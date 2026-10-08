@@ -85,4 +85,36 @@ class NotificationScreenshotTest(private val dark: Boolean) {
         shadowOf(Looper.getMainLooper()).idle()
         view.captureRoboImage("screenshots/notifications-${if (dark) "dark" else "light"}.png")
     }
+
+    // A running run whose title runs past the line, collapsed then expanded: the step count leads
+    // the title, so its ellipsis can't hide it, and the collapsed view drops the text (#826).
+    @Test fun runs() {
+        ShadowSystemClock.advanceBy(Duration.ofMillis(now.toEpochMilli()))
+        RuntimeEnvironment.setQualifiers(if (dark) "+night" else "+notnight")
+        shadowOf(app).grantPermissions(Manifest.permission.POST_NOTIFICATIONS)
+        val activity = Robolectric.buildActivity(ComponentActivity::class.java).setup().get()
+        // `at` is the real clock's: the notifier reads it to tell a live run from a lost one.
+        val run = fake.runs.first().copy(title = "Android end-to-end suite on the emulator, all flows", startedAt = now.minusSeconds(372), at = Instant.now())
+        Notifier(app, Prefs(app)).run(run)
+        val n = shadowOf(app.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).allNotifications.single()
+        val column = LinearLayout(activity).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundColor(if (dark) Color.BLACK else Color.parseColor("#DCDCDC"))
+            setPadding(24, 24, 24, 24)
+        }
+        val builder = Notification.Builder.recoverBuilder(activity, n)
+        // The collapsed template fills its parent: with a progress bar, the shade gives it 80 dp.
+        val collapsed = (80 * activity.resources.displayMetrics.density).toInt()
+        listOf(builder.createContentView() to collapsed, builder.createBigContentView() to ViewGroup.LayoutParams.WRAP_CONTENT).forEach { (views, height) ->
+            val card = FrameLayout(activity).apply {
+                setBackgroundColor(if (dark) Color.parseColor("#171717") else Color.WHITE)
+                setPadding(0, 16, 0, 16)
+            }
+            card.addView(views.apply(activity, card), FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, height))
+            column.addView(card, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { bottomMargin = 8 })
+        }
+        activity.setContentView(ScrollView(activity).apply { addView(column) })
+        shadowOf(Looper.getMainLooper()).idle()
+        column.captureRoboImage("screenshots/notification-run-${if (dark) "dark" else "light"}.png")
+    }
 }

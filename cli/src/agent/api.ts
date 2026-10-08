@@ -127,6 +127,8 @@ export interface Status {
   sessions: SessionInfo[];
   /** Permission prompts (#57): whether they go to Starbridge, and how many wait now. */
   permissions?: { enabled: boolean; waiting: number };
+  /** Presence (#848): whether it is on, and whether the server last heard the owner is here. */
+  presence?: { enabled: boolean; present: boolean; lastError?: string };
 }
 
 /** A session the agent knows of, from `hello` or its event polls. */

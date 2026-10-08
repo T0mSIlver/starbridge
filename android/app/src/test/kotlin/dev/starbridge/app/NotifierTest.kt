@@ -169,4 +169,20 @@ class NotifierTest {
             assertEquals(NotificationCompat.GROUP_ALERT_SUMMARY, NotificationCompat.getGroupAlertBehavior(it))
         }
     }
+
+    // The step count leads the title: at its end, a long title's ellipsis hid it (#826).
+    @Test
+    fun aRunningRunLeadsItsTitleWithTheProgress() {
+        val now = java.time.Instant.now()
+        val run = fake.runs.first().copy(title = "Android end-to-end suite on the emulator, all flows", startedAt = now.minusSeconds(60), at = now)
+        notifier.run(run)
+        posted().let {
+            assertEquals("34 of 120 · ${run.title}", it.extras.getCharSequence(Notification.EXTRA_TITLE).toString())
+        }
+        notifier.run(run.copy(progress = dev.starbridge.app.data.Run.Progress(40, 100, percent = true)))
+        assertEquals("40% · ${run.title}", posted().extras.getCharSequence(Notification.EXTRA_TITLE).toString())
+        // An ended run says how it ended instead.
+        notifier.run(run.copy(exitCode = 0, endedAt = now))
+        assertEquals(run.title, posted().extras.getCharSequence(Notification.EXTRA_TITLE).toString())
+    }
 }

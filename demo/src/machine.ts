@@ -98,6 +98,7 @@ export class DemoMachine {
     const decoder = new TextDecoder();
     let out = "";
     let approved = false;
+    let confirmed = false;
     // Read to the end: a closed pipe would end `pair` with SIGPIPE.
     for await (const chunk of child.stdout as ReadableStream<Uint8Array>) {
       out += decoder.decode(chunk);
@@ -105,6 +106,11 @@ export class DemoMachine {
       if (code && !approved) {
         approved = true;
         await this.device.approvePairing(code);
+      }
+      // The demo owner has read the check code: confirm it as `pair` asks (#814).
+      if (!confirmed && /Check code: /.test(out)) {
+        confirmed = true;
+        await this.spawn(["pair", "--confirm"]).exited;
       }
     }
     if ((await child.exited) !== 0) throw new Error(`pair failed:\n${out}`);

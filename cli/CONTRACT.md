@@ -20,7 +20,7 @@ the lines; the hook outputs are pinned in `cli/test/permissions.test.ts`.
 | `hook permission` | Flags `--agent claude-code\|pi\|opencode`, `--wait`. Reads the hook's JSON on stdin and prints the output its harness defines, or nothing to leave the prompt to the keyboard. SIGTERM means the keyboard answered. On Claude Code's `AskUserQuestion`, prints the devices' answers as the picker's. Exits 0. |
 | `hook settle` | Flag `--agent claude-code`. Reads the hook's JSON on stdin. Exits 0. |
 | `hook ask-user` | Deprecated (#848): prints nothing, which lets the question through to the picker that `hook permission` races. Exits 0. |
-| `pair` | Prints `Pairing code: <code>` first. |
+| `pair` | Prints `Pairing code: <code>` first. Once approved, unless the Android app checked it from the QR code, prints `Check code: <code>` and waits for Enter (yes) or `n` on the terminal or for `pair --confirm` or `pair --reject`. |
 
 Codex sessions receive ``Starbridge has the owner's answer to <id>: run `starbridge wait <id>` to read it.``
 as a queued prompt. The plugins set `STARBRIDGE_PI_ANSWERS`, `STARBRIDGE_OPENCODE_SESSION`,

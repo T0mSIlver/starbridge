@@ -25,13 +25,16 @@ A machine's pairing code passes through the page as well, when the owner opens t
 `/pair#<code>` link in a browser or types its code into one (#795). Whoever holds the code can
 make the approval's MAC, so the page can approve the machine into a chain the server made, which
 lists the machine, and pair a stand-in machine of the same name into the owner's real account.
-The server then relays between the two and reads everything the real machine sends. This also
-works in a browser that was never a member.
+The server would then relay between the two and read everything the real machine sends. The
+machine's check code stops this ("Pairing"): approved from a browser, the machine saves the
+pairing only once the owner says the Android app shows the same code beside it, which differs
+for a machine the server paired elsewhere. Compared against the web page instead, it proves
+nothing, since the server writes that page.
 
 So the checks in this file protect an account against a hostile server only while no browser is
-a member and neither the recovery key nor a pairing code reaches a browser. Where that matters,
-set up the account on the Android app, type pairing codes and the recovery key only there, and
-add no browser; or host your own server.
+a member, the recovery key never reaches a browser, and machines' check codes are compared on
+the Android app. Where that matters, set up the account on the Android app, type the recovery key
+only there, and add no browser; or host your own server.
 
 ## Known limits
 
@@ -223,29 +226,44 @@ Both pairing messages carry an HMAC (`crypto_auth`) keyed from the secret.
 
 1. The new member posts its request (role, id, name, public keys) under the rendezvous id.
 2. The owner types the code on a device. The device checks the request's MAC, appends an `add`
-   entry for those exact keys, and posts an approval `{account, length, head}` with its MAC.
+   entry for those exact keys, and posts an approval `{account, length, head}` with its MAC, and
+   `check` when it read a machine's check key from its QR (below).
 3. The new member checks the approval's MAC, verifies the directory with `{length, head}` as its
    pin, and checks that the directory holds its own keys.
 
 A code expires after 10 minutes. The server could brute-force the secret offline from a MAC, but
 80 bits take far longer than that.
 
-Either side may make the code. A machine prints its own, as text, as a QR code and as a link
+Either side may make the code. A machine prints its own as text, as a link
 `<server>/pair#<code>` that opens the web page with the code filled in (`pairingLink`,
-`codeFromLink`); the fragment never reaches the server. An existing device can instead show a
+`codeFromLink`; the fragment never reaches the server), and as a QR code for the Android app
+(below). An existing device can instead show a
 code as a QR code: the new phone scans it and posts its request under it, and the device, which
 waits on `GET /pairings/:rendezvous?wait=`, checks the MAC and asks the owner to approve. Anyone
 who sees the code can post first, so the device shows the requester's name before approving, as
 with a typed code.
 
-A machine's check code lets the owner see that the machine joined the owner's own chain (#795).
-`checkCode` is the first 80 bits of `BLAKE2b-256("starbridge/v1/check" NUL body NUL sig)` over
-the `add` entry that added the machine, its body and its signature as sent, as 16 Crockford base32 characters in four groups.
-That body holds the machine's keys and name, and through `prev` the whole chain before it. Once
-approved, the machine shows the first three groups and saves the pairing only once a person types
-the last group from the Android app, which shows each active machine's code under Devices,
-computed from the chain it verified. With no terminal, the group comes from
-`starbridge pair --confirm`.
+A machine's check code shows that the machine joined the owner's own chain (#795). `checkCode`
+is the first 80 bits of `BLAKE2b-256("starbridge/v1/check" NUL body NUL sig)` over the `add`
+entry that added the machine, its body and its signature as sent, as 16 Crockford base32
+characters in four groups. That body holds the machine's keys and name, and through `prev` the
+whole chain before it. The Android app and the web page show each active machine's code under
+Devices, computed from the chain they verified.
+
+The machine's QR code carries a check key, 80 bits as 16 Crockford base32 characters, in a link
+no browser opens: `starbridge://pair?server=<server>&k=<key>#<code>` (`appPairingLink`,
+`newCheckKey`, `checkKeyFromLink`). Only the Android app handles `starbridge:` links, so the key
+never reaches a page the server writes. The printed link and code leave it out. An Android app that read the key adds `check` to its approval:
+`crypto_auth` over the same bytes `checkCode` hashes, keyed by
+`BLAKE2b-256("starbridge/v1/check-key" NUL key)` (`checkProof`). The machine then, after it
+verified the chain:
+
+- with a `check` that verifies over its own `add` entry, saves the pairing;
+- with a `check` that does not, saves nothing: the app wrote another entry;
+- with no `check` (a browser, a typed code, an app that predates it), shows its code and saves
+  the pairing once a person answers that the Android app shows the same. With no terminal, the
+  answer comes from `starbridge pair --confirm` or `--reject`. A no, or no answer within 10
+  minutes, saves nothing.
 
 A hostile server that read the pairing code in a browser can approve the machine into a chain it
 controls, even one that reuses the owner's entries and forks after them with a revoked device's
@@ -254,11 +272,13 @@ own public keys, since a pairing request proves no private key. The stand-in's `
 the machine's differ in their `prev` or their contents, so the codes differ unless the server
 finds an entry whose code matches 80 bits of one the owner's device wrote. The signature keeps
 it from searching both sides at once: it can predict the body of the entry the owner's device
-will write, but not that device's signature. Two limits: a member
-browser lets a hostile page write both entries and search for a pair that matches, about 2^40
-tries; and the code proves nothing to a device that itself paired or joined through a browser,
-which the server could have put in a chain of its own. The web page shows the codes too, but a
-hostile server writes that page.
+will write, but not that device's signature. Without the check key, it cannot make a `check`
+the machine accepts, and stripping the app's `check` only makes the machine ask.
+
+Limits: a member browser lets a hostile page write both entries and search for a
+pair that matches, about 2^40 tries; and the code proves nothing to a device that itself paired
+or joined through a browser, which the server could have put in a chain of its own. The web page
+shows the codes too, but a hostile server writes that page.
 
 ## Joining by digits
 
@@ -644,7 +664,9 @@ waits a little, and goes only if nothing answered it meanwhile.
   (`PRESENCE_BEAT_MS`) while the owner sits at its screen, and `{present: false}` once they no
   longer do. It decides that where it reads it, and sends only the bit: a machine, its screen
   unlocked with input in the last minute (`isPresent`); a web page, visible with an input event on
-  it in the last minute; the Android app, in front and touched in the last minute. The server
+  it in the last minute; the Android app, in front and touched in the last minute. Tabs of one
+  browser share its device, so an idle tab says nothing while another tab is in use. A refused
+  beat is tried again a beat later. The server
   keeps each source's bit in memory, trusts a `true` for 75 s (`PRESENCE_VALID_MS`), and counts
   the account present while any source is. A restart forgets it: push at once.
 - **What waits.** A machine's `decision`, `permission` or `waiting` item that asks for a push,

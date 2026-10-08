@@ -6,6 +6,7 @@ import {
   addEntryAsync,
   approverKeys,
   bindMessage,
+  checkCode,
   checkJoined,
   codeFromLink,
   type Decision,
@@ -872,7 +873,17 @@ export function devices(ctx: Ctx): Device[] {
     addedAt: addedAt.get(member.id) ?? "",
     status: active ? "active" : "revoked",
     self: member.id === ctx.device.id,
+    ...(active && member.role === "machine" ? checkOf(ctx.entries, member.id) : {}),
   }));
+}
+
+/** A machine's check code; none rather than no list when its entry will not hash. */
+function checkOf(entries: unknown[], id: string): { check?: string } {
+  try {
+    return { check: checkCode(entries, id) };
+  } catch {
+    return {};
+  }
 }
 
 /** Fetches the request under the typed code and checks its MAC: the server cannot swap keys. */

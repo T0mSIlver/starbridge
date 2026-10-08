@@ -147,16 +147,26 @@ export function AddDevice() {
                 disabled={busy}
                 onClick={() =>
                   run(async () => {
-                    update(await (await load()).approvePairing(ctx, req));
-                    reset({
-                      name: req.name,
-                      icon: req.role === "machine" ? "desktop" : "phone",
-                      title: `${req.name} joined`,
-                      sub:
-                        req.role === "machine"
-                          ? "It can now post decisions and quota windows."
-                          : "It can now read and answer as a device.",
-                    });
+                    const device = await load();
+                    const next = await device.approvePairing(ctx, req);
+                    update(next);
+                    const check = device.devices(next).find((d) => d.id === req.id)?.check;
+                    reset(
+                      req.role === "machine"
+                        ? {
+                            name: req.name,
+                            icon: "desktop",
+                            title: `${req.name} joined`,
+                            sub: `Its terminal shows a check code: press Enter there if it is this one. If not, revoke ${req.name} under Devices, as someone else may have its pairing code.`,
+                            check,
+                          }
+                        : {
+                            name: req.name,
+                            icon: "phone",
+                            title: `${req.name} joined`,
+                            sub: "It can now read and answer as a device.",
+                          },
+                    );
                   })
                 }
               >
