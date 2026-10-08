@@ -345,6 +345,7 @@ class ServerStore(
         secrets = Secrets()
         directory = null
         pending = null
+        pendingCheckKey = null
         approval.value = Approval.Idle
         publish()
         notice.value = message
@@ -1634,6 +1635,7 @@ class ServerStore(
             val check = pendingCheckKey?.let { pairings.checkProof(saved.entries, body.id, it) }
             api().approve(code.rendezvous, pairings.approval(PairingApprovalBody(1, code.rendezvous, saved.account!!, after.length, after.head, me.id, check), code))
             pending = null
+            pendingCheckKey = null
             approval.value = Approval.Done(body.name)
         } catch (e: Exception) {
             approval.value = Approval.Failed(describe(e))
@@ -1643,6 +1645,7 @@ class ServerStore(
     override fun closePairing() {
         showJob?.cancel()
         pending = null
+        pendingCheckKey = null
         approval.value = Approval.Idle
     }
 
@@ -1669,6 +1672,7 @@ class ServerStore(
                         return@launch
                     }
                     pending = code to body
+                    pendingCheckKey = null
                     approval.value = Approval.Found(body.name, if (body.role == "machine") Kind.Machine else Kind.Device, code.formatted())
                     return@launch
                 }
