@@ -179,10 +179,13 @@ class WindowsReader {
     createInterface({ input: child.stdout as NodeJS.ReadableStream }).on("line", (line) =>
       this.pending.shift()?.(line),
     );
-    child.on("exit", () => {
+    // A spawn that fails emits only "error", never "exit": either way the next read starts anew.
+    const gone = () => {
+      if (this.child === child) this.child = undefined;
       for (const p of this.pending.splice(0)) p(undefined);
-    });
-    child.on("error", () => {});
+    };
+    child.on("exit", gone);
+    child.on("error", gone);
     this.child = child;
     return child;
   }
