@@ -187,12 +187,17 @@ export function makePoster(ctx: Ctx): Poster {
 }
 
 /**
- * Sends a run's updates one at a time: the start at once, progress at most every PROGRESS_MS, a
- * heartbeat when RUN_HEARTBEAT_MS passed with no update, and the exit. An update asked for while
+ * Sends a run's updates one at a time: the start at once, the first progress right after it, later
+ * progress at most every PROGRESS_MS, a heartbeat when RUN_HEARTBEAT_MS passed with no update, and
+ * the exit. Without the early first progress, a run whose first line is `[0/5]` shows no steps
+ * for its first PROGRESS_MS (#828). An update asked for while
  * one is in flight replaces any waiting one, so only the latest state goes out.
  */
 export class Reporter {
   private progress: RunProgress | undefined;
+  private progressSent = false;
+  /** The progress changed since the last post. */
+  private dirty = false;
   private exit: { code: number; at: string } | undefined;
   private lastPost = Number.NEGATIVE_INFINITY;
   private inflight: Promise<void> | undefined;
@@ -217,7 +222,8 @@ export class Reporter {
     const next = p ?? undefined;
     if (JSON.stringify(next) === JSON.stringify(this.progress)) return;
     this.progress = next;
-    this.schedule(this.timing.progressMs);
+    this.dirty = true;
+    this.schedule(this.progressGap());
   }
 
   /** Posts the exit and resolves once it is sent, or after FINAL_MS. */
@@ -231,6 +237,10 @@ export class Reporter {
     let t: ReturnType<typeof setTimeout> | undefined;
     await Promise.race([settled, new Promise<void>((r) => (t = setTimeout(r, FINAL_MS)))]);
     clearTimeout(t);
+  }
+
+  private progressGap() {
+    return this.progressSent ? this.timing.progressMs : 0;
   }
 
   /** Posts once `gap` has passed since the last post; a heartbeat stands in for silence. */
@@ -255,6 +265,8 @@ export class Reporter {
       ...(this.exit ? { exit: this.exit } : {}),
     };
     this.lastPost = this.ctx.now().getTime();
+    if (this.progress) this.progressSent = true;
+    this.dirty = false;
     this.inflight = this.post(input)
       .catch((e: Error) => {
         // Not paired, or a bad title: no later update can fare better. A withheld directory
@@ -268,10 +280,11 @@ export class Reporter {
       })
       .finally(() => {
         this.inflight = undefined;
+        // Progress that came in during the post keeps its own gap, not the heartbeat's.
         if (this.queued) {
           this.queued = false;
           this.send();
-        } else this.schedule(this.timing.heartbeatMs);
+        } else this.schedule(this.dirty ? this.progressGap() : this.timing.heartbeatMs);
       });
   }
 }
