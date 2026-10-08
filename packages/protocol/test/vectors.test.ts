@@ -10,11 +10,13 @@ import {
   claimHash,
   codeFromLink,
   computePace,
+  forgetHeads,
   formatPairingCode,
   fromB64,
   joinCommitment,
   joinerKeys,
   joinRequest,
+  noteHead,
   open,
   openImage,
   openJoinApproval,
@@ -34,6 +36,7 @@ import {
   verify,
   verifyBind,
   verifyDirectory,
+  withheldBy,
 } from "../src/index";
 
 const load = async (name: string) =>
@@ -57,6 +60,7 @@ const V = {
   images: await load("images.json"),
   keys: await load("keys.json"),
   pairing: await load("pairing.json"),
+  heads: await load("heads.json"),
   join: await load("join.json"),
   pace: await load("pace.json"),
   schemas: await load("schemas.json"),
@@ -80,6 +84,29 @@ describe("directory.json", () => {
       expect(dir.recoveryPk).toBe(c.expect.recoveryPk);
     });
   }
+});
+
+describe("heads.json", () => {
+  const { chains } = V.heads;
+  const at = (c: string) => [chains[c], verifyDirectory(chains[c])] as const;
+  for (const c of V.heads.withheld)
+    test(`withheldBy: ${c.name}`, () => {
+      const [entries, dir] = at(c.chain);
+      expect(withheldBy(c.heads, dir, entries) ?? null).toEqual(c.expect);
+    });
+  for (const c of V.heads.noteHead)
+    test(`noteHead: ${c.name}`, () => {
+      const [entries, dir] = at(c.chain);
+      const heads = structuredClone(c.heads);
+      expect(noteHead(heads, c.signer, c.head, entries, dir)).toBe(c.expect.changed);
+      expect(heads).toEqual(c.expect.heads);
+    });
+  for (const c of V.heads.forgetHeads)
+    test(`forgetHeads: ${c.name}`, () => {
+      const heads = structuredClone(c.heads);
+      forgetHeads(heads, c.id);
+      expect(heads).toEqual(c.expect);
+    });
 });
 
 describe("envelopes.json", () => {
