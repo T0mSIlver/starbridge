@@ -145,6 +145,19 @@ function cli(name: string, args: string[], home: string) {
   });
 }
 
+/**
+ * The owner's side of a machine's check code (#795): the code the page shows after Approve must
+ * be the one `starbridge pair` printed, then `pair --confirm` answers its question.
+ */
+async function confirmCheck(page: Page, pair: ReturnType<typeof cli>, name: string, home: string) {
+  const printed = (await pair.waitFor(/Check code: (\S+)/))[1] as string;
+  const shown = await page.getByTestId("check-code").textContent();
+  if (shown !== `Check code ${printed}`)
+    throw new Error(`the page shows "${shown}", the terminal ${printed}`);
+  if ((await cli(`${name}-confirm`, ["pair", "--confirm"], home).exited) !== 0)
+    throw new Error("pair --confirm failed");
+}
+
 const vapid = JSON.parse(
   spawnSync("bun", ["-e", "console.log(JSON.stringify(require('web-push').generateVAPIDKeys()))"], {
     cwd: join(ROOT, "server"),
@@ -460,6 +473,7 @@ async function main() {
   await page.getByLabel("Pair a machine or device").fill(code);
   await page.getByRole("button", { name: "Check code" }).click();
   await page.getByRole("button", { name: "Approve" }).click();
+  await confirmCheck(page, pair, "pair", machineHome);
   await pair.waitFor(/✓ Paired as devbox/);
   if ((await pair.exited) !== 0) throw new Error("pair failed");
   await page.getByRole("status", { name: "Pairing result" }).getByText("devbox joined").waitFor();
@@ -1287,6 +1301,7 @@ async function main() {
   await page.getByLabel("Pair a machine or device").fill(farCode);
   await page.getByRole("button", { name: "Check code" }).click();
   await page.getByRole("button", { name: "Approve" }).click();
+  await confirmCheck(page, farPair, "pair-far", farHome);
   if ((await farPair.exited) !== 0) throw new Error("pair of the long-named machine failed");
   // The audit also shoots device names of about 10, 25, 40 and 70 characters, with and without
   // dots and hyphens, to see where each breaks in Settings: three at a time, as an account
@@ -1304,12 +1319,14 @@ async function main() {
   for (let b = 0; AUDIT && b < NAMES.length; b += 3) {
     const batch = NAMES.slice(b, b + 3);
     for (const name of batch) {
-      const pair = cli(`pair-${name}`, ["pair", "--name", name], join(tmp, `name-${name}`));
+      const home = join(tmp, `name-${name}`);
+      const pair = cli(`pair-${name}`, ["pair", "--name", name], home);
       const code = (await pair.waitFor(/Pairing code: (\S+)/))[1] as string;
       await page.getByLabel("Pair a machine or device").fill(code);
       await page.getByRole("button", { name: "Check code" }).click();
       await page.getByText(`Let ${name} post decisions and quotas?`).waitFor();
       await page.getByRole("button", { name: "Approve" }).click();
+      await confirmCheck(page, pair, `pair-${name}`, home);
       if ((await pair.exited) !== 0) throw new Error(`pair of ${name} failed`);
     }
     await page
@@ -1769,6 +1786,7 @@ async function main() {
   await page.getByText("Let laptop post decisions and quotas?").waitFor({ timeout: 30_000 });
   await shoot(page, "pair-request");
   await page.getByRole("button", { name: "Approve" }).click();
+  await confirmCheck(page, linked, "pair-link", join(tmp, "laptop"));
   await linked.waitFor(/✓ Paired as laptop/);
   if ((await linked.exited) !== 0) throw new Error("pair by link failed");
 

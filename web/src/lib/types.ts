@@ -89,7 +89,7 @@ export type Device = Member & {
   status: "active" | "revoked";
   /** The device this page runs on. */
   self?: boolean;
-  /** An active machine's check code, which `starbridge pair` asks for (#795). */
+  /** An active machine's check code, which `starbridge pair` asks the owner to compare (#795). */
   check?: string;
 };
 

@@ -2,7 +2,14 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { type Answer, fromB64, open, type SealedItem, seal } from "@starbridge/protocol";
+import {
+  type Answer,
+  checkKeyFromLink,
+  fromB64,
+  open,
+  type SealedItem,
+  seal,
+} from "@starbridge/protocol";
 import { DEFAULT_LIMITS, LiveServer } from "@starbridge/server/test-support";
 import jpeg from "jpeg-js";
 import jsQR from "jsqr";
@@ -11,7 +18,6 @@ import { makeAgent } from "../src/agent/main";
 import { run } from "../src/cli";
 import { session } from "../src/context";
 import { DONE_LINE, poll } from "../src/decisions";
-import { sendConfirm } from "../src/pair";
 import { piAllow, piPermissionConfig } from "../src/pi";
 import { configCommand, offerPiChain } from "../src/settings";
 import { approveAndConfirm, FAKE_CODEXBAR, paired, testCtx, until } from "./helpers";
@@ -84,34 +90,43 @@ function scan(lines: string[]): string | undefined {
   return jsQR(px, width, height)?.data;
 }
 
-test("pair prints a link and a QR code that carry the code", async () => {
+test("pair prints a link and a QR code that carry the code; the app that scans it checks the code (#795)", async () => {
   const ctx = testCtx();
   const done = run(["pair", "--server", `${server.url}/`, "--name", "devbox"], ctx);
   await until(() => ctx.lines.some((l) => l.includes("Or type the code")));
   const code = ctx.lines[0]?.replace("Pairing code: ", "") as string;
   const link = `${server.url}/pair#${code}`;
   expect(ctx.lines.at(-2)).toBe(`  Or open  ${link}`);
-  expect(scan(ctx.lines.slice(2, -2))).toBe(link);
-  await approveAndConfirm(server, ctx);
+  // Only the QR carries the check key.
+  const scanned = scan(ctx.lines.slice(2, -2)) as string;
+  const key = checkKeyFromLink(scanned) as string;
+  expect(scanned).toBe(`${server.url}/pair?k=${key}#${code}`);
+  const check = await server.approve(code, key);
   expect(await done).toBe(0);
+  expect(ctx.lines).toContain(`Check code: ${check}, checked by the Android app`);
+  expect(ctx.lines.some((l) => l.includes("Same code?"))).toBe(false);
 });
 
-test("pair saves nothing until the owner types the check code's last group (#795)", async () => {
+test("pair saves nothing when the app that scanned the QR saw another add entry (#795)", async () => {
   const ctx = testCtx();
   const done = run(["pair", "--server", server.url, "--name", "devbox"], ctx);
-  // A stand-in's code, as the owner's phone would show it: three wrong tries end the pairing.
-  await approveAndConfirm(server, ctx, "ZZZZ");
-  for (const group of ["ZZZZ", "ZZZZ"]) {
-    await until(() => ctx.errors.some((e) => e.includes("not the code's last group")));
-    ctx.errors.length = 0;
-    sendConfirm({ ...ctx, out: () => {} }, group);
-  }
+  await until(() => ctx.lines.some((l) => l.startsWith("Pairing code: ")));
+  // A proof under another key fails as one over another entry does.
+  await server.approve(ctx.lines[0]?.slice(14) as string, "0123456789ABCDEF");
   expect(await done).toBe(1);
-  expect(ctx.errors.at(-1)).toContain("not confirmed");
+  expect(ctx.errors.at(-1)).toContain("saw another check code");
+  expect(ctx.errors.at(-1)).toContain('revoke "devbox" under Devices');
   expect(ctx.store.machine()).toBeUndefined();
-  expect(ctx.lines.find((l) => l.startsWith("Check code: "))).toMatch(
-    /^Check code: [0-9A-Z]{4}-[0-9A-Z]{4}-[0-9A-Z]{4}-\?\?\?\?$/,
-  );
+});
+
+test("pair saves nothing when the owner says the codes differ (#795)", async () => {
+  const ctx = testCtx();
+  const done = run(["pair", "--server", server.url, "--name", "devbox"], ctx);
+  const check = await approveAndConfirm(server, ctx, false);
+  expect(await done).toBe(1);
+  expect(ctx.lines).toContain(`Check code: ${check}`);
+  expect(ctx.errors.at(-1)).toContain("the codes differ, so this machine is not paired");
+  expect(ctx.store.machine()).toBeUndefined();
 });
 
 test("pair past the account's machine limit ends at once with the reason (#615)", async () => {

@@ -139,11 +139,13 @@ It prints a code, a link and a QR code. Open the link in a browser where you are
 the QR code with your phone, or type the code in Settings → Devices → Add a device, on your phone
 or in the web app, which works from a machine with no browser. The code expires in 10 minutes.
 
-Once a device approves, the machine prints three groups of its check code and waits for the
-fourth, which the Starbridge Android app shows beside the machine under Devices. Type it in the
-terminal, or, where setup runs with no terminal, run `starbridge pair --confirm <last four>`. A
-code that differs means a server read your pairing code and paired the machine into an account
-it controls ([PROTOCOL.md](../PROTOCOL.md#pairing)); the machine then saves nothing.
+Scanned with the Starbridge Android app, the QR code also carries a check key, and the app
+confirms the machine's check code by itself. Approved any other way, the machine prints its check
+code and asks whether the Android app shows the same beside it under Devices: press Enter if so, `n` if not.
+Where setup runs with no terminal, run `starbridge pair --confirm`, or `starbridge pair --reject`
+if the codes differ. A code that differs means a server read your pairing code and paired the
+machine into an account it controls ([PROTOCOL.md](../PROTOCOL.md#pairing)); the machine then
+saves nothing.
 
 The machine pairs with
 https://starbridge.run unless you pass `--server https://starbridge.example` or set

@@ -120,14 +120,21 @@ provider plugins add providers, not panels.
   (#355): otherwise a server in the middle could forge an approval to the joining device. The CLI
   never joins by digits.
 - **A machine's check code** (#795). A pairing code that reaches a browser lets a hostile server
-  approve the machine into a chain it controls, which no device in that chain can expose, so the
-  owner compares: the machine shows three groups of 80 bits of a hash of its `add` entry and
-  saves the pairing only once a person types the fourth from the Android app. The entry, not the
-  keys: a pairing request proves no private key, so a stand-in can copy the machine's keys, and
-  a fork can keep the owner's entry 0; the entry's `prev` ties it to the chain, and its
-  signature, which the server cannot predict, stops a search for two entries that match. Typed rather than
-  a yes, so an agent running setup cannot confirm it; the owner chose a confirmation on every
-  setup over a code only shown.
+  approve the machine into a chain it controls, which no device in that chain can expose. The
+  check code, 80 bits of a hash of the machine's `add` entry, tells the chains apart. It covers the
+  entry rather than the keys: a pairing request proves no private key, so a stand-in can copy the
+  machine's keys, and a fork can keep the owner's entry 0. The entry's `prev` ties it to the
+  chain, and its signature, which the server cannot predict, stops a search for two entries that
+  match. The machine's QR carries a second secret, the check key, and an Android app that scanned
+  it proves with it which entry it wrote, so the machine saves the pairing without asking: the
+  code never reached a browser on that path, and the owner should not have to do anything. Every
+  other path (a browser, a typed code, Android 0.1.0) ends with the machine showing the whole
+  code and asking `Same code? [Y/n]`, Enter for yes, if the Android app shows the same; the
+  browser shows it too, after Approve, for an owner with no app. Tom chose one keypress over
+  typing a group, and Enter over `y` (2026-10-08), accepting that an agent running setup, or a
+  stray Enter, can confirm it. The key sits in the QR's query, not its
+  fragment, because Android 0.1.0 reads the whole fragment as the code; a QR opened in a browser
+  therefore hands the key to the server, so the automatic check holds only when the app scans it.
 - **The recovery key** is a random 16-byte seed shown as 28 Crockford base32 characters with a
   12-bit check, in seven groups of four, read in any case, with or without dashes (#199). 128 bits
   is Ed25519's own security level; the seed is random, so it needs no slow key derivation:

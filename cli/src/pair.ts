@@ -9,12 +9,14 @@ import {
   claimHash,
   formatPairingCode,
   generateMemberKeys,
+  newCheckKey,
   newClaimSecret,
   newPairingCode,
   openPairingApproval,
   pairingLink,
   pairingRequest,
   publicKeys,
+  verifyCheckProof,
   verifyDirectory,
 } from "@starbridge/protocol";
 import { Api, ApiError } from "./api";
@@ -46,6 +48,8 @@ export async function pair(
   const id = `m_${randomBytes(9).toString("base64url")}`;
   const name = opts.name ?? previous?.name ?? hostname();
   const claim = newClaimSecret();
+  // Only the QR carries it: the Android app that scans it confirms the check code by itself.
+  const checkKey = newCheckKey();
 
   // The server's 10 minutes start when it stores the pairing, after this: ending here first
   // keeps the last poll from finding the pairing gone (#623).
@@ -78,7 +82,7 @@ export async function pair(
   // so it does not wrap in an 80-column terminal.
   ctx.out(`Pairing code: ${formatPairingCode(code)}`);
   ctx.out("  Scan this with your phone's camera or the Starbridge app:");
-  for (const line of terminalQr(link)) ctx.out(line);
+  for (const line of terminalQr(pairingLink(server, code, checkKey))) ctx.out(line);
   ctx.out(`  Or open  ${link}`);
   ctx.out("  Or type the code under Devices in the app or web page. It expires in 10 minutes.");
 
@@ -114,13 +118,28 @@ export async function pair(
   const dir = verifyDirectory(entries, { account: approval.account, pin });
   checkJoined(dir, { id, role: "machine", ...publicKeys(keys) });
   // A hostile server that read the code in a browser could have approved this machine into a
-  // chain it controls: only the owner, comparing with the app, can tell (#795).
-  const confirmed = await confirmCheck(ctx, checkCode(entries, id), name);
-  if (ctx.signal?.aborted) return 130;
-  if (!confirmed)
-    throw new UsageError(
-      `the check code was not confirmed, so this machine is not paired. If Devices lists "${name}" from this attempt, revoke it there, then run \`${opts.again ?? "starbridge pair"}\` again`,
-    );
+  // chain it controls: only the Android app, from the QR, or the owner comparing with it can tell
+  // (#795).
+  const again = opts.again ?? "starbridge pair";
+  const check = checkCode(entries, id);
+  if (approval.check !== undefined) {
+    if (!verifyCheckProof(entries, id, checkKey, approval.check))
+      throw new UsageError(
+        `the Android app that scanned the QR code saw another check code, so a server may have paired this machine into an account it controls. Nothing is saved: revoke "${name}" under Devices, then run \`${again}\` again`,
+      );
+    ctx.out(`Check code: ${check}, checked by the Android app`);
+  } else {
+    const answer = await confirmCheck(ctx, check, name);
+    if (ctx.signal?.aborted) return 130;
+    if (answer === "no")
+      throw new UsageError(
+        `the codes differ, so this machine is not paired. A server may have read the pairing code. Revoke "${name}" under Devices, then run \`${again}\` again`,
+      );
+    if (answer === undefined)
+      throw new UsageError(
+        `the check code was not confirmed within 10 minutes, so this machine is not paired. Revoke "${name}" under Devices, then run \`${again}\` again`,
+      );
+  }
 
   const token = result.token;
   ctx.store.locked(() => {
@@ -173,67 +192,71 @@ function addedAt(entries: unknown[], id: string): string | undefined {
   }
 }
 
-/** How long the owner has to confirm the check code, and how many wrong tries. */
+/** How long the owner has to confirm the check code. */
 const CONFIRM_MS = 10 * 60_000;
-const CONFIRM_TRIES = 3;
 
-/** Where `starbridge pair --confirm` leaves the last group for the waiting `pair`. */
+/** Where `starbridge pair --confirm` or `--reject` leaves the answer for the waiting `pair`. */
 const confirmFile = (ctx: Ctx) => join(ctx.store.dir, "pair-confirm");
 
-/** `starbridge pair --confirm <group>`: hands the group typed from the app to the waiting `pair`. */
-export function sendConfirm(ctx: Ctx, group: string): number {
+/** `starbridge pair --confirm` or `--reject`: hands the owner's answer to the waiting `pair`. */
+export function sendConfirm(ctx: Ctx, same: boolean): number {
   // A first pairing has written nothing yet, so the directory may not exist.
   mkdirSync(ctx.store.dir, { recursive: true, mode: 0o700 });
   // Whole or not at all: the waiting `pair` reads whatever is there.
   const tmp = `${confirmFile(ctx)}.${process.pid}`;
   rmSync(tmp, { force: true });
-  writeFileSync(tmp, group, { mode: 0o600, flag: "wx" });
+  writeFileSync(tmp, same ? "yes" : "no", { mode: 0o600, flag: "wx" });
   renameSync(tmp, confirmFile(ctx));
   ctx.out("Sent to the waiting `starbridge pair`.");
   return 0;
 }
 
-/** Crockford base32 as typed: case, spaces and hyphens aside, O as 0, I and L as 1. */
-const normal = (text: string) =>
-  text.toUpperCase().replace(/[\s-]/g, "").replace(/O/g, "0").replace(/[IL]/g, "1");
-
 /**
- * Shows the first three groups of `code` and waits for the owner to type the fourth from the
- * app, on this terminal or with `starbridge pair --confirm`. Nothing confirms it otherwise: an
- * agent running setup has no terminal and does not see the last group.
+ * Shows `code` and asks the owner whether the Android app shows the same beside the machine, on
+ * this terminal or through `starbridge pair --confirm` or `--reject`. Undefined when nobody
+ * answered in time.
  */
-async function confirmCheck(ctx: Ctx, code: string, name: string): Promise<boolean> {
+async function confirmCheck(
+  ctx: Ctx,
+  code: string,
+  name: string,
+): Promise<"yes" | "no" | undefined> {
   const file = confirmFile(ctx);
   rmSync(file, { force: true });
-  ctx.out(`Check code: ${code.slice(0, 14)}-????`);
+  const tty = process.stdin.isTTY;
+  ctx.out(`Check code: ${code}`);
   ctx.out(
-    `  The Starbridge Android app shows "${name}" under Devices with its full check code; a browser shows what the server sends. Type its last four characters${process.stdin.isTTY ? " here" : ""}, or run \`starbridge pair --confirm <last four>\`.`,
+    `  The Starbridge Android app shows "${name}" under Devices with its check code. A browser shows what the server sends, so compare with the app if you have it. An app that shows no code needs updating.`,
+  );
+  ctx.out(
+    tty
+      ? "Same code? [Y/n]"
+      : "  Same code? Run `starbridge pair --confirm` if so, `starbridge pair --reject` if not.",
   );
   const typed: string[] = [];
-  const rl = process.stdin.isTTY
-    ? createInterface({ input: process.stdin }).on("line", (l) => typed.push(l))
+  // Lines typed while the machine waited for approval arrive at once: a stray Enter among them
+  // must not confirm a code nobody read.
+  const shown = Date.now();
+  const rl = tty
+    ? createInterface({ input: process.stdin }).on("line", (l) => {
+        if (Date.now() - shown > 500) typed.push(l);
+      })
     : undefined;
   try {
     const until = ctx.now().getTime() + CONFIRM_MS;
-    for (let tries = 0; tries < CONFIRM_TRIES; ) {
-      if (ctx.signal?.aborted || ctx.now().getTime() > until) return false;
-      let answer = typed.shift();
-      if (answer === undefined) {
-        try {
-          answer = readFileSync(file, "utf8");
-          rmSync(file, { force: true });
-        } catch {
-          await ctx.sleep(500);
-          continue;
-        }
+    for (;;) {
+      if (ctx.signal?.aborted || ctx.now().getTime() > until) return undefined;
+      const line = typed.shift();
+      // Enter alone confirms (Tom, 2026-10-08).
+      if (line !== undefined) return /^\s*(y(es)?)?\s*$/i.test(line) ? "yes" : "no";
+      try {
+        const answer = readFileSync(file, "utf8");
+        rmSync(file, { force: true });
+        return answer === "yes" ? "yes" : "no";
+      } catch {
+        await ctx.sleep(500);
       }
-      if (normal(answer) === normal(code.slice(15))) return true;
-      tries++;
-      ctx.err(
-        `starbridge: that is not the code's last group (${CONFIRM_TRIES - tries} tries left)`,
-      );
     }
-    return false;
   } finally {
     rl?.close();
     rmSync(file, { force: true });

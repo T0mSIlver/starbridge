@@ -40,7 +40,7 @@ The limits:
 - The web app is code the server sends on each load, so a compromised server could send a page
   that uses or reads that browser's keys, approves permission prompts, or uses a pairing code
   or recovery key typed into it. The Android app and the CLI are installed code. Where this
-  matters, use the Android app and no browser, compare a machine's check code on the app, or host
+  matters, use the Android app and no browser, scan machines' QR codes with the app, or host
   your own server; a self-hosted server still sends pushes through starbridge.run's relay
   unless it has its own VAPID keys and uses UnifiedPush
   ([Notifications](../server/README.md#notifications)).

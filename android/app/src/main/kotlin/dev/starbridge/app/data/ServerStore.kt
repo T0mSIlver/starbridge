@@ -38,6 +38,7 @@ import dev.starbridge.app.protocol.SignedEnvelope
 import dev.starbridge.app.protocol.Sodium
 import dev.starbridge.app.protocol.bindMessage
 import dev.starbridge.app.protocol.checkJoined
+import dev.starbridge.app.protocol.checkKeyFromLink
 import dev.starbridge.app.protocol.codeFromLink
 import dev.starbridge.app.protocol.otherServer
 import dev.starbridge.app.protocol.fromB64
@@ -143,6 +144,9 @@ class ServerStore(
     private var secrets = loaded.second
     private var directory: Directory? = null
     private var pending: Pair<PairingCode, PairingRequestBody>? = null
+
+    /** The check key of the machine QR that [pending] came from, if any (#795). */
+    private var pendingCheckKey: String? = null
     private var joinJob: Job? = null
     private var showJob: Job? = null
     private var watchJob: Job? = null
@@ -1601,6 +1605,7 @@ class ServerStore(
             return@run
         }
         pending = parsed to body
+        pendingCheckKey = checkKeyFromLink(code).takeIf { body.role == "machine" }
         approval.value = Approval.Found(body.name, if (body.role == "machine") Kind.Machine else Kind.Device, parsed.formatted())
     }
 
@@ -1624,7 +1629,10 @@ class ServerStore(
                 throw IllegalStateException("Another member already uses this id. Make a new code.")
             }
             val after = directory!!
-            api().approve(code.rendezvous, pairings.approval(PairingApprovalBody(1, code.rendezvous, saved.account!!, after.length, after.head, me.id), code))
+            // From the machine's QR: proves which add entry this phone wrote, so the machine needs
+            // no one to compare check codes (#795).
+            val check = pendingCheckKey?.let { pairings.checkProof(saved.entries, body.id, it) }
+            api().approve(code.rendezvous, pairings.approval(PairingApprovalBody(1, code.rendezvous, saved.account!!, after.length, after.head, me.id, check), code))
             pending = null
             approval.value = Approval.Done(body.name)
         } catch (e: Exception) {

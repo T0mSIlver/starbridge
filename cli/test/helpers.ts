@@ -49,13 +49,15 @@ export async function paired(server: LiveServer, name = "devbox"): Promise<TestC
 }
 
 /**
- * Approves, as the owner's phone, the pairing whose code `ctx` printed, then types the last group
- * of the check code the phone shows, as `starbridge pair --confirm` does.
+ * Approves, as the owner's phone, the pairing whose code `ctx` printed, from the typed code, then
+ * answers whether the check codes match, as `starbridge pair --confirm` or `--reject` does.
+ * Returns the check code the phone shows.
  */
-export async function approveAndConfirm(server: LiveServer, ctx: TestCtx, group?: string) {
+export async function approveAndConfirm(server: LiveServer, ctx: TestCtx, same = true) {
   await until(() => ctx.lines.some((l) => l.startsWith("Pairing code: ")));
   const code = ctx.lines.findLast((l) => l.startsWith("Pairing code: "))?.slice(14) as string;
   const check = await server.approve(code);
-  await until(() => ctx.lines.some((l) => l.startsWith("Check code: ")));
-  sendConfirm({ ...ctx, out: () => {} }, group ?? check.slice(-4));
+  await until(() => ctx.lines.some((l) => l.includes("Same code?")));
+  sendConfirm({ ...ctx, out: () => {} }, same);
+  return check;
 }

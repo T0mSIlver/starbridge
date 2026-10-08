@@ -55,6 +55,14 @@ fun pairingLink(server: String, code: PairingCode): String = "${server.trimEnd('
 /** A code typed by hand, or read from a scanned pairing link: the part after `#` if any. */
 fun codeFromLink(text: String): PairingCode = parsePairingCode(text.substringAfter('#'))
 
+/** The check key a machine's QR carries in its query (`k=`, before any `#`), or null (#795). */
+fun checkKeyFromLink(text: String): String? {
+    val head = text.substringBefore('#')
+    if ('?' !in head) return null
+    val key = head.substringAfter('?').split('&').firstOrNull { it.startsWith("k=") }?.substring(2)?.uppercase() ?: return null
+    return key.takeIf { it.length == 16 && it.all { c -> c in CROCKFORD } }
+}
+
 /**
  * The host of a pairing link made on a server other than [server], or null for a bare code or a
  * link to [server] (#671). Asked only once the lookup failed: a server can answer on several
@@ -106,6 +114,8 @@ data class PairingApprovalBody(
     val length: Int,
     val head: String,
     val approver: String,
+    /** [Pairings.checkProof] of the new machine's `add` entry, when the approver scanned its QR. */
+    val check: String? = null,
 ) {
     fun check() {
         schema(v == 1, "v")
@@ -114,6 +124,7 @@ data class PairingApprovalBody(
         schema(length > 0, "length")
         b64(head, "head")
         id(approver, "approver")
+        check?.let { b64(it, "check") }
     }
 }
 
@@ -125,12 +136,8 @@ class Pairings(private val sodium: Sodium) {
 
     fun claimHash(secret: String): String = toB64(sodium.hash(utf8(secret)))
 
-    /**
-     * A machine's check code (#795), which the machine asks its owner to type the last group of:
-     * the first 80 bits of BLAKE2b-256("starbridge/v1/check" NUL body NUL sig) over the `add`
-     * entry that added member [id], as 16 Crockford base32 characters in groups of four.
-     */
-    fun checkCode(entries: List<JsonElement>, id: String): String {
+    /** The bytes a check code hashes: "starbridge/v1/check" NUL body NUL sig of member [id]'s `add` entry. */
+    private fun checkInput(entries: List<JsonElement>, id: String): ByteArray {
         for (raw in entries) {
             val env = raw as? JsonObject ?: continue
             val body = (env["body"] as? JsonPrimitive)?.contentOrNull ?: continue
@@ -139,11 +146,26 @@ class Pairings(private val sodium: Sodium) {
             if ((parsed["op"] as? JsonPrimitive)?.contentOrNull != "add") continue
             if (((parsed["member"] as? JsonObject)?.get("id") as? JsonPrimitive)?.contentOrNull != id) continue
             val nul = byteArrayOf(0)
-            val hash = sodium.hash(concat(utf8("starbridge/v1/check"), nul, utf8(body), nul, utf8(sig)))
-            return encodeCrockford(hash.copyOf(10)).chunked(4).joinToString("-")
+            return concat(utf8("starbridge/v1/check"), nul, utf8(body), nul, utf8(sig))
         }
         throw ProtocolException("unknown-member", "no add entry for $id")
     }
+
+    /**
+     * A machine's check code (#795), which its owner compares with the machine's when the app did
+     * not scan its QR: the first 80 bits of BLAKE2b-256 of the `add` entry that added member [id],
+     * as 16 Crockford base32 characters in groups of four.
+     */
+    fun checkCode(entries: List<JsonElement>, id: String): String =
+        encodeCrockford(sodium.hash(checkInput(entries, id)).copyOf(10)).chunked(4).joinToString("-")
+
+    /**
+     * The approval's `check` for a machine whose QR gave [key]: `crypto_auth` of the same bytes
+     * under BLAKE2b-256("starbridge/v1/check-key" NUL key). The machine verifies it over its own
+     * `add` entry, so it saves the pairing without asking the owner.
+     */
+    fun checkProof(entries: List<JsonElement>, id: String, key: String): String =
+        toB64(sodium.auth(checkInput(entries, id), sodium.hash(concat(utf8("starbridge/v1/check-key"), byteArrayOf(0), utf8(key)))))
 
     /** BLAKE2b-256 of "starbridge/v1/pairing-key", NUL, the 16 secret characters. */
     fun key(code: PairingCode): ByteArray = sodium.hash(concat(utf8("starbridge/v1/pairing-key"), byteArrayOf(0), utf8(code.secret)))
@@ -200,6 +222,7 @@ class Pairings(private val sodium: Sodium) {
             put("length", body.length)
             put("head", body.head)
             put("approver", body.approver)
+            body.check?.let { put("check", it) }
         }, code)
     }
 

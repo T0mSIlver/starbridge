@@ -8,6 +8,7 @@ import {
   type Snooze,
   addEntry,
   checkCode,
+  checkProof,
   type Directory,
   open,
   openImages,
@@ -106,8 +107,11 @@ export class LiveServer {
     return directory(this.s, this.owner.device.token);
   }
 
-  /** What the owner does after typing the code on the phone. */
-  async approve(codeText: string) {
+  /**
+   * What the owner does after typing the code on the phone, or scanning a machine's QR, which
+   * gives `checkKey`. Returns the check code the phone shows beside the new member.
+   */
+  async approve(codeText: string, checkKey?: string) {
     const code = parsePairingCode(codeText);
     const { request } = await this.phone("GET", `/pairings/${code.rendezvous}`);
     const req = openPairingRequest(request, code);
@@ -121,6 +125,7 @@ export class LiveServer {
     };
     const r = await append(this.s, this.owner.device.token, addEntry(await this.directory(), signer, member, `${new Date().toISOString().slice(0, 19)}Z`));
     if (r.status !== 201) throw new Error(`add entry: ${r.status} ${JSON.stringify(r.json)}`);
+    const { entries } = (await this.phone("GET", "/directory?from=0")) as { entries: unknown[] };
     const approval = pairingApproval(
       {
         v: 1,
@@ -129,12 +134,11 @@ export class LiveServer {
         length: r.json.length,
         head: r.json.head,
         approver: "phone",
+        ...(checkKey && { check: checkProof(entries, req.id, checkKey) }),
       },
       code,
     );
     await this.phone("POST", `/pairings/${code.rendezvous}/approve`, { approval });
-    // What the phone shows beside the new member, which a machine asks its owner to confirm.
-    const { entries } = (await this.phone("GET", "/directory?from=0")) as { entries: unknown[] };
     return checkCode(entries, req.id);
   }
 
