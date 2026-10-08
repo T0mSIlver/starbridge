@@ -12,4 +12,9 @@ trap 'rm -f "$key"' EXIT
 (umask 077; printf '%s' "$APPLE_API_KEY" | base64 --decode > "$key")
 CSC_LINK="$MAC_CERTIFICATE" CSC_KEY_PASSWORD="$MAC_CERTIFICATE_PASSWORD" CSC_FOR_PULL_REQUEST=false \
   APPLE_API_KEY="$key" \
-  pnpm exec electron-builder --mac --publish never -c.mac.notarize=true
+  pnpm exec electron-builder --mac --publish never -c.mac.notarize=true -c.forceCodeSigning=true
+# A missing or expired identity must fail here, not ship an app installed copies refuse.
+for app in release/mac*/Starbridge.app; do
+  codesign --verify --deep --strict "$app"
+  spctl --assess --type execute --verbose=2 "$app" 2>&1 | tee /dev/stderr | grep -q "source=Notarized Developer ID"
+done
