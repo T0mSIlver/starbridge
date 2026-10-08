@@ -78,15 +78,26 @@ export function parsePairingCode(text: string): PairingCode {
 }
 
 /**
- * The link a QR code carries: `<server>/pair#<code>`. Opened in a browser, it shows the web page
- * with the code filled in; the fragment never reaches the server. A machine's QR also carries its
- * check key, as `<server>/pair?k=<key>#<code>`, for the Android app; the printed link does not.
+ * The link `starbridge pair` prints, and a device's QR code carries: `<server>/pair#<code>`.
+ * Opened in a browser, it shows the web page with the code filled in; the fragment never reaches
+ * the server.
  */
-export function pairingLink(server: string, code: PairingCode, checkKey?: string): string {
+export function pairingLink(server: string, code: PairingCode): string {
   let end = server.length;
   while (end > 0 && server[end - 1] === "/") end--;
-  const query = checkKey ? `?k=${checkKey}` : "";
-  return `${server.slice(0, end)}/pair${query}#${formatPairingCode(code)}`;
+  return `${server.slice(0, end)}/pair#${formatPairingCode(code)}`;
+}
+
+/**
+ * The link a machine's QR code carries, for the Android app alone:
+ * `starbridge://pair?server=<server>&k=<check key>#<code>`. No browser opens a `starbridge:` link,
+ * so the check key never reaches a page the server writes (#795). The code stays after `#`, where
+ * apps before the check key read it.
+ */
+export function appPairingLink(server: string, code: PairingCode, checkKey: string): string {
+  let end = server.length;
+  while (end > 0 && server[end - 1] === "/") end--;
+  return `starbridge://pair?server=${encodeURIComponent(server.slice(0, end))}&k=${checkKey}#${formatPairingCode(code)}`;
 }
 
 /** A code typed by hand, or read from a scanned pairing link: the part after `#` if any. */
@@ -95,7 +106,7 @@ export function codeFromLink(text: string): PairingCode {
   return parsePairingCode(hash >= 0 ? text.slice(hash + 1) : text);
 }
 
-/** A machine's check key: 16 Crockford base32 characters, 80 bits, carried only by its QR. */
+/** A machine's check key: 16 Crockford base32 characters, 80 bits, carried only by its QR code. */
 export function newCheckKey(): string {
   return encodeCrockford(sodium.randombytes_buf(10));
 }

@@ -182,10 +182,12 @@ describe("pairing.json: links", () => {
   }
 });
 
-describe("pairing.json: check key links", () => {
+describe("pairing.json: app links", () => {
   const [made, ...rest] = V.pairing.keyLinks;
-  test("pairingLink with a check key", () => {
-    expect(made.link).toBe(`https://starbridge.run/pair?k=${made.key}#${V.pairing.code}`);
+  test("appPairingLink", () => {
+    expect(made.link).toBe(
+      `starbridge://pair?server=https%3A%2F%2Fstarbridge.example%3A8443&k=${made.key}#${V.pairing.code}`,
+    );
     expect(checkKeyFromLink(made.link)).toBe(made.expect);
     expect(formatPairingCode(codeFromLink(made.link))).toBe(V.pairing.code);
   });

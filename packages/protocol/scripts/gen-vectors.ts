@@ -6,6 +6,7 @@
 import {
   addEntry,
   alertsFor,
+  appPairingLink,
   approverKeys,
   bindMessage,
   checkCode,
@@ -1149,19 +1150,16 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
     ],
     keyLinks: [
       {
-        note: "pairingLink(server, code, key): the check key in the query, before #",
-        server: "https://starbridge.run",
+        note: "appPairingLink(server, code, key): the server and check key in the query, the code after #; checkKeyFromLink reads the key back",
+        server: "https://starbridge.example:8443/",
         key: CHECK_KEY,
-        link: pairingLink("https://starbridge.run", code, CHECK_KEY),
+        link: appPairingLink("https://starbridge.example:8443/", code, CHECK_KEY),
         expect: CHECK_KEY,
       },
-      {
-        input: `https://starbridge.run/pair?x=1&k=${CHECK_KEY.toLowerCase()}#ABCD`,
-        expect: CHECK_KEY,
-      },
-      { input: `https://starbridge.run/pair#k=${CHECK_KEY}`, expect: null },
-      { input: "https://starbridge.run/pair?k=0123#ABCD", expect: null },
-      { input: "https://starbridge.run/pair?k=0123456789ABCDEU#ABCD", expect: null },
+      { input: `starbridge://pair?x=1&k=${CHECK_KEY.toLowerCase()}#ABCD`, expect: CHECK_KEY },
+      { input: `starbridge://pair#k=${CHECK_KEY}`, expect: null },
+      { input: "starbridge://pair?k=0123#ABCD", expect: null },
+      { input: "starbridge://pair?k=0123456789ABCDEU#ABCD", expect: null },
       { input: pairingLink("https://starbridge.run", code), expect: null },
     ],
     bind: (() => {
