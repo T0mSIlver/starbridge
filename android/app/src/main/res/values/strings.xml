@@ -1,4 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Starbridge</string>
+    <string name="widget_questions">Needs you</string>
+    <string name="widget_questions_description">Questions waiting on you</string>
+    <string name="widget_quotas">Quotas</string>
+    <string name="widget_quotas_description">What is left on each AI plan</string>
 </resources>

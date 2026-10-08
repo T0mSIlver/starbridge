@@ -57,6 +57,31 @@
             android:name=".push.PromptReceiver"
             android:exported="false" />
 
+        <!-- The home-screen widgets (#894). -->
+        <receiver
+            android:name=".widget.QuestionsWidgetReceiver"
+            android:exported="false"
+            android:label="@string/widget_questions">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_questions" />
+        </receiver>
+
+        <receiver
+            android:name=".widget.QuotasWidgetReceiver"
+            android:exported="false"
+            android:label="@string/widget_quotas">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_quotas" />
+        </receiver>
+
         <service
             android:name=".push.FcmService"
             android:exported="false">

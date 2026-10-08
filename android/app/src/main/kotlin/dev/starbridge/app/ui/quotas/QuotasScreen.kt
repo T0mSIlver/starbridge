@@ -211,35 +211,47 @@ internal fun names(machines: List<String>) = when (machines.size) {
  * The window reset after this snapshot: its use and pace belong to the window that ended, so the
  * card says so until a machine uploads the new one.
  */
-private fun QuotaWindow.ended(now: Instant) = resetsAt?.isAfter(now) == false
+internal fun QuotaWindow.ended(now: Instant) = resetsAt?.isAfter(now) == false
 
-private fun QuotaWindow.course(now: Instant): Course = when (val p = pace) {
+internal fun QuotaWindow.course(now: Instant): Course = when (val p = pace) {
     is Pace.RunsOut if !ended(now) -> if (p.at.isAfter(now)) Course.WillRunOut else Course.RanOut
     else -> Course.Steady
 }
 
-/** The state in words, coloured; DESIGN.md: the words carry the state, never a colour alone. */
+/** Which colour a window's state word takes: `ok`, `bad`, `warn`, or the neutral secondary text. */
+internal enum class Mood { Ok, Bad, Warn, Neutral }
+
+/** The window's state in words (DESIGN.md: the words carry the state, never a colour alone), and its mood. */
+internal fun QuotaWindow.state(now: Instant, absolute: Boolean, h24: Boolean): Pair<Mood, String> {
+    if (ended(now)) return Mood.Neutral to "Window reset"
+    return when (val pace = pace) {
+        Pace.Even -> Mood.Ok to "On pace"
+        is Pace.RunsOut -> Mood.Bad to when {
+            !pace.at.isAfter(now) -> "Ran out ${clockAt(pace.at, now, h24)}"
+            absolute -> "Will run out ${clockAt(pace.at, now, h24)}"
+            else -> "Will run out in ${span(now, pace.at)}"
+        }
+        is Pace.Unused -> Mood.Warn to "Headroom unused"
+        Pace.Unknown -> Mood.Neutral to "Too early to tell"
+    }
+}
+
+/** The state in words, coloured. */
 private class Tone(val color: Color, val word: String)
 
 @Composable
 private fun tone(window: QuotaWindow, now: Instant, absolute: Boolean): Tone {
     val c = StarbridgeTheme.colors
-    val neutral = MaterialTheme.colorScheme.onSurfaceVariant
-    val h24 = LocalClock24.current
-    if (window.ended(now)) return Tone(neutral, "Window reset")
-    return when (val pace = window.pace) {
-        Pace.Even -> Tone(c.ok, "On pace")
-        is Pace.RunsOut -> Tone(
-            c.bad,
-            when {
-                !pace.at.isAfter(now) -> "Ran out ${clockAt(pace.at, now, h24)}"
-                absolute -> "Will run out ${clockAt(pace.at, now, h24)}"
-                else -> "Will run out in ${span(now, pace.at)}"
-            },
-        )
-        is Pace.Unused -> Tone(c.warn, "Headroom unused")
-        Pace.Unknown -> Tone(neutral, "Too early to tell")
-    }
+    val (mood, word) = window.state(now, absolute, LocalClock24.current)
+    return Tone(
+        when (mood) {
+            Mood.Ok -> c.ok
+            Mood.Bad -> c.bad
+            Mood.Warn -> c.warn
+            Mood.Neutral -> MaterialTheme.colorScheme.onSurfaceVariant
+        },
+        word,
+    )
 }
 
 /**
