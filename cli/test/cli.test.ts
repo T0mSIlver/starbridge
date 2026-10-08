@@ -101,10 +101,10 @@ test("pair prints a link and a QR code that carry the code; the app that scans i
   const scanned = scan(ctx.lines.slice(2, -2)) as string;
   const key = checkKeyFromLink(scanned) as string;
   expect(scanned).toBe(`${server.url}/pair?k=${key}#${code}`);
-  const check = await server.approve(code, key);
+  await server.approve(code, key);
   expect(await done).toBe(0);
-  expect(ctx.lines).toContain(`Check code: ${check}, checked by the Android app`);
-  expect(ctx.lines.some((l) => l.includes("Same code?"))).toBe(false);
+  // Checked by the app: nothing to show or ask.
+  expect(ctx.lines.some((l) => l.startsWith("Check code") || l.includes("Same code?"))).toBe(false);
 });
 
 test("pair saves nothing when the app that scanned the QR saw another add entry (#795)", async () => {

@@ -127,7 +127,6 @@ export async function pair(
       throw new UsageError(
         `the Android app that scanned the QR code saw another check code, so a server may have paired this machine into an account it controls. Nothing is saved: revoke "${name}" under Devices, then run \`${again}\` again`,
       );
-    ctx.out(`Check code: ${check}, checked by the Android app`);
   } else {
     const answer = await confirmCheck(ctx, check, name);
     if (ctx.signal?.aborted) return 130;
