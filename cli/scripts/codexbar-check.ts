@@ -1,6 +1,6 @@
 /**
- * Installs CodexBar's latest release the way setup does, into a throwaway HOME, and reads its
- * output with the uploader's parser, without credentials: the provider list, and the error row
+ * Installs CodexBar's latest release the way setup would once a release pins it, into a
+ * throwaway HOME, and reads its output with the uploader's parser, without credentials: the provider list, and the error row
  * a provider without an API key returns. Exits 1 with the reason when either breaks.
  * `.github/workflows/codexbar.yml` runs it daily.
  */
@@ -9,7 +9,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { collect } from "../src/codexbar";
 import { Store } from "../src/config";
-import { installRelease, listProviders, NoChecksum, releaseVersion } from "../src/setup/codexbar";
+import {
+  installRelease,
+  latestCodexbar,
+  listProviders,
+  NoChecksum,
+  releaseVersion,
+} from "../src/setup/codexbar";
 import { defaults, type Sys } from "../src/setup/sys";
 
 const home = mkdtempSync(join(tmpdir(), "codexbar-check-"));
@@ -38,14 +44,14 @@ const fail = (why: string) => {
 };
 
 // The runner shares its IP's anonymous API limit with other jobs, so it asks with its token.
-let version: string | undefined;
+let version: string;
 if (process.env.GITHUB_TOKEN) {
   const res = await fetch("https://api.github.com/repos/steipete/CodexBar/releases/latest", {
     headers: { authorization: `Bearer ${process.env.GITHUB_TOKEN}` },
   });
   if (!res.ok) fail(`finding CodexBar's latest release: ${res.status}`);
   version = releaseVersion(((await res.json()) as { tag_name: string }).tag_name);
-}
+} else version = await latestCodexbar(ctx.env);
 const bin = await installRelease(sys, version).catch((e: Error) => {
   // A release whose tarballs are still uploading; tomorrow's run checks it.
   if (e instanceof NoChecksum) {

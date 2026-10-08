@@ -477,19 +477,25 @@ provider plugins add providers, not panels.
   A link from another server that this one doesn't know names that server, "This code is from
   starbridge.run, and this phone is signed in to …", instead of "No pairing with this code"
   (#671). Only a failed lookup says it, since a server can answer under several names.
-- **Setup** (`cli/src/setup/`; #68, #239, #245) installs CodexBar's latest release, taking the
-  static musl build where the glibc one would not start. Only the repository is pinned, since
-  CodexBar ships almost daily (#530): the tarball must match the `.sha256` of the same release,
-  as Homebrew checks it, and `starbridge update` moves that install to the latest release too.
-  The latest version comes from where `releases/latest` redirects, not GitHub's API, which allows
-  60 unauthenticated requests an hour per address, few behind a shared NAT on launch day; the
+- **Setup** (`cli/src/setup/`; #68, #239, #245) installs the CodexBar release this Starbridge
+  release pins, taking the static musl build where the glibc one would not start, and
+  `starbridge update` moves that install to the new binary's pin (#568). Each release PR pins
+  CodexBar's latest release, which `version.ts` writes with each tarball's SHA-256 into
+  `cli/src/setup/codexbar-pin.json`, so the signed binary carries them. Checking a tarball against
+  the `.sha256` of its own release (#530) caught only a damaged download: whatever CodexBar's
+  account published, or replaced, since its release job uploads with `--clobber`, ran on every
+  machine at its next update. CodexBar's releases carry no signature or build attestation.
+  The pin costs no work per CodexBar release, which ships almost daily; users get CodexBar's
+  fixes with the next Starbridge release, or sooner with `update --codexbar <version>`, which
+  checks only the release's own `.sha256` and which `update` does not undo while the pin is
+  older. A CodexBar from Homebrew follows steipete's tap, as the user's `brew upgrade` does. The
   download says its size and how far it got every 5 s, since the Linux tarball is 170 MB (#618).
   `update` goes on to CodexBar when its own download fails, offline say, but not when a release
   does not check out (#617).
-  `update --codexbar <version>` installs one release, for when the latest breaks; a broken
+  `update --codexbar <version>` installs one release, for when the pinned one breaks; a broken
   CodexBar already shows as each provider's quota error, so there is no other rollback. A daily
-  workflow installs the latest release and reads its output without credentials, and opens an
-  issue when it breaks. A provider works when `usage
+  workflow installs CodexBar's latest release and reads its output without credentials, and opens
+  an issue when it breaks, so a release does not pin a broken one. A provider works when `usage
   --provider X` returns windows; CodexBar exits 1 with the reason in its JSON row, so setup reads
   the row. The unit runs the `starbridge` on the PATH when that is the running binary, since that
   path survives brew upgrades. Setup turns on plugin auto-update through `extraKnownMarketplaces`,

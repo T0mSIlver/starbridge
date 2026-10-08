@@ -31,7 +31,10 @@ Each package's README says how to run it: [server](server/README.md#run-from-sou
 
 One version covers the CLI, the web app, both Claude Code plugins, the Claude Code mod and the Android app. To release
 1.2.3, run `bun cli/scripts/version.ts 1.2.3` from the repository root, merge it in a PR, and tag
-the merged commit `v1.2.3`; the workflow refuses a tag that disagrees with the stamped files. The
+the merged commit `v1.2.3`; the workflow refuses a tag that disagrees with the stamped files.
+`version.ts` also pins CodexBar's latest release, the one setup and `starbridge update` install,
+in `cli/src/setup/codexbar-pin.json`. If an open `codexbar` issue says that release fails the daily
+check, pin the last good one with `bun cli/scripts/codexbar-pin.ts <version>`. The
 marketplace installs both plugins from that tag, and setup installs the Pi package at the tag of
 the CLI it runs. A release candidate (`1.2.3-rc.1`) leaves the marketplace on the last release.
 
