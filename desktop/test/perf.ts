@@ -16,12 +16,12 @@ import { createInterface } from "node:readline";
 
 const DESKTOP = resolve(import.meta.dirname, "..");
 
-// From GitHub's macos-15 runner (arm64), packaged and ad hoc signed, 2026-10-09: cold 425–442 ms
-// (median of 5; the first launch after a build takes 1.2–1.7 s while macOS checks the new binary),
-// warm 7–15 ms, 304 MB, 133 MB. Each budget leaves room for the runner's noise, not for growth.
+// From GitHub's macos-15 runner (arm64), packaged, 2026-10-09: cold 425–750 ms (the runner is
+// noisy: single launches from 290 ms to 1.5 s), warm 7–25 ms, 304 MB, 133 MB. Each budget leaves
+// room for that noise, not for growth.
 export const BUDGETS = {
-  /** Process start to the window's first painted frame, median of the runs. */
-  coldMs: 700,
+  /** Process start to the window's first painted frame, median of the launches after the first. */
+  coldMs: 800,
   /** Showing the hidden window to its next frame, as from the menu bar. */
   warmMs: 50,
   /** All processes' working sets, idle with the page loaded. */
@@ -29,7 +29,8 @@ export const BUDGETS = {
   /** The largest DMG. */
   downloadMb: 140,
 };
-const RUNS = 5;
+/** Launches; the first is left out, since macOS checks a new binary then (1.2–2 s). */
+const RUNS = 7;
 
 type Mark = { name: string; at: number; ms?: number; mb?: number };
 
@@ -111,7 +112,7 @@ const downloadMb = Math.max(
   ...dmgs.map((f) => Math.round(statSync(join(DESKTOP, "release", f)).size / 1e6)),
 );
 
-const result = { coldMs: median(cold), warmMs: median(warm), memoryMb: memory, downloadMb };
+const result = { coldMs: median(cold.slice(1)), warmMs: median(warm), memoryMb: memory, downloadMb };
 console.log(JSON.stringify({ result, budgets: BUDGETS, cold, warm, dmgs }));
 for (const [k, budget] of Object.entries(BUDGETS)) {
   const got = result[k as keyof typeof result];

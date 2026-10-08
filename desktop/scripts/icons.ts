@@ -3,8 +3,7 @@
 //   node desktop/scripts/icons.ts
 //
 // build/icon.png is the app icon: the launcher's tile on Apple's grid, 824 px of a 1024 canvas.
-// assets/trayTemplate.png (and @2x) is the menu bar icon: the mark in black on transparent, which
-// macOS recolours for a light or dark menu bar.
+// assets/tray*.png (and @2x) are the menu bar icons, below.
 import { writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { firefox } from "playwright";
@@ -20,17 +19,29 @@ const TILE = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
     <path fill="#f5a83b" d="M48.5,39.5 A5.5,5.5 0 0 1 59.5,39.5 V48.5 A5.5,5.5 0 0 1 48.5,48.5 Z"/>
   </g></g></svg>`;
 
-// The mark in one colour, cropped closer than the tab icon so it holds at 18 pt. A gap cut
-// around the climber keeps it apart from the tether, as colour does in the full mark.
-const TRAY = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="24 22 60 60">
+// The mark cropped closer than the tab icon so it holds at 18 pt. A gap cut around the climber
+// keeps it apart from the tether, as colour does in the full mark. In one colour it is a template
+// image, which macOS recolours for the menu bar; while something needs the owner, the climber is
+// amber, so the icon carries its own colours, one variant per menu bar appearance.
+const tray = (
+  fill: string,
+  climber: string,
+) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="24 22 60 60">
   <mask id="gap"><rect x="0" y="0" width="108" height="108" fill="white"/>
     <rect x="45.5" y="31" width="17" height="26" rx="8.5" fill="black"/></mask>
-  <g mask="url(#gap)">
+  <g mask="url(#gap)" fill="${fill}">
     <circle cx="54" cy="148" r="80"/>
     <rect x="51.75" y="18" width="4.5" height="52"/>
   </g>
-  <rect x="48.5" y="34" width="11" height="20" rx="5.5"/>
+  <rect x="48.5" y="34" width="11" height="20" rx="5.5" fill="${climber}"/>
 </svg>`;
+
+// Template: black; the light and dark variants use DESIGN.md's `fg` and `accent` of each scheme.
+const TRAYS = {
+  trayTemplate: tray("#000", "#000"),
+  trayWaitingLight: tray("#121212", "#965700"),
+  trayWaitingDark: tray("#f1f1f1", "#f5a83b"),
+};
 
 const browser = await firefox.launch();
 const page = await browser.newPage();
@@ -53,6 +64,8 @@ async function png(svg: string, size: number): Promise<Buffer> {
 }
 
 writeFileSync(join(DESKTOP, "build/icon.png"), await png(TILE, 1024));
-writeFileSync(join(DESKTOP, "assets/trayTemplate.png"), await png(TRAY, 18));
-writeFileSync(join(DESKTOP, "assets/trayTemplate@2x.png"), await png(TRAY, 36));
+for (const [name, svg] of Object.entries(TRAYS)) {
+  writeFileSync(join(DESKTOP, `assets/${name}.png`), await png(svg, 18));
+  writeFileSync(join(DESKTOP, `assets/${name}@2x.png`), await png(svg, 36));
+}
 await browser.close();

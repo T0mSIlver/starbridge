@@ -1,5 +1,5 @@
 // Launches the app on a stand-in server page and checks the bridge end to end: the window loads
-// the page, the page's count reaches the menu bar, a question notifies with its options, a button
+// the page, the page's count turns the menu bar's climber amber, a question notifies with its options, a button
 // and a typed reply answer through the page, the notification closes once the question leaves,
 // the window refuses another origin, and a hidden window still notifies. Notifications and the tray are watched in the main
 // process, so no OS notification is needed (GitHub's macOS runners cannot grant the permission).
@@ -14,6 +14,7 @@ import { join, resolve } from "node:path";
 import { _electron as electron } from "playwright";
 
 const DESKTOP = resolve(import.meta.dirname, "..");
+const MAC = process.platform === "darwin";
 
 /** The stand-in page's globals. */
 type StandIn = { answers: unknown[]; send(entries: unknown[]): void };
@@ -22,7 +23,9 @@ type StandIn = { answers: unknown[]; send(entries: unknown[]): void };
 type Watched = {
   shown: Electron.Notification[];
   closed: string[];
-  titles: string[];
+  tips: string[];
+  /** Whether each menu bar icon set was the one-colour template. */
+  template: boolean[];
   outside: string[];
 };
 
@@ -60,17 +63,21 @@ try {
     const g = globalThis as Record<string, unknown>;
     const shown: unknown[] = [];
     const closed: string[] = [];
-    const titles: string[] = [];
+    const tips: string[] = [];
+    const template: boolean[] = [];
     const outside: string[] = [];
-    Object.assign(g, { shown, closed, titles, outside });
+    Object.assign(g, { shown, closed, tips, template, outside });
     Notification.prototype.show = function (this: Electron.Notification) {
       shown.push(this);
     };
     Notification.prototype.close = function (this: Electron.Notification) {
       closed.push(this.id);
     };
-    Tray.prototype.setTitle = (t: string) => {
-      titles.push(t);
+    Tray.prototype.setToolTip = (t: string) => {
+      tips.push(t);
+    };
+    Tray.prototype.setImage = (i: Electron.NativeImage) => {
+      template.push(i.isTemplateImage());
     };
     shell.openExternal = async (u: string) => {
       outside.push(u);
@@ -106,7 +113,10 @@ try {
       (_e, src) => new Function("g", `return (${src})(g)`)(globalThis),
       f.toString(),
     ) as Promise<T>;
-  await until(() => main((g) => g.titles.at(-1) === "2"), "the count in the menu bar");
+  await until(
+    () => main((g) => g.tips.at(-1) === "Starbridge: 2 need you" && !g.template.at(-1)),
+    "the menu bar's amber climber",
+  );
   const shown = await main((g) =>
     g.shown.map((n: Electron.Notification) => ({
       id: n.id,
@@ -156,7 +166,11 @@ try {
   // Answered elsewhere: the page drops it, and its notification closes.
   await page.evaluate(() => (window as unknown as StandIn).send([]));
   await until(
-    () => main((g) => g.closed.includes("item-p-1") && g.titles.at(-1) === ""),
+    () =>
+      main((g) => g.closed.includes("item-p-1") && g.tips.at(-1) === "Starbridge").then(
+        // Template images are a macOS idea; elsewhere every image reads as not one.
+        async (ok) => ok && (!MAC || (await main((g) => g.template.at(-1) === true))),
+      ),
     "the prompt to close",
   );
 

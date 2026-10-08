@@ -1,8 +1,8 @@
 # Starbridge desktop
 
-The macOS app: the server's web page in a window, the Needs-you count in the menu bar, and a
-notification per question that you answer with its buttons or a typed reply. The page stays the
-device, as in a browser; the app adds what a browser cannot. SPEC.md, "Desktop", has the rules.
+The macOS app: the server's web page in a window, an amber light in the menu bar while something
+needs you, and a notification per question that you answer with its buttons or a typed reply. The
+page stays the device, as in a browser; the app adds what a browser cannot. SPEC.md, "Desktop", has the rules.
 
 ## Develop
 
@@ -17,7 +17,7 @@ pnpm --filter @starbridge/desktop start
 the server set from its menu bar icon (right-click, "Server"), starbridge.run by default.
 
 Tests: `pnpm test` (unit) and `pnpm e2e`, which launches the app on a stand-in page and checks the
-bridge, the menu bar count and the notifications (`xvfb-run -a` on Linux). The `desktop` workflow
+bridge, the menu bar icon and the notifications (`xvfb-run -a` on Linux). The `desktop` workflow
 runs both on GitHub's macOS runner and keeps the DMGs.
 
 `pnpm dist` packages the app on a Mac (`release/`). `node scripts/icons.ts` renders the icons.
@@ -44,11 +44,11 @@ numbers.
 
 | | Budget | 2026-10-09 |
 |---|---|---|
-| Cold start: process start to the window's first painted frame (median of 5) | 700 ms | 425–442 ms |
-| Warm open: the hidden window to its next frame, as from the menu bar | 50 ms | 7–15 ms |
+| Cold start: process start to the window's first painted frame (median of 6 launches after a first) | 800 ms | 425–750 ms |
+| Warm open: the hidden window to its next frame, as from the menu bar | 50 ms | 7–25 ms |
 | Idle memory: every process's working set, page loaded | 350 MB | 304 MB |
 | Download: the largest DMG | 140 MB | 133 MB |
 
-What keeps them: the main process is one 15 KB file, the updater loads 5 s after start from its
-own file, the window shows at once on the page's background colour, and closing it only hides it.
+What keeps them: the main process is one 15 KB file, the window shows at once on the page's
+background colour, and closing it only hides it.
 `STARBRIDGE_TIMING=1` prints the marks (`timing {...}`) from any build.

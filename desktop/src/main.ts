@@ -9,6 +9,7 @@ import {
   Menu,
   Notification,
   nativeImage,
+  nativeTheme,
   session,
   shell,
   Tray,
@@ -34,6 +35,8 @@ let origin: string;
 let win: BrowserWindow | null = null;
 let serverWin: BrowserWindow | null = null;
 let tray: Tray | null = null;
+/** Items in Needs you, which turn the menu bar's climber amber. */
+let needs = 0;
 let notifier: Notifier;
 let quitting = false;
 /** Links that arrived before the window existed. */
@@ -91,7 +94,8 @@ function ready(): void {
   ipcMain.on("state", (e, x) => {
     const state = fromPage(e) && parseState(x);
     if (!state) return;
-    tray?.setTitle(state.count > 0 ? String(state.count) : "");
+    needs = state.count;
+    paintTray();
     notifier.update(state.entries);
   });
   ipcMain.on("answered", (e, x) => {
@@ -121,7 +125,8 @@ function ready(): void {
   if (!globalShortcut.register(settings.shortcut, showWindow))
     console.warn(`shortcut ${settings.shortcut} is taken`);
   const atLogin = process.platform === "darwin" && app.getLoginItemSettings().wasOpenedAtLogin;
-  if (!atLogin) showWindow();
+  if (atLogin) app.dock?.hide();
+  else showWindow();
   for (const link of early.splice(0)) openLink(link);
 }
 
@@ -153,6 +158,8 @@ function createWindow(): void {
     e.preventDefault();
     win?.hide();
   });
+  // A Dock icon only while the window is open; closed, the app is its menu bar icon.
+  win.on("hide", () => app.dock?.hide());
   // Offline at start, or the server restarting: try again, unless a newer navigation came first.
   let retry: NodeJS.Timeout | undefined;
   win.webContents.on("did-start-navigation", (d) => {
@@ -200,12 +207,36 @@ function guard(contents: WebContents): void {
 }
 
 function createTray(): void {
-  const icon = nativeImage.createFromPath(join(ASSETS, "trayTemplate.png"));
-  icon.setTemplateImage(true);
-  tray = new Tray(icon);
-  tray.setToolTip("Starbridge");
+  tray = new Tray(trayIcon());
+  paintTray();
+  nativeTheme.on("updated", paintTray);
   tray.on("click", showWindow);
   tray.on("right-click", () => tray?.popUpContextMenu(menu()));
+}
+
+/**
+ * The mark in the menu bar: one colour, as macOS draws menu bar icons, until something needs the
+ * owner; then its climber is amber, the one amber light, as on the phone. No count: the window
+ * says what. The amber icon carries its own colours, so it follows the menu bar's appearance.
+ */
+function trayIcon(): Electron.NativeImage {
+  const name =
+    needs === 0
+      ? "trayTemplate"
+      : nativeTheme.shouldUseDarkColors
+        ? "trayWaitingDark"
+        : "trayWaitingLight";
+  const icon = nativeImage.createFromPath(join(ASSETS, `${name}.png`));
+  icon.setTemplateImage(needs === 0);
+  return icon;
+}
+
+function paintTray(): void {
+  if (!tray) return;
+  tray.setImage(trayIcon());
+  tray.setToolTip(
+    needs === 0 ? "Starbridge" : `Starbridge: ${needs} need${needs === 1 ? "s" : ""} you`,
+  );
 }
 
 function menu(): Menu {
@@ -229,6 +260,7 @@ function showWindow(): void {
   if (!win) return;
   const from = performance.now();
   if (win.isMinimized()) win.restore();
+  app.dock?.show();
   win.show();
   win.focus();
   // From the click to the next frame the page draws: how fast a warm open feels.

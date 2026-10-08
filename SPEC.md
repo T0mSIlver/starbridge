@@ -990,10 +990,12 @@ a browser; the app adds a menu bar count and notifications, so a web release nee
   again when its agent starts waiting or it comes back from snooze, and its notification closes
   when it leaves Needs you, wherever it was answered. Items already notified stay quiet across a
   restart. The page notifies through the app, never through the browser's notifications.
-- **The menu bar.** The mark as a template icon, with the Needs-you count beside it when it is
-  above zero. A click shows the window; a right-click opens the menu: Open, Open at Login (off by
-  default), Server, Quit. Closing the window keeps the app in the menu bar. ⌃⌥S shows the window
-  from anywhere.
+- **The menu bar.** The mark in one colour, as macOS draws menu bar icons; while anything needs
+  the owner, its climber turns amber, the one amber light, with no count: the window says what
+  (owner's pick from mockups, 2026-10-09). A click shows the window; a right-click opens the menu:
+  Open, Open at Login (off by default), Server, Quit. Closing the window keeps the app in the menu
+  bar and drops its Dock icon, which shows again with the window. ⌃⌥S shows the window from
+  anywhere.
 - **`starbridge://pair` links** open `/pair` on the configured server, as the https link does. The
   link's check key stays out of the page, which the server writes; a link for another server is
   refused, with both servers named.

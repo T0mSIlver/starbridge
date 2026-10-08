@@ -44,9 +44,10 @@ jobs:
           pnpm test
           pnpm e2e
       - working-directory: desktop
-        run: pnpm exec electron-builder --mac --publish never
         # Ad hoc signing (electron-builder.yml) holds no secret, so pull requests may do it too;
-        # unsigned, macOS refuses to open the app.
+        # unsigned, macOS refuses to open the app. The hardened runtime is for notarization, and
+        # an ad hoc signature cannot meet its library validation.
+        run: pnpm exec electron-builder --mac --publish never -c.mac.hardenedRuntime=false
         env:
           CSC_FOR_PULL_REQUEST: "true"
       # The budgets in test/perf.ts, measured on the packaged app.
