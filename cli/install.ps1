@@ -45,7 +45,10 @@
   $os = $env:PROCESSOR_ARCHITEW6432
   if (-not $os) { $os = $env:PROCESSOR_ARCHITECTURE }
   if ($os -ne 'ARM64') {
-    try { $os = "$([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture)" } catch {}
+    # Outside a string: Windows PowerShell 5.1 may not load the type, and inside "$(...)" that
+    # failure turned into an empty string instead of an error, leaving no architecture at all.
+    try { $real = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture } catch { $real = $null }
+    if ($real) { $os = "$real" }
   }
   $arch = switch ($os) { { $_ -in 'X64', 'AMD64' } { 'x64' } 'Arm64' { 'arm64' } default { Fail "no build for $os; try npm i -g starbridge" } }
   $asset = "starbridge-windows-$arch.exe"
