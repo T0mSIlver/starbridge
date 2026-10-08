@@ -854,7 +854,9 @@ first window, so a provider with a window running out leads.
   it returns to its place and notifies once, "Back from snooze", never again. The owner chose
   these from mockups.
 - **History** lists answered questions and the last 7 days of prompts, with how and where each was
-  answered.
+  answered. A question settled `elsewhere` without a page to answer in was answered in the
+  agent's own picker or terminal, so it reads "at the keyboard", never "by the agent", which
+  stays for a withdrawn question or one answered on its page (#865).
 - **Closed sections wait at the bottom** (#662, #682). Closed, History sits at the bottom of a
   short inbox and Snoozed just above it, out of the way; opened, each glides up under the items
   and its rows fade in. Opening Snoozed leaves History at the bottom.

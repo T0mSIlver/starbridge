@@ -32,10 +32,14 @@ export function replyText(reply: Reply, d: Decision): string {
   return d.answerIn ? `Answered in ${answerPlace(d.answerIn)}` : "Answered";
 }
 
-/** Who closed it: this browser, the agent (withdrawn, or for another page), or another device. */
+/**
+ * Who closed it: this browser, another device, the keyboard (the harness's own picker or
+ * terminal, #865), or the agent (withdrawn, or for another page).
+ */
 export function closedBy(item: InboxItem): string {
   if (item.reply) return "This browser";
   if (item.answeredBy) return item.answeredBy.device;
+  if (atKeyboard(item)) return "The keyboard";
   return item.settled || item.decision.answerIn ? "The agent" : "Another device";
 }
 
@@ -87,5 +91,11 @@ export function answeredFirstText(item: InboxItem): string {
 export function closedByPhrase(item: InboxItem): string {
   if (item.reply) return "on this browser";
   if (item.answeredBy) return `on ${item.answeredBy.device}`;
+  if (atKeyboard(item)) return "at the keyboard";
   return item.settled || item.decision.answerIn ? "by the agent" : "on another device";
+}
+
+/** Settled `elsewhere` with no page to answer in: the owner answered in the agent's own picker. */
+function atKeyboard(item: InboxItem): boolean {
+  return item.settled === "elsewhere" && !item.decision.answerIn;
 }
