@@ -187,7 +187,7 @@ class ScreenshotTest(private val dark: Boolean) {
     @Composable
     private fun QuestionSheet(d: Decision) {
         // As the app shows it: Snooze beside Reply on an open question (#571).
-        Sheet({ QuotasScreen(fake.windows, now) }) { DecisionSheet(d, now, { _, _, _ -> }, Replies(rememberDrafts(), emptyMap()), onSnooze = {}) }
+        Sheet({ QuotasScreen(fake.windows, now) }) { DecisionSheet(d, now, { _, _, _ -> }, Replies(rememberDrafts()), onSnooze = {}) }
     }
 
     @Test fun sheetQuestion() = capture("sheet-question") { QuestionSheet(fake.decisions.first { it.id == "d1" }) }
@@ -224,11 +224,11 @@ class ScreenshotTest(private val dark: Boolean) {
     }
 
     @Test fun sheetSnoozeMenu() = capture("sheet-snooze-menu", before = { compose.onNodeWithText("Snooze until 15:00").performScrollTo() }) {
-        Sheet({ QuotasScreen(fake.windows, now) }) { DecisionSheet(fake.decisions.first { it.id == "d1" }, now, { _, _, _ -> }, Replies(rememberDrafts(), emptyMap()), onSnooze = {}, snoozeOpen = true) }
+        Sheet({ QuotasScreen(fake.windows, now) }) { DecisionSheet(fake.decisions.first { it.id == "d1" }, now, { _, _, _ -> }, Replies(rememberDrafts()), onSnooze = {}, snoozeOpen = true) }
     }
 
     @Test fun sheetSnoozed() = capture("sheet-snoozed") {
-        Sheet({ QuotasScreen(fake.windows, now) }) { DecisionSheet(fake.snoozed[1], now, { _, _, _ -> }, Replies(rememberDrafts(), emptyMap()), onSnooze = {}) }
+        Sheet({ QuotasScreen(fake.windows, now) }) { DecisionSheet(fake.snoozed[1], now, { _, _, _ -> }, Replies(rememberDrafts()), onSnooze = {}) }
     }
 
     // A question's card held past the swipe's threshold, to the right (#692).

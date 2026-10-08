@@ -258,7 +258,6 @@ fun Main(decisions: List<Decision>, notice: StateFlow<String?>, dismiss: () -> U
                     entry<InboxKey> {
                         val vm: InboxViewModel = hiltViewModel()
                         val decisions by vm.decisions.collectAsStateWithLifecycle()
-                        val sending by vm.sending.collectAsStateWithLifecycle()
                         val prompts by vm.prompts.collectAsStateWithLifecycle()
                         val runs by vm.runs.collectAsStateWithLifecycle()
                         val view by vm.view.collectAsStateWithLifecycle()
@@ -275,7 +274,7 @@ fun Main(decisions: List<Decision>, notice: StateFlow<String?>, dismiss: () -> U
                             ),
                             DecisionActions(answer = vm::answer, open = { open(DecisionKey(it)) }, snooze = vm::snooze),
                             refresh = refresh(vm::refresh),
-                            replies = Replies(drafts, sending),
+                            replies = Replies(drafts),
                             prompts = prompts,
                             promptActions = PromptActions(answer = vm::answerPrompt, open = { open(PromptKey(it)) }),
                             pollPrompts = vm::refreshPrompts,
@@ -309,9 +308,8 @@ fun Main(decisions: List<Decision>, notice: StateFlow<String?>, dismiss: () -> U
                     entry<DecisionKey>(metadata = BottomSheetSceneStrategy.sheet) { key ->
                         val vm: InboxViewModel = hiltViewModel()
                         val decisions by vm.decisions.collectAsStateWithLifecycle()
-                        val sending by vm.sending.collectAsStateWithLifecycle()
                         val d = decisions.find { it.id == key.id } ?: return@entry
-                        DecisionSheet(d, seconds(d.waiting, now), vm::answer, Replies(drafts, sending), onSnooze = { until ->
+                        DecisionSheet(d, seconds(d.waiting, now), vm::answer, Replies(drafts), onSnooze = { until ->
                             vm.snooze(d.id, until)
                             // Put off, it leaves as an answered question would; brought back, it stays open.
                             if (until.isAfter(Instant.now()) && backStack.lastOrNull() == key) backStack.removeAt(backStack.lastIndex)

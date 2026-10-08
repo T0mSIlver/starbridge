@@ -104,6 +104,9 @@ interface Alerts {
     fun failed(decision: Decision, why: String) {}
 }
 
+/** An answer this phone has yet to hand the server, and when it was given; null for one queued before #895. */
+private data class Tap(val answer: String, val at: Instant?)
+
 /** What became of an answer: sent, waiting for a connection, answered elsewhere, or refused. */
 sealed interface Sent {
     /** The server took this device's answer, now or before: a second tap lands here (#331). */
@@ -192,13 +195,16 @@ class ServerStore(
     private val headBook = Heads(directories)
     /** The hold notice last shown, so it goes once the hold ends. */
     @Volatile private var shownHold: String? = null
-    override val sending = MutableStateFlow<Map<String, String>>(emptyMap())
     override val recovery = MutableStateFlow<RecoveryUi?>(null)
     override val replacing = MutableStateFlow<Replacing>(Replacing.Idle)
     /** While a new recovery key is on screen: its key pair, and the current one. */
     private var replacement: Pair<KeyPair, KeyPair>? = null
     /** Answers tapped but not yet sealed into [Saved.outbox]: the lock may be busy. */
-    private val tapped = java.util.concurrent.ConcurrentHashMap<String, String>()
+    private val tapped = java.util.concurrent.ConcurrentHashMap<String, Tap>()
+    /** Why the server refused this phone's last answer to a question, by decision id: its card says so. */
+    private val notSent = java.util.concurrent.ConcurrentHashMap<String, String>()
+    /** The decisions as saved, before this phone's unsent answers are laid over them ([showUnsent]). */
+    @Volatile private var savedDecisions: List<Decision> = emptyList()
 
     init {
         directory = runCatching { verified(saved.entries) }.getOrNull()
@@ -251,7 +257,7 @@ class ServerStore(
         if (!held && notice.value != null && notice.value == shownHold) notice.value = null
         // A revoked machine's items leave, as on the web: nothing it asked can be answered (#344).
         fun active(from: String) = directory?.members?.get(from)?.active != false
-        decisions.value = if (held) emptyList() else saved.decisions.filter { active(it.from) }.map(::toUi)
+        savedDecisions = if (held) emptyList() else saved.decisions.filter { active(it.from) }.map(::toUi)
         prompts.value = if (held) emptyList() else saved.prompts.filter { active(it.from) }.map(::toUi)
         // As the web: named once the account has more than one active machine.
         val named = (directory?.members?.values?.count { it.active && it.member.role == "machine" } ?: 0) > 1
@@ -260,11 +266,24 @@ class ServerStore(
         runs.value = if (held) emptyList() else saved.runs.filter { active(it.from) }.map(::toUi)
         members.value = directory?.let(::toUi).orEmpty()
         recovery.value = directory?.let(::recoveryUi)
-        showSending()
+        showUnsent()
     }
 
-    private fun showSending() {
-        sending.value = saved.outbox.associate { it.decisionId to it.answer } + tapped
+    /**
+     * Lays this phone's unsent answers over the decisions: a question leaves the open list the
+     * moment it is answered, and comes back with [Decision.notSent] if the server refuses it (#895).
+     */
+    @Synchronized
+    private fun showUnsent() {
+        val unsent = saved.outbox.associate { it.decisionId to Tap(it.answer, instant(it.at)) } + tapped
+        decisions.value = savedDecisions.map { d ->
+            val tap = unsent[d.id]
+            when {
+                !d.isOpen -> d
+                tap != null -> d.copy(answer = tap.answer, answeredAt = tap.at ?: d.createdAt, sending = true)
+                else -> notSent[d.id]?.let { d.copy(notSent = it) } ?: d
+            }
+        }
     }
 
     fun setDistributors(list: List<String>) {
@@ -1214,9 +1233,11 @@ class ServerStore(
      * wait for a connection (#329).
      */
     override fun answer(id: String, choice: String?, text: String?) {
-        if (id in sending.value) return
-        tapped[id] = choice ?: text.orEmpty()
-        showSending()
+        if (saved.outbox.any { it.decisionId == id }) return
+        val page = saved.decisions.find { it.body.id == id }?.body?.answerIn
+        if (tapped.putIfAbsent(id, Tap(choice ?: text ?: page?.let(::doneText).orEmpty(), Instant.now())) != null) return
+        notSent.remove(id)
+        showUnsent()
         run(showBusy = false) {
             try {
                 when (val sent = send(id, choice, text)) {
@@ -1231,12 +1252,16 @@ class ServerStore(
                             notice.value = "Already answered on another device."
                         }
                     }
-                    is Sent.Failed -> notice.value = "Not sent: ${sent.why}"
+                    is Sent.Failed -> notSent[id] = sent.why
                     is Sent.Answered -> Unit
                 }
+            } catch (e: Exception) {
+                // The session ended: report() asks to sign in again, and the answer waits for it.
+                if (e is CancellationException || e is ApiException && e.status == 401) throw e
+                notSent[id] = describe(e)
             } finally {
                 tapped.remove(id)
-                showSending()
+                showUnsent()
             }
         }
     }
@@ -1304,19 +1329,20 @@ class ServerStore(
         val machine = directory?.members?.get(d.from)?.takeIf { it.active }?.member
             ?: throw IllegalStateException("The machine that asked is no longer in your directory.")
         val answerId = newId("a_")
+        val at = now()
         val body = buildJsonObject {
             put("v", 1)
             put("id", answerId)
             put("decisionId", id)
             put("to", machine.id)
-            put("answeredAt", now())
+            put("answeredAt", at)
             choice?.let { put("choice", it) }
             text?.let { put("text", it) }
             if (done) put("done", true)
             // Lets the machine notice a server holding back entries, such as a revocation.
             directory?.let { d -> putJsonObject("dir") { put("length", d.length); put("head", d.head) } }
         }
-        val queued = QueuedAnswer(id, choice ?: text ?: doneText(page!!), envelopes.seal("answer", body, me.id, signKey, listOf(machine)))
+        val queued = QueuedAnswer(id, choice ?: text ?: doneText(page!!), envelopes.seal("answer", body, me.id, signKey, listOf(machine)), at = at)
         persist(saved.copy(outbox = saved.outbox + queued))
         return post(queued)
     }
@@ -1413,7 +1439,8 @@ class ServerStore(
                 is Sent.Answered -> decision?.let { alerts.answered(it, sent.answer) }
                 Sent.Elsewhere -> alerts.cancel(q.decisionId)
                 is Sent.Failed -> {
-                    notice.value = "Not sent: ${sent.why}"
+                    notSent[q.decisionId] = sent.why
+                    showUnsent()
                     decision?.let { alerts.failed(it, sent.why) }
                 }
             }

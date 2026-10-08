@@ -32,8 +32,6 @@ interface Store {
     val tooOld: StateFlow<String?>
     /** The last thing that went wrong, in words for the owner. */
     val notice: StateFlow<String?>
-    /** Answers going out or waiting for a connection, by decision id: the choice or the text, until the server takes them. */
-    val sending: StateFlow<Map<String, String>>
     /** The recovery key's state, once the directory is known (#348). */
     val recovery: StateFlow<RecoveryUi?>
     val replacing: StateFlow<Replacing>

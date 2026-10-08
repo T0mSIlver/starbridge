@@ -64,6 +64,10 @@ data class Decision(
     val takesDone: Boolean = false,
     /** Until when the owner put it off (#571), from the latest snooze any device sent. */
     val snoozedUntil: Instant? = null,
+    /** [answer] is this phone's and the server has yet to take it (#895). */
+    val sending: Boolean = false,
+    /** Why the server refused this phone's last answer; the question is open again (#895). */
+    val notSent: String? = null,
 ) {
     /** Waiting for the owner. */
     val isOpen: Boolean get() = answeredAt == null && answer == null

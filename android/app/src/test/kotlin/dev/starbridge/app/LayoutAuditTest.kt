@@ -208,12 +208,12 @@ class LayoutAuditTest(private val shot: String, private val look: Look) {
             InboxScreen(emptyList(), now, decisionActions, prompts = worst.prompts, promptActions = promptActions)
         },
         "find" to Shot(Tab.Inbox, bar = false, before = { compose.onNode(hasSetTextAction()).performTextInput("rebase") }) { Entry { FindScreen(worst.decisions, worst.prompts, now, {}, {}, {}) } },
-        "sheet-question" to sheet { DecisionSheet(worst.decisions[0], now, { _, _, _ -> }, Replies(rememberDrafts(), emptyMap())) },
-        "sheet-reply" to sheet(before = { compose.onNode(hasSetTextAction()).performTextInput("Only after the eval run") }) { DecisionSheet(worst.decisions[1], now, { _, _, _ -> }, Replies(rememberDrafts(), emptyMap())) },
+        "sheet-question" to sheet { DecisionSheet(worst.decisions[0], now, { _, _, _ -> }, Replies(rememberDrafts())) },
+        "sheet-reply" to sheet(before = { compose.onNode(hasSetTextAction()).performTextInput("Only after the eval run") }) { DecisionSheet(worst.decisions[1], now, { _, _, _ -> }, Replies(rememberDrafts())) },
         "sheet-prompt" to sheet { PromptSheet(worst.prompts[0], now, promptActions) },
         "sheet-prompt-input" to sheet(before = { compose.onNodeWithText("Full input").performClick() }) { PromptSheet(worst.prompts[0], now, promptActions) },
-        "sheet-images" to sheet { DecisionSheet(fake.screenshot.copy(source = worst.decisions[0].source, options = worst.decisions[0].options), now, { _, _, _ -> }, Replies(rememberDrafts(), emptyMap())) },
-        "image-viewer" to sheet(before = { compose.onNodeWithContentDescription("Inbox, dark").performClick() }) { DecisionSheet(fake.screenshot, now, { _, _, _ -> }, Replies(rememberDrafts(), emptyMap())) },
+        "sheet-images" to sheet { DecisionSheet(fake.screenshot.copy(source = worst.decisions[0].source, options = worst.decisions[0].options), now, { _, _, _ -> }, Replies(rememberDrafts())) },
+        "image-viewer" to sheet(before = { compose.onNodeWithContentDescription("Inbox, dark").performClick() }) { DecisionSheet(fake.screenshot, now, { _, _, _ -> }, Replies(rememberDrafts())) },
         "quotas" to Shot(Tab.Quotas) { QuotasScreen(worst.windows, now) },
         "quotas-your-order" to Shot(Tab.Quotas) { QuotasScreen(worst.windows, now, settings = QuotaSettings(order = listOf("mistral", "codex"), runningOutFirst = false)) },
         "quotas-tuned" to Shot(Tab.Quotas) {
