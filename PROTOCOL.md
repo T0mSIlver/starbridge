@@ -723,8 +723,8 @@ Pi extension stops a CLI that ran 600 s, kills one still running 10 s after it w
 defers either way.
 
 The keyboard can answer first. Esc or No sends the hook SIGTERM; it posts `settled: keyboard`
-and exits. A keyboard Yes sends no signal, so `starbridge hook settle` runs on `PostToolUse` and
-`PermissionDenied`, settling the session's waiting prompt whose `inputHash` matches the call's
+and exits. A keyboard Yes sends no signal, so `starbridge hook settle` runs on `PostToolUse`,
+`PostToolUseFailure` (the call ran and failed) and `PermissionDenied`, settling the session's waiting prompt whose `inputHash` matches the call's
 input (Claude Code's `PermissionRequest` input carries no `tool_use_id`), and on `Stop` and
 `SessionEnd`, settling every waiting prompt of the session. The waiting hook then exits at
 once through the agent, or within 5 s on its own path. At the deadline the hook prints nothing,
