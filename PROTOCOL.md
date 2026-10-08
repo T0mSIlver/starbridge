@@ -195,11 +195,14 @@ Devices run the same check on machines (#362). A machine signs its own head into
 posts, `dir: {length, head, by?}`. Before #794 a machine could instead sign a longer head an
 active device had signed into an answer, naming that device as `by` (`headToSign`). A device
 keeps the longest head each machine signed, apart for each `by` it lists, and in one slot per
-machine for any `by` it does not list (`noteHead`), so storage stays bounded; a slot whose `by` a
-`recover` removed takes any head. While a head its chain does not hold counts, it refuses every
+machine for any `by` it does not list (`noteHead`), so storage stays bounded. It keeps no head
+naming a `by` its chain lists as revoked, so a head the owner told it to forget does not come back
+when that item is read again; a fork served before the head could as well revoke the machine,
+whose items then open no more. The web app also keeps the members the owner told it to forget,
+and keeps no head they signed or are named in, even from a read begun on an older chain. While a head its chain does not hold counts, it refuses every
 machine's items and says the server is holding back directory entries; a head counts while its
-machine is listed in the device's chain and neither the machine nor its `by` was removed by a
-`recover`. A `by` the chain does not list counts: its `add` may be what the server holds back, as
+machine is listed in the device's chain and no `recover` came after a revocation of the machine
+or its `by`: the recovery key's `recover` revokes every member and ends every earlier hold. A `by` the chain does not list counts: its `add` may be what the server holds back, as
 when the owner revokes from a new phone. Before holding, a device reads the directory once more,
 since a machine may simply have signed an entry made elsewhere since its last read. It reads the
 items again once the server serves those entries, or once the owner stops waiting. Reading the
