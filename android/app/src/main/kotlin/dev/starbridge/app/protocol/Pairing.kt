@@ -1,6 +1,7 @@
 package dev.starbridge.app.protocol
 
 import java.net.URI
+import java.net.URLDecoder
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -69,7 +70,12 @@ fun checkKeyFromLink(text: String): String? {
  * names, and a link under another of them still pairs.
  */
 fun otherServer(text: String, server: String): String? {
-    val link = runCatching { URI(text.trim()) }.getOrNull() ?: return null
+    var link = runCatching { URI(text.trim()) }.getOrNull() ?: return null
+    // A machine's QR code names its server in the query (#795).
+    if (link.scheme == "starbridge") {
+        val named = link.rawQuery?.split('&')?.firstOrNull { it.startsWith("server=") }?.substring(7) ?: return null
+        link = runCatching { URI(URLDecoder.decode(named, "UTF-8")) }.getOrNull() ?: return null
+    }
     if (link.scheme != "https" && link.scheme != "http" || link.host == null) return null
     val own = runCatching { URI(server.trim()) }.getOrNull()
     return if (own != null && hostPort(own) == hostPort(link)) null else link.rawAuthority

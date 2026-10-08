@@ -96,11 +96,13 @@ test("pair prints a link and a QR code that carry the code; the app that scans i
   await until(() => ctx.lines.some((l) => l.includes("Or type the code")));
   const code = ctx.lines[0]?.replace("Pairing code: ", "") as string;
   const link = `${server.url}/pair#${code}`;
-  expect(ctx.lines.at(-2)).toBe(`  Or open  ${link}`);
-  // Only the QR carries the check key.
+  expect(ctx.lines.at(-2)).toBe(`  No app? Open  ${link}`);
+  // Only the QR carries the check key, in a link no browser opens.
   const scanned = scan(ctx.lines.slice(2, -2)) as string;
   const key = checkKeyFromLink(scanned) as string;
-  expect(scanned).toBe(`${server.url}/pair?k=${key}#${code}`);
+  expect(scanned).toBe(
+    `starbridge://pair?server=${encodeURIComponent(server.url)}&k=${key}#${code}`,
+  );
   await server.approve(code, key);
   expect(await done).toBe(0);
   // Checked by the app: nothing to show or ask.

@@ -234,9 +234,10 @@ Both pairing messages carry an HMAC (`crypto_auth`) keyed from the secret.
 A code expires after 10 minutes. The server could brute-force the secret offline from a MAC, but
 80 bits take far longer than that.
 
-Either side may make the code. A machine prints its own, as text, as a QR code and as a link
+Either side may make the code. A machine prints its own as text, as a link
 `<server>/pair#<code>` that opens the web page with the code filled in (`pairingLink`,
-`codeFromLink`); the fragment never reaches the server. An existing device can instead show a
+`codeFromLink`; the fragment never reaches the server), and as a QR code for the Android app
+(below). An existing device can instead show a
 code as a QR code: the new phone scans it and posts its request under it, and the device, which
 waits on `GET /pairings/:rendezvous?wait=`, checks the MAC and asks the owner to approve. Anyone
 who sees the code can post first, so the device shows the requester's name before approving, as
@@ -249,9 +250,10 @@ characters in four groups. That body holds the machine's keys and name, and thro
 whole chain before it. The Android app and the web page show each active machine's code under
 Devices, computed from the chain they verified.
 
-The machine's QR also carries a check key, 80 bits as 16 Crockford base32 characters, in its
-query: `<server>/pair?k=<key>#<code>` (`newCheckKey`, `checkKeyFromLink`). The printed link and
-code leave it out. An Android app that read the key adds `check` to its approval:
+The machine's QR code carries a check key, 80 bits as 16 Crockford base32 characters, in a link
+no browser opens: `starbridge://pair?server=<server>&k=<key>#<code>` (`appPairingLink`,
+`newCheckKey`, `checkKeyFromLink`). Only the Android app handles `starbridge:` links, so the key
+never reaches a page the server writes. The printed link and code leave it out. An Android app that read the key adds `check` to its approval:
 `crypto_auth` over the same bytes `checkCode` hashes, keyed by
 `BLAKE2b-256("starbridge/v1/check-key" NUL key)` (`checkProof`). The machine then, after it
 verified the chain:
@@ -273,9 +275,7 @@ it from searching both sides at once: it can predict the body of the entry the o
 will write, but not that device's signature. Without the check key, it cannot make a `check`
 the machine accepts, and stripping the app's `check` only makes the machine ask.
 
-Limits: a QR opened in a browser rather than the app (a phone camera with no app, or on a
-self-hosted server, where the App Link does not apply) hands the check key to the server, which
-can then confirm alone; a member browser lets a hostile page write both entries and search for a
+Limits: a member browser lets a hostile page write both entries and search for a
 pair that matches, about 2^40 tries; and the code proves nothing to a device that itself paired
 or joined through a browser, which the server could have put in a chain of its own. The web page
 shows the codes too, but a hostile server writes that page.

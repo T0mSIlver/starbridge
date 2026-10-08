@@ -4,6 +4,7 @@ import { hostname } from "node:os";
 import { join } from "node:path";
 import { createInterface } from "node:readline";
 import {
+  appPairingLink,
   checkCode,
   checkJoined,
   claimHash,
@@ -81,9 +82,10 @@ export async function pair(
   // The first line is part of the CLI's contract (CONTRACT.md); the link sits alone on its line
   // so it does not wrap in an 80-column terminal.
   ctx.out(`Pairing code: ${formatPairingCode(code)}`);
-  ctx.out("  Scan this with your phone's camera or the Starbridge app:");
-  for (const line of terminalQr(pairingLink(server, code, checkKey))) ctx.out(line);
-  ctx.out(`  Or open  ${link}`);
+  // A starbridge: link, which no browser opens: only the app reads the check key (#795).
+  ctx.out("  Scan this with the Starbridge Android app or your phone's camera:");
+  for (const line of terminalQr(appPairingLink(server, code, checkKey))) ctx.out(line);
+  ctx.out(`  No app? Open  ${link}`);
   ctx.out("  Or type the code under Devices in the app or web page. It expires in 10 minutes.");
 
   let result: { approval: unknown; token?: string } | undefined;
