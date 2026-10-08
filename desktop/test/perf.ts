@@ -112,7 +112,12 @@ const downloadMb = Math.max(
   ...dmgs.map((f) => Math.round(statSync(join(DESKTOP, "release", f)).size / 1e6)),
 );
 
-const result = { coldMs: median(cold.slice(1)), warmMs: median(warm), memoryMb: memory, downloadMb };
+const result = {
+  coldMs: median(cold.slice(1)),
+  warmMs: median(warm),
+  memoryMb: memory,
+  downloadMb,
+};
 console.log(JSON.stringify({ result, budgets: BUDGETS, cold, warm, dmgs }));
 for (const [k, budget] of Object.entries(BUDGETS)) {
   const got = result[k as keyof typeof result];

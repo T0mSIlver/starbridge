@@ -989,7 +989,8 @@ a browser; the app adds a menu bar count and notifications, so a web release nee
   if tapped there; when it fails, an "Answer not sent" notification says why. An item notifies
   again when its agent starts waiting or it comes back from snooze, and its notification closes
   when it leaves Needs you, wherever it was answered. Items already notified stay quiet across a
-  restart. The page notifies through the app, never through the browser's notifications.
+  restart. Items notify through the app, never through the browser's notifications; quota
+  alerts stay the page's own, which the app shows as it would a browser's.
 - **The menu bar.** The mark in one colour, as macOS draws menu bar icons; while anything needs
   the owner, its climber turns amber, the one amber light, with no count: the window says what
   (owner's pick from mockups, 2026-10-09). A click shows the window; a right-click opens the menu:

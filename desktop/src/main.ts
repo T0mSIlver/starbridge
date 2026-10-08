@@ -82,13 +82,14 @@ function ready(): void {
   });
 
   const ses = session.fromPartition("persist:starbridge");
-  // The page copies codes and keys; it asks for nothing else, and notifies through the app.
+  // The page copies codes and keys, and shows quota alerts as web notifications; items notify
+  // through the bridge instead. It gets nothing else.
+  const allowed = ["clipboard-sanitized-write", "notifications"];
   ses.setPermissionRequestHandler((wc, permission, done) =>
-    done(fromServer(wc.getURL()) && permission === "clipboard-sanitized-write"),
+    done(fromServer(wc.getURL()) && allowed.includes(permission)),
   );
   ses.setPermissionCheckHandler(
-    (_wc, permission, requesting) =>
-      fromServer(requesting) && permission === "clipboard-sanitized-write",
+    (_wc, permission, requesting) => fromServer(requesting) && allowed.includes(permission),
   );
 
   ipcMain.on("state", (e, x) => {
