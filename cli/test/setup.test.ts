@@ -30,6 +30,7 @@ import {
   installOpencode,
   opencodeState,
   PI_PACKAGE,
+  piPackage,
   removeOpencode,
 } from "../src/setup/harnesses";
 import { markedSkill } from "../src/setup/marker";
@@ -224,6 +225,24 @@ test("a second setup changes nothing", async () => {
   writeFileSync(pi, JSON.stringify({ packages: ["git:github.com/T0mSIlver/starbridge@v0.9.0"] }));
   await setup(m.sys, { yes: true, readyTimeoutMs: 2_000 });
   expect(JSON.parse(readFileSync(pi, "utf8")).packages).toEqual([PI_PACKAGE]);
+
+  // A fork is the owner's own package: not Starbridge's (#763).
+  for (const source of [
+    "git:github.com/T0mSIlver/starbridge-fork@main",
+    "https://github.com/T0mSIlver/starbridge.fork",
+    "git:github.com/T0mSIlver/starbridge/extra",
+  ]) {
+    writeFileSync(pi, JSON.stringify({ packages: [source] }));
+    expect(piPackage(m.sys)).toBeUndefined();
+  }
+  for (const source of [
+    "git:github.com/T0mSIlver/starbridge",
+    "https://github.com/T0mSIlver/starbridge.git@v0.9.0",
+    "git:git@github.com:t0msilver/starbridge@main",
+  ]) {
+    writeFileSync(pi, JSON.stringify({ packages: [source] }));
+    expect(piPackage(m.sys)).toBe(source);
+  }
 });
 
 test("setup asks for no server: it pairs with the one named, and asks only to switch (#749)", async () => {
