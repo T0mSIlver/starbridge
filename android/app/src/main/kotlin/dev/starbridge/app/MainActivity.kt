@@ -170,9 +170,9 @@ class MainActivity : ComponentActivity() {
             opening.trySend(PromptKey(it))
             intent.removeExtra(EXTRA_PROMPT)
         }
-        // The Quotas widget's tap (#894).
+        // The Quotas widget's tap (#894). Signed out, the key would wait and open Quotas after sign-in.
         if (intent?.getStringExtra(EXTRA_TAB) == TAB_QUOTAS) {
-            opening.trySend(QuotasKey)
+            if (store.phase.value == Phase.Ready) opening.trySend(QuotasKey)
             intent.removeExtra(EXTRA_TAB)
         }
     }

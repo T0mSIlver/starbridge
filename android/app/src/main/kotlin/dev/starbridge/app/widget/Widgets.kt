@@ -205,6 +205,9 @@ class QuestionsWidgetReceiver : GlanceAppWidgetReceiver() {
 
 /** A window as a widget row: its bar on the owner's scale, where it is headed, and its state in words. */
 internal class QuotaRow(val window: QuotaWindow, val bar: QuotaSettings.Bar, val course: Course, val mood: Mood, val word: String) {
+    /** The figure and the fill: a window that ran out reads 100% used, as on the Quotas screen. */
+    val percent: Int get() = if (course == Course.RanOut && bar.word == "used") 100 else bar.percent.coerceIn(0, 100)
+
     companion object {
         /** The windows as the Quotas screen orders them, under the owner's quota settings. */
         fun of(windows: List<QuotaWindow>, settings: QuotaSettings, now: Instant, h24: Boolean): List<QuotaRow> =
@@ -225,7 +228,7 @@ private fun Meter(row: QuotaRow, width: Dp, p: Palette) {
     val h = 8.dp
     val reach = 16.dp
     val ranOut = row.course == Course.RanOut
-    val fraction = (if (ranOut && row.bar.word == "used") 100 else row.bar.percent).coerceIn(0, 100) / 100f
+    val fraction = row.percent / 100f
     val fill = width * fraction
     val gap = 4.dp
     Box(GlanceModifier.width(width).height(reach), contentAlignment = Alignment.CenterStart) {
@@ -236,8 +239,9 @@ private fun Meter(row: QuotaRow, width: Dp, p: Palette) {
                 Box(GlanceModifier.width(width - fill - if (fill > gap) gap / 2 else 0.dp).height(h).cornerRadius(h / 2).background(p.tonal)) {}
             }
         }
+        // At the limit: the full end when the bar shows use, its start when it shows what's left.
         if (row.course != Course.Steady) Row {
-            Spacer(GlanceModifier.width(width - 3.dp))
+            if (row.bar.word == "used") Spacer(GlanceModifier.width(width - 3.dp))
             Box(GlanceModifier.width(3.dp).height(reach).cornerRadius(2.dp).background(p.bad)) {}
         }
         if (!ranOut) row.bar.steady?.let {
@@ -276,7 +280,7 @@ internal fun QuotasWidget(rows: List<QuotaRow>?, p: Palette) {
         if (size.width < 250.dp) {
             Text("${first.window.provider} · ${first.window.window}", style = style(14.sp, p.fg2, medium = true), maxLines = 1)
             Spacer(GlanceModifier.defaultWeight())
-            Text("${first.bar.percent}%", style = style(45.sp, p.fg, medium = true), maxLines = 1)
+            Text("${first.percent}%", style = style(45.sp, p.fg, medium = true), maxLines = 1)
             Spacer(GlanceModifier.height(4.dp))
             Meter(first, inner, p)
             Spacer(GlanceModifier.height(4.dp))
@@ -307,7 +311,7 @@ internal fun QuotasWidget(rows: List<QuotaRow>?, p: Palette) {
                         Meter(row, meter, p)
                         Spacer(GlanceModifier.width(12.dp))
                         Text(
-                            "${row.bar.percent}%",
+                            "${row.percent}%",
                             style = style(13.sp, p.fg, medium = true, align = TextAlign.End),
                             maxLines = 1,
                             modifier = GlanceModifier.width(figure),
