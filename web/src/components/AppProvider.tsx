@@ -7,6 +7,7 @@ import type { Boot, Ctx, Inbox, Quotas, Runs } from "@/lib/device";
 import { reach, send } from "@/lib/funnel";
 import { newestWins } from "@/lib/newest";
 import { AnsweredFirst } from "@/lib/outcome";
+import { Beacon, PRESENCE_CHECK_MS, PRESENCE_EVENTS } from "@/lib/presence";
 import {
   DEFAULT_SETTINGS,
   loadSettings,
@@ -453,6 +454,23 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       navigator.serviceWorker?.removeEventListener("message", onMessage);
     };
   }, [ctx, refreshInbox, refreshQuotas, refreshPrompts, pushed]);
+
+  // While the owner uses this page, the other devices' pushes wait (#848).
+  useEffect(() => {
+    if (!ctx) return;
+    const beacon = new Beacon(api.presence, () => document.visibilityState === "visible");
+    const input = () => beacon.input();
+    const tick = () => void beacon.tick();
+    for (const e of PRESENCE_EVENTS) window.addEventListener(e, input, { passive: true });
+    document.addEventListener("visibilitychange", tick);
+    const timer = setInterval(tick, PRESENCE_CHECK_MS);
+    return () => {
+      clearInterval(timer);
+      for (const e of PRESENCE_EVENTS) window.removeEventListener(e, input);
+      document.removeEventListener("visibilitychange", tick);
+      if (beacon.present()) api.presence(false).catch(() => {});
+    };
+  }, [ctx]);
 
   // While a prompt waits or just closed, poll fast so a keyboard answer clears it at once.
   const busy = prompts.length > 0;

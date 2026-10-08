@@ -17,7 +17,7 @@ import {
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { type Browser, type BrowserContext, firefox, type Page } from "playwright";
+import { type Browser, type BrowserContext, firefox, type Locator, type Page } from "playwright";
 import { layoutProblems, type Problem, zoomText } from "./layout.ts";
 
 const ROOT = resolve(import.meta.dirname, "../..");
@@ -68,7 +68,7 @@ function step(text: string) {
  * (#693, #758), so this clicks again until the radio is checked. It waits for the checked state
  * in the DOM, since the radio is never visible.
  */
-async function choose(page: Page, label: string) {
+async function choose(page: Page | Locator, label: string) {
   const radio = page.getByLabel(label, { exact: true });
   const checked = radio.and(page.locator(":checked"));
   for (let tries = 1; ; tries++) {
@@ -1665,6 +1665,56 @@ async function main() {
   await probe(page).waitFor({ timeout: 30_000 });
   await probe(page).click();
   await selected(page).getByRole("button", { name: /^Ship/ }).click();
+
+  step("while the first browser is in use, the second's notification waits the hold (#848)");
+  // The second browser must not count as in use itself: no input on it for longer than the server
+  // trusts its last beat.
+  await pageB.reload();
+  const quietSince = Date.now();
+  await page.goto(`${ORIGIN}/settings`);
+  const holdTime = page.getByRole("radiogroup", { name: /^Hold notifications/ });
+  await holdTime.waitFor({ timeout: 30_000 });
+  await choose(holdTime, "15 s");
+  await shoot(page, "settings-hold");
+  await page.goto(ORIGIN);
+  const use = async () => {
+    await page.mouse.move(20 + Math.random() * 200, 200);
+    await page.mouse.move(240, 220);
+  };
+  while (Date.now() - quietSince < 80_000) {
+    await use();
+    await page.waitForTimeout(5_000);
+  }
+  const holdAsk = cli(
+    "hold-ask",
+    [
+      ...["ask", "--question", "Hold probe: tag the release?", "--option", "Tag"],
+      ...["--option", "Wait", "--project", "starbridge", "--session", "e2e"],
+    ],
+    machineHome,
+  );
+  const [holdId] = await holdAsk.waitFor(/d_[\w-]+/);
+  if ((await holdAsk.exited) !== 0) throw new Error("ask for the hold probe failed");
+  const askedAt = Date.now();
+  const held = async () =>
+    ((await pageB.evaluate(NOTIFICATIONS)) as { title: string }[]).filter((n) =>
+      n.title.startsWith("Hold probe"),
+    ).length;
+  // The browser in use lists it at once; the other hears nothing until the hold ends.
+  await page.locator(`button[data-id="${holdId}"]`).waitFor({ timeout: 15_000 });
+  while (Date.now() - askedAt < 10_000) {
+    await use();
+    if ((await held()) > 0) throw new Error("the second browser was notified during the hold");
+    await page.waitForTimeout(1_000);
+  }
+  while ((await held()) === 0) {
+    if (Date.now() - askedAt > 40_000) throw new Error("the held notification never came");
+    await page.waitForTimeout(1_000);
+  }
+  await page.locator(`button[data-id="${holdId}"]`).click();
+  await selected(page).getByRole("button", { name: /^Tag/ }).click();
+  await page.goto(`${ORIGIN}/settings`);
+  await choose(holdTime, "Off");
 
   step("replace the recovery key with the current one; the second browser says so once (#348)");
   await page.goto(`${ORIGIN}/settings`);
