@@ -16,15 +16,18 @@ import { createInterface } from "node:readline";
 
 const DESKTOP = resolve(import.meta.dirname, "..");
 
+// From GitHub's macos-15 runner (arm64), packaged and ad hoc signed, 2026-10-09: cold 425–442 ms
+// (median of 5; the first launch after a build takes 1.2–1.7 s while macOS checks the new binary),
+// warm 7–15 ms, 304 MB, 133 MB. Each budget leaves room for the runner's noise, not for growth.
 export const BUDGETS = {
-  /** Process start to the first painted frame of the window, median of the runs. */
-  coldMs: 5_000,
-  /** Showing the hidden window to its next frame. */
-  warmMs: 1_000,
+  /** Process start to the window's first painted frame, median of the runs. */
+  coldMs: 700,
+  /** Showing the hidden window to its next frame, as from the menu bar. */
+  warmMs: 50,
   /** All processes' working sets, idle with the page loaded. */
-  memoryMb: 1_000,
+  memoryMb: 350,
   /** The largest DMG. */
-  downloadMb: 300,
+  downloadMb: 140,
 };
 const RUNS = 5;
 

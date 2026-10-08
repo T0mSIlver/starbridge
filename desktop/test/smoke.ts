@@ -1,8 +1,7 @@
 // Launches the app on a stand-in server page and checks the bridge end to end: the window loads
 // the page, the page's count reaches the menu bar, a question notifies with its options, a button
 // and a typed reply answer through the page, the notification closes once the question leaves,
-// the window refuses another origin, and a hidden window's page keeps its timers on time, so a
-// question still notifies within seconds. Notifications and the tray are watched in the main
+// the window refuses another origin, and a hidden window still notifies. Notifications and the tray are watched in the main
 // process, so no OS notification is needed (GitHub's macOS runners cannot grant the permission).
 //
 //   pnpm --filter @starbridge/desktop e2e     (on Linux: xvfb-run -a …)
@@ -161,30 +160,17 @@ try {
     "the prompt to close",
   );
 
-  // Hidden, the page runs its timers at full speed: Chromium would otherwise slow them to once a
-  // second, then once a minute, and notifications would come late. (With throttling off, Electron
-  // also keeps the page's visibilityState "visible".)
-  await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.hide());
-  assert.equal(
-    await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.isVisible()),
-    false,
-  );
+  // Hidden, the page keeps its timers at full speed, so a question still notifies at once.
+  // Chromium would slow them to once a second, then once a minute; GitHub's runners never do,
+  // so the setting is what can be checked here, and the timing on a real Mac.
+  const hidden = await app.evaluate(({ BrowserWindow }) => {
+    const w = BrowserWindow.getAllWindows()[0];
+    w?.hide();
+    return { visible: w?.isVisible(), throttled: w?.webContents.getBackgroundThrottling() };
+  });
+  assert.deepEqual(hidden, { visible: false, throttled: false });
   const late = { ...q, id: "d-2", title: "Still there?" };
-  // Chromium slows a hidden page's timers only after some seconds, so the window stays hidden 12.
-  const ticks = await page.evaluate(
-    (late) =>
-      new Promise<number>((done) => {
-        let ticks = 0;
-        const t = setInterval(() => ticks++, 100);
-        setTimeout(() => {
-          clearInterval(t);
-          (window as unknown as StandIn).send([late]);
-          done(ticks);
-        }, 12_000);
-      }),
-    late,
-  );
-  assert.ok(ticks >= 100, `a hidden page ticked ${ticks} times in 12 s, not ~120`);
+  await page.evaluate((late) => (window as unknown as StandIn).send([late]), late);
   await until(
     () => main((g) => g.shown.some((n) => n.id === "item-d-2")),
     "a hidden window's notification",

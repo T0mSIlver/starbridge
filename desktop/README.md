@@ -35,3 +35,20 @@ The page finds `window.starbridgeDesktop` only on the configured server's origin
 
 The main process checks that each message comes from the window's top frame on that origin, and
 checks every field again.
+
+## Budgets
+
+`test/perf.ts` measures the packaged app on GitHub's macOS runner and fails the `desktop`
+workflow when one is blown. The window loads a stand-in page there, so the network is not in the
+numbers.
+
+| | Budget | 2026-10-09 |
+|---|---|---|
+| Cold start: process start to the window's first painted frame (median of 5) | 700 ms | 425–442 ms |
+| Warm open: the hidden window to its next frame, as from the menu bar | 50 ms | 7–15 ms |
+| Idle memory: every process's working set, page loaded | 350 MB | 304 MB |
+| Download: the largest DMG | 140 MB | 133 MB |
+
+What keeps them: the main process is one 15 KB file, the updater loads 5 s after start from its
+own file, the window shows at once on the page's background colour, and closing it only hides it.
+`STARBRIDGE_TIMING=1` prints the marks (`timing {...}`) from any build.
