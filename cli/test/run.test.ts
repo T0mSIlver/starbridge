@@ -239,6 +239,39 @@ test("the reporter posts the start at once, the first progress right after, late
   expect(posts).toHaveLength(count);
 });
 
+test("updates sent within one second still carry ever later times, so devices keep the newest (#867)", async () => {
+  const posts: RunInput[] = [];
+  let ms = Date.parse("2026-10-05T10:00:00.100Z");
+  // Each reading of the clock is 70 ms after the last, all within one second.
+  const tick = () => {
+    ms += 70;
+    return new Date(ms);
+  };
+  const ctx = { ...testCtx(), now: tick };
+  const reporter = new Reporter(
+    {
+      id: "r_1",
+      title: "t",
+      reason: "r",
+      startedAt: "2026-10-05T10:00:00Z",
+      project: "p",
+      session: "",
+    },
+    async (input) => {
+      posts.push(input);
+    },
+    ctx,
+    { progressMs: 100, heartbeatMs: 5_000 },
+  );
+  reporter.start();
+  reporter.update({ done: 1, total: 5, unit: "step" });
+  await until(() => posts.length === 2, 50);
+  await reporter.finish(0);
+  const times = posts.map((p) => Date.parse(p.at));
+  expect(new Set(posts.map((p) => p.at)).size).toBe(posts.length);
+  expect(times).toEqual([...times].sort((a, b) => a - b));
+});
+
 test("progress printed while a post is in flight goes out after the progress gap, not the heartbeat's", async () => {
   const posts: RunInput[] = [];
   let release: (() => void) | undefined;
