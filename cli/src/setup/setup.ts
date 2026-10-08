@@ -271,6 +271,11 @@ export async function setup(sys: Sys, opts: SetupOpts): Promise<number> {
     ...(permissionsEnabled(ctx)
       ? []
       : ([["Send permission prompts", "starbridge config permissions on"]] as const)),
+    // A machine with a screen can hold the phone's pushes while the owner sits at it (#848).
+    ...(ctx.store.agentConfig().presence?.enabled ||
+    !["desktop", "laptop"].includes(ctx.store.agentConfig().machineKind ?? "")
+      ? []
+      : ([["Quiet the phone while here", "starbridge config presence on"]] as const)),
     ["Remove from one agent", `starbridge uninstall --agent ${one}`],
     ["Remove everything", "starbridge uninstall"],
   ]))

@@ -166,12 +166,15 @@ const HELP = `starbridge: post decisions to your devices, report runs, upload qu
       The commands above go through it when it runs, and to the server directly when not
       (or with STARBRIDGE_NO_AGENT=1).
 
-  starbridge config [permissions on|off] [machine-kind server|desktop|laptop|cloud]
+  starbridge config [permissions on|off] [presence on|off] [machine-kind server|desktop|laptop|cloud]
       Print this machine's settings, or change one. permissions: send its Claude Code
       permission prompts to your devices, where they can be allowed or denied; the prompt
       stays open at the keyboard and the first answer wins. Off by default; while off, the
-      starbridge plugin's permission hook exits at once. machine-kind: the icon devices
-      show, detected by setup.
+      starbridge plugin's permission hook exits at once. presence: while this machine's
+      screen is unlocked and had keyboard or mouse input in the last minute, notifications
+      on your other devices wait a few seconds, so a question you answer here doesn't buzz
+      your phone; the server hears only yes or no. Off by default. machine-kind: the icon
+      devices show, detected by setup.
 
   starbridge hook permission --agent claude-code|pi|opencode [--wait 570s]
   starbridge hook settle --agent claude-code
