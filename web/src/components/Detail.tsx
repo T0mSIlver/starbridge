@@ -21,9 +21,10 @@ import { Viewer } from "./Viewer";
 const kindOf = (source: object) => (source as { machineKind?: MachineKind }).machineKind;
 const agentOf = (d: object) => (d as { agent?: string }).agent;
 
-/** Sends one answer at a time, keeping its error to show. */
+/** Sends one answer at a time, keeping the one in flight and its error to show. */
 function useSend<T>(onAnswer: (reply: T) => Promise<void>) {
-  const [sending, setSending] = useState(false);
+  const [pending, setPending] = useState<T>();
+  const sending = pending !== undefined;
   const [error, setError] = useState<string>();
   /** Another device answered first (#330): the item says with what, once the machine tells. */
   const [lost, setLost] = useState(false);
@@ -31,7 +32,7 @@ function useSend<T>(onAnswer: (reply: T) => Promise<void>) {
   const send = async (reply: T) => {
     if (busy.current) return;
     busy.current = true;
-    setSending(true);
+    setPending(reply);
     setError(undefined);
     try {
       await onAnswer(reply);
@@ -40,10 +41,10 @@ function useSend<T>(onAnswer: (reply: T) => Promise<void>) {
       else setError(e instanceof Error ? e.message : String(e));
     } finally {
       busy.current = false;
-      setSending(false);
+      setPending(undefined);
     }
   };
-  return { send, sending, error, lost };
+  return { send, sending, pending, error, lost };
 }
 
 /** Keys for the selected item, ignored while typing or with a modifier. */
@@ -182,7 +183,11 @@ export function QuestionDetail({
   onSnooze: (until: Date) => Promise<void>;
 }) {
   const d = item.decision;
-  const { send, sending, error, lost } = useSend(onAnswer);
+  const { send, sending, pending, error, lost } = useSend(onAnswer);
+  // The recommended option keeps its amber while in flight only if it is the answer sent: a typed
+  // reply or another option must not look like it (#821).
+  const rec = (o: string, recommended: boolean) =>
+    recommended && (!pending || ("choice" in pending && pending.choice === o));
   const snoozeSend = useSend(onSnooze);
   const [clock] = usePref("clock");
   const [replying, setReplying] = useState(false);
@@ -228,7 +233,13 @@ export function QuestionDetail({
           <AnswerElsewhere page={d.answerIn} />
         </div>
       ) : paired ? (
-        <Picks d={d} keys={keys} sending={sending} onPick={(choice) => send({ choice })} />
+        <Picks
+          d={d}
+          keys={keys}
+          sending={sending}
+          rec={(o) => rec(o, o === d.recommended)}
+          onPick={(choice) => send({ choice })}
+        />
       ) : options.length > 0 ? (
         <fieldset className={`${s.actions} ${s.options}`}>
           <legend className="sr-only">Answer</legend>
@@ -236,7 +247,7 @@ export function QuestionDetail({
             <button
               key={o}
               type="button"
-              className={`t-label ${ui.btn} ${i === 0 ? ui.rec : ""}`}
+              className={`t-label ${ui.btn} ${rec(o, i === 0) ? ui.rec : ""}`}
               disabled={sending}
               aria-keyshortcuts={keys && i < 4 ? String(i + 1) : undefined}
               onClick={() => send({ choice: o })}
@@ -322,11 +333,13 @@ function Picks({
   d,
   keys,
   sending,
+  rec: isRec,
   onPick,
 }: {
   d: InboxItem["decision"];
   keys: boolean;
   sending: boolean;
+  rec: (option: string) => boolean;
   onPick: (choice: string) => void;
 }) {
   const images = d.images ?? [];
@@ -354,7 +367,7 @@ function Picks({
                 <button
                   key={o}
                   type="button"
-                  className={`t-label ${ui.btn} ${rec ? ui.rec : ""}`}
+                  className={`t-label ${ui.btn} ${isRec(o) ? ui.rec : ""}`}
                   disabled={sending}
                   aria-keyshortcuts={keys && i < 4 ? String(i + 1) : undefined}
                   onClick={() => onPick(o)}
