@@ -6,7 +6,8 @@
  *                                           take's events.json and its recording (phone.mp4
  *                                           or browser.webm)
  *
- * Env: OFFSET (seconds the recording lags the take's clock; default 0.3 for a phone, 0 else).
+ * Env: OFFSET (seconds the recording lags the take's clock; default 0.3 for a phone, 0 else),
+ * unless events.json has `sync` pairs (recordingTime).
  */
 import { mkdirSync, readdirSync, readFileSync, rmSync, statSync, symlinkSync } from "node:fs";
 import { join, resolve } from "node:path";
@@ -89,6 +90,25 @@ export function timeline(end: number, fast: Fast[] = []): number[] {
   return times;
 }
 
+/**
+ * The recording's time at the take's time `t`. `sync` pairs a take time with the recording time
+ * that shows then, such as the frame where a step lands on the phone and the moment its line
+ * prints: between pairs the recording plays slightly faster or slower, outside them at its own
+ * pace. Without pairs, the recording lags the take by `offset`.
+ */
+export function recordingTime(t: number, offset: number, sync: [number, number][] = []): number {
+  const pairs = [...sync].sort((a, b) => a[0] - b[0]);
+  const first = pairs[0];
+  const last = pairs.at(-1);
+  if (!first || !last) return t + offset;
+  if (t <= first[0]) return first[1] + t - first[0];
+  if (t >= last[0]) return last[1] + t - last[0];
+  const i = pairs.findIndex(([at]) => at > t);
+  const [t0, r0] = pairs[i - 1] as [number, number];
+  const [t1, r1] = pairs[i] as [number, number];
+  return r0 + ((t - t0) * (r1 - r0)) / (t1 - t0);
+}
+
 async function video(take: string) {
   const data = JSON.parse(readFileSync(join(take, "events.json"), "utf8"));
   const l = LAYOUTS[data.layout as Layout];
@@ -110,8 +130,8 @@ async function video(take: string) {
   }
   await browser.close();
 
-  // The recording as frames on the take's clock: trimmed after fps, which fills the still screen
-  // between a phone recording's sparse frames; then picked again at each output frame's time.
+  // The recording as frames at FPS, which fills the still screen between a phone recording's
+  // sparse frames; then picked again at each output frame's time on the recording.
   const offset = Number(process.env.OFFSET ?? data.offset ?? l.offset);
   const { hole, statusBar } = l;
   const shot = join(take, "recording");
@@ -119,13 +139,14 @@ async function video(take: string) {
   mkdirSync(join(shot, "picked"), { recursive: true });
   await ffmpeg(
     ...["-i", join(take, l.recording), "-vf"],
-    `fps=${FPS},trim=start=${offset},setpts=PTS-STARTPTS,crop=iw:ih*${1 - statusBar}:0:ih*${statusBar},` +
+    `fps=${FPS},crop=iw:ih*${1 - statusBar}:0:ih*${statusBar},` +
       `scale=${hole.w}:${hole.h}:flags=lanczos:force_original_aspect_ratio=increase,crop=${hole.w}:${hole.h}`,
     ...["-q:v", "2", "-start_number", "0", join(shot, "%05d.jpg")],
   );
   const recorded = readdirSync(shot).filter((f) => f.endsWith(".jpg")).length;
   for (const [i, t] of times.entries()) {
-    const from = Math.min(Math.round(t * FPS), recorded - 1);
+    const at = recordingTime(t, offset, data.sync);
+    const from = Math.max(0, Math.min(Math.round(at * FPS), recorded - 1));
     symlinkSync(
       join(shot, `${String(from).padStart(5, "0")}.jpg`),
       join(shot, "picked", `${String(i).padStart(5, "0")}.jpg`),

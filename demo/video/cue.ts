@@ -13,7 +13,7 @@
  *
  * <dir> holds the machine's home, so the owner's own pairing and agent are never used.
  */
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { createInterface } from "node:readline/promises";
 import { Agent, EVAL } from "./agents";
@@ -38,19 +38,22 @@ async function pair(server: string) {
   await cli(dir, "workstation", ["config", "machine-kind", "desktop"]).exited;
 }
 
-/** scrcpy recording the phone, once it says so; undefined without scrcpy. */
+/** scrcpy recording the phone, once its file has data; undefined without scrcpy. */
 async function record(path: string): Promise<Bun.Subprocess | undefined> {
   if (!Bun.which("scrcpy")) return undefined;
+  rmSync(path, { force: true });
+  // scrcpy's log is buffered when piped, so it shows in the terminal and the file is the signal.
   const p = Bun.spawn(["scrcpy", "--no-audio", "--no-control", `--record=${path}`], {
-    stdout: "pipe",
-    stderr: "pipe",
+    stdout: "inherit",
+    stderr: "inherit",
   });
-  let log = "";
-  for await (const chunk of p.stderr) {
-    log += new TextDecoder().decode(chunk);
-    if (/Recording started/i.test(log)) return p;
+  for (let i = 0; i < 300; i++) {
+    if (p.exitCode !== null) throw new Error(`scrcpy exited with ${p.exitCode} before recording`);
+    if (existsSync(path) && statSync(path).size > 0) return p;
+    await Bun.sleep(100);
   }
-  throw new Error(`scrcpy stopped before recording:\n${log}`);
+  p.kill("SIGINT");
+  throw new Error(`scrcpy wrote nothing to ${path} in 30 s`);
 }
 
 /** Answers the eval question from the stack's signed-in browser, as the owner would. */
@@ -104,7 +107,8 @@ async function take(out: string, stack?: string) {
     console.log(`Answered: ${agent.answer}. The eval runs for a minute.`);
     await Bun.sleep(1500);
     await agent.run();
-    await Bun.sleep(4000);
+    // Long enough for the run's "Passed" notification to reach the phone.
+    await Bun.sleep(12000);
     mark("end");
   } finally {
     await stop();

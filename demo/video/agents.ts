@@ -45,8 +45,8 @@ export const EVAL: Script = {
   image: "sample.png",
   next: "Running the full eval on Large.",
   run: {
-    title: "Eval: ranking prompt, 2,000 prompts",
-    reason: "rents 4 H100s, about $14",
+    title: "Eval: ranking prompt",
+    reason: "2,000 prompts on 4 rented H100s, about $14",
     command: "./eval.sh --model large",
     // One step per 10 s: the CLI sends progress at most that often, and the video speeds it up.
     every: 10.5,
