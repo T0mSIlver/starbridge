@@ -629,6 +629,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!desktop) return;
     desktop.onAnswer(async (a) => {
+      // Store.answer does nothing without a device: say so rather than pass for sent.
+      if (!ctxRef.current) throw new Error("Starbridge is signed out.");
       const item = inboxRef.current.items.find((i) => i.decision.id === a.id);
       if (!item || item.answeredAt) throw new Error("Already answered.");
       await answerRef.current(item, "choice" in a ? { choice: a.choice } : { text: a.text });
