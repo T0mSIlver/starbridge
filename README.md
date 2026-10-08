@@ -26,9 +26,6 @@ Launch week: [known issues](https://github.com/T0mSIlver/starbridge/issues?q=is%
   or add the repository to [Obtainium](https://apps.obtainium.imranr.dev/redirect?r=obtainium://add/https://github.com/T0mSIlver/starbridge)
   to get updates. The APK is signed with the same key as the Google Play build, so a Play install
   later updates it in place.
-- **Google Play:** in closed testing, and looking for testers. Join
-  [the group](https://groups.google.com/g/starbridge-testers), then
-  [opt in](https://play.google.com/apps/testing/dev.starbridge.app).
 - **iOS:** add [starbridge.run](https://starbridge.run) to the Home Screen from Safari to get
   notifications, on iOS 16.4 and later. A native app is planned.
 - **Any browser:** [starbridge.run](https://starbridge.run).

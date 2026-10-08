@@ -55,9 +55,9 @@ function Phone({ name, alt }: { name: string; alt: string }) {
   );
 }
 
-// On since Google's review of the closed test passed; README.md's Google Play line carries the
-// same two links (#576).
-const PLAY_TEST_OPEN = true;
+// Off while Play's closed test still serves 1.0.0-rc.1, which predates the current server; back on
+// once Play serves 0.1.0, with README.md's Google Play line (#576, #824).
+const PLAY_TEST_OPEN = false;
 
 const OBTAINIUM = `https://apps.obtainium.imranr.dev/redirect?r=obtainium://add/${REPO}`;
 
