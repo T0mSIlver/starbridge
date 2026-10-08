@@ -23,7 +23,10 @@ export class Presence implements Feature {
 
   constructor(
     private readonly hub: Hub,
-    private readonly reader: { read: () => Promise<Screen | undefined>; stop: () => void } = screenReader(),
+    private readonly reader: {
+      read: () => Promise<Screen | undefined>;
+      stop: () => void;
+    } = screenReader(),
   ) {}
 
   status(into: Status) {

@@ -221,6 +221,21 @@ To upload without the service:
 starbridge quota push --provider claude --provider codex
 ```
 
+### Quiet the phone while you're here
+
+On a desktop or laptop you work at, turn on presence:
+
+```bash
+starbridge config presence on
+```
+
+While this machine's screen is unlocked and had keyboard or mouse input in the last minute,
+notifications on your other devices wait for the time set in Starbridge's Settings (30 s by
+default) and come only if the question is still open, so one you answer here doesn't buzz your
+phone. The question itself shows everywhere at once. The machine reads its lock and idle time
+itself and tells the server only yes or no. It works on macOS, Windows, and Linux under GNOME
+or X11 with `xprintidle`; a machine with no screen sends nothing.
+
 ### Permission prompts
 
 Permission prompts from Claude Code, opencode and Pi stay at the keyboard until you turn them on

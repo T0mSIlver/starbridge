@@ -660,9 +660,9 @@ test("a claude -p session is told to wait, since no mod brings its answer back",
 test("config turns permission prompts on and off", async () => {
   const ctx = await paired(server);
   expect(await run(["config"], ctx)).toBe(0);
-  expect(ctx.lines.at(-2)).toBe("permissions   off");
+  expect(ctx.lines.at(-3)).toBe("permissions   off");
   expect(await run(["config", "permissions", "on"], ctx)).toBe(0);
-  expect(ctx.lines.at(-2)).toBe("permissions   on");
+  expect(ctx.lines.at(-3)).toBe("permissions   on");
   expect(await run(["config", "permissions", "maybe"], ctx)).toBe(1);
 });
 

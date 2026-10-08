@@ -64,8 +64,7 @@ export function graphical(sessions: string[]): { locked: boolean }[] {
   return sessions
     .map(properties)
     .filter(
-      (p) =>
-        p.Active === "yes" && (p.Type === "x11" || p.Type === "wayland") && p.Class === "user",
+      (p) => p.Active === "yes" && (p.Type === "x11" || p.Type === "wayland") && p.Class === "user",
     )
     .map((p) => ({ locked: p.LockedHint === "yes" }));
 }
@@ -84,7 +83,18 @@ async function readLinux(run: Exec): Promise<Screen | undefined> {
     .filter((id): id is string => !!id);
   const shown = await Promise.all(
     ids.map((id) =>
-      run("loginctl", ["show-session", id, "-p", "Type", "-p", "Active", "-p", "Class", "-p", "LockedHint"]),
+      run("loginctl", [
+        "show-session",
+        id,
+        "-p",
+        "Type",
+        "-p",
+        "Active",
+        "-p",
+        "Class",
+        "-p",
+        "LockedHint",
+      ]),
     ),
   );
   const screens = graphical(shown.filter((s): s is string => s !== undefined));
