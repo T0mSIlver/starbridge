@@ -81,6 +81,11 @@ jobs:
     name: end to end
     runs-on: ${{ vars.RUNNER || 'ubuntu-latest' }}
     timeout-minutes: 15
+    # actions: the tested step lists artifacts.
+    permissions:
+      contents: read
+      pull-requests: read
+      actions: read
     steps:
       # Not affected: the Android app, the evals, and Markdown no page renders. /docs renders
       # docs/*.md, cli/README.md and server/README.md (web/src/lib/docs.ts).
@@ -100,8 +105,26 @@ jobs:
               - 'docs/*.md'
               - 'cli/README.md'
               - 'server/README.md'
+      # A merge to main skips the run when a run of this workflow already passed on the same tree
+      # (#878): most often the pull request's own last run, on its merge with the main commit it
+      # was then merged onto, since a squash merge of an unchanged base yields the same tree. A
+      # tree holds every file, ci.yml included, so the run that passed tested exactly what main
+      # now holds, with the same steps. Each passing run uploads an artifact named after its tree.
+      # Only this repository's branches count: a fork's pull request runs its own ci.yml and could
+      # upload any name. Anything else, an expired artifact or a failed API call, runs it again.
+      - id: tested
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TREE: ${{ github.event.head_commit.tree_id }}
+        # Not gh: some self-hosted runners lack it (dell2-2).
+        run: |
+          n=$(curl -fsS -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' \
+            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/actions/artifacts?name=e2e-passed-$TREE&per_page=100" |
+            jq '[.artifacts[] | select((.expired | not) and .workflow_run.head_repository_id == .workflow_run.repository_id)] | length') || n=0
+          echo "passed=$([ "${n:-0}" -gt 0 ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
       - id: scope
-        run: echo "run=${{ github.event_name != 'pull_request' || steps.changes.outputs.code == 'true' || steps.changes.outputs.pages == 'true' }}" >> "$GITHUB_OUTPUT"
+        run: echo "run=${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && steps.tested.outputs.passed != 'true') || steps.changes.outputs.code == 'true' || steps.changes.outputs.pages == 'true' }}" >> "$GITHUB_OUTPUT"
       - if: steps.scope.outputs.run == 'true'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - if: steps.scope.outputs.run == 'true'
@@ -141,6 +164,20 @@ jobs:
         timeout-minutes: 11
         env:
           TMPDIR: ${{ runner.temp }}
+      # What a later merge of the same tree looks up (the tested step above). It holds the commit
+      # that passed; overwrite, since a re-run attempt uploads it again.
+      - id: tree
+        if: steps.scope.outputs.run == 'true'
+        run: |
+          git rev-parse HEAD > "$RUNNER_TEMP/e2e-passed"
+          echo "tree=$(git rev-parse 'HEAD^{tree}')" >> "$GITHUB_OUTPUT"
+      - if: steps.scope.outputs.run == 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: e2e-passed-${{ steps.tree.outputs.tree }}
+          path: ${{ runner.temp }}/e2e-passed
+          retention-days: 7
+          overwrite: true
       - if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:

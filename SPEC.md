@@ -1025,7 +1025,12 @@ Tokens, type and components: `DESIGN.md`.
   `packageManager`'s version, since node slim images ship no corepack (#430).
 - **CI** (#380). Main runs one at a time; a newer merge replaces the waiting run, and the head's
   deploy covers the merges in between. A pull request runs only the jobs its files can affect;
-  skipped jobs still report success. The e2e runs under `.github/watchdog.sh`. Tests point
+  skipped jobs still report success. The e2e runs under `.github/watchdog.sh`. A merge to main
+  skips the e2e when a run from this repository already passed it on the same git tree, most often
+  the pull request's last run on its merge with the commit main then held (#878): a tree fixes every
+  file, `ci.yml` included, so that run tested what main now holds. Each passing e2e uploads an
+  artifact named after its tree, kept 7 days; when none is found or the lookup fails, it runs. A
+  fork's runs do not count, since a fork's pull request runs its own `ci.yml`. Tests point
   `TMPDIR` at one directory per run and remove it (`test-tmp.ts`, #313). A `windows-latest` job
   (#552) runs the CLI's platform tests and starts a built `.exe`; the rest of the CLI suite runs
   there without failing the job until it passes. A private repository skips it, since GitHub's
