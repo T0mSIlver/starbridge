@@ -40,6 +40,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.lifecycle.ViewModel
@@ -413,7 +420,7 @@ internal fun RecoveryKey(
     shown: String,
     onDone: () -> Unit,
     title: String = "Your recovery key",
-    text: String = "Write this key down and keep it offline. If you lose every device, it adds a new one. This is the only time it is shown.",
+    text: String = "Keep this key in a password manager or on paper. If you lose every device, it adds a new one. This is the only time it is shown.",
     action: String = "Continue",
     busy: Boolean = false,
 ) {
@@ -429,15 +436,51 @@ internal fun RecoveryKey(
             }
         }
     }
+    KeyCopies(shown)
     Row(
         Modifier.fillMaxWidth().heightIn(min = Sizes.tap).toggleable(value = saved, role = Role.Checkbox, onValueChange = { saved = it }),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Checkbox(checked = saved, onCheckedChange = null)
         Spacer(Modifier.width(Spacing.s3))
-        Text("I wrote this key down", style = StarbridgeTheme.type.body, color = MaterialTheme.colorScheme.onSurface)
+        Text("I stored this key", style = StarbridgeTheme.type.body, color = MaterialTheme.colorScheme.onSurface)
     }
     Primary(action, busy = busy, enabled = saved, onClick = onDone)
+}
+
+private enum class Copied(val label: String) {
+    Clipboard("Copied. The clipboard clears itself in a minute."),
+    Saved("Saved to your password manager"),
+    Failed("No password manager took it. Copy it instead."),
+}
+
+/** Copy and Save to password manager (#817): the window blocks screenshots, not these. */
+@Composable
+private fun KeyCopies(key: String) {
+    val context = LocalContext.current
+    val activity = LocalActivity.current
+    val scope = rememberCoroutineScope()
+    var copied by remember { mutableStateOf<Copied?>(null) }
+    Column(verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
+        OutlinedButton(onClick = { KeyClipboard.copy(context, key); copied = Copied.Clipboard }, modifier = Modifier.fillMaxWidth().heightIn(min = Sizes.tap)) {
+            Symbol(Sym.Copy, size = 18.dp)
+            Spacer(Modifier.width(Spacing.s2))
+            Text("Copy", style = StarbridgeTheme.type.action)
+        }
+        if (activity != null) {
+            OutlinedButton(
+                onClick = { scope.launch { saveToPasswordManager(activity, key)?.let { copied = if (it) Copied.Saved else Copied.Failed } } },
+                modifier = Modifier.fillMaxWidth().heightIn(min = Sizes.tap),
+            ) {
+                Symbol(Sym.Key, size = 18.dp)
+                Spacer(Modifier.width(Spacing.s2))
+                Text("Save to password manager", style = StarbridgeTheme.type.action)
+            }
+        }
+        copied?.let {
+            Text(it.label, style = StarbridgeTheme.type.small, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
+        }
+    }
 }
 
 /** While shown, the window stays out of screenshots, screen sharing and the recents screen. */

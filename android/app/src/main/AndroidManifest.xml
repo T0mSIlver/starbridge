@@ -7,7 +7,10 @@
     <!-- Android 16 Live Updates: a running run's notification is promoted to the status bar. -->
     <uses-permission android:name="android.permission.POST_PROMOTED_NOTIFICATIONS" />
 
+    <!-- Credential Manager only stores the recovery key (#817); no website signs in with it, so
+         no asset statements link the app to one. -->
     <application
+        tools:ignore="CredManMissingDal"
         android:name=".StarbridgeApp"
         android:allowBackup="false"
         android:enableOnBackInvokedCallback="true"

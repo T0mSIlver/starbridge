@@ -134,6 +134,15 @@ provider plugins add providers, not panels.
   BLAKE2b-256 of `"starbridge/v1/recovery-seed" NUL seed` stretches it to an Ed25519 seed. It is not
   shown as words: a new site that shows 12 words and later asks for them back looks like
   seed-phrase phishing, and Chrome flagged starbridge.run for it. No page says "seed" or "phrase".
+- **The recovery key can be copied or saved to a password manager, never screenshotted** (#817).
+  Android's key screens block screenshots, screen sharing and the recents thumbnail
+  (`FLAG_SECURE`): a screenshot lands in the photo library and its cloud backup, where nobody
+  looks for a secret. Copy puts the key on the clipboard marked sensitive, so keyboards and the
+  clipboard preview hide it, and clears it after a minute if it still holds the key (or if the app,
+  in the background, can't tell). Save to password manager goes through Credential Manager, not
+  the share sheet: Google Password Manager takes no shared text and Bitwarden turns it into a
+  Send, while a saved password reaches all three of Google's, Bitwarden and 1Password. Without
+  either, owners had no way to save the key but typing it out. The web already had Copy.
 - **The first entry is posted only once the owner confirms the key is saved** (#328, #370). The web
   never stores the key; Android keeps the seed in its encrypted store until that confirmation. A browser marks its device posted before it posts the genesis, so an empty
   directory after that is the server's doing, and the keys stay (#371).
