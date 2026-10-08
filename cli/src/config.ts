@@ -34,7 +34,8 @@ export function configDir(env: Record<string, string | undefined>): string {
 
 /**
  * The file `plugin/hooks/settle.sh` reads in the config folder before it starts the CLI: written
- * with the state, `open` while a permission prompt is unsettled and unexpired, else empty (#517).
+ * with the state, `open` while a permission prompt is unsettled and unexpired (#517), or a
+ * question of Claude Code's picker unanswered (#848), else empty.
  */
 export const PROMPTS_OPEN = "permissions-open";
 
@@ -46,9 +47,10 @@ export const CLI_PATH = "cli-path";
 
 /** What `PROMPTS_OPEN` holds for state `s`. */
 export function promptsMark(s: State, now = Date.now()): string {
-  const open = Object.values(s.permissions ?? {}).some(
-    (p) => !p.settled && Date.parse(p.permission.expiresAt) > now,
-  );
+  const open =
+    Object.values(s.permissions ?? {}).some(
+      (p) => !p.settled && Date.parse(p.permission.expiresAt) > now,
+    ) || Object.entries(s.asked).some(([id, a]) => a.picker && !a.settled && !s.answers[id]);
   return open ? "open" : "";
 }
 
@@ -116,6 +118,11 @@ export interface State {
        * session gets it as a prompt, and `wait` without an id skips it.
        */
       held?: boolean;
+      /**
+       * Asked for this Claude Code session's open `AskUserQuestion` picker (#848): settled when
+       * the picker is answered there.
+       */
+      picker?: string;
     }
   >;
   /**

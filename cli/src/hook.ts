@@ -5,8 +5,9 @@
  * Claude app answered, so the waiting prompt is settled and its hook lets go.
  *
  * Neither ever allows anything by itself: on any error, timeout or lost network they print
- * nothing and exit 0, and Claude Code's own dialog decides. `hook ask-user` and `hook question`
- * do the same for questions asked in the terminal, Claude Code's and opencode's.
+ * nothing and exit 0, and Claude Code's own dialog decides. `hook permission` on Claude Code's
+ * `AskUserQuestion` and `hook question` do the same for questions asked in the terminal, Claude
+ * Code's and opencode's: they race the picker (#848).
  */
 import { basename } from "node:path";
 import type { Answer, Permission } from "@starbridge/protocol";
@@ -14,7 +15,16 @@ import { MAX_HOLD_SECONDS } from "./agent/api";
 import { type AgentClient, Interrupted, withAgent } from "./agent/client";
 import type { PermissionWait } from "./agent/permissions";
 import { type Ctx, parseDuration, session, UsageError } from "./context";
-import { type AskInput, ask, poll, settle } from "./decisions";
+import {
+  type AskInput,
+  ask,
+  EXIT_SNOOZED,
+  poll,
+  postDecision,
+  resolveSource,
+  settle,
+  wait,
+} from "./decisions";
 import {
   DEFAULT_WAIT_MS,
   hookDecision,
@@ -81,9 +91,12 @@ export async function hookPermission(
   const watch = untilOrphaned(outer.signal);
   const ctx = { ...outer, signal: watch.signal };
   try {
+    const hook = parseHook(stdin);
+    // Its picker is a permission dialog, raced whether or not permission prompts go to the devices.
+    if (hook.tool_name === "AskUserQuestion" && opts.agent === "claude-code")
+      return await racePicker(ctx, outer, hook, opts.wait);
     if (!permissionsEnabled(ctx)) return 0;
     const agent = agentName(opts.agent);
-    const hook = parseHook(stdin);
     const waitMs = opts.wait ? parseDuration(opts.wait) : DEFAULT_WAIT_MS;
     const deadline = ctx.now().getTime() + waitMs;
     const source = permissionSource(hook, ctx.env);
@@ -231,7 +244,12 @@ export async function hookSettle(
     // a new pairing replaced) is fixed under the lock.
     const st = ctx.store.state();
     if (ctx.store.promptsMarkStale(st)) ctx.store.updateState(() => {});
-    if (!sessionId || waitingFor(st, sessionId).length === 0) return 0;
+    if (!sessionId) return 0;
+    // The picker was answered or dismissed in Claude Code, or the turn ended: its questions are
+    // moot on the devices. A device's answer to it got there first and is no longer open.
+    if (hook.tool_name === "AskUserQuestion" || hook.tool_input === undefined)
+      await settlePicker(ctx, sessionId, "elsewhere");
+    if (waitingFor(ctx.store.state(), sessionId).length === 0) return 0;
     // A tool that ran or was denied names its call; the end of a turn or session settles all.
     const inputHash =
       hook.tool_input !== undefined ? inputHashOf(session(ctx).keys, hook.tool_input) : undefined;
@@ -263,58 +281,136 @@ export async function hookSettle(
   return 0;
 }
 
-/** The answer an agent reads to each question of an `AskUserQuestion` turned away. */
-export const ASK_USER_REASON =
-  "Not answered here: the user is away from this terminal, so ask through Starbridge instead. Run `starbridge ask` with the question, the context they need to answer it cold, the options and what each one changes, your recommendation first, as the `starbridge` skill says. Then keep working on what does not depend on the answer.";
+/** One question of Claude Code's `AskUserQuestion`, as its tool input carries it. */
+interface PickerQuestion {
+  question: string;
+  header?: string;
+  options?: { label: string; description?: string }[];
+  multiSelect?: boolean;
+}
 
-/** How long the server may take to answer before the hook lets `AskUserQuestion` through. */
-const REACH_MS = 3_000;
+function pickerQuestions(input: unknown): PickerQuestion[] | undefined {
+  const questions = (input as { questions?: unknown } | undefined)?.questions;
+  if (
+    !Array.isArray(questions) ||
+    questions.length === 0 ||
+    !questions.every((q) => typeof (q as { question?: unknown })?.question === "string")
+  )
+    return undefined;
+  return questions as PickerQuestion[];
+}
+
+/** The picker's open questions on this machine's devices, by the session that asked them. */
+export function pickerOpen(st: ReturnType<Ctx["store"]["state"]>, session: string): string[] {
+  return Object.entries(st.asked)
+    .filter(([id, a]) => a.picker === session && !a.settled && !st.answers[id])
+    .map(([id]) => id);
+}
+
+async function settlePicker(ctx: Ctx, session: string, outcome: "elsewhere" | "withdrawn") {
+  await Promise.all(
+    pickerOpen(ctx.store.state(), session).map((id) =>
+      settle({ ...ctx, signal: undefined }, { id, outcome }).catch((e) =>
+        ctx.err(`starbridge: could not settle ${id}: ${(e as Error).message}`),
+      ),
+    ),
+  );
+}
 
 /**
- * `starbridge hook ask-user`, on `PreToolUse` for `AskUserQuestion`: answers each question with
- * `ASK_USER_REASON`, so the agent asks through `starbridge ask`, which reaches the owner away
- * from the terminal. Claude Code shows that as an answered question; a deny would show as a red
- * hook error. Input it cannot read is denied instead. When the machine is not paired or its
- * server does not answer, it prints nothing and Claude Code asks as usual, so an agent always
- * has a way to ask.
+ * Claude Code's `AskUserQuestion` (#848), on `PermissionRequest` while its picker is open in the
+ * terminal, the desktop app or the Claude app. Each of its questions becomes a decision on the
+ * devices, already waiting and held from the session's answer loop. Once every one has a
+ * device's answer, it prints them as the picker's answers, which closes the picker. Claude Code
+ * says nothing to the hook when the picker is answered there: `hook settle` on `PostToolUse`
+ * settles the decisions. Esc and Claude Code's own hook timeout both send SIGTERM, so the hook
+ * stops itself at `wait`, before that timeout, and withdraws its questions: their answers could
+ * no longer reach the picker.
  */
-export async function hookAskUser(ctx: Ctx, stdin: string): Promise<number> {
-  try {
-    const machine = ctx.store.machine();
-    if (!machine) return 0;
-    const res = await fetch(`${machine.server.replace(/\/+$/, "")}/healthz`, {
-      signal: AbortSignal.timeout(REACH_MS),
-    });
-    if (!res.ok) return 0;
-  } catch {
+async function racePicker(
+  ctx: Ctx,
+  outer: Ctx,
+  hook: PermissionHookInput & Record<string, unknown>,
+  waitText: string | undefined,
+): Promise<number> {
+  const questions = pickerQuestions(hook.tool_input);
+  const sessionId = typeof hook.session_id === "string" ? hook.session_id : "";
+  if (!questions || !sessionId) return 0;
+  const s = session(ctx);
+  const waitMs = waitText ? parseDuration(waitText) : DEFAULT_WAIT_MS;
+  const cwd = typeof hook.cwd === "string" && hook.cwd ? hook.cwd : process.cwd();
+  const deadline = AbortSignal.timeout(waitMs);
+  // One question that cannot be asked stops the others: the picker takes all answers or none.
+  const failed = new AbortController();
+  const signal = AbortSignal.any([
+    ctx.signal ?? new AbortController().signal,
+    deadline,
+    failed.signal,
+  ]);
+  const results = await Promise.allSettled(
+    questions.map(async (q) => {
+      const sub: Ctx = { ...ctx, signal, err: () => {} };
+      const input: AskInput = {
+        ...questionInput({ ...q, multiple: q.multiSelect }),
+        agent: "claude-code",
+        session: sessionId,
+        project: basename(cwd),
+        held: true,
+        picker: sessionId,
+        waiting: true,
+      };
+      let id: string;
+      try {
+        ({ id } = await postDecision(sub, s, resolveSource(input, ctx.env, cwd)));
+      } catch (e) {
+        failed.abort();
+        throw e;
+      }
+      // A snooze puts it off on the devices; the picker still waits for an answer.
+      while (true) {
+        const lines: string[] = [];
+        const code = await wait(
+          { ...sub, out: (l) => lines.push(l) },
+          { id, json: true, "no-mark": true },
+          s,
+        );
+        if (code === 0 && lines[0])
+          return opencodeAnswer(JSON.parse(lines[0]) as Answer, { ...q, multiple: q.multiSelect });
+        if (code !== EXIT_SNOOZED) return undefined;
+      }
+    }),
+  );
+  const picked = results.map((r) => (r.status === "fulfilled" ? r.value : undefined));
+  const error = results.find((r) => r.status === "rejected");
+  if (error && !signal.aborted)
+    ctx.err(`starbridge: question not sent: ${(error.reason as Error).message}`);
+  if (picked.every((p) => p !== undefined) && !signal.aborted) {
+    const answers = Object.fromEntries(
+      questions.map((q, i) => [q.question, (picked[i] as string[]).join(", ")]),
+    );
+    const decision = {
+      behavior: "allow",
+      updatedInput: { ...(hook.tool_input as object), answers },
+    };
+    ctx.out(
+      JSON.stringify({ hookSpecificOutput: { hookEventName: "PermissionRequest", decision } }),
+    );
     return 0;
   }
-  let input: { questions: { question: string }[] } | undefined;
-  try {
-    const parsed = JSON.parse(stdin) as { tool_input?: { questions?: unknown } };
-    const questions = parsed.tool_input?.questions;
-    if (
-      Array.isArray(questions) &&
-      questions.length > 0 &&
-      questions.every((q) => typeof (q as { question?: unknown })?.question === "string")
-    )
-      input = parsed.tool_input as typeof input;
-  } catch {}
-  const hookSpecificOutput = input
-    ? {
-        hookEventName: "PreToolUse",
-        permissionDecision: "allow",
-        updatedInput: {
-          ...input,
-          answers: Object.fromEntries(input.questions.map((q) => [q.question, ASK_USER_REASON])),
-        },
-      }
-    : {
-        hookEventName: "PreToolUse",
-        permissionDecision: "deny",
-        permissionDecisionReason: ASK_USER_REASON,
-      };
-  ctx.out(JSON.stringify({ hookSpecificOutput }));
+  // SIGTERM: Esc at the picker (or Claude Code's timeout, which `wait` comes before). Otherwise
+  // the hook's own time ran out or a question could not be asked: no answer reaches the picker.
+  await settlePicker(ctx, sessionId, outer.signal?.aborted ? "elsewhere" : "withdrawn");
+  return 0;
+}
+
+/**
+ * `starbridge hook ask-user`, on `PreToolUse` for `AskUserQuestion`, from plugins before #848:
+ * prints nothing, so the picker opens and `hook permission` races it. Those plugins sent the
+ * agent to `starbridge ask` instead; plugins since keep the entry one release, so an older CLI
+ * under a newer plugin still does that rather than leave the picker to `hook permission`, which
+ * took it for a permission prompt.
+ */
+export function hookAskUser(): number {
   return 0;
 }
 
