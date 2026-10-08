@@ -73,7 +73,7 @@ fun RecoveryKeyScreen(
                 replacing.key,
                 actions.save,
                 title = "Your new recovery key",
-                text = "Write this key down and keep it offline. The old key works until you save this one.",
+                text = "Keep this key in a password manager or on paper. The old key works until you save this one.",
                 action = "Save the new key",
                 busy = replacing.saving,
             )

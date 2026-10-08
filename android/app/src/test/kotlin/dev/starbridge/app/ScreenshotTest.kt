@@ -315,6 +315,10 @@ class ScreenshotTest(private val dark: Boolean) {
     @Test fun recoveryKeyShown() = capture("recovery-key-shown") {
         Phone(null, 0) { RecoveryKeyScreen(Replacing.Shown("7K2M-QX9D-T4HR-8VNC-W3JP-F6BZ-0E5A"), busy = false, actions = recoveryActions) }
     }
+    // Copy says the clipboard clears itself (#817).
+    @Test fun recoveryKeyCopied() = capture("recovery-key-copied", before = { compose.onNodeWithText("Copy").performScrollTo().performClick() }) {
+        Phone(null, 0) { RecoveryKeyScreen(Replacing.Shown("7K2M-QX9D-T4HR-8VNC-W3JP-F6BZ-0E5A"), busy = false, actions = recoveryActions) }
+    }
     @Test fun recoveryKeyDone() = capture("recovery-key-done") { Phone(null, 0) { RecoveryKeyScreen(Replacing.Done, busy = false, actions = recoveryActions) } }
 
     // Every other device says once that the key was replaced.

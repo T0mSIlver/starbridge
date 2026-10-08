@@ -123,6 +123,10 @@ dependencies {
     // Scanning needs no camera permission: Google's scanner runs in Play services.
     implementation(libs.code.scanner)
     implementation(libs.zxing.core)
+    // Saves the recovery key to the owner's password manager; Play services carries Google's
+    // before Android 14.
+    implementation(libs.credentials)
+    implementation(libs.credentials.play.services.auth)
     implementation(libs.lifecycle.viewmodel.navigation3)
     // Lazysodium loads libsodium through JNA; Android needs JNA's AAR, which carries
     // its native dispatch library per ABI.
