@@ -1624,6 +1624,17 @@ export interface Runs {
   rejected: { id: string; error: string }[];
 }
 
+/** Drops a run from the server, so every device stops showing it (#827). */
+export async function dismissRun(ctx: Ctx, id: string): Promise<void> {
+  await hold(ctx);
+  try {
+    await api.deleteItem(id);
+  } catch (e) {
+    // Already gone: the sweep or another device dropped it.
+    if (!(e instanceof ApiError && e.status === 404)) throw e;
+  }
+}
+
 /** Every stored run: the server keeps the latest update of each, for a day. */
 export async function loadRuns(ctx: Ctx): Promise<Runs> {
   const out: Runs = { items: [], rejected: [] };

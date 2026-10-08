@@ -1537,6 +1537,35 @@ async function main() {
   await pageB.getByText(/^Later · on /).waitFor();
 
   step(
+    "Runs close and stay closed, still naming a failure; Dismiss drops a run on both browsers (#835, #827)",
+  );
+  const failing = cli(
+    "run-fails",
+    ["run", "--title", "Dismiss probe", "--reason", "fails at once", "--", "sh", "-c", "exit 3"],
+    machineHome,
+  );
+  if ((await failing.exited) !== 3) throw new Error("starbridge run should exit with its command");
+  await page.goto(ORIGIN);
+  await pageB.reload();
+  const runProbe = (p: typeof page) => p.getByRole("article", { name: "Dismiss probe" });
+  await runProbe(page).waitFor({ timeout: 30_000 });
+  await runProbe(pageB).waitFor({ timeout: 30_000 });
+  const runsHead = page.getByRole("button", { name: /^Runs/ });
+  if ((await runsHead.getAttribute("aria-expanded")) !== "true")
+    throw new Error("Runs should start open");
+  await runsHead.click();
+  await runProbe(page).waitFor({ state: "detached" });
+  await page.reload();
+  await runsHead.getByText(/failed$/).waitFor({ timeout: 30_000 });
+  if ((await runsHead.getAttribute("aria-expanded")) !== "false")
+    throw new Error("Runs should stay closed");
+  await runsHead.click();
+  await runProbe(page).getByRole("button", { name: "Dismiss Dismiss probe" }).click();
+  await runProbe(page).waitFor({ state: "detached" });
+  // The second browser reads runs every 10 s.
+  await runProbe(pageB).waitFor({ state: "detached", timeout: 30_000 });
+
+  step(
     "Done on one browser closes a question answered in an artifact on the other, and tells the agent (#539)",
   );
   const doneAsk = cli(

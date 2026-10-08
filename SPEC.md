@@ -732,9 +732,17 @@ Codex prompts are not supported.
   sealed run, so this is client-side. A lost run shows "Lost, no news for 3 min 37 s" and no
   elapsed time, since its last news may predate most of its life. A run with no progress shows an
   indeterminate bar.
-- Runs sit above the questions; finished ones stay 30 minutes. Android shows a notification per
-  run, a Live Update on Android 16. The web polls every 2 s while a run is live and the page is
-  visible, else every 10 s.
+- Runs sit above the questions in their own section, open by default, which each device
+  remembers open or closed like Snoozed and History (#835): many runs at once pushed the
+  questions off the first screen. Closed, its head still counts the runs and names failed and
+  lost ones, failed in red, so closing it never hides a failure.
+- Finished, failed and lost runs stay 30 minutes, unless the owner dismisses one (#827).
+  Dismissing deletes it from the server, so it leaves every device on its next read; a running
+  run offers no Dismiss, and one whose machine posts again comes back. Android also keeps a
+  dismissed run out locally until a newer update, so a server without the route still hides it
+  on that phone.
+- Android shows a notification per run, a Live Update on Android 16; dismissing a run closes it.
+  The web polls every 2 s while a run is live and the page is visible, else every 10 s.
 
 ### Quotas
 

@@ -171,7 +171,10 @@ class ScreenshotTest(private val dark: Boolean) {
     @Test fun inboxNoMachine() = capture("inbox-no-machine") { Phone(Tab.Inbox, 0) { InboxScreen(emptyList(), now, decisionActions, noMachine = true) } }
 
     // Runs as they end, and text at 200%.
-    @Test fun inboxEnded() = capture("inbox-ended") { Phone(Tab.Inbox, 0) { InboxScreen(emptyList(), now, decisionActions, runs = fake.endedRuns) } }
+    @Test fun inboxEnded() = capture("inbox-ended") { Phone(Tab.Inbox, 0) { InboxScreen(emptyList(), now, decisionActions, runs = fake.endedRuns, dismissRun = {}) } }
+
+    // Runs closed (#835): the head still names the failed one.
+    @Test fun inboxRunsClosed() = capture("inbox-runs-closed") { Phone(Tab.Inbox, 4) { InboxScreen(fake.decisions, now, decisionActions, prompts = fake.prompts, promptActions = promptActions, runs = fake.runs + fake.endedRuns, view = InboxView(runsOpen = false)) } }
 
     // The indeterminate bar never settles: stop the clock mid-sweep.
     @Test fun inboxQuietRuns() = capture("inbox-quiet-runs", before = { compose.mainClock.autoAdvance = false; repeat(70) { compose.mainClock.advanceTimeByFrame() } }) { Phone(Tab.Inbox, 0) { InboxScreen(emptyList(), now, decisionActions, runs = fake.quietRuns) } }

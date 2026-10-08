@@ -523,6 +523,8 @@ class Notifier(private val context: Context, private val prefs: Prefs) : Alerts 
      * RUN_STALE_MS. Ended: pass or fail with the duration, and it alerts once. Runs that ended
      * more than [Run.SHOWN_AFTER] ago, or lost their machine, show nothing.
      */
+    override fun cancelRun(id: String) = manager.cancel(RUNS, tag(id))
+
     override fun run(run: Run) {
         if (!allowed()) return
         val now = Instant.now()

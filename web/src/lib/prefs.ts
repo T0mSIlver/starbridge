@@ -8,6 +8,8 @@ export type Prefs = {
   historyOpen: boolean;
   /** The Snoozed group open (#571); collapsed by default. */
   snoozedOpen: boolean;
+  /** The Runs section open (#835); open by default. */
+  runsOpen: boolean;
   theme: "system" | "light" | "dark";
   /** When a question's row carries its answer buttons on narrow screens (#138). */
   rowAnswers: "always" | "waiting" | "never";
@@ -24,6 +26,7 @@ const DEFAULTS: Prefs = {
   grouping: "none",
   historyOpen: false,
   snoozedOpen: false,
+  runsOpen: true,
   theme: "system",
   rowAnswers: "always",
   clock: "system",

@@ -3,7 +3,6 @@ package dev.starbridge.app
 import dev.starbridge.app.data.Decision
 import dev.starbridge.app.data.Prompt
 import dev.starbridge.app.data.Source
-import dev.starbridge.app.ui.inbox.byMachine
 import dev.starbridge.app.ui.inbox.openQuestions
 import dev.starbridge.app.ui.inbox.shownPrompts
 import org.junit.Assert.assertEquals
@@ -31,16 +30,5 @@ class InboxOrderTest {
     @Test
     fun promptsOldestFirst() {
         assertEquals(listOf("a", "b"), shownPrompts(listOf(prompt("b", 5), prompt("a", 0)), now).map { it.id })
-    }
-
-    @Test
-    fun machinesInTheOrderOfTheirMostPressingNeedRunsOnlyLast() {
-        // "machine:item": A only runs, B has the first need, C a later one and a run.
-        val runs = listOf("A:run", "C:run")
-        val needs = listOf("B:prompt", "C:question")
-        assertEquals(
-            listOf(listOf("B:prompt"), listOf("C:run", "C:question"), listOf("A:run")),
-            byMachine(runs, needs) { it.substringBefore(':') },
-        )
     }
 }

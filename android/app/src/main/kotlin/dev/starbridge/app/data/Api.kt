@@ -263,6 +263,10 @@ class Api(private val http: OkHttpClient, private val server: String, private va
 
     suspend fun item(id: String): Listed = get("/items/$id")
 
+    suspend fun deleteItem(id: String) {
+        call("DELETE", "/items/$id")
+    }
+
     /** Asks every machine for a fresh quota snapshot; returns once they posted or [waitSeconds] pass. */
     suspend fun askQuota(waitSeconds: Int) {
         call("POST", "/quota/ask?wait=$waitSeconds", client = longPoll(waitSeconds))

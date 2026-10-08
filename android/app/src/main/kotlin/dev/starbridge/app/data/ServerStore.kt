@@ -86,6 +86,8 @@ interface Alerts {
     fun join(id: String, name: String)
     /** A run's newest update: shows, updates or ends its notification. */
     fun run(run: Run)
+    /** A run dismissed (#827): its notification goes. */
+    fun cancelRun(id: String) {}
     /** Quota alerts the uploader newly raised; each shows once, if this phone opted in. */
     fun quota(notices: List<QuotaNotice>) {}
     /**
@@ -1146,15 +1148,38 @@ class ServerStore(
         keepRuns(fresh, fromSync = true)
     }
 
+    override fun dismissRun(id: String) {
+        run(showBusy = false) {
+            val r = saved.runs.find { it.body.id == id } ?: return@run
+            persist(saved.copy(runs = saved.runs - r, dismissedRuns = saved.dismissedRuns + (id to r.body.at)))
+            alerts.cancelRun(id)
+            try {
+                api().deleteItem(id)
+            } catch (e: ApiException) {
+                if (e.status == 401) throw e
+                // 404: gone already, or a server without the route; this phone hides it either way.
+                if (e.status != 404) notice.value = "Dismissed on this phone only: ${describe(e)}"
+            } catch (e: IOException) {
+                notice.value = "No connection. Dismissed on this phone only."
+            }
+        }
+    }
+
     /**
      * Keeps each update newer than the one held for its run (by `at`, then the exit), drops runs
      * with no news for a day, as the server does, and hands each newer update to [alerts]. A sync
      * skips runs it first learns of already ended, so a new phone does not alert for old results.
+     * A sync lists every run the server holds, so a run it leaves out was dismissed on another
+     * device (#827). A run dismissed here stays out until its machine posts a newer update.
      */
     private fun keepRuns(updates: List<SavedRun>, fromSync: Boolean = false) {
         fun rank(r: SavedRun) = (instant(r.body.at) ?: Instant.EPOCH) to (r.body.exit != null)
-        val held = saved.runs.associateBy { it.body.id }.toMutableMap()
-        val newer = updates.filter { u ->
+        val dismissed = saved.dismissedRuns
+        val listed = updates.map { it.body.id }.toSet()
+        val (kept, gone) = saved.runs.partition { !fromSync || it.body.id in listed }
+        gone.forEach { alerts.cancelRun(it.body.id) }
+        val held = kept.associateBy { it.body.id }.toMutableMap()
+        val newer = updates.filter { u -> dismissed[u.body.id]?.let { at -> (instant(u.body.at) ?: Instant.EPOCH) > (instant(at) ?: Instant.EPOCH) } ?: true }.filter { u ->
             val h = held[u.body.id]
             val (at, exited) = rank(u)
             val wins = h == null || rank(h).let { (hAt, hExited) -> at > hAt || (at == hAt && exited && !hExited) }
@@ -1162,7 +1187,12 @@ class ServerStore(
             wins && !(fromSync && h == null && exited)
         }
         val dayAgo = Instant.now().minus(java.time.Duration.ofDays(1))
-        persist(saved.copy(runs = held.values.filter { toUi(it).lastNews > dayAgo }.sortedBy { it.body.startedAt }))
+        persist(
+            saved.copy(
+                runs = held.values.filter { toUi(it).lastNews > dayAgo }.sortedBy { it.body.startedAt },
+                dismissedRuns = dismissed.filter { (id, at) -> id !in held && (instant(at) ?: Instant.EPOCH) > dayAgo },
+            ),
+        )
         newer.forEach { alerts.run(toUi(it)) }
     }
 

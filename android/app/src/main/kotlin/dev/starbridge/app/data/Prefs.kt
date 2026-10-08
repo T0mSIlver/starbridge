@@ -25,6 +25,8 @@ data class InboxView(
     val snoozedOpen: Boolean = false,
     /** What a swipe right on a question does (#692). */
     val swipe: SwipeSnooze = SwipeSnooze.Hour,
+    /** Runs open (#835); open by default. */
+    val runsOpen: Boolean = true,
 )
 
 /** The inbox's groups: none, one per machine, or what blocks an agent above what can wait (#191). */
@@ -80,12 +82,13 @@ class Prefs @Inject constructor(@ApplicationContext context: Context) {
             prefs.getBoolean(REMIND_OFF, true),
             prefs.getBoolean(SNOOZED_OPEN, false),
             SwipeSnooze.entries.find { it.name == prefs.getString(SWIPE, null) } ?: SwipeSnooze.Hour,
+            prefs.getBoolean(RUNS_OPEN, true),
         ),
     )
     val inbox: StateFlow<InboxView> = _inbox
 
     fun setInbox(value: InboxView) {
-        prefs.edit().putString(GROUPING, value.grouping.name).putBoolean(HISTORY_OPEN, value.historyOpen).putString(BUTTONS, value.buttons.name).putBoolean(REMIND_OFF, value.remindOff).putBoolean(SNOOZED_OPEN, value.snoozedOpen).putString(SWIPE, value.swipe.name).apply()
+        prefs.edit().putString(GROUPING, value.grouping.name).putBoolean(HISTORY_OPEN, value.historyOpen).putString(BUTTONS, value.buttons.name).putBoolean(REMIND_OFF, value.remindOff).putBoolean(SNOOZED_OPEN, value.snoozedOpen).putString(SWIPE, value.swipe.name).putBoolean(RUNS_OPEN, value.runsOpen).apply()
         _inbox.value = value
     }
 
@@ -119,6 +122,7 @@ class Prefs @Inject constructor(@ApplicationContext context: Context) {
         const val ALLOW_UNSEEN = "allow-unseen"
         const val REMIND_OFF = "inbox-remind-notifications-off"
         const val SNOOZED_OPEN = "inbox-snoozed-open"
+        const val RUNS_OPEN = "inbox-runs-open"
         const val SWIPE = "inbox-swipe-snooze"
         // Defaults are written too, so changing one later never changes a choice already saved.
         val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }

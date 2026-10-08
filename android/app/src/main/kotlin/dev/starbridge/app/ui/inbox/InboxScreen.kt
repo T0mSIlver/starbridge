@@ -153,6 +153,7 @@ class InboxViewModel @Inject constructor(private val store: Store, private val p
     fun refreshPrompts() = store.refreshPrompts()
     fun answer(id: String, choice: String?, text: String?) = store.answer(id, choice, text)
     fun snooze(id: String, until: Instant) = store.snooze(id, until)
+    fun dismissRun(id: String) = store.dismissRun(id)
     fun refresh() = store.refresh()
     val recovery = store.recovery
     val members = store.members
@@ -192,12 +193,6 @@ private sealed interface Item {
     /** Whether an agent waits on it: a prompt, or a question its agent marked waiting. */
     val blocks: Boolean
 
-    class RunItem(val run: Run) : Item {
-        override val machine get() = run.source
-        override val key get() = "run/${run.id}"
-        override val blocks get() = false
-    }
-
     class PromptItem(val prompt: Prompt) : Item {
         override val machine get() = prompt.source
         override val key get() = "p/${prompt.id}"
@@ -229,6 +224,8 @@ fun InboxScreen(
     promptActions: PromptActions? = null,
     pollPrompts: () -> Unit = {},
     runs: List<Run> = emptyList(),
+    /** Drops a finished or lost run on every device (#827). */
+    dismissRun: ((String) -> Unit)? = null,
     view: InboxView = InboxView(),
     onView: (InboxView) -> Unit = {},
     onFind: () -> Unit = {},
@@ -290,9 +287,7 @@ fun InboxScreen(
     val shownRuns = Run.shown(runs, now)
     val open = openQuestions(decisions).filterNot { it.snoozed(now) }
     val snoozed = decisions.filter { it.snoozed(now) }.sortedBy { it.snoozedUntil }
-    val runItems = shownRuns.map(Item::RunItem)
     val needs: List<Item> = shown.map(Item::PromptItem) + open.map(Item::Question)
-    val feed: List<Item> = runItems + needs
     val needYou = open.size + shown.count { it.waiting(at) }
     val running = shownRuns.count { it.state(now) == Run.State.Running }
     val history = History(decisions.filterNot { it.isOpen }, prompts.filter { !it.waiting(at) && it !in shown }, now)
@@ -301,7 +296,7 @@ fun InboxScreen(
         "Inbox",
         modifier,
         refresh = refresh,
-        subtitle = if (feed.isEmpty()) null else ({ NeedsYou(needYou, running) }),
+        subtitle = if (needs.isEmpty() && shownRuns.isEmpty()) null else ({ NeedsYou(needYou, running) }),
         trailing = {
             IconButton(onClick = onFind) { Symbol(Sym.Search, size = 22.dp, tint = MaterialTheme.colorScheme.onSurfaceVariant, contentDescription = "Find") }
             ViewMenu(view, onView)
@@ -315,18 +310,18 @@ fun InboxScreen(
     ) {
         recoveryBanner(recovery, dismissRecovery)
         if (notificationsOff && view.remindOff) item(key = "notifications-off") { NotificationsOff { onView(view.copy(remindOff = false)) } }
-        if (feed.isEmpty()) {
-            item(key = "empty") { if (noMachine) NoMachine() else Empty() }
+        runs(shownRuns, now, view.runsOpen, { onView(view.copy(runsOpen = it)) }, dismissRun, segmented = view.grouping != Grouping.None)
+        if (needs.isEmpty()) {
+            if (shownRuns.isEmpty()) item(key = "empty") { if (noMachine) NoMachine() else Empty() }
         } else {
             when (view.grouping) {
-                Grouping.Machine -> byMachine(runItems, needs) { it.machine.machine }.forEach { items ->
+                // In the order of each machine's most pressing need; runs keep their section above (#835).
+                Grouping.Machine -> needs.groupBy { it.machine.machine }.values.forEach { items ->
                     item(key = "machine/${items.first().machine.machine}") { MachineHeader(items.first().machine) }
                     cards(items, at, swiping, replies, promptActions, view.buttons, segmented = true)
                 }
                 Grouping.Waiting -> {
-                    val (running, rest) = feed.partition { it is Item.RunItem }
-                    val (blocking, later) = rest.partition { it.blocks }
-                    cards(running, at, swiping, replies, promptActions, view.buttons, segmented = true)
+                    val (blocking, later) = needs.partition { it.blocks }
                     if (blocking.isNotEmpty()) {
                         // A prompt settled elsewhere stays a moment in place, but no longer counts.
                         val count = blocking.count { it !is Item.PromptItem || it.prompt.waiting(at) }
@@ -338,7 +333,7 @@ fun InboxScreen(
                         cards(later, at, swiping, replies, promptActions, view.buttons, segmented = true)
                     }
                 }
-                Grouping.None -> cards(feed, at, swiping, replies, promptActions, view.buttons)
+                Grouping.None -> cards(needs, at, swiping, replies, promptActions, view.buttons)
             }
         }
         snoozed(snoozed, now, view.snoozedOpen, { onView(view.copy(snoozedOpen = it)) }, swiping, replies, view.buttons, segmented = view.grouping != Grouping.None)
@@ -387,7 +382,6 @@ private fun LazyListScope.cards(items: List<Item>, now: Instant, actions: Decisi
         val m = Modifier.animateItem(placementSpec = MaterialTheme.motionScheme.defaultSpatialSpec())
             .padding(top = if (segmented || i == 0) 0.dp else cardGap - groupGap)
         when (item) {
-            is Item.RunItem -> RunCard(item.run, now, shape, m)
             is Item.PromptItem -> if (item.prompt.waiting(now) && promptActions != null) PromptCard(item.prompt, now, promptActions, shape, m) else ClosedPrompt(item.prompt, shape, m)
             is Item.Question -> DecisionCard(item.decision, now, actions, replies, shape, buttons, m)
         }
@@ -941,12 +935,48 @@ private fun LazyListScope.snoozed(decisions: List<Decision>, now: Instant, open:
     val joined = segmented && open
     val count = decisions.size + 1
     item(key = "snoozed") {
-        SectionHead(Sym.Snooze, "Snoozed", "${decisions.size}", open, onOpen, if (joined) segment(0, count) else cardShape)
+        SectionHead(Sym.Snooze, "Snoozed", AnnotatedString("${decisions.size}"), open, onOpen, if (joined) segment(0, count) else cardShape)
     }
     if (!open) return
     itemsIndexed(decisions, key = { _, it -> "s/${it.id}" }) { i, it ->
         val shape = if (joined) segment(i + 1, count) else cardShape
         DecisionCard(it, now, actions, replies, shape, buttons, sectionRow().padding(top = if (joined) 0.dp else cardGap - groupGap))
+    }
+}
+
+/**
+ * Runs (#835), open by default and remembered, above everything: closed, the head still names
+ * failed and lost runs, so closing it never hides a failure.
+ */
+private fun LazyListScope.runs(runs: List<Run>, now: Instant, open: Boolean, onOpen: (Boolean) -> Unit, dismiss: ((String) -> Unit)?, segmented: Boolean) {
+    if (runs.isEmpty()) return
+    val joined = segmented && open
+    val count = runs.size + 1
+    item(key = "runs") {
+        SectionHead(Sym.Play, "Runs", runsDetail(runs, now), open, onOpen, if (joined) segment(0, count) else cardShape)
+    }
+    if (!open) return
+    itemsIndexed(runs, key = { _, it -> "run/${it.id}" }) { i, it ->
+        val shape = if (joined) segment(i + 1, count) else cardShape
+        val onDismiss = dismiss?.takeIf { _ -> it.state(now) != Run.State.Running }?.let { d -> { d(it.id) } }
+        RunCard(it, now, shape, sectionRow().padding(top = if (joined) 0.dp else cardGap - groupGap), onDismiss)
+    }
+}
+
+/** "3 · 1 failed · 1 lost", the failures in red. */
+@Composable
+private fun runsDetail(runs: List<Run>, now: Instant): AnnotatedString {
+    val states = runs.map { it.state(now) }
+    val failed = states.count { it == Run.State.Failed }
+    val lost = states.count { it == Run.State.Lost }
+    val bad = StarbridgeTheme.colors.bad
+    return buildAnnotatedString {
+        append("${runs.size}")
+        if (failed > 0) {
+            append(" · ")
+            withStyle(SpanStyle(color = bad, fontWeight = FontWeight.Medium)) { append("$failed failed") }
+        }
+        if (lost > 0) append(" · $lost lost")
     }
 }
 
@@ -965,7 +995,7 @@ private fun atBottom(snoozed: Boolean, snoozedOpen: Boolean, history: Boolean, h
  * its place under the items, it glides as the cards do, over the rows it passes (#662).
  */
 @Composable
-private fun LazyItemScope.SectionHead(symbol: Sym, title: String, detail: String?, open: Boolean, onOpen: (Boolean) -> Unit, shape: Shape) {
+private fun LazyItemScope.SectionHead(symbol: Sym, title: String, detail: AnnotatedString?, open: Boolean, onOpen: (Boolean) -> Unit, shape: Shape) {
     val scheme = MaterialTheme.colorScheme
     Surface(
         Modifier.animateItem(placementSpec = MaterialTheme.motionScheme.defaultSpatialSpec()).zIndex(1f).fillMaxWidth().padding(top = Spacing.s3).clip(shape).clickable(onClickLabel = if (open) "Hide $title" else "Show $title") { onOpen(!open) },
@@ -996,7 +1026,7 @@ private fun LazyListScope.history(history: History, open: Boolean, onOpen: (Bool
     val count = history.rows.size + 1
     if (history.rows.isEmpty()) return
     item(key = "history") {
-        SectionHead(Sym.History, "History", if (history.todayCount > 0) "${history.todayCount} answered today" else null, open, onOpen, if (joined) segment(0, count) else cardShape)
+        SectionHead(Sym.History, "History", if (history.todayCount > 0) AnnotatedString("${history.todayCount} answered today") else null, open, onOpen, if (joined) segment(0, count) else cardShape)
     }
     if (!open) return
     itemsIndexed(history.rows, key = { _, (_, it) -> if (it is Decision) "h/d/${it.id}" else "h/p/${(it as Prompt).id}" }) { i, (at, it) ->

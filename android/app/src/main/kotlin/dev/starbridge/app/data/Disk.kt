@@ -135,6 +135,8 @@ data class Saved(
     val recovering: Member? = null,
     /** The last replacement of the recovery key whose notice this phone dismissed (its seq). */
     val recoverySeen: Int = -1,
+    /** Runs dismissed on this phone (#827), by id, with the `at` of the update dismissed. */
+    val dismissedRuns: Map<String, String> = emptyMap(),
 )
 
 /**

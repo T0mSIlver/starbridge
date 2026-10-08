@@ -96,13 +96,6 @@ fun shownPrompts(prompts: List<Prompt>, now: Instant): List<Prompt> = prompts
     .filter { it.waiting(now) || (it.endedAt != null && now.toEpochMilli() - it.endedAt.toEpochMilli() < CLOSING_MS) }
     .sortedBy { it.createdAt }
 
-/**
- * "Group by machine", as on the web: each machine's runs, then its needs, the machines in the
- * order of their most pressing need, and machines with only runs last.
- */
-fun <T> byMachine(runs: List<T>, needs: List<T>, machine: (T) -> String): List<List<T>> =
-    (needs.map(machine) + runs.map(machine)).distinct().map { m -> runs.filter { machine(it) == m } + needs.filter { machine(it) == m } }
-
 /** Open questions as the feed lists them (SPEC, Clients): those whose agent waits first, each oldest first. */
 fun openQuestions(decisions: List<Decision>): List<Decision> = decisions
     .filter { it.isOpen }

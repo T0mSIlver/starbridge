@@ -280,6 +280,7 @@ fun Main(decisions: List<Decision>, notice: StateFlow<String?>, dismiss: () -> U
                             promptActions = PromptActions(answer = vm::answerPrompt, open = { open(PromptKey(it)) }),
                             pollPrompts = vm::refreshPrompts,
                             runs = runs,
+                            dismissRun = vm::dismissRun,
                             view = view,
                             onView = vm::setView,
                             onFind = { backStack.add(FindKey) },
