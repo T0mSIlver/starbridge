@@ -180,7 +180,7 @@ class ServerStore(
         "This phone's saved sign-in couldn't be read, so you're signed out. Sign in again.".takeIf { disk.unreadable.isNotEmpty() },
     )
     private val headBook = Heads(directories)
-    override val heldRevoked = MutableStateFlow<String?>(null)
+    override val heldRevoked = MutableStateFlow<HeldRevoked?>(null)
     /** The hold notice last shown, so it goes once the hold ends. */
     @Volatile private var shownHold: String? = null
     override val sending = MutableStateFlow<Map<String, String>>(emptyMap())
@@ -834,7 +834,7 @@ class ServerStore(
         // Removed from the devices: the wipe said why, and nothing more opens.
         if (phase.value != Phase.Ready) return true
         val why = withheld() ?: return false
-        heldRevoked.value = directory?.let { headBook.withheldBy(saved.heads, it, saved.entries) }?.revoked?.id
+        heldRevoked.value = directory?.let { headBook.withheldBy(saved.heads, it, saved.entries) }?.revoked?.let { HeldRevoked(it.id, why) }
         notice.value = why
         shownHold = why
         alerts.clearAll()

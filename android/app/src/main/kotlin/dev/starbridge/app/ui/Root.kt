@@ -130,17 +130,18 @@ private fun seconds(live: Boolean, slow: Instant): Instant {
 }
 
 /**
- * Shows the store's notices as snackbars. With [stopWaiting], a hold that only the owner's word
- * ends (#813), the notice stays with a Stop waiting action until they act on it or dismiss it.
+ * Shows the store's notices as snackbars. The notice of a hold that only the owner's word ends
+ * (#813) stays with a Stop waiting action, [stopWaiting], until they act on it or dismiss it;
+ * no other notice carries it.
  */
 @Composable
-private fun Notices(notice: StateFlow<String?>, dismiss: () -> Unit, stopWaiting: (() -> Unit)? = null): SnackbarHostState {
+private fun Notices(notice: StateFlow<String?>, dismiss: () -> Unit, stopWaiting: Pair<String, () -> Unit>? = null): SnackbarHostState {
     val host = remember { SnackbarHostState() }
     val text by notice.collectAsStateWithLifecycle()
     val stop by rememberUpdatedState(stopWaiting)
     LaunchedEffect(text) {
         text?.let {
-            val action = stop
+            val action = stop?.takeIf { (held, _) -> held == it }?.second
             val result = host.showSnackbar(it, actionLabel = action?.let { "Stop waiting" }, withDismissAction = true)
             dismiss()
             if (result == SnackbarResult.ActionPerformed) action?.invoke()
@@ -189,7 +190,7 @@ internal fun suiteType(): NavigationSuiteType {
  */
 @OptIn(ExperimentalMaterial3AdaptiveApi::class)
 @Composable
-fun Main(decisions: List<Decision>, notice: StateFlow<String?>, dismiss: () -> Unit, opening: Flow<NavKey>, stopWaiting: (() -> Unit)? = null) {
+fun Main(decisions: List<Decision>, notice: StateFlow<String?>, dismiss: () -> Unit, opening: Flow<NavKey>, stopWaiting: Pair<String, () -> Unit>? = null) {
     val backStack = rememberNavBackStack(InboxKey)
     val now = now()
     // A snoozed question counts again once it is back (#691).

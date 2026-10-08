@@ -289,7 +289,8 @@ class WithheldTest {
         served = fork
         store.refresh()
         until { store.heldRevoked.value != null }
-        assertEquals(target.id, store.heldRevoked.value)
+        assertEquals(target.id, store.heldRevoked.value?.member)
+        assertEquals(store.notice.value, store.heldRevoked.value?.notice)
         assertTrue(store.notice.value!!.contains("Stolen phone revoked ${target.name}"))
         assertTrue(store.decisions.value.isEmpty())
         // Only the owner's word ends it, and reading the machine's item again does not bring it back.

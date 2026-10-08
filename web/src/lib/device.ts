@@ -1176,7 +1176,9 @@ async function hold(ctx: Ctx): Promise<void> {
   const heads = (await store.get("heads", ctx.account)) ?? {};
   if (!withheldBy(heads, ctx.dir, ctx.entries)) return;
   const fresh = await refresh(ctx);
-  const held = withheldBy(heads, fresh.dir, fresh.entries);
+  // Read again: the owner may have stopped waiting while the directory loaded.
+  const now = (await store.get("heads", ctx.account)) ?? {};
+  const held = withheldBy(now, fresh.dir, fresh.entries);
   if (held) throw new Withheld(heldText(fresh.dir, held), held.revoked?.id);
 }
 
