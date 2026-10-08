@@ -178,12 +178,14 @@ const HELP = `starbridge: post decisions to your devices, report runs, upload qu
       For Claude Code's PermissionRequest hook, and for its PostToolUse, PostToolUseFailure,
       PermissionDenied, Stop and SessionEnd hooks: hook JSON on stdin; prints the hook's decision, or nothing
       to leave the prompt to the keyboard. The Starbridge Pi extension runs it with --agent pi
-      for pi-permission-system's prompts, the opencode plugin with --agent opencode.
+      for pi-permission-system's prompts, the opencode plugin with --agent opencode. On
+      Claude Code's AskUserQuestion it posts each question to your devices, whatever the
+      permissions setting, and prints the first device answers as the picker's; an answer
+      in the picker settles them.
 
   starbridge hook ask-user
-      For Claude Code's PreToolUse hook on AskUserQuestion: hook JSON on stdin; answers each
-      question by telling the agent to use \`starbridge ask\`; prints nothing, which lets it
-      through, when this machine is not paired or the server does not answer.
+      For Claude Code's PreToolUse hook on AskUserQuestion, from older plugins: prints
+      nothing, so the picker opens and hook permission races it.
 
   starbridge hook question --agent opencode
       For the Starbridge opencode plugin, on each call of opencode's question tool: posts each
@@ -539,7 +541,7 @@ export async function run(argv: string[], ctx: Ctx): Promise<number> {
         });
         if (sub === "permission") return await hookPermission(ctx, readText("-"), values);
         if (sub === "settle") return await hookSettle(ctx, readText("-"), values);
-        if (sub === "ask-user") return await hookAskUser(ctx, readText("-"));
+        if (sub === "ask-user") return hookAskUser();
         if (sub === "question") return await hookQuestion(ctx, readText("-"), values);
         throw new UsageError(
           "usage: starbridge hook permission|settle --agent claude-code, starbridge hook ask-user, or starbridge hook question --agent opencode",

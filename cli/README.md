@@ -264,9 +264,10 @@ Keys and state live in `~/.config/starbridge` (or `$XDG_CONFIG_HOME/starbridge`,
 `$STARBRIDGE_CONFIG_DIR`), readable only by you. `starbridge config` prints this machine's
 settings.
 
-The Claude Code plugin's hooks call `starbridge hook …`. One of them turns Claude Code's
-`AskUserQuestion` into `starbridge ask`, so the question reaches you away from the terminal; if
-the machine is not paired or the server doesn't answer, it lets the question through. The
+The Claude Code plugin's hooks call `starbridge hook …`. When Claude Code opens its
+`AskUserQuestion` picker, `starbridge hook permission` posts the question to your devices too:
+the first answer, in the picker or on a device, wins, and the other closes as answered
+elsewhere. If the machine is not paired or the server can't be reached, only the picker asks. The
 opencode plugin runs `starbridge hook question --agent opencode` on each call of opencode's
 `question` tool: it posts each question to your devices and prints the answers for opencode,
 or nothing if the terminal answers first or the server can't be reached.
