@@ -452,3 +452,12 @@
     gap: var(--s3) var(--s5);
   }
 }
+
+/* "end-to-end encrypted" links to what the server sees, the claim's limits. */
+.metaLink {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: currentColor;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+}

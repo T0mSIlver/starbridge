@@ -17,6 +17,7 @@ import kotlinx.serialization.json.decodeFromJsonElement
 import kotlinx.serialization.json.encodeToJsonElement
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.int
 import kotlinx.serialization.json.put
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Call
@@ -263,6 +264,10 @@ class Api(private val http: OkHttpClient, private val server: String, private va
 
     suspend fun item(id: String): Listed = get("/items/$id")
 
+    suspend fun deleteItem(id: String) {
+        call("DELETE", "/items/$id")
+    }
+
     /** Asks every machine for a fresh quota snapshot; returns once they posted or [waitSeconds] pass. */
     suspend fun askQuota(waitSeconds: Int) {
         call("POST", "/quota/ask?wait=$waitSeconds", client = longPoll(waitSeconds))
@@ -281,4 +286,15 @@ class Api(private val http: OkHttpClient, private val server: String, private va
     suspend fun unsubscribe(id: String) {
         call("DELETE", "/push/subscriptions/$id")
     }
+
+    /** Whether the owner is using this phone (#848): one bit. */
+    suspend fun presence(present: Boolean) {
+        call("PUT", "/presence", buildJsonObject { put("present", present) })
+    }
+
+    /** The account's hold time in seconds (#848). */
+    suspend fun pushHold(): Int = call("GET", "/settings").second!!.jsonObject.getValue("pushHold").jsonPrimitive.int
+
+    suspend fun setPushHold(seconds: Int): Int =
+        call("PUT", "/settings", buildJsonObject { put("pushHold", seconds) }).second!!.jsonObject.getValue("pushHold").jsonPrimitive.int
 }

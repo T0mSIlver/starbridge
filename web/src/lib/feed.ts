@@ -77,30 +77,18 @@ export const running = (runs: RunItem[], now: number): Entry[] =>
 export type Group = { machine: string; kind?: MachineKind; entries: Entry[] };
 
 /**
- * "Group by machine": one group per machine, its runs then its needs, the groups in the order of
- * their most pressing need; machines with only runs come last.
+ * "Group by machine": one group per machine, in the order of its most pressing need. Runs keep
+ * their own section above (#835).
  */
-export function byMachine(runs: Entry[], needs: Entry[]): Group[] {
+export function byMachine(needs: Entry[]): Group[] {
   const groups = new Map<string, Group>();
-  const add = (e: Entry) => {
+  for (const e of needs) {
     const g = groups.get(e.machine) ?? { machine: e.machine, kind: e.kind, entries: [] };
     g.kind ??= e.kind;
     g.entries.push(e);
     groups.set(e.machine, g);
-  };
-  needs.forEach(add);
-  const order = [...groups.keys()];
-  for (const r of runs) add(r);
-  const rank = (m: string) => (order.includes(m) ? order.indexOf(m) : order.length);
-  return [...groups.values()]
-    .map((g) => ({
-      ...g,
-      entries: [
-        ...g.entries.filter((e) => e.type === "run"),
-        ...g.entries.filter((e) => e.type !== "run"),
-      ],
-    }))
-    .sort((a, b) => rank(a.machine) - rank(b.machine));
+  }
+  return [...groups.values()];
 }
 
 /** An answered item, as History lists it. */

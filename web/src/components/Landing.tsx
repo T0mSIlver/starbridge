@@ -172,8 +172,11 @@ export function Landing({ onOwnerToken }: { onOwnerToken: () => void }) {
           </a>
         </div>
         <p className={`t-meta ${s.faint}`}>
-          Open source, MIT · end-to-end encrypted ·{" "}
-          {hosted ? "self-host or use starbridge.run" : "self-hosted"}
+          Open source, MIT ·{" "}
+          <a href="/docs/faq#what-does-the-server-see" className={s.metaLink}>
+            end-to-end encrypted
+          </a>{" "}
+          · {hosted ? "self-host or use starbridge.run" : "self-hosted"}
         </p>
       </section>
 

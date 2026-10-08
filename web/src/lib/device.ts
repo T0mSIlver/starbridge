@@ -6,6 +6,7 @@ import {
   addEntryAsync,
   approverKeys,
   bindMessage,
+  checkCode,
   checkJoined,
   codeFromLink,
   type Decision,
@@ -872,7 +873,17 @@ export function devices(ctx: Ctx): Device[] {
     addedAt: addedAt.get(member.id) ?? "",
     status: active ? "active" : "revoked",
     self: member.id === ctx.device.id,
+    ...(active && member.role === "machine" ? checkOf(ctx.entries, member.id) : {}),
   }));
+}
+
+/** A machine's check code; none rather than no list when its entry will not hash. */
+function checkOf(entries: unknown[], id: string): { check?: string } {
+  try {
+    return { check: checkCode(entries, id) };
+  } catch {
+    return {};
+  }
 }
 
 /** Fetches the request under the typed code and checks its MAC: the server cannot swap keys. */
@@ -1622,6 +1633,17 @@ export async function loadQuotas(ctx: Ctx): Promise<Quotas> {
 export interface Runs {
   items: RunItem[];
   rejected: { id: string; error: string }[];
+}
+
+/** Drops a run from the server, so every device stops showing it (#827). */
+export async function dismissRun(ctx: Ctx, id: string): Promise<void> {
+  await hold(ctx);
+  try {
+    await api.deleteItem(id);
+  } catch (e) {
+    // Already gone: the sweep or another device dropped it.
+    if (!(e instanceof ApiError && e.status === 404)) throw e;
+  }
 }
 
 /** Every stored run: the server keeps the latest update of each, for a day. */

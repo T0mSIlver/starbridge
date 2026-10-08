@@ -40,7 +40,7 @@ The limits:
 - The web app is code the server sends on each load, so a compromised server could send a page
   that uses or reads that browser's keys, approves permission prompts, or uses a pairing code
   or recovery key typed into it. The Android app and the CLI are installed code. Where this
-  matters, use the Android app and no browser, type pairing codes only into the app, or host
+  matters, use the Android app and no browser, scan machines' QR codes with the app, or host
   your own server; a self-hosted server still sends pushes through starbridge.run's relay
   unless it has its own VAPID keys and uses UnifiedPush
   ([Notifications](../server/README.md#notifications)).
@@ -65,7 +65,7 @@ the agent doesn't matter. Quotas read your AI plans through CodexBar; with no pl
 
 Claude Code gets the most: a plugin with rules, a skill and hooks; answers into the live session
 through a [Claude Code mod](https://code.claude.com/docs/en/plugins/mods/overview), code that
-runs inside Claude Code; its own `AskUserQuestion` sent to your phone; and permission prompts if
+runs inside Claude Code; its own `AskUserQuestion` on your phone as well as in the picker, first answer wins; and permission prompts if
 you turn them on. opencode gets the same through its plugin, its own `question` tool included.
 Pi gets the rules, the skill and answers into the live session through its package, and
 permission prompts with pi-permission-system. Codex gets the skill and answers into interactive

@@ -32,6 +32,7 @@ export function SampleProvider({
   const [quotaSettings, setQuotaSettings] = useState(DEFAULT_SETTINGS);
   // Snoozes given on the page, by question: the sample's own times until the owner snoozes one.
   const [snoozes, setSnoozes] = useState<Record<string, string>>({});
+  const [dismissed, setDismissed] = useState<string[]>([]);
   const store = useMemo<Store>(() => {
     const { devices, ...s } = sample();
     const items = s.inbox.items.map((i) =>
@@ -58,10 +59,14 @@ export function SampleProvider({
         prompts: [],
         runs: { ...s.runs, items: [] },
       }),
+      ...(dismissed.length > 0 && {
+        runs: { ...s.runs, items: s.runs.items.filter((i) => !dismissed.includes(i.run.id)) },
+      }),
       sampleDevices: empty ? devices.filter((d) => d.role !== "machine") : devices,
       reload: noop,
       answer: noop,
       snooze: async (item, until) => setSnoozes((all) => ({ ...all, [item.decision.id]: until })),
+      dismissRun: async (item) => setDismissed((all) => [...all, item.run.id]),
       update: () => {},
       refreshQuotas: noop,
       askQuotas: () => new Promise((done) => setTimeout(done, 1500)),
@@ -71,6 +76,6 @@ export function SampleProvider({
       loadPromptLog: noop,
       deviceName: (id) => id,
     };
-  }, [landing, empty, noQuotas, quiet, quotaSettings, snoozes]);
+  }, [landing, empty, noQuotas, quiet, quotaSettings, snoozes, dismissed]);
   return <StoreContext.Provider value={store}>{children}</StoreContext.Provider>;
 }

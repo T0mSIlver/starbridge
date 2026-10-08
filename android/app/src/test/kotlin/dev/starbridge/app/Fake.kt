@@ -203,7 +203,7 @@ class Fake(private val now: Instant) {
         images = listOf(Image(toB64(javaClass.getResourceAsStream("/fake/phone-inbox.png")!!.readBytes()), 1236, 2676, alt = "Inbox, dark")),
     )
 
-    /** A desktop and a phone layout over their options, "Reply" under them (#536), in a titled session (#563). */
+    /** A desktop and a phone layout over their options, the reply field under them (#536, #849), in a titled session (#563). */
     val layouts = Decision(
         id = "d9",
         question = "Which layout should the inbox lead with?",
@@ -289,8 +289,8 @@ class Fake(private val now: Instant) {
         Member("m1", "Pixel 11 Pro", Kind.Device, ago(60 * 24 * 23), current = true),
         Member("m2", "Pixel 9", Kind.Device, ago(60 * 24 * 22)),
         Member("m3", "Firefox on the MacBook", Kind.Device, ago(60 * 24 * 2)),
-        Member("m4", "dev box", Kind.Machine, ago(60 * 24 * 23)),
-        Member("m5", "mac mini", Kind.Machine, ago(60 * 24 * 20)),
+        Member("m4", "dev box", Kind.Machine, ago(60 * 24 * 23), check = "QEK0-78NT-DYM8-6G6G"),
+        Member("m5", "mac mini", Kind.Machine, ago(60 * 24 * 20), check = "3HJD-8WPA-K7Q2-9XMF"),
     )
 
     val approval = Approval.Found("CI runner on the Mac", Kind.Machine, "7KQ2-M9XD-4TPV-HB3N-R8CE-WY6F")

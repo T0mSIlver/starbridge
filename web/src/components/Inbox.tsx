@@ -18,6 +18,7 @@ import { closeItem, linkedItem, openItem, stackItem, useOpened } from "@/lib/ope
 import { AnsweredFirst, answerPlace, promptOutcome } from "@/lib/outcome";
 import { fitsRow } from "@/lib/permissionInput";
 import { type Prefs, usePref } from "@/lib/prefs";
+import { runState } from "@/lib/runs";
 import { afterAnswer, selectedId, step } from "@/lib/selection";
 import type { InboxItem, PromptItem } from "@/lib/types";
 import { useApp } from "./AppProvider";
@@ -28,6 +29,7 @@ import {
   NeedRow,
   PastRow,
   RunRow,
+  RunsHead,
   SnoozedHead,
   useNow,
   waitingSince,
@@ -83,17 +85,20 @@ export function Inbox() {
     loadPromptLog,
     answer,
     snooze,
+    dismissRun,
     answerPrompt,
     deviceName,
   } = app;
   const [grouping, setGrouping] = usePref("grouping");
   const [historyOpen, setHistoryOpen] = usePref("historyOpen");
   const [snoozedOpen, setSnoozedOpen] = usePref("snoozedOpen");
+  const [runsOpen, setRunsOpen] = usePref("runsOpen");
   const [clock] = usePref("clock");
   // A section's rows fade in when the owner opens it, not when the page loads with it open or the
   // list comes back.
   const [historyToggled, setHistoryToggled] = useState(false);
   const [snoozedToggled, setSnoozedToggled] = useState(false);
+  const [runsToggled, setRunsToggled] = useState(false);
   const snoozedRef = useRef<HTMLDivElement>(null);
   const historyRef = useRef<HTMLDivElement>(null);
   const beforeToggle = useGlide([snoozedRef, historyRef], [snoozedOpen, historyOpen]);
@@ -116,6 +121,7 @@ export function Inbox() {
   const runEntries = all.filter((e) => e.type === "run" && keep(e));
   const snoozed = snoozedEntries(inbox.items, now).filter(keep);
   const showSnoozed = snoozedOpen || finding;
+  const showRuns = runsOpen || finding;
   const allPrompts = useMemo(() => {
     const seen = new Map<string, PromptItem>();
     for (const p of [...(promptLog ?? []), ...prompts]) seen.set(p.permission.id, p);
@@ -267,7 +273,17 @@ export function Inbox() {
   const comfy = !wide;
   const entryRow = (e: Entry, until?: string) =>
     e.type === "run" ? (
-      <RunRow key={e.id} item={e.item} now={now} comfy={comfy} />
+      <RunRow
+        key={e.id}
+        item={e.item}
+        now={now}
+        comfy={comfy}
+        onDismiss={
+          runState(e.item.run, now) === "running"
+            ? undefined
+            : () => dismissRun(e.item).catch(() => {})
+        }
+      />
     ) : (
       <NeedRow
         key={e.id}
@@ -328,6 +344,33 @@ export function Inbox() {
       )}
     </>
   );
+  // Runs, their own section at the top (#835): closing it keeps failed and lost runs named.
+  const runsPart = runEntries.length > 0 && (
+    <>
+      {finding ? (
+        sub(`Runs · ${runEntries.length}`)
+      ) : (
+        <RunsHead
+          open={runsOpen}
+          runs={runEntries.map((e) => (e as Extract<Entry, { type: "run" }>).item)}
+          now={now}
+          comfy={comfy}
+          onToggle={() => {
+            setRunsOpen(!runsOpen);
+            setRunsToggled(true);
+          }}
+        />
+      )}
+      {showRuns && (
+        <div
+          className={runsToggled ? "m-appear" : undefined}
+          onAnimationEnd={() => setRunsToggled(false)}
+        >
+          {runEntries.map(row)}
+        </div>
+      )}
+    </>
+  );
   const historyPart = (
     <>
       {finding ? (
@@ -380,14 +423,9 @@ export function Inbox() {
           {inbox.rejected.length} hidden: failed verification ({inbox.rejected[0]?.error})
         </p>
       )}
+      {runsPart && (grouped ? seg(runsPart) : runsPart)}
       {view === "waiting" ? (
         <>
-          {runEntries.length > 0 && (
-            <>
-              {sub("Running")}
-              {seg(runEntries.map(row))}
-            </>
-          )}
           {waitingOn.length > 0 && (
             <>
               {sub(
@@ -410,7 +448,7 @@ export function Inbox() {
           )}
         </>
       ) : view === "machine" ? (
-        byMachine(runEntries, needs).map((g) => (
+        byMachine(needs).map((g) => (
           <div key={g.machine}>
             {sub(
               <>
@@ -421,20 +459,12 @@ export function Inbox() {
           </div>
         ))
       ) : (
-        <>
-          {runEntries.length > 0 && (
-            <>
-              {sub("Running")}
-              {runEntries.map(row)}
-            </>
-          )}
-          {needs.length > 0 && (
-            <>
-              {sub(comfy ? `Needs you · ${count}` : "Needs you")}
-              {needs.map(row)}
-            </>
-          )}
-        </>
+        needs.length > 0 && (
+          <>
+            {sub(comfy ? `Needs you · ${count}` : "Needs you")}
+            {needs.map(row)}
+          </>
+        )
       )}
       {needs.length === 0 &&
         runEntries.length === 0 &&

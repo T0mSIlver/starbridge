@@ -519,10 +519,12 @@ class Notifier(private val context: Context, private val prefs: Prefs) : Alerts 
 
     /**
      * Running: ongoing and silent, the time elapsed as a chronometer from the start, the progress
-     * as a bar and in the status bar chip. It times out when the machine goes quiet past
-     * RUN_STALE_MS. Ended: pass or fail with the duration, and it alerts once. Runs that ended
+     * as a bar, in the status bar chip and at the head of the title, where a long title's ellipsis
+     * can't hide it and the collapsed view, which drops the text, still shows it (#826). It times out when the machine goes quiet past RUN_STALE_MS. Ended: pass or fail with the duration, and it alerts once. Runs that ended
      * more than [Run.SHOWN_AFTER] ago, or lost their machine, show nothing.
      */
+    override fun cancelRun(id: String) = manager.cancel(RUNS, tag(id))
+
     override fun run(run: Run) {
         if (!allowed()) return
         val now = Instant.now()
@@ -540,7 +542,7 @@ class Notifier(private val context: Context, private val prefs: Prefs) : Alerts 
         val b = NotificationCompat.Builder(context, RUNS)
             .setSortKey(ORDER_RUN)
             .setSmallIcon(R.drawable.ic_notification)
-            .setContentTitle(listOfNotNull(run.title, run.progress?.let { if (it.percent) "${it.done}%" else "${it.done} of ${it.total}" }).joinToString(" · "))
+            .setContentTitle(listOfNotNull(run.progress?.takeIf { state == Run.State.Running }?.let { if (it.percent) "${it.done}%" else "${it.done} of ${it.total}" }, run.title).joinToString(" · "))
             .setSubText(header(run.source))
             .setContentIntent(open)
             .setCategory(NotificationCompat.CATEGORY_PROGRESS)

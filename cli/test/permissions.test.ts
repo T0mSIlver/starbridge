@@ -12,13 +12,7 @@ import { run } from "../src/cli";
 import { PROMPTS_OPEN, promptsMark } from "../src/config";
 import { session } from "../src/context";
 import { poll } from "../src/decisions";
-import {
-  ASK_USER_REASON,
-  hookAskUser,
-  hookPermission,
-  hookSettle,
-  untilOrphaned,
-} from "../src/hook";
+import { hookAskUser, hookPermission, hookSettle, untilOrphaned } from "../src/hook";
 import {
   buildPermission,
   DENIED,
@@ -360,6 +354,14 @@ test("the plugin's PostToolUse check starts the CLI only while a prompt is open 
   expect(started()).toBe(true);
 });
 
+test("a call that ran and failed settles its prompt too: the plugin runs the check on PostToolUseFailure (#847)", () => {
+  // Claude Code fires only PostToolUseFailure when an approved Bash command exits non-zero.
+  const hooks = JSON.parse(
+    readFileSync(join(import.meta.dir, "../../plugin/hooks/hooks.json"), "utf8"),
+  ).hooks;
+  expect(hooks.PostToolUseFailure).toEqual(hooks.PostToolUse);
+});
+
 test("the mark counts only unsettled prompts that have not expired (#517)", () => {
   const prompt = (settled: boolean, expiresAt: string) =>
     ({ settled: settled ? "keyboard" : undefined, permission: { expiresAt } }) as never;
@@ -384,6 +386,29 @@ test("SIGTERM (Esc or No at the keyboard) reports the prompt settled and prints 
     outcome: "keyboard",
   });
 });
+
+for (const viaAgent of [true, false]) {
+  test(`${viaAgent ? "through the agent" : "without an agent"}: an allow at the keyboard settles the prompt once the call starts, not when it ends (#866)`, async () => {
+    const ctx = await machine(viaAgent);
+    const started = new AbortController();
+    const commands: string[] = [];
+    const out = hookPermission(ctx, request(), { agent: "claude-code" }, (signal, command) => {
+      commands.push(command);
+      return { signal: AbortSignal.any([signal as AbortSignal, started.signal]), stop: () => {} };
+    });
+    await until(async () => (await server.opened("permission")).length === 1);
+    const [permission] = await server.opened("permission");
+    expect(commands).toEqual([PUSH.command]);
+    started.abort();
+    expect(await out).toBe(0);
+    expect(ctx.lines).toEqual([]);
+    await until(async () => (await server.opened("settled")).length === 1);
+    expect((await server.opened("settled"))[0]).toMatchObject({
+      itemId: permission?.id,
+      outcome: "keyboard",
+    });
+  });
+}
 
 test("a hook that hangs up and does not hold again is gone: the prompt settles at the keyboard (#400)", async () => {
   const ctx = await machine();
@@ -427,7 +452,7 @@ test("while disabled the hooks post nothing and print nothing", async () => {
   expect(await run(["config", "permissions", "off"], ctx)).toBe(0);
   expect(await hookPermission(ctx, request(), { agent: "claude-code" })).toBe(0);
   // The config listing only: the hook printed nothing.
-  expect(ctx.lines).toHaveLength(2);
+  expect(ctx.lines).toHaveLength(3);
   expect(ctx.lines[0]).toBe("permissions   off");
   expect(await server.opened("permission")).toEqual([]);
   const status = await new AgentClient(join(ctx.store.dir, "agent.sock")).call<Status>(
@@ -570,35 +595,132 @@ test("an unreachable server, bad input or another agent never blocks the hook", 
   expect(ctx.lines).toEqual([]);
 });
 
-test("hook ask-user answers AskUserQuestion with Starbridge while the server answers, and lets it through otherwise", async () => {
-  const questions = [{ question: "Tabs or spaces?", header: "Indent", options: [] }];
-  const hook = JSON.stringify({ tool_name: "AskUserQuestion", tool_input: { questions } });
-  const unpaired = testCtx();
-  expect(await hookAskUser(unpaired, hook)).toBe(0);
-  expect(unpaired.lines).toEqual([]);
+/** Claude Code's `AskUserQuestion` picker, as 2.1.294 sends it to `PermissionRequest` (#848). */
+const PICKED = [
+  {
+    question: "Which color?",
+    header: "Color",
+    options: [
+      { label: "Red (Recommended)", description: "Pick red." },
+      { label: "Blue", description: "Pick blue." },
+    ],
+    multiSelect: false,
+  },
+  {
+    question: "Which sizes?",
+    header: "Sizes",
+    options: [
+      { label: "S", description: "Small" },
+      { label: "L", description: "Large" },
+    ],
+    multiSelect: true,
+  },
+];
+const picker = (questions: unknown[] = PICKED) =>
+  JSON.stringify({
+    session_id: SESSION,
+    cwd: "/work/starbridge",
+    hook_event_name: "PermissionRequest",
+    tool_name: "AskUserQuestion",
+    tool_input: { questions },
+  });
+const pickerDone = (questions: unknown[] = PICKED) =>
+  JSON.stringify({
+    session_id: SESSION,
+    hook_event_name: "PostToolUse",
+    tool_name: "AskUserQuestion",
+    tool_input: { questions, answers: { "Which color?": "Blue" } },
+  });
 
-  // Answered rather than denied: Claude Code shows a denied call as a red hook error.
-  const machine = await paired(server);
-  expect(await hookAskUser(machine, hook)).toBe(0);
-  expect(JSON.parse(machine.lines[0] as string)).toEqual({
+test("a device answers Claude Code's picker, permissions on or off, and the session's loop gets nothing", async () => {
+  const ctx = await paired(server);
+  const done = hookPermission(ctx, picker(), { agent: "claude-code" });
+  await until(async () => (await server.opened("waiting")).length === 2);
+  const decisions = await server.opened("decision");
+  const color = decisions.find((d) => d.question === "Which color?");
+  const sizes = decisions.find((d) => d.question === "Which sizes?");
+  expect(color).toMatchObject({
+    options: ["Red (Recommended)", "Blue"],
+    recommended: "Red (Recommended)",
+    agent: "claude-code",
+    source: { session: SESSION, project: "starbridge" },
+  });
+  expect(readFileSync(join(ctx.store.dir, PROMPTS_OPEN), "utf8")).toBe("open");
+  await server.answer(color?.id as string, { choice: "Blue" });
+  await server.answer(sizes?.id as string, { text: "S, L" });
+  expect(await done).toBe(0);
+  expect(JSON.parse(ctx.lines[0] as string)).toEqual({
     hookSpecificOutput: {
-      hookEventName: "PreToolUse",
-      permissionDecision: "allow",
-      updatedInput: { questions, answers: { "Tabs or spaces?": ASK_USER_REASON } },
+      hookEventName: "PermissionRequest",
+      decision: {
+        behavior: "allow",
+        updatedInput: {
+          questions: PICKED,
+          answers: { "Which color?": "Blue", "Which sizes?": "S, L" },
+        },
+      },
     },
   });
+  expect(readFileSync(join(ctx.store.dir, PROMPTS_OPEN), "utf8")).toBe("");
+  ctx.lines.length = 0;
+  expect(await run(["answers", "--session", SESSION], ctx)).toBe(0);
+  expect(ctx.lines).toEqual([]);
+  // The PostToolUse that follows finds nothing open: only the devices' answers were announced.
+  expect(await hookSettle(ctx, pickerDone(), { agent: "claude-code" })).toBe(0);
+  expect((await server.opened("settled")).map((s) => s.outcome)).toEqual(["device", "device"]);
+});
 
-  machine.lines.length = 0;
-  expect(await hookAskUser(machine, "{}")).toBe(0);
-  expect(JSON.parse(machine.lines[0] as string).hookSpecificOutput).toMatchObject({
-    permissionDecision: "deny",
-    permissionDecisionReason: ASK_USER_REASON,
+test("an answer in the picker settles its cards as answered elsewhere, and Esc does too", async () => {
+  const ctx = await paired(server);
+  const stop = new AbortController();
+  const done = hookPermission({ ...ctx, signal: stop.signal }, picker(PICKED.slice(0, 1)), {
+    agent: "claude-code",
   });
+  await until(async () => (await server.opened("waiting")).length === 1);
+  // Claude Code sends the waiting hook nothing; PostToolUse follows the picker's answer.
+  expect(await hookSettle(ctx, pickerDone(PICKED.slice(0, 1)), { agent: "claude-code" })).toBe(0);
+  expect((await server.opened("settled")).map((s) => s.outcome)).toEqual(["elsewhere"]);
+  expect(readFileSync(join(ctx.store.dir, PROMPTS_OPEN), "utf8")).toBe("");
+  stop.abort();
+  expect(await done).toBe(0);
+  expect(ctx.lines).toEqual([]);
 
-  machine.lines.length = 0;
-  server.failures.push("/healthz");
-  expect(await hookAskUser(machine, hook)).toBe(0);
-  expect(machine.lines).toEqual([]);
+  const esc = new AbortController();
+  const dismissed = hookPermission({ ...ctx, signal: esc.signal }, picker(PICKED.slice(1)), {
+    agent: "claude-code",
+  });
+  await until(async () => (await server.opened("waiting")).length === 2);
+  esc.abort();
+  expect(await dismissed).toBe(0);
+  expect((await server.opened("settled")).map((s) => s.outcome)).toEqual([
+    "elsewhere",
+    "elsewhere",
+  ]);
+});
+
+test("the hook withdraws its cards before Claude Code's timeout, which looks like Esc", async () => {
+  const ctx = await paired(server);
+  const done = hookPermission(ctx, picker(PICKED.slice(0, 1)), {
+    agent: "claude-code",
+    wait: "2s",
+  });
+  expect(await done).toBe(0);
+  expect(ctx.lines).toEqual([]);
+  expect((await server.opened("settled")).map((s) => s.outcome)).toEqual(["withdrawn"]);
+});
+
+test("an unpaired machine or a server down leaves the picker to the keyboard, and hook ask-user lets it open", async () => {
+  const unpaired = testCtx();
+  expect(await hookPermission(unpaired, picker(), { agent: "claude-code" })).toBe(0);
+  expect(unpaired.lines).toEqual([]);
+  const ctx = await paired(server);
+  const m = ctx.store.machine();
+  if (!m) throw new Error("not paired");
+  ctx.store.saveMachine({ ...m, server: "http://127.0.0.1:1" });
+  expect(await hookPermission(ctx, picker(), { agent: "claude-code" })).toBe(0);
+  expect(ctx.lines).toEqual([]);
+  expect(await hookPermission(ctx, picker([{ nope: 1 }]), { agent: "claude-code" })).toBe(0);
+  expect(hookAskUser()).toBe(0);
 });
 
 test("bidi and invisible characters reach devices as escapes (#357)", () => {
@@ -617,4 +739,16 @@ test("bidi and invisible characters reach devices as escapes (#357)", () => {
   expect(() => build("mcp__x__y", { "x\u202E": "rm -rf ~", "x\\u202E": "ls" })).toThrow(
     "stays at the keyboard",
   );
+});
+
+test("a picker card whose hook died unsettled stops holding the open mark after a day", () => {
+  const asked = {
+    question: "Which color?",
+    options: [],
+    askedAt: new Date(0).toISOString(),
+    to: [],
+  };
+  const st = { asked: { d_1: { ...asked, picker: SESSION } }, answers: {} };
+  expect(promptsMark(st, Date.parse(asked.askedAt) + 1000)).toBe("open");
+  expect(promptsMark(st, Date.parse(asked.askedAt) + 86_400_001)).toBe("");
 });

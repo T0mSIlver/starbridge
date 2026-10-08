@@ -74,6 +74,7 @@ function project(name: string): string {
       hooks: {
         PermissionRequest: hook("permission", 600),
         PostToolUse: settle,
+        PostToolUseFailure: settle,
         PermissionDenied: settle,
         Stop: settle,
         SessionEnd: settle,

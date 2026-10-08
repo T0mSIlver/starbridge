@@ -34,7 +34,8 @@ export function configDir(env: Record<string, string | undefined>): string {
 
 /**
  * The file `plugin/hooks/settle.sh` reads in the config folder before it starts the CLI: written
- * with the state, `open` while a permission prompt is unsettled and unexpired, else empty (#517).
+ * with the state, `open` while a permission prompt is unsettled and unexpired (#517), or a
+ * question of Claude Code's picker unanswered (#848), else empty.
  */
 export const PROMPTS_OPEN = "permissions-open";
 
@@ -44,11 +45,20 @@ export const PROMPTS_OPEN = "permissions-open";
  */
 export const CLI_PATH = "cli-path";
 
+/** Claude Code's timeout for the picker's hook (plugin/hooks/hooks.json, #848). */
+export const PICKER_MAX_MS = 86_400_000;
+
 /** What `PROMPTS_OPEN` holds for state `s`. */
 export function promptsMark(s: State, now = Date.now()): string {
-  const open = Object.values(s.permissions ?? {}).some(
-    (p) => !p.settled && Date.parse(p.permission.expiresAt) > now,
-  );
+  const open =
+    Object.values(s.permissions ?? {}).some(
+      (p) => !p.settled && Date.parse(p.permission.expiresAt) > now,
+    ) ||
+    // A picker's hook ends within its day-long timeout; one that died unsettled stops counting.
+    Object.entries(s.asked).some(
+      ([id, a]) =>
+        a.picker && !a.settled && !s.answers[id] && Date.parse(a.askedAt) > now - PICKER_MAX_MS,
+    );
   return open ? "open" : "";
 }
 
@@ -116,6 +126,11 @@ export interface State {
        * session gets it as a prompt, and `wait` without an id skips it.
        */
       held?: boolean;
+      /**
+       * Asked for this Claude Code session's open `AskUserQuestion` picker (#848): settled when
+       * the picker is answered there.
+       */
+      picker?: string;
     }
   >;
   /**
@@ -185,6 +200,11 @@ export interface PendingPermission {
 export interface AgentConfig {
   /** Permission prompts go to Starbridge (#57); off unless `starbridge config permissions on`. */
   permissions?: { enabled?: boolean };
+  /**
+   * Presence (#848): the agent tells the server whether the owner sits at this machine's screen,
+   * so pushes wait while they do; off unless `starbridge config presence on`.
+   */
+  presence?: { enabled?: boolean };
   /**
    * Agents `uninstall --agent` took Starbridge out of (#750): setup and refresh leave them
    * alone until `setup --agent` brings one back.

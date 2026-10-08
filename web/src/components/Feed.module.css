@@ -376,6 +376,29 @@
   font-weight: 500;
 }
 
+/* A finished run's outcome, and Dismiss at the end of its line (#827). */
+.runEnd {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s2);
+}
+
+.dismiss {
+  margin-left: auto;
+  border: 0;
+  background: none;
+  padding: var(--s1) var(--s2);
+  border-radius: var(--radius-xs);
+  color: var(--fg2);
+}
+
+@media (hover: hover) {
+  .dismiss:hover {
+    background: var(--surface2);
+    color: var(--fg);
+  }
+}
+
 .historyHead {
   display: flex;
   align-items: center;

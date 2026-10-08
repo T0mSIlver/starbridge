@@ -13,7 +13,7 @@ instruction files, in your words. Starbridge never writes to them.
 | Questions | ✓ | ✓ | ✓ | ✓ |
 | Answers into the live session | ✓ | ✓¹ | ✓³ | ✓⁵ |
 | "Waiting for you" | ✓ | ✓ | ✓ | ✓ |
-| Runs | ✓ | ✓ | ✓ | ✓ |
+| Runs | ✓ | ✓⁸ | ✓ | ✓ |
 | Permission prompts | Opt-in | No | Opt-in⁴ | Opt-in⁶ |
 | The agent's own ask tool | ✓² | n/a | n/a | ✓⁷ |
 
@@ -21,8 +21,8 @@ instruction files, in your words. Starbridge never writes to them.
 later). In `codex exec`, the agent waits for the answer with `starbridge wait`
 before it ends its turn.
 
-² A hook answers `AskUserQuestion` by telling the agent to ask through
-Starbridge instead. Codex and Pi have no ask tool of their own.
+² `AskUserQuestion` asks in Claude Code's picker and on your devices at once;
+the first answer wins. Codex and Pi have no ask tool of their own.
 
 ³ In the interactive TUI and RPC mode, through `starbridge agent` or the CLI.
 In `pi -p`, the agent waits for the answer with `starbridge wait` before it
@@ -53,6 +53,10 @@ The question stays open in the terminal, and the first answer wins; answering
 or dismissing it there closes it on your devices. A question with more than 4
 options lists them and takes a typed reply; to pick several where the agent
 allows it, reply with their names.
+
+⁸ Codex asks you once at the keyboard to run `starbridge run` outside its
+sandbox, which has no network. The skill has Codex ask before the first run,
+so the wrapped command runs once, outside.
 
 `starbridge setup` installs Starbridge in each agent it finds, and prints one
 line per agent; `starbridge uninstall --agent <name>` removes it from one, and

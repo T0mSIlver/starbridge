@@ -1,5 +1,7 @@
 package dev.starbridge.app
 
+import android.view.KeyEvent
+import android.view.MotionEvent
 import android.Manifest
 import android.content.Intent
 import android.content.res.Resources
@@ -125,6 +127,17 @@ class MainActivity : ComponentActivity() {
         store.foreground(true)
     }
 
+    // Any touch or key says the owner is using this phone (#848); never which one.
+    override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
+        if (ev.actionMasked == MotionEvent.ACTION_DOWN) store.touched()
+        return super.dispatchTouchEvent(ev)
+    }
+
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (event.action == KeyEvent.ACTION_DOWN) store.touched()
+        return super.dispatchKeyEvent(event)
+    }
+
     override fun onPause() {
         super.onPause()
         store.watchJoins(false)
@@ -146,6 +159,12 @@ class MainActivity : ComponentActivity() {
             if (!store.server.value.toUri().host.equals(data.host, ignoreCase = true)) runCatching { startActivity(inBrowser(data)) }
             else if ((store.phase.value as? Phase.NoDevice)?.accountExists == true) store.joinWithCode(data.toString())
             else opening.trySend(PairLinkKey(data.toString(), System.nanoTime()))
+            setIntent(Intent(this, MainActivity::class.java))
+        }
+        // A machine's QR code (#795), from the camera: Add a device looks its code up, and says so
+        // when the link names another server than this phone's.
+        if (data != null && data.scheme == "starbridge" && data.host == "pair") {
+            opening.trySend(PairLinkKey(data.toString(), System.nanoTime()))
             setIntent(Intent(this, MainActivity::class.java))
         }
         intent?.getStringExtra(EXTRA_DECISION)?.let {

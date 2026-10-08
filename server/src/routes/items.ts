@@ -12,6 +12,7 @@ import { nextSeq } from "../db";
 import type { Env } from "../env";
 import { holdOpen, json, waitSeconds } from "../http";
 import { rateLimit } from "../limits";
+import { HELD_KINDS, holdFor } from "../presence";
 import { activeMember, wakeMachines } from "./directory";
 
 const PAGE = 100;
@@ -246,6 +247,8 @@ itemRoutes.post("/items", requireCaller("paired"), async (c) => {
   let machine = "";
   // A waiting flip on a snoozed decision pushes nothing: the owner said not now (#571).
   let snoozed = false;
+  // Devices the referred item's push was held from and has not reached yet (#848).
+  let unheard: string[] = [];
   // The images as stored: those posted, or on a re-seal that sends none, those kept.
   let blobs = item.blobs;
   const seq = db.transaction(() => {
@@ -277,7 +280,7 @@ itemRoutes.post("/items", requireCaller("paired"), async (c) => {
       if (!item.re) fail(400, "bad-schema", `a ${item.kind} needs re`);
       const target = db
         .query(
-          `SELECT kind, from_id, received_at, answered_at FROM items WHERE account_id = ? AND id = ?
+          `SELECT kind, from_id, received_at, answered_at, hold_to FROM items WHERE account_id = ? AND id = ?
            AND kind IN (SELECT value FROM json_each(?))`,
         )
         .get(caller.account, item.re, JSON.stringify(rule.re.kinds)) as {
@@ -285,7 +288,12 @@ itemRoutes.post("/items", requireCaller("paired"), async (c) => {
         from_id: string;
         received_at: string;
         answered_at: string | null;
+        hold_to: string | null;
       } | null;
+      // Devices whose push of the item is still held never heard of it: its close skips them.
+      // A device's snooze of it as well; a machine's waiting flip has a hold of its own.
+      if (target?.hold_to && (fromDevice || !rule.re.open))
+        unheard = JSON.parse(target.hold_to) as string[];
       if (fromDevice) {
         const mine = db
           .query("SELECT 1 FROM boxes WHERE account_id = ? AND item_id = ? AND to_id = ?")
@@ -343,7 +351,7 @@ itemRoutes.post("/items", requireCaller("paired"), async (c) => {
     }
     const earlier = db
       .query(
-        "SELECT kind, from_id, received_at, answered_at, blobs FROM items WHERE account_id = ? AND id = ?",
+        "SELECT kind, from_id, received_at, answered_at, blobs, hold_due, hold_to FROM items WHERE account_id = ? AND id = ?",
       )
       .get(caller.account, item.id) as {
       kind: string;
@@ -351,7 +359,11 @@ itemRoutes.post("/items", requireCaller("paired"), async (c) => {
       received_at: string;
       answered_at: string | null;
       blobs: string | null;
+      hold_due: string | null;
+      hold_to: string | null;
     } | null;
+    // A re-seal keeps the hold of the devices that already had the item.
+    let kept: { due: string | null; to: string | null } = { due: null, to: null };
     let receivedAt = now.toISOString();
     const resealed = item.reseal === true;
     if (resealed && (!RESEALED.includes(item.kind) || !earlier))
@@ -364,6 +376,7 @@ itemRoutes.post("/items", requireCaller("paired"), async (c) => {
         // It keeps its arrival, so a permission's answer window does not move.
         if (earlier.answered_at) fail(409, "already-answered");
         receivedAt = earlier.received_at;
+        kept = { due: earlier.hold_due, to: earlier.hold_to };
         const had = (
           db
             .query("SELECT to_id FROM boxes WHERE account_id = ? AND item_id = ?")
@@ -422,8 +435,8 @@ itemRoutes.post("/items", requireCaller("paired"), async (c) => {
     const iso = now.toISOString();
     const seq = nextSeq(db);
     db.query(
-      `INSERT INTO items (seq, account_id, id, kind, from_id, re, wake_at, wake_due, received_at, size, blobs)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO items (seq, account_id, id, kind, from_id, re, wake_at, wake_due, received_at, size, blobs, hold_due, hold_to)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     ).run(
       seq,
       caller.account,
@@ -436,6 +449,8 @@ itemRoutes.post("/items", requireCaller("paired"), async (c) => {
       receivedAt,
       charged,
       blobs ? JSON.stringify(blobs) : null,
+      kept.due,
+      kept.to,
     );
     const box = db.query("INSERT INTO boxes (account_id, item_id, to_id, box) VALUES (?, ?, ?, ?)");
     for (const b of item.boxes) box.run(caller.account, item.id, b.to, b.box);
@@ -444,7 +459,8 @@ itemRoutes.post("/items", requireCaller("paired"), async (c) => {
     // nothing: the prompt was already answered. An open kind's note closes nothing.
     if (item.re !== undefined && !rule.re?.open) {
       db.query(
-        "UPDATE items SET answered_at = ?, seq = ? WHERE account_id = ? AND id = ? AND answered_at IS NULL",
+        `UPDATE items SET answered_at = ?, seq = ?, hold_due = NULL
+         WHERE account_id = ? AND id = ? AND answered_at IS NULL`,
       ).run(iso, nextSeq(db), caller.account, item.re);
       // Answered or settled, a snoozed decision does not come back.
       db.query(
@@ -466,15 +482,39 @@ itemRoutes.post("/items", requireCaller("paired"), async (c) => {
     c.var.answers.wake(`${caller.account}/${machine}`);
     if (rule.re?.open) {
       // A note for every device (a snooze): the others hide the decision, or show it again.
-      const devices = to.filter((id) => id !== machine && id !== me);
+      const devices = to.filter((id) => id !== machine && id !== me && !unheard.includes(id));
       c.var.push.notify(caller.account, devices, (device) =>
         pushPayload(item, device, config.pushInlineLimit),
       );
     } else {
       const payload = JSON.stringify({ v: 1, kind: "answered", id: item.re });
-      c.var.push.notify(caller.account, answeredDevices, () => payload);
+      c.var.push.notify(
+        caller.account,
+        answeredDevices.filter((id) => !unheard.includes(id)),
+        () => payload,
+      );
     }
   } else if (!item.quiet && !snoozed) {
+    pushTo = pushTo.filter((id) => !unheard.includes(id));
+    // While the owner sits at a screen, a push that would ask for them waits, for the devices
+    // not at it (#848).
+    const hold = HELD_KINDS.includes(item.kind)
+      ? holdFor(db, c.var.presence, caller.account, pushTo)
+      : undefined;
+    if (hold) {
+      const row = db
+        .query("SELECT hold_due, hold_to FROM items WHERE account_id = ? AND id = ?")
+        .get(caller.account, item.id) as { hold_due: string | null; hold_to: string | null };
+      const held = [...new Set([...(JSON.parse(row.hold_to ?? "[]") as string[]), ...hold.held])];
+      db.query("UPDATE items SET hold_due = ?, hold_to = ? WHERE account_id = ? AND id = ?").run(
+        // The later due, so a re-seal's new devices wait their whole hold too.
+        row.hold_due && row.hold_due > hold.due ? row.hold_due : hold.due,
+        JSON.stringify(held),
+        caller.account,
+        item.id,
+      );
+      pushTo = pushTo.filter((id) => !hold.held.includes(id));
+    }
     // Browsers expect each Web Push to show a notification and drop subscriptions that keep
     // showing none, so quota snapshots and runs, which show none there, skip Web Push; pages
     // fetch them instead.
@@ -500,6 +540,22 @@ itemRoutes.get("/items", requireCaller("paired-device"), (c) => {
   const open = c.req.query("open") === "1";
   const items = list(c.var.db, caller.account, memberOf(caller), kinds, from, open);
   return c.json(page(items, from));
+});
+
+// A device drops a run it no longer wants to see (#827), for every device. Only runs: every other
+// kind closes through an answer or a settled notice. A machine that posts the run again brings it
+// back, as a run that still runs should.
+itemRoutes.delete("/items/:id", requireCaller("paired-device"), (c) => {
+  const caller = c.var.caller;
+  const gone = c.var.db
+    .query(
+      `DELETE FROM items WHERE account_id = ? AND id = ? AND kind = 'run'
+         AND EXISTS (SELECT 1 FROM boxes b WHERE b.account_id = items.account_id
+           AND b.item_id = items.id AND b.to_id = ?)`,
+    )
+    .run(caller.account, c.req.param("id"), memberOf(caller));
+  if (gone.changes === 0) fail(404, "not-found");
+  return c.body(null, 204);
 });
 
 itemRoutes.get("/items/:id", requireCaller("paired"), (c) => {

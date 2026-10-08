@@ -159,6 +159,14 @@ export const DEFAULT_LIMITS = {
   /** Pushes relayed for other servers per address, on a server in relay mode. */
   relayPosts: [120, MINUTE] as RateWindow,
 
+  /**
+   * Presence beats per machine or device (#848): one every 30 s while present, and one when it
+   * leaves, with room for a page that reloads.
+   */
+  presenceBeats: [10, MINUTE] as RateWindow,
+  /** Writes of the account's settings (the push hold). */
+  settingsWrites: [30, MINUTE] as RateWindow,
+
   /** Asks for fresh quota snapshots per account; each makes every machine run CodexBar. */
   quotaAsks: [6, MINUTE] as RateWindow,
 

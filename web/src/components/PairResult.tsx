@@ -7,6 +7,8 @@ export interface PairOutcome {
   icon: IconName;
   title: string;
   sub: string;
+  /** A machine's check code, for the owner to compare with its terminal (#795). */
+  check?: string;
 }
 
 export function PairResult({
@@ -24,6 +26,11 @@ export function PairResult({
       </div>
       <div>
         <h2 className="t-action">{outcome.title}</h2>
+        {outcome.check && (
+          <p className="t-code" data-testid="check-code">
+            Check code {outcome.check}
+          </p>
+        )}
         <p className={`t-small ${p.dim}`}>{outcome.sub}</p>
       </div>
       <div className={p.actions}>{children}</div>

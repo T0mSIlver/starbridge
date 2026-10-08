@@ -1,16 +1,23 @@
 import { randomBytes } from "node:crypto";
+import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { hostname } from "node:os";
+import { join } from "node:path";
+import { createInterface } from "node:readline";
 import {
+  appPairingLink,
+  checkCode,
   checkJoined,
   claimHash,
   formatPairingCode,
   generateMemberKeys,
+  newCheckKey,
   newClaimSecret,
   newPairingCode,
   openPairingApproval,
   pairingLink,
   pairingRequest,
   publicKeys,
+  verifyCheckProof,
   verifyDirectory,
 } from "@starbridge/protocol";
 import { Api, ApiError } from "./api";
@@ -42,6 +49,8 @@ export async function pair(
   const id = `m_${randomBytes(9).toString("base64url")}`;
   const name = opts.name ?? previous?.name ?? hostname();
   const claim = newClaimSecret();
+  // Only the QR carries it: the Android app that scans it confirms the check code by itself.
+  const checkKey = newCheckKey();
 
   // The server's 10 minutes start when it stores the pairing, after this: ending here first
   // keeps the last poll from finding the pairing gone (#623).
@@ -73,9 +82,10 @@ export async function pair(
   // The first line is part of the CLI's contract (CONTRACT.md); the link sits alone on its line
   // so it does not wrap in an 80-column terminal.
   ctx.out(`Pairing code: ${formatPairingCode(code)}`);
-  ctx.out("  Scan this with your phone's camera or the Starbridge app:");
-  for (const line of terminalQr(link)) ctx.out(line);
-  ctx.out(`  Or open  ${link}`);
+  // A starbridge: link, which no browser opens: only the app reads the check key (#795).
+  ctx.out("  Scan this with the Starbridge Android app or your phone's camera:");
+  for (const line of terminalQr(appPairingLink(server, code, checkKey))) ctx.out(line);
+  ctx.out(`  No app? Open  ${link}`);
   ctx.out("  Or type the code under Devices in the app or web page. It expires in 10 minutes.");
 
   let result: { approval: unknown; token?: string } | undefined;
@@ -109,6 +119,28 @@ export async function pair(
   const pin = { length: approval.length, head: approval.head };
   const dir = verifyDirectory(entries, { account: approval.account, pin });
   checkJoined(dir, { id, role: "machine", ...publicKeys(keys) });
+  // A hostile server that read the code in a browser could have approved this machine into a
+  // chain it controls: only the Android app, from the QR, or the owner comparing with it can tell
+  // (#795).
+  const again = opts.again ?? "starbridge pair";
+  const check = checkCode(entries, id);
+  if (approval.check !== undefined) {
+    if (!verifyCheckProof(entries, id, checkKey, approval.check))
+      throw new UsageError(
+        `the Android app that scanned the QR code saw another check code, so a server may have paired this machine into an account it controls. Nothing is saved: revoke "${name}" under Devices, then run \`${again}\` again`,
+      );
+  } else {
+    const answer = await confirmCheck(ctx, check, name);
+    if (ctx.signal?.aborted) return 130;
+    if (answer === "no")
+      throw new UsageError(
+        `the codes differ, so this machine is not paired. A server may have read the pairing code. Revoke "${name}" under Devices, then run \`${again}\` again`,
+      );
+    if (answer === undefined)
+      throw new UsageError(
+        `the check code was not confirmed within 10 minutes, so this machine is not paired. Revoke "${name}" under Devices, then run \`${again}\` again`,
+      );
+  }
 
   const token = result.token;
   ctx.store.locked(() => {
@@ -149,14 +181,110 @@ export async function pair(
 function addedAt(entries: unknown[], id: string): string | undefined {
   for (const e of entries as { body: string }[]) {
     const body = JSON.parse(e.body) as { op: string; at: string; member?: { id: string } };
-    if (body.op === "add" && body.member?.id === id)
-      return new Date(body.at).toLocaleString(undefined, {
-        month: "short",
-        day: "numeric",
+    if (body.op === "add" && body.member?.id === id) {
+      // Day and time apart, as Devices joins them: one call puts "at" between them on macOS.
+      const at = new Date(body.at);
+      const day = at.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+      const time = at.toLocaleTimeString(undefined, {
         hour: "2-digit",
         minute: "2-digit",
         // A sandbox or container often runs in UTC while Devices shows the viewer's zone.
         timeZoneName: "short",
       });
+      return `${day}, ${time}`;
+    }
+  }
+}
+
+/** How long the owner has to confirm the check code. */
+const CONFIRM_MS = 10 * 60_000;
+
+/** The check code a waiting `pair` shows, which `pair --confirm` or `--reject` answers. */
+const waitingFile = (ctx: Ctx) => join(ctx.store.dir, "pair-waiting");
+/** The answer for one check code: a `pair` waiting on another code never reads it. */
+const answerFile = (ctx: Ctx, code: string) => join(ctx.store.dir, `pair-answer.${code}`);
+
+/** Whole or not at all: a waiting reader sees the file complete or not yet. */
+function writeWhole(path: string, text: string) {
+  const tmp = `${path}.${process.pid}`;
+  rmSync(tmp, { force: true });
+  writeFileSync(tmp, text, { mode: 0o600, flag: "wx" });
+  renameSync(tmp, path);
+}
+
+/** `starbridge pair --confirm` or `--reject`: answers the check code a waiting `pair` shows. */
+export function sendConfirm(ctx: Ctx, same: boolean): number {
+  let code: string;
+  try {
+    code = readFileSync(waitingFile(ctx), "utf8").trim();
+  } catch {
+    throw new UsageError("no `starbridge pair` is waiting for its check code to be confirmed");
+  }
+  if (!/^[0-9A-Z]{4}(-[0-9A-Z]{4}){3}$/.test(code))
+    throw new UsageError("no `starbridge pair` is waiting for its check code to be confirmed");
+  writeWhole(answerFile(ctx, code), same ? "yes" : "no");
+  ctx.out(
+    `${same ? "Confirmed" : "Rejected"} check code ${code} for the waiting \`starbridge pair\`.`,
+  );
+  return 0;
+}
+
+/**
+ * Shows `code` and asks the owner whether the Android app shows the same beside the machine, on
+ * this terminal or through `starbridge pair --confirm` or `--reject`. Undefined when nobody
+ * answered in time.
+ */
+async function confirmCheck(
+  ctx: Ctx,
+  code: string,
+  name: string,
+): Promise<"yes" | "no" | undefined> {
+  const file = answerFile(ctx, code);
+  rmSync(file, { force: true });
+  // Answers name the code they answer, so two waiting pairings cannot take each other's. A first
+  // pairing has written nothing yet, so the directory may not exist.
+  mkdirSync(ctx.store.dir, { recursive: true, mode: 0o700 });
+  writeWhole(waitingFile(ctx), code);
+  const tty = process.stdin.isTTY;
+  ctx.out(`Check code: ${code}`);
+  ctx.out(
+    `  The Starbridge Android app shows "${name}" under Devices with its check code. A browser shows what the server sends, so compare with the app if you have it. An app that shows no code needs updating.`,
+  );
+  ctx.out(
+    tty
+      ? "Same code? [Y/n]"
+      : "  Same code? Run `starbridge pair --confirm` if so, `starbridge pair --reject` if not.",
+  );
+  const typed: string[] = [];
+  // Lines typed while the machine waited for approval arrive at once: a stray Enter among them
+  // must not confirm a code nobody read.
+  const shown = Date.now();
+  const rl = tty
+    ? createInterface({ input: process.stdin }).on("line", (l) => {
+        if (Date.now() - shown > 500) typed.push(l);
+      })
+    : undefined;
+  try {
+    const until = ctx.now().getTime() + CONFIRM_MS;
+    for (;;) {
+      if (ctx.signal?.aborted || ctx.now().getTime() > until) return undefined;
+      const line = typed.shift();
+      // Enter alone confirms (Tom, 2026-10-08).
+      if (line !== undefined) return /^\s*(y(es)?)?\s*$/i.test(line) ? "yes" : "no";
+      try {
+        const answer = readFileSync(file, "utf8");
+        rmSync(file, { force: true });
+        return answer === "yes" ? "yes" : "no";
+      } catch {
+        await ctx.sleep(500);
+      }
+    }
+  } finally {
+    rl?.close();
+    rmSync(file, { force: true });
+    try {
+      if (readFileSync(waitingFile(ctx), "utf8") === code)
+        rmSync(waitingFile(ctx), { force: true });
+    } catch {}
   }
 }

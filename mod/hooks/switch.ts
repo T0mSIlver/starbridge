@@ -8,6 +8,19 @@
 import type { AgentLoop } from "./agent.ts";
 import type { Poller } from "./poller.ts";
 
+/** Entry points of a run that ends with its last turn: `claude -p` and Agent SDK scripts. */
+const ONE_SHOT = new Set(["sdk-cli", "sdk-ts", "sdk-py"]);
+
+/**
+ * Whether a session gets an answer loop: one under the REPL, or one a host such as Claude
+ * desktop's Code tab or an IDE keeps open for a person (#863). The engine calls those not
+ * interactive, as it does a `claude -p` run, so the host's `CLAUDE_CODE_ENTRYPOINT` tells them
+ * apart; a run with none set is `claude -p`'s own.
+ */
+export function wantsLoop(isInteractive: boolean, entrypoint: string | undefined): boolean {
+  return isInteractive || (!!entrypoint && !ONE_SHOT.has(entrypoint));
+}
+
 export interface Paths {
   /** True when an agent answers `GET /v1/status` with a 2xx. */
   agentUp(): Promise<boolean>;

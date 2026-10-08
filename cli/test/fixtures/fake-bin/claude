@@ -2,6 +2,8 @@
 # Stands in for `claude plugin …`: keeps the marketplace and plugins as files in $FAKE_STATE,
 # and declares the marketplace in settings.json as `claude plugin marketplace add` does.
 echo "claude $*" >>"$FAKE_LOG"
+# Setup runs claude from HOME, so no repository's .claude/settings.json is read or edited (#762).
+[ "$(pwd -P)" = "$(cd "$HOME" && pwd -P)" ] || { echo "not run from HOME: $(pwd)" >&2; exit 1; }
 s=$FAKE_STATE
 mkdir -p "$s"
 [ "$1" = "--version" ] && { echo "${FAKE_CLAUDE_VERSION:-2.1.291} (Claude Code)"; exit 0; }

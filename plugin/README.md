@@ -9,15 +9,16 @@ such as which commands to report or which merges to ask about, put lines in
 their own instruction files: [Agent instructions](https://starbridge.run/docs/tell-your-agents)
 says where.
 
-A `PreToolUse` hook on `AskUserQuestion` runs `starbridge hook ask-user`, which
-answers the question with an instruction to post it with `starbridge ask`.
-When the machine is not paired or the server does not answer, it lets the
-question through.
+When Claude Code opens its `AskUserQuestion` picker, a `PermissionRequest` hook
+posts the question to your devices too: the first answer, in the picker or on
+a device, wins, and the other closes as answered elsewhere. The `PreToolUse`
+hook on `AskUserQuestion` is kept for CLIs before that, which send the agent
+to `starbridge ask` instead.
 
 It also sends this machine's permission prompts to your devices, once you turn
 that on with `starbridge config permissions on` (off by default): `PermissionRequest` runs
-`starbridge hook permission`, and `PostToolUse`, `PermissionDenied`, `Stop`
-and `SessionEnd` run `starbridge hook settle`, which lets the waiting prompt go
+`starbridge hook permission`, and `PostToolUse`, `PostToolUseFailure`,
+`PermissionDenied`, `Stop` and `SessionEnd` run `starbridge hook settle`, which lets the waiting prompt go
 when the keyboard answers first. While it is off, both exit at once.
 
 The answers come back through the `starbridge-mod` plugin (`mod/README.md`).

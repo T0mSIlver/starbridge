@@ -303,7 +303,17 @@ function runOutcome(r: RunItem["run"], now: number): { text: string; tone: strin
 }
 
 /** A command an agent runs under `starbridge run`: what, why, and how far along. */
-export function RunRow({ item, now, comfy }: { item: RunItem; now: number; comfy?: boolean }) {
+export function RunRow({
+  item,
+  now,
+  comfy,
+  onDismiss,
+}: {
+  item: RunItem;
+  now: number;
+  comfy?: boolean;
+  onDismiss?: () => void;
+}) {
   const r = item.run;
   const state = runState(r, now);
   const p = r.progress;
@@ -347,11 +357,60 @@ export function RunRow({ item, now, comfy }: { item: RunItem; now: number; comfy
           )}
         </div>
       ) : (
-        <div className={`t-meta ${s.outcome} ${runOutcome(r, now).tone}`}>
-          {runOutcome(r, now).text}
+        <div className={s.runEnd}>
+          <div className={`t-meta ${s.outcome} ${runOutcome(r, now).tone}`}>
+            {runOutcome(r, now).text}
+          </div>
+          {onDismiss && (
+            <button
+              type="button"
+              className={`t-meta ${s.dismiss}`}
+              aria-label={`Dismiss ${r.title}`}
+              onClick={onDismiss}
+            >
+              Dismiss
+            </button>
+          )}
         </div>
       )}
     </article>
+  );
+}
+
+/**
+ * Runs' head (#835): open by default, its state remembered on this device. Closed, it still names
+ * failed and lost runs, so closing it never hides a failure.
+ */
+export function RunsHead({
+  open,
+  runs,
+  now,
+  comfy,
+  onToggle,
+}: {
+  open: boolean;
+  runs: RunItem[];
+  now: number;
+  comfy?: boolean;
+  onToggle: () => void;
+}) {
+  const states = runs.map((i) => runState(i.run, now));
+  const failed = states.filter((x) => x === "failed").length;
+  const lost = states.filter((x) => x === "lost").length;
+  return (
+    <button
+      type="button"
+      className={`${comfy ? "t-small" : "t-meta"} ${s.historyHead} ${comfy ? s.comfy : ""}`}
+      aria-expanded={open}
+      onClick={onToggle}
+    >
+      <Play size={14} />
+      <span className={s.historyTitle}>Runs</span>
+      <span>{runs.length}</span>
+      {failed > 0 && <span className={`${s.outcome} ${s.bad}`}>· {failed} failed</span>}
+      {lost > 0 && <span>· {lost} lost</span>}
+      <Icon name="chev" size={16} className={s.chev} />
+    </button>
   );
 }
 

@@ -25,13 +25,16 @@ A machine's pairing code passes through the page as well, when the owner opens t
 `/pair#<code>` link in a browser or types its code into one (#795). Whoever holds the code can
 make the approval's MAC, so the page can approve the machine into a chain the server made, which
 lists the machine, and pair a stand-in machine of the same name into the owner's real account.
-The server then relays between the two and reads everything the real machine sends. This also
-works in a browser that was never a member.
+The server would then relay between the two and read everything the real machine sends. The
+machine's check code stops this ("Pairing"): approved from a browser, the machine saves the
+pairing only once the owner says the Android app shows the same code beside it, which differs
+for a machine the server paired elsewhere. Compared against the web page instead, it proves
+nothing, since the server writes that page.
 
 So the checks in this file protect an account against a hostile server only while no browser is
-a member and neither the recovery key nor a pairing code reaches a browser. Where that matters,
-set up the account on the Android app, type pairing codes and the recovery key only there, and
-add no browser; or host your own server.
+a member, the recovery key never reaches a browser, and machines' check codes are compared on
+the Android app. Where that matters, set up the account on the Android app, type the recovery key
+only there, and add no browser; or host your own server.
 
 ## Known limits
 
@@ -223,29 +226,44 @@ Both pairing messages carry an HMAC (`crypto_auth`) keyed from the secret.
 
 1. The new member posts its request (role, id, name, public keys) under the rendezvous id.
 2. The owner types the code on a device. The device checks the request's MAC, appends an `add`
-   entry for those exact keys, and posts an approval `{account, length, head}` with its MAC.
+   entry for those exact keys, and posts an approval `{account, length, head}` with its MAC, and
+   `check` when it read a machine's check key from its QR (below).
 3. The new member checks the approval's MAC, verifies the directory with `{length, head}` as its
    pin, and checks that the directory holds its own keys.
 
 A code expires after 10 minutes. The server could brute-force the secret offline from a MAC, but
 80 bits take far longer than that.
 
-Either side may make the code. A machine prints its own, as text, as a QR code and as a link
+Either side may make the code. A machine prints its own as text, as a link
 `<server>/pair#<code>` that opens the web page with the code filled in (`pairingLink`,
-`codeFromLink`); the fragment never reaches the server. An existing device can instead show a
+`codeFromLink`; the fragment never reaches the server), and as a QR code for the Android app
+(below). An existing device can instead show a
 code as a QR code: the new phone scans it and posts its request under it, and the device, which
 waits on `GET /pairings/:rendezvous?wait=`, checks the MAC and asks the owner to approve. Anyone
 who sees the code can post first, so the device shows the requester's name before approving, as
 with a typed code.
 
-A machine's check code lets the owner see that the machine joined the owner's own chain (#795).
-`checkCode` is the first 80 bits of `BLAKE2b-256("starbridge/v1/check" NUL body NUL sig)` over
-the `add` entry that added the machine, its body and its signature as sent, as 16 Crockford base32 characters in four groups.
-That body holds the machine's keys and name, and through `prev` the whole chain before it. Once
-approved, the machine shows the first three groups and saves the pairing only once a person types
-the last group from the Android app, which shows each active machine's code under Devices,
-computed from the chain it verified. With no terminal, the group comes from
-`starbridge pair --confirm`.
+A machine's check code shows that the machine joined the owner's own chain (#795). `checkCode`
+is the first 80 bits of `BLAKE2b-256("starbridge/v1/check" NUL body NUL sig)` over the `add`
+entry that added the machine, its body and its signature as sent, as 16 Crockford base32
+characters in four groups. That body holds the machine's keys and name, and through `prev` the
+whole chain before it. The Android app and the web page show each active machine's code under
+Devices, computed from the chain they verified.
+
+The machine's QR code carries a check key, 80 bits as 16 Crockford base32 characters, in a link
+no browser opens: `starbridge://pair?server=<server>&k=<key>#<code>` (`appPairingLink`,
+`newCheckKey`, `checkKeyFromLink`). Only the Android app handles `starbridge:` links, so the key
+never reaches a page the server writes. The printed link and code leave it out. An Android app that read the key adds `check` to its approval:
+`crypto_auth` over the same bytes `checkCode` hashes, keyed by
+`BLAKE2b-256("starbridge/v1/check-key" NUL key)` (`checkProof`). The machine then, after it
+verified the chain:
+
+- with a `check` that verifies over its own `add` entry, saves the pairing;
+- with a `check` that does not, saves nothing: the app wrote another entry;
+- with no `check` (a browser, a typed code, an app that predates it), shows its code and saves
+  the pairing once a person answers that the Android app shows the same. With no terminal, the
+  answer comes from `starbridge pair --confirm` or `--reject`. A no, or no answer within 10
+  minutes, saves nothing.
 
 A hostile server that read the pairing code in a browser can approve the machine into a chain it
 controls, even one that reuses the owner's entries and forks after them with a revoked device's
@@ -254,11 +272,13 @@ own public keys, since a pairing request proves no private key. The stand-in's `
 the machine's differ in their `prev` or their contents, so the codes differ unless the server
 finds an entry whose code matches 80 bits of one the owner's device wrote. The signature keeps
 it from searching both sides at once: it can predict the body of the entry the owner's device
-will write, but not that device's signature. Two limits: a member
-browser lets a hostile page write both entries and search for a pair that matches, about 2^40
-tries; and the code proves nothing to a device that itself paired or joined through a browser,
-which the server could have put in a chain of its own. The web page shows the codes too, but a
-hostile server writes that page.
+will write, but not that device's signature. Without the check key, it cannot make a `check`
+the machine accepts, and stripping the app's `check` only makes the machine ask.
+
+Limits: a member browser lets a hostile page write both entries and search for a
+pair that matches, about 2^40 tries; and the code proves nothing to a device that itself paired
+or joined through a browser, which the server could have put in a chain of its own. The web page
+shows the codes too, but a hostile server writes that page.
 
 ## Joining by digits
 
@@ -440,6 +460,7 @@ createdAt, expiresAt, version}`; `state` is `open`, `comparing`, `approved` or `
 |---|---|---|
 | `POST /items` | the kind's signing role | store a sealed item and push it to each recipient; 409 on a reused id; 409 `too-many-items` and 413 `too-large` past the caps in Limits; 403 `account-suspended` from a machine of an account the operator suspended (every machine write gets it; reads still pass) |
 | `GET /items?kind=<kinds>&after=<cursor>&open=1` | device | items with only the caller's box (and a decision's blobs), and `cursor`; `kinds` is a comma-separated list of machine-signed kinds and `snooze`, the machine-signed ones when left out; `open=1` keeps only unanswered decisions and permissions still in their answer window |
+| `DELETE /items/:id` | device | drop a run sealed to the caller, for every device (#827); 404 for any other kind, or a run already gone |
 | `GET /items/:id` | device, machine | one item, the caller's box only, with a decision's blobs; push points here when the item is over the inline limit (3 KB by default) |
 | `GET /quota` | device | the latest quota item from each machine |
 | `GET /quota/senders` | device, machine | `{senders: [{id, receivedAt}]}`: each active machine with a quota item, and when its latest arrived; never the item |
@@ -531,6 +552,14 @@ set in `RELAY_URL` (starbridge.run runs with `RELAY_MODE=1`), which pushes with 
 own credentials; the payload is already ciphertext or an id. UnifiedPush always goes direct.
 `gone` from a push service drops the subscription.
 
+### Presence and settings
+
+| Route | Who | What |
+|---|---|---|
+| `PUT /presence` | device, machine | `{present}`: whether the owner sits at this screen ("Held pushes") → 204 |
+| `GET /settings` | device | the account's settings, `{pushHold}`: seconds a push waits while the owner is present, 30 unless set |
+| `PUT /settings` | device | `{pushHold}`, 0 to 300 → the settings as stored |
+
 ### Limits
 
 These bound what one account, or one address, can make the server store or do. A rate limit
@@ -564,6 +593,8 @@ server whose disk is full answers writes 503 `storage-full` with `Retry-After`; 
 | `GET /joins` waiting | 16 per account; `GET /joins/:id` waiting: 4 per join: 429 `too-many-waits` |
 | `GET /answers` waiting | 32 per machine: 429 `too-many-waits` |
 | `POST /quota/ask` | 6 a minute per account |
+| `PUT /presence` | 10 a minute per device or machine |
+| `PUT /settings` | 30 a minute per account |
 | `POST /push/subscriptions` | 30 a minute per account, on top of the subscription caps |
 | `POST /relay`, on a relay server | 120 a minute per address |
 
@@ -623,6 +654,34 @@ nothing.
 - On the machine, `starbridge waiting <id>` and `starbridge wait <id>` say when the decision is
   snoozed (`wait` exits 3, once per snooze); nothing wakes the agent.
 
+## Held pushes
+
+A question that shows in the agent's own picker and on the owner's screen needs no push to the
+phone as well (#848). So while the owner sits at a screen, the push of an item that asks for them
+waits a little, and goes only if nothing answered it meanwhile.
+
+- **Presence.** A machine or a device sends `PUT /presence {present: true}` every 30 s
+  (`PRESENCE_BEAT_MS`) while the owner sits at its screen, and `{present: false}` once they no
+  longer do. It decides that where it reads it, and sends only the bit: a machine, its screen
+  unlocked with input in the last minute (`isPresent`); a web page, visible with an input event on
+  it in the last minute; the Android app, in front and touched in the last minute. Tabs of one
+  browser share its device, so an idle tab says nothing while another tab is in use. A refused
+  beat is tried again a beat later. The server
+  keeps each source's bit in memory, trusts a `true` for 75 s (`PRESENCE_VALID_MS`), and counts
+  the account present while any source is. A restart forgets it: push at once.
+- **What waits.** A machine's `decision`, `permission` or `waiting` item that asks for a push,
+  posted while the account is present and its `pushHold` is not 0. Its push goes at once to the
+  devices that are themselves present, and waits `pushHold` seconds for the others. A re-seal's
+  new devices wait the same way; those that already waited keep their time.
+- **When the hold ends**, within a few seconds, the server pushes the item to the
+  devices it held it from, if it is still open: a permission unanswered, a decision, or a
+  `waiting` item's decision, unanswered and not snoozed. The hold is stored with the item, so a
+  restart delays it by no more than the restart.
+- **Closed during the hold**, an item never pushes the devices it held it from, nor the
+  `answered` push or the settled notice that closes it: they never heard of it. A snooze posted
+  during the hold skips them too, and a snoozed item's hold ends without a push.
+- **Devices** list a held item at once, as any other: only its push waits.
+
 ## Runs
 
 An agent wraps a command in `starbridge run --title --reason -- <command>` when it blocks the
@@ -637,6 +696,9 @@ last time when the command exits.
   set once the command exited, `code` being 128 + n when signal n ended it.
 - A running run with no update for 3 minutes (`RUN_STALE_MS`) lost its machine: devices stop
   showing it as running.
+- A device dismisses a run with `DELETE /items/:id`, and every device drops it from its list on
+  its next read. The server cannot tell a finished run from a running one, so devices offer it
+  only for finished and lost runs; a machine that posts the run again brings it back.
 
 ## Permission prompts
 
@@ -719,8 +781,8 @@ Pi extension stops a CLI that ran 600 s, kills one still running 10 s after it w
 defers either way.
 
 The keyboard can answer first. Esc or No sends the hook SIGTERM; it posts `settled: keyboard`
-and exits. A keyboard Yes sends no signal, so `starbridge hook settle` runs on `PostToolUse` and
-`PermissionDenied`, settling the session's waiting prompt whose `inputHash` matches the call's
+and exits. A keyboard Yes sends no signal, so `starbridge hook settle` runs on `PostToolUse`,
+`PostToolUseFailure` (the call ran and failed) and `PermissionDenied`, settling the session's waiting prompt whose `inputHash` matches the call's
 input (Claude Code's `PermissionRequest` input carries no `tool_use_id`), and on `Stop` and
 `SessionEnd`, settling every waiting prompt of the session. The waiting hook then exits at
 once through the agent, or within 5 s on its own path. At the deadline the hook prints nothing,
