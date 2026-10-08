@@ -87,6 +87,8 @@ Answers go into interactive sessions; Claude Code needs 2.1.287 or later, Codex 
 [What each agent supports](https://starbridge.run/docs/tell-your-agents#what-each-agent-supports)
 lists the version and setup each one needs.
 
+Tested for 0.1.0: Claude Code on macOS, Linux and Windows 11; Codex, opencode and Pi on Linux.
+
 ## Docs
 
 [starbridge.run/docs](https://starbridge.run/docs): getting started, the CLI, telling your agents
