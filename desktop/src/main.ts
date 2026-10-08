@@ -149,9 +149,14 @@ function createWindow(): void {
     e.preventDefault();
     win?.hide();
   });
+  // Offline at start, or the server restarting: try again, unless a newer navigation came first.
+  let retry: NodeJS.Timeout | undefined;
+  win.webContents.on("did-start-navigation", (d) => {
+    if (d.isMainFrame) clearTimeout(retry);
+  });
   win.webContents.on("did-fail-load", (_e, code, _desc, url, mainFrame) => {
     // -3 is a navigation the page or the app cancelled.
-    if (mainFrame && code !== -3) setTimeout(() => win?.loadURL(url), 5_000);
+    if (mainFrame && code !== -3) retry = setTimeout(() => win?.loadURL(url), 5_000);
   });
   win.loadURL(origin);
 }
@@ -272,9 +277,17 @@ function answer(a: Answer): void {
   win.webContents.send("answer", a);
 }
 
+/** Failure notices, kept until closed: macOS drops a collected notification and its handlers. */
+const notices = new Set<Notification>();
+
 function notSent(id: string, why: string): void {
   const n = new Notification({ title: "Answer not sent", body: why });
-  n.on("click", () => open(id));
+  notices.add(n);
+  n.on("click", () => {
+    notices.delete(n);
+    open(id);
+  });
+  n.on("close", () => notices.delete(n));
   n.show();
 }
 
