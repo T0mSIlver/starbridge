@@ -282,10 +282,16 @@ function menu(): Menu {
       click: () => app.setLoginItemSettings({ openAtLogin: !login }),
     },
     { label: `Server: ${new URL(origin).host}…`, click: showServer },
-    ...(updateReady ? [{ label: "Restart to Update", click: () => update?.install() }] : []),
+    ...(updateReady ? [{ label: "Restart to Update", click: installUpdate }] : []),
     { type: "separator" },
     { label: "Quit Starbridge", role: "quit" },
   ]);
+}
+
+/** Quits for the update: the window must close, not hide, or the install never starts. */
+function installUpdate(): void {
+  quitting = true;
+  update?.install();
 }
 
 function showWindow(): void {
