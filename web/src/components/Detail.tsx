@@ -92,12 +92,10 @@ function Head({ since, children }: { since?: string; children: React.ReactNode }
 function FreeText({
   id,
   sending,
-  focus,
   onSend,
 }: {
   id: string;
   sending: boolean;
-  focus?: boolean;
   onSend: (text: string) => void;
 }) {
   const [text, setText] = useState("");
@@ -117,10 +115,8 @@ function FreeText({
           id={`answer-${id}`}
           className={`${ui.input} t-body ${s.fieldInput}`}
           rows={1}
-          placeholder="Reply"
+          placeholder="Your answer"
           value={text}
-          // biome-ignore lint/a11y/noAutofocus: opened by the Reply button, to type at once
-          autoFocus={focus}
           onChange={(e) => setText(e.target.value)}
           // Enter sends and Shift+Enter starts a new line (#562); an Enter that ends an input
           // method's composition only commits it.
@@ -190,7 +186,6 @@ export function QuestionDetail({
     recommended && (!pending || ("choice" in pending && pending.choice === o));
   const snoozeSend = useSend(onSnooze);
   const [clock] = usePref("clock");
-  const [replying, setReplying] = useState(false);
   // One image per option: each image over the option it stands for, in the agent's order.
   const paired =
     !closed && !d.answerIn && (d.images?.length ?? 0) > 1 && d.images?.length === d.options.length;
@@ -262,20 +257,15 @@ export function QuestionDetail({
       ) : (
         <FreeText id={d.id} sending={sending} onSend={(t) => send({ text: t })} />
       )}
-      {replying && <FreeText id={d.id} sending={sending} focus onSend={(t) => send({ text: t })} />}
+      {/* A typed reply in place of the options (#201), always open: steering by reply is as
+          common as a pick (#849). */}
+      {d.replies && options.length > 0 && (
+        <FreeText id={d.id} sending={sending} onSend={(t) => send({ text: t })} />
+      )}
       {!closed && (
-        // Quiet, so the options stay the answer: a typed reply in place of them (#201), Done for
-        // a page's answer (#539), and putting it off (#571).
+        // Quiet, so the answer stays above: Done for a page's answer (#539), and putting it off
+        // (#571).
         <div className={s.quiet}>
-          {d.replies && options.length > 0 && !replying && (
-            <button
-              type="button"
-              className={`t-small ${s.link} ${s.reply}`}
-              onClick={() => setReplying(true)}
-            >
-              Reply
-            </button>
-          )}
           {d.answerIn && d.done && (
             <button
               type="button"

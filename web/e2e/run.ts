@@ -673,8 +673,8 @@ async function main() {
       await page.screenshot({ path: join(SHOTS, `picks-phone-${scheme}.png`) });
     }
     await page.emulateMedia({ reducedMotion: "no-preference" });
-    // "Reply" is under the picks too; in it, Shift+Enter starts a new line and Enter sends (#562).
-    await page.getByRole("button", { name: "Reply", exact: true }).click();
+    // The reply field is open under the picks too (#849); in it, Shift+Enter starts a new line and
+    // Enter sends (#562).
     const reply = page.getByRole("textbox", { name: "Your answer" });
     await reply.pressSequentially("Phone layout");
     await reply.press("Shift+Enter");
