@@ -40,11 +40,14 @@ class Heads(private val directories: Directories) {
     /**
      * Records the head [signer] signed into an item. A shorter head never replaces a longer one
      * [entries] lack, so replaying an older item cannot lift a hold. With [dir], a `by` that chain
-     * does not list goes in the signer's one unknown slot, "signer/?". True when it changed.
+     * does not list goes in the signer's one unknown slot, "signer/?", and a head passed on from a
+     * `by` it lists as revoked is not kept, so a head the owner forgot does not come back when its
+     * item is read again (heads.ts `noteHead`). True when it changed.
      */
     fun note(heads: MutableMap<String, DirectoryHead>, signer: String, head: DirectoryHead?, entries: List<JsonElement>, dir: Directory? = null): Boolean {
         if (head == null) return false
         val by = head.by?.takeIf { it != signer }
+        if (by != null && dir?.members?.get(by)?.active == false) return false
         val key = when {
             by == null -> signer
             dir != null && !dir.members.containsKey(by) -> "$signer/?"
