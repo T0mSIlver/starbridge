@@ -16,6 +16,7 @@ import {
   Tray,
   type WebContents,
 } from "electron";
+import { autoUpdater } from "electron-updater";
 import { type Answer, type Entry, parseAnswered, parseState } from "./bridge";
 import { Notifier, type Shown } from "./notifier";
 import { linkPage, opensOutside, serverOrigin, staysInWindow } from "./origin";
@@ -31,6 +32,8 @@ const ASSETS = join(ROOT, "assets");
 const SETTINGS = join(app.getPath("userData"), "settings.json");
 /** How long the page has to say an answer from a notification went out. */
 const ANSWER_MS = 30_000;
+/** How often the app looks for a release; it also looks at each start. */
+const UPDATE_MS = 6 * 3_600_000;
 
 let settings: Settings;
 let origin: string;
@@ -43,6 +46,8 @@ let notifier: Notifier;
 let quitting = false;
 /** The GitHub sign-in sent to the browser, until its link comes back. */
 let signIn: SignIn | null = null;
+/** A release downloaded, which installs on quit or from the menu. */
+let updateReady = false;
 /** Links that arrived before the window existed. */
 const early: string[] = [];
 /** Answers handed to the page, until it says they went out. */
@@ -133,6 +138,24 @@ function ready(): void {
   if (atLogin) app.dock?.hide();
   else showWindow();
   for (const link of early.splice(0)) openLink(link);
+  checkForUpdates();
+}
+
+/**
+ * Updates from GitHub Releases (electron-updater reads the latest release's latest-mac.yml). macOS
+ * installs an update only when it carries the same Developer ID as the running app, so an ad hoc
+ * build finds updates and cannot install them; that error is logged, never shown.
+ */
+function checkForUpdates(): void {
+  if (!app.isPackaged) return;
+  autoUpdater.logger = console;
+  autoUpdater.on("update-downloaded", () => {
+    updateReady = true;
+  });
+  autoUpdater.on("error", (e) => console.warn("update:", e.message));
+  const check = () => autoUpdater.checkForUpdates().catch(() => {});
+  check();
+  setInterval(check, UPDATE_MS);
 }
 
 function createWindow(): void {
@@ -262,6 +285,9 @@ function menu(): Menu {
       click: () => app.setLoginItemSettings({ openAtLogin: !login }),
     },
     { label: `Server: ${new URL(origin).host}…`, click: showServer },
+    ...(updateReady
+      ? [{ label: "Restart to Update", click: () => autoUpdater.quitAndInstall() }]
+      : []),
     { type: "separator" },
     { label: "Quit Starbridge", role: "quit" },
   ]);

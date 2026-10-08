@@ -22,6 +22,8 @@ const PLACES: { file: string; pattern: RegExp; tag?: boolean }[] = [
   { file: "mod/.claude-plugin/plugin.json", pattern: /"version": "([^"]+)"/ },
   // The hosted page is built from main and reports it in its client header.
   { file: "web/package.json", pattern: /"version": "([^"]+)"/ },
+  // The desktop app compares it with the release's latest-mac.yml to update.
+  { file: "desktop/package.json", pattern: /"version": "([^"]+)"/ },
   { file: "mod/hooks/agent.ts", pattern: /export const VERSION = "([^"]+)";/ },
   {
     file: "android/app/build.gradle.kts",
