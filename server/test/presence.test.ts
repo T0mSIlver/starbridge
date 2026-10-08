@@ -110,13 +110,15 @@ const post = (who: Actor, item: SealedItem) =>
   s.call("POST", "/v1/items", { token: who.token, body: item });
 const present = (who: Actor, yes = true) =>
   s.call("PUT", "/v1/presence", { token: who.token, body: { present: yes } });
-const heldUntil = async (who: Actor, id: string) =>
-  (
-    (await s.call("GET", "/v1/items?kind=decision,waiting", { token: who.token })).json.items as {
-      item: SealedItem;
-      heldUntil?: string;
-    }[]
-  ).find((x) => x.item.id === id)?.heldUntil;
+/** When `who`'s push of item `id` is due, while it waits. */
+const heldUntil = async (who: Actor, id: string) => {
+  const row = s.deps.db.query("SELECT hold_due, hold_to FROM items WHERE id = ?").get(id) as {
+    hold_due: string | null;
+    hold_to: string | null;
+  };
+  const held = (JSON.parse(row.hold_to ?? "[]") as string[]).includes(who.id);
+  return held ? (row.hold_due ?? undefined) : undefined;
+};
 const release = (afterMs: number) =>
   releaseHolds(s.deps.db, s.deps.push, 3072, Date.now() + afterMs);
 const pushed = () => sent.map((p) => [p.to, p.payload.kind, p.payload.id]);
@@ -132,7 +134,7 @@ test("while a page is present, the other devices' push waits the hold, then goes
   expect((await present(web)).status).toBe(204);
   const d = decision();
   await post(devbox, d);
-  // The present page hears at once; the phone lists it held and gets no push.
+  // The present page hears at once; the phone lists it too, but its push waits.
   expect(pushed()).toEqual([[[web.id], "decision", d.id]]);
   const due = await heldUntil(phone, d.id);
   expect(Date.parse(due as string) - Date.now()).toBeGreaterThan(29_000);

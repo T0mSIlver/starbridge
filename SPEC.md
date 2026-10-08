@@ -371,7 +371,8 @@ provider plugins add providers, not panels.
   the owner's machines or devices says they sit at its screen, the push of a question, a
   permission prompt or a waiting flip waits the account's hold time (30 s by default, off to
   2 minutes in Settings) for every device not itself in use, and goes only if nothing answered it
-  meanwhile. Only the push waits, never the item: every device lists it at once. With no presence
+  meanwhile. Only the push waits, never the item: every device lists it at once, and a held card
+  looks like any other, since the owner chose no state that flips while they look. With no presence
   signal, which is every older client, pushes go at once as before. The server reads presence as
   one bit per source, in memory, since the hold is all it is for: no idle time, lock state or
   reason, nothing on disk, and a restart means push now. Presence counts per person, so a Mac in

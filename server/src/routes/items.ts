@@ -65,8 +65,6 @@ interface Row {
   to_id: string;
   box: string;
   blobs: string | null;
-  hold_due: string | null;
-  hold_to: string | null;
 }
 
 /** An item as a recipient sees it: its own box only, plus what the server knows about it. */
@@ -76,15 +74,9 @@ export interface Stored {
   receivedAt: string;
   /** Decisions and permissions: when a device answered it, or the machine settled it. */
   answeredAt?: string;
-  /** When the recipient's push of it is due, while the owner sits at another screen (#848). */
-  heldUntil?: string;
 }
 
-function stored(r: Row, now = Date.now()): Stored {
-  const held =
-    r.hold_due !== null &&
-    Date.parse(r.hold_due) > now &&
-    (JSON.parse(r.hold_to ?? "[]") as string[]).includes(r.to_id);
+function stored(r: Row): Stored {
   return {
     item: {
       v: 1,
@@ -99,11 +91,10 @@ function stored(r: Row, now = Date.now()): Stored {
     cursor: String(r.seq),
     receivedAt: r.received_at,
     ...(r.answered_at ? { answeredAt: r.answered_at } : {}),
-    ...(held ? { heldUntil: r.hold_due as string } : {}),
   };
 }
 
-const SELECT = `SELECT i.seq, i.id, i.kind, i.from_id, i.re, i.wake_at, i.received_at, i.answered_at, b.to_id, b.box, i.blobs, i.hold_due, i.hold_to
+const SELECT = `SELECT i.seq, i.id, i.kind, i.from_id, i.re, i.wake_at, i.received_at, i.answered_at, b.to_id, b.box, i.blobs
   FROM items i JOIN boxes b ON b.account_id = i.account_id AND b.item_id = i.id`;
 
 function after(raw: string | undefined): number {
@@ -142,7 +133,7 @@ function list(
       JSON.stringify(kinds),
       ...(openOnly ? [JSON.stringify(ANSWERABLE), JSON.stringify(cutoffs)] : []),
     ) as Row[];
-  return rows.map((r) => stored(r, now));
+  return rows.map(stored);
 }
 
 function page(items: Stored[], from: number) {
