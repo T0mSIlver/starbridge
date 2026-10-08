@@ -1,7 +1,15 @@
 "use client";
 
 import { PRESENCE_INPUT_MS, type Settled } from "@starbridge/protocol";
-import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { api, backingOff } from "@/lib/api";
 import type { Boot, Ctx, Inbox, Quotas, Runs } from "@/lib/device";
 import { reach, send } from "@/lib/funnel";
@@ -18,6 +26,7 @@ import {
 import { runState } from "@/lib/runs";
 import { chimeForNew, unlockSound } from "@/lib/sound";
 import type { Device, InboxItem, PromptItem, PromptReply, Reply, RunItem } from "@/lib/types";
+import { type Unsent, withUnsent } from "@/lib/unsent";
 
 // The protocol code and libsodium load here, after the first paint.
 const load = () => import("@/lib/device");
@@ -111,6 +120,12 @@ const QUOTA_ASK_SECONDS = 25;
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [boot, setBoot] = useState<Store["boot"]>({ state: "loading" });
   const [inbox, setInbox] = useState<Inbox>({ items: [], rejected: [] });
+  const [unsent, setUnsent] = useState<Unsent>({});
+  const [notSent, setNotSent] = useState<Record<string, string>>({});
+  const shownInbox = useMemo(
+    () => ({ ...inbox, items: withUnsent(inbox.items, unsent, notSent) }),
+    [inbox, unsent, notSent],
+  );
   const [inboxLoaded, setInboxLoaded] = useState(false);
   const [pushed, setPushed] = useState(false);
   const [quotas, setQuotas] = useState<Quotas>();
@@ -579,6 +594,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const answer = useCallback(
     async (item: InboxItem, reply: Reply) => {
       if (!ctx) return;
+      const id = item.decision.id;
+      // The question leaves the open list now; the server's reply only confirms it (#895).
+      setUnsent((all) => ({ ...all, [id]: { reply, at: new Date().toISOString() } }));
+      setNotSent(({ [id]: _, ...rest }) => rest);
       const d = await load();
       try {
         const answeredAt = await d.answer(ctx, item, reply);
@@ -587,16 +606,19 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         inboxRead.current()();
         setInbox((all) => ({
           ...all,
-          items: all.items.map((i) =>
-            i.decision.id === item.decision.id ? { ...i, answeredAt, reply } : i,
-          ),
+          items: all.items.map((i) => (i.decision.id === id ? { ...i, answeredAt, reply } : i)),
         }));
       } catch (e) {
         if (e instanceof d.ApiError && e.status === 401) reload();
-        if (!(e instanceof d.ApiError && e.code === "already-answered")) throw e;
+        if (!(e instanceof d.ApiError && e.code === "already-answered")) {
+          setNotSent((all) => ({ ...all, [id]: e instanceof Error ? e.message : String(e) }));
+          throw e;
+        }
         // Answered on another device in the meantime: show it answered, and that this one lost.
         await refreshInbox();
         throw new AnsweredFirst();
+      } finally {
+        setUnsent(({ [id]: _, ...rest }) => rest);
       }
     },
     [ctx, refreshInbox, reload],
@@ -627,7 +649,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     <Ctx_.Provider
       value={{
         boot,
-        inbox,
+        inbox: shownInbox,
         inboxLoaded,
         quotas,
         runs,

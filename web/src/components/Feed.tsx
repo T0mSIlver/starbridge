@@ -255,6 +255,10 @@ export function NeedRow({
               </span>
             </div>
             <Thumbs d={entry.item.decision} width={comfy ? 140 : 112} />
+            {/* The server refused this page's answer; answering again retries (#895). */}
+            {entry.item.notSent && (
+              <p className={`t-small ${s.notSent}`}>Not sent: {entry.item.notSent}</p>
+            )}
           </>
         ) : null}
         {actions && <div className={s.actions}>{actions}</div>}

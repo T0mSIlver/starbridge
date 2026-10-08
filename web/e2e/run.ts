@@ -598,6 +598,93 @@ async function main() {
   await shoot(page, "inbox-cleared");
   await page.getByRole("button", { name: /History/ }).click();
 
+  step(
+    "an answer leaves the inbox on the frame after the click, before the server replies; a refused one comes back saying why (#895)",
+  );
+  // Every request waits the hosted server's round trip from a dev box (48 ms, warm connection).
+  await page.route("**/v1/**", async (route) => {
+    await new Promise((done) => setTimeout(done, 48));
+    await route.fallback();
+  });
+  /** The open question's row, by its question. */
+  const needRow = (question: string) =>
+    page.getByRole("button", { name: new RegExp(`${question.replace(/[?.]/g, "\\$&")}$`) });
+  /** Asks, selects the question, clicks `option` in its detail, and times its row's leaving in frames and ms. */
+  const answerTimed = async (question: string, option: string, wait = false) => {
+    const asked = cli(
+      "probe",
+      [
+        ...["ask", "--question", question, "--option", option, "--option", "Not now"],
+        ...["--project", "starbridge", "--session", "e2e", ...(wait ? ["--wait"] : [])],
+      ],
+      machineHome,
+    );
+    await asked.waitFor(/^d_\S+$/m);
+    await page.goto(ORIGIN);
+    await needRow(question).first().click({ timeout: 30_000 });
+    const button = page
+      .locator('section[aria-label="Selected"]')
+      .getByRole("button", { name: new RegExp(`^${option}`) });
+    await button.waitFor();
+    const left = await button.evaluate(async (b, q) => {
+      const listed = () =>
+        [...document.querySelectorAll("[data-row] button[data-id]")].some((r) =>
+          r.getAttribute("aria-label")?.endsWith(q),
+        );
+      const t0 = performance.now();
+      (b as HTMLButtonElement).click();
+      let frames = 0;
+      while (listed() && frames < 600) {
+        await new Promise((done) => requestAnimationFrame(done));
+        frames++;
+      }
+      return { frames, ms: Math.round(performance.now() - t0) };
+    }, question);
+    return { asked, left };
+  };
+  const timed = await answerTimed("Timing probe: tag the release?", "Tag");
+  console.log(`answer click to row gone, 48 ms per request: ${JSON.stringify(timed.left)}`);
+  // Held at the server: the row is gone by the next frame all the same.
+  let release = () => {};
+  const gate = new Promise<void>((done) => {
+    release = done;
+  });
+  let refuse = false;
+  await page.route("**/v1/items", async (route) => {
+    if (route.request().method() !== "POST") return route.fallback();
+    if (refuse)
+      return route.fulfill({
+        status: 400,
+        contentType: "application/json",
+        body: JSON.stringify({ error: "bad-schema", message: "refused by the e2e run" }),
+      });
+    await gate;
+    await route.fallback();
+  });
+  const holding = await answerTimed("Held probe: deploy now?", "Deploy");
+  release();
+  if (holding.left.frames > 1)
+    throw new Error(
+      `the answered row stayed ${holding.left.frames} frames while the server held the answer`,
+    );
+  // Refused: gone at once, then back with why; answering again sends it.
+  refuse = true;
+  const refused = await answerTimed("Refused probe: merge?", "Merge", true);
+  if (refused.left.frames > 1) throw new Error("the refused answer's row did not leave at once");
+  await page
+    .getByText(/^Not sent: bad-schema/)
+    .first()
+    .waitFor({ timeout: 10_000 });
+  refuse = false;
+  await needRow("Refused probe: merge?").first().click();
+  await page
+    .locator('section[aria-label="Selected"]')
+    .getByRole("button", { name: /^Merge/ })
+    .click();
+  await refused.asked.waitFor(/Answer to d_\S+ \(Refused probe: merge\?\): Merge/);
+  await page.unroute("**/v1/items");
+  await page.unroute("**/v1/**");
+
   step("long options wrap on a phone's row instead of widening the page");
   const long = cli(
     "ask-long",
@@ -717,14 +804,8 @@ async function main() {
       throw new Error(
         `Shift+Enter did not start a new line: ${JSON.stringify(await reply.inputValue())}`,
       );
-    // While the typed reply is in flight, no option keeps the recommended one's amber, which
-    // read as that option being sent (#821).
-    const options = page.locator('fieldset button:not([aria-label^="View"])');
-    const fills = () =>
-      options.evaluateAll((els) => els.map((e) => getComputedStyle(e).backgroundColor));
-    // Reduced motion, so the fills read are the end of their transitions.
-    await page.emulateMedia({ reducedMotion: "reduce" });
-    const amber = (await fills())[1];
+    // While the typed reply is in flight, the question already reads answered, and no option is
+    // left to look sent in its place (#821, #895).
     let release = () => {};
     const held = new Promise<void>((done) => {
       release = done;
@@ -734,13 +815,11 @@ async function main() {
       await route.fallback();
     });
     await reply.press("Enter");
-    await page.getByRole("button", { name: "Send" }).and(page.locator(":disabled")).waitFor();
-    const sending = await fills();
+    await page.getByText(/· not sent yet/).waitFor();
+    const left = await page.locator('fieldset button:not([aria-label^="View"])').count();
     release();
     await page.unroute("**/v1/items");
-    await page.emulateMedia({ reducedMotion: "no-preference" });
-    if (sending.includes(amber))
-      throw new Error(`an option looks sent with a typed reply: ${JSON.stringify(sending)}`);
+    if (left > 0) throw new Error(`${left} options still show while the typed reply is sent`);
     await picks.waitFor(/Answer to d_\S+ .*: Phone layout/);
     if ((await picks.exited) !== 0) throw new Error("ask --wait for the picks failed");
     await page.setViewportSize(DESKTOP);
