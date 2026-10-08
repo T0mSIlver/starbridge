@@ -511,7 +511,10 @@ provider plugins add providers, not panels.
   allows a bash ask itself when the whole typed line, from the ask's "full command" evidence, is
   one of those commands with only words, flags, quoted strings and line-joining backslashes; an ask
   without evidence, or from a shell tool under another name, goes to the owner. `starbridge run` is left out,
-  since the command it wraps is the agent's own. Uninstall removes exactly what setup added.
+  since the command it wraps is the agent's own. So Codex asks at the keyboard to run it outside
+  the sandbox, and the skill has it ask on the first call: run in the sandbox first, the command
+  ran unreported, then again once approved (#831). A `prompt` rule only adds an approval: Codex
+  still runs the command in the sandbox first. Uninstall removes exactly what setup added.
 - **Docs** (#211) at `/docs` are the repository's Markdown files listed in `web/src/lib/docs.ts`,
   rendered by the web page. Links between them become `/docs` links; other relative links go to
   GitHub. Images are screenshots under `web/public`, served from the site root, so GitHub shows
