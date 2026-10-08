@@ -170,20 +170,21 @@ try {
     false,
   );
   const late = { ...q, id: "d-2", title: "Still there?" };
+  // Chromium slows a hidden page's timers only after some seconds, so the window stays hidden 12.
   const ticks = await page.evaluate(
     (late) =>
       new Promise<number>((done) => {
         let ticks = 0;
-        const t = setInterval(() => ticks++, 50);
+        const t = setInterval(() => ticks++, 100);
         setTimeout(() => {
           clearInterval(t);
           (window as unknown as StandIn).send([late]);
           done(ticks);
-        }, 2_000);
+        }, 12_000);
       }),
     late,
   );
-  assert.ok(ticks >= 30, `a hidden page ticked ${ticks} times in 2 s, not ~40`);
+  assert.ok(ticks >= 100, `a hidden page ticked ${ticks} times in 12 s, not ~120`);
   await until(
     () => main((g) => g.shown.some((n) => n.id === "item-d-2")),
     "a hidden window's notification",

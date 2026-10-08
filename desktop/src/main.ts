@@ -18,6 +18,9 @@ import { type Answer, type Entry, parseAnswered, parseState } from "./bridge";
 import { Notifier, type Shown } from "./notifier";
 import { linkPage, opensOutside, serverOrigin, staysInWindow } from "./origin";
 import { readSettings, type Settings, writeSettings } from "./settings";
+import { mark, timing } from "./timing";
+
+mark("main");
 
 // The bundler fixes __dirname at build time, so paths start from the app's own folder.
 const ROOT = app.getAppPath();
@@ -65,6 +68,7 @@ function start(): void {
 }
 
 function ready(): void {
+  mark("ready");
   settings = readSettings(SETTINGS);
   origin = process.env.STARBRIDGE_SERVER
     ? (serverOrigin(process.env.STARBRIDGE_SERVER) ?? settings.server)
@@ -158,7 +162,22 @@ function createWindow(): void {
     // -3 is a navigation the page or the app cancelled.
     if (mainFrame && code !== -3) retry = setTimeout(() => win?.loadURL(url), 5_000);
   });
+  win.once("show", () => mark("shown"));
+  win.once("ready-to-show", () => mark("painted"));
+  win.webContents.once("did-finish-load", () => {
+    mark("loaded");
+    if (!timing) return;
+    // As if closed to the menu bar, so that launching the app again measures a warm open.
+    setTimeout(() => win?.hide(), 1_000);
+    setTimeout(reportMemory, 10_000);
+  });
   win.loadURL(origin);
+}
+
+/** The app's memory once idle: every process's working set, as Activity Monitor adds it up. */
+function reportMemory(): void {
+  const kb = app.getAppMetrics().reduce((sum, p) => sum + p.memory.workingSetSize, 0);
+  mark("memory", { mb: Math.round(kb / 1024) });
 }
 
 /** Every web contents: no new windows, and only the server's and GitHub's pages inside. */
@@ -208,9 +227,16 @@ function menu(): Menu {
 
 function showWindow(): void {
   if (!win) return;
+  const from = performance.now();
   if (win.isMinimized()) win.restore();
   win.show();
   win.focus();
+  // From the click to the next frame the page draws: how fast a warm open feels.
+  if (timing && win.webContents.getURL())
+    win.webContents
+      .executeJavaScript("new Promise((r) => requestAnimationFrame(() => r(1)))")
+      .then(() => mark("opened", { ms: Math.round(performance.now() - from) }))
+      .catch(() => {});
 }
 
 function showServer(): void {
