@@ -16,7 +16,7 @@ devices, its kind, size and times.
 [What the server sees](https://starbridge.run/docs/faq#what-does-the-server-see) has the details
 and the limits. Use the free server at [starbridge.run](https://starbridge.run), or host your own.
 
-<!-- Demo video: drag the short MP4 into GitHub's README editor here, under the intro. -->
+![Claude Code asks which model to run a paid eval with; the question reaches the phone, one tap answers it, and the session carries on](docs/media/demo.gif)
 
 Launch week: [known issues](https://github.com/T0mSIlver/starbridge/issues?q=is%3Aissue%20label%3Aknown-issue).
 
