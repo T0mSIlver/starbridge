@@ -656,7 +656,12 @@ Codex prompts are not supported.
 - **The first option is the agent's default** (#191), its proposal with no timer: listed first,
   the one amber button. `recommended` names it when it isn't first.
 - **Typed replies** (#201). Every question with options also takes a typed reply, as a steer to act
-  on. It goes alone, with no choice.
+  on. It goes alone, with no choice. Its field is always open under the options, in the detail
+  (web) and the sheet (Android), so typing costs one tap, as a pick does (#849): the owner often
+  steers an agent this way ("show me two other mockups"), and a Reply button that opened the field
+  made it a second-class answer. Cards in the list keep only the options, so they stay one-tap
+  and short. The owner chose this from mockups over a full-width Reply button and a mic in the
+  field; the field reads "Your answer" on both clients.
 - **Images** (#62, #170, #685): at most 4, PNG or JPEG, never SVG. The CLI keeps a file as is up
   to a 3000 px edge and 384 KB, so a phone screenshot reaches every device unchanged and viewers can zoom into real
   pixels. Android decodes by the image's real size, drops one larger than declared or 8192 px a
@@ -790,8 +795,8 @@ first window, so a provider with a window running out leads.
   thing, the amber fill. A waiting item's title is weight 500 and its time slot a clock ticking
   from when it started waiting; screen readers hear "Waiting for you, 2 minutes" first. No state
   tag anywhere. Under a grouping, the items under one header are joined.
-- **Snoozed** (#571, #692, #699). Snooze sits beside Reply in a question's detail (web) and sheet
-  (Android), never on a notification. Most snoozes are for later the same day, so it opens on
+- **Snoozed** (#571, #692, #699). Snooze sits under the reply field in a question's detail (web)
+  and sheet (Android), never on a notification. Most snoozes are for later the same day, so it opens on
   today: 1 hour and This evening (18:00, offered until 17:00), then the days as chips (today and
   the 7 after it) and a time an hour ahead, up to the half hour (9:00 on another day), from 5
   minutes on, confirmed by "Snooze until 15:00". Android sets the time on a dial; the web types
@@ -828,7 +833,7 @@ first window, so a provider with a window running out leads.
   crop, no frame. With one image per option, two or more, each image sits over its option's
   button in equal columns, in the agent's order: its own shape, no wider than the button and at
   most `size.pick` tall, the row's images centred on one midline so the buttons line up. The owner
-  chose both from mockups. "Reply" sits under them, as under plain options.
+  chose both from mockups. The reply field sits under them, as under plain options.
 - **Signed out.** A browser that holds no device of the account it last signed in to gets the
   landing page at `/`, as does a revoked browser (#209); one with a device gets sign-in.
 - **Restarts go unnoticed** (#250). Clients retry a 502, 503 or refused connection quietly for

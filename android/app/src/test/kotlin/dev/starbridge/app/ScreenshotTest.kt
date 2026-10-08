@@ -191,8 +191,8 @@ class ScreenshotTest(private val dark: Boolean) {
 
     @Test fun sheetWaiting() = capture("sheet-waiting") { QuestionSheet(fake.decisions.first { it.id == "d2" }) }
 
-    // "Reply" opened under the options: a typed answer in place of them (#201).
-    @Test fun sheetReply() = capture("sheet-reply", before = { compose.onNodeWithText("Reply").performClick() }) { QuestionSheet(fake.decisions.first { it.id == "d2" }) }
+    // A reply typed under the options, in place of them (#201); the field is always open (#849).
+    @Test fun sheetReply() = capture("sheet-reply", before = { compose.onNode(hasSetTextAction()).performTextInput("Only after the eval run") }) { QuestionSheet(fake.decisions.first { it.id == "d2" }) }
 
     @Test fun sheetPick() = capture("sheet-pick") { QuestionSheet(showcase.pick) }
 

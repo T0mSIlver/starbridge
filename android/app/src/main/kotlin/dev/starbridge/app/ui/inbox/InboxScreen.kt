@@ -45,8 +45,6 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.material3.toShape
 import androidx.compose.runtime.Composable
 import androidx.compose.foundation.relocation.bringIntoViewRequester
@@ -666,7 +664,6 @@ fun DecisionSheet(decision: Decision, now: Instant, onAnswer: (String, String?, 
     val waiting = open && decision.waiting && until == null
     val since = decision.waitingSince?.takeIf { waiting }
     val h24 = LocalClock24.current
-    var replying by rememberSaveable(decision.id) { mutableStateOf(!replies.drafts[decision.id].isNullOrEmpty()) }
     var snoozing by rememberSaveable(decision.id) { mutableStateOf(snoozeOpen) }
     var tapped by remember(decision.id) { mutableStateOf(false) }
     SheetBody(
@@ -696,7 +693,7 @@ fun DecisionSheet(decision: Decision, now: Instant, onAnswer: (String, String?, 
                 }
                 paired -> {
                     Picks(decision, sending, send)
-                    if (replying) Reply(decision.id, replies, sending != null) { send(null, it) }
+                    if (decision.replies) Reply(decision.id, replies, sending != null) { send(null, it) }
                 }
                 else -> {
                     Images(decision.images, maxHeight = 360.dp)
@@ -706,18 +703,16 @@ fun DecisionSheet(decision: Decision, now: Instant, onAnswer: (String, String?, 
                         decision.options.isEmpty() -> FreeText(replies.drafts[decision.id].orEmpty(), { replies.drafts[decision.id] = it }, sending != null) { send(null, it) }
                         else -> {
                             Options(decision, sending, height = 56.dp, other = scheme.surfaceContainerHighest, answer = send, check = true)
-                            if (replying) Reply(decision.id, replies, sending != null) { send(null, it) }
+                            if (decision.replies) Reply(decision.id, replies, sending != null) { send(null, it) }
                         }
                     }
                 }
             }
-            val reply = decision.replies && decision.options.isNotEmpty() && decision.answerIn == null && !replying
             val done = decision.answerIn != null && decision.takesDone
-            if (open && (reply || done || onSnooze != null)) {
-                // Quiet, so the options stay the answer: a typed reply (#201), Done for a page's
-                // answer (#539), and putting it off (#571).
+            if (open && (done || onSnooze != null)) {
+                // Quiet, so the answer stays above: Done for a page's answer (#539), and putting it
+                // off (#571).
                 Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s1), verticalAlignment = Alignment.CenterVertically) {
-                    if (reply) Quiet("Reply") { replying = true }
                     if (done) Done(sending != null) { send(null, null) }
                     if (onSnooze != null) Quiet(if (until != null) "Snooze again" else "Snooze", sending == null) { snoozing = !snoozing; tapped = snoozing }
                     if (onSnooze != null && until != null) Quiet("Back now", sending == null) { onSnooze(Instant.now()) }
@@ -769,17 +764,14 @@ private fun Picks(decision: Decision, sending: String?, answer: (String?, String
 }
 
 /**
- * "Reply" under the options, quiet: a typed answer in place of them, for when none is right
- * (#201). It opens the text field, which stays open while a draft is kept.
+ * The reply field under the options: a typed answer in place of them (#201), always open, since
+ * steering by reply is as common as a pick (#849). Its draft is kept per question.
  */
 @Composable
-private fun Reply(id: String, replies: Replies, sending: Boolean, onAnswer: (String) -> Unit) {
-    val focus = remember { FocusRequester() }
-    LaunchedEffect(Unit) { if (replies.drafts[id].isNullOrEmpty()) focus.requestFocus() }
-    FreeText(replies.drafts[id].orEmpty(), { replies.drafts[id] = it }, sending, Modifier.focusRequester(focus), onAnswer)
-}
+private fun Reply(id: String, replies: Replies, sending: Boolean, onAnswer: (String) -> Unit) =
+    FreeText(replies.drafts[id].orEmpty(), { replies.drafts[id] = it }, sending, onAnswer)
 
-/** A quiet text button under a question's answer: Reply, Back now. */
+/** A quiet text button under a question's answer: Snooze, Back now. */
 @Composable
 private fun Quiet(label: String, enabled: Boolean = true, onClick: () -> Unit) {
     TextButton(onClick = onClick, enabled = enabled, colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.onSurfaceVariant)) {
@@ -788,7 +780,7 @@ private fun Quiet(label: String, enabled: Boolean = true, onClick: () -> Unit) {
 }
 
 @Composable
-private fun FreeText(text: String, onText: (String) -> Unit, sending: Boolean, field: Modifier = Modifier, onAnswer: (String) -> Unit) {
+private fun FreeText(text: String, onText: (String) -> Unit, sending: Boolean, onAnswer: (String) -> Unit) {
     val send = { if (text.isNotBlank() && !sending) onAnswer(text.trim()) }
     // Material's text field, the send button its trailing icon, centred on the field's line (#254).
     TextField(
@@ -804,7 +796,7 @@ private fun FreeText(text: String, onText: (String) -> Unit, sending: Boolean, f
         keyboardActions = KeyboardActions(onSend = { send() }),
         colors = fieldColors(),
         // A hardware keyboard's Enter sends and Shift+Enter starts a new line, as on the web (#562).
-        modifier = field.fillMaxWidth().onPreviewKeyEvent {
+        modifier = Modifier.fillMaxWidth().onPreviewKeyEvent {
             if (it.key == Key.Enter && !it.isShiftPressed) {
                 if (it.type == KeyEventType.KeyDown) send()
                 true
