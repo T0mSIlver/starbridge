@@ -219,6 +219,8 @@ test("a forged head a machine passed on holds past its forger's revocation, unti
   expect(noteHead(heads, "m2", { ...head(after), by: "b" }, chain, after)).toBe(false);
   // The owner, who made that revocation, forgets B's heads; M2's own head holds the chain.
   forgetHeads(heads, "b");
+  // M2's item, read again, does not bring B's head back.
+  expect(noteHead(heads, "m2", relayed, chain, after)).toBe(false);
   noteHead(heads, "m2", head(after), chain);
   expect(withheldBy(heads, after, chain)).toBeUndefined();
 });

@@ -367,41 +367,8 @@
       }
     },
     {
-      "name": "a slot whose by a recover removed takes any head",
-      "heads": {
-        "devbox/phone": {
-          "length": 9,
-          "head": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-          "by": "phone"
-        }
-      },
-      "signer": "devbox",
-      "head": {
-        "length": 4,
-        "head": "DqW2HO3Vt_cPnrJrqXxbeyPchpXRn2bYiCLol2xRw9w",
-        "by": "phone"
-      },
-      "chain": "recovered",
-      "expect": {
-        "changed": true,
-        "heads": {
-          "devbox/phone": {
-            "length": 4,
-            "head": "DqW2HO3Vt_cPnrJrqXxbeyPchpXRn2bYiCLol2xRw9w",
-            "by": "phone"
-          }
-        }
-      }
-    },
-    {
-      "name": "a slot whose by a revoke names keeps its longer head",
-      "heads": {
-        "devbox/phone": {
-          "length": 9,
-          "head": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-          "by": "phone"
-        }
-      },
+      "name": "a head passed on from a by the chain lists as revoked is not kept",
+      "heads": {},
       "signer": "devbox",
       "head": {
         "length": 4,
@@ -411,8 +378,56 @@
       "chain": "forkRevokesBy",
       "expect": {
         "changed": false,
+        "heads": {}
+      }
+    },
+    {
+      "name": "an unknown slot whose by a recover removed takes any head",
+      "heads": {
+        "devbox/?": {
+          "length": 9,
+          "head": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "by": "phone"
+        }
+      },
+      "signer": "devbox",
+      "head": {
+        "length": 4,
+        "head": "DqW2HO3Vt_cPnrJrqXxbeyPchpXRn2bYiCLol2xRw9w",
+        "by": "ghost"
+      },
+      "chain": "recovered",
+      "expect": {
+        "changed": true,
         "heads": {
-          "devbox/phone": {
+          "devbox/?": {
+            "length": 4,
+            "head": "DqW2HO3Vt_cPnrJrqXxbeyPchpXRn2bYiCLol2xRw9w",
+            "by": "ghost"
+          }
+        }
+      }
+    },
+    {
+      "name": "an unknown slot whose by a revoke names keeps its longer head",
+      "heads": {
+        "devbox/?": {
+          "length": 9,
+          "head": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "by": "phone"
+        }
+      },
+      "signer": "devbox",
+      "head": {
+        "length": 4,
+        "head": "DqW2HO3Vt_cPnrJrqXxbeyPchpXRn2bYiCLol2xRw9w",
+        "by": "ghost"
+      },
+      "chain": "forkRevokesBy",
+      "expect": {
+        "changed": false,
+        "heads": {
+          "devbox/?": {
             "length": 9,
             "head": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
             "by": "phone"

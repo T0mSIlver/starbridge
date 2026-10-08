@@ -43,7 +43,11 @@ function removed(dir: Directory, entries: unknown[], id: string): boolean {
 /**
  * Records the head `signer` signed into an item. A shorter head never replaces a longer one the
  * chain `entries` lacks, so replaying an older item cannot lift a hold. With `dir`, a `by` that
- * chain does not list goes in the signer's one unknown slot. True when it changed.
+ * chain does not list goes in the signer's one unknown slot, and a head passed on from a `by` it
+ * lists as revoked is not kept: once the owner forgot that member's heads (`forgetHeads`), the
+ * item that carried one, read again, must not bring it back. A fork served before the head could
+ * revoke its signer as well, whose items then open no more, so this gives a server nothing new.
+ * True when it changed.
  */
 export function noteHead(
   heads: Heads,
@@ -54,6 +58,7 @@ export function noteHead(
 ): boolean {
   if (!head) return false;
   const by = head.by && head.by !== signer ? head.by : undefined;
+  if (by && dir?.members.get(by)?.active === false) return false;
   const key = !by ? signer : dir && !dir.members.has(by) ? `${signer}/?` : `${signer}/${by}`;
   const known = heads[key];
   // A head passed on from a member a `recover` removed counts no more: any head replaces it, or
