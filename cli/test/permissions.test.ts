@@ -360,6 +360,14 @@ test("the plugin's PostToolUse check starts the CLI only while a prompt is open 
   expect(started()).toBe(true);
 });
 
+test("a call that ran and failed settles its prompt too: the plugin runs the check on PostToolUseFailure (#847)", () => {
+  // Claude Code fires only PostToolUseFailure when an approved Bash command exits non-zero.
+  const hooks = JSON.parse(
+    readFileSync(join(import.meta.dir, "../../plugin/hooks/hooks.json"), "utf8"),
+  ).hooks;
+  expect(hooks.PostToolUseFailure).toEqual(hooks.PostToolUse);
+});
+
 test("the mark counts only unsettled prompts that have not expired (#517)", () => {
   const prompt = (settled: boolean, expiresAt: string) =>
     ({ settled: settled ? "keyboard" : undefined, permission: { expiresAt } }) as never;

@@ -1,8 +1,9 @@
 /**
  * The commands Claude Code's hooks run (#57). `hook permission` runs on `PermissionRequest`: it
  * posts the prompt, waits for a device's answer and prints it as the hook's decision. `hook
- * settle` runs on `PostToolUse`, `PermissionDenied`, `Stop` and `SessionEnd`: the keyboard or the
- * Claude app answered, so the waiting prompt is settled and its hook lets go.
+ * settle` runs on `PostToolUse`, `PostToolUseFailure`, `PermissionDenied`, `Stop` and
+ * `SessionEnd`: the keyboard or the Claude app answered, so the waiting prompt is settled and its
+ * hook lets go.
  *
  * Neither ever allows anything by itself: on any error, timeout or lost network they print
  * nothing and exit 0, and Claude Code's own dialog decides. `hook ask-user` and `hook question`
