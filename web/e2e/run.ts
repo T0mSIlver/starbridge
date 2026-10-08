@@ -683,7 +683,30 @@ async function main() {
       throw new Error(
         `Shift+Enter did not start a new line: ${JSON.stringify(await reply.inputValue())}`,
       );
+    // While the typed reply is in flight, no option keeps the recommended one's amber, which
+    // read as that option being sent (#821).
+    const options = page.locator('fieldset button:not([aria-label^="View"])');
+    const fills = () =>
+      options.evaluateAll((els) => els.map((e) => getComputedStyle(e).backgroundColor));
+    // Reduced motion, so the fills read are the end of their transitions.
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    const amber = (await fills())[1];
+    let release = () => {};
+    const held = new Promise<void>((done) => {
+      release = done;
+    });
+    await page.route("**/v1/items", async (route) => {
+      if (route.request().method() === "POST") await held;
+      await route.fallback();
+    });
     await reply.press("Enter");
+    await page.getByRole("button", { name: "Send" }).and(page.locator(":disabled")).waitFor();
+    const sending = await fills();
+    release();
+    await page.unroute("**/v1/items");
+    await page.emulateMedia({ reducedMotion: "no-preference" });
+    if (sending.includes(amber))
+      throw new Error(`an option looks sent with a typed reply: ${JSON.stringify(sending)}`);
     await picks.waitFor(/Answer to d_\S+ .*: Phone layout/);
     if ((await picks.exited) !== 0) throw new Error("ask --wait for the picks failed");
     await page.setViewportSize(DESKTOP);
