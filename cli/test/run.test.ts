@@ -7,6 +7,7 @@ import { LiveServer } from "@starbridge/server/test-support";
 import { makeAgent } from "../src/agent/main";
 import type { Agent } from "../src/agent/server";
 import { run } from "../src/cli";
+import { WithheldError } from "../src/context";
 import { ProgressParser, Reporter, type RunInput, runCommand } from "../src/run";
 import { paired, type TestCtx, testCtx, until } from "./helpers";
 
@@ -231,6 +232,30 @@ test("the reporter posts the start at once, then progress throttled, a heartbeat
   const count = posts.length;
   await Bun.sleep(500);
   expect(posts).toHaveLength(count);
+});
+
+test("a withheld directory entry pauses the reporter; the exit still goes out (#794)", async () => {
+  const posts: RunInput[] = [];
+  let withheld = true;
+  const reporter = new Reporter(
+    {
+      id: "r_1",
+      title: "t",
+      reason: "r",
+      startedAt: "2026-10-05T10:00:00Z",
+      project: "p",
+      session: "",
+    },
+    async (input) => {
+      if (withheld) throw new WithheldError("the server is holding back directory entries");
+      posts.push(input);
+    },
+    testCtx(),
+  );
+  reporter.start();
+  withheld = false;
+  await reporter.finish(0);
+  expect(posts.at(-1)?.exit?.code).toBe(0);
 });
 
 test("the plugin's SessionStart hook adds the rule to reach the owner and the run rule, and ignores a rules.md", async () => {

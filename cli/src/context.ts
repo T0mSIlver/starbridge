@@ -2,14 +2,15 @@ import {
   activeMembers,
   type Directory,
   type DirectoryHead,
-  headToSign,
+  holdsHead,
   type MachineKind,
   type Member,
   type MemberKeys,
   verifyDirectory,
+  withheldBy,
 } from "@starbridge/protocol";
 import { Api, REMOVED } from "./api";
-import { decodeKeys, type Machine, type Store } from "./config";
+import { decodeKeys, type Machine, type State, type Store } from "./config";
 
 /** Everything a command touches outside its arguments, so tests can run commands in-process. */
 export interface Ctx {
@@ -31,6 +32,9 @@ export function machineKind(ctx: Ctx): { machineKind?: MachineKind } {
 
 /** A mistake the user can fix: printed without a stack, exit code 1. */
 export class UsageError extends Error {}
+
+/** The server holds back directory entries: nothing is sent until it serves them (#794). */
+export class WithheldError extends UsageError {}
 
 export interface Session {
   machine: Machine;
@@ -84,14 +88,47 @@ export async function refreshDirectory(
 }
 
 /**
- * The head this machine signs into its items: the longest it knows, its own or one a device
- * signed that its chain lacks, so the devices it posts to see what the server holds back (#362).
+ * The head this machine signs into its items, so a device served a shorter chain sees what the
+ * server holds back from it (#362). A machine that knows of a longer one posts nothing (#794).
  */
-export function signedHead(ctx: Ctx, dir: Directory): DirectoryHead {
-  return headToSign(ctx.store.state().heads ?? {}, dir, ctx.store.directory());
+export function signedHead(dir: Directory): DirectoryHead {
+  return { length: dir.length, head: dir.head };
 }
 
-export function devices(dir: Directory): Member[] {
+/**
+ * Whether a device signed a head the machine's chain `entries` lacks, and why that holds. Either
+ * the device is active in `dir`, so the server is holding back entries, perhaps the revocation
+ * of a device in `dir`; or a `revoke` entry names it. A device signs no head past its own
+ * revocation, so that chain forks from the one the device saw: a revoked device can extend a
+ * stale chain and revoke the device that revoked it (#794). Only a `recover`, which no device
+ * signs, or pairing again ends that hold. Says which, or undefined.
+ */
+export function withheld(st: State, dir: Directory, entries: unknown[]): string | undefined {
+  const heads = st.heads ?? {};
+  const held = withheldBy(heads, dir, entries);
+  if (held)
+    return `the server is holding back directory entries ${held.id} has seen (${held.head.length}, this machine has ${dir.length})`;
+  for (const [id, head] of Object.entries(heads))
+    if (!holdsHead(entries, head) && revokes(entries, id))
+      return `${id} signed a chain this machine does not hold (${head.length}), and this machine's chain revokes it: the server may be serving a fork. If you revoked ${id} because it was compromised, run \`starbridge pair --force\``;
+  return undefined;
+}
+
+function revokes(entries: unknown[], id: string): boolean {
+  return entries.some((e) => {
+    const body = JSON.parse((e as { body: string }).body) as { op?: string; id?: string };
+    return body.op === "revoke" && body.id === id;
+  });
+}
+
+/**
+ * The devices a new item is sealed to. None while the server is known to hold back entries of
+ * `dir`, since one of them may revoke a device in it (#794). Checked against `dir`'s own
+ * entries: a longer chain another process stored since holds heads that `dir` lacks.
+ */
+export function devices(ctx: Ctx, dir: Directory): Member[] {
+  const behind = withheld(ctx.store.state(), dir, ctx.store.directory().slice(0, dir.length));
+  if (behind) throw new WithheldError(`${behind}. Nothing is sent meanwhile`);
   const list = activeMembers(dir, "device");
   if (list.length === 0) throw new UsageError("the directory has no active device to send to");
   return list;

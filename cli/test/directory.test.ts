@@ -22,8 +22,12 @@ import { LiveServer } from "@starbridge/server/test-support";
 import { run } from "../src/cli";
 import { Store } from "../src/config";
 import { refreshDirectory, session } from "../src/context";
-import { poll } from "../src/decisions";
-import { paired, testCtx, until } from "./helpers";
+import { poll, postWaiting } from "../src/decisions";
+import { hookPermission } from "../src/hook";
+import { postSettled } from "../src/permissions";
+import { pushOnce } from "../src/quota";
+import { postRun } from "../src/run";
+import { FAKE_CODEXBAR, paired, testCtx, until } from "./helpers";
 
 let server: LiveServer;
 beforeEach(async () => {
@@ -233,44 +237,137 @@ test("a snooze's signed head shows a withheld revocation too (#571)", async () =
   }
 });
 
-test("the machine signs into its items the longest head it knows, a device's while held back (#362)", async () => {
+test("a machine that knows the server holds back a revocation seals nothing new (#794)", async () => {
   const { ctx, laptop, ids, answer, serve, known } = await withholding();
-  // What the machine posts, opened as the laptop reads it.
-  const posted: SealedItem[] = [];
-  let inner = globalThis.fetch;
-  const record = () => {
-    inner = globalThis.fetch;
+  expect(await run(["config", "permissions", "on"], ctx)).toBe(0);
+  ctx.env.STARBRIDGE_NO_AGENT = "1";
+  // The laptop revokes the stolen phone; the server hides that from the machine, but delivers
+  // the laptop's answer, which names the longer chain.
+  await laptopAppends(laptop, (dir) =>
+    revokeEntry(dir, { id: laptop.id, signKey: laptop.keys.sign.privateKey }, "phone", now()),
+  );
+  const full = await laptopChain(laptop);
+  const real = globalThis.fetch;
+  serve(known);
+  try {
+    // Counted from the poll on: it announces and re-seals nothing either.
+    let posted = 0;
+    const inner = globalThis.fetch;
     globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
-      if (String(url).endsWith("/v1/items") && init?.method === "POST")
-        posted.push(JSON.parse(init.body as string));
+      if (String(url).endsWith("/v1/items") && init?.method === "POST") posted++;
       return inner(url, init);
     }) as typeof fetch;
-  };
-  record();
-  const lastDecision = async () => {
-    await run(
-      ["ask", "--question", "Ship?", "--option", "Yes", "--option", "No", "--session", "s"],
-      ctx,
-    );
-    const item = posted.at(-1) as SealedItem & { kind: "decision" };
-    return open(item, { id: laptop.id, box: laptop.keys.box }, await laptopChain(laptop)).body.dir;
-  };
-  try {
-    const own = verifyDirectory(ctx.store.directory());
-    expect(await lastDecision()).toEqual({ length: own.length, head: own.head });
-    // The laptop revokes the phone; the server hides that from the machine, but the laptop's
-    // answer names the chain it holds.
-    await laptopAppends(laptop, (dir) =>
-      revokeEntry(dir, { id: laptop.id, signKey: laptop.keys.sign.privateKey }, "phone", now()),
-    );
-    const full = await laptopChain(laptop);
-    serve(known);
-    record();
     answer(laptop, ids[0], "No", { length: full.length, head: full.head });
     await poll(ctx, session(ctx), { cursor: ctx.store.state().cursor, seconds: 1, shared: true });
-    expect(await lastDecision()).toEqual({ length: full.length, head: full.head, by: laptop.id });
+    const s = session(ctx);
+    const refused = "Nothing is sent meanwhile";
+    const at = now();
+    const senders: [string, () => Promise<unknown>][] = [
+      ["ask", async () => expect(await run(["ask", "--question", "Ship?"], ctx)).toBe(1)],
+      ["waiting", () => postWaiting(ctx, s, ids[1], "waiting")],
+      ["settle", async () => expect(await run(["settle", ids[2]], ctx)).toBe(1)],
+      [
+        "run",
+        () =>
+          postRun(ctx, s, {
+            id: "r_1",
+            title: "t",
+            reason: "r",
+            startedAt: at,
+            at,
+            project: "p",
+            session: "s",
+          }),
+      ],
+      ["quota", () => pushOnce(ctx, { providers: ["codex"], codexbar: FAKE_CODEXBAR })],
+      ["permission settled", () => postSettled(ctx, s, "p_1", { outcome: "keyboard" })],
+    ];
+    for (const [name, send] of senders) {
+      ctx.errors.length = 0;
+      const error = await send().then(
+        () => ctx.errors.join("\n"),
+        (e: Error) => e.message,
+      );
+      expect(error, name).toContain(refused);
+    }
+    // The permission hook leaves the prompt to the terminal.
+    ctx.lines.length = 0;
+    await hookPermission(
+      ctx,
+      JSON.stringify({
+        session_id: "s",
+        cwd: "/work/p",
+        hook_event_name: "PermissionRequest",
+        tool_name: "Bash",
+        tool_input: { command: "git push" },
+      }),
+      { agent: "claude-code" },
+    );
+    expect(ctx.errors.join("\n")).toContain(refused);
+    expect(posted).toBe(0);
   } finally {
+    globalThis.fetch = real;
     serve(undefined);
+  }
+  // Served the revocation, the machine seals to the laptop alone, under the head they share.
+  let item: SealedItem | undefined;
+  globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
+    if (String(url).endsWith("/v1/items") && init?.method === "POST")
+      item = JSON.parse(init.body as string);
+    return real(url, init);
+  }) as typeof fetch;
+  try {
+    expect(await run(["ask", "--question", "Ship now?"], ctx)).toBe(0);
+  } finally {
+    globalThis.fetch = real;
+  }
+  const chain = await laptopChain(laptop);
+  const { body } = open(
+    item as SealedItem & { kind: "decision" },
+    { id: laptop.id, box: laptop.keys.box },
+    chain,
+  );
+  expect(body.to).toEqual([laptop.id]);
+  expect(body.dir).toEqual({ length: chain.length, head: chain.head });
+});
+
+test("the stolen phone cannot lift the hold by revoking the revoker on a fork (#794)", async () => {
+  const { ctx, laptop, ids, answer, serve, known } = await withholding();
+  await laptopAppends(laptop, (dir) =>
+    revokeEntry(dir, { id: laptop.id, signKey: laptop.keys.sign.privateKey }, "phone", now()),
+  );
+  const full = await laptopChain(laptop);
+  // The server, holding the phone's keys, serves the machine its stale chain plus the phone's
+  // revocation of the laptop.
+  const r = await fetch(`${server.url}/v1/directory?from=0`, {
+    headers: { authorization: `Bearer ${laptop.token}` },
+  });
+  const stale = ((await r.json()) as { entries: SignedEnvelope[] }).entries.slice(0, known);
+  const phone = { id: "phone", signKey: server.owner.device.keys.sign.privateKey };
+  const fork = [...stale, revokeEntry(verifyDirectory(stale), phone, laptop.id, now())];
+  const real = globalThis.fetch;
+  try {
+    // First the stale chain, with the laptop's answer naming the full one: the machine holds.
+    serve(known);
+    answer(laptop, ids[0], "No", { length: full.length, head: full.head });
+    await poll(ctx, session(ctx), { cursor: ctx.store.state().cursor, seconds: 1, shared: true });
+    expect(ctx.errors.at(-1)).toContain("holding back directory entries");
+    globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
+      const m = /\/v1\/directory\?from=(\d+)/.exec(String(url));
+      if (!m) return real(url, init);
+      return Response.json({ entries: fork.slice(Number(m[1])) });
+    }) as typeof fetch;
+    // The machine took the fork: the laptop is revoked there, the phone active.
+    const dir = await refreshDirectory(ctx, session(ctx));
+    expect(dir.members.get(laptop.id)?.active).toBe(false);
+    expect(await run(["ask", "--question", "Ship?"], ctx)).toBe(1);
+    expect(ctx.errors.join("\n")).toContain("the server may be serving a fork");
+    // The phone's own answer still does not count.
+    answer(server.owner.device, ids[1], "Yes");
+    await poll(ctx, session(ctx), { cursor: ctx.store.state().cursor, seconds: 1, shared: true });
+    expect(ctx.store.state().answers[ids[1]]).toBeUndefined();
+  } finally {
+    globalThis.fetch = real;
   }
 });
 

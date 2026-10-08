@@ -127,7 +127,7 @@ export async function pushOnce(ctx: Ctx, opts: QuotaOpts): Promise<QuotaSnapshot
   const bin = opts.codexbar ?? ctx.env.STARBRIDGE_CODEXBAR ?? "codexbar";
   const collected = await collect(bin, opts.providers, ctx.now, ctx.err);
   const dir = await refreshDirectory(ctx, s);
-  const to = devices(dir);
+  const to = devices(ctx, dir);
   const now = ctx.now();
   const { providers, last } = keepLast(collected, ctx.store.state().quotas ?? {}, now);
   const { snap, raised } = raise(
@@ -141,7 +141,7 @@ export async function pushOnce(ctx: Ctx, opts: QuotaOpts): Promise<QuotaSnapshot
   );
   const item = seal(
     "quota",
-    { ...snap, dir: signedHead(ctx, dir) },
+    { ...snap, dir: signedHead(dir) },
     { id: s.machine.id, signKey: s.keys.sign.privateKey },
     to,
   );
