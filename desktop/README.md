@@ -18,7 +18,10 @@ the server set from its menu bar icon (right-click, "Server"), starbridge.run by
 
 Tests: `pnpm test` (unit) and `pnpm e2e`, which launches the app on a stand-in page and checks the
 bridge, the menu bar icon and the notifications (`xvfb-run -a` on Linux). The `desktop` workflow
-runs both on GitHub's macOS runner and keeps the DMGs.
+runs both on GitHub's macOS runner and keeps the DMGs. `test/stack.ts` runs the app on the whole
+product (server, built web page, CLI, a stand-in GitHub): it signs in through the browser and
+pairs in the app's window, and answers `starbridge ask --wait` from the notifications; CI's
+`desktop end to end` job runs it (`xvfb-run -a node desktop/test/stack.ts` after `pnpm build`).
 
 `pnpm dist` packages the app on a Mac (`release/`). `node scripts/icons.ts` renders the icons.
 
