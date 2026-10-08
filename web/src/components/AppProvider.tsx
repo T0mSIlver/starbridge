@@ -74,9 +74,11 @@ export type Store = {
   sampleDevices?: Device[];
   /**
    * Why no machine's item shows: the server holds back directory entries a machine has seen
-   * (#362). Settings still work, so the owner can revoke.
+   * (#362). Settings still work, so the owner can revoke. `revoked`: a member a `revoke` entry
+   * names, whose heads `stopWaiting` forgets once the owner says they revoked it (#813).
    */
-  withheld?: string;
+  withheld?: { text: string; revoked?: string };
+  stopWaiting: (id: string) => Promise<void>;
 };
 
 export const StoreContext = createContext<Store | null>(null);
@@ -113,7 +115,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [inboxLoaded, setInboxLoaded] = useState(false);
   const [pushed, setPushed] = useState(false);
   const [quotas, setQuotas] = useState<Quotas>();
-  const [withheld, setWithheld] = useState<string>();
+  const [withheld, setWithheld] = useState<Store["withheld"]>();
   const [quotaSettings, setSettingsState] = useState<QuotaSettings>(DEFAULT_SETTINGS);
   const settingsRef = useRef(quotaSettings);
   settingsRef.current = quotaSettings;
@@ -201,7 +203,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           return undefined;
         }
         if (!(e instanceof d.Withheld)) throw e;
-        setWithheld(e.message);
+        setWithheld({ text: e.message, revoked: e.revoked });
         // Their buttons would still offer answers the hold refuses.
         const reg = await navigator.serviceWorker?.getRegistration("/").catch(() => undefined);
         for (const n of (await reg?.getNotifications().catch(() => [])) ?? []) n.close();
@@ -276,6 +278,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   // The directory as last verified; read again before every load.
   const ctxRef = useRef(ctx);
   ctxRef.current = ctx;
+
+  /** The owner says they revoked `id`: its heads go, and everything loads again (#813). */
+  const stopWaiting = useCallback(
+    async (id: string) => {
+      const c = ctxRef.current;
+      if (!c) return;
+      await (await load()).stopWaiting(c, id);
+      setWithheld(undefined);
+      await reload();
+    },
+    [reload],
+  );
   const current = useCallback(async () => {
     const was = ctxRef.current;
     if (!was) return undefined;
@@ -605,6 +619,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         loadPromptLog,
         deviceName,
         withheld,
+        stopWaiting,
       }}
     >
       {children}

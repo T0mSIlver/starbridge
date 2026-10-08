@@ -74,6 +74,7 @@ export function SampleProvider({
       setQuotaSettings,
       answerPrompt: noop,
       loadPromptLog: noop,
+      stopWaiting: noop,
       deviceName: (id) => id,
     };
   }, [landing, empty, noQuotas, quiet, quotaSettings, snoozes, dismissed]);

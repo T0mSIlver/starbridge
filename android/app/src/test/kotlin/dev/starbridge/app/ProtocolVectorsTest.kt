@@ -4,6 +4,8 @@ import com.goterl.lazysodium.LazySodiumJava
 import com.goterl.lazysodium.SodiumJava
 import dev.starbridge.app.protocol.Images
 import dev.starbridge.app.protocol.Directories
+import dev.starbridge.app.protocol.DirectoryHead
+import dev.starbridge.app.protocol.Heads
 import dev.starbridge.app.protocol.Envelopes
 import dev.starbridge.app.protocol.JoinRequestBody
 import dev.starbridge.app.protocol.Joins
@@ -36,6 +38,8 @@ import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.boolean
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import kotlinx.serialization.json.encodeToJsonElement
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonArray
@@ -95,6 +99,44 @@ class ProtocolVectorsTest {
             assertEquals(name, expect.getValue("active").jsonArray.map { it.str }, ids(true))
             assertEquals(name, expect.getValue("revoked").jsonArray.map { it.str }, ids(false))
             assertEquals(name, expect.str("recoveryPk"), dir.recoveryPk)
+        }
+    }
+
+    @Test
+    fun heads() {
+        val v = load("heads.json")
+        val book = Heads(directories)
+        val chains = v.getValue("chains").jsonObject
+        fun entries(name: String) = chains.getValue(name).jsonArray.toList()
+        fun headsOf(o: JsonElement) = o.jsonObject.mapValues { ProtocolJson.decodeFromJsonElement(DirectoryHead.serializer(), it.value) }.toMutableMap()
+        fun json(h: DirectoryHead) = buildJsonObject {
+            put("length", h.length); put("head", h.head); h.by?.let { put("by", it) }
+        }
+        fun json(heads: Map<String, DirectoryHead>) = JsonObject(heads.mapValues { json(it.value) })
+        for (case in v.getValue("withheld").jsonArray.map { it.jsonObject }) {
+            val chain = entries(case.str("chain"))
+            val held = book.withheldBy(headsOf(case.getValue("heads")), directories.verify(chain), chain)
+            val got = held?.let {
+                buildJsonObject {
+                    put("id", it.id); it.by?.let { by -> put("by", by) }; put("head", json(it.head))
+                    it.revoked?.let { r -> put("revoked", buildJsonObject { put("id", r.id); put("by", r.by); put("at", r.at) }) }
+                }
+            } ?: JsonNull
+            assertEquals(case.str("name"), case.getValue("expect"), got)
+        }
+        for (case in v.getValue("noteHead").jsonArray.map { it.jsonObject }) {
+            val chain = entries(case.str("chain"))
+            val heads = headsOf(case.getValue("heads"))
+            val head = ProtocolJson.decodeFromJsonElement(DirectoryHead.serializer(), case.getValue("head"))
+            val changed = book.note(heads, case.str("signer"), head, chain, directories.verify(chain))
+            val expect = case.getValue("expect").jsonObject
+            assertEquals(case.str("name"), expect.getValue("changed").jsonPrimitive.boolean, changed)
+            assertEquals(case.str("name"), expect.getValue("heads"), json(heads))
+        }
+        for (case in v.getValue("forgetHeads").jsonArray.map { it.jsonObject }) {
+            val heads = headsOf(case.getValue("heads"))
+            book.forget(heads, case.str("id"))
+            assertEquals(case.str("name"), case.getValue("expect"), json(heads))
         }
     }
 

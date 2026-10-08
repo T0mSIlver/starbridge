@@ -570,6 +570,140 @@ test("a head from an entry made elsewhere since the last read refreshes rather t
   }
 });
 
+/** A machine's question, with the directory head it signs, sealed to this browser. */
+function machineDecision(
+  m: { member: { id: string; name: string }; keys: ReturnType<typeof generateMemberKeys> },
+  me: device.Ctx,
+  dir: { length: number; head: string },
+) {
+  const { id, name, boxPk, signPk } = me.device;
+  return {
+    item: seal(
+      "decision",
+      {
+        v: 1,
+        id: `d_${m.member.id}`,
+        to: [id],
+        createdAt: "2026-10-08T12:00:00Z",
+        question: "Deploy?",
+        context: "",
+        options: ["Yes", "No"],
+        recommended: "Yes",
+        source: { machine: m.member.name, project: "p", session: "s" },
+        dir,
+      },
+      { id: m.member.id, signKey: m.keys.sign.privateKey },
+      [{ id, role: "device" as const, name, boxPk, signPk }],
+    ),
+    cursor: "1",
+    receivedAt: "2026-10-08T12:00:00Z",
+  };
+}
+
+async function postEntry(entry: unknown) {
+  const r = await realFetch(`${live.url}/v1/directory`, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${live.owner.device.token}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ entry }),
+  });
+  expect(`${r.status} ${await r.text()}`).toStartWith("201");
+}
+
+test("a revoked device cannot lift the hold by revoking, on a fork, the machine that exposed it (#813)", async () => {
+  const at = "2026-10-08T12:00:00Z";
+  const phone = { id: "phone", signKey: live.owner.device.keys.sign.privateKey };
+  const thiefKeys = generateMemberKeys();
+  const thief = {
+    id: "thief",
+    role: "device" as const,
+    name: "Stolen phone",
+    ...publicKeys(thiefKeys),
+  };
+  const mKeys = generateMemberKeys();
+  const m = { id: "m_fork", role: "machine" as const, name: "devbox", ...publicKeys(mKeys) };
+  await postEntry(addEntry(await live.directory(), phone, thief, at));
+  await postEntry(addEntry(await live.directory(), phone, m, at));
+  const mine = (await device.deviceContext(ctx.account)) as device.Ctx;
+  const pin = await store.get("pin", ctx.account);
+  // The owner revokes the stolen phone; the server hides it from this browser, and keeps its keys.
+  await postEntry(revokeEntry(await live.directory(), phone, "thief", at));
+  const truth = await live.directory();
+  const stale = mine.entries;
+  const fork = [
+    ...stale,
+    revokeEntry(
+      verifyDirectory(stale),
+      { id: "thief", signKey: thiefKeys.sign.privateKey },
+      "m_fork",
+      at,
+    ),
+  ];
+  let served = stale;
+  let items = [
+    machineDecision({ member: m, keys: mKeys }, mine, { length: truth.length, head: truth.head }),
+  ];
+  const real = globalThis.fetch;
+  globalThis.fetch = (async (input: string, init?: RequestInit) => {
+    if (input.startsWith("/v1/items?kind=decision")) return Response.json({ items, cursor: "1" });
+    if (input === "/v1/directory") return Response.json({ entries: served });
+    return real(input, init);
+  }) as typeof fetch;
+  try {
+    // The machine has seen the revocation: this browser holds.
+    await expect(device.loadInbox(mine)).rejects.toThrow("holding back changes to your devices");
+    // The stolen phone revokes that machine on a fork of this browser's stale chain.
+    served = fork;
+    items = [];
+    const forked = (await device.deviceContext(ctx.account)) as device.Ctx;
+    expect(forked.dir.members.get("m_fork")?.active).toBe(false);
+    const held = await device.loadInbox(forked).catch((e) => e);
+    expect(held).toBeInstanceOf(device.Withheld);
+    expect(held.revoked).toBe("m_fork");
+    expect(held.message).toContain("Stolen phone revoked devbox");
+    // Only the owner's word ends it.
+    await device.stopWaiting(forked, "m_fork");
+    await expect(device.loadInbox(forked)).resolves.toBeDefined();
+  } finally {
+    globalThis.fetch = real;
+    // Back on the real chain, which the fork does not extend.
+    await store.put("pin", pin as NonNullable<typeof pin>, ctx.account);
+    await store.del("heads", ctx.account);
+    // An account holds at most 5 machines.
+    await postEntry(revokeEntry(await live.directory(), phone, "m_fork", at));
+  }
+});
+
+test("revoking a machine that forged a long head ends the hold on the browser that revokes it (#813)", async () => {
+  const at = "2026-10-08T12:00:00Z";
+  const phone = { id: "phone", signKey: live.owner.device.keys.sign.privateKey };
+  const keys = generateMemberKeys();
+  const forger = { id: "m_forger", role: "machine" as const, name: "forger", ...publicKeys(keys) };
+  await postEntry(addEntry(await live.directory(), phone, forger, at));
+  const mine = (await device.deviceContext(ctx.account)) as device.Ctx;
+  const items = [
+    machineDecision({ member: forger, keys }, mine, { length: 999, head: "A".repeat(43) }),
+  ];
+  const real = globalThis.fetch;
+  globalThis.fetch = (async (input: string, init?: RequestInit) =>
+    input.startsWith("/v1/items?kind=decision")
+      ? Response.json({ items, cursor: "1" })
+      : real(input, init)) as typeof fetch;
+  try {
+    await expect(device.loadInbox(mine)).rejects.toThrow("holding back");
+    // A session bound to this browser's device, as a page that signed in and booted holds.
+    await api.ownerSignIn("owner-secret");
+    expect((await device.boot()).state).toBe("ready");
+    const after = await device.revoke(mine, "m_forger");
+    const inbox = await device.loadInbox(after);
+    expect(inbox.items.map((i) => i.decision.id)).not.toContain("d_m_forger");
+  } finally {
+    globalThis.fetch = real;
+  }
+});
+
 // Last: a recovery revokes every other member, the owner's phone included (#363).
 test("a recovery whose directory append fails leaves the device's keys alone (#283)", async () => {
   const before = await store.get("device", ctx.account);

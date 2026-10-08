@@ -204,6 +204,86 @@ class WithheldTest {
         assertEquals(null, store.notice.value)
     }
 
+    /**
+     * The server hides the phone's revocation of a stolen phone and holds its keys (#813). It
+     * revokes, on a fork of the phone's stale chain, the machine whose head exposed the gap: the
+     * hold stands, names that revocation, and only the owner's Stop waiting ends it.
+     */
+    @Test
+    fun aForkThatRevokesTheMachineDoesNotLiftTheHold() {
+        val account = "acct"
+        val at = "2026-10-08T12:00:00Z"
+        val signKeys = sodium.signKeyPair()
+        val boxKeys = sodium.boxKeyPair()
+        val phone = Member("phone", "device", "Phone", toB64(boxKeys.public), toB64(signKeys.public))
+        val thiefSign = sodium.signKeyPair()
+        val thief = Member("thief", "device", "Stolen phone", toB64(sodium.boxKeyPair().public), toB64(thiefSign.public))
+        val machineSign = sodium.signKeyPair()
+        val machine = Member("m_box", "machine", "devbox", toB64(sodium.boxKeyPair().public), toB64(machineSign.public))
+        val entries = mutableListOf<JsonElement>(envelopeJson(directories.genesisEntry(account, phone, signKeys.secret, sodium.signKeyPair(), at)))
+        for (m in listOf(thief, machine)) entries += envelopeJson(directories.addEntry(directories.verify(entries, account, null), "phone", signKeys.secret, m, at))
+        val known = directories.verify(entries, account, null)
+        val truth = directories.verify(entries + envelopeJson(directories.revokeEntry(known, "phone", signKeys.secret, thief.id, at)), account, null)
+        val fork = entries + envelopeJson(directories.revokeEntry(known, thief.id, thiefSign.secret, machine.id, at))
+        val item = envelopes.seal("decision", buildJsonObject {
+            put("v", 1); put("id", "d_box"); putJsonArray("to") { add("phone") }; put("createdAt", at)
+            put("question", "Deploy?"); put("context", ""); putJsonArray("options") { add("Yes"); add("No") }; put("recommended", "Yes")
+            putJsonObject("source") { put("machine", "devbox"); put("project", "p"); put("session", "s") }
+            putJsonObject("dir") { put("length", truth.length); put("head", truth.head) }
+        }, machine.id, machineSign.secret, listOf(phone))
+        val page = buildJsonObject {
+            put("items", buildJsonArray { add(buildJsonObject { put("item", ProtocolJson.encodeToJsonElement(item)); put("cursor", "1"); put("receivedAt", at) }) })
+            put("cursor", "1")
+        }
+        val empty = buildJsonObject { put("items", buildJsonArray {}); put("cursor", "") }
+        var served: List<JsonElement> = entries.toList()
+
+        http.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse = when (request.url.encodedPath) {
+                "/v1/directory" -> json(buildJsonObject { put("entries", buildJsonArray { served.drop(request.url.queryParameter("from")!!.toInt()).forEach { add(it) } }) })
+                "/v1/items" -> json(if (request.url.queryParameter("kind")!!.startsWith("decision") && request.url.queryParameter("after").isNullOrEmpty()) page else empty)
+                "/v1/quota" -> json(empty)
+                else -> MockResponse(404, okhttp3.Headers.headersOf(), "")
+            }
+        }
+        http.start()
+
+        val identity = object : Vault {
+            override fun wrap(plain: ByteArray) = plain
+            override fun unwrap(wrapped: ByteArray) = wrapped
+        }
+        val disk = Disk(Files.createTempDirectory("starbridge").toFile(), identity)
+        val server = http.url("/").toString().trimEnd('/')
+        disk.save(Saved(server, account = account, accountExists = true, me = phone, pin = Pin(known.length, known.head), entries = entries.toList()))
+        disk.save(Secrets(session = "s", boxPk = toB64(boxKeys.public), boxSk = toB64(boxKeys.secret), signPk = toB64(signKeys.public), signSk = toB64(signKeys.secret)))
+        val alerts = object : Alerts {
+            override fun decision(decision: Decision, silent: Boolean) {}
+            override fun cancel(id: String) {}
+            override fun join(id: String, name: String) {}
+            override fun prompt(prompt: Prompt) {}
+            override fun cancelPrompt(prompt: Prompt) {}
+            override fun run(run: Run) {}
+        }
+        val store = ServerStore(disk, OkHttpClient(), sodium, envelopes, directories, Pairings(sodium), Joins(sodium), alerts, "Phone", server, false, scope)
+
+        // The machine has seen the revocation: the phone holds.
+        store.refresh()
+        until { store.notice.value != null }
+        assertTrue(store.notice.value!!.contains("holding back changes to your devices that devbox has seen"))
+        assertEquals(null, store.heldRevoked.value)
+        // The stolen phone revokes the machine on a fork of the phone's chain: the hold stands.
+        store.dismissNotice()
+        served = fork
+        store.refresh()
+        until { store.heldRevoked.value != null }
+        assertEquals(machine.id, store.heldRevoked.value)
+        assertTrue(store.notice.value!!.contains("Stolen phone revoked devbox"))
+        assertTrue(store.decisions.value.isEmpty())
+        // Only the owner's word ends it.
+        store.stopWaiting(machine.id)
+        until { store.heldRevoked.value == null && store.notice.value == null }
+    }
+
     private fun until(pred: () -> Boolean) {
         val end = System.currentTimeMillis() + 10_000
         while (!pred()) {
