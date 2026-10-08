@@ -725,9 +725,10 @@ Codex prompts are not supported.
 ### Runs
 
 - `starbridge run --title <t> --reason <r> -- <command>` (#60). The reason is required: it tells
-  the owner why this run is theirs to watch. The run posts its start, progress at most every 10 s,
-  a heartbeat every minute and its exit. Output goes through a pipe, so tools that print progress
-  only to a terminal show none.
+  the owner why this run is theirs to watch. The run posts its start, its first progress right
+  after it, later progress at most every 10 s, a heartbeat every minute and its exit; a first
+  progress held back 10 s left a run that opens on `[0/5]` with an indeterminate bar (#828).
+  Output goes through a pipe, so tools that print progress only to a terminal show none.
 - Devices call a run lost 3 minutes after its last update (#190, #249); the server cannot read a
   sealed run, so this is client-side. A lost run shows "Lost, no news for 3 min 37 s" and no
   elapsed time, since its last news may predate most of its life. A run with no progress shows an

@@ -200,7 +200,7 @@ test("a run killed with -9 posts no exit and nothing after, so devices see it lo
   expect(last?.at).toBe(start?.at);
 });
 
-test("the reporter posts the start at once, then progress throttled, a heartbeat, and the exit", async () => {
+test("the reporter posts the start at once, the first progress right after, later progress throttled, a heartbeat, and the exit", async () => {
   const posts: RunInput[] = [];
   const ctx = testCtx();
   const reporter = new Reporter(
@@ -220,18 +220,45 @@ test("the reporter posts the start at once, then progress throttled, a heartbeat
   );
   reporter.start();
   expect(posts).toHaveLength(1);
+  // The first progress, printed while the start is in flight, follows it without the throttle
+  // (#828): a run whose first line is `[0/5]` shows its steps at once.
+  reporter.update({ done: 0, total: 5, unit: "step" });
+  await until(() => posts.length === 2, 50);
+  expect(posts[1]?.progress).toEqual({ done: 0, total: 5, unit: "step" });
   for (let i = 1; i <= 5; i++) reporter.update({ done: i, total: 5, unit: "step" });
   await Bun.sleep(30);
-  expect(posts).toHaveLength(1);
-  await until(() => posts.length === 2);
-  expect(posts[1]?.progress).toEqual({ done: 5, total: 5, unit: "step" });
-  await until(() => posts.length === 3, 1000);
+  expect(posts).toHaveLength(2);
+  await until(() => posts.length === 3);
   expect(posts[2]?.progress).toEqual({ done: 5, total: 5, unit: "step" });
+  await until(() => posts.length === 4, 1000);
+  expect(posts[3]?.progress).toEqual({ done: 5, total: 5, unit: "step" });
   await reporter.finish(0);
   expect(posts.at(-1)?.exit?.code).toBe(0);
   const count = posts.length;
   await Bun.sleep(500);
   expect(posts).toHaveLength(count);
+});
+
+test("progress printed while a post is in flight goes out after the progress gap, not the heartbeat's", async () => {
+  const posts: RunInput[] = [];
+  let release: (() => void) | undefined;
+  const reporter = new Reporter(
+    { id: "r_1", title: "t", reason: "r", startedAt: "2026-10-05T10:00:00Z", project: "p", session: "" },
+    async (input) => {
+      posts.push(input);
+      if (posts.length === 2) await new Promise<void>((r) => (release = r));
+    },
+    testCtx(),
+    { progressMs: 100, heartbeatMs: 5_000 },
+  );
+  reporter.start();
+  reporter.update({ done: 0, total: 5, unit: "step" });
+  await until(() => release !== undefined, 50);
+  reporter.update({ done: 1, total: 5, unit: "step" });
+  release?.();
+  await until(() => posts.length === 3, 1000);
+  expect(posts[2]?.progress).toEqual({ done: 1, total: 5, unit: "step" });
+  await reporter.finish(0);
 });
 
 test("a withheld directory entry pauses the reporter; the exit still goes out (#794)", async () => {
