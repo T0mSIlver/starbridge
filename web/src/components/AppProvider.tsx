@@ -3,9 +3,12 @@
 import { PRESENCE_INPUT_MS, type Settled } from "@starbridge/protocol";
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { api, backingOff } from "@/lib/api";
+import { desktop } from "@/lib/desktop";
+import { desktopState } from "@/lib/desktopState";
 import type { Boot, Ctx, Inbox, Quotas, Runs } from "@/lib/device";
 import { reach, send } from "@/lib/funnel";
 import { newestWins } from "@/lib/newest";
+import { openItem } from "@/lib/opened";
 import { AnsweredFirst } from "@/lib/outcome";
 import { Beacon, PRESENCE_CHANNEL, PRESENCE_CHECK_MS, PRESENCE_EVENTS } from "@/lib/presence";
 import {
@@ -23,6 +26,10 @@ import type { Device, InboxItem, PromptItem, PromptReply, Reply, RunItem } from 
 const load = () => import("@/lib/device");
 /** Pollers read while the page is visible, and skip their turn while the server is away (#332). */
 const polling = () => document.visibilityState === "visible" && !backingOff();
+/** The inbox and prompts: also while hidden in the desktop app, which notifies from them (#886). */
+const reading = () => (document.visibilityState === "visible" || !!desktop) && !backingOff();
+/** How often the desktop app hears the state again, for snoozes that end and prompts that expire. */
+const DESKTOP_TICK_MS = 15_000;
 
 /**
  * A poller's read that skips its turn while the last one is still running, so requests that hang
@@ -425,7 +432,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const readInbox = single(refreshInbox);
     const readPrompts = single(refreshPrompts);
     const tick = () => {
-      if (!polling()) return;
+      if (!reading()) return;
       readInbox();
       readPrompts();
     };
@@ -601,6 +608,36 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     },
     [ctx, refreshInbox, reload],
   );
+
+  // The desktop app's menu bar count and notifications follow Needs you; signed out, both clear.
+  const ready = !!ctx && inboxLoaded;
+  useEffect(() => {
+    if (!desktop) return;
+    const bridge = desktop;
+    const send = () =>
+      bridge.update(
+        ready ? desktopState(inbox.items, prompts, Date.now()) : { count: 0, entries: [] },
+      );
+    send();
+    const timer = setInterval(send, DESKTOP_TICK_MS);
+    return () => clearInterval(timer);
+  }, [ready, inbox, prompts]);
+
+  // A notification's button or reply answers as a tap here would; its click opens the item.
+  const answerRef = useRef(answer);
+  answerRef.current = answer;
+  useEffect(() => {
+    if (!desktop) return;
+    desktop.onAnswer(async (a) => {
+      const item = inboxRef.current.items.find((i) => i.decision.id === a.id);
+      if (!item || item.answeredAt) throw new Error("Already answered.");
+      await answerRef.current(item, "choice" in a ? { choice: a.choice } : { text: a.text });
+    });
+    desktop.onOpen((id) => {
+      if (location.pathname === "/") openItem(id);
+      else location.assign(`/?item=${encodeURIComponent(id)}`);
+    });
+  }, []);
 
   const dismissRun = useCallback(
     async (item: RunItem) => {
