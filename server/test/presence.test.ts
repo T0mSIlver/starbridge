@@ -168,6 +168,10 @@ test("a device's answer during the hold skips the held devices and cancels their
   expect((await post(web, answer(d, web))).status).toBe(201);
   expect(pushed()).toEqual([[[web.id], "answered", d.id]]);
   sent = [];
+  // The machine then announces which answer won (#330): not to the phone, which never heard.
+  await post(devbox, settled(d));
+  expect(pushed()).toEqual([[[web.id], "settled", expect.any(String)]]);
+  sent = [];
   release(31_000);
   expect(sent).toEqual([]);
 });

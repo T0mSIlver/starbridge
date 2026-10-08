@@ -97,11 +97,13 @@ export function releaseHolds(
     hold_to: string;
   }[];
   for (const h of due) {
-    // Cleared first: a push that fails is not retried, as no other push is.
+    // Cleared first: a push that fails is not retried, as no other push is. A closed item keeps
+    // `hold_to`, so the notices that close it skip the devices that never heard of it.
+    const open = stillOpen(db, h);
     db.query(
-      "UPDATE items SET hold_due = NULL, hold_to = NULL WHERE account_id = ? AND id = ?",
+      `UPDATE items SET hold_due = NULL${open ? ", hold_to = NULL" : ""} WHERE account_id = ? AND id = ?`,
     ).run(h.account_id, h.id);
-    if (!stillOpen(db, h)) continue;
+    if (!open) continue;
     const held = JSON.parse(h.hold_to) as string[];
     const boxes = db
       .query(

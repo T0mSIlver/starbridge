@@ -466,7 +466,7 @@ itemRoutes.post("/items", requireCaller("paired"), async (c) => {
     // nothing: the prompt was already answered. An open kind's note closes nothing.
     if (item.re !== undefined && !rule.re?.open) {
       db.query(
-        `UPDATE items SET answered_at = ?, seq = ?, hold_due = NULL, hold_to = NULL
+        `UPDATE items SET answered_at = ?, seq = ?, hold_due = NULL
          WHERE account_id = ? AND id = ? AND answered_at IS NULL`,
       ).run(iso, nextSeq(db), caller.account, item.re);
       // Answered or settled, a snoozed decision does not come back.
@@ -514,7 +514,8 @@ itemRoutes.post("/items", requireCaller("paired"), async (c) => {
         .get(caller.account, item.id) as { hold_due: string | null; hold_to: string | null };
       const held = [...new Set([...(JSON.parse(row.hold_to ?? "[]") as string[]), ...hold.held])];
       db.query("UPDATE items SET hold_due = ?, hold_to = ? WHERE account_id = ? AND id = ?").run(
-        row.hold_due ?? hold.due,
+        // The later due, so a re-seal's new devices wait their whole hold too.
+        row.hold_due && row.hold_due > hold.due ? row.hold_due : hold.due,
         JSON.stringify(held),
         caller.account,
         item.id,
