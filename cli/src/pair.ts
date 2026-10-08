@@ -127,6 +127,10 @@ export async function pair(
     s.cursor = undefined;
     s.asked = {};
     s.answers = {};
+    // Heads from the old pairing: one a compromised device forged would hold this one too.
+    delete s.heads;
+    delete s.held;
+    delete s.behind;
   });
   // `starbridge status` shows the machine's id.
   ctx.out(`✓ Paired as ${name}`);

@@ -1,4 +1,5 @@
 import { createApp } from "./app";
+import { setSuspended } from "./auth";
 import { configFromEnv } from "./config";
 import { openDb, SCHEMA_VERSION } from "./db";
 import { describe, parseValue, readOverrides, writeOverrides } from "./overrides";
@@ -41,6 +42,18 @@ if (process.argv[2] === "signups") {
   if (what === "pause" || what === "resume") setSignUps(config, what === "resume");
   else if (what !== "status") throw new Error("signups pause|resume|status");
   console.log(`sign-ups ${signUpsPaused(config) ? "paused" : "open"}`);
+  process.exit(0);
+}
+// `suspend ACCOUNT` / `unsuspend ACCOUNT`: the account's machines' writes are refused while its
+// devices work as before (#785). deploy/host/switch.sh runs it and logs each change.
+if (process.argv[2] === "suspend" || process.argv[2] === "unsuspend") {
+  const account = process.argv[3];
+  if (!account) throw new Error(`${process.argv[2]} ACCOUNT`);
+  if (!setSuspended(openDb(config.dbPath), account, process.argv[2] === "suspend")) {
+    console.error(`no account ${account}`);
+    process.exit(1);
+  }
+  console.log(`${account} ${process.argv[2] === "suspend" ? "suspended" : "no longer suspended"}`);
   process.exit(0);
 }
 // `limits [show]`, `limits set KEY VALUE`, `limits unset KEY`, `limits reset`: the owner's

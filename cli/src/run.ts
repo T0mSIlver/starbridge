@@ -29,6 +29,7 @@ import {
   session,
   signedHead,
   UsageError,
+  WithheldError,
 } from "./context";
 import { resolveSource } from "./decisions";
 import { killTree, resolveCommand, spawnable } from "./platform";
@@ -92,7 +93,7 @@ export function buildRun(
 /** Seals a run update to every active device and posts it; the agent and the CLI share this. */
 export async function postRun(ctx: Ctx, s: Session, input: RunInput): Promise<Run> {
   const dir = await refreshDirectory(ctx, s);
-  const to = devices(dir);
+  const to = devices(ctx, dir);
   const run = {
     ...buildRun(
       input,
@@ -100,7 +101,7 @@ export async function postRun(ctx: Ctx, s: Session, input: RunInput): Promise<Ru
       to.map((d) => d.id),
       machineKind(ctx),
     ),
-    dir: signedHead(ctx, dir),
+    dir: signedHead(dir),
   };
   const signer = { id: s.machine.id, signKey: s.keys.sign.privateKey };
   await s.api.postItem(seal("run", run, signer, to));
@@ -256,8 +257,9 @@ export class Reporter {
     this.lastPost = this.ctx.now().getTime();
     this.inflight = this.post(input)
       .catch((e: Error) => {
-        // Not paired, or a bad title: no later update can fare better.
-        if (e instanceof UsageError) this.off = true;
+        // Not paired, or a bad title: no later update can fare better. A withheld directory
+        // entry may come any time.
+        if (e instanceof UsageError && !(e instanceof WithheldError)) this.off = true;
         if (!this.warned || this.off)
           this.ctx.err(
             `starbridge: the run was not reported: ${e.message}${this.ctx.env.CODEX_SANDBOX_NETWORK_DISABLED === "1" ? ". Codex's sandbox has no network: runs reach your devices when Codex runs the command outside it" : ""}`,

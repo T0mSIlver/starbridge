@@ -200,7 +200,10 @@ CREATE TABLE usage_days (
  * it runs well within the 30 s Caddy holds requests while the server restarts; a backfill runs in
  * the hourly sweep instead.
  */
-const MIGRATIONS = [V1];
+/** An account the owner suspended for abuse: its machines' writes are refused (#785). */
+const V2 = "ALTER TABLE accounts ADD COLUMN suspended_at TEXT;";
+
+export const MIGRATIONS = [V1, V2];
 
 /** The `user_version` this server brings a database to. */
 export const SCHEMA_VERSION = MIGRATIONS.length;

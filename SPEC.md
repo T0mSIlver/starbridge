@@ -963,6 +963,13 @@ Tokens, type and components: `DESIGN.md`.
   its link prefetches makes a few dozen. The server makes at most 30 new accounts an hour per
   address: each account may store 256 MB, so many GitHub accounts behind one script could fill
   the server's 2 GB, while an office or a carrier's NAT signs up a handful an hour.
+- **Ready for Cloudflare's proxy** (#799). starbridge.run's DNS is on Cloudflare in DNS-only
+  mode; its proxy is the emergency answer to a flood from many addresses, which no per-address
+  rule stops. So that turning it on changes nothing else: Caddy takes the client's address from
+  `CF-Connecting-IP` only on requests from Cloudflare's published ranges, and every rate limit,
+  the block list, the server's per-address limits (through `X-Forwarded-For`, which Caddy sets to
+  that address alone) and Umami use it; and long-polls return within 90 s, under the proxy's
+  100 s cut. Clients already treat a cut long-poll, or Cloudflare's 524, as a reconnect.
 - **Per-address reads** (#582). Caddy counts every `/v1` request per address, 3000 a minute
   (IPv6 per /64): most reads count against no account, so this keeps a looping client or script
   to about 2% of a core. A visible page with a prompt waiting and a run live makes about 200 a
@@ -997,6 +1004,11 @@ Tokens, type and components: `DESIGN.md`.
   address is blocked as its /64, as the rate limits count it, and nothing wider than a /8 (IPv4)
   or /32 (IPv6) is accepted. The block list is the one place an address is written to disk, until
   it is unblocked; `/privacy` says so.
+- **Suspending an account** (#785). The owner can suspend one account whose machines flood the
+  server (a looping agent, or abuse) without deleting it: its machines' writes get 403
+  `account-suspended`, which the CLI prints with its reason, while they still read and wait, and
+  its phones and browsers work as before, so its owner can still answer, settle and revoke.
+  `bun server.js suspend|unsuspend ACCOUNT`, stored as `accounts.suspended_at` (migration 2).
 - **Limits at runtime** (#786). The owner can tighten or loosen a rate window or a cap without a
   deploy (`bun server.js limits set items 60/60`, `set maxMachines 4`, `unset`, `reset`): the
   overrides sit in `limits.json` beside the database, which the server reads every minute, so they

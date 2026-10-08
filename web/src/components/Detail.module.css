@@ -86,9 +86,9 @@
 .command {
   margin: 0;
   padding: var(--s4) var(--s5);
-  border: 1px solid var(--line-strong);
   border-radius: var(--radius-sm);
-  background: var(--surface);
+  background: var(--terminal);
+  color: var(--on-terminal);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
@@ -217,5 +217,10 @@
 @media (max-width: 599px) {
   .options > button {
     min-height: var(--size-tap);
+  }
+
+  /* On a phone the answers share the row's width, as on Android (#805). */
+  .actions > * {
+    flex: 1 1 auto;
   }
 }
