@@ -1,5 +1,7 @@
 package dev.starbridge.app
 
+import android.view.KeyEvent
+import android.view.MotionEvent
 import android.Manifest
 import android.content.Intent
 import android.content.res.Resources
@@ -123,6 +125,17 @@ class MainActivity : ComponentActivity() {
         // Join requests arrive live while the app is in front; a push covers the rest.
         store.watchJoins(true)
         store.foreground(true)
+    }
+
+    // Any touch or key says the owner is using this phone (#848); never which one.
+    override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
+        if (ev.actionMasked == MotionEvent.ACTION_DOWN) store.touched()
+        return super.dispatchTouchEvent(ev)
+    }
+
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (event.action == KeyEvent.ACTION_DOWN) store.touched()
+        return super.dispatchKeyEvent(event)
     }
 
     override fun onPause() {

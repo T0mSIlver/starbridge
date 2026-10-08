@@ -921,6 +921,10 @@ first window, so a provider with a window running out leads.
   brings the question back. Let go earlier and the card springs back. The owner chose one
   direction and a set time, so a snooze is one gesture; asking stays a setting. Screen readers
   get a Snooze action instead.
+- **Presence** (#848). The app in front and touched in the last minute holds the other devices'
+  pushes, as a web page in use does: the owner chose this, since a phone in hand is a screen in
+  use as much as a Mac. It counts a touch or key down, never which. Settings → Notifications
+  sets the account's hold time, as the web's Settings does.
 - Pull to refresh shows only on the screen that was pulled.
 - **Update screen** (#497): when the server answers 426 `client-too-old`, the app shows only
   "Update Starbridge", the server's minimum and this phone's release, and one button back to

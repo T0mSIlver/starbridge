@@ -222,7 +222,7 @@ class LayoutAuditTest(private val shot: String, private val look: Look) {
             }
         },
         "settings" to Shot(Tab.Settings) {
-            SettingsScreen(worst.windows, QuotaSettings(notify = listOf("claude")), worst.members.size, Colours.Starbridge, fake.push, worst.server, settingsActions)
+            SettingsScreen(worst.windows, QuotaSettings(notify = listOf("claude")), worst.members.size, Colours.Starbridge, fake.push, worst.server, settingsActions, pushHold = 120)
         },
         "devices" to Shot(Tab.Settings, bar = false) { DevicesScreen(worst.members, now, deviceActions) },
         "devices-revoke" to Shot(Tab.Settings, bar = false, before = { compose.onAllNodesWithText("Revoke")[0].performClick() }) { DevicesScreen(worst.members, now, deviceActions) },
