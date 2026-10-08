@@ -644,7 +644,9 @@ waits a little, and goes only if nothing answered it meanwhile.
   (`PRESENCE_BEAT_MS`) while the owner sits at its screen, and `{present: false}` once they no
   longer do. It decides that where it reads it, and sends only the bit: a machine, its screen
   unlocked with input in the last minute (`isPresent`); a web page, visible with an input event on
-  it in the last minute; the Android app, in front and touched in the last minute. The server
+  it in the last minute; the Android app, in front and touched in the last minute. Tabs of one
+  browser share its device, so an idle tab says nothing while another tab is in use. A refused
+  beat is tried again a beat later. The server
   keeps each source's bit in memory, trusts a `true` for 75 s (`PRESENCE_VALID_MS`), and counts
   the account present while any source is. A restart forgets it: push at once.
 - **What waits.** A machine's `decision`, `permission` or `waiting` item that asks for a push,

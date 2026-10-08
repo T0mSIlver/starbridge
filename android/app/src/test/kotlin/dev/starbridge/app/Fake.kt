@@ -203,7 +203,7 @@ class Fake(private val now: Instant) {
         images = listOf(Image(toB64(javaClass.getResourceAsStream("/fake/phone-inbox.png")!!.readBytes()), 1236, 2676, alt = "Inbox, dark")),
     )
 
-    /** A desktop and a phone layout over their options, "Reply" under them (#536), in a titled session (#563). */
+    /** A desktop and a phone layout over their options, the reply field under them (#536, #849), in a titled session (#563). */
     val layouts = Decision(
         id = "d9",
         question = "Which layout should the inbox lead with?",

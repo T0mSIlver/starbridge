@@ -193,7 +193,7 @@
   text-decoration: none;
 }
 
-/* Reply, Done, Snooze and Back now on one line, under the answer. */
+/* Done, Snooze and Back now on one line, under the answer. */
 .quiet {
   display: flex;
   flex-wrap: wrap;

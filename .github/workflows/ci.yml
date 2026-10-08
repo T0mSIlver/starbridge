@@ -208,8 +208,10 @@ jobs:
           docker builder prune -f --keep-storage 3GB >/dev/null || true
 
   # The CLI on Windows (#552): its platform tests and a built binary must pass. The rest of the
-  # suite runs too but cannot fail the job until it passes there. GitHub's Windows runners need a
-  # public repository or paid minutes, so a private repository skips the job.
+  # suite runs too but cannot fail the job until it passes there. Bun on Windows can wedge in a
+  # test past its own timeout, so each file runs alone and a hung one is killed and named (#834).
+  # GitHub's Windows runners need a public repository or paid minutes, so a private repository
+  # skips the job.
   windows:
     name: CLI on Windows
     if: ${{ !github.event.repository.private }}
@@ -233,7 +235,8 @@ jobs:
           ./dist/starbridge.exe --help
       - name: The whole CLI suite
         continue-on-error: true
-        run: bun test
+        timeout-minutes: 12
+        run: bun scripts/test-each.ts
 
   # A pull request lists only the checks of runs its own events started, so a dispatched run's
   # checks never show on it; a commit status does. dependabot-lockfile.yml set it to pending.

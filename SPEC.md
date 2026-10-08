@@ -422,6 +422,16 @@ provider plugins add providers, not panels.
   reads the user's: `STARBRIDGE_CONFIG_DIR` and `CODEX_HOME` reach it only as user environment
   variables. Windows has no SIGTERM: a stopped hook dies without settling its prompt, and the
   next `Stop` hook settles it.
+- **Presence** (#848), opt-in per machine with `starbridge config presence on`, since a machine
+  reports when its owner is at it: every 10 s the agent reads the screen's lock and the time
+  since its last input, the number the OS keeps for its screensaver, and sends the server only
+  "present" (unlocked, input in the last minute) or not, again every 30 s while present. macOS
+  reads `ioreg` (`CGSSessionScreenIsLocked`, `HIDIdleTime`); Windows keeps one PowerShell
+  running, since each start costs about a second of CPU, for `GetLastInputInfo` and whether the
+  lock screen (`LogonUI`) runs in its session; Linux takes logind's active graphical session and
+  its `LockedHint`, and GNOME's idle monitor or `xprintidle`, since logind's `IdleHint` flips only
+  after the desktop's idle delay, minutes. A headless box finds no graphical session and sends
+  nothing. Nothing reads what is typed.
 - **Answers on the machine** (#260). A machine accepts an answer only from a device the question
   was sealed to, only while it is open, and for an `answerIn` question only a Done, when it asked
   for one (#539). A settled question's
@@ -482,8 +492,9 @@ provider plugins add providers, not panels.
   mid-output reads as a prompt. Claude Code and Pi, whose installs run for seconds, first print
   `installing…` (#773). It still asks before installing CodexBar, a
   third-party binary (with #748, only when no other machine sends quotas), which providers to
-  send, whether to linger, and whether to send a test decision. Permission prompts stay off and
-  unasked; the summary names `starbridge config permissions on`, `starbridge status`,
+  send, whether to linger, and whether to send a test decision. Permission prompts and presence
+  stay off and unasked; the summary names `starbridge config permissions on`, on a desktop or
+  laptop `starbridge config presence on`, `starbridge status`,
   `starbridge uninstall --agent <name>` and `starbridge uninstall`. With no terminal every
   question takes its default, so nothing waits on input. A failed install prints its reason and
   `starbridge setup --agent <name>`, and setup goes on. Every step after pairing needs the
@@ -524,7 +535,10 @@ provider plugins add providers, not panels.
   allows a bash ask itself when the whole typed line, from the ask's "full command" evidence, is
   one of those commands with only words, flags, quoted strings and line-joining backslashes; an ask
   without evidence, or from a shell tool under another name, goes to the owner. `starbridge run` is left out,
-  since the command it wraps is the agent's own. Uninstall removes exactly what setup added.
+  since the command it wraps is the agent's own. So Codex asks at the keyboard to run it outside
+  the sandbox, and the skill has it ask on the first call: run in the sandbox first, the command
+  ran unreported, then again once approved (#831). A `prompt` rule only adds an approval: Codex
+  still runs the command in the sandbox first. Uninstall removes exactly what setup added.
 - **Docs** (#211) at `/docs` are the repository's Markdown files listed in `web/src/lib/docs.ts`,
   rendered by the web page. Links between them become `/docs` links; other relative links go to
   GitHub. Images are screenshots under `web/public`, served from the site root, so GitHub shows
@@ -567,8 +581,8 @@ line, the safe side: at worst a prompt repeats an answer the agent already read.
 
 | Harness | Delivery |
 |---|---|
-| Claude Code, interactive | The mod (`mod/`) long-polls the local agent's socket in 25 s cycles and submits each answer with `$.prompt.submit` |
-| `claude -p` | `wait`, since mods run only in interactive sessions (#321) |
+| Claude Code: terminal, desktop app's Code tab, IDEs | The mod (`mod/`) long-polls the local agent's socket in 25 s cycles and submits each answer with `$.prompt.submit` |
+| `claude -p`, Agent SDK scripts | `wait`: the run ends with its last turn, so the mod starts no loop there (#321) |
 | Codex TUI | The local agent runs `codex queue --thread <id>`; the message only says to run `starbridge wait <id>`, since other local users can read process arguments (#274). Retried each minute, 30 times |
 | `codex exec` | `wait`: nothing runs a queued message once exec returns. The thread's rollout tells exec apart (#245) |
 | Pi TUI and RPC | The Pi extension (`mod/pi`) calls `pi.sendUserMessage(text, { deliverAs: "followUp" })` (#232) |
@@ -581,6 +595,13 @@ line, the safe side: at worst a prompt repeats an answer the agent already read.
   re-reads the session id before submitting, so an answer that arrives during `/clear` waits for
   the session that asked; `/resume` keeps polling under the resumed id. Without a local agent the mod
   falls back to polling through the CLI, and both paths share the set of submitted lines.
+- **Which sessions run the mod's loop** (#863). Claude Code tells a mod whether a person is at
+  the prompt, and says no both for `claude -p` and for sessions a host such as Claude desktop's
+  Code tab or an IDE runs through the SDK. The mod tells them apart by `CLAUDE_CODE_ENTRYPOINT`:
+  it starts its loop in an interactive session, or one whose entry point is set and is not
+  `sdk-cli` (`claude -p`), `sdk-ts` or `sdk-py` (Agent SDK scripts). A loop in a run that ends
+  early costs nothing, since `ask` still prints the `wait` line for an unattended session.
+  `starbridge status` run from a session whose mod never called says so.
 - **Which harness asked** (#319, #320). Harnesses pass their variables to processes they start, so
   `ask` takes Codex, Pi or opencode over Claude Code when both are set, unless Claude Code runs as `claude
   -p`, the only way Codex and Pi start it. A Codex sub-agent asks under its root thread, since
@@ -616,10 +637,22 @@ line, the safe side: at worst a prompt repeats an answer the agent already read.
 
 ### The harness's own ask tool
 
-- Claude Code (#121, #200): a `PreToolUse` hook on `AskUserQuestion` allows the call with
-  `updatedInput.answers` that say to ask through `starbridge ask`. A deny would show as a red hook
-  error. It lets the question through when the machine is unpaired or the server does not answer
-  within 3 s.
+- Claude Code (#848): the picker races the devices, as permission prompts do. The question shows
+  in Claude Code's own picker (terminal, desktop app, the Claude app through Remote Control) and
+  on the devices at once; the first answer wins and the other side is settled `elsewhere`. Until
+  #848 a `PreToolUse` hook answered the call with "ask through `starbridge ask`" (#121, #200), so a
+  quick question at the desk still went only to the phone. The picker is a permission dialog, so
+  the plugin's `PermissionRequest` hook takes it whatever the permissions setting: one waiting
+  card per question, held from the session's answer loop, and once each has a device's answer it
+  allows the call with those answers, which closes the picker (a multi-select answer
+  comma-joined, as Claude Code's own). An answer in the picker sends the hook nothing, so
+  `PostToolUse` on `AskUserQuestion` settles the cards; Esc sends SIGTERM, as does Claude Code's
+  hook timeout, so the hook has its own entry with a day's timeout and withdraws its cards 10
+  minutes before it, when no answer could reach the picker any more. The generic
+  `PermissionRequest` entry excludes `AskUserQuestion` by its matcher. The `PreToolUse` entry
+  stays one release and the new CLI's `hook ask-user` prints nothing, so a newer plugin over an
+  older CLI still redirects, and a newer CLI under an older plugin races through the generic
+  entry, withdrawing its cards after 570 s.
 - opencode (#345): each `question` call becomes one Starbridge question per question, already
   waiting, and the answers go back into the call through `POST /question/{id}/reply`. The first
   answer, on a device or at the keyboard, wins; the other side is settled `elsewhere`. A question
@@ -669,7 +702,12 @@ Codex prompts are not supported.
 - **The first option is the agent's default** (#191), its proposal with no timer: listed first,
   the one amber button. `recommended` names it when it isn't first.
 - **Typed replies** (#201). Every question with options also takes a typed reply, as a steer to act
-  on. It goes alone, with no choice.
+  on. It goes alone, with no choice. Its field is always open under the options, in the detail
+  (web) and the sheet (Android), so typing costs one tap, as a pick does (#849): the owner often
+  steers an agent this way ("show me two other mockups"), and a Reply button that opened the field
+  made it a second-class answer. Cards in the list keep only the options, so they stay one-tap
+  and short. The owner chose this from mockups over a full-width Reply button and a mic in the
+  field; the field reads "Your answer" on both clients.
 - **Images** (#62, #170, #685): at most 4, PNG or JPEG, never SVG. The CLI keeps a file as is up
   to a 3000 px edge and 384 KB, so a phone screenshot reaches every device unchanged and viewers can zoom into real
   pixels. Android decodes by the image's real size, drops one larger than declared or 8192 px a
@@ -812,8 +850,8 @@ first window, so a provider with a window running out leads.
   thing, the amber fill. A waiting item's title is weight 500 and its time slot a clock ticking
   from when it started waiting; screen readers hear "Waiting for you, 2 minutes" first. No state
   tag anywhere. Under a grouping, the items under one header are joined.
-- **Snoozed** (#571, #692, #699). Snooze sits beside Reply in a question's detail (web) and sheet
-  (Android), never on a notification. Most snoozes are for later the same day, so it opens on
+- **Snoozed** (#571, #692, #699). Snooze sits under the reply field in a question's detail (web)
+  and sheet (Android), never on a notification. Most snoozes are for later the same day, so it opens on
   today: 1 hour and This evening (18:00, offered until 17:00), then the days as chips (today and
   the 7 after it) and a time an hour ahead, up to the half hour (9:00 on another day), from 5
   minutes on, confirmed by "Snooze until 15:00". Android sets the time on a dial; the web types
@@ -850,7 +888,7 @@ first window, so a provider with a window running out leads.
   crop, no frame. With one image per option, two or more, each image sits over its option's
   button in equal columns, in the agent's order: its own shape, no wider than the button and at
   most `size.pick` tall, the row's images centred on one midline so the buttons line up. The owner
-  chose both from mockups. "Reply" sits under them, as under plain options.
+  chose both from mockups. The reply field sits under them, as under plain options.
 - **Signed out.** A browser that holds no device of the account it last signed in to gets the
   landing page at `/`, as does a revoked browser (#209); one with a device gets sign-in.
 - **Restarts go unnoticed** (#250). Clients retry a 502, 503 or refused connection quietly for

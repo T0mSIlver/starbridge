@@ -209,7 +209,7 @@ class LayoutAuditTest(private val shot: String, private val look: Look) {
         },
         "find" to Shot(Tab.Inbox, bar = false, before = { compose.onNode(hasSetTextAction()).performTextInput("rebase") }) { Entry { FindScreen(worst.decisions, worst.prompts, now, {}, {}, {}) } },
         "sheet-question" to sheet { DecisionSheet(worst.decisions[0], now, { _, _, _ -> }, Replies(rememberDrafts(), emptyMap())) },
-        "sheet-reply" to sheet(before = { compose.onNodeWithText("Reply").performClick() }) { DecisionSheet(worst.decisions[1], now, { _, _, _ -> }, Replies(rememberDrafts(), emptyMap())) },
+        "sheet-reply" to sheet(before = { compose.onNode(hasSetTextAction()).performTextInput("Only after the eval run") }) { DecisionSheet(worst.decisions[1], now, { _, _, _ -> }, Replies(rememberDrafts(), emptyMap())) },
         "sheet-prompt" to sheet { PromptSheet(worst.prompts[0], now, promptActions) },
         "sheet-prompt-input" to sheet(before = { compose.onNodeWithText("Full input").performClick() }) { PromptSheet(worst.prompts[0], now, promptActions) },
         "sheet-images" to sheet { DecisionSheet(fake.screenshot.copy(source = worst.decisions[0].source, options = worst.decisions[0].options), now, { _, _, _ -> }, Replies(rememberDrafts(), emptyMap())) },
