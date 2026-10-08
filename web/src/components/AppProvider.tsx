@@ -126,6 +126,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     () => ({ ...inbox, items: withUnsent(inbox.items, unsent, notSent) }),
     [inbox, unsent, notSent],
   );
+  // The page holds an answer until the server takes it: leaving now would drop it, so the browser
+  // asks first, as the answer already looks sent (#895).
+  useEffect(() => {
+    if (Object.keys(unsent).length === 0) return;
+    const stay = (e: BeforeUnloadEvent) => e.preventDefault();
+    window.addEventListener("beforeunload", stay);
+    return () => window.removeEventListener("beforeunload", stay);
+  }, [unsent]);
   const [inboxLoaded, setInboxLoaded] = useState(false);
   const [pushed, setPushed] = useState(false);
   const [quotas, setQuotas] = useState<Quotas>();

@@ -626,6 +626,10 @@ async function main() {
       .locator('section[aria-label="Selected"]')
       .getByRole("button", { name: new RegExp(`^${option}`) });
     await button.waitFor();
+    // Navigating away mid-POST would drop the answer: callers wait for its reply first.
+    const posted = page.waitForResponse(
+      (r) => r.url().endsWith("/v1/items") && r.request().method() === "POST",
+    );
     const left = await button.evaluate(async (b, q) => {
       const listed = () =>
         [...document.querySelectorAll("[data-row] button[data-id]")].some((r) =>
@@ -640,10 +644,11 @@ async function main() {
       }
       return { frames, ms: Math.round(performance.now() - t0) };
     }, question);
-    return { asked, left };
+    return { asked, left, posted };
   };
   const timed = await answerTimed("Timing probe: tag the release?", "Tag");
   console.log(`answer click to row gone, 48 ms per request: ${JSON.stringify(timed.left)}`);
+  await timed.posted;
   // Held at the server: the row is gone by the next frame all the same.
   let release = () => {};
   const gate = new Promise<void>((done) => {
@@ -663,6 +668,7 @@ async function main() {
   });
   const holding = await answerTimed("Held probe: deploy now?", "Deploy");
   release();
+  await holding.posted;
   if (holding.left.frames > 1)
     throw new Error(
       `the answered row stayed ${holding.left.frames} frames while the server held the answer`,
@@ -671,6 +677,7 @@ async function main() {
   refuse = true;
   const refused = await answerTimed("Refused probe: merge?", "Merge", true);
   if (refused.left.frames > 1) throw new Error("the refused answer's row did not leave at once");
+  await refused.posted;
   await page
     .getByText(/^Not sent: bad-schema/)
     .first()
