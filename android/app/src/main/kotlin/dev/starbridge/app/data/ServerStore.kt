@@ -178,6 +178,12 @@ class ServerStore(
     override val keepsKeys = MutableStateFlow(false)
     override val busy = MutableStateFlow(false)
     override val tooOld = MutableStateFlow<String?>(null)
+    override val pushHold = MutableStateFlow<Int?>(null)
+    @Volatile private var inFront = false
+    private var presenceJob: Job? = null
+    private val beacon = Beacon({ present -> if (phase.value == Phase.Ready) api().presence(present) })
+    /** The beacon's one lock: touches and checks come from different threads. */
+    private val beaconLock = Mutex()
 
     override val notice = MutableStateFlow(
         // The files themselves are kept aside under their own names (Disk); the owner needs only what to do.
@@ -1701,6 +1707,16 @@ class ServerStore(
      * Quiet: a failed read leaves no notice, since the next one, or the owner's pull, says why.
      */
     override fun foreground(on: Boolean) {
+        inFront = on
+        presenceJob?.cancel()
+        // In front, it checks whether it still counts; sent behind, it says absent once.
+        presenceJob = scope.launch {
+            while (true) {
+                beaconLock.withLock { beacon.tick(inFront) }
+                if (!inFront) break
+                delay(Beacon.CHECK_MS)
+            }
+        }
         pollJob?.cancel()
         if (!on) return
         pollJob = scope.launch {
@@ -1718,6 +1734,30 @@ class ServerStore(
                     }
                 }
             }
+        }
+    }
+
+    override fun touched() {
+        scope.launch { beaconLock.withLock { if (beacon.input(inFront)) beacon.tick(inFront) } }
+    }
+
+    override fun loadPushHold() {
+        scope.launch {
+            // A server without the setting shows no row.
+            runCatching { api().pushHold() }.onSuccess { pushHold.value = it }
+        }
+    }
+
+    override fun setPushHold(seconds: Int) {
+        val was = pushHold.value
+        pushHold.value = seconds
+        scope.launch {
+            runCatching { api().setPushHold(seconds) }
+                .onSuccess { pushHold.value = it }
+                .onFailure { e ->
+                    pushHold.value = was
+                    if (e is Exception) report(e)
+                }
         }
     }
 

@@ -17,7 +17,7 @@ import {
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { type Browser, type BrowserContext, firefox, type Page } from "playwright";
+import { type Browser, type BrowserContext, firefox, type Locator, type Page } from "playwright";
 import { layoutProblems, type Problem, zoomText } from "./layout.ts";
 
 const ROOT = resolve(import.meta.dirname, "../..");
@@ -63,12 +63,32 @@ function step(text: string) {
 }
 
 /**
+ * Follows a link to `path`. Right after a navigation a click now and then does nothing, as with
+ * `choose` (#879: the Replace link of the recovery key left the page on Settings), so this clicks
+ * again until the address is `path`.
+ */
+async function follow(page: Page, link: Locator, path: string) {
+  for (let tries = 1; ; tries++) {
+    await link.click();
+    try {
+      await page.waitForURL((u) => u.pathname === path, { timeout: 5_000 });
+      return;
+    } catch (e) {
+      if (tries === 3) throw e;
+      console.log(
+        `follow: still at ${new URL(page.url()).pathname} after click ${tries}, clicking again`,
+      );
+    }
+  }
+}
+
+/**
  * Picks an option of a Settings segmented control. Its radio hides inside the segment, which
  * takes the click. Right after a navigation the click now and then leaves the radio as it was
  * (#693, #758), so this clicks again until the radio is checked. It waits for the checked state
  * in the DOM, since the radio is never visible.
  */
-async function choose(page: Page, label: string) {
+async function choose(page: Page | Locator, label: string) {
   const radio = page.getByLabel(label, { exact: true });
   const checked = radio.and(page.locator(":checked"));
   for (let tries = 1; ; tries++) {
@@ -687,8 +707,8 @@ async function main() {
       await page.screenshot({ path: join(SHOTS, `picks-phone-${scheme}.png`) });
     }
     await page.emulateMedia({ reducedMotion: "no-preference" });
-    // "Reply" is under the picks too; in it, Shift+Enter starts a new line and Enter sends (#562).
-    await page.getByRole("button", { name: "Reply", exact: true }).click();
+    // The reply field is open under the picks too (#849); in it, Shift+Enter starts a new line and
+    // Enter sends (#562).
     const reply = page.getByRole("textbox", { name: "Your answer" });
     await reply.pressSequentially("Phone layout");
     await reply.press("Shift+Enter");
@@ -1664,7 +1684,8 @@ async function main() {
     machineHome,
   );
   await snoozeWait.waitFor(
-    /Snoozed d_\S+ \(Snooze probe: ship the docs\?\) until \S+: no answer before then\./,
+    // "until 19:16", or "until tomorrow 00:02" when it ends after midnight.
+    /Snoozed d_\S+ \(Snooze probe: ship the docs\?\) until (?:tomorrow )?\d\d:\d\d: no answer before then\./,
   );
   if ((await snoozeWait.exited) !== 3) throw new Error("wait on a snoozed question did not exit 3");
   // At its time the server pushes every device once: one notification, back from snooze.
@@ -1683,11 +1704,61 @@ async function main() {
   await probe(page).click();
   await selected(page).getByRole("button", { name: /^Ship/ }).click();
 
+  step("while the first browser is in use, the second's notification waits the hold (#848)");
+  // The second browser must not count as in use itself: no input on it for longer than the server
+  // trusts its last beat.
+  await pageB.reload();
+  const quietSince = Date.now();
+  await page.goto(`${ORIGIN}/settings`);
+  const holdTime = page.getByRole("radiogroup", { name: /^Hold notifications/ });
+  await holdTime.waitFor({ timeout: 30_000 });
+  await choose(holdTime, "15 s");
+  await shoot(page, "settings-hold");
+  await page.goto(ORIGIN);
+  const use = async () => {
+    await page.mouse.move(20 + Math.random() * 200, 200);
+    await page.mouse.move(240, 220);
+  };
+  while (Date.now() - quietSince < 80_000) {
+    await use();
+    await page.waitForTimeout(5_000);
+  }
+  const holdAsk = cli(
+    "hold-ask",
+    [
+      ...["ask", "--question", "Hold probe: tag the release?", "--option", "Tag"],
+      ...["--option", "Wait", "--project", "starbridge", "--session", "e2e"],
+    ],
+    machineHome,
+  );
+  const [holdId] = await holdAsk.waitFor(/d_[\w-]+/);
+  if ((await holdAsk.exited) !== 0) throw new Error("ask for the hold probe failed");
+  const askedAt = Date.now();
+  const held = async () =>
+    ((await pageB.evaluate(NOTIFICATIONS)) as { title: string }[]).filter((n) =>
+      n.title.startsWith("Hold probe"),
+    ).length;
+  // The browser in use lists it at once; the other hears nothing until the hold ends.
+  await page.locator(`button[data-id="${holdId}"]`).waitFor({ timeout: 15_000 });
+  while (Date.now() - askedAt < 10_000) {
+    await use();
+    if ((await held()) > 0) throw new Error("the second browser was notified during the hold");
+    await page.waitForTimeout(1_000);
+  }
+  while ((await held()) === 0) {
+    if (Date.now() - askedAt > 40_000) throw new Error("the held notification never came");
+    await page.waitForTimeout(1_000);
+  }
+  await page.locator(`button[data-id="${holdId}"]`).click();
+  await selected(page).getByRole("button", { name: /^Tag/ }).click();
+  await page.goto(`${ORIGIN}/settings`);
+  await choose(holdTime, "Off");
+
   step("replace the recovery key with the current one; the second browser says so once (#348)");
   await page.goto(`${ORIGIN}/settings`);
   const recoveryRow = page.getByRole("region", { name: "Devices" });
   await recoveryRow.getByText(/^Set .* on this browser$/).waitFor();
-  await recoveryRow.getByRole("link", { name: "Replace" }).click();
+  await follow(page, recoveryRow.getByRole("link", { name: "Replace" }), "/settings/recovery-key");
   await page.getByRole("heading", { name: "Replace the recovery key" }).waitFor();
   await page
     .getByText("Lost it? Without the current key it can't be replaced.", { exact: false })

@@ -1,6 +1,7 @@
 // The routes of PROTOCOL.md a device calls. Same origin, so the session cookie rides along; the
 // page and the service worker both use this.
 import {
+  type AccountSettings,
   CLIENT_HEADER,
   clientHeader,
   type PairingMessage,
@@ -302,6 +303,11 @@ export const api = {
   /** Asks every machine for a fresh snapshot; holds up to `wait` seconds for them. */
   askQuota: (wait: number) =>
     call<{ askedAt: string; behind: number }>("POST", `/quota/ask?wait=${wait}`),
+  /** Whether the owner sits at this page (#848): one bit. */
+  presence: (present: boolean) => call<void>("PUT", "/presence", { body: { present } }),
+  settings: () => call<AccountSettings>("GET", "/settings"),
+  saveSettings: (settings: AccountSettings) =>
+    call<AccountSettings>("PUT", "/settings", { body: settings }),
   post: (item: SealedItem) => call<{ cursor: string }>("POST", "/items", { body: item }),
 
   vapid: async () => (await call<{ publicKey: string }>("GET", "/push/vapid")).publicKey,

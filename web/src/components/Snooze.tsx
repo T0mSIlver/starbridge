@@ -17,7 +17,7 @@ import s from "./Snooze.module.css";
 import ui from "./ui.module.css";
 
 /**
- * "Snooze" and its times (#571, #699), up to 7 days ahead. Quiet, as Reply: putting a question off
+ * "Snooze" and its times (#571, #699), up to 7 days ahead. Quiet, as Done: putting a question off
  * is never the default.
  */
 export function SnoozeMenu({

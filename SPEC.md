@@ -376,6 +376,19 @@ provider plugins add providers, not panels.
   pushes were failing anyway.
 - An Android app in front syncs every 10 s until a push has reached it (#445), since a server
   without a relay or UnifiedPush pushes nothing and cannot tell.
+- **Held pushes** (#848). A question that shows in the agent's picker and on the owner's screen
+  needed no buzz on the phone too: a quick back and forth at the desk did that. So while any of
+  the owner's machines or devices says they sit at its screen, the push of a question, a
+  permission prompt or a waiting flip waits the account's hold time (30 s by default, off to
+  2 minutes in Settings) for every device not itself in use, and goes only if nothing answered it
+  meanwhile. Only the push waits, never the item: every device lists it at once, and a held card
+  looks like any other, since the owner chose no state that flips while they look. With no presence
+  signal, which is every older client, pushes go at once as before. The server reads presence as
+  one bit per source, in memory, since the hold is all it is for: no idle time, lock state or
+  reason, nothing on disk, and a restart means push now. Presence counts per person, so a Mac in
+  use holds a question from a headless dev box. The hold is one account setting, since the server
+  applies it and it is about the person, not a device. PROTOCOL.md, "Held pushes", has the
+  timings.
 
 ## Machines
 
@@ -419,6 +432,16 @@ provider plugins add providers, not panels.
   reads the user's: `STARBRIDGE_CONFIG_DIR` and `CODEX_HOME` reach it only as user environment
   variables. Windows has no SIGTERM: a stopped hook dies without settling its prompt, and the
   next `Stop` hook settles it.
+- **Presence** (#848), opt-in per machine with `starbridge config presence on`, since a machine
+  reports when its owner is at it: every 10 s the agent reads the screen's lock and the time
+  since its last input, the number the OS keeps for its screensaver, and sends the server only
+  "present" (unlocked, input in the last minute) or not, again every 30 s while present. macOS
+  reads `ioreg` (`CGSSessionScreenIsLocked`, `HIDIdleTime`); Windows keeps one PowerShell
+  running, since each start costs about a second of CPU, for `GetLastInputInfo` and whether the
+  lock screen (`LogonUI`) runs in its session; Linux takes logind's active graphical session and
+  its `LockedHint`, and GNOME's idle monitor or `xprintidle`, since logind's `IdleHint` flips only
+  after the desktop's idle delay, minutes. A headless box finds no graphical session and sends
+  nothing. Nothing reads what is typed.
 - **Answers on the machine** (#260). A machine accepts an answer only from a device the question
   was sealed to, only while it is open, and for an `answerIn` question only a Done, when it asked
   for one (#539). A settled question's
@@ -480,8 +503,9 @@ provider plugins add providers, not panels.
   mid-output reads as a prompt. Claude Code and Pi, whose installs run for seconds, first print
   `installing…` (#773). It still asks before installing CodexBar, a
   third-party binary (with #748, only when no other machine sends quotas), which providers to
-  send, whether to linger, and whether to send a test decision. Permission prompts stay off and
-  unasked; the summary names `starbridge config permissions on`, `starbridge status`,
+  send, whether to linger, and whether to send a test decision. Permission prompts and presence
+  stay off and unasked; the summary names `starbridge config permissions on`, on a desktop or
+  laptop `starbridge config presence on`, `starbridge status`,
   `starbridge uninstall --agent <name>` and `starbridge uninstall`. With no terminal every
   question takes its default, so nothing waits on input. A failed install prints its reason and
   `starbridge setup --agent <name>`, and setup goes on. Every step after pairing needs the
@@ -522,7 +546,10 @@ provider plugins add providers, not panels.
   allows a bash ask itself when the whole typed line, from the ask's "full command" evidence, is
   one of those commands with only words, flags, quoted strings and line-joining backslashes; an ask
   without evidence, or from a shell tool under another name, goes to the owner. `starbridge run` is left out,
-  since the command it wraps is the agent's own. Uninstall removes exactly what setup added.
+  since the command it wraps is the agent's own. So Codex asks at the keyboard to run it outside
+  the sandbox, and the skill has it ask on the first call: run in the sandbox first, the command
+  ran unreported, then again once approved (#831). A `prompt` rule only adds an approval: Codex
+  still runs the command in the sandbox first. Uninstall removes exactly what setup added.
 - **Docs** (#211) at `/docs` are the repository's Markdown files listed in `web/src/lib/docs.ts`,
   rendered by the web page. Links between them become `/docs` links; other relative links go to
   GitHub. Images are screenshots under `web/public`, served from the site root, so GitHub shows
@@ -565,8 +592,8 @@ line, the safe side: at worst a prompt repeats an answer the agent already read.
 
 | Harness | Delivery |
 |---|---|
-| Claude Code, interactive | The mod (`mod/`) long-polls the local agent's socket in 25 s cycles and submits each answer with `$.prompt.submit` |
-| `claude -p` | `wait`, since mods run only in interactive sessions (#321) |
+| Claude Code: terminal, desktop app's Code tab, IDEs | The mod (`mod/`) long-polls the local agent's socket in 25 s cycles and submits each answer with `$.prompt.submit` |
+| `claude -p`, Agent SDK scripts | `wait`: the run ends with its last turn, so the mod starts no loop there (#321) |
 | Codex TUI | The local agent runs `codex queue --thread <id>`; the message only says to run `starbridge wait <id>`, since other local users can read process arguments (#274). Retried each minute, 30 times |
 | `codex exec` | `wait`: nothing runs a queued message once exec returns. The thread's rollout tells exec apart (#245) |
 | Pi TUI and RPC | The Pi extension (`mod/pi`) calls `pi.sendUserMessage(text, { deliverAs: "followUp" })` (#232) |
@@ -579,6 +606,13 @@ line, the safe side: at worst a prompt repeats an answer the agent already read.
   re-reads the session id before submitting, so an answer that arrives during `/clear` waits for
   the session that asked; `/resume` keeps polling under the resumed id. Without a local agent the mod
   falls back to polling through the CLI, and both paths share the set of submitted lines.
+- **Which sessions run the mod's loop** (#863). Claude Code tells a mod whether a person is at
+  the prompt, and says no both for `claude -p` and for sessions a host such as Claude desktop's
+  Code tab or an IDE runs through the SDK. The mod tells them apart by `CLAUDE_CODE_ENTRYPOINT`:
+  it starts its loop in an interactive session, or one whose entry point is set and is not
+  `sdk-cli` (`claude -p`), `sdk-ts` or `sdk-py` (Agent SDK scripts). A loop in a run that ends
+  early costs nothing, since `ask` still prints the `wait` line for an unattended session.
+  `starbridge status` run from a session whose mod never called says so.
 - **Which harness asked** (#319, #320). Harnesses pass their variables to processes they start, so
   `ask` takes Codex, Pi or opencode over Claude Code when both are set, unless Claude Code runs as `claude
   -p`, the only way Codex and Pi start it. A Codex sub-agent asks under its root thread, since
@@ -614,10 +648,22 @@ line, the safe side: at worst a prompt repeats an answer the agent already read.
 
 ### The harness's own ask tool
 
-- Claude Code (#121, #200): a `PreToolUse` hook on `AskUserQuestion` allows the call with
-  `updatedInput.answers` that say to ask through `starbridge ask`. A deny would show as a red hook
-  error. It lets the question through when the machine is unpaired or the server does not answer
-  within 3 s.
+- Claude Code (#848): the picker races the devices, as permission prompts do. The question shows
+  in Claude Code's own picker (terminal, desktop app, the Claude app through Remote Control) and
+  on the devices at once; the first answer wins and the other side is settled `elsewhere`. Until
+  #848 a `PreToolUse` hook answered the call with "ask through `starbridge ask`" (#121, #200), so a
+  quick question at the desk still went only to the phone. The picker is a permission dialog, so
+  the plugin's `PermissionRequest` hook takes it whatever the permissions setting: one waiting
+  card per question, held from the session's answer loop, and once each has a device's answer it
+  allows the call with those answers, which closes the picker (a multi-select answer
+  comma-joined, as Claude Code's own). An answer in the picker sends the hook nothing, so
+  `PostToolUse` on `AskUserQuestion` settles the cards; Esc sends SIGTERM, as does Claude Code's
+  hook timeout, so the hook has its own entry with a day's timeout and withdraws its cards 10
+  minutes before it, when no answer could reach the picker any more. The generic
+  `PermissionRequest` entry excludes `AskUserQuestion` by its matcher. The `PreToolUse` entry
+  stays one release and the new CLI's `hook ask-user` prints nothing, so a newer plugin over an
+  older CLI still redirects, and a newer CLI under an older plugin races through the generic
+  entry, withdrawing its cards after 570 s.
 - opencode (#345): each `question` call becomes one Starbridge question per question, already
   waiting, and the answers go back into the call through `POST /question/{id}/reply`. The first
   answer, on a device or at the keyboard, wins; the other side is settled `elsewhere`. A question
@@ -631,12 +677,12 @@ gain is every session, machine and agent in one place. `starbridge config permis
 Codex prompts are not supported.
 
 - **Claude Code** (#57). A `PermissionRequest` command hook (600 s) races the dialog. Its input has
-  no `tool_use_id`, so the hook settles a call by the hash of its `tool_input` on `PostToolUse` and
-  `PermissionDenied`, and all of a session's prompts on `Stop` and `SessionEnd`. `PostToolUse` runs
-  a shell check that starts the CLI only while the CLI marks an unexpired prompt open
-  (`<config>/permissions-open`, written with the state): starting it on every tool call cost about
-  50 ms and 50 MB, prompts on or off
-  (#517). "This session" and "always" are offered only
+  no `tool_use_id`, so the hook settles a call by the hash of its `tool_input` on `PostToolUse`,
+  `PostToolUseFailure` and `PermissionDenied` (a call that runs and fails fires only
+  `PostToolUseFailure`, #847), and all of a session's prompts on `Stop` and `SessionEnd`. Both
+  tool hooks run a shell check that starts the CLI only while the CLI marks an unexpired prompt
+  open (`<config>/permissions-open`, written with the state): starting it on every tool call cost
+  about 50 ms and 50 MB, prompts on or off (#517). "This session" and "always" are offered only
   for `addRules` and `addDirectories` suggestions whose rules fit in full; a `setMode` suggestion
   changes more than the call, so it stays at the keyboard. A deny with no message tells the agent
   the owner denied it.
@@ -667,7 +713,12 @@ Codex prompts are not supported.
 - **The first option is the agent's default** (#191), its proposal with no timer: listed first,
   the one amber button. `recommended` names it when it isn't first.
 - **Typed replies** (#201). Every question with options also takes a typed reply, as a steer to act
-  on. It goes alone, with no choice.
+  on. It goes alone, with no choice. Its field is always open under the options, in the detail
+  (web) and the sheet (Android), so typing costs one tap, as a pick does (#849): the owner often
+  steers an agent this way ("show me two other mockups"), and a Reply button that opened the field
+  made it a second-class answer. Cards in the list keep only the options, so they stay one-tap
+  and short. The owner chose this from mockups over a full-width Reply button and a mic in the
+  field; the field reads "Your answer" on both clients.
 - **Images** (#62, #170, #685): at most 4, PNG or JPEG, never SVG. The CLI keeps a file as is up
   to a 3000 px edge and 384 KB, so a phone screenshot reaches every device unchanged and viewers can zoom into real
   pixels. Android decodes by the image's real size, drops one larger than declared or 8192 px a
@@ -736,9 +787,10 @@ Codex prompts are not supported.
 ### Runs
 
 - `starbridge run --title <t> --reason <r> -- <command>` (#60). The reason is required: it tells
-  the owner why this run is theirs to watch. The run posts its start, progress at most every 10 s,
-  a heartbeat every minute and its exit. Output goes through a pipe, so tools that print progress
-  only to a terminal show none.
+  the owner why this run is theirs to watch. The run posts its start, its first progress right
+  after it, later progress at most every 10 s, a heartbeat every minute and its exit; a first
+  progress held back 10 s left a run that opens on `[0/5]` with an indeterminate bar (#828).
+  Output goes through a pipe, so tools that print progress only to a terminal show none.
 - Devices call a run lost 3 minutes after its last update (#190, #249); the server cannot read a
   sealed run, so this is client-side. A lost run shows "Lost, no news for 3 min 37 s" and no
   elapsed time, since its last news may predate most of its life. A run with no progress shows an
@@ -753,6 +805,8 @@ Codex prompts are not supported.
   dismissed run out locally until a newer update, so a server without the route still hides it
   on that phone.
 - Android shows a notification per run, a Live Update on Android 16; dismissing a run closes it.
+  Its progress ("34 of 120", "40%") leads the title: at the end, a long title's ellipsis hid it,
+  and the collapsed notification shows no text line under a progress bar (#826).
   The web polls every 2 s while a run is live and the page is visible, else every 10 s.
 
 ### Quotas
@@ -809,8 +863,8 @@ first window, so a provider with a window running out leads.
   thing, the amber fill. A waiting item's title is weight 500 and its time slot a clock ticking
   from when it started waiting; screen readers hear "Waiting for you, 2 minutes" first. No state
   tag anywhere. Under a grouping, the items under one header are joined.
-- **Snoozed** (#571, #692, #699). Snooze sits beside Reply in a question's detail (web) and sheet
-  (Android), never on a notification. Most snoozes are for later the same day, so it opens on
+- **Snoozed** (#571, #692, #699). Snooze sits under the reply field in a question's detail (web)
+  and sheet (Android), never on a notification. Most snoozes are for later the same day, so it opens on
   today: 1 hour and This evening (18:00, offered until 17:00), then the days as chips (today and
   the 7 after it) and a time an hour ahead, up to the half hour (9:00 on another day), from 5
   minutes on, confirmed by "Snooze until 15:00". Android sets the time on a dial; the web types
@@ -847,7 +901,7 @@ first window, so a provider with a window running out leads.
   crop, no frame. With one image per option, two or more, each image sits over its option's
   button in equal columns, in the agent's order: its own shape, no wider than the button and at
   most `size.pick` tall, the row's images centred on one midline so the buttons line up. The owner
-  chose both from mockups. "Reply" sits under them, as under plain options.
+  chose both from mockups. The reply field sits under them, as under plain options.
 - **Signed out.** A browser that holds no device of the account it last signed in to gets the
   landing page at `/`, as does a revoked browser (#209); one with a device gets sign-in.
 - **Restarts go unnoticed** (#250). Clients retry a 502, 503 or refused connection quietly for
@@ -919,6 +973,10 @@ first window, so a provider with a window running out leads.
   brings the question back. Let go earlier and the card springs back. The owner chose one
   direction and a set time, so a snooze is one gesture; asking stays a setting. Screen readers
   get a Snooze action instead.
+- **Presence** (#848). The app in front and touched in the last minute holds the other devices'
+  pushes, as a web page in use does: the owner chose this, since a phone in hand is a screen in
+  use as much as a Mac. It counts a touch or key down, never which. Settings → Notifications
+  sets the account's hold time, as the web's Settings does.
 - Pull to refresh shows only on the screen that was pulled.
 - **Update screen** (#497): when the server answers 426 `client-too-old`, the app shows only
   "Update Starbridge", the server's minimum and this phone's release, and one button back to
@@ -980,11 +1038,19 @@ Tokens, type and components: `DESIGN.md`.
   `packageManager`'s version, since node slim images ship no corepack (#430).
 - **CI** (#380). Main runs one at a time; a newer merge replaces the waiting run, and the head's
   deploy covers the merges in between. A pull request runs only the jobs its files can affect;
-  skipped jobs still report success. The e2e runs under `.github/watchdog.sh`. Tests point
+  skipped jobs still report success. The e2e runs under `.github/watchdog.sh`. A merge to main
+  skips the e2e when a run from this repository already passed it on the same git tree, most often
+  the pull request's last run on its merge with the commit main then held (#878): a tree fixes every
+  file, `ci.yml` included, so that run tested what main now holds. Each passing e2e uploads an
+  artifact named after its tree, kept 7 days; when none is found or the lookup fails, it runs. A
+  fork's runs do not count, since a fork's pull request runs its own `ci.yml`. Tests point
   `TMPDIR` at one directory per run and remove it (`test-tmp.ts`, #313). A `windows-latest` job
   (#552) runs the CLI's platform tests and starts a built `.exe`; the rest of the CLI suite runs
   there without failing the job until it passes. A private repository skips it, since GitHub's
-  Windows runners need a public one or paid minutes.
+  Windows runners need a public one or paid minutes. A `macos-latest` job (#877), skipped the same
+  way, starts a built binary and runs the whole CLI suite, which must pass: the launchd service and
+  the screen readers run only on a Mac, so the real launchd starts and stops the agent there.
+  Both jobs run each test file alone and kill one that hangs (`cli/scripts/test-each.ts`, #862).
 - **Monitoring.** `uptime.yml` checks `/healthz`, `/healthz/backup` (fails when the last nightly
   backup is over 26 h old) and `/healthz/disk` (under 2 GB free), and opens one `outage` issue.
 

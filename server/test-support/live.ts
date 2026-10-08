@@ -265,6 +265,11 @@ export class LiveServer {
     ).n;
   }
 
+  /** The members the server counts present now (#848). */
+  present(): string[] {
+    return this.s.deps.presence.present(this.owner.id);
+  }
+
   /** The phone revokes a member. */
   async revoke(id: string) {
     const r = await revoke(this.s, this.owner, id);

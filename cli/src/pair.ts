@@ -181,15 +181,18 @@ export async function pair(
 function addedAt(entries: unknown[], id: string): string | undefined {
   for (const e of entries as { body: string }[]) {
     const body = JSON.parse(e.body) as { op: string; at: string; member?: { id: string } };
-    if (body.op === "add" && body.member?.id === id)
-      return new Date(body.at).toLocaleString(undefined, {
-        month: "short",
-        day: "numeric",
+    if (body.op === "add" && body.member?.id === id) {
+      // Day and time apart, as Devices joins them: one call puts "at" between them on macOS.
+      const at = new Date(body.at);
+      const day = at.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+      const time = at.toLocaleTimeString(undefined, {
         hour: "2-digit",
         minute: "2-digit",
         // A sandbox or container often runs in UTC while Devices shows the viewer's zone.
         timeZoneName: "short",
       });
+      return `${day}, ${time}`;
+    }
   }
 }
 

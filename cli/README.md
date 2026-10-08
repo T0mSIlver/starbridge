@@ -231,6 +231,21 @@ To upload without the service:
 starbridge quota push --provider claude --provider codex
 ```
 
+### Quiet the phone while you're here
+
+On a desktop or laptop you work at, turn on presence:
+
+```bash
+starbridge config presence on
+```
+
+While this machine's screen is unlocked and had keyboard or mouse input in the last minute,
+notifications on your other devices wait for the time set in Starbridge's Settings (30 s by
+default) and come only if the question is still open, so one you answer here doesn't buzz your
+phone. The question itself shows everywhere at once. The machine reads its lock and idle time
+itself and tells the server only yes or no. It works on macOS, Windows, and Linux under GNOME
+or X11 with `xprintidle`; a machine with no screen sends nothing.
+
 ### Permission prompts
 
 Permission prompts from Claude Code, opencode and Pi stay at the keyboard until you turn them on
@@ -274,9 +289,10 @@ Keys and state live in `~/.config/starbridge` (or `$XDG_CONFIG_HOME/starbridge`,
 `$STARBRIDGE_CONFIG_DIR`), readable only by you. `starbridge config` prints this machine's
 settings.
 
-The Claude Code plugin's hooks call `starbridge hook …`. One of them turns Claude Code's
-`AskUserQuestion` into `starbridge ask`, so the question reaches you away from the terminal; if
-the machine is not paired or the server doesn't answer, it lets the question through. The
+The Claude Code plugin's hooks call `starbridge hook …`. When Claude Code opens its
+`AskUserQuestion` picker, `starbridge hook permission` posts the question to your devices too:
+the first answer, in the picker or on a device, wins, and the other closes as answered
+elsewhere. If the machine is not paired or the server can't be reached, only the picker asks. The
 opencode plugin runs `starbridge hook question --agent opencode` on each call of opencode's
 `question` tool: it posts each question to your devices and prints the answers for opencode,
 or nothing if the terminal answers first or the server can't be reached.

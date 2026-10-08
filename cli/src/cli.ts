@@ -169,24 +169,29 @@ const HELP = `starbridge: post decisions to your devices, report runs, upload qu
       The commands above go through it when it runs, and to the server directly when not
       (or with STARBRIDGE_NO_AGENT=1).
 
-  starbridge config [permissions on|off] [machine-kind server|desktop|laptop|cloud]
+  starbridge config [permissions on|off] [presence on|off] [machine-kind server|desktop|laptop|cloud]
       Print this machine's settings, or change one. permissions: send its Claude Code
       permission prompts to your devices, where they can be allowed or denied; the prompt
       stays open at the keyboard and the first answer wins. Off by default; while off, the
-      starbridge plugin's permission hook exits at once. machine-kind: the icon devices
-      show, detected by setup.
+      starbridge plugin's permission hook exits at once. presence: while this machine's
+      screen is unlocked and had keyboard or mouse input in the last minute, notifications
+      on your other devices wait a few seconds, so a question you answer here doesn't buzz
+      your phone; the server hears only yes or no. Off by default. machine-kind: the icon
+      devices show, detected by setup.
 
   starbridge hook permission --agent claude-code|pi|opencode [--wait 570s]
   starbridge hook settle --agent claude-code
-      For Claude Code's PermissionRequest hook, and for its PostToolUse, PermissionDenied,
-      Stop and SessionEnd hooks: hook JSON on stdin; prints the hook's decision, or nothing
+      For Claude Code's PermissionRequest hook, and for its PostToolUse, PostToolUseFailure,
+      PermissionDenied, Stop and SessionEnd hooks: hook JSON on stdin; prints the hook's decision, or nothing
       to leave the prompt to the keyboard. The Starbridge Pi extension runs it with --agent pi
-      for pi-permission-system's prompts, the opencode plugin with --agent opencode.
+      for pi-permission-system's prompts, the opencode plugin with --agent opencode. On
+      Claude Code's AskUserQuestion it posts each question to your devices, whatever the
+      permissions setting, and prints the first device answers as the picker's; an answer
+      in the picker settles them.
 
   starbridge hook ask-user
-      For Claude Code's PreToolUse hook on AskUserQuestion: hook JSON on stdin; answers each
-      question by telling the agent to use \`starbridge ask\`; prints nothing, which lets it
-      through, when this machine is not paired or the server does not answer.
+      For Claude Code's PreToolUse hook on AskUserQuestion, from older plugins: prints
+      nothing, so the picker opens and hook permission races it.
 
   starbridge hook question --agent opencode
       For the Starbridge opencode plugin, on each call of opencode's question tool: posts each
@@ -545,7 +550,7 @@ export async function run(argv: string[], ctx: Ctx): Promise<number> {
         });
         if (sub === "permission") return await hookPermission(ctx, readText("-"), values);
         if (sub === "settle") return await hookSettle(ctx, readText("-"), values);
-        if (sub === "ask-user") return await hookAskUser(ctx, readText("-"));
+        if (sub === "ask-user") return hookAskUser();
         if (sub === "question") return await hookQuestion(ctx, readText("-"), values);
         throw new UsageError(
           "usage: starbridge hook permission|settle --agent claude-code, starbridge hook ask-user, or starbridge hook question --agent opencode",

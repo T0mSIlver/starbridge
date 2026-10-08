@@ -203,7 +203,18 @@ CREATE TABLE usage_days (
 /** An account the owner suspended for abuse: its machines' writes are refused (#785). */
 const V2 = "ALTER TABLE accounts ADD COLUMN suspended_at TEXT;";
 
-export const MIGRATIONS = [V1, V2];
+/**
+ * Held pushes (#848): the account's hold time in seconds (unset is the default), and on an item
+ * whose push waits, when it is due and the devices it waits for (a JSON array).
+ */
+const V3 = `
+ALTER TABLE accounts ADD COLUMN push_hold INTEGER;
+ALTER TABLE items ADD COLUMN hold_due TEXT;
+ALTER TABLE items ADD COLUMN hold_to TEXT;
+CREATE INDEX items_hold_due ON items (hold_due) WHERE hold_due IS NOT NULL;
+`;
+
+export const MIGRATIONS = [V1, V2, V3];
 
 /** The `user_version` this server brings a database to. */
 export const SCHEMA_VERSION = MIGRATIONS.length;

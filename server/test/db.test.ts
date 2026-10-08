@@ -3,7 +3,7 @@ import { expect, test } from "bun:test";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { MIGRATIONS, migrate, openDb } from "../src/db";
+import { MIGRATIONS, migrate, openDb, SCHEMA_VERSION } from "../src/db";
 import { OLD_MIGRATIONS } from "./fixtures/migrations-v1-v6";
 
 const version = (db: Database) =>
@@ -80,10 +80,24 @@ test("V2 adds suspended_at to the accounts of a V1 database, none suspended (#78
   );
   v1.close();
   const db = openDb(path);
-  expect(version(db)).toBe(2);
+  expect(version(db)).toBe(SCHEMA_VERSION);
   expect(db.query("SELECT id, suspended_at FROM accounts").all()).toEqual([
     { id: "a1", suspended_at: null },
   ]);
+});
+
+test("V3 leaves every account on the default hold and no item held (#848)", () => {
+  const path = join(mkdtempSync(join(tmpdir(), "sb-db-")), "db.sqlite");
+  const v2 = new Database(path);
+  migrate(v2, MIGRATIONS.slice(0, 2));
+  v2.run(
+    "INSERT INTO accounts (id, github_id, created_at) VALUES ('a1', 1, '2026-10-08T00:00:00Z')",
+  );
+  v2.close();
+  const db = openDb(path);
+  expect(version(db)).toBe(3);
+  expect(db.query("SELECT push_hold FROM accounts").all()).toEqual([{ push_hold: null }]);
+  expect(db.query("SELECT hold_due, hold_to FROM items").all()).toEqual([]);
 });
 
 test("a write that reads first waits for another connection's write lock", async () => {

@@ -19,10 +19,32 @@
             "command": "sh \"${CLAUDE_PLUGIN_ROOT}/hooks/cli.sh\" hook permission --agent claude-code",
             "timeout": 600
           }
+        ],
+        "matcher": "^(?!AskUserQuestion$).*"
+      },
+      {
+        "matcher": "AskUserQuestion",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/hooks/cli.sh\" hook permission --agent claude-code --wait 85800s",
+            "timeout": 86400
+          }
         ]
       }
     ],
     "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/hooks/settle.sh\"",
+            "timeout": 30
+          }
+        ]
+      }
+    ],
+    "PostToolUseFailure": [
       {
         "hooks": [
           {

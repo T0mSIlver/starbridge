@@ -194,8 +194,8 @@ class ScreenshotTest(private val dark: Boolean) {
 
     @Test fun sheetWaiting() = capture("sheet-waiting") { QuestionSheet(fake.decisions.first { it.id == "d2" }) }
 
-    // "Reply" opened under the options: a typed answer in place of them (#201).
-    @Test fun sheetReply() = capture("sheet-reply", before = { compose.onNodeWithText("Reply").performClick() }) { QuestionSheet(fake.decisions.first { it.id == "d2" }) }
+    // A reply typed under the options, in place of them (#201); the field is always open (#849).
+    @Test fun sheetReply() = capture("sheet-reply", before = { compose.onNode(hasSetTextAction()).performTextInput("Only after the eval run") }) { QuestionSheet(fake.decisions.first { it.id == "d2" }) }
 
     @Test fun sheetPick() = capture("sheet-pick") { QuestionSheet(showcase.pick) }
 
@@ -280,7 +280,7 @@ class ScreenshotTest(private val dark: Boolean) {
     @Config(qualifiers = "w412dp-h2400dp-xxhdpi")
     @Test fun settings() = capture("settings") {
         Phone(Tab.Settings, 4) {
-            SettingsScreen(fake.windows, QuotaSettings(hidden = listOf("gemini"), notify = listOf("claude")), fake.members.size, Colours.Starbridge, fake.push, "https://starbridge.run", settingsActions)
+            SettingsScreen(fake.windows, QuotaSettings(hidden = listOf("gemini"), notify = listOf("claude")), fake.members.size, Colours.Starbridge, fake.push, "https://starbridge.run", settingsActions, pushHold = 30)
         }
     }
 
@@ -290,6 +290,13 @@ class ScreenshotTest(private val dark: Boolean) {
     @Test fun settingsNotificationsOff() = capture("settings-notifications-off", { notifications() }) { Phone(Tab.Settings, 4) { NotificationsOffSettings(InboxView()) } }
 
     @Test fun settingsNotificationsOffDismissed() = capture("settings-notifications-off-dismissed", { notifications() }) { Phone(Tab.Settings, 4) { NotificationsOffSettings(InboxView(remindOff = false)) } }
+
+    // The account's hold time (#848), under the notification rows.
+    @Test fun settingsHold() = capture("settings-hold", { compose.onNode(hasScrollToNodeAction()).performScrollToNode(hasText("Hold notifications while you’re at a screen")) }) {
+        Phone(Tab.Settings, 4) {
+            SettingsScreen(fake.windows, QuotaSettings(), fake.members.size, Colours.Starbridge, fake.push, "https://starbridge.run", settingsActions, pushHold = 30)
+        }
+    }
 
     @Composable
     private fun NotificationsOffSettings(inbox: InboxView) =
