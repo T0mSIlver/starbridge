@@ -45,11 +45,18 @@ async function record(path: string): Promise<Bun.Subprocess | undefined> {
     stdout: "pipe",
     stderr: "pipe",
   });
+  // scrcpy logs INFO lines to stdout and errors to stderr; read both to the end, so neither
+  // pipe fills and stalls it.
   let log = "";
-  for await (const chunk of p.stderr) {
-    log += new TextDecoder().decode(chunk);
-    if (/Recording started/i.test(log)) return p;
-  }
+  const { promise: started, resolve: ready } = Promise.withResolvers<boolean>();
+  const read = async (stream: ReadableStream<Uint8Array>) => {
+    for await (const chunk of stream) {
+      log += new TextDecoder().decode(chunk);
+      if (/Recording started/i.test(log)) ready(true);
+    }
+  };
+  Promise.all([read(p.stdout), read(p.stderr)]).then(() => ready(false));
+  if (await started) return p;
   throw new Error(`scrcpy stopped before recording:\n${log}`);
 }
 
