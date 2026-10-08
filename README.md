@@ -64,6 +64,8 @@ The script runs `starbridge setup`, which pairs the machine, installs Starbridge
 finds and ends by offering to send a test question to your phone. After Homebrew or npm, run
 `starbridge setup` yourself. [Start](https://starbridge.run/docs#start) goes on to your agent's
 first question.
+[One notification per question](https://starbridge.run/docs/notifications) turns off your
+agents' own notifications for what Starbridge already sends.
 
 ## What each agent supports
 
