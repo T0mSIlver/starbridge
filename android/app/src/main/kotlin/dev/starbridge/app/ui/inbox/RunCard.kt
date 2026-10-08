@@ -12,7 +12,10 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -30,6 +33,7 @@ import dev.starbridge.app.data.Run
 import dev.starbridge.app.ui.Sym
 import dev.starbridge.app.ui.Symbol
 import dev.starbridge.app.ui.elapsed
+import dev.starbridge.app.ui.theme.Sizes
 import dev.starbridge.app.ui.theme.Spacing
 import dev.starbridge.app.ui.theme.StarbridgeTheme
 import java.time.Instant
@@ -39,7 +43,7 @@ import java.time.Instant
  * it runs, then how it ended. No amber: a run needs nobody.
  */
 @Composable
-fun RunCard(run: Run, now: Instant, shape: Shape, modifier: Modifier = Modifier) {
+fun RunCard(run: Run, now: Instant, shape: Shape, modifier: Modifier = Modifier, onDismiss: (() -> Unit)? = null) {
     val scheme = MaterialTheme.colorScheme
     val colors = StarbridgeTheme.colors
     val type = StarbridgeTheme.type
@@ -59,11 +63,20 @@ fun RunCard(run: Run, now: Instant, shape: Shape, modifier: Modifier = Modifier)
                 Text(run.title, style = type.action.copy(lineHeight = 22.sp), color = scheme.onSurface)
             }
             Text(run.reason.replaceFirstChar { it.uppercase() }, style = type.small, color = scheme.onSurfaceVariant)
-            when (state) {
-                Run.State.Running -> run.progress?.let { Progress(it) } ?: Working()
-                Run.State.Passed -> Text("Passed", style = type.metaStrong, color = colors.ok)
-                Run.State.Failed -> Text("Failed, exit ${run.exitCode}", style = type.metaStrong, color = colors.bad)
-                Run.State.Lost -> Text("Lost, no news for ${elapsed(run.at, now)}", style = type.metaStrong, color = colors.fg3)
+            if (state == Run.State.Running) run.progress?.let { Progress(it) } ?: Working()
+            else Row(verticalAlignment = Alignment.CenterVertically) {
+                val (text, color) = when (state) {
+                    Run.State.Passed -> "Passed" to colors.ok
+                    Run.State.Failed -> "Failed, exit ${run.exitCode}" to colors.bad
+                    else -> "Lost, no news for ${elapsed(run.at, now)}" to colors.fg3
+                }
+                Text(text, style = type.metaStrong, color = color, modifier = Modifier.weight(1f))
+                // Tonal, as a card's secondary buttons are (DESIGN.md); it drops the run on every device (#827).
+                if (onDismiss != null) FilledTonalButton(
+                    onClick = onDismiss,
+                    colors = ButtonDefaults.filledTonalButtonColors(containerColor = colors.surface2, contentColor = scheme.onSurface),
+                    modifier = Modifier.heightIn(min = Sizes.tap),
+                ) { Text("Dismiss", style = type.action) }
             }
         }
     }

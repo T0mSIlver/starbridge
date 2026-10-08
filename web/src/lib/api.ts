@@ -291,6 +291,7 @@ export const api = {
     }),
   cancelJoin: (id: string) => call<void>("DELETE", `/joins/${encodeURIComponent(id)}`),
 
+  deleteItem: (id: string) => call<void>("DELETE", `/items/${encodeURIComponent(id)}`),
   items: (kind: string, after?: string, opts: { open?: boolean } = {}) =>
     call<{ items: Stored[]; cursor: string }>(
       "GET",

@@ -16,7 +16,7 @@ import {
 } from "@/lib/quotaSettings";
 import { runState } from "@/lib/runs";
 import { chimeForNew, unlockSound } from "@/lib/sound";
-import type { Device, InboxItem, PromptItem, PromptReply, Reply } from "@/lib/types";
+import type { Device, InboxItem, PromptItem, PromptReply, Reply, RunItem } from "@/lib/types";
 
 // The protocol code and libsodium load here, after the first paint.
 const load = () => import("@/lib/device");
@@ -52,6 +52,8 @@ export type Store = {
   answer: (item: InboxItem, reply: Reply) => Promise<void>;
   /** Puts the question off until `until` (#571), or brings it back now with the current time. */
   snooze: (item: InboxItem, until: string) => Promise<void>;
+  /** Drops a finished or lost run on every device, before its 30 minutes are up (#827). */
+  dismissRun: (item: RunItem) => Promise<void>;
   /** Replaces the context after a directory write (approve, revoke). */
   update: (ctx: Ctx) => void;
   refreshQuotas: () => Promise<void>;
@@ -556,6 +558,24 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     [ctx, refreshInbox, reload],
   );
 
+  const dismissRun = useCallback(
+    async (item: RunItem) => {
+      if (!ctx) return;
+      const id = item.run.id;
+      setRuns((all) => all && { ...all, items: all.items.filter((i) => i.run.id !== id) });
+      const d = await load();
+      try {
+        await d.dismissRun(ctx, id);
+      } catch (e) {
+        if (e instanceof d.ApiError && e.status === 401) reload();
+        throw e;
+      } finally {
+        await refreshRuns();
+      }
+    },
+    [ctx, refreshRuns, reload],
+  );
+
   const update = useCallback((next: Ctx) => setBoot({ state: "ready", ctx: next }), []);
 
   return (
@@ -569,6 +589,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         reload,
         answer,
         snooze,
+        dismissRun,
         update,
         refreshQuotas,
         askQuotas,
