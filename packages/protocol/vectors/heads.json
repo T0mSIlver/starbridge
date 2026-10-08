@@ -148,6 +148,44 @@
         "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":3,\"prev\":\"-OuggDedc2wqX-5inMAcJw5JoYeOVU9lXRN3UsUQi-Q\",\"at\":\"2026-10-04T11:10:00Z\",\"op\":\"recover\",\"member\":{\"id\":\"browser\",\"role\":\"device\",\"name\":\"Firefox on the Mac\",\"boxPk\":\"YDRufJEaX2uhVBKRdMr-dbKUrDu9VUljL0jOxiZvhBA\",\"signPk\":\"NLTZBDFWy23PC-sKKUm3VZyUDSvLbb6MU6mzAnjjp0Y\"}}",
         "sig": "jD-w_uiZDHe_61XWvJs0RwkLIswqTtGVbY449g8jWKFObQHYwKptjEFZKXuY7sbSofgEfDmrP9Y5MLUlGfcBCA"
       }
+    ],
+    "revokedThenRecovered": [
+      {
+        "v": 1,
+        "kind": "directory",
+        "signer": "phone",
+        "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":0,\"prev\":null,\"at\":\"2026-10-04T09:00:00Z\",\"op\":\"add\",\"member\":{\"id\":\"phone\",\"role\":\"device\",\"name\":\"Pixel\",\"boxPk\":\"GxtY3VDqFLYNoXt5DNAnVNlwybq4ZOuzwPMBb-UdP1c\",\"signPk\":\"1i8Bah79Hk_feT60LNhEceG6nwzwTRKHtcxx9hYofLg\"},\"recoveryPk\":\"JznWHYgiTwfyW3QHRuQQMAeZO0KtraqUwaucN6lQ0Yw\"}",
+        "sig": "0bkmgoHejRg8_DlnAWttqsPItFv9ts7Wv21VhCM4rfGmjeVJsgDIzCb7Nn5rv_-W6ywod1mTMyadSpqcpmPXAw",
+        "recoverySig": "WDZttnKRb24KcAwZHe_NbWzH2mozlK0zBGiqqp3mfBrahWgTAA0SAzwz3CPW1QHwpsaqrOiy0nD8TefuaQvTCQ"
+      },
+      {
+        "v": 1,
+        "kind": "directory",
+        "signer": "phone",
+        "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":1,\"prev\":\"rhZ06D9_KVi0e8KXZKkuBUMKp3W9wWE9_s1SpRhXAWY\",\"at\":\"2026-10-04T11:00:00Z\",\"op\":\"add\",\"member\":{\"id\":\"phone2\",\"role\":\"device\",\"name\":\"New Pixel\",\"boxPk\":\"7dA8regNKd5uoxOnSrNp9HMuyzZkkGa3i1st1mTLBBc\",\"signPk\":\"VLDYHQ-n0A5KfWAN-rpvKyIDWyL-M14X7fX5qluwUHQ\"}}",
+        "sig": "tLBa-ZmT6R0i9wiESrK7yBhnrtR6TO7yfk0EEMrrdvyuXqb4vq1scteY8OQNnaE-jTO2ttbxZ0apDMpzKCpEAg"
+      },
+      {
+        "v": 1,
+        "kind": "directory",
+        "signer": "phone",
+        "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":2,\"prev\":\"1YgNouS6FPTyNnqB9E9KFd29uE1Cl1fruNvwBhh6_iY\",\"at\":\"2026-10-04T11:05:00Z\",\"op\":\"add\",\"member\":{\"id\":\"devbox\",\"role\":\"machine\",\"name\":\"dev box\",\"boxPk\":\"deJw3ylSxXuoNnuoYYwXj5_lDbJ5nTBOdOkY2YVoYUY\",\"signPk\":\"EqQVksi3wX1AWeeym2Ho_5bHQV8vgDNI8vAX4Fueodo\"}}",
+        "sig": "5pXHWnVuwJeI2TgeYBoEx2kWmPKYgZS84ftQif-DGB3OC5J21ayhg6znpYCAuWQy3Mdaei3OR5hotreaF0w9Bw"
+      },
+      {
+        "v": 1,
+        "kind": "directory",
+        "signer": "phone",
+        "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":3,\"prev\":\"-OuggDedc2wqX-5inMAcJw5JoYeOVU9lXRN3UsUQi-Q\",\"at\":\"2026-10-04T11:10:00Z\",\"op\":\"revoke\",\"id\":\"devbox\"}",
+        "sig": "t3KR8cV-1_w-ll_Zpj9o3BVRHLB3SE-bLPDAxXUeIax6nR3j05wtl9vFS8jRF62My6IjoD4K1S2ED1wJF_e7Cg"
+      },
+      {
+        "v": 1,
+        "kind": "directory",
+        "signer": "recovery",
+        "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":4,\"prev\":\"i64zDhj1xz7Gt1MP_KiFD6gwjBXA9fzY8a9LN8SWImc\",\"at\":\"2026-10-04T11:15:00Z\",\"op\":\"recover\",\"member\":{\"id\":\"browser\",\"role\":\"device\",\"name\":\"Firefox on the Mac\",\"boxPk\":\"YDRufJEaX2uhVBKRdMr-dbKUrDu9VUljL0jOxiZvhBA\",\"signPk\":\"NLTZBDFWy23PC-sKKUm3VZyUDSvLbb6MU6mzAnjjp0Y\"}}",
+        "sig": "ScCFeqm6ytmex5he3LR8FDl4vi37DAu_CH9QXoxDbAVc1e0_mzz3DQ9BTuUZXnIIxFMBRHTbO1NndRQFABivDw"
+      }
     ]
   },
   "withheld": [
@@ -240,6 +278,17 @@
         }
       },
       "chain": "recovered",
+      "expect": null
+    },
+    {
+      "name": "a recover ends it for a member revoked before it",
+      "heads": {
+        "devbox": {
+          "length": 9,
+          "head": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        }
+      },
+      "chain": "revokedThenRecovered",
       "expect": null
     },
     {

@@ -2014,6 +2014,10 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
     forkRevokesMachine: grow(stale, (d) => revokeEntry(d, signer(phone2), "devbox", T(11, 10))),
     forkRevokesBy: grow(stale, (d) => revokeEntry(d, signer(phone2), "phone", T(11, 10))),
     recovered: grow(stale, (d) => recoverEntry(d, recovery.privateKey, browser.member, T(11, 10))),
+    revokedThenRecovered: grow(
+      grow(stale, (d) => revokeEntry(d, signer(phone), "devbox", T(11, 10))),
+      (d) => recoverEntry(d, recovery.privateKey, browser.member, T(11, 15)),
+    ),
   };
   type ChainName = keyof typeof chains;
   const dirOf = (c: ChainName) => verifyDirectory(chains[c]);
@@ -2055,6 +2059,11 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
         "a recover ends it",
         { devbox: H, "devbox/phone": { ...H, by: "phone" } },
         "recovered",
+      ),
+      withheldCase(
+        "a recover ends it for a member revoked before it",
+        { devbox: forged },
+        "revokedThenRecovered",
       ),
       withheldCase(
         "a by the chain does not list holds",

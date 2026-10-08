@@ -32,12 +32,23 @@ export function revocationOf(entries: unknown[], id: string): Revocation | undef
 
 /**
  * Whether a head that member `id` signed, or that names it as `by`, no longer counts: the chain
- * lists `id` as revoked and no `revoke` entry names it, so the recovery key's `recover` removed
- * it. A member signs no head past its own revocation, so a chain whose `revoke` comes before a
- * head that member signed forks from the one it saw; a `revoke` therefore ends nothing (#813).
+ * lists `id` as revoked, and a `recover` came after any `revoke` that names it. A member signs no
+ * head past its own revocation, so a chain whose `revoke` comes before a head that member signed
+ * forks from the one it saw; a `revoke` therefore ends nothing (#813). A `recover`, which only
+ * the recovery key signs, revokes every member and starts over: it ends every earlier hold.
  */
 function removed(dir: Directory, entries: unknown[], id: string): boolean {
-  return dir.members.get(id)?.active === false && !revocationOf(entries, id);
+  if (dir.members.get(id)?.active !== false) return false;
+  let revokedAt = -1;
+  let recoveredAt = -1;
+  entries.forEach((raw, i) => {
+    const env = SignedEnvelope.safeParse(raw);
+    if (!env.success) return;
+    const body = JSON.parse(env.data.body) as { op?: string; id?: string };
+    if (body.op === "revoke" && body.id === id) revokedAt = i;
+    if (body.op === "recover") recoveredAt = i;
+  });
+  return recoveredAt > revokedAt;
 }
 
 /**
