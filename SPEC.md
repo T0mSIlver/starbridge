@@ -929,11 +929,13 @@ Tokens, type and components: `DESIGN.md`.
 - **Releases** (#64). A `v1.2.3` or `v1.2.3-rc.4` tag runs `release.yml`: the APK and AAB signed
   with the release key, six CLI binaries (Linux and macOS, and Windows `.exe`, each x64 and
   arm64, cross-compiled by Bun on Linux), `SHA256SUMS` signed with minisign in CI (public key in
-  `cli/minisign.pub`), `install.sh`, and notes from merged PRs. `-rc` tags are prereleases and go
+  `cli/minisign.pub`), `install.sh`, `install.ps1`, and notes from merged PRs. `-rc` tags are prereleases and go
   to npm under `next`. Non-rc tags commit the formula to `T0mSIlver/homebrew-starbridge`. npm
   takes the package through Trusted Publishing: the `npm` job trades its GitHub OIDC token for a
-  publish token, so no npm token exists to leak or expire, and npm adds provenance once the repo is
-  public. npm accepts OIDC only from GitHub's runners, so that job ignores `vars.RUNNER` (#146).
+  publish token, so no npm token exists to leak or expire, and `npm publish --provenance` adds
+  provenance. npm's trusted publisher must allow `npm publish`, not only staging. When a tag's npm
+  job fails, a manual run with `npm_only` publishes that tag to npm alone (#820). npm accepts OIDC
+  only from GitHub's runners, so that job ignores `vars.RUNNER` (#146).
   versionCode is `2000000 + MAJOR*1000000 + MINOR*10000 +
   PATCH*100` plus the rc number or 99, so release candidates sort first; the 2000000 keeps 0.1.0
   above 1.0.0-rc.1 (1000001), which Play's closed test already had (#551). Play App Signing keeps the release

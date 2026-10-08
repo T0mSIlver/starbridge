@@ -102,7 +102,8 @@ Starbridge works with Claude Code 2.1.287 or later, Codex, Pi and opencode.
 
 The recovery key adds a new device to your account when you have lost every device. The first
 device you sign in on shows it once. Store it somewhere safe, away from your devices, such as a
-password manager or paper. Replacing the key needs the current one, so a lost key is gone for good,
+password manager or paper; the Android app can copy it, clearing the clipboard after a minute,
+or save it to a password manager. Replacing the key needs the current one, so a lost key is gone for good,
 but you keep using the devices you have.
 
 To replace the key, pick Replace next to Recovery key: on the web under Settings → Devices, in the
