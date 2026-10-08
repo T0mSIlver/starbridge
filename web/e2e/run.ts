@@ -63,6 +63,26 @@ function step(text: string) {
 }
 
 /**
+ * Follows a link to `path`. Right after a navigation a click now and then does nothing, as with
+ * `choose` (#879: the Replace link of the recovery key left the page on Settings), so this clicks
+ * again until the address is `path`.
+ */
+async function follow(page: Page, link: Locator, path: string) {
+  for (let tries = 1; ; tries++) {
+    await link.click();
+    try {
+      await page.waitForURL((u) => u.pathname === path, { timeout: 5_000 });
+      return;
+    } catch (e) {
+      if (tries === 3) throw e;
+      console.log(
+        `follow: still at ${new URL(page.url()).pathname} after click ${tries}, clicking again`,
+      );
+    }
+  }
+}
+
+/**
  * Picks an option of a Settings segmented control. Its radio hides inside the segment, which
  * takes the click. Right after a navigation the click now and then leaves the radio as it was
  * (#693, #758), so this clicks again until the radio is checked. It waits for the checked state
@@ -1647,7 +1667,8 @@ async function main() {
     machineHome,
   );
   await snoozeWait.waitFor(
-    /Snoozed d_\S+ \(Snooze probe: ship the docs\?\) until \S+: no answer before then\./,
+    // "until 19:16", or "until tomorrow 00:02" when it ends after midnight.
+    /Snoozed d_\S+ \(Snooze probe: ship the docs\?\) until (?:tomorrow )?\d\d:\d\d: no answer before then\./,
   );
   if ((await snoozeWait.exited) !== 3) throw new Error("wait on a snoozed question did not exit 3");
   // At its time the server pushes every device once: one notification, back from snooze.
@@ -1720,7 +1741,7 @@ async function main() {
   await page.goto(`${ORIGIN}/settings`);
   const recoveryRow = page.getByRole("region", { name: "Devices" });
   await recoveryRow.getByText(/^Set .* on this browser$/).waitFor();
-  await recoveryRow.getByRole("link", { name: "Replace" }).click();
+  await follow(page, recoveryRow.getByRole("link", { name: "Replace" }), "/settings/recovery-key");
   await page.getByRole("heading", { name: "Replace the recovery key" }).waitFor();
   await page
     .getByText("Lost it? Without the current key it can't be replaced.", { exact: false })
