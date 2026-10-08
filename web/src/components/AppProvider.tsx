@@ -391,12 +391,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     };
   }, [ctx, fetchQuotas]);
 
+  // Runs dismissed on this page, with the update dismissed: a read that started before the
+  // DELETE must not bring one back, while a newer update from its machine does.
+  const dismissed = useRef(new Map<string, string>());
   const refreshRuns = useCallback(async () => {
     const fresh = await current();
     if (!fresh) return;
     const d = await load();
     const next = await holding(() => d.loadRuns(fresh));
-    if (next) setRuns(next);
+    if (next) setRuns(undismissed(next, dismissed.current));
   }, [current, holding]);
 
   const runLive = !!runs?.items.some((i) => runState(i.run, Date.now()) === "running");
@@ -562,7 +565,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     async (item: RunItem) => {
       if (!ctx) return;
       const id = item.run.id;
-      setRuns((all) => all && { ...all, items: all.items.filter((i) => i.run.id !== id) });
+      dismissed.current.set(id, item.run.at);
+      setRuns((all) => all && undismissed(all, dismissed.current));
       const d = await load();
       try {
         await d.dismissRun(ctx, id);
@@ -606,6 +610,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       {children}
     </Ctx_.Provider>
   );
+}
+
+function undismissed(runs: Runs, dismissed: Map<string, string>): Runs {
+  const hidden = (r: RunItem["run"]) => {
+    const at = dismissed.get(r.id);
+    return at !== undefined && Date.parse(r.at) <= Date.parse(at);
+  };
+  return { ...runs, items: runs.items.filter((i) => !hidden(i.run)) };
 }
 
 export function useApp(): Store {
