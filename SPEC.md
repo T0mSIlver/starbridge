@@ -1004,6 +1004,11 @@ Tokens, type and components: `DESIGN.md`.
   address is blocked as its /64, as the rate limits count it, and nothing wider than a /8 (IPv4)
   or /32 (IPv6) is accepted. The block list is the one place an address is written to disk, until
   it is unblocked; `/privacy` says so.
+- **Suspending an account** (#785). The owner can suspend one account whose machines flood the
+  server (a looping agent, or abuse) without deleting it: its machines' writes get 403
+  `account-suspended`, which the CLI prints with its reason, while they still read and wait, and
+  its phones and browsers work as before, so its owner can still answer, settle and revoke.
+  `bun server.js suspend|unsuspend ACCOUNT`, stored as `accounts.suspended_at` (migration 2).
 - **Privacy and terms** (`/privacy`, `/terms`). Each claim follows the code: stored columns in
   `server/src/db.ts`, retention in `server/src/limits.ts`, logs and backups in `deploy/`. A change
   to what is stored changes the page, and the Play data-safety form. Contact is
