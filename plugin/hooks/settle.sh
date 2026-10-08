@@ -1,6 +1,7 @@
 #!/bin/sh
-# PostToolUse hook: tells the devices that the keyboard answered a permission prompt
-# (`starbridge hook settle`). Starting the CLI costs about 50 ms and 50 MB, so it starts only
+# PostToolUse and PostToolUseFailure hook: tells the devices that the keyboard answered a
+# permission prompt (`starbridge hook settle`). A call that runs and fails fires only
+# PostToolUseFailure (#847). Starting the CLI costs about 50 ms and 50 MB, so it starts only
 # while the CLI marks a prompt open in its config folder (#517). Stop and SessionEnd still settle
 # what is left.
 dir=${STARBRIDGE_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/starbridge}
