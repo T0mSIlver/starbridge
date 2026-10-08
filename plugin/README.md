@@ -16,8 +16,8 @@ question through.
 
 It also sends this machine's permission prompts to your devices, once you turn
 that on with `starbridge config permissions on` (off by default): `PermissionRequest` runs
-`starbridge hook permission`, and `PostToolUse`, `PermissionDenied`, `Stop`
-and `SessionEnd` run `starbridge hook settle`, which lets the waiting prompt go
+`starbridge hook permission`, and `PostToolUse`, `PostToolUseFailure`,
+`PermissionDenied`, `Stop` and `SessionEnd` run `starbridge hook settle`, which lets the waiting prompt go
 when the keyboard answers first. While it is off, both exit at once.
 
 The answers come back through the `starbridge-mod` plugin (`mod/README.md`).
