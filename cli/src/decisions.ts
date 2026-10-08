@@ -53,10 +53,12 @@ export interface AskInput {
   codex?: CodexSession;
   /** A Pi or opencode session whose Starbridge extension or plugin submits answers into it. */
   extensionAnswers?: boolean;
-  /** A `claude -p` session: the mod runs only in interactive ones, so nothing submits answers. */
+  /** A `claude -p` session: the mod starts no loop there, so nothing submits answers. */
   headless?: boolean;
   /** For a hook that waits for the answer itself (`hook question`): no session gets it. */
   held?: boolean;
+  /** Asked for Claude Code's open `AskUserQuestion` picker in this session (#848). */
+  picker?: string;
   project?: string;
   session?: string;
   sessionTitle?: string;
@@ -318,6 +320,7 @@ export async function postDecision(ctx: Ctx, s: Session, input: AskInput): Promi
       ...(input.codex && decision.source.session ? { codex: input.codex } : {}),
       ...(input.extensionAnswers && decision.source.session ? { extensionAnswers: true } : {}),
       ...(input.held ? { held: true } : {}),
+      ...(input.picker ? { picker: input.picker } : {}),
     };
   });
   if (input.waiting) await markWaiting(ctx, () => postWaiting(ctx, s, decision.id, "waiting"));

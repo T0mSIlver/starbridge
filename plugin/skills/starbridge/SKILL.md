@@ -128,3 +128,8 @@ starbridge run --title 'Mac e2e' --reason 'takes over your screen and keyboard' 
 
 Wrap the whole command, chained or not. `--reason` is required: what it
 blocks, or the rule it matches. Output and exit code are the command's own.
+
+In Codex, ask to run `starbridge run` outside the sandbox on the first call
+(escalated permissions, justified by the network the report needs). In the
+sandbox the command runs but no device hears of it, and it runs again once
+the escalation is approved.

@@ -10,10 +10,10 @@ import {
   socketPath,
 } from "./agent.ts";
 import { configDir, Poller } from "./poller.ts";
-import { Switch } from "./switch.ts";
+import { Switch, wantsLoop } from "./switch.ts";
 
 /**
- * Starts the answer loop in each interactive session: through the machine's agent when it runs
+ * Starts the answer loop in each session a person keeps open (`wantsLoop`): through the machine's agent when it runs
  * (agent.ts), else through the CLI (poller.ts); switch.ts picks. A hot reload loads this module
  * afresh: the old loop dies with the old module, and `session.start` starts a new one.
  */
@@ -22,7 +22,7 @@ export const register: Register = (on) => {
 
   on("session.start", async ($, e, next) => {
     const started = await next(e);
-    if (!e.isInteractive) return started;
+    if (!wantsLoop(e.isInteractive, await $.env.get("CLAUDE_CODE_ENTRYPOINT"))) return started;
     void loop?.stop();
     const env = {
       STARBRIDGE_AGENT_SOCKET: await $.env.get("STARBRIDGE_AGENT_SOCKET"),

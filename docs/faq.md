@@ -65,7 +65,7 @@ the agent doesn't matter. Quotas read your AI plans through CodexBar; with no pl
 
 Claude Code gets the most: a plugin with rules, a skill and hooks; answers into the live session
 through a [Claude Code mod](https://code.claude.com/docs/en/plugins/mods/overview), code that
-runs inside Claude Code; its own `AskUserQuestion` sent to your phone; and permission prompts if
+runs inside Claude Code; its own `AskUserQuestion` on your phone as well as in the picker, first answer wins; and permission prompts if
 you turn them on. opencode gets the same through its plugin, its own `question` tool included.
 Pi gets the rules, the skill and answers into the live session through its package, and
 permission prompts with pi-permission-system. Codex gets the skill and answers into interactive
