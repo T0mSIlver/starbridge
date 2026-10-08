@@ -107,7 +107,8 @@ async function take(out: string, stack?: string) {
     console.log(`Answered: ${agent.answer}. The eval runs for a minute.`);
     await Bun.sleep(1500);
     await agent.run();
-    await Bun.sleep(4000);
+    // Long enough for the run's "Passed" notification to reach the phone.
+    await Bun.sleep(12000);
     mark("end");
   } finally {
     await stop();
