@@ -140,7 +140,7 @@ test("setup --yes installs the agent, the plugins and the skills, and uploads a 
   expect(sd).toContain("systemctl --user enable starbridge-agent.service");
 
   // Plugins from the marketplace, auto-updated, with the allow rules.
-  expect(m.calls()).toContain("claude plugin marketplace add T0mSIlver/starbridge");
+  expect(m.calls()).toContain("claude plugin marketplace add T0mSIlver/starbridge --scope user");
   expect(m.calls()).toContain("claude plugin install starbridge@starbridge --scope user");
   expect(m.calls()).toContain("claude plugin install starbridge-mod@starbridge --scope user");
   const settings = JSON.parse(readFileSync(m.settings, "utf8"));
@@ -937,6 +937,14 @@ test("setup installs no plugin from a marketplace named starbridge that is not t
   expect(m.calls().filter((c) => c.startsWith("claude plugin install"))).toEqual([]);
   expect(m.ctx.lines.join("\n")).toContain(
     "comes from someone/starbridge, not T0mSIlver/starbridge",
+  );
+
+  // Nor does uninstall remove it or plugins of that name (#762).
+  writeFileSync(join(m.ctx.env.FAKE_STATE as string, "plugin-starbridge@starbridge"), "");
+  expect(await uninstall(m.sys, {})).toBe(0);
+  expect(m.calls().filter((c) => /plugin (uninstall|marketplace remove)/.test(c))).toEqual([]);
+  expect(m.ctx.lines.join("\n")).toContain(
+    "Left the starbridge marketplace from someone/starbridge and its plugins alone.",
   );
 });
 

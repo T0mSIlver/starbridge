@@ -494,7 +494,9 @@ provider plugins add providers, not panels.
   the row. The unit runs the `starbridge` on the PATH when that is the running binary, since that
   path survives brew upgrades. Setup turns on plugin auto-update through `extraKnownMarketplaces`,
   installs the Claude Code plugins only from a marketplace whose source is this repository (#274),
-  and Codex's skill and rule, the Pi package and opencode's plugin and skill from copies the CLI
+  and uninstall removes only that one, so a developer's own `starbridge` marketplace survives;
+  both run `claude` from the home directory, so no repository's `.claude` settings are read or
+  edited (#762). Setup installs Codex's skill and rule, the Pi package and opencode's plugin and skill from copies the CLI
   carries so versions match. The local agent rewrites outdated copies when it starts.
 - **Setup asks little** (#750). Each question was one more Enter between a new user and their
   first answer, and nearly everyone said yes. Setup installs Starbridge in every agent it finds
