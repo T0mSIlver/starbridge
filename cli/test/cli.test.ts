@@ -129,6 +129,25 @@ test("pair saves nothing when the owner says the codes differ (#795)", async () 
   expect(ctx.store.machine()).toBeUndefined();
 });
 
+test("pair --confirm answers only the check code it names (#795)", async () => {
+  const ctx = testCtx();
+  expect(await run(["pair", "--confirm"], ctx)).toBe(1);
+  expect(ctx.errors.at(-1)).toContain("no `starbridge pair` is waiting");
+  const done = run(["pair", "--server", server.url, "--name", "devbox"], ctx);
+  await until(() => ctx.lines.some((l) => l.startsWith("Pairing code: ")));
+  const check = await server.approve(
+    ctx.lines.find((l) => l.startsWith("Pairing code: "))?.slice(14) as string,
+  );
+  await until(() => ctx.lines.some((l) => l.includes("Same code?")));
+  // An answer meant for another pairing on this machine.
+  writeFileSync(join(ctx.store.dir, "pair-answer.AAAA-AAAA-AAAA-AAAA"), "yes");
+  await Bun.sleep(1200);
+  expect(ctx.store.machine()).toBeUndefined();
+  expect(await run(["pair", "--confirm"], ctx)).toBe(0);
+  expect(ctx.lines).toContain(`Confirmed check code ${check} for the waiting \`starbridge pair\`.`);
+  expect(await done).toBe(0);
+});
+
 test("pair past the account's machine limit ends at once with the reason (#615)", async () => {
   server.stop();
   server = await LiveServer.start({ maxMachines: 1 });

@@ -195,19 +195,33 @@ function addedAt(entries: unknown[], id: string): string | undefined {
 /** How long the owner has to confirm the check code. */
 const CONFIRM_MS = 10 * 60_000;
 
-/** Where `starbridge pair --confirm` or `--reject` leaves the answer for the waiting `pair`. */
-const confirmFile = (ctx: Ctx) => join(ctx.store.dir, "pair-confirm");
+/** The check code a waiting `pair` shows, which `pair --confirm` or `--reject` answers. */
+const waitingFile = (ctx: Ctx) => join(ctx.store.dir, "pair-waiting");
+/** The answer for one check code: a `pair` waiting on another code never reads it. */
+const answerFile = (ctx: Ctx, code: string) => join(ctx.store.dir, `pair-answer.${code}`);
 
-/** `starbridge pair --confirm` or `--reject`: hands the owner's answer to the waiting `pair`. */
-export function sendConfirm(ctx: Ctx, same: boolean): number {
-  // A first pairing has written nothing yet, so the directory may not exist.
-  mkdirSync(ctx.store.dir, { recursive: true, mode: 0o700 });
-  // Whole or not at all: the waiting `pair` reads whatever is there.
-  const tmp = `${confirmFile(ctx)}.${process.pid}`;
+/** Whole or not at all: a waiting reader sees the file complete or not yet. */
+function writeWhole(path: string, text: string) {
+  const tmp = `${path}.${process.pid}`;
   rmSync(tmp, { force: true });
-  writeFileSync(tmp, same ? "yes" : "no", { mode: 0o600, flag: "wx" });
-  renameSync(tmp, confirmFile(ctx));
-  ctx.out("Sent to the waiting `starbridge pair`.");
+  writeFileSync(tmp, text, { mode: 0o600, flag: "wx" });
+  renameSync(tmp, path);
+}
+
+/** `starbridge pair --confirm` or `--reject`: answers the check code a waiting `pair` shows. */
+export function sendConfirm(ctx: Ctx, same: boolean): number {
+  let code: string;
+  try {
+    code = readFileSync(waitingFile(ctx), "utf8").trim();
+  } catch {
+    throw new UsageError("no `starbridge pair` is waiting for its check code to be confirmed");
+  }
+  if (!/^[0-9A-Z]{4}(-[0-9A-Z]{4}){3}$/.test(code))
+    throw new UsageError("no `starbridge pair` is waiting for its check code to be confirmed");
+  writeWhole(answerFile(ctx, code), same ? "yes" : "no");
+  ctx.out(
+    `${same ? "Confirmed" : "Rejected"} check code ${code} for the waiting \`starbridge pair\`.`,
+  );
   return 0;
 }
 
@@ -221,8 +235,12 @@ async function confirmCheck(
   code: string,
   name: string,
 ): Promise<"yes" | "no" | undefined> {
-  const file = confirmFile(ctx);
+  const file = answerFile(ctx, code);
   rmSync(file, { force: true });
+  // Answers name the code they answer, so two waiting pairings cannot take each other's. A first
+  // pairing has written nothing yet, so the directory may not exist.
+  mkdirSync(ctx.store.dir, { recursive: true, mode: 0o700 });
+  writeWhole(waitingFile(ctx), code);
   const tty = process.stdin.isTTY;
   ctx.out(`Check code: ${code}`);
   ctx.out(
@@ -260,5 +278,9 @@ async function confirmCheck(
   } finally {
     rl?.close();
     rmSync(file, { force: true });
+    try {
+      if (readFileSync(waitingFile(ctx), "utf8") === code)
+        rmSync(waitingFile(ctx), { force: true });
+    } catch {}
   }
 }
