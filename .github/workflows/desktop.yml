@@ -45,6 +45,10 @@ jobs:
           pnpm e2e
       - working-directory: desktop
         run: pnpm exec electron-builder --mac --publish never
+        # Ad hoc signing (electron-builder.yml) holds no secret, so pull requests may do it too;
+        # unsigned, macOS refuses to open the app.
+        env:
+          CSC_FOR_PULL_REQUEST: "true"
       # The budgets in test/perf.ts, measured on the packaged app.
       - working-directory: desktop
         run: node test/perf.ts release/mac-arm64/Starbridge.app/Contents/MacOS/Starbridge
