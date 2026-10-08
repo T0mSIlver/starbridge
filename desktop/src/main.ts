@@ -1,3 +1,4 @@
+import { enableCompileCache } from "node:module";
 import { join } from "node:path";
 import {
   app,
@@ -16,7 +17,6 @@ import {
   Tray,
   type WebContents,
 } from "electron";
-import { autoUpdater } from "electron-updater";
 import { type Answer, type Entry, parseAnswered, parseState } from "./bridge";
 import { Notifier, type Shown } from "./notifier";
 import { linkPage, opensOutside, serverOrigin, staysInWindow } from "./origin";
@@ -32,8 +32,6 @@ const ASSETS = join(ROOT, "assets");
 const SETTINGS = join(app.getPath("userData"), "settings.json");
 /** How long the page has to say an answer from a notification went out. */
 const ANSWER_MS = 30_000;
-/** How often the app looks for a release; it also looks at each start. */
-const UPDATE_MS = 6 * 3_600_000;
 
 let settings: Settings;
 let origin: string;
@@ -46,7 +44,8 @@ let notifier: Notifier;
 let quitting = false;
 /** The GitHub sign-in sent to the browser, until its link comes back. */
 let signIn: SignIn | null = null;
-/** A release downloaded, which installs on quit or from the menu. */
+/** A release downloaded, which installs on quit or from Restart to Update. */
+let update: { install(): void } | null = null;
 let updateReady = false;
 /** Links that arrived before the window existed. */
 const early: string[] = [];
@@ -141,21 +140,19 @@ function ready(): void {
   checkForUpdates();
 }
 
-/**
- * Updates from GitHub Releases (electron-updater reads the latest release's latest-mac.yml). macOS
- * installs an update only when it carries the same Developer ID as the running app, so an ad hoc
- * build finds updates and cannot install them; that error is logged, never shown.
- */
 function checkForUpdates(): void {
   if (!app.isPackaged) return;
-  autoUpdater.logger = console;
-  autoUpdater.on("update-downloaded", () => {
-    updateReady = true;
-  });
-  autoUpdater.on("error", (e) => console.warn("update:", e.message));
-  const check = () => autoUpdater.checkForUpdates().catch(() => {});
-  check();
-  setInterval(check, UPDATE_MS);
+  // Loaded late and by path, so the bundler keeps it out of main.js (src/updater.ts).
+  setTimeout(() => {
+    // Node keeps the compiled updater on disk, so later starts skip compiling its 0.5 MB.
+    enableCompileCache();
+    const { startUpdates } = require(
+      join(ROOT, "dist", "updater.js"),
+    ) as typeof import("./updater");
+    update = startUpdates(() => {
+      updateReady = true;
+    });
+  }, 5_000);
 }
 
 function createWindow(): void {
@@ -285,9 +282,7 @@ function menu(): Menu {
       click: () => app.setLoginItemSettings({ openAtLogin: !login }),
     },
     { label: `Server: ${new URL(origin).host}…`, click: showServer },
-    ...(updateReady
-      ? [{ label: "Restart to Update", click: () => autoUpdater.quitAndInstall() }]
-      : []),
+    ...(updateReady ? [{ label: "Restart to Update", click: () => update?.install() }] : []),
     { type: "separator" },
     { label: "Quit Starbridge", role: "quit" },
   ]);
