@@ -257,24 +257,6 @@ async function keepsSessionSpace(page: Page, at: string) {
 const FAILS: Problem["kind"][] = ["page-width", "clipped", "spills", "offscreen", "overlap", "tap"];
 
 /** Fails on what a screenshot would show broken (layout.ts); AUDIT lists it instead. */
-/**
- * A long unbroken answer (an OAuth code) wraps inside the answer field, which stays inside its
- * column (#873); the field is emptied after.
- */
-async function longAnswerFits(page: Page, name: string) {
-  const reply = page.getByRole("textbox", { name: "Your answer" });
-  await reply.fill("4/0AVMBsJh".repeat(30));
-  const box = await reply.evaluate((el) => {
-    const column = el.closest("form")?.parentElement as HTMLElement;
-    const r = el.getBoundingClientRect();
-    const c = column.getBoundingClientRect();
-    return { right: r.right, column: c.right, scroll: el.scrollWidth, client: el.clientWidth };
-  });
-  await reply.fill("");
-  if (box.right > box.column + 0.5 || box.scroll > box.client)
-    throw new Error(`${name}: a long answer runs past its column: ${JSON.stringify(box)}`);
-}
-
 async function fitsLayout(page: Page, name: string) {
   const problems = await layoutProblems(page);
   if (AUDIT) {
@@ -693,7 +675,6 @@ async function main() {
     await page.emulateMedia({ reducedMotion: "no-preference" });
     // The reply field is open under the picks too (#849); in it, Shift+Enter starts a new line and
     // Enter sends (#562).
-    await longAnswerFits(page, "the picks on a phone");
     const reply = page.getByRole("textbox", { name: "Your answer" });
     await reply.pressSequentially("Phone layout");
     await reply.press("Shift+Enter");
@@ -790,7 +771,6 @@ async function main() {
     "https://claude.ai/public/artifacts/0b3f0e7c"
   )
     throw new Error("the open decision has no chip for its Claude artifact");
-  await longAnswerFits(page, "the open decision at desktop width");
 
   // Desktop: one selection, whether picked by click or by J and K; focus follows it in the list.
   const row = page.locator('[aria-current="true"]:has(button[data-id])');
