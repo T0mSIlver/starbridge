@@ -963,6 +963,13 @@ Tokens, type and components: `DESIGN.md`.
   its link prefetches makes a few dozen. The server makes at most 30 new accounts an hour per
   address: each account may store 256 MB, so many GitHub accounts behind one script could fill
   the server's 2 GB, while an office or a carrier's NAT signs up a handful an hour.
+- **Ready for Cloudflare's proxy** (#799). starbridge.run's DNS is on Cloudflare in DNS-only
+  mode; its proxy is the emergency answer to a flood from many addresses, which no per-address
+  rule stops. So that turning it on changes nothing else: Caddy takes the client's address from
+  `CF-Connecting-IP` only on requests from Cloudflare's published ranges, and every rate limit,
+  the block list, the server's per-address limits (through `X-Forwarded-For`, which Caddy sets to
+  that address alone) and Umami use it; and long-polls return within 90 s, under the proxy's
+  100 s cut. Clients already treat a cut long-poll, or Cloudflare's 524, as a reconnect.
 - **Per-address reads** (#582). Caddy counts every `/v1` request per address, 3000 a minute
   (IPv6 per /64): most reads count against no account, so this keeps a looping client or script
   to about 2% of a core. A visible page with a prompt waiting and a run live makes about 200 a
