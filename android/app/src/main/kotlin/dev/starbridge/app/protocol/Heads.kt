@@ -31,11 +31,23 @@ class Heads(private val directories: Directories) {
 
     /**
      * Whether a head [id] signed, or that names it as `by`, no longer counts: [dir] lists it as
-     * revoked and no `revoke` names it, so a `recover` removed it. A `revoke` ends nothing, since
-     * a revoked device can forge one on a fork of a stale chain (#813).
+     * revoked, and a `recover` came after any `revoke` that names it. A `revoke` ends nothing,
+     * since a revoked device can forge one on a fork of a stale chain (#813); a `recover`, which
+     * only the recovery key signs, ends every earlier hold (heads.ts `removed`).
      */
-    private fun removed(dir: Directory, entries: List<JsonElement>, id: String) =
-        dir.members[id]?.active == false && revocationOf(entries, id) == null
+    private fun removed(dir: Directory, entries: List<JsonElement>, id: String): Boolean {
+        if (dir.members[id]?.active != false) return false
+        var revokedAt = -1
+        var recoveredAt = -1
+        entries.forEachIndexed { i, raw ->
+            val env = runCatching { ProtocolJson.decodeFromJsonElement(SignedEnvelope.serializer(), raw) }.getOrNull() ?: return@forEachIndexed
+            val body = runCatching { ProtocolJson.parseToJsonElement(env.body).jsonObject }.getOrNull() ?: return@forEachIndexed
+            val op = body["op"]?.jsonPrimitive?.contentOrNull
+            if (op == "revoke" && body["id"]?.jsonPrimitive?.contentOrNull == id) revokedAt = i
+            if (op == "recover") recoveredAt = i
+        }
+        return recoveredAt > revokedAt
+    }
 
     /**
      * Records the head [signer] signed into an item. A shorter head never replaces a longer one

@@ -1127,10 +1127,15 @@ export class Withheld extends Error {
 
 /**
  * Forgets the directory heads member `id` signed or is named in, on the owner's word that they
- * revoked it: no revocation ends a hold by itself, since a revoked device can forge one on a
- * fork (#813).
+ * revoked it, and keeps none of them again: no revocation ends a hold by itself, since a revoked
+ * device can forge one on a fork (#813). Ids are never reused, so the list only grows by the
+ * members the owner revokes.
  */
 export async function stopWaiting(ctx: Ctx, id: string): Promise<void> {
+  // First, so a read noting heads meanwhile either sees it or has its head deleted below.
+  await store.update("forgotten", ctx.account, (old = []) =>
+    old.includes(id) ? old : [...old, id],
+  );
   await store.update("heads", ctx.account, (old) => {
     const heads = { ...old };
     forgetHeads(heads, id);
@@ -1149,10 +1154,13 @@ async function openMachine<K extends SealedItem["kind"]>(
 ): ReturnType<typeof openAsync<K>> {
   const opened = await openAsync(expectKind(item, kind), me(ctx), ctx.dir);
   const head = (opened.body as { dir?: DirectoryHead }).dir;
+  // Read with the heads: a read that began before the owner stopped waiting must not bring back
+  // a head they told this browser to forget (#813).
   if (head)
-    await store.update("heads", ctx.account, (old) => {
+    await store.updateWith("heads", ctx.account, "forgotten", (old, forgotten = []) => {
       const heads = { ...old };
-      noteHead(heads, opened.signer.id, head, ctx.entries, ctx.dir);
+      if (!forgotten.includes(opened.signer.id) && !(head.by && forgotten.includes(head.by)))
+        noteHead(heads, opened.signer.id, head, ctx.entries, ctx.dir);
       return heads;
     });
   return opened;

@@ -576,7 +576,7 @@ function machineDecision(
   me: device.Ctx,
   dir: { length: number; head: string },
 ) {
-  const { id, name, boxPk, signPk } = me.device;
+  const { id, boxPk } = me.device;
   return {
     item: seal(
       "decision",
@@ -593,7 +593,7 @@ function machineDecision(
         dir,
       },
       { id: m.member.id, signKey: m.keys.sign.privateKey },
-      [{ id, role: "device" as const, name, boxPk, signPk }],
+      [{ id, boxPk }],
     ),
     cursor: "1",
     receivedAt: "2026-10-08T12:00:00Z",
@@ -666,11 +666,18 @@ test("a revoked device cannot lift the hold by revoking, on a fork, the machine 
     // Only the owner's word ends it.
     await device.stopWaiting(forked, "m_fork");
     await expect(device.loadInbox(forked)).resolves.toBeDefined();
+    // A read that began on the chain before the fork, where the machine is active, does not
+    // bring its head back.
+    items = [
+      machineDecision({ member: m, keys: mKeys }, mine, { length: truth.length, head: truth.head }),
+    ];
+    await expect(device.loadInbox(mine)).resolves.toBeDefined();
   } finally {
     globalThis.fetch = real;
     // Back on the real chain, which the fork does not extend.
     await store.put("pin", pin as NonNullable<typeof pin>, ctx.account);
     await store.del("heads", ctx.account);
+    await store.del("forgotten", ctx.account);
     // An account holds at most 5 machines.
     await postEntry(revokeEntry(await live.directory(), phone, "m_fork", at));
   }
@@ -734,6 +741,7 @@ test("after stopping waiting for a device a head named, reading that machine's i
     globalThis.fetch = real;
     await store.put("pin", pin as NonNullable<typeof pin>, ctx.account);
     await store.del("heads", ctx.account);
+    await store.del("forgotten", ctx.account);
     await postEntry(revokeEntry(await live.directory(), phone, "m_old", at));
   }
 });
