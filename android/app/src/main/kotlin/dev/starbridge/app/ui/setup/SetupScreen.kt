@@ -80,6 +80,7 @@ import javax.inject.Inject
 class SetupViewModel @Inject constructor(private val store: Store) : ViewModel() {
     val busy = store.busy
     val server = store.server
+    val keepsKeys = store.keepsKeys
     val actions = SetupActions(
         gitHub = store::gitHubSignInUrl,
         ownerToken = store::signInWithOwnerToken,
@@ -116,9 +117,9 @@ class SetupActions(
  * are the fallback), or, on an empty account, create its keys and show the recovery key once.
  */
 @Composable
-fun SetupScreen(phase: Phase, server: String, busy: Boolean, actions: SetupActions, openUrl: (String) -> Unit, modifier: Modifier = Modifier) {
+fun SetupScreen(phase: Phase, server: String, busy: Boolean, actions: SetupActions, openUrl: (String) -> Unit, modifier: Modifier = Modifier, keepsKeys: Boolean = false) {
     when (phase) {
-        Phase.SignedOut -> SignIn(server, busy, actions, openUrl, modifier)
+        Phase.SignedOut -> SignIn(server, busy, actions, openUrl, modifier, keepsKeys)
         is Phase.NoDevice -> if (phase.accountExists) Join(busy, actions, modifier) else FirstDevice(busy, actions, modifier)
         is Phase.Joining -> Waiting("Approve this phone", if (phase.scanned) "Approve it on the device that shows the QR code." else "Type this code on a device you already use: ${phase.code}", null, actions.cancelJoin, modifier)
         is Phase.JoiningByDigits -> when {
@@ -189,7 +190,7 @@ private fun Tile(sym: Sym) {
 }
 
 @Composable
-private fun SignIn(server: String, busy: Boolean, actions: SetupActions, openUrl: (String) -> Unit, modifier: Modifier) {
+private fun SignIn(server: String, busy: Boolean, actions: SetupActions, openUrl: (String) -> Unit, modifier: Modifier, keepsKeys: Boolean) {
     var selfHosted by rememberSaveable { mutableStateOf(server != BuildConfig.DEFAULT_SERVER) }
     var url by rememberSaveable { mutableStateOf(server) }
     var token by rememberSaveable { mutableStateOf("") }
@@ -235,6 +236,8 @@ private fun SignIn(server: String, busy: Boolean, actions: SetupActions, openUrl
                 }
                 Link("Use starbridge.run") { selfHosted = false; url = BuildConfig.DEFAULT_SERVER }
             }
+            // A phone set up for another account than the one signed in to: the way to start over.
+            if (keepsKeys) Link("Sign out and remove this phone's keys", actions.signOut)
         },
     )
 }

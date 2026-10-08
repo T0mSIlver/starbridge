@@ -169,6 +169,7 @@ class ServerStore(
     override val comparison = MutableStateFlow<Comparison>(Comparison.Idle)
     override val push = MutableStateFlow(PushSetting(saved.pushType, fcmAvailable, emptyList(), false))
     override val server = MutableStateFlow(saved.server)
+    override val keepsKeys = MutableStateFlow(false)
     override val busy = MutableStateFlow(false)
     override val tooOld = MutableStateFlow<String?>(null)
 
@@ -218,6 +219,7 @@ class ServerStore(
     }
 
     private fun publish() {
+        keepsKeys.value = saved.me != null && saved.pin != null
         phase.value = when {
             secrets.session == null -> Phase.SignedOut
             saved.joining != null -> Phase.Joining(saved.joining!!, saved.joiningScanned)
@@ -409,8 +411,12 @@ class ServerStore(
             // A first-device setup the server may already hold: keep its keys and seed to retry.
             persist(newSecrets = secrets.copy(session = session))
             return
+        } else if (mine != null && saved.pin != null && me.account != saved.account) {
+            // The server's word alone, unsigned: a hostile one could unpair the phone with it.
+            // The owner signs in to the right account, or signs out to start over (#808).
+            throw IllegalStateException("This phone belongs to another account than the one you signed in to. Sign in with the account you set it up with, or sign out and remove its keys to set it up again.")
         } else if (mine != null || secrets.signSk != null) {
-            // Another account, or a setup that never finished: start over.
+            // A setup that never finished: start over.
             wipe(null)
         }
         if (me.member != null) throw IllegalStateException("This session already belongs to another device.")

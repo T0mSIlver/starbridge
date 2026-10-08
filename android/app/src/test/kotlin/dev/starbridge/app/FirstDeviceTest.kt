@@ -34,6 +34,7 @@ import mockwebserver3.RecordedRequest
 import okhttp3.OkHttpClient
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
@@ -63,9 +64,13 @@ class FirstDeviceTest {
 
     private fun json(body: JsonElement, code: Int = 200) = MockResponse(code, okhttp3.Headers.headersOf("content-type", "application/json"), body.toString())
 
+    private val account = "acct"
+    private lateinit var disk: Disk
+    private lateinit var server: String
+    private lateinit var open: () -> ServerStore
+
     @Test
     fun theFirstEntryWaitsForTheConfirmedKey() {
-        val account = "acct"
         val entries = java.util.concurrent.CopyOnWriteArrayList<JsonElement>()
         http.dispatcher = object : Dispatcher() {
             override fun dispatch(request: RecordedRequest): MockResponse {
@@ -80,6 +85,9 @@ class FirstDeviceTest {
                         val dir = directories.verify(entries, account, null)
                         json(buildJsonObject { put("length", dir.length); put("head", dir.head) }, 201)
                     }
+                    path == "/v1/auth/owner" -> json(buildJsonObject { put("session", "s2") })
+                    // The server names another account than the one this phone was set up with.
+                    path == "/v1/me" -> json(buildJsonObject { put("account", "other"); put("member", null as String?); put("role", "device") })
                     else -> MockResponse(404, okhttp3.Headers.headersOf(), "")
                 }
             }
@@ -90,8 +98,8 @@ class FirstDeviceTest {
             override fun wrap(plain: ByteArray) = plain
             override fun unwrap(wrapped: ByteArray) = wrapped
         }
-        val disk = Disk(tmp.newFolder(), identity)
-        val server = http.url("/").toString().trimEnd('/')
+        disk = Disk(tmp.newFolder(), identity)
+        server = http.url("/").toString().trimEnd('/')
         disk.save(Saved(server, account = account))
         disk.save(Secrets(session = "s"))
         val alerts = object : Alerts {
@@ -102,7 +110,7 @@ class FirstDeviceTest {
             override fun cancelPrompt(prompt: Prompt) {}
             override fun run(run: Run) {}
         }
-        fun open() = ServerStore(disk, OkHttpClient(), sodium, envelopes, directories, Pairings(sodium), Joins(sodium), alerts, "Phone", server, false, scope)
+        open = { ServerStore(disk, OkHttpClient(), sodium, envelopes, directories, Pairings(sodium), Joins(sodium), alerts, "Phone", server, false, scope) }
 
         val first = open()
         first.setUpFirstDevice()
@@ -119,6 +127,30 @@ class FirstDeviceTest {
         until { again.phase.value == Phase.Ready }
         assertEquals(1, entries.size)
         assertEquals(disk.saved()!!.me!!.id, directories.verify(entries, account, null).members.keys.single())
+    }
+
+    @Test
+    fun theServersWordOnTheAccountUnpairsNothing() {
+        theFirstEntryWaitsForTheConfirmedKey()
+        val before = disk.saved()!!
+        val store = open()
+        until { store.phase.value == Phase.Ready }
+        // The session ended, as before any sign-in the owner makes from the sign-in screen.
+        disk.save(disk.secrets().copy(session = null))
+        val signedOut = open()
+        until { signedOut.phase.value == Phase.SignedOut }
+        assertEquals(true, signedOut.keepsKeys.value)
+        signedOut.signInWithOwnerToken(server, "token")
+        until { !signedOut.busy.value && signedOut.notice.value != null }
+        // Refused, not wiped: the keys, the pin and the account stay (#808).
+        assertEquals(before.me, disk.saved()!!.me)
+        assertEquals(before.pin, disk.saved()!!.pin)
+        assertEquals(account, disk.saved()!!.account)
+        assertNotNull(disk.secrets().signSk)
+        // Sign-in offers the way out: signing out removes the keys.
+        signedOut.signOut()
+        until { !signedOut.keepsKeys.value }
+        assertEquals(null, disk.saved()?.me)
     }
 
     private fun until(pred: () -> Boolean) {
