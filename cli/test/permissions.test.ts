@@ -387,6 +387,29 @@ test("SIGTERM (Esc or No at the keyboard) reports the prompt settled and prints 
   });
 });
 
+for (const viaAgent of [true, false]) {
+  test(`${viaAgent ? "through the agent" : "without an agent"}: an allow at the keyboard settles the prompt once the call starts, not when it ends (#866)`, async () => {
+    const ctx = await machine(viaAgent);
+    const started = new AbortController();
+    const commands: string[] = [];
+    const out = hookPermission(ctx, request(), { agent: "claude-code" }, (signal, command) => {
+      commands.push(command);
+      return { signal: AbortSignal.any([signal as AbortSignal, started.signal]), stop: () => {} };
+    });
+    await until(async () => (await server.opened("permission")).length === 1);
+    const [permission] = await server.opened("permission");
+    expect(commands).toEqual([PUSH.command]);
+    started.abort();
+    expect(await out).toBe(0);
+    expect(ctx.lines).toEqual([]);
+    await until(async () => (await server.opened("settled")).length === 1);
+    expect((await server.opened("settled"))[0]).toMatchObject({
+      itemId: permission?.id,
+      outcome: "keyboard",
+    });
+  });
+}
+
 test("a hook that hangs up and does not hold again is gone: the prompt settles at the keyboard (#400)", async () => {
   const ctx = await machine();
   const agent = new AgentClient(join(ctx.store.dir, "agent.sock"));
