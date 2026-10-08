@@ -291,7 +291,9 @@ itemRoutes.post("/items", requireCaller("paired"), async (c) => {
         hold_to: string | null;
       } | null;
       // Devices whose push of the item is still held never heard of it: its close skips them.
-      if (target?.hold_to && !rule.re.open) unheard = JSON.parse(target.hold_to) as string[];
+      // A device's snooze of it as well; a machine's waiting flip has a hold of its own.
+      if (target?.hold_to && (fromDevice || !rule.re.open))
+        unheard = JSON.parse(target.hold_to) as string[];
       if (fromDevice) {
         const mine = db
           .query("SELECT 1 FROM boxes WHERE account_id = ? AND item_id = ? AND to_id = ?")
@@ -480,7 +482,7 @@ itemRoutes.post("/items", requireCaller("paired"), async (c) => {
     c.var.answers.wake(`${caller.account}/${machine}`);
     if (rule.re?.open) {
       // A note for every device (a snooze): the others hide the decision, or show it again.
-      const devices = to.filter((id) => id !== machine && id !== me);
+      const devices = to.filter((id) => id !== machine && id !== me && !unheard.includes(id));
       c.var.push.notify(caller.account, devices, (device) =>
         pushPayload(item, device, config.pushInlineLimit),
       );

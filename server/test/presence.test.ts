@@ -187,8 +187,10 @@ test("a waiting flip is held too, and a snooze during the hold keeps it quiet", 
     [[web.id], "decision", d.id],
     [[web.id], "waiting", `w-${d.id}`],
   ]);
-  await post(web, snooze(d));
   sent = [];
+  // The snooze from the page in use does not reach the phone, which never heard of the question.
+  await post(web, snooze(d));
+  expect(sent).toEqual([]);
   release(31_000);
   expect(sent).toEqual([]);
 });

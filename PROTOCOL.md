@@ -656,7 +656,8 @@ waits a little, and goes only if nothing answered it meanwhile.
   `waiting` item's decision, unanswered and not snoozed. The hold is stored with the item, so a
   restart delays it by no more than the restart.
 - **Closed during the hold**, an item never pushes the devices it held it from, nor the
-  `answered` push or the settled notice that closes it: they never heard of it.
+  `answered` push or the settled notice that closes it: they never heard of it. A snooze posted
+  during the hold skips them too, and a snoozed item's hold ends without a push.
 - **Devices** list a held item at once, as any other: only its push waits.
 
 ## Runs
