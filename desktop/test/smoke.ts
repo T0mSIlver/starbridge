@@ -1,7 +1,8 @@
 // Launches the app on a stand-in server page and checks the bridge end to end: the window loads
 // the page, the page's count reaches the menu bar, a question notifies with its options, a button
 // and a typed reply answer through the page, the notification closes once the question leaves,
-// and the window refuses another origin. Notifications and the tray are watched in the main
+// the window refuses another origin, and a hidden window's page keeps its timers on time, so a
+// question still notifies within seconds. Notifications and the tray are watched in the main
 // process, so no OS notification is needed (GitHub's macOS runners cannot grant the permission).
 //
 //   pnpm --filter @starbridge/desktop e2e     (on Linux: xvfb-run -a …)
@@ -158,6 +159,34 @@ try {
   await until(
     () => main((g) => g.closed.includes("item-p-1") && g.titles.at(-1) === ""),
     "the prompt to close",
+  );
+
+  // Hidden, the page runs its timers at full speed: Chromium would otherwise slow them to once a
+  // second, then once a minute, and notifications would come late. (With throttling off, Electron
+  // also keeps the page's visibilityState "visible".)
+  await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.hide());
+  assert.equal(
+    await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.isVisible()),
+    false,
+  );
+  const late = { ...q, id: "d-2", title: "Still there?" };
+  const ticks = await page.evaluate(
+    (late) =>
+      new Promise<number>((done) => {
+        let ticks = 0;
+        const t = setInterval(() => ticks++, 50);
+        setTimeout(() => {
+          clearInterval(t);
+          (window as unknown as StandIn).send([late]);
+          done(ticks);
+        }, 2_000);
+      }),
+    late,
+  );
+  assert.ok(ticks >= 30, `a hidden page ticked ${ticks} times in 2 s, not ~40`);
+  await until(
+    () => main((g) => g.shown.some((n) => n.id === "item-d-2")),
+    "a hidden window's notification",
   );
 
   // Another origin stays out of the window and opens in the browser.
