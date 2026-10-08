@@ -6,6 +6,7 @@ import {
   approverKeys,
   BODY_SCHEMAS,
   bindMessage,
+  checkCode,
   claimHash,
   codeFromLink,
   computePace,
@@ -117,6 +118,14 @@ describe("pairing.json", () => {
     expect(code).toEqual({ rendezvous: v.rendezvous, secret: v.secret });
     expect(toB64(pairingKey(code))).toBe(v.key);
     expect(claimHash(v.claim.secret)).toBe(v.claim.hash);
+  });
+  test("check code", () => {
+    expect(checkCode(v.check.entries, v.check.id)).toBe(v.check.expect);
+    // Another add entry gives another code: a stand-in, or the same keys added on a fork.
+    expect(checkCode(v.check.entries, "browser")).not.toBe(v.check.expect);
+    expect(errorCode(() => checkCode(v.check.entries.slice(0, 2), v.check.id))).toBe(
+      "unknown-member",
+    );
   });
   for (const c of v.parse) {
     test(`parse ${c.input}`, () => {

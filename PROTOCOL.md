@@ -236,6 +236,28 @@ waits on `GET /pairings/:rendezvous?wait=`, checks the MAC and asks the owner to
 who sees the code can post first, so the device shows the requester's name before approving, as
 with a typed code.
 
+A machine's check code lets the owner see that the machine joined the owner's own chain (#795).
+`checkCode` is the first 80 bits of `BLAKE2b-256("starbridge/v1/check" NUL body NUL sig)` over
+the `add` entry that added the machine, its body and its signature as sent, as 16 Crockford base32 characters in four groups.
+That body holds the machine's keys and name, and through `prev` the whole chain before it. Once
+approved, the machine shows the first three groups and saves the pairing only once a person types
+the last group from the Android app, which shows each active machine's code under Devices,
+computed from the chain it verified. With no terminal, the group comes from
+`starbridge pair --confirm`.
+
+A hostile server that read the pairing code in a browser can approve the machine into a chain it
+controls, even one that reuses the owner's entries and forks after them with a revoked device's
+key or an old recovery key, and put a stand-in in the owner's chain, even one with the machine's
+own public keys, since a pairing request proves no private key. The stand-in's `add` entry and
+the machine's differ in their `prev` or their contents, so the codes differ unless the server
+finds an entry whose code matches 80 bits of one the owner's device wrote. The signature keeps
+it from searching both sides at once: it can predict the body of the entry the owner's device
+will write, but not that device's signature. Two limits: a member
+browser lets a hostile page write both entries and search for a pair that matches, about 2^40
+tries; and the code proves nothing to a device that itself paired or joined through a browser,
+which the server could have put in a chain of its own. The web page shows the codes too, but a
+hostile server writes that page.
+
 ## Joining by digits
 
 A browser or phone signed in to the account can join without a code: the owner compares 6 digits
