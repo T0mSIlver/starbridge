@@ -120,14 +120,24 @@ provider plugins add providers, not panels.
   (#355): otherwise a server in the middle could forge an approval to the joining device. The CLI
   never joins by digits.
 - **A machine's check code** (#795). A pairing code that reaches a browser lets a hostile server
-  approve the machine into a chain it controls, which no device in that chain can expose, so the
-  owner compares: the machine shows three groups of 80 bits of a hash of its `add` entry and
-  saves the pairing only once a person types the fourth from the Android app. The entry, not the
-  keys: a pairing request proves no private key, so a stand-in can copy the machine's keys, and
-  a fork can keep the owner's entry 0; the entry's `prev` ties it to the chain, and its
-  signature, which the server cannot predict, stops a search for two entries that match. Typed rather than
-  a yes, so an agent running setup cannot confirm it; the owner chose a confirmation on every
-  setup over a code only shown.
+  approve the machine into a chain it controls, which no device in that chain can expose. The
+  check code, 80 bits of a hash of the machine's `add` entry, tells the chains apart. It covers the
+  entry rather than the keys: a pairing request proves no private key, so a stand-in can copy the
+  machine's keys, and a fork can keep the owner's entry 0. The entry's `prev` ties it to the
+  chain, and its signature, which the server cannot predict, stops a search for two entries that
+  match. The machine's QR carries a second secret, the check key, and an Android app that scanned
+  it proves with it which entry it wrote, so the machine saves the pairing without asking: the
+  code never reached a browser on that path, and the owner should not have to do anything. Every
+  other path (a browser, a typed code, Android 0.1.0) ends with the machine showing the whole
+  code and asking `Same code? [Y/n]`, Enter for yes, if the Android app shows the same; the
+  browser shows it too, after Approve, for an owner with no app. Tom chose one keypress over
+  typing a group, and Enter over `y` (2026-10-08), accepting that an agent running setup, or a
+  stray Enter, can confirm it. The QR code is a `starbridge://pair` link, as Signal's
+  `sgnl://linkdevice` and WhatsApp's in-app scan are, rather than an https one, which a phone
+  without the app would open in a browser and so hand the key to the server (Tom, 2026-10-08).
+  A phone without the app opens the printed link or types the code instead, and the machine
+  asks. The code stays after `#`, where Android 0.1.0's scanner reads it, so that scanner still
+  pairs (and the machine asks); 0.1.0's camera opens nothing until the app updates.
 - **The recovery key** is a random 16-byte seed shown as 28 Crockford base32 characters with a
   12-bit check, in seven groups of four, read in any case, with or without dashes (#199). 128 bits
   is Ed25519's own security level; the seed is random, so it needs no slow key derivation:
@@ -454,9 +464,10 @@ provider plugins add providers, not panels.
   the machine's pairing, and starbridge.run, and prints `Pairing with <host>`. It asks only when
   the machine is paired with another server, since it would otherwise switch silently; Enter
   keeps the pairing.
-- **The pairing link** `https://starbridge.run/pair#CODE`, which `pair` prints and shows as a QR
-  code, is also an App Link (#611): setup says to scan it with the camera, and a phone's camera
-  hands links to apps, not to a browser that would first ask to become a device itself. The app
+- **The pairing link** `https://starbridge.run/pair#CODE`, which `pair` prints and a device shows
+  as a QR code, is also an App Link (#611): a phone's camera hands links to apps, not to a browser
+  that would first ask to become a device itself. A machine's QR code is a `starbridge://pair`
+  link instead (#795), which the app opens on any server. The app
   opens Add a device with the code looked up, once the phone is in the account; a phone signed in
   but not in the account yet joins with it instead, as another device's "Scan with the new phone"
   code asks. Without the app,

@@ -442,6 +442,7 @@ function DeviceSection() {
               {d.role === "machine" ? "Machine" : "Device"}
               {d.self ? " · this browser" : d.addedAt ? ` · ${added.get(d.id)}` : ""}
             </div>
+            {d.check && <div className={`t-code ${s.sub}`}>Check code {d.check}</div>}
           </div>
           {d.self ? (
             <span className={s.revokeSpace} />

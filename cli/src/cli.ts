@@ -28,7 +28,7 @@ import {
   wait,
 } from "./decisions";
 import { hookAskUser, hookPermission, hookQuestion, hookSettle } from "./hook";
-import { pair } from "./pair";
+import { pair, sendConfirm } from "./pair";
 import { pushOnce, quotaPush } from "./quota";
 import { installKind, ReleaseError } from "./release";
 import { runCommand } from "./run";
@@ -75,7 +75,10 @@ const HELP = `starbridge: post decisions to your devices, report runs, upload qu
       setup leaves it out until \`setup --agent\` brings it back.
 
   starbridge pair [--server <url>] [--name <name>] [--force]
-      Make this machine's keys and print a pairing code to type on a device.
+      Make this machine's keys and print a pairing code to type on a device. Unless the
+      Starbridge Android app scanned the QR code, confirm that its check code matches.
+  starbridge pair --confirm | --reject
+      Answer that for a waiting \`pair\` or \`setup\` that has no terminal.
       --server <url>          a self-hosted server (default: $STARBRIDGE_SERVER, else
                               https://starbridge.run)
 
@@ -266,8 +269,11 @@ export async function run(argv: string[], ctx: Ctx): Promise<number> {
             server: { type: "string" },
             name: { type: "string" },
             force: { type: "boolean" },
+            confirm: { type: "boolean" },
+            reject: { type: "boolean" },
           },
         });
+        if (values.confirm || values.reject) return sendConfirm(ctx, !values.reject);
         return await pair(ctx, values);
       }
       case "ask": {

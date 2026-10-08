@@ -235,6 +235,8 @@ data class Member(
     val kind: Kind,
     val addedAt: Instant,
     val current: Boolean = false,
+    /** A machine's check code, from the verified directory, which `starbridge pair` asks for (#795). */
+    val check: String? = null,
 )
 
 /** What approving a pairing code has reached. */

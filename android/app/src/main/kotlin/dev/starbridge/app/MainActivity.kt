@@ -161,6 +161,12 @@ class MainActivity : ComponentActivity() {
             else opening.trySend(PairLinkKey(data.toString(), System.nanoTime()))
             setIntent(Intent(this, MainActivity::class.java))
         }
+        // A machine's QR code (#795), from the camera: Add a device looks its code up, and says so
+        // when the link names another server than this phone's.
+        if (data != null && data.scheme == "starbridge" && data.host == "pair") {
+            opening.trySend(PairLinkKey(data.toString(), System.nanoTime()))
+            setIntent(Intent(this, MainActivity::class.java))
+        }
         intent?.getStringExtra(EXTRA_DECISION)?.let {
             opening.trySend(DecisionKey(it))
             intent.removeExtra(EXTRA_DECISION)

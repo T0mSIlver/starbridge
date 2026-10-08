@@ -26,6 +26,7 @@ import dev.starbridge.app.protocol.Run
 import dev.starbridge.app.protocol.Settled
 import dev.starbridge.app.protocol.Waiting
 import dev.starbridge.app.protocol.parseJsonText
+import dev.starbridge.app.protocol.checkKeyFromLink
 import dev.starbridge.app.protocol.codeFromLink
 import dev.starbridge.app.protocol.pairingLink
 import dev.starbridge.app.protocol.parsePairingCode
@@ -36,6 +37,7 @@ import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.boolean
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.encodeToJsonElement
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonArray
@@ -136,6 +138,9 @@ class ProtocolVectorsTest {
         assertEquals(v.str("key"), toB64(pairings.key(code)))
         val claim = v.getValue("claim").jsonObject
         assertEquals(claim.str("hash"), pairings.claimHash(claim.str("secret")))
+        val check = v.getValue("check").jsonObject
+        assertEquals(check.str("expect"), pairings.checkCode(check.getValue("entries").jsonArray.toList(), check.str("id")))
+        assertEquals(check.str("proof"), pairings.checkProof(check.getValue("entries").jsonArray.toList(), check.str("id"), check.str("key")))
 
         for (case in v.getValue("parse").jsonArray.map { it.jsonObject }) {
             val got = try {
@@ -183,6 +188,10 @@ class ProtocolVectorsTest {
                 e.code
             }
             assertEquals(case.str("input"), case.str("expect"), got)
+        }
+        for (case in v.getValue("keyLinks").jsonArray.map { it.jsonObject }) {
+            val input = case["link"]?.jsonPrimitive?.content ?: case.str("input")
+            assertEquals(input, case["expect"]?.jsonPrimitive?.contentOrNull, checkKeyFromLink(input))
         }
     }
 

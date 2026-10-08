@@ -2,7 +2,14 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { type Answer, fromB64, open, type SealedItem, seal } from "@starbridge/protocol";
+import {
+  type Answer,
+  checkKeyFromLink,
+  fromB64,
+  open,
+  type SealedItem,
+  seal,
+} from "@starbridge/protocol";
 import { DEFAULT_LIMITS, LiveServer } from "@starbridge/server/test-support";
 import jpeg from "jpeg-js";
 import jsQR from "jsqr";
@@ -13,7 +20,7 @@ import { session } from "../src/context";
 import { DONE_LINE, poll } from "../src/decisions";
 import { piAllow, piPermissionConfig } from "../src/pi";
 import { configCommand, offerPiChain } from "../src/settings";
-import { FAKE_CODEXBAR, paired, testCtx, until } from "./helpers";
+import { approveAndConfirm, FAKE_CODEXBAR, paired, testCtx, until } from "./helpers";
 
 let server: LiveServer;
 beforeEach(async () => {
@@ -83,15 +90,63 @@ function scan(lines: string[]): string | undefined {
   return jsQR(px, width, height)?.data;
 }
 
-test("pair prints a link and a QR code that carry the code", async () => {
+test("pair prints a link and a QR code that carry the code; the app that scans it checks the code (#795)", async () => {
   const ctx = testCtx();
   const done = run(["pair", "--server", `${server.url}/`, "--name", "devbox"], ctx);
   await until(() => ctx.lines.some((l) => l.includes("Or type the code")));
   const code = ctx.lines[0]?.replace("Pairing code: ", "") as string;
   const link = `${server.url}/pair#${code}`;
-  expect(ctx.lines.at(-2)).toBe(`  Or open  ${link}`);
-  expect(scan(ctx.lines.slice(2, -2))).toBe(link);
-  await server.approve(code);
+  expect(ctx.lines.at(-2)).toBe(`  No app? Open  ${link}`);
+  // Only the QR carries the check key, in a link no browser opens.
+  const scanned = scan(ctx.lines.slice(2, -2)) as string;
+  const key = checkKeyFromLink(scanned) as string;
+  expect(scanned).toBe(
+    `starbridge://pair?server=${encodeURIComponent(server.url)}&k=${key}#${code}`,
+  );
+  await server.approve(code, key);
+  expect(await done).toBe(0);
+  // Checked by the app: nothing to show or ask.
+  expect(ctx.lines.some((l) => l.startsWith("Check code") || l.includes("Same code?"))).toBe(false);
+});
+
+test("pair saves nothing when the app that scanned the QR saw another add entry (#795)", async () => {
+  const ctx = testCtx();
+  const done = run(["pair", "--server", server.url, "--name", "devbox"], ctx);
+  await until(() => ctx.lines.some((l) => l.startsWith("Pairing code: ")));
+  // A proof under another key fails as one over another entry does.
+  await server.approve(ctx.lines[0]?.slice(14) as string, "0123456789ABCDEF");
+  expect(await done).toBe(1);
+  expect(ctx.errors.at(-1)).toContain("saw another check code");
+  expect(ctx.errors.at(-1)).toContain('revoke "devbox" under Devices');
+  expect(ctx.store.machine()).toBeUndefined();
+});
+
+test("pair saves nothing when the owner says the codes differ (#795)", async () => {
+  const ctx = testCtx();
+  const done = run(["pair", "--server", server.url, "--name", "devbox"], ctx);
+  const check = await approveAndConfirm(server, ctx, false);
+  expect(await done).toBe(1);
+  expect(ctx.lines).toContain(`Check code: ${check}`);
+  expect(ctx.errors.at(-1)).toContain("the codes differ, so this machine is not paired");
+  expect(ctx.store.machine()).toBeUndefined();
+});
+
+test("pair --confirm answers only the check code it names (#795)", async () => {
+  const ctx = testCtx();
+  expect(await run(["pair", "--confirm"], ctx)).toBe(1);
+  expect(ctx.errors.at(-1)).toContain("no `starbridge pair` is waiting");
+  const done = run(["pair", "--server", server.url, "--name", "devbox"], ctx);
+  await until(() => ctx.lines.some((l) => l.startsWith("Pairing code: ")));
+  const check = await server.approve(
+    ctx.lines.find((l) => l.startsWith("Pairing code: "))?.slice(14) as string,
+  );
+  await until(() => ctx.lines.some((l) => l.includes("Same code?")));
+  // An answer meant for another pairing on this machine.
+  writeFileSync(join(ctx.store.dir, "pair-answer.AAAA-AAAA-AAAA-AAAA"), "yes");
+  await Bun.sleep(1200);
+  expect(ctx.store.machine()).toBeUndefined();
+  expect(await run(["pair", "--confirm"], ctx)).toBe(0);
+  expect(ctx.lines).toContain(`Confirmed check code ${check} for the waiting \`starbridge pair\`.`);
   expect(await done).toBe(0);
 });
 
@@ -162,7 +217,7 @@ test("pair --force names the old pairing as Devices shows it, not by its id (#28
   const ctx = await paired(server);
   const done = run(["pair", "--force"], ctx);
   await until(() => ctx.lines.some((l) => l.startsWith("Pairing code: ")));
-  await server.approve(ctx.lines[0]?.replace("Pairing code: ", "") as string);
+  await approveAndConfirm(server, ctx);
   expect(await done).toBe(0);
   expect(ctx.lines.at(-1)).toMatch(
     /^Devices still lists the old pairing as the earlier "devbox", added [A-Z][a-z]{2} \d+, \d\d:\d\d( [AP]M)? \S+\. Revoke it there\.$/,
