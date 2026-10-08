@@ -620,7 +620,8 @@ async function main() {
       machineHome,
     );
     await asked.waitFor(/^d_\S+$/m);
-    await page.goto(ORIGIN);
+    // The push brings the row: a reload per probe would spend the per-address rate limit that
+    // later steps' answers need.
     await needRow(question).first().click({ timeout: 30_000 });
     const button = page
       .locator('section[aria-label="Selected"]')
