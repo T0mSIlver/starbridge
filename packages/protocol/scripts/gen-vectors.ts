@@ -9,6 +9,7 @@ import {
   approverKeys,
   bindMessage,
   checkCode,
+  checkProof,
   claimHash,
   codeFromLink,
   computePace,
@@ -1085,6 +1086,7 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
   };
 
   // --- pairing.json ---
+  const CHECK_KEY = encodeCrockford(new Uint8Array(10).map((_, i) => 200 - i * 13));
   const codeBytes = new Uint8Array(15).map((_, i) => i * 17);
   const code = parsePairingCode(encodeCrockford(codeBytes));
   const requestBody = {
@@ -1122,6 +1124,8 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
       entries: chain.slice(0, 3),
       id: devbox.member.id,
       expect: checkCode(chain.slice(0, 3), devbox.member.id),
+      key: CHECK_KEY,
+      proof: checkProof(chain.slice(0, 3), devbox.member.id, CHECK_KEY),
     },
     parse: [
       { input: formatPairingCode(code).toLowerCase(), expect: formatPairingCode(code) },
@@ -1142,6 +1146,23 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
         expect: formatPairingCode(code),
       },
       { input: "https://starbridge.run/pair#0123-4567", expect: "bad-encoding" },
+    ],
+    keyLinks: [
+      {
+        note: "pairingLink(server, code, key): the check key in the query, before #",
+        server: "https://starbridge.run",
+        key: CHECK_KEY,
+        link: pairingLink("https://starbridge.run", code, CHECK_KEY),
+        expect: CHECK_KEY,
+      },
+      {
+        input: `https://starbridge.run/pair?x=1&k=${CHECK_KEY.toLowerCase()}#ABCD`,
+        expect: CHECK_KEY,
+      },
+      { input: `https://starbridge.run/pair#k=${CHECK_KEY}`, expect: null },
+      { input: "https://starbridge.run/pair?k=0123#ABCD", expect: null },
+      { input: "https://starbridge.run/pair?k=0123456789ABCDEU#ABCD", expect: null },
+      { input: pairingLink("https://starbridge.run", code), expect: null },
     ],
     bind: (() => {
       const nonce = toB64(seed(11));

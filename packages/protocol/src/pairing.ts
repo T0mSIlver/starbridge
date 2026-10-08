@@ -79,18 +79,37 @@ export function parsePairingCode(text: string): PairingCode {
 
 /**
  * The link a QR code carries: `<server>/pair#<code>`. Opened in a browser, it shows the web page
- * with the code filled in; the fragment never reaches the server.
+ * with the code filled in; the fragment never reaches the server. A machine's QR also carries its
+ * check key, as `<server>/pair?k=<key>#<code>`, for the Android app; the printed link does not.
  */
-export function pairingLink(server: string, code: PairingCode): string {
+export function pairingLink(server: string, code: PairingCode, checkKey?: string): string {
   let end = server.length;
   while (end > 0 && server[end - 1] === "/") end--;
-  return `${server.slice(0, end)}/pair#${formatPairingCode(code)}`;
+  const query = checkKey ? `?k=${checkKey}` : "";
+  return `${server.slice(0, end)}/pair${query}#${formatPairingCode(code)}`;
 }
 
 /** A code typed by hand, or read from a scanned pairing link: the part after `#` if any. */
 export function codeFromLink(text: string): PairingCode {
   const hash = text.indexOf("#");
   return parsePairingCode(hash >= 0 ? text.slice(hash + 1) : text);
+}
+
+/** A machine's check key: 16 Crockford base32 characters, 80 bits, carried only by its QR. */
+export function newCheckKey(): string {
+  return encodeCrockford(sodium.randombytes_buf(10));
+}
+
+/** The check key in a scanned link's query (`k=`, before any `#`), or undefined. */
+export function checkKeyFromLink(text: string): string | undefined {
+  const head = text.split("#")[0] ?? "";
+  const query = head.includes("?") ? head.slice(head.indexOf("?") + 1) : "";
+  for (const part of query.split("&")) {
+    if (!part.startsWith("k=")) continue;
+    const key = part.slice(2).toUpperCase();
+    return key.length === 16 && [...key].every((c) => CROCKFORD.includes(c)) ? key : undefined;
+  }
+  return undefined;
 }
 
 /**
@@ -135,6 +154,8 @@ export const PairingApprovalBody = z.object({
   length: z.number().int().positive(),
   head: B64,
   approver: Id,
+  /** `checkProof` of the new machine's `add` entry, when the approver scanned its QR. */
+  check: B64.optional(),
 });
 export type PairingApprovalBody = z.infer<typeof PairingApprovalBody>;
 
@@ -245,28 +266,59 @@ export function verifyBind(
   }
 }
 
-/**
- * A machine's check code, which the machine asks the owner to confirm against the code a device
- * shows beside it under Devices (#795): the first 80 bits of BLAKE2b-256("starbridge/v1/check"
- * NUL body NUL sig) over the `add` entry that added member `id` to `entries`, as 16 Crockford
- * base32 characters in groups of four. The body holds the machine's keys and, through `prev`, the
- * whole chain before it, so a stand-in with copied keys or a chain the server forked gives
- * another code; the signature, which the server cannot predict, keeps it from searching for an
- * entry of the owner's and one of its own that match.
- */
-export function checkCode(entries: unknown[], id: string): string {
+/** The bytes a check code hashes: "starbridge/v1/check" NUL body NUL sig of member `id`'s `add` entry. */
+function checkInput(entries: unknown[], id: string): Uint8Array {
   const nul = new Uint8Array([0]);
   for (const e of entries) {
     const { body, sig } = (e ?? {}) as { body?: unknown; sig?: unknown };
     if (typeof body !== "string" || typeof sig !== "string") continue;
     const parsed = JSON.parse(body) as { op?: unknown; member?: { id?: unknown } };
     if (parsed.op !== "add" || parsed.member?.id !== id) continue;
-    const hash = sodium.crypto_generichash(
-      32,
-      concat(utf8("starbridge/v1/check"), nul, utf8(body), nul, utf8(sig)),
-      null,
-    );
-    return (encodeCrockford(hash.subarray(0, 10)).match(/.{4}/g) as string[]).join("-");
+    return concat(utf8("starbridge/v1/check"), nul, utf8(body), nul, utf8(sig));
   }
   throw new ProtocolError("unknown-member", `no add entry for ${id}`);
+}
+
+/**
+ * A machine's check code, which the owner compares with the code a device shows beside it under
+ * Devices (#795): the first 80 bits of BLAKE2b-256 of `checkInput`, the `add` entry that added
+ * member `id` to `entries`, as 16 Crockford base32 characters in groups of four. The body holds
+ * the machine's keys and, through `prev`, the whole chain before it, so a stand-in with copied
+ * keys or a chain the server forked gives another code; the signature, which the server cannot
+ * predict, keeps it from searching for an entry of the owner's and one of its own that match.
+ */
+export function checkCode(entries: unknown[], id: string): string {
+  const hash = sodium.crypto_generichash(32, checkInput(entries, id), null);
+  return (encodeCrockford(hash.subarray(0, 10)).match(/.{4}/g) as string[]).join("-");
+}
+
+function checkKeyBytes(key: string): Uint8Array {
+  return sodium.crypto_generichash(
+    32,
+    concat(utf8("starbridge/v1/check-key"), new Uint8Array([0]), utf8(key)),
+    null,
+  );
+}
+
+/**
+ * The approval's `check`, from a device that read the machine's check key from its QR:
+ * `crypto_auth` of `checkInput` under BLAKE2b-256("starbridge/v1/check-key" NUL key). The machine
+ * verifies it over its own `add` entry, which compares the two codes without the owner.
+ */
+export function checkProof(entries: unknown[], id: string, key: string): string {
+  return toB64(sodium.crypto_auth(checkInput(entries, id), checkKeyBytes(key)));
+}
+
+/** True when `proof` is `checkProof` of member `id`'s `add` entry in `entries` under `key`. */
+export function verifyCheckProof(
+  entries: unknown[],
+  id: string,
+  key: string,
+  proof: string,
+): boolean {
+  try {
+    return sodium.crypto_auth_verify(fromB64(proof), checkInput(entries, id), checkKeyBytes(key));
+  } catch {
+    return false;
+  }
 }
