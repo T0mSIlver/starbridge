@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, expect, setDefaultTimeout, test } from "bun:test";
+import { uptime } from "node:os";
 import { PRESENCE_BEAT_MS } from "@starbridge/protocol";
 import { LiveServer } from "@starbridge/server/test-support";
 import { Presence } from "../src/agent/presence";
@@ -64,6 +65,20 @@ test("each OS's output reads as lock and idle time, and anything else as no scre
   );
   expect(await headless.read()).toBeUndefined();
 });
+
+// #857's readers had never run on a Mac: GitHub's macOS runner has a console session to read.
+test.if(process.platform === "darwin")(
+  "on a Mac, ioreg reads as a lock state and an idle time",
+  async () => {
+    const reader = screenReader();
+    const screen = await reader.read();
+    reader.stop();
+    expect(screen).toEqual({ locked: expect.any(Boolean), idleMs: expect.any(Number) });
+    // Since the last input, so no more than the machine's uptime.
+    expect(screen?.idleMs).toBeGreaterThanOrEqual(0);
+    expect(screen?.idleMs).toBeLessThanOrEqual(uptime() * 1000);
+  },
+);
 
 function hub(ctx: TestCtx): Hub {
   return {

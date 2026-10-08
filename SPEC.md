@@ -1034,7 +1034,10 @@ Tokens, type and components: `DESIGN.md`.
   `TMPDIR` at one directory per run and remove it (`test-tmp.ts`, #313). A `windows-latest` job
   (#552) runs the CLI's platform tests and starts a built `.exe`; the rest of the CLI suite runs
   there without failing the job until it passes. A private repository skips it, since GitHub's
-  Windows runners need a public one or paid minutes.
+  Windows runners need a public one or paid minutes. A `macos-latest` job (#877), skipped the same
+  way, starts a built binary and runs the whole CLI suite, which must pass: the launchd service and
+  the screen readers run only on a Mac, so the real launchd starts and stops the agent there.
+  Both jobs run each test file alone and kill one that hangs (`cli/scripts/test-each.ts`, #862).
 - **Monitoring.** `uptime.yml` checks `/healthz`, `/healthz/backup` (fails when the last nightly
   backup is over 26 h old) and `/healthz/disk` (under 2 GB free), and opens one `outage` issue.
 

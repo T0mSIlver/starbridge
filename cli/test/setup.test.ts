@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, expect, setDefaultTimeout, test } from "bun:test";
+import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
   existsSync,
@@ -8,12 +9,14 @@ import {
   readFileSync,
   readlinkSync,
   rmSync,
-  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
+import { gzipSync } from "node:zlib";
 import { LiveServer } from "@starbridge/server/test-support";
+import { type Status, socketPath } from "../src/agent/api";
+import { AgentClient } from "../src/agent/client";
 import { makeAgent } from "../src/agent/main";
 import type { Agent } from "../src/agent/server";
 import { REMOVED } from "../src/api";
@@ -21,7 +24,7 @@ import { run } from "../src/cli";
 import { session } from "../src/context";
 import { poll } from "../src/decisions";
 import { pushOnce } from "../src/quota";
-import { installTarball, updateCodexbar } from "../src/setup/codexbar";
+import { installTarball, tarballKey, updateCodexbar } from "../src/setup/codexbar";
 import {
   CODEX_RULE,
   installOpencode,
@@ -31,7 +34,12 @@ import {
 } from "../src/setup/harnesses";
 import { markedSkill } from "../src/setup/marker";
 import opencodeFiles from "../src/setup/opencode-files.js";
-import { withInstalledPlaces } from "../src/setup/service";
+import {
+  installService,
+  removeService,
+  serviceState,
+  withInstalledPlaces,
+} from "../src/setup/service";
 import { probeLines, refresh, setup } from "../src/setup/setup";
 import { status } from "../src/setup/status";
 import { defaults, failure, type Sys } from "../src/setup/sys";
@@ -663,6 +671,38 @@ test("Ctrl-C at the test decision withdraws it from the devices (#613)", async (
   expect(settled?.outcome).toBe("withdrawn");
 });
 
+/** A ustar archive of `entries`: "0" a file, "2" a symlink, "5" a folder; mtime 0, owner 0. */
+function tar(
+  entries: { name: string; type?: "0" | "2" | "5"; mode: number; data?: string; link?: string }[],
+): Uint8Array {
+  const blocks: Uint8Array[] = [];
+  for (const e of entries) {
+    const data = new TextEncoder().encode(e.data ?? "");
+    const h = new Uint8Array(512);
+    const put = (at: number, text: string) => h.set(new TextEncoder().encode(text), at);
+    const octal = (at: number, len: number, n: number) =>
+      put(at, `${n.toString(8).padStart(len - 1, "0")}\0`);
+    put(0, e.name);
+    octal(100, 8, e.mode);
+    octal(108, 8, 0);
+    octal(116, 8, 0);
+    octal(124, 12, data.length);
+    octal(136, 12, 0);
+    put(148, " ".repeat(8));
+    put(156, e.type ?? "0");
+    put(157, e.link ?? "");
+    put(257, "ustar\x0000");
+    octal(
+      148,
+      7,
+      h.reduce((a, b) => a + b, 0),
+    );
+    blocks.push(h, data, new Uint8Array((512 - (data.length % 512)) % 512));
+  }
+  blocks.push(new Uint8Array(1024));
+  return Buffer.concat(blocks);
+}
+
 /**
  * CodexBar's releases as GitHub serves them: the API's latest tag, and each version's tarball
  * with a `.sha256` beside it, which `sums` replaces or, when null, leaves out. `latest` may
@@ -670,18 +710,24 @@ test("Ctrl-C at the test decision withdraws it from the devices (#613)", async (
  */
 function fakeCodexbarReleases(latest: string, sums: (v: string, sha: string) => string | null) {
   const state = { latest };
-  // Built once per version: tar stores mtimes, so a tarball rebuilt for the second request
-  // differs from the one the `.sha256` was computed from whenever a second ticks between them (#756).
+  // Built once per version, in-process: a system tar adds mtimes, and on macOS extended
+  // attributes, so its size and checksum would vary by host and by second (#756).
   const built = new Map<string, Uint8Array<ArrayBuffer>>();
   const tarball = (v: string) => {
     let bytes = built.get(v);
-    if (bytes) return bytes;
-    const src = mkdtempSync(join(tmpdir(), "codexbar-src-"));
-    writeFileSync(join(src, "CodexBarCLI"), "#!/bin/sh\n", { mode: 0o755 });
-    writeFileSync(join(src, "VERSION"), `${v}\n`);
-    symlinkSync("CodexBarCLI", join(src, "codexbar"));
-    bytes = new Uint8Array(Bun.spawnSync(["tar", "-czf", "-", "-C", src, "."]).stdout);
-    built.set(v, bytes);
+    if (!bytes) {
+      bytes = new Uint8Array(
+        gzipSync(
+          tar([
+            { name: "./", type: "5", mode: 0o755 },
+            { name: "./CodexBarCLI", mode: 0o755, data: "#!/bin/sh\n" },
+            { name: "./VERSION", mode: 0o644, data: `${v}\n` },
+            { name: "./codexbar", type: "2", mode: 0o777, link: "CodexBarCLI" },
+          ]),
+        ),
+      );
+      built.set(v, bytes);
+    }
     return bytes;
   };
   const server = Bun.serve({
@@ -690,10 +736,9 @@ function fakeCodexbarReleases(latest: string, sums: (v: string, sha: string) => 
       const path = new URL(req.url).pathname;
       if (path === "/rel/latest")
         return Response.redirect(`${server.url.href}rel/tag/v${state.latest}`, 302);
-      const m =
-        /^\/rel\/download\/v([^/]+)\/CodexBarCLI-v[^/]+-linux-x86_64\.tar\.gz(\.sha256)?$/.exec(
-          path,
-        );
+      const m = /^\/rel\/download\/v([^/]+)\/CodexBarCLI-v[^/]+-[^/]+\.tar\.gz(\.sha256)?$/.exec(
+        path,
+      );
       if (!m) return new Response("not found", { status: 404 });
       const bytes = tarball(m[1] as string);
       if (!m[2]) return new Response(bytes);
@@ -755,19 +800,24 @@ test("update moves setup's CodexBar to the latest release, or the one named", as
   try {
     const ctx = testCtx(fake.env);
     const sys = linuxSys(ctx, home);
-    const path = await installTarball(sys, "linux-x86_64", "9.9.8");
+    // linux-musl-x86_64 where the host has no glibc libcurl, such as a Mac.
+    const key = tarballKey(sys) as string;
+    const path = await installTarball(sys, key, "9.9.8");
     expect(path).toBe(join(home, ".local/opt/codexbar/codexbar"));
     ctx.lines.length = 0;
-    expect(await updateCodexbar(sys, undefined)).toBe(0);
-    expect(await updateCodexbar(sys, undefined)).toBe(0);
-    expect(await updateCodexbar(sys, undefined, "v9.9.7")).toBe(0);
+    const codes = [
+      await updateCodexbar(sys, undefined),
+      await updateCodexbar(sys, undefined),
+      await updateCodexbar(sys, undefined, "v9.9.7"),
+    ];
     expect(ctx.lines).toEqual([
-      "Downloading CodexBar 9.9.9 (linux-x86_64), 1 kB",
+      `Downloading CodexBar 9.9.9 (${key}), 1 kB`,
       `Installed CodexBar 9.9.9 to ${join(home, ".local/opt/codexbar")}, linked as ${join(home, ".local/bin/codexbar")}.`,
       "CodexBar 9.9.9 is up to date.",
-      "Downloading CodexBar 9.9.7 (linux-x86_64), 1 kB",
+      `Downloading CodexBar 9.9.7 (${key}), 1 kB`,
       `Installed CodexBar 9.9.7 to ${join(home, ".local/opt/codexbar")}, linked as ${join(home, ".local/bin/codexbar")}.`,
     ]);
+    expect(codes).toEqual([0, 0, 0]);
     expect(readlinkSync(join(home, ".local/bin/codexbar"))).toBe(path);
     fake.state.latest = "10.0.0";
     expect(await updateCodexbar(sys, undefined)).toBe(0);
@@ -973,3 +1023,77 @@ test("on Windows, setup registers a logon task that runs the agent headless, and
   expect(ps().some((c) => c.startsWith("powershell Unregister-ScheduledTask"))).toBe(true);
   expect(existsSync(path)).toBe(false);
 });
+
+test("on macOS, setup loads a launchd agent that runs the agent, and uninstall unloads it", async () => {
+  const m = await machine();
+  await startAgent(m.ctx);
+  const sys: Sys = { ...m.sys, platform: "darwin", arch: "arm64", uid: 501 };
+  expect(await setup(sys, { yes: true, readyTimeoutMs: 2_000 })).toBe(0);
+
+  const path = join(m.home, "Library/LaunchAgents/run.starbridge.agent.plist");
+  const plist = readFileSync(path, "utf8");
+  expect(plist).toContain(`<!-- Written by starbridge ${VERSION};`);
+  expect(plist).toContain(`<string>${SELF}</string>\n    <string>agent</string>`);
+  expect(plist).toContain(
+    `<key>StandardOutPath</key>\n  <string>${join(m.home, "Library/Logs/starbridge-agent.log")}</string>`,
+  );
+  const lc = () => m.calls().filter((c) => c.startsWith("launchctl"));
+  expect(lc()).toContain(`launchctl bootstrap gui/501 ${path}`);
+
+  // A second setup finds the same plist and leaves the running agent alone.
+  const before = lc().length;
+  await setup(sys, { yes: true, readyTimeoutMs: 2_000 });
+  expect(
+    lc()
+      .slice(before)
+      .some((c) => c.startsWith("launchctl bootstrap")),
+  ).toBe(false);
+
+  m.ctx.lines.length = 0;
+  expect(await uninstall(sys, { purge: true })).toBe(0);
+  expect(m.ctx.lines).toContain("Stopped and removed the agent service.");
+  expect(lc()).toContain("launchctl bootout gui/501/run.starbridge.agent");
+  expect(existsSync(path)).toBe(false);
+});
+
+// The real launchd, on GitHub's macOS runners only: its label is the one an installed agent uses.
+test.if(process.platform === "darwin" && process.env.RUNNER_ENVIRONMENT === "github-hosted")(
+  "on a Mac, launchd starts the agent from the plist setup writes, and stops it",
+  async () => {
+    const ctx = await paired(server);
+    const home = mkdtempSync(join(tmpdir(), "starbridge-home-"));
+    Object.assign(ctx.env, {
+      HOME: home,
+      PATH: "/usr/bin:/bin",
+      STARBRIDGE_CONFIG_DIR: ctx.store.dir,
+    });
+    const sys: Sys = {
+      ctx,
+      home,
+      platform: "darwin",
+      arch: process.arch,
+      uid: process.getuid?.() ?? 0,
+      prompt: defaults,
+      self: [process.execPath, join(import.meta.dir, "../src/main.ts")],
+    };
+    const { path } = await installService(sys, false);
+    try {
+      expect(spawnSync("plutil", ["-lint", path]).status).toBe(0);
+      const client = new AgentClient(socketPath(ctx.env, ctx.store.dir));
+      let pid: number | undefined;
+      await until(async () => {
+        pid = await client
+          .call<Status>("GET", "/v1/status", undefined, 1_000)
+          .then((s) => s.pid)
+          .catch(() => undefined);
+        return pid !== undefined;
+      }, 20_000);
+      expect(pid).not.toBe(process.pid);
+      expect((await serviceState(sys)).state).toBe("running");
+    } finally {
+      expect(await removeService(sys)).toBe(true);
+    }
+    expect((await serviceState(sys)).state).toBe("not loaded");
+    expect(existsSync(path)).toBe(false);
+  },
+);
