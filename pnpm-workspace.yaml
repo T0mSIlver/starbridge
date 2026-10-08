@@ -6,3 +6,6 @@ packages:
   - web
   - demo
   - deploy/watch
+  - desktop
+allowBuilds:
+    electron-winstaller: false

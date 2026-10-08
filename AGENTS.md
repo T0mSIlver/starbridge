@@ -11,7 +11,8 @@ product decisions and their reasons, by area; `PROTOCOL.md` the wire format;
 
 pnpm monorepo on Bun. `packages/protocol` (shared types, crypto and test
 vectors), `server` (Hono, `bun:sqlite`), `web` (Next.js), `android` (Kotlin,
-Compose), `cli` (the `starbridge` command and its local agent), `plugin` and
+Compose), `desktop` (Electron, the macOS app), `cli` (the `starbridge`
+command and its local agent), `plugin` and
 `mod` (Claude Code's plugins; `mod` also holds the Pi and opencode ones),
 `deploy` (the hosted instance), `demo` (the Play reviewers' demo server),
 `evals` (the skill eval and the load test), `docs` (pages served under
