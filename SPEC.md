@@ -56,9 +56,9 @@ native app. No native iOS app until there is demand and a device to test on.
 
 The desktop app is Electron, loading the configured server's web page (owner, 2026-10-08). The
 page stays the device: it signs in, pairs and keeps its keys as in a browser, so every web release
-reaches the app without an app update. The app adds what a browser cannot: the Needs-you count in
-the menu bar, notifications with the options as buttons and a typed reply, delivery while no
-browser runs, `starbridge://` links, and later presence (#848). Electron is the only stack with
+reaches the app without an app update. The app adds what a browser cannot: an amber light in the
+menu bar while something needs you, notifications with the options as buttons and a typed reply,
+delivery while no browser runs, `starbridge://` links, and later presence (#848). Electron is the only stack with
 all of these on macOS and Windows; Tauri would need a static export of a web app that renders
 per request, and it has no typed reply nor idle and lock detection. The cost is a ~150 MB
 download. The comparison is in the planning repo's
@@ -1039,7 +1039,7 @@ first window, so a provider with a window running out leads.
 
 The macOS app (#886) is Electron around the configured server's web page (starbridge.run unless
 the owner sets another from the menu bar icon). The page signs in, pairs and keeps its keys as in
-a browser; the app adds a menu bar count and notifications, so a web release needs no app release.
+a browser; the app adds a menu bar light and notifications, so a web release needs no app release.
 
 - **The bridge.** The app's preload gives `window.starbridgeDesktop` to the server's origin only,
   and the main process answers only the window's top frame on that origin. It carries data, never
