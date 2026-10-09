@@ -776,6 +776,20 @@ line, the safe side: at worst a prompt repeats an answer the agent already read.
 Off by default (#124): the Claude app already shows prompts for Remote Control sessions, and the
 gain is every session, machine and agent in one place. `starbridge config permissions on|off`.
 
+**Cursor prompts are impossible today** (#957). Cursor's `beforeShellExecution`, `beforeMCPExecution`
+and `preToolUse` hooks may answer `allow`, `deny` or `ask`, but `cursor-agent` 2026.10.01 honours
+only `deny` and `ask`: after an `allow` it still shows its own "Run this command?" dialog, and
+`-p` still rejects the call (run 2026-10-09, signed in). A device could block a call but never
+approve one, and its dialog opens only once the hook lets go, so the two cannot race either.
+Cursor's prompts stay at the keyboard, and Starbridge adds no hook before every call. A device
+that can only deny would need cards without Allow, which no client has.
+
+What else Cursor does not allow (2026.10), so it stays short of Claude Code: answering Cursor's
+own `askQuestion` from a device, since it runs no hooks; delivering an answer into a chat except
+when its turn ends (`stop`), and in `cursor-agent -p`, which runs no stop hook, not at all; and
+naming the conversation from a command the IDE runs, which gets no conversation id. Not checked:
+the Cursor IDE, which this machine does not run.
+
 - **Claude Code** (#57). A `PermissionRequest` command hook (600 s) races the dialog. Its input has
   no `tool_use_id`, so the hook settles a call by the hash of its `tool_input` on `PostToolUse`,
   `PostToolUseFailure` and `PermissionDenied` (a call that runs and fails fires only
