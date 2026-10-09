@@ -9,6 +9,7 @@ import { piPermissionConfig, removePiEntries } from "../pi";
 import { offerPiAllow, offerPiChain } from "../settings";
 import {
   CODEX_PLUGIN,
+  codexHookTrusted,
   codexPlugin,
   codexPluginDir,
   installCodexPlugin,
@@ -213,9 +214,10 @@ async function installCodex(sys: Sys): Promise<Outcome> {
       notes.push(`Could not install the plugin ${CODEX_PLUGIN}: ${oneLine((e as Error).message)}`);
     }
   // Codex runs a new hook only once the owner trusts it, which it asks at the next launch.
-  const next = hooked
-    ? ["Codex asks once to trust Starbridge's session hook: trust it, so sessions get the rules."]
-    : undefined;
+  const next =
+    hooked && !codexHookTrusted(sys)
+      ? ["Codex asks once to trust Starbridge's session hook: trust it, so sessions get the rules."]
+      : undefined;
   if (skill === "foreign" && rule === "foreign" && !hooked)
     return { mark: "–", text: "skipped", notes };
   return {

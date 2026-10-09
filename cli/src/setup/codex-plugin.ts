@@ -87,6 +87,12 @@ function enabled(sys: Home): boolean {
   return config.includes(`[plugins."${CODEX_PLUGIN}"]`);
 }
 
+/** Whether the owner trusted the plugin's hook: Codex records it as `[hooks.state."<plugin>:…"]`. */
+export function codexHookTrusted(sys: Home): boolean {
+  const config = readText(join(codexHome(sys), "config.toml")) ?? "";
+  return config.includes(`[hooks.state."${CODEX_PLUGIN}:`);
+}
+
 /** The `hooks.json` Codex runs, in its plugin cache. */
 function cachedHooks(sys: Home): string | undefined {
   return readText(

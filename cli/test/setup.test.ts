@@ -1217,6 +1217,15 @@ test("refresh gives Codex the plugin when setup installed its skill before #949"
   const done = await refresh(m.sys);
   expect(done).toContain("✓ Codex        skill, sandbox rule and plugin installed");
   expect(codexPlugin(m.sys)).toBe("current");
+  // Once the owner trusted the hook, setup no longer says Codex will ask.
+  const config = join(m.home, ".codex/config.toml");
+  writeFileSync(
+    config,
+    `${readFileSync(config, "utf8")}[hooks.state."starbridge@starbridge-cli:hooks/hooks.json:session_start:0:0"]\ntrusted_hash = "sha256:x"\n`,
+  );
+  m.ctx.lines.length = 0;
+  await setup(m.sys, { agent: "codex" });
+  expect(m.ctx.lines.join("\n")).not.toContain("to trust Starbridge's");
   // A script someone else put there stays, and setup says so.
   writeFileSync(join(m.home, ".codex/starbridge/hooks/session-start.sh"), "#!/bin/sh\necho mine\n");
   expect(codexPlugin(m.sys)).toBe("foreign");
