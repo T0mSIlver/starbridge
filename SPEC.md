@@ -1014,6 +1014,16 @@ first window, so a provider with a window running out leads.
   use as much as a Mac. It counts a touch or key down, never which. Settings → Notifications
   sets the account's hold time, as the web's Settings does.
 - Pull to refresh shows only on the screen that was pulled.
+- **Home-screen widgets** (#894), in Jetpack Glance. "Needs you" (2×2) counts what the Inbox's
+  badge counts: with an agent waiting, that number in amber on the amber card ("waiting on you",
+  then how many more "when you can"), else the open questions in `fg`. Quotas (2×2, widened to
+  4×2) shows at 2×2 the first window in the Quotas screen's order as a figure, its meter and its
+  state, and at 4×2 every window that fits, under its provider, as a meter and a figure. A tap
+  opens the Inbox or Quotas. Both follow Colours and the quota settings, and redraw on each change
+  to what they show and every 30 minutes, for relative times and snoozes that end. The owner chose
+  these from mockups over one-tap answers on a wider Needs you, a runs widget and taller sizes.
+  RemoteViews cannot load the app's fonts, so the widgets set in the system's sans, and Glance
+  draws no paths, so a meter's overrun shows only its red cap.
 - **Update screen** (#497): when the server answers 426 `client-too-old`, the app shows only
   "Update Starbridge", the server's minimum and this phone's release, and one button back to
   where the app came from: Google Play, Obtainium (its launch intent, else the release page), or

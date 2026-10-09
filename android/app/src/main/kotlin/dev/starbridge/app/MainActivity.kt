@@ -44,6 +44,7 @@ import dev.starbridge.app.ui.DecisionKey
 import dev.starbridge.app.ui.LocalClock24
 import dev.starbridge.app.ui.Main
 import dev.starbridge.app.ui.PairLinkKey
+import dev.starbridge.app.ui.QuotasKey
 import dev.starbridge.app.ui.PromptKey
 import dev.starbridge.app.ui.Setup
 import dev.starbridge.app.ui.pairing.JoinActions
@@ -176,6 +177,11 @@ class MainActivity : ComponentActivity() {
             opening.trySend(PromptKey(it))
             intent.removeExtra(EXTRA_PROMPT)
         }
+        // The Quotas widget's tap (#894). Signed out, the key would wait and open Quotas after sign-in.
+        if (intent?.getStringExtra(EXTRA_TAB) == TAB_QUOTAS) {
+            if (store.phase.value == Phase.Ready) opening.trySend(QuotasKey)
+            intent.removeExtra(EXTRA_TAB)
+        }
     }
 
     /** The next cold start's splash: the manifest's, or the wallpaper's ground (Android 13 and later). */
@@ -211,5 +217,7 @@ class MainActivity : ComponentActivity() {
         private const val RELEASES = "https://github.com/T0mSIlver/starbridge/releases/latest"
         const val EXTRA_DECISION = "decision"
         const val EXTRA_PROMPT = "prompt"
+        const val EXTRA_TAB = "tab"
+        const val TAB_QUOTAS = "quotas"
     }
 }

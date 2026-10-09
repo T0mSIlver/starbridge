@@ -94,6 +94,7 @@ interface AppEntry {
     fun store(): ServerStore
     fun notifier(): Notifier
     fun scope(): CoroutineScope
+    fun prefs(): Prefs
 }
 
 fun Context.app(): AppEntry = EntryPointAccessors.fromApplication(applicationContext, AppEntry::class.java)
