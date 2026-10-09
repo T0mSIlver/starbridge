@@ -261,9 +261,10 @@ function showWindow(): void {
   if (!win) return;
   const from = performance.now();
   if (win.isMinimized()) win.restore();
-  app.dock?.show();
   win.show();
   win.focus();
+  // After the window: bringing the Dock icon back is slow, and the window need not wait for it.
+  app.dock?.show();
   // From the click to the next frame the page draws: how fast a warm open feels.
   if (timing && win.webContents.getURL())
     win.webContents

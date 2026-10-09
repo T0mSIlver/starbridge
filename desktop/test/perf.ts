@@ -16,12 +16,12 @@ import { createInterface } from "node:readline";
 
 const DESKTOP = resolve(import.meta.dirname, "..");
 
-// From GitHub's macos-15 runner (arm64), packaged, 2026-10-09: cold 425–750 ms (the runner is
-// noisy: single launches from 290 ms to 1.5 s), warm 7–25 ms, 304 MB, 133 MB. Each budget leaves
-// room for that noise, not for growth.
+// From GitHub's macos-15 runner (arm64), packaged, 2026-10-09: cold medians 407–555 ms (single
+// launches from 290 ms to 1.5 s), warm 7–49 ms, 304 MB, 133 MB. Each budget leaves room for that
+// noise, not for growth.
 export const BUDGETS = {
   /** Process start to the window's first painted frame, median of the launches after the first. */
-  coldMs: 800,
+  coldMs: 700,
   /** Showing the hidden window to its next frame, as from the menu bar. */
   warmMs: 50,
   /** All processes' working sets, idle with the page loaded. */

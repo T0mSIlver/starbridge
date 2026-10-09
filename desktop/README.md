@@ -44,8 +44,8 @@ numbers.
 
 | | Budget | 2026-10-09 |
 |---|---|---|
-| Cold start: process start to the window's first painted frame (median of 6 launches after a first) | 800 ms | 425–750 ms |
-| Warm open: the hidden window to its next frame, as from the menu bar | 50 ms | 7–25 ms |
+| Cold start: process start to the window's first painted frame (median of 6 launches after a first) | 700 ms | 407–555 ms |
+| Warm open: the hidden window to its next frame, as from the menu bar | 50 ms | 7–49 ms |
 | Idle memory: every process's working set, page loaded | 350 MB | 304 MB |
 | Download: the largest DMG | 140 MB | 133 MB |
 
