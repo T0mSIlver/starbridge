@@ -8,14 +8,14 @@ instruction files, in your words. Starbridge never writes to them.
 
 ## What each agent supports
 
-| | Claude Code | Codex | Pi | opencode | Cursor |
-|---|---|---|---|---|---|
-| Questions | ✓ | ✓ | ✓ | ✓ | ✓ |
-| Answers into the live session | ✓ | ✓¹ | ✓³ | ✓⁵ | ✓¹¹ |
-| "Waiting for you" | ✓ | ✓ | ✓ | ✓ | ✓ |
-| Runs | ✓ | ✓⁸ | ✓ | ✓ | ✓ |
-| Permission prompts | Opt-in | Opt-in⁹ | Opt-in⁴ | Opt-in⁶ | No¹³ |
-| The agent's own ask tool | ✓² | ✓¹⁰ | n/a | ✓⁷ | No¹² |
+| | Claude Code | Codex | Pi | opencode | Cursor | Antigravity |
+|---|---|---|---|---|---|---|
+| Questions | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Answers into the live session | ✓ | ✓¹ | ✓³ | ✓⁵ | ✓¹¹ | No¹⁴ |
+| "Waiting for you" | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Runs | ✓ | ✓⁸ | ✓ | ✓ | ✓ | ✓ |
+| Permission prompts | Opt-in | Opt-in⁹ | Opt-in⁴ | Opt-in⁶ | No¹³ | No |
+| The agent's own ask tool | ✓² | ✓¹⁰ | n/a | ✓⁷ | No¹² | No |
 
 ¹ In interactive sessions, when `starbridge agent` runs (Codex CLI 0.160 or
 later). In `codex exec`, the agent waits for the answer with `starbridge wait`
@@ -82,6 +82,9 @@ devices. The rules tell the agent to ask through `starbridge ask` instead.
 ¹³ Cursor shows its own prompt even when a hook allows the call, so an Allow
 from your phone could not take effect. Cursor's prompts stay at the keyboard.
 
+¹⁴ The agent waits for the answer with `starbridge wait` before it ends its
+turn.
+
 `starbridge setup` installs Starbridge in each agent it finds, and prints one
 line per agent; `starbridge uninstall --agent <name>` removes it from one, and
 setup then leaves that agent alone until `starbridge setup --agent <name>`:
@@ -123,6 +126,14 @@ setup then leaves that agent alone until `starbridge setup --agent <name>`:
   started after setup has them. Setup also adds allow rules to
   `cursor-agent`'s `~/.cursor/cli-config.json`, so that `starbridge ask`,
   `waiting`, `working`, `wait` and `settle` run without a prompt there.
+- Antigravity (the app, the IDE and `agy`): the Starbridge plugin, in
+  `~/.gemini/config/plugins/starbridge`, which all three load. It brings the
+  rules and the skill. For `agy`, setup also adds allow entries to
+  `~/.gemini/antigravity-cli/settings.json` so that `starbridge ask`, `waiting`,
+  `working`, `wait` and `settle` run without a permission prompt, and outside
+  `--sandbox`, when the command is only that; the plugin's hook makes any other
+  line that runs them ask. In the app and the IDE they still ask the first time.
+  A later setup updates the plugin when the CLI carries a newer one.
 
 ## Where the lines go
 
@@ -138,11 +149,13 @@ committed, so lines there apply to everyone who works on the repo.
 <dd>Every repo: <code>~/.pi/agent/AGENTS.md</code>. One repo: <code>AGENTS.override.md</code>.</dd>
 <dt>opencode</dt>
 <dd>Every repo: <code>~/.config/opencode/AGENTS.md</code>. One repo: a file you name in <code>instructions</code> in <code>.opencode/opencode.json</code>, such as <code>["AGENTS.local.md"]</code>.</dd>
+<dt>Antigravity</dt>
+<dd>Every repo: <code>~/.gemini/GEMINI.md</code>. One repo: a file in <code>.agents/rules/</code>, such as <code>.agents/rules/local.md</code>.</dd>
 </dl>
 
 The one-repo files go at the repo root. Add the file's name to
 `.git/info/exclude` to keep it out of git, and for opencode `.opencode/opencode.json`
-too.
+too. Antigravity's go in `.agents/rules/`: exclude the file you add.
 
 Claude Code reads `CLAUDE.local.md` in addition to the repo's `CLAUDE.md`.
 `AGENTS.override.md` replaces the repo's `AGENTS.md` instead, so in a repo that

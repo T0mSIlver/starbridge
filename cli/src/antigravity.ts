@@ -6,7 +6,8 @@
  */
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import type { Ctx } from "./context";
+import { ownCommand } from "../../mod/hooks/own";
+import { type Ctx, UsageError } from "./context";
 
 /** The conversation's id, in every command the agent runs. */
 export const ANTIGRAVITY_CONVERSATION = "ANTIGRAVITY_CONVERSATION_ID";
@@ -69,4 +70,45 @@ export function pbtxtString(text: string, name: string): string | undefined {
     } else bytes.push(e.charCodeAt(0));
   }
   return Buffer.from(bytes).toString("utf8");
+}
+
+/** What Antigravity's `PreToolUse` hook gets on stdin, the parts Starbridge reads. */
+export interface PreToolInput {
+  conversationId?: string;
+  workspacePaths?: string[];
+  toolCall?: { name?: string; args?: Record<string, unknown> };
+}
+
+/** A starbridge command an AGY_ALLOW entry lets through, wherever it sits on the line. */
+const ALLOWED = /(^|[^\w-])starbridge\s+(ask|waiting|working|wait|settle)(?![\w-])/;
+
+/**
+ * `starbridge hook pre-tool --agent antigravity`, on the plugin's `PreToolUse` for
+ * `run_command` (#959). The allow entries setup adds to `agy`'s settings skip the prompt; this
+ * hook narrows them. A line that is one of those commands alone runs outside `--sandbox`, which
+ * has no network and hides the home folder. A line they would pass but that runs more, such as
+ * `LD_PRELOAD=… starbridge ask`, gets the prompt back (`force_ask`). `agy` ignores a hook's
+ * `allow` otherwise. Prints nothing for any other call.
+ */
+export function hookPreTool(ctx: Ctx, text: string, opts: { agent?: string }): number {
+  if (opts.agent !== "antigravity")
+    throw new UsageError(`--agent: antigravity (got ${opts.agent ?? "nothing"})`);
+  let input: PreToolInput;
+  try {
+    input = JSON.parse(text) as PreToolInput;
+  } catch {
+    return 0;
+  }
+  const line = input?.toolCall?.args?.CommandLine;
+  if (input?.toolCall?.name !== "run_command" || typeof line !== "string") return 0;
+  if (ownCommand(line))
+    ctx.out(JSON.stringify({ decision: "allow", overwrite: { BypassSandbox: true } }));
+  else if (ALLOWED.test(line))
+    ctx.out(
+      JSON.stringify({
+        decision: "force_ask",
+        reason: "Starbridge lets its commands skip the prompt only alone on their line.",
+      }),
+    );
+  return 0;
 }

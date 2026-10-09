@@ -30,20 +30,32 @@ import {
   removeCursorFiles,
 } from "./cursor";
 import {
+  AGY_ALLOW,
+  addAgyAllow,
+  agySettingsPath,
+  antigravityDir,
+  antigravityDisabled,
+  antigravityState,
   codexRule,
   codexRulePath,
   codexSkill,
   codexSkillDir,
+  hasAgy,
+  hasAntigravity,
   hasCodex,
   hasOpencode,
   hasPi,
+  installAntigravity,
   installCodexRule,
   installCodexSkill,
   installOpencode,
   installPiPackage,
+  missingAgyAllow,
   opencodeState,
   PI_PACKAGE,
   piPackage,
+  removeAgyAllow,
+  removeAntigravity,
   removeCodexRule,
   removeCodexSkill,
   removeOpencode,
@@ -74,6 +86,7 @@ export const AGENTS = {
   pi: "Pi",
   opencode: "opencode",
   cursor: "Cursor",
+  antigravity: "Antigravity",
 } as const;
 export type AgentId = keyof typeof AGENTS;
 export const AGENT_IDS = Object.keys(AGENTS) as AgentId[];
@@ -105,6 +118,8 @@ export function found(sys: Sys, id: AgentId): boolean {
       return hasOpencode(sys);
     case "cursor":
       return hasCursor(sys);
+    case "antigravity":
+      return hasAntigravity(sys);
   }
 }
 
@@ -138,6 +153,8 @@ export async function installed(sys: Sys, id: AgentId): Promise<boolean> {
       return opencodeState(sys) !== "missing";
     case "cursor":
       return cursorState(sys) !== "missing";
+    case "antigravity":
+      return antigravityState(sys) !== "missing";
   }
 }
 
@@ -174,6 +191,8 @@ export async function installAgent(sys: Sys, id: AgentId): Promise<Outcome> {
         return installOpencodeAgent(sys);
       case "cursor":
         return installCursor(sys);
+      case "antigravity":
+        return installAntigravityAgent(sys);
     }
   } catch (e) {
     return {
@@ -290,6 +309,41 @@ function installCursor(sys: Sys): Outcome {
   return { mark: "✓", text, notes };
 }
 
+/**
+ * The plugin, then the allow entries for `agy`, which only the plugin's hook keeps from passing
+ * more than the commands themselves: without it, setup takes them out.
+ */
+function installAntigravityAgent(sys: Sys): Outcome {
+  const state = antigravityState(sys);
+  if (state === "foreign") {
+    removeAgyAllow(sys);
+    return {
+      mark: "–",
+      text: "skipped",
+      notes: [`${antigravityDir(sys)} is another plugin named starbridge: left alone.`],
+    };
+  }
+  if (state !== "current") installAntigravity(sys);
+  const notes: string[] = [];
+  if (antigravityDisabled(sys)) {
+    removeAgyAllow(sys);
+    notes.push(
+      "The plugin is turned off in Antigravity: `agy plugin enable starbridge`, then `starbridge setup --agent antigravity`.",
+    );
+    return { mark: "✓", text: "plugin installed, turned off", notes };
+  }
+  if (!hasAgy(sys)) return { mark: "✓", text: "plugin installed", notes };
+  const allowed = missingAgyAllow(sys).length === 0 || addAgyAllow(sys);
+  if (!allowed)
+    notes.push(
+      `${agySettingsPath(sys)} is not valid JSON: add ${AGY_ALLOW.join(", ")} to permissions.allow there.`,
+    );
+  const text = allowed
+    ? `plugin installed, ${AGY_ALLOW.length} starbridge commands allowed`
+    : "plugin installed";
+  return { mark: "✓", text, notes };
+}
+
 /** Removes Starbridge from one agent. Returns one line per thing done. */
 export async function removeAgent(sys: Sys, id: AgentId): Promise<string[]> {
   const done: string[] = [];
@@ -315,6 +369,11 @@ export async function removeAgent(sys: Sys, id: AgentId): Promise<string[]> {
       done.push(...removeCursorFiles(sys));
       if (removeCursorAllow(sys))
         done.push(`Removed the starbridge allow rules from ${cursorConfigPath(sys)}.`);
+      break;
+    case "antigravity":
+      if (removeAntigravity(sys)) done.push(`Removed ${antigravityDir(sys)}.`);
+      if (removeAgyAllow(sys))
+        done.push(`Removed the starbridge allow entries from ${agySettingsPath(sys)}.`);
       break;
     case "pi": {
       const source = hasPi(sys) ? piPackage(sys) : undefined;

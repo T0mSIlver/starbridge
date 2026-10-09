@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
-import { authorize, hookInput, keyboardOnly, ownAsk, ownCommand } from "../pi/permissions.ts";
+import { ownCommand } from "../hooks/own.ts";
+import { authorize, hookInput, keyboardOnly, ownAsk } from "../pi/permissions.ts";
 
 const ALLOW = JSON.stringify({
   hookSpecificOutput: { hookEventName: "PermissionRequest", decision: { behavior: "allow" } },

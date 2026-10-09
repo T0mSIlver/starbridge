@@ -8,7 +8,7 @@ import { AGENT_IDS, AGENTS, found as agentFound, installed, removedAgents } from
 import { codexPlugin, codexPluginDir } from "./codex-plugin";
 import { findCodexbar, listProviders, probe } from "./codexbar";
 import { cursorState } from "./cursor";
-import { codexSkill, opencodeState, PI_PACKAGE, piPackage } from "./harnesses";
+import { antigravityState, codexSkill, opencodeState, PI_PACKAGE, piPackage } from "./harnesses";
 import { autoUpdate, hasClaude, PLUGINS, pluginState } from "./plugins";
 import { lingering, serviceState } from "./service";
 import { probeLines } from "./setup";
@@ -154,6 +154,11 @@ export async function status(sys: Sys): Promise<number> {
       const state = cursorState(sys);
       out(
         `Cursor skill: ${state === "current" ? "installed" : state === "outdated" ? "outdated (`starbridge setup --refresh` updates it)" : "another skill named starbridge"}`,
+      );
+    } else if (id === "antigravity") {
+      const state = antigravityState(sys);
+      out(
+        `Antigravity plugin: ${state === "current" ? "installed" : state === "outdated" ? "outdated (`starbridge setup --refresh` updates it)" : "another plugin named starbridge"}`,
       );
     } else {
       const state = opencodeState(sys);

@@ -2,14 +2,16 @@
  * Setup's steps for the agents other than Claude Code (#239): the `starbridge` skill copied into
  * Codex's skills folder, the Starbridge Pi package (the skill, the rules and the extension that
  * puts answers into the session), and the skill and plugin copied into opencode's config folder
- * (#300). The skill and the opencode plugin ship inside this binary, so setup needs no download
- * and installs the version that matches the CLI.
+ * (#300), and the Antigravity plugin (#959). The skill and the opencode and Antigravity plugins
+ * ship inside this binary, so setup needs no download and installs the version that matches the
+ * CLI.
  */
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import rule from "../../../plugin/hooks/rule.md" with { type: "text" };
 import skill from "../../../plugin/skills/starbridge/SKILL.md" with { type: "text" };
 import { VERSION } from "../version";
+import agyFiles from "./antigravity-files.js";
 import { codexPluginDir, refreshCodexPluginFiles } from "./codex-plugin";
 import { cursorHooksPath, cursorSkillDir, cursorState, installCursorFiles } from "./cursor";
 import { markedSkill, marker, ours } from "./marker";
@@ -265,9 +267,151 @@ export function removeOpencode(sys: Home): string[] {
   return done;
 }
 
+/** Whether `agy` is here: on the PATH, or its folder, which setup never creates. */
+export function hasAgy(sys: Sys): boolean {
+  return (
+    which(sys.ctx.env, "agy") !== undefined ||
+    existsSync(join(sys.home, ".gemini", "antigravity-cli"))
+  );
+}
+
+export function hasAntigravity(sys: Sys): boolean {
+  return (
+    hasAgy(sys) ||
+    which(sys.ctx.env, "antigravity") !== undefined ||
+    ["antigravity", "antigravity-ide"].some((p) => existsSync(join(sys.home, ".gemini", p)))
+  );
+}
+
+/** Whether the owner turned the plugin off in Antigravity, which then runs none of its hooks. */
+export function antigravityDisabled(sys: Home): boolean {
+  try {
+    const config = JSON.parse(
+      readFileSync(join(sys.home, ".gemini", "config", "config.json"), "utf8"),
+    ) as { plugins?: Record<string, { enabled?: unknown }> };
+    return config.plugins?.starbridge?.enabled === false;
+  } catch {
+    return false;
+  }
+}
+
 /**
- * Brings the Codex skill, rule and plugin script and opencode's skill and plugin to this
- * release's version,
+ * The Starbridge plugin in Antigravity's global customizations, which the app, the IDE and `agy`
+ * all read. Its rule carries the marker; plugin.json and hooks.json are JSON, with no comments.
+ */
+export function antigravityDir(sys: Home): string {
+  return join(sys.home, ".gemini", "config", "plugins", "starbridge");
+}
+
+const AGY_RULE = "rules/starbridge.md";
+
+/** Every file of the Antigravity plugin, by path inside its folder. */
+function antigravityFiles(): Record<string, string> {
+  return {
+    ...agyFiles,
+    // An always_on rule is in every conversation's context, as the SessionStart hook's is.
+    [AGY_RULE]: `---\n${marker("#")}\ntrigger: always_on\n---\n\n${rule}`,
+    "skills/starbridge/SKILL.md": SKILL,
+  };
+}
+
+/** Whether Antigravity has the plugin, and whether it is this CLI's; one without the marker is someone else's. */
+export function antigravityState(sys: Home): FileState {
+  const dir = antigravityDir(sys);
+  if (!existsSync(dir)) return "missing";
+  const ruleText = readIn(dir, AGY_RULE);
+  if (!ours(ruleText)) return "foreign";
+  const current = Object.entries(antigravityFiles()).every(
+    ([path, want]) => readIn(dir, path) === want,
+  );
+  return current ? "current" : "outdated";
+}
+
+/** Writes the plugin, replacing the folder so a file an older release wrote does not linger. */
+export function installAntigravity(sys: Home) {
+  const dir = antigravityDir(sys);
+  rmSync(dir, { recursive: true, force: true });
+  for (const [path, body] of Object.entries(antigravityFiles())) {
+    mkdirSync(dirname(join(dir, path)), { recursive: true });
+    writeFileSync(join(dir, path), body);
+  }
+}
+
+/**
+ * The allow entries for `agy`'s settings, which let the commands the skill runs skip the prompt.
+ * A hook cannot do it: `agy` 1.3.2 still prompts after a `PreToolUse` `allow`. An entry also
+ * passes the command behind a variable assignment or `env`, so the plugin's hook makes such a
+ * line ask again (`hook pre-tool`).
+ */
+export const AGY_ALLOW = ["ask", "waiting", "working", "wait", "settle"].map(
+  (c) => `command(starbridge ${c})`,
+);
+
+/** `agy`'s settings file. The app and the IDE keep their own, which setup does not know. */
+export function agySettingsPath(sys: Home): string {
+  return join(sys.home, ".gemini", "antigravity-cli", "settings.json");
+}
+
+type AgySettings = { permissions?: { allow?: unknown } & Record<string, unknown> } & Record<
+  string,
+  unknown
+>;
+
+function readAgySettings(sys: Home): AgySettings | undefined {
+  try {
+    const v = JSON.parse(readFileSync(agySettingsPath(sys), "utf8")) as unknown;
+    return v && typeof v === "object" && !Array.isArray(v) ? (v as AgySettings) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+const agyAllowList = (s: AgySettings | undefined): string[] => {
+  const allow = s?.permissions?.allow;
+  return Array.isArray(allow) ? allow.filter((r): r is string => typeof r === "string") : [];
+};
+
+/** The entries of AGY_ALLOW missing from `agy`'s settings. */
+export function missingAgyAllow(sys: Home): string[] {
+  const have = new Set(agyAllowList(readAgySettings(sys)));
+  return AGY_ALLOW.filter((r) => !have.has(r));
+}
+
+/** Adds AGY_ALLOW to `agy`'s settings. False, writing nothing, when the file does not parse. */
+export function addAgyAllow(sys: Home): boolean {
+  const read = readAgySettings(sys);
+  if (!read && existsSync(agySettingsPath(sys))) return false;
+  const s: AgySettings = read ?? {};
+  const allow = agyAllowList(s);
+  s.permissions = {
+    ...s.permissions,
+    allow: [...allow, ...AGY_ALLOW.filter((r) => !allow.includes(r))],
+  };
+  mkdirSync(dirname(agySettingsPath(sys)), { recursive: true });
+  writeFileSync(agySettingsPath(sys), `${JSON.stringify(s, null, 2)}\n`);
+  return true;
+}
+
+/** Removes AGY_ALLOW from `agy`'s settings. False when none was there. */
+export function removeAgyAllow(sys: Home): boolean {
+  const s = readAgySettings(sys);
+  const allow = agyAllowList(s);
+  if (!s?.permissions || !allow.some((r) => AGY_ALLOW.includes(r))) return false;
+  s.permissions.allow = allow.filter((r) => !AGY_ALLOW.includes(r));
+  writeFileSync(agySettingsPath(sys), `${JSON.stringify(s, null, 2)}\n`);
+  return true;
+}
+
+/** Removes the plugin, only when it is the one setup wrote. */
+export function removeAntigravity(sys: Home): boolean {
+  if (antigravityState(sys) === "missing" || antigravityState(sys) === "foreign") return false;
+  rmSync(antigravityDir(sys), { recursive: true, force: true });
+  return true;
+}
+
+/**
+ * Brings the Codex skill, rule and plugin script, opencode's skill and plugin and the
+ * Antigravity plugin to this release's version,
  * where setup wrote them (they carry its marker); it adds nothing. Returns what it did.
  */
 export function refreshFiles(sys: Home): string[] {
@@ -298,5 +442,11 @@ export function refreshFiles(sys: Home): string[] {
     step(`the opencode skill and plugin in ${opencodeDir(sys)}`, () => installOpencode(sys, true));
     if (opencodeSnapshot(sys) === before && done.at(-1)?.startsWith("Updated")) done.pop();
   }
+  if (antigravityState(sys) === "outdated")
+    step(antigravityDir(sys), () => installAntigravity(sys));
+  // The entries pass more than the commands once no hook of ours narrows them.
+  const agy = antigravityState(sys);
+  if ((agy === "foreign" || (agy !== "missing" && antigravityDisabled(sys))) && removeAgyAllow(sys))
+    done.push(`Removed the starbridge allow entries from ${agySettingsPath(sys)}.`);
   return done;
 }
