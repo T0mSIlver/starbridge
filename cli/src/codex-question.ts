@@ -86,7 +86,8 @@ function spawnRace(ctx: Ctx, stdin: string) {
 /**
  * `starbridge hook question --agent codex`, the `PreToolUse` input on stdin: starts the race and
  * prints nothing, so the picker opens. Without the daemon (a TUI that runs its own app server,
- * `codex exec`) or a pairing there is nothing to race, and the question stays at the keyboard.
+ * `codex exec`), on Windows, or without a pairing there is nothing to race, and the question
+ * stays at the keyboard.
  * With `race`, it is the race.
  */
 export async function hookCodexQuestion(
@@ -97,6 +98,8 @@ export async function hookCodexQuestion(
 ): Promise<number> {
   try {
     const hook = parse(stdin);
+    // Node reads a socket path as a named pipe on Windows, where the daemon listens on AF_UNIX.
+    if (process.platform === "win32") return 0;
     const home = codexHome(ctx.env);
     if (!home || !existsSync(codexControlSocket(home))) return 0;
     session(ctx);

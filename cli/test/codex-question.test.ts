@@ -10,6 +10,9 @@ import { paired, type TestCtx, until } from "./helpers";
 
 setDefaultTimeout(30_000);
 
+/** The race reaches Codex's daemon over a unix socket, which it skips on Windows. */
+const unix = test.skipIf(process.platform === "win32");
+
 let server: LiveServer;
 beforeEach(async () => {
   server = await LiveServer.start();
@@ -101,7 +104,7 @@ async function machine(home: string): Promise<TestCtx> {
   return ctx;
 }
 
-test("a device answers Codex's request_user_input, and the picker takes it (#951)", async () => {
+unix("a device answers Codex's request_user_input, and the picker takes it (#951)", async () => {
   const d = daemon([THREAD]);
   const ctx = await machine(d.home);
   const race = hookCodexQuestion(ctx, PRE_TOOL_USE, true);
@@ -123,7 +126,7 @@ test("a device answers Codex's request_user_input, and the picker takes it (#951
   d.stop();
 });
 
-test("answered at the keyboard first, the card is settled elsewhere (#951)", async () => {
+unix("answered at the keyboard first, the card is settled elsewhere (#951)", async () => {
   const d = daemon([THREAD]);
   const ctx = await machine(d.home);
   const race = hookCodexQuestion(ctx, PRE_TOOL_USE, true);
@@ -136,29 +139,32 @@ test("answered at the keyboard first, the card is settled elsewhere (#951)", asy
   d.stop();
 });
 
-test("a thread the daemon has not loaded, a secret, or no daemon leaves the picker alone (#951)", async () => {
-  // `codex exec` runs its thread outside the daemon: resuming it there would load it.
-  const exec = daemon(["another-thread"]);
-  const ctx = await machine(exec.home);
-  await hookCodexQuestion(ctx, PRE_TOOL_USE, true);
-  expect(exec.got.map((m) => m.method)).not.toContain("thread/resume");
-  exec.stop();
+unix(
+  "a thread the daemon has not loaded, a secret, or no daemon leaves the picker alone (#951)",
+  async () => {
+    // `codex exec` runs its thread outside the daemon: resuming it there would load it.
+    const exec = daemon(["another-thread"]);
+    const ctx = await machine(exec.home);
+    await hookCodexQuestion(ctx, PRE_TOOL_USE, true);
+    expect(exec.got.map((m) => m.method)).not.toContain("thread/resume");
+    exec.stop();
 
-  const secret = structuredClone(REQUEST);
-  (secret.params.questions[0] as { isSecret: boolean }).isSecret = true;
-  const d = daemon([THREAD], secret);
-  ctx.env.CODEX_HOME = d.home;
-  await hookCodexQuestion(ctx, PRE_TOOL_USE, true);
-  expect(d.got.some((m) => m.id === 0)).toBe(false);
-  d.stop();
+    const secret = structuredClone(REQUEST);
+    (secret.params.questions[0] as { isSecret: boolean }).isSecret = true;
+    const d = daemon([THREAD], secret);
+    ctx.env.CODEX_HOME = d.home;
+    await hookCodexQuestion(ctx, PRE_TOOL_USE, true);
+    expect(d.got.some((m) => m.id === 0)).toBe(false);
+    d.stop();
 
-  // No daemon: the hook starts no race.
-  ctx.env.CODEX_HOME = mkdtempSync(join(tmpdir(), "codex-home-"));
-  let started = false;
-  await hookCodexQuestion(ctx, PRE_TOOL_USE, false, () => {
-    started = true;
-  });
-  expect(started).toBe(false);
-  expect(ctx.lines).toEqual([]);
-  expect(await server.opened("decision")).toEqual([]);
-});
+    // No daemon: the hook starts no race.
+    ctx.env.CODEX_HOME = mkdtempSync(join(tmpdir(), "codex-home-"));
+    let started = false;
+    await hookCodexQuestion(ctx, PRE_TOOL_USE, false, () => {
+      started = true;
+    });
+    expect(started).toBe(false);
+    expect(ctx.lines).toEqual([]);
+    expect(await server.opened("decision")).toEqual([]);
+  },
+);

@@ -742,7 +742,8 @@ line, the safe side: at worst a prompt repeats an answer the agent already read.
   resuming a `codex exec` thread there would load it. It posts one waiting card per question,
   held from the session's answer loop, and answers the request once each has a device's answer,
   a typed reply as the TUI's `user_note:`. `serverRequest/resolved` first, or the end of the
-  turn, settles the cards `elsewhere`. A secret question stays at the keyboard.
+  turn, settles the cards `elsewhere`. A secret question stays at the keyboard, and so does every
+  question on Windows, where Node reads a socket path as a named pipe.
 - Pi has no built-in ask tool; Starbridge intercepts none by name.
 
 ### Permission prompts
