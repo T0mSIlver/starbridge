@@ -643,6 +643,7 @@ line, the safe side: at worst a prompt repeats an answer the agent already read.
 | Pi TUI and RPC | The Pi extension (`mod/pi`) calls `pi.sendUserMessage(text, { deliverAs: "followUp" })` (#232) |
 | opencode TUI and `serve` | The opencode plugin (`mod/opencode`) calls `client.session.promptAsync`, one loop per session (#300) |
 | `pi -p`, `opencode run`, subagents | `wait` |
+| Antigravity (app, IDE, `agy`) | `wait`, until its hooks bring answers back (#961) |
 
 - **The mod** (#7, #35, #48, #68). Why a mod and not Claude Code channels: channels need launch
   flags and an allowlist. A mod cannot listen on a port and its `$.http.fetch` aborts after 30 s,
@@ -660,7 +661,10 @@ line, the safe side: at worst a prompt repeats an answer the agent already read.
 - **Which harness asked** (#319, #320). Harnesses pass their variables to processes they start, so
   `ask` takes Codex, Pi or opencode over Claude Code when both are set, unless Claude Code runs as `claude
   -p`, the only way Codex and Pi start it. A Codex sub-agent asks under its root thread, since
-  `codex queue` refuses sub-agent threads.
+  `codex queue` refuses sub-agent threads. Antigravity gives commands `ANTIGRAVITY_CONVERSATION_ID`
+  and ranks after Codex, Pi and opencode, which sessions start for reviews, and before Claude Code;
+  its card title is the one Antigravity generates, read from
+  `~/.gemini/<product>/annotations/<id>.pbtxt` (#960).
 - **Pi and opencode** append `plugin/hooks/rule.md` to the system prompt and run the mod's own
   answer loop (`agent.ts`, `poller.ts`, `switch.ts`). opencode gives commands no session id, so
   its plugin sets `STARBRIDGE_OPENCODE_SESSION` through `shell.env`. After opencode restarts, the
