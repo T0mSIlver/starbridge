@@ -6,8 +6,10 @@ import { generateMemberKeys, hashInput, ready } from "@starbridge/protocol";
 import { LiveServer } from "@starbridge/server/test-support";
 import type { Status } from "../src/agent/api";
 import { AgentClient } from "../src/agent/client";
+import { Decisions } from "../src/agent/decisions";
 import { makeAgent } from "../src/agent/main";
-import type { Agent } from "../src/agent/server";
+import { Permissions } from "../src/agent/permissions";
+import { Agent } from "../src/agent/server";
 import { run } from "../src/cli";
 import { PROMPTS_OPEN, promptsMark } from "../src/config";
 import { session } from "../src/context";
@@ -630,8 +632,94 @@ test("an unreachable server, bad input or another agent never blocks the hook", 
   expect(ctx.lines).toEqual([]);
   expect(ctx.errors.join("\n")).toContain("permission prompt not sent");
   expect(await hookPermission(ctx, "not json", { agent: "claude-code" })).toBe(0);
-  expect(await hookPermission(ctx, request(), { agent: "codex" })).toBe(0);
+  expect(await hookPermission(ctx, request(), { agent: "cursor" })).toBe(0);
   expect(ctx.lines).toEqual([]);
+});
+
+/** What Codex 0.160 sends its `PermissionRequest` hook for a sandbox escalation. */
+const CODEX_ESCALATION = JSON.stringify({
+  session_id: "019a0b1c-codex-thread",
+  turn_id: "1",
+  transcript_path: null,
+  cwd: "/work/starbridge",
+  hook_event_name: "PermissionRequest",
+  model: "gpt-6.1-sol",
+  permission_mode: "default",
+  tool_name: "Bash",
+  tool_input: { command: "git push origin main", description: "Push the fix" },
+});
+
+test("Codex: the hook hands over to the keyboard while the owner sits at this machine (#950)", async () => {
+  const ctx = await paired(server);
+  expect(await run(["config", "permissions", "on"], ctx)).toBe(0);
+  ctx.lines.length = 0;
+  let present = true;
+  const a = new Agent(ctx, agentAddress(ctx.store.dir), (hub) => [
+    new Decisions(hub),
+    new Permissions(hub, () => present),
+  ]);
+  await a.start();
+  agents.push(a);
+
+  // At the machine: nothing is posted, and Codex's dialog opens at once.
+  expect(await hookPermission(ctx, CODEX_ESCALATION, { agent: "codex" })).toBe(0);
+  expect(ctx.lines).toEqual([]);
+  expect(await server.opened("permission")).toEqual([]);
+
+  // Away: the devices get it, and a device's allow is Codex's decision, once.
+  present = false;
+  let out = hookPermission(ctx, CODEX_ESCALATION, { agent: "codex" });
+  await until(async () => (await server.opened("permission")).length === 1);
+  const [first] = await server.opened("permission");
+  expect(first).toMatchObject({ agent: "codex", tool: "Bash", summary: "git push origin main" });
+  await server.answerPermission(first?.id as string, { behavior: "allow", scope: "once" });
+  expect(await out).toBe(0);
+  expect(decision(ctx)).toEqual({
+    hookSpecificOutput: { hookEventName: "PermissionRequest", decision: { behavior: "allow" } },
+  });
+
+  // Back at the machine mid-hold: the hook lets go, and the devices see it answered there.
+  ctx.lines.length = 0;
+  out = hookPermission(ctx, CODEX_ESCALATION, { agent: "codex" });
+  await until(async () => (await server.opened("permission")).length === 2);
+  present = true;
+  a.notify();
+  expect(await out).toBe(0);
+  expect(ctx.lines).toEqual([]);
+  const second = (await server.opened("permission"))[1];
+  await until(async () => (await server.opened("settled")).length === 2);
+  expect((await server.opened("settled"))[1]).toMatchObject({
+    itemId: second?.id,
+    outcome: "keyboard",
+  });
+});
+
+test("Codex: an interrupted turn settles the prompt its killed hook held (#950)", async () => {
+  const ctx = await machine(false);
+  const out = hookPermission(ctx, CODEX_ESCALATION, { agent: "codex" }, undefined);
+  await until(async () => (await server.opened("permission")).length === 1);
+  const interrupt = JSON.stringify({
+    session_id: "019a0b1c-codex-thread",
+    turn_id: "1",
+    cwd: "/work/starbridge",
+    hook_event_name: "Interrupt",
+    model: "gpt-6.1-sol",
+    permission_mode: "default",
+  });
+  expect(await hookSettle(ctx, interrupt, { agent: "codex" })).toBe(0);
+  expect(await out).toBe(0);
+  expect(ctx.lines).toEqual([]);
+  await until(async () => (await server.opened("settled")).length === 1);
+  expect((await server.opened("settled"))[0]).toMatchObject({ outcome: "keyboard" });
+});
+
+test("a Codex patch shows the files it touches", () => {
+  const patch =
+    "*** Begin Patch\n*** Update File: src/a.ts\n@@\n-x\n+y\n*** Add File: b.md\n+hi\n*** End Patch";
+  expect(summarize("apply_patch", { command: patch })).toBe("src/a.ts, b.md");
+  expect(summarize("apply_patch", { command: "not a patch" })).toBe(
+    'apply_patch {"command":"not a patch"}',
+  );
 });
 
 /** Claude Code's `AskUserQuestion` picker, as 2.1.294 sends it to `PermissionRequest` (#848). */

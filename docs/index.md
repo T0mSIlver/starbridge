@@ -92,8 +92,8 @@ Run the command in the session's own directory, since the last session is per di
 - **Quotas.** What's left on each AI plan, read from
   [CodexBar](https://github.com/steipete/CodexBar), with an optional alert before a window runs
   out.
-- **Permission prompts.** Allow or deny, from your phone, the calls Claude Code, opencode and Pi
-  ask permission for. Off until you turn them on.
+- **Permission prompts.** Allow or deny, from your phone, the calls Claude Code, Codex, opencode
+  and Pi ask permission for. Off until you turn them on.
 
 Your agents and their apps notify you too. [One notification per question](notifications.md)
 says how to turn off what Starbridge already covers.

@@ -146,7 +146,7 @@ test("setup --yes installs the agent, the plugins and the skills, and uploads a 
   // A slow agent says it is installing first; what is left to do comes only at the end (#773).
   expect(out).toContain("  Claude Code  installing…\n✓ Claude Code  plugins installed");
   const end = out.slice(out.indexOf("Starbridge is set up."));
-  expect(end).toContain("  Codex asks once to trust Starbridge's session hook");
+  expect(end).toContain("  Codex asks once to trust Starbridge's hooks");
   expect(out.indexOf("to trust Starbridge's")).toBe(out.lastIndexOf("to trust Starbridge's"));
 
   // Providers: the earlier ones that work now; `broken` needs a sign-in and is left out.
@@ -192,12 +192,15 @@ test("setup --yes installs the agent, the plugins and the skills, and uploads a 
   expect(m.calls()).toContain(`codex plugin marketplace add ${market}`);
   expect(m.calls()).toContain("codex plugin add starbridge@starbridge-cli");
   const hooks = readFileSync(
-    join(m.home, ".codex/plugins/cache/starbridge-cli/starbridge/1.0.0/hooks/hooks.json"),
+    join(m.home, ".codex/plugins/cache/starbridge-cli/starbridge/1.1.0/hooks/hooks.json"),
     "utf8",
   );
-  expect(JSON.parse(hooks).hooks.SessionStart[0].hooks[0].command).toBe(
-    `sh '${join(market, "hooks", "session-start.sh")}'`,
-  );
+  const command = (event: string) => JSON.parse(hooks).hooks[event][0].hooks[0].command;
+  const script = (name: string) => `sh '${join(market, "hooks", name)}'`;
+  expect(command("SessionStart")).toBe(script("session-start.sh"));
+  // Codex's approvals, through the same CLI wrapper as Claude Code's plugin (#950).
+  expect(command("PermissionRequest")).toBe(`${script("cli.sh")} hook permission --agent codex`);
+  expect(command("Interrupt")).toBe(`${script("cli.sh")} hook settle --agent codex`);
   expect(codexPlugin(m.sys)).toBe("current");
   // opencode gets the skill and the plugin with the code it imports, in the repository's layout.
   const oc = join(m.home, ".config/opencode");
@@ -1223,6 +1226,15 @@ test("refresh gives Codex the plugin when setup installed its skill before #949"
     config,
     `${readFileSync(config, "utf8")}[hooks.state."starbridge@starbridge-cli:hooks/hooks.json:session_start:0:0"]\ntrusted_hash = "sha256:x"\n`,
   );
+  // Trusted before #950 added hooks: Codex asks again for the new ones.
+  m.ctx.lines.length = 0;
+  await setup(m.sys, { agent: "codex" });
+  expect(m.ctx.lines.join("\n")).toContain("to trust Starbridge's hooks");
+  for (const event of ["permission_request", "stop", "interrupt"])
+    writeFileSync(
+      config,
+      `${readFileSync(config, "utf8")}[hooks.state."starbridge@starbridge-cli:hooks/hooks.json:${event}:0:0"]\ntrusted_hash = "sha256:x"\n`,
+    );
   m.ctx.lines.length = 0;
   await setup(m.sys, { agent: "codex" });
   expect(m.ctx.lines.join("\n")).not.toContain("to trust Starbridge's");
