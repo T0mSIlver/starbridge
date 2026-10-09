@@ -196,12 +196,11 @@ test("setup --yes installs the agent, the plugins and the skills, and uploads a 
     "utf8",
   );
   const command = (event: string) => JSON.parse(hooks).hooks[event][0].hooks[0].command;
-  expect(command("SessionStart")).toBe(`sh '${market}/hooks/session-start.sh'`);
+  const script = (name: string) => `sh '${join(market, "hooks", name)}'`;
+  expect(command("SessionStart")).toBe(script("session-start.sh"));
   // Codex's approvals, through the same CLI wrapper as Claude Code's plugin (#950).
-  expect(command("PermissionRequest")).toBe(
-    `sh '${market}/hooks/cli.sh' hook permission --agent codex`,
-  );
-  expect(command("Interrupt")).toBe(`sh '${market}/hooks/cli.sh' hook settle --agent codex`);
+  expect(command("PermissionRequest")).toBe(`${script("cli.sh")} hook permission --agent codex`);
+  expect(command("Interrupt")).toBe(`${script("cli.sh")} hook settle --agent codex`);
   expect(codexPlugin(m.sys)).toBe("current");
   // opencode gets the skill and the plugin with the code it imports, in the repository's layout.
   const oc = join(m.home, ".config/opencode");
