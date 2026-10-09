@@ -608,7 +608,9 @@ async function main() {
   });
   /** The open question's row, by its question. */
   const needRow = (question: string) =>
-    page.getByRole("button", { name: new RegExp(`${question.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`) });
+    page.getByRole("button", {
+      name: new RegExp(`${question.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`),
+    });
   /** Asks, selects the question, clicks `option` in its detail, and times its row's leaving in frames and ms. */
   const answerTimed = async (question: string, option: string, wait = false) => {
     const asked = cli(
