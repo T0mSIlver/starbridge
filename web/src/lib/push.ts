@@ -3,7 +3,7 @@
 import { api } from "./api";
 import { desktop } from "./desktop";
 import { needsHomeScreen, thisBrowser } from "./install";
-import { setPref } from "./prefs";
+import { getPref, setPref } from "./prefs";
 
 /** "install": an iOS tab, where push needs the page on the Home Screen first. */
 export type PushState = "unsupported" | "install" | "denied" | "off" | "on";
@@ -125,10 +125,16 @@ export function subscribeFailure(e: unknown, brave = "brave" in navigator): stri
  * a new one if the server's key changed.
  */
 export async function resubscribe(): Promise<void> {
-  if (!supported() || Notification.permission !== "granted") return;
+  if (!supported() || Notification.permission !== "granted" || getPref("pushOff")) return;
   const reg = await navigator.serviceWorker.getRegistration("/");
   const existing = await reg?.pushManager.getSubscription();
   if (!reg || !existing) return;
   const key = await api.vapid().catch(() => undefined);
-  await send(await current(reg.pushManager, existing, key));
+  const sub = await current(reg.pushManager, existing, key);
+  // Turned off while the key was read (#943): what a new key subscribed goes too.
+  if (getPref("pushOff")) {
+    await sub.unsubscribe();
+    return;
+  }
+  await send(sub);
 }

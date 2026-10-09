@@ -16,6 +16,7 @@ import { desktop } from "@/lib/desktop";
 import type { RecoveryState } from "@/lib/device";
 import { addedLabels, dayAndTime } from "@/lib/format";
 import { AGENTS_GUIDE } from "@/lib/links";
+import { reports } from "@/lib/notify";
 import { applyTheme, type Prefs, usePref } from "@/lib/prefs";
 import type { PushState } from "@/lib/push";
 import { holdsQuotas, providerOrder, type QuotaSettings } from "@/lib/quotaSettings";
@@ -554,8 +555,13 @@ function DeviceSection() {
   const [recovery, setRecovery] = useState<RecoveryState>();
   const [clock] = usePref("clock");
   const [notify, setNotify] = useState<Record<string, NotifyState>>({});
+  // Read again when this device's switch reports a new state.
   useEffect(() => {
-    if (ctx) api.notifications().then(setNotify, () => {});
+    if (!ctx) return;
+    const read = () => api.notifications().then(setNotify, () => {});
+    read();
+    reports.addEventListener("change", read);
+    return () => reports.removeEventListener("change", read);
   }, [ctx]);
   useEffect(() => {
     if (ctx)

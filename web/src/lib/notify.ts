@@ -6,6 +6,12 @@ import { desktop } from "./desktop";
 import { getPref } from "./prefs";
 import type { PushState } from "./push";
 
+/** Whether the owner turned this device's notifications off with its switch. */
+export const switchedOff = () => (desktop ? !getPref("desktopNotify") : getPref("pushOff"));
+
+/** Fires after this device tells the server a new state, so Devices can read them again. */
+export const reports = new EventTarget();
+
 /** What this device reports: the desktop app its own switch, a browser its push state. */
 export function reported(push: PushState): NotifyState | undefined {
   if (desktop) return getPref("desktopNotify") ? "on" : "off";
@@ -17,5 +23,9 @@ export function reported(push: PushState): NotifyState | undefined {
 /** Tells the server this device's state; a server without the route has no list to fill. */
 export async function report(): Promise<void> {
   const state = reported(await (await import("./push")).pushState());
-  if (state) await api.setNotifications(state).catch(() => {});
+  if (!state) return;
+  await api.setNotifications(state).then(
+    () => reports.dispatchEvent(new Event("change")),
+    () => {},
+  );
 }

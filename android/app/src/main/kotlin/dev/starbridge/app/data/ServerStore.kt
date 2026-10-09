@@ -386,6 +386,9 @@ class ServerStore(
     private fun wipe(message: String?) {
         // Another account or server may have no push: poll again until one arrives.
         pushed = false
+        // The next device this phone becomes has told the server nothing yet (#943).
+        reportedNotify = null
+        notifyStates.value = emptyMap()
         joinJob?.cancel()
         showJob?.cancel()
         watchJob?.cancel()
