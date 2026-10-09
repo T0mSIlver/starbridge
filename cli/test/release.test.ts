@@ -15,7 +15,9 @@ import { compareVersions, platformAsset, RELEASE_KEY, verifyMinisign } from "../
 import { piSource } from "../src/setup/harnesses";
 import { update } from "../src/update";
 import { VERSION } from "../src/version";
-import { testCtx } from "./helpers";
+import { bareEnv, compiledFake, FAKE_BIN, SYSTEM_PATH, testCtx } from "./helpers";
+
+const WINDOWS = process.platform === "win32";
 
 const CLI = join(import.meta.dir, "..");
 const FIXTURES = join(import.meta.dir, "fixtures", "minisign");
@@ -89,15 +91,20 @@ function fakeReleases(
 ) {
   const key = signer();
   const asset = opts.asset ?? platformAsset();
-  const binary = `#!/bin/sh\necho "starbridge ${version}"\n`;
+  // Windows starts only a real executable.
+  const binary = WINDOWS
+    ? readFileSync(compiledFake(`console.log("starbridge ${version}");`))
+    : Buffer.from(`#!/bin/sh\necho "starbridge ${version}"\n`);
   const sums = `${createHash("sha256").update(binary).digest("hex")}  ${asset}\n`;
-  const files: Record<string, string> = {
+  const files: Record<string, string | Uint8Array<ArrayBuffer>> = {
     SHA256SUMS: opts.tamper === "sums" ? `${"0".repeat(64)}  ${asset}\n` : sums,
     "SHA256SUMS.minisig": (opts.key ?? key).sign(
       Buffer.from(sums),
       `starbridge v${opts.signed ?? version}`,
     ),
-    [asset]: opts.tamper === "binary" ? `${binary}# changed\n` : binary,
+    [asset]: new Uint8Array(
+      opts.tamper === "binary" ? Buffer.concat([binary, Buffer.from("# changed\n")]) : binary,
+    ),
   };
   const server = Bun.serve({
     port: 0,
@@ -158,7 +165,8 @@ async function install(url: string, pubkey: string, withMinisign: boolean, versi
 const hasMinisign = spawnSync("minisign", ["-v"]).status === 0;
 const verifiers = hasMinisign ? ["openssl", "minisign"] : ["openssl"];
 
-describe.each(verifiers)("install.sh checking with %s", (verifier) => {
+// install.sh refuses Windows, whose installer is install.ps1.
+describe.skipIf(WINDOWS).each(verifiers)("install.sh checking with %s", (verifier) => {
   const run = (url: string, pubkey: string, version?: string) =>
     install(url, pubkey, verifier === "minisign", version);
 
@@ -301,7 +309,7 @@ describe.skipIf(!pwsh || !hasMinisign)("install.ps1", () => {
 
 describe("update", () => {
   function installed() {
-    const path = join(dir, "bin", "starbridge");
+    const path = join(dir, "bin", WINDOWS ? "starbridge.exe" : "starbridge");
     mkdirSync(join(dir, "bin"));
     writeFileSync(path, "old");
     chmodSync(path, 0o755);
@@ -345,10 +353,13 @@ describe("update", () => {
     mkdirSync(dirname(settings), { recursive: true });
     writeFileSync(settings, JSON.stringify({ packages: [piSource(VERSION)] }));
     const c = ctx();
-    c.env.PATH = [join(import.meta.dir, "fixtures", "fake-bin"), dirname(process.execPath)].join(
-      delimiter,
+    Object.assign(
+      c.env,
+      bareEnv({
+        PATH: [FAKE_BIN, dirname(process.execPath), SYSTEM_PATH].join(delimiter),
+        FAKE_LOG: join(dir, "calls"),
+      }),
     );
-    c.env.FAKE_LOG = join(dir, "calls");
     expect(await update(c, { kind: "binary", path }, release.pubkey)).toBe(0);
     expect(c.lines).toContain("Moved the Starbridge Pi package to v99.0.0.");
     expect(JSON.parse(readFileSync(settings, "utf8")).packages).toEqual([piSource("99.0.0")]);

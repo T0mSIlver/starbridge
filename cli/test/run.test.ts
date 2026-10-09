@@ -9,7 +9,16 @@ import type { Agent } from "../src/agent/server";
 import { run } from "../src/cli";
 import { WithheldError } from "../src/context";
 import { ProgressParser, Reporter, type RunInput, runCommand } from "../src/run";
-import { paired, type TestCtx, testCtx, until } from "./helpers";
+import {
+  agentAddress,
+  bareEnv,
+  listenAt,
+  paired,
+  sh,
+  type TestCtx,
+  testCtx,
+  until,
+} from "./helpers";
 
 setDefaultTimeout(30_000);
 
@@ -95,8 +104,9 @@ test("a chained command's output passes through unchanged, and the run ends with
 test.each([
   ["success", "exit 0", 0],
   ["failure", "exit 42", 42],
-  ["a signal", "kill -TERM $$", 128 + 15],
-])("the exit code on %s is the command's own", async (_name, script, code) => {
+  // Windows has no signals: Git's bash emulates them, and a native parent sees it exit 0.
+  ...(process.platform === "win32" ? [] : [["a signal", "kill -TERM $$", 128 + 15] as const]),
+] as const)("the exit code on %s is the command's own", async (_name, script, code) => {
   const ctx = await paired(server);
   ctx.env.STARBRIDGE_NO_AGENT = "1";
   expect((await wrapped(ctx, script)).code).toBe(code);
@@ -142,7 +152,7 @@ test("without a title, a reason or a command, nothing runs", async () => {
 
 test("with an agent running, the run goes through it", async () => {
   const machine = await paired(server);
-  const socket = join(machine.store.dir, "agent.sock");
+  const socket = agentAddress(machine.store.dir);
   const agent = makeAgent(machine, { socket, noQuota: true });
   await agent.start();
   agents.push(agent);
@@ -157,7 +167,7 @@ test("with an agent running, the run goes through it", async () => {
 
 test("a run killed with -9 posts no exit and nothing after, so devices see it lost (#249)", async () => {
   const machine = await paired(server);
-  const socket = join(machine.store.dir, "agent.sock");
+  const socket = agentAddress(machine.store.dir);
   const agent = makeAgent(machine, { socket, noQuota: true });
   await agent.start();
   agents.push(agent);
@@ -329,7 +339,7 @@ test("the plugin's SessionStart hook adds the rule to reach the owner and the ru
   const hook = join(import.meta.dir, "..", "..", "plugin", "hooks", "session-start.sh");
   const ctx = testCtx();
   await Bun.write(join(ctx.store.dir, "rules.md"), "Tell me when you run inference.\n");
-  const p = Bun.spawn(["sh", hook], { env: { STARBRIDGE_CONFIG_DIR: ctx.store.dir } });
+  const p = Bun.spawn([sh(), hook], { env: bareEnv({ STARBRIDGE_CONFIG_DIR: ctx.store.dir }) });
   const out = JSON.parse(await new Response(p.stdout).text());
   expect(out.hookSpecificOutput.hookEventName).toBe("SessionStart");
   const text = out.hookSpecificOutput.additionalContext as string;
@@ -343,12 +353,12 @@ test("the plugin's SessionStart hook adds the rule to reach the owner and the ru
 
 test("an agent of another API revision (426) is skipped: the run goes to the server", async () => {
   const machine = await paired(server);
-  const socket = join(machine.store.dir, "old-agent.sock");
+  const socket = agentAddress(machine.store.dir);
   const old = createServer((_req, res) => {
     res.writeHead(426, { "content-type": "application/json" });
     res.end(JSON.stringify({ error: "agent-too-old", detail: "update the agent" }));
   });
-  await new Promise<void>((r) => old.listen(socket, r));
+  await listenAt(old, socket);
   try {
     machine.env.STARBRIDGE_AGENT_SOCKET = socket;
     const r = await wrapped(machine, "exit 0");

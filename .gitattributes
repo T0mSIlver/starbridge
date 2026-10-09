@@ -1,0 +1,6 @@
+# A Windows checkout (core.autocrlf) would end lines with CRLF, which sh cannot run and which
+# breaks the signed fixtures (#884).
+* text=auto eol=lf
+*.bat -text
+cli/test/fixtures/minisign/* -text
+android/licenses/*.txt -text

@@ -64,8 +64,8 @@ function step(text: string) {
 
 /**
  * Follows a link to `path`. Right after a navigation a click now and then does nothing, as with
- * `choose` (#879: the Replace link of the recovery key left the page on Settings), so this clicks
- * again until the address is `path`.
+ * `choose` (#879: the recovery key's Replace link, and Add a device, left the page on Settings),
+ * so this clicks again until the address is `path`.
  */
 async function follow(page: Page, link: Locator, path: string) {
   for (let tries = 1; ; tries++) {
@@ -489,7 +489,7 @@ async function main() {
     .getByRole("navigation", { name: "Main" })
     .getByRole("link", { name: "Settings" })
     .click();
-  await page.getByRole("link", { name: "Add a device" }).click();
+  await follow(page, page.getByRole("link", { name: "Add a device" }), "/settings/devices/add");
   await page.getByLabel("Pair a machine or device").fill(code);
   await page.getByRole("button", { name: "Check code" }).click();
   await page.getByRole("button", { name: "Approve" }).click();
@@ -510,7 +510,7 @@ async function main() {
     .getByRole("navigation", { name: "Main" })
     .getByRole("link", { name: "Settings" })
     .click();
-  await page.getByRole("link", { name: "Add a device" }).click();
+  await follow(page, page.getByRole("link", { name: "Add a device" }), "/settings/devices/add");
 
   step("refuse a second pairing");
   const other = cli("pair-refused", ["pair", "--name", "stranger"], join(tmp, "stranger"));
@@ -1406,7 +1406,7 @@ async function main() {
     .getByRole("navigation", { name: "Main" })
     .getByRole("link", { name: "Settings" })
     .click();
-  await page.getByRole("link", { name: "Add a device" }).click();
+  await follow(page, page.getByRole("link", { name: "Add a device" }), "/settings/devices/add");
   await page.getByLabel("Pair a machine or device").fill(farCode);
   await page.getByRole("button", { name: "Check code" }).click();
   await page.getByRole("button", { name: "Approve" }).click();
@@ -1454,7 +1454,7 @@ async function main() {
       await page.getByRole("dialog").getByRole("button", { name: "Revoke" }).click();
       await page.getByRole("dialog").waitFor({ state: "detached" });
     }
-    await page.getByRole("link", { name: "Add a device" }).click();
+    await follow(page, page.getByRole("link", { name: "Add a device" }), "/settings/devices/add");
   }
   if ((await cli("perm-on", ["config", "permissions", "on"], farHome).exited) !== 0)
     throw new Error("config permissions on failed");
@@ -1620,7 +1620,7 @@ async function main() {
     .getByRole("navigation", { name: "Main" })
     .getByRole("link", { name: "Settings" })
     .click();
-  await page.getByRole("link", { name: "Add a device" }).click();
+  await follow(page, page.getByRole("link", { name: "Add a device" }), "/settings/devices/add");
   await page.getByLabel("Pair a machine or device").fill(codeB);
   await page.getByRole("button", { name: "Check code" }).click();
   await page.getByText(/read and answer as a device/).waitFor();

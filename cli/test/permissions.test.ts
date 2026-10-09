@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, expect, setDefaultTimeout, test } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { delimiter, join } from "node:path";
 import { generateMemberKeys, hashInput, ready } from "@starbridge/protocol";
 import { LiveServer } from "@starbridge/server/test-support";
 import type { Status } from "../src/agent/api";
@@ -21,7 +21,17 @@ import {
   redactText,
   summarize,
 } from "../src/permissions";
-import { paired, type TestCtx, testCtx, until } from "./helpers";
+import {
+  agentAddress,
+  bareEnv,
+  paired,
+  SYSTEM_PATH,
+  sh,
+  slashes,
+  type TestCtx,
+  testCtx,
+  until,
+} from "./helpers";
 
 setDefaultTimeout(30_000);
 
@@ -70,7 +80,7 @@ async function machine(agent = true): Promise<TestCtx> {
   expect(await run(["config", "permissions", "on"], ctx)).toBe(0);
   if (!agent) ctx.env.STARBRIDGE_NO_AGENT = "1";
   else {
-    const a = makeAgent(ctx, { socket: join(ctx.store.dir, "agent.sock"), noQuota: true });
+    const a = makeAgent(ctx, { socket: agentAddress(ctx.store.dir), noQuota: true });
     await a.start();
     agents.push(a);
   }
@@ -334,12 +344,18 @@ test("the plugin's PostToolUse check starts the CLI only while a prompt is open 
   const cfg = join(dir, "cfg");
   mkdirSync(bin);
   mkdirSync(cfg);
-  writeFileSync(join(bin, "starbridge"), `#!/bin/sh\ncat > "${dir}/ran"\n`, { mode: 0o755 });
+  writeFileSync(join(bin, "starbridge"), `#!/bin/sh\ncat > "${slashes(dir)}/ran"\n`, {
+    mode: 0o755,
+  });
   const script = join(import.meta.dir, "../../plugin/hooks/settle.sh");
-  const env = { PATH: `${bin}:/usr/bin:/bin`, HOME: dir, STARBRIDGE_CONFIG_DIR: cfg };
+  const env = bareEnv({
+    PATH: [bin, SYSTEM_PATH].join(delimiter),
+    HOME: dir,
+    STARBRIDGE_CONFIG_DIR: cfg,
+  });
   const started = () => {
     rmSync(join(dir, "ran"), { force: true });
-    const r = Bun.spawnSync(["sh", script], { env, stdin: new TextEncoder().encode('{"a":1}') });
+    const r = Bun.spawnSync([sh(), script], { env, stdin: new TextEncoder().encode('{"a":1}') });
     expect(r.exitCode).toBe(0);
     return existsSync(join(dir, "ran"));
   };
@@ -412,7 +428,7 @@ for (const viaAgent of [true, false]) {
 
 test("a hook that hangs up and does not hold again is gone: the prompt settles at the keyboard (#400)", async () => {
   const ctx = await machine();
-  const agent = new AgentClient(join(ctx.store.dir, "agent.sock"));
+  const agent = new AgentClient(agentAddress(ctx.store.dir));
   const { id } = await agent.call<{ id: string }>(
     "POST",
     "/v1/permissions",
@@ -455,7 +471,7 @@ test("while disabled the hooks post nothing and print nothing", async () => {
   expect(ctx.lines).toHaveLength(3);
   expect(ctx.lines[0]).toBe("permissions   off");
   expect(await server.opened("permission")).toEqual([]);
-  const status = await new AgentClient(join(ctx.store.dir, "agent.sock")).call<Status>(
+  const status = await new AgentClient(agentAddress(ctx.store.dir)).call<Status>(
     "GET",
     "/v1/status",
   );

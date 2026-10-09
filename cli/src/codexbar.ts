@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
 import { computePace, type QuotaSnapshot, type QuotaWindow } from "@starbridge/protocol";
+import { killTree, spawnable } from "./platform";
 
 /**
  * Reads `codexbar usage --format json`. CodexBar's JSON has no stable contract, so this takes
@@ -27,7 +28,18 @@ export function runCodexbar(
 ): Promise<RunResult> {
   const args = ["usage", "--format", "json", ...(provider ? ["--provider", provider] : [])];
   return new Promise((resolve) => {
-    const child = spawn(bin, args, { stdio: ["ignore", "pipe", "pipe"] });
+    // A `.cmd` on Windows starts only through cmd.exe, as every other command the CLI runs.
+    let start: ReturnType<typeof spawnable>;
+    try {
+      start = spawnable(bin, args);
+    } catch (e) {
+      return resolve({ code: null, stdout: "", stderr: (e as Error).message });
+    }
+    const child = spawn(start.file, start.args, {
+      windowsVerbatimArguments: start.windowsVerbatimArguments,
+      windowsHide: true,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
     let stdout = "";
     let stderr = "";
     child.stdout.on("data", (d) => {
@@ -36,7 +48,7 @@ export function runCodexbar(
     child.stderr.on("data", (d) => {
       stderr += d;
     });
-    const timer = setTimeout(() => child.kill("SIGKILL"), timeoutMs);
+    const timer = setTimeout(() => killTree(child), timeoutMs);
     child.on("error", (e) => {
       clearTimeout(timer);
       resolve({ code: null, stdout, stderr: e.message });

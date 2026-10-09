@@ -24,7 +24,8 @@ for (const name of readdirSync(tmpdir())) {
 }
 
 const root = mkdtempSync(join(tmpdir(), `starbridge-test-${process.pid}-`));
-process.env.TMPDIR = root;
+// Windows reads TEMP, then TMP.
+process.env.TMPDIR = process.env.TEMP = process.env.TMP = root;
 const clean = () => rmSync(root, { recursive: true, force: true });
 afterAll(clean);
 process.on("exit", clean);

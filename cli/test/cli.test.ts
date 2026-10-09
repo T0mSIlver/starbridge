@@ -20,7 +20,7 @@ import { session } from "../src/context";
 import { DONE_LINE, poll } from "../src/decisions";
 import { piAllow, piPermissionConfig } from "../src/pi";
 import { configCommand, offerPiChain } from "../src/settings";
-import { approveAndConfirm, FAKE_CODEXBAR, paired, testCtx, until } from "./helpers";
+import { agentAddress, approveAndConfirm, FAKE_CODEXBAR, paired, testCtx, until } from "./helpers";
 
 let server: LiveServer;
 beforeEach(async () => {
@@ -45,9 +45,12 @@ test("pair joins the directory and keeps the keys private", async () => {
   const machine = ctx.store.machine();
   expect(machine?.name).toBe("devbox");
   expect((await server.directory()).members.get(machine?.id as string)?.active).toBe(true);
-  expect(statSync(ctx.store.dir).mode & 0o777).toBe(0o700);
-  for (const f of ["machine.json", "directory.json", "state.json"])
-    expect(statSync(join(ctx.store.dir, f)).mode & 0o777).toBe(0o600);
+  // Windows keeps no POSIX modes; the config folder sits in the user's own profile.
+  if (process.platform !== "win32") {
+    expect(statSync(ctx.store.dir).mode & 0o777).toBe(0o700);
+    for (const f of ["machine.json", "directory.json", "state.json"])
+      expect(statSync(join(ctx.store.dir, f)).mode & 0o777).toBe(0o600);
+  }
   expect(await run(["pair", "--server", server.url], ctx)).toBe(1);
   expect(ctx.errors.at(-1)).toContain("already paired");
 });
@@ -598,7 +601,7 @@ test("waiting says when the owner snoozed the question, and wait says it once wi
 
 test("through the local agent, waiting and wait say the snooze too, and --json prints its time", async () => {
   const ctx = await paired(server);
-  const agent = makeAgent(ctx, { socket: join(ctx.store.dir, "agent.sock"), noQuota: true });
+  const agent = makeAgent(ctx, { socket: agentAddress(ctx.store.dir), noQuota: true });
   await agent.start();
   try {
     await run(ASK, ctx);
@@ -1048,7 +1051,7 @@ test("a decision whose answer came from a device revoked since is closed (#515)"
 
 test("through the local agent, wait says too that a revoked device answered (#515)", async () => {
   const { ctx, id } = await revokedAnswer();
-  const agent = makeAgent(ctx, { socket: join(ctx.store.dir, "agent.sock"), noQuota: true });
+  const agent = makeAgent(ctx, { socket: agentAddress(ctx.store.dir), noQuota: true });
   await agent.start();
   try {
     const started = Date.now();

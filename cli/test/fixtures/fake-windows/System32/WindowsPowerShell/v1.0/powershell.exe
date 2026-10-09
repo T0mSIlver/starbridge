@@ -1,9 +1,0 @@
-#!/bin/sh
-# Stands in for Windows PowerShell's ScheduledTasks cmdlets: logs each script; the task runs.
-for script; do :; done
-echo "powershell $script" >>"$FAKE_LOG"
-case "$script" in
-  *").State") echo Running ;;
-  Register-*) cp "$STARBRIDGE_TASK_XML" "$FAKE_STATE.task.xml" ;;
-esac
-exit 0

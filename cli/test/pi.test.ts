@@ -43,9 +43,9 @@ test("the skill is allowed by name and by its own folder only; a plain allow nee
   });
   expect(piAllow(h.env).state).toBe("allowed");
   expect(piRules({ HOME: "/h" }).read).toEqual([
-    "/h/.pi/agent/git/github.com/T0mSIlver/starbridge/plugin/skills/starbridge/*",
+    `${join("/h", ".pi/agent/git/github.com/T0mSIlver/starbridge/plugin/skills/starbridge")}/*`,
   ]);
-  expect(piSkillDir({ HOME: "/h", PI_CODING_AGENT_DIR: "/pi" })).toStartWith("/pi/git/");
+  expect(piSkillDir({ HOME: "/h", PI_CODING_AGENT_DIR: "/pi" })).toStartWith(join("/pi", "git"));
 });
 
 test("a plain ask or deny level is left to the owner, and the other surfaces still get theirs", () => {
