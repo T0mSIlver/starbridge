@@ -12,12 +12,14 @@ import {
   claimHash,
   codeFromLink,
   computePace,
+  DEFAULT_QUOTA_ALERTS,
   forgetHeads,
   formatPairingCode,
   fromB64,
   joinCommitment,
   joinerKeys,
   joinRequest,
+  migrateQuotaAlerts,
   noteHead,
   open,
   openImage,
@@ -39,6 +41,7 @@ import {
   verifyBind,
   verifyCheckProof,
   verifyDirectory,
+  wantsQuotaAlert,
   withheldBy,
 } from "../src/index";
 
@@ -66,6 +69,7 @@ const V = {
   heads: await load("heads.json"),
   join: await load("join.json"),
   pace: await load("pace.json"),
+  quotaAlerts: await load("quota-alerts.json"),
   schemas: await load("schemas.json"),
 };
 
@@ -297,6 +301,17 @@ describe("pace.json", () => {
       expect(alertsFor(c.provider, { ...c.window, pace }, now)).toEqual(c.expectAlerts);
     });
   }
+});
+
+describe("quota-alerts.json", () => {
+  const { cases, migrate, defaults } = V.quotaAlerts;
+  test("defaults", () => expect(DEFAULT_QUOTA_ALERTS).toEqual(defaults));
+  for (const c of cases)
+    test(c.name, () =>
+      expect(wantsQuotaAlert(c.settings, c.alert, c.windowMinutes)).toBe(c.expect),
+    );
+  for (const c of migrate)
+    test(`migrate: ${c.name}`, () => expect(migrateQuotaAlerts(c.old)).toEqual(c.expect));
 });
 
 describe("schemas.json", () => {

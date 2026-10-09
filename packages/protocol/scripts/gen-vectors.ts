@@ -15,6 +15,7 @@ import {
   codeFromLink,
   computePace,
   DEFAULT_ALERT_RULE,
+  DEFAULT_QUOTA_ALERTS,
   type Directory,
   encodeCrockford,
   entryHash,
@@ -30,6 +31,7 @@ import {
   type Member,
   type MemberKeys,
   memberKeysFromSeeds,
+  migrateQuotaAlerts,
   noteHead,
   pairingApproval,
   pairingKey,
@@ -37,6 +39,8 @@ import {
   pairingRequest,
   parsePairingCode,
   publicKeys,
+  type QuotaAlert,
+  type QuotaAlertSettings,
   RECOVERY,
   ready,
   recoverEntry,
@@ -52,6 +56,7 @@ import {
   signatureMessage,
   toB64,
   verifyDirectory,
+  wantsQuotaAlert,
   withheldBy,
 } from "../src/index";
 import { concat, fromB64, sodium, utf8 } from "../src/sodium";
@@ -1441,6 +1446,115 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
     cases: paceCases,
   };
 
+  // --- quota-alerts.json ---
+  const custom = {
+    ...DEFAULT_QUOTA_ALERTS,
+    windows: { "claude/primary": [], "zai/primary": ["unused-headroom"], codex: ["low-50"] },
+  } satisfies QuotaAlertSettings;
+  const alertCases = [
+    {
+      name: "default: weekly runs out",
+      settings: DEFAULT_QUOTA_ALERTS,
+      alert: { provider: "claude", window: "secondary", kind: "runs-out" },
+      windowMinutes: 10080,
+    },
+    {
+      name: "default: 5-hour runs out is quiet",
+      settings: DEFAULT_QUOTA_ALERTS,
+      alert: { provider: "claude", window: "primary", kind: "runs-out" },
+      windowMinutes: 300,
+    },
+    {
+      name: "default: a day counts as short",
+      settings: DEFAULT_QUOTA_ALERTS,
+      alert: { provider: "gemini", window: "primary", kind: "runs-out" },
+      windowMinutes: 1440,
+    },
+    {
+      name: "default: unknown length counts as long",
+      settings: DEFAULT_QUOTA_ALERTS,
+      alert: { provider: "mistral", window: "credits", kind: "runs-out" },
+      windowMinutes: null,
+    },
+    {
+      name: "default: low is quiet",
+      settings: DEFAULT_QUOTA_ALERTS,
+      alert: { provider: "claude", window: "secondary", kind: "low", threshold: 20 },
+      windowMinutes: 10080,
+    },
+    {
+      name: "window off beats its length",
+      settings: { ...custom, short: ["runs-out"] },
+      alert: { provider: "claude", window: "primary", kind: "runs-out" },
+      windowMinutes: 300,
+    },
+    {
+      name: "window's own choice",
+      settings: custom,
+      alert: { provider: "zai", window: "primary", kind: "unused-headroom" },
+      windowMinutes: 300,
+    },
+    {
+      name: "window's own choice leaves out the default",
+      settings: custom,
+      alert: { provider: "zai", window: "primary", kind: "runs-out" },
+      windowMinutes: 10080,
+    },
+    {
+      name: "provider key covers its windows",
+      settings: custom,
+      alert: { provider: "codex", window: "secondary", kind: "low", threshold: 50 },
+      windowMinutes: 10080,
+    },
+    {
+      name: "50% picked: a window that skipped to 20% still notifies",
+      settings: custom,
+      alert: { provider: "codex", window: "secondary", kind: "low", threshold: 20 },
+      windowMinutes: 10080,
+    },
+    {
+      name: "20% picked: 50% is quiet",
+      settings: { ...DEFAULT_QUOTA_ALERTS, long: ["low-20"] },
+      alert: { provider: "claude", window: "secondary", kind: "low", threshold: 50 },
+      windowMinutes: 10080,
+    },
+    {
+      name: "20% picked: 20% notifies",
+      settings: { ...DEFAULT_QUOTA_ALERTS, long: ["low-20"] },
+      alert: { provider: "claude", window: "secondary", kind: "low", threshold: 20 },
+      windowMinutes: 10080,
+    },
+  ].map((c) => ({
+    ...c,
+    expect: wantsQuotaAlert(
+      c.settings as QuotaAlertSettings,
+      c.alert as QuotaAlert,
+      c.windowMinutes,
+    ),
+  }));
+  const migrateCases = [
+    { name: "never opted in: defaults", old: { notify: [], notifyLow: true, notifyPace: true } },
+    {
+      name: "bell on, both switches on",
+      old: { notify: ["claude"], notifyLow: true, notifyPace: true },
+    },
+    {
+      name: "bell on, only runs low",
+      old: { notify: ["claude", "zai"], notifyLow: true, notifyPace: false },
+    },
+    {
+      name: "bell on, only runs out",
+      old: { notify: ["codex"], notifyLow: false, notifyPace: true },
+    },
+    { name: "switches unset are on", old: { notify: ["codex"] } },
+  ].map((c) => ({ ...c, expect: migrateQuotaAlerts(c.old) }));
+  const quotaAlertsFile = {
+    note: "wantsQuotaAlert(settings, alert, windowMinutes) and migrateQuotaAlerts(old) (#914).",
+    defaults: DEFAULT_QUOTA_ALERTS,
+    cases: alertCases,
+    migrate: migrateCases,
+  };
+
   // --- schemas.json ---
   const sessionExtras = {
     sessionTitle: "Merge the CLI uploader (#12)",
@@ -2160,6 +2274,7 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
     "pairing.json": pairing,
     "join.json": join,
     "pace.json": paceFile,
+    "quota-alerts.json": quotaAlertsFile,
     "schemas.json": schemas,
   };
 }
