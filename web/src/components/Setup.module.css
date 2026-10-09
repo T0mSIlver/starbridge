@@ -4,7 +4,7 @@
 .frame {
   display: grid;
   grid-template-rows: var(--s16) 1fr var(--s16);
-  min-height: 100dvh;
+  min-height: calc(100dvh - var(--titlebar));
 }
 
 .brand {

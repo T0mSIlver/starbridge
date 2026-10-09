@@ -35,6 +35,8 @@ if (location.origin === arg("origin")) {
 
   contextBridge.exposeInMainWorld("starbridgeDesktop", {
     version: arg("version"),
+    /** "inset" when the window has no title bar, and the page leaves room for its buttons. */
+    titleBar: arg("titlebar"),
     /** The Needs-you count and the items to notify; send it whenever either changes. */
     update: (state: unknown) => ipcRenderer.send("state", state),
     /** Sends a notification's answer; reject with the reason it was not sent. */

@@ -40,7 +40,7 @@
 
 .side {
   position: sticky;
-  top: var(--s6);
+  top: calc(var(--titlebar) + var(--s6));
   align-self: start;
   padding-top: var(--s2);
 }

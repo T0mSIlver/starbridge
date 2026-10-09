@@ -6,7 +6,7 @@
   grid-template-columns:
     var(--pane-list, var(--size-list)) 0 minmax(0, 1fr) 0
     var(--pane-aside, var(--size-aside));
-  height: 100dvh;
+  height: calc(100dvh - var(--titlebar));
 }
 
 @media (max-width: 1399px) {
@@ -203,7 +203,7 @@
 :global(main):has(> .single) {
   display: flex;
   flex-direction: column;
-  min-height: 100dvh;
+  min-height: calc(100dvh - var(--titlebar));
 }
 
 .single {
