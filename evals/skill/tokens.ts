@@ -3,7 +3,7 @@
  * tokenizer: the SessionStart rule, the skill's entry in the skills list (name and description),
  * which every session carries, and the skill's body, which an agent reads when it uses the skill.
  *
- *   bun evals/skill/tokens.ts [--ref origin/main] [--model claude-sonnet-5-5]
+ *   bun evals/skill/tokens.ts [--ref origin/main] [--model claude-haiku-5-5]
  *
  * Without `--ref` it reads this checkout. Each count is the input of a `claude -p` call with the
  * piece appended to the system prompt, minus that of the same call with "." appended.
@@ -18,7 +18,7 @@ const { values: opt } = parseArgs({
   args: process.argv.slice(2),
   options: {
     ref: { type: "string" },
-    model: { type: "string", default: "claude-sonnet-5-5" },
+    model: { type: "string", default: "claude-haiku-5-5" },
   },
 });
 

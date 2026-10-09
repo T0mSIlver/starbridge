@@ -285,6 +285,20 @@ export const scenarios: Scenario[] = [
     },
   },
   {
+    name: "desk-question",
+    what: "a quick question while the owner is at the terminal (#911)",
+    prompt:
+      "I'm at my desk for the next ten minutes. Add a dark theme to src/theme.js; quick question first: should it follow the system setting or be a toggle in the menu?",
+    expect: "ask",
+    interactive: true,
+    build(dir) {
+      write(dir, {
+        "AGENTS.md": "# acme notes web\n\nNext.js app. `npm test` runs the tests.\n",
+        "src/theme.js": "export const theme = { background: '#fff', text: '#111' };\n",
+      });
+    },
+  },
+  {
     name: "unavailable",
     what: "Starbridge is not paired; fall back to the terminal",
     prompt: "Publish the package to npm.",

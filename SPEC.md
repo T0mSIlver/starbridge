@@ -656,7 +656,9 @@ line, the safe side: at worst a prompt repeats an answer the agent already read.
   instruction file. Starbridge is how an agent reaches its user: a card for a decision that is
   theirs, a question before ending a turn on work that waits on them, `starbridge run` around commands
   that block them. Everything else the agent decides. It asks in the terminal only when
-  `starbridge` fails (#121).
+  `starbridge` fails (#121). In Claude Code a quick question may use `AskUserQuestion`, since
+  its picker reaches the devices too (#848); a decision read cold, or needing links or images,
+  stays a card (#911).
 - A question answers cold: its options answer it, and its context runs two to five lines, the fact
   that forces the choice, then one line per option saying what it changes. Links and images only
   when they help; one question per card. The first option is

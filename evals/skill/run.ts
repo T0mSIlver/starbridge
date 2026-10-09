@@ -2,7 +2,7 @@
  * Runs real agents through the scripted situations in scenarios.ts, once with the skill and rule
  * of `--before` (a git ref) and once with this checkout's, and records what each posted.
  *
- *   bun evals/skill/run.ts [--agent claude|codex|pi|opencode] [--model claude-sonnet-5-5] [--reps 2] [--jobs 4]
+ *   bun evals/skill/run.ts [--agent claude|codex|pi|opencode] [--model claude-haiku-5-5] [--reps 2] [--jobs 4]
  *                          [--only merge-order,...] [--arms before,after] [--before origin/main]
  *                          [--out evals/skill/results/<agent>]
  *
@@ -14,8 +14,10 @@
  * `$CODEX_HOME/AGENTS.md`, opencode the same in its XDG config folder; Pi loads the Starbridge Pi
  * extension and skill with `-e` and `--skill`.
  *
- * Models: Claude Code defaults to claude-sonnet-5-5, Codex to its own default and Pi to
- * zai/glm-5.3-flash (`provider/id`, with the providers of `~/.pi/agent`).
+ * Models: Claude Code defaults to claude-haiku-5-5, Codex to its own default and Pi to
+ * zai/glm-5.3-flash (`provider/id`, with the providers of `~/.pi/agent`). Haiku 5.5 costs more
+ * past 100k tokens of context, so each Claude Code run records its largest request and the
+ * progress line flags one over that.
  */
 import { spawnSync } from "node:child_process";
 import {
@@ -26,6 +28,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  readdirSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
@@ -55,7 +58,7 @@ const agent = opt.agent as "claude" | "codex" | "pi" | "opencode";
 const model =
   opt.model ??
   {
-    claude: "claude-sonnet-5-5",
+    claude: "claude-haiku-5-5",
     codex: undefined,
     pi: "zai/glm-5.3-flash",
     opencode: "zai-coding-plan/glm-5.3-flash",
@@ -166,6 +169,8 @@ export interface RunRecord {
   answered?: string;
   /** When the owner snoozed the first card until (#571), for snooze situations. */
   snoozed?: string;
+  /** Claude Code: the largest context one request sent, in tokens. */
+  peakContext?: number;
   error?: string;
 }
 
@@ -946,10 +951,30 @@ async function one(s: Scenario, arm: string, rep: number): Promise<RunRecord> {
   } finally {
     live.stop();
     rec.gh = readFileSync(ghLog, "utf8").split("\n").filter(Boolean);
+    if (agent === "claude") rec.peakContext = peakContext(join(cfg, "projects"));
   }
   writeFileSync(join(out, `${id}.json`), `${JSON.stringify(rec, null, 2)}\n`);
   if (!opt.keep) rmSync(root, { recursive: true, force: true });
   return rec;
+}
+
+/** The largest context one request sent, read from the session transcripts under `dir`. */
+function peakContext(dir: string): number | undefined {
+  if (!existsSync(dir)) return undefined;
+  let peak = 0;
+  for (const f of readdirSync(dir, { recursive: true, encoding: "utf8" }))
+    if (f.endsWith(".jsonl"))
+      for (const l of readFileSync(join(dir, f), "utf8").split("\n")) {
+        if (!l.includes('"usage"')) continue;
+        try {
+          const u = JSON.parse(l).message?.usage ?? {};
+          peak = Math.max(
+            peak,
+            (u.input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0),
+          );
+        } catch {}
+      }
+  return peak || undefined;
 }
 
 const only = opt.only ? new Set((opt.only as string).split(",")) : undefined;
@@ -972,7 +997,7 @@ await Promise.all(
       const r = await job();
       done++;
       console.log(
-        `[${done}/${jobs.length}] ${r.arm} ${r.scenario} #${r.rep}: ${r.decisions.length} decision(s), ${r.runs.length} run(s)${r.error ? `, error: ${r.error}` : ""}`,
+        `[${done}/${jobs.length}] ${r.arm} ${r.scenario} #${r.rep}: ${r.decisions.length} decision(s), ${r.runs.length} run(s)${(r.peakContext ?? 0) > 100_000 ? `, context over 100k: ${r.peakContext}` : ""}${r.error ? `, error: ${r.error}` : ""}`,
       );
     }
   }),
