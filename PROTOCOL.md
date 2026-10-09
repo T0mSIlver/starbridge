@@ -380,7 +380,7 @@ answers anyone with `ok`; `/healthz/backup` and `/healthz/disk` answer `ok`, or 
 last backup is stale or the disk runs low.
 
 Every request names its client and release in `starbridge-client: <name>/<version>`, `name`
-one of `cli`, `android`, `web` and `mod`, `version` MAJOR.MINOR.PATCH with an optional
+one of `cli`, `android`, `web`, `mod` and `desktop` (the desktop app's page), `version` MAJOR.MINOR.PATCH with an optional
 pre-release, which comes before its release (`cli/0.1.0`, `android/0.2.0-rc.1`). The server counts the
 releases in use, and keeps a minimum release per client name: below it, any route answers 426
 `{error: "client-too-old", detail, client, minimum}`, and the client asks its owner to update. A

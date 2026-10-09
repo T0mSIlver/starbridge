@@ -52,9 +52,17 @@ it (#801). The line under the hero's buttons, with end-to-end encryption, shows 
 
 The web app ships first wherever it can: installed to the home screen on iOS (Web Push works for
 home-screen web apps since iOS 16.4) and as an installed app on desktop browsers. Android is a
-native app. No native iOS app until there is demand and a device to test on. A desktop app, if
-one comes, is Tauri over Electron, to reuse the web code; a Mac surface may instead live in
-CodexBar's menu bar, upstream.
+native app. No native iOS app until there is demand and a device to test on.
+
+The desktop app is Electron, loading the configured server's web page (owner, 2026-10-08). The
+page stays the device: it signs in, pairs and keeps its keys as in a browser, so every web release
+reaches the app without an app update. The app adds what a browser cannot: the Needs-you count in
+the menu bar, notifications with the options as buttons and a typed reply, delivery while no
+browser runs, `starbridge://` links, and later presence (#848). Electron is the only stack with
+all of these on macOS and Windows; Tauri would need a static export of a web app that renders
+per request, and it has no typed reply nor idle and lock detection. The cost is a ~150 MB
+download. The comparison is in the planning repo's
+[research/desktop-app.md](https://github.com/T0mSIlver/starbridge-planning/blob/main/research/desktop-app.md).
 
 The CLI runs on Linux, macOS and Windows (#552, decided 2026-10-06 for launch). On Windows,
 CodexBar has no build, so a Windows machine uploads no quotas and setup says so; questions,

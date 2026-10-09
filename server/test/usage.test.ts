@@ -39,6 +39,25 @@ function answer(d: SealedItem, by: Actor, machine: Actor) {
   return seal("answer", body, { id: by.id, signKey: by.keys.sign.privateKey }, [machine.member]);
 }
 
+test("the desktop app's page counts as desktop, not web", async () => {
+  const s = await makeServer();
+  const acct = await setupAccount(s);
+  const mac = await pair(s, acct, "mac", "device", await signIn(s));
+  const devbox = await pair(s, acct, "devbox", "machine");
+  const d = decision("d1", devbox, [mac]);
+  expect((await s.call("POST", "/v1/items", { token: devbox.token, body: d })).status).toBe(201);
+  const headers = {
+    cookie: `sb_session=${mac.token}`,
+    origin: "http://localhost",
+    "starbridge-client": "desktop/0.1.0",
+  };
+  const res = await s.call("POST", "/v1/items", { headers, body: answer(d, mac, devbox) });
+  expect(res.status).toBe(201);
+  const counts = aggregate(s.deps.db, dayOf(Date.now()));
+  expect(counts).toMatchObject({ "active.devices.desktop": 1, "answered.by.desktop": 1 });
+  expect(counts["active.devices.web"]).toBeUndefined();
+});
+
 test("a day's requests become counts; closing the day keeps only the counts", async () => {
   const s = await makeServer();
   const acct = await setupAccount(s);
