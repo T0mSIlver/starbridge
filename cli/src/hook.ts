@@ -53,6 +53,14 @@ function parseHook(text: string): PermissionHookInput & Record<string, unknown> 
   return v as PermissionHookInput & Record<string, unknown>;
 }
 
+/**
+ * Whether Cursor runs this hook: cursor-agent runs installed Claude Code plugins' hooks too, with
+ * its own input (#958). The Claude Code plugin's hooks then step aside for the Cursor plugin's.
+ */
+function inCursor(hook: Record<string, unknown>): boolean {
+  return typeof hook.cursor_version === "string";
+}
+
 function agentName(text: string | undefined): Permission["agent"] {
   // Pi asks through the Starbridge Pi extension's link in pi-permission-system (#232), opencode
   // through the Starbridge opencode plugin (#300), Codex through the Starbridge Codex plugin.
@@ -99,6 +107,7 @@ export async function hookPermission(
   let started: ReturnType<typeof untilRan> | undefined;
   try {
     const hook = parseHook(stdin);
+    if (opts.agent === "claude-code" && inCursor(hook)) return 0;
     // Its picker is a permission dialog, raced whether or not permission prompts go to the devices.
     if (hook.tool_name === "AskUserQuestion" && opts.agent === "claude-code")
       return await racePicker(ctx, outer, hook, opts.wait);
@@ -265,6 +274,7 @@ export async function hookSettle(
   try {
     agentName(opts.agent);
     const hook = parseHook(stdin);
+    if (opts.agent === "claude-code" && inCursor(hook)) return 0;
     const sessionId = typeof hook.session_id === "string" ? hook.session_id : "";
     // Runs after a tool call while a prompt is open: nothing waiting for this session means no
     // network and no agent call. A mark that disagrees with the state (an expired prompt, a state

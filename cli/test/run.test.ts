@@ -348,6 +348,16 @@ test("the plugin's SessionStart hook adds the rule to reach the owner and the ru
   expect(text).toContain("\n\nRun a command that blocks me");
   expect(text).toContain("`starbridge run`");
   expect(text).not.toContain("inference");
+
+  // cursor-agent runs this hook too, with input of its own; the Cursor plugin adds the rule
+  // there (#958).
+  const cursor = Bun.spawn([sh(), hook], {
+    env: bareEnv({ STARBRIDGE_CONFIG_DIR: ctx.store.dir }),
+    stdin: new Blob([
+      JSON.stringify({ hook_event_name: "sessionStart", cursor_version: "2026.10.01" }),
+    ]),
+  });
+  expect(await new Response(cursor.stdout).text()).toBe("");
 });
 
 test("an agent of another API revision (426) is skipped: the run goes to the server", async () => {
