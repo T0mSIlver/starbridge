@@ -77,7 +77,7 @@ agents' own notifications for what Starbridge already sends.
 | Runs | ✓ | ✓ | ✓ | ✓ |
 | Permission prompts | Opt-in | No | Opt-in | Opt-in |
 | The agent's own ask tool | ✓ | n/a | n/a | ✓ |
-| Rules for when to ask you | ✓ | [Paste them](https://starbridge.run/docs/tell-your-agents#rules-for-codex) | ✓ | ✓ |
+| Rules for when to ask you | ✓ | ✓ | ✓ | ✓ |
 
 In Claude Code, the answer arrives through a [Claude Code mod](https://code.claude.com/docs/en/plugins/mods/overview), code that
 runs inside Claude Code: it submits your answer into the live session as its next prompt. Setup

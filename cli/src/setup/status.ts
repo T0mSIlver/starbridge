@@ -5,6 +5,7 @@ import { REMOVED } from "../api";
 import { deliverable } from "../decisions";
 import { VERSION } from "../version";
 import { AGENT_IDS, AGENTS, found as agentFound, installed, removedAgents } from "./agents";
+import { codexPlugin, codexPluginDir } from "./codex-plugin";
 import { findCodexbar, listProviders, probe } from "./codexbar";
 import { codexSkill, opencodeState, PI_PACKAGE, piPackage } from "./harnesses";
 import { autoUpdate, hasClaude, PLUGINS, pluginState } from "./plugins";
@@ -138,6 +139,10 @@ export async function status(sys: Sys): Promise<number> {
       const state = codexSkill(sys);
       out(
         `Codex skill: ${state === "current" ? "installed" : state === "outdated" ? "outdated (`starbridge setup --refresh` updates it)" : "another skill named starbridge"}`,
+      );
+      const plugin = codexPlugin(sys);
+      out(
+        `Codex plugin: ${plugin === "current" ? "installed" : plugin === "foreign" ? `not managed by starbridge (${codexPluginDir(sys)})` : `${plugin} (\`starbridge setup --refresh\` installs it)`}`,
       );
     } else if (id === "pi") {
       const pi = piPackage(sys);

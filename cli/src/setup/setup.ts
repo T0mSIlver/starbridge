@@ -30,6 +30,7 @@ import {
   setRemoved,
   UNDER,
 } from "./agents";
+import { codexPlugin } from "./codex-plugin";
 import {
   type Found,
   findCodexbar,
@@ -99,7 +100,10 @@ export async function refresh(sys: Sys): Promise<string[]> {
   const done = refreshFiles(sys);
   const removed = removedAgents(sys.ctx);
   for (const id of AGENT_IDS) {
-    if (removed.includes(id) || !found(sys, id) || (await installed(sys, id))) continue;
+    if (removed.includes(id) || !found(sys, id)) continue;
+    // Codex installed before its plugin (#949), or with an older one, gets it here.
+    const stale = id === "codex" && ["missing", "outdated"].includes(codexPlugin(sys));
+    if (!stale && (await installed(sys, id))) continue;
     const r = await installAgent(sys, id);
     done.push(
       agentLine(r.mark, id, r.text),

@@ -64,8 +64,8 @@ free server at starbridge.run, or [host your own](../server/README.md).
 
 6. **Tell your agents when to reach you.** With the plugin, Claude Code asks you for decisions
    that are yours and reports the commands that block you. Pi and opencode get the same rules from
-   their Starbridge package and plugin. Codex gets the skill only, so paste the
-   [rules for Codex](tell-your-agents.md#rules-for-codex) into its instructions.
+   their Starbridge package and plugin, and Codex from its Starbridge plugin once you trust its
+   hook, which Codex asks at its next launch.
    [Agent instructions](tell-your-agents.md) covers each agent and how to add your own rules.
 
 ## Sessions already running

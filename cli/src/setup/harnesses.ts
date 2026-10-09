@@ -10,6 +10,7 @@ import { dirname, join } from "node:path";
 import rule from "../../../plugin/hooks/rule.md" with { type: "text" };
 import skill from "../../../plugin/skills/starbridge/SKILL.md" with { type: "text" };
 import { VERSION } from "../version";
+import { codexPluginDir, refreshCodexPluginFiles } from "./codex-plugin";
 import { markedSkill, marker, ours } from "./marker";
 import plugin from "./opencode-files.js";
 import { failure, run, type Sys, which } from "./sys";
@@ -264,7 +265,8 @@ export function removeOpencode(sys: Home): string[] {
 }
 
 /**
- * Brings the Codex skill and rule and opencode's skill and plugin to this release's version,
+ * Brings the Codex skill, rule and plugin script and opencode's skill and plugin to this
+ * release's version,
  * where setup wrote them (they carry its marker); it adds nothing. Returns what it did.
  */
 export function refreshFiles(sys: Home): string[] {
@@ -280,6 +282,11 @@ export function refreshFiles(sys: Home): string[] {
   const skillFile = join(codexSkillDir(sys), "SKILL.md");
   if (codexSkill(sys) === "outdated") step(skillFile, () => installCodexSkill(sys));
   if (codexRule(sys) === "outdated") step(codexRulePath(sys), () => installCodexRule(sys));
+  try {
+    if (refreshCodexPluginFiles(sys)) done.push(`Updated ${codexPluginDir(sys)}.`);
+  } catch (e) {
+    done.push(`Could not update ${codexPluginDir(sys)}: ${(e as Error).message}`);
+  }
   // Files someone else wrote keep it outdated: only a write that changed something counts.
   if (opencodeState(sys) === "outdated") {
     const before = opencodeSnapshot(sys);

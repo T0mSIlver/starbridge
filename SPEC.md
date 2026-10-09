@@ -524,8 +524,8 @@ provider plugins add providers, not panels.
 - **Setup asks little** (#750). Each question was one more Enter between a new user and their
   first answer, and nearly everyone said yes. Setup installs Starbridge in every agent it finds
   and starts the service without asking, one line per agent with what it installed; for Codex,
-  which loads no rules, it links the rules to paste at the end, with the commands, so nothing
-  mid-output reads as a prompt. Claude Code and Pi, whose installs run for seconds, first print
+  whose new hook runs only once trusted, it says at the end that Codex will ask, with the
+  commands, so nothing mid-output reads as a prompt. Claude Code and Pi, whose installs run for seconds, first print
   `installing…` (#773). It still asks before installing CodexBar, a
   third-party binary (with #748, only when no other machine sends quotas), which providers to
   send, whether to linger, and whether to send a test decision. Permission prompts and presence
@@ -653,7 +653,14 @@ line, the safe side: at worst a prompt repeats an answer the agent already read.
 ### Skill and rule
 
 - The `starbridge` plugin's `SessionStart` hook adds the rule as context, so setup edits no
-  instruction file. Starbridge is how an agent reaches its user: a card for a decision that is
+  instruction file. Codex gets it the same way from the Starbridge Codex plugin (#949), which
+  replaced pasting the rule into `AGENTS.md`. Codex 0.160 installs plugins only from a
+  marketplace, so setup writes a local one in `$CODEX_HOME/starbridge` and runs `codex plugin
+  marketplace add` and `codex plugin add starbridge@starbridge-cli`. The hook runs the script in
+  that folder, not the copy in Codex's plugin cache: Codex asks the owner to trust each new or
+  changed hook, so a release that changes the rule rewrites the script and keeps the trusted
+  hook. A change to the plugin's `hooks.json` raises its version, and `setup --refresh`
+  reinstalls it. Starbridge is how an agent reaches its user: a card for a decision that is
   theirs, a question before ending a turn on work that waits on them, `starbridge run` around commands
   that block them. Everything else the agent decides. It asks in the terminal only when
   `starbridge` fails (#121). In Claude Code a quick question may use `AskUserQuestion`, since
@@ -1368,7 +1375,13 @@ What the code relies on, with the versions checked.
 - **Codex** (CLI 0.160): the TUI runs sessions in a shared app-server daemon; `codex queue --thread
   <id> --message <text>` starts a turn in an idle session or runs next in a busy one, and starts
   the daemon itself. It takes the message only as an argument and refuses sub-agent threads. An
-  exec thread's rollout has `originator: codex_exec`. New or changed hooks need trust at launch.
+  exec thread's rollout has `originator: codex_exec`. New or changed hooks need trust at launch:
+  the TUI asks ("Hooks need review"), `codex exec` skips an untrusted hook silently, and the
+  trust goes in `config.toml` as `[hooks.state."<plugin>:hooks/hooks.json:<event>:<group>:<handler>"]`
+  with a hash of the handler, not of the file. Plugins come from marketplaces, local or Git,
+  read from `.agents/plugins/marketplace.json` or `.claude-plugin/marketplace.json`; a plugin's
+  hooks run with `${PLUGIN_ROOT}` set. Hook events and outputs follow Claude Code's
+  (`SessionStart` `additionalContext`, `PermissionRequest`).
 - **Pi** (0.87.1, 1.0.4): `pi.sendUserMessage(..., { deliverAs: "followUp" })` behaves like
   `codex queue`. Commands get `PI_SESSION_ID`. pi-permission-system (33 to 40) caps every
   authorizer link's allow on `path` and `external_directory` to defer (its ADR 0007; making it
