@@ -1184,12 +1184,20 @@ a browser; the app adds a menu bar light and notifications, so a web release nee
   restart. Items notify through the app, never through the browser's notifications; quota
   alerts stay the page's own, which the app shows as it would a browser's. Settings →
   Notifications turns them off and on (#943).
+- **Notification permission** (#935). Electron asks macOS when it first needs notifications, and a
+  question shown while macOS still asks reaches only the window. So the app asks once the page
+  has a session, after one line saying why, and a notification macOS refused shows again with
+  the page's next update (every 15 s), so it appears once the owner allows them.
 - **The menu bar.** The mark in one colour, as macOS draws menu bar icons; while anything needs
   the owner, its climber turns amber, the one amber light, with no count: the window says what
   (owner's pick from mockups, 2026-10-09). A click shows the window; a right-click opens the menu:
   Open, Open at Login (off by default), Server, Quit. Closing the window keeps the app in the menu
   bar and drops its Dock icon, which shows again with the window. ⌃⌥S shows the window from
   anywhere.
+- **Menu bar or Dock** (#936). Settings' "Keep Starbridge in" picks the menu bar (the default
+  above), the Dock (always, with no menu bar icon), or both, applied at once. One choice of three
+  rather than two switches, so no combination leaves the app nowhere and nothing has to be
+  greyed out. The Dock icon's menu holds the menu bar's items, for when there is no menu bar icon.
 - **`starbridge://pair` links** open `/pair` on the configured server, as the https link does. The
   link's check key stays out of the page, which the server writes; a link for another server is
   refused, with both servers named.

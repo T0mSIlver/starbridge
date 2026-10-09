@@ -12,7 +12,7 @@ import {
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
-import { desktop } from "@/lib/desktop";
+import { type DesktopPlace, desktop } from "@/lib/desktop";
 import type { RecoveryState } from "@/lib/device";
 import { addedLabels, dayAndTime } from "@/lib/format";
 import { AGENTS_GUIDE } from "@/lib/links";
@@ -20,6 +20,7 @@ import { reports } from "@/lib/notify";
 import { applyTheme, type Prefs, usePref } from "@/lib/prefs";
 import type { PushState } from "@/lib/push";
 import { holdsQuotas, providerOrder, type QuotaSettings } from "@/lib/quotaSettings";
+import { keptSettingsData, loadSettingsData, type SettingsData, WAIT_MS } from "@/lib/settingsData";
 import { chime } from "@/lib/sound";
 import type { Device, QuotaCardData } from "@/lib/types";
 import { useApp } from "./AppProvider";
@@ -158,11 +159,11 @@ function InboxSection() {
 }
 
 /** What decides whether something notifies here (#914): the browser, sound, and the hold. */
-function NotificationSection() {
+function NotificationSection({ data }: { data: SettingsData }) {
   const [sound, setSound] = usePref("sound");
   return (
     <Section title="Notifications">
-      <ThisDeviceRow />
+      <ThisDeviceRow push={data.push} />
       <Row label="Sound for new questions" sub="While a Starbridge page is open">
         <Switch
           label="Sound for new questions"
@@ -173,7 +174,7 @@ function NotificationSection() {
           }}
         />
       </Row>
-      <HoldRow />
+      <HoldRow initial={data.pushHold} />
     </Section>
   );
 }
@@ -182,8 +183,8 @@ function NotificationSection() {
  * Whether this device notifies (#943): one switch for a browser's Web Push and for the desktop
  * app's own notifications. Each device turns only its own; Devices shows the others'.
  */
-function ThisDeviceRow() {
-  return desktop ? <AppNotifyRow /> : <BrowserRow />;
+function ThisDeviceRow({ push }: { push: PushState }) {
+  return desktop ? <AppNotifyRow /> : <BrowserRow initial={push} />;
 }
 
 const LABEL = "Notifications on this device";
@@ -212,13 +213,15 @@ function AppNotifyRow() {
 }
 
 /** A browser's Web Push: on asks for the permission first; blocked says where to allow it. */
-function BrowserRow() {
-  const [state, setState] = useState<PushState>();
+function BrowserRow({ initial }: { initial: PushState }) {
+  const [state, setState] = useState(initial);
   const [error, setError] = useState<string>();
+  // A refresh underneath never undoes what the owner just turned on or off.
+  const touched = useRef(false);
   useEffect(() => {
-    import("@/lib/push").then((p) => p.pushState()).then(setState);
-  }, []);
-  if (state === undefined || state === "unsupported") return null;
+    if (!touched.current) setState(initial);
+  }, [initial]);
+  if (state === "unsupported") return null;
   if (state === "install")
     return <Row label={LABEL} sub="Add Starbridge to the Home Screen and open it from there" />;
   const sub =
@@ -236,6 +239,7 @@ function BrowserRow() {
         checked={state === "on"}
         disabled={state === "denied"}
         onChange={async (on) => {
+          touched.current = true;
           setError(undefined);
           try {
             const push = await import("@/lib/push");
@@ -260,25 +264,22 @@ const HOLD_LABELS: Record<(typeof PUSH_HOLD_CHOICES)[number], string> = {
 
 /**
  * How long other devices' notifications wait while you use a screen (#848): an account setting,
- * since the server holds the pushes. Shown once the server says what it is.
+ * since the server holds the pushes. A server without the setting shows nothing.
  */
-function HoldRow() {
-  const [hold, setHold] = useState<number | undefined>();
+function HoldRow({ initial }: { initial: number | undefined }) {
+  const [hold, setHold] = useState(initial);
   const [error, setError] = useState<string | undefined>();
+  const touched = useRef(false);
   useEffect(() => {
-    api.settings().then(
-      (s) => setHold(s.pushHold),
-      // A server without the setting: nothing to show.
-      () => {},
-    );
-  }, []);
+    if (!touched.current) setHold(initial);
+  }, [initial]);
   if (hold === undefined) return null;
   return (
     <Row
       label="Hold while you’re at a screen"
       sub={
         error ??
-        "While you use Starbridge or a machine with presence on, your other devices are notified only if a question is still open after this"
+        "While you’re using Starbridge or your computer, other devices wait this long to notify"
       }
     >
       <Segmented<number>
@@ -286,6 +287,7 @@ function HoldRow() {
         value={hold}
         options={PUSH_HOLD_CHOICES.map((c) => [c, HOLD_LABELS[c]])}
         onChange={(pushHold) => {
+          touched.current = true;
           const was = hold;
           setHold(pushHold);
           setError(undefined);
@@ -387,10 +389,7 @@ export function setWindowAlerts(
  * owner may never use CodexBar, and the page stays about agents.
  */
 function QuotaSections() {
-  const { quotas, refreshQuotas } = useApp();
-  useEffect(() => {
-    refreshQuotas().catch(() => {});
-  }, [refreshQuotas]);
+  const { quotas } = useApp();
   if (!holdsQuotas(quotas)) return null;
   return <QuotaSection />;
 }
@@ -547,12 +546,12 @@ const NOTIFY_LABELS: Record<NotifyState, string> = {
   blocked: "Notifications blocked",
 };
 
-function DeviceSection() {
+function DeviceSection({ data }: { data: SettingsData }) {
   const { update, boot, sampleDevices } = useApp();
   const ctx = boot.state === "ready" ? boot.ctx : undefined;
-  const [all, setAll] = useState<Device[] | undefined>(sampleDevices);
+  const [all, setAll] = useState<Device[] | undefined>(sampleDevices ?? data.devices);
   const [revoking, setRevoking] = useState<Device>();
-  const [recovery, setRecovery] = useState<RecoveryState>();
+  const [recovery, setRecovery] = useState<RecoveryState | undefined>(data.recovery);
   const [clock] = usePref("clock");
   const [notify, setNotify] = useState<Record<string, NotifyState>>({});
   // Read again when this device's switch reports a new state.
@@ -564,13 +563,21 @@ function DeviceSection() {
     return () => reports.removeEventListener("change", read);
   }, [ctx]);
   useEffect(() => {
-    if (ctx)
-      load()
-        .then(async (d) => {
-          setAll(d.devices(ctx));
-          setRecovery(await d.recoveryState(ctx));
-        })
-        .catch(() => setAll([]));
+    if (!data.devices) return;
+    setAll(data.devices);
+    setRecovery(data.recovery);
+  }, [data]);
+  // After a revoke, a new ctx: read the devices again.
+  const first = useRef(ctx);
+  useEffect(() => {
+    if (!ctx || ctx === first.current) return;
+    first.current = ctx;
+    load()
+      .then(async (d) => {
+        setAll(d.devices(ctx));
+        setRecovery(await d.recoveryState(ctx));
+      })
+      .catch(() => setAll([]));
   }, [ctx]);
   const order = (d: Device) => (d.self ? 0 : d.role === "device" ? 1 : 2);
   const shown = (all ?? [])
@@ -743,7 +750,37 @@ function AccountSection() {
   );
 }
 
-/** Colours and the clock: how the page looks, per browser. */
+const PLACE_SUBS: Record<DesktopPlace, string> = {
+  menu: "In the Dock only while its window is open",
+  dock: "Always in the Dock, with no menu bar icon",
+  both: "Always in the menu bar and the Dock",
+};
+
+/** Where the desktop app stays (#936): it is always in one of them, so Starbridge stays at hand. */
+function PlaceRow() {
+  const [place, setPlace] = useState(() => desktop?.place?.());
+  if (!desktop?.setPlace || !place) return null;
+  const save = desktop.setPlace;
+  return (
+    <Row label="Keep Starbridge in" sub={PLACE_SUBS[place]}>
+      <Segmented<DesktopPlace>
+        label="Keep Starbridge in"
+        value={place}
+        options={[
+          ["menu", "Menu bar"],
+          ["dock", "Dock"],
+          ["both", "Both"],
+        ]}
+        onChange={(p) => {
+          setPlace(p);
+          save(p);
+        }}
+      />
+    </Row>
+  );
+}
+
+/** Colours and the clock: how the page looks, per browser; in the desktop app, where it stays. */
 function LookSection() {
   const [theme, setTheme] = usePref("theme");
   const [clock, setClock] = usePref("clock");
@@ -762,6 +799,7 @@ function LookSection() {
           onChange={setTheme}
         />
       </Row>
+      <PlaceRow />
       <Row label="Time format">
         <Segmented<Prefs["clock"]>
           label="Time format"
@@ -778,18 +816,54 @@ function LookSection() {
   );
 }
 
+/**
+ * The sections show once what they need has arrived, all at once, so the page lays out once
+ * (#937): the account's hold, this browser's push, the devices and the quotas. A visit after the
+ * first shows the last load at once and refreshes it underneath.
+ */
 export function Settings() {
+  const { boot, refreshQuotas } = useApp();
+  const ctx = boot.state === "ready" ? boot.ctx : undefined;
+  const [data, setData] = useState(() => keptSettingsData(ctx));
+  const [quotasIn, setQuotasIn] = useState(() => !!keptSettingsData(ctx));
+  useEffect(() => {
+    let live = true;
+    loadSettingsData(ctx).then(
+      (d) => live && setData(d),
+      () => {},
+    );
+    // The load gives up on the server after WAIT_MS; past twice that, the quotas or a part of
+    // this browser hangs, and arrives late rather than holding the page.
+    const late = setTimeout(() => {
+      setData((d) => d ?? { push: "unsupported" });
+      setQuotasIn(true);
+    }, 2 * WAIT_MS);
+    return () => {
+      live = false;
+      clearTimeout(late);
+    };
+  }, [ctx]);
+  useEffect(() => {
+    refreshQuotas()
+      .catch(() => {})
+      .finally(() => setQuotasIn(true));
+  }, [refreshQuotas]);
+  const ready = !!data && quotasIn;
   return (
     <>
       <PhoneBar title="Settings" find={false} />
       <div className={s.page}>
         <h1 className={`t-heading ${s.title}`}>Settings</h1>
-        <NotificationSection />
-        <QuotaSections />
-        <InboxSection />
-        <DeviceSection />
-        <LookSection />
-        <AccountSection />
+        {ready && data && (
+          <>
+            <NotificationSection data={data} />
+            <QuotaSections />
+            <InboxSection />
+            <DeviceSection data={data} />
+            <LookSection />
+            <AccountSection />
+          </>
+        )}
       </div>
     </>
   );

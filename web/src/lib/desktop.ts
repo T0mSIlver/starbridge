@@ -14,8 +14,14 @@ export type DesktopEntry = {
 
 export type DesktopAnswer = { id: string; choice: string } | { id: string; text: string };
 
+/** Where the app stays (desktop/src/settings.ts). */
+export type DesktopPlace = "menu" | "dock" | "both";
+
 export type DesktopBridge = {
   version: string;
+  /** Absent before the app's 0.1.3. */
+  place?(): DesktopPlace;
+  setPlace?(place: DesktopPlace): void;
   update(state: { count: number; entries: DesktopEntry[] }): void;
   onAnswer(f: (a: DesktopAnswer) => Promise<void>): void;
   onOpen(f: (id: string) => void): void;

@@ -29,6 +29,7 @@ import {
   saveSettings,
 } from "@/lib/quotaSettings";
 import { runState } from "@/lib/runs";
+import { keptSettingsData, loadSettingsData } from "@/lib/settingsData";
 import { chimeForNew, unlockSound } from "@/lib/sound";
 import type { Device, InboxItem, PromptItem, PromptReply, Reply, RunItem } from "@/lib/types";
 import { type Unsent, withUnsent } from "@/lib/unsent";
@@ -663,9 +664,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     [ctx, refreshInbox, reload],
   );
 
+  const ready = !!ctx && inboxLoaded;
+  // Settings' own data, once the page is idle, so opening Settings lays it out at once (#937).
+  useEffect(() => {
+    if (!ready || !ctx || keptSettingsData(ctx)) return;
+    const idle = window.requestIdleCallback ?? ((f: () => void) => setTimeout(f, 1));
+    idle(() => loadSettingsData(ctx).catch(() => {}));
+  }, [ready, ctx]);
   // The desktop app's menu bar count and notifications follow Needs you; signed out, both clear.
   // With the app's notifications off (#943), the count still lights the menu bar.
-  const ready = !!ctx && inboxLoaded;
   const [notify] = usePref("desktopNotify");
   useEffect(() => {
     if (!desktop) return;

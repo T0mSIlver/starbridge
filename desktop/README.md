@@ -35,6 +35,7 @@ The page finds `window.starbridgeDesktop` only on the configured server's origin
 - `onAnswer(f)`: `f({id, choice} | {id, text})` sends a notification's answer and rejects with
   the reason it was not sent.
 - `onOpen(f)`: `f(id)` opens the item whose notification was clicked.
+- `place()` and `setPlace(p)`: where the app stays, `"menu"`, `"dock"` or `"both"` (from 0.1.3).
 
 The main process checks that each message comes from the window's top frame on that origin, and
 checks every field again.
