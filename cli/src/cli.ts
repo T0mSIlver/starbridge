@@ -90,12 +90,13 @@ const HELP = `starbridge: post decisions to your devices, report runs, upload qu
       --option <text>         2 to 4 times; none asks for a free-text answer
       --recommended <text>    one of the options (default: the first)
       --waiting               you have nothing else to do: post it as waiting for the owner
-      --agent <name>          claude-code, codex, pi, opencode or antigravity (default:
-                              the one that runs the command)
+      --agent <name>          claude-code, codex, pi, opencode, antigravity or cursor
+                              (default: the one that runs the command)
       --project <name>        default: the current directory's name
       --session <id>          default: the agent's session ($CLAUDE_CODE_SESSION_ID,
                               $CODEX_THREAD_ID, $PI_SESSION_ID,
-                              $STARBRIDGE_OPENCODE_SESSION, $ANTIGRAVITY_CONVERSATION_ID)
+                              $STARBRIDGE_OPENCODE_SESSION, $ANTIGRAVITY_CONVERSATION_ID,
+                              $CURSOR_CONVERSATION_ID)
       --session-title <text>  default: the Claude Code, Pi, opencode or Antigravity
                               session's name
       --image <path>          a PNG or JPEG to show with the question, up to 4 times;

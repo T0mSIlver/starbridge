@@ -644,6 +644,7 @@ line, the safe side: at worst a prompt repeats an answer the agent already read.
 | opencode TUI and `serve` | The opencode plugin (`mod/opencode`) calls `client.session.promptAsync`, one loop per session (#300) |
 | `pi -p`, `opencode run`, subagents | `wait` |
 | Antigravity (app, IDE, `agy`) | `wait`, until its hooks bring answers back (#961) |
+| Cursor IDE and `cursor-agent` | `wait`, for now |
 
 - **The mod** (#7, #35, #48, #68). Why a mod and not Claude Code channels: channels need launch
   flags and an allowlist. A mod cannot listen on a port and its `$.http.fetch` aborts after 30 s,
@@ -665,6 +666,11 @@ line, the safe side: at worst a prompt repeats an answer the agent already read.
   and ranks after Codex, Pi and opencode, which sessions start for reviews, and before Claude Code;
   its card title is the one Antigravity generates, read from
   `~/.gemini/<product>/annotations/<id>.pbtxt` (#960).
+- **Cursor** (#955) gives its agent's commands `CURSOR_AGENT=1`, so `ask` names the agent
+  `cursor`. `cursor-agent` also gives them `CURSOR_CONVERSATION_ID`, the session; the IDE does
+  not (2026.10), so a question from an IDE chat names no session. Codex, Pi, opencode and
+  Antigravity win over Cursor, as over Claude Code: their variables name the session that runs
+  the command.
 - **Pi and opencode** append `plugin/hooks/rule.md` to the system prompt and run the mod's own
   answer loop (`agent.ts`, `poller.ts`, `switch.ts`). opencode gives commands no session id, so
   its plugin sets `STARBRIDGE_OPENCODE_SESSION` through `shell.env`. After opencode restarts, the
