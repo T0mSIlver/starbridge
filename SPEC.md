@@ -56,9 +56,9 @@ native app. No native iOS app until there is demand and a device to test on.
 
 The desktop app is Electron, loading the configured server's web page (owner, 2026-10-08). The
 page stays the device: it signs in, pairs and keeps its keys as in a browser, so every web release
-reaches the app without an app update. The app adds what a browser cannot: the Needs-you count in
-the menu bar, notifications with the options as buttons and a typed reply, delivery while no
-browser runs, `starbridge://` links, and later presence (#848). Electron is the only stack with
+reaches the app without an app update. The app adds what a browser cannot: an amber light in the
+menu bar while something needs you, notifications with the options as buttons and a typed reply,
+delivery while no browser runs, `starbridge://` links, and later presence (#848). Electron is the only stack with
 all of these on macOS and Windows; Tauri would need a static export of a web app that renders
 per request, and it has no typed reply nor idle and lock detection. The cost is a ~150 MB
 download. The comparison is in the planning repo's
@@ -1039,14 +1039,19 @@ first window, so a provider with a window running out leads.
 
 The macOS app (#886) is Electron around the configured server's web page (starbridge.run unless
 the owner sets another from the menu bar icon). The page signs in, pairs and keeps its keys as in
-a browser; the app adds a menu bar count and notifications, so a web release needs no app release.
+a browser; the app adds a menu bar light and notifications, so a web release needs no app release.
 
 - **The bridge.** The app's preload gives `window.starbridgeDesktop` to the server's origin only,
   and the main process answers only the window's top frame on that origin. It carries data, never
   code or a URL to open: the page sends the Needs-you count and the items to notify; the app sends
   back a notification's answer and the item to open. Every field is checked on arrival, since the
-  page comes from a server. Inside the window stay the server's pages and GitHub's sign-in; any
-  other link opens in the browser, and new windows never open.
+  page comes from a server. Only the server's pages stay inside the window; any other link opens
+  in the browser, and new windows never open.
+- **Sign-in** goes through the owner's browser, as on Android: the browser is signed in to GitHub
+  and holds the owner's passkeys, which the app's window cannot use (Electron sees only passkeys
+  it made itself). Sign in with GitHub opens the browser with a PKCE challenge; the code comes back
+  on `starbridge://auth`, and the app trades it with its verifier for the session, which becomes
+  the page's session cookie. Owner-token sign-in stays in the page.
 - **Notifications.** One per item in Needs you, as on the phone: a question's options are its
   buttons, and a question that takes typed answers has Reply. An answer goes through the page, as
   if tapped there; when it fails, an "Answer not sent" notification says why. An item notifies
