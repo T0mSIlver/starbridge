@@ -25,6 +25,7 @@ import { run } from "../src/cli";
 import { session } from "../src/context";
 import { poll } from "../src/decisions";
 import { pushOnce } from "../src/quota";
+import { codexPlugin } from "../src/setup/codex-plugin";
 import {
   compareCodexbar,
   installTarball,
@@ -145,8 +146,8 @@ test("setup --yes installs the agent, the plugins and the skills, and uploads a 
   // A slow agent says it is installing first; what is left to do comes only at the end (#773).
   expect(out).toContain("  Claude Code  installing…\n✓ Claude Code  plugins installed");
   const end = out.slice(out.indexOf("Starbridge is set up."));
-  expect(end).toContain("  Paste these rules into Codex's instructions:\n");
-  expect(out.indexOf("Paste these rules")).toBe(out.lastIndexOf("Paste these rules"));
+  expect(end).toContain("  Codex asks once to trust Starbridge's session hook");
+  expect(out.indexOf("to trust Starbridge's")).toBe(out.lastIndexOf("to trust Starbridge's"));
 
   // Providers: the earlier ones that work now; `broken` needs a sign-in and is left out.
   expect(out).toContain("needs sign-in: No available fetch strategy for signedout.");
@@ -186,6 +187,18 @@ test("setup --yes installs the agent, the plugins and the skills, and uploads a 
   expect(readFileSync(join(m.home, ".codex/rules/starbridge.rules"), "utf8")).toContain(
     '"starbridge", ["ask"',
   );
+  // Codex's plugin, from a local marketplace, whose hook runs the script beside it (#949).
+  const market = join(m.home, ".codex/starbridge");
+  expect(m.calls()).toContain(`codex plugin marketplace add ${market}`);
+  expect(m.calls()).toContain("codex plugin add starbridge@starbridge-cli");
+  const hooks = readFileSync(
+    join(m.home, ".codex/plugins/cache/starbridge-cli/starbridge/1.0.0/hooks/hooks.json"),
+    "utf8",
+  );
+  expect(JSON.parse(hooks).hooks.SessionStart[0].hooks[0].command).toBe(
+    `sh '${join(market, "hooks", "session-start.sh")}'`,
+  );
+  expect(codexPlugin(m.sys)).toBe("current");
   // opencode gets the skill and the plugin with the code it imports, in the repository's layout.
   const oc = join(m.home, ".config/opencode");
   expect(readFileSync(join(oc, "skills/starbridge/SKILL.md"), "utf8")).toBe(skill);
@@ -400,7 +413,7 @@ test("an agent installed after setup: status says so, and refresh installs it (#
     "Codex found, Starbridge not installed: run `starbridge setup --refresh`",
   );
   const done = await refresh(m.sys);
-  expect(done).toContain("✓ Codex        skill and sandbox rule installed");
+  expect(done).toContain("✓ Codex        skill, sandbox rule and plugin installed");
   expect(existsSync(join(m.home, ".codex/skills/starbridge/SKILL.md"))).toBe(true);
 });
 
@@ -442,10 +455,14 @@ test("refresh brings what setup wrote to this release and leaves the rest alone"
   const earlier = "Written by starbridge 0.0.1; `starbridge uninstall` removes it.";
   writeFileSync(rule, `# ${earlier}\nold\n`);
   writeFileSync(entry, `// ${earlier}\nold\n`);
+  const script = join(m.home, ".codex/starbridge/hooks/session-start.sh");
+  const wantScript = readFileSync(script, "utf8");
+  writeFileSync(script, `#!/bin/sh\n# ${earlier}\nold\n`);
   writeFileSync(unit, `# ${earlier}\nold\n`);
   writeFileSync(skill, "---\nname: starbridge\n---\nmine\n");
   const done = await refresh(m.sys);
   expect(readFileSync(rule, "utf8")).toBe(CODEX_RULE);
+  expect(readFileSync(script, "utf8")).toBe(wantScript);
   expect(readFileSync(entry, "utf8")).toStartWith(`// Written by starbridge ${VERSION};`);
   expect(readFileSync(unit, "utf8")).toBe(want);
   expect(readFileSync(skill, "utf8")).toBe("---\nname: starbridge\n---\nmine\n");
@@ -605,6 +622,8 @@ test("uninstall removes the service and plugins, asks the devices to revoke, kee
   ).toEqual([]);
   expect(existsSync(join(m.home, ".codex/skills/starbridge"))).toBe(false);
   expect(existsSync(join(m.home, ".codex/rules/starbridge.rules"))).toBe(false);
+  expect(m.calls()).toContain("codex plugin remove starbridge@starbridge-cli");
+  expect(existsSync(join(m.home, ".codex/starbridge"))).toBe(false);
   expect(m.calls()).toContain(`pi remove ${PI_PACKAGE}`);
   expect(readdirSync(join(m.home, ".config/opencode")).sort()).toEqual(["plugins", "skills"]);
   expect(readdirSync(join(m.home, ".config/opencode/plugins"))).toEqual([]);
@@ -999,7 +1018,9 @@ test("setup installs no plugin from a marketplace named starbridge that is not t
   // Nor does uninstall remove it or plugins of that name (#762).
   writeFileSync(join(m.ctx.env.FAKE_STATE as string, "plugin-starbridge@starbridge"), "");
   expect(await uninstall(m.sys, {})).toBe(0);
-  expect(m.calls().filter((c) => /plugin (uninstall|marketplace remove)/.test(c))).toEqual([]);
+  expect(m.calls().filter((c) => /^claude plugin (uninstall|marketplace remove)/.test(c))).toEqual(
+    [],
+  );
   expect(m.ctx.lines.join("\n")).toContain(
     "Left the starbridge marketplace from someone/starbridge and its plugins alone.",
   );
@@ -1184,3 +1205,30 @@ test.if(process.platform === "darwin" && process.env.RUNNER_ENVIRONMENT === "git
     expect(existsSync(path)).toBe(false);
   },
 );
+
+test("refresh gives Codex the plugin when setup installed its skill before #949", async () => {
+  const m = await machine();
+  await setup(m.sys, { yes: true, readyTimeoutMs: 500 });
+  // As an earlier release left Codex: the skill and the rule, no plugin.
+  rmSync(join(m.home, ".codex/starbridge"), { recursive: true });
+  rmSync(join(m.home, ".codex/plugins"), { recursive: true });
+  writeFileSync(join(m.home, ".codex/config.toml"), "");
+  expect(codexPlugin(m.sys)).toBe("missing");
+  const done = await refresh(m.sys);
+  expect(done).toContain("✓ Codex        skill, sandbox rule and plugin installed");
+  expect(codexPlugin(m.sys)).toBe("current");
+  // Once the owner trusted the hook, setup no longer says Codex will ask.
+  const config = join(m.home, ".codex/config.toml");
+  writeFileSync(
+    config,
+    `${readFileSync(config, "utf8")}[hooks.state."starbridge@starbridge-cli:hooks/hooks.json:session_start:0:0"]\ntrusted_hash = "sha256:x"\n`,
+  );
+  m.ctx.lines.length = 0;
+  await setup(m.sys, { agent: "codex" });
+  expect(m.ctx.lines.join("\n")).not.toContain("to trust Starbridge's");
+  // A script someone else put there stays, and setup says so.
+  writeFileSync(join(m.home, ".codex/starbridge/hooks/session-start.sh"), "#!/bin/sh\necho mine\n");
+  expect(codexPlugin(m.sys)).toBe("foreign");
+  await uninstall(m.sys, {});
+  expect(existsSync(join(m.home, ".codex/starbridge/hooks/session-start.sh"))).toBe(true);
+});

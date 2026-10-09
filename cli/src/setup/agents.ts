@@ -4,10 +4,17 @@
  * later setup or refresh leaves that agent alone until `setup --agent <name>` brings it back.
  */
 import type { Ctx } from "../context";
-import { DEFAULT_SERVER } from "../pair";
 import { permissionsEnabled } from "../permissions";
 import { piPermissionConfig, removePiEntries } from "../pi";
 import { offerPiAllow, offerPiChain } from "../settings";
+import {
+  CODEX_PLUGIN,
+  codexHookTrusted,
+  codexPlugin,
+  codexPluginDir,
+  installCodexPlugin,
+  removeCodexPlugin,
+} from "./codex-plugin";
 import {
   codexRule,
   codexRulePath,
@@ -141,7 +148,7 @@ export async function installAgent(sys: Sys, id: AgentId): Promise<Outcome> {
       case "claude":
         return await installClaude(sys);
       case "codex":
-        return installCodex(sys);
+        return await installCodex(sys);
       case "pi":
         return await installPi(sys);
       case "opencode":
@@ -187,7 +194,7 @@ async function installClaude(sys: Sys): Promise<Outcome> {
   return { mark: "✓", text, notes };
 }
 
-function installCodex(sys: Sys): Outcome {
+async function installCodex(sys: Sys): Promise<Outcome> {
   const notes: string[] = [];
   const dir = codexSkillDir(sys);
   const skill = codexSkill(sys);
@@ -196,13 +203,29 @@ function installCodex(sys: Sys): Outcome {
   const rule = codexRule(sys);
   if (rule === "foreign") notes.push(`${codexRulePath(sys)} is not setup's: left alone.`);
   else if (rule !== "current") installCodexRule(sys);
-  const server = sys.ctx.store.machine()?.server.replace(/\/+$/, "") ?? DEFAULT_SERVER;
-  const next = [
-    "Paste these rules into Codex's instructions:",
-    `  ${server}/docs/tell-your-agents#rules-for-codex`,
-  ];
-  if (skill === "foreign" && rule === "foreign") return { mark: "–", text: "skipped", notes, next };
-  return { mark: "✓", text: "skill and sandbox rule installed", notes, next };
+  const plugin = codexPlugin(sys);
+  let hooked = plugin === "current";
+  if (plugin === "foreign") notes.push(`${codexPluginDir(sys)} is not setup's: left alone.`);
+  else if (!hooked)
+    try {
+      await installCodexPlugin(sys);
+      hooked = true;
+    } catch (e) {
+      notes.push(`Could not install the plugin ${CODEX_PLUGIN}: ${oneLine((e as Error).message)}`);
+    }
+  // Codex runs a new hook only once the owner trusts it, which it asks at the next launch.
+  const next =
+    hooked && !codexHookTrusted(sys)
+      ? ["Codex asks once to trust Starbridge's session hook: trust it, so sessions get the rules."]
+      : undefined;
+  if (skill === "foreign" && rule === "foreign" && !hooked)
+    return { mark: "–", text: "skipped", notes };
+  return {
+    mark: "✓",
+    text: hooked ? "skill, sandbox rule and plugin installed" : "skill and sandbox rule installed",
+    notes,
+    ...(next ? { next } : {}),
+  };
 }
 
 async function installPi(sys: Sys): Promise<Outcome> {
@@ -241,6 +264,7 @@ export async function removeAgent(sys: Sys, id: AgentId): Promise<string[]> {
     case "codex":
       if (removeCodexSkill(sys)) done.push(`Removed ${codexSkillDir(sys)}.`);
       if (removeCodexRule(sys)) done.push(`Removed ${codexRulePath(sys)}.`);
+      done.push(...(await removeCodexPlugin(sys)));
       break;
     case "opencode":
       for (const path of removeOpencode(sys)) done.push(`Removed ${path}.`);

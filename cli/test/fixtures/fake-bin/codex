@@ -1,3 +1,20 @@
 #!/bin/sh
-# Stands in for Codex: setup only checks that it is on the PATH.
+# Stands in for Codex: setup checks that it is on the PATH, and installs its plugin from a local
+# marketplace as Codex 0.160 does, into config.toml and the plugin cache.
 echo "codex $*" >>"$FAKE_LOG"
+home="${CODEX_HOME:-$HOME/.codex}"
+mkdir -p "$home"
+case "$1 $2 $3" in
+  "plugin marketplace add") printf '%s' "$4" >"$home/.fake-marketplace" ;;
+  "plugin marketplace remove") rm -f "$home/.fake-marketplace" ;;
+  "plugin add "*)
+    src="$(cat "$home/.fake-marketplace")/plugins/${3%@*}"
+    version=$(sed -n 's/.*"version": "\(.*\)".*/\1/p' "$src/.codex-plugin/plugin.json")
+    cache="$home/plugins/cache/${3#*@}/${3%@*}/$version"
+    mkdir -p "$cache" && cp -R "$src/." "$cache/"
+    printf '[plugins."%s"]\nenabled = true\n' "$3" >>"$home/config.toml" ;;
+  "plugin remove "*)
+    grep -v -F -e "[plugins.\"$3\"]" -e 'enabled = true' "$home/config.toml" >"$home/config.tmp"
+    mv "$home/config.tmp" "$home/config.toml"
+    rm -rf "$home/plugins/cache/${3#*@}" ;;
+esac
