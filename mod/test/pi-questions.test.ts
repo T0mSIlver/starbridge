@@ -54,6 +54,7 @@ function harness(out: string, rpc = false) {
   const ask = (questions: unknown[]) => {
     q.watch(ui);
     const done = q.prompt({ questions }, SESSION);
+    q.blocked({ active: true });
     if (!rpc) void ui.custom?.(() => ({}), {});
     return done;
   };
@@ -123,6 +124,19 @@ test("typed words, or a single-select reply naming two labels, are typed text", 
     kind: "custom",
     answer: "Postgres, Redis (Recommended)",
   });
+});
+
+test("a dialog another extension opens before the package's blocked event keeps its own close", async () => {
+  const h = harness(JSON.stringify({ answers: [["Postgres"]] }), true);
+  const ui = { custom: (f: unknown) => f };
+  h.q.watch(ui);
+  const done = h.q.prompt({ questions: [DB] }, SESSION);
+  const factory = () => "theirs";
+  expect(ui.custom(factory)).toBe(factory);
+  await tick();
+  h.release();
+  await done;
+  expect(h.submitted).toHaveLength(1);
 });
 
 test("a dialog another extension opens, with no questionnaire announced, is left alone", async () => {

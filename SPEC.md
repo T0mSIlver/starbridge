@@ -700,8 +700,10 @@ line, the safe side: at worst a prompt repeats an answer the agent already read.
   question, already waiting, as opencode's do. The tool returning, whoever answered, settles the
   questions still open as answered elsewhere. The package takes no answer from outside
   (juicesharp/rpiv-mono#207 proposes it, and its maintainer merges little), so the Pi extension
-  wraps `ctx.ui.custom`, which Pi shares among extensions, and keeps the `done` of the dialog
-  that follows the event: a device answer closes it as a keyboard submit does. Where no such
+  wraps `ctx.ui.custom`, which Pi shares among extensions, and keeps the `done` of the dialog the
+  package opens right after its `rpiv:ask-user:blocked` event: a device answer closes it as a
+  keyboard submit does. Arming on that event, not on the prompt, leaves other extensions' dialogs
+  alone. Where no such
   dialog opens (Pi's RPC mode), the answer reaches the agent as a follow-up message once the
   questionnaire closes at the keyboard.
 

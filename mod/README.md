@@ -112,7 +112,8 @@ With rpiv-ask-user-question installed, each of its questionnaires
 (`rpiv:ask-user:prompt`) runs `starbridge hook question --agent pi`, as
 opencode's questions do (below). The `ask_user_question` tool returning stops
 the CLI, which settles the questions still open. The extension wraps Pi's
-shared `ctx.ui.custom` to keep the questionnaire dialog's `done`, so a device's
+shared `ctx.ui.custom` to keep the `done` of the dialog the package opens right
+after `rpiv:ask-user:blocked`, so a device's
 answers close it as a keyboard submit does; in Pi's RPC mode they come as a
 follow-up message once the questionnaire closes.
 

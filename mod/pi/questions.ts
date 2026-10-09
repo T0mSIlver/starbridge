@@ -7,7 +7,8 @@
  *
  * The package has no way in for an answer (juicesharp/rpiv-mono#207 proposes one). But Pi gives
  * every extension the same `ctx.ui`, so `watch` wraps its `custom` and keeps the `done` callback
- * of the questionnaire's dialog: a device answer closes it as a keyboard submit does. Where the
+ * of the questionnaire's dialog, the `custom` call the package makes right after it emits
+ * `rpiv:ask-user:blocked` with `active: true`: a device answer closes it as a keyboard submit does. Where the
  * questionnaire is not a `custom` dialog (Pi's RPC mode), the answer reaches the agent as a
  * follow-up message once it is closed at the keyboard.
  */
@@ -15,6 +16,7 @@ import { answersOf } from "../hooks/node.ts";
 
 export const TOOL = "ask_user_question";
 export const PROMPT_EVENT = "rpiv:ask-user:prompt";
+export const BLOCKED_EVENT = "rpiv:ask-user:blocked";
 
 /** Marks a `ui.custom` this module wrapped. */
 const WRAPPED = Symbol.for("starbridge.questionnaire");
@@ -97,11 +99,13 @@ export interface Deps {
 /** Races each questionnaire on the devices; `close` when its tool returns or the session ends. */
 export function questionnaires(deps: Deps) {
   const open = new Set<AbortController>();
-  /** The questionnaire announced last, until its dialog opens. */
+  /** The questionnaire announced last, while its CLI runs. */
+  let latest: { done?: Done } | undefined;
+  /** That questionnaire, between its blocked event and its dialog's `custom` call. */
   let armed: { done?: Done } | undefined;
 
   return {
-    /** Wraps `ui.custom`, once, so the next dialog after a prompt event gives up its `done`. */
+    /** Wraps `ui.custom`, once, so the dialog that follows a blocked event gives up its `done`. */
     watch(ui: { custom?: Custom }) {
       const custom = ui.custom;
       if (typeof custom !== "function" || custom[WRAPPED]) return;
@@ -122,7 +126,7 @@ export function questionnaires(deps: Deps) {
       const qs = promptQuestions(data);
       if (!qs) return;
       const q: { done?: Done } = {};
-      armed = q;
+      latest = q;
       const stop = new AbortController();
       open.add(stop);
       const out = await deps.hook(
@@ -130,13 +134,17 @@ export function questionnaires(deps: Deps) {
         stop.signal,
       );
       open.delete(stop);
-      if (armed === q) armed = undefined;
+      if (latest === q) latest = undefined;
       // Stopped: the questionnaire was answered or dismissed at the keyboard.
       const answers = stop.signal.aborted ? undefined : answersOf(out, qs.length);
       if (!answers) return;
       if (q.done) return q.done({ answers: dialogAnswers(qs, answers), cancelled: false });
       deps.notify("Answered on your devices: the agent gets it once this questionnaire closes.");
       deps.submit(followUp(qs, answers));
+    },
+    /** The package's blocked event: it opens its dialog at once after `active: true`. */
+    blocked(data: unknown) {
+      armed = (data as { active?: unknown } | undefined)?.active === true ? latest : undefined;
     },
     close() {
       for (const stop of open) stop.abort();

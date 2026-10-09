@@ -36,7 +36,7 @@ import {
   permissionsService,
   type Verdict,
 } from "./permissions.ts";
-import { PROMPT_EVENT, questionnaires, TOOL } from "./questions.ts";
+import { BLOCKED_EVENT, PROMPT_EVENT, questionnaires, TOOL } from "./questions.ts";
 
 interface Ctx {
   hasUI: boolean;
@@ -134,10 +134,11 @@ export default function starbridge(pi: PiApi) {
   pi.events.on(PROMPT_EVENT, (data) => {
     const ctx = current;
     if (!ctx?.hasUI) return;
-    // Pi shares one `ui` among extensions; the package opens its dialog right after this event.
+    // Pi shares one `ui` among extensions: its `custom` keeps the dialog the blocked event opens.
     asked.watch(ctx.ui);
     void asked.prompt(data, { id: ctx.sessionManager.getSessionId(), cwd: ctx.cwd });
   });
+  pi.events.on(BLOCKED_EVENT, (data) => asked.blocked(data));
 
   // Whoever answered, or on any error, the questionnaire is over once its tool returns.
   pi.on("tool_execution_end", (e) => {
