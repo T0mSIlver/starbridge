@@ -67,6 +67,16 @@ test("the terminal answering first settles the questions still open, as answered
   expect((await server.opened("settled")).map((s) => s.outcome)).toEqual(["elsewhere"]);
 });
 
+test("Pi's ask_user_question posts as Pi's (#966)", async () => {
+  const ctx = await paired(server);
+  const stop = new AbortController();
+  const done = hookQuestion({ ...ctx, signal: stop.signal }, hookInput([DB]), { agent: "pi" });
+  await until(async () => (await server.opened("decision")).length === 1);
+  expect((await server.opened("decision"))[0]).toMatchObject({ agent: "pi" });
+  stop.abort();
+  expect(await done).toBe(0);
+});
+
 test("an unpaired machine prints nothing, so the terminal's dialog decides", async () => {
   const ctx = testCtx();
   expect(await hookQuestion(ctx, hookInput([DB]), { agent: "opencode" })).toBe(0);

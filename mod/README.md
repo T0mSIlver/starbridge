@@ -108,6 +108,14 @@ from the devices and opens pi-permission-system's own dialog. The link defers
 to that dialog at once while `starbridge config permissions` is off, the
 machine is not paired or the server does not answer, and after 570 s.
 
+With rpiv-ask-user-question installed, each of its questionnaires
+(`rpiv:ask-user:prompt`) runs `starbridge hook question --agent pi`, as
+opencode's questions do (below). The `ask_user_question` tool returning stops
+the CLI, which settles the questions still open. The extension wraps Pi's
+shared `ctx.ui.custom` to keep the questionnaire dialog's `done`, so a device's
+answers close it as a keyboard submit does; in Pi's RPC mode they come as a
+follow-up message once the questionnaire closes.
+
 ## opencode
 
 `opencode/starbridge.ts` is the same answer loop as an opencode plugin.

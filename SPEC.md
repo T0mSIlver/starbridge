@@ -695,7 +695,15 @@ line, the safe side: at worst a prompt repeats an answer the agent already read.
   waiting, and the answers go back into the call through `POST /question/{id}/reply`. The first
   answer, on a device or at the keyboard, wins; the other side is settled `elsewhere`. A question
   with more than 4 options or a label over 100 characters takes a typed reply.
-- Pi has no built-in ask tool; Starbridge intercepts none by name.
+- Pi has no built-in ask tool. Most Pi users add `ask_user_question` from
+  @juicesharp/rpiv-ask-user-question (#966), whose `rpiv:ask-user:prompt` event posts each
+  question, already waiting, as opencode's do. The tool returning, whoever answered, settles the
+  questions still open as answered elsewhere. The package takes no answer from outside
+  (juicesharp/rpiv-mono#207 proposes it, and its maintainer merges little), so the Pi extension
+  wraps `ctx.ui.custom`, which Pi shares among extensions, and keeps the `done` of the dialog
+  that follows the event: a device answer closes it as a keyboard submit does. Where no such
+  dialog opens (Pi's RPC mode), the answer reaches the agent as a follow-up message once the
+  questionnaire closes at the keyboard.
 
 ### Permission prompts
 
