@@ -20,7 +20,7 @@ import {
 import { type Answer, type Entry, parseAnswered, parseState } from "./bridge";
 import { Notifier, type Shown } from "./notifier";
 import { linkPage, opensOutside, serverOrigin, staysInWindow } from "./origin";
-import { readSettings, type Settings, writeSettings } from "./settings";
+import { parsePlace, readSettings, type Settings, writeSettings } from "./settings";
 import { browserSignIn, newSignIn, type SignIn, signInReturn, startsSignIn } from "./signin";
 import { mark, timing } from "./timing";
 
@@ -115,6 +115,18 @@ async function ready(): Promise<void> {
     if (a.error) notSent(a.id, a.error);
     else notifier.close(a.id);
   });
+  // Not secret, and asked while the page is still loading, so only the window is checked.
+  ipcMain.on("place?", (e) => {
+    e.returnValue = e.sender === win?.webContents ? settings.place : null;
+  });
+  ipcMain.on("place", (e, x) => {
+    const place = fromPage(e) && parsePlace(x);
+    if (!place || place === settings.place) return;
+    settings.place = place;
+    save();
+    applyPlace();
+    win?.webContents.send("place", place);
+  });
   ipcMain.on("server", (e, x) => {
     if (e.sender !== serverWin?.webContents || typeof x !== "string") return;
     const next = serverOrigin(x);
@@ -143,12 +155,15 @@ async function ready(): Promise<void> {
     })
     .catch(() => {});
   createWindow();
-  createTray();
+  applyPlace();
+  nativeTheme.on("updated", paintTray);
+  askNotificationsAfterSignIn(ses);
   if (!globalShortcut.register(settings.shortcut, showWindow))
     console.warn(`shortcut ${settings.shortcut} is taken`);
   const atLogin = process.platform === "darwin" && app.getLoginItemSettings().wasOpenedAtLogin;
-  if (atLogin) app.dock?.hide();
-  else showWindow();
+  if (atLogin) {
+    if (settings.place === "menu") app.dock?.hide();
+  } else showWindow();
   for (const link of early.splice(0)) openLink(link);
   checkForUpdates();
 }
@@ -164,6 +179,7 @@ function checkForUpdates(): void {
     ) as typeof import("./updater");
     update = startUpdates(() => {
       updateReady = true;
+      paintDockMenu();
     });
   }, 5_000);
 }
@@ -196,8 +212,10 @@ function createWindow(): void {
     e.preventDefault();
     win?.hide();
   });
-  // A Dock icon only while the window is open; closed, the app is its menu bar icon.
-  win.on("hide", () => app.dock?.hide());
+  // In the menu bar, a Dock icon only while the window is open; closed, the app is its icon there.
+  win.on("hide", () => {
+    if (settings.place === "menu") app.dock?.hide();
+  });
   // Offline at start, or the server restarting: try again, unless a newer navigation came first.
   let retry: NodeJS.Timeout | undefined;
   win.webContents.on("did-start-navigation", (d) => {
@@ -250,12 +268,28 @@ function guard(contents: WebContents): void {
   contents.on("will-attach-webview", (e) => e.preventDefault());
 }
 
-function createTray(): void {
-  tray = new Tray(trayIcon());
-  paintTray();
-  nativeTheme.on("updated", paintTray);
-  tray.on("click", showWindow);
-  tray.on("right-click", () => tray?.popUpContextMenu(menu()));
+/**
+ * Puts the app where the owner keeps it (Settings, "Keep Starbridge in"): the menu bar icon unless
+ * the Dock alone, and the Dock icon always unless the menu bar alone, where it shows only with
+ * the window. The Dock's menu holds the menu bar's items, for when there is no menu bar icon.
+ */
+function applyPlace(): void {
+  if (settings.place === "dock") {
+    tray?.destroy();
+    tray = null;
+  } else if (!tray) {
+    tray = new Tray(trayIcon());
+    paintTray();
+    tray.on("click", showWindow);
+    tray.on("right-click", () => tray?.popUpContextMenu(menu()));
+  }
+  if (settings.place !== "menu" || win?.isVisible()) app.dock?.show();
+  else app.dock?.hide();
+  paintDockMenu();
+}
+
+function paintDockMenu(): void {
+  app.dock?.setMenu(menu(false));
 }
 
 /**
@@ -283,21 +317,30 @@ function paintTray(): void {
   );
 }
 
-function menu(): Menu {
+/** The menu bar icon's menu; the Dock's leaves out Open and Quit, which macOS adds there. */
+function menu(forTray = true): Menu {
   const login = app.getLoginItemSettings().openAtLogin;
   return Menu.buildFromTemplate([
-    { label: "Open Starbridge", accelerator: settings.shortcut, click: showWindow },
-    { type: "separator" },
+    ...(forTray
+      ? [
+          { label: "Open Starbridge", accelerator: settings.shortcut, click: showWindow },
+          { type: "separator" as const },
+        ]
+      : []),
     {
       label: "Open at Login",
       type: "checkbox",
       checked: login,
-      click: () => app.setLoginItemSettings({ openAtLogin: !login }),
+      click: () => {
+        app.setLoginItemSettings({ openAtLogin: !login });
+        paintDockMenu();
+      },
     },
     { label: `Server: ${new URL(origin).host}…`, click: showServer },
     ...(updateReady ? [{ label: "Restart to Update", click: installUpdate }] : []),
-    { type: "separator" },
-    { label: "Quit Starbridge", role: "quit" },
+    ...(forTray
+      ? [{ type: "separator" as const }, { label: "Quit Starbridge", role: "quit" as const }]
+      : []),
   ]);
 }
 
@@ -370,8 +413,54 @@ function notify(entry: Entry): Shown {
   n.on("reply", (d) => {
     if (d.reply.trim()) answer({ id: entry.id, text: d.reply });
   });
+  // Refused, as before the owner allows notifications: the page's next update tries again.
+  n.on("failed", () => notifier.forget(entry.id));
   n.show();
   return n;
+}
+
+/**
+ * Electron asks macOS to allow notifications the first time it touches them, which was the first
+ * question: shown while macOS still asked, it reached only the window. So the app asks once
+ * the page has a session (its sign-in, in the browser or the page), after a line saying why.
+ */
+function askNotificationsAfterSignIn(ses: Electron.Session): void {
+  if (process.platform !== "darwin" || settings.notificationsAsked) return;
+  const host = new URL(origin).hostname;
+  const isSession = (c: Electron.Cookie) =>
+    c.name === "sb_session" && c.domain?.replace(/^\./, "") === host;
+  const onChange = (_e: unknown, c: Electron.Cookie, _cause: string, removed: boolean) => {
+    if (!removed && isSession(c)) ask();
+  };
+  let asking = false;
+  const ask = () => {
+    ses.cookies.off("changed", onChange);
+    if (asking) return;
+    asking = true;
+    const go = () => {
+      if (!win) return;
+      // Saved once the sheet shows: an app that quits before then asks at its next start.
+      settings.notificationsAsked = true;
+      save();
+      dialog
+        .showMessageBox(win, {
+          message: "Allow notifications",
+          detail: "Each question from your agents shows as a notification you answer with a tap.",
+          buttons: ["Continue"],
+        })
+        // Electron asks macOS when it first needs notifications; this is that first need.
+        .then(() => Notification.isSupported());
+    };
+    if (win?.isVisible()) go();
+    else win?.once("show", go);
+  };
+  ses.cookies.on("changed", onChange);
+  ses.cookies.get({ url: origin, name: "sb_session" }).then(
+    (c) => {
+      if (c.length > 0) ask();
+    },
+    () => {},
+  );
 }
 
 /** Hands an answer to the page, which sends it as if tapped there. */
