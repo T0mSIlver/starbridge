@@ -49,7 +49,7 @@ script: a real Mac uses more memory than the runner, so its budget is 400 MB, wh
 
 | | Budget | Runner | Mac Mini M2 |
 |---|---|---|---|
-| Cold start: process start to the window's first painted frame (median of 6 launches after a first) | 700 ms | 407–555 ms | 258–260 ms |
+| Cold start: process start to the window's first painted frame (median of 13 launches after a first) | 700 ms | 407–555 ms | 258–260 ms |
 | Warm open: the hidden window to its next frame, as from the menu bar | 50 ms | 7–49 ms | 15 ms |
 | Idle memory: every process's working set, page loaded | 350 MB on the runner, 400 MB on a Mac | 304–310 MB | 371–378 MB |
 | Download: the largest DMG | 140 MB | 133–134 MB | 134 MB |
