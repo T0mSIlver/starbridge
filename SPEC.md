@@ -391,6 +391,25 @@ provider plugins add providers, not panels.
   and keeps the target. The cost: a 403 for another reason, such as a server clock hours off, drops
   the account's browser subscriptions too, and each comes back only when its page opens. Those
   pushes were failing anyway.
+- **Notifications on this device** (#943). With the desktop app on a Mac, Brave's service worker
+  went on notifying too, so every question came twice, and the only ways out were the browser's
+  site settings or revoking the browser. Settings → Notifications on the web and in the desktop
+  app opens with this switch. A browser's off drops its own Web Push subscription, which nothing
+  renews until the owner turns it back on, and no banner offers it again; on asks for the
+  browser's permission when it is missing, then subscribes; blocked by the browser, the switch
+  is disabled and the row says where to allow it. The desktop app's off stops its notifications
+  while the menu bar light still shows what waits. Android keeps its own controls (system
+  settings, channels), which the app only reads. Each device turns only its own notifications
+  off, never another's (owner's rule), and says its state to the server, so Devices shows every
+  device on, off or blocked, read-only.
+- **The hand-off to the desktop app** (#943). The app's GitHub sign-in passes through
+  `/app/auth` in the default browser of its own machine. When that browser holds a device of the
+  same account with notifications on, which the server confirms once the app traded its code,
+  the page offers to turn off this browser's notifications, one tap. The server keeps no IP or
+  user agent, so this is the one case where two devices are known to share a machine; a browser
+  opened beside an app already signed in gets no offer, since that would be a guess (owner's
+  rule). The owner chose this from mockups over offers by device name both ways and over the
+  switches alone.
 - An Android app in front syncs every 10 s until a push has reached it (#445), since a server
   without a relay or UnifiedPush pushes nothing and cannot tell.
 - **Held pushes** (#848). A question that shows in the agent's picker and on the owner's screen
@@ -1005,7 +1024,7 @@ first window, so a provider with a window running out leads.
   it was refused before doing anything. A wait past the 20 s retry window reaches the caller as
   429 `rate-limited`. A 429 without `Retry-After` is a cap and reaches the caller at once.
 - **Settings** (#914) in the same sections on both clients: Notifications (what decides whether
-  something notifies here: Android's channels or the browser's permission, the hold, the web's
+  something notifies here: Android's channels or this device's switch (#943), the hold, the web's
   sound, Android's Quick Allow), Quotas (see "Quota alerts per window"), the Inbox's,
   Devices, Look (colours and the clock) and Account (the server, Android's push delivery, agent
   instructions, sign out). They had grown one issue at a time: the hold sat under Inbox on the web
@@ -1016,7 +1035,7 @@ first window, so a provider with a window running out leads.
   hidden, so an owner who skips CodexBar never sees an empty feature and the app stays about
   agents. A device that just joined sees the tab at once, since the snapshot it cannot open yet
   still counts.
-- **Devices.** Rows that share a name show when each was added (#287). A Recovery key row says
+- **Devices.** Each device shows whether it notifies, as it last said (#943). Rows that share a name show when each was added (#287). A Recovery key row says
   when and on which device the key was set, with Replace; other devices show a replacement once
   (#348).
 
@@ -1163,7 +1182,8 @@ a browser; the app adds a menu bar light and notifications, so a web release nee
   again when its agent starts waiting or it comes back from snooze, and its notification closes
   when it leaves Needs you, wherever it was answered. Items already notified stay quiet across a
   restart. Items notify through the app, never through the browser's notifications; quota
-  alerts stay the page's own, which the app shows as it would a browser's.
+  alerts stay the page's own, which the app shows as it would a browser's. Settings →
+  Notifications turns them off and on (#943).
 - **The menu bar.** The mark in one colour, as macOS draws menu bar icons; while anything needs
   the owner, its climber turns amber, the one amber light, with no count: the window says what
   (owner's pick from mockups, 2026-10-09). A click shows the window; a right-click opens the menu:
