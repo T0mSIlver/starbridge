@@ -1,5 +1,8 @@
 package dev.starbridge.app.ui
 
+import android.os.Build
+import android.view.HapticFeedbackConstants
+import android.view.View
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.background
@@ -372,4 +375,12 @@ fun fieldColors() = MaterialTheme.colorScheme.surfaceContainerHighest.let {
         errorContainerColor = it,
         unfocusedIndicatorColor = MaterialTheme.colorScheme.outline,
     )
+}
+
+/**
+ * The tick of a gesture backing off its threshold, from Android 14, which added it. Compose's
+ * HapticFeedbackType lacks it; through the view, Android's Touch feedback setting still applies.
+ */
+fun View.thresholdDeactivate() {
+    if (Build.VERSION.SDK_INT >= 34) performHapticFeedback(HapticFeedbackConstants.GESTURE_THRESHOLD_DEACTIVATE)
 }
