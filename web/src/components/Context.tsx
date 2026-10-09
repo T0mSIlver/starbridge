@@ -2,7 +2,7 @@
 // and numbers with a hanging indent, bold, links, and code inline or fenced. Code is the only
 // text set in mono (DESIGN.md); anything else shows as typed.
 import { type Block, parseContext, type Span } from "@starbridge/protocol/context";
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import s from "./Context.module.css";
 
 function Spans({ spans }: { spans: Span[] }) {
@@ -34,8 +34,14 @@ function Line({ block }: { block: Block }) {
         <Spans spans={block.spans} />
       </p>
     );
+  const marker = block.kind === "number" ? block.marker : "•";
   return (
-    <p className={s.item} data-marker={block.kind === "number" ? block.marker : "•"}>
+    // The gutter grows with the marker, so "10." clears the text as "•" does.
+    <p
+      className={s.item}
+      data-marker={marker}
+      style={{ "--marker": marker.length } as CSSProperties}
+    >
       <Spans spans={block.spans} />
     </p>
   );

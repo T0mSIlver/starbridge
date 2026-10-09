@@ -48,16 +48,16 @@ internal fun Context(text: String) {
             // The marker hangs in a gutter, so wrapped lines align with the text.
             is Block.Item -> Row {
                 Text(block.marker, style = StarbridgeTheme.type.body, color = scheme.onSurfaceVariant, modifier = Modifier.widthIn(min = 20.dp))
-                Words(block.spans)
+                Words(block.spans, Modifier.weight(1f))
             }
         }
     }
 }
 
 @Composable
-private fun Words(spans: List<Span>) {
+private fun Words(spans: List<Span>, modifier: Modifier = Modifier) {
     val scheme = MaterialTheme.colorScheme
-    Text(annotated(spans, scheme.onSurface, scheme.surfaceContainerHighest), style = StarbridgeTheme.type.body, color = scheme.onSurfaceVariant)
+    Text(annotated(spans, scheme.onSurface, scheme.surfaceContainerHighest), style = StarbridgeTheme.type.body, color = scheme.onSurfaceVariant, modifier = modifier)
 }
 
 private fun annotated(spans: List<Span>, strong: Color, codeBackground: Color): AnnotatedString = buildAnnotatedString {

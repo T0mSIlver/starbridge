@@ -14,7 +14,7 @@
 /* A bullet or number hangs in the gutter, so wrapped lines align with the text. */
 .item {
   position: relative;
-  padding-left: 1.25em;
+  padding-left: calc(var(--marker, 1) * 1ch + 0.75em);
 }
 
 .item::before {
