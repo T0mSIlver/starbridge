@@ -17,7 +17,7 @@ import { AGENTS_GUIDE } from "@/lib/links";
 import { applyTheme, type Prefs, usePref } from "@/lib/prefs";
 import type { PushState } from "@/lib/push";
 import { holdsQuotas, providerOrder, type QuotaSettings } from "@/lib/quotaSettings";
-import { keptSettingsData, loadSettingsData, type SettingsData } from "@/lib/settingsData";
+import { keptSettingsData, loadSettingsData, type SettingsData, WAIT_MS } from "@/lib/settingsData";
 import { chime } from "@/lib/sound";
 import type { Device, QuotaCardData } from "@/lib/types";
 import { useApp } from "./AppProvider";
@@ -28,8 +28,6 @@ import s from "./Settings.module.css";
 import ui from "./ui.module.css";
 
 const load = () => import("@/lib/device");
-/** How long the sections wait for a part that hangs. */
-const WAIT_MS = 2_000;
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
 export function Section({ title, children }: { title: string; children: React.ReactNode }) {
@@ -182,7 +180,11 @@ function NotificationSection({ data }: { data: SettingsData }) {
 function BrowserRow({ initial }: { initial: PushState }) {
   const [state, setState] = useState(initial);
   const [error, setError] = useState<string>();
-  useEffect(() => setState(initial), [initial]);
+  // A refresh underneath never undoes what the owner just turned on.
+  const touched = useRef(false);
+  useEffect(() => {
+    if (!touched.current) setState(initial);
+  }, [initial]);
   if (state === "unsupported") return null;
   const sub =
     error ??
@@ -199,6 +201,7 @@ function BrowserRow({ initial }: { initial: PushState }) {
           type="button"
           className={`t-meta ${ui.btn} ${ui.sm}`}
           onClick={async () => {
+            touched.current = true;
             setError(undefined);
             try {
               setState(await (await import("@/lib/push")).enablePush());
@@ -231,7 +234,10 @@ const HOLD_LABELS: Record<(typeof PUSH_HOLD_CHOICES)[number], string> = {
 function HoldRow({ initial }: { initial: number | undefined }) {
   const [hold, setHold] = useState(initial);
   const [error, setError] = useState<string | undefined>();
-  useEffect(() => setHold(initial), [initial]);
+  const touched = useRef(false);
+  useEffect(() => {
+    if (!touched.current) setHold(initial);
+  }, [initial]);
   if (hold === undefined) return null;
   return (
     <Row
@@ -246,6 +252,7 @@ function HoldRow({ initial }: { initial: number | undefined }) {
         value={hold}
         options={PUSH_HOLD_CHOICES.map((c) => [c, HOLD_LABELS[c]])}
         onChange={(pushHold) => {
+          touched.current = true;
           const was = hold;
           setHold(pushHold);
           setError(undefined);
@@ -732,11 +739,12 @@ export function Settings() {
       (d) => live && setData(d),
       () => {},
     );
-    // A part that hangs arrives late rather than holding the page.
+    // The load gives up on the server after WAIT_MS; past twice that, the quotas or a part of
+    // this browser hangs, and arrives late rather than holding the page.
     const late = setTimeout(() => {
       setData((d) => d ?? { push: "unsupported" });
       setQuotasIn(true);
-    }, WAIT_MS);
+    }, 2 * WAIT_MS);
     return () => {
       live = false;
       clearTimeout(late);

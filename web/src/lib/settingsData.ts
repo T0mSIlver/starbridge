@@ -14,6 +14,15 @@ export type SettingsData = {
   recovery?: RecoveryState;
 };
 
+/**
+ * How long the server's part may take: past it, the page shows without the hold rather than wait
+ * on its retries, and the devices, read from this browser, never wait on the server.
+ */
+export const WAIT_MS = 2_000;
+
+const within = <T>(p: Promise<T>): Promise<T | undefined> =>
+  Promise.race([p, new Promise<undefined>((done) => setTimeout(done, WAIT_MS))]);
+
 let kept: { account?: string; data: SettingsData } | undefined;
 let loading: { account?: string; data: Promise<SettingsData> } | undefined;
 
@@ -27,9 +36,9 @@ export function loadSettingsData(ctx: Ctx | undefined): Promise<SettingsData> {
   const account = ctx?.account;
   const data = (async () => {
     const [push, pushHold, own] = await Promise.all([
-      import("./push").then((p) => p.pushState()),
-      api.settings().then(
-        (s) => s.pushHold,
+      import("./push").then((p) => p.pushState()).catch((): PushState => "unsupported"),
+      within(api.settings()).then(
+        (s) => s?.pushHold,
         () => undefined,
       ),
       ctx
