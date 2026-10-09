@@ -49,7 +49,7 @@ const HELP = `starbridge: post decisions to your devices, report runs, upload qu
   starbridge setup --refresh
       Set this machine up, or check and repair it: pair it, install Starbridge in each
       agent found (the Claude Code plugins, the Codex skill and rule, the Pi package, the
-      opencode skill and plugin, the Cursor plugin; --no-agents skips them), find or
+      opencode skill and plugin, the Cursor skill; --no-agents skips them), find or
       install CodexBar and pick the providers to upload, install the agent as a user
       service (systemd, launchd or a Scheduled Task), and upload a first quota snapshot.
       It asks only before installing CodexBar, whether to send quotas when another machine
@@ -61,7 +61,7 @@ const HELP = `starbridge: post decisions to your devices, report runs, upload qu
                       server this machine is paired with
       --agent <name>  only Starbridge in that agent, also one uninstall --agent removed
       --refresh only brings the files setup wrote into other tools (the service, the Codex
-      skill and rule, the opencode skill and plugin, the Cursor plugin) to this version,
+      skill and rule, the opencode skill and plugin, the Cursor files) to this version,
       installs Starbridge in an agent found since, and restarts the agent.
 
   starbridge status

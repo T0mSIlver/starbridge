@@ -11,7 +11,7 @@ import rule from "../../../plugin/hooks/rule.md" with { type: "text" };
 import skill from "../../../plugin/skills/starbridge/SKILL.md" with { type: "text" };
 import { VERSION } from "../version";
 import { codexPluginDir, refreshCodexPluginFiles } from "./codex-plugin";
-import { cursorPlugin, cursorPluginDir, installCursorPlugin } from "./cursor";
+import { cursorSkillDir, cursorState, installCursorFiles } from "./cursor";
 import { markedSkill, marker, ours } from "./marker";
 import plugin from "./opencode-files.js";
 import { failure, run, type Sys, which } from "./sys";
@@ -288,8 +288,8 @@ export function refreshFiles(sys: Home): string[] {
   } catch (e) {
     done.push(`Could not update ${codexPluginDir(sys)}: ${(e as Error).message}`);
   }
-  if (cursorPlugin(sys) === "outdated")
-    step(`the Cursor plugin in ${cursorPluginDir(sys)}`, () => installCursorPlugin(sys));
+  if (cursorState(sys) === "outdated")
+    step(`${join(cursorSkillDir(sys), "SKILL.md")}`, () => installCursorFiles(sys));
   // Files someone else wrote keep it outdated: only a write that changed something counts.
   if (opencodeState(sys) === "outdated") {
     const before = opencodeSnapshot(sys);

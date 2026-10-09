@@ -1,20 +1,18 @@
 /**
- * Setup's Cursor step (#953): a local Cursor plugin, `~/.cursor/plugins/local/starbridge`, which
- * the IDE and `cursor-agent` load with no install command and which carries the skill and the
- * hooks, so the owner's own `hooks.json` stays untouched; and the allow rules in
+ * Setup's Cursor step (#953): the skill in `~/.cursor/skills/starbridge`, and the allow rules in
  * `cli-config.json`, so `cursor-agent` runs the commands that post a question without a prompt.
+ * Not a local plugin under `~/.cursor/plugins/local`: `cursor-agent`'s interactive sessions load
+ * neither its skills nor its sessionStart and stop hooks (2026.10.01).
  */
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import skill from "../../../plugin/skills/starbridge/SKILL.md" with { type: "text" };
-import { VERSION } from "../version";
-import type { FileState } from "./harnesses";
-import { markedSkill, marker, ours } from "./marker";
+import { type FileState, SKILL } from "./harnesses";
+import { ours } from "./marker";
 import { type Sys, which } from "./sys";
 
 type Home = Pick<Sys, "ctx" | "home">;
 
-/** Cursor's own folder: plugins and skills load from it whatever `CURSOR_CONFIG_DIR` says. */
+/** Cursor's own folder: skills and hooks load from it whatever `CURSOR_CONFIG_DIR` says. */
 function cursorHome(sys: Home): string {
   return join(sys.home, ".cursor");
 }
@@ -32,25 +30,9 @@ export function hasCursor(sys: Sys): boolean {
   return which(sys.ctx.env, "cursor-agent") !== undefined || existsSync(cursorHome(sys));
 }
 
-export function cursorPluginDir(sys: Home): string {
-  return join(cursorHome(sys), "plugins", "local", "starbridge");
-}
-
-/** The plugin's files by path inside its folder; the README carries the marker. */
-function pluginFiles(): Record<string, string> {
-  return {
-    "README.md": `${marker("<!--", "-->")}\n\nStarbridge for Cursor: https://starbridge.run/docs\n`,
-    ".cursor-plugin/plugin.json": `${JSON.stringify(
-      {
-        name: "starbridge",
-        version: VERSION,
-        description: "Questions and permission prompts to your devices, through Starbridge.",
-      },
-      null,
-      2,
-    )}\n`,
-    "skills/starbridge/SKILL.md": markedSkill(skill),
-  };
+/** Every file setup writes into Cursor's folder, by absolute path. */
+function cursorFiles(sys: Home): Record<string, string> {
+  return { [join(cursorHome(sys), "skills", "starbridge", "SKILL.md")]: SKILL };
 }
 
 function readText(path: string): string | undefined {
@@ -61,32 +43,32 @@ function readText(path: string): string | undefined {
   }
 }
 
-/** A folder without the README's marker is someone else's plugin, which setup leaves alone. */
-export function cursorPlugin(sys: Home): FileState {
-  const dir = cursorPluginDir(sys);
-  const readme = readText(join(dir, "README.md"));
-  if (readme === undefined) return existsSync(dir) ? "foreign" : "missing";
-  if (!ours(readme)) return "foreign";
-  const same = Object.entries(pluginFiles()).every(
-    ([path, body]) => readText(join(dir, path)) === body,
-  );
-  return same ? "current" : "outdated";
+/** The skill's folder, which names what setup put into Cursor in its output. */
+export function cursorSkillDir(sys: Home): string {
+  return join(cursorHome(sys), "skills", "starbridge");
 }
 
-/** Writes the plugin afresh, so a file an older release shipped does not linger. */
-export function installCursorPlugin(sys: Home) {
-  const dir = cursorPluginDir(sys);
-  rmSync(dir, { recursive: true, force: true });
-  for (const [path, body] of Object.entries(pluginFiles())) {
-    mkdirSync(dirname(join(dir, path)), { recursive: true });
-    writeFileSync(join(dir, path), body);
+/** A skill without the marker is someone else's, which setup leaves alone. */
+export function cursorState(sys: Home): FileState {
+  const files = Object.entries(cursorFiles(sys));
+  const skill = readText(join(cursorSkillDir(sys), "SKILL.md"));
+  if (skill === undefined) return "missing";
+  if (!ours(skill)) return "foreign";
+  return files.every(([path, body]) => readText(path) === body) ? "current" : "outdated";
+}
+
+export function installCursorFiles(sys: Home) {
+  for (const [path, body] of Object.entries(cursorFiles(sys))) {
+    mkdirSync(dirname(path), { recursive: true });
+    writeFileSync(path, body);
   }
 }
 
-export function removeCursorPlugin(sys: Home): boolean {
-  if (!ours(readText(join(cursorPluginDir(sys), "README.md")))) return false;
-  rmSync(cursorPluginDir(sys), { recursive: true, force: true });
-  return true;
+/** Removes what setup wrote. Returns the paths it removed. */
+export function removeCursorFiles(sys: Home): string[] {
+  if (!ours(readText(join(cursorSkillDir(sys), "SKILL.md")))) return [];
+  rmSync(cursorSkillDir(sys), { recursive: true, force: true });
+  return [cursorSkillDir(sys)];
 }
 
 /**

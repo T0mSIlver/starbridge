@@ -15,19 +15,18 @@ import {
   installCodexPlugin,
   removeCodexPlugin,
 } from "./codex-plugin";
-
+import {
   addCursorAllow,
   CURSOR_ALLOW,
   cursorConfigPath,
-  cursorPlugin,
-  cursorPluginDir,
+  cursorSkillDir,
+  cursorState,
   hasCursor,
-  installCursorPlugin,
+  installCursorFiles,
   missingCursorAllow,
   removeCursorAllow,
-  removeCursorPlugin,
+  removeCursorFiles,
 } from "./cursor";
-
 import {
   codexRule,
   codexRulePath,
@@ -136,7 +135,7 @@ export async function installed(sys: Sys, id: AgentId): Promise<boolean> {
     case "opencode":
       return opencodeState(sys) !== "missing";
     case "cursor":
-      return cursorPlugin(sys) !== "missing";
+      return cursorState(sys) !== "missing";
   }
 }
 
@@ -270,9 +269,9 @@ function installOpencodeAgent(sys: Sys): Outcome {
 
 function installCursor(sys: Sys): Outcome {
   const notes: string[] = [];
-  const plugin = cursorPlugin(sys);
-  if (plugin === "foreign") notes.push(`${cursorPluginDir(sys)} is another plugin: left alone.`);
-  else if (plugin !== "current") installCursorPlugin(sys);
+  const plugin = cursorState(sys);
+  if (plugin === "foreign") notes.push(`${cursorSkillDir(sys)} is another skill: left alone.`);
+  else if (plugin !== "current") installCursorFiles(sys);
   const allowed = missingCursorAllow(sys).length === 0 || addCursorAllow(sys);
   if (!allowed)
     notes.push(
@@ -280,7 +279,7 @@ function installCursor(sys: Sys): Outcome {
     );
   if (plugin === "foreign" && !allowed) return { mark: "–", text: "skipped", notes };
   const text = [
-    ...(plugin === "foreign" ? [] : ["plugin installed"]),
+    ...(plugin === "foreign" ? [] : ["skill installed"]),
     ...(allowed ? [`${CURSOR_ALLOW.length} starbridge commands allowed`] : []),
   ].join(", ");
   return { mark: "✓", text, notes };
@@ -308,7 +307,7 @@ export async function removeAgent(sys: Sys, id: AgentId): Promise<string[]> {
       for (const path of removeOpencode(sys)) done.push(`Removed ${path}.`);
       break;
     case "cursor":
-      if (removeCursorPlugin(sys)) done.push(`Removed ${cursorPluginDir(sys)}.`);
+      for (const path of removeCursorFiles(sys)) done.push(`Removed ${path}.`);
       if (removeCursorAllow(sys))
         done.push(`Removed the starbridge allow rules from ${cursorConfigPath(sys)}.`);
       break;
