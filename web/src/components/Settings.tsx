@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  isShortWindow,
   PUSH_HOLD_CHOICES,
   QUOTA_ALERT_CHOICES,
   type QuotaAlertChoice,
