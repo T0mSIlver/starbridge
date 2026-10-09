@@ -21,9 +21,12 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
-import androidx.compose.material3.FilterChip
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.IconToggleButton
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.width
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.semantics.contentDescription
 import dev.starbridge.app.data.QuotaAlerts
 import androidx.compose.material3.Text
 import androidx.compose.material3.ToggleButton
@@ -118,7 +121,6 @@ class SettingsActions(
     val clock: (Clock) -> Unit = {},
     val allowUnseen: (Boolean) -> Unit = {},
     val pushHold: (Int) -> Unit = {},
-    val windows: () -> Unit = {},
 )
 
 /** Everything this phone keeps for itself, and the account's devices. The settings stay on the phone. */
@@ -173,47 +175,42 @@ fun SettingsScreen(
         }
 
         if (quotas) {
-            item { Section("Quota alerts") }
-            item { ChipsRow(0, 3, "5-hour and daily windows", quota.alerts.short) { set(quota.copy(alerts = quota.alerts.copy(short = it))) } }
-            item { ChipsRow(1, 3, "Weekly and monthly windows", quota.alerts.long) { set(quota.copy(alerts = quota.alerts.copy(long = it))) } }
-            item { LinkRow(2, 3, "Per window", null, Sym.Chevron, actions.windows) }
-
+            // One box (#914): how the bars read, then each provider with its windows' alerts.
+            val providers = quota.providers(windows)
+            val all = windows.map { it.provider to it.windowId }.distinct()
+            val rows = 5 + providers.size
             item { Section("Quotas") }
-            val quotaRows = 4
             item {
-                ChoiceRow(0, quotaRows, "Bar shows") { Segments(listOf(true to "Used", false to "Left"), quota.showUsed) { set(quota.copy(showUsed = it)) } }
+                ChoiceRow(0, rows, "Bar shows") { Segments(listOf(true to "Used", false to "Left"), quota.showUsed) { set(quota.copy(showUsed = it)) } }
             }
             item {
-                ChoiceRow(1, quotaRows, "Reset times") { Segments(listOf(false to "Resets in 2 h", true to "Resets 14:20"), quota.absoluteResets) { set(quota.copy(absoluteResets = it)) } }
+                ChoiceRow(1, rows, "Reset times") { Segments(listOf(false to "Resets in 2 h", true to "Resets 14:20"), quota.absoluteResets) { set(quota.copy(absoluteResets = it)) } }
             }
             item {
-                ChoiceRow(2, quotaRows, "Workday ticks on weekly bars") {
+                ChoiceRow(2, rows, "Workday ticks on weekly bars") {
                     Segments(listOf(null to "Off", 4 to "4", 5 to "5", 7 to "7 days"), quota.workDays) { set(quota.copy(workDays = it)) }
                 }
             }
-            item { SwitchRow(3, quotaRows, "Running out first", quota.runningOutFirst) { set(quota.copy(runningOutFirst = it)) } }
-
-            val providers = quota.providers(windows)
-            if (providers.isNotEmpty()) {
-                item { Section("Providers") }
-                itemsIndexed(providers, key = { _, p -> "provider/$p" }) { i, p ->
-                    val labels = windows.filter { it.provider == p }.map { it.window }.distinct().joinToString(", ")
-                    ProviderRow(
-                        p,
-                        labels,
-                        shown = p !in quota.hidden,
-                        shape = rowShape(i, providers.size),
-                        onShow = { on -> set(quota.copy(hidden = if (on) quota.hidden - p else (quota.hidden + p).distinct())) },
-                        first = i == 0,
-                        last = i == providers.lastIndex,
-                        onMove = { by ->
-                            val to = (i + by).coerceIn(0, providers.lastIndex)
-                            if (to != i) set(quota.copy(order = providers.toMutableList().apply { add(to, removeAt(i)) }))
-                        },
-                        // The row under the finger follows it, not the placement animation.
-                        placement = { dragging -> Modifier.animateItem(placementSpec = if (dragging) null else spring(stiffness = Spring.StiffnessMediumLow, visibilityThreshold = IntOffset.VisibilityThreshold)) },
-                    )
-                }
+            item { SwitchRow(3, rows, "Running out first", quota.runningOutFirst) { set(quota.copy(runningOutFirst = it)) } }
+            item { AlertHeads(4, rows) }
+            itemsIndexed(providers, key = { _, p -> "provider/$p" }) { i, p ->
+                ProviderRow(
+                    p,
+                    windows.filter { it.provider == p }.distinctBy { it.windowId },
+                    quota.alerts,
+                    shown = p !in quota.hidden,
+                    shape = rowShape(5 + i, rows),
+                    onShow = { on -> set(quota.copy(hidden = if (on) quota.hidden - p else (quota.hidden + p).distinct())) },
+                    onAlerts = { w, picked -> set(quota.copy(alerts = quota.alerts.with(w.provider, w.windowId, all, picked))) },
+                    first = i == 0,
+                    last = i == providers.lastIndex,
+                    onMove = { by ->
+                        val to = (i + by).coerceIn(0, providers.lastIndex)
+                        if (to != i) set(quota.copy(order = providers.toMutableList().apply { add(to, removeAt(i)) }))
+                    },
+                    // The row under the finger follows it, not the placement animation.
+                    placement = { dragging -> Modifier.animateItem(placementSpec = if (dragging) null else spring(stiffness = Spring.StiffnessMediumLow, visibilityThreshold = IntOffset.VisibilityThreshold)) },
+                )
             }
         }
 
@@ -337,19 +334,44 @@ private fun Line(content: @Composable RowScope.() -> Unit) {
     )
 }
 
+/** The alerts a window can pick, in the table's column order (#914). */
+private val ALERT_COLUMNS = listOf("runs-out" to "Runs out", "low-50" to "50% left", "low-20" to "20% left", "unused-headroom" to "Unused")
+
+/** The columns' names over the table, two short lines each so four fit a phone. */
+private val ALERT_HEADS = listOf("Runs\nout", "50%\nleft", "20%\nleft", "Unused")
+
+/** A column of the alerts table: as wide as a checkbox's tap area. */
+private val alertColumn = 48.dp
+
+/** The alerts table's column names, over the providers. */
+@Composable
+private fun AlertHeads(index: Int, count: Int) {
+    Shell(index, count) {
+        Row(Modifier.fillMaxWidth().padding(start = Spacing.s4, end = Spacing.s2, top = Spacing.s3, bottom = Spacing.s2), verticalAlignment = Alignment.Bottom) {
+            Text("Alerts", style = StarbridgeTheme.type.small, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
+            ALERT_HEADS.forEach { label ->
+                Text(label, style = StarbridgeTheme.type.caption, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center, modifier = Modifier.width(alertColumn))
+            }
+        }
+    }
+}
+
 /**
- * A provider: its windows, a handle to drag it up or down (long press), and whether it shows.
- * Screen readers get "Move up" and "Move down" instead of the drag.
+ * A provider: a handle to drag it up or down (long press), its name, an eye that shows or hides
+ * it, and under it each of its windows with a checkbox per alert. A hidden provider folds to its
+ * name. Screen readers get "Move up" and "Move down" instead of the drag.
  */
 @Composable
 private fun ProviderRow(
     name: String,
-    sub: String,
+    windows: List<QuotaWindow>,
+    alerts: QuotaAlerts,
     shown: Boolean,
     shape: Shape,
     first: Boolean,
     last: Boolean,
     onShow: (Boolean) -> Unit,
+    onAlerts: (QuotaWindow, List<String>) -> Unit,
     onMove: (Int) -> Unit,
     placement: (dragging: Boolean) -> Modifier,
 ) {
@@ -375,29 +397,53 @@ private fun ProviderRow(
         color = if (dragging) scheme.surfaceContainerHigh else scheme.surfaceContainer,
         shadowElevation = if (dragging) 3.dp else 0.dp,
     ) {
-        Line {
-            Texts(name, sub, Modifier.weight(1f))
-            Symbol(
-                Sym.Drag,
-                size = 20.dp,
-                tint = StarbridgeTheme.colors.fg3,
-                modifier = Modifier.pointerInput(Unit) {
-                    detectDragGesturesAfterLongPress(
-                        onDragStart = { dragging = true },
-                        onDragEnd = { dragging = false; offset = 0f },
-                        onDragCancel = { dragging = false; offset = 0f },
-                    ) { change, drag ->
-                        change.consume()
-                        // A row and its 2 dp gap; past half of it, the provider swaps with its neighbour.
-                        val step = height + groupGap.toPx()
-                        val (top, bottom) = ends
-                        offset = (offset + drag.y).coerceIn(if (top) 0f else -step, if (bottom) 0f else step)
-                        if (offset > step / 2 && !bottom) { move(1); offset -= step }
-                        if (offset < -step / 2 && !top) { move(-1); offset += step }
+        Column(Modifier.padding(bottom = if (shown && windows.isNotEmpty()) Spacing.s2 else 0.dp)) {
+            Row(Modifier.fillMaxWidth().padding(start = Spacing.s2, end = Spacing.s2), verticalAlignment = Alignment.CenterVertically) {
+                Symbol(
+                    Sym.Drag,
+                    size = 20.dp,
+                    tint = StarbridgeTheme.colors.fg3,
+                    modifier = Modifier.padding(Spacing.s2).pointerInput(Unit) {
+                        detectDragGesturesAfterLongPress(
+                            onDragStart = { dragging = true },
+                            onDragEnd = { dragging = false; offset = 0f },
+                            onDragCancel = { dragging = false; offset = 0f },
+                        ) { change, drag ->
+                            change.consume()
+                            // A row and its 2 dp gap; past half of it, the provider swaps with its neighbour.
+                            val step = height + groupGap.toPx()
+                            val (top, bottom) = ends
+                            offset = (offset + drag.y).coerceIn(if (top) 0f else -step, if (bottom) 0f else step)
+                            if (offset > step / 2 && !bottom) { move(1); offset -= step }
+                            if (offset < -step / 2 && !top) { move(-1); offset += step }
+                        }
+                    },
+                )
+                Text(
+                    if (shown) name else "$name · hidden",
+                    style = StarbridgeTheme.type.action,
+                    color = if (shown) scheme.onSurface else StarbridgeTheme.colors.fg3,
+                    modifier = Modifier.weight(1f),
+                )
+                IconToggleButton(checked = shown, onCheckedChange = onShow) {
+                    Symbol(if (shown) Sym.Visibility else Sym.VisibilityOff, size = 20.dp, tint = if (shown) scheme.onSurfaceVariant else StarbridgeTheme.colors.fg3, contentDescription = "Show $name")
+                }
+            }
+            if (shown) windows.forEach { w ->
+                val picked = alerts.choices(w.provider, w.windowId, w.windowMinutes)
+                Row(Modifier.fillMaxWidth().padding(start = Spacing.s4 + Spacing.s5, end = Spacing.s2), verticalAlignment = Alignment.CenterVertically) {
+                    Text(w.window, style = StarbridgeTheme.type.body, color = scheme.onSurface, modifier = Modifier.weight(1f))
+                    ALERT_COLUMNS.forEach { (kind, label) ->
+                        Box(Modifier.width(alertColumn), contentAlignment = Alignment.Center) {
+                            Checkbox(
+                                checked = kind in picked,
+                                onCheckedChange = { on -> onAlerts(w, QuotaAlerts.CHOICES.filter { (it == kind && on) || (it != kind && it in picked) }) },
+                                modifier = Modifier.semantics { contentDescription = "$name ${w.window}: $label" },
+                            )
+                        }
                     }
-                },
-            )
-            Switch(checked = shown, onCheckedChange = onShow)
+                }
+            }
         }
     }
 }
@@ -447,80 +493,3 @@ private fun <T> SegmentButtons(choices: List<Pair<T, String>>, selected: T, onSe
     if (stacked) Column(verticalArrangement = Arrangement.spacedBy(Spacing.s2)) { buttons() } else Row(horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween)) { buttons() }
 }
 
-private val CHOICE_LABELS = mapOf("runs-out" to "Runs out", "low-50" to "50% left", "low-20" to "20% left", "unused-headroom" to "Unused at reset")
-
-private fun said(picked: List<String>) = if (picked.isEmpty()) "none" else picked.joinToString(", ") { CHOICE_LABELS.getValue(it) }
-
-/** The alerts a window can pick, any number of them, in their fixed order: filter chips. */
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun AlertChips(picked: List<String>, onChange: (List<String>) -> Unit) {
-    FlowRow(horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
-        QuotaAlerts.CHOICES.forEach { c ->
-            val on = c in picked
-            FilterChip(
-                selected = on,
-                onClick = { onChange(QuotaAlerts.CHOICES.filter { (it == c) != (it in picked) }) },
-                label = { Text(CHOICE_LABELS.getValue(c)) },
-                leadingIcon = if (on) ({ Symbol(Sym.Check, size = 18.dp, tint = MaterialTheme.colorScheme.onSurface) }) else null,
-            )
-        }
-    }
-}
-
-/** A setting whose alerts sit under its name. */
-@Composable
-private fun ChipsRow(index: Int, count: Int, title: String, picked: List<String>, onChange: (List<String>) -> Unit) {
-    Shell(index, count) {
-        Column(Modifier.padding(start = Spacing.s4, end = Spacing.s4, top = Spacing.s4, bottom = Spacing.s2)) {
-            Texts(title, null)
-            AlertChips(picked, onChange)
-        }
-    }
-}
-
-/**
- * Settings → Per window (#914): each window shown follows its length's default unless set to its
- * own alerts or off. A row opens to Default, Custom and Off.
- */
-@Composable
-fun PerWindowScreen(windows: List<QuotaWindow>, quota: QuotaSettings, onChange: (QuotaSettings) -> Unit, onBack: () -> Unit, modifier: Modifier = Modifier, opened: String? = null) {
-    val shown = quota.providers(windows).filter { it !in quota.hidden }.flatMap { p -> windows.filter { it.provider == p }.distinctBy { it.windowId } }
-    val all = shown.map { it.provider to it.windowId }
-    var open by rememberSaveable { mutableStateOf(opened) }
-    val a = quota.alerts
-    Page("Per window", modifier, onBack = onBack) {
-        if (shown.isEmpty()) item { Shell(0, 1) { Line { Texts("No quota windows yet", null) } } }
-        shown.forEachIndexed { i, w ->
-            val key = QuotaAlerts.key(w.provider, w.windowId)
-            item(key = key) {
-                val own = a.own(w.provider, w.windowId)
-                val mode = when { own == null -> "default"; own.isNotEmpty() -> "custom"; else -> "off" }
-                val picked = a.choices(w.provider, w.windowId, w.windowMinutes)
-                val length = if (QuotaAlerts.isShort(w.windowMinutes)) a.short else a.long
-                val state = when (mode) { "default" -> "Default: ${said(length).lowercase()}"; "off" -> "Off"; else -> said(own!!) }
-                val save = { p: List<String>? -> onChange(quota.copy(alerts = a.with(w.provider, w.windowId, all, p))) }
-                val expanded = open == key
-                Shell(i, shown.size) {
-                    Column {
-                        Row(
-                            Modifier.fillMaxWidth().clickable { open = if (expanded) null else key }.padding(Spacing.s4),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(Spacing.s3),
-                        ) {
-                            Text("${w.provider} ${w.window}", style = StarbridgeTheme.type.body, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.weight(1f))
-                            Text(state, style = StarbridgeTheme.type.small, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Symbol(if (expanded) Sym.ExpandLess else Sym.ExpandMore, size = 20.dp, tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                        if (expanded) Column(Modifier.padding(start = Spacing.s4, end = Spacing.s4, bottom = Spacing.s2), verticalArrangement = Arrangement.spacedBy(Spacing.s3)) {
-                            Segments(listOf("default" to "Default", "custom" to "Custom", "off" to "Off"), mode) { m ->
-                                save(when (m) { "default" -> null; "off" -> emptyList(); else -> picked.ifEmpty { listOf(QuotaAlerts.RUNS_OUT) } })
-                            }
-                            if (mode == "custom") AlertChips(picked) { save(it) }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}

@@ -36,7 +36,6 @@ import dev.starbridge.app.ui.inbox.InboxScreen
 import dev.starbridge.app.ui.inbox.PromptActions
 import dev.starbridge.app.data.QuotaSettings
 import dev.starbridge.app.data.QuotaAlerts
-import dev.starbridge.app.ui.settings.PerWindowScreen
 import dev.starbridge.app.ui.settings.SettingsActions
 import dev.starbridge.app.ui.settings.SettingsScreen
 import dev.starbridge.app.ui.devices.AddDeviceScreen
@@ -282,18 +281,7 @@ class ScreenshotTest(private val dark: Boolean) {
     @Config(qualifiers = "w412dp-h2400dp-xxhdpi")
     @Test fun settings() = capture("settings") {
         Phone(Tab.Settings, 4) {
-            SettingsScreen(fake.windows, QuotaSettings(hidden = listOf("gemini"), alerts = QuotaAlerts(windows = mapOf("claude/claude-5h" to emptyList()))), fake.members.size, Colours.Starbridge, fake.push, "https://starbridge.run", settingsActions, pushHold = 30)
-        }
-    }
-
-    // Settings → Per window (#914): one window off, one with its own alerts and opened.
-    @Test fun settingsPerWindow() = capture("settings-per-window") {
-        Phone(Tab.Settings, 4) {
-            PerWindowScreen(
-                fake.windows,
-                QuotaSettings(alerts = QuotaAlerts(windows = mapOf("claude/claude-5h" to emptyList(), "zai/zai-5h" to listOf("unused-headroom")))),
-                {}, {}, opened = "zai/zai-5h",
-            )
+            SettingsScreen(fake.windows, QuotaSettings(hidden = listOf("gemini"), alerts = QuotaAlerts(windows = mapOf("claude/claude-5h" to emptyList(), "zai/zai-5h" to listOf("unused-headroom")))), fake.members.size, Colours.Starbridge, fake.push, "https://starbridge.run", settingsActions, pushHold = 30)
         }
     }
 

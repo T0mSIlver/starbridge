@@ -887,15 +887,20 @@ channel; the web shows them only while a page is open, since quota snapshots ski
 ### Quota alerts per window
 
 Each window picks any of four alerts (#914): Runs out (at this pace, before its reset), 50% left,
-20% left, and Unused at reset. Two defaults cover every window with none of its own: 5-hour and
-daily windows (a day or less) notify about nothing, weekly and monthly ones (and those of unknown
-length) about Runs out. A 5-hour window that runs out resets within hours, so its alert was noise;
-a weekly one costs days. Under Per window, each window follows its default, or is set to Custom
-(its own alerts) or Off. This is CodexBar's model (Global, Custom or Off per provider and window),
-with Slack's and GitHub's shape of a default plus exceptions; the owner chose it from mockups over a
-row of alerts for every window, which grows long with many providers. Android's Per window is its
-own page, a row in Settings with no subtitle (owner's pick); the web shows it as a section.
+20% left, and Unused at reset (it resets within the hour, or the day for longer windows, with 30%
+or more unused). A window nobody set follows its length: 5-hour and daily windows (a day or less)
+notify about nothing, weekly and monthly ones (and those of unknown length) about Runs out. A
+5-hour window that runs out resets within hours, so its alert was noise; a weekly one costs days.
 
+- **One table** (#925). Settings → Quotas holds everything about quotas in one box: how bars read,
+  Running out first, then each provider in its order, with its drag handle and an eye that shows
+  or hides it, and under it its windows, a checkbox per alert. A hidden provider folds to its name.
+  Each change is one click. The owner chose this from mockups over separate Quota alerts, Per
+  window and Providers sections, an expand-and-pick row per window (Default, Custom or Off, then
+  chips, CodexBar's model), and a menu per window: those cost two to four clicks and much UI for
+  a few providers. Default rows ("every weekly or monthly window") were dropped too, since few
+  people have many providers and they confused the table; the defaults by length stay, unseen,
+  for windows nobody set. A window with no box ticked is off.
 - **Filtering on the device.** The uploader still raises every alert, and each device shows the
   ones its settings pick, so the server and the uploader learn nothing of them.
   `packages/protocol/src/quotaAlerts.ts` holds the rule and `quota-alerts.json` its vectors, which
@@ -989,7 +994,7 @@ first window, so a provider with a window running out leads.
   429 `rate-limited`. A 429 without `Retry-After` is a cap and reaches the caller at once.
 - **Settings** (#914) in the same sections on both clients: Notifications (what decides whether
   something notifies here: Android's channels or the browser's permission, the hold, the web's
-  sound, Android's Quick Allow), Quota alerts and Per window, Quotas, Providers, the Inbox's,
+  sound, Android's Quick Allow), Quotas (see "Quota alerts per window"), the Inbox's,
   Devices, Look (colours and the clock) and Account (the server, Android's push delivery, agent
   instructions, sign out). They had grown one issue at a time: the hold sat under Inbox on the web
   and under Notifications on Android, and push delivery, a connection setting, sat with
