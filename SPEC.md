@@ -901,6 +901,14 @@ notify about nothing, weekly and monthly ones (and those of unknown length) abou
   a few providers. Default rows ("every weekly or monthly window") were dropped too, since few
   people have many providers and they confused the table; the defaults by length stay, unseen,
   for windows nobody set. A window with no box ticked is off.
+- **Android puts the alerts a tap away** (#930). On a phone the one table read badly: Running
+  out first sat alone, the column names floated in a tile of their own, off their checkboxes, and
+  each provider row looked like a second header. So Settings → Quotas ends with Alerts, a page
+  with one card, the column names once over a row per shown window; Order holds Running out first
+  and the providers, each with its handle and eye. Columns are 56 dp, and each line of a column
+  name shrinks rather than breaks inside a word, as the rail's tab labels do: "Unused" broke at
+  font scale 1.3. The owner chose this from mockups over the names repeated in each provider's
+  card; the web keeps the one table.
 - **Filtering on the device.** The uploader still raises every alert, and each device shows the
   ones its settings pick, so the server and the uploader learn nothing of them.
   `packages/protocol/src/quotaAlerts.ts` holds the rule and `quota-alerts.json` its vectors, which
