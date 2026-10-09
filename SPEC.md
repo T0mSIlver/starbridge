@@ -171,12 +171,21 @@ provider plugins add providers, not panels.
   hold into each answer (`dir`); a machine refuses every device answer while an active device has
   signed a head its chain lacks. Machines sign `dir` into every item; a device re-reads the
   directory, then holds every machine's items (shows none, notifies nothing, sends no answer)
-  while an active machine has signed a head its chain lacks. A machine also passes on heads it
-  got from devices. Such a head counts even when the chain doesn't list that device yet, until
-  the chain shows the device revoked. The hold names the
-  machine and the device and says to revoke the machine first, since a compromised machine can
-  name the owner's own phone. Settings and revoking keep working. Closing the gap fully needs a
+  while a machine has signed a head its chain lacks. Machines before #794 also passed on heads
+  they got from devices; such a head counts even when the chain doesn't list that device yet.
+  The hold names the machine and the device and says to revoke the machine first, since a
+  compromised machine can name the owner's own phone. Settings and revoking keep working. A
+  machine that knows of a longer head posts nothing (#794). Closing the gap fully needs a
   channel the server does not carry.
+- **A revocation ends no hold** (#794, #813). A member signs no head past its own revocation, so
+  a chain that revokes the member whose head shows the gap is a fork: a revoked device whose
+  revocation the server hides can make one. A head therefore keeps counting while a `revoke`
+  names its signer or its `by`; only a `recover` ends it. The way out after revoking a member
+  that forged a long head: `starbridge pair --force` on a machine; on a device, revoking from it
+  forgets that member's heads, since that device knows its own revocation is real, and any other
+  device's hold names who revoked the member and offers "I revoked it: stop waiting". Only the
+  owner can tell their revocation from a forged one. Tom chose this over a button on every
+  device, or none, on 2026-10-08 (#813).
 - **Browser keys** (#8, #116, #274, #283, #354). Non-extractable WebCrypto keys in IndexedDB,
   read back once after writing, with raw libsodium keys where they don't return (WebKit reads an
   X25519 `CryptoKey` back as null). A join or recovery keeps its keys under `pending` until the

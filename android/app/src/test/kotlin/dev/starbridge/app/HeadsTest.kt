@@ -45,16 +45,21 @@ class HeadsTest {
         assertFalse(heads.note(known, "m2", DirectoryHead(mine.length, mine.head), seenByA))
         assertEquals("m2", heads.withheldBy(known, mine, seenByA)?.id)
         assertNull(heads.withheldBy(known, full, truth))
-        // A head counts only while the member that signed it is active.
-        val revoked = mapOf("m" to DirectoryHead(full.length + 5, "A".repeat(43)))
+        // A revoke of the member that signed a head does not end it (#813): it says who revoked it.
+        val revoked = mutableMapOf("m" to DirectoryHead(full.length + 5, "A".repeat(43)))
+        assertEquals("b", heads.withheldBy(revoked, full, truth)?.revoked?.by)
+        assertNull(heads.withheldBy(revoked, mine, seenByA)?.revoked)
+        // The owner's word does.
+        assertTrue(heads.forget(revoked, "m"))
         assertNull(heads.withheldBy(revoked, full, truth))
-        assertEquals("m", heads.withheldBy(revoked, mine, seenByA)?.id)
 
-        // A forged head an honest machine passed on from device b ends with b's revocation.
+        // A forged head an honest machine passed on from device b holds past b's revocation, until forgotten.
         val relayed = mutableMapOf<String, DirectoryHead>()
         heads.note(relayed, "m2", DirectoryHead(99, "A".repeat(43), by = "b"), seenByA)
         assertEquals("b", heads.withheldBy(relayed, mine, seenByA)?.by)
         val withoutB = seenByA + envelopeJson(directories.revokeEntry(mine, "a", sign.getValue("a").secret, "b", at))
+        assertEquals("b", heads.withheldBy(relayed, directories.verify(withoutB), withoutB)?.revoked?.id)
+        heads.forget(relayed, "b")
         assertNull(heads.withheldBy(relayed, directories.verify(withoutB), withoutB))
 
         // A head passed on from a device this chain does not list yet counts, in one slot per machine.
@@ -63,11 +68,11 @@ class HeadsTest {
         heads.note(unknown, "m2", DirectoryHead(98, "B".repeat(43), by = "d"), seenByA, mine)
         assertEquals(setOf("m2/?"), unknown.keys)
         assertEquals("c", heads.withheldBy(unknown, mine, seenByA)?.by)
-        // Once the chain revokes the device a kept head names, any head from that machine replaces it.
+        // Once a revoke names the device a kept head names, it still holds; a shorter head does not take its slot.
         val withD = seenByA + envelopeJson(directories.addEntry(mine, "a", sign.getValue("a").secret, Member("c", "device", "c", toB64(sodium.boxKeyPair().public), toB64(sodium.signKeyPair().public)), at))
         val revokedC = withD + envelopeJson(directories.revokeEntry(directories.verify(withD), "a", sign.getValue("a").secret, "c", at))
         val afterC = directories.verify(revokedC)
-        assertTrue(heads.note(unknown, "m2", DirectoryHead(7, "C".repeat(43), by = "e"), revokedC, afterC))
-        assertEquals("e", heads.withheldBy(unknown, afterC, revokedC)?.by)
+        assertFalse(heads.note(unknown, "m2", DirectoryHead(7, "C".repeat(43), by = "e"), revokedC, afterC))
+        assertEquals("c", heads.withheldBy(unknown, afterC, revokedC)?.revoked?.id)
     }
 }

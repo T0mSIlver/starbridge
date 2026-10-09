@@ -16,6 +16,8 @@ import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.material3.adaptive.ExperimentalMaterial3AdaptiveApi
 import androidx.compose.material3.WideNavigationRailDefaults
@@ -127,15 +129,22 @@ private fun seconds(live: Boolean, slow: Instant): Instant {
     return if (live) fast else slow
 }
 
-/** Shows the store's notices as snackbars. */
+/**
+ * Shows the store's notices as snackbars. The notice of a hold that only the owner's word ends
+ * (#813) stays with a Stop waiting action, [stopWaiting], until they act on it or dismiss it;
+ * no other notice carries it.
+ */
 @Composable
-private fun Notices(notice: StateFlow<String?>, dismiss: () -> Unit): SnackbarHostState {
+private fun Notices(notice: StateFlow<String?>, dismiss: () -> Unit, stopWaiting: Pair<String, () -> Unit>? = null): SnackbarHostState {
     val host = remember { SnackbarHostState() }
     val text by notice.collectAsStateWithLifecycle()
+    val stop by rememberUpdatedState(stopWaiting)
     LaunchedEffect(text) {
         text?.let {
-            host.showSnackbar(it, withDismissAction = true)
+            val action = stop?.takeIf { (held, _) -> held == it }?.second
+            val result = host.showSnackbar(it, actionLabel = action?.let { "Stop waiting" }, withDismissAction = true)
             dismiss()
+            if (result == SnackbarResult.ActionPerformed) action?.invoke()
         }
     }
     return host
@@ -181,14 +190,14 @@ internal fun suiteType(): NavigationSuiteType {
  */
 @OptIn(ExperimentalMaterial3AdaptiveApi::class)
 @Composable
-fun Main(decisions: List<Decision>, notice: StateFlow<String?>, dismiss: () -> Unit, opening: Flow<NavKey>) {
+fun Main(decisions: List<Decision>, notice: StateFlow<String?>, dismiss: () -> Unit, opening: Flow<NavKey>, stopWaiting: Pair<String, () -> Unit>? = null) {
     val backStack = rememberNavBackStack(InboxKey)
     val now = now()
     // A snoozed question counts again once it is back (#691).
     val openDecisions = decisions.count { it.isOpen && !it.snoozed(now) }
     // Shared by a decision's card and its detail, which are separate entries.
     val drafts = rememberDrafts()
-    val host = Notices(notice, dismiss)
+    val host = Notices(notice, dismiss, stopWaiting)
     val sheets = remember { BottomSheetSceneStrategy<NavKey>() }
     val notificationsOff = !rememberNotificationsOn()
     val colors = StarbridgeTheme.colors

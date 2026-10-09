@@ -204,6 +204,104 @@ class WithheldTest {
         assertEquals(null, store.notice.value)
     }
 
+    /**
+     * The server hides the phone's revocation of a stolen phone and holds its keys (#813). It
+     * revokes, on a fork of the phone's stale chain, the machine whose head exposed the gap: the
+     * hold stands, names that revocation, and only the owner's Stop waiting ends it.
+     */
+    @Test
+    fun aForkThatRevokesTheMachineDoesNotLiftTheHold() = forkScenario(passedOn = false)
+
+    /**
+     * The same with a head an older machine passed on from the tablet that revoked the stolen
+     * phone, and a fork that revokes the tablet: after Stop waiting, the machine's item, read
+     * again, does not bring the head back, and its question shows.
+     */
+    @Test
+    fun aForkThatRevokesTheDeviceAHeadNamesDoesNotLiftTheHold() = forkScenario(passedOn = true)
+
+    private fun forkScenario(passedOn: Boolean) {
+        val account = "acct"
+        val at = "2026-10-08T12:00:00Z"
+        val signKeys = sodium.signKeyPair()
+        val boxKeys = sodium.boxKeyPair()
+        val phone = Member("phone", "device", "Phone", toB64(boxKeys.public), toB64(signKeys.public))
+        val thiefSign = sodium.signKeyPair()
+        val thief = Member("thief", "device", "Stolen phone", toB64(sodium.boxKeyPair().public), toB64(thiefSign.public))
+        val tabletSign = sodium.signKeyPair()
+        val tablet = Member("tablet", "device", "Tablet", toB64(sodium.boxKeyPair().public), toB64(tabletSign.public))
+        val machineSign = sodium.signKeyPair()
+        val machine = Member("m_box", "machine", "devbox", toB64(sodium.boxKeyPair().public), toB64(machineSign.public))
+        val entries = mutableListOf<JsonElement>(envelopeJson(directories.genesisEntry(account, phone, signKeys.secret, sodium.signKeyPair(), at)))
+        for (m in listOf(thief, tablet, machine)) entries += envelopeJson(directories.addEntry(directories.verify(entries, account, null), "phone", signKeys.secret, m, at))
+        val known = directories.verify(entries, account, null)
+        val truth = directories.verify(entries + envelopeJson(directories.revokeEntry(known, "tablet", tabletSign.secret, thief.id, at)), account, null)
+        val target = if (passedOn) tablet else machine
+        val fork = entries + envelopeJson(directories.revokeEntry(known, thief.id, thiefSign.secret, target.id, at))
+        val item = envelopes.seal("decision", buildJsonObject {
+            put("v", 1); put("id", "d_box"); putJsonArray("to") { add("phone") }; put("createdAt", at)
+            put("question", "Deploy?"); put("context", ""); putJsonArray("options") { add("Yes"); add("No") }; put("recommended", "Yes")
+            putJsonObject("source") { put("machine", "devbox"); put("project", "p"); put("session", "s") }
+            putJsonObject("dir") { put("length", truth.length); put("head", truth.head); if (passedOn) put("by", tablet.id) }
+        }, machine.id, machineSign.secret, listOf(phone))
+        val page = buildJsonObject {
+            put("items", buildJsonArray { add(buildJsonObject { put("item", ProtocolJson.encodeToJsonElement(item)); put("cursor", "1"); put("receivedAt", at) }) })
+            put("cursor", "1")
+        }
+        val empty = buildJsonObject { put("items", buildJsonArray {}); put("cursor", "") }
+        var served: List<JsonElement> = entries.toList()
+
+        http.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse = when (request.url.encodedPath) {
+                "/v1/directory" -> json(buildJsonObject { put("entries", buildJsonArray { served.drop(request.url.queryParameter("from")!!.toInt()).forEach { add(it) } }) })
+                "/v1/items" -> json(if (request.url.queryParameter("kind")!!.startsWith("decision") && request.url.queryParameter("after").isNullOrEmpty()) page else empty)
+                "/v1/quota" -> json(empty)
+                else -> MockResponse(404, okhttp3.Headers.headersOf(), "")
+            }
+        }
+        http.start()
+
+        val identity = object : Vault {
+            override fun wrap(plain: ByteArray) = plain
+            override fun unwrap(wrapped: ByteArray) = wrapped
+        }
+        val disk = Disk(Files.createTempDirectory("starbridge").toFile(), identity)
+        val server = http.url("/").toString().trimEnd('/')
+        disk.save(Saved(server, account = account, accountExists = true, me = phone, pin = Pin(known.length, known.head), entries = entries.toList()))
+        disk.save(Secrets(session = "s", boxPk = toB64(boxKeys.public), boxSk = toB64(boxKeys.secret), signPk = toB64(signKeys.public), signSk = toB64(signKeys.secret)))
+        val alerts = object : Alerts {
+            override fun decision(decision: Decision, silent: Boolean) {}
+            override fun cancel(id: String) {}
+            override fun join(id: String, name: String) {}
+            override fun prompt(prompt: Prompt) {}
+            override fun cancelPrompt(prompt: Prompt) {}
+            override fun run(run: Run) {}
+        }
+        val store = ServerStore(disk, OkHttpClient(), sodium, envelopes, directories, Pairings(sodium), Joins(sodium), alerts, "Phone", server, false, scope)
+
+        // The machine has seen the revocation: the phone holds.
+        store.refresh()
+        until { store.notice.value != null }
+        assertTrue(store.notice.value!!.contains("devbox"))
+        assertEquals(null, store.heldRevoked.value)
+        // The stolen phone revokes the machine, or the tablet, on a fork of the phone's chain: the hold stands.
+        store.dismissNotice()
+        served = fork
+        store.refresh()
+        until { store.heldRevoked.value != null }
+        assertEquals(target.id, store.heldRevoked.value?.member)
+        assertEquals(store.notice.value, store.heldRevoked.value?.notice)
+        assertTrue(store.notice.value!!.contains("Stolen phone revoked ${target.name}"))
+        assertTrue(store.decisions.value.isEmpty())
+        // Only the owner's word ends it, and reading the machine's item again does not bring it back.
+        store.stopWaiting(target.id)
+        until { store.heldRevoked.value == null && store.notice.value == null && (!passedOn || store.decisions.value.isNotEmpty()) }
+        store.refresh()
+        Thread.sleep(300)
+        assertEquals(null, store.heldRevoked.value)
+        assertEquals(null, store.notice.value)
+    }
+
     private fun until(pred: () -> Boolean) {
         val end = System.currentTimeMillis() + 10_000
         while (!pred()) {
