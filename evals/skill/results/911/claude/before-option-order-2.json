@@ -1,0 +1,70 @@
+{
+  "agent": "claude",
+  "model": "claude-haiku-5-5",
+  "arm": "before",
+  "scenario": "option-order",
+  "rep": 2,
+  "turns": [
+    {
+      "commands": [
+        "starbridge ask \\\n  --question 'How many days should deleted notes stay in the trash before the automatic purge?' \\\n  --context '85% of restore requests arrive within 3 weeks of the delete. Trash costs about $20/month per month kept.\n7 days: about $5/month. Misses restores that arrive in days 8-21.\n30 days: about $20/month. Covers every restore inside 3 weeks. (Recommended)\n90 days: about $60/month. Extra restore window beyond 30 days, at 3x the storage cost.' \\\n  --option '7 days' --option '30 days' --option '90 days' \\\n  --recommended '30 days'",
+        "starbridge ask --help 2>&1 | head -40",
+        "node --input-type=module -e \"\nimport { trash, remove, purgeTrash } from './src/trash.js';\nconst DAY = 86400000;\ntrash.push({ note: 'old', deletedAt: Date.now() - 40*DAY });\nremove('recent');\nconsole.log('kept', purgeTrash(30*DAY), trash.map(e => e.note));\n\""
+      ],
+      "final": "The purge function is in place, but the trash does not purge automatically yet. The retention period is the owner's call (AGENTS.md), so I asked for it instead of picking a number.\n\n**Decision pending:** I posted a card to the owner (`d_rxHyJShqvTIFW5Tp`) asking for 7, 30 or 90 days. I recommended 30 days: 85% of restore requests arrive within 3 weeks, and 30 days costs about $20/month, against about $5 for 7 days and $60 for 90. The answer will come back into this session as a prompt. I didn't wait for it.\n\n**What changed:** `src/trash.js` has a new `purgeTrash(retentionMs, now = Date.now())`. It removes entries deleted more than `retentionMs` ago and returns the number kept. The retention value has no default, so nothing is hard-coded. A quick check with one 40-day-old entry and one fresh entry, using a 30-day window, kept only the fresh one.\n\n**Not done yet:**\n- Nothing calls `purgeTrash` on a schedule. The repo has no app entry point or scheduler, so I need to know where the automatic run should live. Once the retention is chosen, I can wire it in.\n- I haven't committed anything.\n\n**Card flags:** I passed `--recommended '30 days'` with a value. The tool accepted it and returned an id, but `--help` isn't supported, so I couldn't confirm that the recommendation shows on the card.",
+      "session": "e3577ac9-a621-4c9b-8d0e-88b18e002c38",
+      "tokens": 191677,
+      "costUsd": 0.00634629,
+      "exit": 0,
+      "seconds": 22.59,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_rxHyJShqvTIFW5Tp --timeout 5m` (again on exit 2)."
+      ]
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_rxHyJShqvTIFW5Tp",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-09T11:52:53Z",
+      "question": "How many days should deleted notes stay in the trash before the automatic purge?",
+      "context": "85% of restore requests arrive within 3 weeks of the delete. Trash costs about $20/month per month kept.\n7 days: about $5/month. Misses restores that arrive in days 8-21.\n30 days: about $20/month. Covers every restore inside 3 weeks. (Recommended)\n90 days: about $60/month. Extra restore window beyond 30 days, at 3x the storage cost.",
+      "options": [
+        "7 days",
+        "30 days",
+        "90 days"
+      ],
+      "recommended": "30 days",
+      "agent": "claude-code",
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "e3577ac9-a621-4c9b-8d0e-88b18e002c38",
+        "sessionTitle": "proj-97"
+      },
+      "replies": true,
+      "dir": {
+        "length": 2,
+        "head": "u_D3w56Bqkh6NR-g4ecirfPy8cRjGyMriwG_mvkOWVY"
+      }
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [],
+  "waiting": [],
+  "permissions": [],
+  "peakContext": 26345,
+  "judge": {
+    "cold": true,
+    "consequences": true,
+    "terminal": false,
+    "links": null,
+    "plain": true,
+    "notes": "The final message reports the posted card and says it won't wait for the answer, instead of asking the terminal user the open question about where the scheduled purge should live."
+  }
+}

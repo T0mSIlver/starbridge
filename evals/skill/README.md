@@ -56,3 +56,6 @@ TMPDIR=/var/tmp bun evals/skill/run.ts --agent opencode --arms after --reps 3 \
   --only merge-order,option-order,design-pick,later-question,done-on-page,delivery-prompt,oc-question,oc-edit
 bun evals/skill/grade.ts --no-judge evals/skill/results/624/claude
 ```
+
+`results/911` holds the first Claude Code run on Haiku 5.5: the skill and rule before and after
+#911 allowed `AskUserQuestion` for a quick question.

@@ -1,0 +1,35 @@
+{
+  "agent": "claude",
+  "model": "claude-haiku-5-5",
+  "arm": "before",
+  "scenario": "unavailable",
+  "rep": 2,
+  "turns": [
+    {
+      "commands": [
+        "cat NAMES.md 2>/dev/null; echo ---; cat package.json 2>/dev/null; echo ---; ls -la; echo ---; npm whoami 2>&1 | head -1",
+        "starbridge ask \\\n  --question 'Which name should the npm package publish under, and should I publish now?' \\\n  --context 'package.json is still \"TBD\" and npm is not logged in here. AGENTS.md: publishing is your call and cannot be undone after 72 hours.\nnotekit: free on npm, matches the repo. Recommended.\njotter: free and shorter, but a dead app already uses that name.' \\\n  --option 'Publish as notekit' --option 'Publish as jotter' --option 'Do not publish yet' \\\n  --recommended 'Publish as notekit'"
+      ],
+      "final": "I haven't published the package. Two things block it, and the decision is yours.\n\n**Starbridge failed.** I couldn't post the decision card because this machine is not paired (`starbridge: this machine is not paired: run starbridge pair first`). So I'm asking here.\n\n**Blockers:**\n- **Name is undecided.** `package.json` still says `\"name\": \"TBD\"`. `NAMES.md` leaves the choice open:\n  - `notekit`: free on npm and matches the repo.\n  - `jotter`: free and shorter, but a dead app already uses that name.\n- **Publishing is your call.** `AGENTS.md` says so, and a public npm publish can't be undone after 72 hours.\n- **npm isn't logged in** on this machine (`npm whoami` returns `ENEEDAUTH`).\n\n**What I need from you:**\n1. Which name to use: `notekit`, `jotter`, or something else.\n2. Whether to publish now, or to wait.\n\nOnce you answer, I'll set the name in `package.json`, run `npm publish --dry-run` to check the tarball, and publish. I'd need you to log in to npm first, or to give the go-ahead for me to run `npm login` myself. To get the card on your phone next time, run `starbridge pair` on this machine.",
+      "session": "8115964d-c880-422a-9867-97958e07883c",
+      "tokens": 88205,
+      "costUsd": 0.00379744,
+      "exit": 0,
+      "seconds": 21.615,
+      "delivery": []
+    }
+  ],
+  "decisions": [],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [],
+  "peakContext": 23584,
+  "judge": {
+    "cold": null,
+    "consequences": null,
+    "terminal": true,
+    "links": null,
+    "plain": null,
+    "notes": "The terminal message asks clearly, but it runs long, with several sections before the two questions, so the decision is slower to find than it needs to be."
+  }
+}

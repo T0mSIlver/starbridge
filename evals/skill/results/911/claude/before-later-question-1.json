@@ -1,0 +1,88 @@
+{
+  "agent": "claude",
+  "model": "claude-haiku-5-5",
+  "arm": "before",
+  "scenario": "later-question",
+  "rep": 1,
+  "turns": [
+    {
+      "commands": [
+        "node scripts/lint.js; echo \"exit=$?\"",
+        "ls -la && cat scripts/lint.js && ls RELEASE.md 2>/dev/null && cat RELEASE.md",
+        "cat -n src/upload.js && ls src && cat NAMES.md && git status --short",
+        "node scripts/lint.js; echo \"exit=$?\"",
+        "starbridge ask --question 'What should next week’s release be called?' --context 'RELEASE.md is still \"Name: TBD\" and it ships Monday.\nDriftwood: from the name list in NAMES.md\nLantern: from the name list in NAMES.md\nJuniper: from the name list in NAMES.md\nYou can also type another name.' --option 'Driftwood' --option 'Lantern' --option 'Juniper'; echo \"exit=$?\"",
+        "starbridge wait d_qwTEiMDVeZtxm0mp --timeout 5m --no-mark; echo \"exit=$?\""
+      ],
+      "final": "Lint passes, and next week's release is named Driftwood in RELEASE.md.\n\n- **Lint:** `node scripts/lint.js` flagged two `var` declarations in `src/upload.js` (lines 2–3). I changed both to `const`, since neither is reassigned. The script now exits 0.\n- **Release name:** I asked through Starbridge with Driftwood, Lantern and Juniper as options (the candidates from NAMES.md). You answered Driftwood, and I set `Name: Driftwood` in RELEASE.md.\n\nNothing is committed. The working tree has the two modified files, `RELEASE.md` and `src/upload.js`.",
+      "session": "d2d81bce-c8eb-4873-92bc-757246adfe2a",
+      "tokens": 183091,
+      "costUsd": 0.00556232,
+      "exit": 0,
+      "seconds": 147.638,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_qwTEiMDVeZtxm0mp --timeout 5m` (again on exit 2)."
+      ]
+    },
+    {
+      "commands": [
+        "node scripts/lint.js; echo \"lint exit=$?\"; git status --short"
+      ],
+      "final": "Lint passes, and next week's release is named Driftwood in RELEASE.md.\n\n- **Lint:** `node scripts/lint.js` flagged two `var` declarations in `src/upload.js` (lines 2–3). I changed both to `const`, since neither is reassigned. The script now exits 0.\n- **Release name:** I asked through Starbridge with Driftwood, Lantern and Juniper as options (the candidates from NAMES.md). You answered Driftwood, and I set `Name: Driftwood` in RELEASE.md.\n\nNothing is committed. The working tree has the two modified files, `RELEASE.md` and `src/upload.js`.",
+      "session": "d2d81bce-c8eb-4873-92bc-757246adfe2a",
+      "tokens": 183091,
+      "costUsd": 0.00556232,
+      "exit": 0,
+      "seconds": 147.638,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_qwTEiMDVeZtxm0mp --timeout 5m` (again on exit 2)."
+      ]
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_qwTEiMDVeZtxm0mp",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-09T11:54:36Z",
+      "question": "What should next week’s release be called?",
+      "context": "RELEASE.md is still \"Name: TBD\" and it ships Monday.\nDriftwood: from the name list in NAMES.md\nLantern: from the name list in NAMES.md\nJuniper: from the name list in NAMES.md\nYou can also type another name.",
+      "options": [
+        "Driftwood",
+        "Lantern",
+        "Juniper"
+      ],
+      "recommended": "Driftwood",
+      "agent": "claude-code",
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "d2d81bce-c8eb-4873-92bc-757246adfe2a",
+        "sessionTitle": "proj-e6"
+      },
+      "replies": true,
+      "dir": {
+        "length": 2,
+        "head": "eW722aGs2rllQobhfEJrYKTrmrlqi5qSy2_hs-QMXE0"
+      }
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [],
+  "answered": "Answer to d_qwTEiMDVeZtxm0mp (What should next week’s release be called?): Driftwood",
+  "waiting": [],
+  "permissions": [],
+  "peakContext": 25456,
+  "judge": {
+    "cold": true,
+    "consequences": false,
+    "terminal": false,
+    "links": null,
+    "plain": true,
+    "notes": "The card never says that the chosen name goes into RELEASE.md's Name field, and its option notes give where each name came from rather than what choosing it changes; the final message also reports the answer as settled instead of asking the user anything."
+  }
+}

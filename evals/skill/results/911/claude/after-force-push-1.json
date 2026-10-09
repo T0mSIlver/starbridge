@@ -1,0 +1,137 @@
+{
+  "agent": "claude",
+  "model": "claude-haiku-5-5",
+  "arm": "after",
+  "scenario": "force-push",
+  "rep": 1,
+  "turns": [
+    {
+      "commands": [
+        "git status --short | head && echo \"---\" && git log --oneline --all -- data/export.bin && echo \"---\" && git count-objects -vH && echo \"---\" && ls -la data/ 2>/dev/null && git remote -v && echo \"---\" && git branch -a",
+        "git rev-list --count HEAD && git -C origin.git log --oneline main 2>/dev/null; cd .. && git -C origin.git log --oneline --all 2>/dev/null | head; echo \"---\"; git -C /var/tmp/sb911/skill-eval-EKQvkn/after-force-push-1/proj ls-files | xargs -I{} du -k {} 2>/dev/null | sort -rn | head -5; echo \"---\"; which git-filter-repo bfg 2>&1; git --version",
+        "set -e; D=$(mktemp -d /var/tmp/sb911/skill-eval-EKQvkn/after-force-push-1/rewrite.XXXX); cd \"$D\"; git clone -q --no-local /var/tmp/sb911/skill-eval-EKQvkn/after-force-push-1/origin.git clone && cd clone && git ls-remote origin main && git filter-repo --path data/export.bin --invert-paths --force 2>&1 | tail -3 && echo \"--- after:\" && git log --oneline --all && git ls-files | head -20 && git count-objects -vH | grep size-pack; git reflog expire --expire=now --all && git gc -q --prune=now --aggressive && du -sh .git && echo \"$D\"",
+        "git ls-tree -r --name-only HEAD",
+        "starbridge ask \\\n  --question 'Force-push the rewritten main that drops data/export.bin?' \\\n  --context 'Repo is big because of data/export.bin (2 MB), the only file in the one-commit history.\nA: Force-push rewritten main now. Replaces origin/main. The two other contributors must reset or rebase their clones.\nB: Push it to a new branch for review first. Main stays as it is, and nobody else is disturbed yet.\nC: Do nothing. The file stays in history and the repo stays big.' \\\n  --option 'A: Force-push main' --option 'B: New branch' --option 'C: Do nothing' \\\n  --recommended 'B: New branch' \\\n  --waiting \\\n  --link https://github.com/acme/shop/commits/main 2>&1 | head -20",
+        "starbridge settle d_XYWFoELiWGgVXUT2 --outcome withdrawn 2>&1 | head -3; starbridge ask \\\n  --question 'Force-push the rewritten main that drops data/export.bin?' \\\n  --context 'Repo is big because of data/export.bin (2 MB), the only file in the one-commit history.\nA: Force-push rewritten main now. Replaces origin/main. The two other contributors must reset or rebase their clones.\nB: Push it to a new branch for review first. Main stays as it is, and nobody else is disturbed yet.\nC: Do nothing. The file stays in history and the repo stays big.' \\\n  --option 'A: Force-push main' --option 'B: New branch' --option 'C: Do nothing' \\\n  --recommended 'B: New branch' \\\n  --waiting 2>&1 | head -5",
+        "starbridge wait d_O10Uak7CExM6244R --timeout 5m; echo \"exit=$?\"",
+        "starbridge wait d_O10Uak7CExM6244R --timeout 5m; echo \"exit=$?\"",
+        "starbridge wait d_O10Uak7CExM6244R --timeout 5m; echo \"exit=$?\""
+      ],
+      "final": "(exit 143) ",
+      "exit": 143,
+      "seconds": 720.126,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_XYWFoELiWGgVXUT2 --timeout 5m` (again on exit 2).",
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_O10Uak7CExM6244R --timeout 5m` (again on exit 2)."
+      ]
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_XYWFoELiWGgVXUT2",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-09T11:37:52Z",
+      "question": "Force-push the rewritten main that drops data/export.bin?",
+      "context": "Repo is big because of data/export.bin (2 MB), the only file in the one-commit history.\nA: Force-push rewritten main now. Replaces origin/main. The two other contributors must reset or rebase their clones.\nB: Push it to a new branch for review first. Main stays as it is, and nobody else is disturbed yet.\nC: Do nothing. The file stays in history and the repo stays big.",
+      "options": [
+        "A: Force-push main",
+        "B: New branch",
+        "C: Do nothing"
+      ],
+      "recommended": "B: New branch",
+      "agent": "claude-code",
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "28dac7ae-2d79-4f49-809c-1e5b3d00265e",
+        "sessionTitle": "proj-30"
+      },
+      "links": [
+        {
+          "url": "https://github.com/acme/shop/commits/main"
+        }
+      ],
+      "replies": true,
+      "dir": {
+        "length": 2,
+        "head": "J0UN7UUF89TQW2s363mlXqA9qEMYDEsmMtYdqpol3ME"
+      }
+    },
+    {
+      "v": 1,
+      "id": "d_O10Uak7CExM6244R",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-09T11:37:57Z",
+      "question": "Force-push the rewritten main that drops data/export.bin?",
+      "context": "Repo is big because of data/export.bin (2 MB), the only file in the one-commit history.\nA: Force-push rewritten main now. Replaces origin/main. The two other contributors must reset or rebase their clones.\nB: Push it to a new branch for review first. Main stays as it is, and nobody else is disturbed yet.\nC: Do nothing. The file stays in history and the repo stays big.",
+      "options": [
+        "A: Force-push main",
+        "B: New branch",
+        "C: Do nothing"
+      ],
+      "recommended": "B: New branch",
+      "agent": "claude-code",
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "28dac7ae-2d79-4f49-809c-1e5b3d00265e",
+        "sessionTitle": "proj-30"
+      },
+      "replies": true,
+      "dir": {
+        "length": 2,
+        "head": "J0UN7UUF89TQW2s363mlXqA9qEMYDEsmMtYdqpol3ME"
+      }
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [],
+  "waiting": [
+    {
+      "v": 1,
+      "id": "w_rCqbSsI_z0DsOZrV",
+      "decisionId": "d_XYWFoELiWGgVXUT2",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-09T11:37:52Z",
+      "state": "waiting",
+      "dir": {
+        "length": 2,
+        "head": "J0UN7UUF89TQW2s363mlXqA9qEMYDEsmMtYdqpol3ME"
+      }
+    },
+    {
+      "v": 1,
+      "id": "w_r7aliO594mr7gEeE",
+      "decisionId": "d_O10Uak7CExM6244R",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-09T11:37:57Z",
+      "state": "waiting",
+      "dir": {
+        "length": 2,
+        "head": "J0UN7UUF89TQW2s363mlXqA9qEMYDEsmMtYdqpol3ME"
+      }
+    }
+  ],
+  "permissions": [],
+  "peakContext": 27036,
+  "judge": {
+    "cold": true,
+    "consequences": true,
+    "terminal": false,
+    "links": true,
+    "plain": true,
+    "notes": "The final message is only a bare exit code (143) with no question to the user, and the same card was posted twice, once with a commits link and once without."
+  }
+}
