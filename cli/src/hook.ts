@@ -55,7 +55,7 @@ function parseHook(text: string): PermissionHookInput & Record<string, unknown> 
 
 /**
  * Whether Cursor runs this hook: cursor-agent runs installed Claude Code plugins' hooks too, with
- * its own input (#958). The Claude Code plugin's hooks then step aside for the Cursor plugin's.
+ * its own input (#958). The Claude Code plugin's hooks then step aside for setup's Cursor hooks.
  */
 function inCursor(hook: Record<string, unknown>): boolean {
   return typeof hook.cursor_version === "string";
