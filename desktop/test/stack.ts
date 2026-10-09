@@ -279,6 +279,21 @@ try {
       `the page names itself desktop/${VERSION}: ${[...new Set(headers)].join(", ")}`,
     );
     console.log("\ndesktop stack test passed");
+  } catch (e) {
+    // What the window showed when it failed, beside the run's temporary files.
+    const page = app.windows()[0];
+    if (page) {
+      await page
+        .screenshot({ path: join(tmpdir(), "starbridge-desktop-failure.png") })
+        .catch(() => {});
+      console.log(
+        `[failure] ${page.url()}\n${await page
+          .locator("body")
+          .innerText()
+          .catch(() => "")}`,
+      );
+    }
+    throw e;
   } finally {
     await app.close();
   }

@@ -239,6 +239,12 @@ jobs:
         timeout-minutes: 11
         env:
           TMPDIR: ${{ runner.temp }}
+      - if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: desktop-e2e-failure
+          path: ${{ runner.temp }}/starbridge-desktop-failure.png
+          if-no-files-found: ignore
 
   # Builds the deployed images, without pushing them, when a pull request can change their base
   # images or dependencies: a change that breaks a build fails here, not at the deploy (#430).
