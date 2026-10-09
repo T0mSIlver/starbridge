@@ -528,8 +528,12 @@ function notSent(id: string, why: string): void {
   n.show();
 }
 
+/** Numbers each reading, so the page's word on one is not taken for another's. */
+let told = 0;
+
 function tellScreen(r: Reading): void {
-  if (win && fromServer(win.webContents.getURL())) win.webContents.send("screen", r);
+  told++;
+  if (win && fromServer(win.webContents.getURL())) win.webContents.send("screen", r, told);
 }
 
 /**
@@ -543,14 +547,16 @@ function leave(): Promise<void> {
   return new Promise((done) => {
     const finish = () => {
       clearTimeout(timer);
-      ipcMain.off("screen-told", told);
+      ipcMain.off("screen-told", heard);
       done();
     };
-    const told = (e: IpcMainEvent) => {
-      if (fromPage(e)) finish();
+    // The quit's reading is the next one told.
+    const last = told + 1;
+    const heard = (e: IpcMainEvent, n: unknown) => {
+      if (fromPage(e) && n === last) finish();
     };
     const timer = setTimeout(finish, page ? QUIT_MS : 0);
-    ipcMain.on("screen-told", told);
+    ipcMain.on("screen-told", heard);
     screen?.quit();
   });
 }

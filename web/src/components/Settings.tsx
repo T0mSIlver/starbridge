@@ -232,7 +232,7 @@ function MacRow() {
   return (
     <Row
       label="Hold while you use this Mac"
-      sub="In any app, not only Starbridge. It reads only the time since your last input, never what"
+      sub="In any app, not only Starbridge. It reads only the time since your last key or click, never which"
     >
       <Switch
         label="Hold while you use this Mac"

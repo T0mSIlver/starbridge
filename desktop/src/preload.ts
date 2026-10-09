@@ -36,12 +36,12 @@ if (location.origin === arg("origin")) {
     place = p;
   });
   // Said back once the page acted on it, so a quitting app knows the server heard the owner left.
-  ipcRenderer.on("screen", async (_e, s: unknown) => {
+  ipcRenderer.on("screen", async (_e, s: unknown, n: unknown) => {
     screen = s;
     try {
       await onScreen?.();
     } catch {}
-    ipcRenderer.send("screen-told");
+    ipcRenderer.send("screen-told", n);
   });
   ipcRenderer.on("presence", (_e, on: unknown) => {
     presence = on;
