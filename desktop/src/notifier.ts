@@ -40,6 +40,15 @@ export class Notifier {
     this.remember([...this.shown.keys()]);
   }
 
+  /**
+   * Forgets an entry whose notification macOS refused, as while its question to allow
+   * notifications is still open: the page's next update shows it again.
+   */
+  forget(id: string): void {
+    if (!this.shown.delete(id)) return;
+    this.remember([...this.shown.keys()]);
+  }
+
   /** Closes an entry's notification, as after its answer from that notification was sent. */
   close(id: string): void {
     const s = this.shown.get(id);

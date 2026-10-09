@@ -15,6 +15,8 @@ type Answer = { id: string; choice: string } | { id: string; text: string };
 if (location.origin === arg("origin")) {
   let onAnswer: ((a: Answer) => Promise<void>) | null = null;
   let onOpen: ((id: string) => void) | null = null;
+  // Asked, not passed as an argument: the window's arguments stay as they were at its creation.
+  let place: unknown = ipcRenderer.sendSync("place?");
 
   ipcRenderer.on("answer", async (_e, a: Answer) => {
     let error: string | undefined;
@@ -27,6 +29,9 @@ if (location.origin === arg("origin")) {
     ipcRenderer.send("answered", { id: a.id, error });
   });
   ipcRenderer.on("open", (_e, id: string) => onOpen?.(id));
+  ipcRenderer.on("place", (_e, p: unknown) => {
+    place = p;
+  });
 
   contextBridge.exposeInMainWorld("starbridgeDesktop", {
     version: arg("version"),
@@ -36,6 +41,9 @@ if (location.origin === arg("origin")) {
     onAnswer: (f: (a: Answer) => Promise<void>) => {
       onAnswer = f;
     },
+    /** Where the app stays: "menu" (the menu bar, the default), "dock" or "both". */
+    place: () => place,
+    setPlace: (p: unknown) => ipcRenderer.send("place", p),
     /** Opens an item whose notification was clicked. */
     onOpen: (f: (id: string) => void) => {
       onOpen = f;

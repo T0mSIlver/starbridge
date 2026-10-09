@@ -56,3 +56,12 @@ test("an answered item's notification closes and does not come back while it is 
   expect(shown).toEqual(["a"]);
   expect(closed).toEqual(["a"]);
 });
+
+test("a refused notification shows again on the next update", () => {
+  const { n, shown, saved } = setup();
+  n.update([entry("a")]);
+  n.forget("a");
+  expect(saved.at(-1)).toEqual([]);
+  n.update([entry("a")]);
+  expect(shown).toEqual(["a", "a"]);
+});

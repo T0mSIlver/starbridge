@@ -11,6 +11,7 @@ import {
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
+import { type DesktopPlace, desktop } from "@/lib/desktop";
 import type { RecoveryState } from "@/lib/device";
 import { addedLabels, dayAndTime } from "@/lib/format";
 import { AGENTS_GUIDE } from "@/lib/links";
@@ -681,7 +682,37 @@ function AccountSection() {
   );
 }
 
-/** Colours and the clock: how the page looks, per browser. */
+const PLACE_SUBS: Record<DesktopPlace, string> = {
+  menu: "In the Dock only while its window is open",
+  dock: "Always in the Dock, with no menu bar icon",
+  both: "Always in the menu bar and the Dock",
+};
+
+/** Where the desktop app stays (#936): it is always in one of them, so Starbridge stays at hand. */
+function PlaceRow() {
+  const [place, setPlace] = useState(() => desktop?.place?.());
+  if (!desktop?.setPlace || !place) return null;
+  const save = desktop.setPlace;
+  return (
+    <Row label="Keep Starbridge in" sub={PLACE_SUBS[place]}>
+      <Segmented<DesktopPlace>
+        label="Keep Starbridge in"
+        value={place}
+        options={[
+          ["menu", "Menu bar"],
+          ["dock", "Dock"],
+          ["both", "Both"],
+        ]}
+        onChange={(p) => {
+          setPlace(p);
+          save(p);
+        }}
+      />
+    </Row>
+  );
+}
+
+/** Colours and the clock: how the page looks, per browser; in the desktop app, where it stays. */
 function LookSection() {
   const [theme, setTheme] = usePref("theme");
   const [clock, setClock] = usePref("clock");
@@ -700,6 +731,7 @@ function LookSection() {
           onChange={setTheme}
         />
       </Row>
+      <PlaceRow />
       <Row label="Time format">
         <Segmented<Prefs["clock"]>
           label="Time format"

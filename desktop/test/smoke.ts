@@ -27,6 +27,7 @@ type Watched = {
   /** Whether each menu bar icon set was the one-colour template. */
   template: boolean[];
   outside: string[];
+  destroyed: number;
 };
 
 const PAGE = `<!doctype html><title>stand-in</title><script>
@@ -66,7 +67,7 @@ try {
     const tips: string[] = [];
     const template: boolean[] = [];
     const outside: string[] = [];
-    Object.assign(g, { shown, closed, tips, template, outside });
+    Object.assign(g, { shown, closed, tips, template, outside, destroyed: 0 });
     Notification.prototype.show = function (this: Electron.Notification) {
       shown.push(this);
     };
@@ -78,6 +79,9 @@ try {
     };
     Tray.prototype.setImage = (i: Electron.NativeImage) => {
       template.push(i.isTemplateImage());
+    };
+    Tray.prototype.destroy = () => {
+      (g.destroyed as number)++;
     };
     shell.openExternal = async (u: string) => {
       outside.push(u);
@@ -189,6 +193,23 @@ try {
     () => main((g) => g.shown.some((n) => n.id === "item-d-2")),
     "a hidden window's notification",
   );
+
+  // Refused, as while macOS still asks to allow notifications: the page's next update shows it again.
+  await main((g) => g.shown.find((n) => n.id === "item-d-2")?.emit("failed", {}, "not allowed"));
+  await page.evaluate((late) => (window as unknown as StandIn).send([late]), late);
+  await until(
+    () => main((g) => g.shown.filter((n) => n.id === "item-d-2").length === 2),
+    "the refused notification again",
+  );
+
+  // Kept in the Dock alone, the menu bar icon goes, and the page reads the choice after a reload.
+  type Bridge = { place(): string; setPlace(p: string): void };
+  const bridge = () => (window as unknown as { starbridgeDesktop: Bridge }).starbridgeDesktop;
+  assert.equal(await page.evaluate(`(${bridge})().place()`), "menu");
+  await page.evaluate(`(${bridge})().setPlace("dock")`);
+  await until(() => main((g) => g.destroyed === 1), "the menu bar icon to go");
+  await page.reload();
+  assert.equal(await page.evaluate(`(${bridge})().place()`), "dock");
 
   // Another origin stays out of the window and opens in the browser.
   await page.evaluate((u) => {
