@@ -12,6 +12,7 @@ import {
   nativeImage,
   nativeTheme,
   net,
+  powerMonitor,
   session,
   shell,
   Tray,
@@ -20,6 +21,7 @@ import {
 import { type Answer, type Entry, parseAnswered, parseState } from "./bridge";
 import { Notifier, type Shown } from "./notifier";
 import { linkPage, opensOutside, serverOrigin, staysInWindow } from "./origin";
+import { type Reading, SCREEN_CHECK_MS, Screen } from "./screen";
 import { parsePlace, readSettings, type Settings, writeSettings } from "./settings";
 import { browserSignIn, newSignIn, type SignIn, signInReturn, startsSignIn } from "./signin";
 import { mark, timing } from "./timing";
@@ -32,6 +34,8 @@ const ASSETS = join(ROOT, "assets");
 const SETTINGS = join(app.getPath("userData"), "settings.json");
 /** How long the page has to say an answer from a notification went out. */
 const ANSWER_MS = 30_000;
+/** How long a quitting app waits for the page to say the owner left. */
+const QUIT_MS = 2_000;
 
 let settings: Settings;
 let origin: string;
@@ -42,6 +46,10 @@ let tray: Tray | null = null;
 let needs = 0;
 let notifier: Notifier;
 let quitting = false;
+/** The Mac's lock, sleep and, once allowed, idle time, which the page counts as presence. */
+let screen: Screen | null = null;
+/** Whether the page was told the owner left, which the app does once, before it quits. */
+let left = false;
 /** The GitHub sign-in sent to the browser, until its link comes back. */
 let signIn: SignIn | null = null;
 /** A release downloaded, which installs on quit or from Restart to Update. */
@@ -69,8 +77,11 @@ function start(): void {
     else showWindow();
   });
   app.on("activate", showWindow);
-  app.on("before-quit", () => {
+  app.on("before-quit", (e) => {
     quitting = true;
+    if (left || !screen) return;
+    e.preventDefault();
+    leave().then(() => app.quit());
   });
   // The app lives in the menu bar; closing the window keeps it there.
   app.on("window-all-closed", () => {});
@@ -126,6 +137,21 @@ async function ready(): Promise<void> {
     save();
     applyPlace();
     win?.webContents.send("place", place);
+  });
+  screen = new Screen(powerMonitor, tellScreen, settings.presence);
+  setInterval(() => screen?.check(), SCREEN_CHECK_MS);
+  ipcMain.on("screen?", (e) => {
+    e.returnValue = e.sender === win?.webContents ? screen?.read() : null;
+  });
+  ipcMain.on("presence?", (e) => {
+    e.returnValue = e.sender === win?.webContents ? settings.presence : null;
+  });
+  ipcMain.on("presence", (e, on) => {
+    if (!fromPage(e) || typeof on !== "boolean" || on === settings.presence) return;
+    settings.presence = on;
+    save();
+    screen?.setIdle(on);
+    win?.webContents.send("presence", on);
   });
   ipcMain.on("server", (e, x) => {
     if (e.sender !== serverWin?.webContents || typeof x !== "string") return;
@@ -355,7 +381,7 @@ function menu(forTray = true): Menu {
 /** Quits for the update: the window must close, not hide, or the install never starts. */
 function installUpdate(): void {
   quitting = true;
-  update?.install();
+  leave().then(() => update?.install());
 }
 
 function showWindow(): void {
@@ -500,6 +526,33 @@ function notSent(id: string, why: string): void {
   });
   n.on("close", () => notices.delete(n));
   n.show();
+}
+
+function tellScreen(r: Reading): void {
+  if (win && fromServer(win.webContents.getURL())) win.webContents.send("screen", r);
+}
+
+/**
+ * Tells the page the owner left before the app goes, so the other devices need not wait out its
+ * last beat (75 s), and waits until it says so or `QUIT_MS` passed.
+ */
+function leave(): Promise<void> {
+  if (left || !screen) return Promise.resolve();
+  left = true;
+  const page = win && fromServer(win.webContents.getURL());
+  return new Promise((done) => {
+    const finish = () => {
+      clearTimeout(timer);
+      ipcMain.off("screen-told", told);
+      done();
+    };
+    const told = (e: IpcMainEvent) => {
+      if (fromPage(e)) finish();
+    };
+    const timer = setTimeout(finish, page ? QUIT_MS : 0);
+    ipcMain.on("screen-told", told);
+    screen?.quit();
+  });
 }
 
 /** Shows the window on an item. */

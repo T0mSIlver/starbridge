@@ -17,6 +17,9 @@ if (location.origin === arg("origin")) {
   let onOpen: ((id: string) => void) | null = null;
   // Asked, not passed as an argument: the window's arguments stay as they were at its creation.
   let place: unknown = ipcRenderer.sendSync("place?");
+  let screen: unknown = ipcRenderer.sendSync("screen?");
+  let presence: unknown = ipcRenderer.sendSync("presence?");
+  let onScreen: (() => Promise<void>) | null = null;
 
   ipcRenderer.on("answer", async (_e, a: Answer) => {
     let error: string | undefined;
@@ -32,6 +35,17 @@ if (location.origin === arg("origin")) {
   ipcRenderer.on("place", (_e, p: unknown) => {
     place = p;
   });
+  // Said back once the page acted on it, so a quitting app knows the server heard the owner left.
+  ipcRenderer.on("screen", async (_e, s: unknown) => {
+    screen = s;
+    try {
+      await onScreen?.();
+    } catch {}
+    ipcRenderer.send("screen-told");
+  });
+  ipcRenderer.on("presence", (_e, on: unknown) => {
+    presence = on;
+  });
 
   contextBridge.exposeInMainWorld("starbridgeDesktop", {
     version: arg("version"),
@@ -46,6 +60,15 @@ if (location.origin === arg("origin")) {
     /** Where the app stays: "menu" (the menu bar, the default), "dock" or "both". */
     place: () => place,
     setPlace: (p: unknown) => ipcRenderer.send("place", p),
+    /** The Mac's reading: `{away, idleMs}`, idleMs null unless `presence()` (src/screen.ts). */
+    screen: () => screen,
+    /** Called when the reading changes; resolve once the page acted on it. */
+    onScreen: (f: (() => Promise<void>) | null) => {
+      onScreen = f;
+    },
+    /** Whether the Mac's idle time counts as presence; off unless the owner turns it on. */
+    presence: () => presence,
+    setPresence: (on: unknown) => ipcRenderer.send("presence", on),
     /** Opens an item whose notification was clicked. */
     onOpen: (f: (id: string) => void) => {
       onOpen = f;

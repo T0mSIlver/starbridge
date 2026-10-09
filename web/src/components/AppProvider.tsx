@@ -519,6 +519,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       () => document.visibilityState === "visible",
       Date.now,
       () => Date.now() - siblingAt < PRESENCE_INPUT_MS,
+      () => desktop?.screen?.(),
     );
     let toldAt = 0;
     const input = () => {
@@ -532,8 +533,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     for (const e of PRESENCE_EVENTS) window.addEventListener(e, input, { passive: true });
     document.addEventListener("visibilitychange", tick);
     const timer = setInterval(tick, PRESENCE_CHECK_MS);
+    desktop?.onScreen?.(() => beacon.tick());
     return () => {
       clearInterval(timer);
+      desktop?.onScreen?.(null);
       for (const e of PRESENCE_EVENTS) window.removeEventListener(e, input);
       document.removeEventListener("visibilitychange", tick);
       tabs?.close();
