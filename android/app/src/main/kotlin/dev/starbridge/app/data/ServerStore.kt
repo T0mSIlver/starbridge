@@ -1863,6 +1863,24 @@ class ServerStore(
         }
     }
 
+    override val notifyStates = MutableStateFlow<Map<String, String>>(emptyMap())
+    /** The state the server holds for this phone, once it took one. */
+    private var reportedNotify: Boolean? = null
+
+    override fun loadNotifyStates() {
+        scope.launch {
+            // A server without the route: Devices shows no states.
+            runCatching { api().notifications() }.onSuccess { notifyStates.value = it }
+        }
+    }
+
+    override fun reportNotifications(on: Boolean) {
+        scope.launch {
+            if (phase.value != Phase.Ready || reportedNotify == on) return@launch
+            runCatching { api().setNotifications(if (on) "on" else "off") }.onSuccess { reportedNotify = on }
+        }
+    }
+
     override fun setPushHold(seconds: Int) {
         val was = pushHold.value
         pushHold.value = seconds

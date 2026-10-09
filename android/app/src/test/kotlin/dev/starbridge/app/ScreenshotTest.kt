@@ -331,7 +331,8 @@ class ScreenshotTest(private val dark: Boolean) {
     @Test fun quotasStale() = capture("quotas-stale") { QuotasScreen(fake.staleWindows, now) }
     @Test fun quotasFailed() = capture("quotas-failed") { QuotasScreen(fake.failedWindows, now, failures = fake.failures) }
 
-    @Test fun devices() = capture("devices") { Phone(null, 0) { DevicesScreen(fake.members, now, deviceActions) } }
+    // Each device's notifications as it last said (#943): read-only, since only a device changes its own.
+    @Test fun devices() = capture("devices") { Phone(null, 0) { DevicesScreen(fake.members, now, deviceActions, notify = mapOf("m1" to "on", "m2" to "off", "m3" to "blocked")) } }
 
     // The recovery key under the members (#348): when and where it was set, with Replace.
     private val recovery = RecoveryUi(now.minusSeconds(86_400 * 2), "this phone", replaced = false)
