@@ -1,6 +1,6 @@
 {
   "name": "starbridge",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Post decisions to your Starbridge devices and upload quota windows from CodexBar",
   "license": "MIT",
   "repository": {
