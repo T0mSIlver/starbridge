@@ -40,13 +40,21 @@ export class Screen {
     monitor.on("unlock-screen", () => this.set(() => (this.locked = false)));
     monitor.on("suspend", () => this.set(() => (this.asleep = true)));
     monitor.on("resume", () => this.set(() => (this.asleep = false)));
+    this.lockedBefore();
+  }
+
+  /**
+   * Catches a lock that came before the app, which sent no event, from the lock state macOS
+   * reports with the idle time. Read once, not at each check: at an unlock it can still say
+   * locked, which kept the owner away until the next check.
+   */
+  private lockedBefore(): void {
+    if (this.idle && this.monitor.getSystemIdleState(1) === "locked") this.locked = true;
   }
 
   read(): Reading {
-    // The lock state macOS reports with the idle time catches a lock that came before the app.
-    const locked = this.idle && this.monitor.getSystemIdleState(1) === "locked";
     return {
-      away: this.locked || this.asleep || this.quitting || locked,
+      away: this.locked || this.asleep || this.quitting,
       idleMs:
         this.idle && !this.asleep && !this.quitting
           ? this.monitor.getSystemIdleTime() * 1_000
@@ -64,7 +72,10 @@ export class Screen {
   }
 
   setIdle(on: boolean): void {
-    this.set(() => (this.idle = on));
+    this.set(() => {
+      this.idle = on;
+      this.lockedBefore();
+    });
   }
 
   /** Quitting: the owner is away from here from now on. Told even if already away, so the app hears back. */

@@ -3,10 +3,10 @@ import { EventEmitter } from "node:events";
 import { type Reading, Screen } from "../../src/screen";
 
 /** A powerMonitor whose idle seconds and lock state the test sets. */
-function setup(idle: boolean) {
+function setup(idle: boolean, state = "active") {
   const monitor = Object.assign(new EventEmitter(), {
     idleS: 5,
-    state: "active",
+    state,
     getSystemIdleTime: () => monitor.idleS,
     getSystemIdleState: () => monitor.state,
   });
@@ -27,12 +27,20 @@ test("with presence on, the page gets the idle time at every check, and away on 
   monitor.idleS = 0;
   monitor.emit("lock-screen");
   expect(told.at(-1)).toEqual({ away: true, idleMs: 0 });
+  // macOS can still report locked as the unlock arrives: the event wins.
+  monitor.state = "locked";
   monitor.emit("unlock-screen");
   expect(told.at(-1)).toEqual({ away: false, idleMs: 0 });
-  // A lock from before the app started, which sent no event.
-  monitor.state = "locked";
+  screen.check();
+  expect(told.at(-1)?.away).toBe(false);
+});
+
+test("a lock from before the app started, which sent no event, makes the owner away", () => {
+  const { monitor, screen, told } = setup(true, "locked");
   screen.check();
   expect(told.at(-1)?.away).toBe(true);
+  monitor.emit("unlock-screen");
+  expect(told.at(-1)?.away).toBe(false);
 });
 
 test("with presence off, the idle time is never read, and only lock, sleep and quit are told", () => {
