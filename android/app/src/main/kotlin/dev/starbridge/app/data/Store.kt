@@ -38,6 +38,11 @@ interface Store {
     /** The last thing that went wrong, in words for the owner. */
     val notice: StateFlow<String?>
     /**
+     * Why the server has not answered for a while, offline or not (#920), until a call gets
+     * through; a short outage says nothing.
+     */
+    val connection: StateFlow<String?> get() = MutableStateFlow(null)
+    /**
      * While a head holds this phone whose member a `revoke` names: that member and the hold's
      * notice, which alone offers [stopWaiting]. No revocation ends a hold by itself (#813).
      */

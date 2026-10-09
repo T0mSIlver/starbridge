@@ -21,6 +21,7 @@ import dev.starbridge.app.data.KeystoreVault
 import dev.starbridge.app.data.Prefs
 import dev.starbridge.app.data.ServerStore
 import dev.starbridge.app.data.Store
+import dev.starbridge.app.data.validatedNetwork
 import dev.starbridge.app.protocol.Directories
 import dev.starbridge.app.protocol.Envelopes
 import dev.starbridge.app.protocol.Joins
@@ -73,6 +74,7 @@ object AppModule {
             fcmAvailable = FirebaseApp.getApps(context).isNotEmpty(),
             scope = scope,
             wakeWhenOnline = { AnswerWorker.schedule(context) },
+            network = validatedNetwork(context),
         )
     }
 

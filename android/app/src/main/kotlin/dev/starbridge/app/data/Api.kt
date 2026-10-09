@@ -91,7 +91,7 @@ const val RETRY_FOR_MS = 20_000L
 internal var limitedUntil = 0L
 
 /** The server's routes this client uses, as PROTOCOL.md lists them. */
-class Api(private val http: OkHttpClient, private val server: String, private val session: String?) {
+class Api(private val http: OkHttpClient, private val server: String, private val session: String?, private val reach: Reach? = null) {
     private val json = "application/json".toMediaType()
 
     private suspend fun call(method: String, path: String, body: JsonElement? = null, headers: Map<String, String> = emptyMap(), client: OkHttpClient = http): Pair<Int, JsonElement?> {
@@ -105,8 +105,9 @@ class Api(private val http: OkHttpClient, private val server: String, private va
                 continue
             }
             try {
-                return once(method, path, body, headers, client)
+                return once(method, path, body, headers, client).also { reach?.reached() }
             } catch (e: IOException) {
+                if (Reach.transient(e)) reach?.failed() else reach?.reached()
                 if (e is ApiException && e.status == 429 && e.retryAfterMs != null) {
                     // Jitter spreads this app's calls past the limit's window, not into its first moment.
                     limitedUntil = maxOf(limitedUntil, System.currentTimeMillis() + (e.retryAfterMs * (1 + Math.random() / 4)).toLong())

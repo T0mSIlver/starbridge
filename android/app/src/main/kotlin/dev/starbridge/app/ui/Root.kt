@@ -18,6 +18,7 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.material3.SnackbarResult
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.Text
 import androidx.compose.material3.adaptive.ExperimentalMaterial3AdaptiveApi
 import androidx.compose.material3.WideNavigationRailDefaults
@@ -75,6 +76,7 @@ import dev.starbridge.app.ui.setup.SetupScreen
 import dev.starbridge.app.ui.setup.SetupViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.serialization.Serializable
 import java.time.Instant
@@ -134,20 +136,29 @@ private fun seconds(live: Boolean, slow: Instant): Instant {
 /**
  * Shows the store's notices as snackbars. The notice of a hold that only the owner's word ends
  * (#813) stays with a Stop waiting action, [stopWaiting], until they act on it or dismiss it;
- * no other notice carries it.
+ * no other notice carries it. Between notices, [connection] stays up until it clears (#920).
  */
 @Composable
-private fun Notices(notice: StateFlow<String?>, dismiss: () -> Unit, stopWaiting: Pair<String, () -> Unit>? = null): SnackbarHostState {
+internal fun Notices(
+    notice: StateFlow<String?>,
+    dismiss: () -> Unit,
+    stopWaiting: Pair<String, () -> Unit>? = null,
+    connection: StateFlow<String?> = MutableStateFlow(null),
+): SnackbarHostState {
     val host = remember { SnackbarHostState() }
     val text by notice.collectAsStateWithLifecycle()
+    val offline by connection.collectAsStateWithLifecycle()
     val stop by rememberUpdatedState(stopWaiting)
-    LaunchedEffect(text) {
+    // A change of either ends the snackbar on screen: a notice goes first, then the connection's.
+    LaunchedEffect(text, offline) {
         text?.let {
             val action = stop?.takeIf { (held, _) -> held == it }?.second
             val result = host.showSnackbar(it, actionLabel = action?.let { "Stop waiting" }, withDismissAction = true)
             dismiss()
             if (result == SnackbarResult.ActionPerformed) action?.invoke()
+            return@LaunchedEffect
         }
+        offline?.let { host.showSnackbar(it, duration = SnackbarDuration.Indefinite) }
     }
     return host
 }
@@ -192,14 +203,14 @@ internal fun suiteType(): NavigationSuiteType {
  */
 @OptIn(ExperimentalMaterial3AdaptiveApi::class)
 @Composable
-fun Main(decisions: List<Decision>, notice: StateFlow<String?>, dismiss: () -> Unit, opening: Flow<NavKey>, stopWaiting: Pair<String, () -> Unit>? = null, quotas: Boolean = true) {
+fun Main(decisions: List<Decision>, notice: StateFlow<String?>, dismiss: () -> Unit, opening: Flow<NavKey>, stopWaiting: Pair<String, () -> Unit>? = null, quotas: Boolean = true, connection: StateFlow<String?> = MutableStateFlow(null)) {
     val backStack = rememberNavBackStack(InboxKey)
     val now = now()
     // A snoozed question counts again once it is back (#691).
     val openDecisions = decisions.count { it.isOpen && !it.snoozed(now) }
     // Shared by a decision's card and its detail, which are separate entries.
     val drafts = rememberDrafts()
-    val host = Notices(notice, dismiss, stopWaiting)
+    val host = Notices(notice, dismiss, stopWaiting, connection)
     val sheets = remember { BottomSheetSceneStrategy<NavKey>() }
     val notificationsOff = !rememberNotificationsOn()
     val colors = StarbridgeTheme.colors

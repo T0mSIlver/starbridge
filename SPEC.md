@@ -1047,6 +1047,15 @@ first window, so a provider with a window running out leads.
 - **No answer is lost** (#329, #331). An answer is sealed, signed and stored before it is posted;
   WorkManager sends it once a network is up. A retry the server already took gets
   `already-answered`, which the app counts as its own when an earlier attempt may have landed.
+- **Short outages go unnoticed** (#920). A phone unlocks before its network, or its VPN's DNS, is
+  back, so the sync on resume used to fail with the lookup's error. A sync started while Android
+  counts no network as validated waits for one; a sync the network or server failed (unknown host,
+  timeout, refused or reset connection, 502 to 504) retries quietly after 1 s, doubling to 30 s,
+  while the app is in front. Only an outage past 10 s shows, in a snackbar that stays until a call
+  gets through: "Offline. Retrying when you're back online." or "Can't reach starbridge.run.
+  Retrying.", never the exception's text. Time spent behind counts for nothing toward the 10 s; a
+  pull while offline says so at once. The web's reads on `visibilitychange` and `online` already
+  fail quietly.
 - **Notifications off** (#342): a line heads the Inbox with "Turn on", which opens the app's
   notification settings, since Android stops showing the permission prompt after two refusals.
 - **Snooze straight on a time** (#692): the times in "Both clients", "Snoozed", with the dial.

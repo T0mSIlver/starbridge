@@ -104,7 +104,7 @@ class MainActivity : ComponentActivity() {
                 } else if (phase == Phase.Ready) {
                     val heldRevoked by store.heldRevoked.collectAsStateWithLifecycle()
                     val quotas by store.quotasHeld.collectAsStateWithLifecycle()
-                    Main(decisions, store.notice, store::dismissNotice, opening.receiveAsFlow(), heldRevoked?.let { held -> held.notice to { store.stopWaiting(held.member) } }, quotas)
+                    Main(decisions, store.notice, store::dismissNotice, opening.receiveAsFlow(), heldRevoked?.let { held -> held.notice to { store.stopWaiting(held.member) } }, quotas, store.connection)
                     val asks by store.joinAsks.collectAsStateWithLifecycle()
                     val comparison by store.comparison.collectAsStateWithLifecycle()
                     JoinPrompt(asks, comparison, JoinActions(store::compareJoin, store::approveJoin, store::refuseJoin, store::closeComparison))
