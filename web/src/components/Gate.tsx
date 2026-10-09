@@ -548,7 +548,11 @@ export function Gate({ visitor, children }: { visitor: boolean; children: React.
       : boot.state === "signed-out" && !boot.known);
   // The server titled a visitor's page for the landing page: once something else shows there,
   // such as the Inbox after signing in, the tab says what it is.
-  const retitle = visitor && path === "/" && !landing && boot.state !== "loading";
+  // The desktop app's sign-in page was titled "Sign in": signed in, it says Inbox too.
+  const retitle =
+    path === "/" &&
+    !landing &&
+    (visitor ? boot.state !== "loading" : !!desktop && boot.state === "ready");
   useEffect(() => {
     if (retitle) document.title = "Starbridge · Inbox";
   }, [retitle]);
