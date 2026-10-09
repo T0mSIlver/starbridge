@@ -6,7 +6,7 @@
 # shape, `additional_context` at the top.
 #
 # cursor-agent also runs installed Claude Code plugins' hooks, with its own input, which carries
-# `cursor_version` (#958). This plugin then steps aside: the Cursor plugin adds the rule there.
+# `cursor_version` (#958). This plugin then steps aside: setup's Cursor hook adds the rule there.
 if [ "${1-}" != cursor ]; then
   case $(cat) in *'"cursor_version"'*) exit 0 ;; esac
 fi
