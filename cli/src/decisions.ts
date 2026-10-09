@@ -765,10 +765,9 @@ export function delivery(
 }
 
 /**
- * How long after its last call the agent still counts a session's mod as there, for Claude Code.
- * A Cursor conversation counts until its sessionEnd hook says goodbye: its plugin calls only at
- * session start and at each stop, when its hold takes the answers (#956).: one events call
- * held 25 s, and the next one.
+ * How long after its last call the agent still counts a Claude Code session's mod as there: one
+ * events call held 25 s, and the next one. A Cursor conversation counts until its sessionEnd hook
+ * says goodbye, since its hooks call only at session start and at each stop (#956).
  */
 export const MOD_SEEN_MS = 45_000;
 
