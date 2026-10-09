@@ -228,3 +228,98 @@
     flex: 1 1 auto;
   }
 }
+
+/* MOCKUP variants (#947) */
+.growInput,
+.composerInput {
+  display: block;
+  width: 100%;
+  resize: none;
+  field-sizing: content;
+  overflow-wrap: anywhere;
+  max-height: calc(10lh + 2 * var(--s3));
+  overflow-y: auto;
+}
+.hint {
+  color: var(--fg3);
+}
+.hint kbd {
+  font: inherit;
+}
+@media (hover: none) {
+  .hint {
+    display: none;
+  }
+}
+.bar > button {
+  margin-left: auto;
+}
+.bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s2);
+}
+.sendIcon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: var(--s10);
+  height: var(--s10);
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--fg);
+  color: var(--bg);
+}
+.sendIcon:disabled {
+  background: var(--surface2);
+  color: var(--fg3);
+}
+/* A: one box, text on top, a footer row inside it. */
+.composer {
+  width: 100%;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface2);
+}
+.composer:focus-within {
+  border-color: var(--fg);
+}
+.composerInput {
+  padding: var(--s3) var(--s3) 0;
+  border: 0;
+  background: none;
+  color: var(--fg);
+  min-height: calc(1lh + var(--s3));
+}
+.composerInput:focus {
+  outline: 0;
+}
+.composer .bar {
+  padding: var(--s1) var(--s1) var(--s1) var(--s3);
+}
+.composer .sendIcon:disabled {
+  background: none;
+}
+/* B: the button outside, bottom-aligned. */
+.side {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--s2);
+  width: 100%;
+}
+.side .sendIcon {
+  width: var(--size-tap);
+  height: var(--size-tap);
+}
+/* C: the field, then its own bar. */
+.stack {
+  display: grid;
+  gap: var(--s2);
+  width: 100%;
+}
+.side textarea {
+  flex: 1;
+  min-width: 0;
+}

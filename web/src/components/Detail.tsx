@@ -99,9 +99,34 @@ function FreeText({
   onSend: (text: string) => void;
 }) {
   const [text, setText] = useState("");
+  const [v] = useState(() =>
+    typeof location === "undefined" ? "a" : (new URLSearchParams(location.search).get("composer") ?? "a"),
+  );
+  const keyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key !== "Enter" || e.shiftKey || e.nativeEvent.isComposing || e.keyCode === 229) return;
+    e.preventDefault();
+    e.currentTarget.form?.requestSubmit();
+  };
+  const area = (cls: string) => (
+    <textarea
+      id={`answer-${id}`}
+      className={`t-body ${cls}`}
+      rows={1}
+      placeholder="Your answer"
+      value={text}
+      onChange={(e) => setText(e.target.value)}
+      onKeyDown={keyDown}
+    />
+  );
+  const hint = (
+    <span className={`t-small ${s.hint}`}>
+      <kbd>Enter</kbd> to send · <kbd>Shift</kbd>+<kbd>Enter</kbd> for a new line
+    </span>
+  );
+  const off = sending || !text.trim();
   return (
     <form
-      className={s.free}
+      className={`${s.free} ${s[`v${v}`]}`}
       onSubmit={(e) => {
         e.preventDefault();
         if (text.trim()) onSend(text.trim());
@@ -110,33 +135,35 @@ function FreeText({
       <label className="sr-only" htmlFor={`answer-${id}`}>
         Your answer
       </label>
-      <div className={s.field}>
-        <textarea
-          id={`answer-${id}`}
-          className={`${ui.input} t-body ${s.fieldInput}`}
-          rows={1}
-          placeholder="Your answer"
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          // Enter sends and Shift+Enter starts a new line (#562); an Enter that ends an input
-          // method's composition only commits it.
-          onKeyDown={(e) => {
-            if (e.key !== "Enter" || e.shiftKey || e.nativeEvent.isComposing || e.keyCode === 229)
-              return;
-            e.preventDefault();
-            e.currentTarget.form?.requestSubmit();
-          }}
-        />
-        <button
-          type="submit"
-          className={s.send}
-          aria-label="Send"
-          title="Send"
-          disabled={sending || !text.trim()}
-        >
-          <Icon name="send" size={20} />
-        </button>
-      </div>
+      {v === "a" ? (
+        <div className={s.composer}>
+          {area(s.composerInput)}
+          <div className={s.bar}>
+            {hint}
+            <button type="submit" className={s.sendIcon} aria-label="Send" title="Send" disabled={off}>
+              <Icon name="send" size={20} />
+            </button>
+          </div>
+        </div>
+      ) : v === "b" ? (
+        <div className={s.side}>
+          {area(`${ui.input} ${s.growInput}`)}
+          <button type="submit" className={s.sendIcon} aria-label="Send" title="Send" disabled={off}>
+            <Icon name="send" size={20} />
+          </button>
+        </div>
+      ) : (
+        <div className={s.stack}>
+          {area(`${ui.input} ${s.growInput}`)}
+          <div className={s.bar}>
+            {hint}
+            <button type="submit" className={`t-label ${ui.btn} ${ui.fill}`} disabled={off}>
+              <Icon name="send" size={18} />
+              Send
+            </button>
+          </div>
+        </div>
+      )}
     </form>
   );
 }

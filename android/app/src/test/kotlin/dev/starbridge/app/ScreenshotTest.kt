@@ -199,6 +199,9 @@ class ScreenshotTest(private val dark: Boolean) {
     // A reply typed under the options, in place of them (#201); the field is always open (#849).
     @Test fun sheetReply() = capture("sheet-reply", before = { compose.onNode(hasSetTextAction()).performTextInput("Only after the eval run") }) { QuestionSheet(fake.decisions.first { it.id == "d2" }) }
 
+    // A long reply wraps beside the send button, never under it (#947).
+    @Test fun sheetReplyLong() = capture("sheet-reply-long", before = { compose.onNode(hasSetTextAction()).performTextInput(LONG_REPLY) }) { QuestionSheet(fake.decisions.first { it.id == "d2" }) }
+
     @Test fun sheetPick() = capture("sheet-pick") { QuestionSheet(showcase.pick) }
 
     @Test fun sheetPickShapes() = capture("sheet-pick-shapes") { QuestionSheet(fake.layouts) }
@@ -412,3 +415,6 @@ class ScreenshotTest(private val dark: Boolean) {
 
     @Test fun setupRecoveryKey() = capture("setup-recovery-key") { Phone(null, 0) { SetupScreen(Phase.RecoveryKey(fake.recoveryKey), "https://starbridge.run", false, setupActions, {}) } }
 }
+
+private const val LONG_REPLY =
+    "Not quite. Keep the API change first, but split the migration into its own PR so the checkout one stays reviewable, and before you merge anything rerun the full test suite against staging with the new routes, then show me the diff of api/orders.ts and the two failing snapshots you mentioned yesterday so I can decide whether to update them or fix the rendering."
