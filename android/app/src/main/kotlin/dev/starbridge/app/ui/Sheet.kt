@@ -129,10 +129,11 @@ private class SheetScene<T : Any>(
         val ground = remember { SheetGround() }
         val state = rememberModalBottomSheetState(skipPartiallyExpanded = true)
         val scope = rememberCoroutineScope()
-        // A close and a swipe that cross pop the entry once, never the page under it.
+        // A close and a swipe that cross pop the entry once, never the page under it. A hide cut
+        // short by another page replacing this one pops nothing.
         var gone by remember { mutableStateOf(false) }
         val leave = { if (!gone) { gone = true; onBack() } }
-        val close: () -> Unit = { scope.launch { state.hide() }.invokeOnCompletion { leave() } }
+        val close: () -> Unit = { scope.launch { state.hide() }.invokeOnCompletion { if (it == null) leave() } }
         ModalBottomSheet(
             onDismissRequest = leave,
             sheetState = state,
