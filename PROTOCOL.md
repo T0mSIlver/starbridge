@@ -86,7 +86,7 @@ Besides the web app's trust in its server:
 
 - Every machine-signed body names its `source` (machine, project, session, and optionally the
   session's title and links, and `machineKind`: `server`, `desktop`, `laptop` or `cloud`, for
-  its icon). A decision or a permission may name its `agent`, such as `claude-code`, `codex`, `pi` or `opencode`. Clients accept any agent name (lowercase letters, digits and dashes, at most 40), so a newer machine's agent never makes an item unreadable; an agent a client does not know gets no "Open in" link.
+  its icon). A decision or a permission may name its `agent`, such as `claude-code`, `codex`, `pi`, `opencode`, `cursor` or `antigravity`. Clients accept any agent name (lowercase letters, digits and dashes, at most 40), so a newer machine's agent never makes an item unreadable; an agent a client does not know gets no "Open in" link.
 - A decision's links (HTTPS) are part of its signed body. Its images (PNG or JPEG) are sealed once
   for every device (#685): each is a blob in the item's `blobs`, at the index of its entry in the
   body's `images`, made of a random 24-byte nonce then `crypto_secretbox` of the image under a

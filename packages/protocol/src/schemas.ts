@@ -276,7 +276,7 @@ export const SessionLink = z
 export type SessionLink = z.infer<typeof SessionLink>;
 
 /** The coding agent behind a decision or a permission prompt, as machines send it. */
-export const Agent = z.enum(["claude-code", "codex", "pi", "opencode"]);
+export const Agent = z.enum(["claude-code", "codex", "pi", "opencode", "cursor", "antigravity"]);
 export type Agent = z.infer<typeof Agent>;
 
 /**
