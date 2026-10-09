@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+import type { AppSignedIn } from "@starbridge/protocol";
 import { type Context, Hono } from "hono";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import { HTTPException } from "hono/http-exception";
@@ -21,6 +23,8 @@ const SIGNIN_OFF = "off";
 /** RFC 7636: a verifier is 43 to 128 unreserved characters; an S256 challenge is 43. */
 const VERIFIER = /^[A-Za-z0-9._~-]{43,128}$/;
 const CHALLENGE = /^[A-Za-z0-9_-]{43}$/;
+/** RFC 7636 S256: the challenge an app sent for this verifier. */
+const s256 = (verifier: string) => createHash("sha256").update(verifier).digest("base64url");
 
 function newAccountId(): string {
   return randomToken("a").slice(0, 23);
@@ -199,7 +203,22 @@ authRoutes.post("/auth/app/session", async (c) => {
     z.object({ code: z.string().min(1).max(100), verifier: z.string().regex(VERIFIER) }),
   );
   const account = await gitHubAccount(c, code, verifier);
+  c.var.appSignIns.add(s256(verifier), account);
   return c.json({ session: createSession(c.var.db, account, c.var.config.limits.sessions) });
+});
+
+/**
+ * Whether the app whose sign-in this browser passed on now has a session of the browser's own
+ * account (#943). The browser ran on the app's machine, so the page can offer to stop its own
+ * notifications there, with no guess about which devices share a machine.
+ */
+authRoutes.get("/auth/app/signed-in", requireCaller("paired-device"), (c) => {
+  const state = c.req.query("state") ?? "";
+  if (!CHALLENGE.test(state)) fail(400, "bad-request", "state must be the app's challenge");
+  const answer: AppSignedIn = {
+    signedIn: c.var.appSignIns.reached(state, c.var.caller.account),
+  };
+  return c.json(answer);
 });
 
 /** Self-hosted sign-in with OWNER_TOKEN; the session also comes back for the Android app. */

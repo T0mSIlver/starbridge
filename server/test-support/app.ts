@@ -99,9 +99,9 @@ function newMember(id: string, role: Member["role"]): { keys: MemberKeys; member
   return { keys, member: { id, role, name: id, ...publicKeys(keys) } };
 }
 
-/** Signs in with the owner token and writes the directory's first entry. */
-export async function setupAccount(s: Server, deviceId = "phone"): Promise<Account> {
-  const session = await signIn(s);
+/** Signs in with the owner token, unless given a session, and writes the directory's first entry. */
+export async function setupAccount(s: Server, deviceId = "phone", signedIn?: string): Promise<Account> {
+  const session = signedIn ?? (await signIn(s));
   const me = await s.call("GET", "/v1/me", { token: session });
   const { keys, member } = newMember(deviceId, "device");
   const recoverySeed = generateRecoverySeed();

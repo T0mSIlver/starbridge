@@ -202,3 +202,11 @@ textarea.input {
     padding: 0 var(--s4);
   }
 }
+
+/* The sign-in page's offer to turn off this browser's notifications (#943). */
+.offerActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+  margin-top: var(--s3);
+}

@@ -298,4 +298,13 @@ class Api(private val http: OkHttpClient, private val server: String, private va
 
     suspend fun setPushHold(seconds: Int): Int =
         call("PUT", "/settings", buildJsonObject { put("pushHold", seconds) }).second!!.jsonObject.getValue("pushHold").jsonPrimitive.int
+
+    /** This phone's notifications as Android reports them, for every device's Devices list (#943). */
+    suspend fun setNotifications(state: String) {
+        call("PUT", "/notifications", buildJsonObject { put("state", state) })
+    }
+
+    /** What each device of the account last said of its notifications, by member id (#943). */
+    suspend fun notifications(): Map<String, String> =
+        call("GET", "/notifications").second!!.jsonObject.getValue("devices").jsonObject.mapValues { it.value.jsonPrimitive.content }
 }

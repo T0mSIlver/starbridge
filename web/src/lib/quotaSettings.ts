@@ -1,6 +1,7 @@
 // Quota settings, per browser (SPEC.md, "Quota settings follow CodexBar"): a curated set of
 // CodexBar's own settings with CodexBar's meaning. They stay in this browser; the server learns
 // nothing of them. Android keeps the same set (QuotaSettings.kt).
+
 import {
   DEFAULT_QUOTA_ALERTS,
   migrateQuotaAlerts,
@@ -8,6 +9,7 @@ import {
   wantsQuotaAlert,
 } from "@starbridge/protocol";
 import { clockTime, relative } from "./format";
+import { switchedOff } from "./notify";
 import { readStored, stored, writable } from "./stored";
 import type { QuotaAlert, QuotaCardData, QuotaWindow } from "./types";
 
@@ -313,6 +315,8 @@ const SHOWN = "starbridge:quota-notified";
  */
 export async function notifyAlerts(cards: QuotaCardData[], s: QuotaSettings): Promise<void> {
   if (!alertsOn(s.alerts) || typeof Notification === "undefined") return;
+  // This device's switch is off (#943): the browser still grants the permission.
+  if (switchedOff()) return;
   if (Notification.permission !== "granted") return;
   let raw: string | null = null;
   try {

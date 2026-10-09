@@ -405,3 +405,7 @@
     display: none;
   }
 }
+
+.bad {
+  color: var(--bad);
+}

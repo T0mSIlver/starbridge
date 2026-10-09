@@ -5,6 +5,7 @@
 //
 // Needs `npx playwright install firefox` once. Writes screenshots to web/screenshots.
 import { type ChildProcess, spawn, spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import {
   appendFileSync,
   cpSync,
@@ -1897,6 +1898,48 @@ async function main() {
   await page.goto(`${ORIGIN}/settings`);
   await recoveryRow.getByText(/^Replaced .* on this browser$/).waitFor();
   await shoot(page, "devices-recovery");
+
+  step(
+    "the page that passes an app's sign-in on offers to turn off this browser's notifications, and Devices shows it (#943)",
+  );
+  const verifier = Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("base64url");
+  const challenge = createHash("sha256").update(verifier).digest("base64url");
+  failPage = pageB;
+  await pageB.goto(`${ORIGIN}/app/auth?code=stub-code&state=${challenge}`);
+  await pageB.getByRole("link", { name: "Open Starbridge" }).waitFor();
+  // The app trades the code, as the desktop app does once the browser hands it on.
+  const traded = await fetch(`${ORIGIN}/v1/auth/app/session`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ code: "stub-code", verifier }),
+  });
+  if (traded.status !== 200) throw new Error(`the app's sign-in failed: ${traded.status}`);
+  await pageB.getByRole("button", { name: "Turn off in this browser" }).click({ timeout: 15_000 });
+  await pageB.getByText(/^This browser no longer notifies you/).waitFor();
+  await shoot(pageB, "app-signin-handoff");
+  failPage = page;
+  const devicesOf = (p: Page) => p.getByRole("region", { name: "Devices" });
+  await page.goto(`${ORIGIN}/settings`);
+  await devicesOf(page)
+    .getByText(/^Device · added .* · Notifications off$/)
+    .waitFor();
+  // Off stays off: no banner offers them again, and the switch turns them back on.
+  await pageB.goto(ORIGIN);
+  await pageB.waitForTimeout(2_000);
+  if (await pageB.getByRole("button", { name: "Turn on notifications" }).count())
+    throw new Error("the banner offers notifications the owner turned off");
+  await pageB.goto(`${ORIGIN}/settings`);
+  const thisDevice = pageB.getByRole("switch", { name: "Notifications on this device" });
+  if (await thisDevice.isChecked()) throw new Error("the switch still says on");
+  // The switch turns on once the browser granted and the subscription went through.
+  await thisDevice.click();
+  await pageB
+    .getByRole("switch", { name: "Notifications on this device", checked: true })
+    .waitFor();
+  await page.reload();
+  await devicesOf(page)
+    .getByText(/^Device · added .* · Notifications on$/)
+    .waitFor();
 
   step("revoke the second browser");
   await page

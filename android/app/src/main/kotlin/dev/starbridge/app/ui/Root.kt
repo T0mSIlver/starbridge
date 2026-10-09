@@ -213,6 +213,9 @@ fun Main(decisions: List<Decision>, notice: StateFlow<String?>, dismiss: () -> U
     val host = Notices(notice, dismiss, stopWaiting, connection)
     val sheets = remember { BottomSheetSceneStrategy<NavKey>() }
     val notificationsOff = !rememberNotificationsOn()
+    // Other devices' Devices lists show whether Android lets this phone notify (#943).
+    val devices: DevicesViewModel = hiltViewModel()
+    LaunchedEffect(notificationsOff) { devices.reportNotifications(!notificationsOff) }
     val colors = StarbridgeTheme.colors
     // A notification's tap: its question's or prompt's sheet, over the inbox. A pairing link:
     // Add a device, over Devices.
@@ -395,6 +398,8 @@ fun Main(decisions: List<Decision>, notice: StateFlow<String?>, dismiss: () -> U
                         val vm: DevicesViewModel = hiltViewModel()
                         val members by vm.members.collectAsStateWithLifecycle()
                         val recovery by vm.recovery.collectAsStateWithLifecycle()
+                        val notify by vm.notifyStates.collectAsStateWithLifecycle()
+                        LaunchedEffect(Unit) { vm.loadNotifyStates() }
                         DevicesScreen(
                             members, now, vm.actions,
                             onBack = { backStack.removeAt(backStack.lastIndex) },
@@ -403,6 +408,7 @@ fun Main(decisions: List<Decision>, notice: StateFlow<String?>, dismiss: () -> U
                             pollDirectory = vm::refreshDirectory,
                             recovery = recovery,
                             onReplaceRecovery = { backStack.add(RecoveryKeyKey) },
+                            notify = notify,
                         )
                     }
                     entry<RecoveryKeyKey> {

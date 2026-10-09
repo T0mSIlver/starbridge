@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  type NotifyState,
   PUSH_HOLD_CHOICES,
   QUOTA_ALERT_CHOICES,
   type QuotaAlertChoice,
@@ -15,6 +16,7 @@ import { type DesktopPlace, desktop } from "@/lib/desktop";
 import type { RecoveryState } from "@/lib/device";
 import { addedLabels, dayAndTime } from "@/lib/format";
 import { AGENTS_GUIDE } from "@/lib/links";
+import { reports } from "@/lib/notify";
 import { applyTheme, type Prefs, usePref } from "@/lib/prefs";
 import type { PushState } from "@/lib/push";
 import { holdsQuotas, providerOrder, type QuotaSettings } from "@/lib/quotaSettings";
@@ -167,7 +169,7 @@ function NotificationSection({ data }: { data: SettingsData }) {
   const [sound, setSound] = usePref("sound");
   return (
     <Section title="Notifications">
-      <BrowserRow initial={data.push} />
+      <ThisDeviceRow push={data.push} />
       <Row label="Sound for new questions" sub="While a Starbridge page is open">
         <Switch
           label="Sound for new questions"
@@ -183,45 +185,77 @@ function NotificationSection({ data }: { data: SettingsData }) {
   );
 }
 
-/** Whether this browser gets Web Push, and the way to turn it on; the desktop app has its own. */
+/**
+ * Whether this device notifies (#943): one switch for a browser's Web Push and for the desktop
+ * app's own notifications. Each device turns only its own; Devices shows the others'.
+ */
+function ThisDeviceRow({ push }: { push: PushState }) {
+  return desktop ? <AppNotifyRow /> : <BrowserRow initial={push} />;
+}
+
+const LABEL = "Notifications on this device";
+
+function AppNotifyRow() {
+  const [on, setOn] = usePref("desktopNotify");
+  return (
+    <Row
+      label={LABEL}
+      sub={
+        on
+          ? "Questions and permission prompts"
+          : "Off: the window and the menu bar light still show what needs you"
+      }
+    >
+      <Switch
+        label={LABEL}
+        checked={on}
+        onChange={(v) => {
+          setOn(v);
+          import("@/lib/notify").then((n) => n.report());
+        }}
+      />
+    </Row>
+  );
+}
+
+/** A browser's Web Push: on asks for the permission first; blocked says where to allow it. */
 function BrowserRow({ initial }: { initial: PushState }) {
   const [state, setState] = useState(initial);
   const [error, setError] = useState<string>();
-  // A refresh underneath never undoes what the owner just turned on.
+  // A refresh underneath never undoes what the owner just turned on or off.
   const touched = useRef(false);
   useEffect(() => {
     if (!touched.current) setState(initial);
   }, [initial]);
   if (state === "unsupported") return null;
+  if (state === "install")
+    return <Row label={LABEL} sub="Add Starbridge to the Home Screen and open it from there" />;
   const sub =
     error ??
     {
       on: "Questions and permission prompts",
-      off: "Questions and permission prompts",
-      denied: "Blocked in the browser’s settings for this site",
-      install: "Add Starbridge to the Home Screen and open it from there",
+      off: "Off: questions show only while a Starbridge page is open",
+      denied:
+        "Blocked in this browser. Click the icon left of the address, allow Notifications, then reload.",
     }[state];
   return (
-    <Row label="Browser notifications" sub={sub}>
-      {state === "off" ? (
-        <button
-          type="button"
-          className={`t-meta ${ui.btn} ${ui.sm}`}
-          onClick={async () => {
-            touched.current = true;
-            setError(undefined);
-            try {
-              setState(await (await import("@/lib/push")).enablePush());
-            } catch (e) {
-              setError(message(e));
-            }
-          }}
-        >
-          Turn on
-        </button>
-      ) : (
-        <span className={`t-meta ${s.sub}`}>{state === "on" ? "On" : "Off"}</span>
-      )}
+    <Row label={LABEL} sub={<span className={state === "denied" ? s.bad : undefined}>{sub}</span>}>
+      <Switch
+        label={LABEL}
+        checked={state === "on"}
+        disabled={state === "denied"}
+        onChange={async (on) => {
+          touched.current = true;
+          setError(undefined);
+          try {
+            const push = await import("@/lib/push");
+            setState(await (on ? push.enablePush() : push.disablePush()));
+          } catch (e) {
+            setError(message(e));
+          }
+          (await import("@/lib/notify")).report();
+        }}
+      />
     </Row>
   );
 }
@@ -511,6 +545,13 @@ function HostName({ name }: { name: string }) {
   ));
 }
 
+/** What each device last said of its notifications (#943); only the device itself changes it. */
+const NOTIFY_LABELS: Record<NotifyState, string> = {
+  on: "Notifications on",
+  off: "Notifications off",
+  blocked: "Notifications blocked",
+};
+
 function DeviceSection({ data }: { data: SettingsData }) {
   const { update, boot, sampleDevices } = useApp();
   const ctx = boot.state === "ready" ? boot.ctx : undefined;
@@ -518,6 +559,15 @@ function DeviceSection({ data }: { data: SettingsData }) {
   const [revoking, setRevoking] = useState<Device>();
   const [recovery, setRecovery] = useState<RecoveryState | undefined>(data.recovery);
   const [clock] = usePref("clock");
+  const [notify, setNotify] = useState<Record<string, NotifyState>>({});
+  // Read again when this device's switch reports a new state.
+  useEffect(() => {
+    if (!ctx) return;
+    const read = () => api.notifications().then(setNotify, () => {});
+    read();
+    reports.addEventListener("change", read);
+    return () => reports.removeEventListener("change", read);
+  }, [ctx]);
   useEffect(() => {
     if (!data.devices) return;
     setAll(data.devices);
@@ -554,7 +604,18 @@ function DeviceSection({ data }: { data: SettingsData }) {
             </div>
             <div className={`t-meta ${s.sub}`}>
               {d.role === "machine" ? "Machine" : "Device"}
-              {d.self ? " · this browser" : d.addedAt ? ` · ${added.get(d.id)}` : ""}
+              {d.self
+                ? desktop
+                  ? " · this app"
+                  : " · this browser"
+                : d.addedAt
+                  ? ` · ${added.get(d.id)}`
+                  : ""}
+              {notify[d.id] && (
+                <span className={notify[d.id] === "blocked" ? s.bad : undefined}>
+                  {` · ${NOTIFY_LABELS[notify[d.id] as NotifyState]}`}
+                </span>
+              )}
             </div>
             {d.check && <div className={`t-code ${s.sub}`}>Check code {d.check}</div>}
           </div>

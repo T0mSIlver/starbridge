@@ -386,6 +386,9 @@ class ServerStore(
     private fun wipe(message: String?) {
         // Another account or server may have no push: poll again until one arrives.
         pushed = false
+        // The next device this phone becomes has told the server nothing yet (#943).
+        reportedNotify = null
+        notifyStates.value = emptyMap()
         joinJob?.cancel()
         showJob?.cancel()
         watchJob?.cancel()
@@ -1860,6 +1863,24 @@ class ServerStore(
         scope.launch {
             // A server without the setting shows no row.
             runCatching { api().pushHold() }.onSuccess { pushHold.value = it }
+        }
+    }
+
+    override val notifyStates = MutableStateFlow<Map<String, String>>(emptyMap())
+    /** The state the server holds for this phone, once it took one. */
+    private var reportedNotify: Boolean? = null
+
+    override fun loadNotifyStates() {
+        scope.launch {
+            // A server without the route: Devices shows no states.
+            runCatching { api().notifications() }.onSuccess { notifyStates.value = it }
+        }
+    }
+
+    override fun reportNotifications(on: Boolean) {
+        scope.launch {
+            if (phase.value != Phase.Ready || reportedNotify == on) return@launch
+            runCatching { api().setNotifications(if (on) "on" else "off") }.onSuccess { reportedNotify = on }
         }
     }
 

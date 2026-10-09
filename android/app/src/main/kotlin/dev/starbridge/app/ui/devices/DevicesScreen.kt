@@ -91,6 +91,9 @@ class DevicesViewModel @Inject constructor(private val store: Store) : ViewModel
     val busy = store.busy
     val recoveryActions = RecoveryActions(store::newRecoveryKey, store::saveRecoveryKey, store::closeRecoveryKey)
     fun refreshDirectory() = store.refreshDirectory()
+    val notifyStates = store.notifyStates
+    fun loadNotifyStates() = store.loadNotifyStates()
+    fun reportNotifications(on: Boolean) = store.reportNotifications(on)
     val actions = DeviceActions(store::lookUpPairing, store::approvePairing, store::closePairing, store::revoke, store::showCode)
 }
 
@@ -119,6 +122,8 @@ fun DevicesScreen(
     pollDirectory: () -> Unit = {},
     recovery: RecoveryUi? = null,
     onReplaceRecovery: () -> Unit = {},
+    /** What each device last said of its notifications (#943), by member id; only it changes them. */
+    notify: Map<String, String> = emptyMap(),
 ) {
     // A device or machine revoked elsewhere leaves the list without a restart: no push says so.
     LaunchedEffect(Unit) {
@@ -134,7 +139,7 @@ fun DevicesScreen(
     val twins = members.groupingBy { it.name }.eachCount().filterValues { it > 1 }.keys
     var revoking by rememberSaveable { mutableStateOf<String?>(null) }
     Page("Devices", modifier, onBack = onBack, titleGap = Spacing.s4) {
-        itemsIndexed(rows, key = { _, it -> it.id }) { i, it -> MemberRow(it, it.name in twins, groupShape(i, rows.size, outer = Spacing.s5)) { revoking = it.id } }
+        itemsIndexed(rows, key = { _, it -> it.id }) { i, it -> MemberRow(it, it.name in twins, groupShape(i, rows.size, outer = Spacing.s5), notify[it.id]) { revoking = it.id } }
         if (recovery != null) item(key = "recovery") { RecoveryRow(recovery, onReplaceRecovery) }
         item {
             FilledTonalButton(
@@ -287,9 +292,11 @@ fun PairCard(approval: Approval, actions: DeviceActions, otherWays: @Composable 
     }
 }
 
+private val NOTIFY_LABELS = mapOf("on" to "Notifications on", "off" to "Notifications off", "blocked" to "Notifications blocked")
+
 /** A member: its kind's icon, name and when it joined; Revoke is a neutral text button. */
 @Composable
-private fun MemberRow(member: Member, twin: Boolean, shape: Shape, onRevoke: () -> Unit) {
+private fun MemberRow(member: Member, twin: Boolean, shape: Shape, notify: String?, onRevoke: () -> Unit) {
     val scheme = MaterialTheme.colorScheme
     Surface(Modifier.fillMaxWidth(), shape = shape, color = scheme.surfaceContainer) {
         Row(Modifier.padding(Spacing.s4), verticalAlignment = Alignment.CenterVertically) {
@@ -310,6 +317,9 @@ private fun MemberRow(member: Member, twin: Boolean, shape: Shape, onRevoke: () 
                 )
                 member.check?.let {
                     Text("Check code $it", style = StarbridgeTheme.type.machine, color = scheme.onSurfaceVariant)
+                }
+                NOTIFY_LABELS[notify]?.let {
+                    Text(it, style = StarbridgeTheme.type.small, color = if (notify == "blocked") scheme.error else scheme.onSurfaceVariant)
                 }
             }
             if (!member.current) {

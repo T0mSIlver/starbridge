@@ -3,6 +3,7 @@
 import { api } from "./api";
 import { desktop } from "./desktop";
 import { needsHomeScreen, thisBrowser } from "./install";
+import { getPref, setPref } from "./prefs";
 
 /** "install": an iOS tab, where push needs the page on the Home Screen first. */
 export type PushState = "unsupported" | "install" | "denied" | "off" | "on";
@@ -24,6 +25,8 @@ export async function pushState(): Promise<PushState> {
   if (needsHomeScreen(thisBrowser())) return "install";
   if (!supported()) return "unsupported";
   if (Notification.permission === "denied") return "denied";
+  // Off by the switch even when the browser kept its subscription: the server holds none.
+  if (getPref("pushOff")) return "off";
   const reg = await navigator.serviceWorker.getRegistration("/");
   const sub = await reg?.pushManager.getSubscription();
   return sub && Notification.permission === "granted" ? "on" : "off";
@@ -42,8 +45,37 @@ async function send(sub: PushSubscription): Promise<void> {
   await api.subscribe(json.endpoint, { p256dh: keys.p256dh, auth: keys.auth });
 }
 
+/**
+ * Stops Web Push to this browser (#943): the server forgets its subscription and the browser
+ * drops it, so nothing subscribes again at the next boot until the owner turns it back on.
+ */
+export async function disablePush(): Promise<PushState> {
+  setPref("pushOff", true);
+  const reg = supported() ? await navigator.serviceWorker.getRegistration("/") : undefined;
+  const sub = await reg?.pushManager.getSubscription();
+  if (sub) {
+    const json = sub.toJSON();
+    const keys = json.keys as { p256dh?: string; auth?: string } | undefined;
+    // The server returns a known endpoint's id when it is sent again.
+    if (json.endpoint && keys?.p256dh && keys.auth) {
+      try {
+        const { id } = await api.subscribe(json.endpoint, { p256dh: keys.p256dh, auth: keys.auth });
+        await api.unsubscribe(id);
+      } catch (e) {
+        // The server still pushes here: on it stays, and so does what it reports.
+        setPref("pushOff", false);
+        throw e;
+      }
+    }
+    // The server holds no subscription any more, so a push service out of reach changes nothing.
+    await sub.unsubscribe().catch(() => {});
+  }
+  return pushState();
+}
+
 /** Asks for permission (call it from a click) and subscribes this device. */
 export async function enablePush(): Promise<PushState> {
+  setPref("pushOff", false);
   const reg = await registerWorker();
   if (!reg) return "unsupported";
   if ((await Notification.requestPermission()) !== "granted") return pushState();
@@ -102,10 +134,16 @@ export function subscribeFailure(e: unknown, brave = "brave" in navigator): stri
  * a new one if the server's key changed.
  */
 export async function resubscribe(): Promise<void> {
-  if (!supported() || Notification.permission !== "granted") return;
+  if (!supported() || Notification.permission !== "granted" || getPref("pushOff")) return;
   const reg = await navigator.serviceWorker.getRegistration("/");
   const existing = await reg?.pushManager.getSubscription();
   if (!reg || !existing) return;
   const key = await api.vapid().catch(() => undefined);
-  await send(await current(reg.pushManager, existing, key));
+  const sub = await current(reg.pushManager, existing, key);
+  // Turned off while the key was read (#943): what a new key subscribed goes too.
+  if (getPref("pushOff")) {
+    await sub.unsubscribe();
+    return;
+  }
+  await send(sub);
 }

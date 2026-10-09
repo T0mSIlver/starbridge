@@ -5,6 +5,7 @@ import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { getCookie } from "hono/cookie";
 import { HTTPException } from "hono/http-exception";
+import { AppSignIns } from "./appSignIns";
 import { SESSION_COOKIE } from "./auth";
 import { clientVersion } from "./clients";
 import type { Config } from "./config";
@@ -20,6 +21,7 @@ import { bindRoutes } from "./routes/bind";
 import { directoryRoutes } from "./routes/directory";
 import { itemRoutes } from "./routes/items";
 import { joinRoutes, sweepJoins } from "./routes/joins";
+import { notificationRoutes } from "./routes/notifications";
 import { PairingClients, pairingRoutes, sweepPairings } from "./routes/pairings";
 import { presenceRoutes } from "./routes/presence";
 import { pushRoutes } from "./routes/push";
@@ -49,6 +51,7 @@ export async function createApp(config: Config, fetchFn: typeof fetch = fetch) {
     joins: new Waiters(),
     limiter: new RateLimiter(),
     presence: new Presence(),
+    appSignIns: new AppSignIns(),
     watch: new Watch(),
     usage,
   };
@@ -68,6 +71,7 @@ export async function createApp(config: Config, fetchFn: typeof fetch = fetch) {
     deps.pairingClients.sweep(Date.now());
     sweepJoins(db);
     deps.presence.sweep();
+    deps.appSignIns.sweep();
   });
   // Apart from the sweeps, which a full disk stops: the counts must still turn over.
   const watchMinute = () => {
@@ -108,7 +112,8 @@ export async function createApp(config: Config, fetchFn: typeof fetch = fetch) {
     .route("/", joinRoutes)
     .route("/", itemRoutes)
     .route("/", pushRoutes)
-    .route("/", presenceRoutes);
+    .route("/", presenceRoutes)
+    .route("/", notificationRoutes);
 
   const app = new Hono<Env>();
   app.use(async (c, next) => {

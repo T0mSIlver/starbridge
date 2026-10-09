@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { AppHandOff } from "@/components/AppHandOff";
 import { FirstRunPage } from "@/components/Setup";
 import s from "@/components/Setup.module.css";
 import ui from "@/components/ui.module.css";
@@ -42,6 +43,7 @@ export default async function AppSignIn({
           >
             Open Starbridge
           </a>
+          {"code" in passed && passed.state && <AppHandOff state={passed.state} />}
         </>
       ) : (
         <>

@@ -166,6 +166,8 @@ export const DEFAULT_LIMITS = {
   presenceBeats: [10, MINUTE] as RateWindow,
   /** Writes of the account's settings (the push hold). */
   settingsWrites: [30, MINUTE] as RateWindow,
+  /** A device's writes of its own notification state (#943): at boot and on each change. */
+  notificationWrites: [30, MINUTE] as RateWindow,
 
   /** Asks for fresh quota snapshots per account; each makes every machine run CodexBar. */
   quotaAsks: [6, MINUTE] as RateWindow,

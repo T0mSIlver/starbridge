@@ -101,6 +101,11 @@ interface Store {
     val pushHold: StateFlow<Int?> get() = MutableStateFlow(null)
     fun loadPushHold() {}
     fun setPushHold(seconds: Int) {}
+    /** What each device last said of its notifications (#943), once read. */
+    val notifyStates: StateFlow<Map<String, String>> get() = MutableStateFlow(emptyMap())
+    fun loadNotifyStates() {}
+    /** Tells the server whether Android shows this app's notifications; only on a change. */
+    fun reportNotifications(on: Boolean) {}
 
     /** Keeps [joinAsks] current while the app is in front. */
     fun watchJoins(on: Boolean)

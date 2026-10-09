@@ -20,6 +20,10 @@ export type Prefs = {
   asideWidth: number | null;
   /** A chime for new questions and prompts while a Starbridge page is open (#165). */
   sound: boolean;
+  /** The owner turned this browser's notifications off (#943): no banner offers them again. */
+  pushOff: boolean;
+  /** The desktop app notifies (#943); off, its window and menu bar light still show what waits. */
+  desktopNotify: boolean;
 };
 
 const DEFAULTS: Prefs = {
@@ -33,6 +37,8 @@ const DEFAULTS: Prefs = {
   listWidth: null,
   asideWidth: null,
   sound: false,
+  pushOff: false,
+  desktopNotify: true,
 };
 
 import { readStored, stored, writable } from "./stored";

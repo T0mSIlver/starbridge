@@ -3,7 +3,7 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { setSignUps } from "../src/signups";
-import { DEFAULT_LIMITS, makeServer, signIn, testConfig } from "../test-support/app";
+import { DEFAULT_LIMITS, makeServer, setupAccount, signIn, testConfig } from "../test-support/app";
 
 // A stand-in for GitHub's OAuth endpoints and user API.
 let github: ReturnType<typeof Bun.serve>;
@@ -170,6 +170,26 @@ test("the browser passes the app's sign-in on to the app, untouched", async () =
     `starbridge://auth?error=access_denied&state=${challenge}`,
   );
   expect((await s.app.request("/v1/auth/github/callback/app?code=code-42")).status).toBe(400);
+});
+
+test("the page that passed the app's sign-in on learns only that it reached its own account (#943)", async () => {
+  const s = await makeServer(githubConfig());
+  const browser = await setupAccount(s, "brave", sessionCookie(await githubSignIn(s, 42)));
+  const other = await setupAccount(s, "elsewhere", sessionCookie(await githubSignIn(s, 7)));
+  const { verifier, challenge } = pkce();
+  const ask = (token: string, state = challenge) =>
+    s.call("GET", `/v1/auth/app/signed-in?state=${state}`, { token });
+  expect((await ask(browser.device.token)).json).toEqual({ signedIn: false });
+  const app = await s.call("POST", "/v1/auth/app/session", {
+    body: { code: `code-42-${challenge}`, verifier },
+  });
+  expect(app.status).toBe(200);
+  expect((await ask(browser.device.token)).json).toEqual({ signedIn: true });
+  expect((await ask(other.device.token)).json).toEqual({ signedIn: false });
+  expect((await ask(browser.device.token, pkce().challenge)).json).toEqual({ signedIn: false });
+  expect((await ask(browser.device.token, "short")).status).toBe(400);
+  // The app's own session, which holds no device yet, cannot ask.
+  expect((await ask(app.json.session)).status).toBe(403);
 });
 
 test("paused sign-ups refuse new GitHub accounts and let existing ones in (#784)", async () => {
