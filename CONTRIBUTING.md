@@ -18,7 +18,7 @@ pnpm lint
 For Android, in `android/`:
 
 ```bash
-./gradlew assembleRelease verifyRoborazziDebug
+./gradlew assembleRelease lintDebug verifyRoborazziDebug
 ```
 
 Each package's README says how to run it: [server](server/README.md#run-from-source),
