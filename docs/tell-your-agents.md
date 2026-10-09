@@ -68,9 +68,9 @@ it. Codex asks you once, at its next launch, to trust the plugin's hooks.
 
 ¹⁰ In `cursor-agent` chats, when the chat ends its turn with a question open,
 Cursor waits up to 10 minutes for your answer, showing the chat as busy, and
-your answer comes in as the next prompt. Past that, or in the Cursor IDE, which
-doesn't tell commands which chat runs them, the agent waits for the answer with
-`starbridge wait`.
+your answer comes in as the next prompt. Past that, in `cursor-agent -p`, or in
+the Cursor IDE, which doesn't tell commands which chat runs them, the agent
+waits for the answer with `starbridge wait`.
 
 ¹¹ Cursor's `askQuestion` tool runs no hooks, so nothing can show it on your
 devices. The rules tell the agent to ask through `starbridge ask` instead.
@@ -110,9 +110,10 @@ setup then leaves that agent alone until `starbridge setup --agent <name>`:
   answer into the session and sends permission prompts. A later setup, or the
   agent once `starbridge update` restarts it, updates both when the CLI carries
   newer ones.
-- Cursor: a plugin in `~/.cursor/plugins/local/starbridge`, which the IDE and
-  `cursor-agent` load at their next start. It brings the skill, the rules and
-  the hooks that put each answer into the chat. Setup also adds allow rules to
+- Cursor: the skill, in `~/.cursor/skills/starbridge`, and hooks that bring the
+  rules and put each answer into the chat: their scripts in `~/.cursor/starbridge`,
+  their entries added to your `~/.cursor/hooks.json` beside your own. A chat
+  started after setup has them. Setup also adds allow rules to
   `cursor-agent`'s `~/.cursor/cli-config.json`, so that `starbridge ask`,
   `waiting`, `working`, `wait` and `settle` run without a prompt there.
 

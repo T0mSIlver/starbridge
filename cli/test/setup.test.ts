@@ -577,7 +577,7 @@ test("Cursor: setup keeps the owner's config and skill, and refresh updates its 
   withMine.hooks.stop = [mine];
   writeFileSync(hooksFile, JSON.stringify(withMine));
   await refresh(m.sys);
-  expect(JSON.parse(readFileSync(hooksFile, "utf8")).hooks.sessionStart).toHaveLength(2);
+  expect(JSON.parse(readFileSync(hooksFile, "utf8")).hooks.sessionStart[0]).toEqual(mine);
   expect(await run(["uninstall", "--agent", "cursor", "--yes"], m.ctx)).toBe(0);
   expect(existsSync(dir)).toBe(false);
   expect(existsSync(join(m.home, ".cursor/starbridge"))).toBe(false);

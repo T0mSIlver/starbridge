@@ -640,11 +640,13 @@ test("an opencode session with the plugin gets its answer as an event, titled by
 
 const PROMPT = "The answer will come back into this session as a new prompt.";
 
-/** A Cursor hook's input for conversation `conv`. */
+/** A Cursor hook's input for conversation `conv`, each a turn of its own. */
+let turns = 0;
 const cursorHook = (event: string, conv: string, extra: Record<string, unknown> = {}) =>
   JSON.stringify({
     hook_event_name: event,
     conversation_id: conv,
+    generation_id: `g-${++turns}`,
     cursor_version: "2026.10.01",
     ...extra,
   });
@@ -674,6 +676,16 @@ test("Cursor: the stop hook holds for the answer and returns it as the next prom
   expect(ctx.lines.map((l) => JSON.parse(l))).toEqual([
     { followup_message: `Answer to ${id} (Merge #12 now?): Merge` },
   ]);
+  // Cursor runs each stop hook twice at once: only one holds.
+  const twice = cursorHook("stop", "conv-1", { status: "completed" });
+  const id2 = await ask(c, "--project", "p");
+  const both = [hookCursorSession(ctx, twice), hookCursorSession(ctx, twice)];
+  await server.answer(id2, { choice: "Wait" });
+  await Promise.all(both);
+  expect(ctx.lines.slice(1).map((l) => JSON.parse(l))).toEqual([
+    { followup_message: `Answer to ${id2} (Merge #12 now?): Wait` },
+  ]);
+  ctx.lines.length = 1;
   // Taken: the next stop has nothing to hold for.
   await hookCursorSession(ctx, cursorHook("stop", "conv-1", { status: "completed" }));
   expect(ctx.lines).toHaveLength(1);

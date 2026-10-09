@@ -654,7 +654,8 @@ line, the safe side: at worst a prompt repeats an answer the agent already read.
 | opencode TUI and `serve` | The opencode plugin (`mod/opencode`) calls `client.session.promptAsync`, one loop per session (#300) |
 | `pi -p`, `opencode run`, subagents | `wait` |
 | Antigravity (app, IDE, `agy`) | `wait`, until its hooks bring answers back (#961) |
-| `cursor-agent` | The Cursor plugin's `stop` hook holds up to 10 minutes while the conversation has a question open and returns the answer as `followup_message`, Cursor's next user message (#956) |
+| `cursor-agent` | Setup's `stop` hook holds up to 10 minutes while the conversation has a question open and returns the answer as `followup_message`, Cursor's next user message (#956) |
+| `cursor-agent -p` | `wait`: it runs no stop hook |
 | Cursor IDE | `wait`: its commands get no conversation id |
 
 - **The mod** (#7, #35, #48, #68). Why a mod and not Claude Code channels: channels need launch
@@ -691,7 +692,12 @@ line, the safe side: at worst a prompt repeats an answer the agent already read.
   and the agent waits as anywhere else. `ask` promises a prompt only for a conversation whose
   `sessionStart` or `stop` hook greeted the local agent and whose `sessionEnd` has not said
   goodbye: a chat started before setup, or a resumed one before its first stop, gets the `wait`
-  line. A stopped or failed turn holds nothing.
+  line, and so does `cursor-agent -p`, which runs sessionStart but no stop hook, so the hook greets
+  nothing when `cursor-agent`'s arguments hold `-p`. A stopped or failed turn holds nothing.
+  `cursor-agent` 2026.10.01 runs each stop hook twice at once with the same input, so a hold first
+  claims the turn (conversation, generation and loop count) with an exclusive file; the other
+  returns at once. Checked in a signed-in `cursor-agent` on 2026-10-09: the follow-up arrives as
+  the next prompt.
 - **Pi and opencode** append `plugin/hooks/rule.md` to the system prompt and run the mod's own
   answer loop (`agent.ts`, `poller.ts`, `switch.ts`). opencode gives commands no session id, so
   its plugin sets `STARBRIDGE_OPENCODE_SESSION` through `shell.env`. After opencode restarts, the

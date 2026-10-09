@@ -10,13 +10,17 @@
  * `AskUserQuestion` and `hook question` do the same for questions asked in the terminal, Claude
  * Code's and opencode's: they race the picker (#848).
  */
-import type { Answer, Permission } from "@starbridge/protocol";
+import { createHash } from "node:crypto";
+import { closeSync, mkdirSync, openSync, readdirSync, rmSync, statSync } from "node:fs";
+import { basename, join } from "node:path";
+import { type Answer, type Permission, ProtocolError } from "@starbridge/protocol";
 import type { SessionEvent } from "./agent/api";
 import { MAX_HOLD_SECONDS } from "./agent/api";
 import { type AgentClient, Interrupted, withAgent } from "./agent/client";
 import type { PermissionPosted, PermissionWait } from "./agent/permissions";
 import type { State } from "./config";
 import { type Ctx, parseDuration, session, UsageError } from "./context";
+import { cursorAgentArgs } from "./cursor";
 import {
   type AskInput,
   ackLines,
@@ -623,8 +627,34 @@ interface CursorHook {
   hook_event_name?: unknown;
   conversation_id?: unknown;
   session_id?: unknown;
+  generation_id?: unknown;
+  loop_count?: unknown;
   status?: unknown;
   workspace_roots?: unknown;
+}
+
+/**
+ * Takes the stop of one turn for this process. `cursor-agent` 2026.10.01 runs each stop hook twice
+ * at once, with the same input; only one may hold, or an answer could go in twice. False when
+ * another process took it.
+ */
+export function claimStop(ctx: Ctx, hook: CursorHook): boolean {
+  const dir = join(ctx.store.dir, "cursor-stops");
+  mkdirSync(dir, { recursive: true, mode: 0o700 });
+  // File times are the wall clock's.
+  const now = Date.now();
+  for (const f of readdirSync(dir))
+    try {
+      if (now - statSync(join(dir, f)).mtimeMs > 86_400_000) rmSync(join(dir, f), { force: true });
+    } catch {}
+  const turn = JSON.stringify([hook.conversation_id, hook.generation_id, hook.loop_count]);
+  const name = createHash("sha256").update(turn).digest("hex").slice(0, 32);
+  try {
+    closeSync(openSync(join(dir, name), "wx"));
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /** The questions conversation `id` asked that wait for an answer it has not taken. */
@@ -654,11 +684,14 @@ export async function hookCursorSession(outer: Ctx, stdin: string): Promise<numb
           : "";
     if (!id) return 0;
     const event = hook.hook_event_name;
-    if (event === "sessionStart" || event === "stop") await hello(ctx, id, hook);
+    // `cursor-agent -p` never runs stop hooks (2026.10.01), so nothing would take the answer.
+    const print = cursorAgentArgs().some((a) => a === "-p" || a === "--print");
+    if ((event === "sessionStart" || event === "stop") && !print) await hello(ctx, id, hook);
     if (event === "sessionEnd") await call(ctx, (a) => a.call("POST", path(id, "bye"), {}, 5_000));
     // A turn the owner stopped, or that failed, ends without a hold.
     if (event !== "stop" || hook.status !== "completed") return 0;
     if (!ctx.store.machine() || openQuestions(ctx.store.state(), id).length === 0) return 0;
+    if (!claimStop(ctx, hook)) return 0;
     const held = await hold(ctx, id);
     if (!held) return 0;
     // Printed before it is confirmed: at worst a later stop hands the same answer again.
@@ -754,6 +787,8 @@ async function hold(
       if (taken) return { message: taken.lines.join("\n\n"), ack: taken.ack };
     } catch (e) {
       if (ctx.signal?.aborted) return undefined;
+      // Pairing or the directory gone wrong: no retry mends it, and `wait` would fail the same.
+      if (e instanceof UsageError || e instanceof ProtocolError) throw e;
       ctx.err(`starbridge: ${(e as Error).message}; retrying`);
       await ctx.sleep(Math.min(5_000, Math.max(0, left())));
     }
