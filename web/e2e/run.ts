@@ -10,6 +10,7 @@ import {
   cpSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   rmSync,
   writeFileSync,
@@ -49,6 +50,29 @@ const MOTION_VIDEO = process.env.MOTION_VIDEO;
 const DESKTOP = { width: 1280, height: 860 };
 const tmp = mkdtempSync(join(tmpdir(), "starbridge-e2e-"));
 const children: ChildProcess[] = [];
+
+/** When the CodexBar fixtures in cli/test/fixtures/codexbar were recorded. */
+const RECORDED = Date.parse("2026-10-04T19:09:00Z");
+
+/**
+ * The fake CodexBar, replaying a copy of its fixtures whose times are moved to this run's clock:
+ * with their recorded dates, which windows run out depended on the day (#902).
+ */
+function fakeCodexbar(): string {
+  const shift = Date.now() - RECORDED;
+  const dir = join(tmp, "codexbar-fixture");
+  mkdirSync(join(dir, "codexbar"), { recursive: true });
+  const fixtures = join(ROOT, "cli/test/fixtures");
+  cpSync(join(fixtures, "fake-codexbar.sh"), join(dir, "fake-codexbar.sh"));
+  for (const f of readdirSync(join(fixtures, "codexbar"))) {
+    const text = readFileSync(join(fixtures, "codexbar", f), "utf8").replace(
+      /\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d+)?(?:Z|[+-]\d\d:\d\d)/g,
+      (t) => new Date(Date.parse(t) + shift).toISOString().replace(/\.\d+Z$/, "Z"),
+    );
+    writeFileSync(join(dir, "codexbar", f), text);
+  }
+  return join(dir, "fake-codexbar.sh");
+}
 
 /** Two PNGs to attach to a decision: the sample data's pair of layouts (lib/sample.ts). */
 function image(which: "a" | "b"): string {
@@ -532,7 +556,7 @@ async function main() {
       "quota",
       "push",
       "--once",
-      ...(real ? [] : ["--codexbar", join(ROOT, "cli/test/fixtures/fake-codexbar.sh")]),
+      ...(real ? [] : ["--codexbar", fakeCodexbar()]),
       ...["claude", "codex", "zai", "mistral"].flatMap((p) => ["--provider", p]),
     ],
     machineHome,
