@@ -432,13 +432,16 @@ function askNotificationsAfterSignIn(ses: Electron.Session): void {
   const onChange = (_e: unknown, c: Electron.Cookie, _cause: string, removed: boolean) => {
     if (!removed && isSession(c)) ask();
   };
+  let asking = false;
   const ask = () => {
     ses.cookies.off("changed", onChange);
-    if (settings.notificationsAsked) return;
-    settings.notificationsAsked = true;
-    save();
+    if (asking) return;
+    asking = true;
     const go = () => {
       if (!win) return;
+      // Saved once the sheet shows: an app that quits before then asks at its next start.
+      settings.notificationsAsked = true;
+      save();
       dialog
         .showMessageBox(win, {
           message: "Allow notifications",
