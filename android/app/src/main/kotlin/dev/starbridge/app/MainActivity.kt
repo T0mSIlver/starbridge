@@ -1,7 +1,5 @@
 package dev.starbridge.app
 
-import android.view.KeyEvent
-import android.view.MotionEvent
 import android.Manifest
 import android.content.Intent
 import android.content.res.Resources
@@ -129,15 +127,11 @@ class MainActivity : ComponentActivity() {
         store.foreground(true)
     }
 
-    // Any touch or key says the owner is using this phone (#848); never which one.
-    override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
-        if (ev.actionMasked == MotionEvent.ACTION_DOWN) store.touched()
-        return super.dispatchTouchEvent(ev)
-    }
-
-    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
-        if (event.action == KeyEvent.ACTION_DOWN) store.touched()
-        return super.dispatchKeyEvent(event)
+    // Any touch or key says the owner is using this phone (#848); never which one. The activity
+    // calls this before dispatching each, so keys reach the screen as before (#899).
+    override fun onUserInteraction() {
+        super.onUserInteraction()
+        store.touched()
     }
 
     override fun onPause() {

@@ -48,11 +48,11 @@ jobs:
           cache-disabled: ${{ vars.RUNNER != '' }}
 
       # verifyRoborazziDebug runs every unit test and fails when a screen drifts
-      # from app/screenshots/.
-      - name: Build and test
+      # from app/screenshots/; lintDebug fails on any lint error (#899).
+      - name: Build, lint and test
         # No daemon and an in-process Kotlin compiler: nothing stays in memory after the build on
         # a shared self-hosted runner.
-        run: ./gradlew --no-daemon --console=plain -Pkotlin.compiler.execution.strategy=in-process assembleRelease verifyRoborazziDebug
+        run: ./gradlew --no-daemon --console=plain -Pkotlin.compiler.execution.strategy=in-process assembleRelease lintDebug verifyRoborazziDebug
 
       - name: Screenshot diffs
         if: failure()
