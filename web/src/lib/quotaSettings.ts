@@ -1,11 +1,15 @@
 // Quota settings, per browser (SPEC.md, "Quota settings follow CodexBar"): a curated set of
 // CodexBar's own settings with CodexBar's meaning. They stay in this browser; the server learns
 // nothing of them. Android keeps the same set (QuotaSettings.kt).
+import {
+  DEFAULT_QUOTA_ALERTS,
+  migrateQuotaAlerts,
+  type QuotaAlertSettings,
+  wantsQuotaAlert,
+} from "@starbridge/protocol";
 import { clockTime, relative } from "./format";
 import { readStored, stored, writable } from "./stored";
 import type { QuotaAlert, QuotaCardData, QuotaWindow } from "./types";
-
-export type Ticks = "subtle" | "high-contrast" | "hidden";
 
 export type QuotaSettings = {
   /** The bar and the percentage show used, else remaining (CodexBar `usageBarsShowUsed`). */
@@ -14,40 +18,52 @@ export type QuotaSettings = {
   absoluteResets: boolean;
   /** Workdays a week on weekly bars: Monday on (`weeklyProgressWorkDays`); null is off. */
   workDays: 4 | 5 | 7 | null;
-  /** How the workday ticks show (`workdayTickAppearance`). */
-  ticks: Ticks;
   /** Providers in the order to show them; the ones not listed follow in the uploader's order. */
   order: string[];
   /** Windows that will run out or ran out lead, else `order` holds for every window. */
   runningOutFirst: boolean;
   hidden: string[];
-  /** Providers whose alerts notify; none by default. */
-  notify: string[];
-  /** Notify when a window reaches 50% or 20% left (`quotaWarningThresholds`). */
-  notifyLow: boolean;
-  /** Notify when a window will run out, or reset with headroom unused (`predictivePaceWarning…`). */
-  notifyPace: boolean;
+  /** Which alerts notify, per window (#914). */
+  alerts: QuotaAlertSettings;
 };
 
 export const DEFAULT_SETTINGS: QuotaSettings = {
   showUsed: true,
   absoluteResets: false,
   workDays: null,
-  ticks: "subtle",
   order: [],
   runningOutFirst: true,
   hidden: [],
-  notify: [],
-  notifyLow: true,
-  notifyPace: true,
+  alerts: DEFAULT_QUOTA_ALERTS,
 };
+
+/**
+ * Settings as stored, from this release or an older one: a provider bell and two switches before
+ * #914, which become per-window alerts, and a tick style whose "Hidden" was ticks off.
+ */
+export function readSettings(stored: Record<string, unknown> | null): QuotaSettings {
+  const { notify, notifyLow, notifyPace, ticks, ...rest } = stored ?? {};
+  const s = { ...DEFAULT_SETTINGS, ...(rest as Partial<QuotaSettings>) };
+  if (!rest.alerts && Array.isArray(notify))
+    s.alerts = migrateQuotaAlerts({
+      notify: notify as string[],
+      notifyLow: notifyLow as boolean | undefined,
+      notifyPace: notifyPace as boolean | undefined,
+    });
+  if (ticks === "hidden") s.workDays = null;
+  return s;
+}
+
+/** Whether any window can notify, so a hidden page keeps reading quotas. */
+export const alertsOn = (a: QuotaAlertSettings) =>
+  a.short.length > 0 || a.long.length > 0 || Object.values(a.windows).some((c) => c.length > 0);
 
 const KEY = "starbridge:quota-settings";
 
 export function loadSettings(): QuotaSettings {
   try {
     const raw = localStorage.getItem(KEY);
-    return { ...DEFAULT_SETTINGS, ...(readStored(KEY, raw) as Partial<QuotaSettings> | null) };
+    return readSettings(readStored(KEY, raw) as Record<string, unknown> | null);
   } catch {
     return DEFAULT_SETTINGS;
   }
@@ -60,6 +76,14 @@ export function saveSettings(s: QuotaSettings): void {
     // Private windows may refuse storage; the settings then last for this page.
   }
 }
+
+/**
+ * Whether the server holds quotas for the account, opened or not (#914): until a machine sends
+ * them, the Quotas tab and settings stay out of the way.
+ */
+export const holdsQuotas = (
+  q: { cards: unknown[]; errors: unknown[]; rejected: unknown[] } | undefined,
+) => !!q && q.cards.length + q.errors.length + q.rejected.length > 0;
 
 /** Every provider the cards name, in the settings' order. */
 export function providerOrder(cards: QuotaCardData[], s: QuotaSettings): string[] {
@@ -155,12 +179,13 @@ export function runsOutSoonest(lead: QuotaGroup[], now: Date): QuotaGroup | unde
   );
 }
 
-/** The alerts this browser shows a notification for: newly raised, of providers it opted in. */
-export function toNotify(alerts: QuotaAlert[], s: QuotaSettings): QuotaAlert[] {
-  return alerts.filter(
-    (a) =>
-      a.notify && s.notify.includes(a.provider) && (a.kind === "low" ? s.notifyLow : s.notifyPace),
-  );
+/** The alerts this browser shows a notification for: newly raised, and picked for the window. */
+export function toNotify(
+  alerts: QuotaAlert[],
+  s: QuotaSettings,
+  windowMinutes: number | null,
+): QuotaAlert[] {
+  return alerts.filter((a) => a.notify && wantsQuotaAlert(s.alerts, a, windowMinutes));
 }
 
 /** A notification's title and body. */
@@ -262,7 +287,7 @@ export function workdayExpected(
 
 /** CodexBar's workday ticks: one per workday boundary, evenly spaced along a weekly bar. */
 export function workdayTicks(w: Pick<QuotaWindow, "windowMinutes">, s: QuotaSettings): number[] {
-  if (!s.workDays || s.ticks === "hidden" || w.windowMinutes !== WEEK) return [];
+  if (!s.workDays || w.windowMinutes !== WEEK) return [];
   return Array.from({ length: s.workDays - 1 }, (_, i) => ((i + 1) * 100) / (s.workDays as number));
 }
 
@@ -287,7 +312,7 @@ const SHOWN = "starbridge:quota-notified";
  * yet. Quota snapshots skip Web Push (PROTOCOL.md, "Push"), so the page does it while open.
  */
 export async function notifyAlerts(cards: QuotaCardData[], s: QuotaSettings): Promise<void> {
-  if (s.notify.length === 0 || typeof Notification === "undefined") return;
+  if (!alertsOn(s.alerts) || typeof Notification === "undefined") return;
   if (Notification.permission !== "granted") return;
   let raw: string | null = null;
   try {
@@ -298,7 +323,7 @@ export async function notifyAlerts(cards: QuotaCardData[], s: QuotaSettings): Pr
   const kept = readStored(SHOWN, raw)?.shown;
   const shown = Array.isArray(kept) ? (kept as string[]) : [];
   const fresh = cards.flatMap((c) =>
-    toNotify(c.alerts, s)
+    toNotify(c.alerts, s, c.window.windowMinutes)
       .map((a) => ({ a, c, key: `${c.snapshot}/${a.provider}/${a.window}/${a.kind}` }))
       .filter(({ key }) => !shown.includes(key)),
   );

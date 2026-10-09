@@ -20,8 +20,11 @@ import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Surface
-import androidx.compose.material3.IconToggleButton
 import androidx.compose.material3.Switch
+import androidx.compose.material3.FilterChip
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import dev.starbridge.app.data.QuotaAlerts
 import androidx.compose.material3.Text
 import androidx.compose.material3.ToggleButton
 import androidx.compose.material3.ToggleButtonDefaults
@@ -97,6 +100,7 @@ class SettingsViewModel @Inject constructor(private val store: Store, private va
     fun setClock(value: Clock) = prefs.setClock(value)
     fun setPush(type: String) = store.setPushType(type)
     val pushHold = store.pushHold
+    val quotasHeld = store.quotasHeld
     fun loadPushHold() = store.loadPushHold()
     fun setPushHold(seconds: Int) = store.setPushHold(seconds)
     fun signOut() = store.signOut()
@@ -114,6 +118,7 @@ class SettingsActions(
     val clock: (Clock) -> Unit = {},
     val allowUnseen: (Boolean) -> Unit = {},
     val pushHold: (Int) -> Unit = {},
+    val windows: () -> Unit = {},
 )
 
 /** Everything this phone keeps for itself, and the account's devices. The settings stay on the phone. */
@@ -133,50 +138,82 @@ fun SettingsScreen(
     notificationsOff: Boolean = false,
     /** The account's hold time in seconds (#848); null on a server without it, which shows no row. */
     pushHold: Int? = null,
+    /** A machine of the account sends quotas (#914); until then their settings stay out of the way. */
+    quotas: Boolean = true,
 ) {
     val context = LocalContext.current
     var signingOut by rememberSaveable { mutableStateOf(false) }
     val set = actions.quota
     Page("Settings", modifier, titleGap = Spacing.s2) {
-        item { Section("Quota windows") }
-        val quotaRows = 6
+        item { Section("Notifications") }
+        val notificationRows = if (pushHold != null) 4 else 3
         item {
-            ChoiceRow(0, quotaRows, "Bar shows") { Segments(listOf(true to "Used", false to "Left"), quota.showUsed) { set(quota.copy(showUsed = it)) } }
+            LinkRow(
+                0, notificationRows,
+                if (notificationsOff) "Notifications are off" else "Notification settings",
+                if (notificationsOff) "Questions only show in the app. Turn notifications on in Android's settings." else null,
+                Sym.Chevron,
+            ) { openNotificationSettings(context) }
         }
-        item {
-            ChoiceRow(1, quotaRows, "Reset times") { Segments(listOf(false to "Resets in 2 h", true to "Resets 14:20"), quota.absoluteResets) { set(quota.copy(absoluteResets = it)) } }
-        }
-        item {
-            ChoiceRow(2, quotaRows, "Workday ticks on weekly bars") {
-                Segments(listOf(null to "Off", 4 to "4", 5 to "5", 7 to "7 days"), quota.workDays) { set(quota.copy(workDays = it)) }
+        item { SwitchRow(1, notificationRows, "Remind me when notifications are off", inbox.remindOff) { actions.inbox(inbox.copy(remindOff = it)) } }
+        if (pushHold != null) item {
+            ChoiceRow(
+                2, notificationRows, "Hold while you’re at a screen",
+                "While you use Starbridge or a machine with presence on, your other devices are notified only if a question is still open after this",
+            ) {
+                Segments(Beacon.HOLD_CHOICES.map { it to holdLabel(it) }, pushHold, actions.pushHold)
             }
         }
-        item { SwitchRow(3, quotaRows, "Running out first", quota.runningOutFirst) { set(quota.copy(runningOutFirst = it)) } }
-        item { SwitchRow(4, quotaRows, "Warn before a window runs out", quota.notifyPace) { set(quota.copy(notifyPace = it)) } }
-        item { SwitchRow(5, quotaRows, "Warn at 50% and 20% left", quota.notifyLow) { set(quota.copy(notifyLow = it)) } }
+        item {
+            SwitchRow(
+                notificationRows - 1, notificationRows, "Quick Allow", allowUnseen,
+                sub = "Allow from a notification without seeing the whole command. Unsafe.",
+                onChange = actions.allowUnseen,
+            )
+        }
 
-        val providers = quota.providers(windows)
-        if (providers.isNotEmpty()) {
-            item { Section("Providers") }
-            itemsIndexed(providers, key = { _, p -> "provider/$p" }) { i, p ->
-                val labels = windows.filter { it.provider == p }.map { it.window }.distinct().joinToString(", ")
-                ProviderRow(
-                    p,
-                    labels,
-                    shown = p !in quota.hidden,
-                    notify = p in quota.notify,
-                    shape = rowShape(i, providers.size),
-                    onShow = { on -> set(quota.copy(hidden = if (on) quota.hidden - p else (quota.hidden + p).distinct())) },
-                    onNotify = { on -> set(quota.copy(notify = if (on) (quota.notify + p).distinct() else quota.notify - p)) },
-                    first = i == 0,
-                    last = i == providers.lastIndex,
-                    onMove = { by ->
-                        val to = (i + by).coerceIn(0, providers.lastIndex)
-                        if (to != i) set(quota.copy(order = providers.toMutableList().apply { add(to, removeAt(i)) }))
-                    },
-                    // The row under the finger follows it, not the placement animation.
-                    placement = { dragging -> Modifier.animateItem(placementSpec = if (dragging) null else spring(stiffness = Spring.StiffnessMediumLow, visibilityThreshold = IntOffset.VisibilityThreshold)) },
-                )
+        if (quotas) {
+            item { Section("Quota alerts") }
+            item { ChipsRow(0, 3, "5-hour and daily windows", quota.alerts.short) { set(quota.copy(alerts = quota.alerts.copy(short = it))) } }
+            item { ChipsRow(1, 3, "Weekly and monthly windows", quota.alerts.long) { set(quota.copy(alerts = quota.alerts.copy(long = it))) } }
+            item { LinkRow(2, 3, "Per window", null, Sym.Chevron, actions.windows) }
+
+            item { Section("Quotas") }
+            val quotaRows = 4
+            item {
+                ChoiceRow(0, quotaRows, "Bar shows") { Segments(listOf(true to "Used", false to "Left"), quota.showUsed) { set(quota.copy(showUsed = it)) } }
+            }
+            item {
+                ChoiceRow(1, quotaRows, "Reset times") { Segments(listOf(false to "Resets in 2 h", true to "Resets 14:20"), quota.absoluteResets) { set(quota.copy(absoluteResets = it)) } }
+            }
+            item {
+                ChoiceRow(2, quotaRows, "Workday ticks on weekly bars") {
+                    Segments(listOf(null to "Off", 4 to "4", 5 to "5", 7 to "7 days"), quota.workDays) { set(quota.copy(workDays = it)) }
+                }
+            }
+            item { SwitchRow(3, quotaRows, "Running out first", quota.runningOutFirst) { set(quota.copy(runningOutFirst = it)) } }
+
+            val providers = quota.providers(windows)
+            if (providers.isNotEmpty()) {
+                item { Section("Providers") }
+                itemsIndexed(providers, key = { _, p -> "provider/$p" }) { i, p ->
+                    val labels = windows.filter { it.provider == p }.map { it.window }.distinct().joinToString(", ")
+                    ProviderRow(
+                        p,
+                        labels,
+                        shown = p !in quota.hidden,
+                        shape = rowShape(i, providers.size),
+                        onShow = { on -> set(quota.copy(hidden = if (on) quota.hidden - p else (quota.hidden + p).distinct())) },
+                        first = i == 0,
+                        last = i == providers.lastIndex,
+                        onMove = { by ->
+                            val to = (i + by).coerceIn(0, providers.lastIndex)
+                            if (to != i) set(quota.copy(order = providers.toMutableList().apply { add(to, removeAt(i)) }))
+                        },
+                        // The row under the finger follows it, not the placement animation.
+                        placement = { dragging -> Modifier.animateItem(placementSpec = if (dragging) null else spring(stiffness = Spring.StiffnessMediumLow, visibilityThreshold = IntOffset.VisibilityThreshold)) },
+                    )
+                }
             }
         }
 
@@ -195,55 +232,24 @@ fun SettingsScreen(
         item { LinkRow(0, 2, "Devices and machines", "$members", Sym.Chevron, actions.devices) }
         item { LinkRow(1, 2, "Add a device", null, Sym.Qr, actions.addDevice) }
 
-        item { Section("Colours") }
-        item { RadioRow(0, 2, "Starbridge", colours == Colours.Starbridge) { actions.colours(Colours.Starbridge) } }
-        item { RadioRow(1, 2, "Material You", colours == Colours.Wallpaper) { actions.colours(Colours.Wallpaper) } }
-
-        item { Section("Clock") }
+        item { Section("Look") }
+        item { RadioRow(0, 3, "Starbridge", colours == Colours.Starbridge) { actions.colours(Colours.Starbridge) } }
+        item { RadioRow(1, 3, "Material You", colours == Colours.Wallpaper) { actions.colours(Colours.Wallpaper) } }
         item {
-            ChoiceRow(0, 1, "Time format") {
+            ChoiceRow(2, 3, "Time format") {
                 Segments(listOf(Clock.System to "System", Clock.H12 to "12-hour", Clock.H24 to "24-hour"), clock, actions.clock)
             }
         }
 
-        item { Section("Notifications") }
-        val notificationRows = if (pushHold != null) 5 else 4
+        item { Section("Account") }
+        item { LinkRow(0, 4, "Server", server, null) {} }
         item {
-            LinkRow(
-                0, notificationRows,
-                if (notificationsOff) "Notifications are off" else "Notification settings",
-                if (notificationsOff) "Questions only show in the app. Turn notifications on in Android's settings." else null,
-                Sym.Chevron,
-            ) { openNotificationSettings(context) }
-        }
-        item { SwitchRow(1, notificationRows, "Remind me when notifications are off", inbox.remindOff) { actions.inbox(inbox.copy(remindOff = it)) } }
-        item {
-            ChoiceRow(2, notificationRows, "Delivered through", pushState(push, server)) {
+            ChoiceRow(1, 4, "Delivered through", pushState(push, server)) {
                 Segments(listOf("fcm" to "Google", "unifiedpush" to "UnifiedPush"), push.type, actions.push)
             }
         }
-        item {
-            SwitchRow(
-                3, notificationRows, "Quick Allow", allowUnseen,
-                sub = "Allow from a notification without seeing the whole command. Unsafe.",
-                onChange = actions.allowUnseen,
-            )
-        }
-        if (pushHold != null) item {
-            ChoiceRow(
-                4, notificationRows, "Hold notifications while you’re at a screen",
-                "While you use Starbridge or a machine with presence on, your other devices are notified only if a question is still open after this",
-            ) {
-                Segments(Beacon.HOLD_CHOICES.map { it to holdLabel(it) }, pushHold, actions.pushHold)
-            }
-        }
-
-        item { Section("Agents") }
-        item { LinkRow(0, 1, "Agent instructions", null, Sym.Open) { openLink(context, GUIDE) } }
-
-        item { Section("Account") }
-        item { LinkRow(0, 2, "Server", server, null) {} }
-        item { LinkRow(1, 2, "Sign out", null, Sym.Logout) { signingOut = true } }
+        item { LinkRow(2, 4, "Agent instructions", null, Sym.Open) { openLink(context, GUIDE) } }
+        item { LinkRow(3, 4, "Sign out", null, Sym.Logout) { signingOut = true } }
     }
     if (signingOut) {
         Confirm(
@@ -332,8 +338,7 @@ private fun Line(content: @Composable RowScope.() -> Unit) {
 }
 
 /**
- * A provider: its windows, a handle to drag it up or down (long press), a bell for its quota
- * notifications, and whether it shows.
+ * A provider: its windows, a handle to drag it up or down (long press), and whether it shows.
  * Screen readers get "Move up" and "Move down" instead of the drag.
  */
 @Composable
@@ -341,12 +346,10 @@ private fun ProviderRow(
     name: String,
     sub: String,
     shown: Boolean,
-    notify: Boolean,
     shape: Shape,
     first: Boolean,
     last: Boolean,
     onShow: (Boolean) -> Unit,
-    onNotify: (Boolean) -> Unit,
     onMove: (Int) -> Unit,
     placement: (dragging: Boolean) -> Modifier,
 ) {
@@ -394,9 +397,6 @@ private fun ProviderRow(
                     }
                 },
             )
-            IconToggleButton(checked = notify, onCheckedChange = onNotify, enabled = shown) {
-                Symbol(Sym.Bell, size = 20.dp, filled = notify, tint = if (notify) scheme.onSurface else StarbridgeTheme.colors.fg3, contentDescription = "Notify about $name")
-            }
             Switch(checked = shown, onCheckedChange = onShow)
         }
     }
@@ -445,4 +445,82 @@ private fun <T> SegmentButtons(choices: List<Pair<T, String>>, selected: T, onSe
     }
     // Stacked 40 dp choices sit 8 dp apart, so each keeps a 48 dp tap area.
     if (stacked) Column(verticalArrangement = Arrangement.spacedBy(Spacing.s2)) { buttons() } else Row(horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween)) { buttons() }
+}
+
+private val CHOICE_LABELS = mapOf("runs-out" to "Runs out", "low-50" to "50% left", "low-20" to "20% left", "unused-headroom" to "Unused at reset")
+
+private fun said(picked: List<String>) = if (picked.isEmpty()) "none" else picked.joinToString(", ") { CHOICE_LABELS.getValue(it) }
+
+/** The alerts a window can pick, any number of them, in their fixed order: filter chips. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun AlertChips(picked: List<String>, onChange: (List<String>) -> Unit) {
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
+        QuotaAlerts.CHOICES.forEach { c ->
+            val on = c in picked
+            FilterChip(
+                selected = on,
+                onClick = { onChange(QuotaAlerts.CHOICES.filter { (it == c) != (it in picked) }) },
+                label = { Text(CHOICE_LABELS.getValue(c)) },
+                leadingIcon = if (on) ({ Symbol(Sym.Check, size = 18.dp, tint = MaterialTheme.colorScheme.onSurface) }) else null,
+            )
+        }
+    }
+}
+
+/** A setting whose alerts sit under its name. */
+@Composable
+private fun ChipsRow(index: Int, count: Int, title: String, picked: List<String>, onChange: (List<String>) -> Unit) {
+    Shell(index, count) {
+        Column(Modifier.padding(start = Spacing.s4, end = Spacing.s4, top = Spacing.s4, bottom = Spacing.s2)) {
+            Texts(title, null)
+            AlertChips(picked, onChange)
+        }
+    }
+}
+
+/**
+ * Settings → Per window (#914): each window shown follows its length's default unless set to its
+ * own alerts or off. A row opens to Default, Custom and Off.
+ */
+@Composable
+fun PerWindowScreen(windows: List<QuotaWindow>, quota: QuotaSettings, onChange: (QuotaSettings) -> Unit, onBack: () -> Unit, modifier: Modifier = Modifier, opened: String? = null) {
+    val shown = quota.providers(windows).filter { it !in quota.hidden }.flatMap { p -> windows.filter { it.provider == p }.distinctBy { it.windowId } }
+    val all = shown.map { it.provider to it.windowId }
+    var open by rememberSaveable { mutableStateOf(opened) }
+    val a = quota.alerts
+    Page("Per window", modifier, onBack = onBack) {
+        if (shown.isEmpty()) item { Shell(0, 1) { Line { Texts("No quota windows yet", null) } } }
+        shown.forEachIndexed { i, w ->
+            val key = QuotaAlerts.key(w.provider, w.windowId)
+            item(key = key) {
+                val own = a.own(w.provider, w.windowId)
+                val mode = when { own == null -> "default"; own.isNotEmpty() -> "custom"; else -> "off" }
+                val picked = a.choices(w.provider, w.windowId, w.windowMinutes)
+                val length = if (QuotaAlerts.isShort(w.windowMinutes)) a.short else a.long
+                val state = when (mode) { "default" -> "Default: ${said(length).lowercase()}"; "off" -> "Off"; else -> said(own!!) }
+                val save = { p: List<String>? -> onChange(quota.copy(alerts = a.with(w.provider, w.windowId, all, p))) }
+                val expanded = open == key
+                Shell(i, shown.size) {
+                    Column {
+                        Row(
+                            Modifier.fillMaxWidth().clickable { open = if (expanded) null else key }.padding(Spacing.s4),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(Spacing.s3),
+                        ) {
+                            Text("${w.provider} ${w.window}", style = StarbridgeTheme.type.body, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.weight(1f))
+                            Text(state, style = StarbridgeTheme.type.small, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Symbol(if (expanded) Sym.ExpandLess else Sym.ExpandMore, size = 20.dp, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        if (expanded) Column(Modifier.padding(start = Spacing.s4, end = Spacing.s4, bottom = Spacing.s2), verticalArrangement = Arrangement.spacedBy(Spacing.s3)) {
+                            Segments(listOf("default" to "Default", "custom" to "Custom", "off" to "Off"), mode) { m ->
+                                save(when (m) { "default" -> null; "off" -> emptyList(); else -> picked.ifEmpty { listOf(QuotaAlerts.RUNS_OUT) } })
+                            }
+                            if (mode == "custom") AlertChips(picked) { save(it) }
+                        }
+                    }
+                }
+            }
+        }
+    }
 }

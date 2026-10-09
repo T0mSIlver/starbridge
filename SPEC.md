@@ -851,7 +851,12 @@ Codex prompts are not supported.
 - **Alerts** (#115): `low` at CodexBar's defaults (50% and 20% left), and pace: unused headroom of
   30% one hour before the reset for windows of a day or less, one day before for longer ones. Only
   a new alert notifies; every other snapshot is posted quiet. The thresholds are fixed, since
-  devices' settings never reach the uploader. A reset that moves by less than half its window is
+  devices' settings never reach the uploader: each device picks which alerts it shows, per window
+  ("Quota alerts per window").
+- **Window names** (#914). CodexBar calls Claude's and Codex's 5-hour window "Session", and a
+  notification titled "claude Session resets with headroom unused" read as the weekly limit
+  (#844). The uploader names such a window by its length ("5-hour"), as z.ai's already is; other
+  labels stay CodexBar's, since Claude has two weekly windows that only their labels tell apart. A reset that moves by less than half its window is
   the same cycle, as in CodexBar.
 - **A failing provider** (#397, #450) is asked once more, then keeps its last good windows, sent
   with the error and when they were read. Kept windows raise no alerts and go once their reset
@@ -874,10 +879,35 @@ Codex prompts are not supported.
 
 A curated set of CodexBar's own settings, with CodexBar's meaning, per device (#115): bars show
 used (the default; CodexBar defaults to remaining) or remaining; reset times relative or as a
-clock time; workday ticks on weekly bars (off, 4, 5 or 7 days, and their style); per provider
-show, notify and order. "Notify about" picks low, pace or both. Cost tracking and menu-bar-only
-settings stay out. Android shows quota notifications on a low-importance channel; the web shows
-them only while a page is open, since quota snapshots skip Web Push.
+clock time; workday ticks on weekly bars (off, 4, 5 or 7 days); per provider show and order. Cost
+tracking and menu-bar-only settings stay out, and so does the tick style (#914): its "Hidden" was
+ticks off, and Android never had the row. Android shows quota notifications on a low-importance
+channel; the web shows them only while a page is open, since quota snapshots skip Web Push.
+
+### Quota alerts per window
+
+Each window picks any of four alerts (#914): Runs out (at this pace, before its reset), 50% left,
+20% left, and Unused at reset. Two defaults cover every window with none of its own: 5-hour and
+daily windows (a day or less) notify about nothing, weekly and monthly ones (and those of unknown
+length) about Runs out. A 5-hour window that runs out resets within hours, so its alert was noise;
+a weekly one costs days. Under Per window, each window follows its default, or is set to Custom
+(its own alerts) or Off. This is CodexBar's model (Global, Custom or Off per provider and window),
+with Slack's and GitHub's shape of a default plus exceptions; the owner chose it from mockups over a
+row of alerts for every window, which grows long with many providers. Android's Per window is its
+own page, a row in Settings with no subtitle (owner's pick); the web shows it as a section.
+
+- **Filtering on the device.** The uploader still raises every alert, and each device shows the
+  ones its settings pick, so the server and the uploader learn nothing of them.
+  `packages/protocol/src/quotaAlerts.ts` holds the rule and `quota-alerts.json` its vectors, which
+  Android's port checks. `alertsFor` raises only the lowest level reached, so a window that skips
+  past a level picked still notifies at the next one down.
+- **Migration.** These replace the bell per provider and the two switches that gated every
+  provider's alerts ("Warn when a window runs low", and "Warn before a window runs out", which also
+  covered unused headroom). A device whose bell was on for a provider keeps what its switches let
+  through, as one key for the provider, which becomes a key per window the first time one of them
+  is set. A device with no bell on gets the defaults.
+- **The hidden page polls.** A web page that is hidden reads quotas each minute while any window
+  can notify, as it did while any provider's bell was on; with the defaults that is every page.
 
 ### Quota order
 
@@ -952,6 +982,18 @@ first window, so a provider with a window running out leads.
   page or app until then, first tries included, and the call is retried whatever its method, since
   it was refused before doing anything. A wait past the 20 s retry window reaches the caller as
   429 `rate-limited`. A 429 without `Retry-After` is a cap and reaches the caller at once.
+- **Settings** (#914) in the same sections on both clients: Notifications (what decides whether
+  something notifies here: Android's channels or the browser's permission, the hold, the web's
+  sound, Android's Quick Allow), Quota alerts and Per window, Quotas, Providers, the Inbox's,
+  Devices, Look (colours and the clock) and Account (the server, Android's push delivery, agent
+  instructions, sign out). They had grown one issue at a time: the hold sat under Inbox on the web
+  and under Notifications on Android, and push delivery, a connection setting, sat with
+  notifications.
+- **No quotas, no Quotas tab** (#914). Until the server holds a quota snapshot for the account,
+  opened on this device or not, the Quotas tab, its settings and the web's quota column stay
+  hidden, so an owner who skips CodexBar never sees an empty feature and the app stays about
+  agents. A device that just joined sees the tab at once, since the snapshot it cannot open yet
+  still counts.
 - **Devices.** Rows that share a name show when each was added (#287). A Recovery key row says
   when and on which device the key was set, with Replace; other devices show a replacement once
   (#348).

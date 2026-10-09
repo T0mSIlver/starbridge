@@ -610,7 +610,11 @@ error) share one rhythm: the page title in `heading`, sections `s10` apart
 `fg2`, with its action if it has one. First-run, not found and error pages
 use the first-run frame: the brand top left, one 400 px column, legal links
 at the foot. From 900 px, Settings sets each section's name in a column
-(`size.settings-label`) beside its box, and the rows keep `size.content`.
+(`size.settings-label`) beside its box, and the rows keep `size.content`. A
+choice of any number among a few, such as a quota window's alerts, is a row
+of filter chips under the row's name: outlined in `line-strong`, picked ones
+filled in `fg` on the web and tonal with a check on Android (Material 3's
+filter chips).
 
 **Quotas page** (web). Narrower, a card per provider, as on Android.
 Once the page itself is `size.quota-table-from` wide (a window about 1210 px wide,

@@ -12,6 +12,11 @@ interface Store {
     val windows: StateFlow<List<QuotaWindow>>
     /** Providers CodexBar failed for with no windows to keep (#450). */
     val quotaFailures: StateFlow<List<QuotaFailure>>
+    /**
+     * The server holds quota snapshots for the account, opened here or not (#914): until a machine
+     * sends them, the Quotas tab and its settings stay out of the way.
+     */
+    val quotasHeld: StateFlow<Boolean> get() = MutableStateFlow(true)
     /** Runs the server still holds: the latest update of each, for a day. */
     val runs: StateFlow<List<Run>>
     val members: StateFlow<List<Member>>

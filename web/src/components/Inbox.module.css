@@ -15,6 +15,10 @@
   }
 }
 
+.panes.noAside {
+  grid-template-columns: var(--pane-list, var(--size-list)) 0 minmax(0, 1fr);
+}
+
 /* Each pane keeps its scrollbar's gutter, so opening History never shifts its rows. */
 .list {
   display: flex;

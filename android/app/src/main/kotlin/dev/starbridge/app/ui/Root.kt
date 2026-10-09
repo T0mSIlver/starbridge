@@ -53,6 +53,7 @@ import dev.starbridge.app.data.Phase
 import dev.starbridge.app.data.Run
 import dev.starbridge.app.ui.devices.DevicesScreen
 import dev.starbridge.app.ui.settings.SettingsViewModel
+import dev.starbridge.app.ui.settings.PerWindowScreen
 import dev.starbridge.app.ui.settings.SettingsScreen
 import dev.starbridge.app.ui.settings.SettingsActions
 import dev.starbridge.app.ui.devices.AddDeviceScreen
@@ -92,6 +93,7 @@ import java.time.Instant
  */
 @Serializable data class PairLinkKey(val link: String, val at: Long) : NavKey
 @Serializable data object RecoveryKeyKey : NavKey
+@Serializable data object WindowsKey : NavKey
 
 private val Tab.key: NavKey get() = when (this) {
     Tab.Inbox -> InboxKey
@@ -102,7 +104,7 @@ private val Tab.key: NavKey get() = when (this) {
 /** The tab a page belongs to. */
 private fun tabOf(key: NavKey?) = when (key) {
     QuotasKey -> Tab.Quotas
-    SettingsKey, DevicesKey, AddDeviceKey, is PairLinkKey, RecoveryKeyKey -> Tab.Settings
+    SettingsKey, DevicesKey, AddDeviceKey, is PairLinkKey, RecoveryKeyKey, WindowsKey -> Tab.Settings
     else -> Tab.Inbox
 }
 
@@ -190,7 +192,7 @@ internal fun suiteType(): NavigationSuiteType {
  */
 @OptIn(ExperimentalMaterial3AdaptiveApi::class)
 @Composable
-fun Main(decisions: List<Decision>, notice: StateFlow<String?>, dismiss: () -> Unit, opening: Flow<NavKey>, stopWaiting: Pair<String, () -> Unit>? = null) {
+fun Main(decisions: List<Decision>, notice: StateFlow<String?>, dismiss: () -> Unit, opening: Flow<NavKey>, stopWaiting: Pair<String, () -> Unit>? = null, quotas: Boolean = true) {
     val backStack = rememberNavBackStack(InboxKey)
     val now = now()
     // A snoozed question counts again once it is back (#691).
@@ -213,6 +215,8 @@ fun Main(decisions: List<Decision>, notice: StateFlow<String?>, dismiss: () -> U
     }
     val current = backStack.lastOrNull()
     val suite = suiteType()
+    // Quotas shows once a machine of the account sends them, or while open (#914).
+    val tabs = Tab.entries.filter { quotas || it != Tab.Quotas || current == QuotasKey }
     // A sheet replaces the sheet on top, so back always returns to the page under it.
     val open = { key: NavKey ->
         if (backStack.lastOrNull() is DecisionKey || backStack.lastOrNull() is PromptKey) backStack.removeAt(backStack.lastIndex)
@@ -231,7 +235,7 @@ fun Main(decisions: List<Decision>, notice: StateFlow<String?>, dismiss: () -> U
         ),
         containerColor = MaterialTheme.colorScheme.surface,
         navigationItems = {
-            for (tab in Tab.entries) {
+            for (tab in tabs) {
                 val selected = tabOf(current) == tab
                 NavigationSuiteItem(
                     navigationSuiteType = suite,
@@ -252,7 +256,7 @@ fun Main(decisions: List<Decision>, notice: StateFlow<String?>, dismiss: () -> U
         Scaffold(
             snackbarHost = { SnackbarHost(host) },
             // Find covers the screen, as Material's search view does on phones.
-            bottomBar = { if (suite == NavigationSuiteType.None && FindKey !in backStack) BottomBar(tabOf(current), openDecisions, go) },
+            bottomBar = { if (suite == NavigationSuiteType.None && FindKey !in backStack) BottomBar(tabOf(current), openDecisions, go, tabs = tabs) },
             containerColor = MaterialTheme.colorScheme.surface,
         ) { padding ->
             NavDisplay(
@@ -359,16 +363,24 @@ fun Main(decisions: List<Decision>, notice: StateFlow<String?>, dismiss: () -> U
                         val clock by vm.clock.collectAsStateWithLifecycle()
                         val allowUnseen by vm.allowUnseen.collectAsStateWithLifecycle()
                         val pushHold by vm.pushHold.collectAsStateWithLifecycle()
+                        val held by vm.quotasHeld.collectAsStateWithLifecycle()
                         LaunchedEffect(Unit) { vm.loadPushHold() }
                         SettingsScreen(
                             windows, quota, members.size, colours, push, server,
-                            SettingsActions(vm::setQuota, vm::setColours, vm::setPush, vm::signOut, devices = { backStack.add(DevicesKey) }, addDevice = { backStack.add(AddDeviceKey) }, inbox = vm::setInbox, clock = vm::setClock, allowUnseen = vm::setAllowUnseen, pushHold = vm::setPushHold),
+                            SettingsActions(vm::setQuota, vm::setColours, vm::setPush, vm::signOut, devices = { backStack.add(DevicesKey) }, addDevice = { backStack.add(AddDeviceKey) }, inbox = vm::setInbox, clock = vm::setClock, allowUnseen = vm::setAllowUnseen, pushHold = vm::setPushHold, windows = { backStack.add(WindowsKey) }),
                             inbox = inbox,
                             clock = clock,
                             allowUnseen = allowUnseen,
                             notificationsOff = notificationsOff,
                             pushHold = pushHold,
+                            quotas = held,
                         )
+                    }
+                    entry<WindowsKey> {
+                        val vm: SettingsViewModel = hiltViewModel()
+                        val windows by vm.windows.collectAsStateWithLifecycle()
+                        val quota by vm.quota.collectAsStateWithLifecycle()
+                        PerWindowScreen(windows, quota, vm::setQuota, onBack = { backStack.removeAt(backStack.lastIndex) })
                     }
                     entry<DevicesKey> {
                         val vm: DevicesViewModel = hiltViewModel()

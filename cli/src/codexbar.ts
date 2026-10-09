@@ -71,19 +71,30 @@ function isoOrNull(x: unknown): string | null {
   return Number.isNaN(t) ? null : `${new Date(t).toISOString().slice(0, 19)}Z`;
 }
 
+/**
+ * CodexBar calls Claude's and Codex's 5-hour window "Session", which read as the weekly limit in a
+ * notification (#844): such a window is named by its length, as z.ai's already is ("5-hour").
+ */
+function named(label: string, minutes: number | null): string {
+  if (label !== "Session" || minutes === null || minutes >= 24 * 60 || minutes % 60 !== 0)
+    return label;
+  return `${minutes / 60}-hour`;
+}
+
 function window(id: string, label: string, raw: unknown, now: Date): QuotaWindow | undefined {
   if (!isObj(raw)) return undefined;
   const used = raw.usedPercent;
   if (typeof used !== "number" || !Number.isFinite(used) || used < 0) return undefined;
   const minutes = raw.windowMinutes;
+  const windowMinutes =
+    typeof minutes === "number" && Number.isFinite(minutes) && minutes >= 1
+      ? Math.round(minutes)
+      : null;
   const w = {
     id: clip(id, 100),
-    label: clip(label, 100),
+    label: clip(named(label, windowMinutes), 100),
     usedPercent: used,
-    windowMinutes:
-      typeof minutes === "number" && Number.isFinite(minutes) && minutes >= 1
-        ? Math.round(minutes)
-        : null,
+    windowMinutes,
     resetsAt: isoOrNull(raw.resetsAt),
   };
   return { ...w, pace: computePace(w, now) };

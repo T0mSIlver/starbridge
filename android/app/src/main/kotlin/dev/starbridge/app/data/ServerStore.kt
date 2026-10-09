@@ -171,6 +171,10 @@ class ServerStore(
     override val prompts = MutableStateFlow<List<Prompt>>(emptyList())
     override val windows = MutableStateFlow<List<QuotaWindow>>(emptyList())
     override val quotaFailures = MutableStateFlow<List<QuotaFailure>>(emptyList())
+    override val quotasHeld = MutableStateFlow(false)
+
+    /** The server listed quota snapshots on the last read, even ones this phone cannot open yet. */
+    @Volatile private var quotasListed = false
     override val runs = MutableStateFlow<List<Run>>(emptyList())
     override val members = MutableStateFlow<List<Member>>(emptyList())
     override val approval = MutableStateFlow<Approval>(Approval.Idle)
@@ -265,6 +269,7 @@ class ServerStore(
         val named = (directory?.members?.values?.count { it.active && it.member.role == "machine" } ?: 0) > 1
         windows.value = if (held) emptyList() else saved.quotas.filter { active(it.from) }.flatMap { toUi(it, named) }
         quotaFailures.value = if (held) emptyList() else saved.quotas.filter { active(it.from) }.flatMap { failures(it, named) }
+        quotasHeld.value = quotasListed || saved.quotas.isNotEmpty()
         runs.value = if (held) emptyList() else saved.runs.filter { active(it.from) }.map(::toUi)
         members.value = directory?.let(::toUi).orEmpty()
         recovery.value = directory?.let(::recoveryUi)
@@ -1158,6 +1163,7 @@ class ServerStore(
 
     private suspend fun syncQuotas() {
         val listed = api().quota()
+        quotasListed = listed.isNotEmpty()
         if (scan(listed.map { it.item })) return
         // A snapshot this app cannot open keeps that machine's last good one, rather than blanking it.
         val quotas = listed.mapNotNull { l ->
@@ -1170,6 +1176,7 @@ class ServerStore(
     private fun notices(q: SavedQuota): List<QuotaNotice> {
         val now = Instant.now()
         val labels = q.body.providers.flatMap { p -> p.windows.map { "${p.provider}/${it.id}" to it.label.ifBlank { it.id } } }.toMap()
+        val minutes = q.body.providers.flatMap { p -> p.windows.map { "${p.provider}/${it.id}" to it.windowMinutes } }.toMap()
         return q.body.alerts.filter { it.notify == true }.map { a ->
             val name = "${a.provider} ${labels["${a.provider}/${a.window}"] ?: a.window}"
             val resets = instant(a.resetsAt)?.let { "in ${span(now, it)}" } ?: "soon"
@@ -1178,7 +1185,7 @@ class ServerStore(
                 "runs-out" -> "$name will run out" to (instant(a.runsOutAt)?.let { "Runs out in ${span(now, it)} at this pace; resets $resets." } ?: "Resets $resets.")
                 else -> "$name resets with headroom unused" to "Resets $resets with ${a.unusedPercent?.roundToInt() ?: 0}% unused."
             }
-            QuotaNotice("${q.body.id}/${a.provider}/${a.window}/${a.kind}", a.provider, a.window, a.kind, title, text)
+            QuotaNotice("${q.body.id}/${a.provider}/${a.window}/${a.kind}", a.provider, a.window, a.kind, title, text, a.threshold, minutes["${a.provider}/${a.window}"])
         }
     }
 

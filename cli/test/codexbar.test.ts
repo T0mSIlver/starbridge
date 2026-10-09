@@ -21,7 +21,7 @@ test("recorded output: every window, with pace and alerts", () => {
     ["mistral", ["primary", "mistral-monthly-plan"]],
   ]);
   const claude5h = providers[2]?.windows[0];
-  expect(claude5h).toMatchObject({ label: "Session", usedPercent: 18, windowMinutes: 300 });
+  expect(claude5h).toMatchObject({ label: "5-hour", usedPercent: 18, windowMinutes: 300 });
   expect(claude5h?.pace?.stage).toBe("behind");
   // Mistral gives no window length, so no pace.
   expect(providers[3]?.windows[1]?.pace).toBeNull();

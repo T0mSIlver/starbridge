@@ -58,16 +58,17 @@ with one category per kind:
 | Permission prompts | Agents waiting for you to allow a command or an edit. |
 | Join requests | A browser or phone signed in to your account asking to join. |
 | Runs | Commands your agents run that your rules name, until they pass or fail. |
-| Quotas | Quota windows running low or running out, for the providers you pick. Silent. |
+| Quotas | Quota windows running low, running out or resetting unused, as you pick them. Silent. |
 
 On the web, notifications are on once you pick Turn on notifications in the inbox, and off in the
 browser's site settings for starbridge.run. A closed browser gets questions, permission prompts and
 join requests. Quota alerts show only while a Starbridge page is open, and runs only in the inbox,
-never as a notification. Settings → Sound for new questions plays a chime, off by default.
+never as a notification. Settings → Notifications → Sound for new questions plays a chime, off by default.
 
-Quota alerts are off until you pick a provider: the bell beside it in Settings → Providers on
-Android, Notify on the web. Warn before a window runs out and Warn at 50% and 20% left (Warn when a
-window runs low on the web) choose which alerts. These settings belong to each device.
+Settings → Quota alerts picks what each quota window notifies about: runs out before its reset,
+50% left, 20% left, or resets with headroom unused. By default weekly and monthly windows notify when
+they will run out, and 5-hour and daily windows don't notify. Per window sets one window apart
+from its default. These settings belong to each device.
 
 Permission prompts reach your devices only after you run `starbridge config permissions on` on the
 machine, and stop with `starbridge config permissions off`.

@@ -46,15 +46,10 @@
   );
 }
 
-.gap,
-.strong {
+.gap {
   width: var(--size-tick);
   margin-left: calc(var(--size-tick) / -2);
   background: var(--ground, var(--bg));
-}
-
-.strong {
-  background: var(--fg2);
 }
 
 .tick {

@@ -103,7 +103,8 @@ class MainActivity : ComponentActivity() {
                     Scaffold { padding -> UpdateRequired(tooOld!!, BuildConfig.VERSION_NAME, installer(), ::openUpdate, Modifier.padding(padding)) }
                 } else if (phase == Phase.Ready) {
                     val heldRevoked by store.heldRevoked.collectAsStateWithLifecycle()
-                    Main(decisions, store.notice, store::dismissNotice, opening.receiveAsFlow(), heldRevoked?.let { held -> held.notice to { store.stopWaiting(held.member) } })
+                    val quotas by store.quotasHeld.collectAsStateWithLifecycle()
+                    Main(decisions, store.notice, store::dismissNotice, opening.receiveAsFlow(), heldRevoked?.let { held -> held.notice to { store.stopWaiting(held.member) } }, quotas)
                     val asks by store.joinAsks.collectAsStateWithLifecycle()
                     val comparison by store.comparison.collectAsStateWithLifecycle()
                     JoinPrompt(asks, comparison, JoinActions(store::compareJoin, store::approveJoin, store::refuseJoin, store::closeComparison))

@@ -220,11 +220,11 @@ class LayoutAuditTest(private val shot: String, private val look: Look) {
         "quotas-your-order" to Shot(Tab.Quotas) { QuotasScreen(worst.windows, now, settings = QuotaSettings(order = listOf("mistral", "codex"), runningOutFirst = false)) },
         "quotas-tuned" to Shot(Tab.Quotas) {
             CompositionLocalProvider(dev.starbridge.app.ui.LocalClock24 provides false) {
-                QuotasScreen(worst.windows, now, settings = QuotaSettings(showUsed = false, absoluteResets = true, workDays = 5, ticks = QuotaSettings.Ticks.HighContrast))
+                QuotasScreen(worst.windows, now, settings = QuotaSettings(showUsed = false, absoluteResets = true, workDays = 5))
             }
         },
         "settings" to Shot(Tab.Settings) {
-            SettingsScreen(worst.windows, QuotaSettings(notify = listOf("claude")), worst.members.size, Colours.Starbridge, fake.push, worst.server, settingsActions, pushHold = 120)
+            SettingsScreen(worst.windows, QuotaSettings(alerts = dev.starbridge.app.data.QuotaAlerts(short = listOf("runs-out"))), worst.members.size, Colours.Starbridge, fake.push, worst.server, settingsActions, pushHold = 120)
         },
         "devices" to Shot(Tab.Settings, bar = false) { DevicesScreen(worst.members, now, deviceActions) },
         "devices-revoke" to Shot(Tab.Settings, bar = false, before = { compose.onAllNodesWithText("Revoke")[0].performClick() }) { DevicesScreen(worst.members, now, deviceActions) },
