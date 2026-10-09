@@ -95,6 +95,9 @@ Run the command in the session's own directory, since the last session is per di
 - **Permission prompts.** Allow or deny, from your phone, the calls Claude Code, opencode and Pi
   ask permission for. Off until you turn them on.
 
+Your agents and their apps notify you too. [One notification per question](notifications.md)
+says how to turn off what Starbridge already covers.
+
 Starbridge works with Claude Code 2.1.287 or later, Codex, Pi and opencode.
 [Agent instructions](tell-your-agents.md#what-each-agent-supports) lists what each one supports.
 

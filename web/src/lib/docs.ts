@@ -11,6 +11,7 @@ export const DOCS = [
   { slug: "", file: "docs/index.md", title: "Overview" },
   { slug: "cli", file: "cli/README.md", title: "The CLI" },
   { slug: "tell-your-agents", file: "docs/tell-your-agents.md", title: "Agent instructions" },
+  { slug: "notifications", file: "docs/notifications.md", title: "Notifications" },
   { slug: "self-host", file: "server/README.md", title: "Self-host" },
   { slug: "faq", file: "docs/faq.md", title: "FAQ" },
 ] as const;
