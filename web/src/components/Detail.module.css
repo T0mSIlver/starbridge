@@ -127,45 +127,88 @@
   min-width: 0;
 }
 
-/* Material 3's filled field with a trailing icon button, centred on the field's line. */
-.field {
-  position: relative;
+/* One box: the text, then a row with the keys and send inside it (#947). */
+.composer {
   width: 100%;
+  /* On the box, not the text, so text scrolled up stops short of the border. */
+  padding-top: var(--s3);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface2);
+  transition: border-color var(--t-fast) var(--ease);
 }
 
-.fieldInput {
+.composer:focus-within {
+  border-color: var(--fg);
+}
+
+.composerInput {
   display: block;
-  padding-right: calc(var(--size-tap) + var(--s1));
+  width: 100%;
+  min-height: var(--size-tap);
+  /* 10 lines, then it scrolls. */
+  max-height: 10lh;
+  padding: 0 var(--s3);
+  border: 0;
+  background: none;
+  color: var(--fg);
   resize: none;
   field-sizing: content;
+  overflow-y: auto;
   /* A pasted code with no spaces wraps inside the field (#873). */
   overflow-wrap: anywhere;
 }
 
+.composerInput:focus {
+  outline: 0;
+}
+
+.composerBar {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  padding: var(--s1) var(--s1) var(--s1) var(--s3);
+}
+
+.keys {
+  min-width: 0;
+  color: var(--fg3);
+}
+
+@media (hover: none) {
+  .keys {
+    display: none;
+  }
+
+  .send {
+    width: var(--size-tap);
+    height: var(--size-tap);
+  }
+}
+
 .send {
-  position: absolute;
-  top: 50%;
-  right: var(--s1);
   display: grid;
+  flex: none;
   place-items: center;
   width: var(--s10);
   height: var(--s10);
+  margin-left: auto;
   padding: 0;
   border: 0;
   border-radius: var(--radius-pill);
-  background: none;
-  color: var(--fg);
-  transform: translateY(-50%);
+  background: var(--fg);
+  color: var(--bg);
   transition: background var(--t-fast) var(--ease);
 }
 
 .send:disabled {
+  background: none;
   color: var(--fg3);
 }
 
 @media (hover: hover) {
   .send:not(:disabled):hover {
-    background: var(--surface);
+    background: var(--fg2);
   }
 }
 
@@ -227,99 +270,4 @@
   .actions > * {
     flex: 1 1 auto;
   }
-}
-
-/* MOCKUP variants (#947) */
-.growInput,
-.composerInput {
-  display: block;
-  width: 100%;
-  resize: none;
-  field-sizing: content;
-  overflow-wrap: anywhere;
-  max-height: calc(10lh + 2 * var(--s3));
-  overflow-y: auto;
-}
-.hint {
-  color: var(--fg3);
-}
-.hint kbd {
-  font: inherit;
-}
-@media (hover: none) {
-  .hint {
-    display: none;
-  }
-}
-.bar > button {
-  margin-left: auto;
-}
-.bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--s2);
-}
-.sendIcon {
-  display: grid;
-  place-items: center;
-  flex: none;
-  width: var(--s10);
-  height: var(--s10);
-  padding: 0;
-  border: 0;
-  border-radius: var(--radius-pill);
-  background: var(--fg);
-  color: var(--bg);
-}
-.sendIcon:disabled {
-  background: var(--surface2);
-  color: var(--fg3);
-}
-/* A: one box, text on top, a footer row inside it. */
-.composer {
-  width: 100%;
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius-md);
-  background: var(--surface2);
-}
-.composer:focus-within {
-  border-color: var(--fg);
-}
-.composerInput {
-  padding: var(--s3) var(--s3) 0;
-  border: 0;
-  background: none;
-  color: var(--fg);
-  min-height: calc(1lh + var(--s3));
-}
-.composerInput:focus {
-  outline: 0;
-}
-.composer .bar {
-  padding: var(--s1) var(--s1) var(--s1) var(--s3);
-}
-.composer .sendIcon:disabled {
-  background: none;
-}
-/* B: the button outside, bottom-aligned. */
-.side {
-  display: flex;
-  align-items: flex-end;
-  gap: var(--s2);
-  width: 100%;
-}
-.side .sendIcon {
-  width: var(--size-tap);
-  height: var(--size-tap);
-}
-/* C: the field, then its own bar. */
-.stack {
-  display: grid;
-  gap: var(--s2);
-  width: 100%;
-}
-.side textarea {
-  flex: 1;
-  min-width: 0;
 }

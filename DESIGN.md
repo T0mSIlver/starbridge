@@ -535,7 +535,8 @@ it has no title. A session's title is words, in the reading face (#563).
 - Labels are sentence case, never uppercase.
 - Shapes follow the Material 3 scale: cards `radius.xl`, buttons `radius.pill`
   (round ends in a connected group, inner corners `radius.sm`), inset areas
-  such as code `radius.lg`, inputs `radius.xs` on top. Android's cards are
+  such as code `radius.lg`, inputs `radius.xs` on top; the web's reply field
+  is an outlined `radius.md` box holding its send row (#947). Android's cards are
   filled (`surface`), with no border and no shadow; its inbox cards are
   `radius.xl` with 20 dp inside, 16 dp from the screen's edges; one-line
   cards (History's rows) round at 20 dp. The web keeps its own dense shapes

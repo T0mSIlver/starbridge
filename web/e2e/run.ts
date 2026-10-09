@@ -354,6 +354,64 @@ const SIZES = AUDIT
       ["desktop", DESKTOP, 1],
     ] as const);
 
+/** A reply long enough to wrap past 10 lines at a phone's width (#947). */
+const LONG_REPLY =
+  "Not quite. Keep the API change first, but split the migration into its own PR so the checkout one stays reviewable, and before you merge anything rerun the full test suite against staging with the new routes, then show me the diff of api/orders.ts and the two failing snapshots you mentioned yesterday so I can decide whether to update them or fix the rendering. ".repeat(
+    2,
+  );
+
+/**
+ * A long reply never runs under the send button (#947): at each width, the text's box ends above
+ * the button's, and past 10 lines the field scrolls instead of growing. Leaves the field empty,
+ * at the phone's width, reopening the question there with `reopen`.
+ */
+async function replyClear(page: Page, reply: Locator, reopen: () => Promise<void>) {
+  const send = page.getByRole("button", { name: "Send" });
+  const size = page.viewportSize() ?? DESKTOP;
+  for (const width of [320, 390, 600, 900, 1280]) {
+    await page.setViewportSize({ width, height: size.height });
+    await page.waitForTimeout(100);
+    // Switching between the phone and wide layouts loses the draft.
+    if ((await reply.inputValue()) !== LONG_REPLY) await reply.fill(LONG_REPLY);
+    const [text, button] = [await reply.boundingBox(), await send.boundingBox()];
+    if (!text || !button) throw new Error(`at ${width} px the reply field or Send is not shown`);
+    const overlaps =
+      text.x < button.x + button.width &&
+      button.x < text.x + text.width &&
+      text.y < button.y + button.height &&
+      button.y < text.y + text.height;
+    if (overlaps)
+      throw new Error(
+        `at ${width} px the reply's text runs under Send: ${JSON.stringify({ text, button })}`,
+      );
+    const { scroll, client } = await reply.evaluate((el) => ({
+      scroll: el.scrollHeight,
+      client: el.clientHeight,
+    }));
+    if (width === 320 && scroll <= client)
+      throw new Error(`at 320 px a long reply grows the field (${client} px) instead of scrolling`);
+  }
+  for (const [name, viewport] of [
+    ["desktop", DESKTOP],
+    ["phone", size],
+  ] as const) {
+    await page.setViewportSize(viewport);
+    // Narrowed from the wide layout, the phone is back on the list.
+    if (!(await reply.isVisible())) await reopen();
+    if ((await reply.inputValue()) !== LONG_REPLY) await reply.fill(LONG_REPLY);
+    // The whole box, its send row too, clear of the phone's bottom bar.
+    await reply.evaluate((el) => el.closest("form")?.scrollIntoView({ block: "center" }));
+    for (const scheme of ["light", "dark"] as const) {
+      await page.emulateMedia({ colorScheme: scheme, reducedMotion: "reduce" });
+      await page.waitForTimeout(150);
+      await fitsLayout(page, `long reply ${scheme}`);
+      await page.screenshot({ path: join(SHOTS, `reply-long-${name}-${scheme}.png`) });
+    }
+  }
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  await reply.fill("");
+}
+
 async function shoot(page: Page, name: string) {
   for (const [size, viewport, text] of SIZES)
     for (const scheme of ["light", "dark"] as const) {
@@ -831,6 +889,9 @@ async function main() {
     // The reply field is open under the picks too (#849); in it, Shift+Enter starts a new line and
     // Enter sends (#562).
     const reply = page.getByRole("textbox", { name: "Your answer" });
+    await replyClear(page, reply, () =>
+      page.locator("[data-row]", { hasText: LAYOUTS }).first().locator("button[data-id]").click(),
+    );
     await reply.pressSequentially("Phone layout");
     await reply.press("Shift+Enter");
     await reply.pressSequentially("on narrow screens");

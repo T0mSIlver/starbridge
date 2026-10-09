@@ -810,7 +810,8 @@ private fun Quiet(label: String, onClick: () -> Unit) {
 @Composable
 private fun FreeText(text: String, onText: (String) -> Unit, onAnswer: (String) -> Unit) {
     val send = { if (text.isNotBlank()) onAnswer(text.trim()) }
-    // Material's text field, the send button its trailing icon, centred on the field's line (#254).
+    // Material's text field, the send button its trailing icon, centred on the field's line (#254);
+    // the text wraps before the icon. It grows to 10 lines, then scrolls, as on the web (#947).
     TextField(
         value = text,
         onValueChange = { onText(it.take(4000)) },
@@ -819,6 +820,7 @@ private fun FreeText(text: String, onText: (String) -> Unit, onAnswer: (String) 
             IconButton(onClick = send, enabled = text.isNotBlank()) { Symbol(Sym.Send, contentDescription = "Send") }
         },
         textStyle = StarbridgeTheme.type.body,
+        maxLines = 10,
         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
         keyboardActions = KeyboardActions(onSend = { send() }),
         colors = fieldColors(),
