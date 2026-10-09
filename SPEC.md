@@ -663,7 +663,8 @@ line, the safe side: at worst a prompt repeats an answer the agent already read.
 | Pi TUI and RPC | The Pi extension (`mod/pi`) calls `pi.sendUserMessage(text, { deliverAs: "followUp" })` (#232) |
 | opencode TUI and `serve` | The opencode plugin (`mod/opencode`) calls `client.session.promptAsync`, one loop per session (#300) |
 | `pi -p`, `opencode run`, subagents | `wait` |
-| Antigravity (app, IDE, `agy`) | `wait`, until its hooks bring answers back (#961) |
+| Antigravity, interactive | The local agent sends the answer to the conversation's language server, at the address and token `ask` saw, with `SendUserCascadeMessage` run when idle. Retried each minute, 30 times (#961) |
+| `agy -p` | `wait`: its language server ends with the run |
 | `cursor-agent` | Setup's `stop` hook holds up to 10 minutes while the conversation has a question open and returns the answer as `followup_message`, Cursor's next user message (#956) |
 | `cursor-agent -p` | `wait`: it runs no stop hook |
 | Cursor IDE | `wait`: its commands get no conversation id |
@@ -708,6 +709,14 @@ line, the safe side: at worst a prompt repeats an answer the agent already read.
   claims the turn (conversation, generation and loop count) with an exclusive file; the other
   returns at once. Checked in a signed-in `cursor-agent` on 2026-10-09: the follow-up arrives as
   the next prompt.
+- **Antigravity** (#961). Its commands get the language server's address and CSRF token, which
+  `ask` hands to the local agent with the question. That server is internal and changed in
+  1.2.2, but it is the only way into an idle conversation: its documented `Stop` hook can only
+  hold a turn's end, keeping the session busy. So `ask` promises a prompt only when the agent
+  reaches that server, never in `agy -p`, which it tells by its parent process's arguments. The
+  plugin's `Stop` hook stays as the fallback: it hands over answers that came in, and holds the
+  end of a turn up to 10 minutes for a question marked waiting that has no route. The token
+  stays in the machine's state file, readable by its owner only, like the process it came from.
 - **Pi and opencode** append `plugin/hooks/rule.md` to the system prompt and run the mod's own
   answer loop (`agent.ts`, `poller.ts`, `switch.ts`). opencode gives commands no session id, so
   its plugin sets `STARBRIDGE_OPENCODE_SESSION` through `shell.env`. After opencode restarts, the
@@ -1637,7 +1646,15 @@ What the code relies on, with the versions checked.
   prompt, even with `permissionOverrides`. `permissions.allow` entries match words, refuse `;`,
   `&&`, `|`, `$(…)` and redirections, and pass a variable assignment or `env` in front.
   `--sandbox` runs commands without the home folder or the network unless `BypassSandbox`, which
-  an allow entry covers. `PreInvocation` drops an injected `toolCall` without a word.
+  an allow entry covers. `PreInvocation` drops an injected `toolCall` without a word. A `Stop`
+  hook's `continue` reason comes in as a system message, and `agy` cuts off a hook that keeps
+  blocking after some continuations. The language server (Connect JSON on loopback, header
+  `x-codeium-csrf-token`) takes `SendUserCascadeMessage` with `MESSAGE_DELIVERY_STRATEGY_WHEN_IDLE`:
+  the TUI shows it as the user's message and runs it after the current turn, with the session's
+  hooks and permissions; without `cascadeConfig.plannerConfig.planModel` the turn fails, and
+  `GetCascadeTrajectoryGeneratorMetadata` names the model last run. A pending approval is a
+  `WAITING` step whose `requestedInteraction.permission` names the command;
+  `HandleCascadeUserInteraction` answers it, and the TUI says "Answered from another device".
 - **Skill eval** (#299): what lifted scores was one context line per option starting with its
   label, "no answer is never a yes" placed where the agent waits, and card text in single quotes
   (`$0` in double quotes blanked a Codex card). Records: `evals/skill/results/299`.

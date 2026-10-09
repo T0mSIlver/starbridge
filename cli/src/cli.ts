@@ -12,7 +12,7 @@ import {
   waitVia,
 } from "./agent/commands";
 import { runAgent } from "./agent/main";
-import { hookPreTool } from "./antigravity";
+import { hookPreTool, hookStop } from "./antigravity";
 import { ApiError, sandboxHint, Unreachable } from "./api";
 import { hookCodexQuestion } from "./codex-question";
 import { StateFileError } from "./config";
@@ -215,6 +215,12 @@ const HELP = `starbridge: post decisions to your devices, report runs, upload qu
       ask, waiting, working, wait or settle command alone on its line runs outside the
       sandbox; a line that runs one of them with more asks at the keyboard; prints nothing
       for any other call.
+
+  starbridge hook stop --agent antigravity
+      For the Starbridge Antigravity plugin's Stop hook: hook JSON on stdin. Prints the answers
+      to the conversation's questions as {"decision": "continue", "reason": ...}, holding the
+      turn's end up to 10 minutes for one marked waiting that nothing else brings back; prints
+      nothing otherwise.
 
   starbridge update [--codexbar <version>]
       Install the latest release once its signature checks out, then \`setup --refresh\` (brew
@@ -579,8 +585,9 @@ export async function run(argv: string[], ctx: Ctx): Promise<number> {
         if (sub === "session" && values.agent === "cursor")
           return await hookCursorSession(ctx, readText("-"));
         if (sub === "pre-tool") return hookPreTool(ctx, readText("-"), values);
+        if (sub === "stop") return await hookStop(ctx, readText("-"), values);
         throw new UsageError(
-          "usage: starbridge hook permission|settle --agent claude-code|codex, starbridge hook ask-user, starbridge hook question --agent opencode|pi|codex, starbridge hook session --agent cursor, or starbridge hook pre-tool --agent antigravity",
+          "usage: starbridge hook permission|settle --agent claude-code|codex, starbridge hook ask-user, starbridge hook question --agent opencode|pi|codex, starbridge hook session --agent cursor, or starbridge hook pre-tool|stop --agent antigravity",
         );
       }
       case "update": {

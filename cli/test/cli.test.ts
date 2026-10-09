@@ -15,6 +15,7 @@ import jpeg from "jpeg-js";
 import jsQR from "jsqr";
 import { PNG } from "pngjs";
 import { makeAgent } from "../src/agent/main";
+import { hookStop } from "../src/antigravity";
 import { run } from "../src/cli";
 import { session } from "../src/context";
 import { DONE_LINE, poll } from "../src/decisions";
@@ -757,6 +758,27 @@ test("a Cursor agent's command asks as Cursor, in its conversation, and is told 
     ["cursor", "c-1"],
     ["cursor", ""],
   ]);
+});
+
+test("Antigravity's Stop hook holds a waiting turn for its answer and hands it over once (#961)", async () => {
+  const ctx = await paired(server);
+  ctx.env = { ANTIGRAVITY_CONVERSATION_ID: "c-1" };
+  expect(await run([...ASK, "--waiting"], ctx)).toBe(0);
+  const id = ctx.lines.at(-1) as string;
+  const stop = async (conversationId: string) => {
+    ctx.lines.length = 0;
+    expect(await hookStop(ctx, JSON.stringify({ conversationId }), { agent: "antigravity" })).toBe(
+      0,
+    );
+    return ctx.lines;
+  };
+  // Another conversation waits on nothing: its turn ends at once.
+  expect(await stop("c-2")).toEqual([]);
+  setTimeout(() => void server.answer(id, { choice: "Merge" }), 300);
+  expect((await stop("c-1")).map((l) => JSON.parse(l))).toEqual([
+    { decision: "continue", reason: `Answer to ${id} (Merge #12 now?): Merge` },
+  ]);
+  expect(await stop("c-1")).toEqual([]);
 });
 
 test("config turns permission prompts on and off", async () => {
