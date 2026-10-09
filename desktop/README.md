@@ -52,3 +52,10 @@ numbers.
 What keeps them: the main process is one 15 KB file, the window shows at once on the page's
 background colour, and closing it only hides it.
 `STARBRIDGE_TIMING=1` prints the marks (`timing {...}`) from any build.
+
+## The keychain
+
+The page's cookies are encrypted with a key macOS keeps in the login keychain, "Starbridge Safe
+Storage" (the `enableCookieEncryption` fuse). Only the app that made the key may read it without
+asking. A Developer ID app stays that app through updates. Each ad hoc build is a stranger to it,
+so macOS asks for the login password once per new ad hoc build; "Always Allow" covers that build.
