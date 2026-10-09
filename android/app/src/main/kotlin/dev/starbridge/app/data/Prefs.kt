@@ -65,7 +65,7 @@ class Prefs @Inject constructor(@ApplicationContext context: Context) {
     }
 
     private val _quota = MutableStateFlow(
-        prefs.getString(QUOTA, null)?.let { runCatching { json.decodeFromString(QuotaSettings.serializer(), it) }.getOrNull() } ?: QuotaSettings(),
+        prefs.getString(QUOTA, null)?.let { runCatching { QuotaSettings.read(json, it) }.getOrNull() } ?: QuotaSettings(),
     )
     val quota: StateFlow<QuotaSettings> = _quota
 

@@ -58,11 +58,7 @@ export function Meter({
           <i className={s.eaten} style={{ left: 0, width: `${percent}%` }} />
         ))}
       {b.ticks.map((t) => (
-        <i
-          key={t}
-          className={settings.ticks === "high-contrast" ? s.strong : s.gap}
-          style={{ left: `${t}%` }}
-        />
+        <i key={t} className={s.gap} style={{ left: `${t}%` }} />
       ))}
       {(over || out) && <i className={`${s.cap} ${used ? s.end : s.start}`} />}
       {!out && b.steady !== null && (

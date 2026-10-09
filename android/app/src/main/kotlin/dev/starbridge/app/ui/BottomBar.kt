@@ -31,7 +31,7 @@ enum class Tab(val label: String, val sym: Sym) {
  */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun BottomBar(selected: Tab, needYou: Int, onSelect: (Tab) -> Unit, modifier: Modifier = Modifier) {
+fun BottomBar(selected: Tab, needYou: Int, onSelect: (Tab) -> Unit, modifier: Modifier = Modifier, tabs: List<Tab> = Tab.entries) {
     val scheme = MaterialTheme.colorScheme
     val colors = StarbridgeTheme.colors
     // 80 dp with the items centred, as the mockups: the short bar's 64 dp and 8 dp each side.
@@ -40,7 +40,7 @@ fun BottomBar(selected: Tab, needYou: Int, onSelect: (Tab) -> Unit, modifier: Mo
         containerColor = scheme.surfaceContainer,
         windowInsets = ShortNavigationBarDefaults.windowInsets.add(WindowInsets(top = 8.dp, bottom = 8.dp)),
     ) {
-        Tab.entries.forEach { tab ->
+        tabs.forEach { tab ->
             val on = tab == selected
             ShortNavigationBarItem(
                 selected = on,

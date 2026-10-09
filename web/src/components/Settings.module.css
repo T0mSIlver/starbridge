@@ -103,11 +103,89 @@
   min-width: 0;
 }
 
-.notify {
+/* A row whose controls sit under its name: a window's alerts. */
+.stack {
+  display: grid;
+  gap: var(--s3);
+  padding: var(--s3) var(--s4);
+}
+
+/* A window's row opens to its alerts; the whole line is the button. */
+.windowHead {
   display: flex;
   align-items: center;
-  gap: var(--s2);
+  gap: var(--s4);
+  width: 100%;
+  min-height: var(--size-tap);
+  padding: var(--s3) var(--s4);
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.windowHead svg {
+  flex: none;
   color: var(--fg2);
+  transition: transform var(--t-fast) var(--ease);
+}
+
+.windowHead[aria-expanded="true"] svg {
+  transform: rotate(180deg);
+}
+
+.windowHead:focus-visible {
+  outline: 2px solid var(--fg);
+  outline-offset: -2px;
+}
+
+.windowHead > :first-child {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Alerts a window can pick, any number of them: filter chips, the picked ones in `fg`. */
+.chips {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+}
+
+.chip {
+  min-height: var(--s8);
+  padding: var(--s1) var(--s3);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-dense);
+  background: none;
+  font-weight: 500;
+  color: var(--fg2);
+  cursor: pointer;
+  transition:
+    background var(--t-fast) var(--ease),
+    color var(--t-fast) var(--ease);
+}
+
+@media (hover: hover) {
+  .chip:hover {
+    color: var(--fg);
+  }
+}
+
+.chip[aria-pressed="true"] {
+  border-color: var(--fg);
+  background: var(--fg);
+  color: var(--bg);
+}
+
+.chip:focus-visible {
+  outline: 2px solid var(--fg);
+  outline-offset: 2px;
 }
 
 /* Never wider than its row: on the narrowest phones a long label wraps inside its segment. */

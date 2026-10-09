@@ -20,6 +20,7 @@ import { openItem } from "@/lib/opened";
 import { AnsweredFirst } from "@/lib/outcome";
 import { Beacon, PRESENCE_CHANNEL, PRESENCE_CHECK_MS, PRESENCE_EVENTS } from "@/lib/presence";
 import {
+  alertsOn,
   DEFAULT_SETTINGS,
   loadSettings,
   notifyAlerts,
@@ -426,7 +427,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     );
     const tick = () => {
       if (backingOff()) return;
-      if (document.visibilityState === "visible" || settingsRef.current.notify.length > 0) read();
+      if (document.visibilityState === "visible" || alertsOn(settingsRef.current.alerts)) read();
     };
     tick();
     const timer = setInterval(tick, QUOTA_POLL_MS);

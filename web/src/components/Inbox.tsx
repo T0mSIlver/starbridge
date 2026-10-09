@@ -18,6 +18,7 @@ import { closeItem, linkedItem, openItem, stackItem, useOpened } from "@/lib/ope
 import { AnsweredFirst, answerPlace, promptOutcome } from "@/lib/outcome";
 import { fitsRow } from "@/lib/permissionInput";
 import { type Prefs, usePref } from "@/lib/prefs";
+import { holdsQuotas } from "@/lib/quotaSettings";
 import { runState } from "@/lib/runs";
 import { afterAnswer, selectedId, step } from "@/lib/selection";
 import type { InboxItem, PromptItem } from "@/lib/types";
@@ -563,7 +564,9 @@ function Panes({ list, children }: { list: React.ReactNode; children: React.Reac
   const [listPref, setList] = usePref("listWidth");
   const [asidePref, setAside] = usePref("asideWidth");
   const vw = useWindowWidth();
-  const aside = vw >= ASIDE_FROM;
+  // No quotas yet, no column for them (#914).
+  const quotas = holdsQuotas(useApp().quotas);
+  const aside = vw >= ASIDE_FROM && quotas;
   const room = vw - token("--size-rail") - DETAIL_MIN;
   const asideW = aside ? Math.min(asidePref ?? token("--size-aside"), room / 2) : 0;
   const listW = Math.min(listPref ?? token("--size-list"), room - asideW);
@@ -572,7 +575,7 @@ function Panes({ list, children }: { list: React.ReactNode; children: React.Reac
     ...(aside ? { "--pane-aside": `${asideW}px` } : {}),
   } as React.CSSProperties;
   return (
-    <div className={s.panes} style={style}>
+    <div className={`${s.panes} ${quotas ? "" : s.noAside}`} style={style}>
       <h1 className="sr-only">Inbox</h1>
       {list}
       <Resizer
@@ -594,7 +597,7 @@ function Panes({ list, children }: { list: React.ReactNode; children: React.Reac
           onChange={setAside}
         />
       )}
-      <QuotaAside />
+      {quotas && <QuotaAside />}
     </div>
   );
 }

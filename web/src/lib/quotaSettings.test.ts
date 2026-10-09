@@ -5,6 +5,7 @@ import {
   DEFAULT_SETTINGS,
   groups,
   type QuotaSettings,
+  readSettings,
   reorder,
   runsOutSoonest,
   toNotify,
@@ -54,7 +55,6 @@ test("bar: used or remaining, with ticks and the marker on the same scale", () =
     steady: 60,
     ticks: [20, 40, 60, 80],
   });
-  expect(bar(week(30), settings({ workDays: 5, ticks: "hidden" }), now).ticks).toEqual([]);
 });
 
 // The same cases as Android's QuotaSettingsTest.arrange* (SPEC.md, "Quota order"). Wednesday noon.
@@ -157,18 +157,36 @@ test("reorder: the dragged providers swap among their own places; hidden and lea
   ]);
 });
 
-test("notifications: only new alerts, of providers this device opted in to, of chosen kinds", () => {
+test("notifications: only new alerts, of the kinds picked for their window", () => {
   const base = { window: "primary", resetsAt: local(12) };
   const alerts: QuotaAlert[] = [
     { kind: "low", provider: "zai", threshold: 20, notify: true, ...base },
     { kind: "runs-out", provider: "zai", runsOutAt: local(11), notify: true, ...base },
-    { kind: "low", provider: "claude", threshold: 50, notify: true, ...base },
     { kind: "low", provider: "zai", threshold: 50, ...base },
   ];
-  const kinds = (s: QuotaSettings) => toNotify(alerts, s).map((a) => `${a.provider} ${a.kind}`);
-  expect(kinds(DEFAULT_SETTINGS)).toEqual([]);
-  expect(kinds(settings({ notify: ["zai"] }))).toEqual(["zai low", "zai runs-out"]);
-  expect(kinds(settings({ notify: ["zai"], notifyLow: false }))).toEqual(["zai runs-out"]);
+  const kinds = (s: QuotaSettings, minutes: number | null) =>
+    toNotify(alerts, s, minutes).map((a) => `${a.provider} ${a.kind}`);
+  expect(kinds(DEFAULT_SETTINGS, 300)).toEqual([]);
+  expect(kinds(DEFAULT_SETTINGS, 10080)).toEqual(["zai runs-out"]);
+  const picked = settings({
+    alerts: { short: [], long: [], windows: { "zai/primary": ["low-20"] } },
+  });
+  expect(kinds(picked, 300)).toEqual(["zai low"]);
+});
+
+test("settings from before #914 move to per-window alerts; Hidden ticks become ticks off", () => {
+  const old = readSettings({
+    notify: ["zai"],
+    notifyLow: false,
+    notifyPace: true,
+    workDays: 5,
+    ticks: "hidden",
+  });
+  expect(old.alerts.windows).toEqual({ zai: ["runs-out", "unused-headroom"] });
+  expect(old.workDays).toBeNull();
+  expect("notify" in old || "ticks" in old).toBe(false);
+  expect(readSettings({ notify: [] }).alerts).toEqual(DEFAULT_SETTINGS.alerts);
+  expect(readSettings(null)).toEqual(DEFAULT_SETTINGS);
 });
 
 test("runsOutSoonest: the leading group whose window runs out first, wherever it sits (#351)", () => {
