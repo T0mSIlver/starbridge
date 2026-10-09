@@ -756,10 +756,16 @@ Codex prompts are not supported.
   pixels. Android decodes by the image's real size, drops one larger than declared or 8192 px a
   side, and holds at most 4096² pixels in a decode (#360).
 - **Links** (#171) are what the agent wants the owner to see before answering: a Claude artifact, a
-  PR, a doc. They never answer the question. Each has a `title`. Clients show them under "Attached
-  by the agent". A claude.ai link opens in the browser, where the owner is signed in; the Claude
-  app shows artifacts only in its in-app browser. A GitHub PR or issue link without a title reads
-  `owner/repo#123` with the GitHub mark.
+  PR, a doc. They never answer the question. Each has a `title`. Clients show them as chips after
+  the context, each ending in an arrow out. A claude.ai link opens in the browser, where the owner
+  is signed in; the Claude app shows artifacts only in its in-app browser.
+- **GitHub links** (#971). Agents send PRs, issues, Actions runs and releases, and only PRs and
+  issues were recognised. Now a GitHub link leads with GitHub's Octicon for its kind (pull
+  request, issue, discussion, Actions run, release, commit, else the GitHub mark) and reads as its
+  reference: `#123`, a release's tag, a commit's short hash, led by the repo only when it isn't
+  the session's (`CodexBar#412`). The icon says what the number is, so the agent's title gives
+  way to it. A run reads as its title, else "Actions run"; other GitHub pages as their title, else
+  their path. No chip says "Open": the arrow does, and the word cost room on every chip.
 - **`answerIn`** names a page (a Claude artifact whose button messages the agent) where the
   question is answered. It has no options; the schema refuses both. It closes when the agent runs
   `starbridge settle`, or when the owner taps Done beside the page's link (#539): an agent that
@@ -945,6 +951,15 @@ first window, so a provider with a window running out leads.
   thing, the amber fill. A waiting item's title is weight 500 and its time slot a clock ticking
   from when it started waiting; screen readers hear "Waiting for you, 2 minutes" first. No state
   tag anywhere. Under a grouping, the items under one header are joined.
+- **Less on a question** (#970). The owner found the detail crowded, and half of it repeated
+  itself in names nobody chose. Claude Code works in worktrees with generated names and names an
+  unnamed session `<directory>-<hex>` (`nameSource: "derived"`), so the meta row showed the
+  worktree and the session line a made-up name. The CLI now sends a git worktree's repository as
+  the project and leaves a derived session name out; clients show no bare session id either.
+  The detail ends with one line: Snooze (Back now, Done) on the left, the session's name on the
+  right as the link that opens it in Claude or Codex, or "Open in Claude" when it has no name. The
+  "Attached by the agent" caption went: the chips sit inside the agent's words. The owner chose
+  this from mockups of every element.
 - **Snoozed** (#571, #692, #699). Snooze sits under the reply field in a question's detail (web)
   and sheet (Android), never on a notification. Most snoozes are for later the same day, so it opens on
   today: 1 hour and This evening (18:00, offered until 17:00), then the days as chips (today and
@@ -1034,6 +1049,9 @@ first window, so a provider with a window running out leads.
   filled near 18 visitors a second (#593), and a copy costs less than a render. With the cookie,
   `/` is the app as before; the page swaps to sign-in when the browser holds a device, after a
   failed sign-in, or on "Use your own server".
+- **Keyboard shortcuts** (#970) are written down once, in Settings → Inbox: J and K, 1 to 4, A
+  and D from 1100 px, and / anywhere. Hints on the buttons and the Find box crowded the detail,
+  and hints in some places but not others read as missing ones.
 - **Back** (#347). Under 1100 px an open item is `/?item=<id>`, its own history entry, so Back
   returns to the list. Dialogs are modal `<dialog>`s, which Chrome on Android closes on Back.
 - **Backoff** (#332). All calls in a page share one backoff, 250 ms doubling to 30 s with jitter,

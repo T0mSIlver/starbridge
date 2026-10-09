@@ -150,6 +150,12 @@ function InboxSection() {
           onChange={setRowAnswers}
         />
       </Row>
+      {/* The one place the keys are written down: hints on some buttons and not others read as
+          missing ones (#970). */}
+      <Row
+        label="Keyboard shortcuts"
+        sub="In a window 1100 px wide or more: J and K move through the items, 1 to 4 pick an answer, A allows and D denies a prompt. / goes to Find anywhere."
+      />
     </Section>
   );
 }

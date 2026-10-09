@@ -63,13 +63,6 @@ function useKeys(on: boolean, handler: (key: string) => boolean) {
   }, [on]);
 }
 
-/** A key's hint, shown while the pointer is on the answers or one has focus (#970). */
-const Kbd = ({ k }: { k: string }) => (
-  <span className={`t-key ${ui.kbd} ${s.key}`} aria-hidden="true">
-    {k}
-  </span>
-);
-
 /** The owner answers on another page: the one action opens it, in amber. */
 function AnswerElsewhere({ page }: { page: DecisionLink }) {
   return (
@@ -250,7 +243,6 @@ export function QuestionDetail({
               {o}
               {/* Seen by its place and amber; heard as "Default" (#254). */}
               {i === 0 && <span className="sr-only"> Default</span>}
-              {keys && i < 4 && <Kbd k={String(i + 1)} />}
             </button>
           ))}
         </fieldset>
@@ -365,7 +357,6 @@ function Picks({
                 >
                   {o}
                   {rec && <span className="sr-only"> Default</span>}
-                  {keys && i < 4 && <Kbd k={String(i + 1)} />}
                 </button>
               );
             })}
@@ -441,7 +432,7 @@ export function PromptDetail({
               aria-keyshortcuts={keys ? "A" : undefined}
               onClick={() => send({ behavior: "allow", scope: "once" })}
             >
-              Allow {keys && <Kbd k="A" />}
+              Allow
             </button>
             <button
               type="button"
@@ -450,7 +441,7 @@ export function PromptDetail({
               aria-keyshortcuts={keys ? "D" : undefined}
               onClick={() => send({ behavior: "deny", scope: "once" })}
             >
-              Deny {keys && <Kbd k="D" />}
+              Deny
             </button>
           </div>
           {/* Each wider allow shows the exact rule it adds, not only in a tooltip (#274). */}

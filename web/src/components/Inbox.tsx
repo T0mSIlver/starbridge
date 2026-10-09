@@ -422,9 +422,6 @@ export function Inbox() {
         <span className={s.headTitle}>
           Needs you {count > 0 && <span className={s.count}>{count}</span>}
         </span>
-        <span className={`t-key ${s.keys}`}>
-          <kbd className={ui.kbd}>J</kbd> <kbd className={ui.kbd}>K</kbd>
-        </span>
         <ViewMenu grouping={grouping} setGrouping={setGrouping} />
       </header>
       <RecoveryBanner />
