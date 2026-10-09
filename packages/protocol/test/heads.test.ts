@@ -4,6 +4,7 @@ import { beforeAll, expect, test } from "bun:test";
 import {
   addEntry,
   type Directory,
+  forgetHeads,
   generateMemberKeys,
   generateRecoverySeed,
   genesisEntry,
@@ -15,6 +16,7 @@ import {
   open,
   publicKeys,
   ready,
+  recoverEntry,
   recoveryKeyPair,
   revokeEntry,
   type SignedEnvelope,
@@ -107,11 +109,79 @@ test("a machine that holds the revocation exposes it to a device the server with
   expect(() => open(decisionBy("m"), { id: "a", box: keys.a.box }, full)).toThrow("revoked-signer");
 });
 
-test("a head counts only while the member that signed it is active", () => {
+test("a head its signer signed before a revoke keeps counting, and says who revoked it", () => {
   const full = verifyDirectory(truth);
-  const heads: Heads = { m: { length: full.length + 5, head: "A".repeat(43) } };
-  expect(withheldBy(heads, full, truth)).toBeUndefined();
-  expect(withheldBy(heads, verifyDirectory(seenByA), seenByA)?.id).toBe("m");
+  const forged = { length: full.length + 5, head: "A".repeat(43) };
+  const heads: Heads = { m: forged };
+  expect(withheldBy(heads, full, truth)).toEqual({
+    id: "m",
+    head: forged,
+    revoked: { id: "m", by: "b", at },
+  });
+  expect(withheldBy(heads, verifyDirectory(seenByA), seenByA)?.revoked).toBeUndefined();
+  // A head without a revocation is named first.
+  heads.m2 = { length: full.length + 1, head: "B".repeat(43) };
+  expect(withheldBy(heads, full, truth)?.id).toBe("m2");
+  // The owner's word ends it.
+  expect(forgetHeads(heads, "m")).toBe(true);
+  expect(Object.keys(heads)).toEqual(["m2"]);
+});
+
+test("a revoked device cannot lift a device's hold by revoking, on a fork, the machine that exposed it (#813)", () => {
+  // The owner revoked B. The server hides that from A, holds B's keys, and M2, which has seen
+  // the revocation, signs its head: A holds.
+  const mine = verifyDirectory(seenByA);
+  const real = [
+    ...seenByA,
+    revokeEntry(mine, { id: "a", signKey: keys.a.sign.privateKey }, "b", at),
+  ];
+  const heads: Heads = {};
+  noteHead(heads, "m2", head(verifyDirectory(real)), seenByA, mine);
+  expect(withheldBy(heads, mine, seenByA)).toEqual({ id: "m2", head: head(verifyDirectory(real)) });
+  // With B's keys, the server extends A's stale chain with B's revocation of M2. It verifies and
+  // extends A's pin, but no machine signs a head past its own revocation: it is a fork.
+  const fork = [
+    ...seenByA,
+    revokeEntry(mine, { id: "b", signKey: keys.b.sign.privateKey }, "m2", at),
+  ];
+  const forked = verifyDirectory(fork, { pin: head(mine) });
+  expect(withheldBy(heads, forked, fork)).toMatchObject({
+    id: "m2",
+    revoked: { id: "m2", by: "b" },
+  });
+  // A head M2 passed on from device A, which the fork revokes, holds too.
+  const relayed: Heads = {};
+  noteHead(relayed, "m2", { ...head(verifyDirectory(real)), by: "a" }, seenByA, mine);
+  const forkA = [
+    ...seenByA,
+    revokeEntry(mine, { id: "b", signKey: keys.b.sign.privateKey }, "a", at),
+  ];
+  expect(withheldBy(relayed, verifyDirectory(forkA), forkA)).toMatchObject({
+    id: "m2",
+    by: "a",
+    revoked: { id: "a", by: "b" },
+  });
+});
+
+test("the recovery key's recover ends a hold", () => {
+  const seed = generateRecoverySeed();
+  const chain = [
+    genesisEntry({
+      account: "acct",
+      device: members.a,
+      signKey: keys.a.sign.privateKey,
+      recovery: recoveryKeyPair(seed),
+      at,
+    }),
+  ];
+  chain.push(
+    addEntry(verifyDirectory(chain), { id: "a", signKey: keys.a.sign.privateKey }, members.m, at),
+  );
+  const heads: Heads = { m: { length: 9, head: "A".repeat(43) } };
+  expect(withheldBy(heads, verifyDirectory(chain), chain)?.id).toBe("m");
+  const fresh = { ...members.b, id: "c" };
+  chain.push(recoverEntry(verifyDirectory(chain), recoveryKeyPair(seed).privateKey, fresh, at));
+  expect(withheldBy(heads, verifyDirectory(chain), chain)).toBeUndefined();
 });
 
 test("a machine signs the longest head it knows, a device's when its own chain is behind", () => {
@@ -129,7 +199,7 @@ test("a machine signs the longest head it knows, a device's when its own chain i
   expect(headToSign({ b: deviceHead }, verifyDirectory(truth), truth)).toEqual(deviceHead);
 });
 
-test("a forged head a machine passed on ends with its forger's revocation", () => {
+test("a forged head a machine passed on holds past its forger's revocation, until the owner forgets it", () => {
   // Device B, compromised, signs an inflated head into an answer; honest M2 passes it on.
   const mine = verifyDirectory(seenByA);
   const forged = { length: 99, head: "A".repeat(43) };
@@ -138,13 +208,19 @@ test("a forged head a machine passed on ends with its forger's revocation", () =
   const heads: Heads = {};
   noteHead(heads, "m2", relayed, seenByA);
   expect(withheldBy(heads, mine, seenByA)).toMatchObject({ id: "m2", by: "b" });
-  // The owner revokes B: the head it vouched for counts no more, and M2's own head holds.
+  // The owner revokes B: a revocation alone cannot tell this from a fork, so the head still holds.
   const chain = [
     ...seenByA,
     revokeEntry(mine, { id: "a", signKey: keys.a.sign.privateKey }, "b", at),
   ];
   const after = verifyDirectory(chain);
-  expect(withheldBy(heads, after, chain)).toBeUndefined();
+  expect(withheldBy(heads, after, chain)).toMatchObject({ by: "b", revoked: { id: "b", by: "a" } });
+  // A shorter head does not take its slot either.
+  expect(noteHead(heads, "m2", { ...head(after), by: "b" }, chain, after)).toBe(false);
+  // The owner, who made that revocation, forgets B's heads; M2's own head holds the chain.
+  forgetHeads(heads, "b");
+  // M2's item, read again, does not bring B's head back.
+  expect(noteHead(heads, "m2", relayed, chain, after)).toBe(false);
   noteHead(heads, "m2", head(after), chain);
   expect(withheldBy(heads, after, chain)).toBeUndefined();
 });
@@ -172,7 +248,7 @@ test("a head passed on from a device the chain does not list yet counts, in one 
   // Another unknown id takes the same slot, so a machine cannot fill storage with invented ones.
   noteHead(heads, "m2", { length: 99, head: "A".repeat(43), by: "nobody" }, chain, mine);
   expect(Object.keys(heads)).toEqual(["m2/?"]);
-  // Once the chain lists the forger as revoked, its head counts no more.
+  // Revoking the forger does not end its head, which still holds.
   const forger = [
     ...chain,
     addEntry(mine, { id: "a", signKey: keys.a.sign.privateKey }, { ...c, id: "nobody" }, at),
@@ -186,8 +262,13 @@ test("a head passed on from a device the chain does not list yet counts, in one 
       at,
     ),
   ];
+  expect(withheldBy(heads, verifyDirectory(revoked), revoked)).toMatchObject({
+    by: "nobody",
+    revoked: { id: "nobody" },
+  });
+  // The owner forgets it, and C's real head, passed on again, takes the slot back: the hold stands.
+  forgetHeads(heads, "nobody");
   expect(withheldBy(heads, verifyDirectory(revoked), revoked)).toBeUndefined();
-  // And C's real head, passed on again, takes the slot back: the hold stands.
   noteHead(heads, "m2", relayed, revoked, verifyDirectory(revoked));
   expect(withheldBy(heads, verifyDirectory(revoked), revoked)).toMatchObject({ id: "m2", by: "c" });
 });

@@ -112,6 +112,7 @@ export function run(
     input?: string;
     inherit?: boolean;
     env?: Record<string, string>;
+    cwd?: string;
   } = {},
 ): Promise<RunOut | null> {
   const bin = resolveCommand(sys.ctx.env, cmd);
@@ -126,6 +127,7 @@ export function run(
     const child = spawn(start.file, start.args, {
       windowsVerbatimArguments: start.windowsVerbatimArguments,
       env: { ...sys.ctx.env, ...opts.env } as NodeJS.ProcessEnv,
+      ...(opts.cwd ? { cwd: opts.cwd } : {}),
       stdio: [
         opts.input === undefined ? "ignore" : "pipe",
         opts.inherit ? "inherit" : "pipe",

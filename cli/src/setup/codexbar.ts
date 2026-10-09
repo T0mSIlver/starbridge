@@ -20,12 +20,31 @@ import {
 } from "node:fs";
 import { dirname, join } from "node:path";
 import { parseUsage, runCodexbar } from "../codexbar";
+import type { Ctx } from "../context";
+import PINNED from "./codexbar-pin.json" with { type: "json" };
 import { failure, run, type Sys, which } from "./sys";
 
 /**
- * Only the source repository is pinned: setup and `starbridge update` install its latest release,
- * or the one named, checked against the `.sha256` that release publishes beside each tarball.
+ * A CodexBar release and its CLI tarballs' SHA-256, by `tarballKey`. Setup and `starbridge update`
+ * install the one this binary carries, which the release's signature covers; a release named
+ * with `update --codexbar <version>` is checked only against the `.sha256` beside its tarball.
  */
+export interface Pin {
+  version: string;
+  sha256: Record<string, string>;
+}
+export const PIN: Pin = PINNED;
+
+/** Every `tarballKey`: the pin holds a checksum for each. */
+export const KEYS = [
+  "macos-arm64",
+  "macos-x86_64",
+  "linux-aarch64",
+  "linux-x86_64",
+  "linux-musl-aarch64",
+  "linux-musl-x86_64",
+];
+
 const RELEASES = "https://github.com/steipete/CodexBar/releases";
 const PROBE_TIMEOUT_MS = 20_000;
 /** How often a download says how far it got. */
@@ -142,8 +161,8 @@ async function fetchRelease(url: string, init: RequestInit, what: string): Promi
  * The version of CodexBar's latest release, from where GitHub redirects `releases/latest`: the
  * API would allow only 60 unauthenticated requests an hour per address (#618).
  */
-export async function latestCodexbar(sys: Sys): Promise<string> {
-  const releases = sys.ctx.env.STARBRIDGE_CODEXBAR_RELEASES ?? RELEASES;
+export async function latestCodexbar(env: Ctx["env"]): Promise<string> {
+  const releases = env.STARBRIDGE_CODEXBAR_RELEASES ?? RELEASES;
   const what = "finding CodexBar's latest release";
   const res = await fetchRelease(
     `${releases}/latest`,
@@ -153,6 +172,22 @@ export async function latestCodexbar(sys: Sys): Promise<string> {
   const tag = /\/tag\/([^/?#]+)$/.exec(res.headers.get("location") ?? "")?.[1];
   if (!tag) throw new Error(`${what}: ${res.status}, no release tag`);
   return releaseVersion(decodeURIComponent(tag));
+}
+
+/** Compares two CodexBar versions; a pre-release comes before its release. */
+export function compareCodexbar(a: string, b: string): number {
+  const parse = (v: string) => {
+    const [main = "", pre] = releaseVersion(v).split(/-(.*)/);
+    return { nums: main.split(".").map(Number), pre };
+  };
+  const x = parse(a);
+  const y = parse(b);
+  for (let i = 0; i < 3; i++)
+    if (x.nums[i] !== y.nums[i]) return (x.nums[i] as number) < (y.nums[i] as number) ? -1 : 1;
+  if (x.pre === y.pre) return 0;
+  if (x.pre === undefined) return 1;
+  if (y.pre === undefined) return -1;
+  return Math.sign(x.pre.localeCompare(y.pre, "en", { numeric: true }));
 }
 
 const size = (bytes: number) =>
@@ -174,19 +209,28 @@ export function installedVersion(sys: Sys): string | undefined {
 export class NoChecksum extends Error {}
 
 /**
- * Downloads `version`'s tarball and the `.sha256` beside it in the same release, checks one
- * against the other and unpacks the tarball, with its bundle, to `~/.local/opt/codexbar`.
- * Installs nothing when the checksum is missing or differs. Returns the `codexbar` inside.
+ * Downloads `version`'s tarball, checks it against `sha256` when given, else against the
+ * `.sha256` beside it in the same release, and unpacks it, with its bundle, to
+ * `~/.local/opt/codexbar`. Installs nothing when the checksum is missing or differs. Returns the
+ * `codexbar` inside.
  */
-export async function installTarball(sys: Sys, key: string, version: string): Promise<string> {
+export async function installTarball(
+  sys: Sys,
+  key: string,
+  version: string,
+  sha256?: string,
+): Promise<string> {
   const base = `${sys.ctx.env.STARBRIDGE_CODEXBAR_RELEASES ?? RELEASES}/download`;
   const name = `CodexBarCLI-v${version}-${key}.tar.gz`;
   const url = `${base}/v${version}/${name}`;
   const signal = AbortSignal.timeout(10 * 60_000);
-  const sums = await fetchRelease(`${url}.sha256`, { signal }, `downloading ${name}.sha256`);
-  if (!sums.ok) throw new NoChecksum(`no checksum for ${name} (${sums.status}): not installed`);
-  const want = /^[0-9a-f]{64}\b/i.exec((await sums.text()).trim())?.[0].toLowerCase();
-  if (!want) throw new Error(`${name}.sha256 holds no SHA-256: not installed`);
+  let want = sha256;
+  if (!want) {
+    const sums = await fetchRelease(`${url}.sha256`, { signal }, `downloading ${name}.sha256`);
+    if (!sums.ok) throw new NoChecksum(`no checksum for ${name} (${sums.status}): not installed`);
+    want = /^[0-9a-f]{64}\b/i.exec((await sums.text()).trim())?.[0].toLowerCase();
+    if (!want) throw new Error(`${name}.sha256 holds no SHA-256: not installed`);
+  }
   const res = await fetchRelease(url, { signal }, `downloading ${name}`);
   if (!res.ok || !res.body) throw new Error(`downloading ${name}: ${res.status}`);
   const dest = optDir(sys);
@@ -249,12 +293,17 @@ async function download(
   if (sha !== want) throw new Error(`${name} has SHA-256 ${sha}, expected ${want}: not installed`);
 }
 
-/** Installs `version`, else the latest release, from its tarball; logs what it did. */
-export async function installRelease(sys: Sys, version?: string): Promise<string> {
+/**
+ * Installs `version`, else the pinned one, from its tarball; logs what it did. The pinned version
+ * is checked against the pin's checksum, any other against its release's `.sha256`.
+ */
+export async function installRelease(sys: Sys, version?: string, pin = PIN): Promise<string> {
   const key = tarballKey(sys);
   if (!key) throw new Error(`no CodexBar build for ${sys.platform} ${sys.arch}`);
-  const v = version ? releaseVersion(version) : await latestCodexbar(sys);
-  const path = await installTarball(sys, key, v);
+  const v = version ? releaseVersion(version) : pin.version;
+  const sha = v === pin.version ? pin.sha256[key] : undefined;
+  if (v === pin.version && !sha) throw new Error(`no checksum pinned for CodexBar ${v} (${key})`);
+  const path = await installTarball(sys, key, v, sha);
   const link = linkIntoLocalBin(sys, path);
   sys.ctx.out(`Installed CodexBar ${v} to ${optDir(sys)}${link ? `, linked as ${link}` : ""}.`);
   return path;
@@ -361,14 +410,15 @@ export async function probe(
 }
 
 /**
- * `starbridge update`'s CodexBar step: moves a tarball install to the latest release, or to
- * `version` when one is named. Any other CodexBar, from Homebrew or the macOS app, is left to
- * the way it was installed.
+ * `starbridge update`'s CodexBar step: moves a tarball install to the pinned release, or to
+ * `version` when one is named. A newer one, which only `--codexbar` installs, is kept. Any other
+ * CodexBar, from Homebrew or the macOS app, is left to the way it was installed.
  */
 export async function updateCodexbar(
   sys: Sys,
   configured: string | undefined,
   version?: string,
+  pin = PIN,
 ): Promise<number> {
   const out = sys.ctx.out;
   const found = findCodexbar(sys, configured);
@@ -390,22 +440,19 @@ export async function updateCodexbar(
     return version ? 1 : 0;
   }
   const have = installedVersion(sys);
-  let want: string | undefined;
   try {
-    want = version ? releaseVersion(version) : await latestCodexbar(sys);
+    const want = version ? releaseVersion(version) : pin.version;
     if (have === want) {
       out(`CodexBar ${have} is ${version ? "installed" : "up to date"}.`);
       return 0;
     }
-    await installRelease(sys, want);
-    return 0;
-  } catch (e) {
-    if (!version && e instanceof NoChecksum) {
-      out(
-        `CodexBar ${want}'s build for this machine is not published yet: kept ${have ?? "the installed one"}.`,
-      );
+    if (!version && have && compareCodexbar(have, want) > 0) {
+      out(`CodexBar ${have} is newer than the ${want} this release installs: kept.`);
       return 0;
     }
+    await installRelease(sys, want, pin);
+    return 0;
+  } catch (e) {
     out(`Could not update CodexBar: ${(e as Error).message}`);
     return 1;
   }

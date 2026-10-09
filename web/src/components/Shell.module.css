@@ -19,6 +19,10 @@
   margin: var(--s3) var(--s4) 0;
 }
 
+.stopWaiting {
+  margin-top: var(--s2);
+}
+
 .bottom {
   position: fixed;
   z-index: 10;

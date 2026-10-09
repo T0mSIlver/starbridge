@@ -15,7 +15,12 @@ function claudeDir(sys: Sys) {
   return sys.ctx.env.CLAUDE_CONFIG_DIR || join(sys.home, ".claude");
 }
 
-const claude = (sys: Sys, ...args: string[]) => run(sys, "claude", args, { timeoutMs: 180_000 });
+/**
+ * Runs from the home directory, so a repository's `.claude/settings.json` around the current
+ * directory neither shows its marketplaces to setup nor gets edited by it (#762).
+ */
+const claude = (sys: Sys, ...args: string[]) =>
+  run(sys, "claude", args, { timeoutMs: 180_000, cwd: sys.home });
 
 /** The list, or why `claude <args> --json` gave none. */
 async function listJson<T>(sys: Sys, ...args: string[]): Promise<T[] | string> {
@@ -132,7 +137,15 @@ export async function installPlugins(sys: Sys, state: PluginState): Promise<stri
   if (foreign) throw new Error(foreign);
   const done: string[] = [];
   if (!state.marketplace) {
-    const r = await claude(sys, "plugin", "marketplace", "add", MARKETPLACE_SOURCE);
+    const r = await claude(
+      sys,
+      "plugin",
+      "marketplace",
+      "add",
+      MARKETPLACE_SOURCE,
+      "--scope",
+      "user",
+    );
     if (r?.code !== 0)
       throw new Error(`claude plugin marketplace add ${MARKETPLACE_SOURCE}: ${failure(r)}`);
     done.push(`Added the ${MARKETPLACE} marketplace.`);
@@ -146,8 +159,13 @@ export async function installPlugins(sys: Sys, state: PluginState): Promise<stri
   return done;
 }
 
-/** Uninstalls both plugins and the marketplace. */
+/**
+ * Uninstalls both plugins and the marketplace. Leaves a marketplace from another
+ * source and its plugins alone, since setup never installs from one (#762).
+ */
 export async function removePlugins(sys: Sys, state: PluginState): Promise<string[]> {
+  if (state.foreign)
+    return [`Left the ${MARKETPLACE} marketplace from ${state.foreign} and its plugins alone.`];
   const done: string[] = [];
   for (const id of PLUGINS) {
     if (!state.plugins[id]) continue;
@@ -157,6 +175,8 @@ export async function removePlugins(sys: Sys, state: PluginState): Promise<strin
     );
   }
   if (state.marketplace) {
+    // No `--scope user`: with it, Claude Code drops the declaration but keeps the marketplace in
+    // its known list. Run from home, every scope is only the files under ~/.claude.
     const r = await claude(sys, "plugin", "marketplace", "remove", MARKETPLACE);
     done.push(
       r?.code === 0

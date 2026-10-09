@@ -101,7 +101,8 @@ class MainActivity : ComponentActivity() {
                 if (tooOld != null && phase != Phase.SignedOut) {
                     Scaffold { padding -> UpdateRequired(tooOld!!, BuildConfig.VERSION_NAME, installer(), ::openUpdate, Modifier.padding(padding)) }
                 } else if (phase == Phase.Ready) {
-                    Main(decisions, store.notice, store::dismissNotice, opening.receiveAsFlow())
+                    val heldRevoked by store.heldRevoked.collectAsStateWithLifecycle()
+                    Main(decisions, store.notice, store::dismissNotice, opening.receiveAsFlow(), heldRevoked?.let { held -> held.notice to { store.stopWaiting(held.member) } })
                     val asks by store.joinAsks.collectAsStateWithLifecycle()
                     val comparison by store.comparison.collectAsStateWithLifecycle()
                     JoinPrompt(asks, comparison, JoinActions(store::compareJoin, store::approveJoin, store::refuseJoin, store::closeComparison))

@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { imageSrc, linkLabel } from "./attachments";
-import { closedBy, outcomeText } from "./outcome";
+import { closedBy, closedByPhrase, outcomeText } from "./outcome";
 import type { InboxItem } from "./types";
 
 // A 1x1 PNG, base64url with "-" and "_" where base64 has "+" and "/".
@@ -52,4 +52,15 @@ test("a decision answered elsewhere closes when its agent settles it", () => {
   expect(outcomeText(withdrawn)).toBe("Withdrawn");
   expect(closedBy(withdrawn)).toBe("The agent");
   expect(closedBy({ ...withdrawn, settled: undefined })).toBe("Another device");
+});
+
+test("a question answered in the agent's own picker says the keyboard, not the agent (#865)", () => {
+  const item = {
+    decision: {},
+    answeredAt: "2026-10-08T21:00:00Z",
+    settled: "elsewhere",
+  } as InboxItem;
+  expect(outcomeText(item)).toBe("Answered");
+  expect(closedByPhrase(item)).toBe("at the keyboard");
+  expect(closedBy(item)).toBe("The keyboard");
 });

@@ -190,6 +190,7 @@ class ServerStore(
         "This phone's saved sign-in couldn't be read, so you're signed out. Sign in again.".takeIf { disk.unreadable.isNotEmpty() },
     )
     private val headBook = Heads(directories)
+    override val heldRevoked = MutableStateFlow<HeldRevoked?>(null)
     /** The hold notice last shown, so it goes once the hold ends. */
     @Volatile private var shownHold: String? = null
     override val sending = MutableStateFlow<Map<String, String>>(emptyMap())
@@ -249,6 +250,7 @@ class ServerStore(
         val held = withheld() != null
         // A hold that ended takes its notice with it; only a confirmed one raises it.
         if (!held && notice.value != null && notice.value == shownHold) notice.value = null
+        if (!held) heldRevoked.value = null
         // A revoked machine's items leave, as on the web: nothing it asked can be answered (#344).
         fun active(from: String) = directory?.members?.get(from)?.active != false
         decisions.value = if (held) emptyList() else saved.decisions.filter { active(it.from) }.map(::toUi)
@@ -805,7 +807,9 @@ class ServerStore(
     /**
      * Why no machine's item counts: the server holds back entries a machine has seen. It names the
      * machine and, for a head it passed on, the device; a compromised machine can name any device,
-     * the owner's own phone included, so the machine is the one to revoke first.
+     * the owner's own phone included, so the machine is the one to revoke first. A head whose
+     * member a `revoke` names says who revoked it: only the owner can tell whether they did, or a
+     * revoked device forged it on a fork (#813).
      */
     private fun withheld(): String? {
         val dir = directory ?: return null
@@ -814,7 +818,20 @@ class ServerStore(
         val machine = name(held.id)
         val seen = held.by?.let { "$machine says ${name(it)} has seen changes to your devices that the server is holding back." }
             ?: "The server is holding back changes to your devices that $machine has seen."
-        return "$seen Nothing from your machines shows until it sends them. If this does not clear, revoke $machine first."
+        val revoked = held.revoked
+            ?: return "$seen Nothing from your machines shows until it sends them. If this does not clear, revoke $machine first."
+        return "$seen ${name(revoked.by)} revoked ${name(revoked.id)} on ${revoked.at.take(10)}. If you did not, the server may be hiding that ${name(revoked.by)} was revoked. Nothing from your machines shows until this clears; if you did, tap Stop waiting."
+    }
+
+    override fun stopWaiting(memberId: String) = run {
+        forgetHeads(memberId)
+        heldRevoked.value = null
+        sync()
+    }
+
+    private fun forgetHeads(memberId: String) {
+        val heads = saved.heads.toMutableMap()
+        if (headBook.forget(heads, memberId)) persist(saved.copy(heads = heads))
     }
 
     /**
@@ -828,6 +845,7 @@ class ServerStore(
         // Removed from the devices: the wipe said why, and nothing more opens.
         if (phase.value != Phase.Ready) return true
         val why = withheld() ?: return false
+        heldRevoked.value = directory?.let { headBook.withheldBy(saved.heads, it, saved.entries) }?.revoked?.let { HeldRevoked(it.id, why) }
         notice.value = why
         shownHold = why
         alerts.clearAll()
@@ -1881,6 +1899,8 @@ class ServerStore(
         directory = after
         closeRevoked(after)
         persist(saved.copy(entries = all, pin = Pin(after.length, after.head)))
+        // This phone signed the revocation, so it is no fork: a head the member forged ends with it (#813).
+        forgetHeads(memberId)
     }
 
     // --- Replacing the recovery key (#348) -------------------------------------------------

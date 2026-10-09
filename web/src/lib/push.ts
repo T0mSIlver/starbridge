@@ -1,12 +1,15 @@
 // Web Push on the page side: registers the service worker and subscribes with the server's
 // VAPID key. The service worker (src/sw/sw.ts) opens what arrives.
 import { api } from "./api";
+import { desktop } from "./desktop";
 import { needsHomeScreen, thisBrowser } from "./install";
 
 /** "install": an iOS tab, where push needs the page on the Home Screen first. */
 export type PushState = "unsupported" | "install" | "denied" | "off" | "on";
 
+// The desktop app notifies through its own bridge (lib/desktop.ts), not Web Push.
 const supported = () =>
+  !desktop &&
   typeof navigator !== "undefined" &&
   "serviceWorker" in navigator &&
   typeof PushManager !== "undefined" &&

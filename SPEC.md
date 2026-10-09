@@ -52,9 +52,17 @@ it (#801). The line under the hero's buttons, with end-to-end encryption, shows 
 
 The web app ships first wherever it can: installed to the home screen on iOS (Web Push works for
 home-screen web apps since iOS 16.4) and as an installed app on desktop browsers. Android is a
-native app. No native iOS app until there is demand and a device to test on. A desktop app, if
-one comes, is Tauri over Electron, to reuse the web code; a Mac surface may instead live in
-CodexBar's menu bar, upstream.
+native app. No native iOS app until there is demand and a device to test on.
+
+The desktop app is Electron, loading the configured server's web page (owner, 2026-10-08). The
+page stays the device: it signs in, pairs and keeps its keys as in a browser, so every web release
+reaches the app without an app update. The app adds what a browser cannot: the Needs-you count in
+the menu bar, notifications with the options as buttons and a typed reply, delivery while no
+browser runs, `starbridge://` links, and later presence (#848). Electron is the only stack with
+all of these on macOS and Windows; Tauri would need a static export of a web app that renders
+per request, and it has no typed reply nor idle and lock detection. The cost is a ~150 MB
+download. The comparison is in the planning repo's
+[research/desktop-app.md](https://github.com/T0mSIlver/starbridge-planning/blob/main/research/desktop-app.md).
 
 The CLI runs on Linux, macOS and Windows (#552, decided 2026-10-06 for launch). On Windows,
 CodexBar has no build, so a Windows machine uploads no quotas and setup says so; questions,
@@ -171,12 +179,21 @@ provider plugins add providers, not panels.
   hold into each answer (`dir`); a machine refuses every device answer while an active device has
   signed a head its chain lacks. Machines sign `dir` into every item; a device re-reads the
   directory, then holds every machine's items (shows none, notifies nothing, sends no answer)
-  while an active machine has signed a head its chain lacks. A machine also passes on heads it
-  got from devices. Such a head counts even when the chain doesn't list that device yet, until
-  the chain shows the device revoked. The hold names the
-  machine and the device and says to revoke the machine first, since a compromised machine can
-  name the owner's own phone. Settings and revoking keep working. Closing the gap fully needs a
+  while a machine has signed a head its chain lacks. Machines before #794 also passed on heads
+  they got from devices; such a head counts even when the chain doesn't list that device yet.
+  The hold names the machine and the device and says to revoke the machine first, since a
+  compromised machine can name the owner's own phone. Settings and revoking keep working. A
+  machine that knows of a longer head posts nothing (#794). Closing the gap fully needs a
   channel the server does not carry.
+- **A revocation ends no hold** (#794, #813). A member signs no head past its own revocation, so
+  a chain that revokes the member whose head shows the gap is a fork: a revoked device whose
+  revocation the server hides can make one. A head therefore keeps counting while a `revoke`
+  names its signer or its `by`; only a `recover` ends it. The way out after revoking a member
+  that forged a long head: `starbridge pair --force` on a machine; on a device, revoking from it
+  forgets that member's heads, since that device knows its own revocation is real, and any other
+  device's hold names who revoked the member and offers "I revoked it: stop waiting". Only the
+  owner can tell their revocation from a forged one. Tom chose this over a button on every
+  device, or none, on 2026-10-08 (#813).
 - **Browser keys** (#8, #116, #274, #283, #354). Non-extractable WebCrypto keys in IndexedDB,
   read back once after writing, with raw libsodium keys where they don't return (WebKit reads an
   X25519 `CryptoKey` back as null). A join or recovery keeps its keys under `pending` until the
@@ -477,24 +494,32 @@ provider plugins add providers, not panels.
   A link from another server that this one doesn't know names that server, "This code is from
   starbridge.run, and this phone is signed in to …", instead of "No pairing with this code"
   (#671). Only a failed lookup says it, since a server can answer under several names.
-- **Setup** (`cli/src/setup/`; #68, #239, #245) installs CodexBar's latest release, taking the
-  static musl build where the glibc one would not start. Only the repository is pinned, since
-  CodexBar ships almost daily (#530): the tarball must match the `.sha256` of the same release,
-  as Homebrew checks it, and `starbridge update` moves that install to the latest release too.
-  The latest version comes from where `releases/latest` redirects, not GitHub's API, which allows
-  60 unauthenticated requests an hour per address, few behind a shared NAT on launch day; the
+- **Setup** (`cli/src/setup/`; #68, #239, #245) installs the CodexBar release this Starbridge
+  release pins, taking the static musl build where the glibc one would not start, and
+  `starbridge update` moves that install to the new binary's pin (#568). Each release PR pins
+  CodexBar's latest release, which `version.ts` writes with each tarball's SHA-256 into
+  `cli/src/setup/codexbar-pin.json`, so the signed binary carries them. Checking a tarball against
+  the `.sha256` of its own release (#530) caught only a damaged download: whatever CodexBar's
+  account published, or replaced, since its release job uploads with `--clobber`, ran on every
+  machine at its next update. CodexBar's releases carry no signature or build attestation.
+  The pin costs no work per CodexBar release, which ships almost daily; users get CodexBar's
+  fixes with the next Starbridge release, or sooner with `update --codexbar <version>`, which
+  checks only the release's own `.sha256` and which `update` does not undo while the pin is
+  older. A CodexBar from Homebrew follows steipete's tap, as the user's `brew upgrade` does. The
   download says its size and how far it got every 5 s, since the Linux tarball is 170 MB (#618).
   `update` goes on to CodexBar when its own download fails, offline say, but not when a release
   does not check out (#617).
-  `update --codexbar <version>` installs one release, for when the latest breaks; a broken
+  `update --codexbar <version>` installs one release, for when the pinned one breaks; a broken
   CodexBar already shows as each provider's quota error, so there is no other rollback. A daily
-  workflow installs the latest release and reads its output without credentials, and opens an
-  issue when it breaks. A provider works when `usage
+  workflow installs CodexBar's latest release and reads its output without credentials, and opens
+  an issue when it breaks, so a release does not pin a broken one. A provider works when `usage
   --provider X` returns windows; CodexBar exits 1 with the reason in its JSON row, so setup reads
   the row. The unit runs the `starbridge` on the PATH when that is the running binary, since that
   path survives brew upgrades. Setup turns on plugin auto-update through `extraKnownMarketplaces`,
   installs the Claude Code plugins only from a marketplace whose source is this repository (#274),
-  and Codex's skill and rule, the Pi package and opencode's plugin and skill from copies the CLI
+  and uninstall removes only that one, so a developer's own `starbridge` marketplace survives;
+  both run `claude` from the home directory, so no repository's `.claude` settings are read or
+  edited (#762). Setup installs Codex's skill and rule, the Pi package and opencode's plugin and skill from copies the CLI
   carries so versions match. The local agent rewrites outdated copies when it starts.
 - **Setup asks little** (#750). Each question was one more Enter between a new user and their
   first answer, and nearly everyone said yes. Setup installs Starbridge in every agent it finds
@@ -679,7 +704,12 @@ Codex prompts are not supported.
 - **Claude Code** (#57). A `PermissionRequest` command hook (600 s) races the dialog. Its input has
   no `tool_use_id`, so the hook settles a call by the hash of its `tool_input` on `PostToolUse`,
   `PostToolUseFailure` and `PermissionDenied` (a call that runs and fails fires only
-  `PostToolUseFailure`, #847), and all of a session's prompts on `Stop` and `SessionEnd`. Both
+  `PostToolUseFailure`, #847), and all of a session's prompts on `Stop` and `SessionEnd`. A Yes at
+  the keyboard tells the hook nothing until the call ends, so a long command left its card
+  answerable on the phone for the whole run (#866): while it holds a Bash prompt, the hook watches
+  for the call's shell (a process under Claude Code started after the prompt, whose arguments
+  carry the command as `eval '…'`) and settles the prompt when it starts. Other tools, and
+  Windows, still settle when the call ends. Both
   tool hooks run a shell check that starts the CLI only while the CLI marks an unexpired prompt
   open (`<config>/permissions-open`, written with the state): starting it on every tool call cost
   about 50 ms and 50 MB, prompts on or off (#517). "This session" and "always" are offered only
@@ -790,6 +820,9 @@ Codex prompts are not supported.
   the owner why this run is theirs to watch. The run posts its start, its first progress right
   after it, later progress at most every 10 s, a heartbeat every minute and its exit; a first
   progress held back 10 s left a run that opens on `[0/5]` with an indeterminate bar (#828).
+  Each update's `at` carries milliseconds (#867): devices keep the update with the latest `at`,
+  and with whole seconds the start and the first progress tied, so a phone that got the start's
+  push first kept it and showed no step until the next progress, 10 s later.
   Output goes through a pipe, so tools that print progress only to a terminal show none.
 - Devices call a run lost 3 minutes after its last update (#190, #249); the server cannot read a
   sealed run, so this is client-side. A lost run shows "Lost, no news for 3 min 37 s" and no
@@ -878,7 +911,9 @@ first window, so a provider with a window running out leads.
   it returns to its place and notifies once, "Back from snooze", never again. The owner chose
   these from mockups.
 - **History** lists answered questions and the last 7 days of prompts, with how and where each was
-  answered.
+  answered. A question settled `elsewhere` without a page to answer in was answered in the
+  agent's own picker or terminal, so it reads "at the keyboard", never "by the agent", which
+  stays for a withdrawn question or one answered on its page (#865).
 - **Closed sections wait at the bottom** (#662, #682). Closed, History sits at the bottom of a
   short inbox and Snoozed just above it, out of the way; opened, each glides up under the items
   and its rows fade in. Opening Snoozed leaves History at the bottom.
@@ -937,7 +972,8 @@ first window, so a provider with a window running out leads.
   open prompts every 5 s rather than 20 s, as Android does at 10 s (#445): it cannot tell a browser
   without Web Push from a server that sends none, and the owner may be watching it for a question.
   That is 24 reads a minute per visible page, inside the per-address limit; 100 such pages cost
-  about a tenth of a core (#664 has the numbers). A hidden page still reads nothing.
+  about a tenth of a core (#664 has the numbers). A hidden page still reads nothing, except in
+  the desktop app, which notifies from its inbox and prompts and so reads them while hidden (#886).
 - **Notifications.** The service worker shows one per question and closes it once answered. Its
   actions answer only for the account it was shown for (#274). Signing out, revocation or adopting
   new keys closes them all (#311).
