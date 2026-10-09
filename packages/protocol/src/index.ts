@@ -5,6 +5,7 @@ export * from "./heads";
 export * from "./images";
 export * from "./join";
 export * from "./keys";
+export * from "./notifications";
 export * from "./pace";
 export * from "./pairing";
 export * from "./permission";
