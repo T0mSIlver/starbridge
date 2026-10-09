@@ -33,8 +33,12 @@ export const BUDGETS = {
   /** The largest DMG. */
   downloadMb: 140,
 };
-/** Launches; the first is left out, since macOS checks a new binary then (1.2–2 s). */
-const RUNS = 7;
+/**
+ * Launches; the first is left out, since macOS checks a new binary then (1.2–2 s). The 13 counted
+ * give a true middle sample, and the runner's slow launches (up to 1.2 s, in bursts) must then be
+ * 7 of them to move it: run 37949475260 failed on 6 counted, 3 of them slow (#924).
+ */
+const RUNS = 14;
 
 type Mark = { name: string; at: number; ms?: number; mb?: number };
 
