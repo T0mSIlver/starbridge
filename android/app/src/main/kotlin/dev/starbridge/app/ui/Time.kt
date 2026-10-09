@@ -52,6 +52,10 @@ fun clock(at: Instant, h24: Boolean, zone: ZoneId = ZoneId.systemDefault(), loca
 fun day(at: Instant, zone: ZoneId = ZoneId.systemDefault(), locale: Locale = Locale.getDefault()): String =
     format("MMMd", locale).withZone(zone).format(at)
 
+/** The weekday, short, in the phone's language: "Mon", "lun." */
+fun weekday(at: Instant, zone: ZoneId = ZoneId.systemDefault(), locale: Locale = Locale.getDefault()): String =
+    format("EEE", locale).withZone(zone).format(at)
+
 /**
  * A clock time in a sentence: "at 15:55" today, "tomorrow at 10:15", "yesterday at 10:15", else
  * "on Oct 8 at 10:15".

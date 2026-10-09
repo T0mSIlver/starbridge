@@ -1028,6 +1028,15 @@ first window, so a provider with a window running out leads.
   these from mockups over one-tap answers on a wider Needs you, a runs widget and taller sizes.
   RemoteViews cannot load the app's fonts, so the widgets set in the system's sans, and Glance
   draws no paths, so a meter's overrun shows only its red cap.
+- **A Quotas widget says when a window runs out in its own short words** (#912), in red:
+  "Runs out tomorrow 06:44", else "Runs out Mon 06:44", "Out Mon 06:44", "Out Mon", the first
+  that fits its column whole, measured at the phone's font scale; "Ran out yesterday 22:00"
+  shortens the same way. The weekday and time follow the phone's language, zone and the Clock
+  setting; a week or more away, the date replaces the weekday. The Quotas screen's sentence
+  ("Will run out on 13 Oct at 06:44") was cut off in a widget's column, losing the time. The
+  widget always gives a clock time, never "in 3 h", since a launcher redraws it only every 30
+  minutes. Where even "Out Mon" does not fit (Polish "niedz." at font scale 1.3 in a 2×2 at its
+  110 dp minimum), it sets smaller (12.5 sp there) rather than cut off.
 - **Each Quotas widget shows the quotas picked for it** (#907). Dropping one opens a picker, as
   Todoist's and Keep's widgets do; Reconfigure on a long press opens it again. A 2×2 takes one
   quota, in one tap; a 4×2 takes two of one plan, side by side as the 2×2 draws one: a plan with

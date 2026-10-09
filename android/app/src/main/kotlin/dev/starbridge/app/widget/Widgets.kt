@@ -2,8 +2,12 @@ package dev.starbridge.app.widget
 
 import android.content.Context
 import android.content.Intent
+import android.graphics.Paint
+import android.graphics.Typeface
 import android.os.Build
+import android.text.TextPaint
 import android.text.format.DateFormat
+import android.util.TypedValue
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -53,12 +57,15 @@ import dev.starbridge.app.MainActivity
 import dev.starbridge.app.data.Clock
 import dev.starbridge.app.data.Colours
 import dev.starbridge.app.data.Decision
+import dev.starbridge.app.data.Pace
 import dev.starbridge.app.data.Phase
 import dev.starbridge.app.data.Prefs
 import dev.starbridge.app.data.QuotaSettings
 import dev.starbridge.app.data.QuotaWindow
 import dev.starbridge.app.data.Store
 import dev.starbridge.app.di.app
+import dev.starbridge.app.ui.clock
+import dev.starbridge.app.ui.day
 import dev.starbridge.app.ui.inbox.snoozed
 import dev.starbridge.app.ui.quotas.Course
 import dev.starbridge.app.ui.quotas.Mood
@@ -69,12 +76,18 @@ import dev.starbridge.app.ui.theme.DarkProviders
 import dev.starbridge.app.ui.theme.LightColors
 import dev.starbridge.app.ui.theme.LightProviders
 import dev.starbridge.app.ui.theme.StarbridgeColors
+import dev.starbridge.app.ui.weekday
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.launch
 import java.time.Instant
+import java.time.ZoneId
+import java.time.temporal.ChronoUnit
+import java.util.Locale
+import kotlin.math.abs
+import kotlin.math.floor
 
 // The home-screen widgets (#894): "Needs you", the count of questions, and Quotas. Glance draws
 // them as RemoteViews, so they follow the app's look with Glance's means: the tokens as day and
@@ -253,8 +266,19 @@ internal fun List<QuotaRow>.chosen(choice: Choice, count: Int): List<QuotaRow> {
     return (picked + filter { Plan.of(it.window) == choice.plan && it !in picked }).take(count)
 }
 
-/** A window as a widget row: its bar on the owner's scale, where it is headed, and its state in words. */
-internal class QuotaRow(val window: QuotaWindow, val bar: QuotaSettings.Bar, val course: Course, val mood: Mood, val word: String) {
+/**
+ * A window as a widget row: its bar on the owner's scale, where it is headed, and its state in
+ * words: the Quotas screen's [word] for the picker, and [words], clearest first, for [Figure] to
+ * show the first that fits.
+ */
+internal class QuotaRow(
+    val window: QuotaWindow,
+    val bar: QuotaSettings.Bar,
+    val course: Course,
+    val mood: Mood,
+    val word: String,
+    val words: List<String>,
+) {
     /** The figure and the fill: a window that ran out reads 100% used, as on the Quotas screen. */
     val percent: Int get() = if (course == Course.RanOut && bar.word == "used") 100 else bar.percent.coerceIn(0, 100)
 
@@ -268,10 +292,56 @@ internal class QuotaRow(val window: QuotaWindow, val bar: QuotaSettings.Bar, val
             else settings.copy(hidden = emptyList()).arrange(windows, now).filter { Plan.of(it) == plan }
             return arranged.map { w ->
                 val (mood, word) = w.state(now, settings.absoluteResets, h24)
-                QuotaRow(w, settings.bar(w, now), w.course(now), mood, word)
+                val course = w.course(now)
+                val at = (w.pace as? Pace.RunsOut)?.at
+                QuotaRow(w, settings.bar(w, now), course, mood, word, if (course == Course.Steady || at == null) listOf(word) else outWords(at, now, h24))
             }
         }
     }
+}
+
+/**
+ * The widget's own words for a window that runs out or ran out (#912), clearest first, each
+ * shorter than the last: "Runs out tomorrow 06:44", "Runs out Sat 06:44", "Out Sat 06:44",
+ * "Out Sat". The Quotas screen's sentence is cut off in a widget's column. Always a clock time,
+ * never "in 3 h": a launcher redraws a widget only every 30 minutes.
+ */
+internal fun outWords(at: Instant, now: Instant, h24: Boolean, zone: ZoneId = ZoneId.systemDefault(), locale: Locale = Locale.getDefault()): List<String> {
+    val time = clock(at, h24, zone, locale)
+    val today = now.atZone(zone).toLocalDate()
+    val date = at.atZone(zone).toLocalDate()
+    val near = when (date) {
+        today -> "today"
+        today.plusDays(1) -> "tomorrow"
+        today.minusDays(1) -> "yesterday"
+        else -> null
+    }
+    // A weekday names a day within a week either way; further off, the date.
+    val far = if (abs(ChronoUnit.DAYS.between(today, date)) < 7) weekday(at, zone, locale) else day(at, zone, locale)
+    val days = listOfNotNull(near, far)
+    val words = if (at.isAfter(now)) days.map { "Runs out $it $time" } + days.map { "Out $it $time" } + days.map { "Out $it" }
+    else days.map { "Ran out $it $time" } + days.map { "Ran out $it" } + "Ran out"
+    return words.distinct()
+}
+
+/** How wide [text] sets in the widgets' sans (Glance's FontWeight.Medium is sans-serif-medium), under the phone's font scale. */
+internal fun Context.textWidth(text: String, size: TextUnit, medium: Boolean): Dp {
+    val metrics = resources.displayMetrics
+    val paint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+        textSize = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, size.value, metrics)
+        typeface = Typeface.create(if (medium) "sans-serif-medium" else "sans-serif", Typeface.NORMAL)
+    }
+    return (paint.measureText(text) / metrics.density).dp
+}
+
+/**
+ * The first of [words] that fits [width] whole at [size]. When none does (Polish "Out niedz." at
+ * font scale 1.3 in a 2×2 at its narrowest), the last, the shortest, set smaller to fit.
+ */
+internal fun Context.fitting(words: List<String>, width: Dp, size: TextUnit, medium: Boolean): Pair<String, TextUnit> {
+    words.firstOrNull { textWidth(it, size, medium) <= width }?.let { return it to size }
+    val last = words.last()
+    return last to (floor(size.value * width.value / textWidth(last, size, medium).value * 2) / 2).sp
 }
 
 /**
@@ -361,7 +431,8 @@ internal fun QuotasWidget(rows: List<QuotaRow>?, p: Palette, choice: Choice? = n
                     if (i > 0) Spacer(GlanceModifier.width(gap))
                     Column(GlanceModifier.width(half)) {
                         Text(row.window.window, style = style(13.sp, p.fg2), maxLines = 1)
-                        Figure(row, half, p, figure = 34.sp)
+                        // 2 dp gaps, under a quota's name: at font scale 1.3 a 4×2 is full.
+                        Figure(row, half, p, figure = 34.sp, gap = 2.dp)
                     }
                 }
             }
@@ -402,14 +473,16 @@ internal fun QuotasWidget(rows: List<QuotaRow>?, p: Palette, choice: Choice? = n
     }
 }
 
-/** A quota as the 2×2 draws it: its figure, its meter and its state. */
+/** A quota as the 2×2 draws it: its figure, its meter and its state, in the clearest words that fit [width]. */
 @Composable
-private fun Figure(row: QuotaRow, width: Dp, p: Palette, figure: TextUnit = 45.sp) {
+private fun Figure(row: QuotaRow, width: Dp, p: Palette, figure: TextUnit = 45.sp, gap: Dp = 4.dp) {
     Text("${row.percent}%", style = style(figure, p.fg, medium = true), maxLines = 1)
-    Spacer(GlanceModifier.height(4.dp))
+    Spacer(GlanceModifier.height(gap))
     Meter(row, width, p)
-    Spacer(GlanceModifier.height(4.dp))
-    Text(row.word, style = style(13.sp, row.mood.color(p), medium = row.mood == Mood.Bad), maxLines = 1)
+    Spacer(GlanceModifier.height(gap))
+    val medium = row.mood == Mood.Bad
+    val (words, size) = LocalContext.current.fitting(row.words, width, 13.sp, medium)
+    Text(words, style = style(size, row.mood.color(p), medium = medium), maxLines = 1)
 }
 
 class QuotasWidget : GlanceAppWidget() {
