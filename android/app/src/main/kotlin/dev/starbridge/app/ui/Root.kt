@@ -54,7 +54,6 @@ import dev.starbridge.app.data.Phase
 import dev.starbridge.app.data.Run
 import dev.starbridge.app.ui.devices.DevicesScreen
 import dev.starbridge.app.ui.settings.SettingsViewModel
-import dev.starbridge.app.ui.settings.PerWindowScreen
 import dev.starbridge.app.ui.settings.SettingsScreen
 import dev.starbridge.app.ui.settings.SettingsActions
 import dev.starbridge.app.ui.devices.AddDeviceScreen
@@ -95,7 +94,6 @@ import java.time.Instant
  */
 @Serializable data class PairLinkKey(val link: String, val at: Long) : NavKey
 @Serializable data object RecoveryKeyKey : NavKey
-@Serializable data object WindowsKey : NavKey
 
 private val Tab.key: NavKey get() = when (this) {
     Tab.Inbox -> InboxKey
@@ -106,7 +104,7 @@ private val Tab.key: NavKey get() = when (this) {
 /** The tab a page belongs to. */
 private fun tabOf(key: NavKey?) = when (key) {
     QuotasKey -> Tab.Quotas
-    SettingsKey, DevicesKey, AddDeviceKey, is PairLinkKey, RecoveryKeyKey, WindowsKey -> Tab.Settings
+    SettingsKey, DevicesKey, AddDeviceKey, is PairLinkKey, RecoveryKeyKey -> Tab.Settings
     else -> Tab.Inbox
 }
 
@@ -376,7 +374,7 @@ fun Main(decisions: List<Decision>, notice: StateFlow<String?>, dismiss: () -> U
                         LaunchedEffect(Unit) { vm.loadPushHold() }
                         SettingsScreen(
                             windows, quota, members.size, colours, push, server,
-                            SettingsActions(vm::setQuota, vm::setColours, vm::setPush, vm::signOut, devices = { backStack.add(DevicesKey) }, addDevice = { backStack.add(AddDeviceKey) }, inbox = vm::setInbox, clock = vm::setClock, allowUnseen = vm::setAllowUnseen, pushHold = vm::setPushHold, windows = { backStack.add(WindowsKey) }),
+                            SettingsActions(vm::setQuota, vm::setColours, vm::setPush, vm::signOut, devices = { backStack.add(DevicesKey) }, addDevice = { backStack.add(AddDeviceKey) }, inbox = vm::setInbox, clock = vm::setClock, allowUnseen = vm::setAllowUnseen, pushHold = vm::setPushHold),
                             inbox = inbox,
                             clock = clock,
                             allowUnseen = allowUnseen,
@@ -384,12 +382,6 @@ fun Main(decisions: List<Decision>, notice: StateFlow<String?>, dismiss: () -> U
                             pushHold = pushHold,
                             quotas = held,
                         )
-                    }
-                    entry<WindowsKey> {
-                        val vm: SettingsViewModel = hiltViewModel()
-                        val windows by vm.windows.collectAsStateWithLifecycle()
-                        val quota by vm.quota.collectAsStateWithLifecycle()
-                        PerWindowScreen(windows, quota, vm::setQuota, onBack = { backStack.removeAt(backStack.lastIndex) })
                     }
                     entry<DevicesKey> {
                         val vm: DevicesViewModel = hiltViewModel()

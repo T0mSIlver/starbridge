@@ -1269,7 +1269,7 @@ async function main() {
     await page.screenshot({ path: join(AUDIT ?? SHOTS, `inbox-aside-wide-${scheme}.png`) });
   }
 
-  step("a newly raised quota alert notifies a browser that picked it for the window's length");
+  step("a newly raised quota alert notifies a browser that picked it for its window");
   // A 5-hour window at 85%, 3 hours in: "low" at 20% left, and it runs out before the reset.
   const at = (ms: number) => new Date(Date.now() + ms).toISOString().replace(/\.\d+Z$/, "Z");
   const usage = [
@@ -1296,10 +1296,7 @@ async function main() {
     .getByRole("navigation", { name: "Main" })
     .getByRole("link", { name: "Settings" })
     .click();
-  await page
-    .getByRole("group", { name: "5-hour and daily windows" })
-    .getByRole("button", { name: "20% left" })
-    .click();
+  await page.getByRole("checkbox", { name: /^e2e .*: 20% left$/ }).check();
   await page.getByRole("link", { name: "Quotas" }).click();
   await page.waitForFunction(
     () =>

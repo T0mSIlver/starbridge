@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  isShortWindow,
   PUSH_HOLD_CHOICES,
   QUOTA_ALERT_CHOICES,
   type QuotaAlertChoice,
@@ -312,46 +311,8 @@ function QuotaSection() {
           onChange={(runningOutFirst) => patch({ runningOutFirst })}
         />
       </Row>
+      <AlertTable />
     </Section>
-  );
-}
-
-const CHOICE_LABELS: Record<QuotaAlertChoice, string> = {
-  "runs-out": "Runs out",
-  "low-50": "50% left",
-  "low-20": "20% left",
-  "unused-headroom": "Unused at reset",
-};
-
-const said = (picked: QuotaAlertChoice[]) =>
-  picked.length === 0 ? "none" : picked.map((c) => CHOICE_LABELS[c]).join(", ");
-
-/** The alerts a window can pick, any number of them, in their fixed order. */
-function Chips({
-  label,
-  picked,
-  onChange,
-}: {
-  label: string;
-  picked: QuotaAlertChoice[];
-  onChange: (picked: QuotaAlertChoice[]) => void;
-}) {
-  return (
-    <fieldset className={s.chips} aria-label={label}>
-      {QUOTA_ALERT_CHOICES.map((c) => (
-        <button
-          type="button"
-          key={c}
-          className={`t-meta ${s.chip}`}
-          aria-pressed={picked.includes(c)}
-          onClick={() =>
-            onChange(QUOTA_ALERT_CHOICES.filter((x) => (x === c) !== picked.includes(x)))
-          }
-        >
-          {CHOICE_LABELS[c]}
-        </button>
-      ))}
-    </fieldset>
   );
 }
 
@@ -359,35 +320,6 @@ function Chips({
 async function asked() {
   if (typeof Notification !== "undefined" && Notification.permission === "default")
     await Notification.requestPermission();
-}
-
-/** The alerts of every window with none of its own, by its length (#914). */
-function QuotaAlertSection() {
-  const { quotaSettings: q, setQuotaSettings: set } = useApp();
-  const patch = async (p: Partial<Pick<QuotaAlertSettings, "short" | "long">>) => {
-    if (Object.values(p).some((c) => c.length > 0)) await asked();
-    set({ ...q, alerts: { ...q.alerts, ...p } });
-  };
-  return (
-    <Section title="Quota alerts">
-      <div className={s.stack}>
-        <div className="t-small">5-hour and daily windows</div>
-        <Chips
-          label="5-hour and daily windows"
-          picked={q.alerts.short}
-          onChange={(short) => patch({ short })}
-        />
-      </div>
-      <div className={s.stack}>
-        <div className="t-small">Weekly and monthly windows</div>
-        <Chips
-          label="Weekly and monthly windows"
-          picked={q.alerts.long}
-          onChange={(long) => patch({ long })}
-        />
-      </div>
-    </Section>
-  );
 }
 
 type Win = { provider: string; id: string; label: string; minutes: number | null };
@@ -415,125 +347,35 @@ export function setWindowAlerts(
   return { ...a, windows };
 }
 
-/** Each window shown, which follows its length's default unless set to its own alerts or off. */
-function WindowSection({ wins }: { wins: Win[] }) {
-  const { quotaSettings: q, setQuotaSettings: set } = useApp();
-  const [open, setOpen] = useState<string>();
-  if (wins.length === 0) return null;
-  const save = async (w: Win, picked: QuotaAlertChoice[] | undefined) => {
-    if (picked?.length) await asked();
-    set({ ...q, alerts: setWindowAlerts(q.alerts, w, wins, picked) });
-  };
-  return (
-    <Section title="Per window">
-      {wins.map((w) => {
-        const key = quotaWindowKey(w.provider, w.id);
-        const own = q.alerts.windows[key] ?? q.alerts.windows[w.provider];
-        const mode = own === undefined ? "default" : own.length > 0 ? "custom" : "off";
-        const length = isShortWindow(w.minutes) ? q.alerts.short : q.alerts.long;
-        const picked = quotaAlertChoices(q.alerts, w.provider, w.id, w.minutes);
-        const name = `${w.provider} ${w.label}`;
-        const state =
-          mode === "default"
-            ? `Default: ${said(length).toLowerCase()}`
-            : own?.length
-              ? said(own)
-              : "Off";
-        const shown = open === key;
-        return (
-          <div key={key}>
-            <button
-              type="button"
-              className={s.windowHead}
-              aria-expanded={shown}
-              onClick={() => setOpen(shown ? undefined : key)}
-            >
-              <span className="t-small">{name}</span>
-              <span className={`t-meta ${s.sub}`}>{state}</span>
-              <Icon name="down" size={16} />
-            </button>
-            {shown && (
-              <div className={s.stack}>
-                <Segmented<typeof mode>
-                  label={`Alerts for ${name}`}
-                  value={mode}
-                  options={[
-                    ["default", "Default"],
-                    ["custom", "Custom"],
-                    ["off", "Off"],
-                  ]}
-                  onChange={(m) =>
-                    save(
-                      w,
-                      m === "default"
-                        ? undefined
-                        : m === "off"
-                          ? []
-                          : picked.length > 0
-                            ? picked
-                            : ["runs-out"],
-                    )
-                  }
-                />
-                {mode === "custom" && (
-                  <Chips
-                    label={`Alerts for ${name}`}
-                    picked={picked}
-                    onChange={(p) => save(w, p)}
-                  />
-                )}
-              </div>
-            )}
-          </div>
-        );
-      })}
-    </Section>
-  );
-}
-
 /**
  * Everything about quotas, shown once a machine of the account sends them (#914): until then the
  * owner may never use CodexBar, and the page stays about agents.
  */
 function QuotaSections() {
-  const { quotas, refreshQuotas, quotaSettings: q } = useApp();
+  const { quotas, refreshQuotas } = useApp();
   useEffect(() => {
     refreshQuotas().catch(() => {});
   }, [refreshQuotas]);
   if (!holdsQuotas(quotas)) return null;
-  const cards = quotas?.cards ?? [];
-  const wins: Win[] = [];
-  for (const p of providerOrder(cards, q))
-    if (!q.hidden.includes(p))
-      for (const c of cards)
-        if (c.provider === p && !wins.some((w) => w.provider === p && w.id === c.window.id))
-          wins.push({
-            provider: p,
-            id: c.window.id,
-            label: c.window.label,
-            minutes: c.window.windowMinutes,
-          });
-  return (
-    <>
-      <QuotaAlertSection />
-      <WindowSection wins={wins} />
-      <QuotaSection />
-      <ProviderSection />
-    </>
-  );
+  return <QuotaSection />;
 }
 
-/** Each provider: drag (or arrow keys on the handle) to reorder, and show. */
-function ProviderSection() {
+const ALERT_COLUMNS: [QuotaAlertChoice, string, string][] = [
+  ["runs-out", "Runs out", "Runs out before its reset at this pace"],
+  ["low-50", "50% left", "50% left"],
+  ["low-20", "20% left", "20% left"],
+  ["unused-headroom", "Unused", "Resets soon with 30% or more unused"],
+];
+
+/**
+ * Each provider in its order, shown or hidden, with its windows' alerts (#914): drag (or arrow
+ * keys on the handle) to reorder.
+ */
+function AlertTable() {
   const { quotas, quotaSettings: q, setQuotaSettings: set } = useApp();
   const cards = quotas?.cards ?? [];
   const providers = providerOrder(cards, q);
-  if (providers.length === 0)
-    return (
-      <Section title="Providers">
-        <Row label="No quota windows yet" muted />
-      </Section>
-    );
+  if (providers.length === 0) return <Row label="No quota windows yet" muted />;
   const patch = (p: Partial<QuotaSettings>) => set({ ...q, ...p });
   const moveTo = (p: string, at: number) => {
     const order = providers.filter((x) => x !== p);
@@ -541,9 +383,17 @@ function ProviderSection() {
     patch({ order });
   };
   return (
-    <Section title="Providers">
+    <div>
+      <div className={`t-meta ${s.alertGrid} ${s.alertHeads}`} aria-hidden>
+        <span>Alerts</span>
+        {ALERT_COLUMNS.map(([c, label, title]) => (
+          <span key={c} title={title}>
+            {label}
+          </span>
+        ))}
+      </div>
       <Providers providers={providers} cards={cards} q={q} moveTo={moveTo} patch={patch} />
-    </Section>
+    </div>
   );
 }
 
@@ -562,32 +412,74 @@ function Providers({
   patch: (p: Partial<QuotaSettings>) => void;
 }) {
   const reorder = useReorder({ ids: providers, name: (p) => p, onMove: moveTo });
+  const all: Win[] = [];
+  for (const c of cards)
+    if (!all.some((w) => w.provider === c.provider && w.id === c.window.id))
+      all.push({
+        provider: c.provider,
+        id: c.window.id,
+        label: c.window.label,
+        minutes: c.window.windowMinutes,
+      });
+  const pick = async (w: Win, picked: QuotaAlertChoice[]) => {
+    if (picked.length > 0) await asked();
+    patch({ alerts: setWindowAlerts(q.alerts, w, all, picked) });
+  };
   return (
     <div className={`${s.providers} ${reorder.list.className ?? ""}`}>
       {providers.map((p) => {
         const shown = !q.hidden.includes(p);
-        const windows = [
-          ...new Set(cards.filter((c) => c.provider === p).map((c) => c.window.label)),
-        ];
         const item = reorder.item(p);
         return (
-          <div
-            key={p}
-            ref={item.ref}
-            style={item.style}
-            className={`${s.provider} ${item.className}`}
-          >
-            <button type="button" {...reorder.handle(p)}>
-              <Icon name="drag" size={18} />
-            </button>
-            <span className={`t-small ${s.providerName} ${shown ? "" : s.dim}`}>
-              {p} <span className={s.sub}>{windows.join(", ")}</span>
-            </span>
-            <Switch
-              label={`Show ${p}`}
-              checked={shown}
-              onChange={(on) => patch({ hidden: toggle(q.hidden, p, !on) })}
-            />
+          <div key={p} ref={item.ref} style={item.style} className={item.className}>
+            <div className={s.provider}>
+              <button type="button" {...reorder.handle(p)}>
+                <Icon name="drag" size={18} />
+              </button>
+              <span className={`t-small ${s.providerName} ${shown ? "" : s.dim}`}>
+                {p}
+                {!shown && <span className={`t-meta ${s.sub}`}> · hidden</span>}
+              </span>
+              <button
+                type="button"
+                className={s.eye}
+                aria-label={`Show ${p}`}
+                aria-pressed={shown}
+                onClick={() => patch({ hidden: toggle(q.hidden, p, shown) })}
+              >
+                <Icon name={shown ? "eye" : "hidden"} size={18} />
+              </button>
+            </div>
+            {shown &&
+              all
+                .filter((w) => w.provider === p)
+                .map((w) => {
+                  const picked = quotaAlertChoices(q.alerts, w.provider, w.id, w.minutes);
+                  return (
+                    <div key={w.id} className={`t-small ${s.alertGrid} ${s.alertRow}`}>
+                      <span>{w.label}</span>
+                      {ALERT_COLUMNS.map(([c, label]) => (
+                        // The whole cell takes the tap, as wide as a column and a row tall.
+                        <label key={c} className={s.checkCell}>
+                          <input
+                            type="checkbox"
+                            className={s.check}
+                            aria-label={`${p} ${w.label}: ${label}`}
+                            checked={picked.includes(c)}
+                            onChange={(e) =>
+                              pick(
+                                w,
+                                QUOTA_ALERT_CHOICES.filter((x) =>
+                                  x === c ? e.target.checked : picked.includes(x),
+                                ),
+                              )
+                            }
+                          />
+                        </label>
+                      ))}
+                    </div>
+                  );
+                })}
           </div>
         );
       })}

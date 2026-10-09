@@ -101,91 +101,93 @@
 .providerName {
   flex: 1;
   min-width: 0;
-}
-
-/* A row whose controls sit under its name: a window's alerts. */
-.stack {
-  display: grid;
-  gap: var(--s3);
-  padding: var(--s3) var(--s4);
-}
-
-/* A window's row opens to its alerts; the whole line is the button. */
-.windowHead {
-  display: flex;
-  align-items: center;
-  gap: var(--s4);
-  width: 100%;
-  min-height: var(--size-tap);
-  padding: var(--s3) var(--s4);
-  border: 0;
-  background: none;
-  color: inherit;
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-
-.windowHead svg {
-  flex: none;
-  color: var(--fg2);
-  transition: transform var(--t-fast) var(--ease);
-}
-
-.windowHead[aria-expanded="true"] svg {
-  transform: rotate(180deg);
-}
-
-.windowHead:focus-visible {
-  outline: 2px solid var(--fg);
-  outline-offset: -2px;
-}
-
-.windowHead > :first-child {
-  flex: 1;
-  min-width: 0;
-}
-
-/* Alerts a window can pick, any number of them: filter chips, the picked ones in `fg`. */
-.chips {
-  min-width: 0;
-  margin: 0;
-  padding: 0;
-  border: 0;
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--s2);
-}
-
-.chip {
-  min-height: var(--s8);
-  padding: var(--s1) var(--s3);
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius-dense);
-  background: none;
   font-weight: 500;
+}
+
+/* The alerts table (#914): a window's name, then a checkbox per alert, in columns as wide as a
+   tap; the provider rows above each group carry the handle and the eye. */
+.alertGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) repeat(4, 4.25rem);
+  align-items: center;
+  column-gap: var(--s2);
+  padding: 0 var(--s4) 0 calc(var(--s4) + 18px + var(--s3));
+}
+
+/* A long window name breaks rather than spill into the checkboxes on the narrowest phones. */
+.alertGrid > :first-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.alertGrid > :not(:first-child) {
+  display: flex;
+  justify-content: center;
+  text-align: center;
+}
+
+.alertHeads {
+  min-height: var(--size-tap);
+  padding-left: var(--s4);
+  border-bottom: 1px solid var(--line);
+  color: var(--fg2);
+}
+
+.alertRow {
+  min-height: var(--size-tap);
+}
+
+.alertRow:last-child {
+  padding-bottom: var(--s2);
+}
+
+.checkCell {
+  align-self: stretch;
+  align-items: center;
+  min-height: var(--size-tap);
+  cursor: pointer;
+}
+
+.check {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--fg);
+  cursor: pointer;
+}
+
+.eye {
+  display: grid;
+  place-items: center;
+  width: var(--size-tap);
+  height: var(--size-tap);
+  margin: calc(var(--s2) * -1) calc(var(--s3) * -1) calc(var(--s2) * -1) 0;
+  border: 0;
+  background: none;
   color: var(--fg2);
   cursor: pointer;
-  transition:
-    background var(--t-fast) var(--ease),
-    color var(--t-fast) var(--ease);
 }
 
-@media (hover: hover) {
-  .chip:hover {
-    color: var(--fg);
-  }
+.eye[aria-pressed="false"] {
+  color: var(--fg3);
 }
 
-.chip[aria-pressed="true"] {
-  border-color: var(--fg);
-  background: var(--fg);
-  color: var(--bg);
-}
-
-.chip:focus-visible {
+.eye:focus-visible {
   outline: 2px solid var(--fg);
-  outline-offset: 2px;
+  outline-offset: -4px;
+}
+
+@media (max-width: 599px) {
+  .alertGrid {
+    grid-template-columns: minmax(0, 1fr) repeat(4, 40px);
+    column-gap: var(--s1);
+    padding-right: var(--s3);
+  }
+
+  .alertHeads > span {
+    font-size: 11px;
+    line-height: 1.2;
+  }
 }
 
 /* Never wider than its row: on the narrowest phones a long label wraps inside its segment. */
