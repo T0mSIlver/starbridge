@@ -22,6 +22,7 @@ import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
@@ -37,6 +38,7 @@ import androidx.navigation3.scene.Scene
 import androidx.navigation3.scene.SceneStrategy
 import androidx.navigation3.scene.SceneStrategyScope
 import dev.starbridge.app.data.Source
+import kotlinx.coroutines.launch
 import dev.starbridge.app.ui.inbox.MetaRow
 import dev.starbridge.app.ui.inbox.SessionLine
 import dev.starbridge.app.ui.theme.Spacing
@@ -62,6 +64,9 @@ class SheetGround {
 }
 
 val LocalSheetGround = staticCompositionLocalOf { SheetGround() }
+
+/** Closes the sheet this content is in: Material's hide, then its entry leaves the back stack. */
+val LocalSheetClose = staticCompositionLocalOf<() -> Unit> { {} }
 
 /**
  * A question's or a prompt's sheet: the head (the meta row and [head]), then [content], and the
@@ -122,14 +127,20 @@ private class SheetScene<T : Any>(
     override val overlaidEntries = previousEntries
     override val content: @Composable () -> Unit = {
         val ground = remember { SheetGround() }
+        val state = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        val scope = rememberCoroutineScope()
+        // A close and a swipe that cross pop the entry once, never the page under it.
+        var gone by remember { mutableStateOf(false) }
+        val leave = { if (!gone) { gone = true; onBack() } }
+        val close: () -> Unit = { scope.launch { state.hide() }.invokeOnCompletion { leave() } }
         ModalBottomSheet(
-            onDismissRequest = onBack,
-            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+            onDismissRequest = leave,
+            sheetState = state,
             shape = SheetShape,
             containerColor = MaterialTheme.colorScheme.surfaceContainer,
             scrimColor = StarbridgeTheme.colors.scrim,
             dragHandle = { SheetHandle(ground.color) },
-        ) { CompositionLocalProvider(LocalSheetGround provides ground) { entry.Content() } }
+        ) { CompositionLocalProvider(LocalSheetGround provides ground, LocalSheetClose provides close) { entry.Content() } }
     }
 
     override fun equals(other: Any?) = other is SheetScene<*> && other.entry == entry

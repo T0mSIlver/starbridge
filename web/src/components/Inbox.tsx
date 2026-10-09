@@ -189,8 +189,10 @@ export function Inbox() {
   }, [wide]);
 
   const openIds = needs.map((e) => e.id);
+  // Beside the list, the next open item takes its place; on a phone, the list comes back.
   const moveOn = (id: string) => {
     answeredHere.current.add(id);
+    if (!wide) closeItem();
     const next = afterAnswer(openIds, id);
     setPicked((cur) => (cur === id ? next : cur));
     return next;

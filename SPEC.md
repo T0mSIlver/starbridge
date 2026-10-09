@@ -946,6 +946,11 @@ first window, so a provider with a window running out leads.
   next frame, and History shows the answer "not sent yet" until the server takes it. If the server
   refuses it, the question comes back saying "Not sent:" and why, and answering again resends it.
   Waiting for the server's reply kept the card up for its round trip, about a second on a phone.
+  Answered from its open view, the view goes too (#927): Android's sheet, a question's or a
+  prompt's, slides away with Material's own dismiss onto the inbox without the card, and the web
+  shows the next open item beside the list, or the list on a phone. A refused answer comes back in
+  the list, never in a reopened view. Left open, the view showed an answer the owner had just
+  given.
 - **History** lists answered questions and the last 7 days of prompts, with how and where each was
   answered. A question settled `elsewhere` without a page to answer in was answered in the
   agent's own picker or terminal, so it reads "at the keyboard", never "by the agent", which
