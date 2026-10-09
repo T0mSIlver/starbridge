@@ -50,6 +50,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -137,6 +139,8 @@ class ServerStore(
     private val defaultServer: String,
     private val fcmAvailable: Boolean,
     private val scope: CoroutineScope,
+    /** Whether Android counts the default network as validated: a sync waits for it (#920). */
+    private val network: StateFlow<Boolean> = MutableStateFlow(true),
     /** Asks for [flushAnswers] once a network is up; the app schedules [AnswerWorker]. */
     private val wakeWhenOnline: () -> Unit = {},
 ) : Store {
@@ -181,6 +185,10 @@ class ServerStore(
     override val keepsKeys = MutableStateFlow(false)
     override val busy = MutableStateFlow(false)
     override val tooOld = MutableStateFlow<String?>(null)
+    private val reach = Reach(scope)
+    override val connection = MutableStateFlow<String?>(null)
+    /** A sync that waits for the network, then retries until the server answers (#920). */
+    private var catchUpJob: Job? = null
     override val pushHold = MutableStateFlow<Int?>(null)
     @Volatile private var inFront = false
     private var presenceJob: Job? = null
@@ -212,11 +220,16 @@ class ServerStore(
         publish()
         if (saved.joining != null) waitForApproval()
         if (saved.digitJoin != null) waitForDigitJoin()
+        scope.launch { network.collect(reach::network) }
+        scope.launch { reach.status.collect { connection.value = Reach.words(it, host()) } }
     }
 
     // --- State ------------------------------------------------------------------
 
-    private fun api() = Api(http, saved.server, secrets.session)
+    private fun api() = Api(http, saved.server, secrets.session, reach)
+
+    /** The server as the owner knows it: starbridge.run rather than https://starbridge.run. */
+    private fun host() = runCatching { java.net.URI(saved.server).host }.getOrNull() ?: saved.server
 
     private fun now(): String = Instant.now().truncatedTo(ChronoUnit.SECONDS).toString()
 
@@ -304,7 +317,7 @@ class ServerStore(
             try {
                 block()
             } catch (e: Exception) {
-                report(e)
+                report(e, asked = showBusy)
             }
         }
     }
@@ -322,9 +335,19 @@ class ServerStore(
         }
     }
 
-    private fun report(e: Exception) {
+    /**
+     * Turns a failure into a notice. One that only says the server did not answer leaves none: a
+     * sync catches up once it does, and [connection] speaks if that takes long, at once if the
+     * owner [asked] (#920).
+     */
+    private fun report(e: Exception, asked: Boolean = false) {
         // With the exception in the message: Android drops the trace of an UnknownHostException.
         Log.w("Starbridge", "failed: $e", e)
+        if (Reach.transient(e)) {
+            if (asked) reach.surface()
+            catchUp()
+            return
+        }
         if (e is ApiException && e.status == 401 && secrets.session != null) {
             // The keys stay: signing in again binds a new session to this phone.
             persist(newSecrets = secrets.copy(session = null))
@@ -351,7 +374,7 @@ class ServerStore(
         // Another account's key, or this account's from before a replacement (#348).
         is ProtocolException if e.code == "wrong-recovery-key" -> "This is a recovery key, but not this account's current one."
         is ProtocolException -> "Refused: the server sent something that does not check out (${e.code})."
-        is IOException -> "Can't reach ${saved.server}: ${e.message}"
+        is IOException -> "Can't reach ${host()}."
         else -> e.message ?: e.toString()
     }
 
@@ -740,7 +763,44 @@ class ServerStore(
 
     // --- Syncing -----------------------------------------------------------------
 
-    override fun refresh(shown: Boolean) = run(showBusy = shown) { sync() }
+    override fun refresh(shown: Boolean) {
+        // A phone just unlocked may not have its network, or its VPN, back yet: wait for it (#920).
+        if (!network.value) {
+            if (shown) reach.surface()
+            catchUp()
+            return
+        }
+        run(showBusy = shown) { sync() }
+    }
+
+    /**
+     * Syncs once the network is validated, and again after 1 s, 2 s and so on up to 30 s while
+     * the server does not answer. Only while the app is in front: coming back starts a sync anyway.
+     */
+    private fun catchUp() {
+        if (catchUpJob?.isActive == true) return
+        catchUpJob = scope.launch {
+            var wait = 1_000L
+            while (true) {
+                network.first { it }
+                if (!inFront || phase.value != Phase.Ready) return@launch
+                val done = lock.withLock {
+                    try {
+                        sync()
+                        true
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        if (!Reach.transient(e)) report(e)
+                        !Reach.transient(e)
+                    }
+                }
+                if (done) return@launch
+                delay(wait)
+                wait = (wait * 2).coerceAtMost(30_000)
+            }
+        }
+    }
 
     // Outside the lock: the machines take seconds to post, and answers must not wait on them.
     override fun refreshQuotas() {
@@ -1753,6 +1813,8 @@ class ServerStore(
      */
     override fun foreground(on: Boolean) {
         inFront = on
+        // Time spent behind, offline or not, counts for nothing toward saying so (#920).
+        if (on) reach.resumed()
         presenceJob?.cancel()
         // In front, it checks whether it still counts; sent behind, it says absent once.
         presenceJob = scope.launch {
@@ -1801,7 +1863,7 @@ class ServerStore(
                 .onSuccess { pushHold.value = it }
                 .onFailure { e ->
                     pushHold.value = was
-                    if (e is Exception) report(e)
+                    if (e is Exception) report(e, asked = true)
                 }
         }
     }
