@@ -260,7 +260,10 @@ export class Reporter {
     }
     const input: RunInput = {
       ...this.base,
-      at: iso(this.ctx.now()),
+      // To the millisecond: devices keep the update with the latest `at`, and the start and the
+      // first progress leave within the same second, in whichever order the push brings them
+      // (#867).
+      at: this.ctx.now().toISOString(),
       ...(this.progress ? { progress: this.progress } : {}),
       ...(this.exit ? { exit: this.exit } : {}),
     };

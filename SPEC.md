@@ -803,6 +803,9 @@ Codex prompts are not supported.
   the owner why this run is theirs to watch. The run posts its start, its first progress right
   after it, later progress at most every 10 s, a heartbeat every minute and its exit; a first
   progress held back 10 s left a run that opens on `[0/5]` with an indeterminate bar (#828).
+  Each update's `at` carries milliseconds (#867): devices keep the update with the latest `at`,
+  and with whole seconds the start and the first progress tied, so a phone that got the start's
+  push first kept it and showed no step until the next progress, 10 s later.
   Output goes through a pipe, so tools that print progress only to a terminal show none.
 - Devices call a run lost 3 minutes after its last update (#190, #249); the server cannot read a
   sealed run, so this is client-side. A lost run shows "Lost, no news for 3 min 37 s" and no
