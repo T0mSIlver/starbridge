@@ -426,6 +426,29 @@ for (const viaAgent of [true, false]) {
   });
 }
 
+for (const viaAgent of [true, false]) {
+  test(`${viaAgent ? "through the agent" : "without an agent"}: a call that starts while its prompt is being posted settles it on the devices (#900)`, async () => {
+    const ctx = await machine(viaAgent);
+    const started = new AbortController();
+    // The server stores the prompt, and its reply is still on the way when the call starts.
+    server.lostReplies.push("POST /items");
+    const out = hookPermission(ctx, request(), { agent: "claude-code" }, (signal) => ({
+      signal: AbortSignal.any([signal as AbortSignal, started.signal]),
+      stop: () => {},
+    }));
+    await until(async () => (await server.opened("permission")).length === 1);
+    const [permission] = await server.opened("permission");
+    started.abort();
+    expect(await out).toBe(0);
+    expect(ctx.lines).toEqual([]);
+    await until(async () => (await server.opened("settled")).length === 1);
+    expect((await server.opened("settled"))[0]).toMatchObject({
+      itemId: permission?.id,
+      outcome: "keyboard",
+    });
+  });
+}
+
 test("a hook that hangs up and does not hold again is gone: the prompt settles at the keyboard (#400)", async () => {
   const ctx = await machine();
   const agent = new AgentClient(agentAddress(ctx.store.dir));

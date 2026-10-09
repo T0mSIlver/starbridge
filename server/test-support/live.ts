@@ -41,13 +41,18 @@ export class LiveServer {
   readonly log: string[] = [];
   /**
    * The next HTTP requests to these paths fail with 503, once each: the real server has no
-   * outage on demand. In these three lists, "POST /path" matches that method only.
+   * outage on demand. In these lists, "POST /path" matches that method only.
    */
   readonly failures: string[] = [];
   /** The next HTTP requests to these paths fail with 500, which clients do not retry, once each. */
   readonly errors: string[] = [];
   /** The next HTTP requests to these paths never get a response, once each. */
   readonly stalls: string[] = [];
+  /**
+   * The next HTTP requests to these paths are carried out but never get a response, once each,
+   * as when the client hangs up once the server has stored its request.
+   */
+  readonly lostReplies: string[] = [];
   /** The kind of each push the server sent, in order: push itself is off. */
   readonly pushed: string[] = [];
 
@@ -93,6 +98,10 @@ export class LiveServer {
     if (take(this.failures)) return Response.json({ error: "unavailable" }, { status: 503 });
     if (take(this.errors)) return Response.json({ error: "internal" }, { status: 500 });
     if (take(this.stalls)) return new Promise<Response>(() => {});
+    if (take(this.lostReplies)) {
+      void this.s.app.fetch(req, { server });
+      return new Promise<Response>(() => {});
+    }
     return this.s.app.fetch(req, { server });
   }
 

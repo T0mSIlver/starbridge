@@ -404,6 +404,9 @@ function prune(st: State, now: number) {
     if (Date.parse(p.permission.expiresAt) + KEEP_MS < now) delete st.permissions?.[id];
 }
 
+/** How long a prompt whose post was cut may take to report itself settled. */
+const LATE_REPORT_MS = 5_000;
+
 /**
  * Seals the prompt to every active device, posts it and records it as waiting. Returns its id.
  * The answers cursor is read before the post, so a wait from it never misses the answer.
@@ -448,7 +451,13 @@ export async function postPermission(
   } catch (e) {
     // No hook waits for it now: nothing may apply an answer that still comes.
     const keyboard = signal?.aborted && (signal.reason as Error)?.name !== "TimeoutError";
-    markSettled(ctx, permission.id, keyboard ? "keyboard" : "timeout");
+    const how = markSettled(ctx, permission.id, keyboard ? "keyboard" : "timeout");
+    // The server may have stored the prompt before the cut (#900): tell the devices it is over,
+    // or it stays open there. A server that never got it refuses this, which changes nothing.
+    if (how)
+      await postSettled(ctx, s, permission.id, how, AbortSignal.timeout(LATE_REPORT_MS)).catch(
+        () => {},
+      );
     throw e;
   }
   return permission.id;
