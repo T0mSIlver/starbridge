@@ -222,8 +222,8 @@ test("setup --yes installs the agent, the plugins and the skills, and uploads a 
   ).toEqual(CURSOR_ALLOW);
   expect(out).toContain("✓ Cursor       skill installed, 5 starbridge commands allowed");
   // Its sessionStart hook adds the rule in Cursor's shape (#954).
-  const hooks = JSON.parse(readFileSync(join(m.home, ".cursor/hooks.json"), "utf8"));
-  const added = spawnSync(sh(), ["-c", hooks.hooks.sessionStart[0].command], {
+  const cursorHooks = JSON.parse(readFileSync(join(m.home, ".cursor/hooks.json"), "utf8"));
+  const added = spawnSync(sh(), ["-c", cursorHooks.hooks.sessionStart[0].command], {
     input: "{}",
     encoding: "utf8",
   });
