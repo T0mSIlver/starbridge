@@ -944,9 +944,9 @@ async function one(s: Scenario, arm: string, rep: number): Promise<RunRecord> {
       rec.waiting = (await live.opened("waiting")) as Record<string, unknown>[];
       rec.permissions = (await live.opened("permission")) as Record<string, unknown>[];
     }
-    // Images, for render.ts.
-    for (const [i, d] of opened.entries())
-      for (const [j, img] of ((d.images as { type: string; data: string }[]) ?? []).entries())
+    // Images, for render.ts, opened from their blobs (#685).
+    for (const [i, shown] of (s.unpaired ? [] : await live.images()).entries())
+      for (const [j, img] of shown.entries())
         writeFileSync(
           join(out, `${agent}-${id}-d${i}-img${j}.${img.type === "image/png" ? "png" : "jpg"}`),
           Buffer.from(img.data, "base64"),
