@@ -35,6 +35,8 @@ import dev.starbridge.app.ui.inbox.FindScreen
 import dev.starbridge.app.ui.inbox.InboxScreen
 import dev.starbridge.app.ui.inbox.PromptActions
 import dev.starbridge.app.data.QuotaSettings
+import dev.starbridge.app.data.QuotaAlerts
+import dev.starbridge.app.ui.settings.PerWindowScreen
 import dev.starbridge.app.ui.settings.SettingsActions
 import dev.starbridge.app.ui.settings.SettingsScreen
 import dev.starbridge.app.ui.devices.AddDeviceScreen
@@ -269,7 +271,7 @@ class ScreenshotTest(private val dark: Boolean) {
     @Test fun quotasYourOrder() = capture("quotas-your-order") { Phone(Tab.Quotas, 4) { QuotasScreen(fake.windows, now, settings = QuotaSettings(order = listOf("mistral", "codex"), runningOutFirst = false)) } }
 
     // Remaining, clock times, a 5-day week with strong ticks, Codex first, Gemini hidden.
-    private val tuned = QuotaSettings(showUsed = false, absoluteResets = true, workDays = 5, ticks = QuotaSettings.Ticks.HighContrast, order = listOf("codex"), hidden = listOf("gemini"))
+    private val tuned = QuotaSettings(showUsed = false, absoluteResets = true, workDays = 5, order = listOf("codex"), hidden = listOf("gemini"))
 
     @Test fun quotasTuned() = capture("quotas-tuned") { QuotasScreen(fake.windows, now, settings = tuned) }
 
@@ -280,7 +282,18 @@ class ScreenshotTest(private val dark: Boolean) {
     @Config(qualifiers = "w412dp-h2400dp-xxhdpi")
     @Test fun settings() = capture("settings") {
         Phone(Tab.Settings, 4) {
-            SettingsScreen(fake.windows, QuotaSettings(hidden = listOf("gemini"), notify = listOf("claude")), fake.members.size, Colours.Starbridge, fake.push, "https://starbridge.run", settingsActions, pushHold = 30)
+            SettingsScreen(fake.windows, QuotaSettings(hidden = listOf("gemini"), alerts = QuotaAlerts(windows = mapOf("claude/claude-5h" to emptyList()))), fake.members.size, Colours.Starbridge, fake.push, "https://starbridge.run", settingsActions, pushHold = 30)
+        }
+    }
+
+    // Settings → Per window (#914): one window off, one with its own alerts and opened.
+    @Test fun settingsPerWindow() = capture("settings-per-window") {
+        Phone(Tab.Settings, 4) {
+            PerWindowScreen(
+                fake.windows,
+                QuotaSettings(alerts = QuotaAlerts(windows = mapOf("claude/claude-5h" to emptyList(), "zai/zai-5h" to listOf("unused-headroom")))),
+                {}, {}, opened = "zai/zai-5h",
+            )
         }
     }
 
@@ -292,7 +305,7 @@ class ScreenshotTest(private val dark: Boolean) {
     @Test fun settingsNotificationsOffDismissed() = capture("settings-notifications-off-dismissed", { notifications() }) { Phone(Tab.Settings, 4) { NotificationsOffSettings(InboxView(remindOff = false)) } }
 
     // The account's hold time (#848), under the notification rows.
-    @Test fun settingsHold() = capture("settings-hold", { compose.onNode(hasScrollToNodeAction()).performScrollToNode(hasText("Hold notifications while you’re at a screen")) }) {
+    @Test fun settingsHold() = capture("settings-hold", { compose.onNode(hasScrollToNodeAction()).performScrollToNode(hasText("Hold while you’re at a screen")) }) {
         Phone(Tab.Settings, 4) {
             SettingsScreen(fake.windows, QuotaSettings(), fake.members.size, Colours.Starbridge, fake.push, "https://starbridge.run", settingsActions, pushHold = 30)
         }

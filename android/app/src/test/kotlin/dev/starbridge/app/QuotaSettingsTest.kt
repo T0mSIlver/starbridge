@@ -1,6 +1,7 @@
 package dev.starbridge.app
 
 import dev.starbridge.app.data.Pace
+import dev.starbridge.app.data.QuotaAlerts
 import dev.starbridge.app.data.QuotaNotice
 import dev.starbridge.app.data.QuotaSettings
 import dev.starbridge.app.data.QuotaWindow
@@ -74,13 +75,24 @@ class QuotaSettingsTest {
         )
     }
 
-    @Test fun notifiesOnlyOptedInProvidersAndKinds() {
-        fun n(provider: String, kind: String) = QuotaNotice("k", provider, "primary", kind, "", "")
-        val off = QuotaSettings()
-        val zai = QuotaSettings(notify = listOf("zai"), notifyLow = false)
-        assertEquals(false, off.wants(n("zai", "low")))
-        assertEquals(false, zai.wants(n("zai", "low")))
-        assertEquals(true, zai.wants(n("zai", "runs-out")))
-        assertEquals(false, zai.wants(n("claude", "runs-out")))
+    @Test fun notifiesTheKindsPickedForTheWindow() {
+        fun n(kind: String, minutes: Int?, threshold: Int? = null) = QuotaNotice("k", "zai", "primary", kind, "", "", threshold, minutes)
+        val defaults = QuotaSettings()
+        assertEquals(false, defaults.wants(n("runs-out", 300)))
+        assertEquals(true, defaults.wants(n("runs-out", 10080)))
+        val picked = QuotaSettings(alerts = QuotaAlerts(windows = mapOf("zai/primary" to listOf("low-20"))))
+        assertEquals(true, picked.wants(n("low", 300, 20)))
+        assertEquals(false, picked.wants(n("runs-out", 10080)))
+    }
+
+    @Test fun settingsFromBefore914MoveToPerWindowAlerts() {
+        val json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true; encodeDefaults = true }
+        val old = QuotaSettings.read(json, """{"workDays":5,"ticks":"Hidden","notify":["zai"],"notifyLow":false,"notifyPace":true}""")
+        assertEquals(mapOf("zai" to listOf("runs-out", "unused-headroom")), old.alerts.windows)
+        assertEquals(null, old.workDays)
+        assertEquals(QuotaAlerts(), QuotaSettings.read(json, """{"notify":[]}""").alerts)
+        // A provider's key becomes one per window once a window is set, so the others keep it.
+        val set = old.alerts.with("zai", "primary", listOf("zai" to "primary", "zai" to "mcp"), null)
+        assertEquals(mapOf("zai/mcp" to listOf("runs-out", "unused-headroom")), set.windows)
     }
 }

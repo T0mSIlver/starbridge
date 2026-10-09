@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { needsYou } from "@/lib/feed";
 import { setFind, useFind } from "@/lib/find";
+import { holdsQuotas } from "@/lib/quotaSettings";
 import { type Store, useApp } from "./AppProvider";
 import { Icon, type IconName, Mark } from "./icons";
 import s from "./Shell.module.css";
@@ -51,11 +52,15 @@ export function Shell({ children }: { children: React.ReactNode }) {
   // /sample mirrors the app in development (app/sample).
   const at = path.replace(/^\/sample(?=\/|$)/, "") || "/";
   const home = /^\/sample(?=\/|$)/.test(path) ? "/sample" : "/";
-  const tabs = TABS.map(({ href, label, icon }) => {
-    const active = href === "/" ? at === "/" : at.startsWith(href);
-    const count = href === "/" && open > 0 ? open : 0;
-    return { href, label, icon, active, count };
-  });
+  // Quotas shows once a machine of the account sends them, or while open (#914).
+  const quotas = holdsQuotas(app.quotas) || at.startsWith("/quotas");
+  const tabs = TABS.filter(({ href }) => quotas || href !== "/quotas").map(
+    ({ href, label, icon }) => {
+      const active = href === "/" ? at === "/" : at.startsWith(href);
+      const count = href === "/" && open > 0 ? open : 0;
+      return { href, label, icon, active, count };
+    },
+  );
 
   return (
     <div className={s.frame}>

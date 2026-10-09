@@ -4,6 +4,12 @@ import java.time.Instant
 import java.time.ZoneId
 import kotlin.math.roundToInt
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 
 /**
  * Quota settings, per phone (SPEC.md, "Quota settings follow CodexBar"): a curated set of
@@ -18,21 +24,14 @@ data class QuotaSettings(
     val absoluteResets: Boolean = false,
     /** Workdays a week on weekly bars, from Monday (`weeklyProgressWorkDays`); null is off. */
     val workDays: Int? = null,
-    /** How the workday ticks show (`workdayTickAppearance`). */
-    val ticks: Ticks = Ticks.Subtle,
     /** Providers in the order to show them; the ones not listed follow in the uploader's order. */
     val order: List<String> = emptyList(),
     /** Windows that will run out or ran out lead, else [order] holds for every window. */
     val runningOutFirst: Boolean = true,
     val hidden: List<String> = emptyList(),
-    /** Providers whose alerts notify; none by default. */
-    val notify: List<String> = emptyList(),
-    /** Notify when a window reaches 50% or 20% left (`quotaWarningThresholds`). */
-    val notifyLow: Boolean = true,
-    /** Notify when a window will run out, or resets with headroom unused (`predictivePaceWarning…`). */
-    val notifyPace: Boolean = true,
+    /** Which alerts notify, per window (#914). */
+    val alerts: QuotaAlerts = QuotaAlerts(),
 ) {
-    enum class Ticks { Subtle, HighContrast, Hidden }
 
     /** Every provider the windows name, in this order. */
     fun providers(windows: List<QuotaWindow>): List<String> {
@@ -61,13 +60,12 @@ data class QuotaSettings(
         arranged.groupBy { it.provider to it.machine }.values.toList()
 
     /** Whether this phone shows a notification for [notice]. */
-    fun wants(notice: QuotaNotice) =
-        notice.provider in notify && if (notice.kind == "low") notifyLow else notifyPace
+    fun wants(notice: QuotaNotice) = alerts.wants(notice.provider, notice.window, notice.kind, notice.threshold, notice.minutes)
 
     /** CodexBar's workday ticks: one per workday boundary, evenly spaced along a weekly bar. */
     fun ticks(window: QuotaWindow): List<Float> {
         val days = workDays ?: return emptyList()
-        if (ticks == Ticks.Hidden || window.windowMinutes != WEEK) return emptyList()
+        if (window.windowMinutes != WEEK) return emptyList()
         return (1 until days).map { it.toFloat() / days }
     }
 
@@ -87,6 +85,21 @@ data class QuotaSettings(
 
     companion object {
         const val WEEK = 10080
+
+        /**
+         * Settings as stored, from this release or an older one: a provider bell and two switches
+         * before #914 become per-window alerts, and the tick style's "Hidden" was ticks off.
+         */
+        fun read(json: Json, text: String): QuotaSettings {
+            val o = json.parseToJsonElement(text).jsonObject
+            val s = json.decodeFromJsonElement(serializer(), o)
+            val old = o["notify"]?.jsonArray?.map { it.jsonPrimitive.content }
+            val bool = { k: String -> o[k]?.jsonPrimitive?.booleanOrNull ?: true }
+            return s.copy(
+                alerts = if ("alerts" !in o && old != null) QuotaAlerts.migrate(old, bool("notifyLow"), bool("notifyPace")) else s.alerts,
+                workDays = if (o["ticks"]?.jsonPrimitive?.contentOrNull == "Hidden") null else s.workDays,
+            )
+        }
 
         /**
          * Where an even pace over workdays only would be now, in percent used, as CodexBar's
@@ -123,4 +136,8 @@ data class QuotaNotice(
     val kind: String,
     val title: String,
     val text: String,
+    /** A `low` alert's level, percent left. */
+    val threshold: Int? = null,
+    /** The window's length, which picks its default alerts. */
+    val minutes: Int? = null,
 )

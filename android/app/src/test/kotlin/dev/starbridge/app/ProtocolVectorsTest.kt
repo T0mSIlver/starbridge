@@ -33,6 +33,7 @@ import dev.starbridge.app.protocol.codeFromLink
 import dev.starbridge.app.protocol.pairingLink
 import dev.starbridge.app.protocol.parsePairingCode
 import dev.starbridge.app.protocol.toB64
+import dev.starbridge.app.data.QuotaAlerts
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
@@ -375,6 +376,29 @@ class ProtocolVectorsTest {
         val browser = dir.members.getValue("browser").member
         org.junit.Assert.assertThrows(IllegalArgumentException::class.java) {
             envelopes.seal("answer", body, "phone", key("phone", "signSk"), listOf(machine, browser))
+        }
+    }
+
+    // quota-alerts.json (#914): which quota alerts notify, per window, and the old settings' move.
+    @Test fun quotaAlerts() {
+        val v = load("quota-alerts.json")
+        val json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
+        fun alerts(e: JsonElement) = json.decodeFromJsonElement(QuotaAlerts.serializer(), e)
+        assertEquals(alerts(v.getValue("defaults")), QuotaAlerts())
+        for (c in v.getValue("cases").jsonArray.map { it.jsonObject }) {
+            val a = c.getValue("alert").jsonObject
+            val wants = alerts(c.getValue("settings")).wants(
+                a.str("provider"), a.str("window"), a.str("kind"),
+                a.opt("threshold")?.jsonPrimitive?.int,
+                c.opt("windowMinutes")?.jsonPrimitive?.int,
+            )
+            assertEquals(c.str("name"), c.getValue("expect").jsonPrimitive.boolean, wants)
+        }
+        for (c in v.getValue("migrate").jsonArray.map { it.jsonObject }) {
+            val old = c.getValue("old").jsonObject
+            val flag = { k: String -> old.opt(k)?.jsonPrimitive?.boolean ?: true }
+            val migrated = QuotaAlerts.migrate(old.getValue("notify").jsonArray.map { it.str }, flag("notifyLow"), flag("notifyPace"))
+            assertEquals(c.str("name"), alerts(c.getValue("expect")), migrated)
         }
     }
 }

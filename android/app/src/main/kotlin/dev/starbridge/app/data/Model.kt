@@ -225,6 +225,8 @@ data class QuotaWindow(
     val takenAt: Instant? = null,
     /** Why CodexBar failed for the provider; the window is then the last one it read (#397). */
     val error: String? = null,
+    /** The uploader's id for the window, such as `secondary`, which keys its alerts (#914). */
+    val windowId: String = id.substringAfterLast('/'),
 )
 
 /** A provider CodexBar failed for with no windows to keep: its card says only why (#450). */

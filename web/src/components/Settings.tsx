@@ -1,6 +1,14 @@
 "use client";
 
-import { PUSH_HOLD_CHOICES } from "@starbridge/protocol";
+import {
+  isShortWindow,
+  PUSH_HOLD_CHOICES,
+  QUOTA_ALERT_CHOICES,
+  type QuotaAlertChoice,
+  type QuotaAlertSettings,
+  quotaAlertChoices,
+  quotaWindowKey,
+} from "@starbridge/protocol";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
@@ -8,7 +16,8 @@ import type { RecoveryState } from "@/lib/device";
 import { addedLabels, dayAndTime } from "@/lib/format";
 import { AGENTS_GUIDE } from "@/lib/links";
 import { applyTheme, type Prefs, usePref } from "@/lib/prefs";
-import { providerOrder, type QuotaSettings } from "@/lib/quotaSettings";
+import type { PushState } from "@/lib/push";
+import { holdsQuotas, providerOrder, type QuotaSettings } from "@/lib/quotaSettings";
 import { chime } from "@/lib/sound";
 import type { Device, QuotaCardData } from "@/lib/types";
 import { useApp } from "./AppProvider";
@@ -128,7 +137,6 @@ const toggle = (list: string[], p: string, on: boolean) =>
 
 function InboxSection() {
   const [rowAnswers, setRowAnswers] = usePref("rowAnswers");
-  const [sound, setSound] = usePref("sound");
   return (
     <Section title="Inbox">
       <Row label="Answer buttons on questions" sub="On narrow screens">
@@ -143,6 +151,16 @@ function InboxSection() {
           onChange={setRowAnswers}
         />
       </Row>
+    </Section>
+  );
+}
+
+/** What decides whether something notifies here (#914): the browser, sound, and the hold. */
+function NotificationSection() {
+  const [sound, setSound] = usePref("sound");
+  return (
+    <Section title="Notifications">
+      <BrowserRow />
       <Row label="Sound for new questions" sub="While a Starbridge page is open">
         <Switch
           label="Sound for new questions"
@@ -155,6 +173,46 @@ function InboxSection() {
       </Row>
       <HoldRow />
     </Section>
+  );
+}
+
+/** Whether this browser gets Web Push, and the way to turn it on; the desktop app has its own. */
+function BrowserRow() {
+  const [state, setState] = useState<PushState>();
+  const [error, setError] = useState<string>();
+  useEffect(() => {
+    import("@/lib/push").then((p) => p.pushState()).then(setState);
+  }, []);
+  if (state === undefined || state === "unsupported") return null;
+  const sub =
+    error ??
+    {
+      on: "Questions and permission prompts",
+      off: "Questions and permission prompts",
+      denied: "Blocked in the browser’s settings for this site",
+      install: "Add Starbridge to the Home Screen and open it from there",
+    }[state];
+  return (
+    <Row label="Browser notifications" sub={sub}>
+      {state === "off" ? (
+        <button
+          type="button"
+          className={`t-meta ${ui.btn} ${ui.sm}`}
+          onClick={async () => {
+            setError(undefined);
+            try {
+              setState(await (await import("@/lib/push")).enablePush());
+            } catch (e) {
+              setError(message(e));
+            }
+          }}
+        >
+          Turn on
+        </button>
+      ) : (
+        <span className={`t-meta ${s.sub}`}>{state === "on" ? "On" : "Off"}</span>
+      )}
+    </Row>
   );
 }
 
@@ -183,14 +241,14 @@ function HoldRow() {
   if (hold === undefined) return null;
   return (
     <Row
-      label="Hold notifications while you’re at a screen"
+      label="Hold while you’re at a screen"
       sub={
         error ??
         "While you use Starbridge or a machine with presence on, your other devices are notified only if a question is still open after this"
       }
     >
       <Segmented<number>
-        label="Hold notifications while you’re at a screen"
+        label="Hold while you’re at a screen"
         value={hold}
         options={PUSH_HOLD_CHOICES.map((c) => [c, HOLD_LABELS[c]])}
         onChange={(pushHold) => {
@@ -247,20 +305,6 @@ function QuotaSection() {
           onChange={(workDays) => patch({ workDays })}
         />
       </Row>
-      {q.workDays !== null && (
-        <Row label="Tick style">
-          <Segmented<QuotaSettings["ticks"]>
-            label="Tick style"
-            value={q.ticks}
-            options={[
-              ["subtle", "Subtle"],
-              ["high-contrast", "High contrast"],
-              ["hidden", "Hidden"],
-            ]}
-            onChange={(ticks) => patch({ ticks })}
-          />
-        </Row>
-      )}
       <Row id="running-out-first" label="Running out first">
         <Switch
           label="Running out first"
@@ -268,39 +312,226 @@ function QuotaSection() {
           onChange={(runningOutFirst) => patch({ runningOutFirst })}
         />
       </Row>
-      <Row label="Warn when a window runs low">
-        <Switch
-          label="Warn when a window runs low"
-          checked={q.notifyLow}
-          onChange={(notifyLow) => patch({ notifyLow })}
-        />
-      </Row>
-      <Row label="Warn before a window runs out">
-        <Switch
-          label="Warn before a window runs out"
-          checked={q.notifyPace}
-          onChange={(notifyPace) => patch({ notifyPace })}
-        />
-      </Row>
     </Section>
   );
 }
 
-/** Each provider: drag (or arrow keys on the handle) to reorder, notify, show. */
-function ProviderSection() {
-  const { quotas, refreshQuotas, quotaSettings: q, setQuotaSettings: set } = useApp();
-  const [settled, setSettled] = useState(false);
+const CHOICE_LABELS: Record<QuotaAlertChoice, string> = {
+  "runs-out": "Runs out",
+  "low-50": "50% left",
+  "low-20": "20% left",
+  "unused-headroom": "Unused at reset",
+};
+
+const said = (picked: QuotaAlertChoice[]) =>
+  picked.length === 0 ? "none" : picked.map((c) => CHOICE_LABELS[c]).join(", ");
+
+/** The alerts a window can pick, any number of them, in their fixed order. */
+function Chips({
+  label,
+  picked,
+  onChange,
+}: {
+  label: string;
+  picked: QuotaAlertChoice[];
+  onChange: (picked: QuotaAlertChoice[]) => void;
+}) {
+  return (
+    <fieldset className={s.chips} aria-label={label}>
+      {QUOTA_ALERT_CHOICES.map((c) => (
+        <button
+          type="button"
+          key={c}
+          className={`t-meta ${s.chip}`}
+          aria-pressed={picked.includes(c)}
+          onClick={() =>
+            onChange(QUOTA_ALERT_CHOICES.filter((x) => (x === c) !== picked.includes(x)))
+          }
+        >
+          {CHOICE_LABELS[c]}
+        </button>
+      ))}
+    </fieldset>
+  );
+}
+
+/** Notification permission comes with the first alert picked, as it came with a provider's bell. */
+async function asked() {
+  if (typeof Notification !== "undefined" && Notification.permission === "default")
+    await Notification.requestPermission();
+}
+
+/** The alerts of every window with none of its own, by its length (#914). */
+function QuotaAlertSection() {
+  const { quotaSettings: q, setQuotaSettings: set } = useApp();
+  const patch = async (p: Partial<Pick<QuotaAlertSettings, "short" | "long">>) => {
+    if (Object.values(p).some((c) => c.length > 0)) await asked();
+    set({ ...q, alerts: { ...q.alerts, ...p } });
+  };
+  return (
+    <Section title="Quota alerts">
+      <div className={s.stack}>
+        <div className="t-small">5-hour and daily windows</div>
+        <Chips
+          label="5-hour and daily windows"
+          picked={q.alerts.short}
+          onChange={(short) => patch({ short })}
+        />
+      </div>
+      <div className={s.stack}>
+        <div className="t-small">Weekly and monthly windows</div>
+        <Chips
+          label="Weekly and monthly windows"
+          picked={q.alerts.long}
+          onChange={(long) => patch({ long })}
+        />
+      </div>
+    </Section>
+  );
+}
+
+type Win = { provider: string; id: string; label: string; minutes: number | null };
+
+/**
+ * A window's own alerts, or none to follow its length's. A provider's key, which only settings
+ * from before #914 hold, first becomes a key per window, so the provider's other windows keep it.
+ */
+export function setWindowAlerts(
+  a: QuotaAlertSettings,
+  w: Win,
+  all: Win[],
+  picked: QuotaAlertChoice[] | undefined,
+): QuotaAlertSettings {
+  const windows = { ...a.windows };
+  const shared = windows[w.provider];
+  if (shared) {
+    for (const o of all)
+      if (o.provider === w.provider) windows[quotaWindowKey(o.provider, o.id)] ??= shared;
+    delete windows[w.provider];
+  }
+  const key = quotaWindowKey(w.provider, w.id);
+  if (picked) windows[key] = picked;
+  else delete windows[key];
+  return { ...a, windows };
+}
+
+/** Each window shown, which follows its length's default unless set to its own alerts or off. */
+function WindowSection({ wins }: { wins: Win[] }) {
+  const { quotaSettings: q, setQuotaSettings: set } = useApp();
+  const [open, setOpen] = useState<string>();
+  if (wins.length === 0) return null;
+  const save = async (w: Win, picked: QuotaAlertChoice[] | undefined) => {
+    if (picked?.length) await asked();
+    set({ ...q, alerts: setWindowAlerts(q.alerts, w, wins, picked) });
+  };
+  return (
+    <Section title="Per window">
+      {wins.map((w) => {
+        const key = quotaWindowKey(w.provider, w.id);
+        const own = q.alerts.windows[key] ?? q.alerts.windows[w.provider];
+        const mode = own === undefined ? "default" : own.length > 0 ? "custom" : "off";
+        const length = isShortWindow(w.minutes) ? q.alerts.short : q.alerts.long;
+        const picked = quotaAlertChoices(q.alerts, w.provider, w.id, w.minutes);
+        const name = `${w.provider} ${w.label}`;
+        const state =
+          mode === "default"
+            ? `Default: ${said(length).toLowerCase()}`
+            : own?.length
+              ? said(own)
+              : "Off";
+        const shown = open === key;
+        return (
+          <div key={key}>
+            <button
+              type="button"
+              className={s.windowHead}
+              aria-expanded={shown}
+              onClick={() => setOpen(shown ? undefined : key)}
+            >
+              <span className="t-small">{name}</span>
+              <span className={`t-meta ${s.sub}`}>{state}</span>
+              <Icon name="down" size={16} />
+            </button>
+            {shown && (
+              <div className={s.stack}>
+                <Segmented<typeof mode>
+                  label={`Alerts for ${name}`}
+                  value={mode}
+                  options={[
+                    ["default", "Default"],
+                    ["custom", "Custom"],
+                    ["off", "Off"],
+                  ]}
+                  onChange={(m) =>
+                    save(
+                      w,
+                      m === "default"
+                        ? undefined
+                        : m === "off"
+                          ? []
+                          : picked.length > 0
+                            ? picked
+                            : ["runs-out"],
+                    )
+                  }
+                />
+                {mode === "custom" && (
+                  <Chips
+                    label={`Alerts for ${name}`}
+                    picked={picked}
+                    onChange={(p) => save(w, p)}
+                  />
+                )}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </Section>
+  );
+}
+
+/**
+ * Everything about quotas, shown once a machine of the account sends them (#914): until then the
+ * owner may never use CodexBar, and the page stays about agents.
+ */
+function QuotaSections() {
+  const { quotas, refreshQuotas, quotaSettings: q } = useApp();
   useEffect(() => {
-    refreshQuotas()
-      .catch(() => {})
-      .finally(() => setSettled(true));
+    refreshQuotas().catch(() => {});
   }, [refreshQuotas]);
+  if (!holdsQuotas(quotas)) return null;
+  const cards = quotas?.cards ?? [];
+  const wins: Win[] = [];
+  for (const p of providerOrder(cards, q))
+    if (!q.hidden.includes(p))
+      for (const c of cards)
+        if (c.provider === p && !wins.some((w) => w.provider === p && w.id === c.window.id))
+          wins.push({
+            provider: p,
+            id: c.window.id,
+            label: c.window.label,
+            minutes: c.window.windowMinutes,
+          });
+  return (
+    <>
+      <QuotaAlertSection />
+      <WindowSection wins={wins} />
+      <QuotaSection />
+      <ProviderSection />
+    </>
+  );
+}
+
+/** Each provider: drag (or arrow keys on the handle) to reorder, and show. */
+function ProviderSection() {
+  const { quotas, quotaSettings: q, setQuotaSettings: set } = useApp();
   const cards = quotas?.cards ?? [];
   const providers = providerOrder(cards, q);
   if (providers.length === 0)
     return (
       <Section title="Providers">
-        {quotas || settled ? <Row label="No quota windows yet" muted /> : <Pending rows={2} />}
+        <Row label="No quota windows yet" muted />
       </Section>
     );
   const patch = (p: Partial<QuotaSettings>) => set({ ...q, ...p });
@@ -309,21 +540,9 @@ function ProviderSection() {
     order.splice(Math.max(0, Math.min(at, order.length)), 0, p);
     patch({ order });
   };
-  const notify = async (p: string, on: boolean) => {
-    if (on && typeof Notification !== "undefined" && Notification.permission === "default")
-      await Notification.requestPermission();
-    patch({ notify: toggle(q.notify, p, on) });
-  };
   return (
     <Section title="Providers">
-      <Providers
-        providers={providers}
-        cards={cards}
-        q={q}
-        moveTo={moveTo}
-        notify={notify}
-        patch={patch}
-      />
+      <Providers providers={providers} cards={cards} q={q} moveTo={moveTo} patch={patch} />
     </Section>
   );
 }
@@ -334,14 +553,12 @@ function Providers({
   cards,
   q,
   moveTo,
-  notify,
   patch,
 }: {
   providers: string[];
   cards: QuotaCardData[];
   q: QuotaSettings;
   moveTo: (p: string, at: number) => void;
-  notify: (p: string, on: boolean) => void;
   patch: (p: Partial<QuotaSettings>) => void;
 }) {
   const reorder = useReorder({ ids: providers, name: (p) => p, onMove: moveTo });
@@ -365,15 +582,6 @@ function Providers({
             </button>
             <span className={`t-small ${s.providerName} ${shown ? "" : s.dim}`}>
               {p} <span className={s.sub}>{windows.join(", ")}</span>
-            </span>
-            <span className={`t-meta ${s.notify} ${shown ? "" : s.dim}`}>
-              Notify
-              <Switch
-                label={`Notify about ${p}`}
-                checked={q.notify.includes(p)}
-                disabled={!shown}
-                onChange={(on) => notify(p, on)}
-              />
             </span>
             <Switch
               label={`Show ${p}`}
@@ -557,6 +765,10 @@ function AccountSection() {
   const [asking, setAsking] = useState(false);
   return (
     <Section title="Account">
+      <a className={s.linkRow} href={AGENTS_GUIDE} target="_blank" rel="noopener noreferrer">
+        <span className="t-small">Agent instructions</span>
+        <Icon name="open" size={16} />
+      </a>
       <button type="button" className={`t-small ${s.linkRow}`} onClick={() => setAsking(true)}>
         Sign out
       </button>
@@ -577,10 +789,25 @@ function AccountSection() {
   );
 }
 
-function ClockSection() {
+/** Colours and the clock: how the page looks, per browser. */
+function LookSection() {
+  const [theme, setTheme] = usePref("theme");
   const [clock, setClock] = usePref("clock");
+  useEffect(() => applyTheme(theme), [theme]);
   return (
-    <Section title="Clock">
+    <Section title="Look">
+      <Row label="Theme">
+        <Segmented<Prefs["theme"]>
+          label="Theme"
+          value={theme}
+          options={[
+            ["system", "System"],
+            ["light", "Light"],
+            ["dark", "Dark"],
+          ]}
+          onChange={setTheme}
+        />
+      </Row>
       <Row label="Time format">
         <Segmented<Prefs["clock"]>
           label="Time format"
@@ -597,45 +824,17 @@ function ClockSection() {
   );
 }
 
-function ColourSection() {
-  const [theme, setTheme] = usePref("theme");
-  useEffect(() => applyTheme(theme), [theme]);
-  return (
-    <Section title="Colours">
-      <Row label="Theme">
-        <Segmented<Prefs["theme"]>
-          label="Theme"
-          value={theme}
-          options={[
-            ["system", "System"],
-            ["light", "Light"],
-            ["dark", "Dark"],
-          ]}
-          onChange={setTheme}
-        />
-      </Row>
-    </Section>
-  );
-}
-
 export function Settings() {
   return (
     <>
       <PhoneBar title="Settings" find={false} />
       <div className={s.page}>
         <h1 className={`t-heading ${s.title}`}>Settings</h1>
+        <NotificationSection />
+        <QuotaSections />
         <InboxSection />
-        <QuotaSection />
-        <ProviderSection />
         <DeviceSection />
-        <ColourSection />
-        <ClockSection />
-        <Section title="Agents">
-          <a className={s.linkRow} href={AGENTS_GUIDE} target="_blank" rel="noopener noreferrer">
-            <span className="t-small">Agent instructions</span>
-            <Icon name="open" size={16} />
-          </a>
-        </Section>
+        <LookSection />
         <AccountSection />
       </div>
     </>
