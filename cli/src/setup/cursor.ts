@@ -1,13 +1,16 @@
 /**
- * Setup's Cursor step (#953): the skill in `~/.cursor/skills/starbridge`, and the allow rules in
- * `cli-config.json`, so `cursor-agent` runs the commands that post a question without a prompt.
+ * Setup's Cursor step (#953): the skill in `~/.cursor/skills/starbridge`; the hooks' scripts in
+ * `~/.cursor/starbridge` and their entries in `~/.cursor/hooks.json` (#954); and the allow rules
+ * in `cli-config.json`, so `cursor-agent` runs the commands that post a question without a prompt.
  * Not a local plugin under `~/.cursor/plugins/local`: `cursor-agent`'s interactive sessions load
  * neither its skills nor its sessionStart and stop hooks (2026.10.01).
  */
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import rule from "../../../plugin/hooks/rule.md" with { type: "text" };
+import sessionStart from "../../../plugin/hooks/session-start.sh" with { type: "text" };
 import { type FileState, SKILL } from "./harnesses";
-import { ours } from "./marker";
+import { marker, ours } from "./marker";
 import { type Sys, which } from "./sys";
 
 type Home = Pick<Sys, "ctx" | "home">;
@@ -30,9 +33,100 @@ export function hasCursor(sys: Sys): boolean {
   return which(sys.ctx.env, "cursor-agent") !== undefined || existsSync(cursorHome(sys));
 }
 
+/** Where the hooks' scripts live; its README carries the marker. */
+export function cursorScriptsDir(sys: Home): string {
+  return join(cursorHome(sys), "starbridge");
+}
+
 /** Every file setup writes into Cursor's folder, by absolute path. */
 function cursorFiles(sys: Home): Record<string, string> {
-  return { [join(cursorHome(sys), "skills", "starbridge", "SKILL.md")]: SKILL };
+  const dir = cursorScriptsDir(sys);
+  return {
+    [join(cursorHome(sys), "skills", "starbridge", "SKILL.md")]: SKILL,
+    [join(dir, "README.md")]:
+      `${marker("<!--", "-->")}\n\nThe scripts of Starbridge's entries in ~/.cursor/hooks.json.\n`,
+    // The Claude Code plugin's, so both harnesses add the same rule.
+    [join(dir, "session-start.sh")]: sessionStart,
+    [join(dir, "rule.md")]: rule,
+  };
+}
+
+/** Starbridge's entries in `~/.cursor/hooks.json`, by event. */
+function hookEntries(sys: Home): Record<string, Record<string, unknown>[]> {
+  const dir = cursorScriptsDir(sys);
+  return {
+    // The rule, as the Claude Code plugin's SessionStart adds it (#954).
+    sessionStart: [{ command: `sh "${join(dir, "session-start.sh")}" cursor`, timeout: 5 }],
+  };
+}
+
+export function cursorHooksPath(sys: Home): string {
+  return join(cursorHome(sys), "hooks.json");
+}
+
+type HooksFile = Record<string, unknown> & { hooks?: Record<string, unknown> };
+
+/** The hooks file, `{version: 1}` when there is none, undefined when it does not parse. */
+function readHooks(sys: Home): HooksFile | undefined {
+  const text = readText(cursorHooksPath(sys));
+  if (text === undefined) return { version: 1 };
+  try {
+    const v = JSON.parse(text) as unknown;
+    return v && typeof v === "object" && !Array.isArray(v) ? (v as HooksFile) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** An entry is Starbridge's when its command runs a script of its folder. */
+function oursEntry(sys: Home, entry: unknown): boolean {
+  const command = (entry as { command?: unknown } | null)?.command;
+  return typeof command === "string" && command.includes(cursorScriptsDir(sys));
+}
+
+/** The hooks file with Starbridge's entries replaced by `want`'s. */
+function withEntries(
+  sys: Home,
+  file: HooksFile,
+  want: Record<string, Record<string, unknown>[]>,
+): HooksFile {
+  const hooks: Record<string, unknown> = {};
+  const events = new Set([...Object.keys(file.hooks ?? {}), ...Object.keys(want)]);
+  for (const event of events) {
+    const had = file.hooks?.[event];
+    // Not a list: not Cursor's shape, and not setup's to fix.
+    if (had !== undefined && !Array.isArray(had)) {
+      hooks[event] = had;
+      continue;
+    }
+    const list = [...(had ?? []).filter((e) => !oursEntry(sys, e)), ...(want[event] ?? [])];
+    if (list.length > 0) hooks[event] = list;
+  }
+  return { ...file, version: file.version ?? 1, hooks };
+}
+
+function hooksCurrent(sys: Home): boolean {
+  const file = readHooks(sys);
+  // A file that does not parse is the owner's to fix; setup says what to add.
+  if (!file) return true;
+  return JSON.stringify(withEntries(sys, file, hookEntries(sys))) === JSON.stringify(file);
+}
+
+/** Writes Starbridge's hook entries; false, writing nothing, when the file does not parse. */
+function installHooks(sys: Home): boolean {
+  const file = readHooks(sys);
+  if (!file) return false;
+  const next = withEntries(sys, file, hookEntries(sys));
+  if (JSON.stringify(next) !== JSON.stringify(file)) {
+    mkdirSync(dirname(cursorHooksPath(sys)), { recursive: true });
+    writeFileSync(cursorHooksPath(sys), `${JSON.stringify(next, null, 2)}\n`);
+  }
+  return true;
+}
+
+/** What to add to a hooks file setup could not parse. */
+export function hooksToAdd(sys: Home): string {
+  return JSON.stringify(hookEntries(sys));
 }
 
 function readText(path: string): string | undefined {
@@ -54,21 +148,42 @@ export function cursorState(sys: Home): FileState {
   const skill = readText(join(cursorSkillDir(sys), "SKILL.md"));
   if (skill === undefined) return "missing";
   if (!ours(skill)) return "foreign";
-  return files.every(([path, body]) => readText(path) === body) ? "current" : "outdated";
+  const same = files.every(([path, body]) => readText(path) === body);
+  return same && hooksCurrent(sys) ? "current" : "outdated";
 }
 
-export function installCursorFiles(sys: Home) {
+/**
+ * Writes the skill, the scripts and the hook entries. Returns false when `hooks.json` does not
+ * parse, which is then left as it is.
+ */
+export function installCursorFiles(sys: Home): boolean {
   for (const [path, body] of Object.entries(cursorFiles(sys))) {
     mkdirSync(dirname(path), { recursive: true });
     writeFileSync(path, body);
   }
+  return installHooks(sys);
 }
 
-/** Removes what setup wrote. Returns the paths it removed. */
+/** Removes what setup wrote. Returns the paths it removed or changed. */
 export function removeCursorFiles(sys: Home): string[] {
-  if (!ours(readText(join(cursorSkillDir(sys), "SKILL.md")))) return [];
-  rmSync(cursorSkillDir(sys), { recursive: true, force: true });
-  return [cursorSkillDir(sys)];
+  const done: string[] = [];
+  if (ours(readText(join(cursorSkillDir(sys), "SKILL.md")))) {
+    rmSync(cursorSkillDir(sys), { recursive: true, force: true });
+    done.push(cursorSkillDir(sys));
+  }
+  const file = readHooks(sys);
+  if (file && existsSync(cursorHooksPath(sys))) {
+    const next = withEntries(sys, file, {});
+    if (JSON.stringify(next) !== JSON.stringify(file)) {
+      writeFileSync(cursorHooksPath(sys), `${JSON.stringify(next, null, 2)}\n`);
+      done.push(cursorHooksPath(sys));
+    }
+  }
+  if (ours(readText(join(cursorScriptsDir(sys), "README.md")))) {
+    rmSync(cursorScriptsDir(sys), { recursive: true, force: true });
+    done.push(cursorScriptsDir(sys));
+  }
+  return done;
 }
 
 /**

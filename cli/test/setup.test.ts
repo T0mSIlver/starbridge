@@ -64,6 +64,7 @@ import {
   fakeCommand,
   paired,
   SYSTEM_PATH,
+  sh,
   type TestCtx,
   testCtx,
   until,
@@ -220,6 +221,18 @@ test("setup --yes installs the agent, the plugins and the skills, and uploads a 
     JSON.parse(readFileSync(join(m.home, ".cursor/cli-config.json"), "utf8")).permissions.allow,
   ).toEqual(CURSOR_ALLOW);
   expect(out).toContain("✓ Cursor       skill installed, 5 starbridge commands allowed");
+  // Its sessionStart hook adds the rule in Cursor's shape (#954).
+  const hooks = JSON.parse(readFileSync(join(m.home, ".cursor/hooks.json"), "utf8"));
+  const added = spawnSync(sh(), ["-c", hooks.hooks.sessionStart[0].command], {
+    input: "{}",
+    encoding: "utf8",
+  });
+  expect(JSON.parse(added.stdout)).toEqual({
+    additional_context: readFileSync(
+      join(import.meta.dir, "../../plugin/hooks/rule.md"),
+      "utf8",
+    ).trimEnd(),
+  });
 
   const [snap] = await server.opened("quota");
   expect(snap?.providers.map((p) => p.provider)).toEqual(["codex", "zai"]);
@@ -551,11 +564,27 @@ test("Cursor: setup keeps the owner's config and skill, and refresh updates its 
     join(dir, "SKILL.md"),
     "---\n# Written by starbridge 0.0.1; `starbridge uninstall` removes it.\nname: starbridge\n---\nold\n",
   );
-  expect(await refresh(m.sys)).toContain(`Updated ${join(dir, "SKILL.md")}.`);
+  expect(await refresh(m.sys)).toContain(
+    `Updated the Cursor skill and hooks in ${join(m.home, ".cursor")}.`,
+  );
   expect(await refresh(m.sys)).toEqual([]);
 
+  // The owner's own hooks stay where setup adds its own, and after uninstall.
+  const hooksFile = join(m.home, ".cursor/hooks.json");
+  const mine = { command: "./audit.sh", timeout: 3 };
+  const withMine = JSON.parse(readFileSync(hooksFile, "utf8"));
+  withMine.hooks.sessionStart.unshift(mine);
+  withMine.hooks.stop = [mine];
+  writeFileSync(hooksFile, JSON.stringify(withMine));
+  await refresh(m.sys);
+  expect(JSON.parse(readFileSync(hooksFile, "utf8")).hooks.sessionStart).toHaveLength(2);
   expect(await run(["uninstall", "--agent", "cursor", "--yes"], m.ctx)).toBe(0);
   expect(existsSync(dir)).toBe(false);
+  expect(existsSync(join(m.home, ".cursor/starbridge"))).toBe(false);
+  expect(JSON.parse(readFileSync(hooksFile, "utf8"))).toEqual({
+    version: 1,
+    hooks: { sessionStart: [mine], stop: [mine] },
+  });
   expect(JSON.parse(readFileSync(config, "utf8")).permissions.allow).toEqual(["Shell(ls)"]);
 
   // A skill of the same name that setup did not write stays, and a config that does not parse

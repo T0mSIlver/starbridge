@@ -19,9 +19,11 @@ import {
   addCursorAllow,
   CURSOR_ALLOW,
   cursorConfigPath,
+  cursorHooksPath,
   cursorSkillDir,
   cursorState,
   hasCursor,
+  hooksToAdd,
   installCursorFiles,
   missingCursorAllow,
   removeCursorAllow,
@@ -271,7 +273,8 @@ function installCursor(sys: Sys): Outcome {
   const notes: string[] = [];
   const plugin = cursorState(sys);
   if (plugin === "foreign") notes.push(`${cursorSkillDir(sys)} is another skill: left alone.`);
-  else if (plugin !== "current") installCursorFiles(sys);
+  else if (plugin !== "current" && !installCursorFiles(sys))
+    notes.push(`${cursorHooksPath(sys)} is not valid JSON: add to its "hooks" ${hooksToAdd(sys)}.`);
   const allowed = missingCursorAllow(sys).length === 0 || addCursorAllow(sys);
   if (!allowed)
     notes.push(

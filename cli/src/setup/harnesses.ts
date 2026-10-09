@@ -289,7 +289,9 @@ export function refreshFiles(sys: Home): string[] {
     done.push(`Could not update ${codexPluginDir(sys)}: ${(e as Error).message}`);
   }
   if (cursorState(sys) === "outdated")
-    step(`${join(cursorSkillDir(sys), "SKILL.md")}`, () => installCursorFiles(sys));
+    step(`the Cursor skill and hooks in ${dirname(dirname(cursorSkillDir(sys)))}`, () =>
+      installCursorFiles(sys),
+    );
   // Files someone else wrote keep it outdated: only a write that changed something counts.
   if (opencodeState(sys) === "outdated") {
     const before = opencodeSnapshot(sys);

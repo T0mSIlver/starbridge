@@ -715,6 +715,13 @@ line, the safe side: at worst a prompt repeats an answer the agent already read.
   chat (account settings, external messages, purchases, deleting data): its answer reaches the
   agent as tool output. The agent asks in the chat, or the card says the yes must come there
   (#680).
+- Cursor (#954): a `sessionStart` entry that setup adds to `~/.cursor/hooks.json` runs the same
+  script, copied to `~/.cursor/starbridge`, with `cursor`, which prints `{"additional_context":
+  <rule.md>}`; Cursor adds it to the session's context. Setup merges its entries into the
+  owner's file and knows them by that folder in their command; uninstall removes only those. A
+  file that does not parse, such as one with comments, is left as it is, and setup prints what to
+  add. The rule's AskUserQuestion line is harmless there: Cursor's `askQuestion` fires no
+  hooks, so `starbridge ask` stays the way to the phone.
 - There is no Starbridge rules file (#126). Users tell agents what else to ask or report in the
   agents' own instruction files; `docs/tell-your-agents.md` says where.
 - `evals/skill` checks the skill with real sessions of each harness on the smallest models.
