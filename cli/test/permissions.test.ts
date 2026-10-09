@@ -717,6 +717,9 @@ test("a Codex patch shows the files it touches", () => {
   const patch =
     "*** Begin Patch\n*** Update File: src/a.ts\n@@\n-x\n+y\n*** Add File: b.md\n+hi\n*** End Patch";
   expect(summarize("apply_patch", { command: patch })).toBe("src/a.ts, b.md");
+  expect(summarize("apply_patch", { command: "not a patch" })).toBe(
+    'apply_patch {"command":"not a patch"}',
+  );
 });
 
 /** Claude Code's `AskUserQuestion` picker, as 2.1.294 sends it to `PermissionRequest` (#848). */

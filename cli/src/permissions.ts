@@ -252,10 +252,9 @@ export function summarize(tool: string, input: unknown): string {
     keys.map((k) => o[k]).find((v): v is string => typeof v === "string" && v.length > 0);
   const main = isShell(tool)
     ? pick("command")
-    : tool === "apply_patch"
-      ? patchFiles(pick("command") ?? "")
-      : (pick("file_path", "notebook_path", "path", "url", "query", "pattern", "preview") ??
-        `${tool} ${JSON.stringify(input) ?? ""}`);
+    : ((tool === "apply_patch" ? patchFiles(pick("command") ?? "") : undefined) ??
+      pick("file_path", "notebook_path", "path", "url", "query", "pattern", "preview") ??
+      `${tool} ${JSON.stringify(input) ?? ""}`);
   return oneLine(main ?? tool, SUMMARY_MAX) || tool;
 }
 
