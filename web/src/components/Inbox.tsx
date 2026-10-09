@@ -210,6 +210,8 @@ export function Inbox() {
     const next = moveOn(id);
     try {
       await answer(item, reply);
+      // Sent, the draft goes; a failed send keeps it to try again.
+      drafts.delete(id);
     } catch (e) {
       if (e instanceof AnsweredFirst) {
         lost.current.add(id);
