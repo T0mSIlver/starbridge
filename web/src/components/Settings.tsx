@@ -460,7 +460,8 @@ function Providers({
                     <div key={w.id} className={`t-small ${s.alertGrid} ${s.alertRow}`}>
                       <span>{w.label}</span>
                       {ALERT_COLUMNS.map(([c, label]) => (
-                        <span key={c}>
+                        // The whole cell takes the tap, as wide as a column and a row tall.
+                        <label key={c} className={s.checkCell}>
                           <input
                             type="checkbox"
                             className={s.check}
@@ -475,7 +476,7 @@ function Providers({
                               )
                             }
                           />
-                        </span>
+                        </label>
                       ))}
                     </div>
                   );

@@ -135,6 +135,13 @@
   padding-bottom: var(--s2);
 }
 
+.checkCell {
+  align-self: stretch;
+  align-items: center;
+  min-height: var(--size-tap);
+  cursor: pointer;
+}
+
 .check {
   width: 18px;
   height: 18px;
