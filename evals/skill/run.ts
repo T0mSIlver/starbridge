@@ -2,7 +2,7 @@
  * Runs real agents through the scripted situations in scenarios.ts, once with the skill and rule
  * of `--before` (a git ref) and once with this checkout's, and records what each posted.
  *
- *   bun evals/skill/run.ts [--agent claude|codex|pi|opencode] [--model claude-sonnet-5-5] [--reps 2] [--jobs 4]
+ *   bun evals/skill/run.ts [--agent claude|codex|pi|opencode] [--model claude-haiku-5-5] [--reps 2] [--jobs 4]
  *                          [--only merge-order,...] [--arms before,after] [--before origin/main]
  *                          [--out evals/skill/results/<agent>]
  *
@@ -14,8 +14,10 @@
  * `$CODEX_HOME/AGENTS.md`, opencode the same in its XDG config folder; Pi loads the Starbridge Pi
  * extension and skill with `-e` and `--skill`.
  *
- * Models: Claude Code defaults to claude-sonnet-5-5, Codex to its own default and Pi to
- * zai/glm-5.3-flash (`provider/id`, with the providers of `~/.pi/agent`).
+ * Models: Claude Code defaults to claude-haiku-5-5, Codex to its own default and Pi to
+ * zai/glm-5.3-flash (`provider/id`, with the providers of `~/.pi/agent`). Haiku 5.5 costs more
+ * past 100k tokens of context, so each Claude Code run records its largest request and the
+ * progress line flags one over that.
  */
 import { spawnSync } from "node:child_process";
 import {
@@ -26,6 +28,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  readdirSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
@@ -55,7 +58,7 @@ const agent = opt.agent as "claude" | "codex" | "pi" | "opencode";
 const model =
   opt.model ??
   {
-    claude: "claude-sonnet-5-5",
+    claude: "claude-haiku-5-5",
     codex: undefined,
     pi: "zai/glm-5.3-flash",
     opencode: "zai-coding-plan/glm-5.3-flash",
@@ -166,6 +169,10 @@ export interface RunRecord {
   answered?: string;
   /** When the owner snoozed the first card until (#571), for snooze situations. */
   snoozed?: string;
+  /** Claude Code: the largest context one request sent, in tokens. */
+  peakContext?: number;
+  /** Claude Code: every request's input, cache and output tokens, summed over the run. */
+  usedTokens?: number;
   error?: string;
 }
 
@@ -444,17 +451,21 @@ async function interactiveTurn(
           );
   const commands: string[] = [];
   const askUser: { denied: boolean }[] = [];
+  let pending = 0;
   let final = "";
   for (const e of es) {
     if (e.type !== "assistant") continue;
     for (const b of e.message?.content ?? []) {
       if (b.type === "tool_use" && b.name === "Bash") commands.push(b.input?.command ?? "");
-      if (b.type === "tool_use" && b.name === "AskUserQuestion")
+      if (b.type === "tool_use" && b.name === "AskUserQuestion") {
         askUser.push({ denied: results.get(b.id) === true });
+        if (!results.has(b.id)) pending++;
+      }
       if (b.type === "text" && b.text) final = b.text;
     }
   }
-  if (dialog >= 2) askUser.push({ denied: false });
+  // Older Claude Code wrote the pending call to the transcript only once answered.
+  if (dialog >= 2 && pending === 0) askUser.push({ denied: false });
   return { commands, askUser, final, session: id, exit: 0, seconds: (Date.now() - t0) / 1000 };
 }
 
@@ -802,6 +813,11 @@ async function one(s: Scenario, arm: string, rep: number): Promise<RunRecord> {
         text += new TextDecoder().decode(value);
       }
       await live.approve((/Pairing code: (\S+)/.exec(text) as RegExpExecArray)[1] as string);
+      // The owner confirms the check code (#814); `pair` shows it once it sees the approval.
+      for (let i = 0; i < 50; i++) {
+        if (spawnSync(join(bin, "starbridge"), ["pair", "--confirm"], { env }).status === 0) break;
+        await Bun.sleep(200);
+      }
       if ((await pairing.exited) !== 0) throw new Error("pairing failed");
     }
 
@@ -934,9 +950,9 @@ async function one(s: Scenario, arm: string, rep: number): Promise<RunRecord> {
       rec.waiting = (await live.opened("waiting")) as Record<string, unknown>[];
       rec.permissions = (await live.opened("permission")) as Record<string, unknown>[];
     }
-    // Images, for render.ts.
-    for (const [i, d] of opened.entries())
-      for (const [j, img] of ((d.images as { type: string; data: string }[]) ?? []).entries())
+    // Images, for render.ts, opened from their blobs (#685).
+    for (const [i, shown] of (s.unpaired ? [] : await live.images()).entries())
+      for (const [j, img] of shown.entries())
         writeFileSync(
           join(out, `${agent}-${id}-d${i}-img${j}.${img.type === "image/png" ? "png" : "jpg"}`),
           Buffer.from(img.data, "base64"),
@@ -946,10 +962,38 @@ async function one(s: Scenario, arm: string, rep: number): Promise<RunRecord> {
   } finally {
     live.stop();
     rec.gh = readFileSync(ghLog, "utf8").split("\n").filter(Boolean);
+    if (agent === "claude") Object.assign(rec, usage(join(cfg, "projects")));
   }
   writeFileSync(join(out, `${id}.json`), `${JSON.stringify(rec, null, 2)}\n`);
   if (!opt.keep) rmSync(root, { recursive: true, force: true });
   return rec;
+}
+
+/**
+ * The largest context one request sent and the tokens all requests used, read from the session
+ * transcripts under `dir`. A transcript repeats a message's usage on each of its content blocks.
+ */
+function usage(dir: string): { peakContext?: number; usedTokens?: number } {
+  if (!existsSync(dir)) return {};
+  const seen = new Set<string>();
+  let peakContext = 0;
+  let usedTokens = 0;
+  for (const f of readdirSync(dir, { recursive: true, encoding: "utf8" }))
+    if (f.endsWith(".jsonl"))
+      for (const l of readFileSync(join(dir, f), "utf8").split("\n")) {
+        if (!l.includes('"usage"')) continue;
+        try {
+          const m = JSON.parse(l).message ?? {};
+          if (!m.usage || seen.has(m.id)) continue;
+          seen.add(m.id);
+          const u = m.usage;
+          const context =
+            (u.input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0);
+          peakContext = Math.max(peakContext, context);
+          usedTokens += context + (u.output_tokens ?? 0);
+        } catch {}
+      }
+  return peakContext ? { peakContext, usedTokens } : {};
 }
 
 const only = opt.only ? new Set((opt.only as string).split(",")) : undefined;
@@ -972,7 +1016,7 @@ await Promise.all(
       const r = await job();
       done++;
       console.log(
-        `[${done}/${jobs.length}] ${r.arm} ${r.scenario} #${r.rep}: ${r.decisions.length} decision(s), ${r.runs.length} run(s)${r.error ? `, error: ${r.error}` : ""}`,
+        `[${done}/${jobs.length}] ${r.arm} ${r.scenario} #${r.rep}: ${r.decisions.length} decision(s), ${r.runs.length} run(s)${(r.peakContext ?? 0) > 100_000 ? `, context over 100k: ${r.peakContext}` : ""}${r.error ? `, error: ${r.error}` : ""}`,
       );
     }
   }),

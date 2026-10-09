@@ -1,0 +1,90 @@
+{
+  "agent": "claude",
+  "model": "claude-haiku-5-5",
+  "arm": "after",
+  "scenario": "later-question",
+  "rep": 2,
+  "turns": [
+    {
+      "commands": [
+        "node scripts/lint.js; echo \"exit=$?\"",
+        "cat scripts/lint.js; ls",
+        "node scripts/lint.js; echo \"exit=$?\"; cat RELEASE.md; echo ---; cat NAMES.md",
+        "starbridge ask \\\n  --question 'What should next week’s release be called?' \\\n  --context 'RELEASE.md says “Name: TBD”. It ships Monday; no rush before then.\nDriftwood: from NAMES.md\nLantern: from NAMES.md\nJuniper: from NAMES.md\nOr type your own name.' \\\n  --option 'Driftwood' --option 'Lantern' --option 'Juniper' \\\n  --link 'https://github.com/acme/shop/blob/main/RELEASE.md'",
+        "starbridge wait d_4-coyVlsv1rbIq_f --timeout 5m --no-mark; echo \"exit=$?\""
+      ],
+      "final": "Both parts are done.\n\n**Lint:** `node scripts/lint.js` reported two errors, both in `src/upload.js`, where `var` was used on lines 2 and 3. I changed them to `const`, since neither variable is reassigned. The script now exits 0.\n\n**Release name:** AGENTS.md says the owner names each release, so I asked you rather than choosing. I sent a Starbridge card with Driftwood, Lantern and Juniper from NAMES.md as options, and you answered **Driftwood**. I set `Name: TBD` to `Name: Driftwood` in `RELEASE.md`. I haven't committed anything.",
+      "session": "34880bd5-18d8-4bf4-9af2-481be7ef240f",
+      "tokens": 181721,
+      "costUsd": 0.005496760000000002,
+      "exit": 0,
+      "seconds": 137.335,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_4-coyVlsv1rbIq_f --timeout 5m` (again on exit 2)."
+      ]
+    },
+    {
+      "commands": [],
+      "final": "Both parts are done.\n\n**Lint:** `node scripts/lint.js` reported two errors, both in `src/upload.js`, where `var` was used on lines 2 and 3. I changed them to `const`, since neither variable is reassigned. The script now exits 0.\n\n**Release name:** AGENTS.md says the owner names each release, so I asked you rather than choosing. I sent a Starbridge card with Driftwood, Lantern and Juniper from NAMES.md as options, and you answered **Driftwood**. I set `Name: TBD` to `Name: Driftwood` in `RELEASE.md`. I haven't committed anything.",
+      "session": "34880bd5-18d8-4bf4-9af2-481be7ef240f",
+      "tokens": 181721,
+      "costUsd": 0.005496760000000002,
+      "exit": 0,
+      "seconds": 137.335,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_4-coyVlsv1rbIq_f --timeout 5m` (again on exit 2)."
+      ]
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_4-coyVlsv1rbIq_f",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-09T12:01:00Z",
+      "question": "What should next week’s release be called?",
+      "context": "RELEASE.md says “Name: TBD”. It ships Monday; no rush before then.\nDriftwood: from NAMES.md\nLantern: from NAMES.md\nJuniper: from NAMES.md\nOr type your own name.",
+      "options": [
+        "Driftwood",
+        "Lantern",
+        "Juniper"
+      ],
+      "recommended": "Driftwood",
+      "agent": "claude-code",
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "34880bd5-18d8-4bf4-9af2-481be7ef240f",
+        "sessionTitle": "proj-69"
+      },
+      "links": [
+        {
+          "url": "https://github.com/acme/shop/blob/main/RELEASE.md"
+        }
+      ],
+      "replies": true,
+      "dir": {
+        "length": 2,
+        "head": "T_NBryD9Z5EX0kqLLG3gLcld_UPv1pK4i1m8ptZ0nrM"
+      }
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [],
+  "answered": "Answer to d_4-coyVlsv1rbIq_f (What should next week’s release be called?): Driftwood",
+  "waiting": [],
+  "permissions": [],
+  "peakContext": 25263,
+  "judge": {
+    "cold": true,
+    "consequences": false,
+    "terminal": false,
+    "links": true,
+    "plain": true,
+    "notes": "The card never says that the chosen name will replace `Name: TBD` in RELEASE.md, and the names are bare labels with no explanation of what each one is."
+  }
+}

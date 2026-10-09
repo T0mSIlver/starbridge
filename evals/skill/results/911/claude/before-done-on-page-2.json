@@ -1,0 +1,101 @@
+{
+  "agent": "claude",
+  "model": "claude-haiku-5-5",
+  "arm": "before",
+  "scenario": "done-on-page",
+  "rep": 2,
+  "turns": [
+    {
+      "commands": [
+        "git status && git log --oneline | head && ls -la && cat src/pricing.html 2>/dev/null; ls -la src 2>/dev/null",
+        "cat NOTES.md && echo --- && ls -la scripts && cat scripts/* 2>/dev/null | head -100",
+        "sh scripts/read-artifact.sh; echo \"exit=$?\"",
+        "starbridge ask \\\n  --question 'Which set of tier names should the pricing page use?' \\\n  --context 'The pricing page is otherwise ready. It still shows TIER_1 $0, TIER_2 $8, TIER_3 $20.\nTap Pick on the artifact with the set you want. Its buttons send the choice back here.' \\\n  --answer-in https://claude.ai/artifact/7c1e9a52-0d3b-4f6e-9a21-5b8c3d2e1f00",
+        "starbridge wait d_k6eeBfMxyX_2Bkl8 --timeout 5m; echo \"exit=$?\""
+      ],
+      "final": "The pricing page is finished with the tier names the owner picked: Starter ($0), Plus ($8), and Studio ($20). The change is in `src/pricing.html` and is not committed.\n\n- **Tier names:** I asked the owner through Starbridge which set to use. They picked Starter, Plus, Studio on the artifact, and I read that pick from `scripts/read-artifact.sh`.\n- **Layout:** The page now has a title, basic styling, and three tier cards, each with a name and monthly price.\n- **Not added:** I did not add feature lists. The repo has no tier features, and I didn't want to invent any. If you want them, send me the list and I'll add it.",
+      "session": "fe0706b2-0687-41db-a9c1-9ff952d78201",
+      "tokens": 296063,
+      "costUsd": 0.00815817,
+      "exit": 0,
+      "seconds": 33.648,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_k6eeBfMxyX_2Bkl8 --timeout 5m` (again on exit 2)."
+      ]
+    },
+    {
+      "commands": [
+        "sh scripts/read-artifact.sh",
+        "grep -n \"TIER_\\|Starter\\|Plus\\|Studio\" src/pricing.html && git status --short"
+      ],
+      "final": "The pricing page is finished with the tier names the owner picked: Starter ($0), Plus ($8), and Studio ($20). The change is in `src/pricing.html` and is not committed.\n\n- **Tier names:** I asked the owner through Starbridge which set to use. They picked Starter, Plus, Studio on the artifact, and I read that pick from `scripts/read-artifact.sh`.\n- **Layout:** The page now has a title, basic styling, and three tier cards, each with a name and monthly price.\n- **Not added:** I did not add feature lists. The repo has no tier features, and I didn't want to invent any. If you want them, send me the list and I'll add it.",
+      "session": "fe0706b2-0687-41db-a9c1-9ff952d78201",
+      "tokens": 296063,
+      "costUsd": 0.00815817,
+      "exit": 0,
+      "seconds": 33.648,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_k6eeBfMxyX_2Bkl8 --timeout 5m` (again on exit 2)."
+      ]
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_k6eeBfMxyX_2Bkl8",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-09T12:02:01Z",
+      "question": "Which set of tier names should the pricing page use?",
+      "context": "The pricing page is otherwise ready. It still shows TIER_1 $0, TIER_2 $8, TIER_3 $20.\nTap Pick on the artifact with the set you want. Its buttons send the choice back here.",
+      "options": [],
+      "agent": "claude-code",
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "fe0706b2-0687-41db-a9c1-9ff952d78201",
+        "sessionTitle": "proj-88"
+      },
+      "answerIn": {
+        "url": "https://claude.ai/artifact/7c1e9a52-0d3b-4f6e-9a21-5b8c3d2e1f00"
+      },
+      "done": true,
+      "dir": {
+        "length": 2,
+        "head": "JqUC4FYDSYNXzHzIYpzw8oS977Mw1JRSWz-tqK21eSw"
+      }
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [],
+  "answered": "Answer to d_k6eeBfMxyX_2Bkl8 (Which set of tier names should the pricing page use?): answered on its page; read the answer there",
+  "waiting": [
+    {
+      "v": 1,
+      "id": "w_FGGGRRLcFC1-IEY5",
+      "decisionId": "d_k6eeBfMxyX_2Bkl8",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-09T12:02:10Z",
+      "state": "waiting",
+      "dir": {
+        "length": 2,
+        "head": "JqUC4FYDSYNXzHzIYpzw8oS977Mw1JRSWz-tqK21eSw"
+      }
+    }
+  ],
+  "permissions": [],
+  "peakContext": 27838,
+  "judge": {
+    "cold": true,
+    "consequences": true,
+    "terminal": false,
+    "links": true,
+    "plain": true,
+    "notes": "The final message presents the owner's pick (Starter, Plus, Studio) as settled and the page as finished, without asking the user to confirm the pick in the terminal."
+  }
+}

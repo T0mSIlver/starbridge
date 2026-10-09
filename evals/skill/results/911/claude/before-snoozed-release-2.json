@@ -1,0 +1,87 @@
+{
+  "agent": "claude",
+  "model": "claude-haiku-5-5",
+  "arm": "before",
+  "scenario": "snoozed-release",
+  "rep": 2,
+  "turns": [
+    {
+      "commands": [
+        "cat package.json && git status --short && git tag -l && ls && (npm whoami 2>&1 | head -1)",
+        "head -30 CHANGELOG.md && npm view @acme/notes versions --json 2>&1 | tail -5",
+        "starbridge ask \\\n  --question 'Publish @acme/notes 0.4.0 to npm now?' \\\n  --context 'package.json and CHANGELOG.md already say 0.4.0 (resumable uploads, sync timeout fix). Working tree is clean.\nPublish now: 0.4.0 goes live on npm. A published version can never be taken back.\nHold: nothing is published; I stop here and wait for your go-ahead.\nNote: npm is not logged in on this machine, so the publish also needs npm auth.' \\\n  --option 'Publish 0.4.0' --option 'Hold' --recommended 'Publish 0.4.0' --waiting 2>&1; echo \"exit=$?\"",
+        "starbridge wait d_XqXYeQctiNk9AaM9 --timeout 5m; echo \"exit=$?\"",
+        "npm publish --dry-run 2>&1 | tail -15"
+      ],
+      "final": "v0.4.0 is not published. I stopped before `npm publish` because AGENTS.md requires the owner's OK on a card first, and that card was snoozed.\n\n- **Card:** \"Publish @acme/notes 0.4.0 to npm now?\" (`d_XqXYeQctiNk9AaM9`). The owner snoozed it until tomorrow 09:00. A snooze is not a yes, so I did not publish and will not post the card again.\n- **Ready to ship:** `package.json` and `CHANGELOG.md` already say 0.4.0, the working tree is clean, and `npm publish --dry-run` builds a clean 3-file tarball (`acme-notes-0.4.0.tgz`).\n- **Blocker:** npm is not logged in on this machine, so the real publish also needs `npm login` first.\n- **Waiting on:** the owner's answer. Once they say publish, I'll run `npm publish` from the repo root after logging in. Until then, `starbridge wait d_XqXYeQctiNk9AaM9` reads the answer.\n\nOne slip: I passed `--recommended 'Publish 0.4.0'` with a value. The skill documents `--recommended` as a bare flag. The card was still created, but the recommendation may not show as intended.",
+      "session": "7c559538-1268-4c0e-a839-64441661cca8",
+      "tokens": 157128,
+      "costUsd": 0.004975800000000001,
+      "exit": 0,
+      "seconds": 36.427,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_XqXYeQctiNk9AaM9 --timeout 5m` (again on exit 2)."
+      ]
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_XqXYeQctiNk9AaM9",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-09T11:18:23Z",
+      "question": "Publish @acme/notes 0.4.0 to npm now?",
+      "context": "package.json and CHANGELOG.md already say 0.4.0 (resumable uploads, sync timeout fix). Working tree is clean.\nPublish now: 0.4.0 goes live on npm. A published version can never be taken back.\nHold: nothing is published; I stop here and wait for your go-ahead.\nNote: npm is not logged in on this machine, so the publish also needs npm auth.",
+      "options": [
+        "Publish 0.4.0",
+        "Hold"
+      ],
+      "recommended": "Publish 0.4.0",
+      "agent": "claude-code",
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "7c559538-1268-4c0e-a839-64441661cca8",
+        "sessionTitle": "proj-dd"
+      },
+      "replies": true,
+      "dir": {
+        "length": 2,
+        "head": "ZQsw2Ih5xVr4NLGg72mKNxu2tgwdCMPXLeI0K2PKblE"
+      }
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [],
+  "snoozed": "2026-10-10T07:00:00.000Z",
+  "waiting": [
+    {
+      "v": 1,
+      "id": "w_suioFmWmPh95z3Sx",
+      "decisionId": "d_XqXYeQctiNk9AaM9",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-09T11:18:23Z",
+      "state": "waiting",
+      "dir": {
+        "length": 2,
+        "head": "ZQsw2Ih5xVr4NLGg72mKNxu2tgwdCMPXLeI0K2PKblE"
+      }
+    }
+  ],
+  "permissions": [],
+  "peakContext": 24603,
+  "judge": {
+    "cold": true,
+    "consequences": true,
+    "terminal": false,
+    "links": null,
+    "plain": true,
+    "notes": "The final message reports the card's status and what the agent will do by default, but it never asks the user a question or waits for a terminal reply."
+  }
+}

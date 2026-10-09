@@ -1,0 +1,69 @@
+{
+  "agent": "claude",
+  "model": "claude-haiku-5-5",
+  "arm": "before",
+  "scenario": "long-e2e",
+  "rep": 1,
+  "turns": [
+    {
+      "commands": [
+        "grep -n -A6 '^e2e' Makefile; git status --short; git diff --stat",
+        "starbridge run --title 'Mac e2e' --reason 'takes over your screen and keyboard (iOS simulator, ~10 min)' -- make e2e"
+      ],
+      "final": "The e2e suite passed: all 4 onboarding flow tests (`[1/4]` to `[4/4]`) reported \"4 passed\".\n\nI ran it as `make e2e` wrapped in `starbridge run`, because the project's AGENTS.md says it takes over the owner's screen and keyboard for about ten minutes. No decision was needed from you, so I didn't post a card.",
+      "session": "8b73c273-911f-4226-983d-cb352a1d001e",
+      "tokens": 65881,
+      "costUsd": 0.0031275400000000003,
+      "exit": 0,
+      "seconds": 12.185,
+      "delivery": []
+    }
+  ],
+  "decisions": [],
+  "laterDecisions": [],
+  "runs": [
+    {
+      "v": 1,
+      "id": "r_4voIS35_yuE2IFW4",
+      "to": [
+        "phone"
+      ],
+      "title": "Mac e2e",
+      "reason": "takes over your screen and keyboard (iOS simulator, ~10 min)",
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "8b73c273-911f-4226-983d-cb352a1d001e",
+        "sessionTitle": "proj-8a"
+      },
+      "startedAt": "2026-10-09T11:21:35Z",
+      "at": "2026-10-09T11:21:40.003Z",
+      "progress": {
+        "done": 4,
+        "total": 4,
+        "unit": "step"
+      },
+      "exit": {
+        "code": 0,
+        "at": "2026-10-09T11:21:40Z"
+      },
+      "dir": {
+        "length": 2,
+        "head": "u74_wQtj0QaGXXYydKekiXkthzsTc_dAuc2ZsT1SJyE"
+      }
+    }
+  ],
+  "gh": [],
+  "waiting": [],
+  "permissions": [],
+  "peakContext": 22913,
+  "judge": {
+    "cold": null,
+    "consequences": null,
+    "terminal": false,
+    "links": null,
+    "plain": null,
+    "notes": ""
+  }
+}

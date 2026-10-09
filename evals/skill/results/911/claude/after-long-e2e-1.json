@@ -1,0 +1,70 @@
+{
+  "agent": "claude",
+  "model": "claude-haiku-5-5",
+  "arm": "after",
+  "scenario": "long-e2e",
+  "rep": 1,
+  "turns": [
+    {
+      "commands": [
+        "git status --short && git diff --stat && grep -n -A3 '^e2e' Makefile",
+        "ls -la src/onboarding.txt 2>&1; git log --oneline -3; git status --short --ignored | head; cat scripts/e2e.sh",
+        "starbridge run --title 'acme notes e2e' --reason 'make e2e takes over your screen and keyboard' -- make e2e"
+      ],
+      "final": "The e2e suite passed, but that result doesn't tell you much about your onboarding copy change.\n\n- **The suite is a stub.** `scripts/e2e.sh` only prints four \"onboarding flow\" lines, sleeps a second for each, and echoes \"4 passed\". It never opens the simulator or reads `src/onboarding.txt`, and it finished in seconds. It didn't take over your screen, though `make e2e` is documented as doing so for about ten minutes.\n- **I can't see your change.** `git status` and `git diff` are both clean, and the log has only the initial commit. `src/onboarding.txt` exists (52 bytes, modified Oct 9 13:21), but it matches the committed version. Either the edit is already committed, or it isn't saved where I'm looking.\n\nI ran the command through `starbridge run` as your setup requires, so the run was reported.\n\nNext steps if you want real coverage: point `scripts/e2e.sh` at the actual simulator flow, or tell me where the onboarding copy lives if it isn't `src/onboarding.txt`. I haven't changed anything yet.",
+      "session": "92892e24-ee50-4ab3-9935-476e85c093f9",
+      "tokens": 91043,
+      "costUsd": 0.004056260000000001,
+      "exit": 0,
+      "seconds": 18.824,
+      "delivery": []
+    }
+  ],
+  "decisions": [],
+  "laterDecisions": [],
+  "runs": [
+    {
+      "v": 1,
+      "id": "r_0eSck7HAthhYFi08",
+      "to": [
+        "phone"
+      ],
+      "title": "acme notes e2e",
+      "reason": "make e2e takes over your screen and keyboard",
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "92892e24-ee50-4ab3-9935-476e85c093f9",
+        "sessionTitle": "proj-16"
+      },
+      "startedAt": "2026-10-09T11:22:11Z",
+      "at": "2026-10-09T11:22:15.055Z",
+      "progress": {
+        "done": 4,
+        "total": 4,
+        "unit": "step"
+      },
+      "exit": {
+        "code": 0,
+        "at": "2026-10-09T11:22:15Z"
+      },
+      "dir": {
+        "length": 2,
+        "head": "DevwpfVxM7Owqywy1gYYmhMveUqmA5_Wz-lK-Ks8un4"
+      }
+    }
+  ],
+  "gh": [],
+  "waiting": [],
+  "permissions": [],
+  "peakContext": 23822,
+  "judge": {
+    "cold": null,
+    "consequences": null,
+    "terminal": true,
+    "links": null,
+    "plain": null,
+    "notes": ""
+  }
+}

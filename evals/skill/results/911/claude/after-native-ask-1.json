@@ -1,0 +1,84 @@
+{
+  "agent": "claude",
+  "model": "claude-haiku-5-5",
+  "arm": "after",
+  "scenario": "native-ask",
+  "rep": 1,
+  "turns": [
+    {
+      "commands": [],
+      "askUser": [
+        {
+          "denied": false
+        }
+      ],
+      "final": "",
+      "session": "bdee6e28-7b27-4fc0-993a-285412963bcf",
+      "exit": 0,
+      "seconds": 6.02
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_64k6G1yonuJpPj6l",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-09T12:33:46Z",
+      "question": "Which error tracking service should we wire into the web app?",
+      "context": "- Sentry (Recommended): Hosted, free up to 5k errors/month, then $26/month. Session replay included. No infra to maintain.\n- Self-hosted GlitchTip: Free, runs on our VPS. We patch and back it up ourselves (about an hour a month).",
+      "options": [
+        "Sentry (Recommended)",
+        "Self-hosted GlitchTip"
+      ],
+      "recommended": "Sentry (Recommended)",
+      "agent": "claude-code",
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "bdee6e28-7b27-4fc0-993a-285412963bcf",
+        "sessionTitle": "proj-c6"
+      },
+      "replies": true,
+      "dir": {
+        "length": 2,
+        "head": "kZcDLab7uDIobSF3ke1OEZP-qwqFDrvyqKG09M9dT7w"
+      }
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [
+    "gh auth token",
+    "gh auth token",
+    "gh issue list -R anthropics/claude-code --author @me --state closed --search closed:>2026-09-09 --json number,title,closedAt,stateReason --limit 30"
+  ],
+  "waiting": [
+    {
+      "v": 1,
+      "id": "w_w2fRMAzAaak8O54F",
+      "decisionId": "d_64k6G1yonuJpPj6l",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-09T12:33:46Z",
+      "state": "waiting",
+      "dir": {
+        "length": 2,
+        "head": "kZcDLab7uDIobSF3ke1OEZP-qwqFDrvyqKG09M9dT7w"
+      }
+    }
+  ],
+  "permissions": [],
+  "peakContext": 30285,
+  "judge": {
+    "cold": true,
+    "consequences": true,
+    "terminal": false,
+    "links": null,
+    "plain": true,
+    "notes": "The final terminal message is blank, so nothing in the session asks the user a question or says the agent is waiting for a reply."
+  }
+}

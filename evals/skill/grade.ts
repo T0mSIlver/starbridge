@@ -2,7 +2,7 @@
  * Scores the records run.ts wrote against the rubric below and prints a Markdown summary, before
  * against after, per scenario and per check.
  *
- *   bun evals/skill/grade.ts <records dir>... [--judge-model claude-sonnet-5-5] [--no-judge]
+ *   bun evals/skill/grade.ts <records dir>... [--judge-model claude-haiku-5-5] [--no-judge]
  *
  * Most checks read the records. Five need judgement (marked "judge"); Claude grades them through
  * `claude -p` in a throwaway config dir, and the verdict is stored in the record, so grading again
@@ -19,7 +19,7 @@ const { values: opt, positionals: dirs } = parseArgs({
   args: process.argv.slice(2),
   allowPositionals: true,
   options: {
-    "judge-model": { type: "string", default: "claude-sonnet-5-5" },
+    "judge-model": { type: "string", default: "claude-haiku-5-5" },
     "no-judge": { type: "boolean" },
     jobs: { type: "string", default: "3" },
   },
@@ -223,7 +223,7 @@ function score(r: Rec, s: Scenario): Record<string, boolean | null> {
       s.expect === "run"
         ? r.runs.length > 0 &&
           r.runs.every((x) => !!(x as { reason?: string }).reason) &&
-          cmds.filter((c) => /make e2e|scripts\/e2e/.test(c)).every((c) => /starbridge run/.test(c))
+          cmds.filter((c) => /make e2e|(?:^|[;&|]\s*|sh\s+|\.\/)scripts\/e2e/.test(c)).every((c) => /starbridge run/.test(c))
         : null,
     after: s.followUp
       ? !!r.answered &&

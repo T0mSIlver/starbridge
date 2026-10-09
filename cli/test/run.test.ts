@@ -343,9 +343,8 @@ test("the plugin's SessionStart hook adds the rule to reach the owner and the ru
   const out = JSON.parse(await new Response(p.stdout).text());
   expect(out.hookSpecificOutput.hookEventName).toBe("SessionStart");
   const text = out.hookSpecificOutput.additionalContext as string;
-  expect(text).toContain(
-    "Reach me through the `starbridge` skill, not here or with AskUserQuestion",
-  );
+  expect(text).toContain("Reach me through the `starbridge` skill, not here,");
+  expect(text).toContain("In Claude Code, a quick question may use AskUserQuestion");
   expect(text).toContain("\n\nRun a command that blocks me");
   expect(text).toContain("`starbridge run`");
   expect(text).not.toContain("inference");

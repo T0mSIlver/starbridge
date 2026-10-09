@@ -1,0 +1,85 @@
+{
+  "agent": "claude",
+  "model": "claude-haiku-5-5",
+  "arm": "after",
+  "scenario": "desk-question",
+  "rep": 1,
+  "turns": [
+    {
+      "commands": [],
+      "askUser": [
+        {
+          "denied": false
+        }
+      ],
+      "final": "",
+      "session": "f363fb2f-a0aa-4cb3-a630-390e0e2d639b",
+      "exit": 0,
+      "seconds": 8.024
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_6awRZ74aGB8LSxiB",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-09T12:34:17Z",
+      "question": "How should the dark theme be selected in the notes app?",
+      "context": "- Follow system (Recommended): Use prefers-color-scheme automatically. No menu change, and it matches the OS setting without the user configuring anything.\n- Menu toggle: Add a light/dark switch in the menu. The user chooses explicitly, and the choice needs to be stored (e.g. localStorage) and applied on load.\n- Both: Default to the system setting, with a menu toggle that overrides it and can reset back to system.",
+      "options": [
+        "Follow system (Recommended)",
+        "Menu toggle",
+        "Both"
+      ],
+      "recommended": "Follow system (Recommended)",
+      "agent": "claude-code",
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "f363fb2f-a0aa-4cb3-a630-390e0e2d639b",
+        "sessionTitle": "proj-30"
+      },
+      "replies": true,
+      "dir": {
+        "length": 2,
+        "head": "bjlqmNratXp59gfUi23q4zq8ExVWii1k9IgXAa8qd3Y"
+      }
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [
+    "gh auth token",
+    "gh auth token",
+    "gh issue list -R anthropics/claude-code --author @me --state closed --search closed:>2026-09-09 --json number,title,closedAt,stateReason --limit 30"
+  ],
+  "waiting": [
+    {
+      "v": 1,
+      "id": "w_AiZKu65co09c_Vfu",
+      "decisionId": "d_6awRZ74aGB8LSxiB",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-09T12:34:17Z",
+      "state": "waiting",
+      "dir": {
+        "length": 2,
+        "head": "bjlqmNratXp59gfUi23q4zq8ExVWii1k9IgXAa8qd3Y"
+      }
+    }
+  ],
+  "permissions": [],
+  "peakContext": 30339,
+  "judge": {
+    "cold": true,
+    "consequences": true,
+    "terminal": false,
+    "links": null,
+    "plain": true,
+    "notes": "The final terminal message is empty, so the agent never asks the question in the terminal or waits for a reply, which leaves the user with no answer path if they decline the card."
+  }
+}

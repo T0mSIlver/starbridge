@@ -6,7 +6,7 @@ scripted situations (`scenarios.ts`), once with the plugin at a git ref and once
 checkout's, and a rubric scores the cards they post.
 
 ```bash
-TMPDIR=/var/tmp bun evals/skill/run.ts --agent claude --reps 2   # claude-sonnet-5-5
+TMPDIR=/var/tmp bun evals/skill/run.ts --agent claude --reps 2   # claude-haiku-5-5
 TMPDIR=/var/tmp bun evals/skill/run.ts --agent codex --reps 2    # Codex's default model
 TMPDIR=/var/tmp bun evals/skill/run.ts --agent pi --reps 2       # zai/glm-5.3-flash
 TMPDIR=/var/tmp bun evals/skill/run.ts --agent opencode --reps 2 # zai-coding-plan/glm-5.3-flash
@@ -36,7 +36,7 @@ ChatGPT plan. `TMPDIR` must be outside your home, where an
 ancestor's `AGENTS.md` or `CLAUDE.md` would reach the agent. A Codex home is 60 MB, so parallel
 runs can fill a small /tmp.
 
-`grade.ts` scores each run: twelve checks read the record, five ask Claude Sonnet through
+`grade.ts` scores each run: twelve checks read the record, five ask Claude Haiku through
 `claude -p` in a throwaway config dir (stored in the record, so grading again is free). A model
 provider's error, such as a rate limit, makes the run a failed run rather than a score.
 `render.ts` shows cards in the real web inbox (headless Chromium) and saves a screenshot of each.
@@ -56,3 +56,6 @@ TMPDIR=/var/tmp bun evals/skill/run.ts --agent opencode --arms after --reps 3 \
   --only merge-order,option-order,design-pick,later-question,done-on-page,delivery-prompt,oc-question,oc-edit
 bun evals/skill/grade.ts --no-judge evals/skill/results/624/claude
 ```
+
+`results/911` holds the first Claude Code run on Haiku 5.5: the skill and rule before and after
+#911 allowed `AskUserQuestion` for a quick question.
