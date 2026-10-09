@@ -48,7 +48,9 @@ let notifier: Notifier;
 let quitting = false;
 /** The Mac's lock, sleep and, once allowed, idle time, which the page counts as presence. */
 let screen: Screen | null = null;
-/** Whether the page was told the owner left, which the app does once, before it quits. */
+/** The page being told the owner left, which the app does once, before it quits. */
+let leaving: Promise<void> | null = null;
+/** Whether the page said so, or `QUIT_MS` passed: the app may go. */
 let left = false;
 /** The GitHub sign-in sent to the browser, until its link comes back. */
 let signIn: SignIn | null = null;
@@ -163,8 +165,10 @@ async function ready(): Promise<void> {
     if (next === settings.server) return serverWin?.close();
     settings = { ...settings, server: next, notified: [] };
     save();
-    app.relaunch();
-    app.exit();
+    leave().then(() => {
+      app.relaunch();
+      app.exit();
+    });
   });
 
   // The page's signed-out screen in the app is sign-in, not the landing page (web: DESKTOP_COOKIE).
@@ -242,7 +246,8 @@ function createWindow(): void {
   // The window keeps the app's name, for Mission Control and the Window menu, whatever page shows.
   win.on("page-title-updated", (e) => e.preventDefault());
   win.on("close", (e) => {
-    if (quitting) return;
+    // Quitting, the window closes once the page has said the owner left.
+    if (quitting && (left || !screen)) return;
     e.preventDefault();
     win?.hide();
   });
@@ -541,8 +546,14 @@ function tellScreen(r: Reading): void {
  * last beat (75 s), and waits until it says so or `QUIT_MS` passed.
  */
 function leave(): Promise<void> {
-  if (left || !screen) return Promise.resolve();
-  left = true;
+  if (!screen) return Promise.resolve();
+  leaving ??= tellLeft().then(() => {
+    left = true;
+  });
+  return leaving;
+}
+
+function tellLeft(): Promise<void> {
   const page = win && fromServer(win.webContents.getURL());
   return new Promise((done) => {
     const finish = () => {
