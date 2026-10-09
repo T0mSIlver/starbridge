@@ -82,8 +82,9 @@ function session(socket: string, id: string) {
 
 /**
  * What `p` rejects with. On Windows, `expect(p).rejects` in a test that made a node:http request
- * corrupts Bun's heap, and a later test crashes or hangs (#897, Bun 1.4.2 and 1.4.3); a plain
- * `await` in try/catch does not.
+ * corrupts Bun's heap, and a later test crashes or hangs (#897,
+ * https://github.com/oven-sh/bun/issues/44025, Bun 1.4.2 and 1.4.3); a plain `await` in
+ * try/catch does not.
  */
 async function rejection(p: Promise<unknown>): Promise<Error> {
   try {
