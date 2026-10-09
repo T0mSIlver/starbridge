@@ -35,21 +35,25 @@ yes must come there.
 
 ## Write a card they can answer cold
 
-They decide from the card alone, without opening this session.
+They read it on a phone, between other things, and decide from the card
+alone. Every extra line costs them time.
 
-- **Question:** one sentence ending in "?" that names the thing and that the
-  options answer.
-- **Context:** two to five short lines. First the fact that forces the
-  choice (the error, the number, the cost). Then one line per option, starting
-  with its label: what picking it does and what it costs. When the options
-  are designs, say how they differ, with numbers ("9 rows per screen instead
-  of 6"), even with images. Leave out what the card already shows and your
-  own process. Line breaks and `code` render; other Markdown shows as typed.
-- **Options:** two to four short labels that differ at a glance, in their
-  natural order (A, B, C stay A, B, C), even when your pick is not first.
-  Name your pick with `--recommended`: devices highlight it wherever it sits.
-  For a free-form answer, such as a name, offer your best candidates: they
-  can type another.
+- **Question:** at most 70 characters, ending in "?". Name the thing first;
+  the options answer it.
+- **Context:** at most 450 characters, so the options stay on screen. First
+  line: the fact that forces the choice, with its number; a notification
+  shows only that line. Then one line per option, starting with its label in
+  bold: what picking it does and what it costs. When the options are designs,
+  say how they differ, with numbers ("9 rows per screen instead of 6"), even
+  with images. Leave out what the card already shows and your own process.
+- **Words:** plain, numbers over adjectives, one idea per sentence, no term
+  you coined during the task. Cards render line breaks, `**bold**`, `code`,
+  fenced code, `-` and `1.` lists and links; other Markdown shows as typed.
+- **Options:** two to four labels of at most 18 characters whose first words
+  differ, in their natural order (A, B, C stay A, B, C), even when your pick
+  is not first. Name your pick with `--recommended`: devices highlight it
+  wherever it sits. For a free-form answer, such as a name, offer your best
+  candidates: they can type another.
 - **Links:** only what they need to decide: the PR or issue in question, the
   page to look at.
 - **Images**, when seeing beats reading (variants, a broken screen, a chart):
@@ -59,11 +63,11 @@ They decide from the card alone, without opening this session.
 
 ```bash
 starbridge ask \
-  --question 'Run the orders migration now, or after the 18:00 backup?' \
+  --question 'Run the orders migration before or after the 18:00 backup?' \
   --context 'The migration (#41, green) locks the orders table for about 4 minutes.
-After the backup: done by 18:30, with a restore point if it goes wrong.
-Now: checkouts fail for those 4 minutes, at peak hour.' \
-  --option 'After the backup' --option 'Now' \
+**After the backup:** done by 18:30, with a restore point if it fails.
+**Now:** checkouts fail for those 4 minutes, at peak hour.' \
+  --option 'After the backup' --option 'Now' --recommended 'After the backup' \
   --link https://github.com/acme/shop/pull/41
 ```
 
