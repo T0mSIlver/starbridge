@@ -13,10 +13,13 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.DpSize
-import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.datastore.preferences.core.mutablePreferencesOf
 import androidx.glance.ExperimentalGlanceApi
 import androidx.glance.GlanceId
 import androidx.glance.appwidget.GlanceAppWidget
@@ -30,59 +33,99 @@ import dev.starbridge.app.data.Pace
 import dev.starbridge.app.data.QuotaSettings
 import dev.starbridge.app.data.QuotaWindow
 import dev.starbridge.app.ui.theme.StarbridgeTheme
+import dev.starbridge.app.widget.Choice
 import dev.starbridge.app.widget.Palette
 import dev.starbridge.app.widget.Plan
-import dev.starbridge.app.widget.PlanPicker
+import dev.starbridge.app.widget.QuotaPicker
 import dev.starbridge.app.widget.QuotaRow
 import dev.starbridge.app.widget.QuotasWidget
-import dev.starbridge.app.widget.planChoices
+import dev.starbridge.app.widget.chosen
+import dev.starbridge.app.widget.pickerPlans
 import kotlinx.coroutines.runBlocking
+import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
-import org.robolectric.ParameterizedRobolectricTestRunner
+import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import java.time.Duration
 import java.time.Instant
 
-// The Quotas widget's plan (#907): the picker and widgets showing different plans, light and dark.
-// Written to app/screenshots/widgets/.
-@RunWith(ParameterizedRobolectricTestRunner::class)
+// Each Quotas widget shows the quotas picked for it (#907). Screenshots go to
+// app/screenshots/widgets/; android/docs/widgets/ keeps copies.
+@RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [36], qualifiers = "w412dp-h892dp-xxhdpi")
-class WidgetPlanTest(private val dark: Boolean) {
-    companion object {
-        @JvmStatic
-        @ParameterizedRobolectricTestRunner.Parameters(name = "dark={0}")
-        fun cases() = listOf(arrayOf<Any>(false), arrayOf<Any>(true))
-    }
-
+class QuotasWidgetTest {
     @get:Rule val compose = createComposeRule()
 
     private val now = Instant.parse("2026-10-09T14:00:00Z")
-    private val scheme get() = if (dark) "dark" else "light"
+    private val claude = Plan("Claude", null)
+    private val codex = Plan("Codex", null)
 
     private val windows = listOf(
         QuotaWindow("c5", "Claude", "5-hour", 42, now.plus(Duration.ofMinutes(150)), Pace.Even, steadyPercent = 50),
         QuotaWindow("cw", "Claude", "Weekly", 68, now.plus(Duration.ofDays(2)), Pace.RunsOut(now.plus(Duration.ofHours(30))), steadyPercent = 55),
+        QuotaWindow("co", "Claude", "Opus", 30, now.plus(Duration.ofDays(2)), Pace.Even, steadyPercent = 55),
         QuotaWindow("x5", "Codex", "5-hour", 23, now.plus(Duration.ofMinutes(200)), Pace.Even, steadyPercent = 40),
         QuotaWindow("xw", "Codex", "Weekly", 51, now.plus(Duration.ofDays(4)), Pace.Even, steadyPercent = 47),
-        QuotaWindow("z5", "z.ai", "5-hour", 12, now.plus(Duration.ofMinutes(38)), Pace.Unused(86), steadyPercent = 88),
     )
 
-    private val codex = Plan("Codex", null)
+    private fun rows(plan: Plan?, from: List<QuotaWindow> = windows) = QuotaRow.of(from, QuotaSettings(), now, h24 = true, plan = plan)
 
-    @Test fun picker() {
+    @Test fun storedChoiceRoundTrips() {
+        val state = mutablePreferencesOf()
+        val choice = Choice(Plan("Claude", "mac"), listOf("Weekly", "Opus"))
+        Choice.write(state, choice)
+        assertEquals(choice, Choice.read(state))
+        // Back to "Running out first": nothing of the old choice stays.
+        Choice.write(state, null)
+        assertEquals(null, Choice.read(state))
+        assertEquals(0, state.asMap().size)
+    }
+
+    @Test fun showsThePickedQuotaFillingAWiderWidgetFromItsPlan() {
+        val weekly = Choice(claude, listOf("Weekly"))
+        assertEquals(listOf("Weekly"), rows(claude).chosen(weekly, 1).map { it.window.window })
+        // Picked on a 2×2, then widened: the plan's next quota in the Quotas screen's order joins it.
+        assertEquals(listOf("Weekly", "5-hour"), rows(claude).chosen(weekly, 2).map { it.window.window })
+    }
+
+    @Test fun aQuotaThatStopsReportingKeepsItsChoiceAndShowsNone() {
+        val opus = Choice(claude, listOf("Opus"))
+        assertEquals(emptyList<QuotaRow>(), rows(claude, windows.filter { it.id != "co" }).chosen(opus, 2))
+        // A plan that is gone keeps its place in the picker, so the widget's choice still shows.
+        val plans = pickerPlans(windows.filter { it.provider != "Claude" }, QuotaSettings(), now, true, opus)
+        assertEquals(listOf(codex, claude), plans.map { it.plan })
+        assertEquals(0, plans.last().rows.size)
+    }
+
+    @Test fun aWideWidgetTicksTwoQuotasOfAPlanWithMore() {
+        var picked: Choice? = null
+        compose.setContent {
+            StarbridgeTheme { QuotaPicker(pickerPlans(windows, QuotaSettings(), now, true, null), wide = true, chosen = null, signedIn = true) { picked = it } }
+        }
+        compose.onNodeWithText("Opus").performClick()
+        assertEquals(null, picked)
+        compose.onNodeWithText("Weekly", substring = false).performClick()
+        assertEquals(Choice(claude, listOf("Opus", "Weekly")), picked)
+    }
+
+    private fun picker(wide: Boolean, dark: Boolean, chosen: Choice?) {
         compose.setContent {
             StarbridgeTheme(darkTheme = dark, colours = Colours.Starbridge) {
                 Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface)) {
-                    PlanPicker(planChoices(windows, QuotaSettings(), now, codex), codex, signedIn = true) {}
+                    QuotaPicker(pickerPlans(windows, QuotaSettings(), now, true, chosen), wide, chosen, signedIn = true) {}
                 }
             }
         }
-        compose.onRoot().captureRoboImage("screenshots/widgets/picker-$scheme.png")
+        compose.onRoot().captureRoboImage("screenshots/widgets/picker-${if (wide) "4x2" else "2x2"}-${if (dark) "dark" else "light"}.png")
     }
+
+    @Test fun picker2x2Light() = picker(wide = false, dark = false, Choice(codex, listOf("Weekly")))
+    @Test fun picker2x2Dark() = picker(wide = false, dark = true, Choice(codex, listOf("Weekly")))
+    @Test fun picker4x2Light() = picker(wide = true, dark = false, Choice(codex, listOf("5-hour", "Weekly")))
 
     private class Sample(val content: @Composable () -> Unit) : GlanceAppWidget() {
         override val sizeMode = SizeMode.Exact
@@ -90,7 +133,7 @@ class WidgetPlanTest(private val dark: Boolean) {
     }
 
     @OptIn(ExperimentalGlanceApi::class)
-    @Test fun widgets() {
+    private fun widgets(dark: Boolean) {
         val base = ApplicationProvider.getApplicationContext<Context>()
         val context = base.createConfigurationContext(
             Configuration(base.resources.configuration).apply {
@@ -98,14 +141,14 @@ class WidgetPlanTest(private val dark: Boolean) {
             },
         )
         val p = Palette.of(Colours.Starbridge)
-        fun rows(plan: Plan?) = QuotaRow.of(windows, QuotaSettings(), now, h24 = true, plan = plan)
         val small = DpSize(172.dp, 172.dp)
         val wide = DpSize(356.dp, 172.dp)
-        val gone = Plan("Gemini", null)
+        fun widget(choice: Choice?, from: List<QuotaWindow> = windows) = Sample { QuotasWidget(rows(choice?.plan, from), p, choice) }
+        val opus = Choice(claude, listOf("Opus"))
         val lines = listOf(
-            listOf(Sample { QuotasWidget(rows(Plan("Claude", null)), p, Plan("Claude", null)) } to small, Sample { QuotasWidget(rows(codex), p, codex) } to small),
-            listOf(Sample { QuotasWidget(rows(codex), p, codex) } to wide),
-            listOf(Sample { QuotasWidget(rows(null), p) } to small, Sample { QuotasWidget(rows(gone), p, gone) } to small),
+            listOf(widget(Choice(claude, listOf("5-hour"))) to small, widget(Choice(codex, listOf("Weekly"))) to small),
+            listOf(widget(Choice(claude, listOf("Weekly", "Opus"))) to wide),
+            listOf(widget(null) to small, widget(opus, windows.filter { it.id != "co" }) to small),
         )
         val density = context.resources.displayMetrics.density
         fun px(dp: Float) = (dp * density).toInt()
@@ -133,6 +176,9 @@ class WidgetPlanTest(private val dark: Boolean) {
         }
         // Roborazzi captures views in an activity: the compose rule's.
         compose.setContent { AndroidView(factory = { root }, modifier = Modifier.fillMaxWidth()) }
-        compose.onRoot().captureRoboImage("screenshots/widgets/plans-$scheme.png")
+        compose.onRoot().captureRoboImage("screenshots/widgets/widgets-${if (dark) "dark" else "light"}.png")
     }
+
+    @Test fun widgetsLight() = widgets(dark = false)
+    @Test fun widgetsDark() = widgets(dark = true)
 }

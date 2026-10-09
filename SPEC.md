@@ -1028,6 +1028,16 @@ first window, so a provider with a window running out leads.
   these from mockups over one-tap answers on a wider Needs you, a runs widget and taller sizes.
   RemoteViews cannot load the app's fonts, so the widgets set in the system's sans, and Glance
   draws no paths, so a meter's overrun shows only its red cap.
+- **Each Quotas widget shows the quotas picked for it** (#907). Dropping one opens a picker, as
+  Todoist's and Keep's widgets do; Reconfigure on a long press opens it again. A 2×2 takes one
+  quota, in one tap; a 4×2 takes two of one plan, side by side as the 2×2 draws one: a plan with
+  two is one tap, a plan with more ticks two. "Running out first", the default and what Back
+  keeps, shows what leads the Quotas screen, as before. The picker lists every plan, hidden ones
+  too. A 2×2 widened to 4×2 adds its plan's next quota. Quotas that stop reporting keep the
+  choice, and the widget says "Not in your quotas now" until they return or the owner picks
+  again: a machine offline should not cost the choice. The owner chose one quota at 2×2 and two
+  of one provider at 4×2 over a whole plan per widget; the side-by-side 4×2 follows CodexBar's
+  combined macOS widget. Glance keeps the choice per widget and deletes it with the widget.
 - **Update screen** (#497): when the server answers 426 `client-too-old`, the app shows only
   "Update Starbridge", the server's minimum and this phone's release, and one button back to
   where the app came from: Google Play, Obtainium (its launch intent, else the release page), or
