@@ -316,12 +316,16 @@ internal fun outWords(at: Instant, now: Instant, h24: Boolean, zone: ZoneId = Zo
         today.minusDays(1) -> "yesterday"
         else -> null
     }
-    // A weekday names a day within a week either way; further off, the date.
-    val far = if (abs(ChronoUnit.DAYS.between(today, date)) < 7) weekday(at, zone, locale) else day(at, zone, locale)
+    // Today, the time alone; a weekday names a day within a week either way; further off, the date.
+    val far = when {
+        date == today -> ""
+        abs(ChronoUnit.DAYS.between(today, date)) < 7 -> weekday(at, zone, locale)
+        else -> day(at, zone, locale)
+    }
     val days = listOfNotNull(near, far)
-    val words = if (at.isAfter(now)) days.map { "Runs out $it $time" } + days.map { "Out $it $time" } + days.map { "Out $it" }
+    val words = if (at.isAfter(now)) days.map { "Runs out $it $time" } + days.map { "Out $it $time" } + days.filter(String::isNotEmpty).map { "Out $it" }
     else days.map { "Ran out $it $time" } + days.map { "Ran out $it" } + "Ran out"
-    return words.distinct()
+    return words.map { it.replace("  ", " ").trim() }.distinct()
 }
 
 /** How wide [text] sets in the widgets' sans (Glance's FontWeight.Medium is sans-serif-medium), under the phone's font scale. */
@@ -416,7 +420,9 @@ internal fun QuotasWidget(rows: List<QuotaRow>?, p: Palette, choice: Choice? = n
         }
         val inner = size.width - 36.dp
         if (!wide) {
-            Text("${first.window.provider} · ${first.window.window}", style = style(14.sp, p.fg2, medium = true), maxLines = 1)
+            // Too narrow for both names (#915), the quota's alone: its meter's colour names the provider.
+            val (head, headSize) = LocalContext.current.fitting(listOf("${first.window.provider} · ${first.window.window}", first.window.window), inner, 14.sp, true)
+            Text(head, style = style(headSize, p.fg2, medium = true), maxLines = 1)
             Spacer(GlanceModifier.defaultWeight())
             Figure(first, inner, p)
             return@Card
@@ -476,12 +482,15 @@ internal fun QuotasWidget(rows: List<QuotaRow>?, p: Palette, choice: Choice? = n
 /** A quota as the 2×2 draws it: its figure, its meter and its state, in the clearest words that fit [width]. */
 @Composable
 private fun Figure(row: QuotaRow, width: Dp, p: Palette, figure: TextUnit = 45.sp, gap: Dp = 4.dp) {
-    Text("${row.percent}%", style = style(figure, p.fg, medium = true), maxLines = 1)
+    val context = LocalContext.current
+    // Set smaller where "100%" is wider than the column: a 2×2 at its 110 dp minimum (#915).
+    val (percent, percentSize) = context.fitting(listOf("${row.percent}%"), width, figure, true)
+    Text(percent, style = style(percentSize, p.fg, medium = true), maxLines = 1)
     Spacer(GlanceModifier.height(gap))
     Meter(row, width, p)
     Spacer(GlanceModifier.height(gap))
     val medium = row.mood == Mood.Bad
-    val (words, size) = LocalContext.current.fitting(row.words, width, 13.sp, medium)
+    val (words, size) = context.fitting(row.words, width, 13.sp, medium)
     Text(words, style = style(size, row.mood.color(p), medium = medium), maxLines = 1)
 }
 

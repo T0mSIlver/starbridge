@@ -1032,11 +1032,17 @@ first window, so a provider with a window running out leads.
   "Runs out tomorrow 06:44", else "Runs out Mon 06:44", "Out Mon 06:44", "Out Mon", the first
   that fits its column whole, measured at the phone's font scale; "Ran out yesterday 22:00"
   shortens the same way. The weekday and time follow the phone's language, zone and the Clock
-  setting; a week or more away, the date replaces the weekday. The Quotas screen's sentence
+  setting; today, the time alone ("Out 18:30") replaces the weekday, and a week or more away,
+  the date. The Quotas screen's sentence
   ("Will run out on 13 Oct at 06:44") was cut off in a widget's column, losing the time. The
   widget always gives a clock time, never "in 3 h", since a launcher redraws it only every 30
   minutes. Where even "Out Mon" does not fit (Polish "niedz." at font scale 1.3 in a 2×2 at its
   110 dp minimum), it sets smaller (12.5 sp there) rather than cut off.
+- **A 2×2 Quotas widget at its 110 dp minimum width cuts nothing** (#915): its heading drops
+  the provider ("Weekly" for "Claude · Weekly") when both don't fit, the meter's colour still
+  naming it, and its figure sets smaller where "100%" is wider than the column. Raising
+  `minWidth` would not help: from Android 12 the launcher sizes a 2×2 by its grid, and the widget
+  resizes only across, so its height is always two rows.
 - **Each Quotas widget shows the quotas picked for it** (#907). Dropping one opens a picker, as
   Todoist's and Keep's widgets do; Reconfigure on a long press opens it again. A 2×2 takes one
   quota, in one tap; a 4×2 takes two of one plan, side by side as the 2×2 draws one: a plan with

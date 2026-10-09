@@ -129,12 +129,13 @@ class QuotasWidgetTest {
     @Test fun aWindowThatRunsOutSaysWhenInWordsThatShortenToFit() {
         // Friday 9 Oct, 14:00 UTC.
         fun words(at: String, h24: Boolean = true, locale: Locale = Locale.US) = outWords(Instant.parse(at), now, h24, ZoneOffset.UTC, locale)
-        assertEquals(listOf("Runs out today 18:30", "Runs out Fri 18:30", "Out today 18:30", "Out Fri 18:30", "Out today", "Out Fri"), words("2026-10-09T18:30:00Z"))
+        assertEquals(listOf("Runs out today 18:30", "Runs out 18:30", "Out today 18:30", "Out 18:30", "Out today"), words("2026-10-09T18:30:00Z"))
         assertEquals("Runs out tomorrow 6:44 AM", words("2026-10-10T06:44:00Z", h24 = false).first())
         assertEquals(listOf("Runs out Mon 06:44", "Out Mon 06:44", "Out Mon"), words("2026-10-12T06:44:00Z"))
         assertEquals("Out lun.", words("2026-10-12T06:44:00Z", locale = Locale.FRANCE).last())
         // A week or more away, the date: a weekday would name the wrong one.
         assertEquals("Runs out Oct 16 06:44", words("2026-10-16T06:44:00Z").first())
+        assertEquals(listOf("Ran out today 13:40", "Ran out 13:40", "Ran out today", "Ran out"), words("2026-10-09T13:40:00Z"))
         assertEquals(listOf("Ran out yesterday 22:00", "Ran out Thu 22:00", "Ran out yesterday", "Ran out Thu", "Ran out"), words("2026-10-08T22:00:00Z"))
     }
 
@@ -237,6 +238,28 @@ class QuotasWidgetTest {
             scale,
         )
     }
+
+    /**
+     * 2×2s at their declared minimum width, 110 dp (#915), two rows tall as elsewhere (the widget
+     * resizes only across): a window that runs out, one that ran out at 100%, one on pace.
+     */
+    private fun minimum(scale: Float) {
+        val ranOut = windows.map {
+            if (it.id == "c5") it.copy(usedPercent = 100, pace = Pace.RunsOut(now.minus(Duration.ofMinutes(20)))) else it
+        }
+        val least = DpSize(110.dp, 172.dp)
+        shoot(
+            "minimum${if (scale != 1f) "-font-$scale" else ""}",
+            dark = false,
+            listOf(
+                listOf(widget(Choice(claude, listOf("Weekly"))) to least, widget(Choice(claude, listOf("5-hour")), ranOut) to least, widget(Choice(codex, listOf("5-hour"))) to least),
+            ),
+            scale,
+        )
+    }
+
+    @Test fun minimumSize() = minimum(1f)
+    @Test fun minimumSizeAtFontScale13() = minimum(1.3f)
 
     @OptIn(ExperimentalGlanceApi::class)
     private fun shoot(name: String, dark: Boolean, lines: List<List<Pair<GlanceAppWidget, DpSize>>>, scale: Float = 1f) {
