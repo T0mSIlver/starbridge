@@ -6,7 +6,9 @@ import { pushPayload } from "./routes/items";
 /**
  * Brings snoozed decisions back (#571): pushes each snooze whose time has come once more to the
  * active devices it was sealed to, which notify for its decision again, once. An answer, a
- * settled notice or a newer snooze cleared its `wake_due` already.
+ * settled notice or a newer snooze cleared its `wake_due` already. The devices it wakes have now
+ * heard of the decision, so they leave its `hold_to` (#908): its answer and settled notice reach
+ * them.
  */
 export function wakeSnoozes(db: Database, push: Push, inlineLimit: number, now = Date.now()): void {
   const due = db
@@ -36,6 +38,8 @@ export function wakeSnoozes(db: Database, push: Push, inlineLimit: number, now =
       s.id,
     );
     if (boxes.length === 0) continue;
+    const devices = boxes.map((b) => b.to);
+    if (s.re) heard(db, s.account_id, s.re, devices);
     const item: SealedItem = {
       v: 1,
       kind: s.kind,
@@ -45,10 +49,25 @@ export function wakeSnoozes(db: Database, push: Push, inlineLimit: number, now =
       wakeAt: s.wake_at,
       boxes,
     };
-    push.notify(
-      s.account_id,
-      boxes.map((b) => b.to),
-      (device) => pushPayload(item, device, inlineLimit),
-    );
+    push.notify(s.account_id, devices, (device) => pushPayload(item, device, inlineLimit));
   }
+}
+
+/** Takes `devices` off the held devices of item `id`, which no longer holds any once they all left. */
+function heard(db: Database, account: string, id: string, devices: string[]): void {
+  const row = db
+    .query("SELECT hold_to FROM items WHERE account_id = ? AND id = ?")
+    .get(account, id) as { hold_to: string | null } | null;
+  if (!row?.hold_to) return;
+  const held = (JSON.parse(row.hold_to) as string[]).filter((d) => !devices.includes(d));
+  if (held.length > 0)
+    db.query("UPDATE items SET hold_to = ? WHERE account_id = ? AND id = ?").run(
+      JSON.stringify(held),
+      account,
+      id,
+    );
+  else
+    db.query(
+      "UPDATE items SET hold_due = NULL, hold_to = NULL WHERE account_id = ? AND id = ?",
+    ).run(account, id);
 }

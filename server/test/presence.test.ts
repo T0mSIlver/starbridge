@@ -10,6 +10,7 @@ import {
   type Waiting,
 } from "@starbridge/protocol";
 import { releaseHolds } from "../src/presence";
+import { wakeSnoozes } from "../src/snooze";
 import {
   type Account,
   type Actor,
@@ -193,6 +194,24 @@ test("a waiting flip is held too, and a snooze during the hold keeps it quiet", 
   expect(sent).toEqual([]);
   release(31_000);
   expect(sent).toEqual([]);
+});
+
+test("a snooze that wakes after the hold lets the answer and settled notice reach every device", async () => {
+  await present(web);
+  const d = decision();
+  await post(devbox, d);
+  await post(web, snooze(d));
+  release(31_000);
+  sent = [];
+  // The snooze wakes the phone too, which now shows the question (#908).
+  wakeSnoozes(s.deps.db, s.deps.push, 3072, Date.now() + 2 * 3_600_000);
+  expect(pushed()).toEqual([[[phone.id, web.id], "snooze", expect.any(String)]]);
+  sent = [];
+  await post(web, answer(d, web));
+  expect(pushed()).toEqual([[[phone.id, web.id], "answered", d.id]]);
+  sent = [];
+  await post(devbox, settled(d));
+  expect(pushed()).toEqual([[[phone.id, web.id], "settled", expect.any(String)]]);
 });
 
 test("presence ends when its source says so or stops beating, and the hold time is the account's", async () => {
