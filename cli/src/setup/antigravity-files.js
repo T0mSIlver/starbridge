@@ -3,6 +3,7 @@
 // each file as text.
 import hooks from "../../../mod/antigravity/hooks.json" with { type: "text" };
 import manifest from "../../../mod/antigravity/plugin.json" with { type: "text" };
+import preInvocation from "../../../mod/antigravity/pre-invocation.sh" with { type: "text" };
 import preTool from "../../../mod/antigravity/pre-tool.sh" with { type: "text" };
 import cli from "../../../plugin/hooks/cli.sh" with { type: "text" };
 
@@ -10,5 +11,6 @@ export default {
   "plugin.json": manifest,
   "hooks.json": hooks,
   "pre-tool.sh": preTool,
+  "pre-invocation.sh": preInvocation,
   "cli.sh": cli,
 };

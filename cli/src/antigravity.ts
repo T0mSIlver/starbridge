@@ -5,14 +5,15 @@
  * `title:"Fix the build"`.
  */
 import { spawnSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { ownCommand } from "../../mod/hooks/own";
-import type { SessionEvent } from "./agent/api";
-import { withAgent } from "./agent/client";
+import { type SessionEvent, socketPath } from "./agent/api";
+import { AgentClient, withAgent } from "./agent/client";
 import type { State } from "./config";
 import { type Ctx, session, UsageError } from "./context";
 import { ackLines, deliverable, poll, sessionLines } from "./decisions";
+import { permissionsEnabled } from "./permissions";
 
 /** The conversation's id, in every command the agent runs. */
 export const ANTIGRAVITY_CONVERSATION = "ANTIGRAVITY_CONVERSATION_ID";
@@ -75,7 +76,7 @@ export function agyHeadless(): boolean {
 
 const LS = "exa.language_server_pb.LanguageServerService";
 
-async function lsCall<T>(route: AgyRoute, method: string, body: unknown): Promise<T> {
+export async function lsCall<T>(route: AgyRoute, method: string, body: unknown): Promise<T> {
   const r = await fetch(`http://${route.address}/${LS}/${method}`, {
     method: "POST",
     headers: { "content-type": "application/json", "x-codeium-csrf-token": route.token },
@@ -84,6 +85,91 @@ async function lsCall<T>(route: AgyRoute, method: string, body: unknown): Promis
   });
   if (!r.ok) throw new Error(`${method}: HTTP ${r.status} ${(await r.text()).slice(0, 200)}`);
   return (await r.json()) as T;
+}
+
+/**
+ * Hands the agent the route of the Antigravity process this command runs in, so it watches that
+ * process's prompts (#962). Any starbridge command does it; a missing or slow agent costs it at
+ * most half a second.
+ */
+export async function registerAgyRoute(ctx: Ctx): Promise<boolean> {
+  if (!ctx.env.ANTIGRAVITY_LS_ADDRESS) return false;
+  const route = agyRoute(ctx.env);
+  const agent = route && AgentClient.for(ctx);
+  if (!agent) return false;
+  try {
+    await agent.call("POST", "/v1/antigravity/routes", route, 500);
+  } catch {
+    return false;
+  }
+  const id = ctx.env[ANTIGRAVITY_CONVERSATION];
+  if (id) markConversation(ctx, id);
+  return true;
+}
+
+/**
+ * Records that conversation `id` needs no `starbridge hello`: it registered, or prompts are off.
+ * The plugin's shell checks read it, so the CLI no longer starts for its calls.
+ */
+function markConversation(ctx: Ctx, id: string) {
+  if (!/^[\w-]+$/.test(id)) return;
+  const dir = join(ctx.store.dir, "antigravity");
+  mkdirSync(dir, { recursive: true, mode: 0o700 });
+  writeFileSync(join(dir, id), "");
+}
+
+/**
+ * Whether conversation `id` still has to run `starbridge hello` for its prompts to go out: prompts
+ * on, a local agent to take the key, and no command of it registered yet.
+ */
+function needsHello(ctx: Ctx, id: unknown): boolean {
+  if (typeof id !== "string" || !/^[\w-]+$/.test(id)) return false;
+  if (existsSync(join(ctx.store.dir, "antigravity", id))) return false;
+  // `agy -p` registers no route, so a hello there would only fail.
+  if (permissionsEnabled(ctx) && existsSync(socketPath(ctx.env, ctx.store.dir)) && !agyHeadless())
+    return true;
+  markConversation(ctx, id);
+  return false;
+}
+
+/** What the agent is told, at the start of a turn, until the conversation registered. */
+export const NUDGE =
+  "Starbridge sends this session's permission prompts and questions to the owner's phone once it has run a starbridge command. Before anything else, run `starbridge hello` once.";
+
+/**
+ * `starbridge hook pre-invocation --agent antigravity`, on the plugin's `PreInvocation` at the
+ * start of a turn whose conversation has not registered (#962): with permission prompts on,
+ * tells the agent to run `starbridge hello`; else nothing.
+ */
+export function hookPreInvocation(ctx: Ctx, text: string, opts: { agent?: string }): number {
+  if (opts.agent !== "antigravity")
+    throw new UsageError(`--agent: antigravity (got ${opts.agent ?? "nothing"})`);
+  let id: unknown;
+  try {
+    id = (JSON.parse(text) as { conversationId?: unknown }).conversationId;
+  } catch {}
+  ctx.out(
+    JSON.stringify(needsHello(ctx, id) ? { injectSteps: [{ ephemeralMessage: NUDGE }] } : {}),
+  );
+  return 0;
+}
+
+/** `starbridge hello`: hands Starbridge this Antigravity session's route, and says whether it took. */
+export async function hello(ctx: Ctx): Promise<number> {
+  if (!ctx.env.ANTIGRAVITY_LS_ADDRESS) {
+    ctx.out("Nothing to do: this is not an Antigravity session.");
+    return 0;
+  }
+  if (!agyRoute(ctx.env)) {
+    ctx.out("Nothing to do: agy -p keeps its prompts at the keyboard.");
+    return 0;
+  }
+  if (await registerAgyRoute(ctx)) {
+    ctx.out("Starbridge now sends this session's prompts to the owner's devices.");
+    return 0;
+  }
+  ctx.err("starbridge: the Starbridge agent is not running: prompts stay at the keyboard.");
+  return 1;
 }
 
 /** Whether the route's language server answers, so its process still runs. */
@@ -196,7 +282,7 @@ export interface PreToolInput {
 }
 
 /** A starbridge command an AGY_ALLOW entry lets through, wherever it sits on the line. */
-const ALLOWED = /(^|[^\w-])starbridge\s+(ask|waiting|working|wait|settle)(?![\w-])/;
+const ALLOWED = /(^|[^\w-])starbridge\s+(ask|waiting|working|wait|settle|hello)(?![\w-])/;
 
 /**
  * `starbridge hook pre-tool --agent antigravity`, on the plugin's `PreToolUse` for
@@ -217,7 +303,12 @@ export function hookPreTool(ctx: Ctx, text: string, opts: { agent?: string }): n
   }
   const line = input?.toolCall?.args?.CommandLine;
   if (input?.toolCall?.name !== "run_command" || typeof line !== "string") return 0;
-  if (ownCommand(line))
+  // A model may pass over the PreInvocation nudge; a denied command it has to retry it cannot.
+  if (!ownCommand(line) && needsHello(ctx, input.conversationId)) {
+    // Once only: a hello that fails leaves the prompts at the keyboard, not the session stuck.
+    markConversation(ctx, input.conversationId as string);
+    ctx.out(JSON.stringify({ decision: "deny", reason: `${NUDGE} Then run this command again.` }));
+  } else if (ownCommand(line))
     ctx.out(JSON.stringify({ decision: "allow", overwrite: { BypassSandbox: true } }));
   else if (ALLOWED.test(line))
     ctx.out(

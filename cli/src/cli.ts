@@ -12,7 +12,7 @@ import {
   waitVia,
 } from "./agent/commands";
 import { runAgent } from "./agent/main";
-import { hookPreTool, hookStop } from "./antigravity";
+import { hello, hookPreInvocation, hookPreTool, hookStop, registerAgyRoute } from "./antigravity";
 import { ApiError, sandboxHint, Unreachable } from "./api";
 import { hookCodexQuestion } from "./codex-question";
 import { StateFileError } from "./config";
@@ -185,12 +185,13 @@ const HELP = `starbridge: post decisions to your devices, report runs, upload qu
       your phone; the server hears only yes or no. Off by default. machine-kind: the icon
       devices show, detected by setup.
 
-  starbridge hook permission --agent claude-code|pi|opencode [--wait 570s]
+  starbridge hook permission --agent claude-code|pi|opencode|antigravity [--wait 570s]
   starbridge hook settle --agent claude-code
       For Claude Code's PermissionRequest hook, and for its PostToolUse, PostToolUseFailure,
       PermissionDenied, Stop and SessionEnd hooks: hook JSON on stdin; prints the hook's decision, or nothing
       to leave the prompt to the keyboard. The Starbridge Pi extension runs it with --agent pi
-      for pi-permission-system's prompts, the opencode plugin with --agent opencode. On
+      for pi-permission-system's prompts, the opencode plugin with --agent opencode, the agent
+      with --agent antigravity for Antigravity's approvals. On
       Claude Code's AskUserQuestion it posts each question to your devices, whatever the
       permissions setting, and prints the first device answers as the picker's; an answer
       in the picker settles them.
@@ -199,9 +200,10 @@ const HELP = `starbridge: post decisions to your devices, report runs, upload qu
       For Claude Code's PreToolUse hook on AskUserQuestion, from older plugins: prints
       nothing, so the picker opens and hook permission races it.
 
-  starbridge hook question --agent opencode|pi
+  starbridge hook question --agent opencode|pi|antigravity
       For the Starbridge opencode plugin and Pi extension, on each call of opencode's question
-      tool or Pi's ask_user_question: posts each question to your devices, already waiting, and
+      tool or Pi's ask_user_question, and for the agent on each of Antigravity's ask_question
+      calls: posts each question to your devices, already waiting, and
       once all are answered prints {"answers": [[label], ...]}; prints nothing on any error. SIGTERM (the
       terminal answered) settles the questions still open.
 
@@ -212,9 +214,19 @@ const HELP = `starbridge: post decisions to your devices, report runs, upload qu
 
   starbridge hook pre-tool --agent antigravity
       For the Starbridge Antigravity plugin's PreToolUse hook: hook JSON on stdin. A starbridge
-      ask, waiting, working, wait or settle command alone on its line runs outside the
+      ask, waiting, working, wait, settle or hello command alone on its line runs outside the
       sandbox; a line that runs one of them with more asks at the keyboard; prints nothing
       for any other call.
+
+  starbridge hello
+      In an Antigravity session, hands the local agent the session's key, so its permission
+      prompts and ask_question calls reach your devices. Any other starbridge command does it
+      too; the Antigravity plugin asks for this one when the session has run none.
+
+  starbridge hook pre-invocation --agent antigravity
+      For the Starbridge Antigravity plugin's PreInvocation hook, at the start of a turn in a
+      conversation that has not run a starbridge command: with permission prompts on, tells
+      the agent to run starbridge hello; prints {} otherwise.
 
   starbridge hook stop --agent antigravity
       For the Starbridge Antigravity plugin's Stop hook: hook JSON on stdin. Prints the answers
@@ -284,6 +296,8 @@ export async function run(argv: string[], ctx: Ctx): Promise<number> {
   const [command, ...rest] = argv;
   try {
     await ready;
+    if (command !== "agent" && command !== "hook" && command !== "hello")
+      await registerAgyRoute(ctx);
     switch (command) {
       case "pair": {
         const { values } = parseArgs({
@@ -519,6 +533,9 @@ export async function run(argv: string[], ctx: Ctx): Promise<number> {
           ...(v["no-agents"] || v["no-plugin"] ? { noAgents: true } : {}),
         });
       }
+      case "hello":
+        parseArgs({ args: rest, options: {} });
+        return await hello(ctx);
       case "status":
         parseArgs({ args: rest, options: {} });
         return await status(makeSys(ctx, defaults));
@@ -586,8 +603,9 @@ export async function run(argv: string[], ctx: Ctx): Promise<number> {
           return await hookCursorSession(ctx, readText("-"));
         if (sub === "pre-tool") return hookPreTool(ctx, readText("-"), values);
         if (sub === "stop") return await hookStop(ctx, readText("-"), values);
+        if (sub === "pre-invocation") return hookPreInvocation(ctx, readText("-"), values);
         throw new UsageError(
-          "usage: starbridge hook permission|settle --agent claude-code|codex, starbridge hook ask-user, starbridge hook question --agent opencode|pi|codex, starbridge hook session --agent cursor, or starbridge hook pre-tool|stop --agent antigravity",
+          "usage: starbridge hook permission|settle --agent claude-code|codex, starbridge hook ask-user, starbridge hook question --agent opencode|pi|codex|antigravity, starbridge hook session --agent cursor, or starbridge hook pre-tool|stop|pre-invocation --agent antigravity",
         );
       }
       case "update": {

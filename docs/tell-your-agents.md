@@ -14,8 +14,8 @@ instruction files, in your words. Starbridge never writes to them.
 | Answers into the live session | ✓ | ✓¹ | ✓³ | ✓⁵ | ✓¹¹ | ✓¹⁴ |
 | "Waiting for you" | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | Runs | ✓ | ✓⁸ | ✓ | ✓ | ✓ | ✓ |
-| Permission prompts | Opt-in | Opt-in⁹ | Opt-in⁴ | Opt-in⁶ | No¹³ | No |
-| The agent's own ask tool | ✓² | ✓¹⁰ | n/a | ✓⁷ | No¹² | No |
+| Permission prompts | Opt-in | Opt-in⁹ | Opt-in⁴ | Opt-in⁶ | No¹³ | Opt-in¹⁵ |
+| The agent's own ask tool | ✓² | ✓¹⁰ | n/a | ✓⁷ | No¹² | ✓¹⁵ |
 
 ¹ In interactive sessions, when `starbridge agent` runs (Codex CLI 0.160 or
 later). In `codex exec`, the agent waits for the answer with `starbridge wait`
@@ -85,6 +85,13 @@ from your phone could not take effect. Cursor's prompts stay at the keyboard.
 ¹⁴ In interactive sessions, when `starbridge agent` runs. In `agy -p`, the agent
 waits for the answer with `starbridge wait` before it ends its turn.
 
+¹⁵ Like opencode's: Antigravity's own prompt and `ask_question` stay open at
+the keyboard and the first answer wins, when `starbridge agent` runs. Your
+devices can allow a call once or deny it. Only a command the agent runs gets
+the key that lets Starbridge answer them, so with permission prompts on, the
+plugin has each new conversation run `starbridge hello` first. Checked with
+`agy`; the app and the IDE are untested.
+
 `starbridge setup` installs Starbridge in each agent it finds, and prints one
 line per agent; `starbridge uninstall --agent <name>` removes it from one, and
 setup then leaves that agent alone until `starbridge setup --agent <name>`:
@@ -130,7 +137,7 @@ setup then leaves that agent alone until `starbridge setup --agent <name>`:
   `~/.gemini/config/plugins/starbridge`, which all three load. It brings the
   rules and the skill. For `agy`, setup also adds allow entries to
   `~/.gemini/antigravity-cli/settings.json` so that `starbridge ask`, `waiting`,
-  `working`, `wait` and `settle` run without a permission prompt, and outside
+  `working`, `wait`, `settle` and `hello` run without a permission prompt, and outside
   `--sandbox`, when the command is only that; the plugin's hook makes any other
   line that runs them ask. In the app and the IDE they still ask the first time.
   A later setup updates the plugin when the CLI carries a newer one.
