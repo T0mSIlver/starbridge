@@ -587,14 +587,14 @@ test("Cursor: setup keeps the owner's config and skill, and refresh updates its 
   });
   // A hooks file with none of Starbridge's entries is never rewritten, and one setup cannot read
   // as Cursor's stays as it is; an owner's empty event stays too.
-  for (const text of ['{"hooks":{"stop":[]}}', '{"version":1,"hooks":"nope"}']) {
+  for (const text of ['{"hooks":{"afterFileEdit":[]}}', '{"version":1,"hooks":"nope"}']) {
     writeFileSync(hooksFile, text);
     expect(await run(["uninstall", "--agent", "cursor", "--yes"], m.ctx)).toBe(0);
     expect(readFileSync(hooksFile, "utf8")).toBe(text);
   }
-  writeFileSync(hooksFile, '{"hooks":{"stop":[]}}');
+  writeFileSync(hooksFile, '{"hooks":{"afterFileEdit":[]}}');
   expect(await setup(m.sys, { agent: "cursor" })).toBe(0);
-  expect(JSON.parse(readFileSync(hooksFile, "utf8")).hooks.stop).toEqual([]);
+  expect(JSON.parse(readFileSync(hooksFile, "utf8")).hooks.afterFileEdit).toEqual([]);
   writeFileSync(hooksFile, '{"version":1,"hooks":"nope"}');
   m.ctx.lines.length = 0;
   expect(await setup(m.sys, { agent: "cursor" })).toBe(0);
