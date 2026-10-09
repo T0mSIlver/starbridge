@@ -44,11 +44,57 @@ const TRAYS = {
   trayWaitingDark: tray("#f1f1f1", "#f5a83b"),
 };
 
-// The DMG window (#972): the light scheme's `bg` and one arrow in `line-strong` from the app to
-// Applications, whose icons electron-builder.yml places at (170, 190) and (470, 190).
+// The DMG window (#972): stars over a planet's edge, as in the mark, and one arrow from the app to
+// Applications, whose icons electron-builder.yml places at (170, 190) and (470, 190). The window
+// shows the top 372 px, under its title bar. On a light ground soft dots read as stains, so the
+// stars are crisp: pinpoints, and a few four-point sparkles. They keep clear of the icons, their
+// labels and the arrow, and come from a fixed generator, so each render draws the same sky.
+const SKY = {
+  bg: "#f4f4f4",
+  planet: "#ebebeb",
+  edge: "#d6d6d6",
+  star: "#a3a3a3",
+  arrow: "#c6c6c6",
+};
+
+/** A four-point sparkle of radius r: four points joined by curves pulled to the centre. */
+const sparkle = (x: number, y: number, r: number) =>
+  `<path transform="translate(${x.toFixed(1)} ${y.toFixed(1)})" d="M0 ${-r}Q0 0 ${r} 0Q0 0 0 ${r}Q0 0 ${-r} 0Q0 0 0 ${-r}Z"/>`;
+
+function sky(): string {
+  let seed = 11;
+  const next = () => {
+    seed = (seed * 16807) % 2147483647;
+    return (seed - 1) / 2147483646;
+  };
+  const clear = (x: number, y: number) =>
+    x > 12 &&
+    x < 628 &&
+    y > 14 &&
+    y < 300 &&
+    [170, 470].every((cx) => Math.abs(x - cx) > 86 || Math.abs(y - 190) > 104) &&
+    !(x > 236 && x < 404 && Math.abs(y - 190) < 48);
+  const out: string[] = [];
+  let sparkles = 0;
+  while (out.length < 34) {
+    const [x, y, k] = [next() * 640, next() * 400, next()];
+    if (!clear(x, y)) continue;
+    if (sparkles < 7 && k > 0.75) {
+      out.push(sparkle(x, y, 4 + next() * 3.5));
+      sparkles++;
+    } else
+      out.push(
+        `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${(0.7 + k * 0.6).toFixed(2)}"/>`,
+      );
+  }
+  return out.join("");
+}
+
 const BACKGROUND = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 400">
-  <rect width="640" height="400" fill="#f4f4f4"/>
-  <g fill="none" stroke="#c6c6c6" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+  <rect width="640" height="400" fill="${SKY.bg}"/>
+  <g fill="${SKY.star}">${sky()}</g>
+  <circle cx="320" cy="1290" r="960" fill="${SKY.planet}" stroke="${SKY.edge}" stroke-width="1.5"/>
+  <g fill="none" stroke="${SKY.arrow}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
     <path d="M272 190 H368 M354 176 L368 190 L354 204"/>
   </g>
 </svg>`;
