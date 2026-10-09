@@ -22,6 +22,7 @@ import {
   ackLines,
   ask,
   deliveryLine,
+  dropRevokedNow,
   EXIT_SNOOZED,
   poll,
   postDecision,
@@ -639,7 +640,10 @@ export function openQuestions(st: State, id: string): string[] {
  * `starbridge hook session --agent cursor`, the Cursor plugin's sessionStart, stop and sessionEnd
  * hooks, their JSON on stdin. Never fails the hook: on any error it prints nothing.
  */
-export async function hookCursorSession(ctx: Ctx, stdin: string): Promise<number> {
+export async function hookCursorSession(outer: Ctx, stdin: string): Promise<number> {
+  // Cursor killed or gone: an answer taken now would reach no chat.
+  const watch = untilOrphaned(outer.signal);
+  const ctx = { ...outer, signal: watch.signal };
   try {
     const hook = JSON.parse(stdin) as CursorHook;
     const id =
@@ -655,10 +659,17 @@ export async function hookCursorSession(ctx: Ctx, stdin: string): Promise<number
     // A turn the owner stopped, or that failed, ends without a hold.
     if (event !== "stop" || hook.status !== "completed") return 0;
     if (!ctx.store.machine() || openQuestions(ctx.store.state(), id).length === 0) return 0;
-    const message = await hold(ctx, id);
-    if (message) ctx.out(JSON.stringify({ followup_message: message }));
+    const held = await hold(ctx, id);
+    if (!held) return 0;
+    // Printed before it is confirmed: at worst a later stop hands the same answer again.
+    ctx.out(JSON.stringify({ followup_message: held.message }));
+    await held
+      .ack()
+      .catch((e) => ctx.err(`starbridge: could not confirm the answers: ${(e as Error).message}`));
   } catch (e) {
     ctx.err(`starbridge: ${(e as Error).message}`);
+  } finally {
+    watch.stop();
   }
   return 0;
 }
@@ -677,63 +688,83 @@ async function hello(ctx: Ctx, id: string, hook: CursorHook) {
   await call(ctx, (a) => a.call("POST", path(id, "hello"), { ...(cwd ? { cwd } : {}) }, 5_000));
 }
 
+/** Answer lines for the chat, and how to confirm them once printed. */
+interface Taken {
+  lines: string[];
+  ack: () => Promise<unknown>;
+}
+
 /**
- * Waits for the answers to conversation `id`'s questions, through the agent or the server, until
- * CURSOR_HOLD_MS. Returns them as one message, or at the cap what `ask` says when nothing brings
- * an answer back; undefined once no question is open any more.
+ * One wait of at most `seconds` for conversation `id`'s answers, through the agent or the server.
+ * Returns what came, or undefined when nothing did.
  */
-async function hold(ctx: Ctx, id: string): Promise<string | undefined> {
-  const deadline = ctx.now().getTime() + CURSOR_HOLD_MS;
-  const left = () => deadline - ctx.now().getTime();
-  const lines = await withAgent(
+async function cycle(ctx: Ctx, id: string, seconds: number): Promise<Taken | undefined> {
+  return withAgent(
     ctx,
     async (agent) => {
-      while (left() > 0 && !ctx.signal?.aborted) {
-        const seconds = Math.max(1, Math.min(CYCLE_SECONDS, Math.ceil(left() / 1000)));
-        const { events } = await agent.call<{ events: SessionEvent[] }>(
-          "GET",
-          `${path(id, "events")}?wait=${seconds}`,
-          undefined,
-          (seconds + 15) * 1000,
-          ctx.signal,
-        );
-        const answers = events.filter((e) => e.type === "answer");
-        if (answers.length > 0) {
-          await agent.call("POST", path(id, "ack"), { acks: answers.map((e) => e.ack) });
-          return answers.map((e) => e.line);
-        }
-        if (openQuestions(ctx.store.state(), id).length === 0) return [];
-      }
-      return undefined;
+      const { events } = await agent.call<{ events: SessionEvent[] }>(
+        "GET",
+        `${path(id, "events")}?wait=${seconds}`,
+        undefined,
+        (seconds + 15) * 1000,
+        ctx.signal,
+      );
+      const answers = events.filter((e) => e.type === "answer");
+      if (answers.length === 0) return undefined;
+      return {
+        lines: answers.map((e) => e.line),
+        ack: () => agent.call("POST", path(id, "ack"), { acks: answers.map((e) => e.ack) }),
+      };
     },
     async () => {
-      const s = session(ctx);
-      while (left() > 0 && !ctx.signal?.aborted) {
-        const found = sessionLines(ctx.store.state(), id);
-        if (found.length > 0) {
-          ctx.store.updateState((st) =>
-            ackLines(
-              st,
-              id,
-              found.map((l) => l.ack),
-            ),
-          );
-          return found.map((l) => l.line);
-        }
-        if (openQuestions(ctx.store.state(), id).length === 0) return [];
-        const seconds = Math.max(1, Math.min(CYCLE_SECONDS, Math.ceil(left() / 1000)));
-        await poll(ctx, s, { cursor: ctx.store.state().cursor, seconds, shared: true });
+      // An answer from a device revoked since never counts, as the agent's events route drops it.
+      await dropRevokedNow(ctx);
+      let found = sessionLines(ctx.store.state(), id);
+      if (found.length === 0) {
+        await poll(ctx, session(ctx), { cursor: ctx.store.state().cursor, seconds, shared: true });
+        found = sessionLines(ctx.store.state(), id);
       }
-      return undefined;
+      if (found.length === 0) return undefined;
+      const acks = found.map((l) => l.ack);
+      return {
+        lines: found.map((l) => l.line),
+        ack: async () => ctx.store.updateState((st) => ackLines(st, id, acks)),
+      };
     },
   );
-  if (lines) return lines.length > 0 ? lines.join("\n\n") : undefined;
+}
+
+/**
+ * Waits for the answers to conversation `id`'s questions until CURSOR_HOLD_MS, through errors.
+ * Returns them as one message, or at the cap what `ask` says when nothing brings an answer back;
+ * undefined once no question is open any more, or when Cursor is gone.
+ */
+async function hold(
+  ctx: Ctx,
+  id: string,
+): Promise<{ message: string; ack: () => Promise<unknown> } | undefined> {
+  const deadline = ctx.now().getTime() + CURSOR_HOLD_MS;
+  const left = () => deadline - ctx.now().getTime();
+  while (left() > 0) {
+    if (ctx.signal?.aborted) return undefined;
+    if (openQuestions(ctx.store.state(), id).length === 0) return undefined;
+    const seconds = Math.max(1, Math.min(CYCLE_SECONDS, Math.ceil(left() / 1000)));
+    try {
+      const taken = await cycle(ctx, id, seconds);
+      if (taken) return { message: taken.lines.join("\n\n"), ack: taken.ack };
+    } catch (e) {
+      if (ctx.signal?.aborted) return undefined;
+      ctx.err(`starbridge: ${(e as Error).message}; retrying`);
+      await ctx.sleep(Math.min(5_000, Math.max(0, left())));
+    }
+  }
   const st = ctx.store.state();
   const open = openQuestions(st, id);
   if (open.length === 0) return undefined;
-  return open
+  const message = open
     .map(
       (d) => `No answer yet to ${d} (${st.asked[d]?.question ?? ""}). ${deliveryLine(d, "wait")}`,
     )
     .join("\n\n");
+  return { message, ack: async () => {} };
 }

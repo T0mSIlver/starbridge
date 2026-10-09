@@ -701,6 +701,8 @@ test("Cursor: past the hold's cap the agent is told to wait; without an agent th
 
   const direct = { ...ctx, env: { ...ctx.env, STARBRIDGE_NO_AGENT: "1" } };
   ctx.lines.length = 0;
+  // A server error mid-hold is retried, not the end of the hold.
+  server.failures.push("/answers");
   const stop = hookCursorSession(direct, cursorHook("stop", "conv-2", { status: "completed" }));
   await server.answer(id, { choice: "Wait" });
   await stop;
