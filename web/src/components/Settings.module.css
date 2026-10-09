@@ -1,4 +1,4 @@
-/* Settings on the web (direction A): sections of rows in bordered boxes. From 900 px each
+/* Settings on the web (direction A): sections of rows in bordered boxes. From 1100 px each
    section's name stands in a column beside its box, so the page uses its width while the rows
    keep `size.content`, where a switch stays near its label. */
 
@@ -15,7 +15,7 @@
   gap: var(--s3);
 }
 
-@media (min-width: 900px) {
+@media (min-width: 1100px) {
   .page {
     max-width: calc(var(--size-settings-label) + var(--s10) + var(--size-content) + 2 * var(--s16));
   }
@@ -29,6 +29,19 @@
   /* The name's first line sits level with the box's first row. */
   .section > h2 {
     padding-top: var(--s3);
+  }
+}
+
+/* A window beside the rail too narrow for the full column (the desktop app's at 1200 px): the
+   names take a narrower column and the page a smaller margin, so the boxes keep their width
+   rather than sit off to the right (#930). */
+@media (min-width: 1100px) and (max-width: 1439px) {
+  .page {
+    padding-inline: var(--s10);
+  }
+
+  .section {
+    grid-template-columns: var(--size-settings-label-narrow) minmax(0, var(--size-content));
   }
 }
 
@@ -68,7 +81,7 @@
 }
 
 /* A label keeps room for a few words; a wide control wraps below it, as it must on a phone and
-   beside the section names' column from 900 px. */
+   beside the section names' column from 1100 px. */
 .row {
   flex-wrap: wrap;
 }

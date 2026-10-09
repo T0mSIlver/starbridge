@@ -22,10 +22,12 @@ import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.foundation.text.TextAutoSize
+import androidx.compose.ui.unit.sp
 import androidx.compose.material3.IconToggleButton
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.width
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.semantics.contentDescription
 import dev.starbridge.app.data.QuotaAlerts
 import androidx.compose.material3.Text
@@ -121,6 +123,7 @@ class SettingsActions(
     val clock: (Clock) -> Unit = {},
     val allowUnseen: (Boolean) -> Unit = {},
     val pushHold: (Int) -> Unit = {},
+    val alerts: () -> Unit = {},
 )
 
 /** Everything this phone keeps for itself, and the account's devices. The settings stay on the phone. */
@@ -175,33 +178,31 @@ fun SettingsScreen(
         }
 
         if (quotas) {
-            // One box (#914): how the bars read, then each provider with its windows' alerts.
+            // How the bars read, with the alerts a tap away (#930); then the order and what shows.
             val providers = quota.providers(windows)
-            val all = windows.map { it.provider to it.windowId }.distinct()
-            val rows = 5 + providers.size
             item { Section("Quotas") }
             item {
-                ChoiceRow(0, rows, "Bar shows") { Segments(listOf(true to "Used", false to "Left"), quota.showUsed) { set(quota.copy(showUsed = it)) } }
+                ChoiceRow(0, 4, "Bar shows") { Segments(listOf(true to "Used", false to "Left"), quota.showUsed) { set(quota.copy(showUsed = it)) } }
             }
             item {
-                ChoiceRow(1, rows, "Reset times") { Segments(listOf(false to "Resets in 2 h", true to "Resets 14:20"), quota.absoluteResets) { set(quota.copy(absoluteResets = it)) } }
+                ChoiceRow(1, 4, "Reset times") { Segments(listOf(false to "Resets in 2 h", true to "Resets 14:20"), quota.absoluteResets) { set(quota.copy(absoluteResets = it)) } }
             }
             item {
-                ChoiceRow(2, rows, "Workday ticks on weekly bars") {
+                ChoiceRow(2, 4, "Workday ticks on weekly bars") {
                     Segments(listOf(null to "Off", 4 to "4", 5 to "5", 7 to "7 days"), quota.workDays) { set(quota.copy(workDays = it)) }
                 }
             }
-            item { SwitchRow(3, rows, "Running out first", quota.runningOutFirst) { set(quota.copy(runningOutFirst = it)) } }
-            item { AlertHeads(4, rows) }
+            item { LinkRow(3, 4, "Alerts", null, Sym.Chevron, actions.alerts) }
+
+            val rows = 1 + providers.size
+            item { Section("Order") }
+            item { SwitchRow(0, rows, "Running out first", quota.runningOutFirst) { set(quota.copy(runningOutFirst = it)) } }
             itemsIndexed(providers, key = { _, p -> "provider/$p" }) { i, p ->
                 ProviderRow(
                     p,
-                    windows.filter { it.provider == p }.distinctBy { it.windowId },
-                    quota.alerts,
                     shown = p !in quota.hidden,
-                    shape = rowShape(5 + i, rows),
+                    shape = rowShape(1 + i, rows),
                     onShow = { on -> set(quota.copy(hidden = if (on) quota.hidden - p else (quota.hidden + p).distinct())) },
-                    onAlerts = { w, picked -> set(quota.copy(alerts = quota.alerts.with(w.provider, w.windowId, all, picked))) },
                     first = i == 0,
                     last = i == providers.lastIndex,
                     onMove = { by ->
@@ -337,41 +338,74 @@ private fun Line(content: @Composable RowScope.() -> Unit) {
 /** The alerts a window can pick, in the table's column order (#914). */
 private val ALERT_COLUMNS = listOf("runs-out" to "Runs out", "low-50" to "50% left", "low-20" to "20% left", "unused-headroom" to "Unused")
 
-/** The columns' names over the table, two short lines each so four fit a phone. */
-private val ALERT_HEADS = listOf("Runs\nout", "50%\nleft", "20%\nleft", "Unused")
+/** The columns' names over the table, a word or two a line so four fit a phone. */
+private val ALERT_HEADS = listOf(listOf("Runs", "out"), listOf("50%", "left"), listOf("20%", "left"), listOf("Unused"))
 
-/** A column of the alerts table: as wide as a checkbox's tap area. */
-private val alertColumn = 48.dp
+/** A column of the alerts table: a checkbox's tap area, and room for "Unused" at a large font. */
+private val alertColumn = 56.dp
 
-/** The alerts table's column names, over the providers. */
+/**
+ * Settings → Alerts (#930): one card, the column names once on top, then a row per window of the
+ * providers shown, a checkbox per alert.
+ */
 @Composable
-private fun AlertHeads(index: Int, count: Int) {
-    Shell(index, count) {
-        Row(Modifier.fillMaxWidth().padding(start = Spacing.s4, end = Spacing.s2, top = Spacing.s3, bottom = Spacing.s2), verticalAlignment = Alignment.Bottom) {
-            Text("Alerts", style = StarbridgeTheme.type.small, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
-            ALERT_HEADS.forEach { label ->
-                Text(label, style = StarbridgeTheme.type.caption, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center, modifier = Modifier.width(alertColumn))
+fun AlertsScreen(windows: List<QuotaWindow>, quota: QuotaSettings, onChange: (QuotaSettings) -> Unit, onBack: () -> Unit, modifier: Modifier = Modifier) {
+    val scheme = MaterialTheme.colorScheme
+    val all = windows.map { it.provider to it.windowId }.distinct()
+    val shown = quota.providers(windows).filter { it !in quota.hidden }
+    Page("Alerts", modifier, onBack = onBack) {
+        item {
+            Shell(0, 1) {
+                Column(Modifier.padding(vertical = Spacing.s2)) {
+                    Row(Modifier.fillMaxWidth().padding(start = Spacing.s4, end = Spacing.s2), verticalAlignment = Alignment.Bottom) {
+                        Box(Modifier.weight(1f))
+                        ALERT_HEADS.forEach { lines ->
+                            Column(Modifier.width(alertColumn), horizontalAlignment = Alignment.CenterHorizontally) {
+                                // One line each, shrunk rather than broken inside a word, as the rail's tab labels.
+                                lines.forEach { Text(it, style = StarbridgeTheme.type.caption, color = scheme.onSurfaceVariant, maxLines = 1, autoSize = TextAutoSize.StepBased(minFontSize = 8.sp, maxFontSize = StarbridgeTheme.type.caption.fontSize)) }
+                            }
+                        }
+                    }
+                    if (shown.isEmpty()) Text("No quota windows shown", style = StarbridgeTheme.type.body, color = scheme.onSurfaceVariant, modifier = Modifier.padding(Spacing.s4))
+                    shown.forEachIndexed { i, p ->
+                        if (i > 0) HorizontalDivider(Modifier.padding(horizontal = Spacing.s4), color = scheme.outlineVariant)
+                        windows.filter { it.provider == p }.distinctBy { it.windowId }.forEach { w ->
+                            val picked = quota.alerts.choices(w.provider, w.windowId, w.windowMinutes)
+                            Row(Modifier.fillMaxWidth().padding(start = Spacing.s4, end = Spacing.s2), verticalAlignment = Alignment.CenterVertically) {
+                                Text("${w.provider} ${w.window}", style = StarbridgeTheme.type.body, color = scheme.onSurface, modifier = Modifier.weight(1f))
+                                ALERT_COLUMNS.forEach { (kind, label) ->
+                                    Box(Modifier.width(alertColumn), contentAlignment = Alignment.Center) {
+                                        Checkbox(
+                                            checked = kind in picked,
+                                            onCheckedChange = { on ->
+                                                val next = QuotaAlerts.CHOICES.filter { (it == kind && on) || (it != kind && it in picked) }
+                                                onChange(quota.copy(alerts = quota.alerts.with(w.provider, w.windowId, all, next)))
+                                            },
+                                            modifier = Modifier.semantics { contentDescription = "${w.provider} ${w.window}: $label" },
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
     }
 }
 
 /**
- * A provider: a handle to drag it up or down (long press), its name, an eye that shows or hides
- * it, and under it each of its windows with a checkbox per alert. A hidden provider folds to its
- * name. Screen readers get "Move up" and "Move down" instead of the drag.
+ * A provider: a handle to drag it up or down (long press), its name, and an eye that shows or
+ * hides it. Screen readers get "Move up" and "Move down" instead of the drag.
  */
 @Composable
 private fun ProviderRow(
     name: String,
-    windows: List<QuotaWindow>,
-    alerts: QuotaAlerts,
     shown: Boolean,
     shape: Shape,
     first: Boolean,
     last: Boolean,
     onShow: (Boolean) -> Unit,
-    onAlerts: (QuotaWindow, List<String>) -> Unit,
     onMove: (Int) -> Unit,
     placement: (dragging: Boolean) -> Modifier,
 ) {
@@ -397,52 +431,35 @@ private fun ProviderRow(
         color = if (dragging) scheme.surfaceContainerHigh else scheme.surfaceContainer,
         shadowElevation = if (dragging) 3.dp else 0.dp,
     ) {
-        Column(Modifier.padding(bottom = if (shown && windows.isNotEmpty()) Spacing.s2 else 0.dp)) {
-            Row(Modifier.fillMaxWidth().padding(start = Spacing.s2, end = Spacing.s2), verticalAlignment = Alignment.CenterVertically) {
-                Symbol(
-                    Sym.Drag,
-                    size = 20.dp,
-                    tint = StarbridgeTheme.colors.fg3,
-                    modifier = Modifier.padding(Spacing.s2).pointerInput(Unit) {
-                        detectDragGesturesAfterLongPress(
-                            onDragStart = { dragging = true },
-                            onDragEnd = { dragging = false; offset = 0f },
-                            onDragCancel = { dragging = false; offset = 0f },
-                        ) { change, drag ->
-                            change.consume()
-                            // A row and its 2 dp gap; past half of it, the provider swaps with its neighbour.
-                            val step = height + groupGap.toPx()
-                            val (top, bottom) = ends
-                            offset = (offset + drag.y).coerceIn(if (top) 0f else -step, if (bottom) 0f else step)
-                            if (offset > step / 2 && !bottom) { move(1); offset -= step }
-                            if (offset < -step / 2 && !top) { move(-1); offset += step }
-                        }
-                    },
-                )
-                Text(
-                    if (shown) name else "$name · hidden",
-                    style = StarbridgeTheme.type.action,
-                    color = if (shown) scheme.onSurface else StarbridgeTheme.colors.fg3,
-                    modifier = Modifier.weight(1f),
-                )
-                IconToggleButton(checked = shown, onCheckedChange = onShow) {
-                    Symbol(if (shown) Sym.Visibility else Sym.VisibilityOff, size = 20.dp, tint = if (shown) scheme.onSurfaceVariant else StarbridgeTheme.colors.fg3, contentDescription = "Show $name")
-                }
-            }
-            if (shown) windows.forEach { w ->
-                val picked = alerts.choices(w.provider, w.windowId, w.windowMinutes)
-                Row(Modifier.fillMaxWidth().padding(start = Spacing.s4 + Spacing.s5, end = Spacing.s2), verticalAlignment = Alignment.CenterVertically) {
-                    Text(w.window, style = StarbridgeTheme.type.body, color = scheme.onSurface, modifier = Modifier.weight(1f))
-                    ALERT_COLUMNS.forEach { (kind, label) ->
-                        Box(Modifier.width(alertColumn), contentAlignment = Alignment.Center) {
-                            Checkbox(
-                                checked = kind in picked,
-                                onCheckedChange = { on -> onAlerts(w, QuotaAlerts.CHOICES.filter { (it == kind && on) || (it != kind && it in picked) }) },
-                                modifier = Modifier.semantics { contentDescription = "$name ${w.window}: $label" },
-                            )
-                        }
+        Row(Modifier.fillMaxWidth().padding(horizontal = Spacing.s2, vertical = Spacing.s1), verticalAlignment = Alignment.CenterVertically) {
+            Symbol(
+                Sym.Drag,
+                size = 20.dp,
+                tint = StarbridgeTheme.colors.fg3,
+                modifier = Modifier.padding(Spacing.s2).pointerInput(Unit) {
+                    detectDragGesturesAfterLongPress(
+                        onDragStart = { dragging = true },
+                        onDragEnd = { dragging = false; offset = 0f },
+                        onDragCancel = { dragging = false; offset = 0f },
+                    ) { change, drag ->
+                        change.consume()
+                        // A row and its 2 dp gap; past half of it, the provider swaps with its neighbour.
+                        val step = height + groupGap.toPx()
+                        val (top, bottom) = ends
+                        offset = (offset + drag.y).coerceIn(if (top) 0f else -step, if (bottom) 0f else step)
+                        if (offset > step / 2 && !bottom) { move(1); offset -= step }
+                        if (offset < -step / 2 && !top) { move(-1); offset += step }
                     }
-                }
+                },
+            )
+            Text(
+                if (shown) name else "$name · hidden",
+                style = StarbridgeTheme.type.body,
+                color = if (shown) scheme.onSurface else StarbridgeTheme.colors.fg3,
+                modifier = Modifier.weight(1f),
+            )
+            IconToggleButton(checked = shown, onCheckedChange = onShow) {
+                Symbol(if (shown) Sym.Visibility else Sym.VisibilityOff, size = 20.dp, tint = if (shown) scheme.onSurfaceVariant else StarbridgeTheme.colors.fg3, contentDescription = "Show $name")
             }
         }
     }

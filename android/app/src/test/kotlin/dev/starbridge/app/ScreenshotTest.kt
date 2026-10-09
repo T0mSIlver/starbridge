@@ -37,6 +37,7 @@ import dev.starbridge.app.ui.inbox.PromptActions
 import dev.starbridge.app.data.QuotaSettings
 import dev.starbridge.app.data.QuotaAlerts
 import dev.starbridge.app.ui.settings.SettingsActions
+import dev.starbridge.app.ui.settings.AlertsScreen
 import dev.starbridge.app.ui.settings.SettingsScreen
 import dev.starbridge.app.ui.devices.AddDeviceScreen
 import dev.starbridge.app.ui.Tab
@@ -282,6 +283,21 @@ class ScreenshotTest(private val dark: Boolean) {
     @Test fun settings() = capture("settings") {
         Phone(Tab.Settings, 4) {
             SettingsScreen(fake.windows, QuotaSettings(hidden = listOf("gemini"), alerts = QuotaAlerts(windows = mapOf("claude/claude-5h" to emptyList(), "zai/zai-5h" to listOf("unused-headroom")))), fake.members.size, Colours.Starbridge, fake.push, "https://starbridge.run", settingsActions, pushHold = 30)
+        }
+    }
+
+    // Settings → Alerts (#930): the column names once, a row per window of the providers shown.
+    @Test fun settingsAlerts() = capture("settings-alerts") {
+        Phone(Tab.Settings, 4) {
+            AlertsScreen(fake.windows, QuotaSettings(hidden = listOf("gemini"), alerts = QuotaAlerts(windows = mapOf("zai/zai-5h" to listOf("unused-headroom")))), {}, {})
+        }
+    }
+
+    // The same at font scale 1.3, where "Unused" once broke inside the word (#930).
+    @Config(fontScale = 1.3f)
+    @Test fun settingsAlertsLarge() = capture("settings-alerts-large") {
+        Phone(Tab.Settings, 4) {
+            AlertsScreen(fake.windows, QuotaSettings(hidden = listOf("gemini")), {}, {})
         }
     }
 

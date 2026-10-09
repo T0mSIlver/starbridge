@@ -149,6 +149,7 @@
   --size-pane-head: 48px;
   --size-content: 720px;
   --size-settings-label: 220px;
+  --size-settings-label-narrow: 160px;
   --size-quota-provider: 200px;
   --size-quota-table-from: 840px;
   --size-quota-reset: 128px;
