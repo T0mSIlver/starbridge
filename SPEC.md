@@ -143,6 +143,10 @@ provider plugins add providers, not panels.
   stray Enter, can confirm it. The QR code is a `starbridge://pair` link, as Signal's
   `sgnl://linkdevice` and WhatsApp's in-app scan are, rather than an https one, which a phone
   without the app would open in a browser and so hand the key to the server (Tom, 2026-10-08).
+  Devices shows a machine's code, as "Same code as on the machine?", only while the machine
+  can still ask: for `CHECK_CONFIRM_MS` (10 minutes, in `packages/protocol`) from its `add`
+  entry, the time `starbridge pair` waits for an answer (#939). After that the code answers no
+  question, and a line nobody needs reads as one to act on.
   A phone without the app opens the printed link or types the code instead, and the machine
   asks. The code stays after `#`, where Android 0.1.0's scanner reads it, so that scanner still
   pairs (and the machine asks); 0.1.0's camera opens nothing until the app updates.

@@ -1,3 +1,4 @@
+import { CHECK_CONFIRM_MS } from "@starbridge/protocol";
 import { getPref, type Prefs } from "./prefs";
 
 /** "4 min ago", "in 2 h 30 min", "in 3 days". */
@@ -73,4 +74,22 @@ export function addedLabels(
       return [r.id, `added ${day}${twin ? `, ${clockTime(at, clock)}` : ""}`];
     }),
   );
+}
+
+/**
+ * When Devices stops showing a machine's check code: `starbridge pair` waits CHECK_CONFIRM_MS
+ * from the machine's approval for the owner to compare it, and no longer (#939).
+ */
+export function checkUntil(d: { check?: string; addedAt: string }): number | undefined {
+  const at = Date.parse(d.addedAt);
+  return d.check && !Number.isNaN(at) ? at + CHECK_CONFIRM_MS : undefined;
+}
+
+/** The check code Devices shows beside a machine now, if its pairing can still be confirmed. */
+export function shownCheck(
+  d: { check?: string; addedAt: string },
+  now: number = Date.now(),
+): string | undefined {
+  const until = checkUntil(d);
+  return until !== undefined && now < until ? d.check : undefined;
 }

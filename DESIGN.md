@@ -480,6 +480,10 @@ it has no title. A session's title is words, in the reading face (#563).
   on one line of 200 characters, shown whole; otherwise only Deny, and the
   detail allows. A wider grant (this session, this project) shows its exact
   rule in mono beside its label, never only in a tooltip.
+- Mono sets the code, never the words around it (#939). A line that holds a
+  code, such as a machine's check code, sets its label in the line's sans
+  role and only the code in the mono role of the same size, with no added
+  letter spacing.
 - Every inbox item is the same container (#248): on Android a filled card
   (`surface`) with no border and no shadow; on the web a box as its settings
   rows are (`surface`, a `line` border, `radius.sm`). An item that blocks an
@@ -720,4 +724,4 @@ phone top bar) is unchanged.
 | `caption` | body small | group names in a list, footnotes, navigation bar labels |
 | `key` | label small | keyboard hints, counts in badges |
 | `figure` | headline small | a large number, such as used percent |
-| `code`, `command`, `snippet` | | Markdown code; a permission prompt's command; a command or session id in a dense row; the only mono |
+| `code`, `command`, `snippet` | | Markdown code; a permission prompt's command; a command, session id or check code in a dense row; the only mono |

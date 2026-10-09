@@ -27,8 +27,8 @@ export function PairResult({
       <div>
         <h2 className="t-action">{outcome.title}</h2>
         {outcome.check && (
-          <p className="t-code" data-testid="check-code">
-            Check code {outcome.check}
+          <p className="t-machine" data-testid="check-code">
+            Check code <span className="t-code">{outcome.check}</span>
           </p>
         )}
         <p className={`t-small ${p.dim}`}>{outcome.sub}</p>

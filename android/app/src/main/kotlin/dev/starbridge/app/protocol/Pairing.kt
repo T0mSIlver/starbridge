@@ -10,6 +10,12 @@ import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
+/**
+ * CHECK_CONFIRM_MS in pairing.ts: how long `starbridge pair` waits for its owner to confirm its
+ * check code. Devices shows the code beside a machine only this long after it was added (#939).
+ */
+const val CHECK_CONFIRM_MS = 10 * 60_000L
+
 // packages/protocol/src/pairing.ts. The new member shows a 24-character code: 8 characters of
 // rendezvous id, which the server sees, and 16 characters (80 bits) of secret, which never
 // reaches it and keys an HMAC on both pairing messages.
