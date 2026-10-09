@@ -95,7 +95,7 @@ test("V3 leaves every account on the default hold and no item held (#848)", () =
   );
   v2.close();
   const db = openDb(path);
-  expect(version(db)).toBe(3);
+  expect(version(db)).toBe(SCHEMA_VERSION);
   expect(db.query("SELECT push_hold FROM accounts").all()).toEqual([{ push_hold: null }]);
   expect(db.query("SELECT hold_due, hold_to FROM items").all()).toEqual([]);
 });

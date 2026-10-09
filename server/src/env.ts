@@ -1,6 +1,7 @@
 import type { Database } from "bun:sqlite";
 import type { ClientVersion } from "@starbridge/protocol";
 import type { Server } from "bun";
+import type { AppSignIns } from "./appSignIns";
 import type { Caller } from "./auth";
 import type { Config } from "./config";
 import type { Presence } from "./presence";
@@ -29,6 +30,8 @@ export interface Deps {
   limiter: RateLimiter;
   /** Who of each account sits at a screen (#848), in memory only. */
   presence: Presence;
+  /** The account each app sign-in reached, by challenge, for 10 minutes (#943). */
+  appSignIns: AppSignIns;
   watch: Watch;
   usage: Usage;
 }

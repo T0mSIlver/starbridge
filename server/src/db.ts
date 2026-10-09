@@ -214,7 +214,10 @@ ALTER TABLE items ADD COLUMN hold_to TEXT;
 CREATE INDEX items_hold_due ON items (hold_due) WHERE hold_due IS NOT NULL;
 `;
 
-export const MIGRATIONS = [V1, V2, V3];
+/** Whether each device notifies (#943), as it last said: on, off or blocked; unset until it says. */
+const V4 = "ALTER TABLE members ADD COLUMN notify TEXT;";
+
+export const MIGRATIONS = [V1, V2, V3, V4];
 
 /** The `user_version` this server brings a database to. */
 export const SCHEMA_VERSION = MIGRATIONS.length;
