@@ -15,7 +15,11 @@ export function startUpdates(downloaded: () => void): { install(): void } {
   autoUpdater.on("update-downloaded", downloaded);
   autoUpdater.on("error", (e) => console.warn("update:", e.message));
   const check = () => autoUpdater.checkForUpdates().catch(() => {});
-  check();
-  setInterval(check, UPDATE_MS);
+  // Measured runs (STARBRIDGE_TIMING, test/perf.ts) load the updater, so its memory counts, but
+  // keep GitHub out of the numbers.
+  if (!process.env.STARBRIDGE_TIMING) {
+    check();
+    setInterval(check, UPDATE_MS);
+  }
   return { install: () => autoUpdater.quitAndInstall() };
 }
