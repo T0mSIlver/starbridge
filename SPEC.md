@@ -848,6 +848,12 @@ Codex prompts are not supported.
 
 - **The uploader** in the local agent runs CodexBar for every provider at once, every 5 minutes
   and on request, and computes pace and alerts (`packages/protocol`), so clients only render.
+- **Which providers** (#963). Setup probes the providers turned on in CodexBar and the plan of
+  each agent it finds: Claude Code, Codex, Cursor (`~/.cursor` or `cursor-agent`), Antigravity
+  (`agy` or `~/.gemini/antigravity*`) and opencode (OpenCode Go; OpenCode's own plan on macOS
+  only, since CodexBar reads it from browser cookies). The ones that read windows are the default.
+  Pi has no plan of its own: its model provider's counts when CodexBar has it turned on. A main
+  window that repeats a named one, as Antigravity's do, shows once under the name.
 - **Alerts** (#115): `low` at CodexBar's defaults (50% and 20% left), and pace: unused headroom of
   30% one hour before the reset for windows of a day or less, one day before for longer ones. Only
   a new alert notifies; every other snapshot is posted quiet. The thresholds are fixed, since

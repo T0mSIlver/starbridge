@@ -30,6 +30,7 @@ import {
   installTarball,
   KEYS,
   PIN,
+  probeSet,
   tarballKey,
   updateCodexbar,
 } from "../src/setup/codexbar";
@@ -814,6 +815,24 @@ test("a CodexBar the system cannot start says what it needs, not to sign in (#77
     "  Then run again:",
     "    starbridge setup",
   ]);
+});
+
+test("setup probes the plan of each agent it finds (#963)", () => {
+  const home = mkdtempSync(join(tmpdir(), "starbridge-home-"));
+  try {
+    const sys = (platform: NodeJS.Platform): Sys => ({
+      ...linuxSys(testCtx({ PATH: "/nonexistent" }), home),
+      platform,
+    });
+    expect(probeSet(sys("linux"), [], [])).toEqual([]);
+    for (const d of [".cursor", ".gemini/antigravity-cli", ".local/share/opencode"])
+      mkdirSync(join(home, d), { recursive: true });
+    expect(probeSet(sys("linux"), [], [])).toEqual(["cursor", "antigravity", "opencodego"]);
+    // OpenCode's own plan is read from browser cookies, which CodexBar imports only on macOS.
+    expect(probeSet(sys("darwin"), [], [])).toContain("opencode");
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
 });
 
 test("CodexBar installs only when its release's own checksum matches", async () => {

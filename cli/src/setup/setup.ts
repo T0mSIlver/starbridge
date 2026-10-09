@@ -480,7 +480,9 @@ async function codexbarStep(
 
 export function probeLines(sys: Sys, probes: Probe[]): string[] {
   if (probes.length === 0)
-    return ["  CodexBar has no provider turned on, and found no Claude or Codex sign-in."];
+    return [
+      "  CodexBar has no provider turned on, and found none of the agents whose plans it reads.",
+    ];
   // A CodexBar the system cannot start fails every provider the same way, which no sign-in fixes.
   const lib = probes
     .map((p) => /error while loading shared libraries: ([^:\s]+):/.exec(p.detail)?.[1])

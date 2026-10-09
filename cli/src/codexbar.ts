@@ -105,17 +105,24 @@ export function parseRow(row: Obj, now: Date): ProviderQuota {
   const provider = clip(str(row.provider) ?? "unknown", 100);
   const usage = isObj(row.usage) ? row.usage : {};
   const labels = isObj(row.rateWindowLabels) ? row.rateWindowLabels : {};
+  const extras: QuotaWindow[] = [];
+  for (const x of Array.isArray(usage.extraRateWindows) ? usage.extraRateWindows : []) {
+    if (!isObj(x) || !str(x.id)) continue;
+    const w = window(x.id as string, str(x.title) ?? (x.id as string), x.window, now);
+    if (w) extras.push(w);
+  }
+  // Antigravity's primary and secondary repeat its most used named window of each model family
+  // (#963): a main window equal to a named one shows once, under the name.
+  const same = (a: QuotaWindow, b: QuotaWindow) =>
+    a.usedPercent === b.usedPercent &&
+    a.windowMinutes === b.windowMinutes &&
+    a.resetsAt === b.resetsAt;
   const windows: QuotaWindow[] = [];
   for (const key of ["primary", "secondary", "tertiary"]) {
     const w = window(key, str(labels[key]) ?? key, usage[key], now);
-    if (w) windows.push(w);
+    if (w && !extras.some((x) => same(w, x))) windows.push(w);
   }
-  const extras = Array.isArray(usage.extraRateWindows) ? usage.extraRateWindows : [];
-  for (const x of extras) {
-    if (!isObj(x) || !str(x.id)) continue;
-    const w = window(x.id as string, str(x.title) ?? (x.id as string), x.window, now);
-    if (w) windows.push(w);
-  }
+  windows.push(...extras);
   const identity = isObj(usage.identity) ? usage.identity : {};
   const account = str(identity.accountEmail) ?? str(usage.accountEmail);
   const error = rowError(row);

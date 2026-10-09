@@ -368,13 +368,24 @@ export interface Probe {
   detail: string;
 }
 
-/** Which providers to probe: the enabled ones, those named, and Claude and Codex when signed in. */
+/**
+ * Which providers to probe: the enabled ones, those named, and each harness's own plan when this
+ * machine has that harness (#963). A provider that reads no windows stays out of the default.
+ */
 export function probeSet(sys: Sys, list: ProviderInfo[], named: string[]): string[] {
   const set = new Set([...list.filter((p) => p.enabled).map((p) => p.provider), ...named]);
-  const claude =
-    existsSync(join(sys.home, ".claude/.credentials.json")) || which(sys.ctx.env, "claude");
-  if (claude) set.add("claude");
-  if (existsSync(join(sys.home, ".codex/auth.json"))) set.add("codex");
+  const has = (...paths: string[]) => paths.some((p) => existsSync(join(sys.home, p)));
+  const on = (...cmds: string[]) => cmds.some((c) => which(sys.ctx.env, c));
+  if (has(".claude/.credentials.json") || on("claude")) set.add("claude");
+  if (has(".codex/auth.json")) set.add("codex");
+  if (has(".cursor") || on("cursor-agent", "cursor")) set.add("cursor");
+  if (has(".gemini/antigravity", ".gemini/antigravity-cli") || on("agy", "antigravity"))
+    set.add("antigravity");
+  if (has(".local/share/opencode") || on("opencode")) {
+    set.add("opencodego");
+    // CodexBar reads OpenCode's own plan only from browser cookies, which it imports only on macOS.
+    if (sys.platform === "darwin") set.add("opencode");
+  }
   return [...set];
 }
 
