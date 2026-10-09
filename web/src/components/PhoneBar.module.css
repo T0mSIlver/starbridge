@@ -1,6 +1,6 @@
 .bar {
   position: sticky;
-  top: 0;
+  top: var(--titlebar);
   z-index: 5;
   display: flex;
   align-items: center;

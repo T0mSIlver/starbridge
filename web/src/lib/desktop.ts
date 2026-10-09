@@ -22,6 +22,8 @@ export type DesktopBridge = {
   /** Absent before the app's 0.1.3. */
   place?(): DesktopPlace;
   setPlace?(place: DesktopPlace): void;
+  /** "inset" in a window with no title bar (read before the first paint, lib/themeScript.ts). */
+  titleBar?: string;
   update(state: { count: number; entries: DesktopEntry[] }): void;
   onAnswer(f: (a: DesktopAnswer) => Promise<void>): void;
   onOpen(f: (id: string) => void): void;

@@ -192,6 +192,11 @@ function createWindow(): void {
     minHeight: 480,
     show: false,
     title: "Starbridge",
+    // No title bar on macOS (owner's pick from mockups, #938): the page runs up to the window's
+    // buttons and leaves a band for them, which also drags the window.
+    ...(process.platform === "darwin"
+      ? { titleBarStyle: "hiddenInset" as const, trafficLightPosition: { x: 12, y: 8 } }
+      : {}),
     backgroundColor: "#0c0c0c",
     webPreferences: {
       preload: join(ROOT, "dist", "preload.js"),
@@ -204,9 +209,12 @@ function createWindow(): void {
       additionalArguments: [
         `--starbridge-origin=${origin}`,
         `--starbridge-version=${app.getVersion()}`,
+        ...(process.platform === "darwin" ? ["--starbridge-titlebar=inset"] : []),
       ],
     },
   });
+  // The window keeps the app's name, for Mission Control and the Window menu, whatever page shows.
+  win.on("page-title-updated", (e) => e.preventDefault());
   win.on("close", (e) => {
     if (quitting) return;
     e.preventDefault();

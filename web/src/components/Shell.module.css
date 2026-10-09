@@ -2,7 +2,7 @@
    the left rail (`size.rail`). */
 
 .frame {
-  min-height: 100dvh;
+  min-height: calc(100dvh - var(--titlebar));
 }
 
 .rail {
@@ -80,7 +80,7 @@
 
   .rail {
     position: fixed;
-    inset: 0 auto 0 0;
+    inset: var(--titlebar) auto 0 0;
     z-index: 10;
     display: grid;
     grid-template-rows: auto auto auto 1fr auto;

@@ -1178,6 +1178,10 @@ a browser; the app adds a menu bar light and notifications, so a web release nee
   above), the Dock (always, with no menu bar icon), or both, applied at once. One choice of three
   rather than two switches, so no combination leaves the app nowhere and nothing has to be
   greyed out. The Dock icon's menu holds the menu bar's items, for when there is no menu bar icon.
+- **The window** has no title bar on macOS (owner's pick from mockups, #938): the page's rail
+  already names the app and the page, and counts what needs the owner. The page leaves
+  a 28 px band at its top for the window's buttons, which also drags the window; the window keeps
+  the name "Starbridge" for Mission Control and the Window menu, whatever the page's title.
 - **`starbridge://pair` links** open `/pair` on the configured server, as the https link does. The
   link's check key stays out of the page, which the server writes; a link for another server is
   refused, with both servers named.

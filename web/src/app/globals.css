@@ -4,6 +4,13 @@
 :root {
   --sans: var(--font-sans);
   --mono: var(--font-mono);
+  /* The macOS app's window has no title bar (#938): the page leaves this band at its top for the
+     window's buttons, and the window is dragged by it. Zero everywhere else. */
+  --titlebar: 0px;
+}
+
+:root[data-titlebar="inset"] {
+  --titlebar: 28px;
 }
 
 * {
@@ -41,6 +48,25 @@ body {
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   min-height: 100dvh;
+}
+
+:root[data-titlebar="inset"] body {
+  padding-top: var(--titlebar);
+}
+
+:root[data-titlebar="inset"] body::before {
+  content: "";
+  position: fixed;
+  z-index: 30;
+  inset: 0 0 auto;
+  height: var(--titlebar);
+  background: var(--bg);
+  -webkit-app-region: drag;
+}
+
+/* The window's drag region ignores what lies on top, so controls opt out. */
+:root[data-titlebar="inset"] :is(a, button, input, textarea, select, label, summary, dialog) {
+  -webkit-app-region: no-drag;
 }
 
 a {
