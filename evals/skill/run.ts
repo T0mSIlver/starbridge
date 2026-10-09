@@ -171,6 +171,8 @@ export interface RunRecord {
   snoozed?: string;
   /** Claude Code: the largest context one request sent, in tokens. */
   peakContext?: number;
+  /** Claude Code: every request's input, cache and output tokens, summed over the run. */
+  usedTokens?: number;
   error?: string;
 }
 
@@ -960,30 +962,38 @@ async function one(s: Scenario, arm: string, rep: number): Promise<RunRecord> {
   } finally {
     live.stop();
     rec.gh = readFileSync(ghLog, "utf8").split("\n").filter(Boolean);
-    if (agent === "claude") rec.peakContext = peakContext(join(cfg, "projects"));
+    if (agent === "claude") Object.assign(rec, usage(join(cfg, "projects")));
   }
   writeFileSync(join(out, `${id}.json`), `${JSON.stringify(rec, null, 2)}\n`);
   if (!opt.keep) rmSync(root, { recursive: true, force: true });
   return rec;
 }
 
-/** The largest context one request sent, read from the session transcripts under `dir`. */
-function peakContext(dir: string): number | undefined {
-  if (!existsSync(dir)) return undefined;
-  let peak = 0;
+/**
+ * The largest context one request sent and the tokens all requests used, read from the session
+ * transcripts under `dir`. A transcript repeats a message's usage on each of its content blocks.
+ */
+function usage(dir: string): { peakContext?: number; usedTokens?: number } {
+  if (!existsSync(dir)) return {};
+  const seen = new Set<string>();
+  let peakContext = 0;
+  let usedTokens = 0;
   for (const f of readdirSync(dir, { recursive: true, encoding: "utf8" }))
     if (f.endsWith(".jsonl"))
       for (const l of readFileSync(join(dir, f), "utf8").split("\n")) {
         if (!l.includes('"usage"')) continue;
         try {
-          const u = JSON.parse(l).message?.usage ?? {};
-          peak = Math.max(
-            peak,
-            (u.input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0),
-          );
+          const m = JSON.parse(l).message ?? {};
+          if (!m.usage || seen.has(m.id)) continue;
+          seen.add(m.id);
+          const u = m.usage;
+          const context =
+            (u.input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0);
+          peakContext = Math.max(peakContext, context);
+          usedTokens += context + (u.output_tokens ?? 0);
         } catch {}
       }
-  return peak || undefined;
+  return peakContext ? { peakContext, usedTokens } : {};
 }
 
 const only = opt.only ? new Set((opt.only as string).split(",")) : undefined;
