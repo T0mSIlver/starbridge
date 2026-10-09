@@ -50,9 +50,10 @@ from an emulator run against one: GitHub sign-in through a stand-in OAuth
 server, first-device setup, pairing `starbridge pair`, and answering
 `starbridge ask --wait` from the locked screen through UnifiedPush (ntfy).
 
-The home-screen widgets (`widget/`) are RemoteViews, which Roborazzi cannot draw. Debug builds'
-`WidgetShotsActivity` lays them out on sample data, as a launcher applies them, for screenshots on
-an emulator; `docs/widgets/` holds them, light and dark, under each Colours setting.
+The home-screen widgets (`widget/`) are RemoteViews. Debug builds' `WidgetShotsActivity` lays
+them out on sample data, as a launcher applies them, for screenshots on an emulator;
+`QuotasWidgetTest` applies them the same way inside Robolectric, so Roborazzi checks the Quotas
+widget's picked quotas and its picker. `docs/widgets/` holds both, light and dark.
 
 Fonts: Google Sans Flex and Google Sans Code, under the SIL Open Font License
 (`licenses/`). `res/font/google_sans_flex.ttf` is the google/fonts file

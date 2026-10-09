@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 2×2, wider to 4×2 (#894). The launcher redraws it every 30 minutes, for relative times. -->
+<!-- 2×2, wider to 4×2 (#894). The launcher redraws it every 30 minutes, for relative times.
+     Each one shows the plan picked on drop, and Reconfigure on a long press picks again (#907). -->
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
     android:description="@string/widget_quotas_description"
     android:initialLayout="@layout/glance_default_loading_layout"
@@ -11,4 +12,6 @@
     android:targetCellHeight="2"
     android:resizeMode="horizontal"
     android:updatePeriodMillis="1800000"
-    android:widgetCategory="home_screen" />
+    android:widgetCategory="home_screen"
+    android:configure="dev.starbridge.app.widget.QuotasWidgetSetup"
+    android:widgetFeatures="reconfigurable" />

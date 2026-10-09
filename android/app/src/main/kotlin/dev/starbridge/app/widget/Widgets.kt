@@ -12,8 +12,12 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.datastore.preferences.core.MutablePreferences
+import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
+import androidx.glance.currentState
 import androidx.glance.LocalContext
 import androidx.glance.LocalSize
 import androidx.glance.action.clickable
@@ -203,18 +207,70 @@ class QuestionsWidgetReceiver : GlanceAppWidgetReceiver() {
 
 // ---- Quotas ----
 
+/** A plan as the Quotas screen groups windows (#160): one provider, on one machine when several upload. */
+data class Plan(val provider: String, val machine: String?) {
+    val name: String get() = machine?.let { "$provider · $it" } ?: provider
+
+    companion object {
+        fun of(window: QuotaWindow) = Plan(window.provider, window.machine)
+    }
+}
+
+/**
+ * The quotas a Quotas widget shows (#907), kept per widget in Glance's state, which goes with the
+ * widget: one plan's windows by name, one picked at 2×2 and two at 4×2.
+ */
+data class Choice(val plan: Plan, val quotas: List<String>) {
+    companion object {
+        private val PROVIDER = stringPreferencesKey("provider")
+        private val MACHINE = stringPreferencesKey("machine")
+        private val QUOTAS = stringPreferencesKey("quotas")
+
+        /** Null shows whatever leads the Quotas screen, as a widget did before #907. */
+        fun read(state: Preferences): Choice? =
+            state[PROVIDER]?.let { Choice(Plan(it, state[MACHINE]), state[QUOTAS].orEmpty().split('\n').filter(String::isNotEmpty)) }
+
+        fun write(state: MutablePreferences, choice: Choice?) {
+            state.remove(PROVIDER)
+            state.remove(MACHINE)
+            state.remove(QUOTAS)
+            if (choice == null) return
+            state[PROVIDER] = choice.plan.provider
+            choice.plan.machine?.let { state[MACHINE] = it }
+            state[QUOTAS] = choice.quotas.joinToString("\n")
+        }
+    }
+}
+
+/**
+ * The [count] rows a widget with [choice] shows, from its plan's rows in the Quotas screen's
+ * order: the picked quotas that still report, then the plan's next ones to fill the room (a 2×2
+ * picked one, widened to 4×2). None once no picked quota reports: the widget then says so.
+ */
+internal fun List<QuotaRow>.chosen(choice: Choice, count: Int): List<QuotaRow> {
+    val picked = filter { Plan.of(it.window) == choice.plan && it.window.window in choice.quotas }
+    if (picked.isEmpty()) return emptyList()
+    return (picked + filter { Plan.of(it.window) == choice.plan && it !in picked }).take(count)
+}
+
 /** A window as a widget row: its bar on the owner's scale, where it is headed, and its state in words. */
 internal class QuotaRow(val window: QuotaWindow, val bar: QuotaSettings.Bar, val course: Course, val mood: Mood, val word: String) {
     /** The figure and the fill: a window that ran out reads 100% used, as on the Quotas screen. */
     val percent: Int get() = if (course == Course.RanOut && bar.word == "used") 100 else bar.percent.coerceIn(0, 100)
 
     companion object {
-        /** The windows as the Quotas screen orders them, under the owner's quota settings. */
-        fun of(windows: List<QuotaWindow>, settings: QuotaSettings, now: Instant, h24: Boolean): List<QuotaRow> =
-            settings.arrange(windows, now).map { w ->
+        /**
+         * The windows as the Quotas screen orders them, under the owner's quota settings; with a
+         * [plan], only its windows, shown even when the Quotas screen hides its provider.
+         */
+        fun of(windows: List<QuotaWindow>, settings: QuotaSettings, now: Instant, h24: Boolean, plan: Plan? = null): List<QuotaRow> {
+            val arranged = if (plan == null) settings.arrange(windows, now)
+            else settings.copy(hidden = emptyList()).arrange(windows, now).filter { Plan.of(it) == plan }
+            return arranged.map { w ->
                 val (mood, word) = w.state(now, settings.absoluteResets, h24)
                 QuotaRow(w, settings.bar(w, now), w.course(now), mood, word)
             }
+        }
     }
 }
 
@@ -262,29 +318,53 @@ private fun Mood.color(p: Palette) = when (this) {
 
 /**
  * 2×2: the first window ("Running out first" puts one that runs out there) as a figure, its meter
- * and its state. 4×2: every window that fits, under its provider, each a meter and a figure. [rows]
- * is null while this phone is not in an account.
+ * and its state. 4×2: every window that fits, under its provider, each a meter and a figure. With
+ * a [choice] (#907), the picked quota at 2×2, and at 4×2 two of its plan's side by side, as the 2×2
+ * draws one. [rows] is null while this phone is not in an account.
  */
 @Composable
-internal fun QuotasWidget(rows: List<QuotaRow>?, p: Palette) {
+internal fun QuotasWidget(rows: List<QuotaRow>?, p: Palette, choice: Choice? = null) {
     val size = LocalSize.current
+    val wide = size.width >= 250.dp
+    val shown = if (choice != null) rows?.chosen(choice, if (wide) 2 else 1) else rows
     Card(p, open(LocalContext.current, MainActivity.TAB_QUOTAS)) {
-        val first = rows?.firstOrNull()
+        val first = shown?.firstOrNull()
         if (first == null) {
-            Text("Quotas", style = style(14.sp, p.fg2, medium = true), maxLines = 1)
+            Text(choice?.plan?.name ?: "Quotas", style = style(14.sp, p.fg2, medium = true), maxLines = 1)
             Spacer(GlanceModifier.defaultWeight())
-            Text(if (rows == null) "Not signed in" else "No quotas yet", style = style(16.sp, p.fg))
+            Text(
+                when {
+                    shown == null -> "Not signed in"
+                    choice != null -> "Not in your quotas now"
+                    else -> "No quotas yet"
+                },
+                style = style(16.sp, p.fg),
+            )
+            // The choice stays, for quotas that come back; Reconfigure on a long press changes it.
+            if (shown != null && choice != null) Text("Touch and hold to pick again", style = style(13.sp, p.fg2), maxLines = 2)
             return@Card
         }
         val inner = size.width - 36.dp
-        if (size.width < 250.dp) {
+        if (!wide) {
             Text("${first.window.provider} · ${first.window.window}", style = style(14.sp, p.fg2, medium = true), maxLines = 1)
             Spacer(GlanceModifier.defaultWeight())
-            Text("${first.percent}%", style = style(45.sp, p.fg, medium = true), maxLines = 1)
-            Spacer(GlanceModifier.height(4.dp))
-            Meter(first, inner, p)
-            Spacer(GlanceModifier.height(4.dp))
-            Text(first.word, style = style(13.sp, first.mood.color(p), medium = first.mood == Mood.Bad), maxLines = 1)
+            Figure(first, inner, p)
+            return@Card
+        }
+        if (choice != null) {
+            Text(choice.plan.name, style = style(14.sp, p.fg2, medium = true), maxLines = 1)
+            Spacer(GlanceModifier.defaultWeight())
+            val gap = 24.dp
+            val half = (inner - gap) / 2
+            Row(GlanceModifier.fillMaxWidth()) {
+                shown.forEachIndexed { i, row ->
+                    if (i > 0) Spacer(GlanceModifier.width(gap))
+                    Column(GlanceModifier.width(half)) {
+                        Text(row.window.window, style = style(13.sp, p.fg2), maxLines = 1)
+                        Figure(row, half, p, figure = 34.sp)
+                    }
+                }
+            }
             return@Card
         }
         val name = 64.dp
@@ -292,7 +372,7 @@ internal fun QuotasWidget(rows: List<QuotaRow>?, p: Palette) {
         val meter = inner - name - figure - 12.dp
         // Whole providers and rows while they fit: a heading 20 dp, a row 22 dp, 6 dp between providers.
         var room = size.height - 36.dp
-        val groups = rows.groupBy { it.window.provider to it.window.machine }.values.mapNotNull { group ->
+        val groups = shown.groupBy { it.window.provider to it.window.machine }.values.mapNotNull { group ->
             val head = if (room == size.height - 36.dp) 20.dp else 26.dp
             val fits = ((room - head) / 22.dp).toInt().coerceAtMost(group.size)
             if (fits < 1) return@mapNotNull null
@@ -303,8 +383,7 @@ internal fun QuotasWidget(rows: List<QuotaRow>?, p: Palette) {
         groups.take(5).forEachIndexed { i, group ->
             if (i > 0) Spacer(GlanceModifier.height(6.dp))
             Column(GlanceModifier.fillMaxWidth()) {
-                val w = group.first().window
-                Text(w.machine?.let { "${w.provider} · $it" } ?: w.provider, style = style(14.sp, p.fg, medium = true), maxLines = 1)
+                Text(Plan.of(group.first().window).name, style = style(14.sp, p.fg, medium = true), maxLines = 1)
                 group.take(9).forEach { row ->
                     Row(GlanceModifier.fillMaxWidth().height(22.dp), verticalAlignment = Alignment.CenterVertically) {
                         Text(row.window.window, style = style(13.sp, p.fg2), maxLines = 1, modifier = GlanceModifier.width(name))
@@ -323,15 +402,27 @@ internal fun QuotasWidget(rows: List<QuotaRow>?, p: Palette) {
     }
 }
 
+/** A quota as the 2×2 draws it: its figure, its meter and its state. */
+@Composable
+private fun Figure(row: QuotaRow, width: Dp, p: Palette, figure: TextUnit = 45.sp) {
+    Text("${row.percent}%", style = style(figure, p.fg, medium = true), maxLines = 1)
+    Spacer(GlanceModifier.height(4.dp))
+    Meter(row, width, p)
+    Spacer(GlanceModifier.height(4.dp))
+    Text(row.word, style = style(13.sp, row.mood.color(p), medium = row.mood == Mood.Bad), maxLines = 1)
+}
+
 class QuotasWidget : GlanceAppWidget() {
     override val sizeMode = SizeMode.Exact
 
-    override suspend fun provideGlance(context: Context, id: GlanceId) = provideContent { Live { store, prefs -> Quotas(store, prefs) } }
+    override suspend fun provideGlance(context: Context, id: GlanceId) = provideContent {
+        Live { store, prefs -> Quotas(store, prefs, Choice.read(currentState())) }
+    }
 
-    override suspend fun providePreview(context: Context, widgetCategory: Int) = provideContent { Live { store, prefs -> Quotas(store, prefs) } }
+    override suspend fun providePreview(context: Context, widgetCategory: Int) = provideContent { Live { store, prefs -> Quotas(store, prefs, null) } }
 
     @Composable
-    private fun Quotas(store: Store, prefs: Prefs) {
+    private fun Quotas(store: Store, prefs: Prefs, choice: Choice?) {
         val context = LocalContext.current
         val phase by store.phase.collectAsState()
         val windows by store.windows.collectAsState()
@@ -343,7 +434,7 @@ class QuotasWidget : GlanceAppWidget() {
             Clock.H24 -> true
             Clock.H12 -> false
         }
-        QuotasWidget(if (phase == Phase.Ready) QuotaRow.of(windows, settings, Instant.now(), h24) else null, Palette.of(colours))
+        QuotasWidget(if (phase == Phase.Ready) QuotaRow.of(windows, settings, Instant.now(), h24, choice?.plan) else null, Palette.of(colours), choice)
     }
 }
 
