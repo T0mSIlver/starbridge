@@ -1093,8 +1093,14 @@ Tokens, type and components: `DESIGN.md`.
   PATCH*100` plus the rc number or 99, so release candidates sort first; the 2000000 keeps 0.1.0
   above 1.0.0-rc.1 (1000001), which Play's closed test already had (#551). Play App Signing keeps the release
   key, so Play and GitHub builds share one signature (#148).
+- **The desktop app's release** (#886). Once the repository variable `DESKTOP_RELEASE` is true,
+  the tag also builds the macOS app on GitHub's macOS runner, signed with the Developer ID and
+  notarized, its secrets in the `desktop-release` environment, and adds its DMGs, zips and
+  `latest-mac.yml` to the Release. The app reads that file from the latest Release every 6 hours
+  and at start, downloads the zip, and installs it on quit or from Restart to Update. macOS
+  installs an update only with the running app's Developer ID, so ad hoc builds never update.
 - **One version everywhere** (#471). `bun cli/scripts/version.ts <version>` stamps the version
-  into `cli/package.json`, `web/package.json`, both `plugin.json`, the mod's `VERSION`, Android's
+  into `cli/package.json`, `web/package.json`, `desktop/package.json`, both `plugin.json`, the mod's `VERSION`, Android's
   default `versionName` and the marketplace's two `ref`s, in a PR; the merged commit is tagged,
   and the release workflow refuses a tag that disagrees (`--check`, also a test on every PR). The
   marketplace lists both plugins as `git-subdir` sources at that tag, over https so no SSH key is

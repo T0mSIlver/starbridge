@@ -49,8 +49,9 @@ numbers.
 | Idle memory: every process's working set, page loaded | 350 MB | 304 MB |
 | Download: the largest DMG | 140 MB | 133 MB |
 
-What keeps them: the main process is one 15 KB file, the window shows at once on the page's
-background colour, and closing it only hides it.
+What keeps them: the main process is one 15 KB file, the updater (most of the code) loads 5 s
+after start from its own file, the window shows at once on the page's background colour, and
+closing it only hides it.
 `STARBRIDGE_TIMING=1` prints the marks (`timing {...}`) from any build.
 
 ## The keychain
@@ -59,3 +60,19 @@ The page's cookies are encrypted with a key macOS keeps in the login keychain, "
 Storage" (the `enableCookieEncryption` fuse). Only the app that made the key may read it without
 asking. A Developer ID app stays that app through updates. Each ad hoc build is a stranger to it,
 so macOS asks for the login password once per new ad hoc build; "Always Allow" covers that build.
+
+## Signing
+
+Pull requests build ad hoc signed apps: they open after "Open Anyway" in System Settings, and
+their notifications show once allowed there (Electron 42 moved to `UNNotification`, which needs a
+signed app; an ad hoc signature is enough, as the owner's Mac Mini showed). The Developer ID signs and notarizes in two places,
+both through `scripts/sign.sh` and the `desktop-release` environment, which only `main` and tags
+can use:
+
+- the `desktop` workflow's `signed build` job, on `main` or run by hand, once the repository
+  variable `DESKTOP_SIGNING` is `true`: a DMG to try;
+- the release, once `DESKTOP_RELEASE` is `true` (SPEC.md, "The desktop app's release").
+
+The environment's secrets: `MAC_CERTIFICATE` (the Developer ID Application certificate and key,
+a base64 `.p12`), `MAC_CERTIFICATE_PASSWORD`, and an App Store Connect API key for notarization:
+`APPLE_API_KEY` (the base64 `.p8`), `APPLE_API_KEY_ID`, `APPLE_API_ISSUER`.

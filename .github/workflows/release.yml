@@ -1,7 +1,7 @@
 name: release
 
 # A v1.2.3 or v1.2.3-rc.4 tag publishes a GitHub Release with the signed APK and App Bundle, the CLI binaries,
-# install.sh, install.ps1 and their checksums, signed with minisign, then updates the Homebrew tap (not for -rc)
+# install.sh, install.ps1, the macOS app once vars.DESKTOP_RELEASE is true, and their checksums, signed with minisign, then updates the Homebrew tap (not for -rc)
 # and npm. Run by hand, it builds the same files as workflow artifacts and releases nothing.
 # Cut a release with `bun cli/scripts/version.ts 1.2.3` in a PR, then tag the merged commit.
 on:
@@ -119,8 +119,56 @@ jobs:
             cli/dist/install.sh
             cli/dist/install.ps1
 
+  # The macOS app, signed with the Developer ID and notarized. Off until the repository variable
+  # DESKTOP_RELEASE is true, which needs the desktop-release environment's secrets. Its
+  # latest-mac.yml is what installed apps read to update (desktop/electron-builder.yml).
+  desktop:
+    needs: version
+    if: ${{ !inputs.npm_only && vars.DESKTOP_RELEASE == 'true' }}
+    runs-on: macos-15
+    environment: desktop-release
+    defaults:
+      run:
+        working-directory: desktop
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.2
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+      - run: pnpm install --frozen-lockfile --filter @starbridge/desktop
+      - run: |
+          pnpm exec install-electron
+          pnpm test
+          pnpm e2e
+      - name: Build, sign and notarize
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+          MAC_CERTIFICATE: ${{ secrets.MAC_CERTIFICATE }}
+          MAC_CERTIFICATE_PASSWORD: ${{ secrets.MAC_CERTIFICATE_PASSWORD }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+        run: |
+          npm pkg set version="$VERSION"
+          pnpm run build
+          scripts/sign.sh
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: desktop
+          path: |
+            desktop/release/*.dmg
+            desktop/release/*.zip
+            desktop/release/*.blockmap
+            desktop/release/latest-mac.yml
+
   release:
-    needs: [version, android, cli]
+    needs: [version, android, cli, desktop]
+    # The desktop job is skipped until it is turned on; a failed one stops the release.
+    if: ${{ !cancelled() && needs.android.result == 'success' && needs.cli.result == 'success' && contains(fromJSON('["success", "skipped"]'), needs.desktop.result) }}
     runs-on: ${{ vars.RUNNER || 'ubuntu-latest' }}
     permissions:
       contents: write
@@ -188,7 +236,8 @@ jobs:
 
   homebrew:
     needs: [version, release]
-    if: startsWith(github.ref, 'refs/tags/v') && !contains(github.ref_name, '-rc.')
+    # The release's result, not success(): a skipped desktop job upstream would skip this too.
+    if: ${{ !cancelled() && needs.release.result == 'success' && startsWith(github.ref, 'refs/tags/v') && !contains(github.ref_name, '-rc.') }}
     runs-on: ${{ vars.RUNNER || 'ubuntu-latest' }}
     steps:
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1

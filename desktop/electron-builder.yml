@@ -20,14 +20,22 @@ mac:
     - target: zip
       arch: [arm64, x64]
   category: public.app-category.developer-tools
-  # Ad hoc until the app has a Developer ID: it runs once the owner clears Gatekeeper's warning.
-  identity: "-"
+  # The zip, which updates download; the DMG has its own name below.
+  artifactName: Starbridge-${version}-${arch}-mac.${ext}
+  # Signed with the Developer ID in CSC_LINK and notarized by the release workflow; the desktop
+  # workflow's builds are ad hoc (`-c.mac.identity=-`).
   hardenedRuntime: true
   extendInfo:
     # Notifications as alerts, so their buttons show without a hover.
     NSUserNotificationAlertStyle: alert
 dmg:
   artifactName: Starbridge-${version}-${arch}.dmg
+# Writes latest-mac.yml, which the app reads from the latest GitHub Release to update. The
+# workflows upload the files themselves (`--publish never`).
+publish:
+  provider: github
+  owner: T0mSIlver
+  repo: starbridge
 electronFuses:
   runAsNode: false
   enableNodeOptionsEnvironmentVariable: false

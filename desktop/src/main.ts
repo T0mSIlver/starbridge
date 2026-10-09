@@ -1,3 +1,4 @@
+import { enableCompileCache } from "node:module";
 import { join } from "node:path";
 import {
   app,
@@ -43,6 +44,9 @@ let notifier: Notifier;
 let quitting = false;
 /** The GitHub sign-in sent to the browser, until its link comes back. */
 let signIn: SignIn | null = null;
+/** A release downloaded, which installs on quit or from Restart to Update. */
+let update: { install(): void } | null = null;
+let updateReady = false;
 /** Links that arrived before the window existed. */
 const early: string[] = [];
 /** Answers handed to the page, until it says they went out. */
@@ -133,6 +137,22 @@ function ready(): void {
   if (atLogin) app.dock?.hide();
   else showWindow();
   for (const link of early.splice(0)) openLink(link);
+  checkForUpdates();
+}
+
+function checkForUpdates(): void {
+  if (!app.isPackaged) return;
+  // Loaded late and by path, so the bundler keeps it out of main.js (src/updater.ts).
+  setTimeout(() => {
+    // Node keeps the compiled updater on disk, so later starts skip compiling its 0.5 MB.
+    enableCompileCache();
+    const { startUpdates } = require(
+      join(ROOT, "dist", "updater.js"),
+    ) as typeof import("./updater");
+    update = startUpdates(() => {
+      updateReady = true;
+    });
+  }, 5_000);
 }
 
 function createWindow(): void {
@@ -262,9 +282,16 @@ function menu(): Menu {
       click: () => app.setLoginItemSettings({ openAtLogin: !login }),
     },
     { label: `Server: ${new URL(origin).host}…`, click: showServer },
+    ...(updateReady ? [{ label: "Restart to Update", click: installUpdate }] : []),
     { type: "separator" },
     { label: "Quit Starbridge", role: "quit" },
   ]);
+}
+
+/** Quits for the update: the window must close, not hide, or the install never starts. */
+function installUpdate(): void {
+  quitting = true;
+  update?.install();
 }
 
 function showWindow(): void {

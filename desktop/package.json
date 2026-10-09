@@ -6,7 +6,7 @@
   "description": "Starbridge for macOS: the web app in a window, with the Needs-you count in the menu bar and notifications you answer in place",
   "main": "dist/main.js",
   "scripts": {
-    "build": "bun build src/main.ts src/preload.ts src/server-preload.ts --outdir dist --target node --format cjs --external electron",
+    "build": "bun build src/main.ts src/preload.ts src/server-preload.ts src/updater.ts --outdir dist --target node --format cjs --external electron",
     "start": "bun run build && electron .",
     "test": "bun test test/unit",
     "e2e": "bun run build && node test/smoke.ts",
