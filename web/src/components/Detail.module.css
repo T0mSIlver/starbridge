@@ -175,17 +175,6 @@
   color: var(--fg3);
 }
 
-@media (hover: none) {
-  .keys {
-    display: none;
-  }
-
-  .send {
-    width: var(--size-tap);
-    height: var(--size-tap);
-  }
-}
-
 .send {
   display: grid;
   flex: none;
@@ -204,6 +193,18 @@
 .send:disabled {
   background: none;
   color: var(--fg3);
+}
+
+/* After `.send`, which it overrides. */
+@media (hover: none) {
+  .keys {
+    display: none;
+  }
+
+  .send {
+    width: var(--size-tap);
+    height: var(--size-tap);
+  }
 }
 
 @media (hover: hover) {
