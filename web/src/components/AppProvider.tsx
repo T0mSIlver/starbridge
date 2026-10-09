@@ -583,7 +583,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const deviceName = useCallback(
     (id: string) =>
-      id === ctx?.device.id ? "this browser" : (ctx?.dir.members.get(id)?.member.name ?? id),
+      id === ctx?.device.id
+        ? desktop
+          ? "this app"
+          : "this browser"
+        : (ctx?.dir.members.get(id)?.member.name ?? id),
     [ctx],
   );
 

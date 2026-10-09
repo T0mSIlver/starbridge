@@ -203,7 +203,20 @@ function createWindow(): void {
     setTimeout(() => win?.hide(), 1_000);
     setTimeout(reportMemory, 10_000);
   });
-  win.loadURL(origin);
+  // The page's signed-out screen in the app is sign-in, not the landing page (web: DESKTOP_COOKIE).
+  session
+    .fromPartition("persist:starbridge")
+    .cookies.set({
+      url: origin,
+      name: "sb_desktop",
+      value: "1",
+      path: "/",
+      sameSite: "lax",
+      secure: origin.startsWith("https:"),
+      expirationDate: Date.now() / 1000 + 365 * 86_400,
+    })
+    .catch(() => {})
+    .finally(() => win?.loadURL(origin));
 }
 
 /** The app's memory once idle: every process's working set, as Activity Monitor adds it up. */

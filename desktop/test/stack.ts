@@ -161,6 +161,13 @@ try {
       if (h) headers.push(h);
     });
 
+    step("signed out, the app shows sign-in, not the landing page (#905)");
+    await page.getByRole("heading", { name: "Sign in to Starbridge" }).waitFor();
+    const html = await (await fetch(ORIGIN, { headers: { cookie: "sb_desktop=1" } })).text();
+    assert.ok(!html.includes("Know the moment"), "the server sent the app the landing page");
+    assert.equal(await page.getByRole("button", { name: "Use your own server" }).count(), 0);
+    await page.getByText("Opens your browser.").waitFor();
+
     step("sign in with GitHub (stub) through the browser, and set up the app as the first device");
     // Clicked in the page: Playwright's click would wait for a navigation the app cancels.
     await page
@@ -181,6 +188,11 @@ try {
     await app.evaluate(({ app }, link) => {
       app.emit("open-url", { preventDefault() {} }, link);
     }, next);
+    await page.getByText("This app creates your account's keys.").waitFor();
+    assert.match(
+      await page.getByLabel("Name this app").inputValue(),
+      /^Starbridge on (Mac|Linux)$/,
+    );
     await page.getByRole("button", { name: "Create the keys" }).click();
     await page.getByRole("heading", { name: "Save your recovery key" }).waitFor();
     await page.getByLabel(/I wrote this key down/).check();

@@ -69,6 +69,7 @@ import {
 } from "@starbridge/protocol";
 import { ApiError, api, backoff, type Stored } from "./api";
 import { generateDeviceKeys, sealOpener, signer } from "./crypto/keys";
+import { desktop } from "./desktop";
 import { otherServer } from "./otherServer";
 import * as store from "./store";
 import type {
@@ -120,6 +121,9 @@ function randomId(prefix: string): string {
 /** A default device name from the user agent, such as "Firefox on Mac". */
 export function defaultName(): string {
   const ua = navigator.userAgent;
+  // The desktop app names itself, not the Chromium inside it (#905).
+  if (desktop)
+    return `Starbridge on ${/Windows/.test(ua) ? "Windows" : /Linux/.test(ua) ? "Linux" : "Mac"}`;
   const browser = /Edg\//.test(ua)
     ? "Edge"
     : /Firefox\//.test(ua)
@@ -967,7 +971,11 @@ export interface RecoveryState {
 
 export async function recoveryState(ctx: Ctx): Promise<RecoveryState> {
   const name = (id: string) =>
-    id === ctx.device.id ? "this browser" : (ctx.dir.members.get(id)?.member.name ?? id);
+    id === ctx.device.id
+      ? desktop
+        ? "this app"
+        : "this browser"
+      : (ctx.dir.members.get(id)?.member.name ?? id);
   const set = ctx.dir.recoverySet;
   const joined = ctx.entries.findIndex((env) => {
     const body = DirectoryEntry.parse(JSON.parse(env.body));
