@@ -4,7 +4,6 @@
  * The agent and the CLI's own path (no agent) share this file and the state file.
  */
 import { randomBytes } from "node:crypto";
-import { basename } from "node:path";
 import {
   checkPermissionAnswer,
   type Directory,
@@ -38,6 +37,7 @@ import {
 } from "./context";
 import { OPENCODE_TITLE } from "./opencode";
 import { piSessionTitle } from "./pi";
+import { projectName } from "./project";
 
 /**
  * What Claude Code's `PermissionRequest` hook gets on stdin (fields Starbridge reads). The Pi
@@ -389,7 +389,7 @@ export function permissionSource(
   const title =
     claude?.title ?? piSessionTitle(env) ?? (env[OPENCODE_TITLE]?.slice(0, 200) || undefined);
   return {
-    project: basename(typeof hook.cwd === "string" && hook.cwd ? hook.cwd : process.cwd()),
+    project: projectName(typeof hook.cwd === "string" && hook.cwd ? hook.cwd : process.cwd()),
     session,
     ...(title ? { sessionTitle: title } : {}),
     ...(claude?.links.length ? { links: claude.links } : {}),

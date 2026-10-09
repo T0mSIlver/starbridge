@@ -3,6 +3,7 @@ package dev.starbridge.app.ui.inbox
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -15,12 +16,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import dev.starbridge.app.data.Source
 import dev.starbridge.app.data.openLink
@@ -103,15 +102,6 @@ fun middle(text: String, max: Int): String {
     return text.take(head) + "…" + text.takeLast(max - 1 - head)
 }
 
-private val UUID_RE = Regex("^[0-9a-fA-F]{8}-[0-9a-fA-F-]+$")
-
-/** The session's title, else its id: a UUID's first 8 characters. */
-fun sessionName(s: Source) = when {
-    !s.title.isNullOrBlank() -> s.title
-    UUID_RE.matches(s.session) -> s.session.take(8)
-    else -> s.session
-}
-
 /**
  * The agent's app, by the machine's word for it or, when it sends none, by the session's link. An agent this app does not know gets no "Open in".
  */
@@ -123,45 +113,43 @@ fun agentName(agent: String?, source: Source) = when {
 }
 
 /**
- * The end of every detail: the session's name, middle-truncated, and "Open in Claude" or
- * "Open in Codex" when the session has a link this phone can open.
+ * The end of every detail (#970): [leading], the quiet actions, then the session's name,
+ * middle-truncated, opening the session in Claude or Codex when the phone can. A session with no
+ * name the owner gave shows "Open in Claude" alone: its id says nothing.
  */
 @Composable
-fun SessionLine(source: Source, agent: String?, modifier: Modifier = Modifier) {
+fun SessionLine(source: Source, agent: String?, modifier: Modifier = Modifier, leading: @Composable RowScope.() -> Unit = {}) {
     val context = LocalContext.current
     val scheme = MaterialTheme.colorScheme
-    val name = sessionName(source)
+    val name = source.title?.trim().orEmpty()
     val link = source.links.firstOrNull { it.kind != "desktop" }
     val app = agentName(agent, source)
-    if (name.isBlank() && link == null) return
+    val opens = link != null && app != null
     Row(modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.s3)) {
-        // A title is words; only a bare session id is set as code (#563).
-        val nameStyle = if (source.title.isNullOrBlank()) SpanStyle(color = scheme.onSurface, fontFamily = StarbridgeTheme.type.code.fontFamily, fontSize = StarbridgeTheme.type.meta.fontSize)
-        else SpanStyle(color = scheme.onSurface)
-        val line = { max: Int ->
-            buildAnnotatedString {
-                if (name.isNotBlank()) {
-                    append("Session ")
-                    withStyle(nameStyle) { append(middle(name, max)) }
+        leading()
+        val style = StarbridgeTheme.type.small.copy(textDecoration = if (opens) TextDecoration.Underline else null)
+        val measurer = rememberTextMeasurer()
+        BoxWithConstraints(Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) {
+            val text = when {
+                name.isNotEmpty() -> {
+                    // Cut in the middle only when the line runs out of room, as on the web (#172).
+                    val room = constraints.maxWidth - with(LocalDensity.current) { (Spacing.s5 + Spacing.s1).roundToPx() }
+                    val max = (name.length downTo 8).firstOrNull { measurer.measure(middle(name, it), style, maxLines = 1).size.width <= room } ?: 8
+                    middle(name, max)
+                }
+                opens -> "Open in $app"
+                else -> ""
+            }
+            if (text.isNotEmpty()) {
+                Row(
+                    if (opens) Modifier.clickable(onClickLabel = "Open the session in $app") { openLink(context, link!!.url) }.padding(vertical = Spacing.s3) else Modifier.padding(vertical = Spacing.s3),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.s1),
+                ) {
+                    Text(text, style = style, color = if (opens) scheme.onSurface else scheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    if (opens) Symbol(Sym.Open, size = Spacing.s5, tint = scheme.onSurfaceVariant)
                 }
             }
-        }
-        val measurer = rememberTextMeasurer()
-        val style = StarbridgeTheme.type.small
-        BoxWithConstraints(Modifier.weight(1f)) {
-            // Cut in the middle only when the line runs out of room, as on the web (#172).
-            val room = constraints.maxWidth
-            val max = (name.length downTo 8).firstOrNull { measurer.measure(line(it), style, maxLines = 1).size.width <= room } ?: 8
-            Text(line(max), style = style, color = scheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        }
-        if (link != null && app != null) {
-            Text(
-                "Open in $app",
-                style = StarbridgeTheme.type.small.copy(textDecoration = TextDecoration.Underline),
-                color = scheme.onSurface,
-                maxLines = 1,
-                modifier = Modifier.clickable(onClickLabel = "Open the session") { openLink(context, link.url) }.padding(vertical = Spacing.s3),
-            )
         }
     }
 }

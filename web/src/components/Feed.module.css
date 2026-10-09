@@ -93,7 +93,6 @@
 .sessionName {
   display: flex;
   min-width: 0;
-  color: var(--fg2);
   white-space: nowrap;
 }
 
@@ -107,7 +106,6 @@
 
 .sessionHead {
   min-width: 0;
-  margin-left: 0.5ch;
   overflow: hidden;
   text-overflow: ellipsis;
 }
@@ -116,10 +114,20 @@
   flex: none;
 }
 
+/* The session, at the end of the line: its name opens it, with the external-link mark. */
 .open {
+  display: flex;
+  align-items: center;
+  gap: var(--s1);
+  min-width: 0;
   margin-left: auto;
+  color: var(--fg2);
   white-space: nowrap;
   text-underline-offset: 3px;
+}
+
+.open svg {
+  flex: none;
 }
 
 .thumbs {

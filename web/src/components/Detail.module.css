@@ -228,3 +228,15 @@
     flex: 1 1 auto;
   }
 }
+
+/* Key hints wait for the pointer on the answers, or focus in them: on a keyboard's first press
+   they are already there to read (#970). */
+.key {
+  transition: opacity var(--t-fast) var(--ease);
+}
+
+@media (hover: hover) {
+  .actions:not(:hover, :focus-within) .key {
+    opacity: 0;
+  }
+}

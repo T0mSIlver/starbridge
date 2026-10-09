@@ -10,7 +10,6 @@
  * `AskUserQuestion` and `hook question` do the same for questions asked in the terminal, Claude
  * Code's and opencode's: they race the picker (#848).
  */
-import { basename } from "node:path";
 import type { Answer, Permission } from "@starbridge/protocol";
 import { MAX_HOLD_SECONDS } from "./agent/api";
 import { type AgentClient, Interrupted, withAgent } from "./agent/client";
@@ -38,6 +37,7 @@ import {
   postSettled,
   waitingFor,
 } from "./permissions";
+import { projectName } from "./project";
 import { untilRan } from "./ran";
 
 /** Slack past a held request's `wait` before the hook gives up on the agent. */
@@ -369,7 +369,7 @@ async function racePicker(
         ...questionInput({ ...q, multiple: q.multiSelect }),
         agent: "claude-code",
         session: sessionId,
-        project: basename(cwd),
+        project: projectName(cwd),
         held: true,
         picker: sessionId,
         waiting: true,
@@ -533,7 +533,7 @@ export async function hookQuestion(
           ...questionInput(q),
           agent: "opencode",
           session: hook.session_id,
-          project: basename(hook.cwd || process.cwd()),
+          project: projectName(hook.cwd || process.cwd()),
           held: true,
         };
         const how = { wait: true, json: true };

@@ -63,8 +63,9 @@ function useKeys(on: boolean, handler: (key: string) => boolean) {
   }, [on]);
 }
 
+/** A key's hint, shown while the pointer is on the answers or one has focus (#970). */
 const Kbd = ({ k }: { k: string }) => (
-  <span className={`t-key ${ui.kbd}`} aria-hidden="true">
+  <span className={`t-key ${ui.kbd} ${s.key}`} aria-hidden="true">
     {k}
   </span>
 );
@@ -261,38 +262,6 @@ export function QuestionDetail({
       {d.replies && options.length > 0 && (
         <FreeText id={d.id} sending={sending} onSend={(t) => send({ text: t })} />
       )}
-      {!closed && (
-        // Quiet, so the answer stays above: Done for a page's answer (#539), and putting it off
-        // (#571).
-        <div className={s.quiet}>
-          {d.answerIn && d.done && (
-            <button
-              type="button"
-              className={`t-small ${s.link} ${s.reply}`}
-              disabled={sending}
-              onClick={() => send({ done: true })}
-            >
-              Done
-            </button>
-          )}
-          <SnoozeMenu
-            label={snoozed ? "Snooze again" : "Snooze"}
-            className={`t-small ${s.link} ${s.reply}`}
-            disabled={snoozeSend.sending}
-            onSnooze={(until) => snoozeSend.send(until)}
-          />
-          {snoozed && (
-            <button
-              type="button"
-              className={`t-small ${s.link} ${s.reply}`}
-              disabled={snoozeSend.sending}
-              onClick={() => snoozeSend.send(new Date())}
-            >
-              Back now
-            </button>
-          )}
-        </div>
-      )}
       {snoozeSend.error && (
         <p className={ui.error} role="alert">
           Not snoozed: {snoozeSend.error}
@@ -308,7 +277,40 @@ export function QuestionDetail({
           Not sent: {item.notSent}
         </p>
       )}
-      <SessionLine source={d.source} agent={agentOf(d)} />
+      {/* Quiet, so the answer stays above: Done for a page's answer (#539), and putting it off
+          (#571), on the session's line (#970). */}
+      <SessionLine source={d.source} agent={agentOf(d)}>
+        {!closed && (
+          <div className={s.quiet}>
+            {d.answerIn && d.done && (
+              <button
+                type="button"
+                className={`t-small ${s.link} ${s.reply}`}
+                disabled={sending}
+                onClick={() => send({ done: true })}
+              >
+                Done
+              </button>
+            )}
+            <SnoozeMenu
+              label={snoozed ? "Snooze again" : "Snooze"}
+              className={`t-small ${s.link} ${s.reply}`}
+              disabled={snoozeSend.sending}
+              onSnooze={(until) => snoozeSend.send(until)}
+            />
+            {snoozed && (
+              <button
+                type="button"
+                className={`t-small ${s.link} ${s.reply}`}
+                disabled={snoozeSend.sending}
+                onClick={() => snoozeSend.send(new Date())}
+              >
+                Back now
+              </button>
+            )}
+          </div>
+        )}
+      </SessionLine>
     </article>
   );
 }

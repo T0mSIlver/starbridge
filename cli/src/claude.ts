@@ -5,7 +5,7 @@ import type { SessionLink } from "@starbridge/protocol";
 /**
  * What `ask` fills in about the Claude Code session that runs it, from the record Claude Code
  * keeps for each running session in `~/.claude/sessions/<pid>.json` (SPEC.md, "Platform
- * facts"): its `name`, `bridgeSessionId` while Remote Control is on, and `hostSessionId`
+ * facts"): its `name` unless Claude Code derived it, `bridgeSessionId` while Remote Control is on, and `hostSessionId`
  * when Claude Desktop runs it.
  */
 export interface ClaudeSession {
@@ -16,6 +16,8 @@ export interface ClaudeSession {
 interface SessionRecord {
   sessionId?: unknown;
   name?: unknown;
+  /** "derived" for a name Claude Code made up from the directory, "user" for one the owner gave. */
+  nameSource?: unknown;
   bridgeSessionId?: unknown;
   hostSessionId?: unknown;
   updatedAt?: unknown;
@@ -75,6 +77,7 @@ export function claudeSession(
   const host = str(found.hostSessionId);
   if (host && SAFE_ID.test(host))
     links.push({ kind: "desktop", url: `claude://claude.ai/epitaxy/${host}` });
-  const title = str(found.name)?.trim().slice(0, 200);
+  // A made-up name ("starbridge-4c") repeats the project and says nothing more (#970).
+  const title = found.nameSource === "derived" ? undefined : str(found.name)?.trim().slice(0, 200);
   return { ...(title ? { title } : {}), links };
 }
