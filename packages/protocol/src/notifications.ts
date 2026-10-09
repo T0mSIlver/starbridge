@@ -18,3 +18,12 @@ export type DeviceNotifications = z.infer<typeof DeviceNotifications>;
 /** `GET /notifications`: each device that has said, by member id. */
 export const NotificationStates = z.object({ devices: z.record(z.string(), NotifyState) });
 export type NotificationStates = z.infer<typeof NotificationStates>;
+
+/**
+ * `GET /auth/app/signed-in?state=<challenge>`: whether the app whose sign-in this browser just
+ * carried now has a session for the caller's own account. The browser that passes an app's
+ * GitHub sign-in on runs on the app's own machine, so a yes is proof, not a guess, that both
+ * notify the same person there; the page then offers to turn off this browser's notifications.
+ */
+export const AppSignedIn = z.object({ signedIn: z.boolean() });
+export type AppSignedIn = z.infer<typeof AppSignedIn>;

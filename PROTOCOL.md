@@ -423,6 +423,7 @@ request without the header, or with one the server cannot read, is served.
 | `GET /auth/github/callback` | anyone | finish it, set the session, redirect to `/`; on failure redirect to `/?signin=declined`, `expired` (state missing or not this browser's, kept an hour), `paused` (sign-ups paused and no account yet), `limited` (too many new accounts from the address) or `failed` |
 | `GET /auth/github/callback/app` | anyone | the browser got the app's sign-in: redirect to `<APP_REDIRECT_URI>?code=<code>&state=<state>`, or GitHub's `error` instead of the code; 400 `bad-state` without them |
 | `POST /auth/app/session` | the app | `{code, verifier}`: GitHub's code → `{session}`; 400 `bad-code` when GitHub refuses the code: unknown, used, expired or not this verifier's; 403 `signups-paused` while sign-ups are paused and the GitHub user has no account |
+| `GET /auth/app/signed-in?state=<challenge>` | device | `{signedIn}`: true once the app whose challenge this is traded its code for a session of the caller's account (#943); the server keeps each challenge's account 10 minutes, in memory |
 | `POST /auth/owner` | anyone | self-hosted: `{token}` against `OWNER_TOKEN`; sets the session and returns `{session}` |
 | `POST /auth/logout` | device | end the session |
 | `GET /auth/challenge` | device | `{nonce, expiresInSeconds}`: one nonce per session, single use, 5 minutes; asking again returns the outstanding one |
@@ -575,6 +576,9 @@ own credentials; the payload is already ciphertext or an id. UnifiedPush always 
 Each device says whether it notifies (#943), so every device's Devices list can show them all.
 Only the device itself sets its state: a browser turned off drops its own Web Push
 subscription, and the server pushes to whatever subscriptions remain, as before.
+The page that hands an app's GitHub sign-in on (`/app/auth`) runs in a browser on the app's own
+machine. When that browser is a device of the same account, which `GET /auth/app/signed-in`
+says once the app has its session, the page offers to turn off this browser's notifications.
 
 | Route | Who | What |
 |---|---|---|
