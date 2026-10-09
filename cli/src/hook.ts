@@ -12,7 +12,7 @@
  */
 import { createHash } from "node:crypto";
 import { closeSync, mkdirSync, openSync, readdirSync, rmSync, statSync } from "node:fs";
-import { basename, join } from "node:path";
+import { join } from "node:path";
 import { type Answer, type Permission, ProtocolError } from "@starbridge/protocol";
 import type { SessionEvent } from "./agent/api";
 import { MAX_HOLD_SECONDS } from "./agent/api";
