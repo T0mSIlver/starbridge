@@ -807,6 +807,11 @@ async function one(s: Scenario, arm: string, rep: number): Promise<RunRecord> {
         text += new TextDecoder().decode(value);
       }
       await live.approve((/Pairing code: (\S+)/.exec(text) as RegExpExecArray)[1] as string);
+      // The owner confirms the check code (#814); `pair` shows it once it sees the approval.
+      for (let i = 0; i < 50; i++) {
+        if (spawnSync(join(bin, "starbridge"), ["pair", "--confirm"], { env }).status === 0) break;
+        await Bun.sleep(200);
+      }
       if ((await pairing.exited) !== 0) throw new Error("pairing failed");
     }
 
