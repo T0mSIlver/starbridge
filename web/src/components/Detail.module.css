@@ -9,7 +9,6 @@
 }
 
 .context {
-  gap: var(--s4);
   color: var(--fg2);
 }
 

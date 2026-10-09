@@ -243,6 +243,9 @@ class ScreenshotTest(private val dark: Boolean) {
         Phone(Tab.Inbox, 4) { Inbox() }
     }
 
+    // The context subset: bold, bullets and numbers with a hanging indent, links, code (#969).
+    @Test fun sheetFormatted() = capture("sheet-formatted") { QuestionSheet(fake.formatted) }
+
     @Test fun sheetFreeText() = capture("sheet-free-text") { QuestionSheet(fake.freeText) }
 
     @Test fun sheetAnswered() = capture("sheet-answered") { QuestionSheet(fake.decisions.first { it.id == "d4" }) }
