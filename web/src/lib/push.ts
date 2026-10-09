@@ -25,6 +25,8 @@ export async function pushState(): Promise<PushState> {
   if (needsHomeScreen(thisBrowser())) return "install";
   if (!supported()) return "unsupported";
   if (Notification.permission === "denied") return "denied";
+  // Off by the switch even when the browser kept its subscription: the server holds none.
+  if (getPref("pushOff")) return "off";
   const reg = await navigator.serviceWorker.getRegistration("/");
   const sub = await reg?.pushManager.getSubscription();
   return sub && Notification.permission === "granted" ? "on" : "off";
@@ -59,7 +61,8 @@ export async function disablePush(): Promise<PushState> {
       const { id } = await api.subscribe(json.endpoint, { p256dh: keys.p256dh, auth: keys.auth });
       await api.unsubscribe(id);
     }
-    await sub.unsubscribe();
+    // The server holds no subscription any more, so a push service out of reach changes nothing.
+    await sub.unsubscribe().catch(() => {});
   }
   return pushState();
 }

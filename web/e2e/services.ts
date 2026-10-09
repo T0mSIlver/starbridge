@@ -85,6 +85,11 @@ Bun.serve<{ uaid?: string }, never>({
           }),
         );
         log({ event: "subscribed", channel: msg.channelID });
+      } else if (msg.messageType === "unregister" && msg.channelID) {
+        channels.delete(msg.channelID);
+        ws.send(
+          JSON.stringify({ messageType: "unregister", channelID: msg.channelID, status: 200 }),
+        );
       } else if (msg.messageType === "ack") {
         log({ event: "ack", updates: (msg as { updates?: unknown }).updates });
       } else if (msg.messageType === "ping") {

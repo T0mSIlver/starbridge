@@ -1904,6 +1904,7 @@ async function main() {
   );
   const verifier = Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("base64url");
   const challenge = createHash("sha256").update(verifier).digest("base64url");
+  failPage = pageB;
   await pageB.goto(`${ORIGIN}/app/auth?code=stub-code&state=${challenge}`);
   await pageB.getByRole("link", { name: "Open Starbridge" }).waitFor();
   // The app trades the code, as the desktop app does once the browser hands it on.
@@ -1916,6 +1917,7 @@ async function main() {
   await pageB.getByRole("button", { name: "Turn off in this browser" }).click({ timeout: 15_000 });
   await pageB.getByText(/^This browser no longer notifies you/).waitFor();
   await shoot(pageB, "app-signin-handoff");
+  failPage = page;
   const devicesOf = (p: Page) => p.getByRole("region", { name: "Devices" });
   await page.goto(`${ORIGIN}/settings`);
   await devicesOf(page)
