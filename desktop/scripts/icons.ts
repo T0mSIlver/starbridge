@@ -3,7 +3,8 @@
 //   node desktop/scripts/icons.ts
 //
 // build/icon.png is the app icon: the launcher's tile on Apple's grid, 824 px of a 1024 canvas.
-// assets/tray*.png (and @2x) are the menu bar icons, below.
+// assets/tray*.png (and @2x) are the menu bar icons, below. build/background.png (and @2x) is the
+// DMG window's ground, below.
 import { writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { firefox } from "playwright";
@@ -43,22 +44,32 @@ const TRAYS = {
   trayWaitingDark: tray("#f1f1f1", "#f5a83b"),
 };
 
+// The DMG window (#972): the light scheme's `bg` and one arrow in `line-strong` from the app to
+// Applications, whose icons electron-builder.yml places at (170, 190) and (470, 190).
+const BACKGROUND = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 400">
+  <rect width="640" height="400" fill="#f4f4f4"/>
+  <g fill="none" stroke="#c6c6c6" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M272 190 H368 M354 176 L368 190 L354 204"/>
+  </g>
+</svg>`;
+
 const browser = await firefox.launch();
 const page = await browser.newPage();
 
-async function png(svg: string, size: number): Promise<Buffer> {
+async function png(svg: string, width: number, height = width): Promise<Buffer> {
   const src = `data:image/svg+xml;base64,${Buffer.from(svg).toString("base64")}`;
   const url = await page.evaluate(
-    async ([src, size]) => {
-      const img = new Image(size, size);
+    async ([src, width, height]) => {
+      const img = new Image(width, height);
       img.src = src;
       await img.decode();
       const c = document.createElement("canvas");
-      c.width = c.height = size;
-      c.getContext("2d")?.drawImage(img, 0, 0, size, size);
+      c.width = width;
+      c.height = height;
+      c.getContext("2d")?.drawImage(img, 0, 0, width, height);
       return c.toDataURL("image/png");
     },
-    [src, size] as const,
+    [src, width, height] as const,
   );
   return Buffer.from(url.split(",")[1] ?? "", "base64");
 }
@@ -68,4 +79,6 @@ for (const [name, svg] of Object.entries(TRAYS)) {
   writeFileSync(join(DESKTOP, `assets/${name}.png`), await png(svg, 18));
   writeFileSync(join(DESKTOP, `assets/${name}@2x.png`), await png(svg, 36));
 }
+writeFileSync(join(DESKTOP, "build/background.png"), await png(BACKGROUND, 640, 400));
+writeFileSync(join(DESKTOP, "build/background@2x.png"), await png(BACKGROUND, 1280, 800));
 await browser.close();
