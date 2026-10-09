@@ -8,6 +8,7 @@ export * from "./keys";
 export * from "./pace";
 export * from "./pairing";
 export * from "./permission";
+export * from "./notifications";
 export * from "./presence";
 export * from "./quotaAlerts";
 export * from "./readable";

@@ -570,6 +570,17 @@ own credentials; the payload is already ciphertext or an id. UnifiedPush always 
 | `GET /settings` | device | the account's settings, `{pushHold}`: seconds a push waits while the owner is present, 30 unless set |
 | `PUT /settings` | device | `{pushHold}`, 0 to 300 → the settings as stored |
 
+### Device notifications
+
+Each device says whether it notifies (#943), so every device's Devices list can show them all.
+Only the device itself sets its state: a browser turned off drops its own Web Push
+subscription, and the server pushes to whatever subscriptions remain, as before.
+
+| Route | Who | What |
+|---|---|---|
+| `PUT /notifications` | device | `{state: "on" \| "off" \| "blocked"}`: this device's own notifications → 204. `blocked` means the browser or Android refuses them |
+| `GET /notifications` | device | `{devices: {[memberId]: state}}`, for the account's active devices that have said |
+
 ### Limits
 
 These bound what one account, or one address, can make the server store or do. A rate limit
