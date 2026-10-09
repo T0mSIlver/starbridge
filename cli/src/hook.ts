@@ -1,9 +1,9 @@
 /**
- * The commands Claude Code's hooks run (#57). `hook permission` runs on `PermissionRequest`: it
- * posts the prompt, waits for a device's answer and prints it as the hook's decision. `hook
- * settle` runs on `PostToolUse`, `PostToolUseFailure`, `PermissionDenied`, `Stop` and
- * `SessionEnd`: the keyboard or the Claude app answered, so the waiting prompt is settled and its
- * hook lets go.
+ * The commands Claude Code's and Codex's hooks run (#57, #950). `hook permission` runs on
+ * `PermissionRequest`: it posts the prompt, waits for a device's answer and prints it as the
+ * hook's decision. `hook settle` runs on `PostToolUse`, `PostToolUseFailure`, `PermissionDenied`,
+ * `Stop` and `SessionEnd` (Codex: `Stop` and `Interrupt`): the keyboard or the Claude app
+ * answered, so the waiting prompt is settled and its hook lets go.
  *
  * Neither ever allows anything by itself: on any error, timeout or lost network they print
  * nothing and exit 0, and Claude Code's own dialog decides. `hook permission` on Claude Code's
@@ -13,7 +13,7 @@
 import type { Answer, Permission } from "@starbridge/protocol";
 import { MAX_HOLD_SECONDS } from "./agent/api";
 import { type AgentClient, Interrupted, withAgent } from "./agent/client";
-import type { PermissionWait } from "./agent/permissions";
+import type { PermissionPosted, PermissionWait } from "./agent/permissions";
 import { type Ctx, parseDuration, session, UsageError } from "./context";
 import {
   type AskInput,
@@ -55,10 +55,10 @@ function parseHook(text: string): PermissionHookInput & Record<string, unknown> 
 
 function agentName(text: string | undefined): Permission["agent"] {
   // Pi asks through the Starbridge Pi extension's link in pi-permission-system (#232), opencode
-  // through the Starbridge opencode plugin (#300).
-  if (text === "claude-code" || text === "pi" || text === "opencode") return text;
-  // Not Codex: its hook races its TUI in ways not yet worked out (#57).
-  throw new UsageError(`--agent: claude-code, pi or opencode (got ${text ?? "nothing"})`);
+  // through the Starbridge opencode plugin (#300), Codex through the Starbridge Codex plugin.
+  if (text === "claude-code" || text === "codex" || text === "pi" || text === "opencode")
+    return text;
+  throw new UsageError(`--agent: claude-code, codex, pi or opencode (got ${text ?? "nothing"})`);
 }
 
 /** How often the hook checks that the agent that ran it is still there. */
@@ -114,9 +114,13 @@ export async function hookPermission(
     const waitMs = opts.wait ? parseDuration(opts.wait) : DEFAULT_WAIT_MS;
     const deadline = ctx.now().getTime() + waitMs;
     const source = permissionSource(hook, ctx.env);
+    // Codex opens its dialog only once the hook returns without a decision, so the hook cannot
+    // race it: it hands over to the keyboard while the owner sits at this machine, which only
+    // the agent knows (#950). Without the agent it holds for the devices until the deadline.
+    const handOver = agent === "codex";
     const output = await withAgent(
       ctx,
-      (a) => viaAgent(ctx, a, { hook, agent, source, waitMs }, deadline),
+      (a) => viaAgent(ctx, a, { hook, agent, source, waitMs, handOver }, deadline),
       () => direct(ctx, { hook, agent, source, waitMs }, deadline),
     );
     if (output !== undefined) ctx.out(JSON.stringify(output));
@@ -129,7 +133,11 @@ export async function hookPermission(
   return 0;
 }
 
-type Ask = Parameters<typeof postPermission>[3] & { hook: PermissionHookInput };
+type Ask = Parameters<typeof postPermission>[3] & {
+  hook: PermissionHookInput;
+  /** Codex: the keyboard takes the prompt once the owner sits at this machine. */
+  handOver?: boolean;
+};
 
 async function viaAgent(
   ctx: Ctx,
@@ -139,13 +147,16 @@ async function viaAgent(
 ): Promise<unknown> {
   let id: string;
   try {
-    ({ id } = await agent.call<{ id: string }>(
+    const posted = await agent.call<PermissionPosted>(
       "POST",
       "/v1/permissions",
       ask,
       Math.max(1, deadline - ctx.now().getTime()),
       ctx.signal,
-    ));
+    );
+    // The owner sits at this machine: nothing was posted, and the dialog opens.
+    if (!posted.id) return undefined;
+    id = posted.id;
   } catch (e) {
     if (!(e instanceof Interrupted)) throw e;
     // The keyboard answered while the prompt was being posted: settle it by its call.
@@ -168,7 +179,7 @@ async function viaAgent(
       const r = await agent.call<PermissionWait>(
         "POST",
         `${path}/wait`,
-        { wait },
+        { wait, ...(ask.handOver ? { handOver: true } : {}) },
         wait * 1000 + SLACK_MS,
         ctx.signal,
       );
@@ -178,6 +189,7 @@ async function viaAgent(
     await agent.call("POST", `${path}/settle`, { outcome: "timeout" }, 5_000);
   } catch (e) {
     // Claude Code sends SIGTERM when the keyboard answers Esc or No; a Yes starts the call (#866).
+    // Codex kills the hook when the turn is interrupted, and the agent settles the prompt then.
     if (!(e instanceof Interrupted)) throw e;
     await agent.call("POST", `${path}/settle`, { outcome: "keyboard" }, 5_000);
   }
@@ -244,7 +256,7 @@ async function direct(ctx: Ctx, ask: Ask, deadline: number): Promise<unknown> {
   }
 }
 
-/** `starbridge hook settle --agent claude-code`, hook JSON on stdin. */
+/** `starbridge hook settle --agent claude-code|codex`, hook JSON on stdin. */
 export async function hookSettle(
   ctx: Ctx,
   stdin: string,

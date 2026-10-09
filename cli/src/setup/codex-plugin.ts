@@ -1,13 +1,15 @@
 /**
  * The Starbridge Codex plugin (#949): a `SessionStart` hook that adds the rule to each Codex
- * session, as the Claude Code plugin's does. Codex 0.160 installs plugins only from a
- * marketplace, so setup writes a local one under `$CODEX_HOME/starbridge` and installs the
- * plugin from it. The plugin's hook runs the script in that folder, not a copy in Codex's
- * plugin cache: a release then rewrites the script and the rule in place, and the hook Codex
- * trusted stays the same, so the owner is not asked to trust it again.
+ * session, as the Claude Code plugin's does, and a `PermissionRequest` hook that sends Codex's
+ * approvals to the devices (#950). Codex 0.160 installs plugins only from a marketplace, so setup
+ * writes a local one under `$CODEX_HOME/starbridge` and installs the plugin from it. The plugin's
+ * hooks run the scripts in that folder, not copies in Codex's plugin cache: a release then
+ * rewrites the scripts and the rule in place, and the hooks Codex trusted stay the same, so the
+ * owner is not asked to trust them again.
  */
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import cli from "../../../plugin/hooks/cli.sh" with { type: "text" };
 import rule from "../../../plugin/hooks/rule.md" with { type: "text" };
 import sessionStart from "../../../plugin/hooks/session-start.sh" with { type: "text" };
 import { marker, ours } from "./marker";
@@ -21,7 +23,7 @@ export const CODEX_PLUGIN = `starbridge@${CODEX_MARKETPLACE}`;
  * The plugin's version, which names its folder in Codex's cache. Raise it when `hooks.json`
  * changes, so `codex plugin add` installs the new one.
  */
-const PLUGIN_VERSION = "1.0.0";
+const PLUGIN_VERSION = "1.1.0";
 
 function codexHome(sys: Home): string {
   return sys.ctx.env.CODEX_HOME || join(sys.home, ".codex");
@@ -33,6 +35,7 @@ export function codexPluginDir(sys: Home): string {
 }
 
 const SCRIPT = "hooks/session-start.sh";
+const CLI = "hooks/cli.sh";
 const shellQuote = (s: string) => `'${s.replaceAll("'", `'\\''`)}'`;
 
 /** Every file of the marketplace, by path inside it. */
@@ -60,14 +63,32 @@ function files(sys: Home): Record<string, string> {
     "plugins/starbridge/hooks/hooks.json": hooksJson(dir),
     // The marker goes under the shebang; `ours` reads the first lines.
     [SCRIPT]: sessionStart.replace(/^(#!.*\n)/, `$1${marker("#")}\n`),
+    [CLI]: cli,
     "hooks/rule.md": rule,
   };
 }
 
+/**
+ * `PermissionRequest` gets 600 s, above the CLI's 570 s wait. A held prompt ends with its hook,
+ * which settles it; Codex kills the hook when the turn is interrupted, so `Interrupt` (3 s at
+ * most) settles the session's prompts, and `Stop` what is left.
+ */
 function hooksJson(dir: string): string {
-  const command = `sh ${shellQuote(join(dir, SCRIPT))}`;
+  const sh = (script: string, ...args: string[]) =>
+    [`sh ${shellQuote(join(dir, script))}`, ...args].join(" ");
+  const settle = sh(CLI, "hook", "settle", "--agent", "codex");
+  const entry = (command: string, timeout: number) => [
+    { hooks: [{ type: "command", command, timeout }] },
+  ];
   return `${JSON.stringify(
-    { hooks: { SessionStart: [{ hooks: [{ type: "command", command, timeout: 5 }] }] } },
+    {
+      hooks: {
+        SessionStart: entry(sh(SCRIPT), 5),
+        PermissionRequest: entry(sh(CLI, "hook", "permission", "--agent", "codex"), 600),
+        Stop: entry(settle, 30),
+        Interrupt: entry(settle, 3),
+      },
+    },
     null,
     2,
   )}\n`;
@@ -87,10 +108,18 @@ function enabled(sys: Home): boolean {
   return config.includes(`[plugins."${CODEX_PLUGIN}"]`);
 }
 
-/** Whether the owner trusted the plugin's hook: Codex records it as `[hooks.state."<plugin>:…"]`. */
+/**
+ * Whether the owner trusted every hook of the plugin: Codex records each as
+ * `[hooks.state."<plugin>:hooks/hooks.json:<event>:0:0"]`, the event in snake case. A release that
+ * adds a hook asks again.
+ */
 export function codexHookTrusted(sys: Home): boolean {
   const config = readText(join(codexHome(sys), "config.toml")) ?? "";
-  return config.includes(`[hooks.state."${CODEX_PLUGIN}:`);
+  const events = Object.keys(JSON.parse(hooksJson(codexPluginDir(sys))).hooks as object);
+  return events.every((event) => {
+    const snake = event.replace(/[a-z][A-Z]/g, (m) => `${m[0]}_${m[1]}`).toLowerCase();
+    return config.includes(`[hooks.state."${CODEX_PLUGIN}:hooks/hooks.json:${snake}:0:0"]`);
+  });
 }
 
 /** The `hooks.json` Codex runs, in its plugin cache. */

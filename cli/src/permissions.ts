@@ -233,12 +233,18 @@ const oneLine = (s: string, max: number) => {
   return flat.length <= max ? flat : `${flat.slice(0, max - 1)}…`;
 };
 
-/** Claude Code's shell tool, or Pi's. */
+/** Claude Code's and Codex's shell tool, or Pi's. */
 const isShell = (tool: string) => tool === "Bash" || tool === "bash";
 
+/** The files a Codex `apply_patch` touches, from its `*** Update File: <path>` lines. */
+function patchFiles(patch: string): string | undefined {
+  const files = [...patch.matchAll(/^\*\*\* (?:Add|Update|Delete) File: (.+)$/gm)].map((m) => m[1]);
+  return files.length > 0 ? files.join(", ") : undefined;
+}
+
 /**
- * One line: the Bash command, the edited path, the URL; else the tool and its input. `input` is
- * redacted already (`redactValue`).
+ * One line: the Bash command, the edited path or a Codex patch's files, the URL; else the tool
+ * and its input. `input` is redacted already (`redactValue`).
  */
 export function summarize(tool: string, input: unknown): string {
   const o = (input && typeof input === "object" ? input : {}) as Record<string, unknown>;
@@ -246,8 +252,10 @@ export function summarize(tool: string, input: unknown): string {
     keys.map((k) => o[k]).find((v): v is string => typeof v === "string" && v.length > 0);
   const main = isShell(tool)
     ? pick("command")
-    : (pick("file_path", "notebook_path", "path", "url", "query", "pattern", "preview") ??
-      `${tool} ${JSON.stringify(input) ?? ""}`);
+    : tool === "apply_patch"
+      ? patchFiles(pick("command") ?? "")
+      : (pick("file_path", "notebook_path", "path", "url", "query", "pattern", "preview") ??
+        `${tool} ${JSON.stringify(input) ?? ""}`);
   return oneLine(main ?? tool, SUMMARY_MAX) || tool;
 }
 

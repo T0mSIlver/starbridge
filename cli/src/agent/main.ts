@@ -31,12 +31,13 @@ export function makeAgent(ctx: Ctx, opts: AgentOpts = {}): Agent {
   const quota = { providers, intervalMs, ...(codexbar ? { codexbar } : {}) };
   const agent = new Agent(ctx, socket, (hub) => {
     const q = new Quota(hub, quota);
+    const presence = new Presence(hub);
     return [
       new Decisions(hub, (why) => q.now(why)),
       q,
-      new Permissions(hub),
+      new Permissions(hub, () => presence.present()),
       new Runs(hub),
-      new Presence(hub),
+      presence,
     ];
   });
   return agent;

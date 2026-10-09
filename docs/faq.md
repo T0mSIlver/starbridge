@@ -68,8 +68,8 @@ through a [Claude Code mod](https://code.claude.com/docs/en/plugins/mods/overvie
 runs inside Claude Code; its own `AskUserQuestion` on your phone as well as in the picker, first answer wins; and permission prompts if
 you turn them on. opencode gets the same through its plugin, its own `question` tool included.
 Pi gets the rules, the skill and answers into the live session through its package, and
-permission prompts with pi-permission-system. Codex gets the skill and answers into interactive
-sessions, but no rules and no permission prompts. Any other agent can run `starbridge ask` and
+permission prompts with pi-permission-system. Codex gets the rules and permission prompts through
+its plugin, the skill, and answers into interactive sessions. Any other agent can run `starbridge ask` and
 `starbridge wait`.
 [What each agent supports](tell-your-agents.md#what-each-agent-supports) has the details.
 

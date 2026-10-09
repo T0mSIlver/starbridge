@@ -20,6 +20,8 @@ export class Presence implements Feature {
   /** What the server last heard from this machine, and when. */
   private sent: { present: boolean; at: number } | undefined;
   private lastError: string | undefined;
+  /** The last read of this machine's screen, whatever the server heard. */
+  private here = false;
 
   constructor(
     private readonly hub: Hub,
@@ -35,6 +37,14 @@ export class Presence implements Feature {
       present: this.sent?.present === true,
       ...(this.lastError ? { lastError: this.lastError } : {}),
     };
+  }
+
+  /**
+   * Whether the owner sat at this machine at the last read, within READ_MS: a Codex permission
+   * prompt then goes to the keyboard (#950). False while presence is off.
+   */
+  present(): boolean {
+    return this.here;
   }
 
   private async send(present: boolean, signal?: AbortSignal): Promise<void> {
@@ -53,6 +63,10 @@ export class Presence implements Feature {
   async tick(now = Date.now()): Promise<void> {
     const screen = presenceEnabled(this.hub) ? await this.reader.read() : undefined;
     const present = screen !== undefined && isPresent(screen);
+    const arrived = present && !this.here;
+    this.here = present;
+    // Wakes the prompts that hand over to the keyboard once the owner is here.
+    if (arrived) this.hub.notify();
     if (present) {
       if (!this.sent?.present || now - this.sent.at >= PRESENCE_BEAT_MS) await this.send(true);
     } else if (this.sent?.present) await this.send(false);

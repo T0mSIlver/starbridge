@@ -14,7 +14,7 @@ instruction files, in your words. Starbridge never writes to them.
 | Answers into the live session | ✓ | ✓¹ | ✓³ | ✓⁵ |
 | "Waiting for you" | ✓ | ✓ | ✓ | ✓ |
 | Runs | ✓ | ✓⁸ | ✓ | ✓ |
-| Permission prompts | Opt-in | No | Opt-in⁴ | Opt-in⁶ |
+| Permission prompts | Opt-in | Opt-in⁹ | Opt-in⁴ | Opt-in⁶ |
 | The agent's own ask tool | ✓² | n/a | n/a | ✓⁷ |
 
 ¹ In interactive sessions, when `starbridge agent` runs (Codex CLI 0.160 or
@@ -58,6 +58,14 @@ allows it, reply with their names.
 sandbox, which has no network. The skill has Codex ask before the first run,
 so the wrapped command runs once, outside.
 
+⁹ Codex asks the Starbridge hook before it opens its own prompt, so the two
+can't both be open. With `starbridge config presence on`, a prompt goes to the
+terminal while you're at this machine and to your devices while you're away;
+when you sit back down, it moves to the terminal. Without presence, or on a
+machine with no screen, each prompt waits up to 10 minutes for your devices
+before Codex asks in the terminal. Your devices can allow a call once or deny
+it. Codex asks you once, at its next launch, to trust the plugin's hooks.
+
 `starbridge setup` installs Starbridge in each agent it finds, and prints one
 line per agent; `starbridge uninstall --agent <name>` removes it from one, and
 setup then leaves that agent alone until `starbridge setup --agent <name>`:
@@ -71,10 +79,11 @@ setup then leaves that agent alone until `starbridge setup --agent <name>`:
   Control.
 - Codex: the skill, in `~/.codex/skills/starbridge` (or under `$CODEX_HOME`),
   so it knows how to write a question, and the Starbridge Codex plugin, whose
-  session hook brings the rules above. Codex installs plugins from a
+  hooks bring the rules above and send permission prompts once you turn them on. Codex installs plugins from a
   marketplace, so setup writes a local one in `~/.codex/starbridge` and installs
-  the plugin from it. Codex asks once, at its next launch, to trust the hook;
-  until you trust it, sessions start without the rules. A later setup updates
+  the plugin from it. Codex asks once, at its next launch, to trust the hooks
+  ("Hooks need review"); until you trust them, sessions start without the rules,
+  and `codex exec` skips them without a word. A later setup updates
   the skill and the rules when the CLI carries newer ones. Codex runs commands in a sandbox with no network, so setup also writes
   `~/.codex/rules/starbridge.rules`, which runs `starbridge ask`, `waiting`,
   `working`, `wait` and `settle` outside it.

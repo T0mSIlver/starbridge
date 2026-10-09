@@ -799,6 +799,13 @@ input (Claude Code's `PermissionRequest` input carries no `tool_use_id`), and on
 once through the agent, or within 5 s on its own path. At the deadline the hook prints nothing,
 so the dialog decides, and posts `settled: timeout`.
 
+Codex's plugin runs `starbridge hook permission --agent codex`, with Claude Code's input and
+output and no suggestions, so an allow is once. Codex shows its dialog only after the hook
+returns, so through the agent the hook hands over to the keyboard: it posts nothing while the
+owner sits at this machine, and ends its hold, settled `keyboard`, once they do. Interrupting the
+turn kills the hook; `hook settle --agent codex` on `Interrupt` and `Stop` settles the session's
+prompts.
+
 ## Local agent API
 
 `starbridge agent` runs once per machine as a user service. It holds the machine's keys and its
@@ -844,8 +851,8 @@ for an unknown route or decision, 502 when the server refused or failed (`detail
 | `POST /sessions/:id/bye` | the session ended; its session-scoped state goes |
 | `GET /sessions/:id/events?wait=<s>` | `{events: [{type, ack, line, decisionId?}]}`: what the session has not confirmed, held up to `wait` while there is nothing |
 | `POST /sessions/:id/ack` | `{acks}`: confirm events by their `ack`; others' tokens do nothing |
-| `POST /permissions` | `{hook, agent, source: {project, session, sessionTitle?, links?}, waitMs}`: post a permission prompt from the hook's input → `{id}`; 403 `disabled` until `starbridge config permissions on` |
-| `POST /permissions/:id/wait` | `{wait}`: `{output}` once an accepted answer is in, the hook's stdout, handed out once; `{settled}` when the prompt ended another way; `{}` when `wait` passed; a hook that hangs up mid-hold and holds no more within 5 s is gone, and the prompt settles as `keyboard` |
+| `POST /permissions` | `{hook, agent, source: {project, session, sessionTitle?, links?}, waitMs, handOver?}`: post a permission prompt from the hook's input → `{id}`; with `handOver` (Codex), `{present: true}` and nothing posted while presence reads the owner at this machine; 403 `disabled` until `starbridge config permissions on` |
+| `POST /permissions/:id/wait` | `{wait, handOver?}`: `{output}` once an accepted answer is in, the hook's stdout, handed out once; `{settled}` when the prompt ended another way, `keyboard` with `handOver` once the owner sits at this machine; `{}` when `wait` passed; a hook that hangs up mid-hold and holds no more within 5 s is gone, and the prompt settles as `keyboard` |
 | `POST /permissions/:id/settle` | `{outcome: "keyboard" \| "timeout"}` → `{settled}`: the hook's wait ended without an answer |
 | `POST /sessions/:id/permissions/settle` | `{inputHash?}` → `{settled: [ids]}`: the keyboard answered the session's waiting prompt for that input, or all of them without `inputHash` |
 

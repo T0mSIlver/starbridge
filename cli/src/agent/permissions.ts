@@ -3,6 +3,10 @@
  * waits here, held requests of at most MAX_HOLD_SECONDS each. Answers come in through the answer
  * long-poll the decisions feature keeps open, which checks them and records them in the state;
  * a hold hands the answer out as the hook's output once, marking the prompt settled first.
+ *
+ * Codex runs its hook before its own dialog, which opens only once the hook returns without a
+ * decision (#950). Its hook asks to hand over: it posts nothing while the owner sits at this
+ * machine, and its hold ends, settled at the keyboard, as soon as they come back to it.
  */
 import { PermissionAgent } from "@starbridge/protocol";
 import { type Ctx, session } from "../context";
@@ -28,6 +32,13 @@ export interface PermissionWait {
   settled?: "keyboard" | "timeout" | "device";
 }
 
+/** What `POST /v1/permissions` returns: the prompt's id, or `present` when it handed over. */
+export interface PermissionPosted {
+  id?: string;
+  /** The owner sits at this machine: nothing was posted, and the keyboard takes the prompt. */
+  present?: true;
+}
+
 /**
  * How long a prompt whose hook hung up mid-hold waits for its next hold before it counts as
  * answered at the keyboard: the hook died with its agent (a closed terminal, a crash), and an
@@ -41,7 +52,11 @@ export class Permissions implements Feature {
   /** The holds open on each prompt. */
   private readonly holds = new Map<string, number>();
 
-  constructor(private readonly hub: Hub) {}
+  /** `present`: whether the owner sits at this machine (presence's last read). */
+  constructor(
+    private readonly hub: Hub,
+    private readonly present: () => boolean = () => false,
+  ) {}
 
   private get ctx(): Ctx {
     return this.hub.ctx;
@@ -59,7 +74,7 @@ export class Permissions implements Feature {
     {
       method: "POST",
       path: "/v1/permissions",
-      handle: async (req: Request) => {
+      handle: async (req: Request): Promise<PermissionPosted> => {
         if (!permissionsEnabled(this.ctx))
           throw new HttpError(403, "disabled", "run `starbridge config permissions on` first");
         const b = obj(req.body);
@@ -69,6 +84,7 @@ export class Permissions implements Feature {
           throw new HttpError(400, "bad-request", "agent is claude-code, codex or pi");
         if (typeof source.project !== "string" || typeof source.session !== "string")
           throw new HttpError(400, "bad-request", "source needs project and session");
+        if (b.handOver === true && this.present()) return { present: true };
         const waitMs = typeof b.waitMs === "number" ? b.waitMs : 0;
         const id = await postPermission(
           this.ctx,
@@ -97,7 +113,7 @@ export class Permissions implements Feature {
           );
         this.holds.set(id, (this.holds.get(id) ?? 0) + 1);
         try {
-          return await this.hold(id, end, req.signal);
+          return await this.hold(id, end, req.signal, b.handOver === true);
         } finally {
           const left = (this.holds.get(id) ?? 1) - 1;
           if (left > 0) this.holds.set(id, left);
@@ -143,8 +159,16 @@ export class Permissions implements Feature {
     return done;
   }
 
-  /** One hold on prompt `id`, until an answer, a settle, `end` or the hook hanging up. */
-  private async hold(id: string, end: number, signal: AbortSignal): Promise<PermissionWait> {
+  /**
+   * One hold on prompt `id`, until an answer, a settle, `end` or the hook hanging up; with
+   * `handOver`, also until the owner sits at this machine, which settles it at the keyboard.
+   */
+  private async hold(
+    id: string,
+    end: number,
+    signal: AbortSignal,
+    handOver: boolean,
+  ): Promise<PermissionWait> {
     while (true) {
       const p = this.ctx.store.state().permissions?.[id];
       const out = outcomeOf(p);
@@ -157,6 +181,11 @@ export class Permissions implements Feature {
         return { output: hookDecision(p) };
       }
       if (out.settled) return { settled: out.settled };
+      if (handOver && this.present()) {
+        const how = markSettled(this.ctx, id, "keyboard");
+        this.report(id, how);
+        return { settled: "keyboard" };
+      }
       if (signal.aborted || Date.now() >= end) return {};
       await this.hub.changed(end - Date.now(), signal);
     }

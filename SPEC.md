@@ -708,7 +708,6 @@ line, the safe side: at worst a prompt repeats an answer the agent already read.
 
 Off by default (#124): the Claude app already shows prompts for Remote Control sessions, and the
 gain is every session, machine and agent in one place. `starbridge config permissions on|off`.
-Codex prompts are not supported.
 
 - **Claude Code** (#57). A `PermissionRequest` command hook (600 s) races the dialog. Its input has
   no `tool_use_id`, so the hook settles a call by the hash of its `tool_input` on `PostToolUse`,
@@ -725,6 +724,16 @@ Codex prompts are not supported.
   for `addRules` and `addDirectories` suggestions whose rules fit in full; a `setMode` suggestion
   changes more than the call, so it stays at the keyboard. A deny with no message tells the agent
   the owner denied it.
+- **Codex** (#950), through the Starbridge Codex plugin's `PermissionRequest` hook (600 s), whose
+  output schema is Claude Code's. Codex runs the hook before its own dialog and opens the dialog
+  only once the hook returns without a decision, so the two cannot race. The hook hands over to
+  the keyboard instead, by presence (#848): with the owner at this machine it returns at once and
+  posts nothing; otherwise it holds the prompt for the devices and lets go, settled `keyboard`,
+  as soon as the owner sits down, within the agent's 10 s presence read. Without presence, or
+  without the agent, it holds until its 570 s run out and the dialog opens; `config permissions
+  on` says so. Interrupting the turn kills the hook, so the plugin's `Interrupt` and `Stop` hooks
+  settle the session's prompts. Codex rejects `updatedPermissions` from this hook, so devices
+  offer Allow once and Deny. A Codex `apply_patch` shows the files it touches.
 - **Pi** (#232, #288), through pi-permission-system's authorizer chain: the link `starbridge`,
   once the owner names it in `authorizerChain`. A link cannot allow for the session, so devices
   offer Allow and Deny. Asks on the `path` and `external_directory` families stay at the keyboard,
@@ -1405,7 +1414,10 @@ What the code relies on, with the versions checked.
 - **Codex** (CLI 0.160): the TUI runs sessions in a shared app-server daemon; `codex queue --thread
   <id> --message <text>` starts a turn in an idle session or runs next in a busy one, and starts
   the daemon itself. It takes the message only as an argument and refuses sub-agent threads. An
-  exec thread's rollout has `originator: codex_exec`. New or changed hooks need trust at launch:
+  exec thread's rollout has `originator: codex_exec`. `PermissionRequest` runs before the
+  approval dialog and blocks it; any deny among its hooks wins, else the last allow, else the
+  dialog opens. A hook that times out or fails decides nothing. Interrupting the turn kills a
+  running hook with SIGKILL, and `Interrupt` hooks get at most 3 s. New or changed hooks need trust at launch:
   the TUI asks ("Hooks need review"), `codex exec` skips an untrusted hook silently, and the
   trust goes in `config.toml` as `[hooks.state."<plugin>:hooks/hooks.json:<event>:<group>:<handler>"]`
   with a hash of the handler, not of the file. Plugins come from marketplaces, local or Git,
