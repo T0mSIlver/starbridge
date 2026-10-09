@@ -477,7 +477,8 @@ provider plugins add providers, not panels.
   lock screen (`LogonUI`) runs in its session; Linux takes logind's active graphical session and
   its `LockedHint`, and GNOME's idle monitor or `xprintidle`, since logind's `IdleHint` flips only
   after the desktop's idle delay, minutes. A headless box finds no graphical session and sends
-  nothing. Nothing reads what is typed.
+  nothing. Nothing reads what is typed. The desktop app reads the same on a Mac without the CLI,
+  under its own switch ("Desktop", "Presence").
 - **Answers on the machine** (#260). A machine accepts an answer only from a device the question
   was sealed to, only while it is open, and for an `answerIn` question only a Done, when it asked
   for one (#539). A settled question's
@@ -1246,6 +1247,18 @@ a browser; the app adds a menu bar light and notifications, so a web release nee
   already names the app and the page, and counts what needs the owner. The page leaves
   a 28 px band at its top for the window's buttons, which also drags the window; the window keeps
   the name "Starbridge" for Mission Control and the Window menu, whatever the page's title.
+- **Presence** (#945). The window in use holds pushes as a web page does (#848). Hidden, it said
+  absent while the owner worked in another app, so the phone buzzed at a desk. Electron's
+  `powerMonitor` reads what the CLI's machine presence reads: lock, sleep and wake always, and
+  the seconds since the Mac's last input once Settings' "Hold while you use this Mac" is on (off by
+  default). The app hands the page that reading over the bridge, and the page's own beacon sends
+  the one bit (`isPresent`, the CLI's threshold): present while the Mac is unlocked with input in
+  the last minute, window shown or not. Locked, asleep or quitting, the page says absent at once,
+  and the app waits up to 2 s on quit for the page to say so. The switch is the app's own, not
+  the machine's `starbridge config presence on`: the app cannot count on the CLI being on the Mac,
+  and where the agent's presence is on it already sends the same bit, so the switch is for Macs
+  without it. It is opt-in for the same reason as the machine's: it reports when the owner is at
+  the Mac. Lock and sleep need no opt-in, since they only end presence.
 - **`starbridge://pair` links** open `/pair` on the configured server, as the https link does. The
   link's check key stays out of the page, which the server writes; a link for another server is
   refused, with both servers named.

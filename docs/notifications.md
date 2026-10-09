@@ -75,7 +75,9 @@ machine, and stop with `starbridge config permissions off`.
 Settings → Notifications → Hold while you’re at a screen keeps a question off your other devices
 while you use Starbridge: a page or the app you touched in the last minute. If nothing answers it
 within the hold (30 s by default), they notify. A computer counts too once you run
-`starbridge config presence on` on it: unlocked and used in the last minute.
+`starbridge config presence on` on it: unlocked and used in the last minute. In the Mac app,
+Settings → Notifications → Hold while you use this Mac does the same without the CLI, window
+closed or not. A locked or sleeping Mac never counts.
 
 ## Which replaces which
 

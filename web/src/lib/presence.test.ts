@@ -72,3 +72,38 @@ test("a failed beat is tried again a beat later, and an idle tab leaves a busy s
   await idle.tick();
   expect(sent).toEqual([true]);
 });
+
+test("in the desktop app, the Mac's idle time keeps a hidden page present, and away ends it at once", async () => {
+  let now = 0;
+  let screen: { away: boolean; idleMs: number | null } | null = { away: false, idleMs: 5_000 };
+  const sent: boolean[] = [];
+  const b = new Beacon(
+    async (p) => {
+      sent.push(p);
+    },
+    () => false,
+    () => now,
+    () => false,
+    () => screen,
+  );
+  // Hidden, but the owner works in another app.
+  await b.tick();
+  expect(sent).toEqual([true]);
+  // Idle past the minute.
+  screen = { away: false, idleMs: 60_000 };
+  now = 10_000;
+  await b.tick();
+  expect(sent).toEqual([true, false]);
+  // Back, then locked: away even with input on the page a moment ago.
+  screen = { away: false, idleMs: 0 };
+  await b.tick();
+  b.input();
+  screen = { away: true, idleMs: 0 };
+  await b.tick();
+  expect(sent).toEqual([true, false, true, false]);
+  // Presence off: only the page's own use counts.
+  screen = { away: false, idleMs: null };
+  now = 80_000;
+  await b.tick();
+  expect(sent).toEqual([true, false, true, false]);
+});
