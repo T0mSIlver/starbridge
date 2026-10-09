@@ -972,7 +972,8 @@ first window, so a provider with a window running out leads.
   open prompts every 5 s rather than 20 s, as Android does at 10 s (#445): it cannot tell a browser
   without Web Push from a server that sends none, and the owner may be watching it for a question.
   That is 24 reads a minute per visible page, inside the per-address limit; 100 such pages cost
-  about a tenth of a core (#664 has the numbers). A hidden page still reads nothing.
+  about a tenth of a core (#664 has the numbers). A hidden page still reads nothing, except in
+  the desktop app, which notifies from its inbox and prompts and so reads them while hidden (#886).
 - **Notifications.** The service worker shows one per question and closes it once answered. Its
   actions answer only for the account it was shown for (#274). Signing out, revocation or adopting
   new keys closes them all (#311).
