@@ -58,8 +58,14 @@ export async function disablePush(): Promise<PushState> {
     const keys = json.keys as { p256dh?: string; auth?: string } | undefined;
     // The server returns a known endpoint's id when it is sent again.
     if (json.endpoint && keys?.p256dh && keys.auth) {
-      const { id } = await api.subscribe(json.endpoint, { p256dh: keys.p256dh, auth: keys.auth });
-      await api.unsubscribe(id);
+      try {
+        const { id } = await api.subscribe(json.endpoint, { p256dh: keys.p256dh, auth: keys.auth });
+        await api.unsubscribe(id);
+      } catch (e) {
+        // The server still pushes here: on it stays, and so does what it reports.
+        setPref("pushOff", false);
+        throw e;
+      }
     }
     // The server holds no subscription any more, so a push service out of reach changes nothing.
     await sub.unsubscribe().catch(() => {});
