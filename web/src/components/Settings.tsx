@@ -17,6 +17,7 @@ import { AGENTS_GUIDE } from "@/lib/links";
 import { applyTheme, type Prefs, usePref } from "@/lib/prefs";
 import type { PushState } from "@/lib/push";
 import { holdsQuotas, providerOrder, type QuotaSettings } from "@/lib/quotaSettings";
+import { keptSettingsData, loadSettingsData, type SettingsData } from "@/lib/settingsData";
 import { chime } from "@/lib/sound";
 import type { Device, QuotaCardData } from "@/lib/types";
 import { useApp } from "./AppProvider";
@@ -27,6 +28,8 @@ import s from "./Settings.module.css";
 import ui from "./ui.module.css";
 
 const load = () => import("@/lib/device");
+/** How long the sections wait for a part that hangs. */
+const WAIT_MS = 2_000;
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
 export function Section({ title, children }: { title: string; children: React.ReactNode }) {
@@ -155,11 +158,11 @@ function InboxSection() {
 }
 
 /** What decides whether something notifies here (#914): the browser, sound, and the hold. */
-function NotificationSection() {
+function NotificationSection({ data }: { data: SettingsData }) {
   const [sound, setSound] = usePref("sound");
   return (
     <Section title="Notifications">
-      <BrowserRow />
+      <BrowserRow initial={data.push} />
       <Row label="Sound for new questions" sub="While a Starbridge page is open">
         <Switch
           label="Sound for new questions"
@@ -170,19 +173,17 @@ function NotificationSection() {
           }}
         />
       </Row>
-      <HoldRow />
+      <HoldRow initial={data.pushHold} />
     </Section>
   );
 }
 
 /** Whether this browser gets Web Push, and the way to turn it on; the desktop app has its own. */
-function BrowserRow() {
-  const [state, setState] = useState<PushState>();
+function BrowserRow({ initial }: { initial: PushState }) {
+  const [state, setState] = useState(initial);
   const [error, setError] = useState<string>();
-  useEffect(() => {
-    import("@/lib/push").then((p) => p.pushState()).then(setState);
-  }, []);
-  if (state === undefined || state === "unsupported") return null;
+  useEffect(() => setState(initial), [initial]);
+  if (state === "unsupported") return null;
   const sub =
     error ??
     {
@@ -225,18 +226,12 @@ const HOLD_LABELS: Record<(typeof PUSH_HOLD_CHOICES)[number], string> = {
 
 /**
  * How long other devices' notifications wait while you use a screen (#848): an account setting,
- * since the server holds the pushes. Shown once the server says what it is.
+ * since the server holds the pushes. A server without the setting shows nothing.
  */
-function HoldRow() {
-  const [hold, setHold] = useState<number | undefined>();
+function HoldRow({ initial }: { initial: number | undefined }) {
+  const [hold, setHold] = useState(initial);
   const [error, setError] = useState<string | undefined>();
-  useEffect(() => {
-    api.settings().then(
-      (s) => setHold(s.pushHold),
-      // A server without the setting: nothing to show.
-      () => {},
-    );
-  }, []);
+  useEffect(() => setHold(initial), [initial]);
   if (hold === undefined) return null;
   return (
     <Row
@@ -352,10 +347,7 @@ export function setWindowAlerts(
  * owner may never use CodexBar, and the page stays about agents.
  */
 function QuotaSections() {
-  const { quotas, refreshQuotas } = useApp();
-  useEffect(() => {
-    refreshQuotas().catch(() => {});
-  }, [refreshQuotas]);
+  const { quotas } = useApp();
   if (!holdsQuotas(quotas)) return null;
   return <QuotaSection />;
 }
@@ -505,21 +497,29 @@ function HostName({ name }: { name: string }) {
   ));
 }
 
-function DeviceSection() {
+function DeviceSection({ data }: { data: SettingsData }) {
   const { update, boot, sampleDevices } = useApp();
   const ctx = boot.state === "ready" ? boot.ctx : undefined;
-  const [all, setAll] = useState<Device[] | undefined>(sampleDevices);
+  const [all, setAll] = useState<Device[] | undefined>(sampleDevices ?? data.devices);
   const [revoking, setRevoking] = useState<Device>();
-  const [recovery, setRecovery] = useState<RecoveryState>();
+  const [recovery, setRecovery] = useState<RecoveryState | undefined>(data.recovery);
   const [clock] = usePref("clock");
   useEffect(() => {
-    if (ctx)
-      load()
-        .then(async (d) => {
-          setAll(d.devices(ctx));
-          setRecovery(await d.recoveryState(ctx));
-        })
-        .catch(() => setAll([]));
+    if (!data.devices) return;
+    setAll(data.devices);
+    setRecovery(data.recovery);
+  }, [data]);
+  // After a revoke, a new ctx: read the devices again.
+  const first = useRef(ctx);
+  useEffect(() => {
+    if (!ctx || ctx === first.current) return;
+    first.current = ctx;
+    load()
+      .then(async (d) => {
+        setAll(d.devices(ctx));
+        setRecovery(await d.recoveryState(ctx));
+      })
+      .catch(() => setAll([]));
   }, [ctx]);
   const order = (d: Device) => (d.self ? 0 : d.role === "device" ? 1 : 2);
   const shown = (all ?? [])
@@ -716,18 +716,53 @@ function LookSection() {
   );
 }
 
+/**
+ * The sections show once what they need has arrived, all at once, so the page lays out once
+ * (#937): the account's hold, this browser's push, the devices and the quotas. A visit after the
+ * first shows the last load at once and refreshes it underneath.
+ */
 export function Settings() {
+  const { boot, refreshQuotas } = useApp();
+  const ctx = boot.state === "ready" ? boot.ctx : undefined;
+  const [data, setData] = useState(() => keptSettingsData(ctx));
+  const [quotasIn, setQuotasIn] = useState(() => !!keptSettingsData(ctx));
+  useEffect(() => {
+    let live = true;
+    loadSettingsData(ctx).then(
+      (d) => live && setData(d),
+      () => {},
+    );
+    // A part that hangs arrives late rather than holding the page.
+    const late = setTimeout(() => {
+      setData((d) => d ?? { push: "unsupported" });
+      setQuotasIn(true);
+    }, WAIT_MS);
+    return () => {
+      live = false;
+      clearTimeout(late);
+    };
+  }, [ctx]);
+  useEffect(() => {
+    refreshQuotas()
+      .catch(() => {})
+      .finally(() => setQuotasIn(true));
+  }, [refreshQuotas]);
+  const ready = !!data && quotasIn;
   return (
     <>
       <PhoneBar title="Settings" find={false} />
       <div className={s.page}>
         <h1 className={`t-heading ${s.title}`}>Settings</h1>
-        <NotificationSection />
-        <QuotaSections />
-        <InboxSection />
-        <DeviceSection />
-        <LookSection />
-        <AccountSection />
+        {ready && data && (
+          <>
+            <NotificationSection data={data} />
+            <QuotaSections />
+            <InboxSection />
+            <DeviceSection data={data} />
+            <LookSection />
+            <AccountSection />
+          </>
+        )}
       </div>
     </>
   );
