@@ -203,6 +203,15 @@ try {
     await page.getByLabel("Pair a machine or device").fill(code);
     await page.getByRole("button", { name: "Check code" }).click();
     await page.getByRole("button", { name: "Approve" }).click();
+    // The owner's side of the check code (#795): the window shows what the terminal printed, and
+    // `pair --confirm` answers the terminal's question.
+    const printed = (await pair.waitFor(/Check code: (\S+)/))[1] as string;
+    assert.equal(await page.getByTestId("check-code").textContent(), `Check code ${printed}`);
+    assert.equal(
+      await cli("confirm", ["pair", "--confirm"], machine).exited,
+      0,
+      "pair --confirm failed",
+    );
     await pair.waitFor(/✓ Paired as devbox/);
     assert.equal(await pair.exited, 0, "pair failed");
     await page.getByRole("link", { name: /^Inbox/ }).click();
