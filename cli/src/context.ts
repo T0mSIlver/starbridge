@@ -2,7 +2,6 @@ import {
   activeMembers,
   type Directory,
   type DirectoryHead,
-  holdsHead,
   type MachineKind,
   type Member,
   type MemberKeys,
@@ -97,28 +96,18 @@ export function signedHead(dir: Directory): DirectoryHead {
 
 /**
  * Whether a device signed a head the machine's chain `entries` lacks, and why that holds. Either
- * the device is active in `dir`, so the server is holding back entries, perhaps the revocation
- * of a device in `dir`; or a `revoke` entry names it. A device signs no head past its own
- * revocation, so that chain forks from the one the device saw: a revoked device can extend a
- * stale chain and revoke the device that revoked it (#794). Only a `recover`, which no device
- * signs, or pairing again ends that hold. Says which, or undefined.
+ * the server is holding back entries, perhaps the revocation of a device in `dir`; or a `revoke`
+ * entry names that device. A device signs no head past its own revocation, so that chain forks
+ * from the one the device saw: a revoked device can extend a stale chain and revoke the device
+ * that revoked it (#794). Only a `recover`, which no device signs, or pairing again ends that
+ * hold. Says which, or undefined.
  */
 export function withheld(st: State, dir: Directory, entries: unknown[]): string | undefined {
-  const heads = st.heads ?? {};
-  const held = withheldBy(heads, dir, entries);
-  if (held)
-    return `the server is holding back directory entries ${held.id} has seen (${held.head.length}, this machine has ${dir.length})`;
-  for (const [id, head] of Object.entries(heads))
-    if (!holdsHead(entries, head) && revokes(entries, id))
-      return `${id} signed a chain this machine does not hold (${head.length}), and this machine's chain revokes it: the server may be serving a fork. If you revoked ${id} because it was compromised, run \`starbridge pair --force\``;
-  return undefined;
-}
-
-function revokes(entries: unknown[], id: string): boolean {
-  return entries.some((e) => {
-    const body = JSON.parse((e as { body: string }).body) as { op?: string; id?: string };
-    return body.op === "revoke" && body.id === id;
-  });
+  const held = withheldBy(st.heads ?? {}, dir, entries);
+  if (!held) return undefined;
+  if (held.revoked)
+    return `${held.id} signed a chain this machine does not hold (${held.head.length}), and this machine's chain revokes it: the server may be serving a fork. If you revoked ${held.id} because it was compromised, run \`starbridge pair --force\``;
+  return `the server is holding back directory entries ${held.id} has seen (${held.head.length}, this machine has ${dir.length})`;
 }
 
 /**

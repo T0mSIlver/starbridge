@@ -18,8 +18,10 @@ import {
   type Directory,
   encodeCrockford,
   entryHash,
+  forgetHeads,
   formatPairingCode,
   genesisEntry,
+  type Heads,
   hashInput,
   joinApproval,
   joinCommitment,
@@ -28,6 +30,7 @@ import {
   type Member,
   type MemberKeys,
   memberKeysFromSeeds,
+  noteHead,
   pairingApproval,
   pairingKey,
   pairingLink,
@@ -49,6 +52,7 @@ import {
   signatureMessage,
   toB64,
   verifyDirectory,
+  withheldBy,
 } from "../src/index";
 import { concat, fromB64, sodium, utf8 } from "../src/sodium";
 
@@ -2012,7 +2016,143 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
     ],
   };
 
+  // --- heads.json ---
+  // The phone adds the stolen phone (phone2) and the dev box; truth: the phone revokes phone2,
+  // which the server hides. Forks the server can make with phone2's keys revoke the dev box or the
+  // phone instead; a recover ends every hold.
+  const base: SignedEnvelope[] = [chain[0] as SignedEnvelope];
+  const grow = (from: SignedEnvelope[], make: (d: Directory) => SignedEnvelope) => [
+    ...from,
+    make(verifyDirectory(from)),
+  ];
+  const b1 = grow(base, (d) => addEntry(d, signer(phone), phone2.member, T(11)));
+  const stale = grow(b1, (d) => addEntry(d, signer(phone), devbox.member, T(11, 5)));
+  const chains = {
+    stale,
+    truth: grow(stale, (d) => revokeEntry(d, signer(phone), "phone2", T(11, 10))),
+    forkRevokesMachine: grow(stale, (d) => revokeEntry(d, signer(phone2), "devbox", T(11, 10))),
+    forkRevokesBy: grow(stale, (d) => revokeEntry(d, signer(phone2), "phone", T(11, 10))),
+    recovered: grow(stale, (d) => recoverEntry(d, recovery.privateKey, browser.member, T(11, 10))),
+    revokedThenRecovered: grow(
+      grow(stale, (d) => revokeEntry(d, signer(phone), "devbox", T(11, 10))),
+      (d) => recoverEntry(d, recovery.privateKey, browser.member, T(11, 15)),
+    ),
+  };
+  type ChainName = keyof typeof chains;
+  const dirOf = (c: ChainName) => verifyDirectory(chains[c]);
+  const H = { length: dirOf("truth").length, head: dirOf("truth").head };
+  const forged = { length: 9, head: "A".repeat(43) };
+  const withheldCase = (name: string, heads: Heads, c: ChainName) => ({
+    name,
+    heads,
+    chain: c,
+    expect: withheldBy(heads, dirOf(c), chains[c]) ?? null,
+  });
+  const noteCase = (name: string, heads: Heads, signerId: string, head: object, c: ChainName) => {
+    const after = structuredClone(heads);
+    const changed = noteHead(after, signerId, head as never, chains[c], dirOf(c));
+    return { name, heads, signer: signerId, head, chain: c, expect: { changed, heads: after } };
+  };
+  const forgetCase = (name: string, heads: Heads, id: string) => {
+    const after = structuredClone(heads);
+    forgetHeads(after, id);
+    return { name, heads, id, expect: after };
+  };
+  const heads = {
+    note: "withheldBy(heads, verifyDirectory(chains[chain]), chains[chain]); noteHead(heads, signer, head, chains[chain], verifyDirectory(chains[chain])); forgetHeads(heads, id). A `revoke` ends no hold (#813); a `recover` does.",
+    chains,
+    withheld: [
+      withheldCase("a machine's head the chain lacks holds", { devbox: H }, "stale"),
+      withheldCase("the chain that holds it does not", { devbox: H }, "truth"),
+      withheldCase(
+        "a fork that revokes the machine still holds, naming the revocation",
+        { devbox: H },
+        "forkRevokesMachine",
+      ),
+      withheldCase(
+        "a fork that revokes the device a head names as by still holds",
+        { "devbox/phone": { ...H, by: "phone" } },
+        "forkRevokesBy",
+      ),
+      withheldCase(
+        "a recover ends it",
+        { devbox: H, "devbox/phone": { ...H, by: "phone" } },
+        "recovered",
+      ),
+      withheldCase(
+        "a recover ends it for a member revoked before it",
+        { devbox: forged },
+        "revokedThenRecovered",
+      ),
+      withheldCase(
+        "a by the chain does not list holds",
+        { "devbox/?": { ...forged, by: "ghost" } },
+        "stale",
+      ),
+      withheldCase("a signer the chain does not list counts not", { ghost: H }, "stale"),
+      withheldCase(
+        "a head no revoke names comes first",
+        { devbox: H, phone2: forged },
+        "forkRevokesMachine",
+      ),
+    ],
+    noteHead: [
+      noteCase("a first head is kept", {}, "devbox", H, "stale"),
+      noteCase(
+        "a shorter head does not replace one the chain lacks",
+        { devbox: H },
+        "devbox",
+        {
+          length: 2,
+          head: dirOf("stale").head,
+        },
+        "stale",
+      ),
+      noteCase(
+        "a by the chain does not list goes in the signer's one unknown slot",
+        { "devbox/?": { ...forged, by: "ghost" } },
+        "devbox",
+        { ...H, by: "nobody" },
+        "stale",
+      ),
+      noteCase(
+        "a head passed on from a by the chain lists as revoked is not kept",
+        {},
+        "devbox",
+        { ...H, by: "phone" },
+        "forkRevokesBy",
+      ),
+      noteCase(
+        "an unknown slot whose by a recover removed takes any head",
+        { "devbox/?": { ...forged, by: "phone" } },
+        "devbox",
+        { ...H, by: "ghost" },
+        "recovered",
+      ),
+      noteCase(
+        "an unknown slot whose by a revoke names keeps its longer head",
+        { "devbox/?": { ...forged, by: "phone" } },
+        "devbox",
+        { ...H, by: "ghost" },
+        "forkRevokesBy",
+      ),
+    ],
+    forgetHeads: [
+      forgetCase(
+        "drops what the member signed and what names it as by",
+        {
+          devbox: H,
+          "devbox/phone": { ...H, by: "phone" },
+          "laptop/devbox": { ...forged, by: "devbox" },
+          phone2: forged,
+        },
+        "devbox",
+      ),
+    ],
+  };
+
   return {
+    "heads.json": heads,
     "images.json": images,
     "keys.json": keys,
     "directory.json": directory,
