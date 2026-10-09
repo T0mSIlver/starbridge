@@ -306,18 +306,18 @@ class ServerStore(
     }
 
     /** Runs [block] off the caller, one at a time, and turns failures into a notice. */
-    private fun run(showBusy: Boolean = true, block: suspend () -> Unit) {
-        scope.launch { locked(showBusy, block) }
+    private fun run(showBusy: Boolean = true, sync: Boolean = false, block: suspend () -> Unit) {
+        scope.launch { locked(showBusy, sync, block) }
     }
 
     // A run the owner sees raises busy before it waits for the lock: a pull during a quiet sync
     // shows at once. Quiet runs, such as the prompt poll, leave it alone.
-    private suspend fun locked(showBusy: Boolean = true, block: suspend () -> Unit) = shown(showBusy) {
+    private suspend fun locked(showBusy: Boolean = true, sync: Boolean = false, block: suspend () -> Unit) = shown(showBusy) {
         lock.withLock {
             try {
                 block()
             } catch (e: Exception) {
-                report(e, asked = showBusy)
+                report(e, sync = sync, asked = showBusy)
             }
         }
     }
@@ -336,14 +336,14 @@ class ServerStore(
     }
 
     /**
-     * Turns a failure into a notice. One that only says the server did not answer leaves none: a
-     * sync catches up once it does, and [connection] speaks if that takes long, at once if the
-     * owner [asked] (#920).
+     * Turns a failure into a notice. A [sync] that only found the server unanswered leaves none: it
+     * catches up once the server answers, and [connection] speaks if that takes long, at once if
+     * the owner [asked] by a pull (#920). What the owner did themselves still says it failed.
      */
-    private fun report(e: Exception, asked: Boolean = false) {
+    private fun report(e: Exception, sync: Boolean = false, asked: Boolean = false) {
         // With the exception in the message: Android drops the trace of an UnknownHostException.
         Log.w("Starbridge", "failed: $e", e)
-        if (Reach.transient(e)) {
+        if (sync && Reach.transient(e)) {
             if (asked) reach.surface()
             catchUp()
             return
@@ -770,7 +770,7 @@ class ServerStore(
             catchUp()
             return
         }
-        run(showBusy = shown) { sync() }
+        run(showBusy = shown, sync = true) { sync() }
     }
 
     /**
@@ -1152,7 +1152,7 @@ class ServerStore(
      */
     override fun refreshPrompts() {
         if (System.currentTimeMillis() < promptsRetryAt) return
-        run(showBusy = false) {
+        run(showBusy = false, sync = true) {
             if (phase.value != Phase.Ready) return@run
             try {
                 syncPrompts()
@@ -1168,7 +1168,7 @@ class ServerStore(
     @Volatile private var promptFailures = 0
     @Volatile private var promptsRetryAt = 0L
 
-    override fun refreshDirectory() = run(showBusy = false) {
+    override fun refreshDirectory() = run(showBusy = false, sync = true) {
         if (phase.value == Phase.Ready) syncDirectory()
     }
 
@@ -1502,7 +1502,8 @@ class ServerStore(
         try {
             flushHeld() && saved.outbox.isEmpty()
         } catch (e: IOException) {
-            report(e)
+            // The answers wait in the outbox, and their cards say "not sent yet".
+            report(e, sync = true)
             false
         }
     }
@@ -1863,7 +1864,7 @@ class ServerStore(
                 .onSuccess { pushHold.value = it }
                 .onFailure { e ->
                     pushHold.value = was
-                    if (e is Exception) report(e, asked = true)
+                    if (e is Exception) report(e)
                 }
         }
     }
