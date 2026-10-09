@@ -36,6 +36,7 @@ test("a GitHub link reads as its reference, led by its repo when it isn't the se
   expect(label("https://GitHub.com/T0mSIlver/Starbridge/issues/171")).toBe("#171");
   expect(label(`${gh}/discussions/12`)).toBe("#12");
   expect(label(`${gh}/releases/tag/v0.1.2`)).toBe("v0.1.2");
+  expect(label(`${gh}/releases/tag/v1.0-beta%2B1`)).toBe("v1.0-beta+1");
   expect(label(`${gh}/commit/63141e89a2b4c`)).toBe("63141e8");
   expect(label("https://github.com/steipete/CodexBar/pull/412")).toBe("CodexBar#412");
   expect(label("https://github.com/steipete/CodexBar/releases/tag/v1.2")).toBe("CodexBar v1.2");

@@ -22,6 +22,7 @@ class LinksTest {
         assertEquals("#171", label("https://GitHub.com/T0mSIlver/Starbridge/issues/171"))
         assertEquals("#12", label("$gh/discussions/12"))
         assertEquals("v0.1.2", label("$gh/releases/tag/v0.1.2"))
+        assertEquals("v1.0-beta+1", label("$gh/releases/tag/v1.0-beta%2B1"))
         assertEquals("63141e8", label("$gh/commit/63141e89a2b4c"))
         assertEquals("CodexBar#412", label("https://github.com/steipete/CodexBar/pull/412"))
         assertEquals("CodexBar v1.2", label("https://github.com/steipete/CodexBar/releases/tag/v1.2"))
