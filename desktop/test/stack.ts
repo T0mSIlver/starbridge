@@ -185,7 +185,9 @@ try {
     await page.getByRole("heading", { name: "Save your recovery key" }).waitFor();
     await page.getByLabel(/I wrote this key down/).check();
     await page.getByRole("button", { name: "Continue" }).click();
-    await page.getByRole("heading", { name: "Inbox" }).waitFor();
+    // No machine yet, so the inbox says how to add one; its own heading depends on the window's
+    // width, which differs between runners.
+    await page.getByRole("heading", { name: "Add a machine" }).waitFor();
     // The app notifies; the page offers no Web Push of its own.
     assert.equal(await page.getByRole("button", { name: "Turn on notifications" }).count(), 0);
 
