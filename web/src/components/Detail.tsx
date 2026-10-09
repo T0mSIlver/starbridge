@@ -82,7 +82,10 @@ function Head({ since, children }: { since?: string; children: React.ReactNode }
   return <div className={`${s.head} ${since ? s.blocks : ""}`}>{children}</div>;
 }
 
-/** A typed answer: a filled text field with its send button on the field's line (#254). */
+/**
+ * A typed answer (#947): one box with the text on top and a row under it, the keys left and send
+ * right, so the text never runs under the button. It grows to 10 lines, then scrolls.
+ */
 function FreeText({
   id,
   sending,
@@ -104,10 +107,10 @@ function FreeText({
       <label className="sr-only" htmlFor={`answer-${id}`}>
         Your answer
       </label>
-      <div className={s.field}>
+      <div className={s.composer}>
         <textarea
           id={`answer-${id}`}
-          className={`${ui.input} t-body ${s.fieldInput}`}
+          className={`t-body ${s.composerInput}`}
           rows={1}
           placeholder="Your answer"
           value={text}
@@ -121,15 +124,21 @@ function FreeText({
             e.currentTarget.form?.requestSubmit();
           }}
         />
-        <button
-          type="submit"
-          className={s.send}
-          aria-label="Send"
-          title="Send"
-          disabled={sending || !text.trim()}
-        >
-          <Icon name="send" size={20} />
-        </button>
+        <div className={s.composerBar}>
+          {/* For a keyboard; a touch screen's Enter key says what it does. */}
+          <span className={`t-small ${s.keys}`} aria-hidden>
+            Enter to send · Shift+Enter for a new line
+          </span>
+          <button
+            type="submit"
+            className={s.send}
+            aria-label="Send"
+            title="Send"
+            disabled={sending || !text.trim()}
+          >
+            <Icon name="send" size={20} />
+          </button>
+        </div>
       </div>
     </form>
   );

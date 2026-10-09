@@ -127,45 +127,89 @@
   min-width: 0;
 }
 
-/* Material 3's filled field with a trailing icon button, centred on the field's line. */
-.field {
-  position: relative;
+/* One box: the text, then a row with the keys and send inside it (#947). */
+.composer {
   width: 100%;
+  /* On the box, not the text, so text scrolled up stops short of the border. */
+  padding-top: var(--s3);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface2);
+  transition: border-color var(--t-fast) var(--ease);
 }
 
-.fieldInput {
+.composer:focus-within {
+  border-color: var(--fg);
+}
+
+.composerInput {
   display: block;
-  padding-right: calc(var(--size-tap) + var(--s1));
+  width: 100%;
+  min-height: var(--size-tap);
+  /* 10 lines, then it scrolls. */
+  max-height: 10lh;
+  padding: 0 var(--s3);
+  border: 0;
+  background: none;
+  color: var(--fg);
   resize: none;
   field-sizing: content;
+  overflow-y: auto;
   /* A pasted code with no spaces wraps inside the field (#873). */
   overflow-wrap: anywhere;
 }
 
+.composerInput:focus {
+  outline: 0;
+}
+
+.composerBar {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  padding: var(--s1) var(--s1) var(--s1) var(--s3);
+}
+
+.keys {
+  min-width: 0;
+  color: var(--fg3);
+}
+
 .send {
-  position: absolute;
-  top: 50%;
-  right: var(--s1);
   display: grid;
+  flex: none;
   place-items: center;
   width: var(--s10);
   height: var(--s10);
+  margin-left: auto;
   padding: 0;
   border: 0;
   border-radius: var(--radius-pill);
-  background: none;
-  color: var(--fg);
-  transform: translateY(-50%);
+  background: var(--fg);
+  color: var(--bg);
   transition: background var(--t-fast) var(--ease);
 }
 
 .send:disabled {
+  background: none;
   color: var(--fg3);
+}
+
+/* After `.send`, which it overrides. */
+@media (hover: none) {
+  .keys {
+    display: none;
+  }
+
+  .send {
+    width: var(--size-tap);
+    height: var(--size-tap);
+  }
 }
 
 @media (hover: hover) {
   .send:not(:disabled):hover {
-    background: var(--surface);
+    background: var(--fg2);
   }
 }
 

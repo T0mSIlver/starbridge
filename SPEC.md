@@ -1033,6 +1033,12 @@ first window, so a provider with a window running out leads.
   stack. `answerIn` and typed-only questions have no buttons.
 - **Typed answers** (#562): Enter sends, Shift+Enter starts a new line, on the web and with an
   Android hardware keyboard. An Enter that ends an input method's composition only commits it.
+- **The reply field** (#947) grows to 10 lines, then scrolls, on both clients. On the web it is one
+  box: the text on top, then a row inside the box with the keys ("Enter to send · Shift+Enter for
+  a new line", hidden on touch screens) left and send right. A send arrow inside the field's line
+  had long replies running under it in the desktop app. The owner chose this from mockups over a
+  send button beside the field and a separate bar under it. Android keeps Material's trailing
+  icon, which the text wraps before.
 - **Context** renders line breaks and code, inline and fenced. Other Markdown shows as typed; the
   skill says so rather than the clients growing a renderer.
 - **Revoked machines.** Their items leave the Inbox and their notifications close (#344).
