@@ -238,7 +238,7 @@ function HoldRow({ initial }: { initial: number | undefined }) {
       label="Hold while you’re at a screen"
       sub={
         error ??
-        "While you use Starbridge or a machine with presence on, your other devices are notified only if a question is still open after this"
+        "While you’re using Starbridge or your computer, other devices wait this long to notify"
       }
     >
       <Segmented<number>
