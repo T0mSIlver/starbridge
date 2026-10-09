@@ -1,4 +1,5 @@
 export * from "./client";
+export * from "./context";
 export * from "./directory";
 export * from "./envelope";
 export * from "./heads";
