@@ -732,6 +732,17 @@ line, the safe side: at worst a prompt repeats an answer the agent already read.
   waiting, and the answers go back into the call through `POST /question/{id}/reply`. The first
   answer, on a device or at the keyboard, wins; the other side is settled `elsewhere`. A question
   with more than 4 options or a label over 100 characters takes a typed reply.
+- Codex (#951): `request_user_input`, which 0.160 offers only in Plan mode, races the devices
+  as Claude Code's picker does. Codex's hooks cannot answer it, but the TUI runs its sessions in
+  the app-server daemon, which sends the picker's `item/tool/requestUserInput` to every client of
+  the thread, replays a pending one to a client that joins later, and takes the first answer.
+  So the plugin's `PreToolUse` hook on the tool starts a detached `hook question --agent codex
+  --race` and returns: a hook that held would hold the picker back. The race joins the thread
+  over the daemon's control socket (WebSocket JSON-RPC), only when the daemon has it loaded, since
+  resuming a `codex exec` thread there would load it. It posts one waiting card per question,
+  held from the session's answer loop, and answers the request once each has a device's answer,
+  a typed reply as the TUI's `user_note:`. `serverRequest/resolved` first, or the end of the
+  turn, settles the cards `elsewhere`. A secret question stays at the keyboard.
 - Pi has no built-in ask tool; Starbridge intercepts none by name.
 
 ### Permission prompts

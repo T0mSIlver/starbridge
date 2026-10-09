@@ -1,7 +1,8 @@
 /**
  * The Starbridge Codex plugin (#949): a `SessionStart` hook that adds the rule to each Codex
  * session, as the Claude Code plugin's does, and a `PermissionRequest` hook that sends Codex's
- * approvals to the devices (#950). Codex 0.160 installs plugins only from a marketplace, so setup
+ * approvals to the devices (#950), and a `PreToolUse` hook that races `request_user_input` on
+ * them (#951). Codex 0.160 installs plugins only from a marketplace, so setup
  * writes a local one under `$CODEX_HOME/starbridge` and installs the plugin from it. The plugin's
  * hooks run the scripts in that folder, not copies in Codex's plugin cache: a release then
  * rewrites the scripts and the rule in place, and the hooks Codex trusted stay the same, so the
@@ -23,7 +24,7 @@ export const CODEX_PLUGIN = `starbridge@${CODEX_MARKETPLACE}`;
  * The plugin's version, which names its folder in Codex's cache. Raise it when `hooks.json`
  * changes, so `codex plugin add` installs the new one.
  */
-const PLUGIN_VERSION = "1.1.0";
+const PLUGIN_VERSION = "1.2.0";
 
 function codexHome(sys: Home): string {
   return sys.ctx.env.CODEX_HOME || join(sys.home, ".codex");
@@ -87,6 +88,18 @@ function hooksJson(dir: string): string {
         PermissionRequest: entry(sh(CLI, "hook", "permission", "--agent", "codex"), 600),
         Stop: entry(settle, 30),
         Interrupt: entry(settle, 3),
+        PreToolUse: [
+          {
+            matcher: "^request_user_input$",
+            hooks: [
+              {
+                type: "command",
+                command: sh(CLI, "hook", "question", "--agent", "codex"),
+                timeout: 10,
+              },
+            ],
+          },
+        ],
       },
     },
     null,

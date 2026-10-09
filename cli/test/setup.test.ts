@@ -192,7 +192,7 @@ test("setup --yes installs the agent, the plugins and the skills, and uploads a 
   expect(m.calls()).toContain(`codex plugin marketplace add ${market}`);
   expect(m.calls()).toContain("codex plugin add starbridge@starbridge-cli");
   const hooks = readFileSync(
-    join(m.home, ".codex/plugins/cache/starbridge-cli/starbridge/1.1.0/hooks/hooks.json"),
+    join(m.home, ".codex/plugins/cache/starbridge-cli/starbridge/1.2.0/hooks/hooks.json"),
     "utf8",
   );
   const command = (event: string) => JSON.parse(hooks).hooks[event][0].hooks[0].command;
@@ -201,6 +201,8 @@ test("setup --yes installs the agent, the plugins and the skills, and uploads a 
   // Codex's approvals, through the same CLI wrapper as Claude Code's plugin (#950).
   expect(command("PermissionRequest")).toBe(`${script("cli.sh")} hook permission --agent codex`);
   expect(command("Interrupt")).toBe(`${script("cli.sh")} hook settle --agent codex`);
+  // Codex's own question tool, raced on the devices (#951).
+  expect(command("PreToolUse")).toBe(`${script("cli.sh")} hook question --agent codex`);
   expect(codexPlugin(m.sys)).toBe("current");
   // opencode gets the skill and the plugin with the code it imports, in the repository's layout.
   const oc = join(m.home, ".config/opencode");
@@ -1230,7 +1232,7 @@ test("refresh gives Codex the plugin when setup installed its skill before #949"
   m.ctx.lines.length = 0;
   await setup(m.sys, { agent: "codex" });
   expect(m.ctx.lines.join("\n")).toContain("to trust Starbridge's hooks");
-  for (const event of ["permission_request", "stop", "interrupt"])
+  for (const event of ["permission_request", "stop", "interrupt", "pre_tool_use"])
     writeFileSync(
       config,
       `${readFileSync(config, "utf8")}[hooks.state."starbridge@starbridge-cli:hooks/hooks.json:${event}:0:0"]\ntrusted_hash = "sha256:x"\n`,
