@@ -54,10 +54,11 @@ question; steps 1 and 3 say when it asks more. A rerun repairs only what is miss
    already paired with another server, and Enter keeps that one.
 2. It installs Starbridge in each agent it finds and prints one line per agent: the Claude Code
    plugin at user scope, the skill and sandbox rule in Codex's folders, the Starbridge Pi
-   package, and the skill and plugin in opencode's config folder. A failed install prints its
-   reason and the command that retries it, and setup goes on. A later setup updates the Codex
-   and opencode files when the CLI carries newer ones. The Claude Code plugin needs Claude Code
-   2.1.287 or later; setup says when it is older. Claude Code, Codex and Pi may then run
+   package, the skill and plugin in opencode's config folder, and a Cursor plugin in
+   `~/.cursor/plugins/local/starbridge`. A failed install prints its
+   reason and the command that retries it, and setup goes on. A later setup updates the Codex,
+   opencode and Cursor files when the CLI carries newer ones. The Claude Code plugin needs Claude Code
+   2.1.287 or later; setup says when it is older. Claude Code, Codex, Pi and `cursor-agent` may then run
    `starbridge ask`, `waiting`, `working`, `wait` and `settle` without a permission prompt;
    `starbridge run` still asks, since the command it wraps can be anything. For Pi, setup adds
    these rules only when pi-permission-system is installed.
@@ -83,7 +84,7 @@ remove the setup.
 step 2. `starbridge status` prints the same checks, and names an agent installed since setup,
 which `starbridge setup --refresh` then sets up.
 
-`starbridge uninstall --agent <name>` (`claude`, `codex`, `pi` or `opencode`) removes Starbridge
+`starbridge uninstall --agent <name>` (`claude`, `codex`, `pi`, `opencode` or `cursor`) removes Starbridge
 from one agent. Setup and `--refresh` then leave that agent alone, until `starbridge setup
 --agent <name>` installs it there again.
 
@@ -92,7 +93,7 @@ from one agent. Setup and `--refresh` then leave that agent alone, until `starbr
 `starbridge update` installs the latest release over a script install, then runs `starbridge
 setup --refresh` with it and updates the Claude Code plugins. `--refresh` rewrites the files
 setup put into other tools (the agent's service, the Codex skill and rule, opencode's skill and
-plugin) for the new version and restarts the agent. Homebrew and npm installs update through
+plugin, the Cursor plugin) for the new version and restarts the agent. Homebrew and npm installs update through
 their own manager; then run `starbridge setup --refresh`. Each of those files starts with a
 `Written by starbridge <version>` line: setup replaces and uninstall removes only files that have
 it, so remove the line from one to keep it as yours.

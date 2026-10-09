@@ -15,6 +15,19 @@ import {
   installCodexPlugin,
   removeCodexPlugin,
 } from "./codex-plugin";
+
+  addCursorAllow,
+  CURSOR_ALLOW,
+  cursorConfigPath,
+  cursorPlugin,
+  cursorPluginDir,
+  hasCursor,
+  installCursorPlugin,
+  missingCursorAllow,
+  removeCursorAllow,
+  removeCursorPlugin,
+} from "./cursor";
+
 import {
   codexRule,
   codexRulePath,
@@ -59,6 +72,7 @@ export const AGENTS = {
   codex: "Codex",
   pi: "Pi",
   opencode: "opencode",
+  cursor: "Cursor",
 } as const;
 export type AgentId = keyof typeof AGENTS;
 export const AGENT_IDS = Object.keys(AGENTS) as AgentId[];
@@ -88,6 +102,8 @@ export function found(sys: Sys, id: AgentId): boolean {
       return hasPi(sys);
     case "opencode":
       return hasOpencode(sys);
+    case "cursor":
+      return hasCursor(sys);
   }
 }
 
@@ -119,6 +135,8 @@ export async function installed(sys: Sys, id: AgentId): Promise<boolean> {
       return piPackage(sys) !== undefined;
     case "opencode":
       return opencodeState(sys) !== "missing";
+    case "cursor":
+      return cursorPlugin(sys) !== "missing";
   }
 }
 
@@ -153,6 +171,8 @@ export async function installAgent(sys: Sys, id: AgentId): Promise<Outcome> {
         return await installPi(sys);
       case "opencode":
         return installOpencodeAgent(sys);
+      case "cursor":
+        return installCursor(sys);
     }
   } catch (e) {
     return {
@@ -248,6 +268,24 @@ function installOpencodeAgent(sys: Sys): Outcome {
   };
 }
 
+function installCursor(sys: Sys): Outcome {
+  const notes: string[] = [];
+  const plugin = cursorPlugin(sys);
+  if (plugin === "foreign") notes.push(`${cursorPluginDir(sys)} is another plugin: left alone.`);
+  else if (plugin !== "current") installCursorPlugin(sys);
+  const allowed = missingCursorAllow(sys).length === 0 || addCursorAllow(sys);
+  if (!allowed)
+    notes.push(
+      `${cursorConfigPath(sys)} is not valid JSON: add ${CURSOR_ALLOW.join(", ")} to permissions.allow there.`,
+    );
+  if (plugin === "foreign" && !allowed) return { mark: "–", text: "skipped", notes };
+  const text = [
+    ...(plugin === "foreign" ? [] : ["plugin installed"]),
+    ...(allowed ? [`${CURSOR_ALLOW.length} starbridge commands allowed`] : []),
+  ].join(", ");
+  return { mark: "✓", text, notes };
+}
+
 /** Removes Starbridge from one agent. Returns one line per thing done. */
 export async function removeAgent(sys: Sys, id: AgentId): Promise<string[]> {
   const done: string[] = [];
@@ -268,6 +306,11 @@ export async function removeAgent(sys: Sys, id: AgentId): Promise<string[]> {
       break;
     case "opencode":
       for (const path of removeOpencode(sys)) done.push(`Removed ${path}.`);
+      break;
+    case "cursor":
+      if (removeCursorPlugin(sys)) done.push(`Removed ${cursorPluginDir(sys)}.`);
+      if (removeCursorAllow(sys))
+        done.push(`Removed the starbridge allow rules from ${cursorConfigPath(sys)}.`);
       break;
     case "pi": {
       const source = hasPi(sys) ? piPackage(sys) : undefined;

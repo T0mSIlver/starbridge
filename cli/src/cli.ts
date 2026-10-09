@@ -45,30 +45,31 @@ const HELP = `starbridge: post decisions to your devices, report runs, upload qu
 
   starbridge setup [--yes] [--server <url>] [--name <name>] [--providers <a,b>]
                    [--no-quota] [--no-service] [--no-agents]
-  starbridge setup --agent <claude|codex|pi|opencode>
+  starbridge setup --agent <claude|codex|pi|opencode|cursor>
   starbridge setup --refresh
-      Set this machine up, or check and repair it: pair it, install Starbridge in each agent
-      found (the Claude Code plugins, the Codex skill and rule, the Pi package, the opencode
-      skill and plugin; --no-agents skips them), find or install CodexBar and pick the
-      providers to upload, install the agent as a user service (systemd, launchd or a
-      Scheduled Task), and upload a first quota snapshot. It asks only before installing
-      CodexBar, whether to send quotas when another machine already does, which providers to
-      send, whether the agent runs after logout, whether to add the CLI to your PATH, and
-      whether to send a test decision; --yes, or no terminal, takes every default.
+      Set this machine up, or check and repair it: pair it, install Starbridge in each
+      agent found (the Claude Code plugins, the Codex skill and rule, the Pi package, the
+      opencode skill and plugin, the Cursor plugin; --no-agents skips them), find or
+      install CodexBar and pick the providers to upload, install the agent as a user
+      service (systemd, launchd or a Scheduled Task), and upload a first quota snapshot.
+      It asks only before installing CodexBar, whether to send quotas when another machine
+      already does, which providers to send, whether the agent runs after logout, whether
+      to add the CLI to your PATH, and whether to send a test decision; --yes, or no
+      terminal, takes every default.
       --server <url>  the server to pair with (default: $STARBRIDGE_SERVER, else this
                       machine's, else https://starbridge.run); asks before leaving another
                       server this machine is paired with
       --agent <name>  only Starbridge in that agent, also one uninstall --agent removed
-      --refresh only brings the files setup wrote into other tools (the service, the Codex skill
-      and rule, the opencode skill and plugin) to this version, installs Starbridge in an agent
-      found since, and restarts the agent.
+      --refresh only brings the files setup wrote into other tools (the service, the Codex
+      skill and rule, the opencode skill and plugin, the Cursor plugin) to this version,
+      installs Starbridge in an agent found since, and restarts the agent.
 
   starbridge status
       Print the versions, the pairing, the agent and its service, the server, each provider, the
       Claude Code plugins, the Codex skill, the Pi package and the sessions the agent sees.
 
   starbridge uninstall [--yes] [--purge]
-  starbridge uninstall --agent <claude|codex|pi|opencode>
+  starbridge uninstall --agent <claude|codex|pi|opencode|cursor>
       Remove the agent service, Starbridge from every agent and this binary, and ask your
       devices to revoke this machine. Asks before it deletes the keys and state (--purge:
       without asking). CodexBar stays. --agent removes Starbridge from that agent only, and
