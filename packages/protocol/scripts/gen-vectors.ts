@@ -14,6 +14,7 @@ import {
   claimHash,
   codeFromLink,
   computePace,
+  contextText,
   DEFAULT_ALERT_RULE,
   DEFAULT_QUOTA_ALERTS,
   type Directory,
@@ -37,6 +38,7 @@ import {
   pairingKey,
   pairingLink,
   pairingRequest,
+  parseContext,
   parsePairingCode,
   publicKeys,
   type QuotaAlert,
@@ -1446,6 +1448,42 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
     cases: paceCases,
   };
 
+  // --- context.json ---
+  const contextCases = [
+    [
+      "plain lines",
+      "The migration locks orders for 4 minutes.\n\nAfter the backup: done by 18:30.\r\nNow: checkouts fail.",
+    ],
+    ["inline code", "Run `starbridge wait d_1` again; a lone ` stays."],
+    [
+      "bold option labels",
+      "**After the backup:** done by 18:30.\n**Now:** checkouts fail for 4 minutes.",
+    ],
+    ["bold wraps code", "**`first-keys`:** a new account saved its key."],
+    ["bold needs text inside", "2 ** 10 and ** spaced ** and **** stay."],
+    ["bullets", "- one\n* two\n• three\n  - indented\n-not a bullet"],
+    ["numbers", "1. first\n2) second\n10. tenth\n1.5 is a number"],
+    ["heading", "## Options\nA: keep it"],
+    ["bare URL", "See https://github.com/acme/shop/pull/41. Or (https://x.dev/a)."],
+    [
+      "Markdown link",
+      "Read [the PR](https://github.com/acme/shop/pull/41) first; [no](javascript:x) stays.",
+    ],
+    ["fenced code", "Before:\n```bash\n  make build\n\n  make e2e\n```\nAfter."],
+    ["unclosed fence", "Error:\n```\nTypeError: x is undefined"],
+    ["empty fence", "```\n```\nText"],
+    ["outside the subset", "*em* _u_ ~~gone~~ > quote | a | b |"],
+  ].map(([name, text]) => ({
+    name,
+    text,
+    blocks: parseContext(text ?? ""),
+    plain: contextText(text ?? ""),
+  }));
+  const contextFile = {
+    note: "parseContext(text) and contextText(text): the context subset every client renders (#969).",
+    cases: contextCases,
+  };
+
   // --- quota-alerts.json ---
   const custom = {
     ...DEFAULT_QUOTA_ALERTS,
@@ -2274,6 +2312,7 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
     "pairing.json": pairing,
     "join.json": join,
     "pace.json": paceFile,
+    "context.json": contextFile,
     "quota-alerts.json": quotaAlertsFile,
     "schemas.json": schemas,
   };

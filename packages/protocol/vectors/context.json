@@ -1,0 +1,368 @@
+{
+  "note": "parseContext(text) and contextText(text): the context subset every client renders (#969).",
+  "cases": [
+    {
+      "name": "plain lines",
+      "text": "The migration locks orders for 4 minutes.\n\nAfter the backup: done by 18:30.\r\nNow: checkouts fail.",
+      "blocks": [
+        {
+          "kind": "line",
+          "spans": [
+            {
+              "text": "The migration locks orders for 4 minutes."
+            }
+          ]
+        },
+        {
+          "kind": "line",
+          "spans": [
+            {
+              "text": "After the backup: done by 18:30."
+            }
+          ]
+        },
+        {
+          "kind": "line",
+          "spans": [
+            {
+              "text": "Now: checkouts fail."
+            }
+          ]
+        }
+      ],
+      "plain": "The migration locks orders for 4 minutes.\nAfter the backup: done by 18:30.\nNow: checkouts fail."
+    },
+    {
+      "name": "inline code",
+      "text": "Run `starbridge wait d_1` again; a lone ` stays.",
+      "blocks": [
+        {
+          "kind": "line",
+          "spans": [
+            {
+              "text": "Run "
+            },
+            {
+              "text": "starbridge wait d_1",
+              "code": true
+            },
+            {
+              "text": " again; a lone ` stays."
+            }
+          ]
+        }
+      ],
+      "plain": "Run starbridge wait d_1 again; a lone ` stays."
+    },
+    {
+      "name": "bold option labels",
+      "text": "**After the backup:** done by 18:30.\n**Now:** checkouts fail for 4 minutes.",
+      "blocks": [
+        {
+          "kind": "line",
+          "spans": [
+            {
+              "text": "After the backup:",
+              "bold": true
+            },
+            {
+              "text": " done by 18:30."
+            }
+          ]
+        },
+        {
+          "kind": "line",
+          "spans": [
+            {
+              "text": "Now:",
+              "bold": true
+            },
+            {
+              "text": " checkouts fail for 4 minutes."
+            }
+          ]
+        }
+      ],
+      "plain": "After the backup: done by 18:30.\nNow: checkouts fail for 4 minutes."
+    },
+    {
+      "name": "bold wraps code",
+      "text": "**`first-keys`:** a new account saved its key.",
+      "blocks": [
+        {
+          "kind": "line",
+          "spans": [
+            {
+              "text": "first-keys",
+              "code": true,
+              "bold": true
+            },
+            {
+              "text": ":",
+              "bold": true
+            },
+            {
+              "text": " a new account saved its key."
+            }
+          ]
+        }
+      ],
+      "plain": "first-keys: a new account saved its key."
+    },
+    {
+      "name": "bold needs text inside",
+      "text": "2 ** 10 and ** spaced ** and **** stay.",
+      "blocks": [
+        {
+          "kind": "line",
+          "spans": [
+            {
+              "text": "2 ** 10 and ** spaced ** and **** stay."
+            }
+          ]
+        }
+      ],
+      "plain": "2 ** 10 and ** spaced ** and **** stay."
+    },
+    {
+      "name": "bullets",
+      "text": "- one\n* two\n• three\n  - indented\n-not a bullet",
+      "blocks": [
+        {
+          "kind": "bullet",
+          "spans": [
+            {
+              "text": "one"
+            }
+          ]
+        },
+        {
+          "kind": "bullet",
+          "spans": [
+            {
+              "text": "two"
+            }
+          ]
+        },
+        {
+          "kind": "bullet",
+          "spans": [
+            {
+              "text": "three"
+            }
+          ]
+        },
+        {
+          "kind": "bullet",
+          "spans": [
+            {
+              "text": "indented"
+            }
+          ]
+        },
+        {
+          "kind": "line",
+          "spans": [
+            {
+              "text": "-not a bullet"
+            }
+          ]
+        }
+      ],
+      "plain": "• one\n• two\n• three\n• indented\n-not a bullet"
+    },
+    {
+      "name": "numbers",
+      "text": "1. first\n2) second\n10. tenth\n1.5 is a number",
+      "blocks": [
+        {
+          "kind": "number",
+          "marker": "1.",
+          "spans": [
+            {
+              "text": "first"
+            }
+          ]
+        },
+        {
+          "kind": "number",
+          "marker": "2.",
+          "spans": [
+            {
+              "text": "second"
+            }
+          ]
+        },
+        {
+          "kind": "number",
+          "marker": "10.",
+          "spans": [
+            {
+              "text": "tenth"
+            }
+          ]
+        },
+        {
+          "kind": "line",
+          "spans": [
+            {
+              "text": "1.5 is a number"
+            }
+          ]
+        }
+      ],
+      "plain": "1. first\n2. second\n10. tenth\n1.5 is a number"
+    },
+    {
+      "name": "heading",
+      "text": "## Options\nA: keep it",
+      "blocks": [
+        {
+          "kind": "line",
+          "spans": [
+            {
+              "text": "Options",
+              "bold": true
+            }
+          ]
+        },
+        {
+          "kind": "line",
+          "spans": [
+            {
+              "text": "A: keep it"
+            }
+          ]
+        }
+      ],
+      "plain": "Options\nA: keep it"
+    },
+    {
+      "name": "bare URL",
+      "text": "See https://github.com/acme/shop/pull/41. Or (https://x.dev/a).",
+      "blocks": [
+        {
+          "kind": "line",
+          "spans": [
+            {
+              "text": "See "
+            },
+            {
+              "text": "github.com/acme/shop/pull/41",
+              "href": "https://github.com/acme/shop/pull/41"
+            },
+            {
+              "text": ". Or ("
+            },
+            {
+              "text": "x.dev/a",
+              "href": "https://x.dev/a"
+            },
+            {
+              "text": ")."
+            }
+          ]
+        }
+      ],
+      "plain": "See github.com/acme/shop/pull/41. Or (x.dev/a)."
+    },
+    {
+      "name": "Markdown link",
+      "text": "Read [the PR](https://github.com/acme/shop/pull/41) first; [no](javascript:x) stays.",
+      "blocks": [
+        {
+          "kind": "line",
+          "spans": [
+            {
+              "text": "Read "
+            },
+            {
+              "text": "the PR",
+              "href": "https://github.com/acme/shop/pull/41"
+            },
+            {
+              "text": " first; [no](javascript:x) stays."
+            }
+          ]
+        }
+      ],
+      "plain": "Read the PR first; [no](javascript:x) stays."
+    },
+    {
+      "name": "fenced code",
+      "text": "Before:\n```bash\n  make build\n\n  make e2e\n```\nAfter.",
+      "blocks": [
+        {
+          "kind": "line",
+          "spans": [
+            {
+              "text": "Before:"
+            }
+          ]
+        },
+        {
+          "kind": "code",
+          "text": "  make build\n\n  make e2e"
+        },
+        {
+          "kind": "line",
+          "spans": [
+            {
+              "text": "After."
+            }
+          ]
+        }
+      ],
+      "plain": "Before:\n  make build\n\n  make e2e\nAfter."
+    },
+    {
+      "name": "unclosed fence",
+      "text": "Error:\n```\nTypeError: x is undefined",
+      "blocks": [
+        {
+          "kind": "line",
+          "spans": [
+            {
+              "text": "Error:"
+            }
+          ]
+        },
+        {
+          "kind": "code",
+          "text": "TypeError: x is undefined"
+        }
+      ],
+      "plain": "Error:\nTypeError: x is undefined"
+    },
+    {
+      "name": "empty fence",
+      "text": "```\n```\nText",
+      "blocks": [
+        {
+          "kind": "line",
+          "spans": [
+            {
+              "text": "Text"
+            }
+          ]
+        }
+      ],
+      "plain": "Text"
+    },
+    {
+      "name": "outside the subset",
+      "text": "*em* _u_ ~~gone~~ > quote | a | b |",
+      "blocks": [
+        {
+          "kind": "line",
+          "spans": [
+            {
+              "text": "*em* _u_ ~~gone~~ > quote | a | b |"
+            }
+          ]
+        }
+      ],
+      "plain": "*em* _u_ ~~gone~~ > quote | a | b |"
+    }
+  ]
+}

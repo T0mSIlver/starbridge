@@ -12,6 +12,7 @@ import {
   claimHash,
   codeFromLink,
   computePace,
+  contextText,
   DEFAULT_QUOTA_ALERTS,
   forgetHeads,
   formatPairingCode,
@@ -28,6 +29,7 @@ import {
   openPairingRequest,
   ProtocolError,
   pairingKey,
+  parseContext,
   parsePairingCode,
   readable,
   ready,
@@ -69,6 +71,7 @@ const V = {
   heads: await load("heads.json"),
   join: await load("join.json"),
   pace: await load("pace.json"),
+  context: await load("context.json"),
   quotaAlerts: await load("quota-alerts.json"),
   schemas: await load("schemas.json"),
 };
@@ -301,6 +304,14 @@ describe("pace.json", () => {
       expect(alertsFor(c.provider, { ...c.window, pace }, now)).toEqual(c.expectAlerts);
     });
   }
+});
+
+describe("context.json", () => {
+  for (const c of V.context.cases)
+    test(c.name, () => {
+      expect(parseContext(c.text)).toEqual(c.blocks);
+      expect(contextText(c.text)).toBe(c.plain);
+    });
 });
 
 describe("quota-alerts.json", () => {
