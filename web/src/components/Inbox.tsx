@@ -75,6 +75,12 @@ const text = (e: Entry) =>
       ? [e.item.decision.question, e.item.decision.context, e.item.decision.source.sessionTitle]
       : [e.item.run.title, e.item.run.reason];
 
+/**
+ * Replies typed but not sent, by question, until the page reloads (#992): one survives its detail
+ * moving between the phone and wide layouts, and a visit to Settings, as Android keeps them.
+ */
+const drafts = new Map<string, string>();
+
 export function Inbox() {
   const app = useApp();
   const {
@@ -275,6 +281,8 @@ export function Inbox() {
         keys={wide}
         closed={closed}
         lost={lost.current.has(id)}
+        draft={drafts.get(id) ?? ""}
+        onDraft={(t) => (t ? drafts.set(id, t) : drafts.delete(id))}
         onAnswer={(r) => answerQuestion(e.item, r)}
         onSnooze={(until) => snoozeQuestion(e.item, until)}
       />

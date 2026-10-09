@@ -1039,6 +1039,10 @@ first window, so a provider with a window running out leads.
   had long replies running under it in the desktop app. The owner chose this from mockups over a
   send button beside the field and a separate bar under it. Android keeps Material's trailing
   icon, which the text wraps before.
+- **Drafts** (#992). A reply typed and not sent stays with its question: on Android across
+  rotation and process death, on the web until the page reloads. The web's detail moves between
+  the phone and wide layouts as the window is resized, and a draft kept in the field alone was
+  lost there.
 - **Context** renders line breaks and code, inline and fenced. Other Markdown shows as typed; the
   skill says so rather than the clients growing a renderer.
 - **Revoked machines.** Their items leave the Inbox and their notifications close (#344).
