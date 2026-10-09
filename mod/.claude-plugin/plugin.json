@@ -1,6 +1,6 @@
 {
   "name": "starbridge-mod",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Submits the owner's Starbridge answers into the Claude Code session that asked. A Claude Code mod: a build that cannot load mods skips it, and the starbridge plugin keeps working.",
   "author": {
     "name": "Tom Vaucourt"

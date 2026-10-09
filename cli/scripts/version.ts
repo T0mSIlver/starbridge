@@ -10,7 +10,6 @@
  */
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { pinCodexbar } from "./codexbar-pin";
 
 const ROOT = join(import.meta.dir, "..", "..");
 const NUMBER = /^\d+\.\d+\.\d+(-rc\.\d+)?$/;
@@ -81,6 +80,8 @@ if (import.meta.main) {
     process.exit(64);
   }
   stamp(first);
+  // Loaded here, not at the top: the release's --check runs before any install.
+  const { pinCodexbar } = await import("./codexbar-pin");
   const pin = await pinCodexbar();
   console.log(`Pinned CodexBar ${pin.version}: check that no open \`codexbar\` issue names it.`);
 }
