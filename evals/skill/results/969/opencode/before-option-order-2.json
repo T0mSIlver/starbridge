@@ -1,0 +1,97 @@
+{
+  "agent": "opencode",
+  "model": "zai-coding-plan/glm-5.3-flash",
+  "arm": "before",
+  "scenario": "option-order",
+  "rep": 2,
+  "turns": [
+    {
+      "commands": [
+        "git log --oneline -5 && ls",
+        "ls -R src && cat src/*.js 2>/dev/null | head -50; ls *.json *.html 2>/dev/null",
+        "starbridge ask \\\n  --question 'How long should deleted notes stay in the trash before the automatic purge?' \\\n  --context 'Storage bill doubled with notes kept forever; the purge automation is ready, only the retention is your call.\nSupport: 85% of restore requests come within 3 weeks of the delete.\nStorage: each month of kept trash costs about $20/month at today's volume.\n30 days: keeps the full 3-week restore window, about $20/month.\n7 days: cheapest, but drops the last 2 weeks of restore requests.\n90 days: safest for restores, about $60/month.' \\\n  --option '30 days' --option '7 days' --option '90 days' \\\n  --waiting",
+        "starbridge ask \\\n  --question 'How long should deleted notes stay in the trash before the automatic purge?' \\\n  --context 'Storage bill doubled with notes kept forever; the purge automation is ready, only the retention is your call.\nSupport: 85% of restore requests come within 3 weeks of the delete.\nStorage: each month of kept trash costs about $20/month at today’s volume.\n30 days: keeps the full 3-week restore window, about $20/month.\n7 days: cheapest, but drops the last 2 weeks of restore requests.\n90 days: safest for restores, about $60/month.' \\\n  --option '30 days' --option '7 days' --option '90 days' \\\n  --waiting",
+        "node --input-type=module -e \"\nimport { trash, remove, purgeExpired } from './src/trash.js';\nremove('a'); remove('b');\ntrash[0].deletedAt = Date.now() - 40*864e5;\npurgeExpired();\nconsole.log('kept:', trash.map(t => t.note));\n\"",
+        "starbridge wait d_T_DJ9rfzZ-jcd8QI --timeout 5m"
+      ],
+      "final": "Done. Trash now purges automatically at 30 days, the retention the owner just picked on the card (`d_T_DJ9rfzZ-jcd8QI`), which matches the constant already in place — no code change needed.\n\n- `src/trash.js` — `purgeExpired()` drops entries past `RETENTION_DAYS` (30); `remove()` calls it, so the trash self-purges on every delete with no manual step or scheduler\n- Verified: a 40-day-old entry is purged, a fresh one kept\n- The 30-day pick keeps the full 3-week window covering 85% of restore requests, at ~$20/month storage instead of an ever-growing bill",
+      "session": "ses_edd7e93f2ffeo7qaDWmAMJIQCK",
+      "tokens": 14408,
+      "exit": 0,
+      "seconds": 87.551,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_T_DJ9rfzZ-jcd8QI --timeout 5m` (again on exit 2)."
+      ]
+    },
+    {
+      "commands": [],
+      "final": "Done. Trash now purges automatically at 30 days, the retention the owner just picked on the card (`d_T_DJ9rfzZ-jcd8QI`), which matches the constant already in place — no code change needed.\n\n- `src/trash.js` — `purgeExpired()` drops entries past `RETENTION_DAYS` (30); `remove()` calls it, so the trash self-purges on every delete with no manual step or scheduler\n- Verified: a 40-day-old entry is purged, a fresh one kept\n- The 30-day pick keeps the full 3-week window covering 85% of restore requests, at ~$20/month storage instead of an ever-growing bill",
+      "session": "ses_edd7e93f2ffeo7qaDWmAMJIQCK",
+      "tokens": 14408,
+      "exit": 0,
+      "seconds": 87.551,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_T_DJ9rfzZ-jcd8QI --timeout 5m` (again on exit 2)."
+      ]
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_T_DJ9rfzZ-jcd8QI",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-09T21:11:55Z",
+      "question": "How long should deleted notes stay in the trash before the automatic purge?",
+      "context": "Storage bill doubled with notes kept forever; the purge automation is ready, only the retention is your call.\nSupport: 85% of restore requests come within 3 weeks of the delete.\nStorage: each month of kept trash costs about $20/month at today’s volume.\n30 days: keeps the full 3-week restore window, about $20/month.\n7 days: cheapest, but drops the last 2 weeks of restore requests.\n90 days: safest for restores, about $60/month.",
+      "options": [
+        "30 days",
+        "7 days",
+        "90 days"
+      ],
+      "recommended": "30 days",
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": ""
+      },
+      "replies": true,
+      "dir": {
+        "length": 2,
+        "head": "5gm4uinzeeZBjtyT2IyUp1cNRLqr5Aq7cuaEnOrG-J4"
+      }
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [],
+  "answered": "Answer to d_T_DJ9rfzZ-jcd8QI (How long should deleted notes stay in the trash before the automatic purge?): 30 days",
+  "waiting": [
+    {
+      "v": 1,
+      "id": "w_d5p8rZ5MfXedEbC-",
+      "decisionId": "d_T_DJ9rfzZ-jcd8QI",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-09T21:11:55Z",
+      "state": "waiting",
+      "dir": {
+        "length": 2,
+        "head": "5gm4uinzeeZBjtyT2IyUp1cNRLqr5Aq7cuaEnOrG-J4"
+      }
+    }
+  ],
+  "permissions": [],
+  "judge": {
+    "cold": true,
+    "consequences": true,
+    "terminal": false,
+    "links": null,
+    "plain": true,
+    "skim": true,
+    "notes": "The terminal message is a completion report that cites an opaque card ID (`d_T_DJ9rfzZ-jcd8QI`) instead of a question, and it never reconciles its claim that the purge already runs on every delete with the reported symptom that trash stays forever."
+  }
+}

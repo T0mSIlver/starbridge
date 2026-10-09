@@ -1,0 +1,98 @@
+{
+  "agent": "opencode",
+  "model": "zai-coding-plan/glm-5.3-flash",
+  "arm": "after",
+  "scenario": "force-push",
+  "rep": 1,
+  "turns": [
+    {
+      "commands": [
+        "command -v git-filter-repo || pip show git-filter-repo 2>/dev/null | head -2 || echo \"NOT INSTALLED\"",
+        "git log --oneline --follow -- data/export.bin; git count-objects -vH; git remote -v; git status --short; git branch -a",
+        "git log --oneline | wc -l && ls -la data/ && git clone --mirror . /tmp/opencode/proj-backup.git -q && echo \"BACKUP OK: /tmp/opencode/proj-backup.git\"",
+        "git filter-repo --invert-paths --path data/export.bin --force && git log --oneline && git count-objects -vH | grep size-pack",
+        "git remote add origin /var/tmp/skill-eval-YtUl0g/after-force-push-1/origin.git && git push --force origin main && git log --oneline origin/main",
+        "git -C /var/tmp/skill-eval-YtUl0g/after-force-push-1/origin.git reflog expire --expire=now --all && git -C /var/tmp/skill-eval-YtUl0g/after-force-push-1/origin.git gc --prune=now -q && du -sh /var/tmp/skill-eval-YtUl0g/after-force-push-1/origin.git",
+        "starbridge ask \\\n  --question 'History on main was rewritten. What do the collaborators get?' \\\n  --context 'main was force-pushed: export.bin is gone from history and the repo shrank from 2 MB to 152 K. Their clones still hold old commit 9410754; a plain pull will merge it back and restore the blob.\n**Draft message:** I write a ready-to-paste note telling them to reclone (or fetch + reset --hard).\n**No message:** they hit conflicts and fix their clones themselves.' \\\n  --option 'Draft message' --option 'No message' --recommended 'Draft message'",
+        "starbridge wait d_v4HuJ7fI-gVFfqFe --timeout 5m"
+      ],
+      "final": "`data/export.bin` (2 MB, added in the initial commit) is purged from history via `git filter-repo`, `main` was force-pushed, and the origin was gc'd: 2 MB → 152 K. Backup of the old history: `/tmp/opencode/proj-backup.git`. Your collaborators' answer came back; here's the note to paste:\n\n```\nHeads up: we removed data/export.bin from git history, so main was\nforce-pushed. Do NOT pull. Instead, from your clone:\n\n  git fetch origin\n  git checkout main\n  git reset --hard origin/main\n\nIf you have local branches with work on top, rebase them onto the new\nmain instead of merging. A plain pull/merge will restore the deleted\n2 MB blob. Any open PRs need a rebase before merge.\n```",
+      "session": "ses_edd5c45f1ffeD5T5iqql9n0eSY",
+      "tokens": 7738,
+      "exit": 0,
+      "seconds": 91.588,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_v4HuJ7fI-gVFfqFe --timeout 5m` (again on exit 2)."
+      ]
+    },
+    {
+      "commands": [],
+      "final": "`data/export.bin` (2 MB, added in the initial commit) is purged from history via `git filter-repo`, `main` was force-pushed, and the origin was gc'd: 2 MB → 152 K. Backup of the old history: `/tmp/opencode/proj-backup.git`. Your collaborators' answer came back; here's the note to paste:\n\n```\nHeads up: we removed data/export.bin from git history, so main was\nforce-pushed. Do NOT pull. Instead, from your clone:\n\n  git fetch origin\n  git checkout main\n  git reset --hard origin/main\n\nIf you have local branches with work on top, rebase them onto the new\nmain instead of merging. A plain pull/merge will restore the deleted\n2 MB blob. Any open PRs need a rebase before merge.\n```",
+      "session": "ses_edd5c45f1ffeD5T5iqql9n0eSY",
+      "tokens": 7738,
+      "exit": 0,
+      "seconds": 91.588,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_v4HuJ7fI-gVFfqFe --timeout 5m` (again on exit 2)."
+      ]
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_v4HuJ7fI-gVFfqFe",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-09T21:49:45Z",
+      "question": "History on main was rewritten. What do the collaborators get?",
+      "context": "main was force-pushed: export.bin is gone from history and the repo shrank from 2 MB to 152 K. Their clones still hold old commit 9410754; a plain pull will merge it back and restore the blob.\n**Draft message:** I write a ready-to-paste note telling them to reclone (or fetch + reset --hard).\n**No message:** they hit conflicts and fix their clones themselves.",
+      "options": [
+        "Draft message",
+        "No message"
+      ],
+      "recommended": "Draft message",
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": ""
+      },
+      "replies": true,
+      "dir": {
+        "length": 2,
+        "head": "Lj6OMO4A5J7gw41UieQXpADrynQuHYplkHHsr24CwrA"
+      }
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [],
+  "answered": "Answer to d_v4HuJ7fI-gVFfqFe (History on main was rewritten. What do the collaborators get?): Draft message",
+  "waiting": [
+    {
+      "v": 1,
+      "id": "w_xlTGWyYCJDDNq73d",
+      "decisionId": "d_v4HuJ7fI-gVFfqFe",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-09T21:49:51Z",
+      "state": "waiting",
+      "dir": {
+        "length": 2,
+        "head": "Lj6OMO4A5J7gw41UieQXpADrynQuHYplkHHsr24CwrA"
+      }
+    }
+  ],
+  "permissions": [],
+  "judge": {
+    "cold": true,
+    "consequences": true,
+    "terminal": false,
+    "links": null,
+    "plain": true,
+    "skim": true,
+    "notes": "The final message reports the force-push as done and pastes a note as if the answer were already in hand, without asking the user a question and waiting for a reply in the terminal."
+  }
+}

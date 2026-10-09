@@ -1,0 +1,156 @@
+{
+  "agent": "opencode",
+  "model": "zai-coding-plan/glm-5.3-flash",
+  "arm": "after",
+  "scenario": "design-pick",
+  "rep": 2,
+  "turns": [
+    {
+      "commands": [
+        "git branch -a && git log --oneline -5 && ls shots/",
+        "starbridge ask \\\n  --question 'Which settings variant ships to main?' \\\n  --context 'Both branches are green; the design pick is yours. **Compact:** all 9 rows on one screen, no scrolling. **Roomy:** 6 rows per screen — Language, Shortcuts, About need a scroll; taller rows, easier taps. Your pick gets merged into main.' \\\n  --option 'Compact' --option 'Roomy' --recommended 'Compact' \\\n  --image shots/compact.png --image shots/roomy.png \\\n  --waiting",
+        "starbridge wait d_Q_zJoPpQvYGrqgcL --timeout 5m"
+      ],
+      "final": "The variant branches are empty — no settings code was ever committed or pushed to this repo (only screenshots and README). The \"merge\" was a no-op, so nothing actually shipped. That's a failure only the owner can fix.",
+      "session": "ses_edd8937faffeT8b1aRAdQviODU",
+      "tokens": 9087,
+      "exit": 143,
+      "seconds": 720.057,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_Q_zJoPpQvYGrqgcL --timeout 5m` (again on exit 2).",
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_6hsgBXhnSnbXsnbd --timeout 5m` (again on exit 2)."
+      ]
+    },
+    {
+      "commands": [
+        "git merge settings-compact && git log --oneline -3 && git status",
+        "git branch -avv && git log --oneline --all --graph && git diff main settings-compact --stat && git diff main settings-roomy --stat",
+        "ls -la && git stash list && git reflog -10",
+        "git fsck --lost-found 2>&1; git count-objects -v",
+        "starbridge ask \\\n  --question 'Variant branches are empty here — where is the settings code?' \\\n  --context 'Compact is picked and merged, but it was a no-op: settings-compact and settings-roomy both point at the initial commit with main — this repo has no settings code, only shots/ and README. **I’ll push them:** push the 2 branches from your machine; I merge and confirm. **Point me to it:** name the repo or folder; I take it from there.' \\\n  --option 'I’ll push them' --option 'Point me to it' \\\n  --waiting",
+        "starbridge wait d_6hsgBXhnSnbXsnbd --timeout 5m",
+        "starbridge wait d_6hsgBXhnSnbXsnbd --timeout 5m"
+      ],
+      "final": "The variant branches are empty — no settings code was ever committed or pushed to this repo (only screenshots and README). The \"merge\" was a no-op, so nothing actually shipped. That's a failure only the owner can fix.",
+      "session": "ses_edd8937faffeT8b1aRAdQviODU",
+      "tokens": 9087,
+      "exit": 143,
+      "seconds": 720.057,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_Q_zJoPpQvYGrqgcL --timeout 5m` (again on exit 2).",
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_6hsgBXhnSnbXsnbd --timeout 5m` (again on exit 2)."
+      ]
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_Q_zJoPpQvYGrqgcL",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-09T21:00:02Z",
+      "question": "Which settings variant ships to main?",
+      "context": "Both branches are green; the design pick is yours. **Compact:** all 9 rows on one screen, no scrolling. **Roomy:** 6 rows per screen — Language, Shortcuts, About need a scroll; taller rows, easier taps. Your pick gets merged into main.",
+      "options": [
+        "Compact",
+        "Roomy"
+      ],
+      "recommended": "Compact",
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": ""
+      },
+      "images": [
+        {
+          "type": "image/png",
+          "width": 360,
+          "height": 640
+        },
+        {
+          "type": "image/png",
+          "width": 360,
+          "height": 640
+        }
+      ],
+      "replies": true,
+      "dir": {
+        "length": 2,
+        "head": "KeuZCZL100KOMy343mJe4kbXjFtz6J-9KpeV9u8Av6Y"
+      }
+    }
+  ],
+  "laterDecisions": [
+    {
+      "v": 1,
+      "id": "d_6hsgBXhnSnbXsnbd",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-09T21:01:13Z",
+      "question": "Variant branches are empty here — where is the settings code?",
+      "context": "Compact is picked and merged, but it was a no-op: settings-compact and settings-roomy both point at the initial commit with main — this repo has no settings code, only shots/ and README. **I’ll push them:** push the 2 branches from your machine; I merge and confirm. **Point me to it:** name the repo or folder; I take it from there.",
+      "options": [
+        "I’ll push them",
+        "Point me to it"
+      ],
+      "recommended": "I’ll push them",
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": ""
+      },
+      "replies": true,
+      "dir": {
+        "length": 2,
+        "head": "KeuZCZL100KOMy343mJe4kbXjFtz6J-9KpeV9u8Av6Y"
+      }
+    }
+  ],
+  "runs": [],
+  "gh": [],
+  "answered": "Answer to d_Q_zJoPpQvYGrqgcL (Which settings variant ships to main?): Compact",
+  "waiting": [
+    {
+      "v": 1,
+      "id": "w_-jE-VMLuAQLzAnse",
+      "decisionId": "d_Q_zJoPpQvYGrqgcL",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-09T21:00:02Z",
+      "state": "waiting",
+      "dir": {
+        "length": 2,
+        "head": "KeuZCZL100KOMy343mJe4kbXjFtz6J-9KpeV9u8Av6Y"
+      }
+    },
+    {
+      "v": 1,
+      "id": "w_c7MeSDhd2a0tHsCb",
+      "decisionId": "d_6hsgBXhnSnbXsnbd",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-09T21:01:13Z",
+      "state": "waiting",
+      "dir": {
+        "length": 2,
+        "head": "KeuZCZL100KOMy343mJe4kbXjFtz6J-9KpeV9u8Av6Y"
+      }
+    }
+  ],
+  "permissions": [],
+  "judge": {
+    "cold": false,
+    "consequences": false,
+    "terminal": false,
+    "links": null,
+    "plain": false,
+    "skim": false,
+    "notes": "The card never says what each option changes beyond row counts, the agent's terminal message reveals the branches are empty and nothing shipped, but the card still asks the user to pick a variant that would be merged, so the decision the user actually needs to make (fix the missing code) is hidden."
+  }
+}
