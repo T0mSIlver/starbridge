@@ -693,9 +693,9 @@ line, the safe side: at worst a prompt repeats an answer the agent already read.
   scroll. On a 360 px screen the context runs about 40 characters a line and about 450 fit above
   the options, and a notification shows only the question and the context's first line. So the
   question stays within 70 characters, the context within 450, starting with the fact that
-  forces the choice; each option gets a line led by its label in bold, and labels stay within 18
-  characters, where buttons still sit side by side. Plain words and numbers, after Tom's unslop
-  rules. In 225 cards agents posted before this, the context's median was 430 characters and
+  forces the choice; each option gets a line led by its label in bold unless the line would say
+  nothing (names to pick from), and labels stay within 18 characters, where buttons still sit
+  side by side. Plain words and numbers, after Tom's unslop rules. In 225 cards agents posted before this, the context's median was 430 characters and
   one in ten hid its options.
 - Agents also wrap, unasked, any command that blocks the owner or needs them at the machine, and
   always give a reason (#60).

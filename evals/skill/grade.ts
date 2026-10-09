@@ -83,7 +83,7 @@ const CHECKS: { id: string; label: string; judge?: true; card?: true }[] = [
   { id: "lead", label: "Card: context's first line under 120 characters (a notification's line)", card: true },
   { id: "labels", label: "Card: option labels of at most 18 characters, side by side", card: true },
   { id: "distinct", label: "Card: options differ in their first word", card: true },
-  { id: "lines", label: "Card: a line per option, led by its label", card: true },
+  { id: "lines", label: "Card: a line per option, led by its label, or none", card: true },
   { id: "subset", label: "Card: only the Markdown clients render, no em dash", card: true },
   { id: "skim", label: "Card: the choice and how options differ read in one skim", judge: true, card: true },
 ];
@@ -254,7 +254,11 @@ function score(r: Rec, s: Scenario): Record<string, boolean | null> {
     lines: hasCard && cards.some(choices)
       ? cards
           .filter(choices)
-          .every((c) => c.options.every((o) => contextLines(c).some((l) => bare(l).startsWith(o.toLowerCase()))))
+          .every((c) => {
+            // Every option leads a line, or none does: names to pick from need no line each.
+            const led = c.options.filter((o) => contextLines(c).some((l) => bare(l).startsWith(o.toLowerCase())));
+            return led.length === c.options.length || led.length === 0;
+          })
       : null,
     subset: each((c) => !OUTSIDE.some((re) => re.test(c.context))),
     run:

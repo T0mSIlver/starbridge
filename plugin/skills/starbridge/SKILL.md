@@ -41,13 +41,14 @@ alone. Every extra line costs them time.
 - **Question:** at most 70 characters, ending in "?". Name the thing first;
   the options answer it.
 - **Context:** at most 450 characters, so the options stay on screen. First
-  line: the fact that forces the choice, with its number; a notification
-  shows only that line. Then one line per option, starting with its label in
-  bold: what picking it does and what it costs. When the options are designs,
+  line, one short sentence: the fact that forces the choice, with its number;
+  a notification shows only that line. Then one line per option, starting
+  with its label in bold: what picking it does and what it costs. Skip these
+  lines when they would say nothing (names to pick from). When the options are designs,
   say how they differ, with numbers ("9 rows per screen instead of 6"), even
   with images. Leave out what the card already shows and your own process.
 - **Words:** plain, numbers over adjectives, one idea per sentence, no term
-  you coined during the task. Cards render line breaks, `**bold**`, `code`,
+  you coined during the task, no em dashes. Cards render line breaks, `**bold**`, `code`,
   fenced code, `-` and `1.` lists and links; other Markdown shows as typed.
 - **Options:** two to four labels of at most 18 characters whose first words
   differ, in their natural order (A, B, C stay A, B, C), even when your pick
