@@ -11,17 +11,22 @@
  * Code's and opencode's: they race the picker (#848).
  */
 import type { Answer, Permission } from "@starbridge/protocol";
+import type { SessionEvent } from "./agent/api";
 import { MAX_HOLD_SECONDS } from "./agent/api";
 import { type AgentClient, Interrupted, withAgent } from "./agent/client";
 import type { PermissionPosted, PermissionWait } from "./agent/permissions";
+import type { State } from "./config";
 import { type Ctx, parseDuration, session, UsageError } from "./context";
 import {
   type AskInput,
+  ackLines,
   ask,
+  deliveryLine,
   EXIT_SNOOZED,
   poll,
   postDecision,
   resolveSource,
+  sessionLines,
   settle,
   wait,
 } from "./decisions";
@@ -597,4 +602,138 @@ export async function hookQuestion(
     watch.stop();
   }
   return 0;
+}
+
+/*
+ * Cursor (#956). Nothing puts a message into a live Cursor chat except the `stop` hook's
+ * `followup_message`, which Cursor submits as the next user message. So the Starbridge Cursor
+ * plugin's stop hook holds while the conversation has a question open, up to CURSOR_HOLD_MS, and
+ * returns the answer that way. Its sessionStart hook tells the local agent the conversation has
+ * the plugin, which is what lets `ask` promise a prompt there.
+ */
+
+/** How long the stop hook holds for an answer; the chat shows busy meanwhile. */
+export const CURSOR_HOLD_MS = 10 * 60_000;
+
+/** How long one wait for the agent's events or the server's answers holds. */
+const CYCLE_SECONDS = 25;
+
+interface CursorHook {
+  hook_event_name?: unknown;
+  conversation_id?: unknown;
+  session_id?: unknown;
+  status?: unknown;
+  workspace_roots?: unknown;
+}
+
+/** The questions conversation `id` asked that wait for an answer it has not taken. */
+export function openQuestions(st: State, id: string): string[] {
+  return Object.entries(st.asked)
+    .filter(
+      ([d, a]) => a.session === id && !a.settled && !a.revoked && !a.held && !st.answers[d]?.seen,
+    )
+    .map(([d]) => d);
+}
+
+/**
+ * `starbridge hook session --agent cursor`, the Cursor plugin's sessionStart, stop and sessionEnd
+ * hooks, their JSON on stdin. Never fails the hook: on any error it prints nothing.
+ */
+export async function hookCursorSession(ctx: Ctx, stdin: string): Promise<number> {
+  try {
+    const hook = JSON.parse(stdin) as CursorHook;
+    const id =
+      typeof hook.conversation_id === "string"
+        ? hook.conversation_id
+        : typeof hook.session_id === "string"
+          ? hook.session_id
+          : "";
+    if (!id) return 0;
+    const event = hook.hook_event_name;
+    if (event === "sessionStart" || event === "stop") await hello(ctx, id, hook);
+    if (event === "sessionEnd") await call(ctx, (a) => a.call("POST", path(id, "bye"), {}, 5_000));
+    // A turn the owner stopped, or that failed, ends without a hold.
+    if (event !== "stop" || hook.status !== "completed") return 0;
+    if (!ctx.store.machine() || openQuestions(ctx.store.state(), id).length === 0) return 0;
+    const message = await hold(ctx, id);
+    if (message) ctx.out(JSON.stringify({ followup_message: message }));
+  } catch (e) {
+    ctx.err(`starbridge: ${(e as Error).message}`);
+  }
+  return 0;
+}
+
+const path = (id: string, what: string) => `/v1/sessions/${encodeURIComponent(id)}/${what}`;
+
+/** A call to the local agent; without one, nothing. */
+async function call(ctx: Ctx, fn: (a: AgentClient) => Promise<unknown>): Promise<void> {
+  await withAgent(ctx, fn, async () => undefined).catch(() => undefined);
+}
+
+/** Tells the agent this conversation runs the plugin, so `ask` promises a prompt in it. */
+async function hello(ctx: Ctx, id: string, hook: CursorHook) {
+  const roots = Array.isArray(hook.workspace_roots) ? hook.workspace_roots : [];
+  const cwd = typeof roots[0] === "string" ? roots[0] : undefined;
+  await call(ctx, (a) => a.call("POST", path(id, "hello"), { ...(cwd ? { cwd } : {}) }, 5_000));
+}
+
+/**
+ * Waits for the answers to conversation `id`'s questions, through the agent or the server, until
+ * CURSOR_HOLD_MS. Returns them as one message, or at the cap what `ask` says when nothing brings
+ * an answer back; undefined once no question is open any more.
+ */
+async function hold(ctx: Ctx, id: string): Promise<string | undefined> {
+  const deadline = ctx.now().getTime() + CURSOR_HOLD_MS;
+  const left = () => deadline - ctx.now().getTime();
+  const lines = await withAgent(
+    ctx,
+    async (agent) => {
+      while (left() > 0 && !ctx.signal?.aborted) {
+        const seconds = Math.max(1, Math.min(CYCLE_SECONDS, Math.ceil(left() / 1000)));
+        const { events } = await agent.call<{ events: SessionEvent[] }>(
+          "GET",
+          `${path(id, "events")}?wait=${seconds}`,
+          undefined,
+          (seconds + 15) * 1000,
+          ctx.signal,
+        );
+        const answers = events.filter((e) => e.type === "answer");
+        if (answers.length > 0) {
+          await agent.call("POST", path(id, "ack"), { acks: answers.map((e) => e.ack) });
+          return answers.map((e) => e.line);
+        }
+        if (openQuestions(ctx.store.state(), id).length === 0) return [];
+      }
+      return undefined;
+    },
+    async () => {
+      const s = session(ctx);
+      while (left() > 0 && !ctx.signal?.aborted) {
+        const found = sessionLines(ctx.store.state(), id);
+        if (found.length > 0) {
+          ctx.store.updateState((st) =>
+            ackLines(
+              st,
+              id,
+              found.map((l) => l.ack),
+            ),
+          );
+          return found.map((l) => l.line);
+        }
+        if (openQuestions(ctx.store.state(), id).length === 0) return [];
+        const seconds = Math.max(1, Math.min(CYCLE_SECONDS, Math.ceil(left() / 1000)));
+        await poll(ctx, s, { cursor: ctx.store.state().cursor, seconds, shared: true });
+      }
+      return undefined;
+    },
+  );
+  if (lines) return lines.length > 0 ? lines.join("\n\n") : undefined;
+  const st = ctx.store.state();
+  const open = openQuestions(st, id);
+  if (open.length === 0) return undefined;
+  return open
+    .map(
+      (d) => `No answer yet to ${d} (${st.asked[d]?.question ?? ""}). ${deliveryLine(d, "wait")}`,
+    )
+    .join("\n\n");
 }

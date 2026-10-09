@@ -757,14 +757,17 @@ export function delivery(
   codexReachable: boolean,
   modSeen: boolean,
 ): Delivery {
-  if (input.agent === "claude-code") return !input.headless && modSeen ? "prompt" : "wait";
+  if (input.agent === "claude-code" || input.agent === "cursor")
+    return !input.headless && modSeen ? "prompt" : "wait";
   if (input.agent === "pi" || input.agent === "opencode")
     return input.extensionAnswers ? "prompt" : "wait";
   return input.agent === "codex" && codexReachable ? "prompt" : "wait";
 }
 
 /**
- * How long after its last call the agent still counts a session's mod as there: one events call
+ * How long after its last call the agent still counts a session's mod as there, for Claude Code.
+ * A Cursor conversation counts until its sessionEnd hook says goodbye: its plugin calls only at
+ * session start and at each stop, when its hold takes the answers (#956).: one events call
  * held 25 s, and the next one.
  */
 export const MOD_SEEN_MS = 45_000;

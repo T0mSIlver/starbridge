@@ -19,6 +19,7 @@ the lines; the hook outputs are pinned in `cli/test/permissions.test.ts`.
 | `run` | Flags `--title`, `--reason`, then `--` and the command. Exits with the command's code: 127 when it cannot start, 128 plus the signal when a signal ends it. |
 | `hook permission` | Flags `--agent claude-code\|codex\|pi\|opencode`, `--wait`. Reads the hook's JSON on stdin and prints the output its harness defines, or nothing to leave the prompt to the keyboard. SIGTERM means the keyboard answered. For Codex, nothing also when the owner is at this machine. On Claude Code's `AskUserQuestion`, prints the devices' answers as the picker's. Exits 0. |
 | `hook settle` | Flag `--agent claude-code\|codex`. Reads the hook's JSON on stdin. Exits 0. |
+| `hook session` | Flag `--agent cursor`. Reads a Cursor `sessionStart`, `stop` or `sessionEnd` hook's JSON on stdin. On `stop` with a question of the conversation open, holds up to 10 minutes and prints `{"followup_message": <answer lines>}`, or at the cap the `wait` line for each question still open; otherwise prints nothing. Exits 0. |
 | `hook ask-user` | Deprecated (#848): prints nothing, which lets the question through to the picker that `hook permission` races. Exits 0. |
 | `pair` | Prints `Pairing code: <code>` first. Once approved, unless the Android app checked it from the QR code, prints `Check code: <code>` and waits for Enter (yes) or `n` on the terminal or for `pair --confirm` or `pair --reject`. |
 

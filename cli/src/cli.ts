@@ -27,7 +27,7 @@ import {
   sinceTime,
   wait,
 } from "./decisions";
-import { hookAskUser, hookPermission, hookQuestion, hookSettle } from "./hook";
+import { hookAskUser, hookCursorSession, hookPermission, hookQuestion, hookSettle } from "./hook";
 import { pair, sendConfirm } from "./pair";
 import { pushOnce, quotaPush } from "./quota";
 import { installKind, ReleaseError } from "./release";
@@ -201,6 +201,11 @@ const HELP = `starbridge: post decisions to your devices, report runs, upload qu
       question to your devices, already waiting, and once all are answered prints
       {"answers": [[label], ...]} for opencode; prints nothing on any error. SIGTERM (the
       terminal answered) settles the questions still open.
+
+  starbridge hook session --agent cursor
+      For the Starbridge Cursor plugin's sessionStart, stop and sessionEnd hooks: hook JSON on
+      stdin. On stop, while the conversation has a question open, holds up to 10 minutes and
+      prints the answer as {"followup_message": ...}, which Cursor sends as the next prompt.
 
   starbridge update [--codexbar <version>]
       Install the latest release once its signature checks out, then \`setup --refresh\` (brew
@@ -555,8 +560,10 @@ export async function run(argv: string[], ctx: Ctx): Promise<number> {
         if (sub === "settle") return await hookSettle(ctx, readText("-"), values);
         if (sub === "ask-user") return hookAskUser();
         if (sub === "question") return await hookQuestion(ctx, readText("-"), values);
+        if (sub === "session" && values.agent === "cursor")
+          return await hookCursorSession(ctx, readText("-"));
         throw new UsageError(
-          "usage: starbridge hook permission|settle --agent claude-code, starbridge hook ask-user, or starbridge hook question --agent opencode",
+          "usage: starbridge hook permission|settle --agent claude-code, starbridge hook ask-user, starbridge hook question --agent opencode, or starbridge hook session --agent cursor",
         );
       }
       case "update": {
