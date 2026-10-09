@@ -3,6 +3,7 @@
 import { api } from "./api";
 import { desktop } from "./desktop";
 import { needsHomeScreen, thisBrowser } from "./install";
+import { setPref } from "./prefs";
 
 /** "install": an iOS tab, where push needs the page on the Home Screen first. */
 export type PushState = "unsupported" | "install" | "denied" | "off" | "on";
@@ -42,8 +43,30 @@ async function send(sub: PushSubscription): Promise<void> {
   await api.subscribe(json.endpoint, { p256dh: keys.p256dh, auth: keys.auth });
 }
 
+/**
+ * Stops Web Push to this browser (#943): the server forgets its subscription and the browser
+ * drops it, so nothing subscribes again at the next boot until the owner turns it back on.
+ */
+export async function disablePush(): Promise<PushState> {
+  setPref("pushOff", true);
+  const reg = supported() ? await navigator.serviceWorker.getRegistration("/") : undefined;
+  const sub = await reg?.pushManager.getSubscription();
+  if (sub) {
+    const json = sub.toJSON();
+    const keys = json.keys as { p256dh?: string; auth?: string } | undefined;
+    // The server returns a known endpoint's id when it is sent again.
+    if (json.endpoint && keys?.p256dh && keys.auth) {
+      const { id } = await api.subscribe(json.endpoint, { p256dh: keys.p256dh, auth: keys.auth });
+      await api.unsubscribe(id);
+    }
+    await sub.unsubscribe();
+  }
+  return pushState();
+}
+
 /** Asks for permission (call it from a click) and subscribes this device. */
 export async function enablePush(): Promise<PushState> {
+  setPref("pushOff", false);
   const reg = await registerWorker();
   if (!reg) return "unsupported";
   if ((await Notification.requestPermission()) !== "granted") return pushState();

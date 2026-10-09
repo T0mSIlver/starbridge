@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { usePref } from "@/lib/prefs";
 import type { PushState } from "@/lib/push";
 import { useApp } from "./AppProvider";
 import b from "./PushBanner.module.css";
@@ -11,10 +12,13 @@ export function PushBanner() {
   const ready = useApp().boot.state === "ready";
   const [state, setState] = useState<PushState>();
   const [error, setError] = useState<string>();
+  // The owner turned them off in Settings (#943): no banner asks again.
+  const [off] = usePref("pushOff");
   useEffect(() => {
     import("@/lib/push").then((p) => p.pushState()).then(setState);
   }, []);
   if (!ready || state === undefined || state === "on" || state === "unsupported") return null;
+  if (off && state === "off") return null;
   if (state === "install")
     return (
       <p className={`t-meta ${b.banner}`} data-testid="install-hint">
@@ -38,6 +42,7 @@ export function PushBanner() {
           setError(undefined);
           try {
             setState(await (await import("@/lib/push")).enablePush());
+            (await import("@/lib/notify")).report();
           } catch (e) {
             setError(e instanceof Error ? e.message : String(e));
           }
