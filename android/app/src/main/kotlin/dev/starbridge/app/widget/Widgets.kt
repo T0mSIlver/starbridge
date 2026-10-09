@@ -421,8 +421,8 @@ internal fun QuotasWidget(rows: List<QuotaRow>?, p: Palette, choice: Choice? = n
         val inner = size.width - 36.dp
         if (!wide) {
             // Too narrow for both names (#915), the quota's alone: its meter's colour names the provider.
-            val (head, size) = LocalContext.current.fitting(listOf("${first.window.provider} · ${first.window.window}", first.window.window), inner, 14.sp, true)
-            Text(head, style = style(size, p.fg2, medium = true), maxLines = 1)
+            val (head, headSize) = LocalContext.current.fitting(listOf("${first.window.provider} · ${first.window.window}", first.window.window), inner, 14.sp, true)
+            Text(head, style = style(headSize, p.fg2, medium = true), maxLines = 1)
             Spacer(GlanceModifier.defaultWeight())
             Figure(first, inner, p)
             return@Card
