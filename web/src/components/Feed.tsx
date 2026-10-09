@@ -404,7 +404,8 @@ export function RunsHead({
       aria-expanded={open}
       onClick={onToggle}
     >
-      <Play size={14} />
+      {/* A circled play, as History's clock: a bare triangle read as a second chevron (#868). */}
+      <Icon name="run" size={16} />
       <span className={s.historyTitle}>Runs</span>
       <span>{runs.length}</span>
       {failed > 0 && <span className={`${s.outcome} ${s.bad}`}>· {failed} failed</span>}

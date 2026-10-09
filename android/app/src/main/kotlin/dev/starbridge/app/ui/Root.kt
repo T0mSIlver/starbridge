@@ -360,13 +360,16 @@ fun Main(decisions: List<Decision>, notice: StateFlow<String?>, dismiss: () -> U
                         val inbox by vm.inbox.collectAsStateWithLifecycle()
                         val clock by vm.clock.collectAsStateWithLifecycle()
                         val allowUnseen by vm.allowUnseen.collectAsStateWithLifecycle()
+                        val pushHold by vm.pushHold.collectAsStateWithLifecycle()
+                        LaunchedEffect(Unit) { vm.loadPushHold() }
                         SettingsScreen(
                             windows, quota, members.size, colours, push, server,
-                            SettingsActions(vm::setQuota, vm::setColours, vm::setPush, vm::signOut, devices = { backStack.add(DevicesKey) }, addDevice = { backStack.add(AddDeviceKey) }, inbox = vm::setInbox, clock = vm::setClock, allowUnseen = vm::setAllowUnseen),
+                            SettingsActions(vm::setQuota, vm::setColours, vm::setPush, vm::signOut, devices = { backStack.add(DevicesKey) }, addDevice = { backStack.add(AddDeviceKey) }, inbox = vm::setInbox, clock = vm::setClock, allowUnseen = vm::setAllowUnseen, pushHold = vm::setPushHold),
                             inbox = inbox,
                             clock = clock,
                             allowUnseen = allowUnseen,
                             notificationsOff = notificationsOff,
+                            pushHold = pushHold,
                         )
                     }
                     entry<DevicesKey> {

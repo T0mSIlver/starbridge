@@ -40,7 +40,7 @@ The limits:
 - The web app is code the server sends on each load, so a compromised server could send a page
   that uses or reads that browser's keys, approves permission prompts, or uses a pairing code
   or recovery key typed into it. The Android app and the CLI are installed code. Where this
-  matters, use the Android app and no browser, type pairing codes only into the app, or host
+  matters, use the Android app and no browser, scan machines' QR codes with the app, or host
   your own server; a self-hosted server still sends pushes through starbridge.run's relay
   unless it has its own VAPID keys and uses UnifiedPush
   ([Notifications](../server/README.md#notifications)).
@@ -102,9 +102,12 @@ runs and permission prompts work without it.
 ## Do you trust CodexBar's code?
 
 On Linux and macOS, setup installs [CodexBar](https://github.com/steipete/CodexBar) with Homebrew where it is
-present, else from CodexBar's GitHub release, checked against the `.sha256` published in the
-same release. It installs nothing when the checksum is missing or doesn't match. The check
-proves the file is the one the release published; Starbridge doesn't vouch for CodexBar's code.
+present, else from CodexBar's GitHub release. Each Starbridge release names one CodexBar release
+and the SHA-256 of its files, and setup and `starbridge update` install only that file, so a
+changed or newer CodexBar release reaches you only with a Starbridge release.
+`starbridge update --codexbar <version>` installs another release, checked only against the
+`.sha256` published beside it. Starbridge checks that CodexBar's output still reads right, but
+doesn't vouch for CodexBar's code.
 Your plan credentials stay on the machine, and only the encrypted snapshot goes up.
 
 ## What does it cost?

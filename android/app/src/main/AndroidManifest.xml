@@ -46,6 +46,9 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="starbridge" android:host="auth" />
+                <!-- A machine's QR code (#795): only this app opens it, so its check key never
+                     reaches a browser. -->
+                <data android:scheme="starbridge" android:host="pair" />
             </intent-filter>
         </activity>
 

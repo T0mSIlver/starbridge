@@ -7,6 +7,8 @@ import {
   BODY_SCHEMAS,
   bindMessage,
   checkCode,
+  checkKeyFromLink,
+  checkProof,
   claimHash,
   codeFromLink,
   computePace,
@@ -35,6 +37,7 @@ import {
   toB64,
   verify,
   verifyBind,
+  verifyCheckProof,
   verifyDirectory,
   withheldBy,
 } from "../src/index";
@@ -154,6 +157,15 @@ describe("pairing.json", () => {
       "unknown-member",
     );
   });
+  test("check proof", () => {
+    const { entries, id, key, proof } = v.check;
+    expect(checkProof(entries, id, key)).toBe(proof);
+    expect(verifyCheckProof(entries, id, key, proof)).toBe(true);
+    // Another add entry, another key, or no entry at all: no match.
+    expect(verifyCheckProof(entries, "browser", key, proof)).toBe(false);
+    expect(verifyCheckProof(entries, id, `${key.slice(1)}0`, proof)).toBe(false);
+    expect(verifyCheckProof(entries.slice(0, 2), id, key, proof)).toBe(false);
+  });
   for (const c of v.parse) {
     test(`parse ${c.input}`, () => {
       let got: string;
@@ -193,6 +205,22 @@ describe("pairing.json: links", () => {
         got = (e as ProtocolError).code;
       }
       expect(got).toBe(c.expect);
+    });
+  }
+});
+
+describe("pairing.json: app links", () => {
+  const [made, ...rest] = V.pairing.keyLinks;
+  test("appPairingLink", () => {
+    expect(made.link).toBe(
+      `starbridge://pair?server=https%3A%2F%2Fstarbridge.example%3A8443&k=${made.key}#${V.pairing.code}`,
+    );
+    expect(checkKeyFromLink(made.link)).toBe(made.expect);
+    expect(formatPairingCode(codeFromLink(made.link))).toBe(V.pairing.code);
+  });
+  for (const c of rest) {
+    test(`checkKeyFromLink ${c.input}`, () => {
+      expect(checkKeyFromLink(c.input) ?? null).toBe(c.expect);
     });
   }
 });

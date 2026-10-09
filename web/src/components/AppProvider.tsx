@@ -1,12 +1,13 @@
 "use client";
 
-import type { Settled } from "@starbridge/protocol";
+import { PRESENCE_INPUT_MS, type Settled } from "@starbridge/protocol";
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { api, backingOff } from "@/lib/api";
 import type { Boot, Ctx, Inbox, Quotas, Runs } from "@/lib/device";
 import { reach, send } from "@/lib/funnel";
 import { newestWins } from "@/lib/newest";
 import { AnsweredFirst } from "@/lib/outcome";
+import { Beacon, PRESENCE_CHANNEL, PRESENCE_CHECK_MS, PRESENCE_EVENTS } from "@/lib/presence";
 import {
   DEFAULT_SETTINGS,
   loadSettings,
@@ -467,6 +468,46 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       navigator.serviceWorker?.removeEventListener("message", onMessage);
     };
   }, [ctx, refreshInbox, refreshQuotas, refreshPrompts, pushed]);
+
+  // While the owner uses this page, the other devices' pushes wait (#848). Kept across ctx
+  // updates (a device approved, the directory grown), which would otherwise say absent.
+  const signedIn = !!ctx;
+  useEffect(() => {
+    if (!signedIn) return;
+    // Tabs share one device: each tells the others when it is in use.
+    const tabs =
+      typeof BroadcastChannel === "undefined" ? undefined : new BroadcastChannel(PRESENCE_CHANNEL);
+    let siblingAt = Number.NEGATIVE_INFINITY;
+    if (tabs)
+      tabs.onmessage = () => {
+        siblingAt = Date.now();
+      };
+    const beacon = new Beacon(
+      api.presence,
+      () => document.visibilityState === "visible",
+      Date.now,
+      () => Date.now() - siblingAt < PRESENCE_INPUT_MS,
+    );
+    let toldAt = 0;
+    const input = () => {
+      beacon.input();
+      if (Date.now() - toldAt >= PRESENCE_CHECK_MS) {
+        toldAt = Date.now();
+        tabs?.postMessage("in-use");
+      }
+    };
+    const tick = () => void beacon.tick();
+    for (const e of PRESENCE_EVENTS) window.addEventListener(e, input, { passive: true });
+    document.addEventListener("visibilitychange", tick);
+    const timer = setInterval(tick, PRESENCE_CHECK_MS);
+    return () => {
+      clearInterval(timer);
+      for (const e of PRESENCE_EVENTS) window.removeEventListener(e, input);
+      document.removeEventListener("visibilitychange", tick);
+      tabs?.close();
+      if (beacon.present()) api.presence(false).catch(() => {});
+    };
+  }, [signedIn]);
 
   // While a prompt waits or just closed, poll fast so a keyboard answer clears it at once.
   const busy = prompts.length > 0;

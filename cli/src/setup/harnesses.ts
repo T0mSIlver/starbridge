@@ -110,6 +110,9 @@ export function hasPi(sys: Sys): boolean {
   return which(sys.ctx.env, "pi") !== undefined;
 }
 
+/** This repository as a Pi source, at any ref and in any URL form, and no other repository (#763). */
+const STARBRIDGE_PI = /github\.com[/:]T0mSIlver\/starbridge(?:\.git)?\/?(?:@.*)?$/i;
+
 /** The package source as Pi's settings list it, when installed (any ref or URL form). */
 export function piPackage(sys: Home): string | undefined {
   const dir = sys.ctx.env.PI_CODING_AGENT_DIR || join(sys.home, ".pi", "agent");
@@ -124,8 +127,7 @@ export function piPackage(sys: Home): string | undefined {
   if (!Array.isArray(packages)) return undefined;
   for (const p of packages) {
     const source = typeof p === "string" ? p : (p as { source?: unknown })?.source;
-    if (typeof source === "string" && /github\.com[/:]T0mSIlver\/starbridge\b/i.test(source))
-      return source;
+    if (typeof source === "string" && STARBRIDGE_PI.test(source)) return source;
   }
   return undefined;
 }

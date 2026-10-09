@@ -36,7 +36,9 @@
       }
     ],
     "id": "devbox",
-    "expect": "Y5YK-VZEA-18S6-VTZE"
+    "expect": "Y5YK-VZEA-18S6-VTZE",
+    "key": "S2XTX8CMGXX6TR2K",
+    "proof": "G7kPJaGfTMnjDoPCH85wf_8ADqy16NpmxxGAyWHu5R0"
   },
   "parse": [
     {
@@ -74,6 +76,35 @@
     {
       "input": "https://starbridge.run/pair#0123-4567",
       "expect": "bad-encoding"
+    }
+  ],
+  "keyLinks": [
+    {
+      "note": "appPairingLink(server, code, key): the server and check key in the query, the code after #; checkKeyFromLink reads the key back",
+      "server": "https://starbridge.example:8443/",
+      "key": "S2XTX8CMGXX6TR2K",
+      "link": "starbridge://pair?server=https%3A%2F%2Fstarbridge.example%3A8443&k=S2XTX8CMGXX6TR2K#008J-4CT4-ANK7-F24S-NAXW-SQFE",
+      "expect": "S2XTX8CMGXX6TR2K"
+    },
+    {
+      "input": "starbridge://pair?x=1&k=s2xtx8cmgxx6tr2k#ABCD",
+      "expect": "S2XTX8CMGXX6TR2K"
+    },
+    {
+      "input": "starbridge://pair#k=S2XTX8CMGXX6TR2K",
+      "expect": null
+    },
+    {
+      "input": "starbridge://pair?k=0123#ABCD",
+      "expect": null
+    },
+    {
+      "input": "starbridge://pair?k=0123456789ABCDEU#ABCD",
+      "expect": null
+    },
+    {
+      "input": "https://starbridge.run/pair#008J-4CT4-ANK7-F24S-NAXW-SQFE",
+      "expect": null
     }
   ],
   "bind": {

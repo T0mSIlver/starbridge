@@ -201,6 +201,11 @@ export interface AgentConfig {
   /** Permission prompts go to Starbridge (#57); off unless `starbridge config permissions on`. */
   permissions?: { enabled?: boolean };
   /**
+   * Presence (#848): the agent tells the server whether the owner sits at this machine's screen,
+   * so pushes wait while they do; off unless `starbridge config presence on`.
+   */
+  presence?: { enabled?: boolean };
+  /**
    * Agents `uninstall --agent` took Starbridge out of (#750): setup and refresh leave them
    * alone until `setup --agent` brings one back.
    */

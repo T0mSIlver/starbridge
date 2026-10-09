@@ -3,7 +3,8 @@
  * minutes: on Windows, Bun can wedge on a call over the agent's socket so that even its own test
  * timeout never fires, and the whole suite then ran until the job limit (#834). A killed file is
  * reported by name; its hung test is likely the one after the last listed above it. Exits 1 when any
- * file failed or hung. The Windows CI job runs it; `bun test` stays the way to run the suite.
+ * file failed or hung. The Windows and macOS CI jobs run it; `bun test` stays the way to run the
+ * suite.
  */
 import { readdirSync } from "node:fs";
 import { join } from "node:path";

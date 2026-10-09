@@ -87,6 +87,13 @@ interface Store {
     /** Polls the items while the app is in front and no push has arrived ([on] false stops it). */
     fun foreground(on: Boolean)
 
+    /** A touch on the app: the owner is using this phone (#848). */
+    fun touched() {}
+    /** The account's hold time in seconds (#848), once read; null on a server without it. */
+    val pushHold: StateFlow<Int?> get() = MutableStateFlow(null)
+    fun loadPushHold() {}
+    fun setPushHold(seconds: Int) {}
+
     /** Keeps [joinAsks] current while the app is in front. */
     fun watchJoins(on: Boolean)
     fun compareJoin(id: String)

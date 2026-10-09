@@ -38,6 +38,7 @@ import {
   postSettled,
   waitingFor,
 } from "./permissions";
+import { untilRan } from "./ran";
 
 /** Slack past a held request's `wait` before the hook gives up on the agent. */
 const SLACK_MS = 15_000;
@@ -83,14 +84,19 @@ export function untilOrphaned(
   };
 }
 
-/** `starbridge hook permission --agent claude-code [--wait 570s]`, hook JSON on stdin. */
+/**
+ * `starbridge hook permission --agent claude-code [--wait 570s]`, hook JSON on stdin. `ran`
+ * watches for a Bash call starting, which means the keyboard allowed it (#866).
+ */
 export async function hookPermission(
   outer: Ctx,
   stdin: string,
   opts: { agent?: string; wait?: string },
+  ran: typeof untilRan = untilRan,
 ): Promise<number> {
   const watch = untilOrphaned(outer.signal);
-  const ctx = { ...outer, signal: watch.signal };
+  let ctx = { ...outer, signal: watch.signal };
+  let started: ReturnType<typeof untilRan> | undefined;
   try {
     const hook = parseHook(stdin);
     // Its picker is a permission dialog, raced whether or not permission prompts go to the devices.
@@ -98,6 +104,13 @@ export async function hookPermission(
       return await racePicker(ctx, outer, hook, opts.wait);
     if (!permissionsEnabled(ctx)) return 0;
     const agent = agentName(opts.agent);
+    // Claude Code tells the hook nothing when the keyboard allows the call; the call starting
+    // settles the prompt as SIGTERM does, rather than PostToolUse once it ends.
+    const command = (hook.tool_input as { command?: unknown } | undefined)?.command;
+    if (agent === "claude-code" && hook.tool_name === "Bash" && typeof command === "string") {
+      started = ran(ctx.signal, command);
+      ctx = { ...ctx, signal: started.signal };
+    }
     const waitMs = opts.wait ? parseDuration(opts.wait) : DEFAULT_WAIT_MS;
     const deadline = ctx.now().getTime() + waitMs;
     const source = permissionSource(hook, ctx.env);
@@ -110,6 +123,7 @@ export async function hookPermission(
   } catch (e) {
     ctx.err(`starbridge: permission prompt not sent: ${(e as Error).message}`);
   } finally {
+    started?.stop();
     watch.stop();
   }
   return 0;
@@ -163,7 +177,7 @@ async function viaAgent(
     }
     await agent.call("POST", `${path}/settle`, { outcome: "timeout" }, 5_000);
   } catch (e) {
-    // Claude Code sends SIGTERM when the keyboard answers Esc or No.
+    // Claude Code sends SIGTERM when the keyboard answers Esc or No; a Yes starts the call (#866).
     if (!(e instanceof Interrupted)) throw e;
     await agent.call("POST", `${path}/settle`, { outcome: "keyboard" }, 5_000);
   }
@@ -195,7 +209,7 @@ async function direct(ctx: Ctx, ask: Ask, deadline: number): Promise<unknown> {
   while (true) {
     const p = ctx.store.state().permissions?.[id];
     if (!p || p.settled) return undefined;
-    // Claude Code sends SIGTERM when the keyboard answers Esc or No; it drops a later answer.
+    // SIGTERM (Esc or No at the keyboard) or the call starting (Yes, #866); a later answer is dropped.
     if (ctx.signal?.aborted) {
       await settle("keyboard");
       return undefined;

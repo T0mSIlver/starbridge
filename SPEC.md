@@ -120,14 +120,24 @@ provider plugins add providers, not panels.
   (#355): otherwise a server in the middle could forge an approval to the joining device. The CLI
   never joins by digits.
 - **A machine's check code** (#795). A pairing code that reaches a browser lets a hostile server
-  approve the machine into a chain it controls, which no device in that chain can expose, so the
-  owner compares: the machine shows three groups of 80 bits of a hash of its `add` entry and
-  saves the pairing only once a person types the fourth from the Android app. The entry, not the
-  keys: a pairing request proves no private key, so a stand-in can copy the machine's keys, and
-  a fork can keep the owner's entry 0; the entry's `prev` ties it to the chain, and its
-  signature, which the server cannot predict, stops a search for two entries that match. Typed rather than
-  a yes, so an agent running setup cannot confirm it; the owner chose a confirmation on every
-  setup over a code only shown.
+  approve the machine into a chain it controls, which no device in that chain can expose. The
+  check code, 80 bits of a hash of the machine's `add` entry, tells the chains apart. It covers the
+  entry rather than the keys: a pairing request proves no private key, so a stand-in can copy the
+  machine's keys, and a fork can keep the owner's entry 0. The entry's `prev` ties it to the
+  chain, and its signature, which the server cannot predict, stops a search for two entries that
+  match. The machine's QR carries a second secret, the check key, and an Android app that scanned
+  it proves with it which entry it wrote, so the machine saves the pairing without asking: the
+  code never reached a browser on that path, and the owner should not have to do anything. Every
+  other path (a browser, a typed code, Android 0.1.0) ends with the machine showing the whole
+  code and asking `Same code? [Y/n]`, Enter for yes, if the Android app shows the same; the
+  browser shows it too, after Approve, for an owner with no app. Tom chose one keypress over
+  typing a group, and Enter over `y` (2026-10-08), accepting that an agent running setup, or a
+  stray Enter, can confirm it. The QR code is a `starbridge://pair` link, as Signal's
+  `sgnl://linkdevice` and WhatsApp's in-app scan are, rather than an https one, which a phone
+  without the app would open in a browser and so hand the key to the server (Tom, 2026-10-08).
+  A phone without the app opens the printed link or types the code instead, and the machine
+  asks. The code stays after `#`, where Android 0.1.0's scanner reads it, so that scanner still
+  pairs (and the machine asks); 0.1.0's camera opens nothing until the app updates.
 - **The recovery key** is a random 16-byte seed shown as 28 Crockford base32 characters with a
   12-bit check, in seven groups of four, read in any case, with or without dashes (#199). 128 bits
   is Ed25519's own security level; the seed is random, so it needs no slow key derivation:
@@ -431,6 +441,16 @@ provider plugins add providers, not panels.
   reads the user's: `STARBRIDGE_CONFIG_DIR` and `CODEX_HOME` reach it only as user environment
   variables. Windows has no SIGTERM: a stopped hook dies without settling its prompt, and the
   next `Stop` hook settles it.
+- **Presence** (#848), opt-in per machine with `starbridge config presence on`, since a machine
+  reports when its owner is at it: every 10 s the agent reads the screen's lock and the time
+  since its last input, the number the OS keeps for its screensaver, and sends the server only
+  "present" (unlocked, input in the last minute) or not, again every 30 s while present. macOS
+  reads `ioreg` (`CGSSessionScreenIsLocked`, `HIDIdleTime`); Windows keeps one PowerShell
+  running, since each start costs about a second of CPU, for `GetLastInputInfo` and whether the
+  lock screen (`LogonUI`) runs in its session; Linux takes logind's active graphical session and
+  its `LockedHint`, and GNOME's idle monitor or `xprintidle`, since logind's `IdleHint` flips only
+  after the desktop's idle delay, minutes. A headless box finds no graphical session and sends
+  nothing. Nothing reads what is typed.
 - **Answers on the machine** (#260). A machine accepts an answer only from a device the question
   was sealed to, only while it is open, and for an `answerIn` question only a Done, when it asked
   for one (#539). A settled question's
@@ -453,9 +473,10 @@ provider plugins add providers, not panels.
   the machine's pairing, and starbridge.run, and prints `Pairing with <host>`. It asks only when
   the machine is paired with another server, since it would otherwise switch silently; Enter
   keeps the pairing.
-- **The pairing link** `https://starbridge.run/pair#CODE`, which `pair` prints and shows as a QR
-  code, is also an App Link (#611): setup says to scan it with the camera, and a phone's camera
-  hands links to apps, not to a browser that would first ask to become a device itself. The app
+- **The pairing link** `https://starbridge.run/pair#CODE`, which `pair` prints and a device shows
+  as a QR code, is also an App Link (#611): a phone's camera hands links to apps, not to a browser
+  that would first ask to become a device itself. A machine's QR code is a `starbridge://pair`
+  link instead (#795), which the app opens on any server. The app
   opens Add a device with the code looked up, once the phone is in the account; a phone signed in
   but not in the account yet joins with it instead, as another device's "Scan with the new phone"
   code asks. Without the app,
@@ -465,24 +486,32 @@ provider plugins add providers, not panels.
   A link from another server that this one doesn't know names that server, "This code is from
   starbridge.run, and this phone is signed in to …", instead of "No pairing with this code"
   (#671). Only a failed lookup says it, since a server can answer under several names.
-- **Setup** (`cli/src/setup/`; #68, #239, #245) installs CodexBar's latest release, taking the
-  static musl build where the glibc one would not start. Only the repository is pinned, since
-  CodexBar ships almost daily (#530): the tarball must match the `.sha256` of the same release,
-  as Homebrew checks it, and `starbridge update` moves that install to the latest release too.
-  The latest version comes from where `releases/latest` redirects, not GitHub's API, which allows
-  60 unauthenticated requests an hour per address, few behind a shared NAT on launch day; the
+- **Setup** (`cli/src/setup/`; #68, #239, #245) installs the CodexBar release this Starbridge
+  release pins, taking the static musl build where the glibc one would not start, and
+  `starbridge update` moves that install to the new binary's pin (#568). Each release PR pins
+  CodexBar's latest release, which `version.ts` writes with each tarball's SHA-256 into
+  `cli/src/setup/codexbar-pin.json`, so the signed binary carries them. Checking a tarball against
+  the `.sha256` of its own release (#530) caught only a damaged download: whatever CodexBar's
+  account published, or replaced, since its release job uploads with `--clobber`, ran on every
+  machine at its next update. CodexBar's releases carry no signature or build attestation.
+  The pin costs no work per CodexBar release, which ships almost daily; users get CodexBar's
+  fixes with the next Starbridge release, or sooner with `update --codexbar <version>`, which
+  checks only the release's own `.sha256` and which `update` does not undo while the pin is
+  older. A CodexBar from Homebrew follows steipete's tap, as the user's `brew upgrade` does. The
   download says its size and how far it got every 5 s, since the Linux tarball is 170 MB (#618).
   `update` goes on to CodexBar when its own download fails, offline say, but not when a release
   does not check out (#617).
-  `update --codexbar <version>` installs one release, for when the latest breaks; a broken
+  `update --codexbar <version>` installs one release, for when the pinned one breaks; a broken
   CodexBar already shows as each provider's quota error, so there is no other rollback. A daily
-  workflow installs the latest release and reads its output without credentials, and opens an
-  issue when it breaks. A provider works when `usage
+  workflow installs CodexBar's latest release and reads its output without credentials, and opens
+  an issue when it breaks, so a release does not pin a broken one. A provider works when `usage
   --provider X` returns windows; CodexBar exits 1 with the reason in its JSON row, so setup reads
   the row. The unit runs the `starbridge` on the PATH when that is the running binary, since that
   path survives brew upgrades. Setup turns on plugin auto-update through `extraKnownMarketplaces`,
   installs the Claude Code plugins only from a marketplace whose source is this repository (#274),
-  and Codex's skill and rule, the Pi package and opencode's plugin and skill from copies the CLI
+  and uninstall removes only that one, so a developer's own `starbridge` marketplace survives;
+  both run `claude` from the home directory, so no repository's `.claude` settings are read or
+  edited (#762). Setup installs Codex's skill and rule, the Pi package and opencode's plugin and skill from copies the CLI
   carries so versions match. The local agent rewrites outdated copies when it starts.
 - **Setup asks little** (#750). Each question was one more Enter between a new user and their
   first answer, and nearly everyone said yes. Setup installs Starbridge in every agent it finds
@@ -491,8 +520,9 @@ provider plugins add providers, not panels.
   mid-output reads as a prompt. Claude Code and Pi, whose installs run for seconds, first print
   `installing…` (#773). It still asks before installing CodexBar, a
   third-party binary (with #748, only when no other machine sends quotas), which providers to
-  send, whether to linger, and whether to send a test decision. Permission prompts stay off and
-  unasked; the summary names `starbridge config permissions on`, `starbridge status`,
+  send, whether to linger, and whether to send a test decision. Permission prompts and presence
+  stay off and unasked; the summary names `starbridge config permissions on`, on a desktop or
+  laptop `starbridge config presence on`, `starbridge status`,
   `starbridge uninstall --agent <name>` and `starbridge uninstall`. With no terminal every
   question takes its default, so nothing waits on input. A failed install prints its reason and
   `starbridge setup --agent <name>`, and setup goes on. Every step after pairing needs the
@@ -666,7 +696,12 @@ Codex prompts are not supported.
 - **Claude Code** (#57). A `PermissionRequest` command hook (600 s) races the dialog. Its input has
   no `tool_use_id`, so the hook settles a call by the hash of its `tool_input` on `PostToolUse`,
   `PostToolUseFailure` and `PermissionDenied` (a call that runs and fails fires only
-  `PostToolUseFailure`, #847), and all of a session's prompts on `Stop` and `SessionEnd`. Both
+  `PostToolUseFailure`, #847), and all of a session's prompts on `Stop` and `SessionEnd`. A Yes at
+  the keyboard tells the hook nothing until the call ends, so a long command left its card
+  answerable on the phone for the whole run (#866): while it holds a Bash prompt, the hook watches
+  for the call's shell (a process under Claude Code started after the prompt, whose arguments
+  carry the command as `eval '…'`) and settles the prompt when it starts. Other tools, and
+  Windows, still settle when the call ends. Both
   tool hooks run a shell check that starts the CLI only while the CLI marks an unexpired prompt
   open (`<config>/permissions-open`, written with the state): starting it on every tool call cost
   about 50 ms and 50 MB, prompts on or off (#517). "This session" and "always" are offered only
@@ -777,6 +812,9 @@ Codex prompts are not supported.
   the owner why this run is theirs to watch. The run posts its start, its first progress right
   after it, later progress at most every 10 s, a heartbeat every minute and its exit; a first
   progress held back 10 s left a run that opens on `[0/5]` with an indeterminate bar (#828).
+  Each update's `at` carries milliseconds (#867): devices keep the update with the latest `at`,
+  and with whole seconds the start and the first progress tied, so a phone that got the start's
+  push first kept it and showed no step until the next progress, 10 s later.
   Output goes through a pipe, so tools that print progress only to a terminal show none.
 - Devices call a run lost 3 minutes after its last update (#190, #249); the server cannot read a
   sealed run, so this is client-side. A lost run shows "Lost, no news for 3 min 37 s" and no
@@ -792,6 +830,8 @@ Codex prompts are not supported.
   dismissed run out locally until a newer update, so a server without the route still hides it
   on that phone.
 - Android shows a notification per run, a Live Update on Android 16; dismissing a run closes it.
+  Its progress ("34 of 120", "40%") leads the title: at the end, a long title's ellipsis hid it,
+  and the collapsed notification shows no text line under a progress bar (#826).
   The web polls every 2 s while a run is live and the page is visible, else every 10 s.
 
 ### Quotas
@@ -863,7 +903,9 @@ first window, so a provider with a window running out leads.
   it returns to its place and notifies once, "Back from snooze", never again. The owner chose
   these from mockups.
 - **History** lists answered questions and the last 7 days of prompts, with how and where each was
-  answered.
+  answered. A question settled `elsewhere` without a page to answer in was answered in the
+  agent's own picker or terminal, so it reads "at the keyboard", never "by the agent", which
+  stays for a withdrawn question or one answered on its page (#865).
 - **Closed sections wait at the bottom** (#662, #682). Closed, History sits at the bottom of a
   short inbox and Snoozed just above it, out of the way; opened, each glides up under the items
   and its rows fade in. Opening Snoozed leaves History at the bottom.
@@ -958,6 +1000,10 @@ first window, so a provider with a window running out leads.
   brings the question back. Let go earlier and the card springs back. The owner chose one
   direction and a set time, so a snooze is one gesture; asking stays a setting. Screen readers
   get a Snooze action instead.
+- **Presence** (#848). The app in front and touched in the last minute holds the other devices'
+  pushes, as a web page in use does: the owner chose this, since a phone in hand is a screen in
+  use as much as a Mac. It counts a touch or key down, never which. Settings → Notifications
+  sets the account's hold time, as the web's Settings does.
 - Pull to refresh shows only on the screen that was pulled.
 - **Update screen** (#497): when the server answers 426 `client-too-old`, the app shows only
   "Update Starbridge", the server's minimum and this phone's release, and one button back to
@@ -1019,11 +1065,19 @@ Tokens, type and components: `DESIGN.md`.
   `packageManager`'s version, since node slim images ship no corepack (#430).
 - **CI** (#380). Main runs one at a time; a newer merge replaces the waiting run, and the head's
   deploy covers the merges in between. A pull request runs only the jobs its files can affect;
-  skipped jobs still report success. The e2e runs under `.github/watchdog.sh`. Tests point
+  skipped jobs still report success. The e2e runs under `.github/watchdog.sh`. A merge to main
+  skips the e2e when a run from this repository already passed it on the same git tree, most often
+  the pull request's last run on its merge with the commit main then held (#878): a tree fixes every
+  file, `ci.yml` included, so that run tested what main now holds. Each passing e2e uploads an
+  artifact named after its tree, kept 7 days; when none is found or the lookup fails, it runs. A
+  fork's runs do not count, since a fork's pull request runs its own `ci.yml`. Tests point
   `TMPDIR` at one directory per run and remove it (`test-tmp.ts`, #313). A `windows-latest` job
   (#552) runs the CLI's platform tests and starts a built `.exe`; the rest of the CLI suite runs
   there without failing the job until it passes. A private repository skips it, since GitHub's
-  Windows runners need a public one or paid minutes.
+  Windows runners need a public one or paid minutes. A `macos-latest` job (#877), skipped the same
+  way, starts a built binary and runs the whole CLI suite, which must pass: the launchd service and
+  the screen readers run only on a Mac, so the real launchd starts and stops the agent there.
+  Both jobs run each test file alone and kill one that hangs (`cli/scripts/test-each.ts`, #862).
 - **Monitoring.** `uptime.yml` checks `/healthz`, `/healthz/backup` (fails when the last nightly
   backup is over 26 h old) and `/healthz/disk` (under 2 GB free), and opens one `outage` issue.
 

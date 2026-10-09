@@ -1,7 +1,9 @@
 "use client";
 
+import { PUSH_HOLD_CHOICES } from "@starbridge/protocol";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import { api } from "@/lib/api";
 import type { RecoveryState } from "@/lib/device";
 import { addedLabels, dayAndTime } from "@/lib/format";
 import { AGENTS_GUIDE } from "@/lib/links";
@@ -151,7 +153,57 @@ function InboxSection() {
           }}
         />
       </Row>
+      <HoldRow />
     </Section>
+  );
+}
+
+const HOLD_LABELS: Record<(typeof PUSH_HOLD_CHOICES)[number], string> = {
+  0: "Off",
+  15: "15 s",
+  30: "30 s",
+  60: "1 min",
+  120: "2 min",
+};
+
+/**
+ * How long other devices' notifications wait while you use a screen (#848): an account setting,
+ * since the server holds the pushes. Shown once the server says what it is.
+ */
+function HoldRow() {
+  const [hold, setHold] = useState<number | undefined>();
+  const [error, setError] = useState<string | undefined>();
+  useEffect(() => {
+    api.settings().then(
+      (s) => setHold(s.pushHold),
+      // A server without the setting: nothing to show.
+      () => {},
+    );
+  }, []);
+  if (hold === undefined) return null;
+  return (
+    <Row
+      label="Hold notifications while you’re at a screen"
+      sub={
+        error ??
+        "While you use Starbridge or a machine with presence on, your other devices are notified only if a question is still open after this"
+      }
+    >
+      <Segmented<number>
+        label="Hold notifications while you’re at a screen"
+        value={hold}
+        options={PUSH_HOLD_CHOICES.map((c) => [c, HOLD_LABELS[c]])}
+        onChange={(pushHold) => {
+          const was = hold;
+          setHold(pushHold);
+          setError(undefined);
+          api.saveSettings({ pushHold }).catch((e) => {
+            setHold(was);
+            setError(message(e));
+          });
+        }}
+      />
+    </Row>
   );
 }
 
@@ -390,6 +442,7 @@ function DeviceSection() {
               {d.role === "machine" ? "Machine" : "Device"}
               {d.self ? " · this browser" : d.addedAt ? ` · ${added.get(d.id)}` : ""}
             </div>
+            {d.check && <div className={`t-code ${s.sub}`}>Check code {d.check}</div>}
           </div>
           {d.self ? (
             <span className={s.revokeSpace} />

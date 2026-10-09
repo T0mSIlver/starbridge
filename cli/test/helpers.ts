@@ -5,6 +5,7 @@ import type { LiveServer } from "@starbridge/server/test-support";
 import { run } from "../src/cli";
 import { Store } from "../src/config";
 import type { Ctx } from "../src/context";
+import { sendConfirm } from "../src/pair";
 
 export const FAKE_CODEXBAR = join(import.meta.dir, "fixtures", "fake-codexbar.sh");
 
@@ -41,9 +42,22 @@ export async function paired(server: LiveServer, name = "devbox"): Promise<TestC
   const ctx = testCtx();
   const done = run(["pair", "--server", server.url, "--name", name], ctx);
   await until(() => ctx.lines.some((l) => l.startsWith("Pairing code: ")));
-  const code = ctx.lines[0]?.replace("Pairing code: ", "") as string;
-  await server.approve(code);
+  await approveAndConfirm(server, ctx);
   if ((await done) !== 0) throw new Error(ctx.errors.join("\n"));
   ctx.lines.length = 0;
   return ctx;
+}
+
+/**
+ * Approves, as the owner's phone, the pairing whose code `ctx` printed, from the typed code, then
+ * answers whether the check codes match, as `starbridge pair --confirm` or `--reject` does.
+ * Returns the check code the phone shows.
+ */
+export async function approveAndConfirm(server: LiveServer, ctx: TestCtx, same = true) {
+  await until(() => ctx.lines.some((l) => l.startsWith("Pairing code: ")));
+  const code = ctx.lines.findLast((l) => l.startsWith("Pairing code: "))?.slice(14) as string;
+  const check = await server.approve(code);
+  await until(() => ctx.lines.some((l) => l.includes("Same code?")));
+  sendConfirm({ ...ctx, out: () => {} }, same);
+  return check;
 }

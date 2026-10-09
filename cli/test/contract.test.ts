@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { LiveServer } from "@starbridge/server/test-support";
 import { run } from "../src/cli";
 import { codexNotice } from "../src/codex";
-import { paired, testCtx, until } from "./helpers";
+import { approveAndConfirm, paired, testCtx, until } from "./helpers";
 
 let server: LiveServer;
 beforeEach(async () => {
@@ -64,7 +64,7 @@ test("pair prints its code first; errors start with starbridge:", async () => {
   const done = run(["pair", "--server", server.url], ctx);
   await until(() => ctx.lines.length > 0);
   expect(ctx.lines[0]).toMatch(/^Pairing code: \S+$/);
-  await server.approve((ctx.lines[0] as string).slice("Pairing code: ".length));
+  await approveAndConfirm(server, ctx);
   expect(await done).toBe(0);
   expect(await run(["ask", "--input", "/nonexistent.json"], ctx)).toBe(1);
   expect(ctx.errors.at(-1)).toStartWith("starbridge: cannot read /nonexistent.json");

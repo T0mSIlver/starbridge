@@ -6,6 +6,7 @@ import { refreshFiles } from "../setup/harnesses";
 import { socketPath } from "./api";
 import { Decisions } from "./decisions";
 import { Permissions } from "./permissions";
+import { Presence } from "./presence";
 import { Quota } from "./quota";
 import { Runs } from "./runs";
 import { Agent } from "./server";
@@ -30,7 +31,13 @@ export function makeAgent(ctx: Ctx, opts: AgentOpts = {}): Agent {
   const quota = { providers, intervalMs, ...(codexbar ? { codexbar } : {}) };
   const agent = new Agent(ctx, socket, (hub) => {
     const q = new Quota(hub, quota);
-    return [new Decisions(hub, (why) => q.now(why)), q, new Permissions(hub), new Runs(hub)];
+    return [
+      new Decisions(hub, (why) => q.now(why)),
+      q,
+      new Permissions(hub),
+      new Runs(hub),
+      new Presence(hub),
+    ];
   });
   return agent;
 }

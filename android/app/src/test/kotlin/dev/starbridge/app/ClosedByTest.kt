@@ -13,6 +13,7 @@ class ClosedByTest {
     fun whatThenWho() {
         assertEquals("Looks right · on this phone", closedHow(asked.copy(answer = "Looks right")))
         assertEquals("Looks right · on Pixel", closedHow(asked.copy(theirAnswer = "Looks right", answeredOn = "Pixel")))
+        assertEquals("Answered · at the keyboard", closedHow(asked.copy(settled = "elsewhere")))
         assertEquals("Withdrawn · by the agent", closedHow(asked.copy(settled = "withdrawn")))
         assertEquals("Answered · on another device", closedHow(asked.copy(answeredAt = Instant.parse("2026-10-07T10:05:00Z"))))
     }

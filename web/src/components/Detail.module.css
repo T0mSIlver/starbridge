@@ -121,8 +121,10 @@
 
 .free {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--s2);
   justify-items: start;
+  min-width: 0;
 }
 
 /* Material 3's filled field with a trailing icon button, centred on the field's line. */
@@ -136,6 +138,8 @@
   padding-right: calc(var(--size-tap) + var(--s1));
   resize: none;
   field-sizing: content;
+  /* A pasted code with no spaces wraps inside the field (#873). */
+  overflow-wrap: anywhere;
 }
 
 .send {

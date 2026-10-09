@@ -56,6 +56,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import androidx.lifecycle.ViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dev.starbridge.app.data.Beacon
 import dev.starbridge.app.data.CardButtons
 import dev.starbridge.app.data.SwipeSnooze
 import dev.starbridge.app.data.Clock
@@ -95,6 +96,9 @@ class SettingsViewModel @Inject constructor(private val store: Store, private va
     val clock = prefs.clock
     fun setClock(value: Clock) = prefs.setClock(value)
     fun setPush(type: String) = store.setPushType(type)
+    val pushHold = store.pushHold
+    fun loadPushHold() = store.loadPushHold()
+    fun setPushHold(seconds: Int) = store.setPushHold(seconds)
     fun signOut() = store.signOut()
 }
 
@@ -109,6 +113,7 @@ class SettingsActions(
     val inbox: (InboxView) -> Unit = {},
     val clock: (Clock) -> Unit = {},
     val allowUnseen: (Boolean) -> Unit = {},
+    val pushHold: (Int) -> Unit = {},
 )
 
 /** Everything this phone keeps for itself, and the account's devices. The settings stay on the phone. */
@@ -126,6 +131,8 @@ fun SettingsScreen(
     clock: Clock = Clock.System,
     allowUnseen: Boolean = false,
     notificationsOff: Boolean = false,
+    /** The account's hold time in seconds (#848); null on a server without it, which shows no row. */
+    pushHold: Int? = null,
 ) {
     val context = LocalContext.current
     var signingOut by rememberSaveable { mutableStateOf(false) }
@@ -200,26 +207,35 @@ fun SettingsScreen(
         }
 
         item { Section("Notifications") }
+        val notificationRows = if (pushHold != null) 5 else 4
         item {
             LinkRow(
-                0, 4,
+                0, notificationRows,
                 if (notificationsOff) "Notifications are off" else "Notification settings",
                 if (notificationsOff) "Questions only show in the app. Turn notifications on in Android's settings." else null,
                 Sym.Chevron,
             ) { openNotificationSettings(context) }
         }
-        item { SwitchRow(1, 4, "Remind me when notifications are off", inbox.remindOff) { actions.inbox(inbox.copy(remindOff = it)) } }
+        item { SwitchRow(1, notificationRows, "Remind me when notifications are off", inbox.remindOff) { actions.inbox(inbox.copy(remindOff = it)) } }
         item {
-            ChoiceRow(2, 4, "Delivered through", pushState(push, server)) {
+            ChoiceRow(2, notificationRows, "Delivered through", pushState(push, server)) {
                 Segments(listOf("fcm" to "Google", "unifiedpush" to "UnifiedPush"), push.type, actions.push)
             }
         }
         item {
             SwitchRow(
-                3, 4, "Quick Allow", allowUnseen,
+                3, notificationRows, "Quick Allow", allowUnseen,
                 sub = "Allow from a notification without seeing the whole command. Unsafe.",
                 onChange = actions.allowUnseen,
             )
+        }
+        if (pushHold != null) item {
+            ChoiceRow(
+                4, notificationRows, "Hold notifications while you’re at a screen",
+                "While you use Starbridge or a machine with presence on, your other devices are notified only if a question is still open after this",
+            ) {
+                Segments(Beacon.HOLD_CHOICES.map { it to holdLabel(it) }, pushHold, actions.pushHold)
+            }
         }
 
         item { Section("Agents") }
@@ -243,6 +259,12 @@ fun SettingsScreen(
 private const val GUIDE = "https://starbridge.run/docs/tell-your-agents"
 
 /** How pushes reach this phone, as a state; registered, it names the server's host. */
+internal fun holdLabel(seconds: Int) = when {
+    seconds == 0 -> "Off"
+    seconds % 60 == 0 -> "${seconds / 60} min"
+    else -> "$seconds s"
+}
+
 internal fun pushState(push: PushSetting, server: String) = when {
     push.registered -> "Registered with ${android.net.Uri.parse(server).host ?: server}"
     push.type == "unifiedpush" && push.distributors.isEmpty() -> "No UnifiedPush distributor installed"

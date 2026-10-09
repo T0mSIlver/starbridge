@@ -1,0 +1,7 @@
+#!/bin/sh
+# Stands in for `launchctl`: logs each call; the agent is always running.
+echo "launchctl $*" >>"$FAKE_LOG"
+case "$1" in
+  print) echo "	state = running" ;;
+esac
+exit 0

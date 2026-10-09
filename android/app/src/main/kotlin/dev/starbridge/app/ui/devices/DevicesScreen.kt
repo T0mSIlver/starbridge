@@ -308,6 +308,9 @@ private fun MemberRow(member: Member, twin: Boolean, shape: Shape, onRevoke: () 
                     style = StarbridgeTheme.type.small,
                     color = scheme.onSurfaceVariant,
                 )
+                member.check?.let {
+                    Text("Check code $it", style = StarbridgeTheme.type.machine, color = scheme.onSurfaceVariant)
+                }
             }
             if (!member.current) {
                 TextButton(onClick = onRevoke, colors = ButtonDefaults.textButtonColors(contentColor = scheme.onSurface)) {
