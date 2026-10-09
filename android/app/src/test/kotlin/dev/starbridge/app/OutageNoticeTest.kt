@@ -1,10 +1,13 @@
 package dev.starbridge.app
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import dev.starbridge.app.data.Reach
@@ -39,7 +42,7 @@ class OutageNoticeTest {
             LaunchedEffect(Unit) { reach.status.collect { connection.value = Reach.words(it, "starbridge.run") } }
             StarbridgeTheme {
                 val host = Notices(notice, { notice.value = null }, connection = connection)
-                Scaffold(snackbarHost = { SnackbarHost(host) }) { }
+                Scaffold(snackbarHost = { SnackbarHost(host) }) { Box(Modifier.padding(it)) }
             }
         }
         fun after(ms: Long) {

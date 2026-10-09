@@ -838,8 +838,8 @@ async function main() {
       throw new Error(
         `Shift+Enter did not start a new line: ${JSON.stringify(await reply.inputValue())}`,
       );
-    // While the typed reply is in flight, the question already reads answered, and no option is
-    // left to look sent in its place (#821, #895).
+    // At Enter, before the server replies, the phone is back on the list without the question
+    // (#895, #927).
     let release = () => {};
     const held = new Promise<void>((done) => {
       release = done;
@@ -849,11 +849,11 @@ async function main() {
       await route.fallback();
     });
     await reply.press("Enter");
-    await page.getByText(/· not sent yet/).waitFor();
-    const left = await page.locator('fieldset button:not([aria-label^="View"])').count();
+    await page.getByRole("heading", { name: LAYOUTS }).waitFor({ state: "detached" });
+    const left = await page.locator("[data-row]", { hasText: LAYOUTS }).count();
     release();
     await page.unroute("**/v1/items");
-    if (left > 0) throw new Error(`${left} options still show while the typed reply is sent`);
+    if (left > 0) throw new Error("the answered question is still listed while its reply is sent");
     await picks.waitFor(/Answer to d_\S+ .*: Phone layout/);
     if ((await picks.exited) !== 0) throw new Error("ask --wait for the picks failed");
     await page.setViewportSize(DESKTOP);

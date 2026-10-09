@@ -10,6 +10,7 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.text.TextStyle
 import dev.starbridge.app.data.Grouping
 import dev.starbridge.app.ui.SheetBody
+import dev.starbridge.app.ui.LocalSheetClose
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.scaleIn
@@ -643,6 +644,36 @@ fun Options(decision: Decision, height: Dp, other: Color, answer: (String?, Stri
     } else {
         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) { ordered.forEachIndexed { i, o -> One(i, o, Modifier.fillMaxWidth()) } }
     }
+}
+
+/**
+ * A question's sheet over the inbox. An answer, or a snooze that puts it off, closes the sheet at
+ * the tap, as on a card (#895, #927): it slides away still showing the question, onto an inbox without
+ * it. A refused answer brings the question back to the inbox, not to this sheet.
+ */
+@Composable
+fun QuestionSheet(decision: Decision, now: Instant, onAnswer: (String, String?, String?) -> Unit, replies: Replies, onSnooze: (Instant) -> Unit) {
+    val close = LocalSheetClose.current
+    var held by remember(decision.id) { mutableStateOf<Decision?>(null) }
+    val shown = held ?: decision
+    DecisionSheet(
+        shown,
+        now,
+        { id, choice, text ->
+            held = shown
+            onAnswer(id, choice, text)
+            close()
+        },
+        replies,
+        onSnooze = { until ->
+            onSnooze(until)
+            // Brought back, it stays open.
+            if (until.isAfter(Instant.now())) {
+                held = shown
+                close()
+            }
+        },
+    )
 }
 
 /**

@@ -67,7 +67,7 @@ import dev.starbridge.app.ui.inbox.InboxViewModel
 import dev.starbridge.app.ui.inbox.Replies
 import dev.starbridge.app.ui.inbox.rememberDrafts
 import dev.starbridge.app.ui.inbox.PromptActions
-import dev.starbridge.app.ui.inbox.DecisionSheet
+import dev.starbridge.app.ui.inbox.QuestionSheet
 import dev.starbridge.app.ui.inbox.PromptSheet
 import dev.starbridge.app.ui.inbox.snoozed
 import dev.starbridge.app.ui.quotas.QuotasScreen
@@ -333,18 +333,16 @@ fun Main(decisions: List<Decision>, notice: StateFlow<String?>, dismiss: () -> U
                         val vm: InboxViewModel = hiltViewModel()
                         val decisions by vm.decisions.collectAsStateWithLifecycle()
                         val d = decisions.find { it.id == key.id } ?: return@entry
-                        DecisionSheet(d, seconds(d.waiting, now), vm::answer, Replies(drafts), onSnooze = { until ->
-                            vm.snooze(d.id, until)
-                            // Put off, it leaves as an answered question would; brought back, it stays open.
-                            if (until.isAfter(Instant.now()) && backStack.lastOrNull() == key) backStack.removeAt(backStack.lastIndex)
-                        })
+                        QuestionSheet(d, seconds(d.waiting, now), vm::answer, Replies(drafts), onSnooze = { vm.snooze(d.id, it) })
                     }
                     entry<PromptKey>(metadata = BottomSheetSceneStrategy.sheet) { key ->
                         val vm: InboxViewModel = hiltViewModel()
                         val prompts by vm.prompts.collectAsStateWithLifecycle()
                         val p = prompts.find { it.id == key.id } ?: return@entry
                         val at = seconds(p.waiting(Instant.now()), now)
-                        PromptSheet(p, at, PromptActions(answer = vm::answerPrompt))
+                        val close = LocalSheetClose.current
+                        // As a question's: the answer closes the sheet at the tap.
+                        PromptSheet(p, at, PromptActions(answer = { id, allow, scope, message -> vm.answerPrompt(id, allow, scope, message); close() }))
                     }
                     entry<QuotasKey> {
                         val vm: QuotasViewModel = hiltViewModel()

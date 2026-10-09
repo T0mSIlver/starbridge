@@ -1,10 +1,29 @@
 package dev.starbridge.app
 
+import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.test.hasAnyAncestor
+import androidx.compose.ui.test.hasTestTag
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.navigation3.runtime.entryProvider
+import androidx.navigation3.ui.NavDisplay
+import dev.starbridge.app.ui.BottomSheetSceneStrategy
+import dev.starbridge.app.ui.DecisionKey
+import dev.starbridge.app.ui.InboxKey
+import dev.starbridge.app.ui.inbox.QuestionSheet
+import dev.starbridge.app.ui.inbox.Replies
+import dev.starbridge.app.ui.inbox.rememberDrafts
 import com.goterl.lazysodium.LazySodiumJava
 import com.goterl.lazysodium.SodiumJava
 import dev.starbridge.app.data.Alerts
@@ -71,7 +90,8 @@ import dev.starbridge.app.protocol.Decision as DecisionBody
 
 /**
  * An answer is never lost: offline it waits on the phone (#329), and a second tap sends nothing
- * more (#331). Its card goes at the tap, and a refused answer brings it back (#895).
+ * more (#331). Its card goes at the tap, and a refused answer brings it back (#895); answered in
+ * its sheet, the sheet goes too, and a refusal brings the card back, not the sheet (#927).
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [36])
@@ -241,5 +261,62 @@ class AnswerQueueTest {
         compose.waitUntil(5_000) { !store.decisions.value.single().sending && store.decisions.value.single().answer != null }
         compose.onNodeWithText(question).assertDoesNotExist()
         assertEquals(2, posted.size)
+    }
+
+    private val stack = mutableStateListOf<Any>()
+
+    /** The inbox with the question's sheet open over it, as the app's navigation shows them. */
+    private fun showSheet(store: ServerStore) = compose.setContent {
+        val decisions by store.decisions.collectAsState()
+        val now = Instant.parse("2026-10-06T12:01:00Z")
+        val sheets = remember { BottomSheetSceneStrategy<Any>() }
+        StarbridgeTheme {
+            NavDisplay(
+                backStack = stack,
+                onBack = { stack.removeAt(stack.lastIndex) },
+                sceneStrategies = listOf(sheets),
+                entryProvider = entryProvider {
+                    entry<InboxKey> { InboxScreen(decisions, now, DecisionActions(store::answer, {})) }
+                    entry<DecisionKey>(metadata = BottomSheetSceneStrategy.sheet) { key ->
+                        val d = decisions.first { it.id == key.id }
+                        Box(Modifier.testTag("sheet")) { QuestionSheet(d, now, store::answer, Replies(rememberDrafts()), onSnooze = {}) }
+                    }
+                },
+            )
+        }
+    }
+
+    private fun sheetHold() = compose.onAllNodes(hasText("Hold") and hasAnyAncestor(hasTestTag("sheet"))).onFirst()
+
+    @Test
+    fun anAnswerInTheSheetClosesItOntoTheInboxWithoutTheCardBeforeTheServerReplies() {
+        setUp()
+        gate = CountDownLatch(1)
+        val store = store()
+        stack.addAll(listOf(InboxKey, DecisionKey("d_ship")))
+        showSheet(store)
+        compose.onAllNodesWithText(question).assertCountEquals(2)
+
+        sheetHold().performClick()
+        compose.waitForIdle()
+        assertEquals(listOf<Any>(InboxKey), stack.toList())
+        compose.onNodeWithText(question).assertDoesNotExist()
+        assertEquals(0, posted.size)
+        gate.countDown()
+    }
+
+    @Test
+    fun aRefusedAnswerFromTheSheetBringsTheCardBackAndLeavesTheSheetClosed() {
+        setUp()
+        reply = { MockResponse(400, Headers.headersOf("content-type", "application/json"), """{"error":"bad-schema","message":"The answer does not match the question."}""") }
+        val store = store()
+        stack.addAll(listOf(InboxKey, DecisionKey("d_ship")))
+        showSheet(store)
+        sheetHold().performClick()
+        compose.waitUntil(5_000) { store.decisions.value.single().notSent != null }
+        compose.waitForIdle()
+        assertEquals(listOf<Any>(InboxKey), stack.toList())
+        compose.onAllNodesWithText(question).assertCountEquals(1)
+        compose.onNodeWithText("Not sent: bad-schema", substring = true).assertExists()
     }
 }
