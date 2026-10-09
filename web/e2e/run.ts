@@ -1931,7 +1931,8 @@ async function main() {
   await pageB.goto(`${ORIGIN}/settings`);
   const thisDevice = pageB.getByRole("switch", { name: "Notifications on this device" });
   if (await thisDevice.isChecked()) throw new Error("the switch still says on");
-  await thisDevice.check();
+  // The switch turns on once the browser granted and the subscription went through.
+  await thisDevice.click();
   await pageB
     .getByRole("switch", { name: "Notifications on this device", checked: true })
     .waitFor();
