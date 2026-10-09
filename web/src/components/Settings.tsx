@@ -364,8 +364,8 @@ async function asked() {
 /** The alerts of every window with none of its own, by its length (#914). */
 function QuotaAlertSection() {
   const { quotaSettings: q, setQuotaSettings: set } = useApp();
-  const patch = async (p: Partial<QuotaAlertSettings>) => {
-    await asked();
+  const patch = async (p: Partial<Pick<QuotaAlertSettings, "short" | "long">>) => {
+    if (Object.values(p).some((c) => c.length > 0)) await asked();
     set({ ...q, alerts: { ...q.alerts, ...p } });
   };
   return (
