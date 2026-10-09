@@ -1,0 +1,29 @@
+{
+  "name": "@starbridge/desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Starbridge for macOS: the web app in a window, with the Needs-you count in the menu bar and notifications you answer in place",
+  "main": "dist/main.js",
+  "scripts": {
+    "build": "bun build src/main.ts src/preload.ts src/server-preload.ts --outdir dist --target node --format cjs --external electron",
+    "start": "bun run build && electron .",
+    "test": "bun test test/unit",
+    "e2e": "bun run build && node test/smoke.ts",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome check .",
+    "dist": "bun run build && electron-builder",
+    "icons": "node scripts/icons.ts"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.5.15",
+    "@types/bun": "^1.4.2",
+    "@types/node": "^26",
+    "electron": "44.7.0",
+    "electron-builder": "26.15.3",
+    "electron-updater": "6.8.9",
+    "playwright": "1.63.0",
+    "typescript": "^7"
+  },
+  "author": "Tom Vaucourt",
+  "homepage": "https://starbridge.run"
+}

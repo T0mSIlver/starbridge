@@ -1,0 +1,10 @@
+:root { color-scheme: light dark; --bg: #fafafa; --fg: #121212; --fg2: #5c5c5c; --line: #d6d6d6; --accent: #965700; }
+@media (prefers-color-scheme: dark) { :root { --bg: #0c0c0c; --fg: #f1f1f1; --fg2: #a3a3a3; --line: #333; --accent: #f5a83b; } }
+body { margin: 0; padding: 20px; background: var(--bg); color: var(--fg); font: 14px/1.4 -apple-system, system-ui, sans-serif; }
+label { display: block; font-weight: 500; margin-bottom: 6px; }
+input { box-sizing: border-box; width: 100%; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: transparent; color: inherit; font: inherit; }
+#note { color: var(--fg2); margin: 8px 0 16px; }
+#note.error { color: var(--accent); }
+.row { display: flex; justify-content: flex-end; gap: 8px; }
+button { padding: 6px 14px; border-radius: 8px; border: 1px solid var(--line); background: transparent; color: inherit; font: inherit; }
+button[type=submit] { background: var(--fg); color: var(--bg); border-color: var(--fg); }

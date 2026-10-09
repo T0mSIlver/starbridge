@@ -1035,6 +1035,35 @@ first window, so a provider with a window running out leads.
   the outbox for it. Signed out, the refusal shows as a notice instead, so the owner can pick
   another server.
 
+### Desktop
+
+The macOS app (#886) is Electron around the configured server's web page (starbridge.run unless
+the owner sets another from the menu bar icon). The page signs in, pairs and keeps its keys as in
+a browser; the app adds a menu bar count and notifications, so a web release needs no app release.
+
+- **The bridge.** The app's preload gives `window.starbridgeDesktop` to the server's origin only,
+  and the main process answers only the window's top frame on that origin. It carries data, never
+  code or a URL to open: the page sends the Needs-you count and the items to notify; the app sends
+  back a notification's answer and the item to open. Every field is checked on arrival, since the
+  page comes from a server. Inside the window stay the server's pages and GitHub's sign-in; any
+  other link opens in the browser, and new windows never open.
+- **Notifications.** One per item in Needs you, as on the phone: a question's options are its
+  buttons, and a question that takes typed answers has Reply. An answer goes through the page, as
+  if tapped there; when it fails, an "Answer not sent" notification says why. An item notifies
+  again when its agent starts waiting or it comes back from snooze, and its notification closes
+  when it leaves Needs you, wherever it was answered. Items already notified stay quiet across a
+  restart. Items notify through the app, never through the browser's notifications; quota
+  alerts stay the page's own, which the app shows as it would a browser's.
+- **The menu bar.** The mark in one colour, as macOS draws menu bar icons; while anything needs
+  the owner, its climber turns amber, the one amber light, with no count: the window says what
+  (owner's pick from mockups, 2026-10-09). A click shows the window; a right-click opens the menu:
+  Open, Open at Login (off by default), Server, Quit. Closing the window keeps the app in the menu
+  bar and drops its Dock icon, which shows again with the window. ⌃⌥S shows the window from
+  anywhere.
+- **`starbridge://pair` links** open `/pair` on the configured server, as the https link does. The
+  link's check key stays out of the page, which the server writes; a link for another server is
+  refused, with both servers named.
+
 ## Brand
 
 The mark is a space elevator: a planet's edge, a vertical tether and one amber climber (#32). Stars

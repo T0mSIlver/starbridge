@@ -1,0 +1,39 @@
+# Packages the app: `pnpm --filter @starbridge/desktop dist` on a Mac.
+appId: dev.starbridge.desktop
+productName: Starbridge
+copyright: Copyright © 2026 Tom Vaucourt
+directories:
+  output: release
+  buildResources: build
+# main.js and the preloads are bundled, so the app needs no node_modules.
+files:
+  - dist/**
+  - assets/**
+  - package.json
+protocols:
+  - name: Starbridge
+    schemes: [starbridge]
+mac:
+  target:
+    - target: dmg
+      arch: [arm64, x64]
+    - target: zip
+      arch: [arm64, x64]
+  category: public.app-category.developer-tools
+  # Ad hoc until the app has a Developer ID: it runs once the owner clears Gatekeeper's warning.
+  identity: "-"
+  hardenedRuntime: true
+  extendInfo:
+    # Notifications as alerts, so their buttons show without a hover.
+    NSUserNotificationAlertStyle: alert
+dmg:
+  artifactName: Starbridge-${version}-${arch}.dmg
+electronFuses:
+  runAsNode: false
+  enableNodeOptionsEnvironmentVariable: false
+  enableNodeCliInspectArguments: false
+  enableEmbeddedAsarIntegrityValidation: true
+  onlyLoadAppFromAsar: true
+  enableCookieEncryption: true
+linux:
+  executableName: starbridge

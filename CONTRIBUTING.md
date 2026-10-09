@@ -22,9 +22,9 @@ For Android, in `android/`:
 ```
 
 Each package's README says how to run it: [server](server/README.md#run-from-source),
-[web](web/README.md), [CLI](cli/README.md), [mod](mod/README.md#develop) and
-[Android](android/README.md#build). [PROTOCOL.md](PROTOCOL.md) holds the wire format,
-[DESIGN.md](DESIGN.md) the look, [SPEC.md](SPEC.md) every decision with its date, and
+[web](web/README.md), [CLI](cli/README.md), [mod](mod/README.md#develop),
+[desktop](desktop/README.md#develop) and [Android](android/README.md#build).
+[PROTOCOL.md](PROTOCOL.md) holds the wire format, [DESIGN.md](DESIGN.md) the look, [SPEC.md](SPEC.md) every decision with its date, and
 [cli/CONTRACT.md](cli/CONTRACT.md) the CLI commands and output that plugins and agents rely on.
 
 ## Release
