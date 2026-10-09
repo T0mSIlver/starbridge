@@ -449,17 +449,21 @@ async function interactiveTurn(
           );
   const commands: string[] = [];
   const askUser: { denied: boolean }[] = [];
+  let pending = 0;
   let final = "";
   for (const e of es) {
     if (e.type !== "assistant") continue;
     for (const b of e.message?.content ?? []) {
       if (b.type === "tool_use" && b.name === "Bash") commands.push(b.input?.command ?? "");
-      if (b.type === "tool_use" && b.name === "AskUserQuestion")
+      if (b.type === "tool_use" && b.name === "AskUserQuestion") {
         askUser.push({ denied: results.get(b.id) === true });
+        if (!results.has(b.id)) pending++;
+      }
       if (b.type === "text" && b.text) final = b.text;
     }
   }
-  if (dialog >= 2) askUser.push({ denied: false });
+  // Older Claude Code wrote the pending call to the transcript only once answered.
+  if (dialog >= 2 && pending === 0) askUser.push({ denied: false });
   return { commands, askUser, final, session: id, exit: 0, seconds: (Date.now() - t0) / 1000 };
 }
 

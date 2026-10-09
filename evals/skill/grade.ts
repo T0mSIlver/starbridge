@@ -223,7 +223,7 @@ function score(r: Rec, s: Scenario): Record<string, boolean | null> {
       s.expect === "run"
         ? r.runs.length > 0 &&
           r.runs.every((x) => !!(x as { reason?: string }).reason) &&
-          cmds.filter((c) => /make e2e|scripts\/e2e/.test(c)).every((c) => /starbridge run/.test(c))
+          cmds.filter((c) => /make e2e|(?:^|[;&|]\s*|sh\s+|\.\/)scripts\/e2e/.test(c)).every((c) => /starbridge run/.test(c))
         : null,
     after: s.followUp
       ? !!r.answered &&
