@@ -196,7 +196,7 @@ test("setup --yes installs the agent, the plugins and the skills, and uploads a 
     "utf8",
   );
   expect(JSON.parse(hooks).hooks.SessionStart[0].hooks[0].command).toBe(
-    `sh '${market}/hooks/session-start.sh'`,
+    `sh '${join(market, "hooks", "session-start.sh")}'`,
   );
   expect(codexPlugin(m.sys)).toBe("current");
   // opencode gets the skill and the plugin with the code it imports, in the repository's layout.
