@@ -15,6 +15,7 @@ import {
   openWaiting,
   Withheld,
 } from "../lib/device";
+import { promptNote, questionNote } from "../lib/notes";
 import { answerPlace } from "../lib/outcome";
 import * as store from "../lib/store";
 import type { InboxItem, PromptItem, Reply } from "../lib/types";
@@ -183,19 +184,6 @@ async function moot(account: string, id: string): Promise<boolean> {
   return answered.has(`${account}/${id}`) || !(await store.get("device", account));
 }
 
-/** First lines of the context, without code fences, for the notification body. */
-function summary(context: string): string {
-  const text = context
-    .split("\n")
-    .filter((l) => !l.trimStart().startsWith("```"))
-    .join(" ")
-    // Inline code reads as plain text: a notification shows no formatting (#191).
-    .replace(/`([^`\n]+)`/g, "$1")
-    .replace(/\s+/g, " ")
-    .trim();
-  return text.length > 180 ? `${text.slice(0, 179)}…` : text;
-}
-
 /**
  * How far a snooze's time may be ahead of this browser's clock when its second push comes: the
  * server sends it at the time, a little late, by its own clock. A snooze runs at least 5 minutes
@@ -213,9 +201,8 @@ async function showDecision(
 ): Promise<void> {
   const done = () => moot(account, item.decision.id);
   const d = item.decision;
-  const options = d.recommended
-    ? [d.recommended, ...d.options.filter((o) => o !== d.recommended)]
-    : d.options;
+  const note = questionNote(item, { waiting, back });
+  const options = note.options;
   // Only when every option fits: a notification that hides an option would bias the answer.
   // A decision answered on another page gets one action that opens it.
   const actions = d.answerIn
@@ -230,7 +217,7 @@ async function showDecision(
     renotify?: boolean;
     silent?: boolean;
   } = {
-    body: `${back ? "Back from snooze · " : waiting ? "Waiting · " : ""}${d.source.machine} · ${d.source.project}\n${summary(d.context)}`,
+    body: note.body,
     tag: tag(d.id),
     renotify: waiting || back,
     // A flip back to working replaces the waiting notification quietly.
@@ -242,7 +229,7 @@ async function showDecision(
     actions,
   };
   if (await done()) return;
-  await self.registration.showNotification(d.question, options_);
+  await self.registration.showNotification(note.title, options_);
   // An answered push, or a sign-out, may have closed nothing while this one was still opening.
   if (await done())
     for (const n of await self.registration.getNotifications({ tag: tag(d.id) })) n.close();
@@ -256,8 +243,9 @@ async function showPrompt(account: string, item: PromptItem): Promise<void> {
   const p = item.permission;
   const done = () => moot(account, p.id);
   if (await done()) return;
-  await self.registration.showNotification(`${p.tool} on ${p.source.machine}`, {
-    body: `${p.source.project}\n${p.summary}`,
+  const note = promptNote(item);
+  await self.registration.showNotification(note.title, {
+    body: note.body,
     tag: promptTag(p.id),
     requireInteraction: true,
   });

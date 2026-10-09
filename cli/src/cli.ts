@@ -201,9 +201,9 @@ const HELP = `starbridge: post decisions to your devices, report runs, upload qu
 
   starbridge update [--codexbar <version>]
       Install the latest release once its signature checks out, then \`setup --refresh\` (brew
-      and npm installs: use their manager, then \`starbridge setup --refresh\`); then CodexBar's
-      latest release if setup installed it. --codexbar installs that CodexBar release instead,
-      and only that.
+      and npm installs: use their manager, then \`starbridge setup --refresh\`); then the
+      CodexBar release this Starbridge release pins, if setup installed CodexBar. --codexbar
+      installs that CodexBar release instead, and only that; update keeps it if it is newer.
 
   starbridge --version
 

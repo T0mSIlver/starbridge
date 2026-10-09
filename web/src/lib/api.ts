@@ -9,6 +9,7 @@ import {
   type SignedEnvelope,
 } from "@starbridge/protocol";
 import pkg from "../../package.json";
+import { desktop } from "./desktop";
 import type { JoinView } from "./types";
 
 export class ApiError extends Error {
@@ -46,8 +47,12 @@ export function pairingError(e: unknown): string {
   return `${said.charAt(0).toUpperCase()}${said.slice(1)}${/[.!?]$/.test(said) ? "" : "."}`;
 }
 
-/** Sent on every call, the service worker's own fetches included. */
-export const CLIENT = { [CLIENT_HEADER]: clientHeader("web", pkg.version) };
+/** Sent on every call, the service worker's own fetches included; the desktop app's page says so. */
+export const CLIENT = {
+  [CLIENT_HEADER]: desktop
+    ? clientHeader("desktop", desktop.version)
+    : clientHeader("web", pkg.version),
+};
 
 /**
  * Set once the server answers 426 `client-too-old`: it no longer serves this page's release, and

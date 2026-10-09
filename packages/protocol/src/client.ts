@@ -7,7 +7,7 @@ import { z } from "zod";
  */
 export const CLIENT_HEADER = "starbridge-client";
 
-export const CLIENT_NAMES = ["cli", "android", "web", "mod"] as const;
+export const CLIENT_NAMES = ["cli", "android", "web", "mod", "desktop"] as const;
 export type ClientName = (typeof CLIENT_NAMES)[number];
 
 /** MAJOR.MINOR.PATCH, with an optional pre-release (`-rc.2`). */

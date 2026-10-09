@@ -140,7 +140,7 @@ class LayoutAuditTest(private val shot: String, private val look: Look) {
         val SHOTS = listOf(
             "setup-sign-in", "setup-first-device", "setup-join-choose", "setup-join", "setup-join-digits", "setup-recover", "setup-recovery-key",
             "inbox", "inbox-empty", "inbox-by-machine", "inbox-by-waiting", "inbox-history", "inbox-runs", "inbox-view-menu", "inbox-prompt-menu",
-            "find", "sheet-question", "sheet-reply", "sheet-prompt", "sheet-prompt-input", "sheet-images", "image-viewer",
+            "find", "sheet-question", "sheet-reply", "sheet-reply-code", "sheet-prompt", "sheet-prompt-input", "sheet-images", "image-viewer",
             "quotas", "quotas-your-order", "quotas-tuned",
             "settings", "devices", "devices-revoke", "add-device", "add-device-found", "add-device-qr", "join-digits",
         )
@@ -210,6 +210,8 @@ class LayoutAuditTest(private val shot: String, private val look: Look) {
         "find" to Shot(Tab.Inbox, bar = false, before = { compose.onNode(hasSetTextAction()).performTextInput("rebase") }) { Entry { FindScreen(worst.decisions, worst.prompts, now, {}, {}, {}) } },
         "sheet-question" to sheet { DecisionSheet(worst.decisions[0], now, { _, _, _ -> }, Replies(rememberDrafts())) },
         "sheet-reply" to sheet(before = { compose.onNode(hasSetTextAction()).performTextInput("Only after the eval run") }) { DecisionSheet(worst.decisions[1], now, { _, _, _ -> }, Replies(rememberDrafts())) },
+        // A pasted code with no spaces wraps inside the field (#873).
+        "sheet-reply-code" to sheet(before = { compose.onNode(hasSetTextAction()).performTextInput("4/0AVMBsJh".repeat(30)) }) { DecisionSheet(worst.decisions[1], now, { _, _, _ -> }, Replies(rememberDrafts())) },
         "sheet-prompt" to sheet { PromptSheet(worst.prompts[0], now, promptActions) },
         "sheet-prompt-input" to sheet(before = { compose.onNodeWithText("Full input").performClick() }) { PromptSheet(worst.prompts[0], now, promptActions) },
         "sheet-images" to sheet { DecisionSheet(fake.screenshot.copy(source = worst.decisions[0].source, options = worst.decisions[0].options), now, { _, _, _ -> }, Replies(rememberDrafts())) },

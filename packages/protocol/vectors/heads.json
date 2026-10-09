@@ -1,0 +1,520 @@
+{
+  "note": "withheldBy(heads, verifyDirectory(chains[chain]), chains[chain]); noteHead(heads, signer, head, chains[chain], verifyDirectory(chains[chain])); forgetHeads(heads, id). A `revoke` ends no hold (#813); a `recover` does.",
+  "chains": {
+    "stale": [
+      {
+        "v": 1,
+        "kind": "directory",
+        "signer": "phone",
+        "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":0,\"prev\":null,\"at\":\"2026-10-04T09:00:00Z\",\"op\":\"add\",\"member\":{\"id\":\"phone\",\"role\":\"device\",\"name\":\"Pixel\",\"boxPk\":\"GxtY3VDqFLYNoXt5DNAnVNlwybq4ZOuzwPMBb-UdP1c\",\"signPk\":\"1i8Bah79Hk_feT60LNhEceG6nwzwTRKHtcxx9hYofLg\"},\"recoveryPk\":\"JznWHYgiTwfyW3QHRuQQMAeZO0KtraqUwaucN6lQ0Yw\"}",
+        "sig": "0bkmgoHejRg8_DlnAWttqsPItFv9ts7Wv21VhCM4rfGmjeVJsgDIzCb7Nn5rv_-W6ywod1mTMyadSpqcpmPXAw",
+        "recoverySig": "WDZttnKRb24KcAwZHe_NbWzH2mozlK0zBGiqqp3mfBrahWgTAA0SAzwz3CPW1QHwpsaqrOiy0nD8TefuaQvTCQ"
+      },
+      {
+        "v": 1,
+        "kind": "directory",
+        "signer": "phone",
+        "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":1,\"prev\":\"rhZ06D9_KVi0e8KXZKkuBUMKp3W9wWE9_s1SpRhXAWY\",\"at\":\"2026-10-04T11:00:00Z\",\"op\":\"add\",\"member\":{\"id\":\"phone2\",\"role\":\"device\",\"name\":\"New Pixel\",\"boxPk\":\"7dA8regNKd5uoxOnSrNp9HMuyzZkkGa3i1st1mTLBBc\",\"signPk\":\"VLDYHQ-n0A5KfWAN-rpvKyIDWyL-M14X7fX5qluwUHQ\"}}",
+        "sig": "tLBa-ZmT6R0i9wiESrK7yBhnrtR6TO7yfk0EEMrrdvyuXqb4vq1scteY8OQNnaE-jTO2ttbxZ0apDMpzKCpEAg"
+      },
+      {
+        "v": 1,
+        "kind": "directory",
+        "signer": "phone",
+        "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":2,\"prev\":\"1YgNouS6FPTyNnqB9E9KFd29uE1Cl1fruNvwBhh6_iY\",\"at\":\"2026-10-04T11:05:00Z\",\"op\":\"add\",\"member\":{\"id\":\"devbox\",\"role\":\"machine\",\"name\":\"dev box\",\"boxPk\":\"deJw3ylSxXuoNnuoYYwXj5_lDbJ5nTBOdOkY2YVoYUY\",\"signPk\":\"EqQVksi3wX1AWeeym2Ho_5bHQV8vgDNI8vAX4Fueodo\"}}",
+        "sig": "5pXHWnVuwJeI2TgeYBoEx2kWmPKYgZS84ftQif-DGB3OC5J21ayhg6znpYCAuWQy3Mdaei3OR5hotreaF0w9Bw"
+      }
+    ],
+    "truth": [
+      {
+        "v": 1,
+        "kind": "directory",
+        "signer": "phone",
+        "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":0,\"prev\":null,\"at\":\"2026-10-04T09:00:00Z\",\"op\":\"add\",\"member\":{\"id\":\"phone\",\"role\":\"device\",\"name\":\"Pixel\",\"boxPk\":\"GxtY3VDqFLYNoXt5DNAnVNlwybq4ZOuzwPMBb-UdP1c\",\"signPk\":\"1i8Bah79Hk_feT60LNhEceG6nwzwTRKHtcxx9hYofLg\"},\"recoveryPk\":\"JznWHYgiTwfyW3QHRuQQMAeZO0KtraqUwaucN6lQ0Yw\"}",
+        "sig": "0bkmgoHejRg8_DlnAWttqsPItFv9ts7Wv21VhCM4rfGmjeVJsgDIzCb7Nn5rv_-W6ywod1mTMyadSpqcpmPXAw",
+        "recoverySig": "WDZttnKRb24KcAwZHe_NbWzH2mozlK0zBGiqqp3mfBrahWgTAA0SAzwz3CPW1QHwpsaqrOiy0nD8TefuaQvTCQ"
+      },
+      {
+        "v": 1,
+        "kind": "directory",
+        "signer": "phone",
+        "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":1,\"prev\":\"rhZ06D9_KVi0e8KXZKkuBUMKp3W9wWE9_s1SpRhXAWY\",\"at\":\"2026-10-04T11:00:00Z\",\"op\":\"add\",\"member\":{\"id\":\"phone2\",\"role\":\"device\",\"name\":\"New Pixel\",\"boxPk\":\"7dA8regNKd5uoxOnSrNp9HMuyzZkkGa3i1st1mTLBBc\",\"signPk\":\"VLDYHQ-n0A5KfWAN-rpvKyIDWyL-M14X7fX5qluwUHQ\"}}",
+        "sig": "tLBa-ZmT6R0i9wiESrK7yBhnrtR6TO7yfk0EEMrrdvyuXqb4vq1scteY8OQNnaE-jTO2ttbxZ0apDMpzKCpEAg"
+      },
+      {
+        "v": 1,
+        "kind": "directory",
+        "signer": "phone",
+        "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":2,\"prev\":\"1YgNouS6FPTyNnqB9E9KFd29uE1Cl1fruNvwBhh6_iY\",\"at\":\"2026-10-04T11:05:00Z\",\"op\":\"add\",\"member\":{\"id\":\"devbox\",\"role\":\"machine\",\"name\":\"dev box\",\"boxPk\":\"deJw3ylSxXuoNnuoYYwXj5_lDbJ5nTBOdOkY2YVoYUY\",\"signPk\":\"EqQVksi3wX1AWeeym2Ho_5bHQV8vgDNI8vAX4Fueodo\"}}",
+        "sig": "5pXHWnVuwJeI2TgeYBoEx2kWmPKYgZS84ftQif-DGB3OC5J21ayhg6znpYCAuWQy3Mdaei3OR5hotreaF0w9Bw"
+      },
+      {
+        "v": 1,
+        "kind": "directory",
+        "signer": "phone",
+        "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":3,\"prev\":\"-OuggDedc2wqX-5inMAcJw5JoYeOVU9lXRN3UsUQi-Q\",\"at\":\"2026-10-04T11:10:00Z\",\"op\":\"revoke\",\"id\":\"phone2\"}",
+        "sig": "qinmv5uAovZeQNT53Z3AL7nuFcmFrNqz2qihGai-XHZ3WtEbYkXtCtTA3XavENR_R9e-Cd7lg-9yLA1U82W_Bw"
+      }
+    ],
+    "forkRevokesMachine": [
+      {
+        "v": 1,
+        "kind": "directory",
+        "signer": "phone",
+        "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":0,\"prev\":null,\"at\":\"2026-10-04T09:00:00Z\",\"op\":\"add\",\"member\":{\"id\":\"phone\",\"role\":\"device\",\"name\":\"Pixel\",\"boxPk\":\"GxtY3VDqFLYNoXt5DNAnVNlwybq4ZOuzwPMBb-UdP1c\",\"signPk\":\"1i8Bah79Hk_feT60LNhEceG6nwzwTRKHtcxx9hYofLg\"},\"recoveryPk\":\"JznWHYgiTwfyW3QHRuQQMAeZO0KtraqUwaucN6lQ0Yw\"}",
+        "sig": "0bkmgoHejRg8_DlnAWttqsPItFv9ts7Wv21VhCM4rfGmjeVJsgDIzCb7Nn5rv_-W6ywod1mTMyadSpqcpmPXAw",
+        "recoverySig": "WDZttnKRb24KcAwZHe_NbWzH2mozlK0zBGiqqp3mfBrahWgTAA0SAzwz3CPW1QHwpsaqrOiy0nD8TefuaQvTCQ"
+      },
+      {
+        "v": 1,
+        "kind": "directory",
+        "signer": "phone",
+        "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":1,\"prev\":\"rhZ06D9_KVi0e8KXZKkuBUMKp3W9wWE9_s1SpRhXAWY\",\"at\":\"2026-10-04T11:00:00Z\",\"op\":\"add\",\"member\":{\"id\":\"phone2\",\"role\":\"device\",\"name\":\"New Pixel\",\"boxPk\":\"7dA8regNKd5uoxOnSrNp9HMuyzZkkGa3i1st1mTLBBc\",\"signPk\":\"VLDYHQ-n0A5KfWAN-rpvKyIDWyL-M14X7fX5qluwUHQ\"}}",
+        "sig": "tLBa-ZmT6R0i9wiESrK7yBhnrtR6TO7yfk0EEMrrdvyuXqb4vq1scteY8OQNnaE-jTO2ttbxZ0apDMpzKCpEAg"
+      },
+      {
+        "v": 1,
+        "kind": "directory",
+        "signer": "phone",
+        "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":2,\"prev\":\"1YgNouS6FPTyNnqB9E9KFd29uE1Cl1fruNvwBhh6_iY\",\"at\":\"2026-10-04T11:05:00Z\",\"op\":\"add\",\"member\":{\"id\":\"devbox\",\"role\":\"machine\",\"name\":\"dev box\",\"boxPk\":\"deJw3ylSxXuoNnuoYYwXj5_lDbJ5nTBOdOkY2YVoYUY\",\"signPk\":\"EqQVksi3wX1AWeeym2Ho_5bHQV8vgDNI8vAX4Fueodo\"}}",
+        "sig": "5pXHWnVuwJeI2TgeYBoEx2kWmPKYgZS84ftQif-DGB3OC5J21ayhg6znpYCAuWQy3Mdaei3OR5hotreaF0w9Bw"
+      },
+      {
+        "v": 1,
+        "kind": "directory",
+        "signer": "phone2",
+        "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":3,\"prev\":\"-OuggDedc2wqX-5inMAcJw5JoYeOVU9lXRN3UsUQi-Q\",\"at\":\"2026-10-04T11:10:00Z\",\"op\":\"revoke\",\"id\":\"devbox\"}",
+        "sig": "rXNsBnVRc3YX4Y0xoHrHHPo9vuiGLZ2-zCYDpRbrNY7KVdLazfY63U4IM6yr7A5RciiyY9EY6d9uDdFQdEwRDw"
+      }
+    ],
+    "forkRevokesBy": [
+      {
+        "v": 1,
+        "kind": "directory",
+        "signer": "phone",
+        "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":0,\"prev\":null,\"at\":\"2026-10-04T09:00:00Z\",\"op\":\"add\",\"member\":{\"id\":\"phone\",\"role\":\"device\",\"name\":\"Pixel\",\"boxPk\":\"GxtY3VDqFLYNoXt5DNAnVNlwybq4ZOuzwPMBb-UdP1c\",\"signPk\":\"1i8Bah79Hk_feT60LNhEceG6nwzwTRKHtcxx9hYofLg\"},\"recoveryPk\":\"JznWHYgiTwfyW3QHRuQQMAeZO0KtraqUwaucN6lQ0Yw\"}",
+        "sig": "0bkmgoHejRg8_DlnAWttqsPItFv9ts7Wv21VhCM4rfGmjeVJsgDIzCb7Nn5rv_-W6ywod1mTMyadSpqcpmPXAw",
+        "recoverySig": "WDZttnKRb24KcAwZHe_NbWzH2mozlK0zBGiqqp3mfBrahWgTAA0SAzwz3CPW1QHwpsaqrOiy0nD8TefuaQvTCQ"
+      },
+      {
+        "v": 1,
+        "kind": "directory",
+        "signer": "phone",
+        "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":1,\"prev\":\"rhZ06D9_KVi0e8KXZKkuBUMKp3W9wWE9_s1SpRhXAWY\",\"at\":\"2026-10-04T11:00:00Z\",\"op\":\"add\",\"member\":{\"id\":\"phone2\",\"role\":\"device\",\"name\":\"New Pixel\",\"boxPk\":\"7dA8regNKd5uoxOnSrNp9HMuyzZkkGa3i1st1mTLBBc\",\"signPk\":\"VLDYHQ-n0A5KfWAN-rpvKyIDWyL-M14X7fX5qluwUHQ\"}}",
+        "sig": "tLBa-ZmT6R0i9wiESrK7yBhnrtR6TO7yfk0EEMrrdvyuXqb4vq1scteY8OQNnaE-jTO2ttbxZ0apDMpzKCpEAg"
+      },
+      {
+        "v": 1,
+        "kind": "directory",
+        "signer": "phone",
+        "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":2,\"prev\":\"1YgNouS6FPTyNnqB9E9KFd29uE1Cl1fruNvwBhh6_iY\",\"at\":\"2026-10-04T11:05:00Z\",\"op\":\"add\",\"member\":{\"id\":\"devbox\",\"role\":\"machine\",\"name\":\"dev box\",\"boxPk\":\"deJw3ylSxXuoNnuoYYwXj5_lDbJ5nTBOdOkY2YVoYUY\",\"signPk\":\"EqQVksi3wX1AWeeym2Ho_5bHQV8vgDNI8vAX4Fueodo\"}}",
+        "sig": "5pXHWnVuwJeI2TgeYBoEx2kWmPKYgZS84ftQif-DGB3OC5J21ayhg6znpYCAuWQy3Mdaei3OR5hotreaF0w9Bw"
+      },
+      {
+        "v": 1,
+        "kind": "directory",
+        "signer": "phone2",
+        "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":3,\"prev\":\"-OuggDedc2wqX-5inMAcJw5JoYeOVU9lXRN3UsUQi-Q\",\"at\":\"2026-10-04T11:10:00Z\",\"op\":\"revoke\",\"id\":\"phone\"}",
+        "sig": "Xd3i_6T7noGLb7CYyj2h7Z5YG1EFfFuG8Y7xSs3_yZCGlLsWoLXpgDYAxHSqdZhwuaEPmFCU6ZpFz5VqoPDiCg"
+      }
+    ],
+    "recovered": [
+      {
+        "v": 1,
+        "kind": "directory",
+        "signer": "phone",
+        "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":0,\"prev\":null,\"at\":\"2026-10-04T09:00:00Z\",\"op\":\"add\",\"member\":{\"id\":\"phone\",\"role\":\"device\",\"name\":\"Pixel\",\"boxPk\":\"GxtY3VDqFLYNoXt5DNAnVNlwybq4ZOuzwPMBb-UdP1c\",\"signPk\":\"1i8Bah79Hk_feT60LNhEceG6nwzwTRKHtcxx9hYofLg\"},\"recoveryPk\":\"JznWHYgiTwfyW3QHRuQQMAeZO0KtraqUwaucN6lQ0Yw\"}",
+        "sig": "0bkmgoHejRg8_DlnAWttqsPItFv9ts7Wv21VhCM4rfGmjeVJsgDIzCb7Nn5rv_-W6ywod1mTMyadSpqcpmPXAw",
+        "recoverySig": "WDZttnKRb24KcAwZHe_NbWzH2mozlK0zBGiqqp3mfBrahWgTAA0SAzwz3CPW1QHwpsaqrOiy0nD8TefuaQvTCQ"
+      },
+      {
+        "v": 1,
+        "kind": "directory",
+        "signer": "phone",
+        "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":1,\"prev\":\"rhZ06D9_KVi0e8KXZKkuBUMKp3W9wWE9_s1SpRhXAWY\",\"at\":\"2026-10-04T11:00:00Z\",\"op\":\"add\",\"member\":{\"id\":\"phone2\",\"role\":\"device\",\"name\":\"New Pixel\",\"boxPk\":\"7dA8regNKd5uoxOnSrNp9HMuyzZkkGa3i1st1mTLBBc\",\"signPk\":\"VLDYHQ-n0A5KfWAN-rpvKyIDWyL-M14X7fX5qluwUHQ\"}}",
+        "sig": "tLBa-ZmT6R0i9wiESrK7yBhnrtR6TO7yfk0EEMrrdvyuXqb4vq1scteY8OQNnaE-jTO2ttbxZ0apDMpzKCpEAg"
+      },
+      {
+        "v": 1,
+        "kind": "directory",
+        "signer": "phone",
+        "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":2,\"prev\":\"1YgNouS6FPTyNnqB9E9KFd29uE1Cl1fruNvwBhh6_iY\",\"at\":\"2026-10-04T11:05:00Z\",\"op\":\"add\",\"member\":{\"id\":\"devbox\",\"role\":\"machine\",\"name\":\"dev box\",\"boxPk\":\"deJw3ylSxXuoNnuoYYwXj5_lDbJ5nTBOdOkY2YVoYUY\",\"signPk\":\"EqQVksi3wX1AWeeym2Ho_5bHQV8vgDNI8vAX4Fueodo\"}}",
+        "sig": "5pXHWnVuwJeI2TgeYBoEx2kWmPKYgZS84ftQif-DGB3OC5J21ayhg6znpYCAuWQy3Mdaei3OR5hotreaF0w9Bw"
+      },
+      {
+        "v": 1,
+        "kind": "directory",
+        "signer": "recovery",
+        "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":3,\"prev\":\"-OuggDedc2wqX-5inMAcJw5JoYeOVU9lXRN3UsUQi-Q\",\"at\":\"2026-10-04T11:10:00Z\",\"op\":\"recover\",\"member\":{\"id\":\"browser\",\"role\":\"device\",\"name\":\"Firefox on the Mac\",\"boxPk\":\"YDRufJEaX2uhVBKRdMr-dbKUrDu9VUljL0jOxiZvhBA\",\"signPk\":\"NLTZBDFWy23PC-sKKUm3VZyUDSvLbb6MU6mzAnjjp0Y\"}}",
+        "sig": "jD-w_uiZDHe_61XWvJs0RwkLIswqTtGVbY449g8jWKFObQHYwKptjEFZKXuY7sbSofgEfDmrP9Y5MLUlGfcBCA"
+      }
+    ],
+    "revokedThenRecovered": [
+      {
+        "v": 1,
+        "kind": "directory",
+        "signer": "phone",
+        "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":0,\"prev\":null,\"at\":\"2026-10-04T09:00:00Z\",\"op\":\"add\",\"member\":{\"id\":\"phone\",\"role\":\"device\",\"name\":\"Pixel\",\"boxPk\":\"GxtY3VDqFLYNoXt5DNAnVNlwybq4ZOuzwPMBb-UdP1c\",\"signPk\":\"1i8Bah79Hk_feT60LNhEceG6nwzwTRKHtcxx9hYofLg\"},\"recoveryPk\":\"JznWHYgiTwfyW3QHRuQQMAeZO0KtraqUwaucN6lQ0Yw\"}",
+        "sig": "0bkmgoHejRg8_DlnAWttqsPItFv9ts7Wv21VhCM4rfGmjeVJsgDIzCb7Nn5rv_-W6ywod1mTMyadSpqcpmPXAw",
+        "recoverySig": "WDZttnKRb24KcAwZHe_NbWzH2mozlK0zBGiqqp3mfBrahWgTAA0SAzwz3CPW1QHwpsaqrOiy0nD8TefuaQvTCQ"
+      },
+      {
+        "v": 1,
+        "kind": "directory",
+        "signer": "phone",
+        "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":1,\"prev\":\"rhZ06D9_KVi0e8KXZKkuBUMKp3W9wWE9_s1SpRhXAWY\",\"at\":\"2026-10-04T11:00:00Z\",\"op\":\"add\",\"member\":{\"id\":\"phone2\",\"role\":\"device\",\"name\":\"New Pixel\",\"boxPk\":\"7dA8regNKd5uoxOnSrNp9HMuyzZkkGa3i1st1mTLBBc\",\"signPk\":\"VLDYHQ-n0A5KfWAN-rpvKyIDWyL-M14X7fX5qluwUHQ\"}}",
+        "sig": "tLBa-ZmT6R0i9wiESrK7yBhnrtR6TO7yfk0EEMrrdvyuXqb4vq1scteY8OQNnaE-jTO2ttbxZ0apDMpzKCpEAg"
+      },
+      {
+        "v": 1,
+        "kind": "directory",
+        "signer": "phone",
+        "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":2,\"prev\":\"1YgNouS6FPTyNnqB9E9KFd29uE1Cl1fruNvwBhh6_iY\",\"at\":\"2026-10-04T11:05:00Z\",\"op\":\"add\",\"member\":{\"id\":\"devbox\",\"role\":\"machine\",\"name\":\"dev box\",\"boxPk\":\"deJw3ylSxXuoNnuoYYwXj5_lDbJ5nTBOdOkY2YVoYUY\",\"signPk\":\"EqQVksi3wX1AWeeym2Ho_5bHQV8vgDNI8vAX4Fueodo\"}}",
+        "sig": "5pXHWnVuwJeI2TgeYBoEx2kWmPKYgZS84ftQif-DGB3OC5J21ayhg6znpYCAuWQy3Mdaei3OR5hotreaF0w9Bw"
+      },
+      {
+        "v": 1,
+        "kind": "directory",
+        "signer": "phone",
+        "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":3,\"prev\":\"-OuggDedc2wqX-5inMAcJw5JoYeOVU9lXRN3UsUQi-Q\",\"at\":\"2026-10-04T11:10:00Z\",\"op\":\"revoke\",\"id\":\"devbox\"}",
+        "sig": "t3KR8cV-1_w-ll_Zpj9o3BVRHLB3SE-bLPDAxXUeIax6nR3j05wtl9vFS8jRF62My6IjoD4K1S2ED1wJF_e7Cg"
+      },
+      {
+        "v": 1,
+        "kind": "directory",
+        "signer": "recovery",
+        "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":4,\"prev\":\"i64zDhj1xz7Gt1MP_KiFD6gwjBXA9fzY8a9LN8SWImc\",\"at\":\"2026-10-04T11:15:00Z\",\"op\":\"recover\",\"member\":{\"id\":\"browser\",\"role\":\"device\",\"name\":\"Firefox on the Mac\",\"boxPk\":\"YDRufJEaX2uhVBKRdMr-dbKUrDu9VUljL0jOxiZvhBA\",\"signPk\":\"NLTZBDFWy23PC-sKKUm3VZyUDSvLbb6MU6mzAnjjp0Y\"}}",
+        "sig": "ScCFeqm6ytmex5he3LR8FDl4vi37DAu_CH9QXoxDbAVc1e0_mzz3DQ9BTuUZXnIIxFMBRHTbO1NndRQFABivDw"
+      }
+    ]
+  },
+  "withheld": [
+    {
+      "name": "a machine's head the chain lacks holds",
+      "heads": {
+        "devbox": {
+          "length": 4,
+          "head": "DqW2HO3Vt_cPnrJrqXxbeyPchpXRn2bYiCLol2xRw9w"
+        }
+      },
+      "chain": "stale",
+      "expect": {
+        "id": "devbox",
+        "head": {
+          "length": 4,
+          "head": "DqW2HO3Vt_cPnrJrqXxbeyPchpXRn2bYiCLol2xRw9w"
+        }
+      }
+    },
+    {
+      "name": "the chain that holds it does not",
+      "heads": {
+        "devbox": {
+          "length": 4,
+          "head": "DqW2HO3Vt_cPnrJrqXxbeyPchpXRn2bYiCLol2xRw9w"
+        }
+      },
+      "chain": "truth",
+      "expect": null
+    },
+    {
+      "name": "a fork that revokes the machine still holds, naming the revocation",
+      "heads": {
+        "devbox": {
+          "length": 4,
+          "head": "DqW2HO3Vt_cPnrJrqXxbeyPchpXRn2bYiCLol2xRw9w"
+        }
+      },
+      "chain": "forkRevokesMachine",
+      "expect": {
+        "id": "devbox",
+        "head": {
+          "length": 4,
+          "head": "DqW2HO3Vt_cPnrJrqXxbeyPchpXRn2bYiCLol2xRw9w"
+        },
+        "revoked": {
+          "id": "devbox",
+          "by": "phone2",
+          "at": "2026-10-04T11:10:00Z"
+        }
+      }
+    },
+    {
+      "name": "a fork that revokes the device a head names as by still holds",
+      "heads": {
+        "devbox/phone": {
+          "length": 4,
+          "head": "DqW2HO3Vt_cPnrJrqXxbeyPchpXRn2bYiCLol2xRw9w",
+          "by": "phone"
+        }
+      },
+      "chain": "forkRevokesBy",
+      "expect": {
+        "id": "devbox",
+        "by": "phone",
+        "head": {
+          "length": 4,
+          "head": "DqW2HO3Vt_cPnrJrqXxbeyPchpXRn2bYiCLol2xRw9w",
+          "by": "phone"
+        },
+        "revoked": {
+          "id": "phone",
+          "by": "phone2",
+          "at": "2026-10-04T11:10:00Z"
+        }
+      }
+    },
+    {
+      "name": "a recover ends it",
+      "heads": {
+        "devbox": {
+          "length": 4,
+          "head": "DqW2HO3Vt_cPnrJrqXxbeyPchpXRn2bYiCLol2xRw9w"
+        },
+        "devbox/phone": {
+          "length": 4,
+          "head": "DqW2HO3Vt_cPnrJrqXxbeyPchpXRn2bYiCLol2xRw9w",
+          "by": "phone"
+        }
+      },
+      "chain": "recovered",
+      "expect": null
+    },
+    {
+      "name": "a recover ends it for a member revoked before it",
+      "heads": {
+        "devbox": {
+          "length": 9,
+          "head": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        }
+      },
+      "chain": "revokedThenRecovered",
+      "expect": null
+    },
+    {
+      "name": "a by the chain does not list holds",
+      "heads": {
+        "devbox/?": {
+          "length": 9,
+          "head": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "by": "ghost"
+        }
+      },
+      "chain": "stale",
+      "expect": {
+        "id": "devbox",
+        "by": "ghost",
+        "head": {
+          "length": 9,
+          "head": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "by": "ghost"
+        }
+      }
+    },
+    {
+      "name": "a signer the chain does not list counts not",
+      "heads": {
+        "ghost": {
+          "length": 4,
+          "head": "DqW2HO3Vt_cPnrJrqXxbeyPchpXRn2bYiCLol2xRw9w"
+        }
+      },
+      "chain": "stale",
+      "expect": null
+    },
+    {
+      "name": "a head no revoke names comes first",
+      "heads": {
+        "devbox": {
+          "length": 4,
+          "head": "DqW2HO3Vt_cPnrJrqXxbeyPchpXRn2bYiCLol2xRw9w"
+        },
+        "phone2": {
+          "length": 9,
+          "head": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        }
+      },
+      "chain": "forkRevokesMachine",
+      "expect": {
+        "id": "phone2",
+        "head": {
+          "length": 9,
+          "head": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        }
+      }
+    }
+  ],
+  "noteHead": [
+    {
+      "name": "a first head is kept",
+      "heads": {},
+      "signer": "devbox",
+      "head": {
+        "length": 4,
+        "head": "DqW2HO3Vt_cPnrJrqXxbeyPchpXRn2bYiCLol2xRw9w"
+      },
+      "chain": "stale",
+      "expect": {
+        "changed": true,
+        "heads": {
+          "devbox": {
+            "length": 4,
+            "head": "DqW2HO3Vt_cPnrJrqXxbeyPchpXRn2bYiCLol2xRw9w"
+          }
+        }
+      }
+    },
+    {
+      "name": "a shorter head does not replace one the chain lacks",
+      "heads": {
+        "devbox": {
+          "length": 4,
+          "head": "DqW2HO3Vt_cPnrJrqXxbeyPchpXRn2bYiCLol2xRw9w"
+        }
+      },
+      "signer": "devbox",
+      "head": {
+        "length": 2,
+        "head": "-OuggDedc2wqX-5inMAcJw5JoYeOVU9lXRN3UsUQi-Q"
+      },
+      "chain": "stale",
+      "expect": {
+        "changed": false,
+        "heads": {
+          "devbox": {
+            "length": 4,
+            "head": "DqW2HO3Vt_cPnrJrqXxbeyPchpXRn2bYiCLol2xRw9w"
+          }
+        }
+      }
+    },
+    {
+      "name": "a by the chain does not list goes in the signer's one unknown slot",
+      "heads": {
+        "devbox/?": {
+          "length": 9,
+          "head": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "by": "ghost"
+        }
+      },
+      "signer": "devbox",
+      "head": {
+        "length": 4,
+        "head": "DqW2HO3Vt_cPnrJrqXxbeyPchpXRn2bYiCLol2xRw9w",
+        "by": "nobody"
+      },
+      "chain": "stale",
+      "expect": {
+        "changed": false,
+        "heads": {
+          "devbox/?": {
+            "length": 9,
+            "head": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+            "by": "ghost"
+          }
+        }
+      }
+    },
+    {
+      "name": "a head passed on from a by the chain lists as revoked is not kept",
+      "heads": {},
+      "signer": "devbox",
+      "head": {
+        "length": 4,
+        "head": "DqW2HO3Vt_cPnrJrqXxbeyPchpXRn2bYiCLol2xRw9w",
+        "by": "phone"
+      },
+      "chain": "forkRevokesBy",
+      "expect": {
+        "changed": false,
+        "heads": {}
+      }
+    },
+    {
+      "name": "an unknown slot whose by a recover removed takes any head",
+      "heads": {
+        "devbox/?": {
+          "length": 9,
+          "head": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "by": "phone"
+        }
+      },
+      "signer": "devbox",
+      "head": {
+        "length": 4,
+        "head": "DqW2HO3Vt_cPnrJrqXxbeyPchpXRn2bYiCLol2xRw9w",
+        "by": "ghost"
+      },
+      "chain": "recovered",
+      "expect": {
+        "changed": true,
+        "heads": {
+          "devbox/?": {
+            "length": 4,
+            "head": "DqW2HO3Vt_cPnrJrqXxbeyPchpXRn2bYiCLol2xRw9w",
+            "by": "ghost"
+          }
+        }
+      }
+    },
+    {
+      "name": "an unknown slot whose by a revoke names keeps its longer head",
+      "heads": {
+        "devbox/?": {
+          "length": 9,
+          "head": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "by": "phone"
+        }
+      },
+      "signer": "devbox",
+      "head": {
+        "length": 4,
+        "head": "DqW2HO3Vt_cPnrJrqXxbeyPchpXRn2bYiCLol2xRw9w",
+        "by": "ghost"
+      },
+      "chain": "forkRevokesBy",
+      "expect": {
+        "changed": false,
+        "heads": {
+          "devbox/?": {
+            "length": 9,
+            "head": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+            "by": "phone"
+          }
+        }
+      }
+    }
+  ],
+  "forgetHeads": [
+    {
+      "name": "drops what the member signed and what names it as by",
+      "heads": {
+        "devbox": {
+          "length": 4,
+          "head": "DqW2HO3Vt_cPnrJrqXxbeyPchpXRn2bYiCLol2xRw9w"
+        },
+        "devbox/phone": {
+          "length": 4,
+          "head": "DqW2HO3Vt_cPnrJrqXxbeyPchpXRn2bYiCLol2xRw9w",
+          "by": "phone"
+        },
+        "laptop/devbox": {
+          "length": 9,
+          "head": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "by": "devbox"
+        },
+        "phone2": {
+          "length": 9,
+          "head": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        }
+      },
+      "id": "devbox",
+      "expect": {
+        "phone2": {
+          "length": 9,
+          "head": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        }
+      }
+    }
+  ]
+}

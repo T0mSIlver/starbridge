@@ -11,9 +11,12 @@ import {
   useState,
 } from "react";
 import { api, backingOff } from "@/lib/api";
+import { desktop } from "@/lib/desktop";
+import { desktopState } from "@/lib/desktopState";
 import type { Boot, Ctx, Inbox, Quotas, Runs } from "@/lib/device";
 import { reach, send } from "@/lib/funnel";
 import { newestWins } from "@/lib/newest";
+import { openItem } from "@/lib/opened";
 import { AnsweredFirst } from "@/lib/outcome";
 import { Beacon, PRESENCE_CHANNEL, PRESENCE_CHECK_MS, PRESENCE_EVENTS } from "@/lib/presence";
 import {
@@ -32,6 +35,10 @@ import { type Unsent, withUnsent } from "@/lib/unsent";
 const load = () => import("@/lib/device");
 /** Pollers read while the page is visible, and skip their turn while the server is away (#332). */
 const polling = () => document.visibilityState === "visible" && !backingOff();
+/** The inbox and prompts: also while hidden in the desktop app, which notifies from them (#886). */
+const reading = () => (document.visibilityState === "visible" || !!desktop) && !backingOff();
+/** How often the desktop app hears the state again, for snoozes that end and prompts that expire. */
+const DESKTOP_TICK_MS = 15_000;
 
 /**
  * A poller's read that skips its turn while the last one is still running, so requests that hang
@@ -84,9 +91,11 @@ export type Store = {
   sampleDevices?: Device[];
   /**
    * Why no machine's item shows: the server holds back directory entries a machine has seen
-   * (#362). Settings still work, so the owner can revoke.
+   * (#362). Settings still work, so the owner can revoke. `revoked`: a member a `revoke` entry
+   * names, whose heads `stopWaiting` forgets once the owner says they revoked it (#813).
    */
-  withheld?: string;
+  withheld?: { text: string; revoked?: string };
+  stopWaiting: (id: string) => Promise<void>;
 };
 
 export const StoreContext = createContext<Store | null>(null);
@@ -137,7 +146,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [inboxLoaded, setInboxLoaded] = useState(false);
   const [pushed, setPushed] = useState(false);
   const [quotas, setQuotas] = useState<Quotas>();
-  const [withheld, setWithheld] = useState<string>();
+  const [withheld, setWithheld] = useState<Store["withheld"]>();
   const [quotaSettings, setSettingsState] = useState<QuotaSettings>(DEFAULT_SETTINGS);
   const settingsRef = useRef(quotaSettings);
   settingsRef.current = quotaSettings;
@@ -225,7 +234,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           return undefined;
         }
         if (!(e instanceof d.Withheld)) throw e;
-        setWithheld(e.message);
+        setWithheld({ text: e.message, revoked: e.revoked });
         // Their buttons would still offer answers the hold refuses.
         const reg = await navigator.serviceWorker?.getRegistration("/").catch(() => undefined);
         for (const n of (await reg?.getNotifications().catch(() => [])) ?? []) n.close();
@@ -300,6 +309,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   // The directory as last verified; read again before every load.
   const ctxRef = useRef(ctx);
   ctxRef.current = ctx;
+
+  /** The owner says they revoked `id`: its heads go, and everything loads again (#813). */
+  const stopWaiting = useCallback(
+    async (id: string) => {
+      const c = ctxRef.current;
+      if (!c) return;
+      await (await load()).stopWaiting(c, id);
+      setWithheld(undefined);
+      await reload();
+    },
+    [reload],
+  );
   const current = useCallback(async () => {
     const was = ctxRef.current;
     if (!was) return undefined;
@@ -448,7 +469,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const readInbox = single(refreshInbox);
     const readPrompts = single(refreshPrompts);
     const tick = () => {
-      if (!polling()) return;
+      if (!reading()) return;
       readInbox();
       readPrompts();
     };
@@ -632,6 +653,38 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     [ctx, refreshInbox, reload],
   );
 
+  // The desktop app's menu bar count and notifications follow Needs you; signed out, both clear.
+  const ready = !!ctx && inboxLoaded;
+  useEffect(() => {
+    if (!desktop) return;
+    const bridge = desktop;
+    const send = () =>
+      bridge.update(
+        ready ? desktopState(inbox.items, prompts, Date.now()) : { count: 0, entries: [] },
+      );
+    send();
+    const timer = setInterval(send, DESKTOP_TICK_MS);
+    return () => clearInterval(timer);
+  }, [ready, inbox, prompts]);
+
+  // A notification's button or reply answers as a tap here would; its click opens the item.
+  const answerRef = useRef(answer);
+  answerRef.current = answer;
+  useEffect(() => {
+    if (!desktop) return;
+    desktop.onAnswer(async (a) => {
+      // Store.answer does nothing without a device: say so rather than pass for sent.
+      if (!ctxRef.current) throw new Error("Starbridge is signed out.");
+      const item = inboxRef.current.items.find((i) => i.decision.id === a.id);
+      if (!item || item.answeredAt) throw new Error("Already answered.");
+      await answerRef.current(item, "choice" in a ? { choice: a.choice } : { text: a.text });
+    });
+    desktop.onOpen((id) => {
+      if (location.pathname === "/") openItem(id);
+      else location.assign(`/?item=${encodeURIComponent(id)}`);
+    });
+  }, []);
+
   const dismissRun = useCallback(
     async (item: RunItem) => {
       if (!ctx) return;
@@ -676,6 +729,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         loadPromptLog,
         deviceName,
         withheld,
+        stopWaiting,
       }}
     >
       {children}

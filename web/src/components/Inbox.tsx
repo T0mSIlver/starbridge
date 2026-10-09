@@ -431,6 +431,8 @@ export function Inbox() {
           {inbox.rejected.length} hidden: failed verification ({inbox.rejected[0]?.error})
         </p>
       )}
+      {/* The gap History has above it, so Runs does not sit flush under the header (#868). */}
+      {runsPart && <div className={s.gap} />}
       {runsPart && (grouped ? seg(runsPart) : runsPart)}
       {view === "waiting" ? (
         <>

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { needsYou } from "@/lib/feed";
 import { setFind, useFind } from "@/lib/find";
 import { type Store, useApp } from "./AppProvider";
@@ -32,7 +32,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
     });
   }, [router]);
   const app = useApp();
-  const { inbox, prompts, withheld } = app;
+  const { inbox, prompts, withheld, stopWaiting } = app;
   const open = needsYou(inbox.items, prompts, Date.now()).length;
   const machines = pairedMachines(app) ?? 0;
   const q = useFind();
@@ -113,9 +113,15 @@ export function Shell({ children }: { children: React.ReactNode }) {
       </nav>
       <main className={s.main}>
         {withheld && (
-          <p className={`t-small ${ui.error} ${s.withheld}`} role="alert">
-            {withheld}
-          </p>
+          <div className={`t-small ${ui.error} ${s.withheld}`} role="alert">
+            <p>{withheld.text}</p>
+            {withheld.revoked && (
+              <StopWaiting
+                name={app.deviceName(withheld.revoked)}
+                onStop={() => stopWaiting(withheld.revoked as string)}
+              />
+            )}
+          </div>
         )}
         {children}
       </main>
@@ -151,4 +157,22 @@ export function pairedMachines({ boot, sampleDevices }: Store): number | undefin
   if (boot.state !== "ready") return undefined;
   return [...boot.ctx.dir.members.values()].filter((m) => m.member.role === "machine" && m.active)
     .length;
+}
+
+/** The way out of a hold a revocation cannot end (#813): the owner says they made it. */
+function StopWaiting({ name, onStop }: { name: string; onStop: () => Promise<void> }) {
+  const [busy, setBusy] = useState(false);
+  return (
+    <button
+      type="button"
+      className={`t-label ${ui.btn} ${s.stopWaiting}`}
+      disabled={busy}
+      onClick={() => {
+        setBusy(true);
+        onStop().finally(() => setBusy(false));
+      }}
+    >
+      I revoked {name}: stop waiting
+    </button>
+  );
 }

@@ -179,28 +179,38 @@ device list may still hold a device the missing entries revoke, and sealing to i
 that device's keys everything the machine sends. The command fails and says the server is
 holding back entries; the machine posts again once the server serves them.
 
-A revocation does not end the hold either, unless the recovery key made it (`recover`). A device
-signs no head past its own revocation, so a chain that revokes a device before the head that
-device signed forks from the chain the device saw: the revoked device whose revocation the
-server hides can extend the machine's stale chain and revoke the device that revoked it. So a
-machine keeps counting a head its chain does not hold while a `revoke` entry names its device,
-for answers as for sending. When the owner revoked that device because it signed a false long
-head, `starbridge pair --force` pairs the machine again and forgets the heads it kept.
+A revocation does not end a hold either, on a machine or a device, unless the recovery key made
+it (`recover`). A member signs no head past its own revocation, so a chain that revokes a member
+before the head that member signed forks from the chain the member saw: a revoked device whose
+revocation the server hides can extend a stale chain and revoke the member whose head exposed
+it (#794, #813). So a head the chain does not hold keeps counting while a `revoke` entry names
+its signer or its `by` (`withheldBy`, whose result names that revocation as `revoked`). When the
+owner revoked that member because it signed a false long head:
+
+- on a machine, `starbridge pair --force` pairs it again and forgets the heads it kept;
+- the device that signs the revocation forgets the heads that member signed or is named in
+  (`forgetHeads`): it knows its own revocation is real;
+- any other device that holds names who revoked the member and when, and offers to stop waiting
+  for it, which runs `forgetHeads` on the owner's word. A forged revocation shows as signed by a
+  device the owner revoked, which they did not make.
 
 Devices run the same check on machines (#362). A machine signs its own head into every item it
 posts, `dir: {length, head, by?}`. Before #794 a machine could instead sign a longer head an
 active device had signed into an answer, naming that device as `by` (`headToSign`). A device
 keeps the longest head each machine signed, apart for each `by` it lists, and in one slot per
-machine for any `by` it does not list (`noteHead`), so storage stays bounded. While a head its
-chain does not hold counts, it refuses every machine's items and says the server is holding back
-directory entries; a head counts while its machine is active in the device's chain and its `by`,
-if any, is not revoked there (`withheldBy`). A `by` the chain does not list counts: its `add` may
-be what the server holds back, as when the owner revokes from a new phone. Before holding, a
-device reads the directory once more, since a machine may simply have signed an entry made
-elsewhere since its last read. It reads the items again once the server serves those entries,
-or once its chain revokes the machine or the `by`. Reading the directory and revoking keep
-working meanwhile. The device names both members, and says to revoke the machine first: a
-compromised machine can name any `by`, such as the owner's own phone.
+machine for any `by` it does not list (`noteHead`), so storage stays bounded. It keeps no head
+naming a `by` its chain lists as revoked, so a head the owner told it to forget does not come back
+when that item is read again; a fork served before the head could as well revoke the machine,
+whose items then open no more. The web app also keeps the members the owner told it to forget,
+and keeps no head they signed or are named in, even from a read begun on an older chain. While a head its chain does not hold counts, it refuses every
+machine's items and says the server is holding back directory entries; a head counts while its
+machine is listed in the device's chain and no `recover` came after a revocation of the machine
+or its `by`: the recovery key's `recover` revokes every member and ends every earlier hold. A `by` the chain does not list counts: its `add` may be what the server holds back, as
+when the owner revokes from a new phone. Before holding, a device reads the directory once more,
+since a machine may simply have signed an entry made elsewhere since its last read. It reads the
+items again once the server serves those entries, or once the owner stops waiting. Reading the
+directory and revoking keep working meanwhile. The device names both members, and says to revoke
+the machine first: a compromised machine can name any `by`, such as the owner's own phone.
 
 So one machine that holds a withheld revocation exposes it to every device whose items from that
 machine the server delivers, and one that has only seen the head of the device that made it
@@ -208,8 +218,8 @@ stops posting. A server that
 withholds it from every machine, and drops the revoking device's answers, keeps it hidden, as it
 does from a device that gets items only from the revoked machine. A member that is compromised
 but not yet revoked can sign a false long head and hold every device's items until the owner
-revokes it, which the owner sees; machines that saw the head post nothing until they are
-paired again. The server itself can always hold items back.
+revokes it and stops waiting on each device that saw the head, which the owner sees; machines
+that saw the head post nothing until they are paired again. The server itself can always hold items back.
 
 The head is optional: an item without one opens and counts neither for nor against a hold. The
 head is part of the signed body, so the server can neither strip nor change it.
@@ -370,7 +380,7 @@ answers anyone with `ok`; `/healthz/backup` and `/healthz/disk` answer `ok`, or 
 last backup is stale or the disk runs low.
 
 Every request names its client and release in `starbridge-client: <name>/<version>`, `name`
-one of `cli`, `android`, `web` and `mod`, `version` MAJOR.MINOR.PATCH with an optional
+one of `cli`, `android`, `web`, `mod` and `desktop` (the desktop app's page), `version` MAJOR.MINOR.PATCH with an optional
 pre-release, which comes before its release (`cli/0.1.0`, `android/0.2.0-rc.1`). The server counts the
 releases in use, and keeps a minimum release per client name: below it, any route answers 426
 `{error: "client-too-old", detail, client, minimum}`, and the client asks its owner to update. A

@@ -32,6 +32,11 @@ interface Store {
     val tooOld: StateFlow<String?>
     /** The last thing that went wrong, in words for the owner. */
     val notice: StateFlow<String?>
+    /**
+     * While a head holds this phone whose member a `revoke` names: that member and the hold's
+     * notice, which alone offers [stopWaiting]. No revocation ends a hold by itself (#813).
+     */
+    val heldRevoked: StateFlow<HeldRevoked?> get() = MutableStateFlow(null)
     /** The recovery key's state, once the directory is known (#348). */
     val recovery: StateFlow<RecoveryUi?>
     val replacing: StateFlow<Replacing>
@@ -105,4 +110,9 @@ interface Store {
     fun setPushType(type: String)
     fun signOut()
     fun dismissNotice()
+    /** The owner says they revoked [memberId]: the heads it signed or is named in go (#813). */
+    fun stopWaiting(memberId: String) {}
 }
+
+/** A hold whose [member] a `revoke` names, and the [notice] that says so. */
+data class HeldRevoked(val member: String, val notice: String)

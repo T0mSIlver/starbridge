@@ -4,6 +4,7 @@ import { parseClientHeader, versionBelow } from "../src";
 test.each([
   ["cli/1.0.0", { name: "cli", version: [1, 0, 0], pre: false }],
   ["android/1.2.10-rc.1", { name: "android", version: [1, 2, 10], pre: true }],
+  ["desktop/0.1.0", { name: "desktop", version: [0, 1, 0], pre: false }],
   ["phone/1.0.0", null],
   ["cli/1.0", null],
   ["cli/abc1234", null],

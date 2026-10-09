@@ -1,5 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Debug builds reach a local server over plain HTTP (an emulator through adb reverse). -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <application android:usesCleartextTraffic="true" />
+    <application android:usesCleartextTraffic="true">
+        <!-- The widgets on sample data, for screenshots (#894). -->
+        <activity
+            android:name=".widget.WidgetShotsActivity"
+            android:exported="true"
+            android:theme="@android:style/Theme.DeviceDefault.NoActionBar" />
+    </application>
 </manifest>

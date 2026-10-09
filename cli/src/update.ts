@@ -100,8 +100,9 @@ function movePiPackage(ctx: Ctx, version: string) {
 /**
  * `starbridge update`: replaces a script-installed binary with the latest release once its
  * signature and hash check out, then restarts the agent and updates the plugins and the Pi
- * package; then moves a CodexBar that setup installed to its latest release. With `codexbar`, it
- * only installs that CodexBar release, for when the latest one breaks.
+ * package; then moves a CodexBar that setup installed to the release this binary pins, the new
+ * one when it was replaced. With `codexbar`, it only installs that CodexBar release, for when the
+ * pinned one breaks.
  */
 export async function update(
   ctx: Ctx,
@@ -116,7 +117,15 @@ export async function update(
   // hold it back (#617). A release that does not check out stops everything.
   let self = 0;
   try {
-    await updateSelf(ctx, install, pubkey);
+    if ((await updateSelf(ctx, install, pubkey)) && install.kind === "binary") {
+      // The new binary pins its own CodexBar: it updates that, finding itself up to date.
+      const r = spawnSync(install.path, ["update"], {
+        env: ctx.env as NodeJS.ProcessEnv,
+        stdio: ["ignore", "inherit", "inherit"],
+        timeout: 15 * 60_000,
+      });
+      return r.status ?? 1;
+    }
   } catch (e) {
     if (e instanceof ReleaseError && !(e instanceof DownloadError)) throw e;
     ctx.out(`Could not update starbridge: ${(e as Error).message}`);
@@ -126,16 +135,17 @@ export async function update(
   return Math.max(self, await updateCodexbar(sys, configured));
 }
 
-async function updateSelf(ctx: Ctx, install: InstallKind, pubkey: string) {
+/** Returns whether it replaced the binary. */
+async function updateSelf(ctx: Ctx, install: InstallKind, pubkey: string): Promise<boolean> {
   if (install.kind !== "binary") {
     ctx.out(`starbridge was installed with ${install.kind}: run ${MANAGED[install.kind].update}`);
-    return;
+    return false;
   }
   const releases = ctx.env.STARBRIDGE_RELEASES_URL ?? RELEASES_URL;
   const latest = await latestVersion(releases);
   if (compareVersions(latest, VERSION) <= 0) {
     ctx.out(`starbridge ${VERSION} is up to date.`);
-    return;
+    return false;
   }
   const bytes = await downloadVerified(latest, platformAsset(), { releases, pubkey });
   // Written next to the binary, then renamed over it: a running copy keeps its old inode.
@@ -160,6 +170,7 @@ async function updateSelf(ctx: Ctx, install: InstallKind, pubkey: string) {
   }
   updatePlugins(ctx);
   movePiPackage(ctx, latest);
+  return true;
 }
 
 /**

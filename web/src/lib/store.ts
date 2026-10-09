@@ -37,6 +37,11 @@ type Records = {
   /** The longest directory head each machine signed into its items (#362). */
   heads: Heads;
   /**
+   * Members whose directory heads the owner told this browser to forget (#813): heads they
+   * signed or are named in are never kept again, even from a read that started before.
+   */
+  forgotten: string[];
+  /**
    * The signed time of the latest snooze this browser knows of each decision (#571): a return
    * pushed for an older one shows nothing.
    */
@@ -53,6 +58,7 @@ const PER_ACCOUNT: Record<Exclude<keyof Records, "current">, true> = {
   recoverySeen: true,
   probe: true,
   heads: true,
+  forgotten: true,
   snoozes: true,
 };
 export const ACCOUNT_KINDS = Object.keys(PER_ACCOUNT) as Exclude<keyof Records, "current">[];
@@ -162,6 +168,35 @@ export async function update<K extends keyof Records>(
       const s = tx.objectStore(STORE);
       const req = s.get(key(kind, account));
       req.onsuccess = () => s.put(change(req.result as Records[K] | undefined), key(kind, account));
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  } finally {
+    d.close();
+  }
+}
+
+/** Read-modify-write of one record, reading another in the same transaction. */
+export async function updateWith<K extends keyof Records, R extends keyof Records>(
+  kind: K,
+  account: string,
+  read: R,
+  change: (old: Records[K] | undefined, other: Records[R] | undefined) => Records[K],
+): Promise<void> {
+  const d = await db();
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const tx = d.transaction(STORE, "readwrite");
+      const s = tx.objectStore(STORE);
+      const other = s.get(key(read, account));
+      other.onsuccess = () => {
+        const req = s.get(key(kind, account));
+        req.onsuccess = () =>
+          s.put(
+            change(req.result as Records[K] | undefined, other.result as Records[R] | undefined),
+            key(kind, account),
+          );
+      };
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error);
     });

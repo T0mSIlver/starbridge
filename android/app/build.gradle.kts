@@ -117,6 +117,7 @@ dependencies {
     implementation(libs.navigation.suite)
     implementation(libs.okhttp)
     implementation(libs.work.runtime)
+    implementation(libs.glance.appwidget)
     implementation(libs.browser)
     implementation(libs.firebase.messaging)
     implementation(libs.unifiedpush)

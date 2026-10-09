@@ -50,6 +50,10 @@ from an emulator run against one: GitHub sign-in through a stand-in OAuth
 server, first-device setup, pairing `starbridge pair`, and answering
 `starbridge ask --wait` from the locked screen through UnifiedPush (ntfy).
 
+The home-screen widgets (`widget/`) are RemoteViews, which Roborazzi cannot draw. Debug builds'
+`WidgetShotsActivity` lays them out on sample data, as a launcher applies them, for screenshots on
+an emulator; `docs/widgets/` holds them, light and dark, under each Colours setting.
+
 Fonts: Google Sans Flex and Google Sans Code, under the SIL Open Font License
 (`licenses/`). `res/font/google_sans_flex.ttf` is the google/fonts file
 instanced to its weight (300 to 800) and optical size (12 to 36) axes, with
