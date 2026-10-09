@@ -80,6 +80,20 @@ function session(socket: string, id: string) {
   };
 }
 
+/**
+ * What `p` rejects with. On Windows, `expect(p).rejects` in a test that made a node:http request
+ * corrupts Bun's heap, and a later test crashes or hangs (#897, Bun 1.4.2 and 1.4.3); a plain
+ * `await` in try/catch does not.
+ */
+async function rejection(p: Promise<unknown>): Promise<Error> {
+  try {
+    await p;
+  } catch (e) {
+    return e as Error;
+  }
+  throw new Error("expected a rejection, got a result");
+}
+
 async function ask(c: TestCtx, ...extra: string[]): Promise<string> {
   const before = c.lines.length;
   const code = await run([...ASK, ...extra], c);
@@ -277,7 +291,7 @@ test("the socket is the user's only, and a second agent refuses to start", async
     expect(statSync(socket).mode & 0o777).toBe(0o600);
     expect(statSync(ctx.store.dir).mode & 0o777).toBe(0o700);
   }
-  await expect(makeAgent(ctx, { socket }).start()).rejects.toThrow("already runs");
+  expect((await rejection(makeAgent(ctx, { socket }).start())).message).toContain("already runs");
 });
 
 test("a client of another API revision gets 426 with what to update", async () => {
@@ -355,12 +369,9 @@ test("the agent refuses bad requests with the CLI's own messages", async () => {
   expect(c.errors.at(-1)).toContain("--answer-in takes no --option");
   expect(await run(["wait", "d_nosuch"], c)).toBe(1);
   expect(c.errors.at(-1)).toContain("not a decision this machine asked");
-  // Bun 1.4.2 on Windows crashes or hangs in a later test of this file once the agent has
-  // refused this call (#897), though not the calls above, so Windows skips it.
-  if (!WINDOWS)
-    await expect(new AgentClient(socket).call("GET", "/v1/sessions/a%20b/events")).rejects.toThrow(
-      AgentError,
-    );
+  expect(
+    await rejection(new AgentClient(socket).call("GET", "/v1/sessions/a%20b/events")),
+  ).toBeInstanceOf(AgentError);
   expect(await server.opened("decision")).toEqual([]);
 });
 
@@ -405,9 +416,9 @@ test.skipIf(WINDOWS)(
 
 test("a malformed path gets 400 and the agent keeps serving", async () => {
   const { socket } = await machine();
-  await expect(
-    new AgentClient(socket).call("GET", "/v1/sessions/%zz/events"),
-  ).rejects.toMatchObject({ status: 400, body: { error: "bad-path" } });
+  expect(
+    await rejection(new AgentClient(socket).call("GET", "/v1/sessions/%zz/events")),
+  ).toMatchObject({ status: 400, body: { error: "bad-path" } });
   expect((await new AgentClient(socket).call<Status>("GET", "/v1/status")).version).toBeDefined();
 });
 
@@ -697,13 +708,17 @@ test("on loopback TCP (Windows), only a call that proves the port file's token g
   await new Promise<void>((r) => impostor.listen(file.port, "127.0.0.1", r));
   writeFileSync(socket, JSON.stringify(file));
   try {
-    await expect(new AgentClient(socket).call("GET", "/v1/status")).rejects.toThrow("proof");
+    expect((await rejection(new AgentClient(socket).call("GET", "/v1/status"))).message).toContain(
+      "proof",
+    );
   } finally {
     impostor.close();
   }
   // A port file left by an agent that died: its pid runs no more, so nothing is sent.
   writeFileSync(socket, JSON.stringify({ ...file, pid: 2 ** 22 + 1 }));
-  await expect(new AgentClient(socket).call("GET", "/v1/status")).rejects.toThrow("no agent");
+  expect((await rejection(new AgentClient(socket).call("GET", "/v1/status"))).message).toContain(
+    "no agent",
+  );
 });
 
 test("an agent that hangs up or exits without stopping removes its port file (#570)", async () => {
