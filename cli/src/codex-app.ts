@@ -115,10 +115,16 @@ export class CodexApp {
       };
       socket.on("data", onHead);
     });
-    await app.request("initialize", {
-      clientInfo: { name: "starbridge", version: "1" },
-      capabilities: { experimentalApi: true },
-    });
+    // A daemon that took the connection but never answers would hold a detached race forever.
+    const silent = setTimeout(() => app.close(), CONNECT_MS);
+    try {
+      await app.request("initialize", {
+        clientInfo: { name: "starbridge", version: "1" },
+        capabilities: { experimentalApi: true },
+      });
+    } finally {
+      clearTimeout(silent);
+    }
     app.send({ method: "initialized" });
     return app;
   }
