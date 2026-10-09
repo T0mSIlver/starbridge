@@ -585,6 +585,23 @@ test("Cursor: setup keeps the owner's config and skill, and refresh updates its 
     version: 1,
     hooks: { sessionStart: [mine], stop: [mine] },
   });
+  // A hooks file with none of Starbridge's entries is never rewritten, and one setup cannot read
+  // as Cursor's stays as it is; an owner's empty event stays too.
+  for (const text of ['{"hooks":{"stop":[]}}', '{"version":1,"hooks":"nope"}']) {
+    writeFileSync(hooksFile, text);
+    expect(await run(["uninstall", "--agent", "cursor", "--yes"], m.ctx)).toBe(0);
+    expect(readFileSync(hooksFile, "utf8")).toBe(text);
+  }
+  writeFileSync(hooksFile, '{"hooks":{"stop":[]}}');
+  expect(await setup(m.sys, { agent: "cursor" })).toBe(0);
+  expect(JSON.parse(readFileSync(hooksFile, "utf8")).hooks.stop).toEqual([]);
+  writeFileSync(hooksFile, '{"version":1,"hooks":"nope"}');
+  m.ctx.lines.length = 0;
+  expect(await setup(m.sys, { agent: "cursor" })).toBe(0);
+  expect(readFileSync(hooksFile, "utf8")).toBe('{"version":1,"hooks":"nope"}');
+  expect(m.ctx.lines.join("\n")).toContain(`${hooksFile} is not valid JSON`);
+  rmSync(hooksFile);
+  expect(await run(["uninstall", "--agent", "cursor", "--yes"], m.ctx)).toBe(0);
   expect(JSON.parse(readFileSync(config, "utf8")).permissions.allow).toEqual(["Shell(ls)"]);
 
   // A skill of the same name that setup did not write stays, and a config that does not parse

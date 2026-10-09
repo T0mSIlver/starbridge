@@ -274,7 +274,9 @@ function installCursor(sys: Sys): Outcome {
   const plugin = cursorState(sys);
   if (plugin === "foreign") notes.push(`${cursorSkillDir(sys)} is another skill: left alone.`);
   else if (plugin !== "current" && !installCursorFiles(sys))
-    notes.push(`${cursorHooksPath(sys)} is not valid JSON: add to its "hooks" ${hooksToAdd(sys)}.`);
+    notes.push(
+      `${cursorHooksPath(sys)} is not valid JSON or not Cursor's hooks file: add to its "hooks" ${hooksToAdd(sys)}.`,
+    );
   const allowed = missingCursorAllow(sys).length === 0 || addCursorAllow(sys);
   if (!allowed)
     notes.push(
@@ -310,7 +312,7 @@ export async function removeAgent(sys: Sys, id: AgentId): Promise<string[]> {
       for (const path of removeOpencode(sys)) done.push(`Removed ${path}.`);
       break;
     case "cursor":
-      for (const path of removeCursorFiles(sys)) done.push(`Removed ${path}.`);
+      done.push(...removeCursorFiles(sys));
       if (removeCursorAllow(sys))
         done.push(`Removed the starbridge allow rules from ${cursorConfigPath(sys)}.`);
       break;

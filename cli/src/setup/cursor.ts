@@ -66,13 +66,21 @@ export function cursorHooksPath(sys: Home): string {
 
 type HooksFile = Record<string, unknown> & { hooks?: Record<string, unknown> };
 
-/** The hooks file, `{version: 1}` when there is none, undefined when it does not parse. */
+const isObject = (v: unknown): v is Record<string, unknown> =>
+  !!v && typeof v === "object" && !Array.isArray(v);
+
+/**
+ * The hooks file, `{version: 1}` when there is none; undefined when it does not parse or is not
+ * Cursor's shape, which setup then leaves to the owner.
+ */
 function readHooks(sys: Home): HooksFile | undefined {
   const text = readText(cursorHooksPath(sys));
   if (text === undefined) return { version: 1 };
   try {
     const v = JSON.parse(text) as unknown;
-    return v && typeof v === "object" && !Array.isArray(v) ? (v as HooksFile) : undefined;
+    return isObject(v) && (v.hooks === undefined || isObject(v.hooks))
+      ? (v as HooksFile)
+      : undefined;
   } catch {
     return undefined;
   }
@@ -84,11 +92,22 @@ function oursEntry(sys: Home, entry: unknown): boolean {
   return typeof command === "string" && command.includes(cursorScriptsDir(sys));
 }
 
-/** The hooks file with Starbridge's entries replaced by `want`'s. */
+/** Whether the file holds an entry of Starbridge's. */
+function hasOurs(sys: Home, file: HooksFile): boolean {
+  return Object.values(file.hooks ?? {}).some(
+    (list) => Array.isArray(list) && list.some((e) => oursEntry(sys, e)),
+  );
+}
+
+/**
+ * The hooks file with Starbridge's entries replaced by `want`'s; the owner's entries, events and
+ * other keys as they were. An event that held only Starbridge's entries goes with them.
+ */
 function withEntries(
   sys: Home,
   file: HooksFile,
   want: Record<string, Record<string, unknown>[]>,
+  addVersion = true,
 ): HooksFile {
   const hooks: Record<string, unknown> = {};
   const events = new Set([...Object.keys(file.hooks ?? {}), ...Object.keys(want)]);
@@ -100,15 +119,16 @@ function withEntries(
       continue;
     }
     const list = [...(had ?? []).filter((e) => !oursEntry(sys, e)), ...(want[event] ?? [])];
-    if (list.length > 0) hooks[event] = list;
+    if (list.length > 0 || (had !== undefined && had.length === 0)) hooks[event] = list;
   }
-  return { ...file, version: file.version ?? 1, hooks };
+  // Cursor refuses a file without a version; one setup adds entries to gets the first.
+  return { ...file, ...(addVersion && file.version === undefined ? { version: 1 } : {}), hooks };
 }
 
 function hooksCurrent(sys: Home): boolean {
   const file = readHooks(sys);
-  // A file that does not parse is the owner's to fix; setup says what to add.
-  if (!file) return true;
+  // A file setup cannot read stays the owner's to fix: setup says what to add each time.
+  if (!file) return false;
   return JSON.stringify(withEntries(sys, file, hookEntries(sys))) === JSON.stringify(file);
 }
 
@@ -164,24 +184,23 @@ export function installCursorFiles(sys: Home): boolean {
   return installHooks(sys);
 }
 
-/** Removes what setup wrote. Returns the paths it removed or changed. */
+/** Removes what setup wrote. Returns one line per thing done. */
 export function removeCursorFiles(sys: Home): string[] {
   const done: string[] = [];
   if (ours(readText(join(cursorSkillDir(sys), "SKILL.md")))) {
     rmSync(cursorSkillDir(sys), { recursive: true, force: true });
-    done.push(cursorSkillDir(sys));
+    done.push(`Removed ${cursorSkillDir(sys)}.`);
   }
   const file = readHooks(sys);
-  if (file && existsSync(cursorHooksPath(sys))) {
-    const next = withEntries(sys, file, {});
-    if (JSON.stringify(next) !== JSON.stringify(file)) {
-      writeFileSync(cursorHooksPath(sys), `${JSON.stringify(next, null, 2)}\n`);
-      done.push(cursorHooksPath(sys));
-    }
+  // Only a file that holds Starbridge's entries is written.
+  if (file && existsSync(cursorHooksPath(sys)) && hasOurs(sys, file)) {
+    const next = withEntries(sys, file, {}, false);
+    writeFileSync(cursorHooksPath(sys), `${JSON.stringify(next, null, 2)}\n`);
+    done.push(`Removed Starbridge's entries from ${cursorHooksPath(sys)}.`);
   }
   if (ours(readText(join(cursorScriptsDir(sys), "README.md")))) {
     rmSync(cursorScriptsDir(sys), { recursive: true, force: true });
-    done.push(cursorScriptsDir(sys));
+    done.push(`Removed ${cursorScriptsDir(sys)}.`);
   }
   return done;
 }
