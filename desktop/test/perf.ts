@@ -24,7 +24,11 @@ export const BUDGETS = {
   coldMs: 700,
   /** Showing the hidden window to its next frame, as from the menu bar. */
   warmMs: 50,
-  /** All processes' working sets, idle with the page loaded. */
+  /**
+   * All processes' working sets, idle with the page loaded. 350 MB is the runner's gate; a real
+   * Mac uses more, so its budget is 400 MB (owner, 2026-10-09: the Mac Mini M2 measured 371–378 MB
+   * on main 12df3fee, the updater ~23 MB of it, kept).
+   */
   memoryMb: 350,
   /** The largest DMG. */
   downloadMb: 140,

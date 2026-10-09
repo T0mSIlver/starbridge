@@ -3,6 +3,7 @@
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { outdated } from "@/lib/api";
+import { desktop } from "@/lib/desktop";
 import type { FirstDevice as PreparedDevice, RecoveryEntry } from "@/lib/device";
 import { firstSignIn, reach, send } from "@/lib/funnel";
 import { hasPairCode, holdPairCode } from "@/lib/pairLink";
@@ -51,7 +52,7 @@ function NameField({ value, onChange }: { value: string; onChange: (v: string) =
   return (
     <div className={s.field}>
       <label className={`t-meta ${s.dim}`} htmlFor="device-name">
-        Name this browser
+        {desktop ? "Name this app" : "Name this browser"}
       </label>
       <input
         id="device-name"
@@ -144,6 +145,7 @@ export function SignIn({
           {failed ? "Sign in again" : "Continue with GitHub"}
         </a>
       )}
+      {desktop && !off && <p className={`t-meta ${s.dim}`}>Opens your browser.</p>}
       {own ? (
         <form
           className={s.field}
@@ -171,9 +173,12 @@ export function SignIn({
           </button>
         </form>
       ) : (
-        <button type="button" className={`t-meta ${s.link}`} onClick={() => setOwn(true)}>
-          Use your own server
-        </button>
+        // The desktop app sets its server from the menu bar icon instead.
+        !desktop && (
+          <button type="button" className={`t-meta ${s.link}`} onClick={() => setOwn(true)}>
+            Use your own server
+          </button>
+        )
       )}
       <Error_ error={error} />
     </FirstRunPage>
@@ -207,7 +212,9 @@ function FirstDevice({ account, unsaved }: { account: string; unsaved?: string }
       <p className={`t-small ${s.lede}`}>
         {unsaved
           ? "The page closed before you saved the recovery key, so that key was never used. Create the keys again for a new one."
-          : "This browser creates your account's keys."}
+          : desktop
+            ? "This app creates your account's keys."
+            : "This browser creates your account's keys."}
       </p>
       <NameField value={name} onChange={setName} />
       <button
@@ -530,8 +537,10 @@ export function Gate({ visitor, children }: { visitor: boolean; children: React.
   // Back from a failed GitHub sign-in, the page says why instead (proxy.ts serves no landing).
   const signInReturn = useSearchParams().has("signin");
   // Visitors land on the landing page; a browser with a device signs in to its Inbox.
+  // Not in the desktop app, whose signed-out page is sign-in (#905).
   const landing =
     path === "/" &&
+    !desktop &&
     !ownServer &&
     !failed &&
     (boot.state === "loading"
@@ -539,7 +548,11 @@ export function Gate({ visitor, children }: { visitor: boolean; children: React.
       : boot.state === "signed-out" && !boot.known);
   // The server titled a visitor's page for the landing page: once something else shows there,
   // such as the Inbox after signing in, the tab says what it is.
-  const retitle = visitor && path === "/" && !landing && boot.state !== "loading";
+  // The desktop app's sign-in page was titled "Sign in": signed in, it says Inbox too.
+  const retitle =
+    path === "/" &&
+    !landing &&
+    (visitor ? boot.state !== "loading" : !!desktop && boot.state === "ready");
   useEffect(() => {
     if (retitle) document.title = "Starbridge · Inbox";
   }, [retitle]);

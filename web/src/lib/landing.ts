@@ -3,6 +3,12 @@ import type { Metadata } from "next";
 /** The server's session cookie (server/src/auth.ts): a request without it is a visitor's. */
 export const SESSION_COOKIE = "sb_session";
 
+/**
+ * Set by the desktop app in its own window (desktop/src/main.ts): its signed-out page is sign-in,
+ * never the landing page (#905).
+ */
+export const DESKTOP_COOKIE = "sb_desktop";
+
 export const DESCRIPTION =
   "When a coding agent stops for a question, your phone tells you. Answer with one tap and it gets back to work. Every agent and machine in one place. Open source, end-to-end encrypted.";
 

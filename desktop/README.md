@@ -43,14 +43,16 @@ checks every field again.
 
 `test/perf.ts` measures the packaged app on GitHub's macOS runner and fails the `desktop`
 workflow when one is blown. The window loads a stand-in page there, so the network is not in the
-numbers.
+numbers. The Mac Mini column is main 12df3fee on the owner's Mac Mini (2026-10-09), with the same
+script: a real Mac uses more memory than the runner, so its budget is 400 MB, while CI gates at
+350 MB (owner's call, keeping the updater's ~23 MB).
 
-| | Budget | 2026-10-09 |
-|---|---|---|
-| Cold start: process start to the window's first painted frame (median of 6 launches after a first) | 700 ms | 407–555 ms |
-| Warm open: the hidden window to its next frame, as from the menu bar | 50 ms | 7–49 ms |
-| Idle memory: every process's working set, page loaded | 350 MB | 304 MB |
-| Download: the largest DMG | 140 MB | 133 MB |
+| | Budget | Runner | Mac Mini M2 |
+|---|---|---|---|
+| Cold start: process start to the window's first painted frame (median of 6 launches after a first) | 700 ms | 407–555 ms | 258–260 ms |
+| Warm open: the hidden window to its next frame, as from the menu bar | 50 ms | 7–49 ms | 15 ms |
+| Idle memory: every process's working set, page loaded | 350 MB on the runner, 400 MB on a Mac | 304–310 MB | 371–378 MB |
+| Download: the largest DMG | 140 MB | 133–134 MB | 134 MB |
 
 What keeps them: the main process is one 15 KB file, the updater (most of the code) loads 5 s
 after start from its own file, the window shows at once on the page's background colour, and

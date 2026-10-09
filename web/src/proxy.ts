@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { origin, SESSION_COOKIE } from "@/lib/landing";
+import { DESKTOP_COOKIE, origin, SESSION_COOKIE } from "@/lib/landing";
 
 /**
  * The page's Content-Security-Policy, with a fresh nonce for each request. Next reads the nonce
@@ -46,8 +46,13 @@ const ORIGINS = 4;
 function landing(request: NextRequest) {
   if (process.env.NODE_ENV !== "production") return undefined;
   if (request.method !== "GET" || request.nextUrl.pathname !== "/") return undefined;
-  // Signed in: the app. Back from a failed sign-in: its reason. A client navigation: Next's data.
-  if (request.cookies.has(SESSION_COOKIE) || request.nextUrl.searchParams.has("signin"))
+  // Signed in: the app. Back from a failed sign-in: its reason. The desktop app: sign-in. A client
+  // navigation: Next's data.
+  if (
+    request.cookies.has(SESSION_COOKIE) ||
+    request.cookies.has(DESKTOP_COOKIE) ||
+    request.nextUrl.searchParams.has("signin")
+  )
     return undefined;
   if (request.headers.has("rsc") || request.nextUrl.searchParams.has("_rsc")) return undefined;
   const base = origin(request.headers);

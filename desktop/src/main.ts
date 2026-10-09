@@ -78,7 +78,7 @@ function start(): void {
   app.whenReady().then(ready);
 }
 
-function ready(): void {
+async function ready(): Promise<void> {
   mark("ready");
   settings = readSettings(SETTINGS);
   origin = process.env.STARBRIDGE_SERVER
@@ -129,6 +129,19 @@ function ready(): void {
     app.exit();
   });
 
+  // The page's signed-out screen in the app is sign-in, not the landing page (web: DESKTOP_COOKIE).
+  // Set before the window loads anything, so a link that started the app keeps its own page.
+  await ses.cookies
+    .set({
+      url: origin,
+      name: "sb_desktop",
+      value: "1",
+      path: "/",
+      sameSite: "lax",
+      secure: origin.startsWith("https:"),
+      expirationDate: Date.now() / 1000 + 365 * 86_400,
+    })
+    .catch(() => {});
   createWindow();
   createTray();
   if (!globalShortcut.register(settings.shortcut, showWindow))

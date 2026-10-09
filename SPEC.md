@@ -1052,6 +1052,11 @@ a browser; the app adds a menu bar light and notifications, so a web release nee
   it made itself). Sign in with GitHub opens the browser with a PKCE challenge; the code comes back
   on `starbridge://auth`, and the app trades it with its verifier for the session, which becomes
   the page's session cookie. Owner-token sign-in stays in the page.
+- **Signed out**, the app opens on sign-in, never on the landing page: the app sets an
+  `sb_desktop` cookie, which the server's landing and the page both read. Sign-in offers GitHub
+  only, since the server is set from the menu bar icon; a server without GitHub shows its
+  owner-token form. Setup says "this app" and suggests the name "Starbridge on Mac" (owner's pick
+  from mockups, #905).
 - **Notifications.** One per item in Needs you, as on the phone: a question's options are its
   buttons, and a question that takes typed answers has Reply. An answer goes through the page, as
   if tapped there; when it fails, an "Answer not sent" notification says why. An item notifies
