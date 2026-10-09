@@ -334,7 +334,8 @@ size:
   aside: 320 # the web inbox's quota windows
   pane-head: 48 # the head of each web inbox pane
   content: 720
-  settings-label: 220 # the column of section names beside Settings' boxes, from 900 px
+  settings-label: 220 # the column of section names beside Settings' boxes, from 1440 px
+  settings-label-narrow: 160 # the same from 1100 px; under it, each name sits over its box
   quota-provider: 200 # the provider's column on the Quotas table
   quota-table-from: 840 # the Quotas page's own width from which it is one table
   quota-reset: 128 # the Quotas table's reset column: its longest time, "tomorrow 10:59 PM", fits
@@ -609,8 +610,10 @@ error) share one rhythm: the page title in `heading`, sections `s10` apart
 `size.tap` tall). An empty section says what is missing in one line of
 `fg2`, with its action if it has one. First-run, not found and error pages
 use the first-run frame: the brand top left, one 400 px column, legal links
-at the foot. From 900 px, Settings sets each section's name in a column
-(`size.settings-label`) beside its box, and the rows keep `size.content`. Settings'
+at the foot. From 1100 px, Settings sets each section's name in a column
+beside its box (`size.settings-label-narrow`, then `size.settings-label` from
+1440 px), and the rows keep `size.content`; narrower, each name sits over
+its box. Settings'
 quota alerts are a table inside the Quotas box: a provider row (handle, name
 at weight 500, an eye to show or hide it), then its windows, one checkbox per
 alert in columns a tap wide, named once at the top in `fg2`.

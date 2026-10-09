@@ -909,6 +909,10 @@ notify about nothing, weekly and monthly ones (and those of unknown length) abou
   name shrinks rather than breaks inside a word, as the rail's tab labels do: "Unused" broke at
   font scale 1.3. The owner chose this from mockups over the names repeated in each provider's
   card; the web keeps the one table.
+- **Settings' section names on the web** (#930). Beside the rail, a 1200 px window (the desktop
+  app's) gave the names a 220 px column and pushed the boxes off to the right. From 1440 px the
+  names keep that column; from 1100 px they take 160 px and the page a smaller margin; narrower,
+  each name sits over its box.
 - **Filtering on the device.** The uploader still raises every alert, and each device shows the
   ones its settings pick, so the server and the uploader learn nothing of them.
   `packages/protocol/src/quotaAlerts.ts` holds the rule and `quota-alerts.json` its vectors, which

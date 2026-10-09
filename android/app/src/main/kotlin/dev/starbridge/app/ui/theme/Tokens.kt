@@ -314,6 +314,7 @@ object Sizes {
     val paneHead = 48.dp
     val content = 720.dp
     val settingsLabel = 220.dp
+    val settingsLabelNarrow = 160.dp
     val quotaProvider = 200.dp
     val quotaTableFrom = 840.dp
     val quotaReset = 128.dp
