@@ -693,11 +693,28 @@ fun DecisionSheet(decision: Decision, now: Instant, onAnswer: (String, String?, 
     val h24 = LocalClock24.current
     var snoozing by rememberSaveable(decision.id) { mutableStateOf(snoozeOpen) }
     var tapped by remember(decision.id) { mutableStateOf(false) }
+    val done = open && decision.answerIn != null && decision.takesDone
+    val snooze = onSnooze.takeIf { open }
     SheetBody(
         decision.source,
         timeSlot(since, decision.createdAt, now),
         decision.agent,
         blocked = if (waiting) since?.let { waitingLabel(it, now) } ?: "Waiting for you" else null,
+        // Quiet, on the session's line, so the answer stays above (#970): Done for a page's answer
+        // (#539), and putting it off (#571).
+        footer = {
+            if (done) Done { send(null, null) }
+            if (snooze != null) Quiet(if (until != null) "Snooze again" else "Snooze") { snoozing = !snoozing; tapped = snoozing }
+            if (snooze != null && until != null) Quiet("Back now") { snooze(Instant.now()) }
+        },
+        below = {
+            if (snooze != null && snoozing) {
+                // Opened by a tap, the times scroll up into the sheet: they sit below its fold (#692).
+                val times = remember { BringIntoViewRequester() }
+                SnoozeTimes(now, Modifier.bringIntoViewRequester(times)) { snoozing = false; snooze(it) }
+                LaunchedEffect(tapped) { if (tapped) times.bringIntoView() }
+            }
+        },
         head = {
             Text(decision.question, style = StarbridgeTheme.type.question.weight(waiting), color = scheme.onSurface)
             if (until != null) {
@@ -712,7 +729,7 @@ fun DecisionSheet(decision: Decision, now: Instant, onAnswer: (String, String?, 
         Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
             if (open) NotSent(decision)
             Context(decision.context)
-            Links(decision.links)
+            Links(decision.links, decision.source.project)
             val paired = decision.images.size == decision.options.size && decision.images.size > 1 && decision.answerIn == null
             when {
                 !open -> {
@@ -734,22 +751,6 @@ fun DecisionSheet(decision: Decision, now: Instant, onAnswer: (String, String?, 
                             if (decision.replies) Reply(decision.id, replies) { send(null, it) }
                         }
                     }
-                }
-            }
-            val done = decision.answerIn != null && decision.takesDone
-            if (open && (done || onSnooze != null)) {
-                // Quiet, so the answer stays above: Done for a page's answer (#539), and putting it
-                // off (#571).
-                Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s1), verticalAlignment = Alignment.CenterVertically) {
-                    if (done) Done { send(null, null) }
-                    if (onSnooze != null) Quiet(if (until != null) "Snooze again" else "Snooze") { snoozing = !snoozing; tapped = snoozing }
-                    if (onSnooze != null && until != null) Quiet("Back now") { onSnooze(Instant.now()) }
-                }
-                if (onSnooze != null && snoozing) {
-                    // Opened by a tap, the times scroll up into the sheet: they sit below its fold (#692).
-                    val times = remember { BringIntoViewRequester() }
-                    SnoozeTimes(now, Modifier.bringIntoViewRequester(times)) { snoozing = false; onSnooze(it) }
-                    LaunchedEffect(tapped) { if (tapped) times.bringIntoView() }
                 }
             }
         }

@@ -505,12 +505,14 @@ it has no title. A session's title is words, in the reading face (#563).
   row, starting on the text's edge.
 - Every item opens with one meta row of facts Starbridge knows: the machine's
   kind icon and name, the repo, and the time right-aligned. The agent's own
-  words come below it. Details end with the session name, truncated in the
-  middle, and "Open in Claude" or "Open in Codex" as text, with no logos.
-- Links the agent attaches sit under "Attached by the agent", each a chip with
-  "Open", the page's title (else its label) and an open-outside icon. A GitHub
-  pull request or issue reads "owner/repo#123" when it has no title and leads
-  with the GitHub mark.
+  words come below it. Details end with one line: the quiet actions (Snooze,
+  Back now, Done) on the left, and on the right the session's name, truncated
+  in the middle, as a text link with an arrow out, else "Open in Claude" or
+  "Open in Codex". No logos.
+- Links the agent attaches are chips after the context: the label and an
+  open-outside icon, never the word "Open". A GitHub link leads with the
+  Octicon for its kind and reads as its reference ("#123", "v0.1.2").
+- No key hints on buttons or fields: Settings lists the shortcuts.
 - An answered item goes to History, collapsed by default, as one line: the
   answer, the question, which device answered and when.
 - Find (the web rail's box) lists the matching open items, then "History · N"
@@ -649,7 +651,8 @@ round caps and joins, no fills. Android uses Material Symbols Rounded tuned to
 Google Sans Flex. Every platform has the same icons by job: laptop, desktop, server and cloud (a
 machine's kind), permission prompt, question, run, quota, history, settings,
 devices, open in the agent, waiting, inbox, send, expand (an image opens full
-screen).
+screen). GitHub links take GitHub's own Octicons (MIT), filled on their
+16-unit grid, on both clients.
 
 ## The mark
 

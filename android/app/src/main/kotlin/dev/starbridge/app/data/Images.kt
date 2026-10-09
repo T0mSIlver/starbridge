@@ -38,33 +38,66 @@ fun Image.bitmap(maxEdge: Int): Bitmap? = try {
 }
 
 /**
- * A link's chip text: its title, else "owner/repo#123" for a GitHub pull request or issue, else
- * "Claude artifact" for one, else its host and path.
+ * A link's chip text, as on the web (#971). A GitHub pull request, issue or discussion reads
+ * "#123", a release its tag, a commit its short hash, led by the repo when it isn't [project], the
+ * session's; any other link reads as its title, else "Actions run" for a run, "Claude artifact" for
+ * one, else its host and path (a GitHub page's path alone, since its mark says GitHub).
  */
-fun Link.label(): String {
+fun Link.label(project: String = ""): String {
+    val gh = githubLink(url)
+    gh?.ref?.let { ref ->
+        if (gh.repo.equals(project, ignoreCase = true)) return clip(ref)
+        return clip(gh.repo + (if (ref.startsWith("#")) "" else " ") + ref)
+    }
     title?.let { return it }
-    githubRef(url)?.let { return it }
+    if (gh?.kind == GitHubKind.Run) return "Actions run"
+    if (gh != null) return clip(gh.path.ifEmpty { "GitHub" })
     val uri = Uri.parse(url)
     val path = uri.path.orEmpty()
     if (uri.host == "claude.ai" && ARTIFACT_PATH.containsMatchIn(path)) return "Claude artifact"
-    val text = uri.host.orEmpty().removePrefix("www.") + if (path == "/") "" else path
-    return if (text.length > 40) text.take(39) + "…" else text
+    return clip(uri.host.orEmpty().removePrefix("www.") + if (path == "/") "" else path)
 }
+
+private fun clip(text: String) = if (text.length > 40) text.take(39) + "…" else text
 
 /** Where the owner answers a decision with `answerIn`: "the artifact" for a Claude one. */
 fun Link.place() = title ?: if (label() == "Claude artifact") "the artifact" else label()
 
 private val ARTIFACT_PATH = Regex("/artifacts?/")
 
-/** "owner/repo#123" for a GitHub pull request or issue, else null. */
-fun githubRef(url: String): String? {
+/** What a GitHub link points at: each kind has its Octicon on the chip (#971). */
+enum class GitHubKind { Pull, Issue, Discussion, Run, Release, Commit, Other }
+
+/** [ref] is "#123", a release's tag or a commit's short hash; [path] the path after github.com. */
+data class GitHubLink(val kind: GitHubKind, val repo: String, val ref: String?, val path: String)
+
+/** What a github.com link points at, else null. */
+fun githubLink(url: String): GitHubLink? {
     val uri = Uri.parse(url)
     if (uri.scheme != "https" || uri.host?.lowercase() !in setOf("github.com", "www.github.com")) return null
-    val m = GITHUB_ITEM.find(uri.path.orEmpty()) ?: return null
-    return "${m.groupValues[1]}/${m.groupValues[2]}#${m.groupValues[3]}"
+    val path = uri.path.orEmpty().trimEnd('/')
+    val parts = path.split("/")
+    val owner = parts.getOrNull(1).orEmpty()
+    val name = parts.getOrNull(2).orEmpty()
+    val other = GitHubLink(GitHubKind.Other, if (owner.isNotEmpty() && name.isNotEmpty()) name else "", null, path.removePrefix("/"))
+    if (other.repo.isEmpty()) return other
+    val section = parts.getOrNull(3)
+    val a = parts.getOrNull(4).orEmpty()
+    val b = parts.getOrNull(5).orEmpty()
+    fun number(kind: GitHubKind) = if (DIGITS.matches(a)) other.copy(kind = kind, ref = "#$a") else other
+    return when {
+        section == "pull" -> number(GitHubKind.Pull)
+        section == "issues" -> number(GitHubKind.Issue)
+        section == "discussions" -> number(GitHubKind.Discussion)
+        section == "actions" && a == "runs" && DIGITS.matches(b) -> other.copy(kind = GitHubKind.Run)
+        section == "releases" && a == "tag" && b.isNotEmpty() -> other.copy(kind = GitHubKind.Release, ref = b)
+        section == "commit" && SHA.matches(a) -> other.copy(kind = GitHubKind.Commit, ref = a.take(7))
+        else -> other
+    }
 }
 
-private val GITHUB_ITEM = Regex("^/([^/]+)/([^/]+)/(?:pull|issues)/(\\d+)(?:/|$)")
+private val DIGITS = Regex("\\d+")
+private val SHA = Regex("[0-9a-fA-F]{7,40}")
 
 private const val CLAUDE_APP = "com.anthropic.claude"
 

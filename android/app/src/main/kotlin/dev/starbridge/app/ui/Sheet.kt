@@ -3,6 +3,7 @@ package dev.starbridge.app.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -75,7 +76,17 @@ val LocalSheetClose = staticCompositionLocalOf<() -> Unit> { {} }
  * ticks, and a screen reader hears it first (#191).
  */
 @Composable
-fun SheetBody(source: Source, time: String, agent: String?, blocked: String? = null, head: @Composable () -> Unit = {}, content: @Composable () -> Unit) {
+fun SheetBody(
+    source: Source,
+    time: String,
+    agent: String?,
+    blocked: String? = null,
+    head: @Composable () -> Unit = {},
+    /** Quiet actions at the start of the session's line (#970), and what they open under it. */
+    footer: @Composable RowScope.() -> Unit = {},
+    below: @Composable () -> Unit = {},
+    content: @Composable () -> Unit,
+) {
     val scheme = MaterialTheme.colorScheme
     val ground by animateColorAsState(
         if (blocked != null) StarbridgeTheme.colors.accentSoft.compositeOver(scheme.surfaceContainer) else scheme.surfaceContainer,
@@ -95,7 +106,8 @@ fun SheetBody(source: Source, time: String, agent: String?, blocked: String? = n
         Column(Modifier.padding(start = Spacing.s4, end = Spacing.s4, top = if (blocked != null) 14.dp else 0.dp, bottom = Spacing.s4)) {
             content()
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant, modifier = Modifier.padding(top = 14.dp))
-            SessionLine(source, agent, Modifier.padding(top = Spacing.s1))
+            SessionLine(source, agent, Modifier.padding(top = Spacing.s1), footer)
+            below()
         }
     }
 }

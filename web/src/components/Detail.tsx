@@ -63,12 +63,6 @@ function useKeys(on: boolean, handler: (key: string) => boolean) {
   }, [on]);
 }
 
-const Kbd = ({ k }: { k: string }) => (
-  <span className={`t-key ${ui.kbd}`} aria-hidden="true">
-    {k}
-  </span>
-);
-
 /** The owner answers on another page: the one action opens it, in amber. */
 function AnswerElsewhere({ page }: { page: DecisionLink }) {
   return (
@@ -249,7 +243,6 @@ export function QuestionDetail({
               {o}
               {/* Seen by its place and amber; heard as "Default" (#254). */}
               {i === 0 && <span className="sr-only"> Default</span>}
-              {keys && i < 4 && <Kbd k={String(i + 1)} />}
             </button>
           ))}
         </fieldset>
@@ -260,38 +253,6 @@ export function QuestionDetail({
           common as a pick (#849). */}
       {d.replies && options.length > 0 && (
         <FreeText id={d.id} sending={sending} onSend={(t) => send({ text: t })} />
-      )}
-      {!closed && (
-        // Quiet, so the answer stays above: Done for a page's answer (#539), and putting it off
-        // (#571).
-        <div className={s.quiet}>
-          {d.answerIn && d.done && (
-            <button
-              type="button"
-              className={`t-small ${s.link} ${s.reply}`}
-              disabled={sending}
-              onClick={() => send({ done: true })}
-            >
-              Done
-            </button>
-          )}
-          <SnoozeMenu
-            label={snoozed ? "Snooze again" : "Snooze"}
-            className={`t-small ${s.link} ${s.reply}`}
-            disabled={snoozeSend.sending}
-            onSnooze={(until) => snoozeSend.send(until)}
-          />
-          {snoozed && (
-            <button
-              type="button"
-              className={`t-small ${s.link} ${s.reply}`}
-              disabled={snoozeSend.sending}
-              onClick={() => snoozeSend.send(new Date())}
-            >
-              Back now
-            </button>
-          )}
-        </div>
       )}
       {snoozeSend.error && (
         <p className={ui.error} role="alert">
@@ -308,7 +269,40 @@ export function QuestionDetail({
           Not sent: {item.notSent}
         </p>
       )}
-      <SessionLine source={d.source} agent={agentOf(d)} />
+      {/* Quiet, so the answer stays above: Done for a page's answer (#539), and putting it off
+          (#571), on the session's line (#970). */}
+      <SessionLine source={d.source} agent={agentOf(d)}>
+        {!closed && (
+          <div className={s.quiet}>
+            {d.answerIn && d.done && (
+              <button
+                type="button"
+                className={`t-small ${s.link} ${s.reply}`}
+                disabled={sending}
+                onClick={() => send({ done: true })}
+              >
+                Done
+              </button>
+            )}
+            <SnoozeMenu
+              label={snoozed ? "Snooze again" : "Snooze"}
+              className={`t-small ${s.link} ${s.reply}`}
+              disabled={snoozeSend.sending}
+              onSnooze={(until) => snoozeSend.send(until)}
+            />
+            {snoozed && (
+              <button
+                type="button"
+                className={`t-small ${s.link} ${s.reply}`}
+                disabled={snoozeSend.sending}
+                onClick={() => snoozeSend.send(new Date())}
+              >
+                Back now
+              </button>
+            )}
+          </div>
+        )}
+      </SessionLine>
     </article>
   );
 }
@@ -363,7 +357,6 @@ function Picks({
                 >
                   {o}
                   {rec && <span className="sr-only"> Default</span>}
-                  {keys && i < 4 && <Kbd k={String(i + 1)} />}
                 </button>
               );
             })}
@@ -439,7 +432,7 @@ export function PromptDetail({
               aria-keyshortcuts={keys ? "A" : undefined}
               onClick={() => send({ behavior: "allow", scope: "once" })}
             >
-              Allow {keys && <Kbd k="A" />}
+              Allow
             </button>
             <button
               type="button"
@@ -448,7 +441,7 @@ export function PromptDetail({
               aria-keyshortcuts={keys ? "D" : undefined}
               onClick={() => send({ behavior: "deny", scope: "once" })}
             >
-              Deny {keys && <Kbd k="D" />}
+              Deny
             </button>
           </div>
           {/* Each wider allow shows the exact rule it adds, not only in a tooltip (#274). */}

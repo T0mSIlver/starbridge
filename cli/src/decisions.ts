@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { basename, resolve } from "node:path";
+import { resolve } from "node:path";
 import {
   type Agent,
   type Answer,
@@ -39,6 +39,7 @@ import { fitPicture, loadPicture, type Picture } from "./images";
 import { OPENCODE_ANSWERS, OPENCODE_SESSION, OPENCODE_TITLE } from "./opencode";
 import { acceptPermissionAnswer } from "./permissions";
 import { PI_ANSWERS, piSessionTitle } from "./pi";
+import { projectName } from "./project";
 
 export interface AskInput {
   question?: string;
@@ -140,7 +141,7 @@ export function resolveSource(
     ...(codex ? { codex } : {}),
     ...(extensionAnswers ? { extensionAnswers } : {}),
     ...(headless ? { headless } : {}),
-    project: input.project ?? basename(cwd),
+    project: input.project ?? projectName(cwd),
     session,
     ...(title !== undefined ? { sessionTitle: title } : {}),
     sessionLinks: input.sessionLinks ?? claude?.links ?? [],

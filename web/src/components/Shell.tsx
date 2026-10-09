@@ -88,7 +88,6 @@ export function Shell({ children }: { children: React.ReactNode }) {
               e.currentTarget.blur();
             }}
           />
-          <kbd className={`t-key ${ui.kbd}`}>/</kbd>
         </label>
         <ul className={s.tabs}>
           {tabs.map((t) => (

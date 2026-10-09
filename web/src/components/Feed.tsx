@@ -136,35 +136,50 @@ export function agentName(agent?: string): string | undefined {
 /** Characters of a session's name kept after the cut. */
 const TAIL = 12;
 
-/** The session's name, cut in the middle, and where to open it (DESIGN.md, "Rules"). */
-export function SessionLine({ source, agent }: { source: Source; agent?: string }) {
+/**
+ * The detail's last line (#970): the quiet actions, then the session's name, cut in the middle,
+ * opening the session in its agent's app. A session with no name the owner gave shows "Open in
+ * Claude" alone: its id says nothing.
+ */
+export function SessionLine({
+  source,
+  agent,
+  children,
+}: {
+  source: Source;
+  agent?: string;
+  /** Snooze, Back now and Done, at the start of the line. */
+  children?: React.ReactNode;
+}) {
   // One space per run of white space, as the line would show it: the halves keep theirs (#630).
-  const name = (source.sessionTitle?.trim() || source.session).replace(/\s+/g, " ").trim();
-  // A title is words; only a bare session id is set as code (#563).
-  const code = source.sessionTitle ? "" : "t-snippet";
+  const name = source.sessionTitle?.replace(/\s+/g, " ").trim() ?? "";
   const links = source.links ?? [];
   const app = agentName(agent);
   const link = app ? (links.find((l) => l.kind !== "desktop") ?? links[0]) : undefined;
-  if (!name && !link) return null;
+  if (!name && !link && !children) return null;
+  // Cut in the middle only when the line runs out of room: the head shrinks, the tail stays (#172).
+  const named = name && (
+    <span className={s.sessionName} title={name}>
+      <span className={s.sessionHead}>{name.slice(0, -TAIL)}</span>
+      <span className={s.sessionTail}>{name.slice(-TAIL)}</span>
+    </span>
+  );
   return (
     <div className={`t-meta ${s.session}`}>
-      {name && (
-        <span className={s.sessionName} title={name}>
-          Session
-          {/* Cut in the middle only when the line runs out of room: the head shrinks, the tail
-              stays (#172). */}
-          <span className={`${code} ${s.sessionHead}`}>{name.slice(0, -TAIL)}</span>
-          <span className={`${code} ${s.sessionTail}`}>{name.slice(-TAIL)}</span>
-        </span>
-      )}
-      {link && (
+      {children}
+      {link ? (
         <a
           className={s.open}
           href={link.url}
+          title={`Open in ${app}`}
+          aria-label={name ? `Open in ${app}: ${name}` : undefined}
           {...(link.kind === "desktop" ? {} : { target: "_blank", rel: "noopener noreferrer" })}
         >
-          Open in {app}
+          {named || `Open in ${app}`}
+          <Icon name="open" size={14} />
         </a>
+      ) : (
+        <span className={s.open}>{named}</span>
       )}
     </div>
   );

@@ -54,11 +54,6 @@
   gap: var(--s2);
 }
 
-.linksLabel {
-  flex-basis: 100%;
-  color: var(--fg3);
-}
-
 /* An assist chip (Material 3): outlined, small corners, an icon before the label. */
 .chip {
   display: inline-flex;

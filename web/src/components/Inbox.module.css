@@ -91,10 +91,6 @@
   color: var(--fg2);
 }
 
-.keys {
-  color: var(--fg3);
-}
-
 .sub {
   display: flex;
   align-items: center;
