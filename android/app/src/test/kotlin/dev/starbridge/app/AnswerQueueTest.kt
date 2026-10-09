@@ -218,8 +218,10 @@ class AnswerQueueTest {
         assertEquals(0, posted.size)
 
         gate.countDown()
-        runBlocking { withTimeout(5_000) { while (disk.saved()!!.outbox.isNotEmpty()) delay(10) } }
-        store.decisions.value.single().let { assertEquals("Hold", it.answer); assertFalse(it.sending) }
+        // The server took it: answered by this phone, nothing left to send.
+        runBlocking { withTimeout(5_000) { while (store.decisions.value.single().sending) delay(10) } }
+        assertEquals("Hold", store.decisions.value.single().answer)
+        assertTrue(disk.saved()!!.outbox.isEmpty())
     }
 
     @Test
