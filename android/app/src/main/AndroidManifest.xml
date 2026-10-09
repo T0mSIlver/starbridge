@@ -85,6 +85,18 @@
                 android:resource="@xml/widget_quotas" />
         </receiver>
 
+        <!-- The Quotas widget's plan, on drop and from Reconfigure (#907). -->
+        <activity
+            android:name=".widget.QuotasWidgetSetup"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:taskAffinity=""
+            android:theme="@style/Theme.Starbridge">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
+            </intent-filter>
+        </activity>
+
         <service
             android:name=".push.FcmService"
             android:exported="false">
