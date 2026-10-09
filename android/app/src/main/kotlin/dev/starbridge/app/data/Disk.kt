@@ -89,9 +89,10 @@ data class SavedRun(val from: String, val text: String) {
  * An answer signed and sealed but not yet taken by the server: offline, say. [answer] is the
  * choice or the text; [mayHaveLanded] is set once an attempt failed after the request may have
  * reached the server, so a later `already-answered` is most likely this answer's own (#329).
+ * [at] is when it was given, so History places it before the server takes it (#895).
  */
 @Serializable
-data class QueuedAnswer(val decisionId: String, val answer: String, val item: SealedItem, val mayHaveLanded: Boolean = false)
+data class QueuedAnswer(val decisionId: String, val answer: String, val item: SealedItem, val mayHaveLanded: Boolean = false, val at: String? = null)
 
 @Serializable
 data class SavedPush(val type: String, val id: String, val endpoint: String)

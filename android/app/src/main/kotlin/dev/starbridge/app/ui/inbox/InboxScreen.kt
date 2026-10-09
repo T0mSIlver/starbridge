@@ -142,7 +142,6 @@ import android.widget.Toast
 @HiltViewModel
 class InboxViewModel @Inject constructor(private val store: Store, private val prefs: Prefs) : ViewModel() {
     val decisions = store.decisions
-    val sending = store.sending
     val prompts = store.prompts
     val runs = store.runs
     val view = prefs.inbox
@@ -168,11 +167,8 @@ class DecisionActions(
     val pick: ((String) -> Unit)? = null,
 )
 
-/**
- * What a question's card and its sheet share while the owner answers: the reply drafts, by
- * decision id, and the answers going out, which lock the question until the server replies.
- */
-class Replies(val drafts: SnapshotStateMap<String, String>, val sending: Map<String, String>)
+/** What a question's card and its sheet share while the owner answers: the reply drafts, by decision id. */
+class Replies(val drafts: SnapshotStateMap<String, String>)
 
 /** Reply drafts that survive rotation and process death; one map serves the card and the sheet. */
 @Composable
@@ -217,7 +213,7 @@ fun InboxScreen(
     actions: DecisionActions,
     modifier: Modifier = Modifier,
     refresh: Refresh? = null,
-    replies: Replies = Replies(rememberDrafts(), emptyMap()),
+    replies: Replies = Replies(rememberDrafts()),
     prompts: List<Prompt> = emptyList(),
     promptActions: PromptActions? = null,
     pollPrompts: () -> Unit = {},
@@ -518,7 +514,7 @@ private const val INSTALL_DOCS = "https://starbridge.run/docs"
 @Composable
 private fun DecisionCard(decision: Decision, now: Instant, actions: DecisionActions, replies: Replies, shape: Shape, buttons: CardButtons, modifier: Modifier = Modifier) {
     val pick = actions.pick
-    if (pick != null && replies.sending[decision.id] == null) {
+    if (pick != null) {
         SwipeToSnooze(shape, { pick(decision.id) }, modifier) { QuestionCard(decision, now, actions, replies, shape, buttons) }
     } else {
         QuestionCard(decision, now, actions, replies, shape, buttons, modifier)
@@ -553,20 +549,28 @@ private fun QuestionCard(decision: Decision, now: Instant, actions: DecisionActi
                 Spacer(Modifier.width(Spacing.s2))
                 Text(decision.question, style = StarbridgeTheme.type.subtitle.weight(waiting), color = scheme.onSurface)
             }
+            NotSent(decision)
             Images(decision.images, maxHeight = 160.dp, crop = true, modifier = Modifier.padding(vertical = Spacing.s1))
             val page = decision.answerIn
             // A snoozed card stays quiet, with no amber default: the owner opens it to answer.
             if (page != null && until == null && decision.takesDone && cardButtons(decision, buttons)) {
                 Spacer(Modifier.height(Spacing.s1))
                 val send = answer(decision, actions.answer)
-                PageAndDone(page, replies.sending[decision.id] != null, other = if (waiting) scheme.surfaceContainer else scheme.surfaceContainerHighest) { send(null, null) }
+                PageAndDone(page, other = if (waiting) scheme.surfaceContainer else scheme.surfaceContainerHighest) { send(null, null) }
             }
             if (until == null && cardOptions(decision, buttons)) {
                 Spacer(Modifier.height(Spacing.s1))
-                Options(decision, replies.sending[decision.id], height = 40.dp, other = if (waiting) scheme.surfaceContainer else scheme.surfaceContainerHighest, answer = answer(decision, actions.answer))
+                Options(decision, height = 40.dp, other = if (waiting) scheme.surfaceContainer else scheme.surfaceContainerHighest, answer = answer(decision, actions.answer))
             }
         }
     }
+}
+
+/** Why the server refused this phone's answer, which brought the question back: answering again retries (#895). */
+@Composable
+private fun NotSent(decision: Decision) {
+    val why = decision.notSent ?: return
+    Text("Not sent: $why", style = StarbridgeTheme.type.small, color = MaterialTheme.colorScheme.error)
 }
 
 /** A question's title: weight 500 while its agent waits on it, else 400. */
@@ -596,15 +600,14 @@ private fun answer(decision: Decision, send: (String, String?, String?) -> Unit)
 
 /**
  * The options as a connected group, the agent's default first and the one amber button. Side by
- * side when there are two short ones, else stacked; the one going out takes the check, and taps
- * are dropped until the server replies. In the sheet ([check]), stacked, the default takes a check.
+ * side when there are two short ones, else stacked. In the sheet ([check]), stacked, the default
+ * takes a check.
  */
 @Composable
-fun Options(decision: Decision, sending: String?, height: Dp, other: Color, answer: (String?, String?) -> Unit, check: Boolean = false) {
+fun Options(decision: Decision, height: Dp, other: Color, answer: (String?, String?) -> Unit, check: Boolean = false) {
     val colors = StarbridgeTheme.colors
     val ordered = decision.ordered
     val end = height / 2
-    val pick = { option: String -> if (sending == null) answer(option, null) }
     val row = !check && ordered.size <= 2 && ordered.all { it.length <= 18 }
     @Composable
     fun One(i: Int, option: String, modifier: Modifier) {
@@ -617,10 +620,10 @@ fun Options(decision: Decision, sending: String?, height: Dp, other: Color, answ
         }
         val recommended = option == decision.proposal
         Button(
-            onClick = { pick(option) },
-            shape = if (option == sending) RoundedCornerShape(end) else shape,
+            onClick = { answer(option, null) },
+            shape = shape,
             colors = if (recommended) ButtonDefaults.buttonColors(containerColor = colors.accent, contentColor = colors.onAccent)
-            else ButtonDefaults.buttonColors(containerColor = if (option == sending) MaterialTheme.colorScheme.onSurface else other, contentColor = if (option == sending) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.onSurface),
+            else ButtonDefaults.buttonColors(containerColor = other, contentColor = MaterialTheme.colorScheme.onSurface),
             contentPadding = PaddingValues(horizontal = Spacing.s4),
             modifier = modifier.heightIn(min = height).semantics { if (recommended) stateDescription = "Default" },
         ) {
@@ -651,7 +654,6 @@ fun DecisionSheet(decision: Decision, now: Instant, onAnswer: (String, String?, 
     val scheme = MaterialTheme.colorScheme
     val wasOpen = remember(decision.id) { decision.isOpen }
     val send = answer(decision, onAnswer)
-    val sending = replies.sending[decision.id]
     val open = decision.isOpen
     val until = decision.snoozedUntil?.takeIf { decision.snoozed(now) }
     // Snoozed, nothing is amber, even when its agent waits: the owner said not now (#571).
@@ -677,6 +679,7 @@ fun DecisionSheet(decision: Decision, now: Instant, onAnswer: (String, String?, 
         },
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            if (open) NotSent(decision)
             Context(decision.context)
             Links(decision.links)
             val paired = decision.images.size == decision.options.size && decision.images.size > 1 && decision.answerIn == null
@@ -686,18 +689,18 @@ fun DecisionSheet(decision: Decision, now: Instant, onAnswer: (String, String?, 
                     Outcome(decision, now, arrived = wasOpen)
                 }
                 paired -> {
-                    Picks(decision, sending, send)
-                    if (decision.replies) Reply(decision.id, replies, sending != null) { send(null, it) }
+                    Picks(decision, send)
+                    if (decision.replies) Reply(decision.id, replies) { send(null, it) }
                 }
                 else -> {
                     Images(decision.images, maxHeight = 360.dp)
                     val page = decision.answerIn
                     when {
                         page != null -> AnswerElsewhere(page)
-                        decision.options.isEmpty() -> FreeText(replies.drafts[decision.id].orEmpty(), { replies.drafts[decision.id] = it }, sending != null) { send(null, it) }
+                        decision.options.isEmpty() -> FreeText(replies.drafts[decision.id].orEmpty(), { replies.drafts[decision.id] = it }) { send(null, it) }
                         else -> {
-                            Options(decision, sending, height = 56.dp, other = scheme.surfaceContainerHighest, answer = send, check = true)
-                            if (decision.replies) Reply(decision.id, replies, sending != null) { send(null, it) }
+                            Options(decision, height = 56.dp, other = scheme.surfaceContainerHighest, answer = send, check = true)
+                            if (decision.replies) Reply(decision.id, replies) { send(null, it) }
                         }
                     }
                 }
@@ -707,9 +710,9 @@ fun DecisionSheet(decision: Decision, now: Instant, onAnswer: (String, String?, 
                 // Quiet, so the answer stays above: Done for a page's answer (#539), and putting it
                 // off (#571).
                 Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s1), verticalAlignment = Alignment.CenterVertically) {
-                    if (done) Done(sending != null) { send(null, null) }
-                    if (onSnooze != null) Quiet(if (until != null) "Snooze again" else "Snooze", sending == null) { snoozing = !snoozing; tapped = snoozing }
-                    if (onSnooze != null && until != null) Quiet("Back now", sending == null) { onSnooze(Instant.now()) }
+                    if (done) Done { send(null, null) }
+                    if (onSnooze != null) Quiet(if (until != null) "Snooze again" else "Snooze") { snoozing = !snoozing; tapped = snoozing }
+                    if (onSnooze != null && until != null) Quiet("Back now") { onSnooze(Instant.now()) }
                 }
                 if (onSnooze != null && snoozing) {
                     // Opened by a tap, the times scroll up into the sheet: they sit below its fold (#692).
@@ -728,7 +731,7 @@ fun DecisionSheet(decision: Decision, now: Instant, onAnswer: (String, String?, 
  * one midline, so the buttons under them line up ([PickImages], #536).
  */
 @Composable
-private fun Picks(decision: Decision, sending: String?, answer: (String?, String?) -> Unit) {
+private fun Picks(decision: Decision, answer: (String?, String?) -> Unit) {
     val colors = StarbridgeTheme.colors
     var viewing by remember { mutableStateOf<Int?>(null) }
     BoxWithConstraints {
@@ -742,7 +745,7 @@ private fun Picks(decision: Decision, sending: String?, answer: (String?, String
                             val option = decision.options[i]
                             val recommended = option == decision.proposal
                             Button(
-                                onClick = { if (sending == null) answer(option, null) },
+                                onClick = { answer(option, null) },
                                 colors = if (recommended) ButtonDefaults.buttonColors(containerColor = colors.accent, contentColor = colors.onAccent)
                                 else ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHighest, contentColor = MaterialTheme.colorScheme.onSurface),
                                 modifier = Modifier.weight(1f).height(48.dp).semantics { if (recommended) stateDescription = "Default" },
@@ -762,28 +765,27 @@ private fun Picks(decision: Decision, sending: String?, answer: (String?, String
  * steering by reply is as common as a pick (#849). Its draft is kept per question.
  */
 @Composable
-private fun Reply(id: String, replies: Replies, sending: Boolean, onAnswer: (String) -> Unit) =
-    FreeText(replies.drafts[id].orEmpty(), { replies.drafts[id] = it }, sending, onAnswer)
+private fun Reply(id: String, replies: Replies, onAnswer: (String) -> Unit) =
+    FreeText(replies.drafts[id].orEmpty(), { replies.drafts[id] = it }, onAnswer)
 
 /** A quiet text button under a question's answer: Snooze, Back now. */
 @Composable
-private fun Quiet(label: String, enabled: Boolean = true, onClick: () -> Unit) {
-    TextButton(onClick = onClick, enabled = enabled, colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.onSurfaceVariant)) {
+private fun Quiet(label: String, onClick: () -> Unit) {
+    TextButton(onClick = onClick, colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.onSurfaceVariant)) {
         Text(label, style = StarbridgeTheme.type.label)
     }
 }
 
 @Composable
-private fun FreeText(text: String, onText: (String) -> Unit, sending: Boolean, onAnswer: (String) -> Unit) {
-    val send = { if (text.isNotBlank() && !sending) onAnswer(text.trim()) }
+private fun FreeText(text: String, onText: (String) -> Unit, onAnswer: (String) -> Unit) {
+    val send = { if (text.isNotBlank()) onAnswer(text.trim()) }
     // Material's text field, the send button its trailing icon, centred on the field's line (#254).
     TextField(
         value = text,
         onValueChange = { onText(it.take(4000)) },
-        enabled = !sending,
         placeholder = { Text("Your answer") },
         trailingIcon = {
-            IconButton(onClick = send, enabled = text.isNotBlank() && !sending) { Symbol(Sym.Send, contentDescription = "Send") }
+            IconButton(onClick = send, enabled = text.isNotBlank()) { Symbol(Sym.Send, contentDescription = "Send") }
         },
         textStyle = StarbridgeTheme.type.body,
         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
@@ -820,11 +822,11 @@ private fun AnswerElsewhere(page: Link) {
  * answer and Done only says it was given there.
  */
 @Composable
-private fun Done(sending: Boolean, onDone: () -> Unit) = Quiet("Done") { if (!sending) onDone() }
+private fun Done(onDone: () -> Unit) = Quiet("Done", onDone)
 
 /** On a card: the page's link, amber, joined to a tonal Done (#539). */
 @Composable
-private fun PageAndDone(page: Link, sending: Boolean, other: Color, onDone: () -> Unit) {
+private fun PageAndDone(page: Link, other: Color, onDone: () -> Unit) {
     val context = LocalContext.current
     val colors = StarbridgeTheme.colors
     val end = 20.dp
@@ -841,7 +843,7 @@ private fun PageAndDone(page: Link, sending: Boolean, other: Color, onDone: () -
             Text("Answer in ${page.place()}", style = StarbridgeTheme.type.label, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         Button(
-            onClick = { if (!sending) onDone() },
+            onClick = onDone,
             shape = RoundedCornerShape(topStart = 8.dp, bottomStart = 8.dp, topEnd = end, bottomEnd = end),
             colors = ButtonDefaults.buttonColors(containerColor = other, contentColor = MaterialTheme.colorScheme.onSurface),
             contentPadding = PaddingValues(horizontal = Spacing.s4),
@@ -858,10 +860,12 @@ internal fun outcome(decision: Decision) = decision.answer ?: decision.theirAnsw
 }
 
 /**
- * Who closed it, after its outcome: "on this phone", "on Pixel", "at the keyboard" (the agent's own
- * picker, #865), "by the agent" (withdrawn, or for another page), "on another device".
+ * Who closed it, after its outcome: "not sent yet" (this phone's, on its way), "on this phone",
+ * "on Pixel", "at the keyboard" (the agent's own picker, #865), "by the agent" (withdrawn, or for
+ * another page), "on another device".
  */
 internal fun closedByPhrase(decision: Decision) = when {
+    decision.sending -> "not sent yet"
     decision.answer != null -> "on this phone"
     decision.answeredOn != null -> "on ${decision.answeredOn}"
     decision.settled == "elsewhere" && decision.answerIn == null -> "at the keyboard"

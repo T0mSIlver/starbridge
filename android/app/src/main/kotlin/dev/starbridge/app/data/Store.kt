@@ -37,8 +37,6 @@ interface Store {
      * notice, which alone offers [stopWaiting]. No revocation ends a hold by itself (#813).
      */
     val heldRevoked: StateFlow<HeldRevoked?> get() = MutableStateFlow(null)
-    /** Answers going out or waiting for a connection, by decision id: the choice or the text, until the server takes them. */
-    val sending: StateFlow<Map<String, String>>
     /** The recovery key's state, once the directory is known (#348). */
     val recovery: StateFlow<RecoveryUi?>
     val replacing: StateFlow<Replacing>

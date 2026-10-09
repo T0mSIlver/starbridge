@@ -467,3 +467,8 @@
     min-height: var(--size-tap);
   }
 }
+
+.notSent {
+  color: var(--bad);
+  overflow-wrap: anywhere;
+}

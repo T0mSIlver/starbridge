@@ -41,6 +41,10 @@ export type InboxItem = {
   waitingSince?: string;
   /** Until when the owner put it off (#571), from the latest snooze any device sent. */
   snoozedUntil?: string;
+  /** `reply` is this browser's and the server has yet to take it (#895). */
+  sending?: boolean;
+  /** Why the server refused this browser's last answer; the question is open again (#895). */
+  notSent?: string;
 };
 
 /** An answer to a permission prompt: allow for a scope, or deny with a note to the agent. */

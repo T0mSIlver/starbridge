@@ -44,7 +44,7 @@ function useSend<T>(onAnswer: (reply: T) => Promise<void>) {
       setPending(undefined);
     }
   };
-  return { send, sending, pending, error, lost };
+  return { send, sending, error, lost };
 }
 
 /** Keys for the selected item, ignored while typing or with a modifier. */
@@ -165,6 +165,7 @@ export function QuestionDetail({
   now,
   keys,
   closed,
+  lost: lostHere,
   onAnswer,
   onSnooze,
 }: {
@@ -174,16 +175,14 @@ export function QuestionDetail({
   keys: boolean;
   /** "Server first · on this browser · 11:02", once answered. */
   closed?: string;
+  /** This page's answer lost to another device's (#330). */
+  lost?: boolean;
   onAnswer: (reply: Reply) => Promise<void>;
   /** Puts it off until a time (#571); a time already passed brings it back. */
   onSnooze: (until: Date) => Promise<void>;
 }) {
   const d = item.decision;
-  const { send, sending, pending, error, lost } = useSend(onAnswer);
-  // The recommended option keeps its amber while in flight only if it is the answer sent: a typed
-  // reply or another option must not look like it (#821).
-  const rec = (o: string, recommended: boolean) =>
-    recommended && (!pending || ("choice" in pending && pending.choice === o));
+  const { send, sending, lost } = useSend(onAnswer);
   const snoozeSend = useSend(onSnooze);
   const [clock] = usePref("clock");
   // One image per option: each image over the option it stands for, in the agent's order.
@@ -232,7 +231,7 @@ export function QuestionDetail({
           d={d}
           keys={keys}
           sending={sending}
-          rec={(o) => rec(o, o === d.recommended)}
+          rec={(o) => o === d.recommended}
           onPick={(choice) => send({ choice })}
         />
       ) : options.length > 0 ? (
@@ -242,7 +241,7 @@ export function QuestionDetail({
             <button
               key={o}
               type="button"
-              className={`t-label ${ui.btn} ${rec(o, i === 0) ? ui.rec : ""}`}
+              className={`t-label ${ui.btn} ${i === 0 ? ui.rec : ""}`}
               disabled={sending}
               aria-keyshortcuts={keys && i < 4 ? String(i + 1) : undefined}
               onClick={() => send({ choice: o })}
@@ -299,14 +298,14 @@ export function QuestionDetail({
           Not snoozed: {snoozeSend.error}
         </p>
       )}
-      {lost && (
+      {(lost || lostHere) && (
         <p className={ui.error} role="alert">
           {answeredFirstText(item)}
         </p>
       )}
-      {error && (
+      {item.notSent && (
         <p className={ui.error} role="alert">
-          Not sent: {error}
+          Not sent: {item.notSent}
         </p>
       )}
       <SessionLine source={d.source} agent={agentOf(d)} />

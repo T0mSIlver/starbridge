@@ -192,15 +192,22 @@ export function Inbox() {
     answeredHere.current.add(id);
     const next = afterAnswer(openIds, id);
     setPicked((cur) => (cur === id ? next : cur));
+    return next;
   };
+  // It moves on at the click, as the question leaves (#895). A refused answer brings its row back
+  // saying why; one another device beat stays selected, saying what won (#330).
   const answerQuestion = async (item: InboxItem, reply: Parameters<typeof answer>[1]) => {
+    const id = item.decision.id;
+    const next = moveOn(id);
     try {
       await answer(item, reply);
     } catch (e) {
-      if (e instanceof AnsweredFirst) lost.current.add(item.decision.id);
+      if (e instanceof AnsweredFirst) {
+        lost.current.add(id);
+        setPicked((cur) => (cur === next ? id : cur));
+      }
       throw e;
     }
-    moveOn(item.decision.id);
   };
   // Put off, it leaves the open list as an answer does; brought back, it stays selected.
   const snoozeQuestion = async (item: InboxItem, until: Date) => {
@@ -264,6 +271,7 @@ export function Inbox() {
         now={now}
         keys={wide}
         closed={closed}
+        lost={lost.current.has(id)}
         onAnswer={(r) => answerQuestion(e.item, r)}
         onSnooze={(until) => snoozeQuestion(e.item, until)}
       />

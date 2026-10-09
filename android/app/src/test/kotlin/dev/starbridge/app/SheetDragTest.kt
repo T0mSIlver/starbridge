@@ -41,7 +41,7 @@ class SheetDragTest {
         compose.setContent {
             StarbridgeTheme {
                 ModalBottomSheet(onDismissRequest = {}, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
-                    Box(Modifier.testTag("sheet")) { DecisionSheet(d, now, { _, _, _ -> }, Replies(rememberDrafts(), emptyMap())) }
+                    Box(Modifier.testTag("sheet")) { DecisionSheet(d, now, { _, _, _ -> }, Replies(rememberDrafts())) }
                 }
             }
         }

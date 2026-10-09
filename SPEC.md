@@ -910,6 +910,10 @@ first window, so a provider with a window running out leads.
   it says "Snoozed until …" and offers Snooze again (replaces the time) and Back now. At its time
   it returns to its place and notifies once, "Back from snooze", never again. The owner chose
   these from mockups.
+- **An answer closes its question at the tap** (#895). The question leaves the open list on the
+  next frame, and History shows the answer "not sent yet" until the server takes it. If the server
+  refuses it, the question comes back saying "Not sent:" and why, and answering again resends it.
+  Waiting for the server's reply kept the card up for its round trip, about a second on a phone.
 - **History** lists answered questions and the last 7 days of prompts, with how and where each was
   answered. A question settled `elsewhere` without a page to answer in was answered in the
   agent's own picker or terminal, so it reads "at the keyboard", never "by the agent", which

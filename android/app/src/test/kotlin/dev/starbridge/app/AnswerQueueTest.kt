@@ -1,5 +1,10 @@
 package dev.starbridge.app
 
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
 import com.goterl.lazysodium.LazySodiumJava
 import com.goterl.lazysodium.SodiumJava
 import dev.starbridge.app.data.Alerts
@@ -23,6 +28,9 @@ import dev.starbridge.app.protocol.ProtocolJson
 import dev.starbridge.app.protocol.Sodium
 import dev.starbridge.app.protocol.envelopeJson
 import dev.starbridge.app.protocol.toB64
+import dev.starbridge.app.ui.inbox.DecisionActions
+import dev.starbridge.app.ui.inbox.InboxScreen
+import dev.starbridge.app.ui.theme.StarbridgeTheme
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -47,20 +55,28 @@ import okhttp3.Headers
 import okhttp3.OkHttpClient
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import java.net.UnknownHostException
 import java.nio.file.Files
+import java.time.Instant
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.CopyOnWriteArrayList
 import dev.starbridge.app.protocol.Decision as DecisionBody
 
-/** An answer is never lost: offline it waits on the phone (#329), and a second tap sends nothing more (#331). */
+/**
+ * An answer is never lost: offline it waits on the phone (#329), and a second tap sends nothing
+ * more (#331). Its card goes at the tap, and a refused answer brings it back (#895).
+ */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [36])
 class AnswerQueueTest {
+    @get:Rule val compose = createComposeRule()
     private val sodium = Sodium(LazySodiumJava(SodiumJava()))
     private val envelopes = Envelopes(sodium)
     private val directories = Directories(sodium, envelopes)
@@ -68,6 +84,10 @@ class AnswerQueueTest {
     private val http = MockWebServer()
     private val posted = CopyOnWriteArrayList<String>()
     @Volatile private var offline = false
+    /** Holds each POST until counted down, as a slow network would. */
+    @Volatile private var gate = CountDownLatch(0)
+    /** What the server replies to a POST. */
+    @Volatile private var reply = { MockResponse(201, Headers.headersOf("content-type", "application/json"), "{}") }
     private var wakes = 0
     private val disk = Disk(Files.createTempDirectory("starbridge").toFile(), object : Vault {
         override fun wrap(plain: ByteArray) = plain
@@ -113,8 +133,9 @@ class AnswerQueueTest {
         http.dispatcher = object : Dispatcher() {
             override fun dispatch(request: RecordedRequest): MockResponse =
                 if (request.method == "POST" && request.url.encodedPath == "/v1/items") {
+                    gate.await()
                     posted += request.body!!.utf8()
-                    MockResponse(201, Headers.headersOf("content-type", "application/json"), "{}")
+                    reply()
                 } else {
                     MockResponse(404, Headers.headersOf(), "")
                 }
@@ -142,24 +163,21 @@ class AnswerQueueTest {
         offline = true
         val store = store()
         store.answer("d_ship", "Hold", null)
-        runBlocking { withTimeout(5_000) { while (disk.saved()!!.outbox.isEmpty() || store.sending.value.isEmpty()) delay(10) } }
-        // Still waiting, and shown as waiting, after the tap's attempt failed.
+        runBlocking { withTimeout(5_000) { while (disk.saved()!!.outbox.isEmpty() || wakes == 0) delay(10) } }
+        // Still waiting, and shown answered but not sent, after the tap's attempt failed.
         runBlocking { delay(200) }
-        assertEquals(mapOf("d_ship" to "Hold"), store.sending.value)
-        assertEquals(null, store.decisions.value.single().answeredAt)
-        assertTrue(wakes > 0)
+        store.decisions.value.single().let { assertEquals("Hold", it.answer); assertTrue(it.sending) }
         assertEquals(0, posted.size)
 
         // The app was closed meanwhile: the answer is on disk, and the worker sends it.
         offline = false
         val reopened = store()
-        assertEquals(mapOf("d_ship" to "Hold"), reopened.sending.value)
+        reopened.decisions.value.single().let { assertEquals("Hold", it.answer); assertTrue(it.sending) }
         assertTrue(runBlocking { reopened.flushAnswers() })
         assertTrue(runBlocking { reopened.flushAnswers() })
         assertEquals(1, posted.size)
         assertTrue(posted.single().contains("\"re\":\"d_ship\""))
-        assertEquals("Hold", reopened.decisions.value.single().answer)
-        assertEquals(emptyMap<String, String>(), reopened.sending.value)
+        reopened.decisions.value.single().let { assertEquals("Hold", it.answer); assertFalse(it.sending) }
         assertTrue(disk.saved()!!.outbox.isEmpty())
     }
 
@@ -175,5 +193,53 @@ class AnswerQueueTest {
         }
         assertEquals(listOf(Sent.Answered("Ship"), Sent.Answered("Ship")), sent)
         assertEquals(1, posted.size)
+    }
+
+    private val question = "Ship the dark mode toggle today?"
+
+    /** The inbox as the app shows it, over [store]'s decisions. */
+    private fun showInbox(store: ServerStore) = compose.setContent {
+        val decisions by store.decisions.collectAsState()
+        StarbridgeTheme { InboxScreen(decisions, Instant.parse("2026-10-06T12:01:00Z"), DecisionActions(store::answer, {})) }
+    }
+
+    @Test
+    fun theCardGoesOnTheFrameAfterTheTapWhileTheServerHasYetToReply() {
+        setUp()
+        gate = CountDownLatch(1)
+        val store = store()
+        showInbox(store)
+        compose.onNodeWithText(question).assertExists()
+
+        compose.mainClock.autoAdvance = false
+        compose.onNodeWithText("Hold").performClick()
+        compose.mainClock.advanceTimeByFrame()
+        compose.onNodeWithText(question).assertDoesNotExist()
+        assertEquals(0, posted.size)
+
+        gate.countDown()
+        // The server took it: answered by this phone, nothing left to send.
+        runBlocking { withTimeout(5_000) { while (store.decisions.value.single().sending) delay(10) } }
+        assertEquals("Hold", store.decisions.value.single().answer)
+        assertTrue(disk.saved()!!.outbox.isEmpty())
+    }
+
+    @Test
+    fun aRefusedAnswerBringsTheCardBackWithWhyAndAnsweringAgainSendsIt() {
+        setUp()
+        reply = { MockResponse(400, Headers.headersOf("content-type", "application/json"), """{"error":"bad-schema","message":"The answer does not match the question."}""") }
+        val store = store()
+        showInbox(store)
+        compose.onNodeWithText("Hold").performClick()
+        compose.waitUntil(5_000) { store.decisions.value.single().notSent != null }
+        compose.onNodeWithText(question).assertExists()
+        compose.onNodeWithText("Not sent: bad-schema", substring = true).assertExists()
+        assertTrue(disk.saved()!!.outbox.isEmpty())
+
+        reply = { MockResponse(201, Headers.headersOf("content-type", "application/json"), "{}") }
+        compose.onNodeWithText("Hold").performClick()
+        compose.waitUntil(5_000) { !store.decisions.value.single().sending && store.decisions.value.single().answer != null }
+        compose.onNodeWithText(question).assertDoesNotExist()
+        assertEquals(2, posted.size)
     }
 }
