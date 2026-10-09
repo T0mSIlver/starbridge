@@ -381,11 +381,10 @@ export function probeSet(sys: Sys, list: ProviderInfo[], named: string[]): strin
   if (has(".cursor") || on("cursor-agent", "cursor")) set.add("cursor");
   if (has(".gemini/antigravity", ".gemini/antigravity-cli") || on("agy", "antigravity"))
     set.add("antigravity");
-  if (has(".local/share/opencode") || on("opencode")) {
-    set.add("opencodego");
-    // CodexBar reads OpenCode's own plan only from browser cookies, which it imports only on macOS.
-    if (sys.platform === "darwin") set.add("opencode");
-  }
+  // CodexBar finds OpenCode's plans on its own only in browser cookies, which it imports only on
+  // macOS; elsewhere they need a key or cookie in CodexBar's config, which turns them on anyway.
+  if (sys.platform === "darwin" && (has(".local/share/opencode") || on("opencode")))
+    set.add("opencode").add("opencodego");
   return [...set];
 }
 

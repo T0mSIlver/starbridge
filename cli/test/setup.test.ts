@@ -827,9 +827,14 @@ test("setup probes the plan of each agent it finds (#963)", () => {
     expect(probeSet(sys("linux"), [], [])).toEqual([]);
     for (const d of [".cursor", ".gemini/antigravity-cli", ".local/share/opencode"])
       mkdirSync(join(home, d), { recursive: true });
-    expect(probeSet(sys("linux"), [], [])).toEqual(["cursor", "antigravity", "opencodego"]);
-    // OpenCode's own plan is read from browser cookies, which CodexBar imports only on macOS.
-    expect(probeSet(sys("darwin"), [], [])).toContain("opencode");
+    expect(probeSet(sys("linux"), [], [])).toEqual(["cursor", "antigravity"]);
+    // CodexBar finds OpenCode's plans on its own only in browser cookies, imported only on macOS.
+    expect(probeSet(sys("darwin"), [], [])).toEqual([
+      "cursor",
+      "antigravity",
+      "opencode",
+      "opencodego",
+    ]);
   } finally {
     rmSync(home, { recursive: true, force: true });
   }
