@@ -1,0 +1,375 @@
+{
+  "note": "wantsQuotaAlert(settings, alert, windowMinutes) and migrateQuotaAlerts(old) (#914).",
+  "defaults": {
+    "short": [],
+    "long": [
+      "runs-out"
+    ],
+    "windows": {}
+  },
+  "cases": [
+    {
+      "name": "default: weekly runs out",
+      "settings": {
+        "short": [],
+        "long": [
+          "runs-out"
+        ],
+        "windows": {}
+      },
+      "alert": {
+        "provider": "claude",
+        "window": "secondary",
+        "kind": "runs-out"
+      },
+      "windowMinutes": 10080,
+      "expect": true
+    },
+    {
+      "name": "default: 5-hour runs out is quiet",
+      "settings": {
+        "short": [],
+        "long": [
+          "runs-out"
+        ],
+        "windows": {}
+      },
+      "alert": {
+        "provider": "claude",
+        "window": "primary",
+        "kind": "runs-out"
+      },
+      "windowMinutes": 300,
+      "expect": false
+    },
+    {
+      "name": "default: a day counts as short",
+      "settings": {
+        "short": [],
+        "long": [
+          "runs-out"
+        ],
+        "windows": {}
+      },
+      "alert": {
+        "provider": "gemini",
+        "window": "primary",
+        "kind": "runs-out"
+      },
+      "windowMinutes": 1440,
+      "expect": false
+    },
+    {
+      "name": "default: unknown length counts as long",
+      "settings": {
+        "short": [],
+        "long": [
+          "runs-out"
+        ],
+        "windows": {}
+      },
+      "alert": {
+        "provider": "mistral",
+        "window": "credits",
+        "kind": "runs-out"
+      },
+      "windowMinutes": null,
+      "expect": true
+    },
+    {
+      "name": "default: low is quiet",
+      "settings": {
+        "short": [],
+        "long": [
+          "runs-out"
+        ],
+        "windows": {}
+      },
+      "alert": {
+        "provider": "claude",
+        "window": "secondary",
+        "kind": "low",
+        "threshold": 20
+      },
+      "windowMinutes": 10080,
+      "expect": false
+    },
+    {
+      "name": "window off beats its length",
+      "settings": {
+        "short": [
+          "runs-out"
+        ],
+        "long": [
+          "runs-out"
+        ],
+        "windows": {
+          "claude/primary": [],
+          "zai/primary": [
+            "unused-headroom"
+          ],
+          "codex": [
+            "low-50"
+          ]
+        }
+      },
+      "alert": {
+        "provider": "claude",
+        "window": "primary",
+        "kind": "runs-out"
+      },
+      "windowMinutes": 300,
+      "expect": false
+    },
+    {
+      "name": "window's own choice",
+      "settings": {
+        "short": [],
+        "long": [
+          "runs-out"
+        ],
+        "windows": {
+          "claude/primary": [],
+          "zai/primary": [
+            "unused-headroom"
+          ],
+          "codex": [
+            "low-50"
+          ]
+        }
+      },
+      "alert": {
+        "provider": "zai",
+        "window": "primary",
+        "kind": "unused-headroom"
+      },
+      "windowMinutes": 300,
+      "expect": true
+    },
+    {
+      "name": "window's own choice leaves out the default",
+      "settings": {
+        "short": [],
+        "long": [
+          "runs-out"
+        ],
+        "windows": {
+          "claude/primary": [],
+          "zai/primary": [
+            "unused-headroom"
+          ],
+          "codex": [
+            "low-50"
+          ]
+        }
+      },
+      "alert": {
+        "provider": "zai",
+        "window": "primary",
+        "kind": "runs-out"
+      },
+      "windowMinutes": 10080,
+      "expect": false
+    },
+    {
+      "name": "provider key covers its windows",
+      "settings": {
+        "short": [],
+        "long": [
+          "runs-out"
+        ],
+        "windows": {
+          "claude/primary": [],
+          "zai/primary": [
+            "unused-headroom"
+          ],
+          "codex": [
+            "low-50"
+          ]
+        }
+      },
+      "alert": {
+        "provider": "codex",
+        "window": "secondary",
+        "kind": "low",
+        "threshold": 50
+      },
+      "windowMinutes": 10080,
+      "expect": true
+    },
+    {
+      "name": "50% picked: a window that skipped to 20% still notifies",
+      "settings": {
+        "short": [],
+        "long": [
+          "runs-out"
+        ],
+        "windows": {
+          "claude/primary": [],
+          "zai/primary": [
+            "unused-headroom"
+          ],
+          "codex": [
+            "low-50"
+          ]
+        }
+      },
+      "alert": {
+        "provider": "codex",
+        "window": "secondary",
+        "kind": "low",
+        "threshold": 20
+      },
+      "windowMinutes": 10080,
+      "expect": true
+    },
+    {
+      "name": "20% picked: 50% is quiet",
+      "settings": {
+        "short": [],
+        "long": [
+          "low-20"
+        ],
+        "windows": {}
+      },
+      "alert": {
+        "provider": "claude",
+        "window": "secondary",
+        "kind": "low",
+        "threshold": 50
+      },
+      "windowMinutes": 10080,
+      "expect": false
+    },
+    {
+      "name": "20% picked: 20% notifies",
+      "settings": {
+        "short": [],
+        "long": [
+          "low-20"
+        ],
+        "windows": {}
+      },
+      "alert": {
+        "provider": "claude",
+        "window": "secondary",
+        "kind": "low",
+        "threshold": 20
+      },
+      "windowMinutes": 10080,
+      "expect": true
+    }
+  ],
+  "migrate": [
+    {
+      "name": "never opted in: defaults",
+      "old": {
+        "notify": [],
+        "notifyLow": true,
+        "notifyPace": true
+      },
+      "expect": {
+        "short": [],
+        "long": [
+          "runs-out"
+        ],
+        "windows": {}
+      }
+    },
+    {
+      "name": "bell on, both switches on",
+      "old": {
+        "notify": [
+          "claude"
+        ],
+        "notifyLow": true,
+        "notifyPace": true
+      },
+      "expect": {
+        "short": [],
+        "long": [
+          "runs-out"
+        ],
+        "windows": {
+          "claude": [
+            "runs-out",
+            "low-50",
+            "low-20",
+            "unused-headroom"
+          ]
+        }
+      }
+    },
+    {
+      "name": "bell on, only runs low",
+      "old": {
+        "notify": [
+          "claude",
+          "zai"
+        ],
+        "notifyLow": true,
+        "notifyPace": false
+      },
+      "expect": {
+        "short": [],
+        "long": [
+          "runs-out"
+        ],
+        "windows": {
+          "claude": [
+            "low-50",
+            "low-20"
+          ],
+          "zai": [
+            "low-50",
+            "low-20"
+          ]
+        }
+      }
+    },
+    {
+      "name": "bell on, only runs out",
+      "old": {
+        "notify": [
+          "codex"
+        ],
+        "notifyLow": false,
+        "notifyPace": true
+      },
+      "expect": {
+        "short": [],
+        "long": [
+          "runs-out"
+        ],
+        "windows": {
+          "codex": [
+            "runs-out",
+            "unused-headroom"
+          ]
+        }
+      }
+    },
+    {
+      "name": "switches unset are on",
+      "old": {
+        "notify": [
+          "codex"
+        ]
+      },
+      "expect": {
+        "short": [],
+        "long": [
+          "runs-out"
+        ],
+        "windows": {
+          "codex": [
+            "runs-out",
+            "low-50",
+            "low-20",
+            "unused-headroom"
+          ]
+        }
+      }
+    }
+  ]
+}

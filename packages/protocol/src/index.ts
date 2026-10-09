@@ -9,6 +9,7 @@ export * from "./pace";
 export * from "./pairing";
 export * from "./permission";
 export * from "./presence";
+export * from "./quotaAlerts";
 export * from "./readable";
 export * from "./schemas";
 export { type ErrorCode, fromB64, ProtocolError, ready, toB64 } from "./sodium";
