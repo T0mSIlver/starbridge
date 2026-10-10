@@ -1451,6 +1451,17 @@ Tokens, type and components: `DESIGN.md`.
   test; that traffic stays on the phone and items are end-to-end encrypted. Every release starts
   as an rc the maintainer installs; the final tag must be its newest rc plus the version stamp
   (`version.ts --final`), keeping the rc's CodexBar pin, so it ships what was tried.
+- **Play's Alpha track from CI** (#1024). Testers fell behind while each App Bundle went to Play
+  Console by hand. Once the release is published, the `play` job uploads the tag's AAB to Alpha
+  through the Play Developer API (`cli/scripts/play.ts`), status `completed`, with the GitHub
+  release's PR titles as notes in the listing's default language, cut to Play's 500 characters.
+  rcs go too: Alpha is the testers' track, and the final's higher versionCode replaces its rc
+  there. Committing the edit sends it for review; managed publishing, while on, then holds it
+  until the owner presses Publish. A draft would add a second console step for nothing. The
+  service account's key is `PLAY_SERVICE_ACCOUNT_JSON` in the `play-release` environment, open to
+  main and `v*` tags, and the job runs on GitHub's runner so the key never reaches a self-hosted
+  one. Without the key the job skips with a notice; a failed upload fails the run after the
+  release is out. Run by hand on main, the job asks Play to validate the edit and discards it.
 - **The desktop app's release** (#886). Once the repository variable `DESKTOP_RELEASE` is true,
   the tag also builds the macOS app on GitHub's macOS runner, signed with the Developer ID and
   notarized, its secrets in the `desktop-release` environment, and adds its DMGs, zips and
