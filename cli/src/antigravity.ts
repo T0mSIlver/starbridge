@@ -134,7 +134,7 @@ function needsHello(ctx: Ctx, id: unknown): boolean {
 
 /** What the agent is told, at the start of a turn, until the conversation registered. */
 export const NUDGE =
-  "Starbridge sends this session's permission prompts and questions to the owner's phone once it has run a starbridge command. Before anything else, run `starbridge hello` once.";
+  "Starbridge sends this session's permission prompts and questions to the owner's devices once it has run a starbridge command. Before anything else, run `starbridge hello` once.";
 
 /**
  * `starbridge hook pre-invocation --agent antigravity`, on the plugin's `PreInvocation` at the

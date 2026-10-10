@@ -183,7 +183,7 @@ const HELP = `starbridge: post decisions to your devices, report runs, upload qu
       starbridge plugin's permission hook exits at once. presence: while this machine's
       screen is unlocked and had keyboard or mouse input in the last minute, notifications
       on your other devices wait a few seconds, so a question you answer here doesn't buzz
-      your phone; the server hears only yes or no. Off by default. machine-kind: the icon
+      them; the server hears only yes or no. Off by default. machine-kind: the icon
       devices show, detected by setup.
 
   starbridge hook permission --agent claude-code|pi|opencode|antigravity [--wait 570s]

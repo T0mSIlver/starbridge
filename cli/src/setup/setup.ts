@@ -258,7 +258,11 @@ export async function setup(sys: Sys, opts: SetupOpts): Promise<number> {
   const upload = machine && quota && quota.providers.length > 0 ? quota : undefined;
   if (upload || (machine && !opts.yes)) section(ctx, "Test");
   if (upload) await firstUpload(ctx, upload);
-  if (machine && !opts.yes && (await prompt.confirm("  Send a test decision to your phone?", true)))
+  if (
+    machine &&
+    !opts.yes &&
+    (await prompt.confirm("  Send a test decision to your devices?", true))
+  )
     await testDecision(ctx, machine.name);
 
   section(
@@ -275,11 +279,11 @@ export async function setup(sys: Sys, opts: SetupOpts): Promise<number> {
     ...(permissionsEnabled(ctx)
       ? []
       : ([["Send permission prompts", "starbridge config permissions on"]] as const)),
-    // A machine with a screen can hold the phone's pushes while the owner sits at it (#848).
+    // A machine with a screen can hold other devices' pushes while the owner sits at it (#848).
     ...(ctx.store.agentConfig().presence?.enabled ||
     !["desktop", "laptop"].includes(ctx.store.agentConfig().machineKind ?? "")
       ? []
-      : ([["Quiet the phone while here", "starbridge config presence on"]] as const)),
+      : ([["Quiet other devices while here", "starbridge config presence on"]] as const)),
     ["Remove from one agent", `starbridge uninstall --agent ${one}`],
     ["Remove everything", "starbridge uninstall"],
   ]))
@@ -634,7 +638,7 @@ async function testDecision(ctx: Ctx, name: string) {
     session: "",
   };
   const opts = { wait: true, timeout: "10m" };
-  ctx.out("  Sent. Answer it on your phone or the web page (Ctrl-C skips)…");
+  ctx.out("  Sent. Answer it on any of your devices (Ctrl-C skips)…");
   // `ask` prints the decision's id first, kept to withdraw the card on Ctrl-C (#613), then the
   // answer line agents read; the owner sees neither, only what they answered.
   let id: string | undefined;

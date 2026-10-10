@@ -40,13 +40,13 @@ free server at starbridge.run, or [host your own](../server/README.md).
    and asks before it installs CodexBar, which reads your AI plans' quotas. CodexBar is optional:
    `--no-quota` skips it, and questions, runs and permission prompts work without it.
 
-4. **Answer the test question.** Setup ends with "Send a test decision to your phone?". Say yes,
-   and your phone asks "Does Starbridge reach you from" this machine. Tap Yes, and the terminal
-   prints your answer. If nothing arrives, `starbridge status` checks the machine's side. To send
+4. **Answer the test question.** Setup ends with "Send a test decision to your devices?". Say
+   yes, and your phone, browser or desktop app asks "Does Starbridge reach you from" this
+   machine. Tap Yes, and the terminal prints your answer. If nothing arrives, `starbridge status` checks the machine's side. To send
    one again later:
 
    ```bash
-   starbridge ask --question "Does this reach my phone?" --option Yes --option No --wait
+   starbridge ask --question "Does this reach me?" --option Yes --option No --wait
    ```
 
 5. **Ask from an agent.** Start a new Claude Code, Pi or opencode session, or
