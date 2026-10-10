@@ -1492,12 +1492,15 @@ Tokens, type and components: `DESIGN.md`.
   through the Play Developer API (`cli/scripts/play.ts`), status `completed`, with the GitHub
   release's PR titles as notes in the listing's default language, cut to Play's 500 characters.
   rcs go too: Alpha is the testers' track, and the final's higher versionCode replaces its rc
-  there. Committing the edit sends it for review; managed publishing, while on, then holds it
-  until the owner presses Publish. A draft would add a second console step for nothing. The
-  service account's key is `PLAY_SERVICE_ACCOUNT_JSON` in the `play-release` environment, open to
-  main and `v*` tags, and the job runs on GitHub's runner so the key never reaches a self-hosted
-  one. Without the key the job skips with a notice; a failed upload fails the run after the
-  release is out. Run by hand on main, the job asks Play to validate the edit and discards it.
+  there. Committing the edit sends it for review, and with managed publishing off, testers get it
+  once Play approves; the cost is that any other change Play approves also goes live at once. A
+  draft would add a console step for nothing. No key exists: the organization policy forbids
+  service account keys, so Google's workload identity federation trades the job's GitHub OIDC
+  token for a short-lived token of the `starbridge-play` service account, trusting only this
+  repository's `play-release` environment, open to main and `v*` tags (repository variables
+  `PLAY_WIF_PROVIDER` and `PLAY_SERVICE_ACCOUNT`). Without them the job skips with a notice; a
+  failed upload fails the run after the release is out. Run by hand on main, the job asks Play to
+  validate the edit and discards it.
 - **The desktop app's release** (#886). Once the repository variable `DESKTOP_RELEASE` is true,
   the tag also builds the macOS app on GitHub's macOS runner, signed with the Developer ID and
   notarized, its secrets in the `desktop-release` environment, and adds its DMGs, zips and

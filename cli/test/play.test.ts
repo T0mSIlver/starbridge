@@ -1,5 +1,4 @@
 import { afterEach, expect, test } from "bun:test";
-import { createVerify, generateKeyPairSync } from "node:crypto";
 import { PACKAGE, playNotes, upload } from "../scripts/play";
 
 const URL_ = "https://github.com/T0mSIlver/starbridge/releases/tag/v1.2.3";
@@ -25,22 +24,12 @@ test("Play notes keep the pull request titles and fit Play's 500 characters", ()
 type Seen = { method: string; path: string; body: string };
 
 function fakePlay(commit: (seen: Seen[]) => Response | undefined = () => undefined) {
-  const { publicKey, privateKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
   const seen: Seen[] = [];
   const server = Bun.serve({
     port: 0,
     async fetch(req) {
       const url = new URL(req.url);
       const s = { method: req.method, path: url.pathname + url.search, body: await req.text() };
-      if (url.pathname === "/token") {
-        const [h, p, sig] = new URLSearchParams(s.body).get("assertion")?.split(".") ?? [];
-        const ok = createVerify("RSA-SHA256")
-          .update(`${h}.${p}`)
-          .verify(publicKey, sig ?? "", "base64url");
-        return ok
-          ? Response.json({ access_token: "tok" })
-          : new Response("bad jwt", { status: 401 });
-      }
       if (req.headers.get("authorization") !== "Bearer tok")
         return new Response("no", { status: 401 });
       seen.push(s);
@@ -53,14 +42,9 @@ function fakePlay(commit: (seen: Seen[]) => Response | undefined = () => undefin
       return new Response(s.method === "DELETE" ? "" : "{}");
     },
   });
-  const account = {
-    client_email: "ci@x.iam.gserviceaccount.com",
-    private_key: privateKey.export({ type: "pkcs8", format: "pem" }).toString(),
-    token_uri: `http://localhost:${server.port}/token`,
-  };
   const run = (validate: boolean) =>
     upload({
-      account,
+      token: "tok",
       aab: new Uint8Array([1, 2]),
       version: "1.2.3",
       notes: "• x",

@@ -1,16 +1,15 @@
 /**
  * Uploads a release's App Bundle to Google Play's Alpha track, the testers' closed track (#1024):
  *   bun run scripts/play.ts <aab> <version> <notes.md> [--validate]
- * The service account's JSON key comes from PLAY_SERVICE_ACCOUNT_JSON. --validate checks the edit
+ * PLAY_ACCESS_TOKEN is an OAuth token for the androidpublisher scope; in CI, google-github-actions/auth
+ * trades the job's OIDC token for one, so no key exists. --validate checks the edit
  * with Play and discards it, so nothing is published. Without it the edit is committed, which sends
  * it for review; with managed publishing on, it then waits in Play Console for Publish.
  */
-import { createSign } from "node:crypto";
 import { readFileSync } from "node:fs";
 
 export const PACKAGE = "dev.starbridge.app";
 export const TRACK = "alpha";
-const SCOPE = "https://www.googleapis.com/auth/androidpublisher";
 // Play's limit on one language's release notes.
 const NOTES_MAX = 500;
 
@@ -37,38 +36,8 @@ export function playNotes(markdown: string, releaseUrl: string): string {
   return [...kept, more].join("\n");
 }
 
-interface ServiceAccount {
-  client_email: string;
-  private_key: string;
-  token_uri: string;
-}
-
-async function accessToken(account: ServiceAccount): Promise<string> {
-  const now = Math.floor(Date.now() / 1000);
-  const b64 = (o: object) => Buffer.from(JSON.stringify(o)).toString("base64url");
-  const unsigned = `${b64({ alg: "RS256", typ: "JWT" })}.${b64({
-    iss: account.client_email,
-    scope: SCOPE,
-    aud: account.token_uri,
-    iat: now,
-    exp: now + 3600,
-  })}`;
-  const signature = createSign("RSA-SHA256")
-    .update(unsigned)
-    .sign(account.private_key, "base64url");
-  const res = await fetch(account.token_uri, {
-    method: "POST",
-    body: new URLSearchParams({
-      grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
-      assertion: `${unsigned}.${signature}`,
-    }),
-  });
-  if (!res.ok) throw new Error(`Google token: ${res.status} ${await res.text()}`);
-  return ((await res.json()) as { access_token: string }).access_token;
-}
-
 export async function upload(opts: {
-  account: ServiceAccount;
+  token: string;
   aab: Uint8Array<ArrayBuffer>;
   version: string;
   notes: string;
@@ -76,7 +45,6 @@ export async function upload(opts: {
   api?: string;
 }): Promise<number> {
   const api = opts.api ?? "https://androidpublisher.googleapis.com";
-  const token = await accessToken(opts.account);
   const app = `/androidpublisher/v3/applications/${PACKAGE}`;
   async function call<T>(
     method: string,
@@ -86,7 +54,7 @@ export async function upload(opts: {
   ): Promise<T> {
     const res = await fetch(`${api}${path}`, {
       method,
-      headers: { authorization: `Bearer ${token}`, "content-type": type },
+      headers: { authorization: `Bearer ${opts.token}`, "content-type": type },
       body,
     });
     const text = await res.text();
@@ -153,15 +121,13 @@ if (import.meta.main) {
   const args = process.argv.slice(2);
   const validate = args.includes("--validate");
   const [aab, version, notesPath] = args.filter((a) => a !== "--validate");
-  const key = process.env.PLAY_SERVICE_ACCOUNT_JSON;
-  if (!aab || !version || !notesPath || !key) {
-    throw new Error(
-      "usage: PLAY_SERVICE_ACCOUNT_JSON=… play.ts <aab> <version> <notes.md> [--validate]",
-    );
+  const token = process.env.PLAY_ACCESS_TOKEN;
+  if (!aab || !version || !notesPath || !token) {
+    throw new Error("usage: PLAY_ACCESS_TOKEN=… play.ts <aab> <version> <notes.md> [--validate]");
   }
   const releaseUrl = `https://github.com/T0mSIlver/starbridge/releases/tag/v${version}`;
   await upload({
-    account: JSON.parse(key) as ServiceAccount,
+    token,
     aab: readFileSync(aab),
     version,
     notes: playNotes(readFileSync(notesPath, "utf8"), releaseUrl),

@@ -57,9 +57,9 @@ the CLI it runs.
 arm64). A `v*` tag runs `.github/workflows/release.yml`, which attaches them, the signed APK and
 App Bundle, `install.sh`, `install.ps1` and the signed `SHA256SUMS` to a GitHub Release,
 commits the formula to `T0mSIlver/homebrew-starbridge` and publishes to npm through Trusted Publishing, with no npm token. The signing key lives in the `MINISIGN_SECRET_KEY` Actions secret and, offline, with the maintainer.
-Then it uploads the App Bundle to Google Play's Alpha track, rcs included, once the
-`PLAY_SERVICE_ACCOUNT_JSON` secret is set in the `play-release` environment; without it, upload the
-bundle in Play Console. Run by hand on main with a version above the last one Play has, the
+Then it uploads the App Bundle to Google Play's Alpha track, rcs included, signing in through
+workload identity federation with no key, once the `PLAY_WIF_PROVIDER` and `PLAY_SERVICE_ACCOUNT`
+repository variables are set; without them, upload the bundle in Play Console. Run by hand on main with a version above the last one Play has, the
 workflow only asks Play to validate the upload.
 
 The maintainer's dogfood APKs are debug builds signed with the Android release key, so that
