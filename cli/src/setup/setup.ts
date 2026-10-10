@@ -258,7 +258,11 @@ export async function setup(sys: Sys, opts: SetupOpts): Promise<number> {
   const upload = machine && quota && quota.providers.length > 0 ? quota : undefined;
   if (upload || (machine && !opts.yes)) section(ctx, "Test");
   if (upload) await firstUpload(ctx, upload);
-  if (machine && !opts.yes && (await prompt.confirm("  Send a test decision to your devices?", true)))
+  if (
+    machine &&
+    !opts.yes &&
+    (await prompt.confirm("  Send a test decision to your devices?", true))
+  )
     await testDecision(ctx, machine.name);
 
   section(
