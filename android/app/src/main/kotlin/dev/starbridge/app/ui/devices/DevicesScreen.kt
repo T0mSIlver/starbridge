@@ -96,6 +96,7 @@ class DevicesViewModel @Inject constructor(private val store: Store) : ViewModel
     val recoveryActions = RecoveryActions(store::newRecoveryKey, store::saveRecoveryKey, store::closeRecoveryKey)
     fun refreshDirectory() = store.refreshDirectory()
     val notifyStates = store.notifyStates
+    val deviceClients = store.deviceClients
     fun loadNotifyStates() = store.loadNotifyStates()
     fun reportNotifications(on: Boolean) = store.reportNotifications(on)
     val actions = DeviceActions(store::lookUpPairing, store::approvePairing, store::closePairing, store::revoke, store::showCode)
@@ -128,6 +129,8 @@ fun DevicesScreen(
     onReplaceRecovery: () -> Unit = {},
     /** What each device last said of its notifications (#943), by member id; only it changes them. */
     notify: Map<String, String> = emptyMap(),
+    /** The app each device said that from (#1019), by member id: its icon. */
+    clients: Map<String, String> = emptyMap(),
 ) {
     // A device or machine revoked elsewhere leaves the list without a restart: no push says so.
     LaunchedEffect(Unit) {
@@ -143,7 +146,7 @@ fun DevicesScreen(
     val twins = members.groupingBy { it.name }.eachCount().filterValues { it > 1 }.keys
     var revoking by rememberSaveable { mutableStateOf<String?>(null) }
     Page("Devices", modifier, onBack = onBack, titleGap = Spacing.s4) {
-        itemsIndexed(rows, key = { _, it -> it.id }) { i, it -> MemberRow(it, now, it.name in twins, groupShape(i, rows.size, outer = Spacing.s5), notify[it.id]) { revoking = it.id } }
+        itemsIndexed(rows, key = { _, it -> it.id }) { i, it -> MemberRow(it, now, it.name in twins, groupShape(i, rows.size, outer = Spacing.s5), notify[it.id], clients[it.id]) { revoking = it.id } }
         if (recovery != null) item(key = "recovery") { RecoveryRow(recovery, onReplaceRecovery) }
         item {
             FilledTonalButton(
@@ -299,15 +302,27 @@ fun PairCard(approval: Approval, actions: DeviceActions, otherWays: @Composable 
 private val NOTIFY_LABELS = mapOf("on" to "Notifications on", "off" to "Notifications off", "blocked" to "Notifications blocked")
 
 /**
- * A member: its kind's icon, name and when it joined; Revoke is a neutral text button. A machine
+ * A member's icon (#1019): a machine's terminal; a device's app, as it said with its notifications;
+ * this phone is a phone. A device that has not said is a plain device.
+ */
+fun memberSym(member: Member, client: String?) = when {
+    member.kind == Kind.Machine -> Sym.Terminal
+    member.current || client == "android" -> Sym.Phone
+    client == "web" -> Sym.Web
+    client == "desktop" -> Sym.Desktop
+    else -> Sym.Devices
+}
+
+/**
+ * A member: its icon, name and when it joined; Revoke is a neutral text button. A machine
  * shows its check code while `starbridge pair` waits for the owner to compare it (#939).
  */
 @Composable
-private fun MemberRow(member: Member, now: Instant, twin: Boolean, shape: Shape, notify: String?, onRevoke: () -> Unit) {
+private fun MemberRow(member: Member, now: Instant, twin: Boolean, shape: Shape, notify: String?, client: String?, onRevoke: () -> Unit) {
     val scheme = MaterialTheme.colorScheme
     Surface(Modifier.fillMaxWidth(), shape = shape, color = scheme.surfaceContainer) {
         Row(Modifier.padding(Spacing.s4), verticalAlignment = Alignment.CenterVertically) {
-            Symbol(if (member.kind == Kind.Machine) Sym.Computer else Sym.Phone, tint = scheme.onSurface)
+            Symbol(memberSym(member, client), tint = scheme.onSurface)
             Spacer(Modifier.width(Spacing.s4))
             Column(Modifier.weight(1f)) {
                 Text(member.name, style = StarbridgeTheme.type.body, color = scheme.onSurface)

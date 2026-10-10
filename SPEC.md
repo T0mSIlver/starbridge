@@ -1251,7 +1251,7 @@ first window, so a provider with a window running out leads.
   still counts. The tab appears as soon as a machine's first snapshot arrives: the server pushes
   that one even when it is quiet, since a phone whose pushes work does not poll and would
   otherwise learn of it only at its next start or pull (#1010).
-- **Devices.** Each device shows whether it notifies, as it last said (#943). Rows that share a name show when each was added (#287). A Recovery key row says
+- **Devices.** Each device shows whether it notifies, as it last said (#943), and an icon for the app it said it from (#1019): a phone for the Android app, a browser window, a monitor for the desktop app, a terminal for a machine. The server knows the app from how the device signs in (a bearer token, the session cookie, the desktop app's client header), so devices paired before show theirs without pairing again; one that has not said yet shows a plain device. Rows that share a name show when each was added (#287). A Recovery key row says
   when and on which device the key was set, with Replace; other devices show a replacement once
   (#348).
 

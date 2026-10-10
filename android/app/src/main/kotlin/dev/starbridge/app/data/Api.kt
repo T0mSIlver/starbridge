@@ -304,7 +304,13 @@ class Api(private val http: OkHttpClient, private val server: String, private va
         call("PUT", "/notifications", buildJsonObject { put("state", state) })
     }
 
-    /** What each device of the account last said of its notifications, by member id (#943). */
-    suspend fun notifications(): Map<String, String> =
-        call("GET", "/notifications").second!!.jsonObject.getValue("devices").jsonObject.mapValues { it.value.jsonPrimitive.content }
+    /**
+     * What each device of the account last said of its notifications, and the app it said it
+     * from, by member id (#943, #1019).
+     */
+    suspend fun notifications(): Pair<Map<String, String>, Map<String, String>> {
+        val body = call("GET", "/notifications").second!!.jsonObject
+        fun read(key: String) = body[key]?.jsonObject?.mapValues { it.value.jsonPrimitive.content }.orEmpty()
+        return read("devices") to read("clients")
+    }
 }

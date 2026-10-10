@@ -389,6 +389,7 @@ class ServerStore(
         // The next device this phone becomes has told the server nothing yet (#943).
         reportedNotify = null
         notifyStates.value = emptyMap()
+        deviceClients.value = emptyMap()
         joinJob?.cancel()
         showJob?.cancel()
         watchJob?.cancel()
@@ -1881,13 +1882,17 @@ class ServerStore(
     }
 
     override val notifyStates = MutableStateFlow<Map<String, String>>(emptyMap())
+    override val deviceClients = MutableStateFlow<Map<String, String>>(emptyMap())
     /** The state the server holds for this phone, once it took one. */
     private var reportedNotify: Boolean? = null
 
     override fun loadNotifyStates() {
         scope.launch {
             // A server without the route: Devices shows no states.
-            runCatching { api().notifications() }.onSuccess { notifyStates.value = it }
+            runCatching { api().notifications() }.onSuccess { (states, clients) ->
+                notifyStates.value = states
+                deviceClients.value = clients
+            }
         }
     }
 

@@ -338,11 +338,11 @@ class ScreenshotTest(private val dark: Boolean) {
     @Test fun quotasFailed() = capture("quotas-failed") { QuotasScreen(fake.failedWindows, now, failures = fake.failures) }
 
     // Each device's notifications as it last said (#943): read-only, since only a device changes its own.
-    @Test fun devices() = capture("devices") { Phone(null, 0) { DevicesScreen(fake.members, now, deviceActions, notify = mapOf("m1" to "on", "m2" to "off", "m3" to "blocked")) } }
+    @Test fun devices() = capture("devices") { Phone(null, 0) { DevicesScreen(fake.members, now, deviceActions, notify = mapOf("m1" to "on", "m2" to "off", "m3" to "blocked"), clients = fake.clients) } }
 
     // The recovery key under the members (#348): when and where it was set, with Replace.
     private val recovery = RecoveryUi(now.minusSeconds(86_400 * 2), "this phone", replaced = false)
-    @Test fun devicesRecovery() = capture("devices-recovery") { Phone(null, 0) { DevicesScreen(fake.members, now, deviceActions, recovery = recovery) } }
+    @Test fun devicesRecovery() = capture("devices-recovery") { Phone(null, 0) { DevicesScreen(fake.members, now, deviceActions, recovery = recovery, clients = fake.clients) } }
 
     private val recoveryActions = RecoveryActions({}, {}, {})
     @Test fun recoveryKeyAsk() = capture("recovery-key-ask") { Phone(null, 0) { RecoveryKeyScreen(Replacing.Idle, busy = false, actions = recoveryActions) } }
@@ -364,7 +364,7 @@ class ScreenshotTest(private val dark: Boolean) {
     }
 
     @Test fun devicesRevoke() = capture("devices-revoke", before = { compose.onAllNodesWithText("Revoke")[0].performClick() }) {
-        Phone(null, 0) { DevicesScreen(fake.members, now, deviceActions) }
+        Phone(null, 0) { DevicesScreen(fake.members, now, deviceActions, clients = fake.clients) }
     }
 
     @Test fun addDevice() = capture("add-device") { Phone(null, 0) { AddDeviceScreen(Approval.Idle, deviceActions) } }

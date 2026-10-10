@@ -328,7 +328,7 @@ export const api = {
   /** This device's own notifications, for every device's Devices list (#943). */
   setNotifications: (state: NotifyState) =>
     call<void>("PUT", "/notifications", { body: { state } }),
-  notifications: async () => (await call<NotificationStates>("GET", "/notifications")).devices,
+  notifications: () => call<NotificationStates>("GET", "/notifications"),
   /** Whether the app whose sign-in this browser passed on reached this browser's account. */
   appSignedIn: async (state: string) =>
     (await call<AppSignedIn>("GET", `/auth/app/signed-in?state=${encodeURIComponent(state)}`))
