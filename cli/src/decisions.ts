@@ -18,7 +18,7 @@ import {
   verifyDirectory,
   type Waiting,
 } from "@starbridge/protocol";
-import { ANTIGRAVITY_CONVERSATION, antigravityTitle } from "./antigravity";
+import { type AgyRoute, ANTIGRAVITY_CONVERSATION, agyRoute, antigravityTitle } from "./antigravity";
 import { ApiError } from "./api";
 import { claudeSession } from "./claude";
 import { type CodexSession, codexAsker, codexSession, codexTitle } from "./codex";
@@ -54,6 +54,8 @@ export interface AskInput {
   agent?: Agent;
   /** Where a Codex session runs: its `CODEX_HOME` and the `codex` that answers reach it with. */
   codex?: CodexSession;
+  /** Where an interactive Antigravity conversation's language server takes its answer. */
+  antigravity?: AgyRoute;
   /** A Pi or opencode session whose Starbridge extension or plugin submits answers into it. */
   extensionAnswers?: boolean;
   /** A `claude -p` session: the mod starts no loop there, so nothing submits answers. */
@@ -119,6 +121,7 @@ export function resolveSource(
               : env.CLAUDE_CODE_SESSION_ID) ??
     "";
   const codex = agent === "codex" ? (input.codex ?? codexSession(env)) : undefined;
+  const agy = agent === "antigravity" ? (input.antigravity ?? agyRoute(env)) : undefined;
   const answersEnv = agent === "pi" ? PI_ANSWERS : agent === "opencode" ? OPENCODE_ANSWERS : "";
   const extensionAnswers =
     !!answersEnv && (input.extensionAnswers ?? (!!session && env[answersEnv] === session));
@@ -151,6 +154,7 @@ export function resolveSource(
     ...input,
     ...(agent ? { agent } : {}),
     ...(codex ? { codex } : {}),
+    ...(agy ? { antigravity: agy } : {}),
     ...(extensionAnswers ? { extensionAnswers } : {}),
     ...(headless ? { headless } : {}),
     project: input.project ?? projectName(cwd),
@@ -336,6 +340,7 @@ export async function postDecision(ctx: Ctx, s: Session, input: AskInput): Promi
       ...(decision.answerIn ? { answerIn: true } : {}),
       ...(decision.done ? { done: true } : {}),
       ...(input.codex && decision.source.session ? { codex: input.codex } : {}),
+      ...(input.antigravity && decision.source.session ? { antigravity: input.antigravity } : {}),
       ...(input.extensionAnswers && decision.source.session ? { extensionAnswers: true } : {}),
       ...(input.held ? { held: true } : {}),
       ...(input.picker ? { picker: input.picker } : {}),
@@ -751,19 +756,21 @@ export type Delivery = "prompt" | "wait";
 /**
  * A prompt only when something will submit it (#537): for Claude Code, a mod seen polling for
  * this session (`modSeen`), which an installed plugin alone does not mean; for Pi and opencode,
- * their extension, which says so itself; for Codex, its reachable app-server. With no agent
- * running, Codex gets nothing back.
+ * their extension, which says so itself; for Codex, its reachable app-server; for Antigravity,
+ * its reachable language server (#961). With no agent running, Codex and Antigravity get
+ * nothing back.
  */
 export function delivery(
-  input: Pick<AskInput, "agent" | "extensionAnswers" | "headless">,
-  codexReachable: boolean,
+  input: Pick<AskInput, "agent" | "extensionAnswers" | "headless" | "antigravity">,
+  reachable: boolean,
   modSeen: boolean,
 ): Delivery {
+  if (input.agent === "antigravity") return input.antigravity && reachable ? "prompt" : "wait";
   if (input.agent === "claude-code" || input.agent === "cursor")
     return !input.headless && modSeen ? "prompt" : "wait";
   if (input.agent === "pi" || input.agent === "opencode")
     return input.extensionAnswers ? "prompt" : "wait";
-  return input.agent === "codex" && codexReachable ? "prompt" : "wait";
+  return input.agent === "codex" && reachable ? "prompt" : "wait";
 }
 
 /**

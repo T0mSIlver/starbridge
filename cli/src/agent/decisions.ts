@@ -5,11 +5,13 @@
  * session has not confirmed, and the CLI's own path (no agent) reads the same state.
  */
 import { activeMembers, type Directory, ProtocolError } from "@starbridge/protocol";
+import { type AgyRoute, agyReachable, agySend } from "../antigravity";
 import { codexNotice, codexQueue, codexReachable } from "../codex";
 import { type Ctx, iso, session, UsageError } from "../context";
 import {
   type AskInput,
   ackLines,
+  answerLine,
   deliverable,
   delivery,
   dropRevokedNow,
@@ -45,7 +47,7 @@ export type QuotaWanted = "a device joined" | "a device asked";
 export class Decisions implements Feature {
   private lastOkAt: Date | undefined;
   private lastError: string | undefined;
-  /** Codex answers whose `codex queue` failed, by decision id: tries so far, and when next. */
+  /** Answers whose delivery failed, by decision id: tries so far, and when next. */
   private retries = new Map<string, { tries: number; at: number }>();
   /** The active devices and the last quota ask, as of the previous poll. */
   private devices: Set<string> | undefined;
@@ -73,7 +75,11 @@ export class Decisions implements Feature {
         if (typeof ask.project !== "string")
           throw new HttpError(400, "bad-request", "input.project is required");
         const decision = await postDecision(this.ctx, session(this.ctx), ask);
-        const reachable = ask.codex ? await codexReachable(ask.codex) : false;
+        const reachable = ask.codex
+          ? await codexReachable(ask.codex)
+          : ask.antigravity
+            ? await agyReachable(ask.antigravity)
+            : false;
         const mod =
           !!ask.session &&
           this.hub.seen(
@@ -204,37 +210,47 @@ export class Decisions implements Feature {
   }
 
   /**
-   * Queues each new answer to a Codex session into it with `codex queue`, and marks it seen only
-   * once that succeeded: an agent that dies meanwhile queues it again, rather than never. A
-   * session that is gone gets CODEX_TRIES tries, a minute apart; the answer stays for a `wait`.
+   * Queues each new answer to a Codex session into it with `codex queue`, and sends each to an
+   * Antigravity conversation through its language server (#961). Marks it seen only once that
+   * succeeded: an agent that dies meanwhile delivers it again, rather than never. A session that
+   * is gone gets CODEX_TRIES tries, a minute apart; the answer stays for a `wait`.
    */
-  private async deliverCodex() {
+  private async deliverQueued() {
     const now = Date.now();
     for (const [id, a] of Object.entries(this.ctx.store.state().answers)) {
       // Read again before each: another process may have found the directory behind meanwhile.
       const st = this.ctx.store.state();
       if (st.behind) return;
       const asked = st.asked[id];
-      if (a.seen || !st.answers[id] || !asked?.codex || !asked.session || !deliverable(st, id))
-        continue;
+      const route = asked?.codex ?? asked?.antigravity;
+      if (a.seen || !st.answers[id] || !route || !asked?.session || !deliverable(st, id)) continue;
       const retry = this.retries.get(id) ?? { tries: 0, at: 0 };
       if (retry.tries >= CODEX_TRIES || retry.at > now) continue;
-      const error = await codexQueue(asked.codex, asked.session, codexNotice(id));
+      const [how, where] = asked.codex
+        ? ["codex queue", `Codex session ${asked.session}`]
+        : ["sending to Antigravity", `Antigravity conversation ${asked.session}`];
+      const error = asked.codex
+        ? await codexQueue(asked.codex, asked.session, codexNotice(id))
+        : await agySend(
+            asked.antigravity as AgyRoute,
+            asked.session,
+            answerLine(a.answer, asked.question),
+          );
       if (error === undefined) {
         this.retries.delete(id);
         this.ctx.store.updateState((st) => {
           const x = st.answers[id];
           if (x) x.seen = true;
         });
-        this.hub.log(`answer to ${id} queued into Codex session ${asked.session}`);
+        this.hub.log(`answer to ${id} queued into ${where}`);
         continue;
       }
       const tries = retry.tries + 1;
       this.retries.set(id, { tries, at: now + CODEX_RETRY_MS });
       this.hub.log(
         tries < CODEX_TRIES
-          ? `answer to ${id}: codex queue failed (${error}); retrying in 1 min`
-          : `answer to ${id}: codex queue failed ${tries} times (${error}); giving up`,
+          ? `answer to ${id}: ${how} failed (${error}); retrying in 1 min`
+          : `answer to ${id}: ${how} failed ${tries} times (${error}); giving up`,
       );
     }
   }
@@ -271,7 +287,7 @@ export class Decisions implements Feature {
         failures = 0;
         first = false;
         this.hub.notify();
-        await this.deliverCodex();
+        await this.deliverQueued();
       } catch (e) {
         if (signal.aborted) break;
         const message = (e as Error).message;

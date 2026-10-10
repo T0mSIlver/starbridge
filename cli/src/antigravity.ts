@@ -4,13 +4,129 @@
  * conversation in `~/.gemini/<product>/annotations/<id>.pbtxt`, a protobuf text file such as
  * `title:"Fix the build"`.
  */
+import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { ownCommand } from "../../mod/hooks/own";
-import { type Ctx, UsageError } from "./context";
+import type { SessionEvent } from "./agent/api";
+import { withAgent } from "./agent/client";
+import type { State } from "./config";
+import { type Ctx, session, UsageError } from "./context";
+import { ackLines, deliverable, poll, sessionLines } from "./decisions";
 
 /** The conversation's id, in every command the agent runs. */
 export const ANTIGRAVITY_CONVERSATION = "ANTIGRAVITY_CONVERSATION_ID";
+
+/**
+ * Where the language server of the Antigravity process running a conversation listens, with the
+ * token it takes (#961). Commands get both, hooks and MCP servers neither.
+ */
+export interface AgyRoute {
+  address: string;
+  token: string;
+}
+
+/**
+ * The conversation's route from its command's environment: only on loopback, since the token
+ * goes with every call, and not in `agy -p`, whose server is gone once its run ends.
+ */
+export function agyRoute(env: Ctx["env"]): AgyRoute | undefined {
+  const address = env.ANTIGRAVITY_LS_ADDRESS;
+  const token = env.ANTIGRAVITY_CSRF_TOKEN;
+  if (!address || !token || !/^(localhost|127\.0\.0\.1|\[::1\]):\d+$/.test(address))
+    return undefined;
+  return agyHeadless() ? undefined : { address, token };
+}
+
+/** The process ids and arguments of this process's parents, nearest first, up to `max`. */
+function parents(max: number): string[][] {
+  const out: string[][] = [];
+  let pid = process.ppid;
+  for (let i = 0; i < max && pid > 1; i++) {
+    let args: string[];
+    let ppid: number;
+    if (process.platform === "linux") {
+      try {
+        args = readFileSync(`/proc/${pid}/cmdline`, "utf8").split("\0").filter(Boolean);
+        // The command name in `stat` may hold spaces and parentheses: read after the last one.
+        const stat = readFileSync(`/proc/${pid}/stat`, "utf8");
+        ppid = Number(stat.slice(stat.lastIndexOf(")") + 2).split(" ")[1]);
+      } catch {
+        break;
+      }
+    } else if (process.platform === "darwin") {
+      const r = spawnSync("ps", ["-o", "ppid=,command=", "-p", String(pid)], { encoding: "utf8" });
+      const m = /^\s*(\d+)\s+(.*)$/.exec(r.stdout?.trim() ?? "");
+      if (!m) break;
+      ppid = Number(m[1]);
+      args = (m[2] as string).split(" ");
+    } else break;
+    out.push(args);
+    pid = ppid;
+  }
+  return out;
+}
+
+/** Whether an `agy -p` (`--print`, `--prompt`) runs this command. */
+export function agyHeadless(): boolean {
+  const agy = parents(8).find((a) => /^agy(\.exe)?$/.test(basename(a[0] ?? "")));
+  return !!agy?.slice(1).some((a) => a === "-p" || a === "--print" || a === "--prompt");
+}
+
+const LS = "exa.language_server_pb.LanguageServerService";
+
+async function lsCall<T>(route: AgyRoute, method: string, body: unknown): Promise<T> {
+  const r = await fetch(`http://${route.address}/${LS}/${method}`, {
+    method: "POST",
+    headers: { "content-type": "application/json", "x-codeium-csrf-token": route.token },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(10_000),
+  });
+  if (!r.ok) throw new Error(`${method}: HTTP ${r.status} ${(await r.text()).slice(0, 200)}`);
+  return (await r.json()) as T;
+}
+
+/** Whether the route's language server answers, so its process still runs. */
+export async function agyReachable(route: AgyRoute): Promise<boolean> {
+  try {
+    const r = await fetch(`http://${route.address}/healthz`, {
+      signal: AbortSignal.timeout(2_000),
+    });
+    return r.ok;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Sends `text` into conversation `id` as the owner's next message, run once the conversation
+ * is idle, as `codex queue` does. The call must name the model, or the turn fails; the one the
+ * conversation last ran keeps it as it was. Returns why it failed, or undefined.
+ */
+export async function agySend(
+  route: AgyRoute,
+  id: string,
+  text: string,
+): Promise<string | undefined> {
+  try {
+    const meta = await lsCall<{ generatorMetadata?: { chatModel?: { model?: string } }[] }>(
+      route,
+      "GetCascadeTrajectoryGeneratorMetadata",
+      { cascadeId: id },
+    );
+    const model = meta.generatorMetadata?.findLast((m) => m.chatModel?.model)?.chatModel?.model;
+    if (!model) return "the conversation has run no model yet";
+    await lsCall(route, "SendUserCascadeMessage", {
+      cascadeId: id,
+      items: [{ text }],
+      deliveryStrategy: "MESSAGE_DELIVERY_STRATEGY_WHEN_IDLE",
+      cascadeConfig: { plannerConfig: { planModel: model } },
+    });
+    return undefined;
+  } catch (e) {
+    return (e as Error).message;
+  }
+}
 
 /** Each product's folder under `~/.gemini`: the CLI, the app, the IDE. */
 const PRODUCTS = ["antigravity-cli", "antigravity", "antigravity-ide"];
@@ -111,4 +227,98 @@ export function hookPreTool(ctx: Ctx, text: string, opts: { agent?: string }): n
       }),
     );
   return 0;
+}
+
+/** How long the Stop hook holds the end of a turn for an answer the session waits on. */
+export const HOLD_MS = 10 * 60_000;
+/** Each cycle of that hold, under the 30 s a held call to the agent may take. */
+const CYCLE_SECONDS = 25;
+
+/**
+ * Whether conversation `id` waits on an answer nothing else brings: a decision it asked from
+ * `agy -p`, or with no route to its language server, is marked waiting, open, and not snoozed
+ * past now.
+ */
+export function waitsOn(st: State, id: string, now: Date): boolean {
+  return Object.entries(st.asked).some(
+    ([d, a]) =>
+      a.session === id &&
+      !a.antigravity &&
+      a.waiting?.state === "waiting" &&
+      !st.answers[d] &&
+      deliverable(st, d) &&
+      !(a.snooze && Date.parse(a.snooze.until) > now.getTime()),
+  );
+}
+
+/** The lines of answers to conversation `id`, held up to `seconds` for one; each taken once. */
+async function takeLines(ctx: Ctx, id: string, seconds: number): Promise<string[]> {
+  const path = `/v1/sessions/${encodeURIComponent(id)}`;
+  return withAgent(
+    ctx,
+    async (agent) => {
+      const { events } = await agent.call<{ events: SessionEvent[] }>(
+        "GET",
+        `${path}/events?wait=${seconds}`,
+        undefined,
+        seconds * 1000 + 15_000,
+        ctx.signal,
+      );
+      if (events.length > 0)
+        await agent.call("POST", `${path}/ack`, { acks: events.map((e) => e.ack) });
+      return events.map((e) => e.line);
+    },
+    async () => {
+      let lines = sessionLines(ctx.store.state(), id);
+      if (lines.length === 0 && seconds > 0) {
+        await poll(ctx, session(ctx), { cursor: ctx.store.state().cursor, seconds, shared: true });
+        lines = sessionLines(ctx.store.state(), id);
+      }
+      ctx.store.updateState((st) =>
+        ackLines(
+          st,
+          id,
+          lines.map((l) => l.ack),
+        ),
+      );
+      return lines.map((l) => l.line);
+    },
+  );
+}
+
+/**
+ * `starbridge hook stop --agent antigravity`, on the plugin's `Stop` hook (#961): the answers
+ * that came in for the conversation go back into it as the hook's `continue` reason, which
+ * Antigravity adds as a system message and runs another turn on. While a question the
+ * conversation asked is marked waiting, the hook holds the end of the turn for its answer, at
+ * most HOLD_MS. Prints nothing when there is nothing to hand over, so the turn ends.
+ */
+export async function hookStop(ctx: Ctx, text: string, opts: { agent?: string }): Promise<number> {
+  if (opts.agent !== "antigravity")
+    throw new UsageError(`--agent: antigravity (got ${opts.agent ?? "nothing"})`);
+  let id: unknown;
+  try {
+    id = (JSON.parse(text) as { conversationId?: unknown }).conversationId;
+  } catch {
+    return 0;
+  }
+  if (typeof id !== "string" || !id || !ctx.store.machine()) return 0;
+  const until = ctx.now().getTime() + HOLD_MS;
+  let seconds = 0;
+  try {
+    for (;;) {
+      const lines = await takeLines(ctx, id, seconds);
+      if (lines.length > 0) {
+        ctx.out(JSON.stringify({ decision: "continue", reason: lines.join("\n") }));
+        return 0;
+      }
+      const left = until - ctx.now().getTime();
+      if (left <= 0 || !waitsOn(ctx.store.state(), id, ctx.now())) return 0;
+      seconds = Math.max(1, Math.min(CYCLE_SECONDS, Math.ceil(left / 1000)));
+    }
+  } catch (e) {
+    // The turn ends as it would without Starbridge; `wait` still reads the answer later.
+    ctx.err(`starbridge: ${(e as Error).message}`);
+    return 0;
+  }
 }

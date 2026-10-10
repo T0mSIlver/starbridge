@@ -25,6 +25,7 @@ import {
   type Waiting,
 } from "@starbridge/protocol";
 
+import type { AgyRoute } from "./antigravity";
 import type { CodexSession } from "./codex";
 /** `$STARBRIDGE_CONFIG_DIR`, else `$XDG_CONFIG_HOME/starbridge`, else `~/.config/starbridge`. */
 export function configDir(env: Record<string, string | undefined>): string {
@@ -119,6 +120,8 @@ export interface State {
       project?: string;
       /** The Codex session that asked, which the agent queues the answer into. */
       codex?: CodexSession;
+      /** The Antigravity conversation's language server, which the agent sends the answer to. */
+      antigravity?: AgyRoute;
       /** Told its answer comes back as a prompt from the Pi extension or the opencode plugin. */
       extensionAnswers?: boolean;
       /**

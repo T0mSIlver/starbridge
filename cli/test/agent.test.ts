@@ -536,6 +536,57 @@ test.skipIf(WINDOWS)(
   },
 );
 
+test("the agent sends an Antigravity conversation's answer through its language server (#961)", async () => {
+  const { socket } = await machine();
+  const calls: { method: string; token: string | null; body: unknown }[] = [];
+  const ls = Bun.serve({
+    hostname: "127.0.0.1",
+    port: 0,
+    async fetch(req) {
+      const url = new URL(req.url);
+      if (url.pathname === "/healthz") return Response.json({ status: "ok" });
+      const method = url.pathname.split("/").at(-1) as string;
+      calls.push({
+        method,
+        token: req.headers.get("x-codeium-csrf-token"),
+        body: await req.json(),
+      });
+      if (method === "GetCascadeTrajectoryGeneratorMetadata")
+        return Response.json({ generatorMetadata: [{ chatModel: { model: "MODEL_A" } }, {}] });
+      return Response.json({});
+    },
+  });
+  try {
+    const env = {
+      STARBRIDGE_AGENT_SOCKET: socket,
+      ANTIGRAVITY_CONVERSATION_ID: "c-1",
+      ANTIGRAVITY_LS_ADDRESS: `127.0.0.1:${ls.port}`,
+      ANTIGRAVITY_CSRF_TOKEN: "tok",
+    };
+    const c = testCtx(env);
+    const id = await ask(c, "--project", "p");
+    expect(c.errors.at(-1)).toBe("The answer will come back into this session as a new prompt.");
+    await server.answer(id, { choice: "Merge" });
+    await until(() => calls.some((x) => x.method === "SendUserCascadeMessage"));
+    expect(calls.at(-1)).toEqual({
+      method: "SendUserCascadeMessage",
+      token: "tok",
+      body: {
+        cascadeId: "c-1",
+        items: [{ text: `Answer to ${id} (Merge #12 now?): Merge` }],
+        deliveryStrategy: "MESSAGE_DELIVERY_STRATEGY_WHEN_IDLE",
+        cascadeConfig: { plannerConfig: { planModel: "MODEL_A" } },
+      },
+    });
+    // Its token goes to loopback only: a server elsewhere gets no route, and the line says wait.
+    const away = testCtx({ ...env, ANTIGRAVITY_LS_ADDRESS: `example.com:${ls.port}` });
+    await ask(away, "--project", "p");
+    expect(away.errors.at(-1)).toContain("run `starbridge wait");
+  } finally {
+    ls.stop(true);
+  }
+});
+
 test.skipIf(WINDOWS)(
   "a Codex session the agent cannot reach is told to wait, and its wait gets the answer",
   async () => {
