@@ -111,7 +111,9 @@ export function finishOnAnswer(
   const changed = () => {
     if (stopped || !status || status.state === "prompt") return;
     stop();
-    (status.state === "granted" ? enablePush() : pushState()).then(done, fail);
+    // Turned off since the click (#943): the switch stays off.
+    const subscribe = status.state === "granted" && !getPref("pushOff");
+    (subscribe ? enablePush() : pushState()).then(done, fail);
   };
   const stop = () => {
     stopped = true;
@@ -119,6 +121,7 @@ export function finishOnAnswer(
   };
   navigator.permissions?.query({ name: "notifications" }).then(
     (s) => {
+      if (stopped) return;
       status = s;
       s.addEventListener("change", changed);
       // Answered between the click's result and this query.
