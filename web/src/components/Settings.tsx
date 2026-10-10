@@ -180,6 +180,7 @@ function NotificationSection({ data }: { data: SettingsData }) {
           }}
         />
       </Row>
+      <MacRow />
       <HoldRow initial={data.pushHold} />
     </Section>
   );
@@ -254,6 +255,31 @@ function BrowserRow({ initial }: { initial: PushState }) {
             setError(message(e));
           }
           (await import("@/lib/notify")).report();
+        }}
+      />
+    </Row>
+  );
+}
+
+/**
+ * In the desktop app, whether the Mac's idle time counts as presence (#945): opt-in, as a
+ * machine's `starbridge config presence on` is, since it reports when the owner is at the Mac.
+ */
+function MacRow() {
+  const [on, setOn] = useState(() => desktop?.presence?.());
+  if (!desktop?.setPresence || typeof on !== "boolean") return null;
+  const save = desktop.setPresence;
+  return (
+    <Row
+      label="Hold while you use this Mac"
+      sub="In any app, not only Starbridge. It reads only the time since your last key or click, never which"
+    >
+      <Switch
+        label="Hold while you use this Mac"
+        checked={on}
+        onChange={(v) => {
+          setOn(v);
+          save(v);
         }}
       />
     </Row>

@@ -82,17 +82,24 @@ function Head({ since, children }: { since?: string; children: React.ReactNode }
   return <div className={`${s.head} ${since ? s.blocks : ""}`}>{children}</div>;
 }
 
-/** A typed answer: a filled text field with its send button on the field's line (#254). */
+/**
+ * A typed answer (#947): one box with the text on top and a row under it, the keys left and send
+ * right, so the text never runs under the button. It grows to 10 lines, then scrolls.
+ */
 function FreeText({
   id,
   sending,
+  draft,
+  onDraft,
   onSend,
 }: {
   id: string;
   sending: boolean;
+  draft: string;
+  onDraft: (text: string) => void;
   onSend: (text: string) => void;
 }) {
-  const [text, setText] = useState("");
+  const [text, setText] = useState(draft);
   return (
     <form
       className={s.free}
@@ -104,14 +111,17 @@ function FreeText({
       <label className="sr-only" htmlFor={`answer-${id}`}>
         Your answer
       </label>
-      <div className={s.field}>
+      <div className={s.composer}>
         <textarea
           id={`answer-${id}`}
-          className={`${ui.input} t-body ${s.fieldInput}`}
+          className={`t-body ${s.composerInput}`}
           rows={1}
           placeholder="Your answer"
           value={text}
-          onChange={(e) => setText(e.target.value)}
+          onChange={(e) => {
+            setText(e.target.value);
+            onDraft(e.target.value);
+          }}
           // Enter sends and Shift+Enter starts a new line (#562); an Enter that ends an input
           // method's composition only commits it.
           onKeyDown={(e) => {
@@ -121,15 +131,21 @@ function FreeText({
             e.currentTarget.form?.requestSubmit();
           }}
         />
-        <button
-          type="submit"
-          className={s.send}
-          aria-label="Send"
-          title="Send"
-          disabled={sending || !text.trim()}
-        >
-          <Icon name="send" size={20} />
-        </button>
+        <div className={s.composerBar}>
+          {/* For a keyboard; a touch screen's Enter key says what it does. */}
+          <span className={`t-small ${s.keys}`} aria-hidden>
+            Enter to send · Shift+Enter for a new line
+          </span>
+          <button
+            type="submit"
+            className={s.send}
+            aria-label="Send"
+            title="Send"
+            disabled={sending || !text.trim()}
+          >
+            <Icon name="send" size={20} />
+          </button>
+        </div>
       </div>
     </form>
   );
@@ -160,6 +176,8 @@ export function QuestionDetail({
   keys,
   closed,
   lost: lostHere,
+  draft,
+  onDraft,
   onAnswer,
   onSnooze,
 }: {
@@ -171,6 +189,9 @@ export function QuestionDetail({
   closed?: string;
   /** This page's answer lost to another device's (#330). */
   lost?: boolean;
+  /** The reply typed but not sent, kept by the inbox across remounts (#992). */
+  draft: string;
+  onDraft: (text: string) => void;
   onAnswer: (reply: Reply) => Promise<void>;
   /** Puts it off until a time (#571); a time already passed brings it back. */
   onSnooze: (until: Date) => Promise<void>;
@@ -247,12 +268,24 @@ export function QuestionDetail({
           ))}
         </fieldset>
       ) : (
-        <FreeText id={d.id} sending={sending} onSend={(t) => send({ text: t })} />
+        <FreeText
+          id={d.id}
+          sending={sending}
+          draft={draft}
+          onDraft={onDraft}
+          onSend={(t) => send({ text: t })}
+        />
       )}
       {/* A typed reply in place of the options (#201), always open: steering by reply is as
           common as a pick (#849). */}
       {d.replies && options.length > 0 && (
-        <FreeText id={d.id} sending={sending} onSend={(t) => send({ text: t })} />
+        <FreeText
+          id={d.id}
+          sending={sending}
+          draft={draft}
+          onDraft={onDraft}
+          onSend={(t) => send({ text: t })}
+        />
       )}
       {snoozeSend.error && (
         <p className={ui.error} role="alert">

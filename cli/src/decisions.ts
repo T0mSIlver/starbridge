@@ -18,9 +18,10 @@ import {
   verifyDirectory,
   type Waiting,
 } from "@starbridge/protocol";
+import { ANTIGRAVITY_CONVERSATION, antigravityTitle } from "./antigravity";
 import { ApiError } from "./api";
 import { claudeSession } from "./claude";
-import { type CodexSession, codexAsker, codexSession } from "./codex";
+import { type CodexSession, codexAsker, codexSession, codexTitle } from "./codex";
 import type { State } from "./config";
 import {
   type Ctx,
@@ -35,6 +36,7 @@ import {
   UsageError,
   withheld,
 } from "./context";
+import { CURSOR_CONVERSATION } from "./cursor";
 import { fitPicture, loadPicture, type Picture } from "./images";
 import { OPENCODE_ANSWERS, OPENCODE_SESSION, OPENCODE_TITLE } from "./opencode";
 import { acceptPermissionAnswer } from "./permissions";
@@ -110,7 +112,11 @@ export function resolveSource(
         ? env.PI_SESSION_ID
         : agent === "opencode"
           ? env[OPENCODE_SESSION]
-          : env.CLAUDE_CODE_SESSION_ID) ??
+          : agent === "antigravity"
+            ? env[ANTIGRAVITY_CONVERSATION]
+            : agent === "cursor"
+              ? env[CURSOR_CONVERSATION]
+              : env.CLAUDE_CODE_SESSION_ID) ??
     "";
   const codex = agent === "codex" ? (input.codex ?? codexSession(env)) : undefined;
   const answersEnv = agent === "pi" ? PI_ANSWERS : agent === "opencode" ? OPENCODE_ANSWERS : "";
@@ -123,6 +129,8 @@ export function resolveSource(
     agent !== "codex" &&
     agent !== "pi" &&
     agent !== "opencode" &&
+    agent !== "antigravity" &&
+    agent !== "cursor" &&
     (input.sessionTitle === undefined || input.sessionLinks === undefined)
       ? claudeSession(env, session)
       : undefined;
@@ -132,7 +140,11 @@ export function resolveSource(
       ? piSessionTitle(env)
       : agent === "opencode"
         ? env[OPENCODE_TITLE]?.slice(0, 200) || undefined
-        : undefined) ??
+        : agent === "antigravity" && session
+          ? antigravityTitle(env, session)
+          : agent === "codex"
+            ? codexTitle(env, session)
+            : undefined) ??
     claude?.title;
   const at = (path: string) => resolve(cwd, path);
   return {
@@ -199,11 +211,14 @@ export function buildDecision(input: AskInput, ctx: Ctx, machine: string, to: st
 /**
  * `--agent`, else the agent that runs this command: Claude Code sets CLAUDECODE=1, Codex gives
  * every command its session id in CODEX_THREAD_ID, Pi in PI_SESSION_ID, and the Starbridge
- * opencode plugin STARBRIDGE_OPENCODE_SESSION (clearing the others it inherited). An agent
- * passes these on to the agents it starts, so two can be set. Codex, Pi and opencode run
- * commands without a terminal, so a Claude Code they started runs as `claude -p`
- * (CLAUDE_CODE_SESSION_ATTENDED=0); otherwise Codex, Pi or opencode was started from a Claude
- * Code session (a `codex exec` review, a script) and asks.
+ * opencode plugin STARBRIDGE_OPENCODE_SESSION (clearing the others it inherited), Antigravity
+ * its conversation's in ANTIGRAVITY_CONVERSATION_ID. An agent passes these on to the agents it
+ * starts, so two can be set. Codex, Pi, opencode and Antigravity run commands without a
+ * terminal, so a Claude Code they started runs as `claude -p` (CLAUDE_CODE_SESSION_ATTENDED=0);
+ * otherwise the other agent was started from a Claude Code session (a `codex exec` review, a
+ * script) and asks. Antigravity comes after Codex, Pi and opencode for the same reason: they are
+ * the ones a session starts for a review, as `codex exec` or `opencode run`.
+ * Cursor sets CURSOR_AGENT=1 and comes last, before Claude Code: its flag names no session.
  */
 function agentOf(input: AskInput, env: Ctx["env"]): { agent?: Agent } {
   if (input.agent !== undefined) return { agent: input.agent };
@@ -212,6 +227,8 @@ function agentOf(input: AskInput, env: Ctx["env"]): { agent?: Agent } {
   if (env.CODEX_THREAD_ID) return { agent: "codex" };
   if (env.PI_SESSION_ID) return { agent: "pi" };
   if (env[OPENCODE_SESSION]) return { agent: "opencode" };
+  if (env[ANTIGRAVITY_CONVERSATION]) return { agent: "antigravity" };
+  if (env.CURSOR_AGENT === "1") return { agent: "cursor" };
   return claude ? { agent: "claude-code" } : {};
 }
 

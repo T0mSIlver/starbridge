@@ -715,6 +715,50 @@ test("a claude -p session is told to wait, since no mod brings its answer back",
   ]);
 });
 
+test("an Antigravity conversation asks under its id and title, and is told to wait", async () => {
+  const ctx = await paired(server);
+  const home = mkdtempSync(join(tmpdir(), "starbridge-agy-"));
+  const notes = join(home, ".gemini", "antigravity-cli", "annotations");
+  mkdirSync(notes, { recursive: true });
+  writeFileSync(join(notes, "c-1.pbtxt"), 'title:"Fix the \\"build\\""');
+  ctx.env = { HOME: home, ANTIGRAVITY_CONVERSATION_ID: "c-1" };
+  await run(ASK, ctx);
+  expect(ctx.errors.at(-1)).toContain("run `starbridge wait");
+  // Started from a Claude Code session, it still asks as itself; a `claude -p` it starts, or a
+  // `codex exec` review, asks as that agent.
+  ctx.env = { HOME: home, ANTIGRAVITY_CONVERSATION_ID: "c-1", CLAUDECODE: "1" };
+  await run(ASK, ctx);
+  ctx.env.CLAUDE_CODE_SESSION_ATTENDED = "0";
+  await run(ASK, ctx);
+  ctx.env = { HOME: home, ANTIGRAVITY_CONVERSATION_ID: "c-1", CODEX_THREAD_ID: "t1" };
+  await run(ASK, ctx);
+  const opened = await server.opened("decision");
+  expect(opened.map((d) => d.agent)).toEqual([
+    "antigravity",
+    "antigravity",
+    "claude-code",
+    "codex",
+  ]);
+  expect([opened[0]?.source.session, opened[0]?.source.sessionTitle]).toEqual([
+    "c-1",
+    'Fix the "build"',
+  ]);
+});
+
+test("a Cursor agent's command asks as Cursor, in its conversation, and is told to wait (#955)", async () => {
+  const ctx = await paired(server);
+  ctx.env = { ...ctx.env, CURSOR_AGENT: "1", CURSOR_CONVERSATION_ID: "c-1" };
+  await run(ASK, ctx);
+  expect(ctx.errors.at(-1)).toContain("run `starbridge wait");
+  // The IDE gives its agent's commands no conversation id.
+  delete ctx.env.CURSOR_CONVERSATION_ID;
+  await run(ASK, ctx);
+  expect((await server.opened("decision")).map((d) => [d.agent, d.source.session])).toEqual([
+    ["cursor", "c-1"],
+    ["cursor", ""],
+  ]);
+});
+
 test("config turns permission prompts on and off", async () => {
   const ctx = await paired(server);
   expect(await run(["config"], ctx)).toBe(0);

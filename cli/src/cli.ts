@@ -90,13 +90,15 @@ const HELP = `starbridge: post decisions to your devices, report runs, upload qu
       --option <text>         2 to 4 times; none asks for a free-text answer
       --recommended <text>    one of the options (default: the first)
       --waiting               you have nothing else to do: post it as waiting for the owner
-      --agent <name>          claude-code, codex, pi or opencode (default: the one that
-                              runs the command)
+      --agent <name>          claude-code, codex, pi, opencode, antigravity or cursor
+                              (default: the one that runs the command)
       --project <name>        default: the current directory's name
       --session <id>          default: the agent's session ($CLAUDE_CODE_SESSION_ID,
                               $CODEX_THREAD_ID, $PI_SESSION_ID,
-                              $STARBRIDGE_OPENCODE_SESSION)
-      --session-title <text>  default: the Claude Code, Pi or opencode session's name
+                              $STARBRIDGE_OPENCODE_SESSION, $ANTIGRAVITY_CONVERSATION_ID,
+                              $CURSOR_CONVERSATION_ID)
+      --session-title <text>  default: the Claude Code, Pi, opencode or Antigravity
+                              session's name
       --image <path>          a PNG or JPEG to show with the question, up to 4 times;
                               scaled down to fit the server's size cap
       --link <url>            an https page to open, such as a claude.ai artifact,
@@ -193,10 +195,10 @@ const HELP = `starbridge: post decisions to your devices, report runs, upload qu
       For Claude Code's PreToolUse hook on AskUserQuestion, from older plugins: prints
       nothing, so the picker opens and hook permission races it.
 
-  starbridge hook question --agent opencode
-      For the Starbridge opencode plugin, on each call of opencode's question tool: posts each
-      question to your devices, already waiting, and once all are answered prints
-      {"answers": [[label], ...]} for opencode; prints nothing on any error. SIGTERM (the
+  starbridge hook question --agent opencode|pi
+      For the Starbridge opencode plugin and Pi extension, on each call of opencode's question
+      tool or Pi's ask_user_question: posts each question to your devices, already waiting, and
+      once all are answered prints {"answers": [[label], ...]}; prints nothing on any error. SIGTERM (the
       terminal answered) settles the questions still open.
 
   starbridge update [--codexbar <version>]
@@ -553,7 +555,7 @@ export async function run(argv: string[], ctx: Ctx): Promise<number> {
         if (sub === "ask-user") return hookAskUser();
         if (sub === "question") return await hookQuestion(ctx, readText("-"), values);
         throw new UsageError(
-          "usage: starbridge hook permission|settle --agent claude-code, starbridge hook ask-user, or starbridge hook question --agent opencode",
+          "usage: starbridge hook permission|settle --agent claude-code, starbridge hook ask-user, or starbridge hook question --agent opencode|pi",
         );
       }
       case "update": {

@@ -1,7 +1,8 @@
 // Launches the app on a stand-in server page and checks the bridge end to end: the window loads
 // the page, the page's count turns the menu bar's climber amber, a question notifies with its options, a button
 // and a typed reply answer through the page, the notification closes once the question leaves,
-// the window refuses another origin, and a hidden window still notifies. Notifications and the tray are watched in the main
+// the window refuses another origin, a hidden window still notifies, and the Mac's lock and quitting
+// reach the page as away. Notifications and the tray are watched in the main
 // process, so no OS notification is needed (GitHub's macOS runners cannot grant the permission).
 //
 //   pnpm --filter @starbridge/desktop e2e     (on Linux: xvfb-run -a …)
@@ -17,7 +18,11 @@ const DESKTOP = resolve(import.meta.dirname, "..");
 const MAC = process.platform === "darwin";
 
 /** The stand-in page's globals. */
-type StandIn = { answers: unknown[]; send(entries: unknown[]): void };
+type StandIn = {
+  answers: unknown[];
+  send(entries: unknown[]): void;
+  readings: { away: boolean; idleMs: number | null }[];
+};
 
 /** What the main process records in place of the OS. */
 type Watched = {
@@ -36,10 +41,19 @@ const b = window.starbridgeDesktop;
 document.title = b ? "bridge " + b.version : "no bridge";
 if (b) b.onAnswer(async (a) => { window.answers.push(a); if (a.text === "fail") throw new Error("offline"); });
 window.send = (entries) => b.update({ count: entries.length, entries });
+// Away, as the page's presence would say absent: the server hears it, even as the app quits.
+window.readings = [];
+if (b) b.onScreen(async () => { const r = b.screen(); window.readings.push(r); if (r.away) await fetch("/away", { method: "POST" }); });
 </script>`;
 
+/** Requests other than GET, by path. */
+const posted: string[] = [];
+
 function serve(body: string): Promise<Server> {
-  const s = createServer((_req, res) => res.setHeader("content-type", "text/html").end(body));
+  const s = createServer((req, res) => {
+    if (req.method !== "GET") posted.push(req.url ?? "");
+    res.setHeader("content-type", "text/html").end(body);
+  });
   return new Promise((done) => s.listen(0, "127.0.0.1", () => done(s)));
 }
 const url = (s: Server) => `http://127.0.0.1:${(s.address() as AddressInfo).port}`;
@@ -211,12 +225,50 @@ try {
   await page.reload();
   assert.equal(await page.evaluate(`(${bridge})().place()`), "dock");
 
+  // Presence (#945): off by default, the page hears only lock and sleep; on, the idle time too.
+  type Screen = StandIn["readings"][number];
+  const screenBridge = () =>
+    (
+      window as unknown as {
+        starbridgeDesktop: {
+          screen(): Screen;
+          presence(): boolean;
+          setPresence(on: boolean): void;
+        };
+      }
+    ).starbridgeDesktop;
+  assert.deepEqual(await page.evaluate(`(${screenBridge})().screen()`), {
+    away: false,
+    idleMs: null,
+  });
+  assert.equal(await page.evaluate(`(${screenBridge})().presence()`), false);
+  await page.evaluate(`(${screenBridge})().setPresence(true)`);
+  await until(
+    () =>
+      page.evaluate(
+        () => typeof (window as unknown as StandIn).readings.at(-1)?.idleMs === "number",
+      ),
+    "the idle time",
+  );
+  await app.evaluate(({ powerMonitor }) => powerMonitor.emit("lock-screen"));
+  await until(() => Promise.resolve(posted.length === 1), "away on lock");
+  await app.evaluate(({ powerMonitor }) => powerMonitor.emit("unlock-screen"));
+  await until(
+    () => page.evaluate(() => (window as unknown as StandIn).readings.at(-1)?.away === false),
+    "back on unlock",
+  );
+  await page.reload();
+  assert.equal(await page.evaluate(`(${screenBridge})().presence()`), true);
+
   // Another origin stays out of the window and opens in the browser.
   await page.evaluate((u) => {
     location.href = u;
   }, url(other));
   await until(() => main((g) => g.outside.length === 1), "the link to open outside");
   assert.equal(new URL(page.url()).origin, url(server));
+  // Quitting tells the page the owner left, and waits for it.
+  await app.close();
+  assert.equal(posted.length, 2, "away on quit");
   console.log("desktop smoke test passed");
 } finally {
   await app.close();

@@ -1,7 +1,8 @@
 // Presence (#848): while this page is visible and had input in the last minute, the owner sits
 // at it, so the server holds the other devices' pushes. Only that bit reaches the server, and no
 // more than an input happened: never which key or where.
-import { PRESENCE_BEAT_MS, PRESENCE_INPUT_MS } from "@starbridge/protocol";
+import { isPresent, PRESENCE_BEAT_MS, PRESENCE_INPUT_MS } from "@starbridge/protocol";
+import type { DesktopScreen } from "./desktop";
 
 /** How often the page checks whether it still counts: a minute without input ends it. */
 export const PRESENCE_CHECK_MS = 10_000;
@@ -25,10 +26,18 @@ export class Beacon {
      * says nothing while its sibling is in use.
      */
     private readonly sibling: () => boolean = () => false,
+    /**
+     * In the desktop app, the Mac's reading (#945): away ends presence at once, and its idle time,
+     * once the owner allowed it, counts the owner present while they use other apps.
+     */
+    private readonly screen: () => DesktopScreen | null | undefined = () => undefined,
   ) {}
 
   present(): boolean {
-    return this.visible() && this.now() - this.lastInput < PRESENCE_INPUT_MS;
+    const screen = this.screen();
+    if (screen?.away) return false;
+    if (this.visible() && this.now() - this.lastInput < PRESENCE_INPUT_MS) return true;
+    return screen?.idleMs != null && isPresent({ locked: false, idleMs: screen.idleMs });
   }
 
   /** An input on the page; the first after an absence says present at once. */

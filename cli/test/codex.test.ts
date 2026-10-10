@@ -2,7 +2,8 @@ import { expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { codexAsker, codexThread } from "../src/codex";
+import { codexAsker, codexThread, codexTitle } from "../src/codex";
+import { resolveSource } from "../src/decisions";
 
 test("a Codex rollout tells exec from the TUI, and a sub-agent from its root thread", () => {
   const home = mkdtempSync(join(tmpdir(), "codex-home-"));
@@ -33,4 +34,22 @@ test("a Codex rollout tells exec from the TUI, and a sub-agent from its root thr
   write(sub, "codex-tui", { subagent: { thread_spawn: { parent_thread_id: root } } }, root);
   expect(codexAsker({ CODEX_HOME: home, CODEX_THREAD_ID: sub })).toBe(root);
   expect(codexAsker({ CODEX_HOME: home, CODEX_THREAD_ID: root })).toBe(root);
+});
+
+test("a Codex card carries the thread's latest name from session_index.jsonl (#952)", () => {
+  const home = mkdtempSync(join(tmpdir(), "codex-home-"));
+  const id = "01a10da5-c3f3-7360-bfee-87f37efe87b0";
+  const other = "01a10e7a-4828-7533-8389-55fca2e32225";
+  const line = (i: string, name: string) =>
+    `${JSON.stringify({ id: i, thread_name: name, updated_at: "2026-10-05T19:59:00Z" })}\n`;
+  const env = { CODEX_HOME: home, CODEX_THREAD_ID: id };
+  expect(codexTitle(env, id)).toBeUndefined();
+  writeFileSync(
+    join(home, "session_index.jsonl"),
+    line(id, "Ask about README") + line(other, "Other") + line(id, "Fix the README") + "{torn",
+  );
+  expect(codexTitle(env, id)).toBe("Fix the README");
+  expect(resolveSource({ question: "q" }, env, "/work/p").sessionTitle).toBe("Fix the README");
+  writeFileSync(join(home, "session_index.jsonl"), line(id, "x".repeat(300)));
+  expect(codexTitle(env, id)).toHaveLength(200);
 });

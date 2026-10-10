@@ -23,6 +23,11 @@ export interface Settings {
   place: Place;
   /** Whether macOS was asked to allow notifications, which happens once, after sign-in. */
   notificationsAsked: boolean;
+  /**
+   * Whether the Mac's idle time counts the owner present while they use other apps (#945), as
+   * `starbridge config presence on` does for a machine: off unless the owner turns it on.
+   */
+  presence: boolean;
 }
 
 export const DEFAULT_SHORTCUT = "Control+Alt+S";
@@ -45,6 +50,7 @@ export function readSettings(file: string): Settings {
       typeof saved.notificationsAsked === "boolean"
         ? saved.notificationsAsked
         : notified.length > 0,
+    presence: saved.presence === true,
   };
 }
 

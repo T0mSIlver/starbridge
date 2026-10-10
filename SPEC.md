@@ -477,7 +477,8 @@ provider plugins add providers, not panels.
   lock screen (`LogonUI`) runs in its session; Linux takes logind's active graphical session and
   its `LockedHint`, and GNOME's idle monitor or `xprintidle`, since logind's `IdleHint` flips only
   after the desktop's idle delay, minutes. A headless box finds no graphical session and sends
-  nothing. Nothing reads what is typed.
+  nothing. Nothing reads what is typed. The desktop app reads the same on a Mac without the CLI,
+  under its own switch ("Desktop", "Presence").
 - **Answers on the machine** (#260). A machine accepts an answer only from a device the question
   was sealed to, only while it is open, and for an `answerIn` question only a Done, when it asked
   for one (#539). A settled question's
@@ -643,6 +644,8 @@ line, the safe side: at worst a prompt repeats an answer the agent already read.
 | Pi TUI and RPC | The Pi extension (`mod/pi`) calls `pi.sendUserMessage(text, { deliverAs: "followUp" })` (#232) |
 | opencode TUI and `serve` | The opencode plugin (`mod/opencode`) calls `client.session.promptAsync`, one loop per session (#300) |
 | `pi -p`, `opencode run`, subagents | `wait` |
+| Antigravity (app, IDE, `agy`) | `wait`, until its hooks bring answers back (#961) |
+| Cursor IDE and `cursor-agent` | `wait`, for now |
 
 - **The mod** (#7, #35, #48, #68). Why a mod and not Claude Code channels: channels need launch
   flags and an allowlist. A mod cannot listen on a port and its `$.http.fetch` aborts after 30 s,
@@ -660,7 +663,15 @@ line, the safe side: at worst a prompt repeats an answer the agent already read.
 - **Which harness asked** (#319, #320). Harnesses pass their variables to processes they start, so
   `ask` takes Codex, Pi or opencode over Claude Code when both are set, unless Claude Code runs as `claude
   -p`, the only way Codex and Pi start it. A Codex sub-agent asks under its root thread, since
-  `codex queue` refuses sub-agent threads.
+  `codex queue` refuses sub-agent threads. Antigravity gives commands `ANTIGRAVITY_CONVERSATION_ID`
+  and ranks after Codex, Pi and opencode, which sessions start for reviews, and before Claude Code;
+  its card title is the one Antigravity generates, read from
+  `~/.gemini/<product>/annotations/<id>.pbtxt` (#960).
+- **Cursor** (#955) gives its agent's commands `CURSOR_AGENT=1`, so `ask` names the agent
+  `cursor`. `cursor-agent` also gives them `CURSOR_CONVERSATION_ID`, the session; the IDE does
+  not (2026.10), so a question from an IDE chat names no session. Codex, Pi, opencode and
+  Antigravity win over Cursor, as over Claude Code: their variables name the session that runs
+  the command.
 - **Pi and opencode** append `plugin/hooks/rule.md` to the system prompt and run the mod's own
   answer loop (`agent.ts`, `poller.ts`, `switch.ts`). opencode gives commands no session id, so
   its plugin sets `STARBRIDGE_OPENCODE_SESSION` through `shell.env`. After opencode restarts, the
@@ -729,7 +740,17 @@ line, the safe side: at worst a prompt repeats an answer the agent already read.
   waiting, and the answers go back into the call through `POST /question/{id}/reply`. The first
   answer, on a device or at the keyboard, wins; the other side is settled `elsewhere`. A question
   with more than 4 options or a label over 100 characters takes a typed reply.
-- Pi has no built-in ask tool; Starbridge intercepts none by name.
+- Pi has no built-in ask tool. Most Pi users add `ask_user_question` from
+  @juicesharp/rpiv-ask-user-question (#966), whose `rpiv:ask-user:prompt` event posts each
+  question, already waiting, as opencode's do. The tool returning, whoever answered, settles the
+  questions still open as answered elsewhere. The package takes no answer from outside
+  (juicesharp/rpiv-mono#207 proposes it, and its maintainer merges little), so the Pi extension
+  wraps `ctx.ui.custom`, which Pi shares among extensions, and keeps the `done` of the dialog the
+  package opens right after its `rpiv:ask-user:blocked` event: a device answer closes it as a
+  keyboard submit does. Arming on that event, not on the prompt, leaves other extensions' dialogs
+  alone. Where no such
+  dialog opens (Pi's RPC mode), the answer reaches the agent as a follow-up message once the
+  questionnaire closes at the keyboard.
 
 ### Permission prompts
 
@@ -897,6 +918,14 @@ gain is every session, machine and agent in one place. `starbridge config permis
 
 - **The uploader** in the local agent runs CodexBar for every provider at once, every 5 minutes
   and on request, and computes pace and alerts (`packages/protocol`), so clients only render.
+- **Which providers** (#963). Setup probes the providers turned on in CodexBar and the plan of
+  each agent it finds: Claude Code, Codex, Cursor (`~/.cursor` or `cursor-agent`), Antigravity
+  (`agy` or `~/.gemini/antigravity*`) and, on macOS only, opencode (OpenCode and OpenCode Go).
+  CodexBar finds those two plans on its own only in browser cookies, which it imports only on
+  macOS; elsewhere they need a key or cookie in CodexBar's config, which turns them on anyway.
+  The ones that read windows are the default. Pi has no plan of its own, and most opencode users
+  pay their model's provider: that provider counts when CodexBar has it turned on. A main window
+  that repeats a named one, as Antigravity's do, shows once under the name.
 - **Alerts** (#115): `low` at CodexBar's defaults (50% and 20% left), and pace: unused headroom of
   30% one hour before the reset for windows of a day or less, one day before for longer ones. Only
   a new alert notifies; every other snapshot is posted quiet. The thresholds are fixed, since
@@ -1041,6 +1070,16 @@ first window, so a provider with a window running out leads.
   stack. `answerIn` and typed-only questions have no buttons.
 - **Typed answers** (#562): Enter sends, Shift+Enter starts a new line, on the web and with an
   Android hardware keyboard. An Enter that ends an input method's composition only commits it.
+- **The reply field** (#947) grows to 10 lines, then scrolls, on both clients. On the web it is one
+  box: the text on top, then a row inside the box with the keys ("Enter to send · Shift+Enter for
+  a new line", hidden on touch screens) left and send right. A send arrow inside the field's line
+  had long replies running under it in the desktop app. The owner chose this from mockups over a
+  send button beside the field and a separate bar under it. Android keeps Material's trailing
+  icon, which the text wraps before.
+- **Drafts** (#992). A reply typed and not sent stays with its question: on Android across
+  rotation and process death, on the web until the page reloads. The web's detail moves between
+  the phone and wide layouts as the window is resized, and a draft kept in the field alone was
+  lost there.
 - **Context** (#969) renders the subset the skill names, the same on the web, the desktop app and
   Android: each line on its own, blank lines only separating; `**bold**`; code, inline and
   fenced; `-` and `1.` lists with a hanging indent; links, bare or `[text](https://…)`. A `#`
@@ -1248,6 +1287,18 @@ a browser; the app adds a menu bar light and notifications, so a web release nee
   already names the app and the page, and counts what needs the owner. The page leaves
   a 28 px band at its top for the window's buttons, which also drags the window; the window keeps
   the name "Starbridge" for Mission Control and the Window menu, whatever the page's title.
+- **Presence** (#945). The window in use holds pushes as a web page does (#848). Hidden, it said
+  absent while the owner worked in another app, so the phone buzzed at a desk. Electron's
+  `powerMonitor` reads what the CLI's machine presence reads: lock, sleep and wake always, and
+  the seconds since the Mac's last input once Settings' "Hold while you use this Mac" is on (off by
+  default). The app hands the page that reading over the bridge, and the page's own beacon sends
+  the one bit (`isPresent`, the CLI's threshold): present while the Mac is unlocked with input in
+  the last minute, window shown or not. Locked, asleep or quitting, the page says absent at once,
+  and the app waits up to 2 s on quit for the page to say so. The switch is the app's own, not
+  the machine's `starbridge config presence on`: the app cannot count on the CLI being on the Mac,
+  and where the agent's presence is on it already sends the same bit, so the switch is for Macs
+  without it. It is opt-in for the same reason as the machine's: it reports when the owner is at
+  the Mac. Lock and sleep need no opt-in, since they only end presence.
 - **`starbridge://pair` links** open `/pair` on the configured server, as the https link does. The
   link's check key stays out of the page, which the server writes; a link for another server is
   refused, with both servers named.
@@ -1446,7 +1497,9 @@ What the code relies on, with the versions checked.
 - **Codex** (CLI 0.160): the TUI runs sessions in a shared app-server daemon; `codex queue --thread
   <id> --message <text>` starts a turn in an idle session or runs next in a busy one, and starts
   the daemon itself. It takes the message only as an argument and refuses sub-agent threads. An
-  exec thread's rollout has `originator: codex_exec`. `PermissionRequest` runs before the
+  exec thread's rollout has `originator: codex_exec`. A thread's title is its last
+  `thread_name` in `$CODEX_HOME/session_index.jsonl`, which Codex appends to on each rename, so
+  Codex cards and prompts carry it as the other agents' do (#952). `PermissionRequest` runs before the
   approval dialog and blocks it; any deny among its hooks wins, else the last allow, else the
   dialog opens. A hook that times out or fails decides nothing. Interrupting the turn kills a
   running hook with SIGKILL, and `Interrupt` hooks get at most 3 s. New or changed hooks need trust at launch:
