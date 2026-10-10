@@ -546,7 +546,8 @@ encrypt it per RFC 8291.
 A quota snapshot asks for a push only when it raises an alert: the uploader marks that alert
 `notify: true` and posts every other snapshot `quiet`. It raises each alert (a kind, and for
 `low` a threshold) at most once per window per reset. Each device decides from its own
-settings whether to show it.
+settings whether to show it. The server pushes a machine's first stored snapshot even when it
+is `quiet`, so devices learn at once that the machine sends quotas.
 
 Quota snapshots and runs go to FCM and UnifiedPush only. Browsers expect every Web Push to show a
 notification and drop a subscription that keeps showing none (Firefox after 16), so the web page
