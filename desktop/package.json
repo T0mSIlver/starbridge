@@ -1,7 +1,7 @@
 {
   "name": "@starbridge/desktop",
   "productName": "Starbridge",
-  "version": "0.1.3",
+  "version": "0.1.4-rc.1",
   "private": true,
   "description": "Starbridge for macOS: the web app in a window, with the Needs-you count in the menu bar and notifications you answer in place",
   "main": "dist/main.js",
