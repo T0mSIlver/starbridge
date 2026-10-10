@@ -227,6 +227,9 @@ function BrowserRow({ initial }: { initial: PushState }) {
   useEffect(() => {
     if (!touched.current) setState(initial);
   }, [initial]);
+  // Stops waiting for an answer the browser's prompt has yet to give (#1030).
+  const waiting = useRef<() => void>(undefined);
+  useEffect(() => () => waiting.current?.(), []);
   if (state === "unsupported") return null;
   if (state === "install")
     return <Row label={LABEL} sub="Add Starbridge to the Home Screen and open it from there" />;
@@ -246,14 +249,25 @@ function BrowserRow({ initial }: { initial: PushState }) {
         disabled={state === "denied"}
         onChange={async (on) => {
           touched.current = true;
+          waiting.current?.();
           setError(undefined);
+          const notify = await import("@/lib/notify");
           try {
             const push = await import("@/lib/push");
-            setState(await (on ? push.enablePush() : push.disablePush()));
+            const next = await (on ? push.enablePush() : push.disablePush());
+            setState(next);
+            if (on && next === "off")
+              waiting.current = push.finishOnAnswer(
+                (s) => {
+                  setState(s);
+                  notify.report();
+                },
+                (e) => setError(message(e)),
+              );
           } catch (e) {
             setError(message(e));
           }
-          (await import("@/lib/notify")).report();
+          notify.report();
         }}
       />
     </Row>

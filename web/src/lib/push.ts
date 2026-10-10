@@ -97,6 +97,42 @@ export async function enablePush(): Promise<PushState> {
 }
 
 /**
+ * Finishes what `enablePush` left undecided (#1030): Chrome can settle requestPermission as
+ * "default" while its prompt waits folded into a chip in the address bar, so Allow there comes
+ * after the click. Once the browser's permission turns granted this subscribes, once denied it
+ * reports blocked, and `done` gets the new state. Returns what stops the wait.
+ */
+export function finishOnAnswer(
+  done: (state: PushState) => void,
+  fail: (e: unknown) => void,
+): () => void {
+  let stopped = false;
+  let status: PermissionStatus | undefined;
+  const changed = () => {
+    if (stopped || !status || status.state === "prompt") return;
+    stop();
+    // Turned off since the click (#943): the switch stays off.
+    const subscribe = status.state === "granted" && !getPref("pushOff");
+    (subscribe ? enablePush() : pushState()).then(done, fail);
+  };
+  const stop = () => {
+    stopped = true;
+    status?.removeEventListener("change", changed);
+  };
+  navigator.permissions?.query({ name: "notifications" }).then(
+    (s) => {
+      if (stopped) return;
+      status = s;
+      s.addEventListener("change", changed);
+      // Answered between the click's result and this query.
+      changed();
+    },
+    () => {},
+  );
+  return stop;
+}
+
+/**
  * The subscription to send: the existing one while the server's key made it, else a new one. A
  * push service refuses pushes signed with another key than the subscription's, as when a server
  * moves from the relay to its own VAPID keys (#567).
