@@ -39,7 +39,7 @@
 
 .bar {
   position: absolute;
-  top: calc(var(--s3) + var(--titlebar) + env(safe-area-inset-top));
+  top: calc(var(--s3) + var(--window-buttons) + env(safe-area-inset-top));
   left: var(--s3);
   right: var(--s3);
   display: flex;
