@@ -103,6 +103,8 @@ interface Store {
     fun setPushHold(seconds: Int) {}
     /** What each device last said of its notifications (#943), once read. */
     val notifyStates: StateFlow<Map<String, String>> get() = MutableStateFlow(emptyMap())
+    /** The app each device said its notifications from: android, web or desktop (#1019). */
+    val deviceClients: StateFlow<Map<String, String>> get() = MutableStateFlow(emptyMap())
     fun loadNotifyStates() {}
     /** Tells the server whether Android shows this app's notifications; only on a change. */
     fun reportNotifications(on: Boolean) {}

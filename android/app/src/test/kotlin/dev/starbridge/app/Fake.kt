@@ -312,12 +312,14 @@ class Fake(private val now: Instant) {
 
     val members = listOf(
         Member("m1", "Pixel 11 Pro", Kind.Device, ago(60 * 24 * 23), current = true),
-        Member("m2", "Pixel 9", Kind.Device, ago(60 * 24 * 22)),
+        Member("m2", "Starbridge on Mac", Kind.Device, ago(60 * 24 * 22)),
         Member("m3", "Firefox on the MacBook", Kind.Device, ago(60 * 24 * 2)),
         Member("m4", "dev box", Kind.Machine, ago(60 * 24 * 23), check = "QEK0-78NT-DYM8-6G6G"),
         // Paired 3 minutes ago, so its pairing still waits for the check code (#939).
         Member("m5", "mac mini", Kind.Machine, ago(3), check = "3HJD-8WPA-K7Q2-9XMF"),
     )
+    /** The app each device said its notifications from (#1019). */
+    val clients = mapOf("m1" to "android", "m2" to "desktop", "m3" to "web")
 
     val approval = Approval.Found("CI runner on the Mac", Kind.Machine, "7KQ2-M9XD-4TPV-HB3N-R8CE-WY6F")
 

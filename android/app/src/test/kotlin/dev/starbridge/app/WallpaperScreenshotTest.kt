@@ -70,5 +70,5 @@ class WallpaperScreenshotTest(private val wallpaper: Wallpaper, private val dark
     @Config(qualifiers = "w412dp-h1060dp-xxhdpi")
     @Test fun quotas() = capture("quotas") { Phone(Tab.Quotas, 4) { QuotasScreen(fake.windows, now, settings = QuotaSettings(alerts = dev.starbridge.app.data.QuotaAlerts(short = listOf("runs-out")))) } }
 
-    @Test fun devices() = capture("devices") { Phone(null, 0) { DevicesScreen(fake.members, now, DeviceActions({}, {}, {}, {}, {})) } }
+    @Test fun devices() = capture("devices") { Phone(null, 0) { DevicesScreen(fake.members, now, DeviceActions({}, {}, {}, {}, {}), clients = fake.clients) } }
 }

@@ -24,7 +24,7 @@ import { keptSettingsData, loadSettingsData, type SettingsData, WAIT_MS } from "
 import { chime } from "@/lib/sound";
 import type { Device, QuotaCardData } from "@/lib/types";
 import { useApp } from "./AppProvider";
-import { Icon } from "./icons";
+import { Icon, type IconName } from "./icons";
 import { PhoneBar } from "./PhoneBar";
 import { useReorder } from "./Reorder";
 import s from "./Settings.module.css";
@@ -553,6 +553,14 @@ const NOTIFY_LABELS: Record<NotifyState, string> = {
   blocked: "Notifications blocked",
 };
 
+/** A device's icon by the app it signs in from (#1019); one that has not said is a plain device. */
+function deviceIcon(role: string, client: string | undefined): IconName {
+  if (role === "machine") return "server";
+  return (
+    ({ android: "phone", web: "globe", desktop: "laptop" } as const)[client ?? ""] ?? "devices"
+  );
+}
+
 function DeviceSection({ data }: { data: SettingsData }) {
   const { update, boot, sampleDevices } = useApp();
   const ctx = boot.state === "ready" ? boot.ctx : undefined;
@@ -561,10 +569,18 @@ function DeviceSection({ data }: { data: SettingsData }) {
   const [recovery, setRecovery] = useState<RecoveryState | undefined>(data.recovery);
   const [clock] = usePref("clock");
   const [notify, setNotify] = useState<Record<string, NotifyState>>({});
+  const [clients, setClients] = useState<Record<string, string>>({});
   // Read again when this device's switch reports a new state.
   useEffect(() => {
     if (!ctx) return;
-    const read = () => api.notifications().then(setNotify, () => {});
+    const read = () =>
+      api.notifications().then(
+        (s) => {
+          setNotify(s.devices);
+          setClients(s.clients ?? {});
+        },
+        () => {},
+      );
     read();
     reports.addEventListener("change", read);
     return () => reports.removeEventListener("change", read);
@@ -606,7 +622,10 @@ function DeviceSection({ data }: { data: SettingsData }) {
       {shown.map((d) => (
         <div key={d.id} className={s.device}>
           <span className={s.deviceIcon}>
-            <Icon name={d.role === "machine" ? "desktop" : "devices"} size={18} />
+            <Icon
+              name={deviceIcon(d.role, d.self ? (desktop ? "desktop" : "web") : clients[d.id])}
+              size={18}
+            />
           </span>
           <div className={s.rowText}>
             <div className="t-small">
