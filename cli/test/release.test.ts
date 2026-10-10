@@ -363,7 +363,8 @@ describe.skipIf(WINDOWS || !hasPython)("install.sh's Python check refuses", () =
   });
 });
 
-test.skipIf(WINDOWS)(
+// RHEL 8's Python sits at a path the PATH cannot hide.
+test.skipIf(WINDOWS || existsSync("/usr/libexec/platform-python"))(
   "install.sh with nothing to check the signature says how to get minisign",
   async () => {
     release = fakeReleases("9.9.9");
