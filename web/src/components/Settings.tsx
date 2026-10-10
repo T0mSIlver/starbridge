@@ -14,7 +14,7 @@ import { useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
 import { type DesktopPlace, desktop } from "@/lib/desktop";
 import type { RecoveryState } from "@/lib/device";
-import { addedLabels, dayAndTime } from "@/lib/format";
+import { addedLabels, checkUntil, dayAndTime, shownCheck } from "@/lib/format";
 import { AGENTS_GUIDE } from "@/lib/links";
 import { reports } from "@/lib/notify";
 import { applyTheme, type Prefs, usePref } from "@/lib/prefs";
@@ -616,6 +616,15 @@ function DeviceSection({ data }: { data: SettingsData }) {
     .filter((d) => d.status === "active")
     .sort((a, b) => order(a) - order(b) || a.addedAt.localeCompare(b.addedAt));
   const added = addedLabels(shown, clock);
+  // Renders again when the next check code stops mattering, so it leaves on time.
+  const [, tick] = useState(0);
+  const now = Date.now();
+  const next = Math.min(...shown.map((d) => checkUntil(d) ?? 0).filter((t) => t > now));
+  useEffect(() => {
+    if (!Number.isFinite(next)) return;
+    const t = setTimeout(() => tick((n) => n + 1), next - Date.now());
+    return () => clearTimeout(t);
+  }, [next]);
   return (
     <Section title="Devices">
       {!all && <Pending rows={2} />}
@@ -643,7 +652,11 @@ function DeviceSection({ data }: { data: SettingsData }) {
                 </span>
               )}
             </div>
-            {d.check && <div className={`t-code ${s.sub}`}>Check code {d.check}</div>}
+            {shownCheck(d, now) && (
+              <div className={`t-meta ${s.sub}`} data-testid="device-check">
+                Same code as on the machine? <span className="t-snippet">{d.check}</span>
+              </div>
+            )}
           </div>
           {d.self ? (
             <span className={s.revokeSpace} />

@@ -315,7 +315,8 @@ class Fake(private val now: Instant) {
         Member("m2", "Pixel 9", Kind.Device, ago(60 * 24 * 22)),
         Member("m3", "Firefox on the MacBook", Kind.Device, ago(60 * 24 * 2)),
         Member("m4", "dev box", Kind.Machine, ago(60 * 24 * 23), check = "QEK0-78NT-DYM8-6G6G"),
-        Member("m5", "mac mini", Kind.Machine, ago(60 * 24 * 20), check = "3HJD-8WPA-K7Q2-9XMF"),
+        // Paired 3 minutes ago, so its pairing still waits for the check code (#939).
+        Member("m5", "mac mini", Kind.Machine, ago(3), check = "3HJD-8WPA-K7Q2-9XMF"),
     )
 
     val approval = Approval.Found("CI runner on the Mac", Kind.Machine, "7KQ2-M9XD-4TPV-HB3N-R8CE-WY6F")

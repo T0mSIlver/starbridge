@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { createInterface } from "node:readline";
 import {
   appPairingLink,
+  CHECK_CONFIRM_MS,
   checkCode,
   checkJoined,
   claimHash,
@@ -196,9 +197,6 @@ function addedAt(entries: unknown[], id: string): string | undefined {
   }
 }
 
-/** How long the owner has to confirm the check code. */
-const CONFIRM_MS = 10 * 60_000;
-
 /** The check code a waiting `pair` shows, which `pair --confirm` or `--reject` answers. */
 const waitingFile = (ctx: Ctx) => join(ctx.store.dir, "pair-waiting");
 /** The answer for one check code: a `pair` waiting on another code never reads it. */
@@ -265,7 +263,7 @@ async function confirmCheck(
       })
     : undefined;
   try {
-    const until = ctx.now().getTime() + CONFIRM_MS;
+    const until = ctx.now().getTime() + CHECK_CONFIRM_MS;
     for (;;) {
       if (ctx.signal?.aborted || ctx.now().getTime() > until) return undefined;
       const line = typed.shift();

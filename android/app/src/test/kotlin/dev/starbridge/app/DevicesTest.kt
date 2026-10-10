@@ -6,11 +6,15 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import dev.starbridge.app.data.Kind
 import dev.starbridge.app.data.Member
+import dev.starbridge.app.protocol.CHECK_CONFIRM_MS
 import dev.starbridge.app.ui.devices.DeviceActions
 import dev.starbridge.app.ui.clock
 import dev.starbridge.app.ui.day
 import dev.starbridge.app.ui.devices.DevicesScreen
 import dev.starbridge.app.ui.theme.StarbridgeTheme
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -37,5 +41,15 @@ class DevicesTest {
         compose.onNodeWithText("${added(members[0])}, ${clock(members[0].addedAt, true)}").assertExists()
         compose.onNodeWithText("${added(members[1])}, ${clock(members[1].addedAt, true)}").assertExists()
         compose.onAllNodesWithText(added(members[2])).assertCountEquals(1)
+    }
+
+    @Test fun aMachineShowsItsCheckCodeOnlyWhileItsPairingWaitsForIt() {
+        val added = Instant.parse("2026-10-09T09:00:00Z")
+        val members = listOf(Member("m1", "devbox", Kind.Machine, added, check = "HYB9-MDSM-H3N5-PVAX"))
+        var now by mutableStateOf(added.plusMillis(CHECK_CONFIRM_MS - 1))
+        compose.setContent { StarbridgeTheme { DevicesScreen(members, now, DeviceActions({}, {}, {}, {}, {})) } }
+        compose.onNodeWithText("Same code as on the machine? HYB9-MDSM-H3N5-PVAX").assertExists()
+        now = added.plusMillis(CHECK_CONFIRM_MS)
+        compose.onAllNodesWithText("HYB9-MDSM-H3N5-PVAX", substring = true).assertCountEquals(0)
     }
 }

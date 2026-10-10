@@ -201,6 +201,7 @@ async function confirmCheck(page: Page, pair: ReturnType<typeof cli>, name: stri
     throw new Error(`the page shows "${shown}", the terminal ${printed}`);
   if ((await cli(`${name}-confirm`, ["pair", "--confirm"], home).exited) !== 0)
     throw new Error("pair --confirm failed");
+  return printed;
 }
 
 const vapid = JSON.parse(
@@ -580,7 +581,7 @@ async function main() {
   await page.getByLabel("Pair a machine or device").fill(code);
   await page.getByRole("button", { name: "Check code" }).click();
   await page.getByRole("button", { name: "Approve" }).click();
-  await confirmCheck(page, pair, "pair", machineHome);
+  const devboxCheck = await confirmCheck(page, pair, "pair", machineHome);
   await pair.waitFor(/✓ Paired as devbox/);
   if ((await pair.exited) !== 0) throw new Error("pair failed");
   await page.getByRole("status", { name: "Pairing result" }).getByText("devbox joined").waitFor();
@@ -597,6 +598,36 @@ async function main() {
     .getByRole("navigation", { name: "Main" })
     .getByRole("link", { name: "Settings" })
     .click();
+
+  step("Devices shows the machine's check code while its pairing can be confirmed (#939)");
+  {
+    const row = page
+      .getByRole("region", { name: "Devices" })
+      .locator('[class*="__device"]')
+      .filter({ hasText: "devbox" });
+    const shown = await row.getByTestId("device-check").textContent();
+    if (shown !== `Same code as on the machine? ${devboxCheck}`)
+      throw new Error(`Devices shows "${shown}" beside devbox, the terminal ${devboxCheck}`);
+    for (const scheme of ["light", "dark"] as const) {
+      await page.emulateMedia({ colorScheme: scheme });
+      await page.waitForTimeout(150);
+      await row.screenshot({ path: join(SHOTS, `devices-check-row-${scheme}.png`) });
+    }
+    await page.emulateMedia({ colorScheme: "light" });
+    // A page whose clock runs on: the code leaves once `starbridge pair` stops waiting for it.
+    // The clock is the whole context's, so it goes back to now before the next step.
+    const later = await a.newPage();
+    await later.clock.install();
+    await later.goto(`${ORIGIN}/settings`);
+    const check = later.getByRole("region", { name: "Devices" }).getByTestId("device-check");
+    await check.waitFor();
+    await later.clock.fastForward(60 * 60_000);
+    await check.waitFor({ state: "detached", timeout: 5_000 }).catch(() => {
+      throw new Error("Devices still shows devbox's check code an hour after it was added");
+    });
+    await later.clock.setSystemTime(new Date());
+    await later.close();
+  }
   await follow(page, page.getByRole("link", { name: "Add a device" }), "/settings/devices/add");
 
   step("refuse a second pairing");
