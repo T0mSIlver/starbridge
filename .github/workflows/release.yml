@@ -285,6 +285,67 @@ jobs:
           gh release create "v$VERSION" out/* --repo "$GITHUB_REPOSITORY" --title "v$VERSION" --notes-file notes.md \
             $(case $VERSION in *-rc.*) echo --prerelease ;; esac)
 
+  # The App Bundle to Play's Alpha track, the testers' track, rcs included (#1024). Run by hand on main,
+  # Play only validates it, so dispatch a version above every code Play has seen. No key exists: Google's
+  # workload identity federation trades the job's OIDC token for a short-lived token of the starbridge-play
+  # service account, and trusts only this repository's play-release environment, open to main and v*
+  # tags. Without the PLAY_WIF_PROVIDER and PLAY_SERVICE_ACCOUNT variables the job skips.
+  play:
+    needs: [version, release]
+    if: ${{ !cancelled() && needs.release.result == 'success' && (startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main') }}
+    runs-on: ubuntu-latest
+    environment: play-release
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - id: setup
+        env:
+          SET: ${{ vars.PLAY_WIF_PROVIDER != '' && vars.PLAY_SERVICE_ACCOUNT != '' }}
+        run: |
+          if [ "$SET" = true ]; then echo "set=true" >> "$GITHUB_OUTPUT"
+          else echo "::notice::PLAY_WIF_PROVIDER or PLAY_SERVICE_ACCOUNT is not set; upload the App Bundle to Play by hand."; fi
+      - if: steps.setup.outputs.set
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - if: steps.setup.outputs.set
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.2
+      - if: steps.setup.outputs.set
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: android
+          path: out
+      - if: steps.setup.outputs.set && !startsWith(github.ref, 'refs/tags/v')
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release-dry-run
+          path: dry-run
+      - if: steps.setup.outputs.set
+        id: auth
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0
+        with:
+          workload_identity_provider: ${{ vars.PLAY_WIF_PROVIDER }}
+          service_account: ${{ vars.PLAY_SERVICE_ACCOUNT }}
+          token_format: access_token
+          access_token_scopes: https://www.googleapis.com/auth/androidpublisher
+          create_credentials_file: false
+          export_environment_variables: false
+      - if: steps.setup.outputs.set
+        name: Upload to Alpha
+        env:
+          PLAY_ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.version.outputs.version }}
+          TAG: ${{ startsWith(github.ref, 'refs/tags/v') }}
+        run: |
+          if [ "$TAG" = true ]; then
+            gh release view "v$VERSION" --repo "$GITHUB_REPOSITORY" --json body --jq .body > notes.md
+            bun cli/scripts/play.ts "out/starbridge-$VERSION.aab" "$VERSION" notes.md
+          else
+            bun cli/scripts/play.ts "out/starbridge-$VERSION.aab" "$VERSION" dry-run/notes.md --validate
+          fi
+
   homebrew:
     needs: [version, release]
     # The release's result, not success(): a skipped desktop job upstream would skip this too.
