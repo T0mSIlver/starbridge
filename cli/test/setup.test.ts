@@ -1400,7 +1400,7 @@ test("Antigravity gets the plugin with the rule, the skill and the allow hook (#
   writeFileSync(agySettings, JSON.stringify({ permissions: { allow: ["command(ls)"] } }));
   m.ctx.lines.length = 0;
   await setup(m.sys, { yes: true, noQuota: true, noService: true, agent: "antigravity" });
-  expect(m.ctx.lines).toContain("✓ Antigravity  plugin installed, 5 starbridge commands allowed");
+  expect(m.ctx.lines).toContain("✓ Antigravity  plugin installed, 6 starbridge commands allowed");
   expect(JSON.parse(readFileSync(agySettings, "utf8")).permissions.allow).toEqual([
     "command(ls)",
     "command(starbridge ask)",
@@ -1408,6 +1408,7 @@ test("Antigravity gets the plugin with the rule, the skill and the allow hook (#
     "command(starbridge working)",
     "command(starbridge wait)",
     "command(starbridge settle)",
+    "command(starbridge hello)",
   ]);
 
   // An older release's plugin is brought up to date, its stray files gone.

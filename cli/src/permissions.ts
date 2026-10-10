@@ -23,6 +23,7 @@ import {
   seal,
   visible,
 } from "@starbridge/protocol";
+import { antigravityTitle } from "./antigravity";
 import { claudeSession } from "./claude";
 import { codexTitle } from "./codex";
 import type { PendingPermission, PermissionUpdate, State } from "./config";
@@ -398,7 +399,13 @@ export function permissionSource(
   const title =
     agent === "codex"
       ? codexTitle(env, session)
-      : (claude?.title ?? piSessionTitle(env) ?? (env[OPENCODE_TITLE]?.slice(0, 200) || undefined));
+      : agent === "antigravity"
+        ? session
+          ? antigravityTitle(env, session)
+          : undefined
+        : (claude?.title ??
+          piSessionTitle(env) ??
+          (env[OPENCODE_TITLE]?.slice(0, 200) || undefined));
   return {
     project: projectName(typeof hook.cwd === "string" && hook.cwd ? hook.cwd : process.cwd()),
     session,

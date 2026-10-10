@@ -343,7 +343,7 @@ export function installAntigravity(sys: Home) {
  * passes the command behind a variable assignment or `env`, so the plugin's hook makes such a
  * line ask again (`hook pre-tool`).
  */
-export const AGY_ALLOW = ["ask", "waiting", "working", "wait", "settle"].map(
+export const AGY_ALLOW = ["ask", "waiting", "working", "wait", "settle", "hello"].map(
   (c) => `command(starbridge ${c})`,
 );
 

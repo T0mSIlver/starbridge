@@ -5,7 +5,7 @@
  */
 
 /** The commands allowed without asking anyone: the ones the skill tells the agent to run. */
-const OWN = new Set(["ask", "waiting", "working", "wait", "settle"]);
+const OWN = new Set(["ask", "waiting", "working", "wait", "settle", "hello"]);
 
 /**
  * Whether `command` runs one starbridge command of OWN and nothing else (#488): it starts with

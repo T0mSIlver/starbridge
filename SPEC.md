@@ -592,7 +592,7 @@ provider plugins add providers, not panels.
   allows a bash ask itself when the whole typed line, from the ask's "full command" evidence, is
   one of those commands with only words, flags, quoted strings and line-joining backslashes; an ask
   without evidence, or from a shell tool under another name, goes to the owner. For `agy`, setup
-  adds `command(starbridge ask)` and the other four to `permissions.allow` in
+  adds `command(starbridge ask)` and the other four, with `hello` (#962), to `permissions.allow` in
   `~/.gemini/antigravity-cli/settings.json`, since `agy` still prompts after a hook's `allow`. Such
   an entry also passes `LD_PRELOAD=… starbridge ask` and `env … starbridge ask`, so the
   plugin's `PreToolUse` hook on `run_command` returns `force_ask` for a line an entry would pass
@@ -821,6 +821,10 @@ line, the safe side: at worst a prompt repeats an answer the agent already read.
   alone. Where no such
   dialog opens (Pi's RPC mode), the answer reaches the agent as a follow-up message once the
   questionnaire closes at the keyboard.
+- Antigravity (#962): each `ask_question` call becomes one Starbridge question per question,
+  through `hook question` as opencode's, and the answers go back into the waiting step through
+  its language server; a reply that names no option becomes the write-in. The first answer wins,
+  as with its approvals below.
 
 ### Permission prompts
 
@@ -879,6 +883,20 @@ the Cursor IDE, which this machine does not run.
   apply_patch move takes a file and which files it deletes; an `external_directory` ask from the
   shell as its directories and command; any other permission with its metadata. An MCP call shows
   only the tool's name, since the event carries none of its arguments.
+- **Antigravity** (#962). Its `PreToolUse` hook cannot approve (Platform facts), so the local
+  agent does it the way Antigravity's own other devices do: it reads, every second, the newest
+  steps of each running conversation on the language servers it has a route to, and posts a
+  step waiting for an approval through `hook permission`, a command shown as Claude Code's Bash
+  is. A device's answer goes back through `HandleCascadeUserInteraction`, once only, since a
+  scope beyond the call would need Antigravity's own rule syntax; a keyboard answer ends the step,
+  which stops the hook as SIGTERM does. A route comes from any `starbridge` command run in that
+  Antigravity process (`ask` included), since only commands get the token, and a hook cannot make
+  a session run one (`PreInvocation` drops an injected `toolCall`). So with prompts on, until a
+  conversation has run one, the plugin's `PreInvocation` hook tells the agent at each turn's start
+  to run `starbridge hello`, and its `PreToolUse` denies the first other command once with the
+  same words, which a model that passed over the first has to read (#962; the owner chose this
+  over waiting for the session's first `ask`). One extra command per conversation; with no local
+  agent, or prompts off, neither happens. The app and the IDE are untested.
 - **A stalled server never holds a prompt** (#260): deadlines and SIGTERM cut every request the
   hook makes. When a hook dies mid-hold, the local agent settles its prompt as answered at the keyboard
   (#400).

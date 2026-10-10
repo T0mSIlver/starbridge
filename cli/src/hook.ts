@@ -73,10 +73,19 @@ function inCursor(hook: Record<string, unknown>): boolean {
 
 function agentName(text: string | undefined): Permission["agent"] {
   // Pi asks through the Starbridge Pi extension's link in pi-permission-system (#232), opencode
-  // through the Starbridge opencode plugin (#300), Codex through the Starbridge Codex plugin.
-  if (text === "claude-code" || text === "codex" || text === "pi" || text === "opencode")
+  // through the Starbridge opencode plugin (#300), Codex through the Starbridge Codex plugin,
+  // Antigravity through the agent, which watches its language server (#962).
+  if (
+    text === "claude-code" ||
+    text === "codex" ||
+    text === "pi" ||
+    text === "opencode" ||
+    text === "antigravity"
+  )
     return text;
-  throw new UsageError(`--agent: claude-code, codex, pi or opencode (got ${text ?? "nothing"})`);
+  throw new UsageError(
+    `--agent: claude-code, codex, pi, opencode or antigravity (got ${text ?? "nothing"})`,
+  );
 }
 
 /** How often the hook checks that the agent that ran it is still there. */
@@ -548,8 +557,8 @@ export async function hookQuestion(
   const ctx = { ...outer, signal: watch.signal };
   try {
     const agent = opts.agent;
-    if (agent !== "opencode" && agent !== "pi")
-      throw new UsageError(`--agent: opencode or pi (got ${agent ?? "nothing"})`);
+    if (agent !== "opencode" && agent !== "pi" && agent !== "antigravity")
+      throw new UsageError(`--agent: opencode, pi or antigravity (got ${agent ?? "nothing"})`);
     const hook = JSON.parse(stdin) as QuestionHookInput;
     if (!Array.isArray(hook?.questions) || hook.questions.length === 0 || !hook.session_id)
       throw new UsageError("the hook input needs session_id and questions");

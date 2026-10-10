@@ -3,6 +3,7 @@ import { homedir } from "node:os";
 import { dirname } from "node:path";
 import { type Ctx, parseDuration } from "../context";
 import { refreshFiles } from "../setup/harnesses";
+import { Antigravity } from "./antigravity";
 import { socketPath } from "./api";
 import { Decisions } from "./decisions";
 import { Permissions } from "./permissions";
@@ -38,6 +39,7 @@ export function makeAgent(ctx: Ctx, opts: AgentOpts = {}): Agent {
       new Permissions(hub, () => presence.present()),
       new Runs(hub),
       presence,
+      new Antigravity(hub),
     ];
   });
   return agent;
