@@ -113,7 +113,7 @@ export async function hookPermission(
     }
     const waitMs = opts.wait ? parseDuration(opts.wait) : DEFAULT_WAIT_MS;
     const deadline = ctx.now().getTime() + waitMs;
-    const source = permissionSource(hook, ctx.env);
+    const source = permissionSource(hook, ctx.env, agent);
     // Codex opens its dialog only once the hook returns without a decision, so the hook cannot
     // race it: it hands over to the keyboard while the owner sits at this machine, which only
     // the agent knows (#950). Without the agent it holds for the devices until the deadline.

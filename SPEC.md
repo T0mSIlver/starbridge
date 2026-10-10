@@ -1463,7 +1463,9 @@ What the code relies on, with the versions checked.
 - **Codex** (CLI 0.160): the TUI runs sessions in a shared app-server daemon; `codex queue --thread
   <id> --message <text>` starts a turn in an idle session or runs next in a busy one, and starts
   the daemon itself. It takes the message only as an argument and refuses sub-agent threads. An
-  exec thread's rollout has `originator: codex_exec`. `PermissionRequest` runs before the
+  exec thread's rollout has `originator: codex_exec`. A thread's title is its last
+  `thread_name` in `$CODEX_HOME/session_index.jsonl`, which Codex appends to on each rename, so
+  Codex cards and prompts carry it as the other agents' do (#952). `PermissionRequest` runs before the
   approval dialog and blocks it; any deny among its hooks wins, else the last allow, else the
   dialog opens. A hook that times out or fails decides nothing. Interrupting the turn kills a
   running hook with SIGKILL, and `Interrupt` hooks get at most 3 s. New or changed hooks need trust at launch:

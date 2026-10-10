@@ -21,7 +21,7 @@ import {
 import { ANTIGRAVITY_CONVERSATION, antigravityTitle } from "./antigravity";
 import { ApiError } from "./api";
 import { claudeSession } from "./claude";
-import { type CodexSession, codexAsker, codexSession } from "./codex";
+import { type CodexSession, codexAsker, codexSession, codexTitle } from "./codex";
 import type { State } from "./config";
 import {
   type Ctx,
@@ -142,7 +142,9 @@ export function resolveSource(
         ? env[OPENCODE_TITLE]?.slice(0, 200) || undefined
         : agent === "antigravity" && session
           ? antigravityTitle(env, session)
-          : undefined) ??
+          : agent === "codex"
+            ? codexTitle(env, session)
+            : undefined) ??
     claude?.title;
   const at = (path: string) => resolve(cwd, path);
   return {
