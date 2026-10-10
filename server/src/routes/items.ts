@@ -251,6 +251,9 @@ itemRoutes.post("/items", requireCaller("paired"), async (c) => {
   let unheard: string[] = [];
   // The images as stored: those posted, or on a re-seal that sends none, those kept.
   let blobs = item.blobs;
+  // A machine's first stored snapshot pushes even when quiet, so devices learn it sends quotas
+  // without waiting for their next sync (#1010).
+  let firstQuota = false;
   const seq = db.transaction(() => {
     recheck(c);
     const now = new Date();
@@ -396,10 +399,10 @@ itemRoutes.post("/items", requireCaller("paired"), async (c) => {
 
     if (item.kind === "quota") {
       // Only the latest snapshot from each machine matters.
-      db.query("DELETE FROM items WHERE account_id = ? AND kind = 'quota' AND from_id = ?").run(
-        caller.account,
-        me,
-      );
+      const replaced = db
+        .query("DELETE FROM items WHERE account_id = ? AND kind = 'quota' AND from_id = ?")
+        .run(caller.account, me);
+      firstQuota = replaced.changes === 0;
     }
     // Machines' items leave the last answerReserve bytes to devices' answers, so a full account
     // can still answer, and answering lets its decisions expire.
@@ -494,7 +497,7 @@ itemRoutes.post("/items", requireCaller("paired"), async (c) => {
         () => payload,
       );
     }
-  } else if (!item.quiet && !snoozed) {
+  } else if ((!item.quiet || firstQuota) && !snoozed) {
     pushTo = pushTo.filter((id) => !unheard.includes(id));
     // While the owner sits at a screen, a push that would ask for them waits, for the devices
     // not at it (#848).

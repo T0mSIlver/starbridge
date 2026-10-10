@@ -569,6 +569,37 @@ test("a queued push is dropped once its device is revoked", async () => {
   expect(seen.some((x) => x.path === "/wp/revoked-tablet")).toBe(false);
 });
 
+test("a machine's first snapshot pushes even when quiet, so phones show Quotas at once", async () => {
+  const { s, acct, devbox } = await setup(fcmConfig());
+  await s.call("POST", "/v1/push/subscriptions", {
+    token: acct.device.token,
+    body: { type: "fcm", endpoint: "tok-ok" },
+  });
+  seen.length = 0;
+  const post = async (id: string) => {
+    const snapshot: QuotaSnapshot = {
+      v: 1,
+      id,
+      to: [acct.device.id],
+      takenAt: at,
+      providers: [],
+      alerts: [],
+    };
+    const q = seal("quota", snapshot, { id: devbox.id, signKey: devbox.keys.sign.privateKey }, [
+      acct.device.member,
+    ]);
+    const res = await s.call("POST", "/v1/items", {
+      token: devbox.token,
+      body: { ...q, quiet: true },
+    });
+    expect(res.status).toBe(201);
+  };
+  await post("q1");
+  await post("q2");
+  await s.deps.push.idle();
+  expect(fcmSends().map((m) => JSON.parse(m.data.p).id)).toEqual(["q1"]);
+});
+
 test("quota snapshots and runs skip Web Push, which browsers drop when it shows nothing, and quiet items skip push", async () => {
   const { s, acct, devbox } = await setup({ ...fcmConfig(), ...vapidConfig() });
   const browser = browserSubscription("quota");
