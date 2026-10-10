@@ -271,11 +271,11 @@ function MacRow() {
   const save = desktop.setPresence;
   return (
     <Row
-      label="Hold while you use this Mac"
-      sub="In any app, not only Starbridge. It reads only the time since your last key or click, never which"
+      label="Count any app on this Mac"
+      sub="You’re at a screen while you use any app here, not only Starbridge. It reads only the time since your last key or click, never which"
     >
       <Switch
-        label="Hold while you use this Mac"
+        label="Count any app on this Mac"
         checked={on}
         onChange={(v) => {
           setOn(v);
@@ -295,7 +295,8 @@ const HOLD_LABELS: Record<(typeof PUSH_HOLD_CHOICES)[number], string> = {
 };
 
 /**
- * How long other devices' notifications wait while you use a screen (#848): an account setting,
+ * How long other devices' notifications wait once you leave the last screen, after waiting all
+ * the time you use one (#848, #1003): an account setting,
  * since the server holds the pushes. A server without the setting shows nothing.
  */
 function HoldRow({ initial }: { initial: number | undefined }) {
@@ -311,7 +312,7 @@ function HoldRow({ initial }: { initial: number | undefined }) {
       label="Hold while you’re at a screen"
       sub={
         error ??
-        "While you’re using Starbridge or your computer, other devices wait this long to notify"
+        "Other devices stay quiet while you use Starbridge or your computer, and wait this long after you leave"
       }
     >
       <Segmented<number>

@@ -1411,8 +1411,9 @@ a browser; the app adds a menu bar light and notifications, so a web release nee
 - **Presence** (#945). The window in use holds pushes as a web page does (#848). Hidden, it said
   absent while the owner worked in another app, so the phone buzzed at a desk. Electron's
   `powerMonitor` reads what the CLI's machine presence reads: lock, sleep and wake always, and
-  the seconds since the Mac's last input once Settings' "Hold while you use this Mac" is on (off by
-  default). The app hands the page that reading over the bridge, and the page's own beacon sends
+  the seconds since the Mac's last input once Settings' "Count any app on this Mac" is on (off by
+  default; renamed from "Hold while you use this Mac" in #1003, since it decides only whether the
+  Mac counts as a screen, not a second hold). The app hands the page that reading over the bridge, and the page's own beacon sends
   the one bit (`isPresent`, the CLI's threshold): present while the Mac is unlocked with input in
   the last minute, window shown or not. Locked, asleep or quitting, the page says absent at once,
   and the app waits up to 2 s on quit for the page to say so. The switch is the app's own, not
