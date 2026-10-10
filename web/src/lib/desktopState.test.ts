@@ -50,6 +50,7 @@ test("the count and one entry per item in Needs you, prompts first", () => {
     NOW,
   );
   expect(s.count).toBe(2);
+  expect(s.waiting).toBe(2);
   expect(s.entries).toEqual([
     {
       id: "p1",

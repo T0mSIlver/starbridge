@@ -25,6 +25,7 @@ import { type Reading, SCREEN_CHECK_MS, Screen } from "./screen";
 import { parsePlace, readSettings, type Settings, writeSettings } from "./settings";
 import { browserSignIn, newSignIn, type SignIn, signInReturn, startsSignIn } from "./signin";
 import { mark, timing } from "./timing";
+import { snapshot, Widgets } from "./widgets";
 
 mark("main");
 
@@ -45,6 +46,8 @@ let tray: Tray | null = null;
 /** Items in Needs you, which turn the menu bar's climber amber. */
 let needs = 0;
 let notifier: Notifier;
+/** The Needs you widget's snapshot (#1031). */
+const widgets = Widgets.at(process.execPath);
 let quitting = false;
 /** The Mac's lock, sleep and idle time, which the page counts as presence. */
 let screen: Screen | null = null;
@@ -87,6 +90,7 @@ function start(): void {
   });
   // The app lives in the menu bar; closing the window keeps it there.
   app.on("window-all-closed", () => {});
+  app.on("will-quit", () => widgets.close());
   app.on("web-contents-created", (_e, contents) => guard(contents));
   app.whenReady().then(ready);
 }
@@ -119,6 +123,7 @@ async function ready(): Promise<void> {
     needs = state.count;
     paintTray();
     notifier.update(state.entries);
+    widgets.show(snapshot(state));
   });
   ipcMain.on("answered", (e, x) => {
     const a = fromPage(e) && parseAnswered(x);
@@ -571,6 +576,13 @@ function open(id: string): void {
 function openLink(link: string): void {
   if (!win) {
     early.push(link);
+    return;
+  }
+  // The widget's click (#1031): the Inbox, unless the window already shows it.
+  if (link === "starbridge://inbox") {
+    const at = win.webContents.getURL();
+    if (!fromServer(at) || new URL(at).pathname !== "/") win.loadURL(`${origin}/`);
+    showWindow();
     return;
   }
   const back = signInReturn(link, signIn);

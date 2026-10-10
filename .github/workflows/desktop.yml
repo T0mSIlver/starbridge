@@ -50,6 +50,9 @@ jobs:
         run: pnpm exec electron-builder --mac --publish never -c.mac.identity=- -c.mac.hardenedRuntime=false
         env:
           CSC_FOR_PULL_REQUEST: "true"
+      # The Needs you widget, built by the afterPack hook with the runner's Xcode (#1031).
+      - working-directory: desktop
+        run: scripts/check-widgets.sh release/mac-arm64/Starbridge.app
       # The budgets in test/perf.ts, measured on the packaged app.
       - working-directory: desktop
         run: node test/perf.ts release/mac-arm64/Starbridge.app/Contents/MacOS/Starbridge

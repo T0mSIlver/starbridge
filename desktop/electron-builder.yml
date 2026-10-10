@@ -25,6 +25,9 @@ mac:
   # Signed with the Developer ID in CSC_LINK and notarized by the release workflow; the desktop
   # workflow's builds are ad hoc (`-c.mac.identity=-`).
   hardenedRuntime: true
+  # The widget's helper, which scripts/widgets.cjs signs with its App Group entitlement.
+  signIgnore:
+    - Contents/MacOS/starbridge-widgets$
   extendInfo:
     # Notifications as alerts, so their buttons show without a hover.
     NSUserNotificationAlertStyle: alert
@@ -38,7 +41,7 @@ dmg:
   contents:
     - { x: 170, y: 190, type: file }
     - { x: 470, y: 190, type: link, path: /Applications }
-afterPack: scripts/dmg-hidden.cjs
+afterPack: scripts/after-pack.cjs
 # Writes latest-mac.yml, which the app reads from the latest GitHub Release to update. The
 # workflows upload the files themselves (`--publish never`).
 publish:

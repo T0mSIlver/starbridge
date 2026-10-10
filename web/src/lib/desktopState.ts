@@ -4,12 +4,15 @@ import { needsYou } from "./feed";
 import { promptNote, questionNote } from "./notes";
 import type { InboxItem, PromptItem } from "./types";
 
-/** What the app shows: the Needs-you count and one notification per item in it. */
+/**
+ * What the app shows: the Needs-you count, how many of those an agent waits on (its widget,
+ * #1031), and one notification per item.
+ */
 export function desktopState(
   inbox: InboxItem[],
   prompts: PromptItem[],
   now: number,
-): { count: number; entries: DesktopEntry[] } {
+): { count: number; waiting: number; entries: DesktopEntry[] } {
   const open = needsYou(inbox, prompts, now);
   const entries = open.map((e): DesktopEntry => {
     if (e.type === "prompt")
@@ -27,5 +30,5 @@ export function desktopState(
       waiting,
     };
   });
-  return { count: open.length, entries };
+  return { count: open.length, waiting: entries.filter((e) => e.waiting).length, entries };
 }

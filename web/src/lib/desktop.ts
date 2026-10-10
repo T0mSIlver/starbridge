@@ -34,7 +34,13 @@ export type DesktopBridge = {
   screen?(): DesktopScreen | null;
   /** Called when the reading changes; the app waits for the promise before it quits. */
   onScreen?(f: (() => Promise<void>) | null): void;
-  update(state: { count: number; entries: DesktopEntry[] }): void;
+  /** `waiting` and `account` feed the app's widget (#1031); apps before it ignore them. */
+  update(state: {
+    count: number;
+    waiting: number;
+    account: "ready" | "signedOut" | "loading";
+    entries: DesktopEntry[];
+  }): void;
   onAnswer(f: (a: DesktopAnswer) => Promise<void>): void;
   onOpen(f: (id: string) => void): void;
 };

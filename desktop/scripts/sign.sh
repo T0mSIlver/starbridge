@@ -16,5 +16,6 @@ CSC_LINK="$MAC_CERTIFICATE" CSC_KEY_PASSWORD="$MAC_CERTIFICATE_PASSWORD" CSC_FOR
 # A missing or expired identity must fail here, not ship an app installed copies refuse.
 for app in release/mac*/Starbridge.app; do
   codesign --verify --deep --strict "$app"
+  scripts/check-widgets.sh "$app"
   spctl --assess --type execute --verbose=2 "$app" 2>&1 | tee /dev/stderr | grep -q "source=Notarized Developer ID"
 done
