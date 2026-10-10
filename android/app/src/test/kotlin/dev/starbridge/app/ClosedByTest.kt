@@ -15,6 +15,11 @@ class ClosedByTest {
         assertEquals("Looks right · on Pixel", closedHow(asked.copy(theirAnswer = "Looks right", answeredOn = "Pixel")))
         assertEquals("Answered · at the keyboard", closedHow(asked.copy(settled = "elsewhere")))
         assertEquals("Withdrawn · by the agent", closedHow(asked.copy(settled = "withdrawn")))
+        // The agent's reason takes the place of "by the agent" (#1008).
+        assertEquals(
+            "Withdrawn · Fixed it myself after rereading the logs",
+            closedHow(asked.copy(settled = "withdrawn", reason = "Fixed it myself after rereading the logs")),
+        )
         assertEquals("Answered · on another device", closedHow(asked.copy(answeredAt = Instant.parse("2026-10-07T10:05:00Z"))))
     }
 }

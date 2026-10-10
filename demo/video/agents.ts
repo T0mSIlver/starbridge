@@ -181,8 +181,14 @@ export class Agent {
   async stop(): Promise<void> {
     for (const child of this.children) child.kill();
     if (this.id && !this.answer)
-      await cli(this.dir, this.script.machine, ["settle", this.id, "--outcome", "withdrawn"])
-        .exited;
+      await cli(this.dir, this.script.machine, [
+        "settle",
+        this.id,
+        "--outcome",
+        "withdrawn",
+        "--reason",
+        "The demo take stopped",
+      ]).exited;
   }
 
   toJSON() {

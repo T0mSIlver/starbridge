@@ -28,6 +28,7 @@ import {
   deliveryLine,
   dropRevokedNow,
   EXIT_SNOOZED,
+  pickerReason,
   poll,
   postDecision,
   resolveSource,
@@ -366,7 +367,7 @@ export function pickerOpen(st: ReturnType<Ctx["store"]["state"]>, session: strin
 async function settlePicker(ctx: Ctx, session: string, outcome: "elsewhere" | "withdrawn") {
   await Promise.all(
     pickerOpen(ctx.store.state(), session).map((id) =>
-      settle({ ...ctx, signal: undefined }, { id, outcome }).catch((e) =>
+      settle({ ...ctx, signal: undefined }, { id, outcome, ...pickerReason(outcome) }).catch((e) =>
         ctx.err(`starbridge: could not settle ${id}: ${(e as Error).message}`),
       ),
     ),
@@ -605,8 +606,8 @@ export async function hookQuestion(
     await Promise.all(
       ids.map((id) =>
         id
-          ? settle({ ...ctx, signal: undefined }, { id, outcome }).catch((e) =>
-              ctx.err(`starbridge: could not settle ${id}: ${(e as Error).message}`),
+          ? settle({ ...ctx, signal: undefined }, { id, outcome, ...pickerReason(outcome) }).catch(
+              (e) => ctx.err(`starbridge: could not settle ${id}: ${(e as Error).message}`),
             )
           : undefined,
       ),

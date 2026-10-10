@@ -123,11 +123,12 @@ const HELP = `starbridge: post decisions to your devices, report runs, upload qu
       Show the owner that you are now blocked on the decision ("Waiting for you", which
       notifies them once more), or back to working on other things.
 
-  starbridge settle <decision id> [--outcome elsewhere|withdrawn]
+  starbridge settle <decision id> [--outcome elsewhere|withdrawn] [--reason <text>]
   starbridge settle --session <id> | --all [--yes] [--outcome elsewhere|withdrawn]
       Close a decision without a Starbridge answer: answered on its --answer-in page
       (elsewhere, the default for those) or no longer needed (withdrawn). Devices move it
-      out of the inbox. --session closes every open decision that session asked, --all every
+      out of the inbox. A withdrawal says why in --reason, one short line of at most 120
+      characters that History shows: --reason 'Fixed it myself after rereading the logs'. --session closes every open decision that session asked, --all every
       one this machine asked, after asking (--yes skips the question), at the pace the
       server allows: a looping agent's thousands take over an hour.
 
@@ -375,6 +376,7 @@ export async function run(argv: string[], ctx: Ctx): Promise<number> {
           allowPositionals: true,
           options: {
             outcome: { type: "string" },
+            reason: { type: "string" },
             session: { type: "string" },
             all: { type: "boolean" },
             yes: { type: "boolean", short: "y" },

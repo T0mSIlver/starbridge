@@ -265,7 +265,11 @@ test("a machine that knows the server holds back a revocation seals nothing new 
     const senders: [string, () => Promise<unknown>][] = [
       ["ask", async () => expect(await run(["ask", "--question", "Ship?"], ctx)).toBe(1)],
       ["waiting", () => postWaiting(ctx, s, ids[1], "waiting")],
-      ["settle", async () => expect(await run(["settle", ids[2]], ctx)).toBe(1)],
+      [
+        "settle",
+        async () =>
+          expect(await run(["settle", ids[2], "--reason", "No longer needed"], ctx)).toBe(1),
+      ],
       [
         "run",
         () =>

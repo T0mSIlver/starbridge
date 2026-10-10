@@ -1267,6 +1267,30 @@ async function main() {
     .getByText(/Answered in the artifact/)
     .waitFor();
 
+  step("a withdrawn decision shows the agent's reason in History (#1008)");
+  const moot = cli(
+    "moot",
+    [
+      ...["ask", "--question", "Retry the flaky upload test?", "--option", "Retry"],
+      ...["--option", "Skip", "--project", "starbridge"],
+    ],
+    machineHome,
+  );
+  const [mootId] = await moot.waitFor(/d_[\w-]+/);
+  if ((await moot.exited) !== 0) throw new Error("ask failed");
+  const reason = "Fixed it myself after rereading the logs";
+  const withdraw = cli(
+    "withdraw",
+    ["settle", mootId as string, "--outcome", "withdrawn", "--reason", reason],
+    machineHome,
+  );
+  if ((await withdraw.exited) !== 0) throw new Error("settle --outcome withdrawn failed");
+  await page
+    .locator(`[data-id="${mootId}"]`)
+    .locator("..")
+    .getByText(`Withdrawn · ${reason}`)
+    .waitFor({ timeout: 30_000 });
+
   await page.getByRole("link", { name: "Quotas" }).click();
   await page.locator("article").first().waitFor();
   await shoot(page, "quotas");

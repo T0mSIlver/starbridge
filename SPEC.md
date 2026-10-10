@@ -960,6 +960,13 @@ the Cursor IDE, which this machine does not run.
   flood has a way out; `--all` asks first, with the count. Each is one settled notice, posted at
   the pace the machine's rate limit allows, waiting out each 429: the server needs no bulk
   route, and the notices still reach devices one per question.
+- **A withdrawal says why** (#1008). `settle <id> --outcome withdrawn` takes `--reason`, one line
+  of at most 120 characters, and refuses to withdraw without it: a card that vanished from Needs
+  you with no word left the owner guessing whether the agent gave up, found the answer or forgot.
+  The settled notice carries it, sealed like the rest. The skill asks for a brief one ("Fixed it
+  myself after rereading the logs"). Withdrawals the CLI makes itself give their own: a harness's
+  picker that can no longer take the answer, a skipped `setup` test. `settle --session` and
+  `--all` take one too but need none, since they clear a flood.
 - **Snoozing** (#571). The owner can put a question off: "not now, show me this again at 18:00".
   A snooze is not an answer, so #122 holds: for the agent it means what no answer means. Its job
   is less clutter, in the inbox and in the owner's head. Agents are never woken by one; when an
@@ -1171,7 +1178,10 @@ first window, so a provider with a window running out leads.
 - **History** lists answered questions and the last 7 days of prompts, with how and where each was
   answered. A question settled `elsewhere` without a page to answer in was answered in the
   agent's own picker or terminal, so it reads "at the keyboard", never "by the agent", which
-  stays for a withdrawn question or one answered on its page (#865).
+  stays for a withdrawn question or one answered on its page (#865). A withdrawn question with a
+  reason shows the reason in its place: "Withdrawn · Fixed it myself after rereading the logs"
+  (#1008). The owner chose it from mockups over a line of its own and over the reason after
+  "Withdrawn:", which pushed the rest off a phone's row.
 - **Closed sections wait at the bottom** (#662, #682). Closed, History sits at the bottom of a
   short inbox and Snoozed just above it, out of the way; opened, each glides up under the items
   and its rows fade in. Opening Snoozed leaves History at the bottom.

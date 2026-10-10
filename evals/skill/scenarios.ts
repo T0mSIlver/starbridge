@@ -47,6 +47,11 @@ export interface Scenario {
    * blocks nothing yet, which should never be (#603).
    */
   blocks?: boolean;
+  /**
+   * A card this machine posted before the run, which the owner then answers in the prompt
+   * instead; `{card}` in the prompt names its id. The agent should withdraw it, saying why (#1008).
+   */
+  card?: { question: string; options: string[] };
   /** Seconds the owner takes to answer the first card (default 15). */
   answerAfter?: number;
   /** The owner taps Done on an `--answer-in` card instead of picking (#539). */
@@ -373,6 +378,19 @@ export const scenarios: Scenario[] = [
           "<h1>Pricing</h1>\n<!-- TODO: tier names -->\n<div class=tier>TIER_1 $0</div>\n<div class=tier>TIER_2 $8</div>\n<div class=tier>TIER_3 $20</div>\n",
       });
     },
+  },
+  {
+    ...mergeOrder,
+    name: "typed-answer",
+    what: "the owner answers an open card in the terminal; the agent withdraws it",
+    prompt:
+      "About your Starbridge card {card} on the merge order of #12 and #13: merge #13 first, then #12.",
+    expect: "none",
+    card: { question: "Merge #12 or #13 first?", options: ["#12 first", "#13 first"] },
+    forbidden: undefined,
+    followUp: undefined,
+    natural: undefined,
+    blocks: undefined,
   },
   {
     ...mergeOrder,

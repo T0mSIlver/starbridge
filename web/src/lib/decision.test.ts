@@ -75,6 +75,10 @@ test("a decision answered elsewhere closes when its agent settles it", () => {
   expect(outcomeText(withdrawn)).toBe("Withdrawn");
   expect(closedBy(withdrawn)).toBe("The agent");
   expect(closedBy({ ...withdrawn, settled: undefined })).toBe("Another device");
+  // Its reason takes the place of "by the agent" (#1008).
+  expect(closedByPhrase(withdrawn)).toBe("by the agent");
+  const why = "Fixed it myself after rereading the logs";
+  expect(closedByPhrase({ ...withdrawn, reason: why })).toBe(why);
 });
 
 test("a question answered in the agent's own picker says the keyboard, not the agent (#865)", () => {

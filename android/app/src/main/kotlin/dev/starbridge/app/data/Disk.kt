@@ -40,6 +40,8 @@ data class SavedDecision(
     val answer: String? = null,
     /** How the machine closed it, when its settled notice did rather than an answer. */
     val settled: String? = null,
+    /** Why its agent withdrew it, from that notice (#1008). */
+    val reason: String? = null,
     /** Another device's answer the machine took, and that device's id, from its notice (#330). */
     val theirAnswer: String? = null,
     val answeredBy: String? = null,
