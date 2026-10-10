@@ -13,6 +13,7 @@ import {
 } from "./agent/commands";
 import { runAgent } from "./agent/main";
 import { ApiError, sandboxHint, Unreachable } from "./api";
+import { hookCodexQuestion } from "./codex-question";
 import { StateFileError } from "./config";
 import { type Ctx, UsageError } from "./context";
 import {
@@ -549,14 +550,21 @@ export async function run(argv: string[], ctx: Ctx): Promise<number> {
         const [sub, ...args] = rest;
         const { values } = parseArgs({
           args,
-          options: { agent: { type: "string" }, wait: { type: "string" } },
+          options: {
+            agent: { type: "string" },
+            wait: { type: "string" },
+            race: { type: "boolean" },
+          },
         });
         if (sub === "permission") return await hookPermission(ctx, readText("-"), values);
         if (sub === "settle") return await hookSettle(ctx, readText("-"), values);
         if (sub === "ask-user") return hookAskUser();
-        if (sub === "question") return await hookQuestion(ctx, readText("-"), values);
+        if (sub === "question")
+          return values.agent === "codex"
+            ? await hookCodexQuestion(ctx, readText("-"), values.race === true)
+            : await hookQuestion(ctx, readText("-"), values);
         throw new UsageError(
-          "usage: starbridge hook permission|settle --agent claude-code, starbridge hook ask-user, or starbridge hook question --agent opencode|pi",
+          "usage: starbridge hook permission|settle --agent claude-code|codex, starbridge hook ask-user, or starbridge hook question --agent opencode|pi|codex",
         );
       }
       case "update": {
