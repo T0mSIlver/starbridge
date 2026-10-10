@@ -1970,7 +1970,13 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
       },
       {
         name: "an empty reason",
-        body: { ...settledBody, itemId: "dec_1", outcome: "withdrawn", device: undefined, reason: "" },
+        body: {
+          ...settledBody,
+          itemId: "dec_1",
+          outcome: "withdrawn",
+          device: undefined,
+          reason: "",
+        },
         valid: false,
       },
       {
