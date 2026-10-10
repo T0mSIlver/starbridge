@@ -964,7 +964,10 @@ the Cursor IDE, which this machine does not run.
   of at most 120 characters, and refuses to withdraw without it: a card that vanished from Needs
   you with no word left the owner guessing whether the agent gave up, found the answer or forgot.
   The settled notice carries it, sealed like the rest. The skill asks for a brief one ("Fixed it
-  myself after rereading the logs"). Withdrawals the CLI makes itself give their own: a harness's
+  myself after rereading the logs"), and the SessionStart rule asks agents to withdraw a card the
+  owner answered in the terminal: the skill never loads when no card is to be posted, and Haiku
+  5.5 withdrew it in 0 of 3 runs without the rule's sentence, 3 of 3 with it
+  (`evals/skill/results/1008`). Withdrawals the CLI makes itself give their own: a harness's
   picker that can no longer take the answer, a skipped `setup` test. `settle --session` and
   `--all` take one too but need none, since they clear a flood.
 - **Snoozing** (#571). The owner can put a question off: "not now, show me this again at 18:00".
