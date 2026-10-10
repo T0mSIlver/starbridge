@@ -730,6 +730,10 @@ line, the safe side: at worst a prompt repeats an answer the agent already read.
   file that does not parse, such as one with comments, is left as it is, and setup prints what to
   add. The rule's AskUserQuestion line is harmless there: Cursor's `askQuestion` fires no
   hooks, so `starbridge ask` stays the way to the phone.
+- `cursor-agent` also runs installed Claude Code plugins' hooks, Starbridge's among them (#958).
+  Their input is Cursor's and carries `cursor_version`, which Claude Code never sends, so the
+  Claude Code plugin's hooks step aside there and setup's Cursor hooks run: the rule comes once, and
+  no Claude Code settle runs for a Cursor conversation.
 - There is no Starbridge rules file (#126). Users tell agents what else to ask or report in the
   agents' own instruction files; `docs/tell-your-agents.md` says where.
 - `evals/skill` checks the skill with real sessions of each harness on the smallest models.
@@ -1563,6 +1567,15 @@ What the code relies on, with the versions checked.
   /question/{id}/reply` work the same way. Plugins get an in-process SDK client;
   `experimental.chat.system.transform` is the only hook that adds to the system prompt; `shell.env`
   sees each bash call's session id. Worktrees of one repository share a `projectID`.
+- **Cursor** (`cursor-agent` 2026.10.01, read in its bundle): agent commands get `CURSOR_AGENT=1`,
+  and from the CLI `CURSOR_CONVERSATION_ID`; hooks get neither, but their input carries
+  `conversation_id` and `cursor_version`. Hooks load from `~/.cursor/hooks.json`, project files,
+  plugins under `~/.cursor/plugins/local/<name>` and Claude Code's plugins and settings, whose
+  events are mapped to Cursor's except `PermissionRequest` and `Notification`. Run: an interactive
+  session fires a local plugin's `sessionEnd` but not its `sessionStart` or `stop`, and lists
+  none of its skills; `-p` fires its `sessionStart`.
+  A hook's `timeout` is in seconds, any positive value. `cli-config.json` sits in
+  `$CURSOR_CONFIG_DIR`, else `$XDG_CONFIG_HOME/cursor`, else `~/.cursor`.
 - **CodexBar**: `usage --provider <unknown>` exits 0 and prints every provider, so the uploader
   keeps only matching rows. Mistral windows carry no `windowMinutes`, so they get no pace. The
   Claude probe drives `claude /usage` and can take 10 s on a busy machine.

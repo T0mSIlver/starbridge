@@ -4,6 +4,12 @@
 # in a run. Anything more personal goes in the agent's own instruction files
 # (docs/tell-your-agents.md). With `cursor`, Cursor's sessionStart hook (#954): Cursor's output
 # shape, `additional_context` at the top.
+#
+# cursor-agent also runs installed Claude Code plugins' hooks, with its own input, which carries
+# `cursor_version` (#958). This plugin then steps aside: setup's Cursor hook adds the rule there.
+if [ "${1-}" != cursor ]; then
+  case $(cat) in *'"cursor_version"'*) exit 0 ;; esac
+fi
 context=$(cat "$(dirname "$0")/rule.md")
 
 # JSON-escape: backslashes, quotes, tabs, carriage returns, drop other control characters, then

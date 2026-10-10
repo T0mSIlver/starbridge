@@ -488,6 +488,23 @@ test("a hook whose parent is gone stops waiting", async () => {
   watch.stop();
 });
 
+test("the Claude Code plugin's hooks step aside when cursor-agent runs them (#958)", async () => {
+  const ctx = await machine(false);
+  const open = await ask(ctx);
+  // Cursor's input, under its own names, for a conversation that happens to share the id.
+  const cursor = { session_id: SESSION, cursor_version: "2026.10.01" };
+  const stop = JSON.stringify({ ...cursor, hook_event_name: "stop", status: "completed" });
+  expect(await hookSettle(ctx, stop, { agent: "claude-code" })).toBe(0);
+  const call = JSON.parse(request()) as Record<string, unknown>;
+  expect(
+    await hookPermission(ctx, JSON.stringify({ ...call, ...cursor }), { agent: "claude-code" }),
+  ).toBe(0);
+  expect(await server.opened("permission")).toHaveLength(1);
+  expect(await server.opened("settled")).toEqual([]);
+  await server.answerPermission(open.permission.id, { behavior: "deny", scope: "once" });
+  expect(await open.out).toBe(0);
+});
+
 test("while disabled the hooks post nothing and print nothing", async () => {
   const ctx = await machine();
   expect(await run(["config", "permissions", "off"], ctx)).toBe(0);
