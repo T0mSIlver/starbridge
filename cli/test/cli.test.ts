@@ -531,13 +531,31 @@ test("the machine tells every device which answer it took, once (#330)", async (
   expect(await server.opened("settled")).toHaveLength(1);
 });
 
+test("a withdrawal says why in one short line, which the settled notice carries (#1008)", async () => {
+  const ctx = await paired(server);
+  expect(await run(ASK, ctx)).toBe(0);
+  const id = ctx.lines.at(-1) as string;
+  expect(await run(["settle", id], ctx)).toBe(1);
+  expect(ctx.errors.at(-1)).toContain("--reason '");
+  expect(await run(["settle", id, "--reason", "x".repeat(121)], ctx)).toBe(1);
+  expect(await run(["settle", id, "--reason", "Fixed\nit"], ctx)).toBe(1);
+  expect(ctx.errors.at(-1)).toContain("one line of at most 120 characters");
+  expect(await run(["settle", id, "--outcome", "elsewhere", "--reason", "Fixed it"], ctx)).toBe(1);
+  expect(await server.opened("settled")).toEqual([]);
+  const reason = "Fixed it myself after rereading the logs";
+  expect(await run(["settle", id, "--outcome", "withdrawn", "--reason", reason], ctx)).toBe(0);
+  expect(await server.opened("settled")).toMatchObject([
+    { itemId: id, outcome: "withdrawn", reason },
+  ]);
+});
+
 test("settle leaves a decision whose answer reached the agent answered, not withdrawn", async () => {
   const ctx = await paired(server);
   expect(await run(ASK, ctx)).toBe(0);
   const id = ctx.lines.at(-1) as string;
   await server.answer(id, { choice: "Merge" });
   expect(await run(["wait", id, "--timeout", "5s"], ctx)).toBe(0);
-  expect(await run(["settle", id], ctx)).toBe(0);
+  expect(await run(["settle", id, "--reason", "No longer needed"], ctx)).toBe(0);
   expect((await server.opened("settled")).map((n) => n.outcome)).toEqual(["device"]);
 });
 
@@ -892,8 +910,8 @@ test("an answer to a withdrawn or answerIn decision, or a Done to another, is ne
   await server.answer(early, { choice: "Merge" });
   await poll(ctx, session(ctx), { cursor: ctx.store.state().cursor, seconds: 1, shared: true });
   expect(ctx.store.state().answers[early]).toBeDefined();
-  await run(["settle", early], ctx);
-  await run(["settle", late], ctx);
+  await run(["settle", early, "--reason", "No longer needed"], ctx);
+  await run(["settle", late, "--reason", "No longer needed"], ctx);
   // A compromised server held these signed answers and releases them now.
   await server.forge(
     { decisionId: late, reply: { choice: "Merge" } },
@@ -946,7 +964,7 @@ test("open decisions reach a device that joins later, which can answer them", as
   await run([...ASK, "--session", "s", "--waiting"], ctx);
   const id = ctx.lines.at(-1) as string;
   await run(["ask", "--question", "Done?", "--session", "s"], ctx);
-  await run(["settle", ctx.lines.at(-1) as string], ctx);
+  await run(["settle", ctx.lines.at(-1) as string, "--reason", "No longer needed"], ctx);
   await server.addDevice("old");
   await server.revoke("old");
   const laptop = await server.addDevice("laptop");
@@ -1111,7 +1129,7 @@ test("a decision whose answer came from a device revoked since is closed (#515)"
   expect(ctx.errors.join("\n")).toContain("removed since");
   // `settle` posts no notice the server would contradict: it holds the decision answered.
   const posts = server.log.filter((c) => c === "POST /items").length;
-  expect(await run(["settle", id], ctx)).toBe(0);
+  expect(await run(["settle", id, "--reason", "No longer needed"], ctx)).toBe(0);
   expect(server.log.filter((c) => c === "POST /items").length).toBe(posts);
 });
 

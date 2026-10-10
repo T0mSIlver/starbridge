@@ -850,7 +850,9 @@ test("the hook withdraws its cards before Claude Code's timeout, which looks lik
   });
   expect(await done).toBe(0);
   expect(ctx.lines).toEqual([]);
-  expect((await server.opened("settled")).map((s) => s.outcome)).toEqual(["withdrawn"]);
+  expect(await server.opened("settled")).toMatchObject([
+    { outcome: "withdrawn", reason: "Its answer could no longer reach the agent" },
+  ]);
 });
 
 test("an unpaired machine or a server down leaves the picker to the keyboard, and hook ask-user lets it open", async () => {

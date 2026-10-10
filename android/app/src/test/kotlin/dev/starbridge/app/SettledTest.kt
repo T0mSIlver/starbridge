@@ -161,10 +161,12 @@ class SettledTest {
         // The asking machine's own notice still closes it.
         served = page(envelopes.seal("settled", buildJsonObject {
             put("v", 1); put("id", "s_own"); put("itemId", "d_asked"); putJsonArray("to") { add("phone") }; put("at", at); put("outcome", "withdrawn")
+            put("reason", "You answered in the terminal")
         }, asks.id, asksSign.secret, listOf(phone)))
         store.refresh()
         until { disk.saved()!!.decisions.single().settled != null }
         assertEquals("withdrawn", disk.saved()!!.decisions.single().settled)
+        assertEquals("You answered in the terminal", disk.saved()!!.decisions.single().reason)
     }
 
     private fun until(pred: () -> Boolean) {

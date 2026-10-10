@@ -167,6 +167,9 @@ export interface RunRecord {
   prompted?: boolean;
   gh: string[];
   answered?: string;
+  /** The card posted before the run (`card` situations) and the settled notices the devices got. */
+  card?: string;
+  settled?: Record<string, unknown>[];
   /** When the owner snoozed the first card until (#571), for snooze situations. */
   snoozed?: string;
   /** Claude Code: the largest context one request sent, in tokens. */
@@ -868,8 +871,18 @@ async function one(s: Scenario, arm: string, rep: number): Promise<RunRecord> {
     // prompt: the agent waits within its turn (`starbridge wait`), so the owner answers the first
     // card while it runs, whether or not the situation checks what it does with the answer.
     let answeredFirst: Record<string, unknown>[] | undefined;
+    if (s.card) {
+      const args = ["ask", "--question", s.card.question, "--session", "earlier"];
+      for (const o of s.card.options) args.push("--option", o);
+      // Not spawnSync: the server runs in this process.
+      const posted = Bun.spawn([join(bin, "starbridge"), ...args], { env, cwd: proj, stdout: "pipe", stderr: "pipe" });
+      rec.card = (await new Response(posted.stdout).text()).split("\n")[0]?.trim();
+      if ((await posted.exited) !== 0 || !rec.card)
+        throw new Error(`the earlier card failed: ${await new Response(posted.stderr).text()}`);
+    }
+    const prompt = s.prompt.replace("{card}", rec.card ?? "");
     const answering =
-      !s.interactive && !s.unpaired && !s.live
+      !s.interactive && !s.unpaired && !s.live && !s.card
         ? (async () => {
             while (!answeredFirst) {
               await Bun.sleep(2_000);
@@ -913,8 +926,8 @@ async function one(s: Scenario, arm: string, rep: number): Promise<RunRecord> {
     const first = s.live
       ? (rec.turns[0] as Turn & { session?: string })
       : s.interactive
-      ? await interactiveTurn(proj, env, s.prompt, armDir, cfg)
-      : await turn(proj, env, s.prompt, armDir);
+      ? await interactiveTurn(proj, env, prompt, armDir, cfg)
+      : await turn(proj, env, prompt, armDir);
     if (answering && !answeredFirst) answeredFirst = [];
     if (!s.live) rec.turns.push(first);
     // The model's provider failed (a rate limit): the run says nothing about the agent.
@@ -936,7 +949,7 @@ async function one(s: Scenario, arm: string, rep: number): Promise<RunRecord> {
           { ...first, commands: first.commands.slice(0, i + 1) },
           { ...first, commands: first.commands.slice(i + 1) },
         ];
-    } else rec.decisions = strip(opened);
+    } else rec.decisions = strip(opened.filter((d) => d.id !== rec.card));
     const card = answering || s.live ? undefined : (opened[0] as Card | undefined);
     if (s.followUp && card && first.session) {
       const choice = choiceFor(card);
@@ -949,6 +962,7 @@ async function one(s: Scenario, arm: string, rep: number): Promise<RunRecord> {
       rec.runs = (await live.opened("run")) as Record<string, unknown>[];
       rec.waiting = (await live.opened("waiting")) as Record<string, unknown>[];
       rec.permissions = (await live.opened("permission")) as Record<string, unknown>[];
+      rec.settled = (await live.opened("settled")) as Record<string, unknown>[];
     }
     // Images, for render.ts, opened from their blobs (#685).
     for (const [i, shown] of (s.unpaired ? [] : await live.images()).entries())

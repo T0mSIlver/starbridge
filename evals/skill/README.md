@@ -59,3 +59,6 @@ bun evals/skill/grade.ts --no-judge evals/skill/results/624/claude
 
 `results/911` holds the first Claude Code run on Haiku 5.5: the skill and rule before and after
 #911 allowed `AskUserQuestion` for a quick question.
+
+`results/1008` holds `typed-answer`, where the owner answers an open card in the terminal: the
+agent should withdraw it with a short `--reason`.

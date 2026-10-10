@@ -960,7 +960,7 @@ class ServerStore(
         val byId = saved.decisions.associateBy { it.body.id }.toMutableMap()
         // How each item a settled notice closed was closed, with the time: the notice lists before
         // the decision it closed, which moved past it.
-        val closings = mutableMapOf<String, Pair<String?, String>>()
+        val closings = mutableMapOf<String, Pair<Settled, String>>()
         // Which device's answer each machine took, whenever its notice comes (#330).
         val wins = mutableListOf<Pair<String, Settled>>()
         val waits = mutableListOf<Pair<String, Waiting>>()
@@ -985,7 +985,7 @@ class ServerStore(
                     body as Settled
                     if (body.outcome == "device") wins += from to body
                     // Keyed by machine: a notice closes only the machine's own items (#362).
-                    else closings["$from/${body.itemId}"] = body.outcome to listed.receivedAt
+                    else closings["$from/${body.itemId}"] = body to listed.receivedAt
                     continue
                 }
                 // The notice that closed it arrived in the same write, so it carries the same time;
@@ -994,15 +994,17 @@ class ServerStore(
                 val known = byId[listed.item.id]
                 if (known != null) {
                     // A settled push marked it answered already, without saying how.
-                    val settled = settledBy(known.from)
-                    if (listed.answeredAt != null && (known.answeredAt == null || settled != null)) {
-                        byId[known.body.id] = known.copy(answeredAt = listed.answeredAt, settled = settled ?: known.settled)
+                    val notice = settledBy(known.from)
+                    if (listed.answeredAt != null && (known.answeredAt == null || notice?.outcome != null)) {
+                        byId[known.body.id] = if (notice?.outcome != null) closedBy(known.copy(answeredAt = listed.answeredAt), notice)
+                        else known.copy(answeredAt = listed.answeredAt)
                         alerts.cancel(known.body.id)
                     }
                     continue
                 }
                 val (from, _, text) = open(listed.item) ?: continue
-                byId[listed.item.id] = saved(listed.item, SavedDecision(from, text, listed.answeredAt, settled = settledBy(from)))
+                val decision = SavedDecision(from, text, listed.answeredAt)
+                byId[listed.item.id] = saved(listed.item, settledBy(from)?.let { closedBy(decision, it) } ?: decision)
             }
             cursor = page.cursor
             if (page.items.size < 100) break
@@ -1120,10 +1122,14 @@ class ServerStore(
         val d = saved.decisions.find { it.body.id == id && it.from == from } ?: return
         alerts.cancel(id)
         val updated = if (notice.outcome == "device") won(d, from, notice)
-        else if (d.answeredAt == null && d.answer == null) d.copy(answeredAt = now(), settled = notice.outcome)
+        else if (d.answeredAt == null && d.answer == null) closedBy(d.copy(answeredAt = now()), notice)
         else null
         if (updated != null) persist(saved.copy(decisions = saved.decisions.map { if (it === d) updated else it }))
     }
+
+    /** [d] as its machine's [notice] closed it, with the agent's reason for a withdrawal (#1008). */
+    private fun closedBy(d: SavedDecision, notice: Settled) =
+        d.copy(settled = notice.outcome, reason = notice.reason?.takeIf { notice.outcome == "withdrawn" })
 
     /** Decisions this phone's answer lost to another device's, until the machine says which won. */
     private val lost = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
@@ -2179,6 +2185,7 @@ class ServerStore(
             answer = d.answer,
             answeredAt = instant(d.answeredAt) ?: d.answer?.let { Instant.now() },
             settled = d.settled,
+            reason = d.reason,
             theirAnswer = d.theirAnswer,
             answeredOn = d.answeredBy?.let { directory?.members?.get(it)?.member?.name ?: it },
             replies = b.replies == true,

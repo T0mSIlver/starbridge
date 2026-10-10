@@ -69,6 +69,7 @@ const CHECKS: { id: string; label: string; judge?: true; card?: true }[] = [
   { id: "mark", label: "Marked waiting only when blocked" },
   { id: "delivery", label: "Did what ask's last line said: waited, or ended the turn" },
   { id: "done", label: "On Done: read the page, no settle, no new card" },
+  { id: "withdrew", label: "Answered in the terminal: withdrew the card, saying why in one line" },
   { id: "question", label: "opencode's question reached the devices and its answer the session" },
   { id: "diff", label: "opencode's edit prompt reached the devices with its diff" },
   { id: "cold", label: "Answerable cold, from the card alone", judge: true },
@@ -314,6 +315,10 @@ function score(r: Rec, s: Scenario): Record<string, boolean | null> {
         !all.some((c) => /starbridge\s+settle\b/.test(c)) &&
         r.laterDecisions.length === 0 &&
         !!r.turns[1]?.commands.some((c) => /read-artifact|page-pick/.test(c))
+      : null,
+    withdrew: s.card
+      ? (r.settled ?? []).some((n) => n.itemId === r.card && n.outcome === "withdrawn" && !!n.reason) &&
+        all.some((c) => /gh pr merge\s+#?13\b/.test(c))
       : null,
     question: s.name === "oc-question"
       ? !!first?.tools?.includes("question") &&

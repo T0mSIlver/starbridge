@@ -87,12 +87,16 @@ export function answeredFirstText(item: InboxItem): string {
   return `Answered on ${by.device}: ${replyText(by.reply, item.decision)}`;
 }
 
-/** Who closed a question, after its answer in History: "not sent yet", "on this browser", "by the agent". */
+/**
+ * Who closed a question, after its answer in History: "not sent yet", "on this browser", "by the
+ * agent", or for a withdrawn one the agent's reason (#1008).
+ */
 export function closedByPhrase(item: InboxItem): string {
   if (item.sending) return "not sent yet";
   if (item.reply) return "on this browser";
   if (item.answeredBy) return `on ${item.answeredBy.device}`;
   if (atKeyboard(item)) return "at the keyboard";
+  if (item.settled === "withdrawn" && item.reason) return item.reason;
   return item.settled || item.decision.answerIn ? "by the agent" : "on another device";
 }
 

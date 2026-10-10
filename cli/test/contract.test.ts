@@ -160,7 +160,9 @@ test("decisions --open lists the open questions as JSON lines, until answered or
   ]);
   await server.answer(id, { choice: "Merge" });
   expect(await run(["wait", id], ctx)).toBe(0);
-  expect(await run(["settle", other, "--outcome", "withdrawn"], ctx)).toBe(0);
+  expect(
+    await run(["settle", other, "--outcome", "withdrawn", "--reason", "No longer needed"], ctx),
+  ).toBe(0);
   ctx.lines.length = 0;
   expect(await run(["decisions", "--open"], ctx)).toBe(0);
   expect(ctx.lines).toEqual([]);

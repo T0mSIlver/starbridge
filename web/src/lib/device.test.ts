@@ -310,7 +310,15 @@ test("a machine's settled notice closes only that machine's decisions (#362)", a
     items[0] = {
       item: seal(
         "settled",
-        { v: 1, id: "s_own", itemId: "d_asked", to, at, outcome: "withdrawn" },
+        {
+          v: 1,
+          id: "s_own",
+          itemId: "d_asked",
+          to,
+          at,
+          outcome: "withdrawn",
+          reason: "You answered in the terminal",
+        },
         { id: asks.member.id, signKey: asks.keys.sign.privateKey },
         recipient,
       ),
@@ -318,7 +326,10 @@ test("a machine's settled notice closes only that machine's decisions (#362)", a
       receivedAt: at,
     };
     const own = await device.loadInbox(fresh);
-    expect(own.items.find((i) => i.decision.id === "d_asked")?.settled).toBe("withdrawn");
+    expect(own.items.find((i) => i.decision.id === "d_asked")).toMatchObject({
+      settled: "withdrawn",
+      reason: "You answered in the terminal",
+    });
     // Answered on the phone: the asking machine's later notice says with what, and only its own
     // counts (#330).
     const told = (by: (typeof machines)[0], choice: string) => ({

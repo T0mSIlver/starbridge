@@ -825,7 +825,7 @@ test("Ctrl-C at the test decision withdraws it from the devices (#613)", async (
   const [decision] = await server.opened("decision");
   const [settled] = await server.opened("settled");
   expect(settled?.itemId).toBe(decision?.id);
-  expect(settled?.outcome).toBe("withdrawn");
+  expect(settled).toMatchObject({ outcome: "withdrawn", reason: "Skipped in starbridge setup" });
 });
 
 /** A ustar archive of `entries`: "0" a file, "2" a symlink, "5" a folder; mtime 0, owner 0. */
