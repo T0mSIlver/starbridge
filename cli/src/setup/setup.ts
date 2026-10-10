@@ -54,7 +54,7 @@ import {
   unavailable,
   withInstalledPlaces,
 } from "./service";
-import { defaults, otherCopies, type Sys } from "./sys";
+import { otherCopies, type Sys } from "./sys";
 
 export interface SetupOpts {
   /** `--yes`: every question takes its default; sys.prompt answers so. */

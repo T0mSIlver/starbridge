@@ -46,7 +46,7 @@ test("a Codex card carries the thread's latest name from session_index.jsonl (#9
   expect(codexTitle(env, id)).toBeUndefined();
   writeFileSync(
     join(home, "session_index.jsonl"),
-    line(id, "Ask about README") + line(other, "Other") + line(id, "Fix the README") + "{torn",
+    `${line(id, "Ask about README") + line(other, "Other") + line(id, "Fix the README")}{torn`,
   );
   expect(codexTitle(env, id)).toBe("Fix the README");
   expect(resolveSource({ question: "q" }, env, "/work/p").sessionTitle).toBe("Fix the README");

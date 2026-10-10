@@ -38,7 +38,7 @@ import { configCommand } from "./settings";
 import { AGENT_IDS, type AgentId, isAgentId } from "./setup/agents";
 import { refresh, setup } from "./setup/setup";
 import { status } from "./setup/status";
-import { defaults, makeSys, type Prompt, terminalPrompt } from "./setup/sys";
+import { defaults, makeSys, terminalPrompt } from "./setup/sys";
 import { uninstall, uninstallAgent } from "./setup/uninstall";
 import { update } from "./update";
 import { VERSION } from "./version";
