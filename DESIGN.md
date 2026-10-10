@@ -440,6 +440,13 @@ rail, the page leaves that strip empty in `bg`; under 600 px, in `surface`
 above the top bar. It pairs with the app
 without imitating Android.
 
+The macOS app's Needs you widget (#1031) is Android's 2×2 in WidgetKit's small
+size: `surface` card, `fg2` heading, the count in Google Sans Flex medium at
+52 pt, `accent` and `accent-soft` over the whole card while an agent waits.
+Unlike Android's RemoteViews, a widget extension loads the app's face from its
+own Resources. The count is `widgetAccentable`, so it keeps the light when
+macOS tints widgets.
+
 Google Sans Flex sets everything a person reads, numbers included, with
 tabular figures where they line up. It is the face of Google's own apps and
 open source (OFL) since November 2025, so a Material app reads native in it
