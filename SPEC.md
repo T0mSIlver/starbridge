@@ -594,7 +594,16 @@ provider plugins add providers, not panels.
   since the command it wraps is the agent's own. So Codex asks at the keyboard to run it outside
   the sandbox, and the skill has it ask on the first call: run in the sandbox first, the command
   ran unreported, then again once approved (#831). A `prompt` rule only adds an approval: Codex
-  still runs the command in the sandbox first. Uninstall removes exactly what setup added.
+  still runs the command in the sandbox first. `cursor-agent` gets `Shell(starbridge ask)` and the
+  four others in `cli-config.json`'s `permissions.allow`; each matches the command and what starts
+  with it plus a space, and a compound line runs without a prompt only when each of its commands
+  is allowed (2026.10.01). The IDE does not read that file. Uninstall removes exactly what setup added.
+- **Cursor** (#953) gets the skill in `~/.cursor/skills/starbridge`. Not a local plugin under
+  `~/.cursor/plugins/local`, which would keep everything in one folder: `cursor-agent` 2026.10.01
+  loads a local plugin's skill and hooks in `-p` but, in an interactive session, neither its skill
+  nor its `sessionStart` and `stop` hooks (run 2026-10-09). Cursor also reads `~/.codex/skills`,
+  so with Codex set up too it lists the skill twice; both copies are the same. Setup finds Cursor
+  by `cursor-agent` on the PATH or a `~/.cursor` folder.
 - **Docs** (#211) at `/docs` are the repository's Markdown files listed in `web/src/lib/docs.ts`,
   rendered by the web page. Links between them become `/docs` links; other relative links go to
   GitHub. Images are screenshots under `web/public`, served from the site root, so GitHub shows

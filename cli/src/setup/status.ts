@@ -7,6 +7,7 @@ import { VERSION } from "../version";
 import { AGENT_IDS, AGENTS, found as agentFound, installed, removedAgents } from "./agents";
 import { codexPlugin, codexPluginDir } from "./codex-plugin";
 import { findCodexbar, listProviders, probe } from "./codexbar";
+import { cursorState } from "./cursor";
 import { codexSkill, opencodeState, PI_PACKAGE, piPackage } from "./harnesses";
 import { autoUpdate, hasClaude, PLUGINS, pluginState } from "./plugins";
 import { lingering, serviceState } from "./service";
@@ -148,6 +149,11 @@ export async function status(sys: Sys): Promise<number> {
       const pi = piPackage(sys);
       out(
         `Pi package: ${pi === PI_PACKAGE ? "installed" : `${pi} (\`starbridge setup\` moves it to v${VERSION})`}`,
+      );
+    } else if (id === "cursor") {
+      const state = cursorState(sys);
+      out(
+        `Cursor skill: ${state === "current" ? "installed" : state === "outdated" ? "outdated (`starbridge setup --refresh` updates it)" : "another skill named starbridge"}`,
       );
     } else {
       const state = opencodeState(sys);

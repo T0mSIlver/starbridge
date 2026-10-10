@@ -35,6 +35,7 @@ import {
   tarballKey,
   updateCodexbar,
 } from "../src/setup/codexbar";
+import { CURSOR_ALLOW } from "../src/setup/cursor";
 import {
   CODEX_RULE,
   installOpencode,
@@ -213,6 +214,13 @@ test("setup --yes installs the agent, the plugins and the skills, and uploads a 
     expect(readFileSync(join(oc, "starbridge", f), "utf8")).toBe(
       readFileSync(join(import.meta.dir, "../..", f), "utf8"),
     );
+
+  // Cursor gets the skill, and the allow rules in cli-config.json.
+  expect(readFileSync(join(m.home, ".cursor/skills/starbridge/SKILL.md"), "utf8")).toBe(skill);
+  expect(
+    JSON.parse(readFileSync(join(m.home, ".cursor/cli-config.json"), "utf8")).permissions.allow,
+  ).toEqual(CURSOR_ALLOW);
+  expect(out).toContain("✓ Cursor       skill installed, 5 starbridge commands allowed");
 
   const [snap] = await server.opened("quota");
   expect(snap?.providers.map((p) => p.provider)).toEqual(["codex", "zai"]);
@@ -522,6 +530,46 @@ test("status reports the agent, the service and the plugins", async () => {
   expect(out).toContain("Codex skill: installed");
   expect(out).toContain("Pi package: installed");
   expect(out).toContain("opencode skill and plugin: installed");
+  expect(out).toContain("Cursor skill: installed");
+});
+
+test("Cursor: setup keeps the owner's config and skill, and refresh updates its own (#953)", async () => {
+  const m = await machine();
+  const config = join(m.home, "xdg/cursor/cli-config.json");
+  m.ctx.env.XDG_CONFIG_HOME = join(m.home, "xdg");
+  mkdirSync(dirname(config), { recursive: true });
+  writeFileSync(config, JSON.stringify({ permissions: { allow: ["Shell(ls)"], deny: [] }, v: 1 }));
+  const opts = { yes: true, noQuota: true, noService: true } as const;
+  await setup(m.sys, opts);
+  expect(JSON.parse(readFileSync(config, "utf8"))).toEqual({
+    permissions: { allow: ["Shell(ls)", ...CURSOR_ALLOW], deny: [] },
+    v: 1,
+  });
+
+  // An older release's skill is brought up to date.
+  const dir = join(m.home, ".cursor/skills/starbridge");
+  writeFileSync(
+    join(dir, "SKILL.md"),
+    "---\n# Written by starbridge 0.0.1; `starbridge uninstall` removes it.\nname: starbridge\n---\nold\n",
+  );
+  expect(await refresh(m.sys)).toContain(`Updated ${join(dir, "SKILL.md")}.`);
+  expect(await refresh(m.sys)).toEqual([]);
+
+  expect(await run(["uninstall", "--agent", "cursor", "--yes"], m.ctx)).toBe(0);
+  expect(existsSync(dir)).toBe(false);
+  expect(JSON.parse(readFileSync(config, "utf8")).permissions.allow).toEqual(["Shell(ls)"]);
+
+  // A skill of the same name that setup did not write stays, and a config that does not parse
+  // is left as it is, with what to add.
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, "SKILL.md"), "mine\n");
+  writeFileSync(config, "{ // mine\n}");
+  m.ctx.lines.length = 0;
+  expect(await setup(m.sys, { agent: "cursor" })).toBe(0);
+  expect(m.ctx.lines.join("\n")).toContain(`${dir} is another skill: left alone.`);
+  expect(m.ctx.lines.join("\n")).toContain(`${config} is not valid JSON`);
+  expect(readFileSync(join(dir, "SKILL.md"), "utf8")).toBe("mine\n");
+  expect(readFileSync(config, "utf8")).toBe("{ // mine\n}");
 });
 
 test("status names the Claude Code session it runs in when that session's mod never called (#863)", async () => {
@@ -631,6 +679,10 @@ test("uninstall removes the service and plugins, asks the devices to revoke, kee
   expect(m.calls()).toContain(`pi remove ${PI_PACKAGE}`);
   expect(readdirSync(join(m.home, ".config/opencode")).sort()).toEqual(["plugins", "skills"]);
   expect(readdirSync(join(m.home, ".config/opencode/plugins"))).toEqual([]);
+  expect(readdirSync(join(m.home, ".cursor/skills"))).toEqual([]);
+  expect(
+    JSON.parse(readFileSync(join(m.home, ".cursor/cli-config.json"), "utf8")).permissions.allow,
+  ).toEqual([]);
   expect(JSON.parse(readFileSync(pps, "utf8"))).toEqual({
     permission: { bash: { "*": "ask" } },
     authorizerChain: ["judge"],
