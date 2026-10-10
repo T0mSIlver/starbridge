@@ -13,15 +13,18 @@ sealed interface Block {
     data class Code(val text: String) : Block
 }
 
-// (?U): JavaScript's \s takes Unicode spaces too. Leftmost match wins; at one position, code
-// before a link before bold before a bare URL.
+// JavaScript's \s, spelled out: Android's ICU regex rejects the UNICODE_CHARACTER_CLASS flag
+// that would widen Java's \s to it, and fails the whole pattern (#1002).
+private const val WS = "\\t\\n\\u000B\\f\\r \\u00A0\\u1680\\u2000-\\u200A\\u2028\\u2029\\u202F\\u205F\\u3000\\uFEFF"
+
+// Leftmost match wins; at one position, code before a link before bold before a bare URL.
 private val INLINE = Regex(
-    "(?U)`([^`\\n]+)`|\\[([^\\]\\n]+)\\]\\((https?://[^\\s)]+)\\)|\\*\\*(?=\\S)([^\\n]*?\\S)\\*\\*|(https?://[^\\s<>]+)",
+    "`([^`\\n]+)`|\\[([^\\]\\n]+)\\]\\((https?://[^$WS)]+)\\)|\\*\\*(?=[^$WS])([^\\n]*?[^$WS])\\*\\*|(https?://[^$WS<>]+)",
 )
 private val URL_TAIL = Regex("[.,;:!?'\")\\]]+$")
-private val BULLET = Regex("(?U)^[-*•]\\s+(.*)$")
-private val NUMBER = Regex("(?U)^([0-9]{1,3})[.)]\\s+(.*)$")
-private val HEADING = Regex("(?U)^#{1,6}\\s+(.*)$")
+private val BULLET = Regex("^[-*•][$WS]+(.*)$")
+private val NUMBER = Regex("^([0-9]{1,3})[.)][$WS]+(.*)$")
+private val HEADING = Regex("^#{1,6}[$WS]+(.*)$")
 
 private fun inline(text: String, bold: Boolean = false): List<Span> {
     val spans = mutableListOf<Span>()
