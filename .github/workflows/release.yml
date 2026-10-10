@@ -210,7 +210,6 @@ jobs:
           disable-animations: true
           emulator-options: -no-window -no-snapshot -no-audio -no-boot-anim -gpu swiftshader_indirect
           script: ADB="$ANDROID_HOME/platform-tools/adb" bun demo/smoke/android.ts "apk/starbridge-$VERSION.apk" smoke-out
-      # Only on failure: the release job publishes every artifact of the run.
       - if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -229,8 +228,10 @@ jobs:
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version: 1.4.2
+      # Only the built files: a re-run also finds smoke-failure, formula and release-dry-run from the earlier attempt (#1029).
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
+          pattern: "{android,cli,desktop}"
           path: out
           merge-multiple: true
       - name: Checksums
@@ -262,6 +263,7 @@ jobs:
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: formula
+          overwrite: true
           path: formula/
       - name: Release notes
         env:
@@ -275,6 +277,7 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: release-dry-run
+          overwrite: true
           path: |
             out/
             notes.md

@@ -98,6 +98,15 @@ async function crashed(): Promise<string | undefined> {
   return caught.includes("push failed") ? caught : undefined;
 }
 
+async function booted(what: string, seconds: number) {
+  await adb("wait-for-device");
+  await until(
+    what,
+    seconds,
+    async () => (await shell("getprop sys.boot_completed")).trim() === "1" || undefined,
+  );
+}
+
 interface Node {
   text: string;
   desc: string;
@@ -270,20 +279,19 @@ try {
   });
 
   step("emulator");
-  await adb("wait-for-device");
-  await until(
-    "boot",
-    300,
-    async () => (await shell("getprop sys.boot_completed")).trim() === "1" || undefined,
-  );
+  await booted("boot", 300);
   // The FCM broadcast is guarded by a permission only Play services holds; root holds every one.
-  await adb("root");
-  await adb("wait-for-device");
-  await until(
-    "boot after adb root",
-    120,
-    async () => (await shell("getprop sys.boot_completed")).trim() === "1" || undefined,
-  );
+  // adbd restarts as root, and the emulator can drop offline meanwhile (#1029): wait, then retry once.
+  for (let attempt = 1; ; attempt++) {
+    const error = await adb("root").then(
+      () => undefined,
+      (e: Error) => e,
+    );
+    await booted("boot after adb root", 120);
+    if ((await shell("id -u")).trim() === "0") break;
+    if (attempt === 2) throw error ?? new Error("adb root left the shell unprivileged");
+    step(`adb root, attempt ${attempt} failed: ${error?.message ?? "shell not root"}; retrying`);
+  }
   await adb("reverse", `tcp:${port}`, `tcp:${port}`);
   await shell("input keyevent KEYCODE_WAKEUP");
   await shell("wm dismiss-keyguard");
