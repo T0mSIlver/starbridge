@@ -1,68 +1,59 @@
-// A decision's context: plain text with links, inline `code` and fenced code
-// blocks. Code is the only text set in mono (DESIGN.md).
+// A decision's context in the subset every client renders (#969): one block per line, bullets
+// and numbers with a hanging indent, bold, links, and code inline or fenced. Code is the only
+// text set in mono (DESIGN.md); anything else shows as typed.
+import { type Block, parseContext, type Span } from "@starbridge/protocol/context";
+import type { CSSProperties, ReactNode } from "react";
 import s from "./Context.module.css";
 
-const INLINE = /(`[^`\n]+`|https?:\/\/\S+)/;
-
-function Inline({ text }: { text: string }) {
-  return text.split(INLINE).map((part, i) => {
-    // biome-ignore-start lint/suspicious/noArrayIndexKey: parts of one fixed string, never reordered
-    if (/^`.+`$/.test(part))
-      return (
-        <code key={i} className={`t-code ${s.inline}`}>
-          {part.slice(1, -1)}
-        </code>
-      );
-    if (/^https?:\/\//.test(part))
-      return (
-        <a key={i} href={part} target="_blank" rel="noreferrer">
-          {part.replace(/^https?:\/\//, "")}
+function Spans({ spans }: { spans: Span[] }) {
+  // biome-ignore-start lint/suspicious/noArrayIndexKey: parts of one fixed string, never reordered
+  return spans.map((span, i) => {
+    let node: ReactNode = span.text;
+    if (span.code) node = <code className={`t-code ${s.inline}`}>{node}</code>;
+    if (span.href)
+      node = (
+        <a href={span.href} target="_blank" rel="noreferrer">
+          {node}
         </a>
       );
-    // biome-ignore-end lint/suspicious/noArrayIndexKey: parts of one fixed string, never reordered
-    return part;
+    return span.bold ? <strong key={i}>{node}</strong> : <span key={i}>{node}</span>;
   });
+  // biome-ignore-end lint/suspicious/noArrayIndexKey: parts of one fixed string, never reordered
 }
 
-type Part = { code: boolean; text: string; line: number };
-
-// Fences open and close only on a line that starts with ```; an unclosed
-// fence runs to the end, as in CommonMark.
-function split(text: string): Part[] {
-  const parts: Part[] = [];
-  let code = false;
-  let lines: string[] = [];
-  let start = 0;
-  const flush = (next: number) => {
-    const body = lines.join("\n");
-    if (code || body.trim()) parts.push({ code, text: code ? body : body.trim(), line: start });
-    lines = [];
-    start = next;
-  };
-  text.split("\n").forEach((line, n) => {
-    if (line.trimStart().startsWith("```")) {
-      flush(n + 1);
-      code = !code;
-    } else lines.push(line);
-  });
-  flush(0);
-  return parts;
+function Line({ block }: { block: Block }) {
+  if (block.kind === "code")
+    return (
+      <pre className={`t-code ${s.block}`}>
+        <code>{block.text}</code>
+      </pre>
+    );
+  if (block.kind === "line")
+    return (
+      <p>
+        <Spans spans={block.spans} />
+      </p>
+    );
+  const marker = block.kind === "number" ? block.marker : "•";
+  return (
+    // The gutter grows with the marker, so "10." clears the text as "•" does.
+    <p
+      className={s.item}
+      data-marker={marker}
+      style={{ "--marker": marker.length } as CSSProperties}
+    >
+      <Spans spans={block.spans} />
+    </p>
+  );
 }
 
 export function Context({ text, className }: { text: string; className?: string }) {
   return (
     <div className={`${s.context} ${className ?? ""}`}>
-      {split(text).map((part) =>
-        part.code ? (
-          <pre key={part.line} className={`t-code ${s.block}`}>
-            <code>{part.text}</code>
-          </pre>
-        ) : (
-          <p key={part.line}>
-            <Inline text={part.text} />
-          </p>
-        ),
-      )}
+      {parseContext(text).map((block, i) => (
+        // biome-ignore lint/suspicious/noArrayIndexKey: blocks of one fixed string, never reordered
+        <Line key={i} block={block} />
+      ))}
     </div>
   );
 }

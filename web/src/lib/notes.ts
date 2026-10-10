@@ -1,16 +1,10 @@
 // What a notification says, the same from the service worker and the desktop app (#886).
+import { contextText } from "@starbridge/protocol/context";
 import type { InboxItem, PromptItem } from "./types";
 
-/** First lines of the context, without code fences, for the notification body. */
+/** The start of the context as plain text, for the notification body (#191, #969). */
 export function summary(context: string): string {
-  const text = context
-    .split("\n")
-    .filter((l) => !l.trimStart().startsWith("```"))
-    .join(" ")
-    // Inline code reads as plain text: a notification shows no formatting (#191).
-    .replace(/`([^`\n]+)`/g, "$1")
-    .replace(/\s+/g, " ")
-    .trim();
+  const text = contextText(context).replace(/\s+/g, " ").trim();
   return text.length > 180 ? `${text.slice(0, 179)}…` : text;
 }
 

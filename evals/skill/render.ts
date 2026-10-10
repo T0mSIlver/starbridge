@@ -5,7 +5,8 @@
  *
  * Starts the stand-in GitHub, the server and the built web page as web/e2e/run.ts does, signs in
  * with headless Chromium, pairs a CLI, re-posts each card with `starbridge ask --input` and
- * screenshots the selected decision at desktop width. Writes `<record name>-d<index>.png`.
+ * screenshots the selected decision at desktop width, or with --phone the whole 360 × 780 screen,
+ * where the fold shows. Writes `<record name>-d<index>.png`.
  */
 import { type ChildProcess, spawn, spawnSync } from "node:child_process";
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -17,7 +18,7 @@ import { chromium } from "../../web/node_modules/playwright/index.mjs";
 const { values: opt, positionals } = parseArgs({
   args: process.argv.slice(2),
   allowPositionals: true,
-  options: { out: { type: "string" }, "no-build": { type: "boolean" } },
+  options: { out: { type: "string" }, "no-build": { type: "boolean" }, phone: { type: "boolean" } },
 });
 const out = resolve(opt.out ?? "evals/skill/cards");
 mkdirSync(out, { recursive: true });
@@ -92,20 +93,22 @@ try {
   const browser = await chromium.launch();
   const page = await (await browser.newContext({ viewport: { width: 1280, height: 900 } })).newPage();
   await page.goto(ORIGIN);
-  await page.getByRole("link", { name: "Sign in with GitHub" }).first().click();
-  await page.getByRole("button", { name: "Make keys" }).click();
-  await page.getByLabel(/I wrote these words down/).check();
+  await page.getByRole("link", { name: /^(Sign in|Continue) with GitHub$/ }).first().click();
+  await page.getByRole("button", { name: "Create the keys" }).click();
+  await page.getByLabel(/I wrote this key down/).check();
   await page.getByRole("button", { name: "Continue" }).click();
   await page.getByRole("heading", { name: "Inbox" }).waitFor();
 
   const pair = cli(["pair", "--name", "devbox"]);
   const code = (await pair.waitFor(/Pairing code: (\S+)/))[1] as string;
-  await page.getByRole("link", { name: "Devices" }).click();
+  await page.goto(`${ORIGIN}/settings/devices/add`);
   await page.getByLabel("Pair a machine or device").fill(code);
   await page.getByRole("button", { name: "Check code" }).click();
   await page.getByRole("button", { name: "Approve" }).click();
+  await pair.waitFor(/Check code: (\S+)/);
+  await cli(["pair", "--confirm"]).exited;
   if ((await pair.exited) !== 0) throw new Error("pair failed");
-  await page.getByRole("link", { name: "Inbox" }).click();
+  await page.goto(ORIGIN);
 
   for (const spec of positionals) {
     const [file, index = "0"] = spec.split(":") as [string, string?];
@@ -129,11 +132,20 @@ try {
     writeFileSync(json, JSON.stringify(card));
     const ask = cli(["ask", "--input", json, "--project", "notes", "--session", "eval", "--session-title", rec.scenario]);
     if ((await ask.exited) !== 0) throw new Error(`ask failed for ${spec}`);
-    await page.getByText(d.question).first().click({ timeout: 30_000 });
+    if (opt.phone) await page.setViewportSize({ width: 360, height: 780 });
+    // The card's whole-card button sits under its answer buttons, which take a click at its centre.
+    await page
+      .getByRole("button", { name: d.question, exact: true })
+      .first()
+      .dispatchEvent("click", undefined, { timeout: 30_000 });
     const pane = page.locator('section[aria-label="Selected decision"]');
-    await pane.getByText(d.question).waitFor();
+    await (opt.phone ? page.getByRole("heading", { name: d.question }) : pane.getByText(d.question)).waitFor();
     await page.waitForTimeout(300);
-    await pane.screenshot({ path: join(out, `${name}.png`) });
+    await (opt.phone ? page : pane).screenshot({ path: join(out, `${name}.png`) });
+    if (opt.phone) {
+      await page.goBack();
+      await page.setViewportSize({ width: 1280, height: 900 });
+    }
     console.log(join(out, `${name}.png`));
   }
   await browser.close();

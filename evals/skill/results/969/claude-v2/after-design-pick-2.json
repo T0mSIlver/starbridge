@@ -1,0 +1,115 @@
+{
+  "agent": "claude",
+  "model": "claude-haiku-5-5",
+  "arm": "after",
+  "scenario": "design-pick",
+  "rep": 2,
+  "turns": [
+    {
+      "commands": [
+        "git branch -a && git log --oneline --all --graph | head -20 && git status --short && ls -la shots/ 2>/dev/null",
+        "git log --oneline main..settings-compact && git log --oneline main..settings-roomy && git diff --stat main settings-compact && git diff --stat main settings-roomy",
+        "git rev-parse main settings-compact settings-roomy && git diff main settings-compact --stat; git diff main settings-roomy --stat; git status --short --ignored | head",
+        "starbridge ask \\\n  --question 'Which settings design should I ship to main?' \\\n  --context 'Both branches point at main’s commit, so merging either one changes nothing yet.\n**Compact:** 39 px rows, all 9 settings, including Language, Shortcuts and About.\n**Roomy:** 63 px rows, only 6 settings: Language, Shortcuts and About are cut.' \\\n  --option 'Compact' --option 'Roomy' \\\n  --image \"$PWD/shots/compact.png\" --image \"$PWD/shots/roomy.png\"",
+        "starbridge wait d_kJuF9BbwwakBxoXd --timeout 5m"
+      ],
+      "final": "Compact is chosen, but nothing actually shipped. `git merge settings-compact` printed \"Already up to date\", and main is still at `119d969`.\n\nThe `settings-compact` and `settings-roomy` branches both point at the same commit as main. The variant code was never committed to either branch, so there was nothing to merge. The Compact screenshot in `shots/compact.png` is the design you picked, but its code is not in git yet.\n\nNext step: find where the Compact code lives (an uncommitted working tree, another clone, or a different branch name). Once it's committed to `settings-compact`, I can merge it. I didn't touch main or any files.\n\nThe decision card went to your phone and you answered Compact. Nothing else is waiting on you.",
+      "session": "bc9611c0-2400-4790-9247-f28381f87519",
+      "tokens": 187735,
+      "costUsd": 0.0060222999999999995,
+      "exit": 0,
+      "seconds": 40.731,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_kJuF9BbwwakBxoXd --timeout 5m` (again on exit 2)."
+      ]
+    },
+    {
+      "commands": [
+        "git merge settings-compact && git log --oneline -3"
+      ],
+      "final": "Compact is chosen, but nothing actually shipped. `git merge settings-compact` printed \"Already up to date\", and main is still at `119d969`.\n\nThe `settings-compact` and `settings-roomy` branches both point at the same commit as main. The variant code was never committed to either branch, so there was nothing to merge. The Compact screenshot in `shots/compact.png` is the design you picked, but its code is not in git yet.\n\nNext step: find where the Compact code lives (an uncommitted working tree, another clone, or a different branch name). Once it's committed to `settings-compact`, I can merge it. I didn't touch main or any files.\n\nThe decision card went to your phone and you answered Compact. Nothing else is waiting on you.",
+      "session": "bc9611c0-2400-4790-9247-f28381f87519",
+      "tokens": 187735,
+      "costUsd": 0.0060222999999999995,
+      "exit": 0,
+      "seconds": 40.731,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_kJuF9BbwwakBxoXd --timeout 5m` (again on exit 2)."
+      ]
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_kJuF9BbwwakBxoXd",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-09T21:46:02Z",
+      "question": "Which settings design should I ship to main?",
+      "context": "Both branches point at main’s commit, so merging either one changes nothing yet.\n**Compact:** 39 px rows, all 9 settings, including Language, Shortcuts and About.\n**Roomy:** 63 px rows, only 6 settings: Language, Shortcuts and About are cut.",
+      "options": [
+        "Compact",
+        "Roomy"
+      ],
+      "recommended": "Compact",
+      "agent": "claude-code",
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "bc9611c0-2400-4790-9247-f28381f87519",
+        "sessionTitle": "proj-6e"
+      },
+      "images": [
+        {
+          "type": "image/png",
+          "width": 360,
+          "height": 640
+        },
+        {
+          "type": "image/png",
+          "width": 360,
+          "height": 640
+        }
+      ],
+      "replies": true,
+      "dir": {
+        "length": 2,
+        "head": "3hCGrdi5qxDub8MILuhULDH8dAbldrQmy8lLF-6wlVA"
+      }
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [],
+  "answered": "Answer to d_kJuF9BbwwakBxoXd (Which settings design should I ship to main?): Compact",
+  "waiting": [
+    {
+      "v": 1,
+      "id": "w_lcmHhCzv-FzNslpk",
+      "decisionId": "d_kJuF9BbwwakBxoXd",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-09T21:46:04Z",
+      "state": "waiting",
+      "dir": {
+        "length": 2,
+        "head": "3hCGrdi5qxDub8MILuhULDH8dAbldrQmy8lLF-6wlVA"
+      }
+    }
+  ],
+  "permissions": [],
+  "peakContext": 26080,
+  "usedTokens": 187735,
+  "judge": {
+    "cold": true,
+    "consequences": true,
+    "terminal": false,
+    "links": null,
+    "plain": true,
+    "skim": true,
+    "notes": "The card went out before the agent confirmed the variant code was committed, and its context says only that merging changes nothing yet, so the user's Compact tap shipped nothing and the card never warned that the code was missing from git."
+  }
+}

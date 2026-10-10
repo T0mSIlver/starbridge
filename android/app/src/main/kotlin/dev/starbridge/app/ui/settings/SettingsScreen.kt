@@ -34,6 +34,8 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.ToggleButton
 import androidx.compose.material3.ToggleButtonDefaults
 import androidx.compose.material3.ToggleButtonShapes
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -301,9 +303,23 @@ private fun ChoiceRow(index: Int, count: Int, title: String, sub: String? = null
     }
 }
 
+/** [onChange] with a switch's feel: a tick on, a lighter one off (#997). */
+@Composable
+private fun rememberToggle(onChange: (Boolean) -> Unit): (Boolean) -> Unit {
+    val haptics = LocalHapticFeedback.current
+    val change by rememberUpdatedState(onChange)
+    return remember(haptics) {
+        { on ->
+            haptics.performHapticFeedback(if (on) HapticFeedbackType.ToggleOn else HapticFeedbackType.ToggleOff)
+            change(on)
+        }
+    }
+}
+
 @Composable
 private fun SwitchRow(index: Int, count: Int, title: String, checked: Boolean, sub: String? = null, onChange: (Boolean) -> Unit) {
-    Shell(index, count, Modifier.toggleable(checked, role = Role.Switch, onValueChange = onChange)) {
+    val toggle = rememberToggle(onChange)
+    Shell(index, count, Modifier.toggleable(checked, role = Role.Switch, onValueChange = toggle)) {
         Line { Texts(title, sub, Modifier.weight(1f)); Switch(checked = checked, onCheckedChange = null) }
     }
 }
@@ -415,6 +431,8 @@ private fun ProviderRow(
     var height by remember { mutableIntStateOf(0) }
     val move by rememberUpdatedState(onMove)
     val ends by rememberUpdatedState(first to last)
+    // As the launcher's: a heavy click on pick-up, a tick per place it moves to (#997).
+    val haptics = LocalHapticFeedback.current
     Surface(
         placement(dragging)
             .fillMaxWidth()
@@ -438,8 +456,8 @@ private fun ProviderRow(
                 tint = StarbridgeTheme.colors.fg3,
                 modifier = Modifier.padding(Spacing.s2).pointerInput(Unit) {
                     detectDragGesturesAfterLongPress(
-                        onDragStart = { dragging = true },
-                        onDragEnd = { dragging = false; offset = 0f },
+                        onDragStart = { dragging = true; haptics.performHapticFeedback(HapticFeedbackType.LongPress) },
+                        onDragEnd = { dragging = false; offset = 0f; haptics.performHapticFeedback(HapticFeedbackType.GestureEnd) },
                         onDragCancel = { dragging = false; offset = 0f },
                     ) { change, drag ->
                         change.consume()
@@ -447,8 +465,12 @@ private fun ProviderRow(
                         val step = height + groupGap.toPx()
                         val (top, bottom) = ends
                         offset = (offset + drag.y).coerceIn(if (top) 0f else -step, if (bottom) 0f else step)
-                        if (offset > step / 2 && !bottom) { move(1); offset -= step }
-                        if (offset < -step / 2 && !top) { move(-1); offset += step }
+                        val by = if (offset > step / 2 && !bottom) 1 else if (offset < -step / 2 && !top) -1 else 0
+                        if (by != 0) {
+                            move(by)
+                            offset -= by * step
+                            haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
+                        }
                     }
                 },
             )
@@ -458,7 +480,7 @@ private fun ProviderRow(
                 color = if (shown) scheme.onSurface else StarbridgeTheme.colors.fg3,
                 modifier = Modifier.weight(1f),
             )
-            IconToggleButton(checked = shown, onCheckedChange = onShow) {
+            IconToggleButton(checked = shown, onCheckedChange = rememberToggle(onShow)) {
                 Symbol(if (shown) Sym.Visibility else Sym.VisibilityOff, size = 20.dp, tint = if (shown) scheme.onSurfaceVariant else StarbridgeTheme.colors.fg3, contentDescription = "Show $name")
             }
         }
