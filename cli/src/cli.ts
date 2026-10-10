@@ -27,6 +27,7 @@ import {
   settle,
   setWaiting,
   sinceTime,
+  typedBreaks,
   wait,
 } from "./decisions";
 import { hookAskUser, hookCursorSession, hookPermission, hookQuestion, hookSettle } from "./hook";
@@ -345,7 +346,7 @@ export async function run(argv: string[], ctx: Ctx): Promise<number> {
         const input: AskInput = {
           ...fromJson,
           ...(v.question !== undefined ? { question: v.question } : {}),
-          ...(v.context !== undefined ? { context: v.context } : {}),
+          ...(v.context !== undefined ? { context: typedBreaks(v.context) } : {}),
           ...(v["context-file"] !== undefined ? { context: readText(v["context-file"]) } : {}),
           ...(v.option !== undefined ? { options: v.option } : {}),
           ...(v.recommended !== undefined ? { recommended: v.recommended } : {}),

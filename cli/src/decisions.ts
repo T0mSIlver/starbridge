@@ -185,6 +185,20 @@ function sourceFor(input: AskInput, ctx: Ctx, machine: string): Decision["source
   };
 }
 
+/**
+ * A `--context` with no line break in it whose author wrote `\n` for each, as opencode's models do
+ * (#1037): those become line breaks, except inside code spans and after a backslash. A context
+ * that holds a real line break meant its `\n`, so it stays as typed; fenced code needs real line
+ * breaks, so none is touched.
+ */
+export function typedBreaks(context: string): string {
+  if (/[\r\n]/.test(context)) return context;
+  return context
+    .split(/(`[^`]+`)/)
+    .map((part, i) => (i % 2 === 1 ? part : part.replace(/(?<!\\)\\n/g, "\n")))
+    .join("");
+}
+
 export function buildDecision(input: AskInput, ctx: Ctx, machine: string, to: string[]): Decision {
   if (!input.question) throw new UsageError("ask needs --question");
   const options = input.options ?? [];

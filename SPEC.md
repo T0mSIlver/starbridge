@@ -1218,6 +1218,13 @@ first window, so a provider with a window running out leads.
   heading is a bold line. Anything else shows as typed. `packages/protocol`'s `parseContext`
   parses it, ported to Kotlin with shared vectors, and notifications show the same text plain.
   Each line on its own makes a line per option read as a list; bold lets the labels lead it.
+- **`\n` in `--context`** (#1037). Models in opencode wrote `\n` for line breaks inside the
+  quoted `--context`, which the shell passes on as typed, and cards showed a backslash and an n.
+  The skill says to break lines with real line breaks inside the quotes. `ask` also turns `\n`
+  into a line break when the `--context` argument holds no real line break, the one case where it
+  is unambiguous: never inside a code span, never after a backslash, and never from
+  `--context-file` or `--input`. Fenced code needs real line breaks, so none is touched. The
+  cost: a Windows path written outside a code span, `C:\new`, breaks after `C:`.
 - **Revoked machines.** Their items leave the Inbox and their notifications close (#344).
 - **Clock** (#161): System, 12-hour or 24-hour, per device. UI words stay English.
 - **Images** open a full-screen viewer (zoom, pan, swipe or arrow keys between images) and carry
