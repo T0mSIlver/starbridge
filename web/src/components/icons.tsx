@@ -83,10 +83,10 @@ const PATHS = {
       <path d="M11 18h2" />
     </>
   ),
-  browser: (
+  globe: (
     <>
-      <rect x="3" y="4" width="18" height="16" rx="2" />
-      <path d="M3 9h18M6.5 6.5h.01M9 6.5h.01" />
+      <circle cx="12" cy="12" r="9" />
+      <path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18" />
     </>
   ),
   laptop: (

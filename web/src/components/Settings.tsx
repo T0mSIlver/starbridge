@@ -555,9 +555,9 @@ const NOTIFY_LABELS: Record<NotifyState, string> = {
 
 /** A device's icon by the app it signs in from (#1019); one that has not said is a plain device. */
 function deviceIcon(role: string, client: string | undefined): IconName {
-  if (role === "machine") return "term";
+  if (role === "machine") return "server";
   return (
-    ({ android: "phone", web: "browser", desktop: "desktop" } as const)[client ?? ""] ?? "devices"
+    ({ android: "phone", web: "globe", desktop: "laptop" } as const)[client ?? ""] ?? "devices"
   );
 }
 

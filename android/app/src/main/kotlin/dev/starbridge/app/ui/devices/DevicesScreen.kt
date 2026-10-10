@@ -302,14 +302,15 @@ fun PairCard(approval: Approval, actions: DeviceActions, otherWays: @Composable 
 private val NOTIFY_LABELS = mapOf("on" to "Notifications on", "off" to "Notifications off", "blocked" to "Notifications blocked")
 
 /**
- * A member's icon (#1019): a machine's terminal; a device's app, as it said with its notifications;
- * this phone is a phone. A device that has not said is a plain device.
+ * A member's icon (#1019): a server for a machine; a device's app, as it said with its
+ * notifications: a phone, a globe for a browser, a laptop for the desktop app. This phone is a
+ * phone; a device that has not said is a plain device.
  */
 fun memberSym(member: Member, client: String?) = when {
-    member.kind == Kind.Machine -> Sym.Terminal
+    member.kind == Kind.Machine -> Sym.Server
     member.current || client == "android" -> Sym.Phone
-    client == "web" -> Sym.Web
-    client == "desktop" -> Sym.Desktop
+    client == "web" -> Sym.Globe
+    client == "desktop" -> Sym.Laptop
     else -> Sym.Devices
 }
 
