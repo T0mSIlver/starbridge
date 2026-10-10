@@ -4,7 +4,7 @@
  * through `starbridge-widgets`, a helper beside its executable, which also asks WidgetKit to
  * redraw: WidgetCenter is Swift only.
  */
-import { execFile, execFileSync } from "node:child_process";
+import { type ChildProcess, execFile, execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import type { PageState } from "./bridge";
 
@@ -34,7 +34,7 @@ export function snapshot(state: PageState): Snapshot | null {
 /** Writes each new snapshot, one helper run at a time; the page repeats its state every 15 s. */
 export class Widgets {
   private last = "";
-  private running = false;
+  private running: ChildProcess | null = null;
   private next: string | null = null;
 
   /** `helper` is null where there is no widget: off macOS, or a development run. */
@@ -57,6 +57,9 @@ export class Widgets {
   /** On quit: the widget says Starbridge is closed rather than keep a count nobody updates. */
   close(): void {
     if (!this.helper || this.last === JSON.stringify(CLOSED)) return;
+    // A write still running could rename its file over this one once the app is gone.
+    this.next = null;
+    this.running?.kill("SIGKILL");
     try {
       execFileSync(this.helper, [APP_GROUP], { input: JSON.stringify(CLOSED), timeout: 2_000 });
     } catch {}
@@ -66,11 +69,13 @@ export class Widgets {
     if (this.running || this.next === null || !this.helper) return;
     const json = this.next;
     this.next = null;
-    this.running = true;
     const child = execFile(this.helper, [APP_GROUP], { timeout: 10_000 }, () => {
-      this.running = false;
+      this.running = null;
       this.write();
     });
+    this.running = child;
+    // A helper that exits before reading (an ad hoc build, refused the group) must not crash the app.
+    child.stdin?.on("error", () => {});
     child.stdin?.end(json);
   }
 }
