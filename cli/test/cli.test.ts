@@ -745,6 +745,20 @@ test("an Antigravity conversation asks under its id and title, and is told to wa
   ]);
 });
 
+test("a Cursor agent's command asks as Cursor, in its conversation, and is told to wait (#955)", async () => {
+  const ctx = await paired(server);
+  ctx.env = { ...ctx.env, CURSOR_AGENT: "1", CURSOR_CONVERSATION_ID: "c-1" };
+  await run(ASK, ctx);
+  expect(ctx.errors.at(-1)).toContain("run `starbridge wait");
+  // The IDE gives its agent's commands no conversation id.
+  delete ctx.env.CURSOR_CONVERSATION_ID;
+  await run(ASK, ctx);
+  expect((await server.opened("decision")).map((d) => [d.agent, d.source.session])).toEqual([
+    ["cursor", "c-1"],
+    ["cursor", ""],
+  ]);
+});
+
 test("config turns permission prompts on and off", async () => {
   const ctx = await paired(server);
   expect(await run(["config"], ctx)).toBe(0);
