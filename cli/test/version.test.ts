@@ -41,9 +41,21 @@ test("a release moves the marketplace to its tag; a release candidate leaves it"
   expect(check("7.1.0", dir)).toEqual([".claude-plugin/marketplace.json: v(none), want v7.1.0"]);
 });
 
-test("a final release may change only the version places since its rc", () => {
-  expect(beyondStamp(FILES)).toEqual([]);
-  expect(beyondStamp(["cli/package.json", "cli/src/setup/codexbar-pin.json"])).toEqual([
-    "cli/src/setup/codexbar-pin.json",
+test("a final release may change only the version stamp since its rc", () => {
+  const rc = copy();
+  stamp("9.8.7-rc.1", rc);
+  const final = copy();
+  stamp("9.8.7", final);
+  const read = (dir: string) => (f: string) => readFileSync(join(dir, f), "utf8");
+  expect(beyondStamp(FILES, read(rc), read(final))).toEqual([]);
+
+  const pkg = join(final, "cli/package.json");
+  writeFileSync(
+    pkg,
+    readFileSync(pkg, "utf8").replace('"version"', '"private": true,\n  "version"'),
+  );
+  expect(beyondStamp([...FILES, "cli/src/main.ts"], read(rc), read(final))).toEqual([
+    "cli/package.json",
+    "cli/src/main.ts",
   ]);
 });

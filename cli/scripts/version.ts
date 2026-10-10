@@ -57,12 +57,20 @@ export function check(version?: string, root = ROOT): string[] {
 }
 
 /**
- * The changed files that are not version places: a final release must ship what its rc shipped,
- * which the owner installed and tried (#1004), so only the stamp may differ.
+ * The changed files that differ in more than their version: a final release must ship what its
+ * rc shipped, which the owner installed and tried (#1004), so only the stamp may differ.
  */
-export function beyondStamp(changed: string[]): string[] {
-  const stamped = new Set(PLACES.map((p) => p.file));
-  return changed.filter((f) => !stamped.has(f));
+export function beyondStamp(
+  changed: string[],
+  before: (file: string) => string,
+  after: (file: string) => string,
+): string[] {
+  const unstamped = (text: string, pattern: RegExp) =>
+    text.replace(pattern, (m, old: string) => m.replace(old, "VERSION"));
+  return changed.filter((f) => {
+    const place = PLACES.find((p) => p.file === f);
+    return !place || unstamped(before(f), place.pattern) !== unstamped(after(f), place.pattern);
+  });
 }
 
 export function stamp(version: string, root = ROOT) {
@@ -107,7 +115,10 @@ if (import.meta.main) {
       console.error(`no v${second}-rc.N tag: cut a release candidate and try its APK first`);
       process.exit(1);
     }
-    const extra = beyondStamp(git("diff", "--name-only", rc, "HEAD"));
+    // A file missing on one side differs.
+    const show = (ref: string) => (file: string) =>
+      spawnSync("git", ["show", `${ref}:${file}`], { cwd: ROOT, encoding: "utf8" }).stdout ?? "";
+    const extra = beyondStamp(git("diff", "--name-only", rc, "HEAD"), show(rc), show("HEAD"));
     if (extra.length) {
       console.error(
         `${extra.length} files changed since ${rc}, such as ${extra.slice(0, 5).join(", ")}.`,
