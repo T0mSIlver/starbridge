@@ -14,7 +14,7 @@ instruction files, in your words. Starbridge never writes to them.
 | Answers into the live session | ✓ | ✓¹ | ✓³ | ✓⁵ | ✓¹¹ |
 | "Waiting for you" | ✓ | ✓ | ✓ | ✓ | ✓ |
 | Runs | ✓ | ✓⁸ | ✓ | ✓ | ✓ |
-| Permission prompts | Opt-in | Opt-in⁹ | Opt-in⁴ | Opt-in⁶ | No |
+| Permission prompts | Opt-in | Opt-in⁹ | Opt-in⁴ | Opt-in⁶ | No¹³ |
 | The agent's own ask tool | ✓² | ✓¹⁰ | n/a | ✓⁷ | No¹² |
 
 ¹ In interactive sessions, when `starbridge agent` runs (Codex CLI 0.160 or
@@ -78,6 +78,9 @@ waits for the answer with `starbridge wait`.
 
 ¹² Cursor's `askQuestion` tool runs no hooks, so nothing can show it on your
 devices. The rules tell the agent to ask through `starbridge ask` instead.
+
+¹³ Cursor shows its own prompt even when a hook allows the call, so an Allow
+from your phone could not take effect. Cursor's prompts stay at the keyboard.
 
 `starbridge setup` installs Starbridge in each agent it finds, and prints one
 line per agent; `starbridge uninstall --agent <name>` removes it from one, and
