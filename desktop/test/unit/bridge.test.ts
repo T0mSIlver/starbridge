@@ -11,7 +11,15 @@ const entry = {
 };
 
 test("a page's state reads as sent", () => {
-  expect(parseState({ count: 1, entries: [entry] })).toEqual({ count: 1, entries: [entry] });
+  const state = { count: 2, entries: [entry], waiting: 1, account: "ready" as const };
+  expect(parseState(state)).toEqual(state);
+});
+
+test("a page before #1031 counts the waiting from its entries", () => {
+  expect(parseState({ count: 1, entries: [{ ...entry, waiting: true }] })).toMatchObject({
+    waiting: 1,
+    account: "ready",
+  });
 });
 
 test("long text is cut, not refused", () => {
@@ -29,6 +37,8 @@ test.each([
   ["a function", { count: 1, entries: [{ ...entry, title: () => 1 }] }],
   ["too many entries", { count: 201, entries: Array(201).fill(entry) }],
   ["an array", []],
+  ["more waiting than counted", { count: 1, entries: [], waiting: 2 }],
+  ["an unknown account", { count: 0, entries: [], account: "admin" }],
 ])("%s is refused", (_why, x) => {
   expect(parseState(x)).toBeNull();
 });

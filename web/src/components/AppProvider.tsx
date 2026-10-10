@@ -683,13 +683,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const send = () => {
       const state = ready
         ? desktopState(inbox.items, prompts, Date.now())
-        : { count: 0, entries: [] };
-      bridge.update(notify ? state : { ...state, entries: [] });
+        : { count: 0, waiting: 0, entries: [] };
+      // Signed out, or with no device here; a server that fails or a broken chain keeps the count.
+      const out = ["signed-out", "first-device", "join", "revoked"].includes(boot.state);
+      const account = ready ? "ready" : out ? "signedOut" : "loading";
+      bridge.update({ ...state, account, entries: notify ? state.entries : [] });
     };
     send();
     const timer = setInterval(send, DESKTOP_TICK_MS);
     return () => clearInterval(timer);
-  }, [ready, inbox, prompts, notify]);
+  }, [ready, boot.state, inbox, prompts, notify]);
 
   // A notification's button or reply answers as a tap here would; its click opens the item.
   const answerRef = useRef(answer);

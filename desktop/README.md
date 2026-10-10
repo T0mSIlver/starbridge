@@ -30,8 +30,9 @@ pairs in the app's window, and answers `starbridge ask --wait` from the notifica
 The page finds `window.starbridgeDesktop` only on the configured server's origin:
 
 - `version`: the app's version, which the page sends as `starbridge-client: desktop/<version>`.
-- `update({count, entries})`: the Needs-you count and one entry per item to notify
-  (`src/bridge.ts`). Send it whenever either changes.
+- `update({count, waiting, account, entries})`: the Needs-you count, how many of them an agent
+  waits on, `"ready"`, `"signedOut"` or `"loading"`, and one entry per item to notify
+  (`src/bridge.ts`). Send it whenever any changes.
 - `onAnswer(f)`: `f({id, choice} | {id, text})` sends a notification's answer and rejects with
   the reason it was not sent.
 - `onOpen(f)`: `f(id)` opens the item whose notification was clicked.
@@ -43,6 +44,17 @@ The page finds `window.starbridgeDesktop` only on the configured server's origin
 
 The main process checks that each message comes from the window's top frame on that origin, and
 checks every field again.
+
+## The widget
+
+`widgets/` holds the Needs you widget (#1031): `NeedsYou.swift`, the WidgetKit extension, and
+`reload.swift`, the helper the app runs to write `widgets.json` into the App Group container and
+ask WidgetKit to redraw (`src/widgets.ts`). `scripts/widgets.cjs`, electron-builder's afterPack
+hook, builds both with `swiftc` (Xcode's macOS SDK, no Xcode project), copies them into the app
+and signs them with their own entitlements; `scripts/check-widgets.sh` checks a packaged app.
+The App Group needs the Team ID, so only a Developer ID build shows a count. A new widget build
+registers once the app sits in /Applications and has run; `pluginkit -m -p
+com.apple.widgetkit-extension -v` lists it.
 
 ## Budgets
 

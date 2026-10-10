@@ -1458,6 +1458,19 @@ a browser; the app adds a menu bar light and notifications, so a web release nee
   as two holds, and with the switch off the window still counted while touched, so a Mac in
   another app held a push one time and not the next. The hold time is the opt-in: Off, nothing
   is held, whatever presence says.
+- **The Needs you widget** (#1031), in Notification Center and on the desktop: Android's 2×2
+  (#894) at WidgetKit's small size, the same count and amber. The owner left out Quotas widgets,
+  which CodexBar's own widgets already show. A WidgetKit extension in `Contents/PlugIns` draws it;
+  the page sends the count and how many of them an agent waits on over the bridge, and the app
+  writes them into the App Group `3N63N7U9R3.dev.starbridge` through a small Swift helper, which
+  also asks WidgetKit to redraw (WidgetCenter is Swift only). The widget reads that file and
+  nothing else: fetching the server itself would need a token in a shared keychain group, which
+  takes a provisioning profile, and the device's keys. It redraws on each change, as Android's
+  does, and every 30 minutes; quitting, the app says Starbridge is closed rather than leave a
+  count nobody updates. A click opens the Inbox (`starbridge://inbox`). The group carries the
+  Team ID because from macOS 15 that is what lets an app outside the App Store open it without
+  asking, so ad hoc builds (pull requests) show "Starbridge is closed": macOS refuses them the
+  group.
 - **`starbridge://pair` links** open `/pair` on the configured server, as the https link does. The
   link's check key stays out of the page, which the server writes; a link for another server is
   refused, with both servers named.

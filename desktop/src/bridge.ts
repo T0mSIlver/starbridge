@@ -22,7 +22,14 @@ export interface Entry {
 export interface PageState {
   count: number;
   entries: Entry[];
+  /** How many of `count` an agent waits on, for the widget (#1031); kept with notifications off. */
+  waiting: number;
+  /** Whether the page is signed in with its inbox loaded, signed out, or still loading. */
+  account: Account;
 }
+
+export type Account = "ready" | "signedOut" | "loading";
+const ACCOUNTS: Account[] = ["ready", "signedOut", "loading"];
 
 /** A notification's answer, which the page sends as if typed or tapped there. */
 export type Answer = { id: string; choice: string } | { id: string; text: string };
@@ -47,7 +54,13 @@ export function parseState(x: unknown): PageState | null {
     if (!entry) return null;
     entries.push(entry);
   }
-  return { count, entries };
+  // Pages before #1031 send neither: their entries say who waits, and a count means signed in.
+  const waiting = x.waiting ?? entries.filter((e) => e.waiting).length;
+  if (typeof waiting !== "number" || !Number.isInteger(waiting) || waiting < 0 || waiting > count)
+    return null;
+  const account = x.account ?? "ready";
+  if (!ACCOUNTS.includes(account as Account)) return null;
+  return { count, entries, waiting, account: account as Account };
 }
 
 function parseEntry(e: unknown): Entry | null {
