@@ -223,9 +223,9 @@ function createWindow(): void {
     show: false,
     title: "Starbridge",
     // No title bar on macOS (owner's picks from mockups, #938, #1006): the page runs up to the
-    // window's buttons, and a strip under them drags the window.
+    // window's buttons, centred on the rail's mark, and a strip under them drags the window.
     ...(process.platform === "darwin"
-      ? { titleBarStyle: "hiddenInset" as const, trafficLightPosition: { x: 12, y: 8 } }
+      ? { titleBarStyle: "hiddenInset" as const, trafficLightPosition: { x: 12, y: 20 } }
       : {}),
     backgroundColor: "#0c0c0c",
     webPreferences: {

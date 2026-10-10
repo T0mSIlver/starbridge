@@ -12,8 +12,8 @@
 }
 
 :root[data-titlebar="inset"] {
-  --window-buttons: 28px;
-  --titlebar: 28px;
+  --window-buttons: 52px;
+  --titlebar: 52px;
 }
 
 * {

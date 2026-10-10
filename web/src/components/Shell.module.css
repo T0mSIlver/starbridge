@@ -73,6 +73,11 @@
   text-align: center;
 }
 
+/* The macOS app, narrow (#1006): the strip for the window's buttons takes the top bar's colour. */
+:global(:root[data-titlebar="inset"]):has(.rail) :global(body)::before {
+  background: var(--surface);
+}
+
 @media (min-width: 600px) {
   .bottom {
     display: none;
@@ -99,8 +104,8 @@
   }
 
   /* The macOS app (#938, #1006): the rail runs to the window's top in its own colour, with the
-     window's buttons over it, and the panes beside it start at the top. The strip still drags the
-     window, see-through, and passes clicks to what lies under it. */
+     window's buttons in its first row, before the name, and the panes beside it start at the top.
+     The strip still drags the window, see-through, and passes clicks to what lies under it. */
   :global(:root[data-titlebar="inset"]):has(.rail) {
     --titlebar: 0px;
   }
@@ -110,8 +115,9 @@
     pointer-events: none;
   }
 
-  .rail {
-    padding-top: calc(var(--s4) + var(--window-buttons));
+  /* The buttons end 64 px from the window's edge (desktop/src/main.ts). */
+  :global(:root[data-titlebar="inset"]) .brand {
+    margin-left: 60px;
   }
 }
 
