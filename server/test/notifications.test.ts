@@ -45,3 +45,18 @@ test("a revoked device drops out of the list (#943)", async () => {
   await revoke(s, acct, "brave");
   expect(await states()).toEqual({});
 });
+
+test("the list names the app each device said it from (#1019)", async () => {
+  const desktop = await pair(s, acct, "app", "device", await signIn(s));
+  await put(acct.device.token, "on");
+  const cookie = (token: string, client: string) => ({
+    cookie: `sb_session=${token}`,
+    "starbridge-client": client,
+  });
+  const viaCookie = (token: string, client: string) =>
+    s.call("PUT", "/v1/notifications", { headers: cookie(token, client), body: { state: "on" } });
+  expect((await viaCookie(browser.token, "web/0.1.4")).status).toBe(204);
+  expect((await viaCookie(desktop.token, "desktop/0.1.4")).status).toBe(204);
+  const res = await s.call("GET", "/v1/notifications", { token: acct.device.token });
+  expect(res.json.clients).toEqual({ phone: "android", brave: "web", app: "desktop" });
+});

@@ -584,7 +584,7 @@ says once the app has its session, the page offers to turn off this browser's no
 | Route | Who | What |
 |---|---|---|
 | `PUT /notifications` | device | `{state: "on" \| "off" \| "blocked"}`: this device's own notifications → 204. `blocked` means the browser or Android refuses them |
-| `GET /notifications` | device | `{devices: {[memberId]: state}}`, for the account's active devices that have said |
+| `GET /notifications` | device | `{devices: {[memberId]: state}, clients: {[memberId]: "android" \| "web" \| "desktop"}}`, for the account's active devices that have said. `clients` names the app each last said it from (#1019), known from how it signs in: a bearer token is the Android app, the session cookie a browser, or the desktop app when its `starbridge-client` says so. A client may meet a name it does not know: it shows a plain device |
 
 ### Limits
 
