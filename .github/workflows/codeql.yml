@@ -1,0 +1,49 @@
+name: CodeQL
+
+# CodeQL's default setup, as its own workflow so Swift can build by hand: autobuild finds no
+# Xcode project in desktop/widgets, which builds with swiftc (desktop/README.md, "The widget").
+# The other languages keep default setup's languages, build mode and weekly scan.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "17 4 * * 1"
+
+concurrency:
+  group: codeql-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { language: actions, build-mode: none, runner: ubuntu-latest }
+          - { language: java-kotlin, build-mode: none, runner: ubuntu-latest }
+          - { language: javascript-typescript, build-mode: none, runner: ubuntu-latest }
+          - { language: swift, build-mode: manual, runner: macos-15 }
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: github/codeql-action/init@24c54180a607b1449ed407dd24f251e4e9147c8d # v4.38.3
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
+      # The widget and its helper, as electron-builder's afterPack hook builds them.
+      - if: matrix.language == 'swift'
+        run: desktop/widgets/build.sh dev.starbridge.desktop 0.0.0 0.0.0 3N63N7U9R3.dev.starbridge
+      - uses: github/codeql-action/analyze@24c54180a607b1449ed407dd24f251e4e9147c8d # v4.38.3
+        with:
+          category: /language:${{ matrix.language }}
