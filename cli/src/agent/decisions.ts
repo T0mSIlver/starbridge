@@ -74,7 +74,12 @@ export class Decisions implements Feature {
           throw new HttpError(400, "bad-request", "input.project is required");
         const decision = await postDecision(this.ctx, session(this.ctx), ask);
         const reachable = ask.codex ? await codexReachable(ask.codex) : false;
-        const mod = !!ask.session && this.hub.seen(ask.session, MOD_SEEN_MS);
+        const mod =
+          !!ask.session &&
+          this.hub.seen(
+            ask.session,
+            ask.agent === "cursor" ? Number.POSITIVE_INFINITY : MOD_SEEN_MS,
+          );
         return { id: decision.id, delivery: delivery(ask, reachable, mod) };
       },
     },

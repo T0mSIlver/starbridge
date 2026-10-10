@@ -7,8 +7,10 @@
  */
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import cli from "../../../plugin/hooks/cli.sh" with { type: "text" };
 import rule from "../../../plugin/hooks/rule.md" with { type: "text" };
 import sessionStart from "../../../plugin/hooks/session-start.sh" with { type: "text" };
+import { CURSOR_HOLD_MS } from "../hook";
 import { type FileState, SKILL } from "./harnesses";
 import { marker, ours } from "./marker";
 import { type Sys, which } from "./sys";
@@ -48,15 +50,24 @@ function cursorFiles(sys: Home): Record<string, string> {
     // The Claude Code plugin's, so both harnesses add the same rule.
     [join(dir, "session-start.sh")]: sessionStart,
     [join(dir, "rule.md")]: rule,
+    [join(dir, "cli.sh")]: cli,
   };
 }
 
 /** Starbridge's entries in `~/.cursor/hooks.json`, by event. */
 function hookEntries(sys: Home): Record<string, Record<string, unknown>[]> {
   const dir = cursorScriptsDir(sys);
+  const session = `sh "${join(dir, "cli.sh")}" hook session --agent cursor`;
   return {
     // The rule, as the Claude Code plugin's SessionStart adds it (#954).
-    sessionStart: [{ command: `sh "${join(dir, "session-start.sh")}" cursor`, timeout: 5 }],
+    sessionStart: [
+      { command: `sh "${join(dir, "session-start.sh")}" cursor`, timeout: 5 },
+      { command: session, timeout: 10 },
+    ],
+    // Holds for the answers to the conversation's open questions (#956), with no cap on how
+    // many turns it starts.
+    stop: [{ command: session, timeout: CURSOR_HOLD_MS / 1000 + 60, loop_limit: null }],
+    sessionEnd: [{ command: session, timeout: 10 }],
   };
 }
 

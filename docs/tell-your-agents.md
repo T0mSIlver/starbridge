@@ -8,14 +8,14 @@ instruction files, in your words. Starbridge never writes to them.
 
 ## What each agent supports
 
-| | Claude Code | Codex | Pi | opencode |
-|---|---|---|---|---|
-| Questions | ✓ | ✓ | ✓ | ✓ |
-| Answers into the live session | ✓ | ✓¹ | ✓³ | ✓⁵ |
-| "Waiting for you" | ✓ | ✓ | ✓ | ✓ |
-| Runs | ✓ | ✓⁸ | ✓ | ✓ |
-| Permission prompts | Opt-in | Opt-in⁹ | Opt-in⁴ | Opt-in⁶ |
-| The agent's own ask tool | ✓² | ✓¹⁰ | n/a | ✓⁷ |
+| | Claude Code | Codex | Pi | opencode | Cursor |
+|---|---|---|---|---|---|
+| Questions | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Answers into the live session | ✓ | ✓¹ | ✓³ | ✓⁵ | ✓¹¹ |
+| "Waiting for you" | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Runs | ✓ | ✓⁸ | ✓ | ✓ | ✓ |
+| Permission prompts | Opt-in | Opt-in⁹ | Opt-in⁴ | Opt-in⁶ | No |
+| The agent's own ask tool | ✓² | ✓¹⁰ | n/a | ✓⁷ | No¹² |
 
 ¹ In interactive sessions, when `starbridge agent` runs (Codex CLI 0.160 or
 later). In `codex exec`, the agent waits for the answer with `starbridge wait`
@@ -70,6 +70,15 @@ it. Codex asks you once, at its next launch, to trust the plugin's hooks.
 asks in the terminal and on your devices at once; the first answer wins. A
 typed reply reaches Codex as a note, as one typed in the terminal does.
 
+¹¹ In `cursor-agent` chats, when the chat ends its turn with a question open,
+Cursor waits up to 10 minutes for your answer, showing the chat as busy, and
+your answer comes in as the next prompt. Past that, in `cursor-agent -p`, or in
+the Cursor IDE, which doesn't tell commands which chat runs them, the agent
+waits for the answer with `starbridge wait`.
+
+¹² Cursor's `askQuestion` tool runs no hooks, so nothing can show it on your
+devices. The rules tell the agent to ask through `starbridge ask` instead.
+
 `starbridge setup` installs Starbridge in each agent it finds, and prints one
 line per agent; `starbridge uninstall --agent <name>` removes it from one, and
 setup then leaves that agent alone until `starbridge setup --agent <name>`:
@@ -105,6 +114,12 @@ setup then leaves that agent alone until `starbridge setup --agent <name>`:
   answer into the session and sends permission prompts. A later setup, or the
   agent once `starbridge update` restarts it, updates both when the CLI carries
   newer ones.
+- Cursor: the skill, in `~/.cursor/skills/starbridge`, and hooks that bring the
+  rules and put each answer into the chat: their scripts in `~/.cursor/starbridge`,
+  their entries added to your `~/.cursor/hooks.json` beside your own. A chat
+  started after setup has them. Setup also adds allow rules to
+  `cursor-agent`'s `~/.cursor/cli-config.json`, so that `starbridge ask`,
+  `waiting`, `working`, `wait` and `settle` run without a prompt there.
 
 ## Where the lines go
 

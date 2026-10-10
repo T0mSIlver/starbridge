@@ -19,6 +19,7 @@ import { AgentClient, AgentError, Interrupted, NoAgent } from "../src/agent/clie
 import { makeAgent } from "../src/agent/main";
 import type { Agent } from "../src/agent/server";
 import { run } from "../src/cli";
+import { hookCursorSession } from "../src/hook";
 import {
   agentAddress,
   FAKE_CODEXBAR,
@@ -635,6 +636,92 @@ test("an opencode session with the plugin gets its answer as an event, titled by
   // What the plugin reads after a restart to resume only the sessions expecting a prompt (#398).
   const asked = ctx.store.state().asked;
   expect([asked[id]?.extensionAnswers, asked[waits]?.extensionAnswers]).toEqual([true, undefined]);
+});
+
+const PROMPT = "The answer will come back into this session as a new prompt.";
+
+/** A Cursor hook's input for conversation `conv`, each a turn of its own. */
+let turns = 0;
+const cursorHook = (event: string, conv: string, extra: Record<string, unknown> = {}) =>
+  JSON.stringify({
+    hook_event_name: event,
+    conversation_id: conv,
+    generation_id: `g-${++turns}`,
+    cursor_version: "2026.10.01",
+    ...extra,
+  });
+
+test("Cursor: the stop hook holds for the answer and returns it as the next prompt (#956)", async () => {
+  const { ctx, socket } = await machine();
+  const c = testCtx({
+    STARBRIDGE_AGENT_SOCKET: socket,
+    CURSOR_AGENT: "1",
+    CURSOR_CONVERSATION_ID: "conv-1",
+  });
+  // Until the plugin's sessionStart hook ran, nothing says a hold takes the answer.
+  const before = await ask(c, "--project", "p");
+  expect(c.errors.at(-1)).toContain("run `starbridge wait");
+  expect(await run(["settle", before, "--outcome", "withdrawn"], ctx)).toBe(0);
+  ctx.lines.length = 0;
+  expect(await hookCursorSession(ctx, cursorHook("sessionStart", "conv-1"))).toBe(0);
+  const id = await ask(c, "--project", "p");
+  expect(c.errors.at(-1)).toBe(PROMPT);
+
+  // A turn the owner stopped holds nothing.
+  await hookCursorSession(ctx, cursorHook("stop", "conv-1", { status: "aborted" }));
+  expect(ctx.lines).toEqual([]);
+  const stop = hookCursorSession(ctx, cursorHook("stop", "conv-1", { status: "completed" }));
+  await server.answer(id, { choice: "Merge" });
+  expect(await stop).toBe(0);
+  expect(ctx.lines.map((l) => JSON.parse(l))).toEqual([
+    { followup_message: `Answer to ${id} (Merge #12 now?): Merge` },
+  ]);
+  // Cursor runs each stop hook twice at once: only one holds.
+  const twice = cursorHook("stop", "conv-1", { status: "completed" });
+  const id2 = await ask(c, "--project", "p");
+  const both = [hookCursorSession(ctx, twice), hookCursorSession(ctx, twice)];
+  await server.answer(id2, { choice: "Wait" });
+  await Promise.all(both);
+  expect(ctx.lines.slice(1).map((l) => JSON.parse(l))).toEqual([
+    { followup_message: `Answer to ${id2} (Merge #12 now?): Wait` },
+  ]);
+  ctx.lines.length = 1;
+  // Taken: the next stop has nothing to hold for.
+  await hookCursorSession(ctx, cursorHook("stop", "conv-1", { status: "completed" }));
+  expect(ctx.lines).toHaveLength(1);
+
+  // After sessionEnd, the conversation is gone.
+  await hookCursorSession(ctx, cursorHook("sessionEnd", "conv-1"));
+  await ask(c, "--project", "p");
+  expect(c.errors.at(-1)).toContain("run `starbridge wait");
+});
+
+test("Cursor: past the hold's cap the agent is told to wait; without an agent the hold reads the server (#956)", async () => {
+  const { ctx, socket } = await machine();
+  const c = testCtx({
+    STARBRIDGE_AGENT_SOCKET: socket,
+    CURSOR_AGENT: "1",
+    CURSOR_CONVERSATION_ID: "conv-2",
+  });
+  const id = await ask(c, "--project", "p");
+  let calls = 0;
+  const late = { ...ctx, now: () => new Date(Date.now() + (calls++ > 0 ? 11 * 60_000 : 0)) };
+  await hookCursorSession(late, cursorHook("stop", "conv-2", { status: "completed" }));
+  expect(JSON.parse(ctx.lines.at(-1) as string).followup_message).toBe(
+    `No answer yet to ${id} (Merge #12 now?). Nothing brings the answer into this session: when only the answer is left, run \`starbridge wait ${id} --timeout 5m\` (again on exit 2).`,
+  );
+
+  const direct = { ...ctx, env: { ...ctx.env, STARBRIDGE_NO_AGENT: "1" } };
+  ctx.lines.length = 0;
+  // A server error mid-hold is retried, not the end of the hold.
+  server.failures.push("/answers");
+  const stop = hookCursorSession(direct, cursorHook("stop", "conv-2", { status: "completed" }));
+  await server.answer(id, { choice: "Wait" });
+  await stop;
+  expect(ctx.lines.map((l) => JSON.parse(l))).toEqual([
+    { followup_message: `Answer to ${id} (Merge #12 now?): Wait` },
+  ]);
+  expect(ctx.store.state().answers[id]?.seen).toBe(true);
 });
 
 // Unix sockets only: on Windows the agent listens on loopback TCP.
