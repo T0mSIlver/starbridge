@@ -1936,6 +1936,50 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
         valid: true,
       },
       {
+        name: "a withdrawn decision with its reason",
+        body: {
+          ...settledBody,
+          itemId: "dec_1",
+          outcome: "withdrawn",
+          device: undefined,
+          reason: "Fixed it myself after rereading the logs",
+        },
+        valid: true,
+      },
+      {
+        name: "a reason over 120 characters",
+        body: {
+          ...settledBody,
+          itemId: "dec_1",
+          outcome: "withdrawn",
+          device: undefined,
+          reason: "x".repeat(121),
+        },
+        valid: false,
+      },
+      {
+        name: "a reason on two lines",
+        body: {
+          ...settledBody,
+          itemId: "dec_1",
+          outcome: "withdrawn",
+          device: undefined,
+          reason: "Fixed it myself\nafter rereading the logs",
+        },
+        valid: false,
+      },
+      {
+        name: "an empty reason",
+        body: {
+          ...settledBody,
+          itemId: "dec_1",
+          outcome: "withdrawn",
+          device: undefined,
+          reason: "",
+        },
+        valid: false,
+      },
+      {
         name: "a decision answered elsewhere",
         body: { ...settledBody, itemId: "dec_1", outcome: "elsewhere", device: undefined },
         valid: true,

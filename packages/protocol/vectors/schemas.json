@@ -2110,6 +2110,70 @@
       "valid": true
     },
     {
+      "name": "a withdrawn decision with its reason",
+      "body": {
+        "v": 1,
+        "id": "set_1",
+        "itemId": "dec_1",
+        "to": [
+          "phone",
+          "phone2"
+        ],
+        "outcome": "withdrawn",
+        "at": "2026-10-04T10:01:00Z",
+        "reason": "Fixed it myself after rereading the logs"
+      },
+      "valid": true
+    },
+    {
+      "name": "a reason over 120 characters",
+      "body": {
+        "v": 1,
+        "id": "set_1",
+        "itemId": "dec_1",
+        "to": [
+          "phone",
+          "phone2"
+        ],
+        "outcome": "withdrawn",
+        "at": "2026-10-04T10:01:00Z",
+        "reason": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+      },
+      "valid": false
+    },
+    {
+      "name": "a reason on two lines",
+      "body": {
+        "v": 1,
+        "id": "set_1",
+        "itemId": "dec_1",
+        "to": [
+          "phone",
+          "phone2"
+        ],
+        "outcome": "withdrawn",
+        "at": "2026-10-04T10:01:00Z",
+        "reason": "Fixed it myself\nafter rereading the logs"
+      },
+      "valid": false
+    },
+    {
+      "name": "an empty reason",
+      "body": {
+        "v": 1,
+        "id": "set_1",
+        "itemId": "dec_1",
+        "to": [
+          "phone",
+          "phone2"
+        ],
+        "outcome": "withdrawn",
+        "at": "2026-10-04T10:01:00Z",
+        "reason": ""
+      },
+      "valid": false
+    },
+    {
       "name": "a decision answered elsewhere",
       "body": {
         "v": 1,

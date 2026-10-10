@@ -503,6 +503,9 @@ export type PermissionAnswer = z.infer<typeof PermissionAnswer>;
  * (`device` names it); or a decision answered outside Starbridge (`elsewhere`, such as the
  * page its `answerIn` names) or withdrawn by the agent.
  */
+/** The longest reason an agent gives for withdrawing a decision. */
+export const SETTLED_REASON_MAX = 120;
+
 export const Settled = z
   .object({
     v: z.literal(1),
@@ -523,6 +526,13 @@ export const Settled = z
     dir: DirectoryHead.optional(),
     /** With outcome "device" on a permission: what that device answered (#349). */
     behavior: z.enum(["allow", "deny"]).optional(),
+    /** With outcome "withdrawn": why the agent no longer needs it, one line (#1008). */
+    reason: z
+      .string()
+      .min(1)
+      .max(SETTLED_REASON_MAX)
+      .regex(/^[^\r\n]*$/, "one line")
+      .optional(),
   })
   .refine((s) => s.device !== undefined || (s.choice === undefined && s.text === undefined), {
     message: "choice and text come only with a device's outcome",
