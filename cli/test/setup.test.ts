@@ -314,7 +314,13 @@ test("a second setup changes nothing", async () => {
 test("setup asks for no server: it pairs with the one named, and asks only to switch (#749)", async () => {
   const m = await machine();
   const asked: string[] = [];
-  m.sys.prompt = { ...defaults, confirm: async (q, def) => (asked.push(q), def) };
+  m.sys.prompt = {
+    ...defaults,
+    confirm: async (q, def) => {
+      asked.push(q);
+      return def;
+    },
+  };
   m.ctx.env.STARBRIDGE_SERVER = "https://other.example";
   const first = await setup(m.sys, { yes: true, noService: true, noQuota: true, noAgents: true });
   expect(first).toBe(0);
@@ -390,7 +396,10 @@ test("setup asks before sending quotas that another machine already sends, and E
   const asked: string[] = [];
   mac.sys.prompt = {
     ...defaults,
-    confirm: async (q, def) => (asked.push(q), def),
+    confirm: async (q, def) => {
+      asked.push(q);
+      return def;
+    },
   };
   expect(await setup(mac.sys, { yes: true, noService: true, readyTimeoutMs: 1 })).toBe(0);
   expect(asked[0]).toBe("  devbox already sends quotas. Send from this machine too?");
@@ -400,7 +409,13 @@ test("setup asks before sending quotas that another machine already sends, and E
 
   // devbox itself already sends them: no question.
   devbox.ctx.store.saveAgentConfig({ quota: { providers: ["codex"], interval: "5m" } });
-  devbox.sys.prompt = { ...defaults, confirm: async (q, def) => (asked.push(q), def) };
+  devbox.sys.prompt = {
+    ...defaults,
+    confirm: async (q, def) => {
+      asked.push(q);
+      return def;
+    },
+  };
   await setup(devbox.sys, { yes: true, noService: true, readyTimeoutMs: 1 });
   expect(asked.filter((q) => q.includes("already sends quotas"))).toHaveLength(1);
 });
