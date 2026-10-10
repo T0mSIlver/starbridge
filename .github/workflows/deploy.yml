@@ -60,3 +60,8 @@ jobs:
             identical | ahead) echo "starbridge.run runs $got" ;;
             *) echo "starbridge.run runs $got, not $REV or later ($status)"; exit 1 ;;
           esac
+      # The deploy also rebuilt the Play reviewers' demo server from this commit (#1016).
+      - name: Check the demo server
+        run: |
+          curl -fsS --retry 10 --retry-delay 3 --retry-all-errors https://demo.starbridge.run/v1/demo |
+            jq -e '.demo == true' >/dev/null || { echo "demo.starbridge.run is not a demo server"; exit 1; }

@@ -36,3 +36,5 @@ REVISION=$rev /opt/starbridge/deploy/host/apply.sh
 # Only once it is up and healthy: a failed deploy leaves no REVISION, so only main's head deploys
 # next, and the check above never trusts a release that never ran.
 echo "$rev" > /opt/starbridge/REVISION
+# Then the demo server, from the same checkout: a failure fails the run, with prod deployed.
+/opt/starbridge/deploy/host/demo.sh || { echo "$rev is live; the demo server did not deploy" >&2; exit 1; }

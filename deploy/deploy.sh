@@ -26,6 +26,7 @@ git archive --format=tar "$rev" | ssh -i "$key" "$host" "sudo sh -euc '
   REVISION=$rev /opt/starbridge/deploy/host/apply.sh
   # Only once it is up and healthy: starbridge-deploy refuses revisions older than this one.
   echo $rev > /opt/starbridge/REVISION
+  /opt/starbridge/deploy/host/demo.sh || { echo \"$rev is live; the demo server did not deploy\" >&2; exit 1; }
 '"
 # The first deploy waits for Caddy's certificate. The server names the commit it was built from.
 # Headers to a file, not a pipe: an unreachable server must fail the script.

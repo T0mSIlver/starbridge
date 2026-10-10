@@ -1,6 +1,6 @@
 # The demo server for Play reviewers (#423), at https://demo.starbridge.run. A project of its
-# own, apart from prod's: `sudo docker compose -p starbridge-demo -f /opt/starbridge-demo/deploy/demo/compose.yaml`.
-# deploy/demo/deploy.sh unpacks the repository to /opt/starbridge-demo and builds the image there.
+# own, apart from prod's: `sudo docker compose -p starbridge-demo -f /opt/starbridge/deploy/demo/compose.yaml`.
+# Every prod deploy builds it from prod's checkout (deploy/host/apply.sh, #1016).
 services:
   demo:
     build:
@@ -9,7 +9,7 @@ services:
     image: starbridge-demo:latest
     restart: unless-stopped
     init: true
-    # OWNER_TOKEN, copied by deploy.sh from ~/.config/starbridge/secrets/demo-owner-token.
+    # OWNER_TOKEN, copied by setup.sh from ~/.config/starbridge/secrets/demo-owner-token.
     env_file: /etc/starbridge-demo/demo.env
     environment:
       PUBLIC_URL: https://demo.starbridge.run

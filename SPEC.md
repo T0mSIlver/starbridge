@@ -1614,6 +1614,9 @@ Tokens, type and components: `DESIGN.md`.
   `demo/` is its first device and machine. It approves every join by digits without comparing,
   so a reviewer walks the same screens as a real second phone. The server refuses `DEMO=1` beside
   a starbridge.run `PUBLIC_URL`, GitHub sign-in or relay mode. A restart is a fresh account.
+  Every prod deploy rebuilds it from the same commit (#1016): deployed by hand, it once fell behind
+  prod and rejected the apps' item kinds, so reviewers saw an empty inbox. It restarts only when its
+  image changed, so a reviewer's account survives deploys that leave its code alone.
 
 ## Platform facts
 
