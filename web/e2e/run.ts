@@ -1872,7 +1872,40 @@ async function main() {
   step(
     "snooze on one browser: it leaves both inboxes, wait says until when, and at its time it comes back with one notification (#571)",
   );
+  // Chrome can settle requestPermission as "default" while its prompt waits folded into a chip in
+  // the address bar; Allow there comes after the click and still turns push on (#1030).
+  await pageB.evaluate(() => {
+    const status = Object.assign(new EventTarget(), { state: "prompt" as PermissionState });
+    const query = navigator.permissions.query.bind(navigator.permissions);
+    navigator.permissions.query = (d) =>
+      d.name === "notifications"
+        ? Promise.resolve(status as unknown as PermissionStatus)
+        : query(d);
+    const ask = Notification.requestPermission;
+    const w = window as unknown as { asked?: boolean; listening?: boolean; allow: () => void };
+    Notification.requestPermission = () => {
+      w.asked = true;
+      return Promise.resolve("default");
+    };
+    const listen = status.addEventListener.bind(status);
+    status.addEventListener = (...a: Parameters<EventTarget["addEventListener"]>) => {
+      w.listening = true;
+      listen(...a);
+    };
+    w.allow = () => {
+      Notification.requestPermission = ask;
+      status.state = "granted";
+      status.dispatchEvent(new Event("change"));
+    };
+  });
   await pageB.getByRole("button", { name: "Turn on notifications" }).click();
+  await pageB.waitForFunction(() => {
+    const w = window as unknown as { asked?: boolean; listening?: boolean };
+    return w.asked && w.listening;
+  });
+  if (!(await pageB.getByRole("button", { name: "Turn on notifications" }).isVisible()))
+    throw new Error("expected the banner to stay while the browser's prompt is unanswered");
+  await pageB.evaluate(() => (window as unknown as { allow: () => void }).allow());
   await pageB.getByRole("button", { name: "Turn on notifications" }).waitFor({ state: "detached" });
   const snoozeAsk = cli(
     "snooze-ask",
