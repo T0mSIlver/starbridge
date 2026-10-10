@@ -46,7 +46,7 @@ let tray: Tray | null = null;
 let needs = 0;
 let notifier: Notifier;
 let quitting = false;
-/** The Mac's lock, sleep and, once allowed, idle time, which the page counts as presence. */
+/** The Mac's lock, sleep and idle time, which the page counts as presence. */
 let screen: Screen | null = null;
 /** The page being told the owner left, which the app does once, before it quits. */
 let leaving: Promise<void> | null = null;
@@ -140,20 +140,10 @@ async function ready(): Promise<void> {
     applyPlace();
     win?.webContents.send("place", place);
   });
-  screen = new Screen(powerMonitor, tellScreen, settings.presence);
+  screen = new Screen(powerMonitor, tellScreen);
   setInterval(() => screen?.check(), SCREEN_CHECK_MS);
   ipcMain.on("screen?", (e) => {
     e.returnValue = e.sender === win?.webContents ? screen?.read() : null;
-  });
-  ipcMain.on("presence?", (e) => {
-    e.returnValue = e.sender === win?.webContents ? settings.presence : null;
-  });
-  ipcMain.on("presence", (e, on) => {
-    if (!fromPage(e) || typeof on !== "boolean" || on === settings.presence) return;
-    settings.presence = on;
-    save();
-    screen?.setIdle(on);
-    win?.webContents.send("presence", on);
   });
   ipcMain.on("server", (e, x) => {
     if (e.sender !== serverWin?.webContents || typeof x !== "string") return;

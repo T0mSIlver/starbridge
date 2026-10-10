@@ -419,13 +419,20 @@ provider plugins add providers, not panels.
 - **Held pushes** (#848). A question that shows in the agent's picker and on the owner's screen
   needed no buzz on the phone too: a quick back and forth at the desk did that. So while any of
   the owner's machines or devices says they sit at its screen, the push of a question, a
-  permission prompt or a waiting flip waits the account's hold time (30 s by default, off to
-  2 minutes in Settings) for every device not itself in use, and goes only if nothing answered it
-  meanwhile. Only the push waits, never the item: every device lists it at once, and a held card
+  permission prompt or a waiting flip waits for every device not itself in use, and goes only if
+  nothing answered it meanwhile. It waits as long as the owner stays, then the account's hold time
+  (30 s by default, off to 2 minutes in Settings) from when the last screen stopped saying so
+  (#1003): a fixed time from the question rang the phone at a desk the owner never left, and
+  timed a walk away from the wrong moment. Coming back within the hold time holds again. What
+  bounds a hold is each source's own reading, input in the last minute, so a Mac left unlocked
+  stops holding a minute after its last key; a source that says present wrongly (#990) holds
+  until it stops. Only the push waits, never the item: every device lists it at once, and a held card
   looks like any other, since the owner chose no state that flips while they look. With no presence
   signal, which is every older client, pushes go at once as before. The server reads presence as
   one bit per source, in memory, since the hold is all it is for: no idle time, lock state or
-  reason, nothing on disk, and a restart means push now. Presence counts per person, so a Mac in
+  reason, nothing on disk. A restart forgets who was present: a new question pushes at once, and
+  a held one counts everyone present for one trusted beat, so a source still there holds it again
+  rather than the phone ringing at a restart. Presence counts per person, so a Mac in
   use holds a question from a headless dev box. The hold is one account setting, since the server
   applies it and it is about the person, not a device. PROTOCOL.md, "Held pushes", has the
   timings.
@@ -1407,16 +1414,15 @@ a browser; the app adds a menu bar light and notifications, so a web release nee
   the name "Starbridge" for Mission Control and the Window menu, whatever the page's title.
 - **Presence** (#945). The window in use holds pushes as a web page does (#848). Hidden, it said
   absent while the owner worked in another app, so the phone buzzed at a desk. Electron's
-  `powerMonitor` reads what the CLI's machine presence reads: lock, sleep and wake always, and
-  the seconds since the Mac's last input once Settings' "Hold while you use this Mac" is on (off by
-  default). The app hands the page that reading over the bridge, and the page's own beacon sends
-  the one bit (`isPresent`, the CLI's threshold): present while the Mac is unlocked with input in
-  the last minute, window shown or not. Locked, asleep or quitting, the page says absent at once,
-  and the app waits up to 2 s on quit for the page to say so. The switch is the app's own, not
-  the machine's `starbridge config presence on`: the app cannot count on the CLI being on the Mac,
-  and where the agent's presence is on it already sends the same bit, so the switch is for Macs
-  without it. It is opt-in for the same reason as the machine's: it reports when the owner is at
-  the Mac. Lock and sleep need no opt-in, since they only end presence.
+  `powerMonitor` reads what the CLI's machine presence reads: lock, sleep and wake, and the
+  seconds since the Mac's last input. The app hands the page that reading over the bridge, and
+  the page's own beacon sends the one bit (`isPresent`, the CLI's threshold): present while the
+  Mac is unlocked with input in the last minute, window shown or not. Locked, asleep or quitting,
+  the page says absent at once, and the app waits up to 2 s on quit for the page to say so. Any
+  app on the Mac counts, with no switch of its own (#1003): the owner found two "Hold" rows read
+  as two holds, and with the switch off the window still counted while touched, so a Mac in
+  another app held a push one time and not the next. The hold time is the opt-in: Off, nothing
+  is held, whatever presence says.
 - **`starbridge://pair` links** open `/pair` on the configured server, as the https link does. The
   link's check key stays out of the page, which the server writes; a link for another server is
   refused, with both servers named.

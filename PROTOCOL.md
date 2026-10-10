@@ -568,7 +568,7 @@ own credentials; the payload is already ciphertext or an id. UnifiedPush always 
 | Route | Who | What |
 |---|---|---|
 | `PUT /presence` | device, machine | `{present}`: whether the owner sits at this screen ("Held pushes") → 204 |
-| `GET /settings` | device | the account's settings, `{pushHold}`: seconds a push waits while the owner is present, 30 unless set |
+| `GET /settings` | device | the account's settings, `{pushHold}`: seconds a held push waits after the owner left the last screen, 30 unless set; 0 holds nothing |
 | `PUT /settings` | device | `{pushHold}`, 0 to 300 → the settings as stored |
 
 ### Device notifications
@@ -695,13 +695,16 @@ waits a little, and goes only if nothing answered it meanwhile.
   browser share its device, so an idle tab says nothing while another tab is in use. A refused
   beat is tried again a beat later. The server
   keeps each source's bit in memory, trusts a `true` for 75 s (`PRESENCE_VALID_MS`), and counts
-  the account present while any source is. A restart forgets it: push at once.
+  the account present while any source is, and when the last source stopped: its `false`, or the
+  end of its last beat's 75 s. A restart forgets it: a new item pushes at once, and every account
+  counts as present for 75 s, as if each source had just beaten.
 - **What waits.** A machine's `decision`, `permission` or `waiting` item that asks for a push,
   posted while the account is present and its `pushHold` is not 0. Its push goes at once to the
-  devices that are themselves present, and waits `pushHold` seconds for the others. A re-seal's
-  new devices wait the same way; those that already waited keep their time.
+  devices that are themselves present, and waits for the others while the account stays present,
+  then `pushHold` seconds from when it stopped (#1003); never less than `pushHold` seconds from
+  the post. Present again before then, it waits again. A re-seal's new devices join the same hold.
 - **When the hold ends**, within a few seconds, the server pushes the item to the
-  devices it held it from, if it is still open: a permission unanswered, a decision, or a
+  devices it held it from, if it is still open, each item once, all those waiting together: a permission unanswered, a decision, or a
   `waiting` item's decision, unanswered and not snoozed. The hold is stored with the item, so a
   restart delays it by no more than the restart.
 - **Closed during the hold**, an item never pushes the devices it held it from, nor the

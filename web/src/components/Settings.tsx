@@ -180,7 +180,6 @@ function NotificationSection({ data }: { data: SettingsData }) {
           }}
         />
       </Row>
-      <MacRow />
       <HoldRow initial={data.pushHold} />
     </Section>
   );
@@ -261,31 +260,6 @@ function BrowserRow({ initial }: { initial: PushState }) {
   );
 }
 
-/**
- * In the desktop app, whether the Mac's idle time counts as presence (#945): opt-in, as a
- * machine's `starbridge config presence on` is, since it reports when the owner is at the Mac.
- */
-function MacRow() {
-  const [on, setOn] = useState(() => desktop?.presence?.());
-  if (!desktop?.setPresence || typeof on !== "boolean") return null;
-  const save = desktop.setPresence;
-  return (
-    <Row
-      label="Hold while you use this Mac"
-      sub="In any app, not only Starbridge. It reads only the time since your last key or click, never which"
-    >
-      <Switch
-        label="Hold while you use this Mac"
-        checked={on}
-        onChange={(v) => {
-          setOn(v);
-          save(v);
-        }}
-      />
-    </Row>
-  );
-}
-
 const HOLD_LABELS: Record<(typeof PUSH_HOLD_CHOICES)[number], string> = {
   0: "Off",
   15: "15 s",
@@ -295,7 +269,8 @@ const HOLD_LABELS: Record<(typeof PUSH_HOLD_CHOICES)[number], string> = {
 };
 
 /**
- * How long other devices' notifications wait while you use a screen (#848): an account setting,
+ * How long other devices' notifications wait once you leave the last screen, after waiting all
+ * the time you use one (#848, #1003): an account setting,
  * since the server holds the pushes. A server without the setting shows nothing.
  */
 function HoldRow({ initial }: { initial: number | undefined }) {
@@ -311,7 +286,7 @@ function HoldRow({ initial }: { initial: number | undefined }) {
       label="Hold while you’re at a screen"
       sub={
         error ??
-        "While you’re using Starbridge or your computer, other devices wait this long to notify"
+        "While you use any of your screens, your other devices stay quiet, then wait this long after you leave"
       }
     >
       <Segmented<number>

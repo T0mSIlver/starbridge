@@ -1914,7 +1914,9 @@ async function main() {
   await probe(page).click();
   await selected(page).getByRole("button", { name: /^Ship/ }).click();
 
-  step("while the first browser is in use, the second's notification waits the hold (#848)");
+  step(
+    "while the first browser is in use, the second hears nothing, then a hold after it leaves (#848, #1003)",
+  );
   // The second browser must not count as in use itself: no input on it for longer than the server
   // trusts its last beat.
   await pageB.reload();
@@ -1948,17 +1950,31 @@ async function main() {
     ((await pageB.evaluate(NOTIFICATIONS)) as { title: string }[]).filter((n) =>
       n.title.startsWith("Hold probe"),
     ).length;
-  // The browser in use lists it at once; the other hears nothing until the hold ends.
+  // The browser in use lists it at once; the other hears nothing while it stays in use, well
+  // past the hold time.
   await page.locator(`button[data-id="${holdId}"]`).waitFor({ timeout: 15_000 });
-  while (Date.now() - askedAt < 10_000) {
+  while (Date.now() - askedAt < 25_000) {
     await use();
-    if ((await held()) > 0) throw new Error("the second browser was notified during the hold");
+    if ((await held()) > 0)
+      throw new Error("the second browser was notified while the first was in use");
     await page.waitForTimeout(1_000);
   }
+  // The first browser's page goes hidden: presence ends, and the hold counts from now.
+  await page.evaluate(() => {
+    Object.defineProperty(document, "visibilityState", { configurable: true, get: () => "hidden" });
+    document.dispatchEvent(new Event("visibilitychange"));
+  });
+  const leftAt = Date.now();
   while ((await held()) === 0) {
-    if (Date.now() - askedAt > 40_000) throw new Error("the held notification never came");
+    if (Date.now() - leftAt > 40_000) throw new Error("the held notification never came");
     await page.waitForTimeout(1_000);
   }
+  if (Date.now() - leftAt < 12_000)
+    throw new Error(`notified ${Date.now() - leftAt} ms after leaving, under the 15 s hold`);
+  await page.evaluate(() => {
+    delete (document as { visibilityState?: unknown }).visibilityState;
+    document.dispatchEvent(new Event("visibilitychange"));
+  });
   await page.locator(`button[data-id="${holdId}"]`).click();
   await selected(page).getByRole("button", { name: /^Tag/ }).click();
   await page.goto(`${ORIGIN}/settings`);
