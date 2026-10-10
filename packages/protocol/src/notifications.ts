@@ -15,8 +15,16 @@ export type NotifyState = z.infer<typeof NotifyState>;
 export const DeviceNotifications = z.object({ state: NotifyState });
 export type DeviceNotifications = z.infer<typeof DeviceNotifications>;
 
-/** `GET /notifications`: each device that has said, by member id. */
-export const NotificationStates = z.object({ devices: z.record(z.string(), NotifyState) });
+/**
+ * `GET /notifications`: each device that has said, by member id. `clients`: which app each of
+ * those devices last said it from (#1019), so Devices shows a phone, a browser or the desktop app.
+ * The server knows it from how the device signs in, never from a user agent; a name it may add
+ * later reads as a plain device.
+ */
+export const NotificationStates = z.object({
+  devices: z.record(z.string(), NotifyState),
+  clients: z.record(z.string(), z.string()).optional(),
+});
 export type NotificationStates = z.infer<typeof NotificationStates>;
 
 /**
