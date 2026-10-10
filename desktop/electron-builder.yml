@@ -28,8 +28,17 @@ mac:
   extendInfo:
     # Notifications as alerts, so their buttons show without a hover.
     NSUserNotificationAlertStyle: alert
+# The DMG window (#972): the app, an arrow and Applications, on build/background.png (and @2x,
+# which electron-builder joins into one Retina TIFF). Its size is the window's.
+# scripts/dmg-hidden.cjs puts the background and volume icon files outside the window.
 dmg:
   artifactName: Starbridge-${version}-${arch}.dmg
+  iconSize: 128
+  iconTextSize: 13
+  contents:
+    - { x: 170, y: 190, type: file }
+    - { x: 470, y: 190, type: link, path: /Applications }
+afterPack: scripts/dmg-hidden.cjs
 # Writes latest-mac.yml, which the app reads from the latest GitHub Release to update. The
 # workflows upload the files themselves (`--publish never`).
 publish:
