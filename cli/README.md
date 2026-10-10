@@ -110,7 +110,9 @@ and asks your devices to revoke the machine. It deletes the keys only when you s
 ### Check a download
 
 The scripts and `starbridge update` install a binary only if its hash is in the release's
-`SHA256SUMS` and the release key signed `SHA256SUMS.minisig`. `install.ps1` checks the signature
+`SHA256SUMS` and the release key signed `SHA256SUMS.minisig`. `install.sh` checks the signature
+with minisign, else OpenSSL 3, else Python 3, which every RHEL 8 has for dnf; with none of them it
+stops and gives the command that installs minisign. `install.ps1` checks the signature
 with minisign's own Windows build, pinned by its hash, since Windows has no Ed25519 check. The key is also in
 [`minisign.pub`](minisign.pub):
 

@@ -130,16 +130,25 @@ beforeEach(() => {
 });
 afterEach(() => release?.server.stop(true));
 
-/** Runs a copy of install.sh that trusts `pubkey`, with PATH stripped of minisign if asked. */
-async function install(url: string, pubkey: string, withMinisign: boolean, version?: string) {
+/**
+ * Runs a copy of install.sh that trusts `pubkey` and checks with `verifier`: the PATH loses
+ * minisign but for "minisign", and fails `broken` commands, as on RHEL 8 with OpenSSL 1.1.1.
+ */
+async function install(url: string, pubkey: string, verifier: string, version?: string) {
   const script = join(dir, "install.sh");
   writeFileSync(
     script,
     readFileSync(join(CLI, "install.sh"), "utf8").replace(/^PUBKEY=\S+$/m, `PUBKEY=${pubkey}`),
   );
-  const path = (process.env.PATH ?? "")
-    .split(delimiter)
-    .filter((d) => withMinisign || !existsSync(join(d, "minisign")))
+  const broken = { python: ["openssl"], none: ["openssl", "python3"] }[verifier] ?? [];
+  const fakes = join(dir, "fakes");
+  mkdirSync(fakes, { recursive: true });
+  for (const name of broken) {
+    writeFileSync(join(fakes, name), "#!/bin/sh\nexit 1\n");
+    chmodSync(join(fakes, name), 0o755);
+  }
+  const path = [fakes, ...(process.env.PATH ?? "").split(delimiter)]
+    .filter((d) => verifier === "minisign" || !existsSync(join(d, "minisign")))
     .join(delimiter);
   // Async: the fake releases server answers from this same process.
   const p = Bun.spawn(["sh", script], {
@@ -163,12 +172,17 @@ async function install(url: string, pubkey: string, withMinisign: boolean, versi
 }
 
 const hasMinisign = spawnSync("minisign", ["-v"]).status === 0;
-const verifiers = hasMinisign ? ["openssl", "minisign"] : ["openssl"];
+const hasPython = spawnSync("python3", ["-c", "import hashlib; hashlib.blake2b"]).status === 0;
+const verifiers = [
+  "openssl",
+  ...(hasMinisign ? ["minisign"] : []),
+  ...(hasPython ? ["python"] : []),
+];
 
 // install.sh refuses Windows, whose installer is install.ps1.
 describe.skipIf(WINDOWS).each(verifiers)("install.sh checking with %s", (verifier) => {
   const run = (url: string, pubkey: string, version?: string) =>
-    install(url, pubkey, verifier === "minisign", version);
+    install(url, pubkey, verifier, version);
 
   test("installs the signed binary", async () => {
     release = fakeReleases("9.9.9");
@@ -208,6 +222,37 @@ describe.skipIf(WINDOWS).each(verifiers)("install.sh checking with %s", (verifie
     expect((await run(release.url, release.pubkey, "v9.9.9")).code).toBe(0);
   });
 });
+
+// Python checks minisign's legacy, not prehashed, signatures too.
+describe.skipIf(WINDOWS || !hasPython)("install.sh's Python check", () => {
+  test("accepts a legacy signature and refuses it over other content", () => {
+    const script = readFileSync(join(CLI, "install.sh"), "utf8");
+    const body = /<<'PY'\n([\s\S]*?)\nPY\n/.exec(script)?.[1] ?? "";
+    const check = (sig: string, file: string) =>
+      spawnSync("python3", ["-", FIXTURE_KEY, join(FIXTURES, sig), file], {
+        input: body,
+        encoding: "utf8",
+      });
+    const ok = check("legacy.minisig", join(FIXTURES, "legacy"));
+    expect(ok.status).toBe(0);
+    expect(ok.stdout).toStartWith("trusted comment: ");
+    const changed = join(dir, "legacy");
+    writeFileSync(changed, `${fixture("legacy")}x`);
+    expect(check("legacy.minisig", changed).status).toBe(1);
+  });
+});
+
+test.skipIf(WINDOWS)(
+  "install.sh with nothing to check the signature says how to get minisign",
+  async () => {
+    release = fakeReleases("9.9.9");
+    const r = await install(release.url, release.pubkey, "none");
+    expect(r.code).not.toBe(0);
+    expect(r.err).toContain("needs minisign, OpenSSL 3 or Python 3 to check the release signature");
+    expect(r.err).toContain("To install minisign: ");
+    expect(existsSync(r.bin)).toBe(false);
+  },
+);
 
 /**
  * install.ps1 under PowerShell 7, with minisign from the PATH in place of the pinned Windows
