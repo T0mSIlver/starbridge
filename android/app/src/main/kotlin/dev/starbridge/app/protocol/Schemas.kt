@@ -214,6 +214,8 @@ data class SealedItem(
 // --- Decisions and answers ---------------------------------------------------
 
 val MACHINE_KINDS = setOf("server", "desktop", "laptop", "cloud")
+/** The longest reason an agent gives for withdrawing a decision (SETTLED_REASON_MAX in schemas.ts). */
+const val SETTLED_REASON_MAX = 120
 val SETTLED_OUTCOMES = setOf("keyboard", "timeout", "device", "elsewhere", "withdrawn")
 val WAITING_STATES = setOf("working", "waiting")
 /**
@@ -494,6 +496,8 @@ data class Settled(
     override val dir: DirectoryHead? = null,
     /** With outcome "device" on a permission: what that device answered (#349). */
     val behavior: String? = null,
+    /** With outcome "withdrawn": why the agent no longer needs it, one line (#1008). */
+    val reason: String? = null,
 ) : ItemBody {
     override val re get() = itemId
     override val recipients get() = to
@@ -511,6 +515,10 @@ data class Settled(
         schema((outcome == "device") == (device != null), "device is set exactly when outcome is device")
         choice?.let { len(it, 0, 100, "choice") }
         text?.let { len(it, 0, 4000, "text") }
+        reason?.let {
+            len(it, 1, SETTLED_REASON_MAX, "reason")
+            schema('\n' !in it && '\r' !in it, "reason")
+        }
         schema(device != null || (choice == null && text == null), "choice and text come only with a device's outcome")
         schema(choice == null || text == null, "at most one of choice and text")
     }

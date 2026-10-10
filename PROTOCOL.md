@@ -748,12 +748,12 @@ first answer wins.
   "once" | "session" | "project", inputHash, message?}`: a deny is for this call only and may
   carry a message to the agent; an allow carries none.
 - `settled` `{v, id, itemId, to, at, outcome?: "keyboard" | "timeout" | "device" | "elsewhere" |
-  "withdrawn", device?, behavior?: "allow" | "deny", choice?, text?}` closes any item its machine
+  "withdrawn", device?, behavior?: "allow" | "deny", choice?, text?, reason?}` closes any item its machine
   posted, a permission or a decision. For a permission, `keyboard` covers any answer outside
   Starbridge (terminal, Desktop, the Claude app) and `device` names the device whose answer the
   machine applied, with `behavior` saying whether it allowed or denied. For a decision,
   `elsewhere` means it was answered outside Starbridge and `withdrawn` that the agent no longer
-  needs it; `device`, posted once the machine accepts a device's answer, names that device and
+  needs it, with the agent's `reason` why: one line of at most 120 characters; `device`, posted once the machine accepts a device's answer, names that device and
   repeats its `choice` or `text`, neither for a Done. An answer is sealed only to the machine, so this notice is how
   the other devices learn which answer won, for instance when two answered at once. Devices
   show it after the decision is answered, whenever it arrives; clients that predate the two
