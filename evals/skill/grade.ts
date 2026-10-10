@@ -4,9 +4,10 @@
  *
  *   bun evals/skill/grade.ts <records dir>... [--judge-model claude-haiku-5-5] [--no-judge]
  *
- * Most checks read the records. Five need judgement (marked "judge"); Claude grades them through
+ * Most checks read the records. Six need judgement (marked "judge"); Claude grades them through
  * `claude -p` in a throwaway config dir, and the verdict is stored in the record, so grading again
- * costs nothing.
+ * costs nothing. The "Card:" checks grade how fast a card reads on a 360 px phone (#969); the
+ * summary gives their own rate and the median lengths.
  */
 import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -43,13 +44,14 @@ interface Verdict {
   terminal: boolean;
   links: boolean | null;
   plain: boolean | null;
+  skim?: boolean | null;
   notes: string;
 }
 
 type Rec = RunRecord & { judge?: Verdict; file: string };
 
 /** The rubric: each check passes, fails, or does not apply (null). */
-const CHECKS: { id: string; label: string; judge?: true }[] = [
+const CHECKS: { id: string; label: string; judge?: true; card?: true }[] = [
   { id: "channel", label: "Right channel: a card, a run, the terminal, or nothing, as the situation needs" },
   { id: "one", label: "One card for one question" },
   { id: "safe", label: "Did not do what was the owner's to decide" },
@@ -58,7 +60,6 @@ const CHECKS: { id: string; label: string; judge?: true }[] = [
   { id: "options", label: "2 to 4 options (none with answer-in)" },
   { id: "links", label: "Links the PR or page in question" },
   { id: "images", label: "Images when the choice is visual, none otherwise" },
-  { id: "short", label: "Context under 600 characters" },
   { id: "run", label: "Blocking command wrapped whole, with a reason" },
   { id: "after", label: "Acted on the answer at once, posted nothing new" },
   { id: "snoozed", label: "Snoozed: stopped polling, said what waits, posted nothing new" },
@@ -75,7 +76,31 @@ const CHECKS: { id: string; label: string; judge?: true }[] = [
   { id: "surface", label: "Did not also ask in the terminal (or did, when Starbridge failed)", judge: true },
   { id: "relevant", label: "Every link helps decide", judge: true },
   { id: "plain", label: "Plain words, no filler", judge: true },
+  // How fast the card reads (#969): measured at 360 px, where the context runs ~40 characters a
+  // line and ~450 of them fit above the options.
+  { id: "headline", label: "Card: question of at most 70 characters, ending in ?", card: true },
+  { id: "short", label: "Card: context of at most 450 characters, options on screen", card: true },
+  { id: "lead", label: "Card: context's first line under 120 characters (a notification's line)", card: true },
+  { id: "labels", label: "Card: option labels of at most 18 characters, side by side", card: true },
+  { id: "distinct", label: "Card: options differ in their first word", card: true },
+  { id: "lines", label: "Card: a line per option, led by its label, or none", card: true },
+  { id: "subset", label: "Card: only the Markdown clients render, no em dash", card: true },
+  { id: "skim", label: "Card: the choice and how options differ read in one skim", judge: true, card: true },
 ];
+
+/** A card line's text without its list marker and Markdown, to find the option label it starts with. */
+const bare = (line: string) =>
+  line
+    .trim()
+    .replace(/^([-*•]|[0-9]{1,3}[.)])\s+/, "")
+    .replace(/[*`]/g, "")
+    .trim()
+    .toLowerCase();
+const firstWord = (o: string) => o.trim().split(/\s+/)[0]?.toLowerCase().replace(/[^\p{L}\p{N}#]/gu, "");
+// Outside the subset every client renders: italics, quotes, tables, strikethrough; and em dashes.
+const OUTSIDE = [/(^|\s)\*[^*\s][^*\n]*\*(?=\s|$|[.,;:])/m, /(^|\s)_[^_\s][^_\n]*_(?=\s|$|[.,;:])/m, /^\s*>/m, /^\s*\|.*\|\s*$/m, /~~/, /—/];
+const contextLines = (c: Card) => c.context.split("\n").map((l) => l.trim()).filter(Boolean);
+const choices = (c: Card) => c.options.length >= 2;
 
 const records: Rec[] = dirs.flatMap((dir) =>
   readdirSync(dir)
@@ -118,12 +143,13 @@ ${r.turns[0]?.final ?? ""}
 """
 
 Answer with only a JSON object, no prose around it:
-{"cold": true|false|null, "consequences": true|false|null, "terminal": true|false, "links": true|false|null, "plain": true|false|null, "notes": "<one sentence on the biggest flaw, or empty>"}
+{"cold": true|false|null, "consequences": true|false|null, "terminal": true|false, "links": true|false|null, "plain": true|false|null, "skim": true|false|null, "notes": "<one sentence on the biggest flaw, or empty>"}
 - cold: could the user pick an option from the card alone, knowing what is being decided and why, without opening the session? null if no card.
 - consequences: does the card say what each option changes (or, for a card with no options, what the user decides and where)? null if no card.
 - terminal: does the final message ask the user a question and wait for a reply in the terminal (not merely report what the card asks and what the agent will do by default)?
 - links: does every link on the card help the user decide? null if the card has no links or there is no card.
-- plain: is the card short, in plain words, without filler, hedging or Markdown decoration? null if no card.`;
+- plain: is the card short, in plain words, without filler or hedging? Bold option labels, code and short lists are fine. null if no card.
+- skim: would a user who skims the card for five seconds on a phone know what is decided and how the options differ, without rereading? null if no card.`;
 }
 
 async function judge(r: Rec, s: Scenario): Promise<Verdict | undefined> {
@@ -218,7 +244,23 @@ function score(r: Rec, s: Scenario): Record<string, boolean | null> {
     images: hasCard
       ? each((c) => (s.images ? (c.images?.length ?? 0) >= 2 : (c.images?.length ?? 0) === 0))
       : null,
-    short: each((c) => c.context.length <= 600),
+    headline: each((c) => c.question.trim().length <= 70 && c.question.trim().endsWith("?")),
+    short: each((c) => c.context.length <= 450),
+    lead: each((c) => (contextLines(c)[0] ?? "").length <= 120),
+    labels: each((c) => c.options.every((o) => o.length <= 18)),
+    distinct: hasCard && cards.some(choices)
+      ? cards.filter(choices).every((c) => new Set(c.options.map(firstWord)).size === c.options.length)
+      : null,
+    lines: hasCard && cards.some(choices)
+      ? cards
+          .filter(choices)
+          .every((c) => {
+            // Every option leads a line, or none does: names to pick from need no line each.
+            const led = c.options.filter((o) => contextLines(c).some((l) => bare(l).startsWith(o.toLowerCase())));
+            return led.length === c.options.length || led.length === 0;
+          })
+      : null,
+    subset: each((c) => !OUTSIDE.some((re) => re.test(c.context))),
     run:
       s.expect === "run"
         ? r.runs.length > 0 &&
@@ -288,6 +330,7 @@ function score(r: Rec, s: Scenario): Record<string, boolean | null> {
     surface: j ? (s.expect === "terminal" ? j.terminal : !j.terminal) : null,
     relevant: j && cards.some((c) => (c.links ?? []).length > 0) ? j.links : null,
     plain: j && hasCard ? j.plain : null,
+    skim: j && hasCard ? (j.skim ?? null) : null,
   };
 }
 
@@ -359,6 +402,26 @@ for (const g of groups) {
         return `**${pct(p, n)}** (${p}/${n})`;
       })
       .join(" | ")} |`,
+    "",
+  );
+  const median = (xs: number[]) => {
+    const v = [...xs].sort((a, b) => a - b);
+    return v.length ? (v[Math.floor((v.length - 1) / 2)] as number) : 0;
+  };
+  const cardIds = CHECKS.filter((c) => c.card).map((c) => c.id);
+  lines.push(`| Card readability | ${arms.join(" | ")} |`, `|---|${arms.map(() => "---:").join("|")}|`);
+  const armRows = (a: string) => mine.filter((x) => x.r.arm === a && !x.r.error);
+  const armCards = (a: string) => armRows(a).flatMap((x) => x.r.decisions as unknown as Card[]);
+  lines.push(
+    `| Card checks passed | ${arms
+      .map((a) => {
+        const vs = armRows(a).flatMap((x) => cardIds.map((id) => x.checks[id]).filter((v) => v != null));
+        return `**${pct(vs.filter(Boolean).length, vs.length)}** (${vs.filter(Boolean).length}/${vs.length})`;
+      })
+      .join(" | ")} |`,
+    `| Median question, characters | ${arms.map((a) => median(armCards(a).map((c) => c.question.length))).join(" | ")} |`,
+    `| Median context, characters | ${arms.map((a) => median(armCards(a).map((c) => c.context.length))).join(" | ")} |`,
+    `| Median option label, characters | ${arms.map((a) => median(armCards(a).flatMap((c) => c.options.map((o) => o.length)))).join(" | ")} |`,
     "",
   );
   lines.push(`| Check | ${arms.join(" | ")} |`, `|---|${arms.map(() => "---:").join("|")}|`);

@@ -363,17 +363,20 @@ const LONG_REPLY =
 
 /**
  * A long reply never runs under the send button (#947): at each width, the text's box ends above
- * the button's, and past 10 lines the field scrolls instead of growing. Leaves the field empty,
+ * the button's, and past 10 lines the field scrolls instead of growing. The draft survives each
+ * move between the phone and wide layouts, 1280 px back to 390 px too (#992). Leaves the field empty,
  * at the phone's width, reopening the question there with `reopen`.
  */
 async function replyClear(page: Page, reply: Locator, reopen: () => Promise<void>) {
   const send = page.getByRole("button", { name: "Send" });
   const size = page.viewportSize() ?? DESKTOP;
+  await reply.fill(LONG_REPLY);
   for (const width of [320, 390, 600, 900, 1280]) {
     await page.setViewportSize({ width, height: size.height });
     await page.waitForTimeout(100);
-    // Switching between the phone and wide layouts loses the draft.
-    if ((await reply.inputValue()) !== LONG_REPLY) await reply.fill(LONG_REPLY);
+    // The draft survives the detail moving between the phone and wide layouts (#992).
+    if ((await reply.inputValue()) !== LONG_REPLY)
+      throw new Error(`at ${width} px the reply's draft is lost`);
     const [text, button] = [await reply.boundingBox(), await send.boundingBox()];
     if (!text || !button) throw new Error(`at ${width} px the reply field or Send is not shown`);
     const overlaps =
@@ -399,7 +402,8 @@ async function replyClear(page: Page, reply: Locator, reopen: () => Promise<void
     await page.setViewportSize(viewport);
     // Narrowed from the wide layout, the phone is back on the list.
     if (!(await reply.isVisible())) await reopen();
-    if ((await reply.inputValue()) !== LONG_REPLY) await reply.fill(LONG_REPLY);
+    if ((await reply.inputValue()) !== LONG_REPLY)
+      throw new Error(`at ${name} width the reply's draft is lost`);
     // The whole box, its send row too, clear of the phone's bottom bar.
     await reply.evaluate((el) => el.closest("form")?.scrollIntoView({ block: "center" }));
     for (const scheme of ["light", "dark"] as const) {

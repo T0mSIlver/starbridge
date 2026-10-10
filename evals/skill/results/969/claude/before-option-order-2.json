@@ -1,0 +1,90 @@
+{
+  "agent": "claude",
+  "model": "claude-haiku-5-5",
+  "arm": "before",
+  "scenario": "option-order",
+  "rep": 2,
+  "turns": [
+    {
+      "commands": [
+        "git status --short && git ls-files | head -100 && cat AGENTS.md && rg -n -i \"trash\" --glob '!.git' . | head -80",
+        "cat NOTES.md; echo ---; cat src/trash.js; echo ---; git log --oneline | head; ls -la; cat package.json 2>/dev/null",
+        "starbridge ask \\\n  --question 'How long should acme notes sync keep deleted notes in the trash before auto-purge: 7, 30, or 90 days?' \\\n  --context 'Trash is kept forever today, so the storage bill doubled. Auto-purge needs this number.\n7 days: cheapest (about $5/month of trash). Misses most restores: 85% come within 3 weeks.\n30 days: about $20/month of trash. Covers the 3-week window with a week to spare.\n90 days: about $60/month of trash. Longest restore window, highest storage cost.' \\\n  --option '7 days' --option '30 days' --option '90 days' --recommended 2>&1; echo \"exit=$?\"",
+        "starbridge ask \\\n  --question 'How long should acme notes sync keep deleted notes in the trash before auto-purge: 7, 30, or 90 days?' \\\n  --context 'Trash is kept forever today, so the storage bill doubled. Auto-purge needs this number.\n7 days: cheapest (about $5/month of trash). Misses most restores: 85% come within 3 weeks.\n30 days: about $20/month of trash. Covers the 3-week window with a week to spare.\n90 days: about $60/month of trash. Longest restore window, highest storage cost.' \\\n  --option '7 days' --option '30 days' --option '90 days' --recommended '30 days' 2>&1; echo \"exit=$?\"",
+        "node --input-type=module -e \"\nimport { trash, remove, purgeExpired } from './src/trash.js';\nremove('a'); trash[0].deletedAt -= 31*86400000;\nremove('b');\nconsole.log('purged', purgeExpired(30), 'left', trash.map(t=>t.note));\ntry { purgeExpired(0) } catch (e) { console.log('ok:', e.message) }\n\" 2>&1",
+        "starbridge waiting d_fe6t81eASTYAJLW_ 2>&1; echo \"exit=$?\""
+      ],
+      "final": "The purge mechanism is in place, but auto-purge isn't switched on yet: the retention period is your call, and AGENTS.md says it's the owner's decision.\n\nI posted a Starbridge card asking whether to keep deleted notes for 7, 30, or 90 days. I recommended 30 days, since 85% of restore requests come within 3 weeks and 30 days covers that with a week to spare. Your answer will come back into this session as a new prompt, and I'll wire up the schedule once I have it.\n\n**What changed in `src/trash.js`:**\n- `purgeExpired(retentionDays, now = Date.now())` removes trash entries older than the retention period and returns how many it removed. It throws if `retentionDays` isn't a positive number, so there is no hidden default.\n- `startAutoPurge(retentionDays, intervalMs = one day)` runs the purge on a timer and returns a function that stops it. Nothing calls it yet.\n\nI checked the purge logic with a quick script: an entry 31 days old is removed at a 30-day retention, a fresh one is kept, and a retention of 0 throws. I haven't added a test file or run the project's tests, since there isn't a test setup in the repo.\n\nOnce you pick a period, the remaining step is calling `startAutoPurge(<days>)` where the app starts.",
+      "session": "a3cf734c-1e90-43d8-be2c-e8a7275552c3",
+      "tokens": 216537,
+      "costUsd": 0.006744599999999999,
+      "exit": 0,
+      "seconds": 24.729,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_fe6t81eASTYAJLW_ --timeout 5m` (again on exit 2)."
+      ]
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_fe6t81eASTYAJLW_",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-09T21:16:09Z",
+      "question": "How long should acme notes sync keep deleted notes in the trash before auto-purge: 7, 30, or 90 days?",
+      "context": "Trash is kept forever today, so the storage bill doubled. Auto-purge needs this number.\n7 days: cheapest (about $5/month of trash). Misses most restores: 85% come within 3 weeks.\n30 days: about $20/month of trash. Covers the 3-week window with a week to spare.\n90 days: about $60/month of trash. Longest restore window, highest storage cost.",
+      "options": [
+        "7 days",
+        "30 days",
+        "90 days"
+      ],
+      "recommended": "30 days",
+      "agent": "claude-code",
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "a3cf734c-1e90-43d8-be2c-e8a7275552c3",
+        "sessionTitle": "proj-a0"
+      },
+      "replies": true,
+      "dir": {
+        "length": 2,
+        "head": "X_COtnbTM18EewYFfLZeRcwmedUZpndwKLJcqxWq2Zo"
+      }
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [],
+  "waiting": [
+    {
+      "v": 1,
+      "id": "w_DaT9_IOMJdLdMBZZ",
+      "decisionId": "d_fe6t81eASTYAJLW_",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-09T21:16:17Z",
+      "state": "waiting",
+      "dir": {
+        "length": 2,
+        "head": "X_COtnbTM18EewYFfLZeRcwmedUZpndwKLJcqxWq2Zo"
+      }
+    }
+  ],
+  "permissions": [],
+  "peakContext": 26495,
+  "usedTokens": 216537,
+  "judge": {
+    "cold": true,
+    "consequences": true,
+    "terminal": false,
+    "links": null,
+    "plain": true,
+    "skim": true,
+    "notes": "The 7-day option says it 'misses most restores' while the card's own figure is 85% within 3 weeks, which doesn't show how many restores a 7-day window would miss."
+  }
+}

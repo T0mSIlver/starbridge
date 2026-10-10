@@ -38,6 +38,9 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalView
+import dev.starbridge.app.ui.thresholdDeactivate
+import kotlinx.coroutines.flow.drop
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import dev.starbridge.app.ui.SheetGround
 import dev.starbridge.app.ui.SheetHandle
@@ -55,6 +58,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import dev.starbridge.app.data.Decision
 import dev.starbridge.app.data.SwipeSnooze
 import dev.starbridge.app.ui.LocalClock24
@@ -173,6 +177,11 @@ fun SnoozeTimes(now: Instant, modifier: Modifier = Modifier, onSnooze: (Instant)
     val dial = rememberTimePickerState(initialHour = start.hour, initialMinute = start.minute, is24Hour = h24)
     val presets = snoozePresets(now, zone).filter { (name, _) -> name != "Tomorrow morning" }
     val until = day.atTime(dial.hour, dial.minute).atZone(zone).toInstant()
+    // A tick per hour or minute the dial moves to, as Android's own clock dial gives (#997).
+    val haptics = LocalHapticFeedback.current
+    LaunchedEffect(dial) {
+        snapshotFlow { dial.hour to dial.minute }.drop(1).collect { haptics.performHapticFeedback(HapticFeedbackType.SegmentFrequentTick) }
+    }
     Column(verticalArrangement = Arrangement.spacedBy(Spacing.s4), modifier = modifier.semantics { contentDescription = "Snooze until" }) {
         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
             presets.forEachIndexed { i, (name, at) ->
@@ -234,8 +243,12 @@ fun SwipeToSnooze(shape: Shape, onSwipe: () -> Unit, modifier: Modifier = Modifi
     // One lambda for the card's life: Material re-runs a new one while the card still sits
     // swiped, which would snooze twice.
     val swiped by rememberUpdatedState(onSwipe)
+    // Whether the card sits past the threshold, so backing off it ticks too (#997). A snooze
+    // clears it first: the card springing back after one is no back-off.
+    var crossed by remember { mutableStateOf(false) }
     val dismiss: (SwipeToDismissBoxValue) -> Unit = remember(state) {
         {
+            crossed = false
             swiped()
             scope.launch { state.reset() }
         }
@@ -244,8 +257,11 @@ fun SwipeToSnooze(shape: Shape, onSwipe: () -> Unit, modifier: Modifier = Modifi
     var width by remember { mutableStateOf(0) }
     // From the offset, the threshold's own measure: the target value lags a slow drag.
     val armed by remember { derivedStateOf { width > 0 && state.offsetOrZero() >= width * SWIPE_ARMS } }
+    val view = LocalView.current
     LaunchedEffect(armed) {
         if (armed) haptics.performHapticFeedback(HapticFeedbackType.GestureThresholdActivate)
+        else if (crossed) view.thresholdDeactivate()
+        crossed = armed
     }
     SwipeToDismissBox(
         state,

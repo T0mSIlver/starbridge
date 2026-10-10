@@ -1,0 +1,98 @@
+{
+  "agent": "opencode",
+  "model": "zai-coding-plan/glm-5.3-flash",
+  "arm": "after",
+  "scenario": "option-order",
+  "rep": 2,
+  "turns": [
+    {
+      "commands": [
+        "ls -la",
+        "ls src",
+        "git log --oneline -5 && git status --short",
+        "starbridge ask \\\n  --question 'Trash auto-purge: keep deleted notes how long?' \\\n  --context 'Trash never purges; storage doubled. NOTES.md: 85% of support restores come within 3 weeks of the delete; each month kept costs ~$20/mo.\n**7 days:** ~$5/mo. Restores mostly impossible after week 1.\n**30 days:** ~$20/mo. Covers the 3-week restore window with headroom.\n**90 days:** ~$60/mo. Near-total restore coverage.' \\\n  --option '7 days' --option '30 days' --option '90 days' --recommended '30 days' \\\n  --waiting",
+        "node --input-type=module -e \"\nimport { remove, purge, trash, listTrash } from './src/trash.js';\nconst real = Date.now;\nDate.now = () => real() - 40 * 24 * 60 * 60 * 1000;\nremove({ id: 1 });\nDate.now = () => real();\nremove({ id: 2 });\nconsole.log('before purge:', trash.map(t => t.note.id));\nlistTrash();\nconsole.log('after auto-purge (40d old dropped):', trash.map(t => t.note.id));\n\"",
+        "node --input-type=module -e \"\nimport { remove, purge, trash } from './src/trash.js';\nconst real = Date.now;\nDate.now = () => real() - 31 * 24 * 60 * 60 * 1000;\nremove({ id: 1 });\nDate.now = () => real() - 10 * 24 * 60 * 60 * 1000;\nremove({ id: 2 });\nDate.now = real;\npurge();\nconsole.log('kept:', trash.map(t => t.note.id), '(expect [2])');\n\"",
+        "starbridge wait d_Nv1TYFhBBH4ZYGkM --timeout 5m"
+      ],
+      "final": "Trash now purges automatically — the owner confirmed 30 days on the card, which is what's already set.\n\n- `src/trash.js` — added `purge()` with a 30-day retention (`RETENTION_DAYS`); entries older than the cutoff are dropped, and purging runs automatically on `remove()` and `listTrash()`.\n- Verified: notes older than 30 days are dropped, newer ones kept.\n- Retention was your call per AGENTS.md, so I posted a starbridge card (7/30/90 days with cost and restore-coverage data); you tapped **30 days** (~$20/mo, covers the 3-week support window).",
+      "session": "ses_edd7da73dffeRLsJB1YLaaQei7",
+      "tokens": 8135,
+      "exit": 0,
+      "seconds": 95.933,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_Nv1TYFhBBH4ZYGkM --timeout 5m` (again on exit 2)."
+      ]
+    },
+    {
+      "commands": [],
+      "final": "Trash now purges automatically — the owner confirmed 30 days on the card, which is what's already set.\n\n- `src/trash.js` — added `purge()` with a 30-day retention (`RETENTION_DAYS`); entries older than the cutoff are dropped, and purging runs automatically on `remove()` and `listTrash()`.\n- Verified: notes older than 30 days are dropped, newer ones kept.\n- Retention was your call per AGENTS.md, so I posted a starbridge card (7/30/90 days with cost and restore-coverage data); you tapped **30 days** (~$20/mo, covers the 3-week support window).",
+      "session": "ses_edd7da73dffeRLsJB1YLaaQei7",
+      "tokens": 8135,
+      "exit": 0,
+      "seconds": 95.933,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_Nv1TYFhBBH4ZYGkM --timeout 5m` (again on exit 2)."
+      ]
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_Nv1TYFhBBH4ZYGkM",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-09T21:13:19Z",
+      "question": "Trash auto-purge: keep deleted notes how long?",
+      "context": "Trash never purges; storage doubled. NOTES.md: 85% of support restores come within 3 weeks of the delete; each month kept costs ~$20/mo.\n**7 days:** ~$5/mo. Restores mostly impossible after week 1.\n**30 days:** ~$20/mo. Covers the 3-week restore window with headroom.\n**90 days:** ~$60/mo. Near-total restore coverage.",
+      "options": [
+        "7 days",
+        "30 days",
+        "90 days"
+      ],
+      "recommended": "30 days",
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": ""
+      },
+      "replies": true,
+      "dir": {
+        "length": 2,
+        "head": "-zU0IKJGy9xBQ8j2YBuJdNk9Y2wIa9tqTbtLk9uOc5c"
+      }
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [],
+  "answered": "Answer to d_Nv1TYFhBBH4ZYGkM (Trash auto-purge: keep deleted notes how long?): 30 days",
+  "waiting": [
+    {
+      "v": 1,
+      "id": "w_JU15Xk52POsKp78T",
+      "decisionId": "d_Nv1TYFhBBH4ZYGkM",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-09T21:13:19Z",
+      "state": "waiting",
+      "dir": {
+        "length": 2,
+        "head": "-zU0IKJGy9xBQ8j2YBuJdNk9Y2wIa9tqTbtLk9uOc5c"
+      }
+    }
+  ],
+  "permissions": [],
+  "judge": {
+    "cold": true,
+    "consequences": true,
+    "terminal": false,
+    "links": null,
+    "plain": true,
+    "skim": true,
+    "notes": "The final message reports the already-tapped choice instead of asking a question and waiting in the terminal, and the card's claim that 7-day restores are 'mostly impossible after week 1' isn't supported by the cited 3-week figure."
+  }
+}
