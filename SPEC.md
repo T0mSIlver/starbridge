@@ -1477,6 +1477,16 @@ Tokens, type and components: `DESIGN.md`.
   PATCH*100` plus the rc number or 99, so release candidates sort first; the 2000000 keeps 0.1.0
   above 1.0.0-rc.1 (1000001), which Play's closed test already had (#551). Play App Signing keeps the release
   key, so Play and GitHub builds share one signature (#148).
+- **Release candidates first** (#1004). v0.1.3 crashed on every card with context: Android's ICU
+  regex refused `(?U)`, which the JVM's regex, and so unit tests and Robolectric, accept. A tag is
+  live at once, so the release publishes nothing until the release APK passes a smoke test on an
+  emulator (`demo/smoke/android.ts`, GitHub's runner, since dell2 has no KVM): it signs in to a
+  local demo server, gets a question with context through an FCM message from a fake FCM, shows
+  the notification and opens the card. Delivering that message needs a root shell, so the image is
+  `google_apis`. Release builds allow plain HTTP to `127.0.0.1` and `localhost` only, for this
+  test; that traffic stays on the phone and items are end-to-end encrypted. Every release starts
+  as an rc the maintainer installs; the final tag must be its newest rc plus the version stamp
+  (`version.ts --final`), keeping the rc's CodexBar pin, so it ships what was tried.
 - **The desktop app's release** (#886). Once the repository variable `DESKTOP_RELEASE` is true,
   the tag also builds the macOS app on GitHub's macOS runner, signed with the Developer ID and
   notarized, its secrets in the `desktop-release` environment, and adds its DMGs, zips and

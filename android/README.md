@@ -49,7 +49,8 @@ into the string resources Firebase reads. Without it the app builds with FCM
 off and offers UnifiedPush.
 
 Debug builds allow plain HTTP, for a local server reached through `adb reverse
-tcp:8080 tcp:8080` at `http://127.0.0.1:8080`. `docs/e2e/` holds screenshots
+tcp:8080 tcp:8080` at `http://127.0.0.1:8080`. Release builds allow it to
+`127.0.0.1` and `localhost` only, for the release smoke test. `docs/e2e/` holds screenshots
 from an emulator run against one: GitHub sign-in through a stand-in OAuth
 server, first-device setup, pairing `starbridge pair`, and answering
 `starbridge ask --wait` from the locked screen through UnifiedPush (ntfy).
