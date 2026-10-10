@@ -18,7 +18,7 @@ import { makeAgent } from "../src/agent/main";
 import { hookStop } from "../src/antigravity";
 import { run } from "../src/cli";
 import { session } from "../src/context";
-import { DONE_LINE, poll } from "../src/decisions";
+import { DONE_LINE, poll, typedBreaks } from "../src/decisions";
 import { piAllow, piPermissionConfig } from "../src/pi";
 import { configCommand, offerPiChain } from "../src/settings";
 import { agentAddress, approveAndConfirm, FAKE_CODEXBAR, paired, testCtx, until } from "./helpers";
@@ -1274,4 +1274,15 @@ test("a lock left by a dead process is broken, and the command goes on", async (
   writeFileSync(join(ctx.store.dir, ".lock"), `${dead} left-by-a-crash`);
   expect(await run(ASK, ctx)).toBe(0);
   expect(existsSync(join(ctx.store.dir, ".lock"))).toBe(false);
+});
+
+test("a context typed with \\n for its line breaks gets them, but never in code (#1037)", () => {
+  expect(typedBreaks("Locks 4 min.\\n**Now:** fails.\\n- `printf 'a\\nb'`")).toBe(
+    "Locks 4 min.\n**Now:** fails.\n- `printf 'a\\nb'`",
+  );
+  // A real line break says the \n was meant; a backslash before it keeps it too.
+  expect(typedBreaks("First.\nRun `sed 's/\\n//'` or C:\\\\new")).toBe(
+    "First.\nRun `sed 's/\\n//'` or C:\\\\new",
+  );
+  expect(typedBreaks("Path C:\\\\new")).toBe("Path C:\\\\new");
 });

@@ -73,7 +73,8 @@ starbridge ask \
 ```
 
 Quote text in single quotes, since double quotes expand `$` and backticks,
-and write apostrophes as ’. Other flags: `--image` (up to 4 PNG or JPEG),
+and write apostrophes as ’. Break lines inside the quotes with real line
+breaks, as above, never `\n`: bash and zsh pass it on as typed. Other flags: `--image` (up to 4 PNG or JPEG),
 `--link` (up to 4 HTTPS URLs), `--waiting` (only the answer unblocks you), `--answer-in`. `ask` prints the decision id (`d_Xk3…`) and how the
 answer comes back.
 
