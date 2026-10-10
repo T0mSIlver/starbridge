@@ -33,6 +33,7 @@ android {
         // The hosted server; self-hosters change it on the sign-in screen.
         buildConfigField("String", "DEFAULT_SERVER", "\"https://starbridge.run\"")
         firebaseResources()
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     signingConfigs {
@@ -74,6 +75,9 @@ android {
 
     // The versionCode formula is plain Kotlin in buildSrc: VersionCodeTest checks it (#551).
     sourceSets.getByName("test").kotlin.srcDir(rootProject.file("buildSrc/src/main/kotlin"))
+    // Device tests read the same vectors as assets: they check what only Android's runtime
+    // can, such as its ICU regex engine (#1002).
+    sourceSets.getByName("androidTest").assets.srcDir(rootProject.file("../packages/protocol/vectors"))
 
     testOptions {
         unitTests.isIncludeAndroidResources = true
@@ -150,6 +154,10 @@ dependencies {
     testImplementation(libs.okhttp.mockwebserver)
     testImplementation(libs.coroutines.test)
     testImplementation(libs.material.components) { isTransitive = false }
+
+    androidTestImplementation(libs.junit)
+    androidTestImplementation(libs.androidx.test.runner)
+    androidTestImplementation(libs.androidx.test.junit)
 }
 
 class Keystore(val file: File, val password: String, val alias: String)
