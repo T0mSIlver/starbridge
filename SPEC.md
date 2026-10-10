@@ -416,6 +416,12 @@ provider plugins add providers, not panels.
   switches alone.
 - An Android app in front syncs every 10 s until a push has reached it (#445), since a server
   without a relay or UnifiedPush pushes nothing and cannot tell.
+- **Android registers its push route at each start** (#1011), even when its token is unchanged.
+  The server drops a subscription FCM once calls gone, and the phone, still holding the same
+  token, never sent it again until a reinstall. An app update does not change the token or stop
+  delivery: on the emulator, updates to a newer, the same and an older release all kept the token,
+  and FCM woke the app before it was opened. Registering is idempotent, so the cost is one
+  request per start.
 - **Held pushes** (#848). A question that shows in the agent's picker and on the owner's screen
   needed no buzz on the phone too: a quick back and forth at the desk did that. So while any of
   the owner's machines or devices says they sit at its screen, the push of a question, a

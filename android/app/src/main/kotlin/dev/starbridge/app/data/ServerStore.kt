@@ -399,6 +399,7 @@ class ServerStore(
         disk.wipe()
         alerts.clearAll()
         pendingPush = null
+        confirmedPush = null
         saved = Saved(saved.server, pushType = saved.pushType)
         secrets = Secrets()
         directory = null
@@ -1672,21 +1673,28 @@ class ServerStore(
     /** The route whose registration failed, kept until one succeeds or the phone signs out. */
     @Volatile private var pendingPush: PushRoute? = null
 
+    /** The endpoint the server took since the app started. */
+    @Volatile private var confirmedPush: String? = null
+
     private suspend fun subscribeHeld(route: PushRoute) {
         if (phase.value != Phase.Ready || route.type != saved.pushType) return
         val old = saved.push
-        if (old != null && old.type == route.type && old.endpoint == route.endpoint) {
+        val same = old != null && old.type == route.type && old.endpoint == route.endpoint
+        if (same && confirmedPush == route.endpoint) {
             pendingPush = null
             return
         }
         pendingPush = route
-        if (old != null) {
+        // The same endpoint registers again once per start, since the server drops a subscription
+        // its push service once called gone (#1011); subscribing again keeps its id.
+        if (old != null && !same) {
             runCatching { api().unsubscribe(old.id) }
             // Forgotten first, so a failed replacement is not mistaken for a working route.
             persist(saved.copy(push = null))
         }
         val id = api().subscribe(route.type, route.endpoint, route.keys)
         persist(saved.copy(push = SavedPush(route.type, id, route.endpoint)))
+        confirmedPush = route.endpoint
         pendingPush = null
     }
 
