@@ -49,7 +49,8 @@ mkdirSync(out, { recursive: true });
 const dir = mkdtempSync(join(tmpdir(), "starbridge-smoke-"));
 const port = Number(process.env.PORT ?? 8411);
 const server = `http://127.0.0.1:${port}`;
-const ownerToken = crypto.randomUUID();
+// Letters and digits only: `input text` is typed through the keyboard.
+const ownerToken = crypto.randomUUID().replaceAll("-", "");
 const ADB = process.env.ADB ?? "adb";
 
 const step = (what: string) => console.log(`[smoke] ${what}`);
@@ -146,6 +147,14 @@ async function tap(label: string, seconds = 30) {
 async function type(text: string) {
   // `input text` takes no spaces; %s stands for one.
   await shell(`input text '${text.replaceAll(" ", "%s")}'`);
+}
+
+/** Clears the field and types the text. */
+async function replace(field: string, text: string) {
+  await tap(field);
+  await shell("input keyevent KEYCODE_MOVE_END");
+  await shell(`input keyevent ${Array(60).fill("KEYCODE_DEL").join(" ")}`);
+  await type(text);
 }
 
 /** A fake FCM: an OAuth token endpoint and messages:send, which records each message. */
@@ -286,16 +295,24 @@ try {
   step("sign in with the owner token");
   await shell(`am start -W -n ${PKG}/.MainActivity`);
   await tap("Use your own server");
-  await tap("Server");
-  await shell("input keyevent KEYCODE_MOVE_END");
-  await shell(`input keyevent ${Array(40).fill("KEYCODE_DEL").join(" ")}`);
-  await type(server);
-  await tap("Owner token");
-  await type(ownerToken);
-  await shell("input keyevent KEYCODE_BACK");
-  await tap("Sign in");
+  await replace("Server", server);
+  // A slow emulator's keyboard can drop keys; the token field hides what it got.
+  for (let attempt = 1; ; attempt++) {
+    await replace("Owner token", ownerToken);
+    await shell("input keyevent KEYCODE_BACK");
+    await tap("Sign in");
+    const joining = await see("Compare digits", 30).then(
+      () => true,
+      (e) => {
+        if (e instanceof Crash || attempt === 3) throw e;
+        return false;
+      },
+    );
+    if (joining) break;
+    step(`sign-in attempt ${attempt} failed; typing the token again`);
+  }
   step("join by digits");
-  await tap("Compare digits", 60);
+  await tap("Compare digits");
   await tap("They match", 60);
   await see("Inbox", 60);
   // Play services hands out a token only once Google's servers answered it, which a fresh
