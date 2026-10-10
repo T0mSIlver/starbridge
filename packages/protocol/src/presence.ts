@@ -4,8 +4,8 @@ import { z } from "zod";
  * Presence (#848): whether the owner sits at an unlocked screen they used in the last minute. A
  * machine reads its own lock and idle state, a device its page or app in front and touched; each
  * reduces that to one bit where it is read and sends only the bit. While any source of an
- * account is present, the server holds the pushes of new questions and permission prompts for
- * the account's hold time, then pushes those still open.
+ * account is present, the server holds the pushes of new questions and permission prompts, and
+ * once nobody is, for the account's hold time more, then pushes those still open (#1003).
  */
 
 /** Input this recent makes a screen present. */
@@ -26,7 +26,7 @@ export const PUSH_HOLD_MAX = 300;
 
 /** `GET` and `PUT /settings`: the account's own settings, which the server applies. */
 export const AccountSettings = z.object({
-  /** Seconds a push waits while the owner is present. */
+  /** Seconds a held push waits once the owner left the last screen. */
   pushHold: z.number().int().min(0).max(PUSH_HOLD_MAX),
 });
 export type AccountSettings = z.infer<typeof AccountSettings>;
