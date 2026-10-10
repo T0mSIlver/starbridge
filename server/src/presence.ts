@@ -1,21 +1,35 @@
 import type { Database } from "bun:sqlite";
-import { PRESENCE_VALID_MS, PUSH_HOLD_DEFAULT, type SealedItem } from "@starbridge/protocol";
+import {
+  PRESENCE_VALID_MS,
+  PUSH_HOLD_DEFAULT,
+  PUSH_HOLD_MAX,
+  type SealedItem,
+} from "@starbridge/protocol";
 import type { Push } from "./push";
 import { pushPayload } from "./routes/items";
 
 /**
  * Who of an account sits at a screen right now (#848), as each machine and device last said:
- * one bit per source, kept in memory only and trusted `PRESENCE_VALID_MS` after its last beat. A
- * restart forgets it, which means push at once.
+ * one bit per source, kept in memory only and trusted `PRESENCE_VALID_MS` after its last beat,
+ * and when the account's last source stopped, from which a held push counts its hold (#1003).
  */
 export class Presence {
   private accounts = new Map<string, Map<string, number>>();
+  private left = new Map<string, number>();
+  /**
+   * A restart forgot who was present, so every account counts as present until then, as if each
+   * source had just beaten: one that is beats again before.
+   */
+  private readonly forgotten: number;
+
+  constructor(now = Date.now()) {
+    this.forgotten = now + PRESENCE_VALID_MS;
+  }
 
   beat(account: string, member: string, present: boolean, now = Date.now()): void {
     let sources = this.accounts.get(account);
     if (!present) {
-      sources?.delete(member);
-      if (sources?.size === 0) this.accounts.delete(account);
+      if (sources?.delete(member) && sources.size === 0) this.leave(account, now);
       return;
     }
     if (!sources) {
@@ -29,14 +43,33 @@ export class Presence {
   present(account: string, now = Date.now()): string[] {
     const sources = this.accounts.get(account);
     if (!sources) return [];
-    for (const [member, until] of sources) if (until <= now) sources.delete(member);
-    if (sources.size === 0) this.accounts.delete(account);
+    let last = 0;
+    for (const [member, until] of sources)
+      if (until <= now) {
+        sources.delete(member);
+        last = Math.max(last, until);
+      }
+    if (sources.size === 0) this.leave(account, last);
     return [...sources.keys()];
+  }
+
+  /** Since when nobody of the account is at a screen, or undefined while someone is. */
+  absentSince(account: string, now = Date.now()): number | undefined {
+    if (this.present(account, now).length > 0 || now < this.forgotten) return undefined;
+    return Math.max(this.left.get(account) ?? 0, this.forgotten);
   }
 
   /** Drops what has run out, so an account that stopped beating leaves no entry. */
   sweep(now = Date.now()): void {
     for (const account of [...this.accounts.keys()]) this.present(account, now);
+    // Once the longest hold has run out since, the departure no longer delays anything.
+    for (const [account, at] of this.left)
+      if (at + PUSH_HOLD_MAX * 1000 < now) this.left.delete(account);
+  }
+
+  private leave(account: string, at: number): void {
+    this.accounts.delete(account);
+    this.left.set(account, at);
   }
 }
 
@@ -52,8 +85,9 @@ export function pushHold(db: Database, account: string): number {
 }
 
 /**
- * The devices of `to` whose push waits, and until when: every one not itself present, while any
- * source of the account is. None when nobody is present or the hold is off.
+ * The devices of `to` whose push waits: every one not itself present, while any source of the
+ * account is. None when nobody is present or the hold is off. `due` is the earliest the hold can
+ * end, a hold time from now, since the owner has yet to leave.
  */
 export function holdFor(
   db: Database,
@@ -72,12 +106,15 @@ export function holdFor(
 }
 
 /**
- * Pushes the held items whose hold has run out to the devices they were held from, when they are
- * still open: a permission unanswered, a decision, or a `waiting` item's, unanswered and not
- * snoozed. One answered, settled or snoozed meanwhile never pushes.
+ * Pushes the held items whose hold has run out to the devices they were held from (#1003): the
+ * account's hold time after the owner left every screen, and not before the item's `hold_due`.
+ * The hold never runs out while the owner is at a screen; one turned off runs out at `hold_due`. They
+ * go only when still open: a permission unanswered, a decision, or a `waiting` item's,
+ * unanswered and not snoozed. One answered, settled or snoozed meanwhile never pushes.
  */
 export function releaseHolds(
   db: Database,
+  presence: Presence,
   push: Push,
   inlineLimit: number,
   now = Date.now(),
@@ -96,7 +133,19 @@ export function releaseHolds(
     answered_at: string | null;
     hold_to: string;
   }[];
+  const ends = new Map<string, number>();
+  const endOf = (account: string) => {
+    let end = ends.get(account);
+    if (end === undefined) {
+      const seconds = pushHold(db, account);
+      const left = presence.absentSince(account, now);
+      end = seconds <= 0 ? now : left === undefined ? Infinity : left + seconds * 1000;
+      ends.set(account, end);
+    }
+    return end;
+  };
   for (const h of due) {
+    if (endOf(h.account_id) > now) continue;
     // Cleared first: a push that fails is not retried, as no other push is. A closed item keeps
     // `hold_to`, so the notices that close it skip the devices that never heard of it.
     const open = stillOpen(db, h);

@@ -712,7 +712,12 @@ test("Cursor: the stop hook holds for the answer and returns it as the next prom
   // Until the plugin's sessionStart hook ran, nothing says a hold takes the answer.
   const before = await ask(c, "--project", "p");
   expect(c.errors.at(-1)).toContain("run `starbridge wait");
-  expect(await run(["settle", before, "--outcome", "withdrawn"], ctx)).toBe(0);
+  expect(
+    await run(
+      ["settle", before, "--outcome", "withdrawn", "--reason", "Asked again once the hook ran"],
+      ctx,
+    ),
+  ).toBe(0);
   ctx.lines.length = 0;
   expect(await hookCursorSession(ctx, cursorHook("sessionStart", "conv-1"))).toBe(0);
   const id = await ask(c, "--project", "p");

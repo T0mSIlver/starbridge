@@ -671,7 +671,7 @@ async function testDecision(ctx: Ctx, name: string) {
   if (code === 2) ctx.out("✗ No answer within 10 minutes");
   if (code !== EXIT_INTERRUPTED || !id) return;
   try {
-    await settle(ctx, { id, outcome: "withdrawn" });
+    await settle(ctx, { id, outcome: "withdrawn", reason: "Skipped in starbridge setup" });
     ctx.out("– Skipped");
   } catch (e) {
     ctx.out(`– Skipped, but the card stays open on your devices: ${(e as Error).message}`);

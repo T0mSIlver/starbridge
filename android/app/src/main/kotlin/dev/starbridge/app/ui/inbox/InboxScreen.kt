@@ -895,14 +895,16 @@ internal fun outcome(decision: Decision) = decision.answer ?: decision.theirAnsw
 
 /**
  * Who closed it, after its outcome: "not sent yet" (this phone's, on its way), "on this phone",
- * "on Pixel", "at the keyboard" (the agent's own picker, #865), "by the agent" (withdrawn, or for
- * another page), "on another device".
+ * "on Pixel", "at the keyboard" (the agent's own picker, #865), the agent's reason for a
+ * withdrawal (#1008), "by the agent" (withdrawn without one, or for another page), "on another
+ * device".
  */
 internal fun closedByPhrase(decision: Decision) = when {
     decision.sending -> "not sent yet"
     decision.answer != null -> "on this phone"
     decision.answeredOn != null -> "on ${decision.answeredOn}"
     decision.settled == "elsewhere" && decision.answerIn == null -> "at the keyboard"
+    decision.settled == "withdrawn" && decision.reason != null -> decision.reason
     decision.settled != null || decision.answerIn != null -> "by the agent"
     else -> "on another device"
 }

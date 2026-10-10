@@ -201,6 +201,7 @@ async function confirmCheck(page: Page, pair: ReturnType<typeof cli>, name: stri
     throw new Error(`the page shows "${shown}", the terminal ${printed}`);
   if ((await cli(`${name}-confirm`, ["pair", "--confirm"], home).exited) !== 0)
     throw new Error("pair --confirm failed");
+  return printed;
 }
 
 const vapid = JSON.parse(
@@ -580,7 +581,7 @@ async function main() {
   await page.getByLabel("Pair a machine or device").fill(code);
   await page.getByRole("button", { name: "Check code" }).click();
   await page.getByRole("button", { name: "Approve" }).click();
-  await confirmCheck(page, pair, "pair", machineHome);
+  const devboxCheck = await confirmCheck(page, pair, "pair", machineHome);
   await pair.waitFor(/✓ Paired as devbox/);
   if ((await pair.exited) !== 0) throw new Error("pair failed");
   await page.getByRole("status", { name: "Pairing result" }).getByText("devbox joined").waitFor();
@@ -597,6 +598,36 @@ async function main() {
     .getByRole("navigation", { name: "Main" })
     .getByRole("link", { name: "Settings" })
     .click();
+
+  step("Devices shows the machine's check code while its pairing can be confirmed (#939)");
+  {
+    const row = page
+      .getByRole("region", { name: "Devices" })
+      .locator('[class*="__device"]')
+      .filter({ hasText: "devbox" });
+    const shown = await row.getByTestId("device-check").textContent();
+    if (shown !== `Same code as on the machine? ${devboxCheck}`)
+      throw new Error(`Devices shows "${shown}" beside devbox, the terminal ${devboxCheck}`);
+    for (const scheme of ["light", "dark"] as const) {
+      await page.emulateMedia({ colorScheme: scheme });
+      await page.waitForTimeout(150);
+      await row.screenshot({ path: join(SHOTS, `devices-check-row-${scheme}.png`) });
+    }
+    await page.emulateMedia({ colorScheme: "light" });
+    // A page whose clock runs on: the code leaves once `starbridge pair` stops waiting for it.
+    // The clock is the whole context's, so it goes back to now before the next step.
+    const later = await a.newPage();
+    await later.clock.install();
+    await later.goto(`${ORIGIN}/settings`);
+    const check = later.getByRole("region", { name: "Devices" }).getByTestId("device-check");
+    await check.waitFor();
+    await later.clock.fastForward(60 * 60_000);
+    await check.waitFor({ state: "detached", timeout: 5_000 }).catch(() => {
+      throw new Error("Devices still shows devbox's check code an hour after it was added");
+    });
+    await later.clock.setSystemTime(new Date());
+    await later.close();
+  }
   await follow(page, page.getByRole("link", { name: "Add a device" }), "/settings/devices/add");
 
   step("refuse a second pairing");
@@ -1235,6 +1266,30 @@ async function main() {
     .locator("..")
     .getByText(/Answered in the artifact/)
     .waitFor();
+
+  step("a withdrawn decision shows the agent's reason in History (#1008)");
+  const moot = cli(
+    "moot",
+    [
+      ...["ask", "--question", "Retry the flaky upload test?", "--option", "Retry"],
+      ...["--option", "Skip", "--project", "starbridge"],
+    ],
+    machineHome,
+  );
+  const [mootId] = await moot.waitFor(/d_[\w-]+/);
+  if ((await moot.exited) !== 0) throw new Error("ask failed");
+  const reason = "Fixed it myself after rereading the logs";
+  const withdraw = cli(
+    "withdraw",
+    ["settle", mootId as string, "--outcome", "withdrawn", "--reason", reason],
+    machineHome,
+  );
+  if ((await withdraw.exited) !== 0) throw new Error("settle --outcome withdrawn failed");
+  await page
+    .locator(`[data-id="${mootId}"]`)
+    .locator("..")
+    .getByText(`Withdrawn · ${reason}`)
+    .waitFor({ timeout: 30_000 });
 
   await page.getByRole("link", { name: "Quotas" }).click();
   await page.locator("article").first().waitFor();
@@ -1883,7 +1938,9 @@ async function main() {
   await probe(page).click();
   await selected(page).getByRole("button", { name: /^Ship/ }).click();
 
-  step("while the first browser is in use, the second's notification waits the hold (#848)");
+  step(
+    "while the first browser is in use, the second hears nothing, then a hold after it leaves (#848, #1003)",
+  );
   // The second browser must not count as in use itself: no input on it for longer than the server
   // trusts its last beat.
   await pageB.reload();
@@ -1917,17 +1974,31 @@ async function main() {
     ((await pageB.evaluate(NOTIFICATIONS)) as { title: string }[]).filter((n) =>
       n.title.startsWith("Hold probe"),
     ).length;
-  // The browser in use lists it at once; the other hears nothing until the hold ends.
+  // The browser in use lists it at once; the other hears nothing while it stays in use, well
+  // past the hold time.
   await page.locator(`button[data-id="${holdId}"]`).waitFor({ timeout: 15_000 });
-  while (Date.now() - askedAt < 10_000) {
+  while (Date.now() - askedAt < 25_000) {
     await use();
-    if ((await held()) > 0) throw new Error("the second browser was notified during the hold");
+    if ((await held()) > 0)
+      throw new Error("the second browser was notified while the first was in use");
     await page.waitForTimeout(1_000);
   }
+  // The first browser's page goes hidden: presence ends, and the hold counts from now.
+  await page.evaluate(() => {
+    Object.defineProperty(document, "visibilityState", { configurable: true, get: () => "hidden" });
+    document.dispatchEvent(new Event("visibilitychange"));
+  });
+  const leftAt = Date.now();
   while ((await held()) === 0) {
-    if (Date.now() - askedAt > 40_000) throw new Error("the held notification never came");
+    if (Date.now() - leftAt > 40_000) throw new Error("the held notification never came");
     await page.waitForTimeout(1_000);
   }
+  if (Date.now() - leftAt < 12_000)
+    throw new Error(`notified ${Date.now() - leftAt} ms after leaving, under the 15 s hold`);
+  await page.evaluate(() => {
+    delete (document as { visibilityState?: unknown }).visibilityState;
+    document.dispatchEvent(new Event("visibilitychange"));
+  });
   await page.locator(`button[data-id="${holdId}"]`).click();
   await selected(page).getByRole("button", { name: /^Tag/ }).click();
   await page.goto(`${ORIGIN}/settings`);

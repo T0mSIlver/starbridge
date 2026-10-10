@@ -17,6 +17,7 @@ import { type Ctx, session, UsageError } from "./context";
 import {
   type AskInput,
   EXIT_SNOOZED,
+  pickerReason,
   postDecision,
   resolveSource,
   settle,
@@ -229,8 +230,8 @@ async function ask(
   await Promise.all(
     ids.map((id) =>
       id
-        ? settle({ ...ctx, signal: undefined }, { id, outcome }).catch((e) =>
-            ctx.err(`starbridge: could not settle ${id}: ${(e as Error).message}`),
+        ? settle({ ...ctx, signal: undefined }, { id, outcome, ...pickerReason(outcome) }).catch(
+            (e) => ctx.err(`starbridge: could not settle ${id}: ${(e as Error).message}`),
           )
         : undefined,
     ),

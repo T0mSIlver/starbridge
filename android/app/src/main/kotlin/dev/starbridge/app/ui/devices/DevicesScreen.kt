@@ -41,6 +41,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.lifecycle.ViewModel
@@ -53,6 +56,7 @@ import dev.starbridge.app.data.Prefs
 import dev.starbridge.app.data.PushSetting
 import dev.starbridge.app.data.RecoveryUi
 import dev.starbridge.app.data.Store
+import dev.starbridge.app.protocol.CHECK_CONFIRM_MS
 import dev.starbridge.app.ui.Beacon
 import dev.starbridge.app.ui.Choice
 import dev.starbridge.app.ui.Label
@@ -139,7 +143,7 @@ fun DevicesScreen(
     val twins = members.groupingBy { it.name }.eachCount().filterValues { it > 1 }.keys
     var revoking by rememberSaveable { mutableStateOf<String?>(null) }
     Page("Devices", modifier, onBack = onBack, titleGap = Spacing.s4) {
-        itemsIndexed(rows, key = { _, it -> it.id }) { i, it -> MemberRow(it, it.name in twins, groupShape(i, rows.size, outer = Spacing.s5), notify[it.id]) { revoking = it.id } }
+        itemsIndexed(rows, key = { _, it -> it.id }) { i, it -> MemberRow(it, now, it.name in twins, groupShape(i, rows.size, outer = Spacing.s5), notify[it.id]) { revoking = it.id } }
         if (recovery != null) item(key = "recovery") { RecoveryRow(recovery, onReplaceRecovery) }
         item {
             FilledTonalButton(
@@ -294,9 +298,12 @@ fun PairCard(approval: Approval, actions: DeviceActions, otherWays: @Composable 
 
 private val NOTIFY_LABELS = mapOf("on" to "Notifications on", "off" to "Notifications off", "blocked" to "Notifications blocked")
 
-/** A member: its kind's icon, name and when it joined; Revoke is a neutral text button. */
+/**
+ * A member: its kind's icon, name and when it joined; Revoke is a neutral text button. A machine
+ * shows its check code while `starbridge pair` waits for the owner to compare it (#939).
+ */
 @Composable
-private fun MemberRow(member: Member, twin: Boolean, shape: Shape, notify: String?, onRevoke: () -> Unit) {
+private fun MemberRow(member: Member, now: Instant, twin: Boolean, shape: Shape, notify: String?, onRevoke: () -> Unit) {
     val scheme = MaterialTheme.colorScheme
     Surface(Modifier.fillMaxWidth(), shape = shape, color = scheme.surfaceContainer) {
         Row(Modifier.padding(Spacing.s4), verticalAlignment = Alignment.CenterVertically) {
@@ -315,8 +322,16 @@ private fun MemberRow(member: Member, twin: Boolean, shape: Shape, notify: Strin
                     style = StarbridgeTheme.type.small,
                     color = scheme.onSurfaceVariant,
                 )
-                member.check?.let {
-                    Text("Check code $it", style = StarbridgeTheme.type.machine, color = scheme.onSurfaceVariant)
+                member.check?.takeIf { now.isBefore(member.addedAt.plusMillis(CHECK_CONFIRM_MS)) }?.let {
+                    val mono = StarbridgeTheme.type.code.fontFamily
+                    Text(
+                        buildAnnotatedString {
+                            append("Same code as on the machine? ")
+                            withStyle(SpanStyle(fontFamily = mono)) { append(it) }
+                        },
+                        style = StarbridgeTheme.type.small,
+                        color = scheme.onSurfaceVariant,
+                    )
                 }
                 NOTIFY_LABELS[notify]?.let {
                     Text(it, style = StarbridgeTheme.type.small, color = if (notify == "blocked") scheme.error else scheme.onSurfaceVariant)

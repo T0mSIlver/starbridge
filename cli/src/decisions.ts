@@ -11,6 +11,7 @@ import {
   open,
   ProtocolError,
   parseWith,
+  SETTLED_REASON_MAX,
   SealedItem,
   type SessionLink,
   type Settled,
@@ -451,6 +452,8 @@ export interface SettleOpts {
   id?: string;
   /** Checked here: it comes from the command line. */
   outcome?: string;
+  /** Why the agent withdraws it, which History shows (#1008); required to withdraw one by id. */
+  reason?: string;
   /** Every open decision the session asked. */
   session?: string;
   /** Every open decision this machine asked, once `confirm` agrees. */
@@ -465,14 +468,39 @@ export async function settle(ctx: Ctx, opts: SettleOpts): Promise<number> {
   if (opts.outcome !== undefined && opts.outcome !== "elsewhere" && opts.outcome !== "withdrawn")
     throw new UsageError("--outcome is elsewhere or withdrawn");
   const outcome = opts.outcome as "elsewhere" | "withdrawn" | undefined;
+  const { reason } = opts;
+  if (reason !== undefined) checkReason(reason);
   if (id) {
     const asked = ctx.store.state().asked[id];
     if (!asked) throw new UsageError(`${id} is not a decision this machine asked`);
+    const withdrawn = (outcome ?? (asked.answerIn ? "elsewhere" : "withdrawn")) === "withdrawn";
+    if (withdrawn && reason === undefined)
+      throw new UsageError(
+        `say why you withdraw it, in one short line: --reason 'Fixed it myself after rereading the logs'`,
+      );
+    if (!withdrawn && reason !== undefined)
+      throw new UsageError("--reason is for --outcome withdrawn");
     const s = session(ctx);
-    await settleOne(ctx, s, await refreshDirectory(ctx, s), id, outcome);
+    await settleOne(ctx, s, await refreshDirectory(ctx, s), id, outcome, false, reason);
     return 0;
   }
+  if (reason !== undefined && outcome !== "withdrawn")
+    throw new UsageError("--reason is for --outcome withdrawn");
   return settleMany(ctx, opts, outcome);
+}
+
+/**
+ * `settle`'s reason for a harness's own question that `outcome` closes: withdrawn, its picker can
+ * no longer take the answer.
+ */
+export function pickerReason(outcome: "elsewhere" | "withdrawn"): { reason?: string } {
+  return outcome === "withdrawn" ? { reason: "Its answer could no longer reach the agent" } : {};
+}
+
+/** A withdrawal's reason: one line that History shows whole. */
+function checkReason(reason: string) {
+  if (!reason.trim() || /[\r\n]/.test(reason) || reason.length > SETTLED_REASON_MAX)
+    throw new UsageError(`--reason is one line of at most ${SETTLED_REASON_MAX} characters`);
 }
 
 /**
@@ -507,7 +535,7 @@ async function settleMany(
         return 130;
       }
       try {
-        if (await settleOne(ctx, s, dir, id, outcome, true)) done++;
+        if (await settleOne(ctx, s, dir, id, outcome, true, opts.reason)) done++;
         break;
       } catch (e) {
         if (!(e instanceof ApiError && e.retryAfter)) {
@@ -534,6 +562,7 @@ async function settleOne(
   id: string,
   outcomeOpt: "elsewhere" | "withdrawn" | undefined,
   bulk = false,
+  reason?: string,
 ): Promise<boolean> {
   const asked = ctx.store.state().asked[id];
   // Closed by a revoked device's answer the server holds: a notice would contradict it. A
@@ -563,6 +592,7 @@ async function settleOne(
     to: to.map((d) => d.id),
     at: iso(ctx.now()),
     outcome,
+    ...(reason !== undefined && outcome === "withdrawn" ? { reason } : {}),
     dir: signedHead(dir),
   } satisfies Settled;
   try {

@@ -55,6 +55,8 @@ data class Decision(
     val answeredAt: Instant? = null,
     /** How the machine closed it, when its settled notice did: "withdrawn" or "elsewhere". */
     val settled: String? = null,
+    /** Why its agent withdrew it, in the agent's words (#1008). */
+    val reason: String? = null,
     /** Another device's answer the machine took, and that device's name (#330). */
     val theirAnswer: String? = null,
     val answeredOn: String? = null,

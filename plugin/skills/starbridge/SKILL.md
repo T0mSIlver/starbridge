@@ -110,6 +110,13 @@ if it leaves the choice open. Act on the answer at once. Post again only when
 the outcome changes what they would do (the merge failed); otherwise say it
 in your final message.
 
+A card still open that no longer needs an answer (the owner answered in the
+terminal, or you found it yourself) stays in their inbox until you take it
+back, before you act: `starbridge settle <id> --outcome withdrawn --reason
+'…'`. The reason shows in their History: one short line, 120 characters at
+most, such as `'You answered in the terminal'` or `'Fixed it myself after
+rereading the logs'`.
+
 ## Answers in an artifact
 
 When you built a claude.ai artifact whose buttons send the pick to this
@@ -118,8 +125,6 @@ arrives, run `starbridge settle <id>`, then act; a card answered in Starbridge
 needs no settle. When the owner taps Done on the card instead, you get
 `Answer to <id> (…): answered on its page; read the answer there`: the card is
 closed, so read the pick on the page and act, with no settle. An artifact only to look at goes in `--link`, with options.
-`starbridge settle <id> --outcome withdrawn` takes back a card you no longer
-need.
 
 ## Report a run
 

@@ -12,7 +12,7 @@ import { configDir } from "./poller.ts";
 
 /** The agent API revision this mod speaks, sent in the `starbridge-api` header. */
 export const API = 1;
-export const VERSION = "0.1.3";
+export const VERSION = "0.1.4-rc.1";
 const CLIENT = `starbridge-mod/${VERSION}`;
 
 /** Event types this mod submits; others are skipped and left unconfirmed, as the API asks. */

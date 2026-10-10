@@ -432,7 +432,12 @@ pane never sits as a strip in empty ground: from `size.detail-wide-from` wide, i
 takes 86% of the pane up to `size.detail-wide`, images grow to `size.media-wide`, and the
 roles with a `wide` size step up. On the web,
 "Colours" picks the theme: System (the default), Light or Dark, set as
-`data-theme` on `<html>` and remembered on the device. It pairs with the app
+`data-theme` on `<html>` and remembered on the device. In the macOS app the window has no title bar: the rail runs to the
+window's top in `surface`, the window's buttons sit in its first row, centred
+on the mark, with the name after them, and the panes start at the top beside
+it; a see-through 52 px strip across the top drags the window. Without the
+rail, the page leaves that strip empty in `bg`; under 600 px, in `surface`
+above the top bar. It pairs with the app
 without imitating Android.
 
 Google Sans Flex sets everything a person reads, numbers included, with
@@ -480,6 +485,10 @@ it has no title. A session's title is words, in the reading face (#563).
   on one line of 200 characters, shown whole; otherwise only Deny, and the
   detail allows. A wider grant (this session, this project) shows its exact
   rule in mono beside its label, never only in a tooltip.
+- Mono sets the code, never the words around it (#939). A line that holds a
+  code, such as a machine's check code, sets its label in the line's sans
+  role and only the code in the mono role of the same size, with no added
+  letter spacing.
 - Every inbox item is the same container (#248): on Android a filled card
   (`surface`) with no border and no shadow; on the web a box as its settings
   rows are (`surface`, a `line` border, `radius.sm`). An item that blocks an
@@ -720,4 +729,4 @@ phone top bar) is unchanged.
 | `caption` | body small | group names in a list, footnotes, navigation bar labels |
 | `key` | label small | keyboard hints, counts in badges |
 | `figure` | headline small | a large number, such as used percent |
-| `code`, `command`, `snippet` | | Markdown code; a permission prompt's command; a command or session id in a dense row; the only mono |
+| `code`, `command`, `snippet` | | Markdown code; a permission prompt's command; a command, session id or check code in a dense row; the only mono |

@@ -1249,6 +1249,7 @@ async function openDecision(
     machine,
     ...(s.answeredAt ? { answeredAt: s.answeredAt } : {}),
     ...(settled ? { settled } : {}),
+    ...(settled === "withdrawn" && notice?.reason ? { reason: notice.reason } : {}),
     ...(answeredBy ? { answeredBy } : {}),
     ...(reply ? { reply: replyOf(reply) } : {}),
   };

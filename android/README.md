@@ -38,6 +38,10 @@ recordRoborazziDebug` writes `app/screenshots/`, light and dark, and
 
 Cryptography is libsodium through Lazysodium. `ProtocolVectorsTest` runs it on
 the JVM through `lazysodium-java` against `../packages/protocol/vectors`.
+The JVM's regex is Java's, while a phone's is ICU's, which rejects some of Java's syntax:
+`ContextTextDeviceTest` runs the context vectors on a device (`./gradlew
+connectedDebugAndroidTest`, which uninstalls the app afterwards), and `RegexFlagsTest` refuses the
+`(?U)` flag in `src/main`.
 
 Firebase: the build reads `google-services.json` from
 `~/.config/starbridge/secrets/`, else from `app/` (gitignored), and turns it

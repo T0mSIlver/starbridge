@@ -277,6 +277,13 @@ export function verifyBind(
   }
 }
 
+/**
+ * How long a machine waits for its owner to confirm its check code, from its approval. Devices
+ * show the code beside the machine only this long after its `add` entry, while it can still be
+ * confirmed (#939).
+ */
+export const CHECK_CONFIRM_MS = 10 * 60_000;
+
 /** The bytes a check code hashes: "starbridge/v1/check" NUL body NUL sig of member `id`'s `add` entry. */
 function checkInput(entries: unknown[], id: string): Uint8Array {
   const nul = new Uint8Array([0]);

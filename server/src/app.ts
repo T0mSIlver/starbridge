@@ -97,8 +97,8 @@ export async function createApp(config: Config, fetchFn: typeof fetch = fetch) {
   // Snoozed decisions come back within this much of their time (#571).
   const snoozes = housekeep(() => wakeSnoozes(db, deps.push, config.pushInlineLimit));
   setInterval(snoozes, 15_000).unref();
-  // Held pushes go out within this much of their time (#848); the hold is seconds long.
-  const holds = housekeep(() => releaseHolds(db, deps.push, config.pushInlineLimit));
+  // Held pushes go out within this much of their time (#848, #1003); the hold is seconds long.
+  const holds = housekeep(() => releaseHolds(db, deps.presence, deps.push, config.pushInlineLimit));
   setInterval(holds, 2_000).unref();
   hourly();
   setInterval(hourly, 3_600_000).unref();

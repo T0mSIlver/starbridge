@@ -9,7 +9,7 @@ import {
   seal,
   type Waiting,
 } from "@starbridge/protocol";
-import { releaseHolds } from "../src/presence";
+import { Presence, releaseHolds } from "../src/presence";
 import { wakeSnoozes } from "../src/snooze";
 import {
   type Account,
@@ -35,6 +35,8 @@ beforeEach(async () => {
   phone = acct.device;
   web = await pair(s, acct, "web", "device", await signIn(s));
   devbox = await pair(s, acct, "devbox", "machine");
+  // Long enough after a start that the server no longer counts everyone present.
+  s.deps.presence = new Presence(Date.now() - PRESENCE_VALID_MS);
   sent = [];
   s.deps.push.notify = (_account: string, to: string[], payload: (d: string) => string) => {
     if (to.length > 0) sent.push({ to, payload: JSON.parse(payload(to[0] as string)) });
@@ -121,7 +123,7 @@ const heldUntil = async (who: Actor, id: string) => {
   return held ? (row.hold_due ?? undefined) : undefined;
 };
 const release = (afterMs: number) =>
-  releaseHolds(s.deps.db, s.deps.push, 3072, Date.now() + afterMs);
+  releaseHolds(s.deps.db, s.deps.presence, s.deps.push, 3072, Date.now() + afterMs);
 const pushed = () => sent.map((p) => [p.to, p.payload.kind, p.payload.id]);
 
 test("with nobody present, a question pushes every device at once, as before", async () => {
@@ -131,17 +133,22 @@ test("with nobody present, a question pushes every device at once, as before", a
   expect(await heldUntil(phone, d.id)).toBeUndefined();
 });
 
-test("while a page is present, the other devices' push waits the hold, then goes if still open", async () => {
+test("while a page is present, the other devices' push waits until the owner leaves, then the hold", async () => {
   expect((await present(web)).status).toBe(204);
   const d = decision();
   await post(devbox, d);
   // The present page hears at once; the phone lists it too, but its push waits.
   expect(pushed()).toEqual([[[web.id], "decision", d.id]]);
-  const due = await heldUntil(phone, d.id);
-  expect(Date.parse(due as string) - Date.now()).toBeGreaterThan(29_000);
+  expect(await heldUntil(phone, d.id)).toBeDefined();
   expect(await heldUntil(web, d.id)).toBeUndefined();
   sent = [];
-  release(10_000);
+  // Present long past the hold time: still nothing (#1003).
+  await present(web);
+  release(60_000);
+  expect(sent).toEqual([]);
+  // The owner leaves: the hold counts from now.
+  await present(web, false);
+  release(29_000);
   expect(sent).toEqual([]);
   release(31_000);
   expect(pushed()).toEqual([[[phone.id], "decision", d.id]]);
@@ -149,6 +156,84 @@ test("while a page is present, the other devices' push waits the hold, then goes
   sent = [];
   release(60_000);
   expect(sent).toEqual([]);
+});
+
+test("coming back before the hold runs out holds again, until the last screen is left", async () => {
+  await present(web);
+  await present(devbox);
+  const d = decision();
+  await post(devbox, d);
+  sent = [];
+  // One screen of two left: still present.
+  await present(web, false);
+  release(31_000);
+  expect(sent).toEqual([]);
+  await present(devbox, false);
+  release(20_000);
+  expect(sent).toEqual([]);
+  // Back within the hold, then gone again: the hold counts from the second departure.
+  await present(devbox);
+  release(31_000);
+  expect(sent).toEqual([]);
+  s.deps.presence.beat(acct.id, devbox.id, false, Date.now() + 40_000);
+  release(65_000);
+  expect(sent).toEqual([]);
+  release(71_000);
+  expect(pushed()).toEqual([[[phone.id], "decision", d.id]]);
+});
+
+test("a source that stops beating counts as gone once its last beat runs out", async () => {
+  await present(web);
+  const d = decision();
+  await post(devbox, d);
+  sent = [];
+  release(PRESENCE_VALID_MS + 29_000);
+  expect(sent).toEqual([]);
+  release(PRESENCE_VALID_MS + 31_000);
+  expect(pushed()).toEqual([[[phone.id], "decision", d.id]]);
+});
+
+test("every question waiting when the owner leaves pushes once, together", async () => {
+  await present(web);
+  const d1 = decision();
+  const d2 = decision();
+  await post(devbox, d1);
+  await post(devbox, d2);
+  sent = [];
+  await present(web, false);
+  release(31_000);
+  expect(pushed()).toEqual([
+    [[phone.id], "decision", d1.id],
+    [[phone.id], "decision", d2.id],
+  ]);
+  sent = [];
+  release(62_000);
+  expect(sent).toEqual([]);
+});
+
+test("after a restart, held pushes wait for the sources to beat again before counting", async () => {
+  await present(web);
+  const d = decision();
+  await post(devbox, d);
+  sent = [];
+  s.deps.presence = new Presence();
+  release(31_000);
+  expect(sent).toEqual([]);
+  // Nobody beat since the restart: gone from when the server stopped trusting the old beats.
+  release(PRESENCE_VALID_MS + 31_000);
+  expect(pushed()).toEqual([[[phone.id], "decision", d.id]]);
+});
+
+test("turning the hold off releases what it holds, a hold time after its question", async () => {
+  await present(web);
+  const d = decision();
+  await post(devbox, d);
+  sent = [];
+  await s.call("PUT", "/v1/settings", { token: phone.token, body: { pushHold: 0 } });
+  release(29_000);
+  expect(sent).toEqual([]);
+  release(31_000);
+  expect(pushed()).toEqual([[[phone.id], "decision", d.id]]);
 });
 
 test("a machine's presence holds every device; its answer at the keyboard means no push ever", async () => {
@@ -159,6 +244,7 @@ test("a machine's presence holds every device; its answer at the keyboard means 
   await post(devbox, settled(d));
   // The settled notice skips the devices that never heard of the question.
   expect(sent).toEqual([]);
+  await present(devbox, false);
   release(31_000);
   expect(sent).toEqual([]);
 });
@@ -175,6 +261,7 @@ test("a device's answer during the hold skips the held devices and cancels their
   await post(devbox, settled(d));
   expect(pushed()).toEqual([[[web.id], "settled", expect.any(String)]]);
   sent = [];
+  await present(web, false);
   release(31_000);
   expect(sent).toEqual([]);
 });
@@ -192,6 +279,7 @@ test("a waiting flip is held too, and a snooze during the hold keeps it quiet", 
   // The snooze from the page in use does not reach the phone, which never heard of the question.
   await post(web, snooze(d));
   expect(sent).toEqual([]);
+  await present(web, false);
   release(31_000);
   expect(sent).toEqual([]);
 });
@@ -201,6 +289,7 @@ test("a snooze that wakes after the hold lets the answer and settled notice reac
   const d = decision();
   await post(devbox, d);
   await post(web, snooze(d));
+  await present(web, false);
   release(31_000);
   sent = [];
   // The snooze wakes the phone too, which now shows the question (#908).

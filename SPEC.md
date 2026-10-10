@@ -143,6 +143,10 @@ provider plugins add providers, not panels.
   stray Enter, can confirm it. The QR code is a `starbridge://pair` link, as Signal's
   `sgnl://linkdevice` and WhatsApp's in-app scan are, rather than an https one, which a phone
   without the app would open in a browser and so hand the key to the server (Tom, 2026-10-08).
+  Devices shows a machine's code, as "Same code as on the machine?", only while the machine
+  can still ask: for `CHECK_CONFIRM_MS` (10 minutes, in `packages/protocol`) from its `add`
+  entry, the time `starbridge pair` waits for an answer (#939). After that the code answers no
+  question, and a line nobody needs reads as one to act on.
   A phone without the app opens the printed link or types the code instead, and the machine
   asks. The code stays after `#`, where Android 0.1.0's scanner reads it, so that scanner still
   pairs (and the machine asks); 0.1.0's camera opens nothing until the app updates.
@@ -412,16 +416,29 @@ provider plugins add providers, not panels.
   switches alone.
 - An Android app in front syncs every 10 s until a push has reached it (#445), since a server
   without a relay or UnifiedPush pushes nothing and cannot tell.
+- **Android registers its push route at each start** (#1011), even when its token is unchanged.
+  The server drops a subscription FCM once calls gone, and the phone, still holding the same
+  token, never sent it again until a reinstall. An app update does not change the token or stop
+  delivery: on the emulator, updates to a newer, the same and an older release all kept the token,
+  and FCM woke the app before it was opened. Registering is idempotent, so the cost is one
+  request per start.
 - **Held pushes** (#848). A question that shows in the agent's picker and on the owner's screen
   needed no buzz on the phone too: a quick back and forth at the desk did that. So while any of
   the owner's machines or devices says they sit at its screen, the push of a question, a
-  permission prompt or a waiting flip waits the account's hold time (30 s by default, off to
-  2 minutes in Settings) for every device not itself in use, and goes only if nothing answered it
-  meanwhile. Only the push waits, never the item: every device lists it at once, and a held card
+  permission prompt or a waiting flip waits for every device not itself in use, and goes only if
+  nothing answered it meanwhile. It waits as long as the owner stays, then the account's hold time
+  (30 s by default, off to 2 minutes in Settings) from when the last screen stopped saying so
+  (#1003): a fixed time from the question rang the phone at a desk the owner never left, and
+  timed a walk away from the wrong moment. Coming back within the hold time holds again. What
+  bounds a hold is each source's own reading, input in the last minute, so a Mac left unlocked
+  stops holding a minute after its last key; a source that says present wrongly (#990) holds
+  until it stops. Only the push waits, never the item: every device lists it at once, and a held card
   looks like any other, since the owner chose no state that flips while they look. With no presence
   signal, which is every older client, pushes go at once as before. The server reads presence as
   one bit per source, in memory, since the hold is all it is for: no idle time, lock state or
-  reason, nothing on disk, and a restart means push now. Presence counts per person, so a Mac in
+  reason, nothing on disk. A restart forgets who was present: a new question pushes at once, and
+  a held one counts everyone present for one trusted beat, so a source still there holds it again
+  rather than the phone ringing at a restart. Presence counts per person, so a Mac in
   use holds a question from a headless dev box. The hold is one account setting, since the server
   applies it and it is about the person, not a device. PROTOCOL.md, "Held pushes", has the
   timings.
@@ -949,6 +966,16 @@ the Cursor IDE, which this machine does not run.
   flood has a way out; `--all` asks first, with the count. Each is one settled notice, posted at
   the pace the machine's rate limit allows, waiting out each 429: the server needs no bulk
   route, and the notices still reach devices one per question.
+- **A withdrawal says why** (#1008). `settle <id> --outcome withdrawn` takes `--reason`, one line
+  of at most 120 characters, and refuses to withdraw without it: a card that vanished from Needs
+  you with no word left the owner guessing whether the agent gave up, found the answer or forgot.
+  The settled notice carries it, sealed like the rest. The skill asks for a brief one ("Fixed it
+  myself after rereading the logs"), and the SessionStart rule asks agents to withdraw a card the
+  owner answered in the terminal: the skill never loads when no card is to be posted, and Haiku
+  5.5 withdrew it in 0 of 3 runs without the rule's sentence, 3 of 3 with it
+  (`evals/skill/results/1008`). Withdrawals the CLI makes itself give their own: a harness's
+  picker that can no longer take the answer, a skipped `setup` test. `settle --session` and
+  `--all` take one too but need none, since they clear a flood.
 - **Snoozing** (#571). The owner can put a question off: "not now, show me this again at 18:00".
   A snooze is not an answer, so #122 holds: for the agent it means what no answer means. Its job
   is less clutter, in the inbox and in the owner's head. Agents are never woken by one; when an
@@ -1160,7 +1187,10 @@ first window, so a provider with a window running out leads.
 - **History** lists answered questions and the last 7 days of prompts, with how and where each was
   answered. A question settled `elsewhere` without a page to answer in was answered in the
   agent's own picker or terminal, so it reads "at the keyboard", never "by the agent", which
-  stays for a withdrawn question or one answered on its page (#865).
+  stays for a withdrawn question or one answered on its page (#865). A withdrawn question with a
+  reason shows the reason in its place: "Withdrawn · Fixed it myself after rereading the logs"
+  (#1008). The owner chose it from mockups over a line of its own and over the reason after
+  "Withdrawn:", which pushed the rest off a phone's row.
 - **Closed sections wait at the bottom** (#662, #682). Closed, History sits at the bottom of a
   short inbox and Snoozed just above it, out of the way; opened, each glides up under the items
   and its rows fade in. Opening Snoozed leaves History at the bottom.
@@ -1218,7 +1248,9 @@ first window, so a provider with a window running out leads.
   opened on this device or not, the Quotas tab, its settings and the web's quota column stay
   hidden, so an owner who skips CodexBar never sees an empty feature and the app stays about
   agents. A device that just joined sees the tab at once, since the snapshot it cannot open yet
-  still counts.
+  still counts. The tab appears as soon as a machine's first snapshot arrives: the server pushes
+  that one even when it is quiet, since a phone whose pushes work does not poll and would
+  otherwise learn of it only at its next start or pull (#1010).
 - **Devices.** Each device shows whether it notifies, as it last said (#943). Rows that share a name show when each was added (#287). A Recovery key row says
   when and on which device the key was set, with Replace; other devices show a replacement once
   (#348).
@@ -1398,21 +1430,25 @@ a browser; the app adds a menu bar light and notifications, so a web release nee
   rather than two switches, so no combination leaves the app nowhere and nothing has to be
   greyed out. The Dock icon's menu holds the menu bar's items, for when there is no menu bar icon.
 - **The window** has no title bar on macOS (owner's pick from mockups, #938): the page's rail
-  already names the app and the page, and counts what needs the owner. The page leaves
-  a 28 px band at its top for the window's buttons, which also drags the window; the window keeps
-  the name "Starbridge" for Mission Control and the Window menu, whatever the page's title.
+  already names the app and the page, and counts what needs the owner. The rail runs to the
+  window's top in its own colour, the window's buttons sit in its first row before the app's name,
+  and the panes beside it start at the top (owner's pick from mockups, #1006): a band in the page's
+  background across the whole window ran past the rail, and cost every pane 28 px. A see-through
+  52 px strip across the top, macOS's toolbar height, drags the window. Pages without the rail
+  (sign-in, docs) leave that strip empty in the page's background; under 600 px it takes the top
+  bar's colour. The window keeps the name "Starbridge" for Mission Control and
+  the Window menu, whatever the page's title.
 - **Presence** (#945). The window in use holds pushes as a web page does (#848). Hidden, it said
   absent while the owner worked in another app, so the phone buzzed at a desk. Electron's
-  `powerMonitor` reads what the CLI's machine presence reads: lock, sleep and wake always, and
-  the seconds since the Mac's last input once Settings' "Hold while you use this Mac" is on (off by
-  default). The app hands the page that reading over the bridge, and the page's own beacon sends
-  the one bit (`isPresent`, the CLI's threshold): present while the Mac is unlocked with input in
-  the last minute, window shown or not. Locked, asleep or quitting, the page says absent at once,
-  and the app waits up to 2 s on quit for the page to say so. The switch is the app's own, not
-  the machine's `starbridge config presence on`: the app cannot count on the CLI being on the Mac,
-  and where the agent's presence is on it already sends the same bit, so the switch is for Macs
-  without it. It is opt-in for the same reason as the machine's: it reports when the owner is at
-  the Mac. Lock and sleep need no opt-in, since they only end presence.
+  `powerMonitor` reads what the CLI's machine presence reads: lock, sleep and wake, and the
+  seconds since the Mac's last input. The app hands the page that reading over the bridge, and
+  the page's own beacon sends the one bit (`isPresent`, the CLI's threshold): present while the
+  Mac is unlocked with input in the last minute, window shown or not. Locked, asleep or quitting,
+  the page says absent at once, and the app waits up to 2 s on quit for the page to say so. Any
+  app on the Mac counts, with no switch of its own (#1003): the owner found two "Hold" rows read
+  as two holds, and with the switch off the window still counted while touched, so a Mac in
+  another app held a push one time and not the next. The hold time is the opt-in: Off, nothing
+  is held, whatever presence says.
 - **`starbridge://pair` links** open `/pair` on the configured server, as the https link does. The
   link's check key stays out of the page, which the server writes; a link for another server is
   refused, with both servers named.
