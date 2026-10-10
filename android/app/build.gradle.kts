@@ -26,7 +26,7 @@ android {
         minSdk = 31
         targetSdk = 36
         // Release builds pass -PversionName from the tag (v1.2.3 or v1.2.3-rc.4).
-        val release = providers.gradleProperty("versionName").orNull ?: "0.1.4-rc.1"
+        val release = providers.gradleProperty("versionName").orNull ?: "0.1.4-rc.2"
         versionName = release
         // buildSrc/src/main/kotlin/VersionCode.kt.
         versionCode = versionCodeOf(release)
