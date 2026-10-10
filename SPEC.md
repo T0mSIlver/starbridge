@@ -539,8 +539,8 @@ provider plugins add providers, not panels.
   installs the Claude Code plugins only from a marketplace whose source is this repository (#274),
   and uninstall removes only that one, so a developer's own `starbridge` marketplace survives;
   both run `claude` from the home directory, so no repository's `.claude` settings are read or
-  edited (#762). Setup installs Codex's skill and rule, the Pi package and opencode's plugin and skill from copies the CLI
-  carries so versions match. The local agent rewrites outdated copies when it starts.
+  edited (#762). Setup installs Codex's skill and rule, the Pi package, opencode's plugin and skill and the
+  Antigravity plugin from copies the CLI carries so versions match. The local agent rewrites outdated copies when it starts.
 - **Setup asks little** (#750). Each question was one more Enter between a new user and their
   first answer, and nearly everyone said yes. Setup installs Starbridge in every agent it finds
   and starts the service without asking, one line per agent with what it installed; for Codex,
@@ -574,7 +574,8 @@ provider plugins add providers, not panels.
   install.ps1.
 - **Files setup writes into other tools** (#474) start with one marker line, ``Written by
   starbridge <version>; `starbridge uninstall` removes it.``, in the file's comment syntax: the
-  systemd unit, the launchd plist, the Codex rule, the opencode entry and the copied skills (a YAML
+  systemd unit, the launchd plist, the Codex rule, the opencode entry, the Antigravity plugin's
+  rule and the copied skills (a YAML
   comment first in the front matter). A file is Starbridge's only when it has the marker: setup
   replaces it when it differs from this release's, uninstall removes it, and any other file at
   those paths is left alone, even a skill named `starbridge`, which another skill manager may have
@@ -590,7 +591,16 @@ provider plugins add providers, not panels.
   the last match wins. Pi gets no bash pattern, since none is safe there (Platform facts): the link
   allows a bash ask itself when the whole typed line, from the ask's "full command" evidence, is
   one of those commands with only words, flags, quoted strings and line-joining backslashes; an ask
-  without evidence, or from a shell tool under another name, goes to the owner. `starbridge run` is left out,
+  without evidence, or from a shell tool under another name, goes to the owner. For `agy`, setup
+  adds `command(starbridge ask)` and the other four to `permissions.allow` in
+  `~/.gemini/antigravity-cli/settings.json`, since `agy` still prompts after a hook's `allow`. Such
+  an entry also passes `LD_PRELOAD=… starbridge ask` and `env … starbridge ask`, so the
+  plugin's `PreToolUse` hook on `run_command` returns `force_ask` for a line an entry would pass
+  that the Pi check (`mod/hooks/own.ts`) rejects, and for one it accepts sets `BypassSandbox`:
+  `--sandbox` hides the home folder and the network (#959). Every command passes that hook, so a
+  shell check starts the CLI only for one that names `starbridge`. Since only that hook narrows
+  the entries, setup adds them only while the plugin there is Starbridge's and turned on, and takes
+  them out otherwise. The app and the IDE keep their settings elsewhere; setup adds nothing there. `starbridge run` is left out,
   since the command it wraps is the agent's own. So Codex asks at the keyboard to run it outside
   the sandbox, and the skill has it ask on the first call: run in the sandbox first, the command
   ran unreported, then again once approved (#831). A `prompt` rule only adds an approval: Codex
@@ -716,7 +726,9 @@ line, the safe side: at worst a prompt repeats an answer the agent already read.
   that folder, not the copy in Codex's plugin cache: Codex asks the owner to trust each new or
   changed hook, so a release that changes the rule rewrites the script and keeps the trusted
   hook. A change to the plugin's `hooks.json` raises its version, and `setup --refresh`
-  reinstalls it. Starbridge is how an agent reaches its user: a card for a decision that is
+  reinstalls it. Antigravity has no session-start hook; its plugin carries the rule as an
+  `always_on` rule in `rules/`, which loads in every conversation (#959). Starbridge is how an
+  agent reaches its user: a card for a decision that is
   theirs, a question before ending a turn on work that waits on them, `starbridge run` around commands
   that block them. Everything else the agent decides. It asks in the terminal only when
   `starbridge` fails (#121). In Claude Code a quick question may use `AskUserQuestion`, since
@@ -1616,6 +1628,16 @@ What the code relies on, with the versions checked.
 - **Android**: OkHttp retries a POST whose connection dropped before the reply started, so a
   server may receive it twice. Android 16 draws the notification accent itself. Material 3's
   expanded `SearchBar` passes a screen-filling minimum height to its field (#341).
+- **Antigravity** (`agy` 1.3.2): commands the agent runs get `ANTIGRAVITY_CONVERSATION_ID`,
+  `ANTIGRAVITY_AGENT=1`, and the language server's `ANTIGRAVITY_LS_ADDRESS` and
+  `ANTIGRAVITY_CSRF_TOKEN`; hooks and MCP servers get only the conversation id. A hook runs from
+  its `hooks.json`'s folder, as a child of `agy`, whose arguments show `-p`. A plugin folder
+  written into `~/.gemini/config/plugins/` loads without `agy plugin install`, its `always_on`
+  rule included. `PreToolUse` `deny`, `force_ask` and `overwrite` work; `allow` does not skip the
+  prompt, even with `permissionOverrides`. `permissions.allow` entries match words, refuse `;`,
+  `&&`, `|`, `$(…)` and redirections, and pass a variable assignment or `env` in front.
+  `--sandbox` runs commands without the home folder or the network unless `BypassSandbox`, which
+  an allow entry covers. `PreInvocation` drops an injected `toolCall` without a word.
 - **Skill eval** (#299): what lifted scores was one context line per option starting with its
   label, "no answer is never a yes" placed where the agent waits, and card text in single quotes
   (`$0` in double quotes blanked a Codex card). Records: `evals/skill/results/299`.

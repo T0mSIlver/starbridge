@@ -12,6 +12,7 @@ import {
   waitVia,
 } from "./agent/commands";
 import { runAgent } from "./agent/main";
+import { hookPreTool } from "./antigravity";
 import { ApiError, sandboxHint, Unreachable } from "./api";
 import { hookCodexQuestion } from "./codex-question";
 import { StateFileError } from "./config";
@@ -46,31 +47,32 @@ const HELP = `starbridge: post decisions to your devices, report runs, upload qu
 
   starbridge setup [--yes] [--server <url>] [--name <name>] [--providers <a,b>]
                    [--no-quota] [--no-service] [--no-agents]
-  starbridge setup --agent <claude|codex|pi|opencode|cursor>
+  starbridge setup --agent <claude|codex|pi|opencode|cursor|antigravity>
   starbridge setup --refresh
       Set this machine up, or check and repair it: pair it, install Starbridge in each
       agent found (the Claude Code plugins, the Codex skill and rule, the Pi package, the
-      opencode skill and plugin, the Cursor skill; --no-agents skips them), find or
-      install CodexBar and pick the providers to upload, install the agent as a user
-      service (systemd, launchd or a Scheduled Task), and upload a first quota snapshot.
-      It asks only before installing CodexBar, whether to send quotas when another machine
-      already does, which providers to send, whether the agent runs after logout, whether
-      to add the CLI to your PATH, and whether to send a test decision; --yes, or no
+      opencode skill and plugin, the Cursor skill, the Antigravity plugin; --no-agents skips
+      them), find or install CodexBar and pick the providers to upload, install the agent as
+      a user service (systemd, launchd or a Scheduled Task), and upload a first quota
+      snapshot. It asks only before installing CodexBar, whether to send quotas when another
+      machine already does, which providers to send, whether the agent runs after logout,
+      whether to add the CLI to your PATH, and whether to send a test decision; --yes, or no
       terminal, takes every default.
       --server <url>  the server to pair with (default: $STARBRIDGE_SERVER, else this
                       machine's, else https://starbridge.run); asks before leaving another
                       server this machine is paired with
       --agent <name>  only Starbridge in that agent, also one uninstall --agent removed
       --refresh only brings the files setup wrote into other tools (the service, the Codex
-      skill and rule, the opencode skill and plugin, the Cursor files) to this version,
-      installs Starbridge in an agent found since, and restarts the agent.
+      skill and rule, the opencode skill and plugin, the Cursor files, the Antigravity
+      plugin) to this version, installs Starbridge in an agent found since, and restarts the
+      agent.
 
   starbridge status
       Print the versions, the pairing, the agent and its service, the server, each provider, the
       Claude Code plugins, the Codex skill, the Pi package and the sessions the agent sees.
 
   starbridge uninstall [--yes] [--purge]
-  starbridge uninstall --agent <claude|codex|pi|opencode|cursor>
+  starbridge uninstall --agent <claude|codex|pi|opencode|cursor|antigravity>
       Remove the agent service, Starbridge from every agent and this binary, and ask your
       devices to revoke this machine. Asks before it deletes the keys and state (--purge:
       without asking). CodexBar stays. --agent removes Starbridge from that agent only, and
@@ -207,6 +209,12 @@ const HELP = `starbridge: post decisions to your devices, report runs, upload qu
       For the Starbridge Cursor plugin's sessionStart, stop and sessionEnd hooks: hook JSON on
       stdin. On stop, while the conversation has a question open, holds up to 10 minutes and
       prints the answer as {"followup_message": ...}, which Cursor sends as the next prompt.
+
+  starbridge hook pre-tool --agent antigravity
+      For the Starbridge Antigravity plugin's PreToolUse hook: hook JSON on stdin. A starbridge
+      ask, waiting, working, wait or settle command alone on its line runs outside the
+      sandbox; a line that runs one of them with more asks at the keyboard; prints nothing
+      for any other call.
 
   starbridge update [--codexbar <version>]
       Install the latest release once its signature checks out, then \`setup --refresh\` (brew
@@ -570,8 +578,9 @@ export async function run(argv: string[], ctx: Ctx): Promise<number> {
             : await hookQuestion(ctx, readText("-"), values);
         if (sub === "session" && values.agent === "cursor")
           return await hookCursorSession(ctx, readText("-"));
+        if (sub === "pre-tool") return hookPreTool(ctx, readText("-"), values);
         throw new UsageError(
-          "usage: starbridge hook permission|settle --agent claude-code|codex, starbridge hook ask-user, starbridge hook question --agent opencode|pi|codex, or starbridge hook session --agent cursor",
+          "usage: starbridge hook permission|settle --agent claude-code|codex, starbridge hook ask-user, starbridge hook question --agent opencode|pi|codex, starbridge hook session --agent cursor, or starbridge hook pre-tool --agent antigravity",
         );
       }
       case "update": {
