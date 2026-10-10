@@ -615,6 +615,7 @@ async function main() {
     }
     await page.emulateMedia({ colorScheme: "light" });
     // A page whose clock runs on: the code leaves once `starbridge pair` stops waiting for it.
+    // The clock is the whole context's, so it goes back to now before the next step.
     const later = await a.newPage();
     await later.clock.install();
     await later.goto(`${ORIGIN}/settings`);
@@ -624,6 +625,7 @@ async function main() {
     await check.waitFor({ state: "detached", timeout: 5_000 }).catch(() => {
       throw new Error("Devices still shows devbox's check code an hour after it was added");
     });
+    await later.clock.setSystemTime(new Date());
     await later.close();
   }
   await follow(page, page.getByRole("link", { name: "Add a device" }), "/settings/devices/add");
