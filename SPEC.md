@@ -1206,6 +1206,18 @@ first window, so a provider with a window running out leads.
   use as much as a Mac. It counts a touch or key down, never which. Settings → Notifications
   sets the account's hold time, as the web's Settings does.
 - Pull to refresh shows only on the screen that was pulled.
+- **Haptics** (#997): Android's own feedback constants only, through Compose's haptics (the
+  view's for the one Compose lacks), so the phone's Touch feedback setting governs them all; no
+  custom vibrations. Answering a question and Allow or Deny confirm: Deny is a choice, not an
+  error. An answer the server refused, its question back saying "Not sent", rejects. The snooze
+  swipe ticks crossing 40% and again backing under it, but not as the card springs back after a
+  snooze. The snooze dial ticks softly per hour or minute, as Android's clock dial does. Quota
+  reorder gives a heavy click on pick-up, a tick per place and one on drop, as the launcher
+  does. Switches tick on and, lighter, off. Nothing when a sheet opens, a pull refreshes or an
+  agent resumes: the tap had its feedback, and a late pulse reads as a new event. Notifications
+  keep Android's default vibration: a channel's is frozen once created, and the owner's own
+  settings would be lost to new channel ids. The owner picked these in a debug build from six
+  candidates, dropping the pull's tick.
 - **Home-screen widgets** (#894), in Jetpack Glance. "Needs you" (2×2) counts what the Inbox's
   badge counts: with an agent waiting, that number in amber on the amber card ("waiting on you",
   then how many more "when you can"), else the open questions in `fg`. Quotas (2×2, widened to

@@ -33,6 +33,8 @@ import androidx.window.core.layout.WindowSizeClass
 import dev.starbridge.app.ui.theme.StarbridgeTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.mutableStateOf
@@ -133,6 +135,12 @@ private fun seconds(live: Boolean, slow: Instant): Instant {
     return if (live) fast else slow
 }
 
+/** Whether a question says "Not sent" in [after] that did not in [before]: the server refused its answer. */
+internal fun refused(before: List<Decision>, after: List<Decision>): Boolean {
+    val was = before.associate { it.id to it.notSent }
+    return after.any { it.notSent != null && it.notSent != was[it.id] }
+}
+
 /**
  * Shows the store's notices as snackbars. The notice of a hold that only the owner's word ends
  * (#813) stays with a Stop waiting action, [stopWaiting], until they act on it or dismiss it;
@@ -211,6 +219,13 @@ fun Main(decisions: List<Decision>, notice: StateFlow<String?>, dismiss: () -> U
     // Shared by a decision's card and its detail, which are separate entries.
     val drafts = rememberDrafts()
     val host = Notices(notice, dismiss, stopWaiting, connection)
+    // A refused answer brings its question back saying "Not sent": the platform's reject (#997).
+    val haptics = LocalHapticFeedback.current
+    var before by remember { mutableStateOf(decisions) }
+    LaunchedEffect(decisions) {
+        if (refused(before, decisions)) haptics.performHapticFeedback(HapticFeedbackType.Reject)
+        before = decisions
+    }
     val sheets = remember { BottomSheetSceneStrategy<NavKey>() }
     val notificationsOff = !rememberNotificationsOn()
     // Other devices' Devices lists show whether Android lets this phone notify (#943).

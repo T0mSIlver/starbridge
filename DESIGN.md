@@ -392,7 +392,7 @@ guidelines: connected button groups for a decision's options, the navigation
 bar with its pill indicator (a navigation rail on wide screens), flexible top
 app bars, the expressive motion scheme (springs with overshoot), progress
 indicators with a gap and a stop mark for quota windows, the loading
-indicator, predictive back, haptics on answer, and list and detail side by
+indicator, predictive back, haptics (SPEC.md, "Android"), and list and detail side by
 side on wide screens. Stock components take their colours from these tokens
 through the theme.
 
