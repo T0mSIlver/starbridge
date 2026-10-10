@@ -225,24 +225,17 @@ try {
   await page.reload();
   assert.equal(await page.evaluate(`(${bridge})().place()`), "dock");
 
-  // Presence (#945): off by default, the page hears only lock and sleep; on, the idle time too.
+  // Presence (#945, #1003): the page hears the idle time, lock and sleep.
   type Screen = StandIn["readings"][number];
   const screenBridge = () =>
     (
       window as unknown as {
         starbridgeDesktop: {
           screen(): Screen;
-          presence(): boolean;
-          setPresence(on: boolean): void;
         };
       }
     ).starbridgeDesktop;
-  assert.deepEqual(await page.evaluate(`(${screenBridge})().screen()`), {
-    away: false,
-    idleMs: null,
-  });
-  assert.equal(await page.evaluate(`(${screenBridge})().presence()`), false);
-  await page.evaluate(`(${screenBridge})().setPresence(true)`);
+  assert.equal(await page.evaluate(`(${screenBridge})().screen().away`), false);
   await until(
     () =>
       page.evaluate(
@@ -257,8 +250,6 @@ try {
     () => page.evaluate(() => (window as unknown as StandIn).readings.at(-1)?.away === false),
     "back on unlock",
   );
-  await page.reload();
-  assert.equal(await page.evaluate(`(${screenBridge})().presence()`), true);
 
   // Another origin stays out of the window and opens in the browser.
   await page.evaluate((u) => {

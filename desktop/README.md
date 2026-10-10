@@ -37,10 +37,9 @@ The page finds `window.starbridgeDesktop` only on the configured server's origin
 - `onOpen(f)`: `f(id)` opens the item whose notification was clicked.
 - `place()` and `setPlace(p)`: where the app stays, `"menu"`, `"dock"` or `"both"` (from 0.1.3).
 - `screen()`: the Mac's reading, `{away, idleMs}`: away while locked, asleep or quitting, and the
-  milliseconds since its last input, null unless `presence()` (`src/screen.ts`). `onScreen(f)`:
-  `f()` runs when it changes, every 10 s while the idle time is on; the app waits for its promise
-  before it quits. `presence()` and `setPresence(on)`: whether the idle time is read, off by
-  default (from 0.1.3).
+  milliseconds since its last input, null while asleep or quitting (`src/screen.ts`).
+  `onScreen(f)`: `f()` runs every 10 s and when it changes; the app waits for its promise before
+  it quits.
 
 The main process checks that each message comes from the window's top frame on that origin, and
 checks every field again.

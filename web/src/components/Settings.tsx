@@ -180,7 +180,6 @@ function NotificationSection({ data }: { data: SettingsData }) {
           }}
         />
       </Row>
-      <MacRow />
       <HoldRow initial={data.pushHold} />
     </Section>
   );
@@ -261,31 +260,6 @@ function BrowserRow({ initial }: { initial: PushState }) {
   );
 }
 
-/**
- * In the desktop app, whether the Mac's idle time counts as presence (#945): opt-in, as a
- * machine's `starbridge config presence on` is, since it reports when the owner is at the Mac.
- */
-function MacRow() {
-  const [on, setOn] = useState(() => desktop?.presence?.());
-  if (!desktop?.setPresence || typeof on !== "boolean") return null;
-  const save = desktop.setPresence;
-  return (
-    <Row
-      label="Count any app on this Mac"
-      sub="You’re at a screen while you use any app here, not only Starbridge. It reads only the time since your last key or click, never which"
-    >
-      <Switch
-        label="Count any app on this Mac"
-        checked={on}
-        onChange={(v) => {
-          setOn(v);
-          save(v);
-        }}
-      />
-    </Row>
-  );
-}
-
 const HOLD_LABELS: Record<(typeof PUSH_HOLD_CHOICES)[number], string> = {
   0: "Off",
   15: "15 s",
@@ -312,7 +286,7 @@ function HoldRow({ initial }: { initial: number | undefined }) {
       label="Hold while you’re at a screen"
       sub={
         error ??
-        "Other devices stay quiet while you use Starbridge or your computer, and wait this long after you leave"
+        "While you use any of your screens, your other devices stay quiet, then wait this long after you leave"
       }
     >
       <Segmented<number>

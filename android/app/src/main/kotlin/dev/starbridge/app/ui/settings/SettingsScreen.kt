@@ -166,7 +166,7 @@ fun SettingsScreen(
         if (pushHold != null) item {
             ChoiceRow(
                 2, notificationRows, "Hold while you’re at a screen",
-                "Other devices stay quiet while you use Starbridge or your computer, and wait this long after you leave",
+                "While you use any of your screens, your other devices stay quiet, then wait this long after you leave",
             ) {
                 Segments(Beacon.HOLD_CHOICES.map { it to holdLabel(it) }, pushHold, actions.pushHold)
             }
