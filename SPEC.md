@@ -649,7 +649,9 @@ provider plugins add providers, not panels.
   | sh` pairs with my.host, and a self-hosted landing page shows its own commands. The web
   container reads `PUBLIC_URL` when it runs, so one image serves any server; only a plain
   http(s) origin goes into the script. It checks `SHA256SUMS` with
-  minisign, or OpenSSL 3 when minisign is missing. `starbridge update` replaces script installs
+  minisign, else OpenSSL 3, else Python 3 (#1032): RHEL 8 ships OpenSSL 1.1.1, whose command line
+  has no Ed25519 check, and no minisign, but always a Python for dnf. With none of them it stops
+  and prints the command that installs minisign on that distribution; no flag skips the check. `starbridge update` replaces script installs
   and points Homebrew and npm installs at their manager. Windows refuses to replace or delete a
   running `.exe` but lets it be renamed, so `update` moves it aside to `starbridge.exe.old` and
   the next update removes that; `uninstall` deletes the binary from a detached cmd.exe two seconds

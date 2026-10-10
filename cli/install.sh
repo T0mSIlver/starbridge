@@ -9,7 +9,7 @@
 #
 # It accepts the binary only if its hash is in SHA256SUMS and SHA256SUMS carries the release
 # key's minisign signature, for STARBRIDGE_VERSION when that is set. It checks the signature with
-# minisign when installed, else openssl.
+# minisign when installed, else OpenSSL 3, else Python 3 (RHEL 8 keeps one for dnf).
 #
 # STARBRIDGE_VERSION=1.2.3      a version other than the latest release
 # STARBRIDGE_INSTALL_DIR=<dir>  instead of ~/.local/bin
@@ -102,6 +102,123 @@ openssl_verify() {
   ed25519 "$t/gm" "$t/gs"
 }
 
+# The same check in Python, for systems with neither minisign nor OpenSSL 3, such as RHEL 8 and its
+# OpenSSL 1.1.1. Ed25519 verification as in RFC 8032, section 5.1.7. Prints the trusted comment.
+python_verify() {
+  "$1" - "$PUBKEY" "$2" "$3" <<'PY'
+import base64, hashlib, sys
+
+p = 2**255 - 19
+L = 2**252 + 27742317777372353535851937790883648493
+d = -121665 * pow(121666, p - 2, p) % p
+I = pow(2, (p - 1) // 4, p)
+
+def add(P, Q):
+    a = (P[1] - P[0]) * (Q[1] - Q[0]) % p
+    b = (P[1] + P[0]) * (Q[1] + Q[0]) % p
+    c = 2 * P[3] * Q[3] * d % p
+    e = 2 * P[2] * Q[2] % p
+    f, g, h, k = b - a, e - c, e + c, b + a
+    return (f * g % p, h * k % p, g * h % p, f * k % p)
+
+def mul(s, P):
+    Q = (0, 1, 1, 0)
+    while s:
+        if s & 1:
+            Q = add(Q, P)
+        P = add(P, P)
+        s >>= 1
+    return Q
+
+def same(P, Q):
+    return (P[0] * Q[2] - Q[0] * P[2]) % p == 0 and (P[1] * Q[2] - Q[1] * P[2]) % p == 0
+
+def point(y, sign):
+    if y >= p:
+        return None
+    x2 = (y * y - 1) * pow(d * y * y + 1, p - 2, p) % p
+    if x2 == 0:
+        return None if sign else (0, y, 1, 0)
+    x = pow(x2, (p + 3) // 8, p)
+    if (x * x - x2) % p:
+        x = x * I % p
+    if (x * x - x2) % p:
+        return None
+    if x & 1 != sign:
+        x = p - x
+    return (x, y, 1, x * y % p)
+
+def decode(b):
+    y = int.from_bytes(b, "little")
+    return point(y & ((1 << 255) - 1), y >> 255)
+
+B = point(4 * pow(5, p - 2, p) % p, 0)
+
+def verify(key, msg, sig):
+    A, R = decode(key), decode(sig[:32])
+    s = int.from_bytes(sig[32:], "little")
+    if A is None or R is None or s >= L:
+        return False
+    h = int.from_bytes(hashlib.sha512(sig[:32] + key + msg).digest(), "little") % L
+    return same(mul(s, B), add(R, mul(h, A)))
+
+prefix = b"trusted comment: "
+try:
+    pub = base64.b64decode(sys.argv[1], validate=True)
+    with open(sys.argv[2], "rb") as f:
+        lines = f.read().split(b"\n")
+    sig = base64.b64decode(lines[1].strip(), validate=True)
+    comment = lines[2].rstrip(b"\r")
+    signed = base64.b64decode(lines[3].strip(), validate=True)
+    with open(sys.argv[3], "rb") as f:
+        msg = f.read()
+except Exception:
+    sys.exit(1)
+if len(pub) != 42 or pub[:2] != b"Ed" or len(sig) != 74 or sig[2:10] != pub[2:10]:
+    sys.exit(1)
+if sig[:2] == b"ED":
+    msg = hashlib.blake2b(msg).digest()
+elif sig[:2] != b"Ed":
+    sys.exit(1)
+if not comment.startswith(prefix) or len(signed) != 64:
+    sys.exit(1)
+if not verify(pub[10:], msg, sig[10:]) or not verify(pub[10:], sig[10:] + comment[17:], signed):
+    sys.exit(1)
+sys.stdout.write(comment.decode("utf-8", "replace"))
+PY
+}
+
+# A Python 3 that can check: python3, else the one every RHEL 8 keeps for dnf.
+python=
+for py in python3 /usr/libexec/platform-python; do
+  if command -v "$py" >/dev/null 2>&1 && "$py" -c 'import hashlib; hashlib.blake2b' >/dev/null 2>&1; then
+    python=$py
+    break
+  fi
+done
+
+# The command that installs minisign on this system.
+minisign_hint() {
+  if [ "$os" = darwin ]; then
+    echo "brew install minisign"
+    return
+  fi
+  id= like= version=
+  if [ -r /etc/os-release ]; then
+    id=$(. /etc/os-release && echo "${ID:-}")
+    like=$(. /etc/os-release && echo "${ID_LIKE:-}")
+    version=$(. /etc/os-release && echo "${VERSION_ID:-}")
+  fi
+  case " $id $like " in
+    " fedora "*) echo "sudo dnf install minisign" ;;
+    " rhel "*) echo "sudo dnf install https://dl.fedoraproject.org/pub/epel/epel-release-latest-${version%%.*}.noarch.rpm && sudo dnf install minisign" ;;
+    *" rhel "* | *" centos "* | *" fedora "*) echo "sudo dnf install epel-release && sudo dnf install minisign" ;;
+    *" debian "* | *" ubuntu "*) echo "sudo apt install minisign" ;;
+    *" arch "*) echo "sudo pacman -S minisign" ;;
+    *) echo "see https://jedisct1.github.io/minisign/" ;;
+  esac
+}
+
 if command -v minisign >/dev/null 2>&1; then
   comment="trusted comment: $(minisign -VQ -P "$PUBKEY" -m "$tmp/SHA256SUMS" -x "$tmp/SHA256SUMS.minisig")" ||
     fail "SHA256SUMS does not carry the release signature"
@@ -109,8 +226,11 @@ elif command -v openssl >/dev/null 2>&1 &&
   openssl pkeyutl -help 2>&1 | grep -q rawin && openssl list -digest-algorithms 2>/dev/null | grep -qi blake2b512; then
   openssl_verify "$tmp/SHA256SUMS" "$tmp/SHA256SUMS.minisig" ||
     fail "SHA256SUMS does not carry the release signature"
+elif [ -n "$python" ]; then
+  comment=$(python_verify "$python" "$tmp/SHA256SUMS.minisig" "$tmp/SHA256SUMS") ||
+    fail "SHA256SUMS does not carry the release signature"
 else
-  fail "needs minisign (https://jedisct1.github.io/minisign/) or OpenSSL 3 to check the release signature"
+  fail "needs minisign, OpenSSL 3 or Python 3 to check the release signature. To install minisign: $(minisign_hint)"
 fi
 # The trusted comment names the version the signature is for, whatever tag served it.
 signed=${comment#trusted comment: }
