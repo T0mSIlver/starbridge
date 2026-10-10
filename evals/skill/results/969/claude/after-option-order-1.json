@@ -1,0 +1,104 @@
+{
+  "agent": "claude",
+  "model": "claude-haiku-5-5",
+  "arm": "after",
+  "scenario": "option-order",
+  "rep": 1,
+  "turns": [
+    {
+      "commands": [
+        "git ls-files && echo --- && cat AGENTS.md && echo --- && grep -rniE \"trash|purge|retention\" --exclude-dir=.git . | head -100",
+        "cat src/trash.js && echo --- && cat NOTES.md && echo --- && git log --oneline | head",
+        "starbridge ask \\\n  --question 'How long should deleted notes stay in the trash?' \\\n  --context '85% of restore requests come within 3 weeks of the delete. Trash costs about $20/month for each month kept.\n**7 days:** cheapest, but restores after a week fail.\n**30 days:** covers the 3-week window with margin. Recommended.\n**90 days:** longest support window, about $60/month more storage at today’s volume.' \\\n  --option '7 days' --option '30 days' --option '90 days' --recommended '30 days'",
+        "node --input-type=module -e '\nimport { trash, remove, purgeExpired } from \"./src/trash.js\";\nconst DAY = 86400000, now = Date.now();\ntrash.push({ note: \"old\", deletedAt: now - 40*DAY }, { note: \"recent\", deletedAt: now - 5*DAY });\nconst n = purgeExpired(30*DAY, now);\nconsole.log(\"purged\", n, \"left\", trash.map(e => e.note));\n'",
+        "starbridge wait d_eJm502HfuodZLkzF --timeout 5m; echo \"exit=$?\""
+      ],
+      "final": "Trash is now purged automatically, with a 30-day retention. That's the owner's choice, from the card I sent via Starbridge.\n\n**What changed** (`src/trash.js`):\n- `purgeExpired(retentionMs, now)` removes entries older than the cutoff and returns how many it dropped.\n- `startTrashPurge(retentionMs, intervalMs)` purges immediately, then every hour. The timer is `unref`'d so it doesn't keep the process alive.\n- `TRASH_RETENTION_MS` is set to 30 days. The module starts the purge when it loads.\n\n**Checks:** a quick run dropped a 40-day-old entry and kept a 5-day-old one. The module imports and reports 30 days. I didn't write a test file, since the repo has no test setup.\n\n**Decision:** I sent the owner a card with 7, 30 and 90 days. I recommended 30, because 85% of restores come within 3 weeks and 30 days covers that with margin. They replied 30 days.\n\n**Not verified:** the repo has no app entry point, so I couldn't confirm the purge runs in the real app. It only runs once something imports `src/trash.js`.",
+      "session": "bfcfe403-5dcf-4c58-99ef-db6263da5d1d",
+      "tokens": 244375,
+      "costUsd": 0.00749886,
+      "exit": 0,
+      "seconds": 37.675,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_eJm502HfuodZLkzF --timeout 5m` (again on exit 2)."
+      ]
+    },
+    {
+      "commands": [
+        "printf '\\n// Runs for the life of the process; the timer is unref'\"'\"'d so it never keeps it alive.\\nstartTrashPurge(TRASH_RETENTION_MS);\\n' >> src/trash.js && node --input-type=module -e 'import { trash, remove, TRASH_RETENTION_MS } from \"./src/trash.js\"; remove(\"a\"); console.log(TRASH_RETENTION_MS/86400000, \"days\", trash.length)' && git status --short"
+      ],
+      "final": "Trash is now purged automatically, with a 30-day retention. That's the owner's choice, from the card I sent via Starbridge.\n\n**What changed** (`src/trash.js`):\n- `purgeExpired(retentionMs, now)` removes entries older than the cutoff and returns how many it dropped.\n- `startTrashPurge(retentionMs, intervalMs)` purges immediately, then every hour. The timer is `unref`'d so it doesn't keep the process alive.\n- `TRASH_RETENTION_MS` is set to 30 days. The module starts the purge when it loads.\n\n**Checks:** a quick run dropped a 40-day-old entry and kept a 5-day-old one. The module imports and reports 30 days. I didn't write a test file, since the repo has no test setup.\n\n**Decision:** I sent the owner a card with 7, 30 and 90 days. I recommended 30, because 85% of restores come within 3 weeks and 30 days covers that with margin. They replied 30 days.\n\n**Not verified:** the repo has no app entry point, so I couldn't confirm the purge runs in the real app. It only runs once something imports `src/trash.js`.",
+      "session": "bfcfe403-5dcf-4c58-99ef-db6263da5d1d",
+      "tokens": 244375,
+      "costUsd": 0.00749886,
+      "exit": 0,
+      "seconds": 37.675,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_eJm502HfuodZLkzF --timeout 5m` (again on exit 2)."
+      ]
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_eJm502HfuodZLkzF",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-09T21:16:09Z",
+      "question": "How long should deleted notes stay in the trash?",
+      "context": "85% of restore requests come within 3 weeks of the delete. Trash costs about $20/month for each month kept.\n**7 days:** cheapest, but restores after a week fail.\n**30 days:** covers the 3-week window with margin. Recommended.\n**90 days:** longest support window, about $60/month more storage at today’s volume.",
+      "options": [
+        "7 days",
+        "30 days",
+        "90 days"
+      ],
+      "recommended": "30 days",
+      "agent": "claude-code",
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "bfcfe403-5dcf-4c58-99ef-db6263da5d1d",
+        "sessionTitle": "proj-aa"
+      },
+      "replies": true,
+      "dir": {
+        "length": 2,
+        "head": "3MW3gYfxly2UP9vcX5Pwx6PGMWpSL0nSLnIlBlptHr8"
+      }
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [],
+  "answered": "Answer to d_eJm502HfuodZLkzF (How long should deleted notes stay in the trash?): 30 days",
+  "waiting": [
+    {
+      "v": 1,
+      "id": "w_Y5t2HYvpG5UZqTf8",
+      "decisionId": "d_eJm502HfuodZLkzF",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-09T21:16:17Z",
+      "state": "waiting",
+      "dir": {
+        "length": 2,
+        "head": "3MW3gYfxly2UP9vcX5Pwx6PGMWpSL0nSLnIlBlptHr8"
+      }
+    }
+  ],
+  "permissions": [],
+  "peakContext": 27392,
+  "usedTokens": 244375,
+  "judge": {
+    "cold": true,
+    "consequences": true,
+    "terminal": false,
+    "links": null,
+    "plain": true,
+    "skim": true,
+    "notes": "The cost line \"about $20/month for each month kept\" is ambiguous about whether the cost accumulates, though the option descriptions still let the user decide."
+  }
+}

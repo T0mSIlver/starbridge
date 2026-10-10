@@ -1,0 +1,89 @@
+{
+  "agent": "claude",
+  "model": "claude-haiku-5-5",
+  "arm": "after",
+  "scenario": "later-question",
+  "rep": 1,
+  "turns": [
+    {
+      "commands": [
+        "node scripts/lint.js; echo \"exit=$?\"",
+        "ls -la && cat RELEASE.md 2>/dev/null; echo \"---\"; git status --short",
+        "cat scripts/lint.js; echo \"--- upload.js\"; cat -A src/upload.js; echo \"--- NAMES.md\"; cat NAMES.md; echo \"--- package.json\"; cat package.json",
+        "node scripts/lint.js; echo \"exit=$?\"",
+        "starbridge ask \\\n  --question 'What should next week’s release be called?' \\\n  --context 'RELEASE.md says “Name: TBD” and the release ships Monday.\n**Driftwood:** written into RELEASE.md as the name.\n**Lantern:** written into RELEASE.md as the name.\n**Juniper:** written into RELEASE.md as the name.' \\\n  --option 'Driftwood' --option 'Lantern' --option 'Juniper' \\\n  --answer-in-any-name 2>&1; echo \"exit=$?\"",
+        "starbridge ask \\\n  --question 'What should next week’s release be called?' \\\n  --context 'RELEASE.md still says “Name: TBD”, and the release ships Monday. No rush.' \\\n  --option 'Driftwood' --option 'Lantern' --option 'Juniper'; echo \"exit=$?\"",
+        "starbridge wait d_We4nRNuyBFianzWN --timeout 5m --no-mark; echo \"exit=$?\""
+      ],
+      "final": "Lint passes, and next week's release is named Driftwood in RELEASE.md.\n\n- **Lint:** `node scripts/lint.js` reported two `var` declarations in `src/upload.js`. I changed both to `const`, since neither is reassigned. The script now exits 0.\n- **Release name:** I asked through Starbridge, and you answered Driftwood. I set `Name: TBD` to `Name: Driftwood` in RELEASE.md. I did not touch NAMES.md.",
+      "session": "7e183338-d977-462b-a277-519ef63e442e",
+      "tokens": 237451,
+      "costUsd": 0.00643757,
+      "exit": 0,
+      "seconds": 138.177,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_We4nRNuyBFianzWN --timeout 5m` (again on exit 2)."
+      ]
+    },
+    {
+      "commands": [],
+      "final": "Lint passes, and next week's release is named Driftwood in RELEASE.md.\n\n- **Lint:** `node scripts/lint.js` reported two `var` declarations in `src/upload.js`. I changed both to `const`, since neither is reassigned. The script now exits 0.\n- **Release name:** I asked through Starbridge, and you answered Driftwood. I set `Name: TBD` to `Name: Driftwood` in RELEASE.md. I did not touch NAMES.md.",
+      "session": "7e183338-d977-462b-a277-519ef63e442e",
+      "tokens": 237451,
+      "costUsd": 0.00643757,
+      "exit": 0,
+      "seconds": 138.177,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_We4nRNuyBFianzWN --timeout 5m` (again on exit 2)."
+      ]
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_We4nRNuyBFianzWN",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-09T21:58:05Z",
+      "question": "What should next week’s release be called?",
+      "context": "RELEASE.md still says “Name: TBD”, and the release ships Monday. No rush.",
+      "options": [
+        "Driftwood",
+        "Lantern",
+        "Juniper"
+      ],
+      "recommended": "Driftwood",
+      "agent": "claude-code",
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "7e183338-d977-462b-a277-519ef63e442e",
+        "sessionTitle": "proj-e7"
+      },
+      "replies": true,
+      "dir": {
+        "length": 2,
+        "head": "cHvmqX0pj1g8P_zON0UDkDU6hxvS9xcdTF7x349bWSU"
+      }
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [],
+  "answered": "Answer to d_We4nRNuyBFianzWN (What should next week’s release be called?): Driftwood",
+  "waiting": [],
+  "permissions": [],
+  "peakContext": 26297,
+  "usedTokens": 237451,
+  "judge": {
+    "cold": true,
+    "consequences": false,
+    "terminal": false,
+    "links": null,
+    "plain": true,
+    "skim": true,
+    "notes": "The card lists three names but never says what choosing each one changes, and the final message reports the answer instead of asking for a reply in the terminal."
+  }
+}

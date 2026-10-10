@@ -927,29 +927,6 @@ private fun Outcome(decision: Decision, now: Instant, arrived: Boolean) {
     }
 }
 
-/** Markdown's code, fenced or inline, in mono; everything else in the sans. */
-@Composable
-private fun Context(text: String) {
-    val scheme = MaterialTheme.colorScheme
-    text.split("```").forEachIndexed { i, part ->
-        if (i % 2 == 1) {
-            val code = part.substringAfter('\n', part).trimEnd()
-            Surface(shape = RoundedCornerShape(Spacing.s4), color = scheme.surfaceContainerHighest, modifier = Modifier.fillMaxWidth()) {
-                Text(code, style = StarbridgeTheme.type.code, color = scheme.onSurface, modifier = Modifier.padding(horizontal = Spacing.s4, vertical = Spacing.s3))
-            }
-        } else if (part.isNotBlank()) {
-            Text(inline(part.trim(), scheme.surfaceContainerHighest), style = StarbridgeTheme.type.body, color = scheme.onSurfaceVariant)
-        }
-    }
-}
-
-private fun inline(text: String, background: Color): AnnotatedString = buildAnnotatedString {
-    text.split('`').forEachIndexed { i, part ->
-        if (i % 2 == 1) withStyle(SpanStyle(fontFamily = StarbridgeTheme.type.code.fontFamily, fontSize = 14.sp, background = background)) { append(part) }
-        else append(part)
-    }
-}
-
 /** What History holds: answered questions and ended prompts, newest first, and today's count. */
 internal class History(decisions: List<Decision>, prompts: List<Prompt>, now: Instant) {
     val rows: List<Pair<Instant, Any>> = (

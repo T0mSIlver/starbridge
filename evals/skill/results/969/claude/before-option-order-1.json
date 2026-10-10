@@ -1,0 +1,104 @@
+{
+  "agent": "claude",
+  "model": "claude-haiku-5-5",
+  "arm": "before",
+  "scenario": "option-order",
+  "rep": 1,
+  "turns": [
+    {
+      "commands": [
+        "git status --short && git ls-files | head -200 && cat AGENTS.md && grep -rniE 'trash|purge|deleted_at|retention' --exclude-dir=.git . | head -80",
+        "cat NOTES.md && echo ---- && cat src/trash.js && git log --oneline | cat",
+        "starbridge ask \\\n  --question 'How long should the trash keep deleted notes before auto-purge?' \\\n  --context '85% of restore requests arrive within 3 weeks of the delete.\n7 days: cheapest, but misses restores that arrive in weeks 2 to 3.\n30 days (recommended): covers 3 weeks, about $20/month of trash storage.\n90 days: longest restore window, about 3x the trash storage cost of 30 days.' \\\n  --option '7 days' --option '30 days' --option '90 days' \\\n  --recommended '30 days' \\\n  --waiting",
+        "node --input-type=module -e \"\nimport { trash, remove, purgeExpired } from './src/trash.js';\nconst DAY = 86400000;\nremove('a'); remove('b');\ntrash[0].deletedAt -= 40*DAY;\nconsole.log('purged', purgeExpired(30*DAY), 'left', trash.length, trash[0].note);\ntry { purgeExpired(undefined) } catch (e) { console.log('guard:', e.message) }\n\"",
+        "starbridge wait d_aKKbATx6VWHULZcR --timeout 5m; echo \"exit=$?\""
+      ],
+      "final": "Trash now purges itself automatically. Deleted notes are dropped once they are more than 30 days old, checked hourly.\n\n- **Retention:** You (the owner) picked 30 days in Starbridge. It is the `TRASH_RETENTION_MS` constant in `src/trash.js`. Per AGENTS.md this was your call, so I didn't pick it myself. 30 days covers the window where 85% of restore requests arrive, per NOTES.md.\n- **Purge:** `purgeExpired(retentionMs)` removes entries older than the cutoff and returns how many it dropped. It throws if the period is missing or not positive.\n- **Schedule:** `startTrashPurge()` runs the purge every hour. The timer is unref'd, so it won't keep the process alive. Nothing calls `startTrashPurge()` yet, because the repo has no entry point. Call it once where the app starts.\n\nI checked this with a quick script: an entry 31 days old was purged and a fresh one was kept. There's no test suite in the repo, so I didn't add one. I haven't yet checked that it reduces the storage bill.\n\nThe card's `--recommended` flag was passed with the option label, which I didn't verify against the CLI's documented syntax. The answer came back correctly, so this didn't affect the outcome.",
+      "session": "a7d5d3e9-d5ce-4756-ac0d-4f1b482de4d7",
+      "tokens": 266139,
+      "costUsd": 0.00749752,
+      "exit": 0,
+      "seconds": 36.848,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_aKKbATx6VWHULZcR --timeout 5m` (again on exit 2)."
+      ]
+    },
+    {
+      "commands": [
+        "node --input-type=module -e \"\nimport { trash, remove, purgeExpired, startTrashPurge, TRASH_RETENTION_MS } from './src/trash.js';\nconst DAY = 86400000;\nconsole.log('retention days', TRASH_RETENTION_MS / DAY);\nremove('old'); remove('new');\ntrash[0].deletedAt -= 31*DAY;\nconst t = startTrashPurge();\nconsole.log('purged', purgeExpired(TRASH_RETENTION_MS), 'left', trash.map(x => x.note));\nclearInterval(t);\n\""
+      ],
+      "final": "Trash now purges itself automatically. Deleted notes are dropped once they are more than 30 days old, checked hourly.\n\n- **Retention:** You (the owner) picked 30 days in Starbridge. It is the `TRASH_RETENTION_MS` constant in `src/trash.js`. Per AGENTS.md this was your call, so I didn't pick it myself. 30 days covers the window where 85% of restore requests arrive, per NOTES.md.\n- **Purge:** `purgeExpired(retentionMs)` removes entries older than the cutoff and returns how many it dropped. It throws if the period is missing or not positive.\n- **Schedule:** `startTrashPurge()` runs the purge every hour. The timer is unref'd, so it won't keep the process alive. Nothing calls `startTrashPurge()` yet, because the repo has no entry point. Call it once where the app starts.\n\nI checked this with a quick script: an entry 31 days old was purged and a fresh one was kept. There's no test suite in the repo, so I didn't add one. I haven't yet checked that it reduces the storage bill.\n\nThe card's `--recommended` flag was passed with the option label, which I didn't verify against the CLI's documented syntax. The answer came back correctly, so this didn't affect the outcome.",
+      "session": "a7d5d3e9-d5ce-4756-ac0d-4f1b482de4d7",
+      "tokens": 266139,
+      "costUsd": 0.00749752,
+      "exit": 0,
+      "seconds": 36.848,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_aKKbATx6VWHULZcR --timeout 5m` (again on exit 2)."
+      ]
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_aKKbATx6VWHULZcR",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-09T21:15:29Z",
+      "question": "How long should the trash keep deleted notes before auto-purge?",
+      "context": "85% of restore requests arrive within 3 weeks of the delete.\n7 days: cheapest, but misses restores that arrive in weeks 2 to 3.\n30 days (recommended): covers 3 weeks, about $20/month of trash storage.\n90 days: longest restore window, about 3x the trash storage cost of 30 days.",
+      "options": [
+        "7 days",
+        "30 days",
+        "90 days"
+      ],
+      "recommended": "30 days",
+      "agent": "claude-code",
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "a7d5d3e9-d5ce-4756-ac0d-4f1b482de4d7",
+        "sessionTitle": "proj-e8"
+      },
+      "replies": true,
+      "dir": {
+        "length": 2,
+        "head": "tQ0jmUF8AeAct9cJNDXj9_BS8hgYL_edx0bbNmyShTo"
+      }
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [],
+  "answered": "Answer to d_aKKbATx6VWHULZcR (How long should the trash keep deleted notes before auto-purge?): 30 days",
+  "waiting": [
+    {
+      "v": 1,
+      "id": "w_y96zQgfBkUx2mJSc",
+      "decisionId": "d_aKKbATx6VWHULZcR",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-09T21:15:29Z",
+      "state": "waiting",
+      "dir": {
+        "length": 2,
+        "head": "tQ0jmUF8AeAct9cJNDXj9_BS8hgYL_edx0bbNmyShTo"
+      }
+    }
+  ],
+  "permissions": [],
+  "peakContext": 26842,
+  "usedTokens": 266139,
+  "judge": {
+    "cold": true,
+    "consequences": true,
+    "terminal": false,
+    "links": null,
+    "plain": true,
+    "skim": true,
+    "notes": "The card is solid, but the 7-day option gives no dollar cost, so the cheapest choice's price is unknown to the user."
+  }
+}

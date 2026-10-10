@@ -16,7 +16,11 @@ import dev.starbridge.app.protocol.Pin
 import dev.starbridge.app.protocol.ProtocolException
 import dev.starbridge.app.protocol.RecoveryKeys
 import dev.starbridge.app.protocol.recoverySignSeed
+import dev.starbridge.app.protocol.Block
 import dev.starbridge.app.protocol.ProtocolJson
+import dev.starbridge.app.protocol.Span
+import dev.starbridge.app.protocol.contextText
+import dev.starbridge.app.protocol.parseContext
 import dev.starbridge.app.protocol.SealedItem
 import dev.starbridge.app.protocol.SignedEnvelope
 import dev.starbridge.app.protocol.Sodium
@@ -376,6 +380,25 @@ class ProtocolVectorsTest {
         val browser = dir.members.getValue("browser").member
         org.junit.Assert.assertThrows(IllegalArgumentException::class.java) {
             envelopes.seal("answer", body, "phone", key("phone", "signSk"), listOf(machine, browser))
+        }
+    }
+
+    // context.json (#969): the context subset every client renders.
+    @Test fun context() {
+        fun spans(e: JsonElement) = e.jsonArray.map { it.jsonObject }.map {
+            Span(it.str("text"), it.opt("code") != null, it.opt("bold") != null, it.opt("href")?.str)
+        }
+        for (c in load("context.json").getValue("cases").jsonArray.map { it.jsonObject }) {
+            val blocks = c.getValue("blocks").jsonArray.map { it.jsonObject }.map {
+                when (it.str("kind")) {
+                    "code" -> Block.Code(it.str("text"))
+                    "bullet" -> Block.Item("•", spans(it.getValue("spans")))
+                    "number" -> Block.Item(it.str("marker"), spans(it.getValue("spans")))
+                    else -> Block.Line(spans(it.getValue("spans")))
+                }
+            }
+            assertEquals(c.str("name"), blocks, parseContext(c.str("text")))
+            assertEquals(c.str("name"), c.str("plain"), contextText(c.str("text")))
         }
     }
 

@@ -1,0 +1,104 @@
+{
+  "agent": "claude",
+  "model": "claude-haiku-5-5",
+  "arm": "after",
+  "scenario": "option-order",
+  "rep": 2,
+  "turns": [
+    {
+      "commands": [
+        "git status --short && git ls-files | head -200 && grep -ril \"trash\" --exclude-dir=.git . | head -50",
+        "cat src/trash.js && echo ---- && cat NOTES.md && echo ---- && cat AGENTS.md",
+        "cat > /tmp/purge-check.mjs <<'EOF'\nimport { trash, remove, purgeExpired } from '/var/tmp/skill-eval-0IujK1/after-option-order-2/proj/src/trash.js';\nconst DAY = 86400000;\nconst now = Date.now();\ntrash.push({ note: 'old', deletedAt: now - 10 * DAY }, { note: 'new', deletedAt: now - 1 * DAY });\nconsole.log('purged', purgeExpired(7, now), 'left', trash.map(t => t.note));\nconsole.log('purged', purgeExpired(0, now + 1000), 'left', trash.length);\ntry { purgeExpired(-1); } catch (e) { console.log(e.name, e.message); }\nEOF\nnode /tmp/purge-check.mjs; rm -f /tmp/purge-check.mjs",
+        "starbridge ask \\\n  --question 'How many days should the trash keep deleted notes?' \\\n  --context 'Storage doubled because deleted notes stay in the trash forever. 85% of restore requests come within 3 weeks.\n**7 days:** cheapest, but restores after a week fail.\n**30 days:** covers 3-week restores with margin. Recommended.\n**90 days:** keeps notes longest, about $20/month more per month of trash.' \\\n  --option '7 days' --option '30 days' --option '90 days' --recommended '30 days' \\\n  --waiting",
+        "starbridge wait d_X_ztEy6F0oDJQKR9 --timeout 5m; echo \"exit=$?\""
+      ],
+      "final": "Trash now purges automatically after 30 days. The owner picked 30 days through a Starbridge card, so that is the window the code uses.\n\nChanges in `src/trash.js`:\n- `purgeExpired(retentionDays, now)` drops entries older than the window and returns how many it removed. It rejects negative or non-numeric windows.\n- `TRASH_RETENTION_DAYS = 30`, with a comment pointing to AGENTS.md.\n- `startAutoPurge(intervalMs)` purges once immediately, then every 24 hours by default. The timer is unref'd so it doesn't keep the process alive.\n\nI checked it with a short script: an entry 31 days old was purged and one 29 days old was kept. I didn't run any project test suite, because the repo has none.\n\nNot done: nothing calls `startAutoPurge()` yet, because the repo has no app entry point. It needs to be called once at startup. Until then, trash still grows.",
+      "session": "82044750-7ddc-4624-bdb6-00e8817f542a",
+      "tokens": 262128,
+      "costUsd": 0.007547770000000002,
+      "exit": 0,
+      "seconds": 40.292,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_X_ztEy6F0oDJQKR9 --timeout 5m` (again on exit 2)."
+      ]
+    },
+    {
+      "commands": [
+        "cat > /tmp/purge-check.mjs <<'EOF'\nimport { trash, purgeExpired, startAutoPurge, TRASH_RETENTION_DAYS } from '/var/tmp/skill-eval-0IujK1/after-option-order-2/proj/src/trash.js';\nconst DAY = 86400000, now = Date.now();\ntrash.push({ note: 'old', deletedAt: now - 31 * DAY }, { note: 'kept', deletedAt: now - 29 * DAY });\nconst t = startAutoPurge();\nconsole.log('retention', TRASH_RETENTION_DAYS, 'left', trash.map(x => x.note));\nclearInterval(t);\nEOF\nnode /tmp/purge-check.mjs; rm -f /tmp/purge-check.mjs; git status --short"
+      ],
+      "final": "Trash now purges automatically after 30 days. The owner picked 30 days through a Starbridge card, so that is the window the code uses.\n\nChanges in `src/trash.js`:\n- `purgeExpired(retentionDays, now)` drops entries older than the window and returns how many it removed. It rejects negative or non-numeric windows.\n- `TRASH_RETENTION_DAYS = 30`, with a comment pointing to AGENTS.md.\n- `startAutoPurge(intervalMs)` purges once immediately, then every 24 hours by default. The timer is unref'd so it doesn't keep the process alive.\n\nI checked it with a short script: an entry 31 days old was purged and one 29 days old was kept. I didn't run any project test suite, because the repo has none.\n\nNot done: nothing calls `startAutoPurge()` yet, because the repo has no app entry point. It needs to be called once at startup. Until then, trash still grows.",
+      "session": "82044750-7ddc-4624-bdb6-00e8817f542a",
+      "tokens": 262128,
+      "costUsd": 0.007547770000000002,
+      "exit": 0,
+      "seconds": 40.292,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_X_ztEy6F0oDJQKR9 --timeout 5m` (again on exit 2)."
+      ]
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_X_ztEy6F0oDJQKR9",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-09T21:58:03Z",
+      "question": "How many days should the trash keep deleted notes?",
+      "context": "Storage doubled because deleted notes stay in the trash forever. 85% of restore requests come within 3 weeks.\n**7 days:** cheapest, but restores after a week fail.\n**30 days:** covers 3-week restores with margin. Recommended.\n**90 days:** keeps notes longest, about $20/month more per month of trash.",
+      "options": [
+        "7 days",
+        "30 days",
+        "90 days"
+      ],
+      "recommended": "30 days",
+      "agent": "claude-code",
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "82044750-7ddc-4624-bdb6-00e8817f542a",
+        "sessionTitle": "proj-0a"
+      },
+      "replies": true,
+      "dir": {
+        "length": 2,
+        "head": "3fVUzVCxiKLEk44-K_DwVE6jUZjPkouVqt2GbfY1wlA"
+      }
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [],
+  "answered": "Answer to d_X_ztEy6F0oDJQKR9 (How many days should the trash keep deleted notes?): 30 days",
+  "waiting": [
+    {
+      "v": 1,
+      "id": "w_FmUEVd6kT2jSbkyZ",
+      "decisionId": "d_X_ztEy6F0oDJQKR9",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-09T21:58:03Z",
+      "state": "waiting",
+      "dir": {
+        "length": 2,
+        "head": "3fVUzVCxiKLEk44-K_DwVE6jUZjPkouVqt2GbfY1wlA"
+      }
+    }
+  ],
+  "permissions": [],
+  "peakContext": 27070,
+  "usedTokens": 262128,
+  "judge": {
+    "cold": true,
+    "consequences": true,
+    "terminal": false,
+    "links": null,
+    "plain": true,
+    "skim": true,
+    "notes": "The final message states the owner already picked 30 days, which no answer in the transcript shows, and it neither asks a question nor waits for a reply in the terminal."
+  }
+}

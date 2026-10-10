@@ -5,9 +5,23 @@
   min-width: 0;
 }
 
-/* Keep the agent's line breaks, as Android does: lists and short paragraphs. */
-.context p {
-  white-space: pre-line;
+/* Each line is a block, so a line per option reads as one; bold is the only emphasis. */
+.context strong {
+  font-weight: 600;
+  color: var(--fg);
+}
+
+/* A bullet or number hangs in the gutter, so wrapped lines align with the text. */
+.item {
+  position: relative;
+  padding-left: calc(var(--marker, 1) * 1ch + 0.75em);
+}
+
+.item::before {
+  content: attr(data-marker);
+  position: absolute;
+  left: 0;
+  font-variant-numeric: tabular-nums;
 }
 
 .context a {

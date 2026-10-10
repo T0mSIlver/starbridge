@@ -24,6 +24,7 @@ import {
   visible,
 } from "@starbridge/protocol";
 import { claudeSession } from "./claude";
+import { codexTitle } from "./codex";
 import type { PendingPermission, PermissionUpdate, State } from "./config";
 import {
   type Ctx,
@@ -383,18 +384,21 @@ export function buildPermission(
 }
 
 /**
- * Where the prompt comes from, from the hook input and Claude Code's record of the session, the
- * name in Pi's session file (`PI_SESSION_FILE`, which the Pi extension passes), or the title the
+ * Where the prompt comes from, from the hook input and Claude Code's record of the session, Codex's
+ * session index, the name in Pi's session file (`PI_SESSION_FILE`, which the Pi extension passes), or the title the
  * opencode plugin passes.
  */
 export function permissionSource(
   hook: PermissionHookInput,
   env: Ctx["env"],
+  agent?: Permission["agent"],
 ): PermissionSourceInput {
   const session = typeof hook.session_id === "string" ? hook.session_id : "";
-  const claude = session ? claudeSession(env, session) : undefined;
+  const claude = session && agent !== "codex" ? claudeSession(env, session) : undefined;
   const title =
-    claude?.title ?? piSessionTitle(env) ?? (env[OPENCODE_TITLE]?.slice(0, 200) || undefined);
+    agent === "codex"
+      ? codexTitle(env, session)
+      : (claude?.title ?? piSessionTitle(env) ?? (env[OPENCODE_TITLE]?.slice(0, 200) || undefined));
   return {
     project: projectName(typeof hook.cwd === "string" && hook.cwd ? hook.cwd : process.cwd()),
     session,

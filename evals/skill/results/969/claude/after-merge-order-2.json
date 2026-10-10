@@ -1,0 +1,179 @@
+{
+  "agent": "claude",
+  "model": "claude-haiku-5-5",
+  "arm": "after",
+  "scenario": "merge-order",
+  "rep": 2,
+  "turns": [
+    {
+      "commands": [
+        "gh pr view 12 --json number,title,state,mergeable,mergeStateStatus,headRefName,files,statusCheckRollup && echo ---- && gh pr view 13 --json number,title,state,mergeable,mergeStateStatus,headRefName,files,statusCheckRollup",
+        "gh pr view 12 --json mergeable,mergeStateStatus && gh pr view 13 --json mergeable,mergeStateStatus && git fetch origin 2>&1 | tail -2; git diff --stat origin/main...origin/HEAD 2>/dev/null | tail -1; gh pr diff 12 -- src/api.ts; echo ======; gh pr diff 13 -- src/api.ts",
+        "gh pr view 13 --json mergeable 2>&1; gh pr view 12 --json mergeable 2>&1; echo ======; gh pr diff 13 -- src/api.ts 2>&1",
+        "git branch -a 2>&1; git remote -v; gh pr diff 12 2>&1 | head -150",
+        "gh pr diff 13 2>&1 | head -150; echo ====; gh pr checks 12 2>&1; gh pr checks 13 2>&1",
+        "git show main:src/api.ts | head -20; echo ----; gh pr diff 12 --patch 2>/dev/null | head -5; gh pr view 12 --web >/dev/null 2>&1; echo; git ls-remote origin 2>&1",
+        "cd $(mktemp -d) && git init -q . && printf 'export const TIMEOUT_MS = 5000;' > api.ts && git add . && git -c user.email=a@b -c user.name=s commit -qm base && git checkout -qb p12 && printf 'export const TIMEOUT_MS = 5000;\\nexport const CHUNK = 1 << 20;\\n' > api.ts && git -c user.email=a@b -c user.name=s commit -qam p12 && git checkout -q - && git checkout -qb p13 && printf 'export const TIMEOUT_MS = 30000;\\n' > api.ts && git -c user.email=a@b -c user.name=s commit -qam p13 && git checkout -q p12 && git merge p13 2>&1 | tail -3; git merge --abort 2>/dev/null; git checkout -q p13 && git merge p12 2>&1 | tail -3",
+        "date",
+        "starbridge ask \\\n  --question 'Which PR merges first: #12 or #13?' \\\n  --context '#12 and #13 both edit src/api.ts at the same spot, so the second one conflicts. Both are green.\n**#12 first:** CLI release (20:00 tonight) gets resumable uploads. #13 then needs a rebase.\n**#13 first:** slow-link sync fix ships first. #12 needs a rebase before tonight'\"'\"'s release.\n**Hold both:** nothing merges until you decide.' \\\n  --option 'Merge #12 first' --option 'Merge #13 first' --option 'Hold both' \\\n  --link https://github.com/acme/notes/pull/12 --link https://github.com/acme/notes/pull/13 2>&1",
+        "starbridge wait d_WpYQuob5mMTM0cA8 --timeout 5m; echo \"exit=$?\""
+      ],
+      "final": "(exit 143) ",
+      "exit": 143,
+      "seconds": 720.129,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_WpYQuob5mMTM0cA8 --timeout 5m` (again on exit 2).",
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_L4YmCR2SuwMdsLpC --timeout 5m` (again on exit 2)."
+      ]
+    },
+    {
+      "commands": [
+        "gh pr merge 12 --squash 2>&1; echo \"exit=$?\"; gh pr view 13 2>&1 | head -3",
+        "starbridge ask \\\n  --question 'Rebase #13 onto main and merge it?' \\\n  --context '#12 merged. #13 now conflicts with main in src/api.ts (TIMEOUT_MS line).\n**Rebase and merge:** I resolve the conflict on dev'\"'\"'s branch, push, and squash-merge it.\n**Leave it:** dev rebases #13 later. Nothing else changes.' \\\n  --option 'Rebase and merge' --option 'Leave it' --recommended 'Rebase and merge' \\\n  --link https://github.com/acme/notes/pull/13 2>&1",
+        "starbridge wait d_L4YmCR2SuwMdsLpC --timeout 5m; echo \"exit=$?\"",
+        "starbridge wait d_L4YmCR2SuwMdsLpC --timeout 5m; echo \"exit=$?\"",
+        "starbridge wait d_L4YmCR2SuwMdsLpC --timeout 5m; echo \"exit=$?\""
+      ],
+      "final": "(exit 143) ",
+      "exit": 143,
+      "seconds": 720.129,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_WpYQuob5mMTM0cA8 --timeout 5m` (again on exit 2).",
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_L4YmCR2SuwMdsLpC --timeout 5m` (again on exit 2)."
+      ]
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_WpYQuob5mMTM0cA8",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-09T20:50:33Z",
+      "question": "Which PR merges first: #12 or #13?",
+      "context": "#12 and #13 both edit src/api.ts at the same spot, so the second one conflicts. Both are green.\n**#12 first:** CLI release (20:00 tonight) gets resumable uploads. #13 then needs a rebase.\n**#13 first:** slow-link sync fix ships first. #12 needs a rebase before tonight's release.\n**Hold both:** nothing merges until you decide.",
+      "options": [
+        "Merge #12 first",
+        "Merge #13 first",
+        "Hold both"
+      ],
+      "recommended": "Merge #12 first",
+      "agent": "claude-code",
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "e473c0b7-60ec-4ec7-893a-0508a821504a",
+        "sessionTitle": "proj-6c"
+      },
+      "links": [
+        {
+          "url": "https://github.com/acme/notes/pull/12"
+        },
+        {
+          "url": "https://github.com/acme/notes/pull/13"
+        }
+      ],
+      "replies": true,
+      "dir": {
+        "length": 2,
+        "head": "SWq5B5aWs5FJyi4Gmup0Oj35pLghV0GoOGtabTkcn_Y"
+      }
+    }
+  ],
+  "laterDecisions": [
+    {
+      "v": 1,
+      "id": "d_L4YmCR2SuwMdsLpC",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-09T20:50:54Z",
+      "question": "Rebase #13 onto main and merge it?",
+      "context": "#12 merged. #13 now conflicts with main in src/api.ts (TIMEOUT_MS line).\n**Rebase and merge:** I resolve the conflict on dev's branch, push, and squash-merge it.\n**Leave it:** dev rebases #13 later. Nothing else changes.",
+      "options": [
+        "Rebase and merge",
+        "Leave it"
+      ],
+      "recommended": "Rebase and merge",
+      "agent": "claude-code",
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "e473c0b7-60ec-4ec7-893a-0508a821504a",
+        "sessionTitle": "proj-6c"
+      },
+      "links": [
+        {
+          "url": "https://github.com/acme/notes/pull/13"
+        }
+      ],
+      "replies": true,
+      "dir": {
+        "length": 2,
+        "head": "SWq5B5aWs5FJyi4Gmup0Oj35pLghV0GoOGtabTkcn_Y"
+      }
+    }
+  ],
+  "runs": [],
+  "gh": [
+    "gh pr view 12 --json number,title,state,mergeable,mergeStateStatus,headRefName,files,statusCheckRollup",
+    "gh pr view 13 --json number,title,state,mergeable,mergeStateStatus,headRefName,files,statusCheckRollup",
+    "gh pr view 12 --json mergeable,mergeStateStatus",
+    "gh pr view 13 --json mergeable,mergeStateStatus",
+    "gh pr diff 12 -- src/api.ts",
+    "gh pr view 13 --json mergeable",
+    "gh pr view 12 --json mergeable",
+    "gh pr diff 12",
+    "gh pr diff 13",
+    "gh pr diff 12 --patch",
+    "gh pr view 12 --web",
+    "gh pr merge 12 --squash",
+    "gh pr view 13"
+  ],
+  "answered": "Answer to d_WpYQuob5mMTM0cA8 (Which PR merges first: #12 or #13?): Merge #12 first",
+  "waiting": [
+    {
+      "v": 1,
+      "id": "w_85EMxQkoAxLdYf2t",
+      "decisionId": "d_WpYQuob5mMTM0cA8",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-09T20:50:35Z",
+      "state": "waiting",
+      "dir": {
+        "length": 2,
+        "head": "SWq5B5aWs5FJyi4Gmup0Oj35pLghV0GoOGtabTkcn_Y"
+      }
+    },
+    {
+      "v": 1,
+      "id": "w_nQ57JnTlezPoUknN",
+      "decisionId": "d_L4YmCR2SuwMdsLpC",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-09T20:50:56Z",
+      "state": "waiting",
+      "dir": {
+        "length": 2,
+        "head": "SWq5B5aWs5FJyi4Gmup0Oj35pLghV0GoOGtabTkcn_Y"
+      }
+    }
+  ],
+  "permissions": [],
+  "peakContext": 28808,
+  "usedTokens": 370686,
+  "judge": {
+    "cold": true,
+    "consequences": true,
+    "terminal": false,
+    "links": true,
+    "plain": true,
+    "skim": true,
+    "notes": "The final terminal message is only \"(exit 143)\": it asks nothing and waits for no reply, so the session ends without a clear hand-off to the user."
+  }
+}

@@ -15,6 +15,7 @@ import android.text.Spanned
 import android.text.TextPaint
 import android.text.TextUtils
 import android.util.TypedValue
+import android.text.style.StyleSpan
 import android.text.style.TypefaceSpan
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -36,7 +37,10 @@ import dev.starbridge.app.data.place
 import dev.starbridge.app.data.Prompt
 import dev.starbridge.app.data.QuotaNotice
 import dev.starbridge.app.data.Run
+import dev.starbridge.app.protocol.Block
 import dev.starbridge.app.protocol.RUN_STALE_MS
+import dev.starbridge.app.protocol.Span
+import dev.starbridge.app.protocol.parseContext
 import dev.starbridge.app.ui.elapsed
 import java.time.Duration
 import java.time.Instant
@@ -134,21 +138,31 @@ class Notifier(private val context: Context, private val prefs: Prefs) : Alerts 
     /** The meta row in the header, after "Starbridge": the machine and the repo. */
     private fun header(s: Source) = listOf(s.machine, s.project).filter { it.isNotBlank() }.joinToString(" · ")
 
-    /** The agent's words, its Markdown code in mono and without the backticks. */
+    /** The agent's words in the context subset (#969): bold, code in mono, bullets as "•". */
     private fun words(text: String): CharSequence = SpannableStringBuilder().apply {
-        text.split("```").forEachIndexed { i, part ->
-            if (i % 2 == 1) {
-                mono(part.substringAfter('\n', part).trimEnd('\n'))
-            } else {
-                part.split('`').forEachIndexed { j, piece -> if (j % 2 == 1) mono(piece) else append(piece) }
+        parseContext(text).forEachIndexed { i, block ->
+            if (i > 0) append('\n')
+            when (block) {
+                is Block.Code -> styled(block.text, TypefaceSpan("monospace"))
+                is Block.Item -> append("${block.marker} ").also { spans(block.spans) }
+                is Block.Line -> spans(block.spans)
             }
         }
-    }.trim()
+    }
 
-    private fun SpannableStringBuilder.mono(code: String) {
+    private fun SpannableStringBuilder.spans(spans: List<Span>) {
+        for (s in spans) {
+            val at = length
+            append(s.text)
+            if (s.code) setSpan(TypefaceSpan("monospace"), at, length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            if (s.bold) setSpan(StyleSpan(Typeface.BOLD), at, length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        }
+    }
+
+    private fun SpannableStringBuilder.styled(text: String, span: Any) {
         val at = length
-        append(code)
-        setSpan(TypefaceSpan("monospace"), at, length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        append(text)
+        setSpan(span, at, length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
     }
 
     /**

@@ -5,7 +5,7 @@
  * agent delivers answers to Codex sessions that way, as the Claude Code mod submits them.
  */
 import { spawn } from "node:child_process";
-import { closeSync, openSync, readdirSync, readSync } from "node:fs";
+import { closeSync, fstatSync, openSync, readdirSync, readSync } from "node:fs";
 import { createConnection } from "node:net";
 import { join } from "node:path";
 import type { Ctx } from "./context";
@@ -41,6 +41,43 @@ export function codexAsker(env: Ctx["env"]): string | undefined {
   const id = env.CODEX_THREAD_ID;
   const home = codexHome(env);
   return (id && home && codexThread(home, id)?.root) || id;
+}
+
+/** How much of `session_index.jsonl` a title is looked for in, from its end. */
+const INDEX_TAIL = 1 << 20;
+
+/**
+ * The title of Codex thread `id`: its `thread_name` in `$CODEX_HOME/session_index.jsonl`, which
+ * Codex appends to on each rename, so the last line for an id wins. Read from the file's last
+ * MB, capped at 200 characters as the other agents' titles.
+ */
+export function codexTitle(env: Ctx["env"], id: string): string | undefined {
+  const home = codexHome(env);
+  if (!home || !id) return undefined;
+  let text: string;
+  try {
+    const fd = openSync(join(home, "session_index.jsonl"), "r");
+    try {
+      const size = fstatSync(fd).size;
+      const buf = Buffer.alloc(Math.min(size, INDEX_TAIL));
+      readSync(fd, buf, 0, buf.length, size - buf.length);
+      text = buf.toString("utf8");
+    } finally {
+      closeSync(fd);
+    }
+  } catch {
+    return undefined;
+  }
+  const lines = text.split("\n");
+  for (let i = lines.length - 1; i >= 0; i--) {
+    if (!lines[i]?.includes(id)) continue;
+    try {
+      const e = JSON.parse(lines[i] as string) as { id?: unknown; thread_name?: unknown };
+      if (e.id === id && typeof e.thread_name === "string")
+        return e.thread_name.trim().slice(0, 200) || undefined;
+    } catch {}
+  }
+  return undefined;
 }
 
 function codexHome(env: Ctx["env"]): string | undefined {

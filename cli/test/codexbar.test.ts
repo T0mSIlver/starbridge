@@ -40,6 +40,16 @@ test("recorded output: every window, with pace and alerts", () => {
   ]);
 });
 
+test("Antigravity's main windows, which repeat named ones, show once under their names (#963)", () => {
+  const [row] = parseUsage(fixture("antigravity"), "antigravity", NOW);
+  expect(row?.windows.map((w) => w.label)).toEqual([
+    "Gemini 5-hour",
+    "Gemini weekly",
+    "Claude/GPT 5-hour",
+    "Claude/GPT weekly",
+  ]);
+});
+
 test("schema drift: unknown fields ignored, malformed windows skipped, errors kept", () => {
   const rows = parseUsage(fixture("drift"), undefined, NOW);
   expect(rows.map((r) => r.provider)).toEqual(["claude", "zai", "cursor"]);
