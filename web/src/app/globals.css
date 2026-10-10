@@ -4,13 +4,16 @@
 :root {
   --sans: var(--font-sans);
   --mono: var(--font-mono);
-  /* The macOS app's window has no title bar (#938): the page leaves this band at its top for the
-     window's buttons, and the window is dragged by it. Zero everywhere else. */
+  /* The macOS app's window has no title bar (#938). `--window-buttons` is the height of the strip
+     that holds its buttons and drags the window; `--titlebar` the part of it the page leaves
+     empty: all of it, except beside the rail (Shell.module.css). Zero everywhere else. */
+  --window-buttons: 0px;
   --titlebar: 0px;
 }
 
 :root[data-titlebar="inset"] {
-  --titlebar: 28px;
+  --window-buttons: 52px;
+  --titlebar: 52px;
 }
 
 * {
@@ -59,7 +62,7 @@ body {
   position: fixed;
   z-index: 30;
   inset: 0 0 auto;
-  height: var(--titlebar);
+  height: var(--window-buttons);
   background: var(--bg);
   -webkit-app-region: drag;
 }

@@ -432,7 +432,12 @@ pane never sits as a strip in empty ground: from `size.detail-wide-from` wide, i
 takes 86% of the pane up to `size.detail-wide`, images grow to `size.media-wide`, and the
 roles with a `wide` size step up. On the web,
 "Colours" picks the theme: System (the default), Light or Dark, set as
-`data-theme` on `<html>` and remembered on the device. It pairs with the app
+`data-theme` on `<html>` and remembered on the device. In the macOS app the window has no title bar: the rail runs to the
+window's top in `surface`, the window's buttons sit in its first row, centred
+on the mark, with the name after them, and the panes start at the top beside
+it; a see-through 52 px strip across the top drags the window. Without the
+rail, the page leaves that strip empty in `bg`; under 600 px, in `surface`
+above the top bar. It pairs with the app
 without imitating Android.
 
 Google Sans Flex sets everything a person reads, numbers included, with

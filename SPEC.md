@@ -1409,9 +1409,14 @@ a browser; the app adds a menu bar light and notifications, so a web release nee
   rather than two switches, so no combination leaves the app nowhere and nothing has to be
   greyed out. The Dock icon's menu holds the menu bar's items, for when there is no menu bar icon.
 - **The window** has no title bar on macOS (owner's pick from mockups, #938): the page's rail
-  already names the app and the page, and counts what needs the owner. The page leaves
-  a 28 px band at its top for the window's buttons, which also drags the window; the window keeps
-  the name "Starbridge" for Mission Control and the Window menu, whatever the page's title.
+  already names the app and the page, and counts what needs the owner. The rail runs to the
+  window's top in its own colour, the window's buttons sit in its first row before the app's name,
+  and the panes beside it start at the top (owner's pick from mockups, #1006): a band in the page's
+  background across the whole window ran past the rail, and cost every pane 28 px. A see-through
+  52 px strip across the top, macOS's toolbar height, drags the window. Pages without the rail
+  (sign-in, docs) leave that strip empty in the page's background; under 600 px it takes the top
+  bar's colour. The window keeps the name "Starbridge" for Mission Control and
+  the Window menu, whatever the page's title.
 - **Presence** (#945). The window in use holds pushes as a web page does (#848). Hidden, it said
   absent while the owner worked in another app, so the phone buzzed at a desk. Electron's
   `powerMonitor` reads what the CLI's machine presence reads: lock, sleep and wake, and the
