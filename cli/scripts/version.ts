@@ -4,10 +4,12 @@
  *   bun cli/scripts/version.ts <version>          stamp it, for the release commit the tag points at,
  *                                                 and pin CodexBar's latest release (codexbar-pin.ts)
  *   bun cli/scripts/version.ts --check [version]  fail unless every place says it (default: the CLI's)
+ *   bun cli/scripts/version.ts --final <version>  fail unless HEAD is its newest rc tag plus the stamp
  *
  * A release candidate moves every version but leaves the marketplace on the last release, so
  * only users who pin an rc get its plugins.
  */
+import { spawnSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -54,6 +56,15 @@ export function check(version?: string, root = ROOT): string[] {
   return wrong;
 }
 
+/**
+ * The changed files that are not version places: a final release must ship what its rc shipped,
+ * which the owner installed and tried (#1004), so only the stamp may differ.
+ */
+export function beyondStamp(changed: string[]): string[] {
+  const stamped = new Set(PLACES.map((p) => p.file));
+  return changed.filter((f) => !stamped.has(f));
+}
+
 export function stamp(version: string, root = ROOT) {
   if (!NUMBER.test(version)) throw new Error(`not a version: ${version}`);
   for (const { file, pattern, tag } of PLACES) {
@@ -68,6 +79,17 @@ export function stamp(version: string, root = ROOT) {
   }
 }
 
+/** The newest `v<version>-rc.N` tag, if any. */
+function newestRc(version: string): string | undefined {
+  return git("tag", "-l", `v${version}-rc.*`, "--sort=-v:refname")[0];
+}
+
+function git(...args: string[]): string[] {
+  const r = spawnSync("git", args, { cwd: ROOT, encoding: "utf8" });
+  if (r.status !== 0) throw new Error(`git ${args.join(" ")}: ${r.stderr}`);
+  return r.stdout.split("\n").filter(Boolean);
+}
+
 if (import.meta.main) {
   const [first, second] = process.argv.slice(2);
   if (first === "--check") {
@@ -75,13 +97,40 @@ if (import.meta.main) {
     for (const line of wrong) console.error(line);
     process.exit(wrong.length ? 1 : 0);
   }
+  if (first === "--final") {
+    if (!second || !NUMBER.test(second) || isRc(second)) {
+      console.error(`--final takes a release version, not ${second ?? "nothing"}`);
+      process.exit(64);
+    }
+    const rc = newestRc(second);
+    if (!rc) {
+      console.error(`no v${second}-rc.N tag: cut a release candidate and try its APK first`);
+      process.exit(1);
+    }
+    const extra = beyondStamp(git("diff", "--name-only", rc, "HEAD"));
+    if (extra.length) {
+      console.error(
+        `${extra.length} files changed since ${rc}, such as ${extra.slice(0, 5).join(", ")}.`,
+      );
+      console.error(`Cut the next rc from this commit and try it first.`);
+    }
+    process.exit(extra.length ? 1 : 0);
+  }
   if (!first) {
-    console.error("usage: bun cli/scripts/version.ts <version> | --check [version]");
+    console.error(
+      "usage: bun cli/scripts/version.ts <version> | --check [version] | --final <version>",
+    );
     process.exit(64);
   }
   stamp(first);
-  // Loaded here, not at the top: the release's --check runs before any install.
-  const { pinCodexbar } = await import("./codexbar-pin");
-  const pin = await pinCodexbar();
-  console.log(`Pinned CodexBar ${pin.version}: check that no open \`codexbar\` issue names it.`);
+  // A final release ships its rc's CodexBar, the one the owner tried.
+  const rc = isRc(first) ? undefined : newestRc(first);
+  if (rc) {
+    console.log(`Kept the CodexBar pin of ${rc}.`);
+  } else {
+    // Loaded here, not at the top: the release's --check runs before any install.
+    const { pinCodexbar } = await import("./codexbar-pin");
+    const pin = await pinCodexbar();
+    console.log(`Pinned CodexBar ${pin.version}: check that no open \`codexbar\` issue names it.`);
+  }
 }

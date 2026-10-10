@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { cpSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { check, stamp } from "../scripts/version";
+import { beyondStamp, check, stamp } from "../scripts/version";
 
 const ROOT = join(import.meta.dir, "..", "..");
 const FILES = [
@@ -39,4 +39,11 @@ test("a release moves the marketplace to its tag; a release candidate leaves it"
   expect(check("7.1.1", dir)).toHaveLength(FILES.length + 1);
   writeFileSync(join(dir, ".claude-plugin/marketplace.json"), ref().replaceAll('"ref"', '"tag"'));
   expect(check("7.1.0", dir)).toEqual([".claude-plugin/marketplace.json: v(none), want v7.1.0"]);
+});
+
+test("a final release may change only the version places since its rc", () => {
+  expect(beyondStamp(FILES)).toEqual([]);
+  expect(beyondStamp(["cli/package.json", "cli/src/setup/codexbar-pin.json"])).toEqual([
+    "cli/src/setup/codexbar-pin.json",
+  ]);
 });
