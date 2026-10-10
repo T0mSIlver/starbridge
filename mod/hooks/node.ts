@@ -209,3 +209,17 @@ export const sleep = (ms: number) =>
   new Promise<void>((r) => {
     setTimeout(r, ms).unref();
   });
+
+/** The answers `starbridge hook question` printed, one array of labels per question. */
+export function answersOf(stdout: string, count: number): string[][] | undefined {
+  try {
+    const a = (JSON.parse(stdout) as { answers?: unknown }).answers;
+    if (
+      Array.isArray(a) &&
+      a.length === count &&
+      a.every((x) => Array.isArray(x) && x.every((l) => typeof l === "string"))
+    )
+      return a as string[][];
+  } catch {}
+  return undefined;
+}

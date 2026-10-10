@@ -594,7 +594,16 @@ provider plugins add providers, not panels.
   since the command it wraps is the agent's own. So Codex asks at the keyboard to run it outside
   the sandbox, and the skill has it ask on the first call: run in the sandbox first, the command
   ran unreported, then again once approved (#831). A `prompt` rule only adds an approval: Codex
-  still runs the command in the sandbox first. Uninstall removes exactly what setup added.
+  still runs the command in the sandbox first. `cursor-agent` gets `Shell(starbridge ask)` and the
+  four others in `cli-config.json`'s `permissions.allow`; each matches the command and what starts
+  with it plus a space, and a compound line runs without a prompt only when each of its commands
+  is allowed (2026.10.01). The IDE does not read that file. Uninstall removes exactly what setup added.
+- **Cursor** (#953) gets the skill in `~/.cursor/skills/starbridge`. Not a local plugin under
+  `~/.cursor/plugins/local`, which would keep everything in one folder: `cursor-agent` 2026.10.01
+  loads a local plugin's skill and hooks in `-p` but, in an interactive session, neither its skill
+  nor its `sessionStart` and `stop` hooks (run 2026-10-09). Cursor also reads `~/.codex/skills`,
+  so with Codex set up too it lists the skill twice; both copies are the same. Setup finds Cursor
+  by `cursor-agent` on the PATH or a `~/.cursor` folder.
 - **Docs** (#211) at `/docs` are the repository's Markdown files listed in `web/src/lib/docs.ts`,
   rendered by the web page. Links between them become `/docs` links; other relative links go to
   GitHub. Images are screenshots under `web/public`, served from the site root, so GitHub shows
@@ -700,6 +709,14 @@ line, the safe side: at worst a prompt repeats an answer the agent already read.
   that forces the choice, then one line per option saying what it changes. Links and images only
   when they help; one question per card. The first option is
   the agent's default (#191).
+- A card reads in seconds on a phone (#969): the owner should decide in one read, without a
+  scroll. On a 360 px screen the context runs about 40 characters a line and about 450 fit above
+  the options, and a notification shows only the question and the context's first line. So the
+  question stays within 70 characters, the context within 450, starting with the fact that
+  forces the choice; each option gets a line led by its label in bold unless the line would say
+  nothing (names to pick from), and labels stay within 18 characters, where buttons still sit
+  side by side. Plain words and numbers, after Tom's unslop rules. In 225 cards agents posted before this, the context's median was 430 characters and
+  one in ten hid its options.
 - Agents also wrap, unasked, any command that blocks the owner or needs them at the machine, and
   always give a reason (#60).
 - A card cannot approve an action the agent's own guidelines say needs the owner's yes in the
@@ -744,7 +761,17 @@ line, the safe side: at worst a prompt repeats an answer the agent already read.
   a typed reply as the TUI's `user_note:`. `serverRequest/resolved` first, or the end of the
   turn, settles the cards `elsewhere`. A secret question stays at the keyboard, and so does every
   question on Windows, where Node reads a socket path as a named pipe.
-- Pi has no built-in ask tool; Starbridge intercepts none by name.
+- Pi has no built-in ask tool. Most Pi users add `ask_user_question` from
+  @juicesharp/rpiv-ask-user-question (#966), whose `rpiv:ask-user:prompt` event posts each
+  question, already waiting, as opencode's do. The tool returning, whoever answered, settles the
+  questions still open as answered elsewhere. The package takes no answer from outside
+  (juicesharp/rpiv-mono#207 proposes it, and its maintainer merges little), so the Pi extension
+  wraps `ctx.ui.custom`, which Pi shares among extensions, and keeps the `done` of the dialog the
+  package opens right after its `rpiv:ask-user:blocked` event: a device answer closes it as a
+  keyboard submit does. Arming on that event, not on the prompt, leaves other extensions' dialogs
+  alone. Where no such
+  dialog opens (Pi's RPC mode), the answer reaches the agent as a follow-up message once the
+  questionnaire closes at the keyboard.
 
 ### Permission prompts
 
@@ -912,6 +939,14 @@ gain is every session, machine and agent in one place. `starbridge config permis
 
 - **The uploader** in the local agent runs CodexBar for every provider at once, every 5 minutes
   and on request, and computes pace and alerts (`packages/protocol`), so clients only render.
+- **Which providers** (#963). Setup probes the providers turned on in CodexBar and the plan of
+  each agent it finds: Claude Code, Codex, Cursor (`~/.cursor` or `cursor-agent`), Antigravity
+  (`agy` or `~/.gemini/antigravity*`) and, on macOS only, opencode (OpenCode and OpenCode Go).
+  CodexBar finds those two plans on its own only in browser cookies, which it imports only on
+  macOS; elsewhere they need a key or cookie in CodexBar's config, which turns them on anyway.
+  The ones that read windows are the default. Pi has no plan of its own, and most opencode users
+  pay their model's provider: that provider counts when CodexBar has it turned on. A main window
+  that repeats a named one, as Antigravity's do, shows once under the name.
 - **Alerts** (#115): `low` at CodexBar's defaults (50% and 20% left), and pace: unused headroom of
   30% one hour before the reset for windows of a day or less, one day before for longer ones. Only
   a new alert notifies; every other snapshot is posted quiet. The thresholds are fixed, since
@@ -1062,8 +1097,16 @@ first window, so a provider with a window running out leads.
   had long replies running under it in the desktop app. The owner chose this from mockups over a
   send button beside the field and a separate bar under it. Android keeps Material's trailing
   icon, which the text wraps before.
-- **Context** renders line breaks and code, inline and fenced. Other Markdown shows as typed; the
-  skill says so rather than the clients growing a renderer.
+- **Drafts** (#992). A reply typed and not sent stays with its question: on Android across
+  rotation and process death, on the web until the page reloads. The web's detail moves between
+  the phone and wide layouts as the window is resized, and a draft kept in the field alone was
+  lost there.
+- **Context** (#969) renders the subset the skill names, the same on the web, the desktop app and
+  Android: each line on its own, blank lines only separating; `**bold**`; code, inline and
+  fenced; `-` and `1.` lists with a hanging indent; links, bare or `[text](https://…)`. A `#`
+  heading is a bold line. Anything else shows as typed. `packages/protocol`'s `parseContext`
+  parses it, ported to Kotlin with shared vectors, and notifications show the same text plain.
+  Each line on its own makes a line per option read as a list; bold lets the labels lead it.
 - **Revoked machines.** Their items leave the Inbox and their notifications close (#344).
 - **Clock** (#161): System, 12-hour or 24-hour, per device. UI words stay English.
 - **Images** open a full-screen viewer (zoom, pan, swipe or arrow keys between images) and carry
@@ -1175,6 +1218,18 @@ first window, so a provider with a window running out leads.
   use as much as a Mac. It counts a touch or key down, never which. Settings → Notifications
   sets the account's hold time, as the web's Settings does.
 - Pull to refresh shows only on the screen that was pulled.
+- **Haptics** (#997): Android's own feedback constants only, through Compose's haptics (the
+  view's for the one Compose lacks), so the phone's Touch feedback setting governs them all; no
+  custom vibrations. Answering a question and Allow or Deny confirm: Deny is a choice, not an
+  error. An answer the server refused, its question back saying "Not sent", rejects. The snooze
+  swipe ticks crossing 40% and again backing under it, but not as the card springs back after a
+  snooze. The snooze dial ticks softly per hour or minute, as Android's clock dial does. Quota
+  reorder gives a heavy click on pick-up, a tick per place and one on drop, as the launcher
+  does. Switches tick on and, lighter, off. Nothing when a sheet opens, a pull refreshes or an
+  agent resumes: the tap had its feedback, and a late pulse reads as a new event. Notifications
+  keep Android's default vibration: a channel's is frozen once created, and the owner's own
+  settings would be lost to new channel ids. The owner picked these in a debug build from six
+  candidates, dropping the pull's tick.
 - **Home-screen widgets** (#894), in Jetpack Glance. "Needs you" (2×2) counts what the Inbox's
   badge counts: with an agent waiting, that number in amber on the amber card ("waiting on you",
   then how many more "when you can"), else the open questions in `fg`. Quotas (2×2, widened to

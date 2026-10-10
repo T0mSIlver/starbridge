@@ -1,0 +1,97 @@
+{
+  "agent": "opencode",
+  "model": "zai-coding-plan/glm-5.3-flash",
+  "arm": "after",
+  "scenario": "option-order",
+  "rep": 2,
+  "turns": [
+    {
+      "commands": [
+        "ls -la && git log --oneline -5",
+        "ls src",
+        "starbridge ask \\\n  --question 'How long should deleted notes stay in the trash before auto-purge?' \\\n  --context 'Trash keeps notes forever and storage doubled. The purge age sets what support can still restore.\n**7 days:** about $5/month; restores after week 1 fail.\n**30 days:** about $20/month; covers 85% of restore requests.\n**90 days:** about $60/month; covers nearly all restores.' \\\n  --option '7 days' --option '30 days' --option '90 days' --recommended '30 days' \\\n  --waiting",
+        "node --input-type=module -e \"\nimport { trash, remove, purgeTrash, RETENTION_DAYS } from './src/trash.js';\nconst day = 24*60*60*1000;\ntrash.push({note:'old', deletedAt: Date.now() - 40*day});\ntrash.push({note:'recent', deletedAt: Date.now() - 2*day});\nremove('fresh');\nconst purged = purgeTrash();\nconsole.log('RETENTION_DAYS', RETENTION_DAYS);\nconsole.log('purged', purged.map(e=>e.note));\nconsole.log('kept', trash.map(e=>e.note));\n\"",
+        "node --input-type=module -e \"\nimport { trash, purgeTrash } from './src/trash.js';\nconst day = 24*60*60*1000;\nconst now = Date.now();\ntrash.push({note:'old', deletedAt: now - 40*day}, {note:'edge', deletedAt: now - 30*day}, {note:'recent', deletedAt: now - 2*day});\nconst purged = purgeTrash(now);\nconsole.log('purged', purged.map(e=>e.note));\nconsole.log('kept', trash.map(e=>e.note));\n\"",
+        "starbridge wait d_WS6hLtQb0t4PXAxY --timeout 5m"
+      ],
+      "final": "Done. `src/trash.js` now auto-purges the trash:\n\n- `RETENTION_DAYS = 30` — the owner picked 30 days on the card (`d_WS6hLtQb0t4PXAxY`), which is what I'd already set, so no change needed.\n- `remove()` sweeps stale entries on every delete, so no scheduler is required (src/trash.js:16).\n- `purgeTrash(now)` is exported for ops and tests; entries at or past the boundary are purged (verified: 30- and 40-day-old entries dropped, 2-day-old kept).",
+      "session": "ses_edd5a3d5dffe71Gsy4BogfDtKb",
+      "tokens": 20380,
+      "exit": 0,
+      "seconds": 93.535,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_WS6hLtQb0t4PXAxY --timeout 5m` (again on exit 2)."
+      ]
+    },
+    {
+      "commands": [],
+      "final": "Done. `src/trash.js` now auto-purges the trash:\n\n- `RETENTION_DAYS = 30` — the owner picked 30 days on the card (`d_WS6hLtQb0t4PXAxY`), which is what I'd already set, so no change needed.\n- `remove()` sweeps stale entries on every delete, so no scheduler is required (src/trash.js:16).\n- `purgeTrash(now)` is exported for ops and tests; entries at or past the boundary are purged (verified: 30- and 40-day-old entries dropped, 2-day-old kept).",
+      "session": "ses_edd5a3d5dffe71Gsy4BogfDtKb",
+      "tokens": 20380,
+      "exit": 0,
+      "seconds": 93.535,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_WS6hLtQb0t4PXAxY --timeout 5m` (again on exit 2)."
+      ]
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_WS6hLtQb0t4PXAxY",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-09T21:51:49Z",
+      "question": "How long should deleted notes stay in the trash before auto-purge?",
+      "context": "Trash keeps notes forever and storage doubled. The purge age sets what support can still restore.\n**7 days:** about $5/month; restores after week 1 fail.\n**30 days:** about $20/month; covers 85% of restore requests.\n**90 days:** about $60/month; covers nearly all restores.",
+      "options": [
+        "7 days",
+        "30 days",
+        "90 days"
+      ],
+      "recommended": "30 days",
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": ""
+      },
+      "replies": true,
+      "dir": {
+        "length": 2,
+        "head": "rqq8oFdQWCwOe3x_FNIRhCgjAiGanzDx_1TFaCAbC3Q"
+      }
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [],
+  "answered": "Answer to d_WS6hLtQb0t4PXAxY (How long should deleted notes stay in the trash before auto-purge?): 30 days",
+  "waiting": [
+    {
+      "v": 1,
+      "id": "w_dP-GK9HTtiVQz1YV",
+      "decisionId": "d_WS6hLtQb0t4PXAxY",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-09T21:51:49Z",
+      "state": "waiting",
+      "dir": {
+        "length": 2,
+        "head": "rqq8oFdQWCwOe3x_FNIRhCgjAiGanzDx_1TFaCAbC3Q"
+      }
+    }
+  ],
+  "permissions": [],
+  "judge": {
+    "cold": true,
+    "consequences": true,
+    "terminal": false,
+    "links": null,
+    "plain": true,
+    "skim": true,
+    "notes": "The final message reports the card's answer as settled and says the work is done, so it never asks the user a question or waits for a reply in the terminal."
+  }
+}

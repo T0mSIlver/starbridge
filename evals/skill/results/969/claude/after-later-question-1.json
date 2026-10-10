@@ -1,0 +1,88 @@
+{
+  "agent": "claude",
+  "model": "claude-haiku-5-5",
+  "arm": "after",
+  "scenario": "later-question",
+  "rep": 1,
+  "turns": [
+    {
+      "commands": [
+        "node scripts/lint.js; echo \"exit=$?\"",
+        "ls -la && cat RELEASE.md 2>/dev/null; echo \"---\"; cat scripts/lint.js",
+        "cat -n src/upload.js; echo \"---\"; ls src; cat NAMES.md",
+        "node scripts/lint.js; echo \"exit=$?\"",
+        "starbridge ask \\\n  --question 'What do we name next week’s release?' \\\n  --context 'RELEASE.md says \"Name: TBD\". It ships Monday.\n**Driftwood:** from NAMES.md\n**Lantern:** from NAMES.md\n**Juniper:** from NAMES.md\nOr type another name.' \\\n  --option 'Driftwood' --option 'Lantern' --option 'Juniper'",
+        "starbridge wait d_QoGwzK_h9g-pOBwg --timeout 5m --no-mark; echo \"exit=$?\""
+      ],
+      "final": "Lint is fixed and the release is named Driftwood in RELEASE.md.\n\n- **Lint:** `node scripts/lint.js` flagged two `var` declarations in `src/upload.js`. I changed both to `const`, since neither is reassigned. The script now exits 0.\n- **Release name:** I sent you a card through Starbridge with the three names from NAMES.md (Driftwood, Lantern, Juniper). You answered Driftwood, so `RELEASE.md` now reads `Name: Driftwood`. I did not commit anything.",
+      "session": "381d2204-a837-42c6-9c5c-a03bba536e08",
+      "tokens": 210188,
+      "costUsd": 0.0058187199999999994,
+      "exit": 0,
+      "seconds": 149.736,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_QoGwzK_h9g-pOBwg --timeout 5m` (again on exit 2)."
+      ]
+    },
+    {
+      "commands": [],
+      "final": "Lint is fixed and the release is named Driftwood in RELEASE.md.\n\n- **Lint:** `node scripts/lint.js` flagged two `var` declarations in `src/upload.js`. I changed both to `const`, since neither is reassigned. The script now exits 0.\n- **Release name:** I sent you a card through Starbridge with the three names from NAMES.md (Driftwood, Lantern, Juniper). You answered Driftwood, so `RELEASE.md` now reads `Name: Driftwood`. I did not commit anything.",
+      "session": "381d2204-a837-42c6-9c5c-a03bba536e08",
+      "tokens": 210188,
+      "costUsd": 0.0058187199999999994,
+      "exit": 0,
+      "seconds": 149.736,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_QoGwzK_h9g-pOBwg --timeout 5m` (again on exit 2)."
+      ]
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_QoGwzK_h9g-pOBwg",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-09T21:16:49Z",
+      "question": "What do we name next week’s release?",
+      "context": "RELEASE.md says \"Name: TBD\". It ships Monday.\n**Driftwood:** from NAMES.md\n**Lantern:** from NAMES.md\n**Juniper:** from NAMES.md\nOr type another name.",
+      "options": [
+        "Driftwood",
+        "Lantern",
+        "Juniper"
+      ],
+      "recommended": "Driftwood",
+      "agent": "claude-code",
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "381d2204-a837-42c6-9c5c-a03bba536e08",
+        "sessionTitle": "proj-94"
+      },
+      "replies": true,
+      "dir": {
+        "length": 2,
+        "head": "4YnV-6Usg96lMXJ5VoUx_RZ_GhlnrPvKr2HwLc50gGo"
+      }
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [],
+  "answered": "Answer to d_QoGwzK_h9g-pOBwg (What do we name next week’s release?): Driftwood",
+  "waiting": [],
+  "permissions": [],
+  "peakContext": 25693,
+  "usedTokens": 210188,
+  "judge": {
+    "cold": false,
+    "consequences": false,
+    "terminal": false,
+    "links": null,
+    "plain": true,
+    "skim": true,
+    "notes": "The card never says what changes with each option, and the final message reports the release as already named Driftwood, so the user's decision was never actually asked for in the terminal and the card's context shows the agent sent the question without that being a true open question."
+  }
+}

@@ -2,14 +2,8 @@ import { expect, test } from "bun:test";
 import { mkdtempSync, readdirSync, rmSync, utimesSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import {
-  answersOf,
-  claim,
-  hookInput,
-  isRun,
-  submitted,
-  waitingSessions,
-} from "../opencode/starbridge.ts";
+import { answersOf } from "../hooks/node.ts";
+import { claim, hookInput, isRun, submitted, waitingSessions } from "../opencode/starbridge.ts";
 
 test("only `opencode run` counts as run, whatever flags come first", () => {
   const exe = ["/usr/bin/opencode", "/$bunfs/root/src/index.js"];

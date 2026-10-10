@@ -510,11 +510,11 @@ export function opencodeAnswer(a: Answer, q: OpencodeQuestion): string[] {
 }
 
 /**
- * `starbridge hook question --agent opencode`, the plugin's input on stdin: posts each question
- * of one `question` tool call as a decision, already waiting, and once all are answered prints
- * `{"answers": [[label], ...]}` for opencode's reply route. Nothing else gets those answers: they
- * are `held`, recorded without the session, whose answer loop would submit them as a prompt; so
- * it goes to the server itself.
+ * `starbridge hook question --agent opencode|pi`, the plugin's input on stdin: posts each question
+ * of one call of opencode's `question` tool, or of Pi's `ask_user_question` (#966), as a decision,
+ * already waiting, and once all are answered prints `{"answers": [[label], ...]}`. Nothing else
+ * gets those answers: they are `held`, recorded without the session, whose answer loop would
+ * submit them as a prompt; so it goes to the server itself.
  * SIGTERM means the terminal answered or dismissed the call: the questions still open are
  * settled as answered elsewhere. Any error prints nothing, and the terminal's dialog decides.
  */
@@ -527,8 +527,9 @@ export async function hookQuestion(
   const watch = untilOrphaned(outer.signal);
   const ctx = { ...outer, signal: watch.signal };
   try {
-    if (opts.agent !== "opencode")
-      throw new UsageError(`--agent: opencode (got ${opts.agent ?? "nothing"})`);
+    const agent = opts.agent;
+    if (agent !== "opencode" && agent !== "pi")
+      throw new UsageError(`--agent: opencode or pi (got ${agent ?? "nothing"})`);
     const hook = JSON.parse(stdin) as QuestionHookInput;
     if (!Array.isArray(hook?.questions) || hook.questions.length === 0 || !hook.session_id)
       throw new UsageError("the hook input needs session_id and questions");
@@ -543,7 +544,7 @@ export async function hookQuestion(
         const sub: Ctx = { ...ctx, signal, out: (l) => lines.push(l), err: () => {} };
         const input: AskInput = {
           ...questionInput(q),
-          agent: "opencode",
+          agent,
           session: hook.session_id,
           project: projectName(hook.cwd || process.cwd()),
           held: true,

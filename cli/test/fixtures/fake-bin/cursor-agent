@@ -1,0 +1,3 @@
+#!/bin/sh
+# Stands in for cursor-agent: setup only checks that it is on the PATH.
+echo "cursor-agent $*" >>"$FAKE_LOG"

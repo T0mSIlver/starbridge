@@ -1,0 +1,124 @@
+{
+  "agent": "opencode",
+  "model": "zai-coding-plan/glm-5.3-flash",
+  "arm": "after",
+  "scenario": "merge-order",
+  "rep": 1,
+  "turns": [
+    {
+      "commands": [
+        "gh pr view 12 --json number,title,mergeable,mergeStateStatus,files",
+        "gh pr view 13 --json number,title,mergeable,mergeStateStatus,files",
+        "gh pr view 12 --json mergeable,mergeStateStatus --jq '.mergeable + \" / \" + .mergeStateStatus' && gh pr view 13 --json mergeable,mergeStateStatus --jq '.mergeable + \" / \" + .mergeStateStatus'",
+        "gh pr view 12 --json mergeable,mergeStateStatus; gh pr view 13 --json mergeable,mergeStateStatus",
+        "git remote -v && git fetch origin main pull/12/head:refs/tmp/pr12 pull/13/head:refs/tmp/pr13 2>&1",
+        "git ls-remote origin",
+        "gh pr diff 12",
+        "gh pr diff 13",
+        "starbridge ask \\\n  --question 'Merge #12 or #13 into main first?' \\\n  --context 'Both PRs are green and both edit the same line of src/api.ts (TIMEOUT_MS), so the merge order matters and it is your call.\n**#12 first:** resumable uploads land before the 20:00 CLI release tonight; #13 rebases onto it.\n**#13 first:** sync timeout fix ships to server users today; #12 rebases after and still lands before 20:00.' \\\n  --option '#12 first' --option '#13 first' --recommended '#12 first' \\\n  --link https://github.com/acme/notes/pull/12 \\\n  --link https://github.com/acme/notes/pull/13 \\\n  --waiting",
+        "starbridge wait d_NbDGElPYI8Xw4C_g --timeout 5m"
+      ],
+      "final": "Both merged:\n\n- **#12** (resumable uploads) — squashed and merged first, per the owner's tap on the card.\n- **#13** (sync timeout fix) — merged cleanly after; no rebase needed.\n\nMain is set for tonight's 20:00 CLI release.",
+      "session": "ses_edd929130ffevdRKT2y4YWJYqj",
+      "tokens": 8499,
+      "exit": 0,
+      "seconds": 111.322,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_NbDGElPYI8Xw4C_g --timeout 5m` (again on exit 2)."
+      ]
+    },
+    {
+      "commands": [
+        "gh pr merge 12 --squash",
+        "gh pr view 13",
+        "gh pr merge 13 --squash"
+      ],
+      "final": "Both merged:\n\n- **#12** (resumable uploads) — squashed and merged first, per the owner's tap on the card.\n- **#13** (sync timeout fix) — merged cleanly after; no rebase needed.\n\nMain is set for tonight's 20:00 CLI release.",
+      "session": "ses_edd929130ffevdRKT2y4YWJYqj",
+      "tokens": 8499,
+      "exit": 0,
+      "seconds": 111.322,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_NbDGElPYI8Xw4C_g --timeout 5m` (again on exit 2)."
+      ]
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_NbDGElPYI8Xw4C_g",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-09T20:50:37Z",
+      "question": "Merge #12 or #13 into main first?",
+      "context": "Both PRs are green and both edit the same line of src/api.ts (TIMEOUT_MS), so the merge order matters and it is your call.\n**#12 first:** resumable uploads land before the 20:00 CLI release tonight; #13 rebases onto it.\n**#13 first:** sync timeout fix ships to server users today; #12 rebases after and still lands before 20:00.",
+      "options": [
+        "#12 first",
+        "#13 first"
+      ],
+      "recommended": "#12 first",
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": ""
+      },
+      "links": [
+        {
+          "url": "https://github.com/acme/notes/pull/12"
+        },
+        {
+          "url": "https://github.com/acme/notes/pull/13"
+        }
+      ],
+      "replies": true,
+      "dir": {
+        "length": 2,
+        "head": "QDLZ6qvSkpanEKnwy1LHyW-7q--HTWMLiQztP_C_HME"
+      }
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [
+    "gh pr view 12 --json number,title,mergeable,mergeStateStatus,files",
+    "gh pr view 13 --json number,title,mergeable,mergeStateStatus,files",
+    "gh pr view 12 --json mergeable,mergeStateStatus --jq .mergeable + \" / \" + .mergeStateStatus",
+    "gh pr view 13 --json mergeable,mergeStateStatus --jq .mergeable + \" / \" + .mergeStateStatus",
+    "gh pr view 12 --json mergeable,mergeStateStatus",
+    "gh pr view 13 --json mergeable,mergeStateStatus",
+    "gh pr diff 12",
+    "gh pr diff 13",
+    "gh pr merge 12 --squash",
+    "gh pr view 13",
+    "gh pr merge 13 --squash"
+  ],
+  "answered": "Answer to d_NbDGElPYI8Xw4C_g (Merge #12 or #13 into main first?): #12 first",
+  "waiting": [
+    {
+      "v": 1,
+      "id": "w_PI4PiBVCcxe0gBLg",
+      "decisionId": "d_NbDGElPYI8Xw4C_g",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-09T20:50:37Z",
+      "state": "waiting",
+      "dir": {
+        "length": 2,
+        "head": "QDLZ6qvSkpanEKnwy1LHyW-7q--HTWMLiQztP_C_HME"
+      }
+    }
+  ],
+  "permissions": [],
+  "judge": {
+    "cold": true,
+    "consequences": true,
+    "terminal": false,
+    "links": true,
+    "plain": true,
+    "skim": true,
+    "notes": "The final terminal message reports the merge outcome instead of asking the user anything, so the decision was never surfaced in the terminal as a question awaiting reply."
+  }
+}

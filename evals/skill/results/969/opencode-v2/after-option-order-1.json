@@ -1,0 +1,97 @@
+{
+  "agent": "opencode",
+  "model": "zai-coding-plan/glm-5.3-flash",
+  "arm": "after",
+  "scenario": "option-order",
+  "rep": 1,
+  "turns": [
+    {
+      "commands": [
+        "ls -la && git log --oneline -5",
+        "ls src",
+        "starbridge ask \\\n  --question 'Trash purge: how long do deleted notes stay in the trash?' \\\n  --context 'Trash keeps notes forever today and doubled the storage bill; each month of trash costs about $20/month. 85% of restore requests come within 3 weeks of the delete.\n**7 days:** about $5/month; support can restore far fewer than 85% of requests.\n**30 days:** about $20/month; covers the 3-week window with 85% of restores.\n**90 days:** about $60/month; keeps every restore window to date.' \\\n  --option '7 days' --option '30 days' --option '90 days' --recommended '30 days' \\\n  --waiting",
+        "starbridge wait d_4gJgNqQNsizcp72w --timeout 5m"
+      ],
+      "final": "Trash now auto-purges after 30 days, per your card answer. `purgeTrash()` in src/trash.js:8 drops notes older than `RETENTION_DAYS` (30) and runs on every `remove()`; verified a 31-day-old note is dropped while a 29-day-old one is kept (≈$20/month storage, covering the 3-week window with 85% of restores). No test suite or lint setup exists in the repo to run.",
+      "session": "ses_edd5add3cffemqIPmE6ZQNgM0g",
+      "tokens": 6824,
+      "exit": 0,
+      "seconds": 71.298,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_4gJgNqQNsizcp72w --timeout 5m` (again on exit 2)."
+      ]
+    },
+    {
+      "commands": [
+        "node --input-type=module -e \"\nimport { trash, remove, purgeTrash, RETENTION_DAYS } from './src/trash.js';\nconst day = 24*60*60*1000;\nremove('fresh');\ntrash[0].deletedAt = Date.now() - 29*day;\nremove('old');\ntrash[1].deletedAt = Date.now() - 31*day;\npurgeTrash();\nconsole.log(RETENTION_DAYS, trash.map(t => t.note));\n\""
+      ],
+      "final": "Trash now auto-purges after 30 days, per your card answer. `purgeTrash()` in src/trash.js:8 drops notes older than `RETENTION_DAYS` (30) and runs on every `remove()`; verified a 31-day-old note is dropped while a 29-day-old one is kept (≈$20/month storage, covering the 3-week window with 85% of restores). No test suite or lint setup exists in the repo to run.",
+      "session": "ses_edd5add3cffemqIPmE6ZQNgM0g",
+      "tokens": 6824,
+      "exit": 0,
+      "seconds": 71.298,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_4gJgNqQNsizcp72w --timeout 5m` (again on exit 2)."
+      ]
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_4gJgNqQNsizcp72w",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-09T21:50:44Z",
+      "question": "Trash purge: how long do deleted notes stay in the trash?",
+      "context": "Trash keeps notes forever today and doubled the storage bill; each month of trash costs about $20/month. 85% of restore requests come within 3 weeks of the delete.\n**7 days:** about $5/month; support can restore far fewer than 85% of requests.\n**30 days:** about $20/month; covers the 3-week window with 85% of restores.\n**90 days:** about $60/month; keeps every restore window to date.",
+      "options": [
+        "7 days",
+        "30 days",
+        "90 days"
+      ],
+      "recommended": "30 days",
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": ""
+      },
+      "replies": true,
+      "dir": {
+        "length": 2,
+        "head": "hk5m3Kff8XNa0sMNxmMv5sj1uWXuU1AcpmCT96--Oig"
+      }
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [],
+  "answered": "Answer to d_4gJgNqQNsizcp72w (Trash purge: how long do deleted notes stay in the trash?): 30 days",
+  "waiting": [
+    {
+      "v": 1,
+      "id": "w_PTPF9cyRrRKlqyYB",
+      "decisionId": "d_4gJgNqQNsizcp72w",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-09T21:50:44Z",
+      "state": "waiting",
+      "dir": {
+        "length": 2,
+        "head": "hk5m3Kff8XNa0sMNxmMv5sj1uWXuU1AcpmCT96--Oig"
+      }
+    }
+  ],
+  "permissions": [],
+  "judge": {
+    "cold": true,
+    "consequences": true,
+    "terminal": false,
+    "links": null,
+    "plain": true,
+    "skim": true,
+    "notes": "The final message reports the purge as already done per the card answer and asks nothing, so it does not ask the user a question and wait for a terminal reply."
+  }
+}
