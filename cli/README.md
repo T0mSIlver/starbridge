@@ -72,7 +72,7 @@ question; steps 1 and 3 say when it asks more. A rerun repairs only what is miss
 4. It installs and starts the background service, `starbridge agent`, as a systemd user unit, a
    launchd agent, or on Windows a Scheduled Task that starts at logon without administrator
    rights and logs to `%LOCALAPPDATA%\starbridge\agent.log`.
-5. It uploads a first quota snapshot, then offers to send a test question to your phone and
+5. It uploads a first quota snapshot, then offers to send a test question to your devices and
    prints your answer.
 
 [Permission prompts](#permission-prompts) stay in the terminal unless you turn them on with
@@ -170,10 +170,10 @@ starbridge ask --question "Merge #12 now?" \
 - Anywhere else, the agent waits for it with `starbridge wait <id> --timeout 5m`, which exits
   with code 2 when the time runs out.
 
-To check the path to your phone yourself, ask and wait in one command:
+To check the path to your devices yourself, ask and wait in one command:
 
 ```bash
-starbridge ask --question "Does this reach my phone?" --option Yes --option No --wait
+starbridge ask --question "Does this reach me?" --option Yes --option No --wait
 ```
 
 When the agent runs out of other work, `starbridge waiting <id>` shows "Waiting for you" on
@@ -232,7 +232,7 @@ To upload without the service:
 starbridge quota push --provider claude --provider codex
 ```
 
-### Quiet the phone while you're here
+### Quiet your other devices while you're here
 
 On a desktop or laptop you work at, turn on presence:
 
@@ -242,9 +242,9 @@ starbridge config presence on
 
 While this machine's screen is unlocked and had keyboard or mouse input in the last minute,
 notifications on your other devices wait for the time set in Starbridge's Settings (30 s by
-default) and come only if the question is still open, so one you answer here doesn't buzz your
-phone. The question itself shows everywhere at once. The machine reads its lock and idle time
-itself and tells the server only yes or no. It works on macOS, Windows, and Linux under GNOME
+default) and come only if the question is still open, so one you answer here doesn't buzz them.
+The question itself shows everywhere at once. The machine reads its lock and idle time itself
+and tells the server only yes or no. It works on macOS, Windows, and Linux under GNOME
 or X11 with `xprintidle`; a machine with no screen sends nothing.
 
 ### Permission prompts
