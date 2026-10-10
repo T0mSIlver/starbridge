@@ -131,10 +131,11 @@ jobs:
 
   # The macOS app, signed with the Developer ID and notarized. Off until the repository variable
   # DESKTOP_RELEASE is true, which needs the desktop-release environment's secrets. Its
-  # latest-mac.yml is what installed apps read to update (desktop/electron-builder.yml).
+  # latest-mac.yml is what installed apps read to update (desktop/electron-builder.yml). That
+  # environment admits only main and v* tags, so a manual run from another branch skips the app.
   desktop:
     needs: version
-    if: ${{ !inputs.npm_only && vars.DESKTOP_RELEASE == 'true' }}
+    if: ${{ !inputs.npm_only && vars.DESKTOP_RELEASE == 'true' && (startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main') }}
     runs-on: macos-15
     environment: desktop-release
     defaults:
