@@ -1,0 +1,103 @@
+{
+  "agent": "claude",
+  "model": "claude-haiku-5-5",
+  "arm": "after",
+  "scenario": "option-order",
+  "rep": 2,
+  "turns": [
+    {
+      "commands": [
+        "git ls-files && echo --- && rg -n -i \"trash\" --hidden -g '!.git' | head -100",
+        "cat NOTES.md && echo --- && cat src/trash.js && echo --- && git log --oneline | head",
+        "starbridge ask \\\n  --question 'Keep deleted notes in trash for how many days?' \\\n  --context '85% of restore requests arrive within 3 weeks of delete.\n**7 days:** cheapest, but misses most restores (about $5/month of trash).\n**30 days:** covers the 3-week window with margin (about $20/month of trash).\n**90 days:** safest for support, about $60/month of trash.' \\\n  --option '7 days' --option '30 days' --option '90 days' --recommended '30 days' \\\n  --waiting",
+        "starbridge wait d_NxYtqWXKLXoMkFJt --timeout 5m; echo \"exit=$?\""
+      ],
+      "final": "Trash now purges automatically after 30 days, the value the owner chose through the Starbridge card.\n\nThe change is in `src/trash.js`:\n- `RETENTION_MS` is 30 days.\n- `purgeExpired(retentionMs)` removes entries older than the cutoff.\n- `remove()` runs the purge before each delete, so expired notes leave the trash whenever a note is deleted. The repo has no scheduler, so there is no timer-based purge.\n\nA quick check confirmed that a 31-day-old entry is purged and a 2-day-old entry is kept. I didn't run any test suite because the repo has none.\n\nThings to know:\n- The purge only runs on delete. If no notes are deleted for a long time, expired entries stay until the next delete. A timer or cron job would fix that, but the repo has nothing to hook one into.\n- The trash is an in-memory array, so it resets when the process restarts. I didn't change that.\n- The 30-day choice trades cost against restores: 85% of restore requests arrive within 3 weeks, and the cost is about $20 per month of trash at current volume.",
+      "session": "b90187ba-fae5-4d68-bde5-7133e60c9709",
+      "tokens": 237339,
+      "costUsd": 0.00696047,
+      "exit": 0,
+      "seconds": 38.191,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_NxYtqWXKLXoMkFJt --timeout 5m` (again on exit 2)."
+      ]
+    },
+    {
+      "commands": [
+        "node --input-type=module -e \"\nimport { trash, remove, purgeExpired, RETENTION_MS } from './src/trash.js';\nconst DAY = 86400000;\ntrash.push({ note: 'old', deletedAt: Date.now() - 31 * DAY });\ntrash.push({ note: 'recent', deletedAt: Date.now() - 2 * DAY });\nremove('new');\nconsole.log(trash.map(t => t.note), RETENTION_MS);\n\""
+      ],
+      "final": "Trash now purges automatically after 30 days, the value the owner chose through the Starbridge card.\n\nThe change is in `src/trash.js`:\n- `RETENTION_MS` is 30 days.\n- `purgeExpired(retentionMs)` removes entries older than the cutoff.\n- `remove()` runs the purge before each delete, so expired notes leave the trash whenever a note is deleted. The repo has no scheduler, so there is no timer-based purge.\n\nA quick check confirmed that a 31-day-old entry is purged and a 2-day-old entry is kept. I didn't run any test suite because the repo has none.\n\nThings to know:\n- The purge only runs on delete. If no notes are deleted for a long time, expired entries stay until the next delete. A timer or cron job would fix that, but the repo has nothing to hook one into.\n- The trash is an in-memory array, so it resets when the process restarts. I didn't change that.\n- The 30-day choice trades cost against restores: 85% of restore requests arrive within 3 weeks, and the cost is about $20 per month of trash at current volume.",
+      "session": "b90187ba-fae5-4d68-bde5-7133e60c9709",
+      "tokens": 237339,
+      "costUsd": 0.00696047,
+      "exit": 0,
+      "seconds": 38.191,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_NxYtqWXKLXoMkFJt --timeout 5m` (again on exit 2)."
+      ]
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_NxYtqWXKLXoMkFJt",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-09T21:16:13Z",
+      "question": "Keep deleted notes in trash for how many days?",
+      "context": "85% of restore requests arrive within 3 weeks of delete.\n**7 days:** cheapest, but misses most restores (about $5/month of trash).\n**30 days:** covers the 3-week window with margin (about $20/month of trash).\n**90 days:** safest for support, about $60/month of trash.",
+      "options": [
+        "7 days",
+        "30 days",
+        "90 days"
+      ],
+      "recommended": "30 days",
+      "agent": "claude-code",
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "b90187ba-fae5-4d68-bde5-7133e60c9709",
+        "sessionTitle": "proj-e7"
+      },
+      "replies": true,
+      "dir": {
+        "length": 2,
+        "head": "hTu0kJyFJ0TkvzqCiJpmcQbEShEiRQVlvgUkIYbov14"
+      }
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [],
+  "answered": "Answer to d_NxYtqWXKLXoMkFJt (Keep deleted notes in trash for how many days?): 30 days",
+  "waiting": [
+    {
+      "v": 1,
+      "id": "w_FhLQoAgek8g2M6X8",
+      "decisionId": "d_NxYtqWXKLXoMkFJt",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-09T21:16:13Z",
+      "state": "waiting",
+      "dir": {
+        "length": 2,
+        "head": "hTu0kJyFJ0TkvzqCiJpmcQbEShEiRQVlvgUkIYbov14"
+      }
+    }
+  ],
+  "permissions": [],
+  "peakContext": 27046,
+  "usedTokens": 237339,
+  "judge": {
+    "cold": true,
+    "consequences": true,
+    "terminal": false,
+    "links": null,
+    "plain": true,
+    "skim": true,
+    "notes": "The card's context text never says 30 days is the recommendation, so a phone reader has to infer it from a separate field the card doesn't display in its text."
+  }
+}

@@ -700,6 +700,14 @@ line, the safe side: at worst a prompt repeats an answer the agent already read.
   that forces the choice, then one line per option saying what it changes. Links and images only
   when they help; one question per card. The first option is
   the agent's default (#191).
+- A card reads in seconds on a phone (#969): the owner should decide in one read, without a
+  scroll. On a 360 px screen the context runs about 40 characters a line and about 450 fit above
+  the options, and a notification shows only the question and the context's first line. So the
+  question stays within 70 characters, the context within 450, starting with the fact that
+  forces the choice; each option gets a line led by its label in bold unless the line would say
+  nothing (names to pick from), and labels stay within 18 characters, where buttons still sit
+  side by side. Plain words and numbers, after Tom's unslop rules. In 225 cards agents posted before this, the context's median was 430 characters and
+  one in ten hid its options.
 - Agents also wrap, unasked, any command that blocks the owner or needs them at the machine, and
   always give a reason (#60).
 - A card cannot approve an action the agent's own guidelines say needs the owner's yes in the
@@ -1072,8 +1080,12 @@ first window, so a provider with a window running out leads.
   rotation and process death, on the web until the page reloads. The web's detail moves between
   the phone and wide layouts as the window is resized, and a draft kept in the field alone was
   lost there.
-- **Context** renders line breaks and code, inline and fenced. Other Markdown shows as typed; the
-  skill says so rather than the clients growing a renderer.
+- **Context** (#969) renders the subset the skill names, the same on the web, the desktop app and
+  Android: each line on its own, blank lines only separating; `**bold**`; code, inline and
+  fenced; `-` and `1.` lists with a hanging indent; links, bare or `[text](https://…)`. A `#`
+  heading is a bold line. Anything else shows as typed. `packages/protocol`'s `parseContext`
+  parses it, ported to Kotlin with shared vectors, and notifications show the same text plain.
+  Each line on its own makes a line per option read as a list; bold lets the labels lead it.
 - **Revoked machines.** Their items leave the Inbox and their notifications close (#344).
 - **Clock** (#161): System, 12-hour or 24-hour, per device. UI words stay English.
 - **Images** open a full-screen viewer (zoom, pan, swipe or arrow keys between images) and carry

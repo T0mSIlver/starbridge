@@ -1,0 +1,90 @@
+{
+  "agent": "claude",
+  "model": "claude-haiku-5-5",
+  "arm": "before",
+  "scenario": "later-question",
+  "rep": 1,
+  "turns": [
+    {
+      "commands": [
+        "node scripts/lint.js; echo \"exit=$?\"",
+        "node scripts/lint.js; echo \"exit=$?\"",
+        "ls && cat RELEASE.md 2>/dev/null | head -40; git tag | tail -5",
+        "cat NAMES.md",
+        "starbridge ask \\\n  --question 'What should next week’s release be called?' \\\n  --context 'RELEASE.md says “Name: TBD” and it ships Monday (2026-10-12). Contents: resumable uploads, faster sync on slow links.\nDriftwood: from the ideas list in NAMES.md.\nLantern: from the ideas list in NAMES.md.\nJuniper: from the ideas list in NAMES.md.\nOr type another name.' \\\n  --option 'Driftwood' --option 'Lantern' --option 'Juniper'",
+        "starbridge wait d_LBxrNsH1jzlh7QL1 --timeout 5m --no-mark; echo \"exit=$?\""
+      ],
+      "final": "Lint passes, and the release is named Driftwood in RELEASE.md.\n\n- **Lint:** `node scripts/lint.js` flagged two `var` declarations in `src/upload.js`. Neither variable is reassigned, so I changed both to `const`. The script now exits 0.\n- **Release name:** I sent you a Starbridge card with the three names from `NAMES.md` (Driftwood, Lantern, Juniper). You answered Driftwood, so I changed `Name: TBD` to `Name: Driftwood` in `RELEASE.md`. Nothing is committed.",
+      "session": "48d48d0a-6e64-4b01-9d91-760a5649d8f7",
+      "tokens": 231814,
+      "costUsd": 0.006370970000000001,
+      "exit": 0,
+      "seconds": 179.609,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_LBxrNsH1jzlh7QL1 --timeout 5m` (again on exit 2)."
+      ]
+    },
+    {
+      "commands": [
+        "node scripts/lint.js; echo \"lint exit=$?\"; git status --short"
+      ],
+      "final": "Lint passes, and the release is named Driftwood in RELEASE.md.\n\n- **Lint:** `node scripts/lint.js` flagged two `var` declarations in `src/upload.js`. Neither variable is reassigned, so I changed both to `const`. The script now exits 0.\n- **Release name:** I sent you a Starbridge card with the three names from `NAMES.md` (Driftwood, Lantern, Juniper). You answered Driftwood, so I changed `Name: TBD` to `Name: Driftwood` in `RELEASE.md`. Nothing is committed.",
+      "session": "48d48d0a-6e64-4b01-9d91-760a5649d8f7",
+      "tokens": 231814,
+      "costUsd": 0.006370970000000001,
+      "exit": 0,
+      "seconds": 179.609,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_LBxrNsH1jzlh7QL1 --timeout 5m` (again on exit 2)."
+      ]
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_LBxrNsH1jzlh7QL1",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-09T21:16:49Z",
+      "question": "What should next week’s release be called?",
+      "context": "RELEASE.md says “Name: TBD” and it ships Monday (2026-10-12). Contents: resumable uploads, faster sync on slow links.\nDriftwood: from the ideas list in NAMES.md.\nLantern: from the ideas list in NAMES.md.\nJuniper: from the ideas list in NAMES.md.\nOr type another name.",
+      "options": [
+        "Driftwood",
+        "Lantern",
+        "Juniper"
+      ],
+      "recommended": "Driftwood",
+      "agent": "claude-code",
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "48d48d0a-6e64-4b01-9d91-760a5649d8f7",
+        "sessionTitle": "proj-9e"
+      },
+      "replies": true,
+      "dir": {
+        "length": 2,
+        "head": "fVhyVDXeOpYrH6D09FSakk1kl6JwC5FdFMO0xoBJJuc"
+      }
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [],
+  "answered": "Answer to d_LBxrNsH1jzlh7QL1 (What should next week’s release be called?): Driftwood",
+  "waiting": [],
+  "permissions": [],
+  "peakContext": 25895,
+  "usedTokens": 231814,
+  "judge": {
+    "cold": true,
+    "consequences": false,
+    "terminal": false,
+    "links": null,
+    "plain": true,
+    "skim": true,
+    "notes": "The card never says that the chosen name gets written into RELEASE.md, and the options are just bare names with no note of what each one changes."
+  }
+}

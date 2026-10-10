@@ -1,0 +1,98 @@
+{
+  "agent": "opencode",
+  "model": "zai-coding-plan/glm-5.3-flash",
+  "arm": "before",
+  "scenario": "option-order",
+  "rep": 1,
+  "turns": [
+    {
+      "commands": [
+        "git log --oneline -5 && git status --short",
+        "starbridge ask \\\n  --question 'How long should deleted notes stay in the trash before the automatic purge?' \\\n  --context 'Trash never purges today and the storage bill doubled.\nSupport: 85% of restore requests come within 3 weeks of the delete.\n7 days: ~$5/mo storage, misses most restore requests.\n30 days: ~$20/mo, covers the 3-week window and 85% of restores.\n90 days: ~$60/mo, covers nearly all restores.' \\\n  --option '7 days' \\\n  --option '30 days' --recommended \\\n  --option '90 days' \\\n  --waiting",
+        "starbridge ask --help",
+        "starbridge --help 2>&1; starbridge 2>&1",
+        "starbridge ask \\\n  --question 'How long should deleted notes stay in the trash before the automatic purge?' \\\n  --context 'Trash never purges today and the storage bill doubled.\nSupport: 85% of restore requests come within 3 weeks of the delete.\n7 days: ~$5/mo storage, misses most restore requests.\n30 days: ~$20/mo, covers the 3-week window and 85% of restores.\n90 days: ~$60/mo, covers nearly all restores.' \\\n  --option '7 days' \\\n  --option '30 days' \\\n  --option '90 days' \\\n  --recommended '30 days' \\\n  --waiting",
+        "node --input-type=module -e \"\nimport { trash, remove, purgeExpiredTrash } from './src/trash.js';\nconst day = 24*60*60*1000;\nremove({id:1});\ntrash[0].deletedAt = Date.now() - 40*day;\nremove({id:2});\ntrash[1].deletedAt = Date.now() - 10*day;\nconst purged = purgeExpiredTrash();\nconsole.log('purged:', purged.map(e => e.note.id), 'kept:', trash.map(e => e.note.id));\n\"",
+        "starbridge wait d_aG2lNMcw2I_1tgf0 --timeout 5m"
+      ],
+      "final": "Owner confirmed 30 days — matching the default I set.\n\nDone: `src/trash.js` now auto-purges the trash. `purgeExpiredTrash()` (src/trash.js:9) drops entries older than `TRASH_RETENTION_DAYS = 30` and returns what was purged; call it on a schedule (cron/tick) to keep the bill down. Verified: a 40-day-old entry is purged, a 10-day-old one kept.",
+      "session": "ses_edd7ecf3cffe3FHTKo5w0ZBaV1",
+      "tokens": 12190,
+      "exit": 0,
+      "seconds": 74.957,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_aG2lNMcw2I_1tgf0 --timeout 5m` (again on exit 2)."
+      ]
+    },
+    {
+      "commands": [],
+      "final": "Owner confirmed 30 days — matching the default I set.\n\nDone: `src/trash.js` now auto-purges the trash. `purgeExpiredTrash()` (src/trash.js:9) drops entries older than `TRASH_RETENTION_DAYS = 30` and returns what was purged; call it on a schedule (cron/tick) to keep the bill down. Verified: a 40-day-old entry is purged, a 10-day-old one kept.",
+      "session": "ses_edd7ecf3cffe3FHTKo5w0ZBaV1",
+      "tokens": 12190,
+      "exit": 0,
+      "seconds": 74.957,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_aG2lNMcw2I_1tgf0 --timeout 5m` (again on exit 2)."
+      ]
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_aG2lNMcw2I_1tgf0",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-09T21:11:42Z",
+      "question": "How long should deleted notes stay in the trash before the automatic purge?",
+      "context": "Trash never purges today and the storage bill doubled.\nSupport: 85% of restore requests come within 3 weeks of the delete.\n7 days: ~$5/mo storage, misses most restore requests.\n30 days: ~$20/mo, covers the 3-week window and 85% of restores.\n90 days: ~$60/mo, covers nearly all restores.",
+      "options": [
+        "7 days",
+        "30 days",
+        "90 days"
+      ],
+      "recommended": "30 days",
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": ""
+      },
+      "replies": true,
+      "dir": {
+        "length": 2,
+        "head": "AGiFsiJvqanQoVpgZ4ER7CM7Y7F_h_xLtIS_qDoYs_c"
+      }
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [],
+  "answered": "Answer to d_aG2lNMcw2I_1tgf0 (How long should deleted notes stay in the trash before the automatic purge?): 30 days",
+  "waiting": [
+    {
+      "v": 1,
+      "id": "w__X1GFKq22bjo-dm-",
+      "decisionId": "d_aG2lNMcw2I_1tgf0",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-09T21:11:42Z",
+      "state": "waiting",
+      "dir": {
+        "length": 2,
+        "head": "AGiFsiJvqanQoVpgZ4ER7CM7Y7F_h_xLtIS_qDoYs_c"
+      }
+    }
+  ],
+  "permissions": [],
+  "judge": {
+    "cold": true,
+    "consequences": true,
+    "terminal": false,
+    "links": null,
+    "plain": true,
+    "skim": true,
+    "notes": "The final message reports the purge as done and never asks the user a question or waits for a reply in the terminal."
+  }
+}
