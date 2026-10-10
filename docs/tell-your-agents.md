@@ -11,18 +11,18 @@ instruction files, in your words. Starbridge never writes to them.
 | | Claude Code | Codex | Pi | opencode | Cursor |
 |---|---|---|---|---|---|
 | Questions | ✓ | ✓ | ✓ | ✓ | ✓ |
-| Answers into the live session | ✓ | ✓¹ | ✓³ | ✓⁵ | ✓¹⁰ |
+| Answers into the live session | ✓ | ✓¹ | ✓³ | ✓⁵ | ✓¹¹ |
 | "Waiting for you" | ✓ | ✓ | ✓ | ✓ | ✓ |
 | Runs | ✓ | ✓⁸ | ✓ | ✓ | ✓ |
-| Permission prompts | Opt-in | Opt-in⁹ | Opt-in⁴ | Opt-in⁶ | No¹² |
-| The agent's own ask tool | ✓² | n/a | n/a | ✓⁷ | No¹¹ |
+| Permission prompts | Opt-in | Opt-in⁹ | Opt-in⁴ | Opt-in⁶ | No¹³ |
+| The agent's own ask tool | ✓² | ✓¹⁰ | n/a | ✓⁷ | No¹² |
 
 ¹ In interactive sessions, when `starbridge agent` runs (Codex CLI 0.160 or
 later). In `codex exec`, the agent waits for the answer with `starbridge wait`
 before it ends its turn.
 
 ² `AskUserQuestion` asks in Claude Code's picker and on your devices at once;
-the first answer wins. Codex and Pi have no ask tool of their own.
+the first answer wins. Pi has no ask tool of its own.
 
 ³ In the interactive TUI and RPC mode, through `starbridge agent` or the CLI.
 In `pi -p`, the agent waits for the answer with `starbridge wait` before it
@@ -66,16 +66,20 @@ machine with no screen, each prompt waits up to 10 minutes for your devices
 before Codex asks in the terminal. Your devices can allow a call once or deny
 it. Codex asks you once, at its next launch, to trust the plugin's hooks.
 
-¹⁰ In `cursor-agent` chats, when the chat ends its turn with a question open,
+¹⁰ On macOS and Linux, Codex's own question tool, which it uses in Plan mode,
+asks in the terminal and on your devices at once; the first answer wins. A
+typed reply reaches Codex as a note, as one typed in the terminal does.
+
+¹¹ In `cursor-agent` chats, when the chat ends its turn with a question open,
 Cursor waits up to 10 minutes for your answer, showing the chat as busy, and
 your answer comes in as the next prompt. Past that, in `cursor-agent -p`, or in
 the Cursor IDE, which doesn't tell commands which chat runs them, the agent
 waits for the answer with `starbridge wait`.
 
-¹¹ Cursor's `askQuestion` tool runs no hooks, so nothing can show it on your
+¹² Cursor's `askQuestion` tool runs no hooks, so nothing can show it on your
 devices. The rules tell the agent to ask through `starbridge ask` instead.
 
-¹² Cursor shows its own prompt even when a hook allows the call, so an Allow
+¹³ Cursor shows its own prompt even when a hook allows the call, so an Allow
 from your phone could not take effect. Cursor's prompts stay at the keyboard.
 
 `starbridge setup` installs Starbridge in each agent it finds, and prints one

@@ -34,6 +34,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { AgentLoop, socketPath } from "../hooks/agent.ts";
 import {
+  answersOf,
   hookCommand,
   permissionHook,
   runCommand,
@@ -138,20 +139,6 @@ function rule(): string | undefined {
  */
 export function isRun(argv: string[]): boolean {
   return argv.slice(2).includes("run");
-}
-
-/** The answers `starbridge hook question` printed, one array of labels per question. */
-export function answersOf(stdout: string, count: number): string[][] | undefined {
-  try {
-    const a = (JSON.parse(stdout) as { answers?: unknown }).answers;
-    if (
-      Array.isArray(a) &&
-      a.length === count &&
-      a.every((x) => Array.isArray(x) && x.every((l) => typeof l === "string"))
-    )
-      return a as string[][];
-  } catch {}
-  return undefined;
 }
 
 /**

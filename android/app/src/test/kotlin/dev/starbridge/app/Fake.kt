@@ -221,6 +221,31 @@ class Fake(private val now: Instant) {
     )
 
     /** No options: the sheet takes a reply. */
+    // Every part of the context subset (#969), as a card the skill asks for.
+    val formatted = Decision(
+        id = "d10",
+        question = "Which Umami events go in for launch week?",
+        context = """
+            Docs views and store clicks already count, with no code. See https://github.com/acme/web/pull/561.
+            **All 4:** web only, no content or account data:
+            - `first-keys`: a new account saved its recovery key
+            - `second-device`: a phone or a second browser joined the account
+            1. kind on `first-answer`
+            **Only 2:** `second-device` and `error-screen`.
+            ## None
+            Keep [#561](https://github.com/acme/web/pull/561) as is; *em* and a lone ` show as typed.
+            ```
+            umami events --since 7d
+            ```
+        """.trimIndent(),
+        options = listOf("All 4", "Only 2", "None"),
+        recommended = "All 4",
+        source = devBox,
+        createdAt = ago(3),
+        agent = "claude-code",
+        replies = true,
+    )
+
     val freeText = Decision(
         id = "d7",
         question = "Which Hetzner location for the VPS?",

@@ -31,6 +31,7 @@ import {
   installTarball,
   KEYS,
   PIN,
+  probeSet,
   tarballKey,
   updateCodexbar,
 } from "../src/setup/codexbar";
@@ -194,7 +195,7 @@ test("setup --yes installs the agent, the plugins and the skills, and uploads a 
   expect(m.calls()).toContain(`codex plugin marketplace add ${market}`);
   expect(m.calls()).toContain("codex plugin add starbridge@starbridge-cli");
   const hooks = readFileSync(
-    join(m.home, ".codex/plugins/cache/starbridge-cli/starbridge/1.1.0/hooks/hooks.json"),
+    join(m.home, ".codex/plugins/cache/starbridge-cli/starbridge/1.2.0/hooks/hooks.json"),
     "utf8",
   );
   const command = (event: string) => JSON.parse(hooks).hooks[event][0].hooks[0].command;
@@ -203,6 +204,8 @@ test("setup --yes installs the agent, the plugins and the skills, and uploads a 
   // Codex's approvals, through the same CLI wrapper as Claude Code's plugin (#950).
   expect(command("PermissionRequest")).toBe(`${script("cli.sh")} hook permission --agent codex`);
   expect(command("Interrupt")).toBe(`${script("cli.sh")} hook settle --agent codex`);
+  // Codex's own question tool, raced on the devices (#951).
+  expect(command("PreToolUse")).toBe(`${script("cli.sh")} hook question --agent codex`);
   expect(codexPlugin(m.sys)).toBe("current");
   // opencode gets the skill and the plugin with the code it imports, in the repository's layout.
   const oc = join(m.home, ".config/opencode");
@@ -936,6 +939,29 @@ test("a CodexBar the system cannot start says what it needs, not to sign in (#77
   ]);
 });
 
+test("setup probes the plan of each agent it finds (#963)", () => {
+  const home = mkdtempSync(join(tmpdir(), "starbridge-home-"));
+  try {
+    const sys = (platform: NodeJS.Platform): Sys => ({
+      ...linuxSys(testCtx({ PATH: "/nonexistent" }), home),
+      platform,
+    });
+    expect(probeSet(sys("linux"), [], [])).toEqual([]);
+    for (const d of [".cursor", ".gemini/antigravity-cli", ".local/share/opencode"])
+      mkdirSync(join(home, d), { recursive: true });
+    expect(probeSet(sys("linux"), [], [])).toEqual(["cursor", "antigravity"]);
+    // CodexBar finds OpenCode's plans on its own only in browser cookies, imported only on macOS.
+    expect(probeSet(sys("darwin"), [], [])).toEqual([
+      "cursor",
+      "antigravity",
+      "opencode",
+      "opencodego",
+    ]);
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
 test("CodexBar installs only when its release's own checksum matches", async () => {
   const home = mkdtempSync(join(tmpdir(), "starbridge-home-"));
   const opt = join(home, ".local/opt/codexbar");
@@ -1328,7 +1354,7 @@ test("refresh gives Codex the plugin when setup installed its skill before #949"
   m.ctx.lines.length = 0;
   await setup(m.sys, { agent: "codex" });
   expect(m.ctx.lines.join("\n")).toContain("to trust Starbridge's hooks");
-  for (const event of ["permission_request", "stop", "interrupt"])
+  for (const event of ["permission_request", "stop", "interrupt", "pre_tool_use"])
     writeFileSync(
       config,
       `${readFileSync(config, "utf8")}[hooks.state."starbridge@starbridge-cli:hooks/hooks.json:${event}:0:0"]\ntrusted_hash = "sha256:x"\n`,

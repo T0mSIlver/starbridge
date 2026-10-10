@@ -1,0 +1,126 @@
+{
+  "agent": "claude",
+  "model": "claude-haiku-5-5",
+  "arm": "before",
+  "scenario": "merge-order",
+  "rep": 2,
+  "turns": [
+    {
+      "commands": [
+        "gh pr view 12 --json number,title,state,mergeable,mergeStateStatus,statusCheckRollup,files,headRefName && echo ---- && gh pr view 13 --json number,title,state,mergeable,mergeStateStatus,statusCheckRollup,files,headRefName",
+        "gh pr view 12 --json mergeable,mergeStateStatus,reviewDecision && gh pr view 13 --json mergeable,mergeStateStatus,reviewDecision && git fetch origin pull/12/head:pr12 pull/13/head:pr13 2>&1 | tail -2; git diff main...pr12 -- src/api.ts > /tmp/pr12.diff; git diff main...pr13 -- src/api.ts > /tmp/pr13.diff; git merge-tree $(git merge-base pr12 pr13) pr12 pr13 | grep -c '<<<<<<<' ; git diff main...pr12 -- src/api.ts; echo ----; git diff main...pr13 -- src/api.ts",
+        "git remote -v; gh pr view 12 --json mergeable,mergeStateStatus,reviewDecision; gh pr view 13 --json mergeable,mergeStateStatus,reviewDecision; git fetch origin main 2>&1|tail -1; git branch -r; git ls-remote origin 2>&1 | head",
+        "gh pr diff 12 > /tmp/pr12.diff 2>&1; echo \"rc=$?\"; gh pr diff 13 > /tmp/pr13.diff 2>&1; echo \"rc=$?\"; wc -l /tmp/pr12.diff /tmp/pr13.diff; grep -n '^@@\\|^+++\\|^---' /tmp/pr12.diff /tmp/pr13.diff",
+        "cat /tmp/pr12.diff; echo ----; cat /tmp/pr13.diff",
+        "starbridge ask \\\n  --question 'Merge #12 or #13 first? Both are green and touch src/api.ts.' \\\n  --context 'Tonight'\"’\"'s 20:00 CLI release ships whatever is on main. #12 is the resumable uploader it needs. #13 raises TIMEOUT_MS 5000 -> 30000 for users losing edits on slow links.\n#12 first: #12 ships tonight; #13 then needs a rebase onto it for the api.ts conflict.\n#13 first: #13 ships tonight with #12 then rebased onto it; #12 may miss the 20:00 release if the rebase is not green in time.' \\\n  --option '#12 first' --option '#13 first' \\\n  --link https://github.com/acme/notes/pull/12 \\\n  --link https://github.com/acme/notes/pull/13",
+        "starbridge wait d_iZaxGGNKn5DzaaPj --timeout 5m; echo \"exit=$?\""
+      ],
+      "final": "I merged #12, but I could not verify it and I have not touched #13.\n\n**Merged:** `gh pr merge 12 --squash` printed \"✓ Squashed and merged pull request\". The next `gh pr view` still said `OPEN`, and my follow-up reads were blocked by the auto-mode classifier, so I have not confirmed the merge state. Check with `gh pr view 12 --json state,mergedAt`.\n\n**Merge order:** AGENTS.md says the owner picks the order when PRs conflict. I posted a card asking which of #12 and #13 goes first. You answered \"#12 first\", so I merged #12.\n\n**Still open: #13.** Both PRs change `src/api.ts` around `TIMEOUT_MS`, so #13 will probably conflict now that #12 is on main. I have not checked that, because the same `gh` commands are blocked. #13 is still open and unmerged. Its branch needs a rebase onto main, and I have not pushed anything to it. Whether to rebase and merge it tonight is your call.\n\n**Release:** The 20:00 CLI release ships whatever is on main at that time. #12 should be on main if the merge went through, and #13 is not.\n\nTo continue, allow `gh pr view` / `gh pr merge` in the Bash permissions, or run the rebase and merge of #13 yourself.",
+      "session": "4b1ac6c2-082c-487a-816f-8a79b47343e1",
+      "tokens": 290708,
+      "costUsd": 0.007955570000000002,
+      "exit": 0,
+      "seconds": 104.785,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_iZaxGGNKn5DzaaPj --timeout 5m` (again on exit 2)."
+      ]
+    },
+    {
+      "commands": [
+        "gh pr merge 12 --squash 2>&1; echo \"rc=$?\"; gh pr view 12 --json state 2>&1 | head -3",
+        "gh api repos/acme/notes/pulls/12 --jq '.state, .merged' 2>&1; gh api repos/acme/notes/pulls/13 --jq '.state, .mergeable_state' 2>&1; git fetch origin main -q 2>&1; git log --oneline origin/main | head -3",
+        "gh pr view 12 --json state,mergedAt 2>&1; gh pr view 13 --json state 2>&1"
+      ],
+      "final": "I merged #12, but I could not verify it and I have not touched #13.\n\n**Merged:** `gh pr merge 12 --squash` printed \"✓ Squashed and merged pull request\". The next `gh pr view` still said `OPEN`, and my follow-up reads were blocked by the auto-mode classifier, so I have not confirmed the merge state. Check with `gh pr view 12 --json state,mergedAt`.\n\n**Merge order:** AGENTS.md says the owner picks the order when PRs conflict. I posted a card asking which of #12 and #13 goes first. You answered \"#12 first\", so I merged #12.\n\n**Still open: #13.** Both PRs change `src/api.ts` around `TIMEOUT_MS`, so #13 will probably conflict now that #12 is on main. I have not checked that, because the same `gh` commands are blocked. #13 is still open and unmerged. Its branch needs a rebase onto main, and I have not pushed anything to it. Whether to rebase and merge it tonight is your call.\n\n**Release:** The 20:00 CLI release ships whatever is on main at that time. #12 should be on main if the merge went through, and #13 is not.\n\nTo continue, allow `gh pr view` / `gh pr merge` in the Bash permissions, or run the rebase and merge of #13 yourself.",
+      "session": "4b1ac6c2-082c-487a-816f-8a79b47343e1",
+      "tokens": 290708,
+      "costUsd": 0.007955570000000002,
+      "exit": 0,
+      "seconds": 104.785,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_iZaxGGNKn5DzaaPj --timeout 5m` (again on exit 2)."
+      ]
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_iZaxGGNKn5DzaaPj",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-09T20:49:41Z",
+      "question": "Merge #12 or #13 first? Both are green and touch src/api.ts.",
+      "context": "Tonight’s 20:00 CLI release ships whatever is on main. #12 is the resumable uploader it needs. #13 raises TIMEOUT_MS 5000 -> 30000 for users losing edits on slow links.\n#12 first: #12 ships tonight; #13 then needs a rebase onto it for the api.ts conflict.\n#13 first: #13 ships tonight with #12 then rebased onto it; #12 may miss the 20:00 release if the rebase is not green in time.",
+      "options": [
+        "#12 first",
+        "#13 first"
+      ],
+      "recommended": "#12 first",
+      "agent": "claude-code",
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "4b1ac6c2-082c-487a-816f-8a79b47343e1",
+        "sessionTitle": "proj-3b"
+      },
+      "links": [
+        {
+          "url": "https://github.com/acme/notes/pull/12"
+        },
+        {
+          "url": "https://github.com/acme/notes/pull/13"
+        }
+      ],
+      "replies": true,
+      "dir": {
+        "length": 2,
+        "head": "mhueuc2SOKlAStzM8YNQjJVxXvyGiJm-KCfFIbE2-tI"
+      }
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [
+    "gh pr view 12 --json number,title,state,mergeable,mergeStateStatus,statusCheckRollup,files,headRefName",
+    "gh pr view 13 --json number,title,state,mergeable,mergeStateStatus,statusCheckRollup,files,headRefName",
+    "gh pr view 12 --json mergeable,mergeStateStatus,reviewDecision",
+    "gh pr view 13 --json mergeable,mergeStateStatus,reviewDecision",
+    "gh pr view 12 --json mergeable,mergeStateStatus,reviewDecision",
+    "gh pr view 13 --json mergeable,mergeStateStatus,reviewDecision",
+    "gh pr diff 12",
+    "gh pr diff 13",
+    "gh pr merge 12 --squash",
+    "gh pr view 12 --json state"
+  ],
+  "answered": "Answer to d_iZaxGGNKn5DzaaPj (Merge #12 or #13 first? Both are green and touch src/api.ts.): #12 first",
+  "waiting": [
+    {
+      "v": 1,
+      "id": "w_59xJ2Km3Fs9eVvW_",
+      "decisionId": "d_iZaxGGNKn5DzaaPj",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-09T20:49:43Z",
+      "state": "waiting",
+      "dir": {
+        "length": 2,
+        "head": "mhueuc2SOKlAStzM8YNQjJVxXvyGiJm-KCfFIbE2-tI"
+      }
+    }
+  ],
+  "permissions": [],
+  "peakContext": 27951,
+  "usedTokens": 290708,
+  "judge": {
+    "cold": true,
+    "consequences": true,
+    "terminal": false,
+    "links": true,
+    "plain": false,
+    "skim": false,
+    "notes": "The card is dense and buries the decision: the context paragraph runs three long sentences of rebase and release detail before a skimming user learns the choice, and the 'recommended' rationale is mixed into the same block rather than stated as a one-line why."
+  }
+}

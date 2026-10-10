@@ -13,6 +13,7 @@ import {
 } from "./agent/commands";
 import { runAgent } from "./agent/main";
 import { ApiError, sandboxHint, Unreachable } from "./api";
+import { hookCodexQuestion } from "./codex-question";
 import { StateFileError } from "./config";
 import { type Ctx, UsageError } from "./context";
 import {
@@ -196,10 +197,10 @@ const HELP = `starbridge: post decisions to your devices, report runs, upload qu
       For Claude Code's PreToolUse hook on AskUserQuestion, from older plugins: prints
       nothing, so the picker opens and hook permission races it.
 
-  starbridge hook question --agent opencode
-      For the Starbridge opencode plugin, on each call of opencode's question tool: posts each
-      question to your devices, already waiting, and once all are answered prints
-      {"answers": [[label], ...]} for opencode; prints nothing on any error. SIGTERM (the
+  starbridge hook question --agent opencode|pi
+      For the Starbridge opencode plugin and Pi extension, on each call of opencode's question
+      tool or Pi's ask_user_question: posts each question to your devices, already waiting, and
+      once all are answered prints {"answers": [[label], ...]}; prints nothing on any error. SIGTERM (the
       terminal answered) settles the questions still open.
 
   starbridge hook session --agent cursor
@@ -554,16 +555,23 @@ export async function run(argv: string[], ctx: Ctx): Promise<number> {
         const [sub, ...args] = rest;
         const { values } = parseArgs({
           args,
-          options: { agent: { type: "string" }, wait: { type: "string" } },
+          options: {
+            agent: { type: "string" },
+            wait: { type: "string" },
+            race: { type: "boolean" },
+          },
         });
         if (sub === "permission") return await hookPermission(ctx, readText("-"), values);
         if (sub === "settle") return await hookSettle(ctx, readText("-"), values);
         if (sub === "ask-user") return hookAskUser();
-        if (sub === "question") return await hookQuestion(ctx, readText("-"), values);
+        if (sub === "question")
+          return values.agent === "codex"
+            ? await hookCodexQuestion(ctx, readText("-"), values.race === true)
+            : await hookQuestion(ctx, readText("-"), values);
         if (sub === "session" && values.agent === "cursor")
           return await hookCursorSession(ctx, readText("-"));
         throw new UsageError(
-          "usage: starbridge hook permission|settle --agent claude-code, starbridge hook ask-user, starbridge hook question --agent opencode, or starbridge hook session --agent cursor",
+          "usage: starbridge hook permission|settle --agent claude-code|codex, starbridge hook ask-user, starbridge hook question --agent opencode|pi|codex, or starbridge hook session --agent cursor",
         );
       }
       case "update": {

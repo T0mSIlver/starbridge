@@ -8,6 +8,9 @@
  * While the loop runs, the session's commands get its id in STARBRIDGE_PI_ANSWERS, so `starbridge ask`
  * says the answer comes back as a prompt. In `pi -p` it says to `starbridge wait` instead.
  *
+ * With rpiv-ask-user-question installed, it races each of its questionnaires on the devices
+ * (questions.ts).
+ *
  * With pi-permission-system installed, it also registers the `starbridge` link in its authorizer
  * chain, so permission prompts can go to the owner's devices (permissions.ts).
  *
@@ -19,7 +22,7 @@ import { readFile, stat, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { AgentLoop, socketPath } from "../hooks/agent.ts";
-import { permissionHook, runCommand, sleep, socketFetch } from "../hooks/node.ts";
+import { hookCommand, permissionHook, runCommand, sleep, socketFetch } from "../hooks/node.ts";
 import { configDir, Poller } from "../hooks/poller.ts";
 import { Switch } from "../hooks/switch.ts";
 import {
@@ -33,6 +36,7 @@ import {
   permissionsService,
   type Verdict,
 } from "./permissions.ts";
+import { BLOCKED_EVENT, PROMPT_EVENT, questionnaires, TOOL } from "./questions.ts";
 
 interface Ctx {
   hasUI: boolean;
@@ -40,6 +44,8 @@ interface Ctx {
   sessionManager: { getSessionId(): string; getSessionFile(): string | undefined };
   ui: {
     setStatus(key: string, text: string | undefined): void;
+    notify(message: string, type?: "info" | "warning" | "error"): void;
+    custom?: (factory: unknown, options?: unknown) => unknown;
     select(
       title: string,
       options: string[],
@@ -58,6 +64,7 @@ interface PiApi {
     event: "before_agent_start",
     handler: (e: { systemPrompt: string }, ctx: Ctx) => { systemPrompt?: string } | undefined,
   ): void;
+  on(event: "tool_execution_end", handler: (e: { toolName: string }, ctx: Ctx) => unknown): void;
   sendUserMessage(text: string, options?: { deliverAs?: "steer" | "followUp" }): void;
   events: { on(channel: string, handler: (data: unknown) => void): () => void };
 }
@@ -109,6 +116,34 @@ export default function starbridge(pi: PiApi) {
       deciding.set(id, done);
       end.addEventListener("abort", done);
     });
+
+  const asked = questionnaires({
+    hook: (stdin, signal) => {
+      const file = current?.sessionManager.getSessionFile();
+      return hookCommand(
+        ["question", "--agent", "pi"],
+        stdin,
+        signal,
+        file ? { PI_SESSION_FILE: file } : {},
+      );
+    },
+    submit: (line) => pi.sendUserMessage(line, { deliverAs: "followUp" }),
+    notify: (text) => current?.ui.notify(text, "info"),
+  });
+
+  pi.events.on(PROMPT_EVENT, (data) => {
+    const ctx = current;
+    if (!ctx?.hasUI) return;
+    // Pi shares one `ui` among extensions: its `custom` keeps the dialog the blocked event opens.
+    asked.watch(ctx.ui);
+    void asked.prompt(data, { id: ctx.sessionManager.getSessionId(), cwd: ctx.cwd });
+  });
+  pi.events.on(BLOCKED_EVENT, (data) => asked.blocked(data));
+
+  // Whoever answered, or on any error, the questionnaire is over once its tool returns.
+  pi.on("tool_execution_end", (e) => {
+    if (e.toolName === TOOL) asked.close();
+  });
 
   pi.events.on("permissions:decision", (data) => {
     const id = (data as { requestId?: unknown } | undefined)?.requestId;
@@ -247,6 +282,7 @@ export default function starbridge(pi: PiApi) {
     loop = undefined;
     current = undefined;
     ended.abort();
+    asked.close();
     for (const dispose of links.values()) dispose();
     links.clear();
     delete process.env[ANSWERS_ENV];
