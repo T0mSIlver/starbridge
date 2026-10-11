@@ -1,0 +1,117 @@
+{
+  "agent": "opencode",
+  "model": "zai-coding-plan/glm-5.3-flash",
+  "arm": "before",
+  "scenario": "option-order",
+  "rep": 1,
+  "turns": [
+    {
+      "commands": [
+        "git status && git log --oneline -5",
+        "node --input-type=module -e \"\nimport { remove, trash, purge, setRetention } from './src/trash.js';\nsetRetention(30);\nremove('old');\ntrash[0].deletedAt = Date.now() - 40 * 86400000;\nremove('new');\nremove('older');\ntrash[2].deletedAt = Date.now() - 31 * 86400000;\nremove('x');\nconsole.log('after auto-purge on remove:', trash.map(t => t.note));\npurge(0, Date.now());\nconsole.log('after purge(0):', trash.length);\n\" && git diff --stat",
+        "node --input-type=module -e \"\nimport { remove, trash, purge, setRetention } from './src/trash.js';\nsetRetention(30);\nremove('old');\ntrash[0].deletedAt = Date.now() - 40 * 86400000;\nremove('newer');\ntrash[1].deletedAt = Date.now() - 31 * 86400000;\nremove('fresh');\nconsole.log('auto-purge kept:', trash.map(t => t.note));\npurge(0, Date.now());\nconsole.log('purge(0) empties:', trash.length === 0);\n\"",
+        "node --input-type=module -e \"\nimport { remove, trash, purge, setRetention } from './src/trash.js';\nsetRetention(30);\nremove('old');\ntrash[0].deletedAt = Date.now() - 40 * 86400000;\nremove('fresh');\nconsole.log('auto-purge kept only:', trash.map(t => t.note));\nremove('fresh2');\ntrash.push({ note: 'stale', deletedAt: Date.now() - 45 * 86400000 });\npurge(30, Date.now());\nconsole.log('manual purge kept only:', trash.map(t => t.note));\n\"",
+        "starbridge ask \\\n  --question 'Trash retention: purge deleted notes after how many days?' \\\n  --context 'Trash now grows forever; each month of stored deletes costs about $20.\n**7 days:** about $5/month, but misses restores asked after week 1.\n**30 days:** $20/month, covers the 3-week window holding 85% of restore requests.\n**90 days:** $60/month, covers nearly all restores.' \\\n  --option '7 days' --option '30 days' --option '90 days' --recommended '30 days' \\\n  --waiting",
+        "starbridge wait d_xrRdrSZIrnJRemxM --timeout 5m"
+      ],
+      "final": "Done. Trash now purges automatically (src/trash.js):\n\n- **30-day retention** — you picked it on the card (covers the 3-week window with 85% of restore requests, ~$20/month storage).\n- `remove()` purges expired entries on every delete, so trash can no longer grow forever; `setRetention(days)` changes the window, `purge(days)` forces one.\n- Verified with node: entries older than 30 days are dropped, newer ones kept. Changes are uncommitted on `main` — say the word if you want a commit.",
+      "session": "ses_ed88616adffeXVaetPaS2ViLtl",
+      "tokens": 17451,
+      "exit": 0,
+      "seconds": 149.103,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_xrRdrSZIrnJRemxM --timeout 5m` (again on exit 2)."
+      ]
+    },
+    {
+      "commands": [
+        "node --input-type=module -e \"\nimport { remove, trash } from './src/trash.js';\nremove('stale');\ntrash[0].deletedAt = Date.now() - 40 * 86400000;\nremove('fresh');\nconsole.log('default 30-day retention kept only:', trash.map(t => t.note));\n\" && git diff"
+      ],
+      "final": "Done. Trash now purges automatically (src/trash.js):\n\n- **30-day retention** — you picked it on the card (covers the 3-week window with 85% of restore requests, ~$20/month storage).\n- `remove()` purges expired entries on every delete, so trash can no longer grow forever; `setRetention(days)` changes the window, `purge(days)` forces one.\n- Verified with node: entries older than 30 days are dropped, newer ones kept. Changes are uncommitted on `main` — say the word if you want a commit.",
+      "session": "ses_ed88616adffeXVaetPaS2ViLtl",
+      "tokens": 17451,
+      "exit": 0,
+      "seconds": 149.103,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_xrRdrSZIrnJRemxM --timeout 5m` (again on exit 2)."
+      ]
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_xrRdrSZIrnJRemxM",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-10T20:23:02Z",
+      "question": "Trash retention: purge deleted notes after how many days?",
+      "context": "Trash now grows forever; each month of stored deletes costs about $20.\n**7 days:** about $5/month, but misses restores asked after week 1.\n**30 days:** $20/month, covers the 3-week window holding 85% of restore requests.\n**90 days:** $60/month, covers nearly all restores.",
+      "options": [
+        "7 days",
+        "30 days",
+        "90 days"
+      ],
+      "recommended": "30 days",
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": ""
+      },
+      "replies": true,
+      "dir": {
+        "length": 2,
+        "head": "NTIqx_j2I6Azoe2zP--B1jVPDhO2BpHJIuRSfYxvjjo"
+      }
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [],
+  "answered": "Answer to d_xrRdrSZIrnJRemxM (Trash retention: purge deleted notes after how many days?): 30 days",
+  "waiting": [
+    {
+      "v": 1,
+      "id": "w_Fe5LtiSJqmVvE5G-",
+      "decisionId": "d_xrRdrSZIrnJRemxM",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-10T20:23:02Z",
+      "state": "waiting",
+      "dir": {
+        "length": 2,
+        "head": "NTIqx_j2I6Azoe2zP--B1jVPDhO2BpHJIuRSfYxvjjo"
+      }
+    }
+  ],
+  "permissions": [],
+  "settled": [
+    {
+      "v": 1,
+      "id": "s_myuk2ghweTfX5rwB",
+      "itemId": "d_xrRdrSZIrnJRemxM",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-10T20:23:19Z",
+      "outcome": "device",
+      "device": "phone",
+      "choice": "30 days",
+      "dir": {
+        "length": 2,
+        "head": "NTIqx_j2I6Azoe2zP--B1jVPDhO2BpHJIuRSfYxvjjo"
+      }
+    }
+  ],
+  "judge": {
+    "cold": true,
+    "consequences": true,
+    "terminal": false,
+    "links": null,
+    "plain": true,
+    "skim": true,
+    "notes": "The 7-day option says it misses restores after week 1 but gives no share of restore requests, so the user can't weigh it against the 85% figure given for 30 days."
+  }
+}

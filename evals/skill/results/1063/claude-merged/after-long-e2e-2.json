@@ -1,0 +1,73 @@
+{
+  "agent": "claude",
+  "model": "claude-haiku-5-5",
+  "arm": "after",
+  "scenario": "long-e2e",
+  "rep": 2,
+  "turns": [
+    {
+      "commands": [
+        "starbridge run --title 'Mac e2e' --reason 'takes over your screen and keyboard' -- make e2e"
+      ],
+      "final": "The e2e suite passed: 4 of 4 onboarding flow tests, exit code 0. Your copy change in `src/onboarding.txt` didn't break anything the suite covers.\n\nThe run went through `starbridge run`, as the project notes and your setup require, because it takes over the simulator. I didn't post any cards, and nothing is waiting on you.",
+      "session": "68d3db1a-97b9-4060-896e-3cc9c2cbeac5",
+      "tokens": 44556,
+      "costUsd": 0.0037357899999999997,
+      "exit": 0,
+      "seconds": 11.789,
+      "delivery": [],
+      "background": [
+        "starbridge run --title 'Mac e2e' --reason 'takes over your screen and keyboard' -- make e2e"
+      ]
+    }
+  ],
+  "decisions": [],
+  "laterDecisions": [],
+  "runs": [
+    {
+      "v": 1,
+      "id": "r_UTngdelhChUMHfgv",
+      "to": [
+        "phone"
+      ],
+      "title": "Mac e2e",
+      "reason": "takes over your screen and keyboard",
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "68d3db1a-97b9-4060-896e-3cc9c2cbeac5"
+      },
+      "startedAt": "2026-10-11T10:12:20Z",
+      "at": "2026-10-11T10:12:24.096Z",
+      "progress": {
+        "done": 4,
+        "total": 4,
+        "unit": "step"
+      },
+      "exit": {
+        "code": 0,
+        "at": "2026-10-11T10:12:24Z"
+      },
+      "dir": {
+        "length": 2,
+        "head": "JklZ_CG3nP5TbT_nsaqqfQSoLER6of7VWuvQE1OOavQ"
+      }
+    }
+  ],
+  "gh": [],
+  "waiting": [],
+  "permissions": [],
+  "settled": [],
+  "peakContext": 22278,
+  "usedTokens": 105952,
+  "judge": {
+    "cold": null,
+    "consequences": null,
+    "terminal": false,
+    "links": null,
+    "plain": null,
+    "skim": null,
+    "notes": ""
+  }
+}

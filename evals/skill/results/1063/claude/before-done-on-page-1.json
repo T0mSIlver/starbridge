@@ -1,0 +1,119 @@
+{
+  "agent": "claude",
+  "model": "claude-haiku-5-5",
+  "arm": "before",
+  "scenario": "done-on-page",
+  "rep": 1,
+  "turns": [
+    {
+      "commands": [
+        "git status --short && git log --oneline | head -5 && ls -la && ls -la src 2>/dev/null && cat src/pricing.html 2>/dev/null",
+        "grep -ril \"tier\" . --exclude-dir=.git | head -20; ls /var/tmp/skill-eval-U0FO1F/before-done-on-page-1/cfg/projects/-var-tmp-skill-eval-U0FO1F-before-done-on-page-1-proj/memory/ 2>/dev/null && cat /var/tmp/skill-eval-U0FO1F/before-done-on-page-1/cfg/projects/-var-tmp-skill-eval-U0FO1F-before-done-on-page-1-proj/memory/MEMORY.md 2>/dev/null",
+        "cat NOTES.md && echo --- && ls -la scripts && head -c 2000 scripts/* 2>/dev/null; echo; ls /var/tmp/skill-eval-U0FO1F/before-done-on-page-1/ ; find / -iname \"*artifact*\" -path \"*skill-eval*\" 2>/dev/null | head",
+        "sh scripts/read-artifact.sh; echo \"exit=$?\"; ls -la /var/tmp/skill-eval-U0FO1F/before-done-on-page-1/",
+        "starbridge ask --question 'Which tier names should the pricing page use?' --context 'The pricing page (src/pricing.html) is waiting on your pick of tier names.\n**Pick on the artifact:** its Pick buttons send your choice back to this session.' --answer-in https://claude.ai/artifact/7c1e9a52-0d3b-4f6e-9a21-5b8c3d2e1f00; echo \"exit=$?\"",
+        "starbridge wait d_CtvHfI1kFlBZ94QG --timeout 5m; echo \"exit=$?\""
+      ],
+      "final": "The pricing page is finished. The tier names are now Starter ($0), Plus ($8), and Studio ($20), taken from the owner's pick on the artifact. I changed `src/pricing.html` only, replacing the `TIER_1`–`TIER_3` placeholders and removing the `TODO` comment. I haven't committed.\n\nThe owner had not picked when I first checked, so I posted a Starbridge card linking to the artifact and waited on it. The answer came back as \"answered on its page\", and `scripts/read-artifact.sh` then returned `Picked: Starter, Plus, Studio`.\n\nI didn't change the prices or add anything beyond the names. The file is still the minimal three-line fragment it was.",
+      "session": "b33d1ae1-3e24-4e46-80ee-f86fb1a91b11",
+      "tokens": 202828,
+      "costUsd": 0.00624859,
+      "exit": 0,
+      "seconds": 47.851,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_CtvHfI1kFlBZ94QG --timeout 5m` (again on exit 2)."
+      ]
+    },
+    {
+      "commands": [
+        "sh scripts/read-artifact.sh; echo \"exit=$?\""
+      ],
+      "final": "The pricing page is finished. The tier names are now Starter ($0), Plus ($8), and Studio ($20), taken from the owner's pick on the artifact. I changed `src/pricing.html` only, replacing the `TIER_1`–`TIER_3` placeholders and removing the `TODO` comment. I haven't committed.\n\nThe owner had not picked when I first checked, so I posted a Starbridge card linking to the artifact and waited on it. The answer came back as \"answered on its page\", and `scripts/read-artifact.sh` then returned `Picked: Starter, Plus, Studio`.\n\nI didn't change the prices or add anything beyond the names. The file is still the minimal three-line fragment it was.",
+      "session": "b33d1ae1-3e24-4e46-80ee-f86fb1a91b11",
+      "tokens": 202828,
+      "costUsd": 0.00624859,
+      "exit": 0,
+      "seconds": 47.851,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_CtvHfI1kFlBZ94QG --timeout 5m` (again on exit 2)."
+      ]
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_CtvHfI1kFlBZ94QG",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-10T20:44:38Z",
+      "question": "Which tier names should the pricing page use?",
+      "context": "The pricing page (src/pricing.html) is waiting on your pick of tier names.\n**Pick on the artifact:** its Pick buttons send your choice back to this session.",
+      "options": [],
+      "agent": "claude-code",
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "b33d1ae1-3e24-4e46-80ee-f86fb1a91b11"
+      },
+      "answerIn": {
+        "url": "https://claude.ai/artifact/7c1e9a52-0d3b-4f6e-9a21-5b8c3d2e1f00"
+      },
+      "done": true,
+      "dir": {
+        "length": 2,
+        "head": "l5pr2yddsDUAXFYYV1x9lTWvCPmvcCLwwUcWbveKico"
+      }
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [],
+  "answered": "Answer to d_CtvHfI1kFlBZ94QG (Which tier names should the pricing page use?): answered on its page; read the answer there",
+  "waiting": [
+    {
+      "v": 1,
+      "id": "w_zInkTAM-9On3y7Yj",
+      "decisionId": "d_CtvHfI1kFlBZ94QG",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-10T20:44:40Z",
+      "state": "waiting",
+      "dir": {
+        "length": 2,
+        "head": "l5pr2yddsDUAXFYYV1x9lTWvCPmvcCLwwUcWbveKico"
+      }
+    }
+  ],
+  "permissions": [],
+  "settled": [
+    {
+      "v": 1,
+      "id": "s_VFiHgukPT3eroXCB",
+      "itemId": "d_CtvHfI1kFlBZ94QG",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-10T20:44:55Z",
+      "outcome": "device",
+      "device": "phone",
+      "dir": {
+        "length": 2,
+        "head": "l5pr2yddsDUAXFYYV1x9lTWvCPmvcCLwwUcWbveKico"
+      }
+    }
+  ],
+  "peakContext": 25267,
+  "usedTokens": 202828,
+  "judge": {
+    "cold": false,
+    "consequences": true,
+    "terminal": false,
+    "links": true,
+    "plain": true,
+    "skim": false,
+    "notes": "The card lists no candidate tier names and never says the user should tap Done on the card after answering in the artifact, so the user must open the artifact to learn what is being chosen and how to finish."
+  }
+}

@@ -1,0 +1,133 @@
+{
+  "agent": "claude",
+  "model": "claude-haiku-5-5",
+  "arm": "after",
+  "scenario": "design-pick",
+  "rep": 1,
+  "turns": [
+    {
+      "commands": [
+        "git branch -a && git worktree list && ls -la shots/ 2>/dev/null; git status --short",
+        "git diff --stat main settings-compact && echo --- && git diff --stat main settings-roomy",
+        "git log --oneline --all --graph && git rev-parse main settings-compact settings-roomy && git diff main...settings-compact --stat; git diff main...settings-roomy --stat",
+        "git stash list; git reflog | head -20; git for-each-ref",
+        "starbridge ask \\\n  --question 'Which settings design should ship to main?' \\\n  --context 'Both branches point at main’s commit, so no variant code is on them yet. Shipping merges a branch.\n**Compact:** 9 settings rows fit per screen, 39 px each.\n**Roomy:** 6 rows per screen, 63 px each, with more space around each label.' \\\n  --option 'Compact' --option 'Roomy' \\\n  --image /var/tmp/skill-eval-LwreYl/after-design-pick-1/proj/shots/compact.png \\\n  --image /var/tmp/skill-eval-LwreYl/after-design-pick-1/proj/shots/roomy.png",
+        "starbridge wait d_OGDoJlb3U1ztjq97 --timeout 5m; echo \"exit=$?\""
+      ],
+      "final": "I asked the owner which design to ship, and they picked **Compact**. I ran `git merge settings-compact` on main, but it was a no-op (\"Already up to date\"), so nothing was shipped.\n\nThe variant work is not on either branch. `settings-compact`, `settings-roomy` and `main` all point at the same commit (`ae00994 Initial commit`), there are no stashes, and the reflog shows nothing else. The only trace of the designs is the two screenshots in `shots/`. The tests you mentioned are not on any branch I can see.\n\nTo finish the ship, the Compact work needs to be committed to `settings-compact`. Then the merge can be run again. I didn't commit anything myself because I don't have the code. If the work is on another machine or branch, tell me where and I'll merge it.",
+      "session": "2fa680e6-33f3-4a39-a9df-62b6d61ea20e",
+      "tokens": 188077,
+      "costUsd": 0.00652978,
+      "exit": 0,
+      "seconds": 35.863,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_OGDoJlb3U1ztjq97 --timeout 5m` (again on exit 2)."
+      ]
+    },
+    {
+      "commands": [
+        "git branch --show-current && git merge settings-compact; echo \"exit=$?\"; git log --oneline -1; git status --short"
+      ],
+      "final": "I asked the owner which design to ship, and they picked **Compact**. I ran `git merge settings-compact` on main, but it was a no-op (\"Already up to date\"), so nothing was shipped.\n\nThe variant work is not on either branch. `settings-compact`, `settings-roomy` and `main` all point at the same commit (`ae00994 Initial commit`), there are no stashes, and the reflog shows nothing else. The only trace of the designs is the two screenshots in `shots/`. The tests you mentioned are not on any branch I can see.\n\nTo finish the ship, the Compact work needs to be committed to `settings-compact`. Then the merge can be run again. I didn't commit anything myself because I don't have the code. If the work is on another machine or branch, tell me where and I'll merge it.",
+      "session": "2fa680e6-33f3-4a39-a9df-62b6d61ea20e",
+      "tokens": 188077,
+      "costUsd": 0.00652978,
+      "exit": 0,
+      "seconds": 35.863,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_OGDoJlb3U1ztjq97 --timeout 5m` (again on exit 2)."
+      ]
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_OGDoJlb3U1ztjq97",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-11T10:21:01Z",
+      "question": "Which settings design should ship to main?",
+      "context": "Both branches point at main’s commit, so no variant code is on them yet. Shipping merges a branch.\n**Compact:** 9 settings rows fit per screen, 39 px each.\n**Roomy:** 6 rows per screen, 63 px each, with more space around each label.",
+      "options": [
+        "Compact",
+        "Roomy"
+      ],
+      "recommended": "Compact",
+      "agent": "claude-code",
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "2fa680e6-33f3-4a39-a9df-62b6d61ea20e"
+      },
+      "images": [
+        {
+          "type": "image/png",
+          "width": 360,
+          "height": 640
+        },
+        {
+          "type": "image/png",
+          "width": 360,
+          "height": 640
+        }
+      ],
+      "replies": true,
+      "dir": {
+        "length": 2,
+        "head": "zAl9Kyq9mxHlCpXiASI7lv6mU_5suVzkExq4173LoT0"
+      }
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [],
+  "answered": "Answer to d_OGDoJlb3U1ztjq97 (Which settings design should ship to main?): Compact",
+  "waiting": [
+    {
+      "v": 1,
+      "id": "w_dKe7CjhPUPmUbkUN",
+      "decisionId": "d_OGDoJlb3U1ztjq97",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-11T10:21:03Z",
+      "state": "waiting",
+      "dir": {
+        "length": 2,
+        "head": "zAl9Kyq9mxHlCpXiASI7lv6mU_5suVzkExq4173LoT0"
+      }
+    }
+  ],
+  "permissions": [],
+  "settled": [
+    {
+      "v": 1,
+      "id": "s_tpQbtsZ2FE0BvdnU",
+      "itemId": "d_OGDoJlb3U1ztjq97",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-11T10:21:17Z",
+      "outcome": "device",
+      "device": "phone",
+      "choice": "Compact",
+      "dir": {
+        "length": 2,
+        "head": "zAl9Kyq9mxHlCpXiASI7lv6mU_5suVzkExq4173LoT0"
+      }
+    }
+  ],
+  "peakContext": 25572,
+  "usedTokens": 188077,
+  "judge": {
+    "cold": true,
+    "consequences": true,
+    "terminal": true,
+    "links": null,
+    "plain": true,
+    "skim": true,
+    "notes": "The card buries the blocker that neither branch contains any variant code, so a user could tap Compact expecting a merge that cannot happen, and it should have led with that."
+  }
+}

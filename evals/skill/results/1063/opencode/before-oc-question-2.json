@@ -1,0 +1,111 @@
+{
+  "agent": "opencode",
+  "model": "zai-coding-plan/glm-5.3-flash",
+  "arm": "before",
+  "scenario": "oc-question",
+  "rep": 2,
+  "turns": [
+    {
+      "commands": [],
+      "final": "",
+      "exit": 0,
+      "seconds": 407.304,
+      "delivery": [],
+      "background": [],
+      "tools": [
+        "read",
+        "question"
+      ]
+    },
+    {
+      "commands": [],
+      "final": "`src/hello.js` now exports `greeting = 'Hello!'` (English, per your choice).",
+      "exit": 0,
+      "seconds": 407.304,
+      "delivery": [],
+      "background": [],
+      "tools": [
+        "edit"
+      ]
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_nnuWaz-j8WPT3QGw",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-10T20:42:49Z",
+      "question": "Which language should src/hello.js greet users in?",
+      "context": "- English: Hello!\n- French: Bonjour !\n- German: Hallo!",
+      "options": [
+        "English",
+        "French",
+        "German"
+      ],
+      "recommended": "English",
+      "agent": "opencode",
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "ses_ed872461cfferWm97Li913yFGC",
+        "sessionTitle": "Localization greeting in hello.js"
+      },
+      "replies": true,
+      "dir": {
+        "length": 2,
+        "head": "-3WNvIHQxS_VskHRmlzujK2NRpwqiSVMOseTf5xptDM"
+      }
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [],
+  "answered": "Answer to d_nnuWaz-j8WPT3QGw (Which language should src/hello.js greet users in?): English",
+  "waiting": [
+    {
+      "v": 1,
+      "id": "w_IFh1JpFn3aYdTFRv",
+      "decisionId": "d_nnuWaz-j8WPT3QGw",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-10T20:42:49Z",
+      "state": "waiting",
+      "dir": {
+        "length": 2,
+        "head": "-3WNvIHQxS_VskHRmlzujK2NRpwqiSVMOseTf5xptDM"
+      }
+    }
+  ],
+  "permissions": [],
+  "settled": [
+    {
+      "v": 1,
+      "id": "s_40bIyhYXGKBriySM",
+      "itemId": "d_nnuWaz-j8WPT3QGw",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-10T20:43:06Z",
+      "outcome": "device",
+      "device": "phone",
+      "choice": "English",
+      "dir": {
+        "length": 2,
+        "head": "-3WNvIHQxS_VskHRmlzujK2NRpwqiSVMOseTf5xptDM"
+      }
+    }
+  ],
+  "judge": {
+    "cold": true,
+    "consequences": true,
+    "terminal": false,
+    "links": null,
+    "plain": true,
+    "skim": true,
+    "notes": "The final terminal message is empty, so the agent never asks the question or waits for a reply in the terminal."
+  }
+}

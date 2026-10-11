@@ -5,13 +5,19 @@ on:
     branches: [main]
     paths:
       - "ios/**"
-      - "packages/protocol/vectors/**"
+      - "packages/protocol/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
       - "server/**"
       - ".github/workflows/ios.yml"
   pull_request:
     paths:
       - "ios/**"
-      - "packages/protocol/vectors/**"
+      - "packages/protocol/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
       - "server/**"
       - ".github/workflows/ios.yml"
   workflow_dispatch:
@@ -20,18 +26,53 @@ concurrency:
   group: ios-${{ github.ref }}
   cancel-in-progress: true
 
+# pull-requests: the changes job reads a pull request's files from the API.
 permissions:
   contents: read
+  pull-requests: read
 
 defaults:
   run:
     working-directory: ios/StarbridgeProtocol
 
 jobs:
+  # Which jobs the changed files can affect: the Swift package only reads its own sources and the
+  # shared vectors, so a server or lockfile change runs the app alone. GitHub's macOS runners are
+  # its scarcest. A failed comparison or a dispatched run runs everything.
+  changes:
+    name: changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      protocol: ${{ github.event_name == 'workflow_dispatch' || steps.filter.outcome != 'success' || steps.filter.outputs.protocol == 'true' }}
+    defaults:
+      run:
+        working-directory: .
+    steps:
+      - if: github.event_name == 'push'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 2
+          filter: blob:none
+      - id: filter
+        if: github.event_name != 'workflow_dispatch'
+        continue-on-error: true
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        with:
+          # Ignored on a pull request, which compares with its base.
+          base: ${{ github.event.before }}
+          filters: |
+            protocol:
+              - 'ios/StarbridgeProtocol/**'
+              - 'packages/protocol/**'
+              - '.github/workflows/ios.yml'
+
   # The Swift port of packages/protocol against the shared vectors (#1083), on GitHub's hosted
   # macOS runner, with the libsodium that swift-sodium bundles for Apple platforms.
   protocol-macos:
     name: StarbridgeProtocol on macOS
+    needs: changes
+    if: needs.changes.outputs.protocol == 'true'
     runs-on: macos-15
     timeout-minutes: 20
     steps:
@@ -42,17 +83,21 @@ jobs:
       # the libsodium framework.
       - run: xcodebuild -quiet -scheme StarbridgeProtocol -destination "generic/platform=iOS" build
 
-  # The same tests on Linux with the system libsodium, where agents develop the package.
+  # The same tests on Linux with the system libsodium, where agents develop the package. The
+  # repository is mounted whole: the tests read packages/protocol/vectors.
   protocol-linux:
     name: StarbridgeProtocol on Linux
+    needs: changes
+    if: needs.changes.outputs.protocol == 'true'
     runs-on: ubuntu-24.04
-    container: swift:6.3.3
     timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: .
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - working-directory: .
-        run: apt-get update -qq && apt-get install -qq -y libsodium-dev pkg-config
-      - run: swift test
+      - run: docker build -t starbridge-swift -f ios/StarbridgeProtocol/linux.Dockerfile ios/StarbridgeProtocol
+      - run: docker run --rm -v "$PWD:/repo" -w /repo/ios/StarbridgeProtocol starbridge-swift swift test
 
   # The app (#1105): XcodeGen writes the project, then its tests run on a simulator, JoinTests
   # against a self-hosted server started here.

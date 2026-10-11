@@ -22,8 +22,8 @@
   instants, since whole-second and millisecond stamps sort differently as text.
 - **Images** (#62, #170, #685): at most 4, PNG or JPEG, never SVG. The CLI keeps a file as is up
   to a 3000 px edge and 384 KB, so a phone screenshot reaches every device unchanged and viewers can zoom into real
-  pixels. Android decodes by the image's real size, drops one larger than declared or 8192 px a
-  side, and holds at most 4096² pixels in a decode (#360).
+  pixels. Android and the iPhone app decode by the image's real size, drop one larger than
+  declared or 8192 px a side, and hold at most 4096² pixels in a decode (#360).
 - **Links** (#171) are what the agent wants the owner to see before answering: a Claude artifact, a
   PR, a doc. They never answer the question. Each has a `title`. Clients show them as chips after
   the context, each ending in an arrow out. A claude.ai link opens in the browser, where the owner

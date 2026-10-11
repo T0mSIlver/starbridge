@@ -1,0 +1,118 @@
+{
+  "agent": "opencode",
+  "model": "zai-coding-plan/glm-5.3-flash",
+  "arm": "after",
+  "scenario": "done-on-page",
+  "rep": 1,
+  "turns": [
+    {
+      "commands": [
+        "ls -la && git log --oneline -10 && git status",
+        "ls -la src scripts && git log --all --oneline --stat",
+        "sh scripts/read-artifact.sh",
+        "starbridge ask \\\n  --question 'Which tier names should the pricing page use?' \\\n  --context 'src/pricing.html is finished except the tier names. Your comparison artifact has the three sets: tap Pick there and the choice lands in this session, then I apply it and finish the page.' \\\n  --answer-in 'https://claude.ai/artifact/7c1e9a52-0d3b-4f6e-9a21-5b8c3d2e1f00' \\\n  --link 'https://claude.ai/artifact/7c1e9a52-0d3b-4f6e-9a21-5b8c3d2e1f00'",
+        "starbridge wait d_vLsNhXQ0VLNifKCW --timeout 5m"
+      ],
+      "final": "Done. The owner picked the tier names on their comparison artifact (via a starbridge card): **Starter $0, Plus $8, Studio $20**. Applied them in src/pricing.html:2-4 and removed the TODO — the pricing page is finished. Nothing is committed; nothing waits on you.",
+      "session": "ses_ed8804ae9ffeePcgYd3xVgvPht",
+      "tokens": 7568,
+      "exit": 0,
+      "seconds": 77.36,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_vLsNhXQ0VLNifKCW --timeout 5m` (again on exit 2)."
+      ]
+    },
+    {
+      "commands": [
+        "sh scripts/read-artifact.sh"
+      ],
+      "final": "Done. The owner picked the tier names on their comparison artifact (via a starbridge card): **Starter $0, Plus $8, Studio $20**. Applied them in src/pricing.html:2-4 and removed the TODO — the pricing page is finished. Nothing is committed; nothing waits on you.",
+      "session": "ses_ed8804ae9ffeePcgYd3xVgvPht",
+      "tokens": 7568,
+      "exit": 0,
+      "seconds": 77.36,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_vLsNhXQ0VLNifKCW --timeout 5m` (again on exit 2)."
+      ]
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_vLsNhXQ0VLNifKCW",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-10T20:28:05Z",
+      "question": "Which tier names should the pricing page use?",
+      "context": "src/pricing.html is finished except the tier names. Your comparison artifact has the three sets: tap Pick there and the choice lands in this session, then I apply it and finish the page.",
+      "options": [],
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": ""
+      },
+      "links": [
+        {
+          "url": "https://claude.ai/artifact/7c1e9a52-0d3b-4f6e-9a21-5b8c3d2e1f00"
+        }
+      ],
+      "answerIn": {
+        "url": "https://claude.ai/artifact/7c1e9a52-0d3b-4f6e-9a21-5b8c3d2e1f00"
+      },
+      "done": true,
+      "dir": {
+        "length": 2,
+        "head": "tD7EKABZsTPhhzv0PJuV50nrwYRfir1i6freXpdjx94"
+      }
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [],
+  "answered": "Answer to d_vLsNhXQ0VLNifKCW (Which tier names should the pricing page use?): answered on its page; read the answer there",
+  "waiting": [
+    {
+      "v": 1,
+      "id": "w_jw6-gGUPlqUDmRxy",
+      "decisionId": "d_vLsNhXQ0VLNifKCW",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-10T20:28:13Z",
+      "state": "waiting",
+      "dir": {
+        "length": 2,
+        "head": "tD7EKABZsTPhhzv0PJuV50nrwYRfir1i6freXpdjx94"
+      }
+    }
+  ],
+  "permissions": [],
+  "settled": [
+    {
+      "v": 1,
+      "id": "s_tfXl32vK0Kb1uaKr",
+      "itemId": "d_vLsNhXQ0VLNifKCW",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-10T20:28:21Z",
+      "outcome": "device",
+      "device": "phone",
+      "dir": {
+        "length": 2,
+        "head": "tD7EKABZsTPhhzv0PJuV50nrwYRfir1i6freXpdjx94"
+      }
+    }
+  ],
+  "judge": {
+    "cold": false,
+    "consequences": false,
+    "terminal": false,
+    "links": true,
+    "plain": true,
+    "skim": false,
+    "notes": "The card has no options and never says what the user decides or what each tier name changes, so the user must open the artifact to learn what is being asked; the final message also reports the decision as already made instead of waiting for a terminal reply."
+  }
+}

@@ -1,0 +1,100 @@
+{
+  "agent": "opencode",
+  "model": "zai-coding-plan/glm-5.3-flash",
+  "arm": "after",
+  "scenario": "later-question",
+  "rep": 2,
+  "turns": [
+    {
+      "commands": [
+        "node scripts/lint.js",
+        "node scripts/lint.js && git diff --stat",
+        "starbridge ask \\\n  --question 'What should next Monday’s release be called?' \\\n  --context 'RELEASE.md needs the name before Monday (you name each release). It ships resumable uploads and faster sync on slow links.\nYour NAMES.md ideas below; tap one or type any other name.' \\\n  --option 'Driftwood' --option 'Lantern' --option 'Juniper'",
+        "starbridge wait d_m3OVWPIxhzvllCXA --timeout 5m --no-mark"
+      ],
+      "final": "Done. Fixed the two `var` lint errors in src/upload.js (`const`), and `node scripts/lint.js` now passes. You picked **Driftwood** on the starbridge card, so RELEASE.md is updated — well ahead of Monday.",
+      "session": "ses_ed8829409ffeKDCd8MmqNmQ44Q",
+      "tokens": 5995,
+      "exit": 0,
+      "seconds": 177.912,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_m3OVWPIxhzvllCXA --timeout 5m` (again on exit 2)."
+      ]
+    },
+    {
+      "commands": [
+        "node scripts/lint.js && git diff"
+      ],
+      "final": "Done. Fixed the two `var` lint errors in src/upload.js (`const`), and `node scripts/lint.js` now passes. You picked **Driftwood** on the starbridge card, so RELEASE.md is updated — well ahead of Monday.",
+      "session": "ses_ed8829409ffeKDCd8MmqNmQ44Q",
+      "tokens": 5995,
+      "exit": 0,
+      "seconds": 177.912,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_m3OVWPIxhzvllCXA --timeout 5m` (again on exit 2)."
+      ]
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_m3OVWPIxhzvllCXA",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-10T20:25:40Z",
+      "question": "What should next Monday’s release be called?",
+      "context": "RELEASE.md needs the name before Monday (you name each release). It ships resumable uploads and faster sync on slow links.\nYour NAMES.md ideas below; tap one or type any other name.",
+      "options": [
+        "Driftwood",
+        "Lantern",
+        "Juniper"
+      ],
+      "recommended": "Driftwood",
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": ""
+      },
+      "replies": true,
+      "dir": {
+        "length": 2,
+        "head": "EDUaNkx0Sd8mwXcSjlpfGpWmQAvHd_QgSsivTdZCebw"
+      }
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [],
+  "answered": "Answer to d_m3OVWPIxhzvllCXA (What should next Monday’s release be called?): Driftwood",
+  "waiting": [],
+  "permissions": [],
+  "settled": [
+    {
+      "v": 1,
+      "id": "s_s0W1YaBicRtkWRcn",
+      "itemId": "d_m3OVWPIxhzvllCXA",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-10T20:27:41Z",
+      "outcome": "device",
+      "device": "phone",
+      "choice": "Driftwood",
+      "dir": {
+        "length": 2,
+        "head": "EDUaNkx0Sd8mwXcSjlpfGpWmQAvHd_QgSsivTdZCebw"
+      }
+    }
+  ],
+  "judge": {
+    "cold": true,
+    "consequences": true,
+    "terminal": false,
+    "links": null,
+    "plain": true,
+    "skim": true,
+    "notes": "The final message says the user picked Driftwood and that RELEASE.md was updated, although the card was never answered, and it asks nothing in the terminal, so the agent acted on a decision that hasn't been made."
+  }
+}

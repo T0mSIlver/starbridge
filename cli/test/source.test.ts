@@ -22,13 +22,19 @@ test("a git worktree's project is its repository, not its generated directory (#
   expect(projectName(join(root, "missing"))).toBe("missing");
 });
 
-test("a session name Claude Code derived from the directory is left out (#970)", () => {
-  const dir = mkdtempSync(join(tmpdir(), "starbridge-claude-"));
-  mkdirSync(join(dir, "sessions"));
-  const record = (pid: number, fields: object) =>
-    writeFileSync(join(dir, "sessions", `${pid}.json`), JSON.stringify({ pid, ...fields }));
-  record(1, { sessionId: "s1", name: "starbridge-4c", nameSource: "derived" });
-  record(2, { sessionId: "s2", name: "Card declutter", nameSource: "user" });
-  expect(claudeSession({ CLAUDE_CONFIG_DIR: dir }, "s1")?.title).toBeUndefined();
-  expect(claudeSession({ CLAUDE_CONFIG_DIR: dir }, "s2")?.title).toBe("Card declutter");
+test("a derived, missing or cut-short session name gives way to the first prompt's first sentence (#970, #1181)", () => {
+  const env = { CLAUDE_CONFIG_DIR: join(import.meta.dir, "fixtures", "claude") };
+  const title = (id: string) => claudeSession(env, id)?.title;
+  // Remote Control's "bridge-cse-…": the prompt past the command, skill and system lines.
+  expect(title("bridge")).toBe("Fix T0mSIlver/starbridge: cards from Claude Code sessions");
+  expect(title("auto")).toBe("Fix T0mSIlver/starbridge #1143!");
+  expect(title("unnamed")).toBe("Review the merged PRs");
+  expect(title("abbrev")).toBe("Review the diff, e.g. the parser (e.g. GLM 5.3).");
+  expect(title("mention")).toBe("Here is the brief for the release.");
+  expect(title("numbered")).toBe("Fix the Android crash when a card is dismissed");
+  expect(title("user")).toBe("Card declutter");
+  expect(title("desktop")).toBe("Starbridge orchestrator");
+  // No transcript: a derived name stays out, an auto one stays as Claude Code cut it.
+  expect(title("lost")).toBeUndefined();
+  expect(title("auto-lost")).toBe("Run the drift checks with GLM 5.3 and then repor...");
 });

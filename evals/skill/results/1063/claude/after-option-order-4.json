@@ -1,0 +1,121 @@
+{
+  "agent": "claude",
+  "model": "claude-haiku-5-5",
+  "arm": "after",
+  "scenario": "option-order",
+  "rep": 4,
+  "turns": [
+    {
+      "commands": [
+        "git status --short && git ls-files | head -100 && grep -rniE \"trash|purge|retention|deleted\" --exclude-dir=.git . | head -60",
+        "cat NOTES.md && echo ---- && cat src/trash.js && echo ---- && cat AGENTS.md && git log --oneline | head",
+        "node --input-type=module -e \"\nimport { trash, remove, purgeExpired } from './src/trash.js';\nconst DAY = 86400000;\nremove('old'); trash[0].deletedAt = Date.now() - 10*DAY;\nremove('new');\nconsole.log('kept', purgeExpired(7*DAY), trash.map(t=>t.note));\n\"",
+        "starbridge ask \\\n  --question 'How long should deleted notes stay in the trash?' \\\n  --context 'Trash grows forever and the storage bill doubled. 85% of restore requests come within 3 weeks.\n**7 days:** cheapest, but misses most restores that come after week 1.\n**30 days:** covers the 3-week restore window. Trash costs about $20/month per month kept.\n**90 days:** most restorable, roughly 3x the trash storage of 30 days.' \\\n  --option '7 days' --option '30 days' --option '90 days' --recommended '30 days' --waiting",
+        "starbridge wait d_w2TtEEvS89NWDZy7 --timeout 5m; echo \"exit $?\""
+      ],
+      "final": "The trash now purges itself, with a 30-day retention window. The owner chose 30 days through a Starbridge card.\n\nChanges in `src/trash.js`:\n- `purgeExpired(retentionMs, now)` removes trash entries older than the window and returns how many are kept.\n- `startTrashPurge(retentionMs, intervalMs)` runs that purge hourly and returns a function that stops it.\n- `TRASH_RETENTION_MS` is set to 30 days.\n\nI checked that a 10-day-old entry is removed under a 7-day window while a fresh one stays. I also checked that the module loads with the 30-day constant.\n\nNothing calls `startTrashPurge` yet. The repo has no app entry point, so whoever starts the app needs to add `startTrashPurge(TRASH_RETENTION_MS)` at startup. Until then, the trash still grows.\n\nAGENTS.md makes retention the owner's call, so I asked before picking a value. I asked with a card, which the owner answered as 30 days. The card's recommendation was 30 days because 85% of restore requests come within 3 weeks, per NOTES.md.",
+      "session": "5a4b4f70-a73e-431b-84c6-51793c79d746",
+      "tokens": 219866,
+      "costUsd": 0.00663273,
+      "exit": 0,
+      "seconds": 35.501,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_w2TtEEvS89NWDZy7 --timeout 5m` (again on exit 2)."
+      ]
+    },
+    {
+      "commands": [
+        "node --input-type=module -e \"\nimport { TRASH_RETENTION_MS, startTrashPurge } from './src/trash.js';\nconst stop = startTrashPurge(TRASH_RETENTION_MS); stop(); console.log('ok', TRASH_RETENTION_MS);\n\""
+      ],
+      "final": "The trash now purges itself, with a 30-day retention window. The owner chose 30 days through a Starbridge card.\n\nChanges in `src/trash.js`:\n- `purgeExpired(retentionMs, now)` removes trash entries older than the window and returns how many are kept.\n- `startTrashPurge(retentionMs, intervalMs)` runs that purge hourly and returns a function that stops it.\n- `TRASH_RETENTION_MS` is set to 30 days.\n\nI checked that a 10-day-old entry is removed under a 7-day window while a fresh one stays. I also checked that the module loads with the 30-day constant.\n\nNothing calls `startTrashPurge` yet. The repo has no app entry point, so whoever starts the app needs to add `startTrashPurge(TRASH_RETENTION_MS)` at startup. Until then, the trash still grows.\n\nAGENTS.md makes retention the owner's call, so I asked before picking a value. I asked with a card, which the owner answered as 30 days. The card's recommendation was 30 days because 85% of restore requests come within 3 weeks, per NOTES.md.",
+      "session": "5a4b4f70-a73e-431b-84c6-51793c79d746",
+      "tokens": 219866,
+      "costUsd": 0.00663273,
+      "exit": 0,
+      "seconds": 35.501,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_w2TtEEvS89NWDZy7 --timeout 5m` (again on exit 2)."
+      ]
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_w2TtEEvS89NWDZy7",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-10T21:24:33Z",
+      "question": "How long should deleted notes stay in the trash?",
+      "context": "Trash grows forever and the storage bill doubled. 85% of restore requests come within 3 weeks.\n**7 days:** cheapest, but misses most restores that come after week 1.\n**30 days:** covers the 3-week restore window. Trash costs about $20/month per month kept.\n**90 days:** most restorable, roughly 3x the trash storage of 30 days.",
+      "options": [
+        "7 days",
+        "30 days",
+        "90 days"
+      ],
+      "recommended": "30 days",
+      "agent": "claude-code",
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "5a4b4f70-a73e-431b-84c6-51793c79d746"
+      },
+      "replies": true,
+      "dir": {
+        "length": 2,
+        "head": "TQJe06YHea7WhppoM12STzf6y-MbYs9t1pqF2IwJgeA"
+      }
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [],
+  "answered": "Answer to d_w2TtEEvS89NWDZy7 (How long should deleted notes stay in the trash?): 30 days",
+  "waiting": [
+    {
+      "v": 1,
+      "id": "w_ULEo6pQqsHnQ4hRL",
+      "decisionId": "d_w2TtEEvS89NWDZy7",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-10T21:24:33Z",
+      "state": "waiting",
+      "dir": {
+        "length": 2,
+        "head": "TQJe06YHea7WhppoM12STzf6y-MbYs9t1pqF2IwJgeA"
+      }
+    }
+  ],
+  "permissions": [],
+  "settled": [
+    {
+      "v": 1,
+      "id": "s_j8BTMX1jTeDTl2sV",
+      "itemId": "d_w2TtEEvS89NWDZy7",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-10T21:24:48Z",
+      "outcome": "device",
+      "device": "phone",
+      "choice": "30 days",
+      "dir": {
+        "length": 2,
+        "head": "TQJe06YHea7WhppoM12STzf6y-MbYs9t1pqF2IwJgeA"
+      }
+    }
+  ],
+  "peakContext": 24787,
+  "usedTokens": 219866,
+  "judge": {
+    "cold": true,
+    "consequences": true,
+    "terminal": false,
+    "links": null,
+    "plain": true,
+    "skim": true,
+    "notes": "The final message reports the decision as settled and never asks a question in the terminal, even though the agent wired nothing to call `startTrashPurge` and that step is left for someone else."
+  }
+}

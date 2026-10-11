@@ -1,0 +1,175 @@
+{
+  "agent": "claude",
+  "model": "claude-haiku-5-5",
+  "arm": "before",
+  "scenario": "design-pick",
+  "rep": 1,
+  "turns": [
+    {
+      "commands": [
+        "git branch -a && git log --oneline --all --graph | head -20 && ls -la shots/ 2>/dev/null; git status --short",
+        "starbridge ask \\\n  --question 'Which settings screen should ship to main: Compact or Roomy?' \\\n  --context 'Both settings variants pass the tests. Shipping merges that branch into main.\n**Compact:** 8 settings rows visible, smaller text, tighter spacing (branch settings-compact).\n**Roomy:** 6 rows visible, larger text, more space per row (branch settings-roomy).' \\\n  --option 'Compact' --option 'Roomy' \\\n  --image shots/compact.png --image shots/roomy.png\necho \"exit=$?\"",
+        "starbridge wait d_RAc0cSaiVRxP7dku --timeout 5m; echo \"exit=$?\""
+      ],
+      "final": "(exit 143) ",
+      "exit": 143,
+      "seconds": 720.421,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_RAc0cSaiVRxP7dku --timeout 5m` (again on exit 2).",
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_JgXrXy2SvbmSiPrm --timeout 5m` (again on exit 2)."
+      ]
+    },
+    {
+      "commands": [
+        "git checkout main && git merge settings-compact --no-edit && git log --oneline --graph -5 && git status --short",
+        "git log --oneline -3 settings-compact && git log --oneline -3 settings-roomy && git diff --stat main settings-compact && git diff --stat main settings-roomy && git worktree list && git status --short --branch",
+        "git stash list; git reflog --all | head; git for-each-ref; ls -la; grep -ril \"compact\\|roomy\" --exclude-dir=.git . | head -20",
+        "cat README.md && echo --- && cat AGENTS.md",
+        "starbridge ask \\\n  --question 'Compact branch is empty. Where is its settings code?' \\\n  --context 'Merging settings-compact did nothing: it points at the same commit as main, so main has no Compact changes.\n**Push it:** I merge settings-compact once you push its commits (roomy is empty too).\n**Stop:** I leave main unchanged until you say more.' \\\n  --option 'I will push it' --option 'Stop for now' \\\n  --waiting\necho \"exit=$?\"",
+        "starbridge wait d_JgXrXy2SvbmSiPrm --timeout 5m; echo \"exit=$?\"",
+        "starbridge wait d_JgXrXy2SvbmSiPrm --timeout 5m; echo \"exit=$?\"",
+        "starbridge wait d_JgXrXy2SvbmSiPrm --timeout 5m; echo \"exit=$?\""
+      ],
+      "final": "(exit 143) ",
+      "exit": 143,
+      "seconds": 720.421,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_RAc0cSaiVRxP7dku --timeout 5m` (again on exit 2).",
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_JgXrXy2SvbmSiPrm --timeout 5m` (again on exit 2)."
+      ]
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_RAc0cSaiVRxP7dku",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-11T10:12:28Z",
+      "question": "Which settings screen should ship to main: Compact or Roomy?",
+      "context": "Both settings variants pass the tests. Shipping merges that branch into main.\n**Compact:** 8 settings rows visible, smaller text, tighter spacing (branch settings-compact).\n**Roomy:** 6 rows visible, larger text, more space per row (branch settings-roomy).",
+      "options": [
+        "Compact",
+        "Roomy"
+      ],
+      "recommended": "Compact",
+      "agent": "claude-code",
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "ac48799f-e94c-415b-b124-86b15ad24228"
+      },
+      "images": [
+        {
+          "type": "image/png",
+          "width": 360,
+          "height": 640
+        },
+        {
+          "type": "image/png",
+          "width": 360,
+          "height": 640
+        }
+      ],
+      "replies": true,
+      "dir": {
+        "length": 2,
+        "head": "JemVeEuP9QrKuRz945ab1dzxuDU2zhkrUSgJDaYhlgo"
+      }
+    }
+  ],
+  "laterDecisions": [
+    {
+      "v": 1,
+      "id": "d_JgXrXy2SvbmSiPrm",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-11T10:12:55Z",
+      "question": "Compact branch is empty. Where is its settings code?",
+      "context": "Merging settings-compact did nothing: it points at the same commit as main, so main has no Compact changes.\n**Push it:** I merge settings-compact once you push its commits (roomy is empty too).\n**Stop:** I leave main unchanged until you say more.",
+      "options": [
+        "I will push it",
+        "Stop for now"
+      ],
+      "recommended": "I will push it",
+      "agent": "claude-code",
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "ac48799f-e94c-415b-b124-86b15ad24228"
+      },
+      "replies": true,
+      "dir": {
+        "length": 2,
+        "head": "JemVeEuP9QrKuRz945ab1dzxuDU2zhkrUSgJDaYhlgo"
+      }
+    }
+  ],
+  "runs": [],
+  "gh": [],
+  "answered": "Answer to d_RAc0cSaiVRxP7dku (Which settings screen should ship to main: Compact or Roomy?): Compact",
+  "waiting": [
+    {
+      "v": 1,
+      "id": "w_Edeex5bn1fBvt91q",
+      "decisionId": "d_RAc0cSaiVRxP7dku",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-11T10:12:30Z",
+      "state": "waiting",
+      "dir": {
+        "length": 2,
+        "head": "JemVeEuP9QrKuRz945ab1dzxuDU2zhkrUSgJDaYhlgo"
+      }
+    },
+    {
+      "v": 1,
+      "id": "w_LsVPrQ3weGJcnS3w",
+      "decisionId": "d_JgXrXy2SvbmSiPrm",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-11T10:12:55Z",
+      "state": "waiting",
+      "dir": {
+        "length": 2,
+        "head": "JemVeEuP9QrKuRz945ab1dzxuDU2zhkrUSgJDaYhlgo"
+      }
+    }
+  ],
+  "permissions": [],
+  "settled": [
+    {
+      "v": 1,
+      "id": "s_vfr6Hromo1jDL24b",
+      "itemId": "d_RAc0cSaiVRxP7dku",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-11T10:12:45Z",
+      "outcome": "device",
+      "device": "phone",
+      "choice": "Compact",
+      "dir": {
+        "length": 2,
+        "head": "JemVeEuP9QrKuRz945ab1dzxuDU2zhkrUSgJDaYhlgo"
+      }
+    }
+  ],
+  "peakContext": 27005,
+  "usedTokens": 311014,
+  "judge": {
+    "cold": true,
+    "consequences": true,
+    "terminal": false,
+    "links": null,
+    "plain": true,
+    "skim": true,
+    "notes": "The final terminal message is just \"(exit 143)\": it neither asks the question nor waits for a reply, so the user gets no prompt in the session."
+  }
+}

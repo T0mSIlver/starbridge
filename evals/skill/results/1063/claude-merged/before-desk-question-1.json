@@ -1,0 +1,33 @@
+{
+  "agent": "claude",
+  "model": "claude-haiku-5-5",
+  "arm": "before",
+  "scenario": "desk-question",
+  "rep": 1,
+  "turns": [
+    {
+      "commands": [],
+      "askUser": [],
+      "final": "",
+      "session": "265511fa-b7d0-4bba-9f25-2b539d70b9d2",
+      "exit": 0,
+      "seconds": 721.226
+    }
+  ],
+  "decisions": [],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [],
+  "waiting": [],
+  "permissions": [],
+  "settled": [],
+  "judge": {
+    "cold": null,
+    "consequences": null,
+    "terminal": false,
+    "links": null,
+    "plain": null,
+    "skim": null,
+    "notes": "It posted no card and its final message was empty, so the dark-theme question (system setting or menu toggle) never reached the user."
+  }
+}

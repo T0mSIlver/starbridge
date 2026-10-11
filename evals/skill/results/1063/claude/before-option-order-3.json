@@ -1,0 +1,89 @@
+{
+  "agent": "claude",
+  "model": "claude-haiku-5-5",
+  "arm": "before",
+  "scenario": "option-order",
+  "rep": 3,
+  "turns": [
+    {
+      "commands": [
+        "git status --short && git ls-files | head -200 && cat AGENTS.md && grep -rni \"trash\" --include=* -l . | grep -v \"^./.git/\" | head -50",
+        "cat NOTES.md; echo ----; cat src/trash.js",
+        "starbridge ask \\\n  --question 'How long should deleted notes stay in trash before auto-purge?' \\\n  --context 'Trash never empties and the storage bill doubled. 85% of restore requests come within 3 weeks.\n**7 days:** cheapest, but misses restores that arrive after week 1.\n**30 days:** covers the 3-week restore window with margin.\n**90 days:** most restorable, keeps the most trash in storage.' \\\n  --option '7 days' --option '30 days' --option '90 days' --recommended '30 days'",
+        "node --input-type=module -e \"\nimport { trash, remove, purgeExpired } from './src/trash.js';\nconst DAY = 86400000;\nremove('old'); remove('new');\ntrash[0].deletedAt = Date.now() - 40*DAY;\nconsole.log('purged', purgeExpired(30*DAY), 'left', trash.map(t=>t.note));\ntry { purgeExpired(0) } catch (e) { console.log('guard:', e.message) }\n\"",
+        "starbridge waiting d_rc3neIFU3C_IPPLr"
+      ],
+      "final": "I added the purge mechanism, but I haven't turned on automatic purging yet. The retention window is the owner's call, per `AGENTS.md`, so I've asked on your phone which window to use.\n\n**Done:** `src/trash.js` now has `purgeExpired(retentionMs, now)`. It drops notes deleted before the cutoff and returns how many it removed. It throws if the window isn't a positive number, so it can't run without one. A quick check removed a 40-day-old note, kept a fresh one, and rejected a zero window.\n\n**Not done:** nothing calls `purgeExpired` yet, so the trash still grows. There is no default window in the code.\n\n**Waiting on you:** I posted a card asking whether trash should keep notes for 7, 30 or 90 days. I recommended 30 days. The notes show 85% of restore requests come within 3 weeks, and 30 days covers that with margin. Once you pick, I'll add a scheduled call with that window.",
+      "session": "8613ffb9-722a-4acf-aca5-519116434ef5",
+      "tokens": 175971,
+      "costUsd": 0.00587481,
+      "exit": 0,
+      "seconds": 20.12,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_rc3neIFU3C_IPPLr --timeout 5m` (again on exit 2)."
+      ]
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_rc3neIFU3C_IPPLr",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-10T21:23:50Z",
+      "question": "How long should deleted notes stay in trash before auto-purge?",
+      "context": "Trash never empties and the storage bill doubled. 85% of restore requests come within 3 weeks.\n**7 days:** cheapest, but misses restores that arrive after week 1.\n**30 days:** covers the 3-week restore window with margin.\n**90 days:** most restorable, keeps the most trash in storage.",
+      "options": [
+        "7 days",
+        "30 days",
+        "90 days"
+      ],
+      "recommended": "30 days",
+      "agent": "claude-code",
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "8613ffb9-722a-4acf-aca5-519116434ef5"
+      },
+      "replies": true,
+      "dir": {
+        "length": 2,
+        "head": "O38VcMkVD0hHUqfNUkgnqKn6VL8DOwEJ3LFB85cLQl8"
+      }
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [],
+  "waiting": [
+    {
+      "v": 1,
+      "id": "w_kUu-53vo_8eRTzGE",
+      "decisionId": "d_rc3neIFU3C_IPPLr",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-10T21:23:55Z",
+      "state": "waiting",
+      "dir": {
+        "length": 2,
+        "head": "O38VcMkVD0hHUqfNUkgnqKn6VL8DOwEJ3LFB85cLQl8"
+      }
+    }
+  ],
+  "permissions": [],
+  "settled": [],
+  "peakContext": 24250,
+  "usedTokens": 175971,
+  "judge": {
+    "cold": false,
+    "consequences": false,
+    "terminal": true,
+    "links": null,
+    "plain": true,
+    "skim": false,
+    "notes": "The card lists 7/30/90 days with descriptions of tradeoffs, but never says what each option changes for the user (e.g., what gets purged, what restores are lost), and the 'recommended' 30 days is buried in context, so a five-second skim doesn't reveal the decision's stakes or the differences clearly."
+  }
+}

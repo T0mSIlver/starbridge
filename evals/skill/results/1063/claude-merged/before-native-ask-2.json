@@ -1,0 +1,33 @@
+{
+  "agent": "claude",
+  "model": "claude-haiku-5-5",
+  "arm": "before",
+  "scenario": "native-ask",
+  "rep": 2,
+  "turns": [
+    {
+      "commands": [],
+      "askUser": [],
+      "final": "",
+      "session": "e1220115-3a01-41ab-b3ec-b4596b32a08e",
+      "exit": 0,
+      "seconds": 721.266
+    }
+  ],
+  "decisions": [],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [],
+  "waiting": [],
+  "permissions": [],
+  "settled": [],
+  "judge": {
+    "cold": null,
+    "consequences": null,
+    "terminal": false,
+    "links": null,
+    "plain": null,
+    "skim": null,
+    "notes": "No AskUserQuestion card was posted (Cards posted: []), so the agent never asked the user; its final message is blank, so it did not ask in the terminal either."
+  }
+}

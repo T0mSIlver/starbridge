@@ -518,7 +518,7 @@ export function questionTitle(text: string): string | undefined {
   let title: string | undefined;
   for (const m of [...breaks, undefined]) {
     const sentence = text.slice(start, m?.index ?? text.length).trim();
-    if (sentence.endsWith("?") && sentence.length <= TITLE_CHARS) title = sentence;
+    if (/\?["'”)\]]?$/.test(sentence) && sentence.length <= TITLE_CHARS) title = sentence;
     if (m) start = m.index + m[0].length;
   }
   return title;

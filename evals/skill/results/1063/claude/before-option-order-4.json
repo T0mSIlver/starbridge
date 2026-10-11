@@ -1,0 +1,121 @@
+{
+  "agent": "claude",
+  "model": "claude-haiku-5-5",
+  "arm": "before",
+  "scenario": "option-order",
+  "rep": 4,
+  "turns": [
+    {
+      "commands": [
+        "git status --short && git ls-files | head -200 && cat AGENTS.md && grep -rniE 'trash|retention|purge' --exclude-dir=.git . | head -100",
+        "cat NOTES.md && echo ---- && cat src/trash.js && git log --oneline",
+        "cat > /tmp/trash-check.mjs <<'EOF'\nimport { trash, remove, purgeExpired } from '/var/tmp/skill-eval-mnEdEu/before-option-order-4/proj/src/trash.js';\nconst day = 86400000;\nconst now = Date.now();\ntrash.push({ note: 'old', deletedAt: now - 40 * day }, { note: 'recent', deletedAt: now - 2 * day });\nconsole.log('purged', purgeExpired(30, now), 'left', trash.map(t => t.note));\ntry { purgeExpired(undefined); } catch (e) { console.log('guard ok:', e.message); }\nEOF\nnode /tmp/trash-check.mjs; rm /tmp/trash-check.mjs",
+        "starbridge ask \\\n  --question 'How long should deleted notes stay in trash before purge?' \\\n  --context 'Trash grows forever now, and the storage bill doubled. The purge code is ready; it needs the window.\n**30 days:** covers 85% of restore requests (they come within 3 weeks). About $20/month of storage.\n**7 days:** cheapest, about $5/month. Misses restores after a week.\n**90 days:** most restorable, about $60/month.' \\\n  --option '30 days' --option '7 days' --option '90 days' --recommended '30 days' \\\n  --waiting",
+        "starbridge wait d_cVCAi04c46MOAUTH --timeout 5m; echo \"exit=$?\""
+      ],
+      "final": "Trash is now purged automatically. Notes deleted more than 30 days ago are removed each time a note is deleted.\n\n- **Retention window:** `AGENTS.md` makes this the owner's call. I posted a card to the owner with the 7, 30 and 90 day options, and they chose 30 days. It's set as `TRASH_RETENTION_DAYS` in `src/trash.js`.\n- **Purge:** `purgeExpired(retentionDays, now)` drops entries older than the window. `remove()` calls it with the 30-day constant. I checked it with a quick script: a 40-day-old entry was purged and a new delete was kept.\n- **Gap:** the purge only runs on a delete. If deletes stop, expired notes stay in the trash until the next one. A scheduled call to `purgeExpired(TRASH_RETENTION_DAYS)` would close that. The repo has no entry point or scheduler, so I didn't add one.\n\nChanges are uncommitted, in `src/trash.js` only.",
+      "session": "07bddcbf-418d-4d6e-988b-337999eb602d",
+      "tokens": 227310,
+      "costUsd": 0.007597410000000001,
+      "exit": 0,
+      "seconds": 40.885,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_cVCAi04c46MOAUTH --timeout 5m` (again on exit 2)."
+      ]
+    },
+    {
+      "commands": [
+        "cat > /tmp/trash-check.mjs <<'EOF'\nimport { trash, remove, TRASH_RETENTION_DAYS } from '/var/tmp/skill-eval-mnEdEu/before-option-order-4/proj/src/trash.js';\nconst day = 86400000;\ntrash.push({ note: 'old', deletedAt: Date.now() - 40 * day });\nremove('new');\nconsole.log(TRASH_RETENTION_DAYS, trash.map(t => t.note));\nEOF\nnode /tmp/trash-check.mjs; rm /tmp/trash-check.mjs; git status --short"
+      ],
+      "final": "Trash is now purged automatically. Notes deleted more than 30 days ago are removed each time a note is deleted.\n\n- **Retention window:** `AGENTS.md` makes this the owner's call. I posted a card to the owner with the 7, 30 and 90 day options, and they chose 30 days. It's set as `TRASH_RETENTION_DAYS` in `src/trash.js`.\n- **Purge:** `purgeExpired(retentionDays, now)` drops entries older than the window. `remove()` calls it with the 30-day constant. I checked it with a quick script: a 40-day-old entry was purged and a new delete was kept.\n- **Gap:** the purge only runs on a delete. If deletes stop, expired notes stay in the trash until the next one. A scheduled call to `purgeExpired(TRASH_RETENTION_DAYS)` would close that. The repo has no entry point or scheduler, so I didn't add one.\n\nChanges are uncommitted, in `src/trash.js` only.",
+      "session": "07bddcbf-418d-4d6e-988b-337999eb602d",
+      "tokens": 227310,
+      "costUsd": 0.007597410000000001,
+      "exit": 0,
+      "seconds": 40.885,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_cVCAi04c46MOAUTH --timeout 5m` (again on exit 2)."
+      ]
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_cVCAi04c46MOAUTH",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-10T21:23:55Z",
+      "question": "How long should deleted notes stay in trash before purge?",
+      "context": "Trash grows forever now, and the storage bill doubled. The purge code is ready; it needs the window.\n**30 days:** covers 85% of restore requests (they come within 3 weeks). About $20/month of storage.\n**7 days:** cheapest, about $5/month. Misses restores after a week.\n**90 days:** most restorable, about $60/month.",
+      "options": [
+        "30 days",
+        "7 days",
+        "90 days"
+      ],
+      "recommended": "30 days",
+      "agent": "claude-code",
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "07bddcbf-418d-4d6e-988b-337999eb602d"
+      },
+      "replies": true,
+      "dir": {
+        "length": 2,
+        "head": "DwozyA_RTubtORsXJbBgRIcpoD1qCLcRbwRdYitxWl4"
+      }
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [],
+  "answered": "Answer to d_cVCAi04c46MOAUTH (How long should deleted notes stay in trash before purge?): 30 days",
+  "waiting": [
+    {
+      "v": 1,
+      "id": "w_BL0514pvFp29IO-l",
+      "decisionId": "d_cVCAi04c46MOAUTH",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-10T21:23:55Z",
+      "state": "waiting",
+      "dir": {
+        "length": 2,
+        "head": "DwozyA_RTubtORsXJbBgRIcpoD1qCLcRbwRdYitxWl4"
+      }
+    }
+  ],
+  "permissions": [],
+  "settled": [
+    {
+      "v": 1,
+      "id": "s_ZaA4nyC0SivPapBm",
+      "itemId": "d_cVCAi04c46MOAUTH",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-10T21:24:11Z",
+      "outcome": "device",
+      "device": "phone",
+      "choice": "30 days",
+      "dir": {
+        "length": 2,
+        "head": "DwozyA_RTubtORsXJbBgRIcpoD1qCLcRbwRdYitxWl4"
+      }
+    }
+  ],
+  "peakContext": 26272,
+  "usedTokens": 227310,
+  "judge": {
+    "cold": true,
+    "consequences": true,
+    "terminal": false,
+    "links": null,
+    "plain": true,
+    "skim": true,
+    "notes": "The cost figures ($5, $20, $60) are given without any basis, and the 7-day option's tradeoff is vague ('misses restores after a week'), though the card still lets the user decide."
+  }
+}

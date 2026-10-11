@@ -7,6 +7,13 @@ final class MemoryVault: Vault, @unchecked Sendable {
     var secrets = Secrets()
     func load() throws -> Secrets { secrets }
     func save(_ secrets: Secrets) throws { self.secrets = secrets }
+    var aside: [String: Secrets] = [:]
+    var asideFails = false
+    func setAside(_ tag: String) throws {
+        if asideFails { throw Notice(message: "keychain: locked") }
+        aside[tag] = secrets
+        secrets = Secrets()
+    }
 }
 
 /**

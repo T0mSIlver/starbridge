@@ -174,8 +174,8 @@
   the entries, setup adds them only while the plugin there is Starbridge's and turned on, and takes
   them out otherwise. The app and the IDE keep their settings elsewhere; setup adds nothing there. `starbridge run` is left out,
   since the command it wraps is the agent's own. So Codex asks at the keyboard to run it outside
-  the sandbox, and the skill has it ask on the first call: run in the sandbox first, the command
-  ran unreported, then again once approved (#831). A `prompt` rule only adds an approval: Codex
+  the sandbox: run in the sandbox first, the command ran unreported, then again once approved
+  (#831), so `run` there now refuses before the command starts and says to escalate (#1063). A `prompt` rule only adds an approval: Codex
   still runs the command in the sandbox first. `cursor-agent` gets `Shell(starbridge ask)` and the
   four others in `cli-config.json`'s `permissions.allow`; each matches the command and what starts
   with it plus a space, and a compound line runs without a prompt only when each of its commands
@@ -217,7 +217,9 @@
   the local agent reads GitHub's `releases/latest` (no drafts or pre-releases), unauthenticated
   with the ETag of its last answer, since a 304 costs nothing from the 60 requests an hour an
   address gets, and a 10 s timeout; a failure changes nothing and is tried an hour later. It
-  keeps the answer in `latest.json`, so commands read it without the network. `setup`, `pair`,
+  keeps the answer in `latest.json`, so commands read it without the network; an unreadable
+  one moves to `latest.json.unreadable-<time>` and is read again, since it is only a cache and a
+  kept one would stop the check for good (#1174). `setup`, `pair`,
   `config`, `--version` and help, run in a terminal, end with one line on stderr when it is
   newer, naming `starbridge update` or brew's or npm's command; hooks, `ask`, `wait` and every
   other command an agent runs never print it, nor does any command whose stderr is not a

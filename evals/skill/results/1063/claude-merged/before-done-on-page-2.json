@@ -1,0 +1,119 @@
+{
+  "agent": "claude",
+  "model": "claude-haiku-5-5",
+  "arm": "before",
+  "scenario": "done-on-page",
+  "rep": 2,
+  "turns": [
+    {
+      "commands": [
+        "git status --short && ls -la && find . -path ./.git -prune -o -type f -print | head -100 && echo \"--- pricing.html ---\" && cat src/pricing.html 2>/dev/null; echo \"--- memory ---\"; ls -la /var/tmp/skill-eval-LwreYl/before-done-on-page-2/cfg/projects/-var-tmp-skill-eval-LwreYl-before-done-on-page-2-proj/memory/ 2>/dev/null && cat /var/tmp/skill-eval-LwreYl/before-done-on-page-2/cfg/projects/-var-tmp-skill-eval-LwreYl-before-done-on-page-2-proj/memory/MEMORY.md 2>/dev/null",
+        "echo \"--- NOTES.md ---\" && cat NOTES.md && echo && echo \"--- read-artifact.sh ---\" && cat scripts/read-artifact.sh && echo && echo \"--- ls scripts ---\" && ls -la scripts",
+        "sh scripts/read-artifact.sh",
+        "starbridge ask \\\n  --question 'Which tier names should the pricing page use?' \\\n  --context 'The pricing page has placeholder tiers (TIER_1 $0, TIER_2 $8, TIER_3 $20) and needs final names.\nOpen the comparison artifact and tap Pick on the set you want.' \\\n  --answer-in https://claude.ai/artifact/7c1e9a52-0d3b-4f6e-9a21-5b8c3d2e1f00\necho \"exit: $?\"",
+        "starbridge wait d_y3u1KfWjRECQup2V --timeout 5m; echo \"exit: $?\""
+      ],
+      "final": "The pricing page is finished. The tiers are now Starter ($0), Plus ($8), and Studio ($20), the names the owner picked in the comparison artifact. I removed the TODO comment. The change is an uncommitted edit to `src/pricing.html`.\n\nThe names were the owner's call, so I posted a question card and waited. They tapped Pick on the artifact page, and the choice came back as \"Picked: Starter, Plus, Studio\". The card was closed on its page, so nothing needed settling.",
+      "session": "548937f8-b43c-468b-8c64-329f843a43e7",
+      "tokens": 199922,
+      "costUsd": 0.0062057200000000005,
+      "exit": 0,
+      "seconds": 32.02,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_y3u1KfWjRECQup2V --timeout 5m` (again on exit 2)."
+      ]
+    },
+    {
+      "commands": [
+        "sh scripts/read-artifact.sh",
+        "cat src/pricing.html && git status --short"
+      ],
+      "final": "The pricing page is finished. The tiers are now Starter ($0), Plus ($8), and Studio ($20), the names the owner picked in the comparison artifact. I removed the TODO comment. The change is an uncommitted edit to `src/pricing.html`.\n\nThe names were the owner's call, so I posted a question card and waited. They tapped Pick on the artifact page, and the choice came back as \"Picked: Starter, Plus, Studio\". The card was closed on its page, so nothing needed settling.",
+      "session": "548937f8-b43c-468b-8c64-329f843a43e7",
+      "tokens": 199922,
+      "costUsd": 0.0062057200000000005,
+      "exit": 0,
+      "seconds": 32.02,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_y3u1KfWjRECQup2V --timeout 5m` (again on exit 2)."
+      ]
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_y3u1KfWjRECQup2V",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-11T11:08:38Z",
+      "question": "Which tier names should the pricing page use?",
+      "context": "The pricing page has placeholder tiers (TIER_1 $0, TIER_2 $8, TIER_3 $20) and needs final names.\nOpen the comparison artifact and tap Pick on the set you want.",
+      "options": [],
+      "agent": "claude-code",
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "548937f8-b43c-468b-8c64-329f843a43e7"
+      },
+      "answerIn": {
+        "url": "https://claude.ai/artifact/7c1e9a52-0d3b-4f6e-9a21-5b8c3d2e1f00"
+      },
+      "done": true,
+      "dir": {
+        "length": 2,
+        "head": "Dk8bYIVcpF6J-l1-V30DvUJ0j5BR5sjmwp4qAOP2GN8"
+      }
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [],
+  "answered": "Answer to d_y3u1KfWjRECQup2V (Which tier names should the pricing page use?): answered on its page; read the answer there",
+  "waiting": [
+    {
+      "v": 1,
+      "id": "w_VRJQHeuApi4hOzsb",
+      "decisionId": "d_y3u1KfWjRECQup2V",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-11T11:08:40Z",
+      "state": "waiting",
+      "dir": {
+        "length": 2,
+        "head": "Dk8bYIVcpF6J-l1-V30DvUJ0j5BR5sjmwp4qAOP2GN8"
+      }
+    }
+  ],
+  "permissions": [],
+  "settled": [
+    {
+      "v": 1,
+      "id": "s_0U_EVi7tZ_SW0MCB",
+      "itemId": "d_y3u1KfWjRECQup2V",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-11T11:08:54Z",
+      "outcome": "device",
+      "device": "phone",
+      "dir": {
+        "length": 2,
+        "head": "Dk8bYIVcpF6J-l1-V30DvUJ0j5BR5sjmwp4qAOP2GN8"
+      }
+    }
+  ],
+  "peakContext": 25086,
+  "usedTokens": 199922,
+  "judge": {
+    "cold": false,
+    "consequences": false,
+    "terminal": false,
+    "links": false,
+    "plain": false,
+    "skim": false,
+    "notes": "The card has no options and never says what the owner decides or that they should pick a tier name; its context shows placeholder tiers but not the proposed names, so a cold reader can't tell what's being chosen or how it differs. Terminal ends with a reported outcome, not a question awaiting a reply."
+  }
+}

@@ -1,5 +1,37 @@
+import ImageIO
 import SwiftUI
 import UIKit
+
+extension SavedImage {
+    /** The longest edge an image may have, as the protocol bounds `width` and `height`. */
+    static let maxEdge = 8192
+
+    /** The most pixels a decode holds, 64 MB at 4 bytes each, whatever `maxEdge` a view asks. */
+    static let maxPixels = 4096 * 4096
+
+    /**
+     * `data` decoded at most about `maxEdge` pixels on its longer side, so a thumbnail never holds
+     * the full bitmap, as on Android (#360). Sized by the image's real size, not the declared one,
+     * which a machine could understate. Nil when it does not decode, or is larger than declared.
+     */
+    static func decode(_ data: Data, width: Int, height: Int, maxEdge edge: Int) -> UIImage? {
+        guard let source = CGImageSourceCreateWithData(data as CFData, [kCGImageSourceShouldCache: false] as CFDictionary),
+              let props = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
+              let w = props[kCGImagePropertyPixelWidth] as? Int, let h = props[kCGImagePropertyPixelHeight] as? Int,
+              w > 0, h > 0, w <= width, h <= height, max(w, h) <= maxEdge else { return nil }
+        let scale = min(1, Double(edge) / Double(max(w, h)), (Double(maxPixels) / (Double(w) * Double(h))).squareRoot())
+        let options: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceThumbnailMaxPixelSize: max(1, Int(Double(max(w, h)) * scale)),
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceShouldCacheImmediately: true,
+        ]
+        return CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary).map { UIImage(cgImage: $0) }
+    }
+
+    /** This image decoded at most about `edge` pixels on its longer side; nil as [decode] says. */
+    func decoded(maxEdge edge: Int) -> UIImage? { Self.decode(bytes, width: width, height: height, maxEdge: edge) }
+}
 
 /** Which image a full-screen viewer opens on. */
 struct ViewerStart: Identifiable {
@@ -48,7 +80,8 @@ struct Thumb: View {
     var body: some View {
         Button(action: open) {
             ZStack(alignment: .bottomTrailing) {
-                if let ui = UIImage(data: image.bytes) {
+                // Two to a row on the widest iPhone: about 650 px each.
+                if let ui = image.decoded(maxEdge: 1024) {
                     Image(uiImage: ui).resizable().scaledToFit()
                 } else {
                     Tokens.Colors.surface2.color
@@ -101,7 +134,8 @@ private struct Zoomable: View {
 
     var body: some View {
         Group {
-            if let ui = UIImage(data: image.bytes) {
+            // Full size up to the pixel cap, so zooming shows real pixels.
+            if let ui = image.decoded(maxEdge: SavedImage.maxEdge) {
                 Image(uiImage: ui).resizable().scaledToFit()
             }
         }
@@ -152,7 +186,7 @@ struct ImageOptions: View {
                 VStack(spacing: Tokens.Spacing.s2) {
                     Thumb(image: images[i]) { open(i) }
                         .frame(maxHeight: Tokens.Sizes.pick)
-                    OptionButton(label: option, strong: option == recommended, amber: amber, height: 48) { answer(option) }
+                    OptionButton(label: option, strong: sameOption(option, recommended), amber: amber, height: 48) { answer(option) }
                 }
             }
         }

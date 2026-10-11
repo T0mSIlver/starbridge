@@ -215,7 +215,7 @@ test("setup --yes installs the agent, the plugins and the skills, and uploads a 
   expect(readFileSync(join(oc, "plugins/starbridge.ts"), "utf8")).toContain(
     'from "../starbridge/mod/opencode/starbridge.ts"',
   );
-  for (const f of ["mod/opencode/starbridge.ts", "mod/hooks/node.ts", "plugin/hooks/rule.md"])
+  for (const f of ["mod/opencode/starbridge.ts", "mod/hooks/node.ts", "plugin/rules/opencode.md"])
     expect(readFileSync(join(oc, "starbridge", f), "utf8")).toBe(
       readFileSync(join(import.meta.dir, "../..", f), "utf8"),
     );
@@ -234,7 +234,7 @@ test("setup --yes installs the agent, the plugins and the skills, and uploads a 
   });
   expect(JSON.parse(added.stdout)).toEqual({
     additional_context: readFileSync(
-      join(import.meta.dir, "../../plugin/hooks/rule.md"),
+      join(import.meta.dir, "../../plugin/rules/cursor.md"),
       "utf8",
     ).trimEnd(),
   });
@@ -1402,7 +1402,9 @@ test("Antigravity gets the plugin with the rule, the skill and the allow hook (#
     "trigger: always_on",
     "---",
   ]);
-  expect(rule).toEndWith(readFileSync(join(import.meta.dir, "../../plugin/hooks/rule.md"), "utf8"));
+  expect(rule).toEndWith(
+    readFileSync(join(import.meta.dir, "../../plugin/rules/antigravity.md"), "utf8"),
+  );
   expect(readFileSync(join(dir, "skills/starbridge/SKILL.md"), "utf8")).toBe(
     readFileSync(join(m.home, ".codex/skills/starbridge/SKILL.md"), "utf8"),
   );

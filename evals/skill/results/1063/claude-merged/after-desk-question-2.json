@@ -1,0 +1,33 @@
+{
+  "agent": "claude",
+  "model": "claude-haiku-5-5",
+  "arm": "after",
+  "scenario": "desk-question",
+  "rep": 2,
+  "turns": [
+    {
+      "commands": [],
+      "askUser": [],
+      "final": "",
+      "session": "71868a2d-0cc9-4654-8d4e-14de36a234ff",
+      "exit": 0,
+      "seconds": 721.261
+    }
+  ],
+  "decisions": [],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [],
+  "waiting": [],
+  "permissions": [],
+  "settled": [],
+  "judge": {
+    "cold": null,
+    "consequences": null,
+    "terminal": false,
+    "links": null,
+    "plain": null,
+    "skim": null,
+    "notes": "No card was posted for the decision (cards list is empty), and the final message only reports nothing rather than asking the user the system-vs-toggle question in the terminal."
+  }
+}

@@ -409,6 +409,15 @@ export class Store {
     return this.read<LatestRelease>("latest.json");
   }
 
+  /**
+   * Moves an unreadable `latest.json` to `latest.json.unreadable-<time>` (#1174): it is only a
+   * cache of GitHub's answer, so the next read starts over rather than stopping the check.
+   */
+  setLatestAside(now: Date) {
+    const p = this.path("latest.json");
+    renameSync(p, `${p}.unreadable-${now.toISOString().replace(/[:.]/g, "-")}`);
+  }
+
   saveLatest(l: LatestRelease) {
     this.write("latest.json", l);
   }

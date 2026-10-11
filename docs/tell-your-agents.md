@@ -2,7 +2,9 @@
 
 Setup gives every harness the same rules: the agent asks you through Starbridge
 for decisions that are yours and for work that waits on you, and wraps the
-commands that block you in `starbridge run`. Anything else you want to hear about goes in your harness's
+commands that block you in `starbridge run`. Each harness's rule also names its
+own question picker where Starbridge races it, so a quick question may use it.
+Anything else you want to hear about goes in your harness's
 instruction files, in your words. Starbridge never writes to them.
 
 <a id="what-each-agent-supports"></a>

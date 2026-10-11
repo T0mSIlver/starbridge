@@ -386,6 +386,7 @@ export async function ask(
   // With no agent, nothing tells which sessions run a mod: the poller's lease says only that one
   // does (#537).
   if (!opts.wait) ctx.err(deliveryLine(decision.id, delivery(resolved, false, false)));
+  if (input.answerIn !== undefined) ctx.err(answerInLine(decision.id));
   if (!opts.wait) return 0;
   return wait(ctx, { id: decision.id, timeout: opts.timeout, json: opts.json }, s);
 }
@@ -837,6 +838,14 @@ export function deliveryLine(id: string, d: Delivery): string {
   return d === "prompt"
     ? "The answer will come back into this session as a new prompt."
     : `Nothing brings the answer into this session: when only the answer is left, run \`starbridge wait ${id} --timeout 5m\` (again on exit 2).`;
+}
+
+/**
+ * What `ask --answer-in` adds, so only an agent that built such a page reads how its answer comes
+ * (#1063).
+ */
+export function answerInLine(id: string): string {
+  return `When the page's message brings the pick, run \`starbridge settle ${id}\`, then act. If the owner taps Done on the card instead, the answer says \`${DONE_LINE}\`: read the pick there and act, with no settle.`;
 }
 
 /** The line `wait` prints and the mod submits; the decision skill tells agents to expect it. */

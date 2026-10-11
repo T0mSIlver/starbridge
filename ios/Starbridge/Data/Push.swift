@@ -84,23 +84,30 @@ extension Store {
 
     /**
      * Deny from a notification: for this call only, as from the inbox. The notification goes once
-     * the server took it; else it stays, saying why, so the owner can deny from the app.
+     * the server took it; else it stays, saying why, so the owner can deny from the app. Returns
+     * what the notification says then, nil once it is gone.
      */
-    func denyFromNotification(_ id: String) async {
+    @discardableResult
+    func denyFromNotification(_ id: String) async -> String? {
+        var unread: String?
         do {
             try await serial { if self.prompt(id) == nil { try await self.fetch(id) } }
-        } catch {}
+        } catch {
+            unread = describe(error)
+        }
         let sent = await answerPrompt(id, allow: false)
         // Answered, expired, gone, or its machine revoked: no deny will ever land, so the notification goes too.
-        let moot = prompt(id).map { !$0.isOpen || directory?.members[$0.from]?.active == false } ?? true
+        // A prompt this iPhone could not read is none of those: its deny was not sent (#1156).
+        let moot = prompt(id).map { !$0.isOpen || directory?.members[$0.from]?.active == false } ?? false
         if sent || moot {
             notice = sent ? notice : nil
             await Self.removeDelivered(about: id)
-        } else {
-            let why = notice ?? "the server did not take it."
-            notice = nil
-            await replace(id, with: "Deny not sent: \(why)", kind: "permission", title: prompt(id).map(\.headline), source: prompt(id)?.body.source)
+            return nil
         }
+        let note = "Deny not sent: \(unread ?? notice ?? "the server did not take it.")"
+        notice = nil
+        await replace(id, with: note, kind: "permission", title: prompt(id).map(\.headline), source: prompt(id)?.body.source)
+        return note
     }
 
     /** The item's notification again, quiet, saying how its answer ended. */

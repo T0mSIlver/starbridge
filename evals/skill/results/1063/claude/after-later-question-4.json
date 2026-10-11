@@ -1,0 +1,107 @@
+{
+  "agent": "claude",
+  "model": "claude-haiku-5-5",
+  "arm": "after",
+  "scenario": "later-question",
+  "rep": 4,
+  "turns": [
+    {
+      "commands": [
+        "node scripts/lint.js; echo \"exit=$?\"",
+        "ls -la && cat RELEASE.md 2>/dev/null; echo ---; git status --short",
+        "cat scripts/lint.js; echo ---; cat -A src/upload.js | head -20; echo ---; cat NAMES.md; echo ---; cat package.json",
+        "node scripts/lint.js; echo \"exit=$?\"",
+        "starbridge ask \\\n  --question 'What should next week’s release be called?' \\\n  --context 'RELEASE.md says “Name: TBD”. It ships Monday, no rush.\nPick one of the candidates from NAMES.md, or type another name.' \\\n  --option 'Driftwood' --option 'Lantern' --option 'Juniper'",
+        "starbridge wait d_pXZG5WiFIBcDy65k --timeout 5m --no-mark; echo \"exit=$?\""
+      ],
+      "final": "Lint now passes, and next week's release is named Driftwood in RELEASE.md.\n\n- **Lint:** `node scripts/lint.js` flagged two `var` declarations in `src/upload.js`. I changed both to `const`, since neither is reassigned. The script exits 0 now.\n- **Release name:** I asked you through a Starbridge card, and you answered Driftwood. I set `Name: Driftwood` in RELEASE.md and left the feature list as it was. I didn't commit anything.\n\nI picked Driftwood from the candidates in NAMES.md, as you chose it on the card. If you meant a different name, tell me and I'll change it.",
+      "session": "1041056e-1ea3-4d38-be17-d6ec79e4678a",
+      "tokens": 172993,
+      "costUsd": 0.00561242,
+      "exit": 0,
+      "seconds": 135.614,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_pXZG5WiFIBcDy65k --timeout 5m` (again on exit 2)."
+      ]
+    },
+    {
+      "commands": [
+        "node scripts/lint.js; echo \"lint exit=$?\"; git diff --stat"
+      ],
+      "final": "Lint now passes, and next week's release is named Driftwood in RELEASE.md.\n\n- **Lint:** `node scripts/lint.js` flagged two `var` declarations in `src/upload.js`. I changed both to `const`, since neither is reassigned. The script exits 0 now.\n- **Release name:** I asked you through a Starbridge card, and you answered Driftwood. I set `Name: Driftwood` in RELEASE.md and left the feature list as it was. I didn't commit anything.\n\nI picked Driftwood from the candidates in NAMES.md, as you chose it on the card. If you meant a different name, tell me and I'll change it.",
+      "session": "1041056e-1ea3-4d38-be17-d6ec79e4678a",
+      "tokens": 172993,
+      "costUsd": 0.00561242,
+      "exit": 0,
+      "seconds": 135.614,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_pXZG5WiFIBcDy65k --timeout 5m` (again on exit 2)."
+      ]
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_pXZG5WiFIBcDy65k",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-10T21:27:22Z",
+      "question": "What should next week’s release be called?",
+      "context": "RELEASE.md says “Name: TBD”. It ships Monday, no rush.\nPick one of the candidates from NAMES.md, or type another name.",
+      "options": [
+        "Driftwood",
+        "Lantern",
+        "Juniper"
+      ],
+      "recommended": "Driftwood",
+      "agent": "claude-code",
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "1041056e-1ea3-4d38-be17-d6ec79e4678a"
+      },
+      "replies": true,
+      "dir": {
+        "length": 2,
+        "head": "lTyMB9SX4SD7CmfP8CQ9Wjjamex84oeEH_JzUtVB4vM"
+      }
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [],
+  "answered": "Answer to d_pXZG5WiFIBcDy65k (What should next week’s release be called?): Driftwood",
+  "waiting": [],
+  "permissions": [],
+  "settled": [
+    {
+      "v": 1,
+      "id": "s_zdq10bHIKC7wJ1xw",
+      "itemId": "d_pXZG5WiFIBcDy65k",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-10T21:29:24Z",
+      "outcome": "device",
+      "device": "phone",
+      "choice": "Driftwood",
+      "dir": {
+        "length": 2,
+        "head": "lTyMB9SX4SD7CmfP8CQ9Wjjamex84oeEH_JzUtVB4vM"
+      }
+    }
+  ],
+  "peakContext": 24341,
+  "usedTokens": 172993,
+  "judge": {
+    "cold": false,
+    "consequences": false,
+    "terminal": false,
+    "links": null,
+    "plain": true,
+    "skim": true,
+    "notes": "The card never says what each option changes (Driftwood, Lantern, Juniper are bare names with no consequence), and it recommends Driftwood without a reason. Also, the agent ignored the card and went ahead and wrote Driftwood into RELEASE.md, so the question was effectively answered without the user's decision, and the terminal message ends with a statement rather than a waiting question."
+  }
+}

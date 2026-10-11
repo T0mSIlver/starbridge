@@ -1,0 +1,120 @@
+{
+  "agent": "claude",
+  "model": "claude-haiku-5-5",
+  "arm": "after",
+  "scenario": "option-order",
+  "rep": 1,
+  "turns": [
+    {
+      "commands": [
+        "git status --short && find . -path ./.git -prune -o -type f -print | head -200 && grep -rni \"trash\" --exclude-dir=.git . | head -80",
+        "cat NOTES.md && echo ---- && cat src/trash.js && echo ---- && cat AGENTS.md && git log --oneline | head",
+        "starbridge ask \\\n  --question 'Keep deleted notes in the trash for how many days?' \\\n  --context '85% of restore requests come within 3 weeks of the delete.\n**7 days:** least storage, but misses restores after day 7.\n**30 days:** covers 3 weeks of restores, about $20/month of trash.\n**90 days:** keeps everything, highest storage cost.' \\\n  --option '7 days' --option '30 days' --option '90 days' --recommended '30 days'",
+        "cat > /var/tmp/skill-eval-mnEdEu/check-trash.mjs <<'EOF'\nimport { trash, remove, purgeExpired } from '/var/tmp/skill-eval-mnEdEu/after-option-order-1/proj/src/trash.js';\nconst day = 86400000, now = Date.now();\ntrash.push({ note: 'old', deletedAt: now - 40 * day });\ntrash.push({ note: 'recent', deletedAt: now - 10 * day });\nconsole.log('purged', purgeExpired(30, now), 'left', trash.map(t => t.note));\nEOF\nnode -I /var/tmp/skill-eval-mnEdEu/check-trash.mjs; rm /var/tmp/skill-eval-mnEdEu/check-trash.mjs",
+        "cd /var/tmp/skill-eval-mnEdEu && cat > /var/tmp/skill-eval-mnEdEu/check-trash.mjs <<'EOF'\nimport { trash, purgeExpired } from '/var/tmp/skill-eval-mnEdEu/after-option-order-1/proj/src/trash.js';\nconst day = 86400000, now = Date.now();\ntrash.push({ note: 'old', deletedAt: now - 40 * day });\ntrash.push({ note: 'recent', deletedAt: now - 10 * day });\nconsole.log('purged', purgeExpired(30, now), 'left', trash.map(t => t.note));\nEOF\nnode /var/tmp/skill-eval-mnEdEu/check-trash.mjs; rm /var/tmp/skill-eval-mnEdEu/check-trash.mjs",
+        "starbridge wait d_4KP808uSYGCVbnC- --timeout 5m; echo \"exit $?\""
+      ],
+      "final": "Trash notes are now purged automatically after 30 days, with the value set by the owner. The purge runs as an hourly timer, but nothing in the repo starts it yet.\n\n**What changed** (`src/trash.js`):\n- `purgeExpired(retentionDays, now)` removes notes whose `deletedAt` is older than the window and returns how many it removed.\n- `startAutoPurge(retentionDays, intervalMs)` runs that every hour and returns a stop function.\n- `TRASH_RETENTION_DAYS = 30` is the default window.\n\n**Decision:** AGENTS.md makes the retention period the owner's call. I posted the 7 / 30 / 90-day question as a Starbridge card. The owner answered **30 days**, the recommended option. It covers the 3 weeks in which 85% of restore requests come (per NOTES.md).\n\n**Verified:** a quick script with a 40-day-old note and a 10-day-old note, run with a 30-day window, purged the old one and kept the recent one.\n\n**Not done:** the repo has no app entry point, so nothing calls `startAutoPurge()` yet. Wire it into the startup code, which I couldn't find here, for purging to actually run. Existing trash from before this change will be purged on the first run past its 30-day mark.",
+      "session": "43e453f0-5f30-4cb3-9f4a-9a7da3064b47",
+      "tokens": 227718,
+      "costUsd": 0.007236140000000002,
+      "exit": 0,
+      "seconds": 33.101,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_4KP808uSYGCVbnC- --timeout 5m` (again on exit 2)."
+      ]
+    },
+    {
+      "commands": [],
+      "final": "Trash notes are now purged automatically after 30 days, with the value set by the owner. The purge runs as an hourly timer, but nothing in the repo starts it yet.\n\n**What changed** (`src/trash.js`):\n- `purgeExpired(retentionDays, now)` removes notes whose `deletedAt` is older than the window and returns how many it removed.\n- `startAutoPurge(retentionDays, intervalMs)` runs that every hour and returns a stop function.\n- `TRASH_RETENTION_DAYS = 30` is the default window.\n\n**Decision:** AGENTS.md makes the retention period the owner's call. I posted the 7 / 30 / 90-day question as a Starbridge card. The owner answered **30 days**, the recommended option. It covers the 3 weeks in which 85% of restore requests come (per NOTES.md).\n\n**Verified:** a quick script with a 40-day-old note and a 10-day-old note, run with a 30-day window, purged the old one and kept the recent one.\n\n**Not done:** the repo has no app entry point, so nothing calls `startAutoPurge()` yet. Wire it into the startup code, which I couldn't find here, for purging to actually run. Existing trash from before this change will be purged on the first run past its 30-day mark.",
+      "session": "43e453f0-5f30-4cb3-9f4a-9a7da3064b47",
+      "tokens": 227718,
+      "costUsd": 0.007236140000000002,
+      "exit": 0,
+      "seconds": 33.101,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_4KP808uSYGCVbnC- --timeout 5m` (again on exit 2)."
+      ]
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_4KP808uSYGCVbnC-",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-10T21:24:10Z",
+      "question": "Keep deleted notes in the trash for how many days?",
+      "context": "85% of restore requests come within 3 weeks of the delete.\n**7 days:** least storage, but misses restores after day 7.\n**30 days:** covers 3 weeks of restores, about $20/month of trash.\n**90 days:** keeps everything, highest storage cost.",
+      "options": [
+        "7 days",
+        "30 days",
+        "90 days"
+      ],
+      "recommended": "30 days",
+      "agent": "claude-code",
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "43e453f0-5f30-4cb3-9f4a-9a7da3064b47"
+      },
+      "replies": true,
+      "dir": {
+        "length": 2,
+        "head": "4zomvYptY-qDUAJ9QKK6lYZbuF-DtJWGZDkt70-Qv0k"
+      }
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [],
+  "answered": "Answer to d_4KP808uSYGCVbnC- (Keep deleted notes in the trash for how many days?): 30 days",
+  "waiting": [
+    {
+      "v": 1,
+      "id": "w_ekNK1Go8BQp7AHvA",
+      "decisionId": "d_4KP808uSYGCVbnC-",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-10T21:24:18Z",
+      "state": "waiting",
+      "dir": {
+        "length": 2,
+        "head": "4zomvYptY-qDUAJ9QKK6lYZbuF-DtJWGZDkt70-Qv0k"
+      }
+    }
+  ],
+  "permissions": [],
+  "settled": [
+    {
+      "v": 1,
+      "id": "s_AnXecS3wpWtJJhrK",
+      "itemId": "d_4KP808uSYGCVbnC-",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-10T21:24:26Z",
+      "outcome": "device",
+      "device": "phone",
+      "choice": "30 days",
+      "dir": {
+        "length": 2,
+        "head": "4zomvYptY-qDUAJ9QKK6lYZbuF-DtJWGZDkt70-Qv0k"
+      }
+    }
+  ],
+  "peakContext": 25538,
+  "usedTokens": 227718,
+  "judge": {
+    "cold": true,
+    "consequences": true,
+    "terminal": false,
+    "links": null,
+    "plain": true,
+    "skim": true,
+    "notes": "The final message reports the answer as already given and asks the user nothing in the terminal, so the reply never invites a follow-up on the unwired auto-purge."
+  }
+}

@@ -14,7 +14,10 @@ What the code relies on, with the versions checked.
 - **Claude Code sessions**: `~/.claude/sessions/<pid>.json` holds `sessionId`, `name` (the title)
   and, under Remote Control, `bridgeSessionId`; the Remote Control URL is
   `https://claude.ai/code/<bridgeSessionId>`. Records are rewritten in place without truncation,
-  so read only the first JSON object (`cli/src/claude.ts`).
+  so read only the first JSON object (`cli/src/claude.ts`). `nameSource` is `derived`, `auto` or
+  `user`, and absent for Claude Desktop's names. The transcript is
+  `~/.claude/projects/<cwd, each other character a dash>/<sessionId>.jsonl`; a user line typed by
+  a person has no `isMeta` or `isCompactSummary` and no `origin.kind` other than `human`.
 - **Claude Code hooks** (2.1.289): `PermissionRequest` waits up to 600 s and races the dialog. It
   fires under `--dangerously-skip-permissions` for `ask` rules and for Remote Control's `--print
   --sdk-url` children, not for auto mode's classifier blocks, which reach hooks only as

@@ -1,0 +1,172 @@
+{
+  "agent": "claude",
+  "model": "claude-haiku-5-5",
+  "arm": "after",
+  "scenario": "option-order",
+  "rep": 2,
+  "turns": [
+    {
+      "commands": [
+        "git status --short && git ls-files | head -100 && cat AGENTS.md && grep -rniE 'trash|purge|retention|deleted_at|soft.?delete' --exclude-dir=.git . | head -80",
+        "cat NOTES.md && echo ---- && cat src/trash.js && git log --oneline | head",
+        "starbridge ask \\\n  --question 'Purge deleted notes from trash after how many days?' \\\n  --context 'The trash never empties, and the storage bill doubled.\n**7 days:** lowest storage cost; restores after a week fail.\n**30 days:** 85% of restore requests come within 3 weeks, so most are covered.\n**90 days:** longest restore window; highest storage cost.' \\\n  --option '7 days' --option '30 days' --option '90 days' --recommended '30 days' \\\n  --link https://github.com/acme/notes-sync/blob/main/NOTES.md",
+        "starbridge settle d__tNdny_4gDSk5cNR --outcome withdrawn --reason 'Reposted without a link I could not verify' && starbridge ask \\\n  --question 'Purge deleted notes from trash after how many days?' \\\n  --context 'The trash never empties, and the storage bill doubled.\n**7 days:** lowest storage cost; restores after a week fail.\n**30 days:** 85% of restore requests come within 3 weeks, so most are covered.\n**90 days:** longest restore window; highest storage cost.' \\\n  --option '7 days' --option '30 days' --option '90 days' --recommended '30 days'",
+        "cp src/trash.js /tmp/trash-check.mjs && node -e '\nimport(\"/tmp/trash-check.mjs\").then(({ trash, remove, purgeExpired }) => {\n  const day = 86400000, now = Date.now();\n  trash.push({ note: \"old\", deletedAt: now - 40 * day }, { note: \"new\", deletedAt: now - 2 * day });\n  const n = purgeExpired(30, now);\n  console.log(n, trash.map(e => e.note));\n});' ; rm -f /tmp/trash-check.mjs",
+        "starbridge wait d_0wJBfgp2ZXUQpwgE --timeout 5m; echo \"exit=$?\""
+      ],
+      "final": "Deleted notes now go out of the trash after 30 days, which is the retention value the owner picked.\n\n- **What changed:** `src/trash.js` has a `purgeExpired(retentionDays)` function that removes entries older than the cutoff. `remove()` runs it with `TRASH_RETENTION_DAYS = 30` before each delete, so the trash stays bounded.\n- **Why on delete:** the repo has no scheduler or entry point to run a timer from. Purging on delete is the only automatic trigger it supports. Notes in the trash are only removed when another note is deleted, so a quiet period leaves old notes in place until the next delete. A daily timer would need an entry point this repo doesn't have.\n- **Decision:** I asked the owner through Starbridge for the period. They answered 30 days. I'd suggested 30 because 85% of restore requests come within 3 weeks, per NOTES.md.\n- **Verification:** I ran a quick check in Node. Notes deleted 40 days ago were removed, and notes deleted 2 days ago were kept. I didn't add a test file because the repo has no test setup.\n- **Not done:** no commit.",
+      "session": "6fa84105-ccf2-43cb-bf8f-258e90199d28",
+      "tokens": 206036,
+      "costUsd": 0.0076766000000000004,
+      "exit": 0,
+      "seconds": 34.156,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d__tNdny_4gDSk5cNR --timeout 5m` (again on exit 2).",
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_0wJBfgp2ZXUQpwgE --timeout 5m` (again on exit 2)."
+      ]
+    },
+    {
+      "commands": [
+        "cp src/trash.js /tmp/trash-check.mjs && node -e '\nimport(\"/tmp/trash-check.mjs\").then(({ trash, remove, TRASH_RETENTION_DAYS }) => {\n  const day = 86400000, now = Date.now();\n  trash.push({ note: \"old\", deletedAt: now - 40 * day }, { note: \"new\", deletedAt: now - 2 * day });\n  remove(\"fresh\");\n  console.log(TRASH_RETENTION_DAYS, trash.map(e => e.note));\n});' ; rm -f /tmp/trash-check.mjs && git diff --stat"
+      ],
+      "final": "Deleted notes now go out of the trash after 30 days, which is the retention value the owner picked.\n\n- **What changed:** `src/trash.js` has a `purgeExpired(retentionDays)` function that removes entries older than the cutoff. `remove()` runs it with `TRASH_RETENTION_DAYS = 30` before each delete, so the trash stays bounded.\n- **Why on delete:** the repo has no scheduler or entry point to run a timer from. Purging on delete is the only automatic trigger it supports. Notes in the trash are only removed when another note is deleted, so a quiet period leaves old notes in place until the next delete. A daily timer would need an entry point this repo doesn't have.\n- **Decision:** I asked the owner through Starbridge for the period. They answered 30 days. I'd suggested 30 because 85% of restore requests come within 3 weeks, per NOTES.md.\n- **Verification:** I ran a quick check in Node. Notes deleted 40 days ago were removed, and notes deleted 2 days ago were kept. I didn't add a test file because the repo has no test setup.\n- **Not done:** no commit.",
+      "session": "6fa84105-ccf2-43cb-bf8f-258e90199d28",
+      "tokens": 206036,
+      "costUsd": 0.0076766000000000004,
+      "exit": 0,
+      "seconds": 34.156,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d__tNdny_4gDSk5cNR --timeout 5m` (again on exit 2).",
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_0wJBfgp2ZXUQpwgE --timeout 5m` (again on exit 2)."
+      ]
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d__tNdny_4gDSk5cNR",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-10T21:24:22Z",
+      "question": "Purge deleted notes from trash after how many days?",
+      "context": "The trash never empties, and the storage bill doubled.\n**7 days:** lowest storage cost; restores after a week fail.\n**30 days:** 85% of restore requests come within 3 weeks, so most are covered.\n**90 days:** longest restore window; highest storage cost.",
+      "options": [
+        "7 days",
+        "30 days",
+        "90 days"
+      ],
+      "recommended": "30 days",
+      "agent": "claude-code",
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "6fa84105-ccf2-43cb-bf8f-258e90199d28"
+      },
+      "links": [
+        {
+          "url": "https://github.com/acme/notes-sync/blob/main/NOTES.md"
+        }
+      ],
+      "replies": true,
+      "dir": {
+        "length": 2,
+        "head": "2Tygq40gqbfpWw7oqlFS0pF3lVBAcc58hv0vRjR5Ggk"
+      }
+    },
+    {
+      "v": 1,
+      "id": "d_0wJBfgp2ZXUQpwgE",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-10T21:24:26Z",
+      "question": "Purge deleted notes from trash after how many days?",
+      "context": "The trash never empties, and the storage bill doubled.\n**7 days:** lowest storage cost; restores after a week fail.\n**30 days:** 85% of restore requests come within 3 weeks, so most are covered.\n**90 days:** longest restore window; highest storage cost.",
+      "options": [
+        "7 days",
+        "30 days",
+        "90 days"
+      ],
+      "recommended": "30 days",
+      "agent": "claude-code",
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "6fa84105-ccf2-43cb-bf8f-258e90199d28"
+      },
+      "replies": true,
+      "dir": {
+        "length": 2,
+        "head": "2Tygq40gqbfpWw7oqlFS0pF3lVBAcc58hv0vRjR5Ggk"
+      }
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [],
+  "answered": "Answer to d_0wJBfgp2ZXUQpwgE (Purge deleted notes from trash after how many days?): 30 days",
+  "waiting": [
+    {
+      "v": 1,
+      "id": "w_Lq-kqtbB_SYUDlF-",
+      "decisionId": "d_0wJBfgp2ZXUQpwgE",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-10T21:24:34Z",
+      "state": "waiting",
+      "dir": {
+        "length": 2,
+        "head": "2Tygq40gqbfpWw7oqlFS0pF3lVBAcc58hv0vRjR5Ggk"
+      }
+    }
+  ],
+  "permissions": [],
+  "settled": [
+    {
+      "v": 1,
+      "id": "s_PtivFmzKdrzBeF6w",
+      "itemId": "d__tNdny_4gDSk5cNR",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-10T21:24:26Z",
+      "outcome": "withdrawn",
+      "dir": {
+        "length": 2,
+        "head": "2Tygq40gqbfpWw7oqlFS0pF3lVBAcc58hv0vRjR5Ggk"
+      },
+      "reason": "Reposted without a link I could not verify"
+    },
+    {
+      "v": 1,
+      "id": "s_LbPbOpDBEcQAe24C",
+      "itemId": "d_0wJBfgp2ZXUQpwgE",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-10T21:24:38Z",
+      "outcome": "device",
+      "device": "phone",
+      "choice": "30 days",
+      "dir": {
+        "length": 2,
+        "head": "2Tygq40gqbfpWw7oqlFS0pF3lVBAcc58hv0vRjR5Ggk"
+      }
+    }
+  ],
+  "peakContext": 26636,
+  "usedTokens": 206036,
+  "judge": {
+    "cold": true,
+    "consequences": true,
+    "terminal": false,
+    "links": true,
+    "plain": true,
+    "skim": true,
+    "notes": "The agent posted two identical cards for the same decision, so the owner could be asked twice, and the second card has no link."
+  }
+}

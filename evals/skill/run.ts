@@ -679,8 +679,10 @@ async function liveRun(
       );
       for (const d of ["opencode", "hooks"])
         cpSync(join(armDir, "mod", d), join(conf, "starbridge/mod", d), { recursive: true });
-      mkdirSync(join(conf, "starbridge/plugin/hooks"), { recursive: true });
-      copyFileSync(join(armDir, "plugin/hooks/rule.md"), join(conf, "starbridge/plugin/hooks/rule.md"));
+      // Where the arm's plugin reads its rule: plugin/rules since #1063, plugin/hooks before.
+      for (const d of ["hooks", "rules"])
+        if (existsSync(join(armDir, "plugin", d)))
+          cpSync(join(armDir, "plugin", d), join(conf, "starbridge/plugin", d), { recursive: true });
       const allow = { bash: "allow", webfetch: "allow", external_directory: "allow" };
       writeFileSync(
         join(conf, "opencode.json"),
@@ -872,14 +874,10 @@ async function one(s: Scenario, arm: string, rep: number): Promise<RunRecord> {
       if (r.status !== 0) throw new Error(`codex login --with-api-key: ${r.stderr}`);
     }
     cpSync(join(plugin, "skills/starbridge"), join(conf, "skills/starbridge"), { recursive: true });
-    const hook = spawnSync("sh", [join(plugin, "hooks/session-start.sh")], {
-      env: { STARBRIDGE_CONFIG_DIR: sb },
-      encoding: "utf8",
-    });
-    writeFileSync(
-      join(conf, "AGENTS.md"),
-      `${JSON.parse(hook.stdout).hookSpecificOutput.additionalContext}\n`,
-    );
+    // The harness's own rule (#1063), else the one rule every harness had before.
+    const own = join(plugin, "rules", `${agent}.md`);
+    const rule = readFileSync(existsSync(own) ? own : join(plugin, "hooks/rule.md"), "utf8");
+    writeFileSync(join(conf, "AGENTS.md"), `${rule.trimEnd()}\n`);
   }
 
   const env: Record<string, string> = {
@@ -983,6 +981,11 @@ async function one(s: Scenario, arm: string, rep: number): Promise<RunRecord> {
       }
     };
     const delay = (s.answerAfter ?? 15) * 1000;
+    /** `c` while it is open, else the first card still open, as the owner's inbox shows them. */
+    const stillOpen = async (c: Card) => {
+      const open = (await live.opened("decision", "&open=1")) as unknown as Card[];
+      return open.find((o) => o.id === c.id) ?? open[0];
+    };
     // In `claude -p`, `codex exec`, `pi -p` and `opencode run` nothing brings an answer back as a
     // prompt: the agent waits within its turn (`starbridge wait`), so the owner answers the first
     // card while it runs, whether or not the situation checks what it does with the answer.
@@ -1009,7 +1012,10 @@ async function one(s: Scenario, arm: string, rep: number): Promise<RunRecord> {
               await Bun.sleep(delay);
               if (answeredFirst) break;
               const latest = (await live.opened("decision")) as Record<string, unknown>[];
-              await reply(c);
+              // A card the agent withdrew and reposted meanwhile: the owner answers the new one.
+              const target = await stillOpen(c);
+              if (!target) continue;
+              await reply(target);
               answeredFirst = latest;
             }
           })().catch(() => {}) // the turn ended and the server stopped first
@@ -1025,7 +1031,8 @@ async function one(s: Scenario, arm: string, rep: number): Promise<RunRecord> {
         seen ??= Date.now();
         if (Date.now() - seen < delay) return false;
         answeredFirst = (await live.opened("decision")) as Record<string, unknown>[];
-        if (d) await reply(d);
+        const target = d && (await stillOpen(d));
+        if (target) await reply(target);
         else if (p) {
           await live.answerPermission(p.id, { behavior: "allow", scope: "once" });
           rec.answered = `Allowed ${p.id}`;

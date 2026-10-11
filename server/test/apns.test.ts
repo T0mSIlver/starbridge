@@ -1,10 +1,11 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import http2 from "node:http2";
-import { type Decision, type Run, seal } from "@starbridge/protocol";
+import { type Decision, type Run, type Snooze, seal } from "@starbridge/protocol";
 import { apnsRequest } from "../src/apns";
 import { createApp } from "../src/app";
 import type { Config } from "../src/config";
 import { checkTarget } from "../src/push";
+import { wakeSnoozes } from "../src/snooze";
 import { aggregate, dayOf } from "../src/usage";
 import {
   type Account,
@@ -327,6 +328,49 @@ test("relay mode: a server without an APNs key forwards through the relay, envir
       "relay.apns.ok": 1,
       "relay.apns.gone": 1,
     });
+  } finally {
+    relay.deps.push.close();
+    relayServer.stop(true);
+  }
+});
+
+test("a snooze's return is grouped under its question's machine, through the relay too (#1168)", async () => {
+  const relay = await createApp(
+    testConfig({ ...apnsConfig(), relayMode: true, ownerToken: undefined }),
+  );
+  const relayServer = Bun.serve({
+    port: 0,
+    fetch: (req, server) => relay.app.fetch(req, { server }),
+  });
+  try {
+    for (const over of [apnsConfig(), { relayUrl: `http://localhost:${relayServer.port}` }]) {
+      const { s, acct, devbox } = await setup(over);
+      await subscribe(s, acct, OK);
+      const d = await postDecision(s, acct, devbox, "d1");
+      const phone = acct.device;
+      const body: Snooze = {
+        v: 1,
+        id: "z1",
+        decisionId: d.id,
+        to: [devbox.id, phone.id],
+        // APNs hides a snooze until its time by the clock, so it returns within the test.
+        until: new Date(Date.now() + 1_000).toISOString(),
+        at: new Date().toISOString(),
+      };
+      const z = seal("snooze", body, { id: phone.id, signKey: phone.keys.sign.privateKey }, [
+        devbox.member,
+        phone.member,
+      ]);
+      expect((await s.call("POST", "/v1/items", { token: phone.token, body: z })).status).toBe(201);
+      await s.deps.push.idle();
+      sent.length = 0;
+      await Bun.sleep(1_100);
+      wakeSnoozes(s.deps.db, s.deps.push, 3072);
+      await s.deps.push.idle();
+      expect(sent.map((x) => [x.body.p.kind, x.body.p.from, x.body.aps["thread-id"]])).toEqual([
+        ["snooze", phone.id, devbox.id],
+      ]);
+    }
   } finally {
     relay.deps.push.close();
     relayServer.stop(true);

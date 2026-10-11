@@ -61,6 +61,8 @@ final class Store {
     @ObservationIgnored let http: URLSession
     @ObservationIgnored private var joinTask: Task<Void, Never>?
     @ObservationIgnored var directory: Directory?
+    /** Why nothing may be stored this run: the saved state or its keys could not be read or set aside. */
+    @ObservationIgnored private var locked: String?
 
     init(vault: Vault = KeychainVault(), disk: Disk = .standard, deviceName: String, http: URLSession = .shared) {
         self.vault = vault
@@ -68,13 +70,31 @@ final class Store {
         self.deviceName = deviceName
         self.http = http
         SavedImage.directory = disk.url.deletingLastPathComponent().appendingPathComponent("images")
-        saved = disk.load() ?? Saved(server: Self.defaultServer)
+        let loaded = disk.loadOrMoveAside()
+        if case let .saved(found) = loaded { saved = found ?? Saved(server: Self.defaultServer) } else { saved = Saved(server: Self.defaultServer) }
         do {
             secrets = try vault.load()
         } catch {
             secrets = Secrets()
             notice = "\(error)"
         }
+        switch loaded {
+        case .saved:
+            break
+        case let .aside(tag):
+            // The keys describe the device the unreadable file held: they go aside with it, and the app starts signed out.
+            do {
+                try vault.setAside(tag)
+                secrets = Secrets()
+                notice = "This iPhone’s saved state couldn’t be read, so you’re signed out. Sign in again."
+            } catch {
+                locked = "This iPhone’s keys couldn’t be set aside with its unreadable saved state (\(error)). Restart the app."
+            }
+        case let .stuck(why):
+            locked = "This iPhone’s saved state couldn’t be read (\(why)). Restart the app."
+        }
+        // Nothing is written this run, so the file and the keys stay for a launch that can read them.
+        if let locked { notice = locked }
         if saved.joining != nil { waitForApproval() }
         if saved.digitJoin != nil { waitForDigitJoin() }
     }
@@ -98,6 +118,7 @@ final class Store {
      * for an account it never belonged to.
      */
     func save(_ newSaved: Saved? = nil, _ newSecrets: Secrets? = nil) throws {
+        if let locked { throw Notice(message: locked) }
         // The secrets first: a saved state naming keys the vault lacks could not resume.
         if let newSecrets { try vault.save(newSecrets) }
         // A sync that changed nothing writes nothing: the file is read by the notification extension too.
@@ -121,7 +142,7 @@ final class Store {
             // What failed to store still holds for this run.
             if let newSecrets { secrets = newSecrets }
             if let newSaved { saved = newSaved }
-            notice = "\(error)"
+            notice = describe(error)
         }
     }
 

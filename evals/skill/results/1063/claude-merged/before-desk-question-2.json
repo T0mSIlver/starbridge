@@ -1,0 +1,33 @@
+{
+  "agent": "claude",
+  "model": "claude-haiku-5-5",
+  "arm": "before",
+  "scenario": "desk-question",
+  "rep": 2,
+  "turns": [
+    {
+      "commands": [],
+      "askUser": [],
+      "final": "",
+      "session": "dab3c9d6-47f0-4032-8849-222237e37e1d",
+      "exit": 0,
+      "seconds": 721.126
+    }
+  ],
+  "decisions": [],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [],
+  "waiting": [],
+  "permissions": [],
+  "settled": [],
+  "judge": {
+    "cold": null,
+    "consequences": null,
+    "terminal": false,
+    "links": null,
+    "plain": null,
+    "skim": null,
+    "notes": "No card was posted (the cards list is empty) and the final message is blank, so the user was never asked the system-versus-toggle decision either on the phone or in the terminal."
+  }
+}

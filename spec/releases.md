@@ -89,12 +89,13 @@
   candidate moves every version but the marketplace refs. Setup and `starbridge update` install
   the Pi package at the CLI's own tag. The mod keeps its own copy of the agent API revision, since
   Claude Code installs only `mod/`.
-- **Deploys** (#26, #150, #260). A merge to main deploys from Actions once CI passes, over SSH to a
-  forced command that deploys only main's head or a commit on main containing the deployed one;
-  the box fetches it itself. Rollbacks are manual (`deploy/deploy.sh`). The deploy fails unless the
-  live server reports that commit or a later one (`x-starbridge-revision`). That header, and
-  `starbridge-deploy`'s argument, are refused unless they are 40 lowercase hex characters (#467),
-  since the workflow puts the revision in a `gh api` path.
+- **Deploys** (#26, #150, #260, #1094). A merge to main deploys from Actions once CI passes, unless
+  no file the box builds from changed since the revision it runs, over SSH to a forced command that
+  deploys only main's head or a commit on main containing the deployed one; the box fetches it
+  itself. Rollbacks are manual (`deploy/deploy.sh`). The deploy fails unless the live server reports
+  that commit or a later one (`x-starbridge-revision`). That header, and `starbridge-deploy`'s
+  argument, are refused unless they are 40 lowercase hex characters (#467), since the workflow puts
+  the revision in a `gh api` path.
 - **No downtime** (#150, #508). The page runs as two copies; a deploy starts the idle one, waits
   for its health, then stops the other, and Caddy sends every request to the first healthy copy.
   The server stays one instance, since it holds the long-polls and SQLite; Caddy holds requests up
@@ -103,24 +104,37 @@
   is tagged by a hash of that file, which pins every input, and built only when no image has the
   tag, since a rebuild after the build-cache prune yields a new image even from the same file.
 - **Pinning** (#361, #423, #426). Actions are pinned by commit SHA and images by digest, so a
-  dependency changes only in a Dependabot PR. A workflow writes `pnpm-lock.yaml` into Dependabot's
-  security PRs, which update `package.json` alone, then dispatches CI, since a push with
-  `GITHUB_TOKEN` starts no workflow. The images install pnpm with `npm install -g` at
-  `packageManager`'s version, since node slim images ship no corepack (#430).
+  dependency changes only in a Dependabot PR. A job's image goes in a Dockerfile, not `container:`,
+  since Dependabot reads only Dockerfiles (#1172). A workflow writes `pnpm-lock.yaml` into
+  Dependabot's security PRs, which update `package.json` alone, then dispatches CI, since a push
+  with `GITHUB_TOKEN` starts no workflow; that run sets the PR's `CI` status, failed when any job
+  fails or skips, Windows and macOS on a private repository aside (#1161). The images install pnpm
+  with `npm install -g` at `packageManager`'s version, since node slim images ship no corepack
+  (#430).
 - **CI** (#380). Main runs one at a time; a newer merge replaces the waiting run, and the head's
-  deploy covers the merges in between. A pull request runs only the jobs its files can affect;
-  skipped jobs still report success. The e2e runs under `.github/watchdog.sh`. A merge to main
-  skips the e2e when a run from this repository already passed it on the same git tree, most often
-  the pull request's last run on its merge with the commit main then held (#878): a tree fixes every
-  file, `ci.yml` included, so that run tested what main now holds. Each passing e2e uploads an
-  artifact named after its tree, kept 7 days; when none is found or the lookup fails, it runs. A
-  fork's runs do not count, since a fork's pull request runs its own `ci.yml`. Tests point
-  `TMPDIR` at one directory per run and remove it (`test-tmp.ts`, #313). A `windows-latest` job
-  (#552) runs the CLI's platform tests and starts a built `.exe`; the rest of the CLI suite runs
-  there without failing the job until it passes. A private repository skips it, since GitHub's
-  Windows runners need a public one or paid minutes. A `macos-latest` job (#877), skipped the same
-  way, starts a built binary and runs the whole CLI suite, which must pass: the launchd service and
-  the screen readers run only on a Mac, so the real launchd starts and stops the agent there.
-  Both jobs run each test file alone and kill one that hangs (`cli/scripts/test-each.ts`, #862).
+  deploy covers the merges in between. A run tests only the jobs its files can affect, a pull
+  request's against its base and a push's against the commit before it (#1094); skipped jobs still
+  report success. The e2e runs under `.github/watchdog.sh`. A merge to main skips the e2e when a run
+  from this repository already passed it on the same git tree, most often the pull request's last
+  run on its merge with the commit main then held (#878): a tree fixes every file, `ci.yml`
+  included, so that run tested what main now holds. Each of the e2e's three parts uploads an
+  artifact named after its part and tree when it passes (`e2e-passed-<part>-<tree>`, #1094), kept 7
+  days; when none is found or the lookup fails, it runs. A fork's runs do not count, since a fork's
+  pull request runs its own `ci.yml`. Tests point `TMPDIR` at one directory per run and remove it
+  (`test-tmp.ts`, #313). A `windows-latest` job (#552) starts a built `.exe` and runs the whole CLI
+  suite, which must pass (#884). A private repository skips it, since GitHub's Windows runners need
+  a public one or paid minutes. A `macos-latest` job (#877), skipped the same way, starts a built
+  binary and runs the whole CLI suite, which must pass: the launchd service and the screen readers
+  run only on a Mac, so the real launchd starts and stops the agent there. Both jobs run each test
+  file alone and kill one that hangs (`cli/scripts/test-each.ts`, #862).
+- **CI runners** (#146, #1204). Three self-hosted pools, one repository variable each: `RUNNER`
+  (`starbridge-ci`) runs main's tests, deploys and uptime checks; `ANDROID_RUNNER`
+  (`starbridge-android`) the Android builds; `PR_RUNNER` (`starbridge-pr`) the test and e2e jobs of
+  a pull request from this repository's own branches, so they start sooner than on GitHub's
+  runners. Dependabot's pull requests and forks' stay on GitHub's runners, and so does every other
+  pull request job: the desktop e2e needs Electron's libraries, the image builds Docker, and
+  Android, Windows and macOS their own systems. The PR pool holds no secrets, and no pull request
+  job reaches the other two pools, which run the deploy and the release. A fork's pull request
+  runs its own `ci.yml`, which could name any label, so a fork's run is never approved.
 - **Monitoring.** `uptime.yml` checks `/healthz`, `/healthz/backup` (fails when the last nightly
   backup is over 26 h old) and `/healthz/disk` (under 2 GB free), and opens one `outage` issue.

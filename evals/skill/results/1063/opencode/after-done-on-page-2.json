@@ -1,0 +1,119 @@
+{
+  "agent": "opencode",
+  "model": "zai-coding-plan/glm-5.3-flash",
+  "arm": "after",
+  "scenario": "done-on-page",
+  "rep": 2,
+  "turns": [
+    {
+      "commands": [
+        "git log --oneline -10 && git status",
+        "ls -la && ls -la src/",
+        "ls -la scripts/",
+        "sh scripts/read-artifact.sh",
+        "starbridge ask \\\n  --question 'Pick the pricing tier names in the artifact?' \\\n  --context 'src/pricing.html is finished except the tier names ($0, $8, $20 placeholders). Your artifact compares three sets of names. Tap Pick there and the choice lands in this session; I will fill in the page at once.' \\\n  --answer-in 'https://claude.ai/artifact/7c1e9a52-0d3b-4f6e-9a21-5b8c3d2e1f00' \\\n  --link 'https://claude.ai/artifact/7c1e9a52-0d3b-4f6e-9a21-5b8c3d2e1f00' \\\n  --waiting",
+        "starbridge wait d_W1f2Q6xIEL7qwEAZ --timeout 5m"
+      ],
+      "final": "Done. The card's answer pointed to the artifact page; the pick read `Starter, Plus, Studio`. Updated src/pricing.html:1-3 with those names at the $0/$8/$20 tiers and removed the TODO. No commit was requested, so the change is left unstaged.",
+      "session": "ses_ed8801e8dffeyy9C0QX15ai4WF",
+      "tokens": 11596,
+      "exit": 0,
+      "seconds": 59.281,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_W1f2Q6xIEL7qwEAZ --timeout 5m` (again on exit 2)."
+      ]
+    },
+    {
+      "commands": [
+        "sh scripts/read-artifact.sh"
+      ],
+      "final": "Done. The card's answer pointed to the artifact page; the pick read `Starter, Plus, Studio`. Updated src/pricing.html:1-3 with those names at the $0/$8/$20 tiers and removed the TODO. No commit was requested, so the change is left unstaged.",
+      "session": "ses_ed8801e8dffeyy9C0QX15ai4WF",
+      "tokens": 11596,
+      "exit": 0,
+      "seconds": 59.281,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_W1f2Q6xIEL7qwEAZ --timeout 5m` (again on exit 2)."
+      ]
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_W1f2Q6xIEL7qwEAZ",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-10T20:28:01Z",
+      "question": "Pick the pricing tier names in the artifact?",
+      "context": "src/pricing.html is finished except the tier names ($0, $8, $20 placeholders). Your artifact compares three sets of names. Tap Pick there and the choice lands in this session; I will fill in the page at once.",
+      "options": [],
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": ""
+      },
+      "links": [
+        {
+          "url": "https://claude.ai/artifact/7c1e9a52-0d3b-4f6e-9a21-5b8c3d2e1f00"
+        }
+      ],
+      "answerIn": {
+        "url": "https://claude.ai/artifact/7c1e9a52-0d3b-4f6e-9a21-5b8c3d2e1f00"
+      },
+      "done": true,
+      "dir": {
+        "length": 2,
+        "head": "E_lJoDmeqyAh6HtKo1H_X-5TAqMp50A_1gbY4BxWH7w"
+      }
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [],
+  "answered": "Answer to d_W1f2Q6xIEL7qwEAZ (Pick the pricing tier names in the artifact?): answered on its page; read the answer there",
+  "waiting": [
+    {
+      "v": 1,
+      "id": "w_92iymwJafokAyeQm",
+      "decisionId": "d_W1f2Q6xIEL7qwEAZ",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-10T20:28:02Z",
+      "state": "waiting",
+      "dir": {
+        "length": 2,
+        "head": "E_lJoDmeqyAh6HtKo1H_X-5TAqMp50A_1gbY4BxWH7w"
+      }
+    }
+  ],
+  "permissions": [],
+  "settled": [
+    {
+      "v": 1,
+      "id": "s_9OlInsbfLxpwv1re",
+      "itemId": "d_W1f2Q6xIEL7qwEAZ",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-10T20:28:18Z",
+      "outcome": "device",
+      "device": "phone",
+      "dir": {
+        "length": 2,
+        "head": "E_lJoDmeqyAh6HtKo1H_X-5TAqMp50A_1gbY4BxWH7w"
+      }
+    }
+  ],
+  "judge": {
+    "cold": false,
+    "consequences": true,
+    "terminal": false,
+    "links": true,
+    "plain": true,
+    "skim": false,
+    "notes": "The card says the artifact compares three sets of names but never names them, so the owner cannot judge the choice without opening the artifact, and the terminal report states the pick instead of asking the user to confirm it."
+  }
+}

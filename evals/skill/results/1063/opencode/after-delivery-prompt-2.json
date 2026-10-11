@@ -1,0 +1,152 @@
+{
+  "agent": "opencode",
+  "model": "zai-coding-plan/glm-5.3-flash",
+  "arm": "after",
+  "scenario": "delivery-prompt",
+  "rep": 2,
+  "turns": [
+    {
+      "commands": [
+        "gh pr view 12 --json number,title,state,mergeable,mergeStateStatus,files",
+        "gh pr view 13 --json number,title,state,mergeable,mergeStateStatus,files",
+        "gh pr view 12 --json mergeable,mergeStateStatus -q '.mergeable + \" / \" + .mergeStateStatus'; gh pr view 13 --json mergeable,mergeStateStatus -q '.mergeable + \" / \" + .mergeStateStatus'",
+        "gh api repos/acme/notes/pulls/12 --jq '{mergeable, mergeable_state: .mergeable_state}' && gh api repos/acme/notes/pulls/13 --jq '{mergeable, mergeable_state: .mergeable_state}'",
+        "git fetch origin main pull/12/head:pr-12 pull/13/head:pr-13 2>&1 | tail -3 && git merge-tree $(git merge-base pr-12 pr-13) pr-12 pr-13 | grep -c '<<<<<<<' ",
+        "git branch -a && git remote -v",
+        "git fetch origin 2>&1 | tail -5; git log --oneline origin/main -5; git branch -a",
+        "gh pr view 12 --json mergeable,mergeStateStatus,isInMergeQueue 2>&1",
+        "gh pr diff 12 2>&1 | head -50",
+        "gh pr diff 13 2>&1 | head -50",
+        "starbridge ask \\\n  --question 'PRs #12 and #13 conflict in src/api.ts. Which merges first?' \\\n  --context 'Both are green but edit the same lines of src/api.ts, so the second needs a rebase after the first merges.\n**#12 first:** resumable uploads for the CLI, needed for tonight''s 20:00 release.\n**#13 first:** sync timeout fix for slow-link users (3 reports this week).' \\\n  --option '#12 first' --option '#13 first' --recommended '#12 first' \\\n  --link https://github.com/acme/notes/pull/12 \\\n  --link https://github.com/acme/notes/pull/13 \\\n  --waiting"
+      ],
+      "final": "Card sent: `d_MwISblaTyMnjtePS`. Both PRs are green but conflict on the same lines of `src/api.ts`, and per the repo notes the merge order is yours to pick — the card asks which goes first (#12 recommended, since it's needed for tonight's 20:00 CLI release). The second PR will need a rebase after the first merges. I'll merge both as soon as you tap an answer.",
+      "exit": 0,
+      "seconds": 456.63,
+      "delivery": [
+        "The answer will come back into this session as a new prompt."
+      ],
+      "background": [],
+      "tools": [
+        "skill"
+      ]
+    },
+    {
+      "commands": [
+        "gh pr merge 12 --squash 2>&1",
+        "gh pr update-branch 13 2>&1",
+        "gh pr view 13 --json state,mergeable 2>&1; git fetch origin 2>&1 | tail -3; git log --oneline origin/main -3",
+        "gh pr merge 13 --squash 2>&1",
+        "gh pr view 12 --json state -q .state 2>/dev/null; gh pr view 13 --json state -q .state 2>/dev/null"
+      ],
+      "final": "Both merged, per your call:\n\n1. **#12 (CLI resumable uploads)** — squash-merged first, in time for tonight's 20:00 CLI release.\n2. **#13 (sync timeout fix)** — ran `gh pr update-branch` to pull the conflicting `src/api.ts` change in, then squash-merged.\n\nBoth merge commands reported success. `gh pr view` in this environment keeps showing stale `OPEN` state and the local mirror (`origin`) doesn't track the PR branches, so I couldn't verify the merged commits on main directly — worth a quick glance at the repo page if you want confirmation.",
+      "exit": 0,
+      "seconds": 456.634,
+      "delivery": [],
+      "background": [],
+      "tools": []
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_MwISblaTyMnjtePS",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-10T20:35:32Z",
+      "question": "PRs #12 and #13 conflict in src/api.ts. Which merges first?",
+      "context": "Both are green but edit the same lines of src/api.ts, so the second needs a rebase after the first merges.\n**#12 first:** resumable uploads for the CLI, needed for tonights 20:00 release.\n**#13 first:** sync timeout fix for slow-link users (3 reports this week).",
+      "options": [
+        "#12 first",
+        "#13 first"
+      ],
+      "recommended": "#12 first",
+      "agent": "opencode",
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "ses_ed879942bffeEyYjWzT09T7uH3",
+        "sessionTitle": "Merging PRs #12 and #13"
+      },
+      "links": [
+        {
+          "url": "https://github.com/acme/notes/pull/12"
+        },
+        {
+          "url": "https://github.com/acme/notes/pull/13"
+        }
+      ],
+      "replies": true,
+      "dir": {
+        "length": 2,
+        "head": "yqReBL1lqyngHtJ9F_Ib49QsHo5NxZSpctRgEsNeNvc"
+      }
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [
+    "gh pr view 12 --json number,title,state,mergeable,mergeStateStatus,files",
+    "gh pr view 13 --json number,title,state,mergeable,mergeStateStatus,files",
+    "gh pr view 12 --json mergeable,mergeStateStatus -q .mergeable + \" / \" + .mergeStateStatus",
+    "gh pr view 13 --json mergeable,mergeStateStatus -q .mergeable + \" / \" + .mergeStateStatus",
+    "gh api repos/acme/notes/pulls/12 --jq {mergeable, mergeable_state: .mergeable_state}",
+    "gh api repos/acme/notes/pulls/13 --jq {mergeable, mergeable_state: .mergeable_state}",
+    "gh pr view 12 --json mergeable,mergeStateStatus,isInMergeQueue",
+    "gh pr diff 12",
+    "gh pr diff 13",
+    "gh pr merge 12 --squash",
+    "gh pr update-branch 13",
+    "gh pr view 13 --json state,mergeable",
+    "gh pr merge 13 --squash",
+    "gh pr view 12 --json state -q .state",
+    "gh pr view 13 --json state -q .state"
+  ],
+  "answered": "Answer to d_MwISblaTyMnjtePS (PRs #12 and #13 conflict in src/api.ts. Which merges first?): #12 first",
+  "prompted": true,
+  "waiting": [
+    {
+      "v": 1,
+      "id": "w_DVZlXoZMYoaB4AyP",
+      "decisionId": "d_MwISblaTyMnjtePS",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-10T20:35:33Z",
+      "state": "waiting",
+      "dir": {
+        "length": 2,
+        "head": "yqReBL1lqyngHtJ9F_Ib49QsHo5NxZSpctRgEsNeNvc"
+      }
+    }
+  ],
+  "permissions": [],
+  "settled": [
+    {
+      "v": 1,
+      "id": "s_XNPDsgGVvLKSTASW",
+      "itemId": "d_MwISblaTyMnjtePS",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-10T20:35:49Z",
+      "outcome": "device",
+      "device": "phone",
+      "choice": "#12 first",
+      "dir": {
+        "length": 2,
+        "head": "yqReBL1lqyngHtJ9F_Ib49QsHo5NxZSpctRgEsNeNvc"
+      }
+    }
+  ],
+  "judge": {
+    "cold": true,
+    "consequences": true,
+    "terminal": false,
+    "links": true,
+    "plain": true,
+    "skim": true,
+    "notes": "The final terminal message only reports the card and says it will merge once the user taps, instead of asking the question and waiting for a reply in the terminal."
+  }
+}

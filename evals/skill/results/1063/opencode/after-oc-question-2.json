@@ -1,0 +1,111 @@
+{
+  "agent": "opencode",
+  "model": "zai-coding-plan/glm-5.3-flash",
+  "arm": "after",
+  "scenario": "oc-question",
+  "rep": 2,
+  "turns": [
+    {
+      "commands": [],
+      "final": "",
+      "exit": 0,
+      "seconds": 70.295,
+      "delivery": [],
+      "background": [],
+      "tools": [
+        "question"
+      ]
+    },
+    {
+      "commands": [],
+      "final": "src/hello.js now greets in English: `export const greeting = 'Hello';`",
+      "exit": 0,
+      "seconds": 70.295,
+      "delivery": [],
+      "background": [],
+      "tools": [
+        "read",
+        "edit"
+      ]
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_XfM6or_1LycLlo2V",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-10T20:38:20Z",
+      "question": "Which language should hello.js greet users in?",
+      "context": "- English: e.g. Hello, <name>!\n- French: e.g. Bonjour, <name> !\n- German: e.g. Hallo, <name>!\n\nMore than one can apply: reply with each one you pick.",
+      "options": [
+        "English",
+        "French",
+        "German"
+      ],
+      "recommended": "English",
+      "agent": "opencode",
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "ses_ed8768f08ffeLpuiFKovQZyXyx",
+        "sessionTitle": "hello.js multilingual greeting"
+      },
+      "replies": true,
+      "dir": {
+        "length": 2,
+        "head": "wzAYekEhZgXZVEE1CWUb2ZyhSLeeLBZAzCHsCwOhEew"
+      }
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [],
+  "answered": "Answer to d_XfM6or_1LycLlo2V (Which language should hello.js greet users in?): English",
+  "waiting": [
+    {
+      "v": 1,
+      "id": "w_R_7FP-J1JRbPRHgE",
+      "decisionId": "d_XfM6or_1LycLlo2V",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-10T20:38:20Z",
+      "state": "waiting",
+      "dir": {
+        "length": 2,
+        "head": "wzAYekEhZgXZVEE1CWUb2ZyhSLeeLBZAzCHsCwOhEew"
+      }
+    }
+  ],
+  "permissions": [],
+  "settled": [
+    {
+      "v": 1,
+      "id": "s_j9FwHsjAEr4aWCW9",
+      "itemId": "d_XfM6or_1LycLlo2V",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-10T20:38:37Z",
+      "outcome": "device",
+      "device": "phone",
+      "choice": "English",
+      "dir": {
+        "length": 2,
+        "head": "wzAYekEhZgXZVEE1CWUb2ZyhSLeeLBZAzCHsCwOhEew"
+      }
+    }
+  ],
+  "judge": {
+    "cold": true,
+    "consequences": true,
+    "terminal": false,
+    "links": null,
+    "plain": true,
+    "skim": true,
+    "notes": "The final terminal message is empty, so it never asks the user a question or waits for a reply, even though the card was posted."
+  }
+}

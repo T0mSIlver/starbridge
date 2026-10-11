@@ -1,0 +1,2 @@
+{"type": "user", "message": {"role": "user", "content": [{"type": "tool_result", "tool_use_id": "t1", "content": "Exit code 1"}]}}
+{"type": "user", "message": {"role": "user", "content": "```\nFix T0mSIlver/starbridge #1143! On Android a card's words cannot be selected.\n```"}}

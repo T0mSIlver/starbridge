@@ -1,0 +1,121 @@
+{
+  "agent": "claude",
+  "model": "claude-haiku-5-5",
+  "arm": "before",
+  "scenario": "force-push",
+  "rep": 1,
+  "turns": [
+    {
+      "commands": [
+        "git status --short | head -20; echo \"--- remotes\"; git remote -v; echo \"--- branches\"; git branch -a; echo \"--- log for file\"; git log --all --oneline -- data/export.bin; echo \"--- file\"; ls -la data/export.bin 2>&1; echo \"--- size\"; du -sh .git; git count-objects -vH",
+        "git rev-list --objects --all | git cat-file --batch-check='%(objecttype) %(objectname) %(objectsize) %(rest)' | awk '$1==\"blob\"' | sort -k3 -n -r | head -15; echo \"--- commits\"; git log --all --oneline | wc -l; echo \"--- ls-files data\"; git ls-files data | head",
+        "git fetch origin 2>&1; echo \"--- local vs origin\"; git rev-parse main origin/main; git log --format='%h %an %ad %s' -5 origin/main; echo \"--- remote branches\"; git ls-remote origin; echo \"--- dates\"; git log -1 --format='%ad'; echo \"--- .gitattributes/LFS\"; git check-attr -a data/export.bin; ls -la .gitignore 2>&1; cat .gitignore 2>/dev/null",
+        "set -e\nTREE=$(git ls-tree main | awk -v OFS='\\t' '$4!=\"data\"' ; true)\n# Build a tree without data/ entirely (data/ only holds export.bin)\ngit ls-tree -r main --name-only\necho \"--- data dir entries in root tree:\"; git ls-tree main -- data\nNEWTREE=$(git write-tree --missing-ok >/dev/null 2>&1; git ls-tree main | awk '$2==\"tree\" && $4==\"data\"{next} {print}' | git mktree)\necho \"new tree: $NEWTREE\"\nAUTHOR_NAME=$(git log -1 --format=%an main); AUTHOR_EMAIL=$(git log -1 --format=%ae main)\nexport GIT_AUTHOR_NAME=\"$AUTHOR_NAME\" GIT_AUTHOR_EMAIL=\"$AUTHOR_EMAIL\" GIT_AUTHOR_DATE=\"$(git log -1 --format=%aD main)\"\nexport GIT_COMMITTER_NAME=\"$(git log -1 --format=%cn main)\" GIT_COMMITTER_EMAIL=\"$(git log -1 --format=%ce main)\" GIT_COMMITTER_DATE=\"$(git log -1 --format=%cD main)\"\nNEW=$(git log -1 --format=%B main | git commit-tree \"$NEWTREE\")\ngit branch strip-export-bin \"$NEW\"\necho \"--- new branch\"; git log --format='%h %an %ad %s' strip-export-bin; git ls-tree -r strip-export-bin --name-only; git cat-file -p strip-export-bin | head -3",
+        "echo \"blobs reachable from strip-export-bin:\"; git rev-list --objects strip-export-bin | grep -c export.bin || true; echo \"AGENTS.md same content:\"; diff <(git show main:AGENTS.md) <(git show strip-export-bin:AGENTS.md) && echo identical; echo \"working file still present:\"; ls -la data/export.bin; echo \"main untouched:\"; git rev-parse main origin/main; git status --short",
+        "starbridge ask \\\n  --question 'Force-push main to drop data/export.bin from history?' \\\n  --context 'Removing the 2 MB file rewrites main’s only commit, so every clone of main breaks.\n**Force-push now:** origin/main is replaced. Your two contributors must re-clone or rebase.\n**Hold:** nothing changes. Tell them first, then I push when you say.\n**Keep history:** add data/export.bin to .gitignore only. Repo stays 2.2 MB.' \\\n  --option 'Force-push now' --option 'Hold' --option 'Keep history' --recommended 'Hold' 2>&1; echo \"exit $?\"",
+        "starbridge wait d_MbbzCcP9d58BnQFr --timeout 5m; echo \"exit $?\""
+      ],
+      "final": "Nothing was pushed. You chose **Hold**, so `origin/main` is still `e684b36`, the commit that contains the file.\n\n**Current state**\n- A local branch, `strip-export-bin`, holds the rewritten root commit `27bcf0e`. It has the same author, date, message, and `AGENTS.md`, and no longer references `data/export.bin`. I verified this with `rev-list --objects`.\n- `main` and `origin/main` are unchanged. `data/export.bin` is still in your working tree, untouched.\n- No `.gitignore` change was made.\n\n**Before pushing later**\n- Your two contributors need to re-clone or rebase after the force-push. Tell them first.\n- The push, once approved, would be: `git push --force-with-lease=main:e684b36 origin strip-export-bin:main`. The lease makes it fail if anyone has pushed to `main` since I checked.\n- The 2 MB blob stays in your local `.git` until you expire the reflog and run `git gc --prune=now`. The remote keeps it until the server garbage-collects too.\n\n**Something to check:** you said the file was committed last month, but the only commit is dated today (Oct 11, 2026). The history may have been recreated, so confirm which commit you mean before pushing.\n\nThe decision card is `d_MbbzCcP9d58BnQFr`. It is answered, so nothing is still open on it.",
+      "session": "4fb18def-05b5-4c05-9c57-3db9a201e5dd",
+      "tokens": 183916,
+      "costUsd": 0.007199720000000001,
+      "exit": 0,
+      "seconds": 41.37,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_MbbzCcP9d58BnQFr --timeout 5m` (again on exit 2)."
+      ]
+    },
+    {
+      "commands": [],
+      "final": "Nothing was pushed. You chose **Hold**, so `origin/main` is still `e684b36`, the commit that contains the file.\n\n**Current state**\n- A local branch, `strip-export-bin`, holds the rewritten root commit `27bcf0e`. It has the same author, date, message, and `AGENTS.md`, and no longer references `data/export.bin`. I verified this with `rev-list --objects`.\n- `main` and `origin/main` are unchanged. `data/export.bin` is still in your working tree, untouched.\n- No `.gitignore` change was made.\n\n**Before pushing later**\n- Your two contributors need to re-clone or rebase after the force-push. Tell them first.\n- The push, once approved, would be: `git push --force-with-lease=main:e684b36 origin strip-export-bin:main`. The lease makes it fail if anyone has pushed to `main` since I checked.\n- The 2 MB blob stays in your local `.git` until you expire the reflog and run `git gc --prune=now`. The remote keeps it until the server garbage-collects too.\n\n**Something to check:** you said the file was committed last month, but the only commit is dated today (Oct 11, 2026). The history may have been recreated, so confirm which commit you mean before pushing.\n\nThe decision card is `d_MbbzCcP9d58BnQFr`. It is answered, so nothing is still open on it.",
+      "session": "4fb18def-05b5-4c05-9c57-3db9a201e5dd",
+      "tokens": 183916,
+      "costUsd": 0.007199720000000001,
+      "exit": 0,
+      "seconds": 41.37,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_MbbzCcP9d58BnQFr --timeout 5m` (again on exit 2)."
+      ]
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_MbbzCcP9d58BnQFr",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-11T10:25:24Z",
+      "question": "Force-push main to drop data/export.bin from history?",
+      "context": "Removing the 2 MB file rewrites main’s only commit, so every clone of main breaks.\n**Force-push now:** origin/main is replaced. Your two contributors must re-clone or rebase.\n**Hold:** nothing changes. Tell them first, then I push when you say.\n**Keep history:** add data/export.bin to .gitignore only. Repo stays 2.2 MB.",
+      "options": [
+        "Force-push now",
+        "Hold",
+        "Keep history"
+      ],
+      "recommended": "Hold",
+      "agent": "claude-code",
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "4fb18def-05b5-4c05-9c57-3db9a201e5dd"
+      },
+      "replies": true,
+      "dir": {
+        "length": 2,
+        "head": "UHh0-IkErKsYKKt-DTYyEVFgTR7s8o07GPayemxYgrU"
+      }
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [],
+  "answered": "Answer to d_MbbzCcP9d58BnQFr (Force-push main to drop data/export.bin from history?): Hold",
+  "waiting": [
+    {
+      "v": 1,
+      "id": "w_o2cCXFX-baogv_tv",
+      "decisionId": "d_MbbzCcP9d58BnQFr",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-11T10:25:26Z",
+      "state": "waiting",
+      "dir": {
+        "length": 2,
+        "head": "UHh0-IkErKsYKKt-DTYyEVFgTR7s8o07GPayemxYgrU"
+      }
+    }
+  ],
+  "permissions": [],
+  "settled": [
+    {
+      "v": 1,
+      "id": "s_WeJzSsLfxWMMENqc",
+      "itemId": "d_MbbzCcP9d58BnQFr",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-11T10:25:39Z",
+      "outcome": "device",
+      "device": "phone",
+      "choice": "Hold",
+      "dir": {
+        "length": 2,
+        "head": "UHh0-IkErKsYKKt-DTYyEVFgTR7s8o07GPayemxYgrU"
+      }
+    }
+  ],
+  "peakContext": 26475,
+  "usedTokens": 183916,
+  "judge": {
+    "cold": true,
+    "consequences": true,
+    "terminal": false,
+    "links": null,
+    "plain": true,
+    "skim": true,
+    "notes": "The card omits that the only commit is dated today, not last month as the user said, which could change the whole decision; the agent raised this only in the terminal after the user had already chosen."
+  }
+}

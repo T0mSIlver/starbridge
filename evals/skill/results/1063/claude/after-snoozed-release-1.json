@@ -1,0 +1,88 @@
+{
+  "agent": "claude",
+  "model": "claude-haiku-5-5",
+  "arm": "after",
+  "scenario": "snoozed-release",
+  "rep": 1,
+  "turns": [
+    {
+      "commands": [
+        "cat package.json && git status --short && git log --oneline | head -5 && ls -la && (npm whoami 2>&1 | head -1) && (npm view $(node -p \"require('./package.json').name\") versions --json 2>&1 | tail -8)",
+        "cat CHANGELOG.md && echo --- && which starbridge && npm config get registry && ls ~/.npmrc 2>/dev/null; echo \"exit $?\"",
+        "starbridge ask \\\n  --question 'Publish @acme/notes 0.4.0 to npm?' \\\n  --context 'A published version can never be taken back.\n**Publish:** 0.4.0 goes live with resumable uploads and no sync timeout on slow links.\n**Hold:** nothing is published. This machine is not logged in to npm, so I would need your login first.' \\\n  --option 'Publish 0.4.0' --option 'Hold' --recommended 'Publish 0.4.0'",
+        "starbridge wait d_f5NqD23D6Aq14BTj --timeout 5m; echo \"exit $?\""
+      ],
+      "final": "I haven't published v0.4.0. The approval card is snoozed until tomorrow 09:00, and a snooze is not an answer.\n\n**What waits:** the owner's OK to run `npm publish` for `@acme/notes` 0.4.0. AGENTS.md requires that OK before any publish, and a published version can't be taken back. Card `d_f5NqD23D6Aq14BTj` is open. Run `starbridge wait d_f5NqD23D6Aq14BTj` to read the answer once it arrives.\n\n**What I checked:**\n- `package.json` is at version 0.4.0. `CHANGELOG.md` has its 0.4.0 entry: resumable uploads, and sync no longer times out on slow links.\n- The git tree is clean on `main`, with one commit.\n- There is no test or build script in `package.json`, so there was nothing to run before publishing.\n- This machine is not logged in to npm (`npm whoami` returned `ENEEDAUTH`, and there is no `~/.npmrc`). A publish would fail until someone logs in.\n\n**Next step once approved:** log in to npm on this machine, then run `npm publish` from the repo root. The card says the login is needed, so the owner may need to supply it.",
+      "session": "153a64d8-656a-4696-b74c-2a931e0cbacb",
+      "tokens": 109101,
+      "costUsd": 0.00435879,
+      "exit": 0,
+      "seconds": 29.98,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_f5NqD23D6Aq14BTj --timeout 5m` (again on exit 2)."
+      ]
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_f5NqD23D6Aq14BTj",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-10T19:50:13Z",
+      "question": "Publish @acme/notes 0.4.0 to npm?",
+      "context": "A published version can never be taken back.\n**Publish:** 0.4.0 goes live with resumable uploads and no sync timeout on slow links.\n**Hold:** nothing is published. This machine is not logged in to npm, so I would need your login first.",
+      "options": [
+        "Publish 0.4.0",
+        "Hold"
+      ],
+      "recommended": "Publish 0.4.0",
+      "agent": "claude-code",
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "153a64d8-656a-4696-b74c-2a931e0cbacb"
+      },
+      "replies": true,
+      "dir": {
+        "length": 2,
+        "head": "H9fY8niOEUCaNjDrghwEMy7WNcW50lYg-iJBy0HZE9c"
+      }
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [],
+  "snoozed": "2026-10-11T07:00:00.000Z",
+  "waiting": [
+    {
+      "v": 1,
+      "id": "w_WF90LAB2wIaiA4nk",
+      "decisionId": "d_f5NqD23D6Aq14BTj",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-10T19:50:15Z",
+      "state": "waiting",
+      "dir": {
+        "length": 2,
+        "head": "H9fY8niOEUCaNjDrghwEMy7WNcW50lYg-iJBy0HZE9c"
+      }
+    }
+  ],
+  "permissions": [],
+  "settled": [],
+  "peakContext": 22937,
+  "usedTokens": 109101,
+  "judge": {
+    "cold": true,
+    "consequences": true,
+    "terminal": false,
+    "links": null,
+    "plain": true,
+    "skim": true,
+    "notes": "The Publish option doesn't mention that this machine is not logged in to npm, so tapping it would fail. The login requirement appears only under Hold, even though the card recommends Publish."
+  }
+}
