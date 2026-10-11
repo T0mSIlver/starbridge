@@ -592,7 +592,7 @@ export async function hookQuestion(
     const hook = JSON.parse(stdin) as QuestionHookInput;
     if (!Array.isArray(hook?.questions) || hook.questions.length === 0 || !hook.session_id)
       throw new UsageError("the hook input needs session_id and questions");
-    session(ctx);
+    const s = session(ctx);
     // One question that cannot be asked stops the others: opencode takes all answers or none.
     const failed = new AbortController();
     const signal = ctx.signal ? AbortSignal.any([ctx.signal, failed.signal]) : failed.signal;
@@ -612,13 +612,19 @@ export async function hookQuestion(
         };
         const how = { wait: true, json: true };
         try {
-          const code = await ask(sub, input, how);
+          let code = await ask(sub, input, how);
           ids[i] = lines[0];
-          return code === 0 && lines[1]
-            ? opencodeAnswer(JSON.parse(lines[1]) as Answer, q)
-            : undefined;
+          let answer = lines[1];
+          // A snooze puts it off on the devices; the dialog still waits for an answer (#1226).
+          while (code === EXIT_SNOOZED && ids[i]) {
+            lines.length = 0;
+            code = await wait(sub, { id: ids[i], json: true, "no-mark": true }, s);
+            answer = lines[0];
+          }
+          return code === 0 && answer ? opencodeAnswer(JSON.parse(answer) as Answer, q) : undefined;
         } catch (e) {
-          ids[i] = lines[0];
+          // A wait after a snooze printed nothing: the id from `ask` stays.
+          ids[i] ??= lines[0];
           failed.abort();
           throw e;
         }

@@ -655,6 +655,7 @@ server whose disk is full answers writes 503 `storage-full` with `Retry-After`; 
 | `PUT /presence` | 10 a minute per device or machine |
 | `PUT /release` | 30 an hour per machine |
 | `PUT /settings` | 30 a minute per account |
+| `PUT /notifications` | 30 a minute per device |
 | `POST /push/subscriptions` | 30 a minute per account, on top of the subscription caps |
 | `POST /relay`, on a relay server | 120 a minute per address |
 
@@ -872,7 +873,7 @@ is 0700, the socket 0600. Types: `cli/src/agent/api.ts`.
 On Windows (#552), Node and Bun read a socket path as a named pipe, which other local users can
 open, so the agent listens on a free port on 127.0.0.1 instead. It writes `agent.port`,
 `{port, token, pid}`, into the config directory through a temporary file that `icacls` makes
-readable by its user only. `token` is 32 random bytes, new at each start, and never crosses the
+readable by its user only; when that fails, the agent does not serve. `token` is 32 random bytes, new at each start, and never crosses the
 wire. Each request sends a fresh 16-byte nonce as `starbridge-nonce: <32 hex>` and
 `authorization: Starbridge <sha256hex("<token>:client:<nonce>")>`; the agent answers any other
 with 401 `{error: "unauthorized"}`, and every answer to a proven request carries
@@ -896,7 +897,7 @@ for an unknown route or decision, 502 when the server refused or failed (`detail
 | Route | What |
 |---|---|
 | `GET /status` | `{version, api, pid, startedAt, socket, machine?, server: {reachable, lastOkAt?, lastError?}, quota: {providers, intervalSeconds, lastPostAt?, lastError?}, sessions}` |
-| `POST /decisions` | `{input}` with `ask`'s fields (`question`, `options`, `waiting`, `agent`, `project`, `session`, …); the client fills `project`, `session`, title and links from its own process, for Codex `codex` (`{home, bin}`: its `CODEX_HOME` and `codex` binary), and for Pi `piAnswers: true` while the Starbridge Pi extension runs in the session, for `claude -p` `headless: true` → `{id, delivery}`: `prompt` when the answer will come back into the session as a prompt (Claude Code's mod, when that session's mod called the agent within 45 s, which `claude -p` never does; the Pi extension; Codex, which the agent reaches with `codex queue` while the session's app-server daemon listens; that message names the decision and `starbridge wait <id>`, never its text, since process arguments are readable by other local users), else `wait` |
+| `POST /decisions` | `{input}` with `ask`'s fields (`question`, `options`, `waiting`, `agent`, `project`, `session`, …); the client fills `project`, `session`, title and links from its own process, for Codex `codex` (`{home, bin}`: its `CODEX_HOME` and `codex` binary), for Pi and opencode `extensionAnswers: true` while the Starbridge Pi or opencode extension runs in the session, for `claude -p` `headless: true` → `{id, delivery}`: `prompt` when the answer will come back into the session as a prompt (Claude Code's mod, when that session's mod called the agent within 45 s, which `claude -p` never does; the Pi and opencode extensions; Codex, which the agent reaches with `codex queue` while the session's app-server daemon listens; that message names the decision and `starbridge wait <id>`, never its text, since process arguments are readable by other local users), else `wait` |
 | `POST /decisions/:id/waiting` | `{state: "working" \| "waiting"}` → `{posted, snoozedUntil?}`: post the decision's waiting state, `posted: false` when it already had it; `snoozedUntil` while the owner has snoozed it; 404 `unknown-decision`, 400 when it is answered. `starbridge waiting`, `working` |
 | `POST /answers/next` | `{id?, session?, wait?}`: the answer to decision `id`, or the first answer no `wait` printed to a decision session `session` asked, marked printed → `{answer?, question?, snoozedUntil?}`; with `id` and no answer, `snoozedUntil` once per snooze while the owner has snoozed it; 404 `unknown-decision`. `starbridge wait` |
 | `POST /answers/all` | `{since?, known?, wait?}`: every accepted answer the asking sessions may have, answered from `since` (ms since the epoch) on, leaving out the decision ids in `known`, held up to `wait` while there is none; marks nothing seen → `{answers: [{decisionId, question, choice? \| text? \| done?, answeredAt, session?, sessionTitle?, project?}]}`. `starbridge answers --all` |
@@ -910,6 +911,7 @@ for an unknown route or decision, 502 when the server refused or failed (`detail
 | `POST /permissions/:id/wait` | `{wait, handOver?}`: `{output}` once an accepted answer is in, the hook's stdout, handed out once; `{settled}` when the prompt ended another way, `keyboard` with `handOver` once the owner sits at this machine; `{}` when `wait` passed; a hook that hangs up mid-hold and holds no more within 5 s is gone, and the prompt settles as `keyboard` |
 | `POST /permissions/:id/settle` | `{outcome: "keyboard" \| "timeout"}` → `{settled}`: the hook's wait ended without an answer |
 | `POST /sessions/:id/permissions/settle` | `{inputHash?}` → `{settled: [ids]}`: the keyboard answered the session's waiting prompt for that input, or all of them without `inputHash` |
+| `POST /antigravity/routes` | `{address, token}`: the Antigravity language server the calling command runs under, which the agent then watches for prompts and reaches to deliver answers (#962); every `starbridge` command run inside Antigravity posts it → `{}`; 400 without both fields |
 
 Paths are under `/v1`. The one event type today is `answer`. A client skips types it does not
 know. The agent keeps answers in the CLI's state file,

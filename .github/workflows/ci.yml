@@ -22,11 +22,12 @@ permissions:
   contents: read
   pull-requests: read
 
-# Jobs run on GitHub-hosted runners, with two exceptions for the test and e2e jobs. On a push to
-# main, the repository variable RUNNER points the test job at the self-hosted main pool. A pull
-# request from this repository's own branches, Dependabot's aside, runs both on the self-hosted PR
-# pool, PR_RUNNER (#1204): it holds no secrets, and no pull request reaches RUNNER's pool or
-# ANDROID_RUNNER's. A fork's pull request and a dispatched run stay on GitHub's runners.
+# Jobs run on GitHub-hosted runners unless a repository variable names a self-hosted pool, as a
+# JSON array of labels (docs/ci.md). A push to main runs the test job on TRUSTED_RUNNER. A pull
+# request from this repository's own branches, Dependabot's aside, runs the test job on
+# PR_LIGHT_RUNNER, the e2e parts on PR_HEAVY_RUNNER and the image builds on PR_DOCKER_RUNNER: the PR
+# pool holds no secrets, and no pull request job reaches TRUSTED_RUNNER's pool or ANDROID_RUNNER's.
+# A fork's pull request and a dispatched run stay on GitHub's runners.
 #
 # A run tests only what its files can affect: a pull request's files against its base, a push's
 # since the commit before it (the changes job). A job that cannot be affected is skipped, which
@@ -35,8 +36,8 @@ jobs:
   # Which jobs a run's files can affect. A push compares github.event.before with the pushed
   # commit, so a merge that touches only the Android or desktop app or docs skips the rest. A
   # push whose before is missing (a new branch) or not in the history, a dispatched run, and a
-  # failure of this job run everything. GitHub's runner, whatever vars.RUNNER says: every job
-  # waits for this one, and self-hosted runners can all be busy.
+  # failure of this job run everything. GitHub's runner, whatever the runner variables say:
+  # every job waits for this one, and self-hosted runners can all be busy.
   changes:
     name: changes
     runs-on: ubuntu-latest
@@ -145,7 +146,7 @@ jobs:
     name: test, typecheck, lint
     needs: changes
     if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.checks == 'true') }}
-    runs-on: ${{ github.event_name == 'push' && vars.RUNNER || github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]' && vars.PR_RUNNER || 'ubuntu-latest' }}
+    runs-on: ${{ github.event_name == 'push' && vars.TRUSTED_RUNNER && fromJSON(vars.TRUSTED_RUNNER) || github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]' && vars.PR_LIGHT_RUNNER && fromJSON(vars.PR_LIGHT_RUNNER) || 'ubuntu-latest' }}
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -156,6 +157,11 @@ jobs:
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version: 1.4.2
+      # The same Node on every runner, not whichever a self-hosted box has.
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          package-manager-cache: false
       - run: pnpm install --frozen-lockfile
         timeout-minutes: 5
         # A store that stays on the runner between jobs. Its default, under the job's temp
@@ -170,7 +176,7 @@ jobs:
   # own server and browser (E2E_SHARD). Each screenshot also fails on layout breakage: a page wider
   # than the window, clipped, spilled or overlapping text (web/e2e/layout.ts). GitHub's runners
   # for main's pushes: the parts wait on timers more than they compute, and three at once would
-  # fill the main pool. A pull request's run them on the PR pool, as the test job.
+  # fill the trusted pool. A pull request's run them on PR_HEAVY_RUNNER.
   e2e:
     name: end to end (${{ matrix.shard }})
     needs: changes
@@ -179,7 +185,7 @@ jobs:
       fail-fast: false
       matrix:
         shard: [inbox, snooze, devices]
-    runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]' && vars.PR_RUNNER || 'ubuntu-latest' }}
+    runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]' && vars.PR_HEAVY_RUNNER && fromJSON(vars.PR_HEAVY_RUNNER) || 'ubuntu-latest' }}
     timeout-minutes: 15
     # actions: the tested step lists artifacts.
     permissions:
@@ -219,7 +225,7 @@ jobs:
       # No package-manager-cache: it uploaded the pnpm store to GitHub's cache after every run,
       # ~50 s of the job, while the store already stays on the runner.
       - if: steps.scope.outputs.run == 'true'
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
           package-manager-cache: false
@@ -229,8 +235,8 @@ jobs:
         env:
           pnpm_config_store_dir: ${{ runner.tool_cache }}/pnpm-store
       # The PR pool has Firefox's system libraries already; only GitHub's runners install them.
-      # Firefox goes in each runner's own tool cache: the PR pool's runners on one host share a home, and
-      # three parts installing into one directory at once could break each other's copy.
+      # Firefox goes in the runner's tool cache, which a self-hosted runner slot keeps between jobs
+      # and shares with no other slot (.github/runners/slot.sh).
       - if: steps.scope.outputs.run == 'true'
         run: pnpm --filter @starbridge/web exec playwright install ${{ runner.environment == 'github-hosted' && '--with-deps' || '' }} firefox
         timeout-minutes: 5
@@ -253,14 +259,14 @@ jobs:
           git rev-parse HEAD > "$RUNNER_TEMP/e2e-passed"
           echo "tree=$(git rev-parse 'HEAD^{tree}')" >> "$GITHUB_OUTPUT"
       - if: steps.scope.outputs.run == 'true'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: e2e-passed-${{ matrix.shard }}-${{ steps.tree.outputs.tree }}
           path: ${{ runner.temp }}/e2e-passed
           retention-days: 7
           overwrite: true
       - if: failure()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: e2e-failure-${{ matrix.shard }}
           path: ${{ runner.temp }}/starbridge-e2e-failure.png
@@ -268,7 +274,7 @@ jobs:
 
   # The desktop app on the whole product (desktop/test/stack.ts): signs in and pairs in the app's
   # window, and answers `starbridge ask --wait` from its notifications. GitHub's runner, whatever
-  # vars.RUNNER says: Electron needs the desktop libraries the hosted image has.
+  # the runner variables say: Electron needs the desktop libraries the hosted image has.
   desktop-e2e:
     name: desktop end to end
     needs: changes
@@ -283,7 +289,7 @@ jobs:
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version: 1.4.2
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
           package-manager-cache: false
@@ -298,7 +304,7 @@ jobs:
         env:
           TMPDIR: ${{ runner.temp }}
       - if: failure()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: desktop-e2e-failure
           path: ${{ runner.temp }}/starbridge-desktop-failure.png
@@ -312,21 +318,21 @@ jobs:
     name: images
     needs: changes
     if: github.event_name != 'push' && needs.changes.outputs.images == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]' && vars.PR_DOCKER_RUNNER && fromJSON(vars.PR_DOCKER_RUNNER) || 'ubuntu-latest' }}
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # One step each, so one broken image does not hide another. --pull as the deploy does, so a
       # stale local copy of a base image cannot pass here and fail there; Caddy's is not pulled
-      # there either.
+      # there either. No tags: jobs side by side on one box would overwrite each other's.
       - if: ${{ !cancelled() }}
-        run: docker build --pull -f server/Dockerfile -t starbridge-server .
+        run: docker build --pull -f server/Dockerfile .
       - if: ${{ !cancelled() }}
-        run: docker build --pull -f web/Dockerfile -t starbridge-web .
+        run: docker build --pull -f web/Dockerfile .
       - if: ${{ !cancelled() }}
-        run: docker build --pull -f deploy/demo/Dockerfile -t starbridge-demo .
+        run: docker build --pull -f deploy/demo/Dockerfile .
       - if: ${{ !cancelled() }}
-        run: docker build -f deploy/caddy.Dockerfile -t starbridge-caddy deploy
+        run: docker build -f deploy/caddy.Dockerfile deploy
 
   # The CLI on Windows (#552): a built binary and the whole suite must pass (#884). Bun on Windows
   # can wedge in a test past its own timeout, so each file runs alone and a hung one is killed and

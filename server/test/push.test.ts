@@ -4,7 +4,7 @@ import { type Decision, type QuotaSnapshot, type Run, seal } from "@starbridge/p
 import * as ece from "http_ece";
 import webpush from "web-push";
 import { createApp } from "../src/app";
-import type { Config } from "../src/config";
+import { type Config, privatePushHosts } from "../src/config";
 import { DEFAULT_LIMITS } from "../src/limits";
 import { checkTarget } from "../src/push";
 import { aggregate, dayOf } from "../src/usage";
@@ -224,7 +224,7 @@ test("subscriptions to private or plain-HTTP addresses are refused unless allowe
     "https://[fe80::1]/x",
     "https://box.internal/x",
   ])
-    expect(checkTarget(wp(e), false)).toBeString();
+    expect(checkTarget(wp(e), [])).toBeString();
   for (const e of [
     "https://fcm.googleapis.com/fcm/send/abc",
     "https://[2606:4700::1111]/x",
@@ -234,12 +234,29 @@ test("subscriptions to private or plain-HTTP addresses are refused unless allowe
     "https://[2001:4860::8888]/x",
     "https://[2606:4700::5efe]/x",
   ])
-    expect(checkTarget(wp(e), false)).toBeUndefined();
-  expect(checkTarget(wp("http://10.0.0.5:8080/up"), true)).toBeUndefined();
-  expect(checkTarget({ type: "webpush", endpoint: "https://push.example/x" }, false)).toBe(
+    expect(checkTarget(wp(e), [])).toBeUndefined();
+  // The owner's own hosts, listed, over HTTP too; "any" is the old ALLOW_PRIVATE_PUSH_ENDPOINTS=1.
+  const lan = privatePushHosts(" NTFY.lan. , 10.0.0.5,[fd00::1]");
+  expect(lan).toEqual(["ntfy.lan", "10.0.0.5", "fd00::1"]);
+  // Written as the URL parser would not write it, a host still matches.
+  expect(privatePushHosts("fd00:0:0:0:0:0:0:1,192.168.001.020")).toEqual([
+    "fd00::1",
+    "192.168.1.16",
+  ]);
+  for (const bad of ["ntfy.lan:8080", "a b", "http://ntfy.lan", "ntfy.lan/up"])
+    expect(() => privatePushHosts(bad)).toThrow("not a host name or address");
+  expect(checkTarget(wp("http://10.0.0.5:8080/up"), lan)).toBeUndefined();
+  expect(checkTarget(wp("http://ntfy.lan/up"), lan)).toBeUndefined();
+  expect(checkTarget(wp("https://[fd00::1]/up"), lan)).toBeUndefined();
+  expect(checkTarget(wp("http://10.0.0.6/up"), lan)).toBe("endpoint must be https");
+  expect(checkTarget(wp("https://169.254.169.254/x"), lan)).toBe("endpoint is a private address");
+  expect(checkTarget(wp("http://10.0.0.6/up"), privatePushHosts("1"))).toBeUndefined();
+  expect(privatePushHosts(undefined)).toEqual([]);
+  expect(privatePushHosts("0")).toEqual([]);
+  expect(checkTarget({ type: "webpush", endpoint: "https://push.example/x" }, [])).toBe(
     "webpush needs keys",
   );
-  expect(checkTarget({ type: "fcm", endpoint: "abc:DEF_1-2" }, false)).toBeUndefined();
+  expect(checkTarget({ type: "fcm", endpoint: "abc:DEF_1-2" }, [])).toBeUndefined();
 });
 
 test("FCM direct: a decision pushes the device's own box; a gone token drops its subscription", async () => {
@@ -392,7 +409,7 @@ test("the relay route is off unless RELAY_MODE, refuses UnifiedPush and private 
   const on = await makeServer({
     ...fcmConfig(),
     relayMode: true,
-    allowPrivatePushEndpoints: false,
+    privatePushHosts: [],
   });
   expect((await on.call("POST", "/v1/relay", { body: msg })).json).toEqual({ result: "ok" });
   expect(
@@ -456,7 +473,7 @@ async function pinnedPush(dns: (host: string) => string[]) {
   const connects: string[] = [];
   const lookups: string[] = [];
   const push = new Push(
-    testConfig({ allowPrivatePushEndpoints: false }),
+    testConfig({ privatePushHosts: [] }),
     openDb(":memory:"),
     (() => {
       throw new Error("pushes to subscription URLs must go through the pinned connection");

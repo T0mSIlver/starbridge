@@ -7,6 +7,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  realpathSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -228,6 +229,18 @@ describe.skipIf(WINDOWS).each(verifiers)("install.sh checking with %s", (verifie
     release = fakeReleases("9.9.9");
     expect((await run(release.url, release.pubkey, "v9.9.9")).code).toBe(0);
   });
+
+  test("refuses an older signed release served as the latest", async () => {
+    release = fakeReleases("9.9.9", { signed: "1.0.0" });
+    const r = await run(release.url, release.pubkey);
+    expect(r.err).toContain('SHA256SUMS is signed for "starbridge v1.0.0", not starbridge v9.9.9');
+    expect(existsSync(r.bin)).toBe(false);
+  });
+
+  test("refuses a plain-HTTP mirror off this machine", async () => {
+    const r = await run("http://releases.example/releases", "x");
+    expect(r.err).toContain("STARBRIDGE_RELEASES_URL must be an https URL");
+  });
 });
 
 /** The `n`th line of a signature file, changed by `f`. */
@@ -377,11 +390,12 @@ test.skipIf(WINDOWS || existsSync("/usr/libexec/platform-python"))(
 );
 
 /**
- * install.ps1 under PowerShell 7, with minisign from the PATH in place of the pinned Windows
- * download. The fake `.exe` is a shell script, so this runs on Linux and macOS only.
+ * install.ps1 under PowerShell 7. On Linux and macOS, minisign from the PATH stands in for the
+ * pinned Windows download and the fake `.exe` is a shell script; on Windows (CI's "CLI on
+ * Windows") the script downloads its pinned minisign and installs a real fake `.exe`.
  */
-const pwsh = spawnSync("pwsh", ["-v"]).status === 0 && process.platform !== "win32";
-describe.skipIf(!pwsh || !hasMinisign)("install.ps1", () => {
+const pwsh = spawnSync("pwsh", ["-v"]).status === 0;
+describe.skipIf(!pwsh || !(hasMinisign || WINDOWS))("install.ps1", () => {
   const asset = platformAsset("win32", process.arch);
   async function installPs(
     url: string,
@@ -400,17 +414,30 @@ describe.skipIf(!pwsh || !hasMinisign)("install.ps1", () => {
     // As `irm | iex` runs it: in a session whose last native command exited 0.
     const iex = `cmd /c exit 0 2>$null; $global:LASTEXITCODE = 0; Get-Content -Raw '${script}' | Invoke-Expression`;
     const args = opts.iex ? ["-Command", iex] : ["-File", script];
+    // Windows' temp folder may come as a short 8.3 name; the script prints the long one. The
+    // install folder goes on the PATH already, so the script leaves the user's alone.
+    const bin = join(WINDOWS ? realpathSync.native(dir) : dir, "bin");
+    // A copy of process.env keeps Windows' `Path` spelling: drop it, or pwsh may read it unprepended.
+    const env = WINDOWS
+      ? {
+          ...Object.fromEntries(
+            Object.entries(process.env).filter(([k]) => k.toUpperCase() !== "PATH"),
+          ),
+          PATH: `${bin};${process.env.PATH ?? ""}`,
+        }
+      : { PATH: process.env.PATH ?? "" };
+    const minisign =
+      opts.minisign ??
+      (WINDOWS
+        ? undefined
+        : spawnSync("sh", ["-c", "command -v minisign"], { encoding: "utf8" }).stdout.trim());
     const p = Bun.spawn(["pwsh", "-NoProfile", "-NonInteractive", ...args], {
       env: {
-        PATH: process.env.PATH ?? "",
+        ...env,
         HOME: dir,
         STARBRIDGE_RELEASES_URL: url,
-        STARBRIDGE_INSTALL_DIR: join(dir, "bin"),
-        STARBRIDGE_MINISIGN:
-          opts.minisign ??
-          spawnSync("sh", ["-c", "command -v minisign"], {
-            encoding: "utf8",
-          }).stdout.trim(),
+        STARBRIDGE_INSTALL_DIR: bin,
+        ...(minisign ? { STARBRIDGE_MINISIGN: minisign } : {}),
         STARBRIDGE_NO_SETUP: "1",
         NO_COLOR: "1",
         ...(version ? { STARBRIDGE_VERSION: version } : {}),
@@ -425,7 +452,7 @@ describe.skipIf(!pwsh || !hasMinisign)("install.ps1", () => {
     ]);
     // PowerShell wraps an error at the console width.
     const text = `${out}${err}`.replace(/\s*\n\s*\|\s*/g, " ");
-    return { code, out: text, bin: join(dir, "bin", "starbridge.exe") };
+    return { code, out: text, bin: join(bin, "starbridge.exe") };
   }
 
   test("installs the signed binary, over a copy that stays running", async () => {
@@ -434,6 +461,8 @@ describe.skipIf(!pwsh || !hasMinisign)("install.ps1", () => {
     writeFileSync(join(dir, "bin", "starbridge.exe"), "old");
     const r = await installPs(release.url, release.pubkey);
     expect(r.out).toContain(`Installed starbridge 9.9.9 to ${r.bin}`);
+    // On Windows the install folder was on the PATH: the user's PATH stays as it was.
+    if (WINDOWS) expect(r.out).not.toContain("to your PATH");
     expect(r.code).toBe(0);
     expect(readFileSync(r.bin, "utf8")).toContain("starbridge 9.9.9");
     expect(existsSync(`${r.bin}.old`)).toBe(false);
@@ -471,6 +500,18 @@ describe.skipIf(!pwsh || !hasMinisign)("install.ps1", () => {
     const r = await installPs(release.url, release.pubkey, "9.9.9");
     expect(r.out).toContain('SHA256SUMS is signed for "starbridge v1.0.0", not starbridge v9.9.9');
     expect(existsSync(r.bin)).toBe(false);
+  });
+
+  test("refuses an older signed release served as the latest", async () => {
+    release = fakeReleases("9.9.9", { asset, signed: "1.0.0" });
+    const r = await installPs(release.url, release.pubkey);
+    expect(r.out).toContain('SHA256SUMS is signed for "starbridge v1.0.0", not starbridge v9.9.9');
+    expect(existsSync(r.bin)).toBe(false);
+  });
+
+  test("refuses a plain-HTTP mirror off this machine", async () => {
+    const r = await installPs("http://releases.example/releases", "x");
+    expect(r.out).toContain("STARBRIDGE_RELEASES_URL must be an https URL");
   });
 });
 
