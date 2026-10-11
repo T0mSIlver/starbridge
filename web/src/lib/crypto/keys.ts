@@ -30,13 +30,18 @@ async function webCryptoKeys(): Promise<DeviceKeys> {
   };
 }
 
-/** `keeps` checks that storage gives WebCrypto keys back; raw keys replace any it loses. */
+/**
+ * `keeps` checks that storage gives WebCrypto keys back; raw keys replace any it loses. It is
+ * given keys of their own, never the device's: a probe left behind by a closed page holds
+ * nothing.
+ */
 export async function generateDeviceKeys(
   keeps: (keys: StoredKeys) => Promise<boolean> = async () => true,
 ): Promise<DeviceKeys> {
   try {
     const keys = await webCryptoKeys();
-    if (!(await keeps(keys.stored))) throw new Error("storage loses WebCrypto keys");
+    if (!(await keeps((await webCryptoKeys()).stored)))
+      throw new Error("storage loses WebCrypto keys");
     return keys;
   } catch {
     await sodium.ready;
