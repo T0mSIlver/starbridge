@@ -87,7 +87,8 @@ function relaySlots(c: Context<Env>, endpoint: string): [string, number][] {
     [`address ${ipKey(c)}`, limits.relaySendsPerClient],
     // An IPv4 address is its own /48, already capped tighter above.
     [`network ${ipKey(c, 48)}`, limits.relaySendsPerNetwork],
-    [`host ${new URL(endpoint).hostname}`, limits.relaySendsPerHost],
+    // `push.example.` and `push.example` are one host.
+    [`host ${new URL(endpoint).hostname.replace(/\.$/, "")}`, limits.relaySendsPerHost],
   ];
 }
 

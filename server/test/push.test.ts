@@ -465,6 +465,9 @@ test.each([
   const first = relay(firstIp, `${base()}${slowPath}`);
   while (!seen.some((x) => x.path === slowPath)) await Bun.sleep(10);
   expect((await relay(secondIp, `${base()}/wp/relay`)).status).toBe(503);
+  // The same host with DNS's root dot.
+  const dotted = base().replace("localhost", "localhost.");
+  expect((await relay(secondIp, `${dotted}/wp/relay`)).status).toBe(503);
   const other = new URL(base());
   other.hostname = otherHost;
   const elsewhere = "relaySendsPerNetwork" in cap ? "2001:db8:2::1" : secondIp;
