@@ -7,8 +7,8 @@
   Pushes in flight, 4 per address, 8 per IPv6 /48 and 16 per push service host), so nobody can
   aim it at a host or burn the VAPID key (#577). A push service that never answers holds a slot
   for 10 s; the per-host cap bounds what any one host gets, and the caps per sender leave the
-  rest to other servers. The server refuses relay mode with `ALLOW_PRIVATE_PUSH_ENDPOINTS`, which
-  is for a self-hoster's own network. It
+  rest to other servers. The server refuses relay mode with any `ALLOW_PRIVATE_PUSH_ENDPOINTS`
+  host, since those are for a self-hoster's own network. It
   pushes only ciphertext or ids. A push carries the
   device's ciphertext when it fits FCM's 4 KB, else the item id.
 - Quota snapshots and runs skip Web Push: browsers drop subscriptions whose pushes show no
@@ -37,6 +37,11 @@
   6to4) is judged by that IPv4 address, since a translator on a self-hoster's network can route it
   there (#1095). Teredo and ISATAP addresses are refused whole: both are deprecated, and no push
   service uses them.
+  `ALLOW_PRIVATE_PUSH_ENDPOINTS` names the private hosts a self-hoster's push endpoints may use,
+  such as their own ntfy, over plain HTTP too; every other private address stays refused, since
+  any account on the server could otherwise make it call into the owner's network. Relay mode
+  refuses any listed host. `1`, from when it was a yes/no flag, still allows every private host, with a
+  warning at startup.
 - A server's VAPID key can change, as when a self-hoster leaves the relay for their own keys
   (#567). Each page boot compares the browser's subscription key with the server's and subscribes
   again when they differ. The server drops a Web Push subscription its push service refuses with

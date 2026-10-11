@@ -126,7 +126,7 @@ jobs:
           mkdir -p ../out
           cp app/build/outputs/apk/release/app-release.apk "../out/starbridge-$VERSION.apk"
           cp app/build/outputs/bundle/release/app-release.aab "../out/starbridge-$VERSION.aab"
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: android
           path: out/
@@ -153,7 +153,7 @@ jobs:
           npm pkg set version="$VERSION"
           bun run build:bin
           cp install.sh install.ps1 dist/
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: cli
           path: |
@@ -179,7 +179,7 @@ jobs:
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version: 1.4.2
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
       - run: pnpm install --frozen-lockfile --filter @starbridge/desktop
@@ -199,7 +199,7 @@ jobs:
           npm pkg set version="$VERSION"
           pnpm run build
           scripts/sign.sh
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: desktop
           path: |
@@ -223,7 +223,7 @@ jobs:
         with:
           bun-version: 1.4.2
       - run: pnpm install --frozen-lockfile
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: android
           path: apk
@@ -243,7 +243,7 @@ jobs:
           emulator-options: -no-window -no-snapshot -no-audio -no-boot-anim -gpu swiftshader_indirect
           script: ADB="$ANDROID_HOME/platform-tools/adb" bun demo/smoke/android.ts "apk/starbridge-$VERSION.apk" smoke-out
       - if: failure()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: smoke-failure
           path: smoke-out/
@@ -267,7 +267,7 @@ jobs:
         with:
           bun-version: 1.4.2
       # Only the built files: a re-run also finds smoke-failure, formula and release-dry-run from the earlier attempt (#1029).
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: "{android,cli,desktop}"
           path: out
@@ -298,7 +298,7 @@ jobs:
           mkdir formula
           bun run cli/scripts/brew-formula.ts "$VERSION" out/SHA256SUMS > formula/starbridge.rb
           cat formula/starbridge.rb
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: formula
           overwrite: true
@@ -311,7 +311,7 @@ jobs:
           bun cli/scripts/release-notes.ts "$VERSION" "$GITHUB_SHA" > notes.md
           cat notes.md
       - if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: release-dry-run
           overwrite: true
@@ -354,12 +354,12 @@ jobs:
         with:
           bun-version: 1.4.2
       - if: steps.setup.outputs.set
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: android
           path: out
       - if: steps.setup.outputs.set && !startsWith(github.ref, 'refs/tags/v')
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: release-dry-run
           path: dry-run
@@ -398,7 +398,7 @@ jobs:
     runs-on: ${{ vars.RUNNER || 'ubuntu-latest' }}
     environment: release
     steps:
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: formula
           path: formula
@@ -443,7 +443,7 @@ jobs:
         with:
           bun-version: 1.4.2
       - run: pnpm install --frozen-lockfile
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
       - run: npm pkg set version="${{ needs.version.outputs.version }}"
