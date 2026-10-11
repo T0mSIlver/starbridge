@@ -1,0 +1,3 @@
+{"type": "user", "isCompactSummary": true, "message": {"role": "user", "content": "This session is being continued from a previous conversation that ran out of context."}}
+{"type": "user", "origin": {"kind": "peer", "from": "local_1"}, "message": {"role": "user", "content": "Another Claude session sent a message: hello."}}
+{"type": "user", "origin": {"kind": "human"}, "message": {"role": "user", "content": "# Review the merged PRs\n\nThen open issues for each finding."}}

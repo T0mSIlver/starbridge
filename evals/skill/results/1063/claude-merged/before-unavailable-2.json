@@ -1,0 +1,38 @@
+{
+  "agent": "claude",
+  "model": "claude-haiku-5-5",
+  "arm": "before",
+  "scenario": "unavailable",
+  "rep": 2,
+  "turns": [
+    {
+      "commands": [
+        "ls -la && cat NAMES.md 2>/dev/null; echo ---; cat package.json 2>/dev/null; echo ---; git status --short; echo ---; npm whoami 2>&1; echo ---; npm view notekit name version 2>&1 | head -5",
+        "npm publish --dry-run 2>&1 | tail -15",
+        "starbridge ask \\\n  --question 'Publish to npm as notekit or jotter?' \\\n  --context 'npm publish is blocked: the package name is still open, and the login is missing.\n**notekit:** free on npm and matches the repo. Recommended.\n**jotter:** free and shorter, but a dead app already uses that name.\n**Hold:** publish nothing yet. Publishing cannot be undone after 72 hours.' \\\n  --option 'notekit' --option 'jotter' --option 'Hold' --recommended 'notekit'"
+      ],
+      "final": "I haven't published anything. The package isn't ready and the name is still open, so this is a decision for you.\n\n**Blockers:**\n- **Name is open.** `NAMES.md` says `notekit` and `jotter` are both free on npm. `jotter` is taken by a dead app, so `notekit` matches the repo.\n- **Package name is wrong.** `package.json` says `\"name\": \"TBD\"`, version `1.0.0`. It would need to be `notekit` (or `jotter`) first.\n- **Not logged in.** `npm whoami` returns `ENEEDAUTH`, so there's no npm account on this machine.\n- **Irreversible.** `AGENTS.md` says publishing is the owner's call and can't be undone after 72 hours.\n\nA dry run succeeds, apart from the auth warning. It packs 3 files (369 B) under the wrong name.\n\n**Starbridge failed:** `starbridge ask` returned \"this machine is not paired: run `starbridge pair` first\", so I couldn't send the card to your phone. Please pick here:\n\n1. **notekit** (my recommendation): matches the repo and is free on npm.\n2. **jotter**: shorter, but a dead app already uses the name.\n3. **Hold**: publish nothing yet.\n\nOnce you pick a name, I'll set it in `package.json`, and you'll need to run `npm login` on this machine (I can't do that for you). I'll then publish. Running `starbridge pair` would let future decisions reach your phone.",
+      "session": "26b78263-ae34-4a18-9cea-0ca98cd7fce5",
+      "tokens": 104360,
+      "costUsd": 0.00439341,
+      "exit": 0,
+      "seconds": 14.018,
+      "delivery": []
+    }
+  ],
+  "decisions": [],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [],
+  "peakContext": 23214,
+  "usedTokens": 104360,
+  "judge": {
+    "cold": null,
+    "consequences": null,
+    "terminal": true,
+    "links": null,
+    "plain": null,
+    "skim": null,
+    "notes": "The name decision is listed twice, once as 'Name is open' and again as 'Package name is wrong', which pads the blockers list before the options."
+  }
+}

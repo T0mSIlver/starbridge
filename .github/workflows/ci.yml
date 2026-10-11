@@ -22,9 +22,11 @@ permissions:
   contents: read
   pull-requests: read
 
-# Jobs run on GitHub-hosted runners. On a push to main, the repository variable RUNNER points the
-# test job at self-hosted runners instead; pull requests' and dispatched runs' code never runs on
-# them.
+# Jobs run on GitHub-hosted runners, with two exceptions for the test and e2e jobs. On a push to
+# main, the repository variable RUNNER points the test job at the self-hosted main pool. A pull
+# request from this repository's own branches, Dependabot's aside, runs both on the self-hosted PR
+# pool, PR_RUNNER (#1204): it holds no secrets, and no pull request reaches RUNNER's pool or
+# ANDROID_RUNNER's. A fork's pull request and a dispatched run stay on GitHub's runners.
 #
 # A run tests only what its files can affect: a pull request's files against its base, a push's
 # since the commit before it (the changes job). A job that cannot be affected is skipped, which
@@ -138,7 +140,7 @@ jobs:
     name: test, typecheck, lint
     needs: changes
     if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.checks == 'true') }}
-    runs-on: ${{ github.event_name == 'push' && vars.RUNNER || 'ubuntu-latest' }}
+    runs-on: ${{ github.event_name == 'push' && vars.RUNNER || github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]' && vars.PR_RUNNER || 'ubuntu-latest' }}
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -162,8 +164,8 @@ jobs:
   # The whole product on one machine (web/e2e/run.ts), in three parts side by side, each with its
   # own server and browser (E2E_SHARD). Each screenshot also fails on layout breakage: a page wider
   # than the window, clipped, spilled or overlapping text (web/e2e/layout.ts). GitHub's runners
-  # for main's pushes too: the parts wait on timers more than they compute, and three at once would
-  # fill the self-hosted runners.
+  # for main's pushes: the parts wait on timers more than they compute, and three at once would
+  # fill the main pool. A pull request's run them on the PR pool, as the test job.
   e2e:
     name: end to end (${{ matrix.shard }})
     needs: changes
@@ -172,7 +174,7 @@ jobs:
       fail-fast: false
       matrix:
         shard: [inbox, snooze, devices]
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]' && vars.PR_RUNNER || 'ubuntu-latest' }}
     timeout-minutes: 15
     # actions: the tested step lists artifacts.
     permissions:
@@ -221,9 +223,14 @@ jobs:
         timeout-minutes: 5
         env:
           pnpm_config_store_dir: ${{ runner.tool_cache }}/pnpm-store
+      # The PR pool has Firefox's system libraries already; only GitHub's runners install them.
+      # Firefox goes in each runner's own tool cache: the PR pool's runners on one host share a home, and
+      # three parts installing into one directory at once could break each other's copy.
       - if: steps.scope.outputs.run == 'true'
-        run: pnpm --filter @starbridge/web exec playwright install --with-deps firefox
+        run: pnpm --filter @starbridge/web exec playwright install ${{ runner.environment == 'github-hosted' && '--with-deps' || '' }} firefox
         timeout-minutes: 5
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: ${{ runner.tool_cache }}/ms-playwright
       # A part takes up to ~4 min, the snooze's 2-minute wait for its time included. At 7 the
       # watchdog prints what is still running and stops it.
       - if: steps.scope.outputs.run == 'true'
@@ -232,6 +239,7 @@ jobs:
         env:
           TMPDIR: ${{ runner.temp }}
           E2E_SHARD: ${{ matrix.shard }}
+          PLAYWRIGHT_BROWSERS_PATH: ${{ runner.tool_cache }}/ms-playwright
       # What a later merge of the same tree looks up (the tested step above). It holds the commit
       # that passed; overwrite, since a re-run attempt uploads it again.
       - id: tree

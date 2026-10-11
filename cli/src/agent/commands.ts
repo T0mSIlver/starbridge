@@ -6,6 +6,7 @@ import type { Answer, QuotaSnapshot } from "@starbridge/protocol";
 import { type Ctx, parseDuration, UsageError } from "../context";
 import {
   type AskInput,
+  answerInLine,
   answerLine,
   closedError,
   type Delivery,
@@ -57,6 +58,7 @@ export async function askVia(
   );
   ctx.out(id);
   if (!opts.wait) ctx.err(deliveryLine(id, d));
+  if (resolved.answerIn !== undefined) ctx.err(answerInLine(id));
   if (!opts.wait) return 0;
   return waitVia(ctx, agent, { id, timeout: opts.timeout, json: opts.json });
 }

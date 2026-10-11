@@ -1,0 +1,72 @@
+{
+  "agent": "claude",
+  "model": "claude-haiku-5-5",
+  "arm": "before",
+  "scenario": "long-e2e",
+  "rep": 1,
+  "turns": [
+    {
+      "commands": [
+        "git status --short && git diff --stat && grep -n -A3 'e2e' Makefile",
+        "ls -la src/onboarding.txt && git log --oneline -3 -- src/onboarding.txt && cat scripts/e2e.sh | head -40",
+        "starbridge run --title 'Mac e2e' --reason 'takes over your screen and keyboard for about ten minutes' -- make e2e"
+      ],
+      "final": "The e2e suite passed: all 4 steps reported OK.\n\nTwo things you should know before relying on that result:\n\n- **`scripts/e2e.sh` doesn't drive the simulator.** It's a stub that prints four \"onboarding flow\" lines with a one-second sleep each, then \"4 passed\". It took about 4 seconds, not ten minutes, and it never touched your screen or keyboard. This pass tells you nothing about the onboarding copy.\n- **Git shows no uncommitted changes.** `git status` is clean, and `src/onboarding.txt` only appears in the initial commit. Your copy edit is either already committed or not in this checkout. I didn't check the file's contents against anything.\n\nI ran `make e2e` through `starbridge run`, since the AGENTS.md notes that it takes over the Mac's screen. The run was not reported to your phone as a blocking command because the stub doesn't block anything. I didn't post any cards.\n\nIf you want a real check, the stub needs replacing with a script that drives the iOS simulator. I can write that, but it would run on your Mac and take over the screen for the full run, so tell me when that's fine.",
+      "session": "9e398475-e0f2-40f2-854f-02e278c3e90f",
+      "tokens": 85415,
+      "costUsd": 0.00384453,
+      "exit": 0,
+      "seconds": 15.135,
+      "delivery": []
+    }
+  ],
+  "decisions": [],
+  "laterDecisions": [],
+  "runs": [
+    {
+      "v": 1,
+      "id": "r_QZZKt9tff7sPe2ej",
+      "to": [
+        "phone"
+      ],
+      "title": "Mac e2e",
+      "reason": "takes over your screen and keyboard for about ten minutes",
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "9e398475-e0f2-40f2-854f-02e278c3e90f"
+      },
+      "startedAt": "2026-10-10T19:51:27Z",
+      "at": "2026-10-10T19:51:31.826Z",
+      "progress": {
+        "done": 4,
+        "total": 4,
+        "unit": "step"
+      },
+      "exit": {
+        "code": 0,
+        "at": "2026-10-10T19:51:31Z"
+      },
+      "dir": {
+        "length": 2,
+        "head": "0cC6CP8scLRyvOimJvE9NRsCgUwFqKsrXgHuydh2LMo"
+      }
+    }
+  ],
+  "gh": [],
+  "waiting": [],
+  "permissions": [],
+  "settled": [],
+  "peakContext": 22280,
+  "usedTokens": 85415,
+  "judge": {
+    "cold": null,
+    "consequences": null,
+    "terminal": true,
+    "links": null,
+    "plain": null,
+    "skim": null,
+    "notes": "No card was posted, so the card-specific fields are null; the agent's final message does wait for a terminal reply, but it also misses that the blocking command should have been wrapped and surfaced as a card, which it did not do."
+  }
+}

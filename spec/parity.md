@@ -17,7 +17,7 @@ opens an issue for each client the row says should follow.
 | History | yes | yes | yes | yes (#1122: answered questions, with how; prompts not listed) |
 | Find | yes (rail box) | yes (Material 3 search view) | yes | yes (#1131: the system search field) |
 | Permission prompts, answer from the device (Allow / Deny) | yes | yes | yes | yes (#1122: Allow, Deny with a note, offered scopes) |
-| Runs (section, progress, dismiss) | yes | yes | yes | yes (#1122) |
+| Runs (section, progress, dismiss) | yes | yes | yes | yes (#1122; the section #1170) |
 | Quotas tab | yes | yes | yes | not yet |
 | Quota alerts per window (settings) | yes | yes | yes | not yet |
 | Widgets | n/a | yes (#894: Needs you, Quotas) | yes (#1031: Needs you only; no Quotas widget by owner's choice) | not yet |

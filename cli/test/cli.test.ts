@@ -420,6 +420,8 @@ test("ask --answer-in posts a pointer decision, and settle closes it", async () 
   expect(ctx.errors.at(-1)).toContain("never in two places");
   expect(await run([...pointer, "--answer-in", page], ctx)).toBe(0);
   const id = ctx.lines.at(-1) as string;
+  // What to do when the page answers comes only to the agent that built one (#1063).
+  expect(ctx.errors.at(-1)).toContain(`run \`starbridge settle ${id}\`, then act`);
   expect((await server.opened("decision"))[0]).toMatchObject({
     answerIn: { url: page },
     options: [],

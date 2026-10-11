@@ -3,15 +3,18 @@
  * tokenizer: the SessionStart rule, the skill's entry in the skills list (name and description),
  * which every session carries, and the skill's body, which an agent reads when it uses the skill.
  *
- *   bun evals/skill/tokens.ts [--ref origin/main] [--model claude-haiku-5-5]
+ *   bun evals/skill/tokens.ts [--ref origin/main] [--model claude-haiku-5-5] [--agent codex]
  *
- * Without `--ref` it reads this checkout. Each count is the input of a `claude -p` call with the
+ * Without `--ref` it reads this checkout. `--agent` picks the harness whose rule it counts
+ * (cli/src/setup/rules.ts), Claude Code's by default; a ref from before #1063 has one rule. Each count is the input of a `claude -p` call with the
  * piece appended to the system prompt, minus that of the same call with "." appended.
  */
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { parseArgs } from "node:util";
+import type { Agent } from "@starbridge/protocol";
+import { RULE_FILES } from "../../cli/src/setup/rules.ts";
 import { claudeToken, tmpOutsideHome } from "./login.ts";
 
 const { values: opt } = parseArgs({
@@ -19,6 +22,7 @@ const { values: opt } = parseArgs({
   options: {
     ref: { type: "string" },
     model: { type: "string", default: "claude-haiku-5-5" },
+    agent: { type: "string", default: "claude-code" },
   },
 });
 
@@ -30,10 +34,18 @@ function read(path: string): string {
   return r.stdout;
 }
 
+const exists = (path: string) =>
+  opt.ref
+    ? spawnSync("git", ["-C", repo, "cat-file", "-e", `${opt.ref}:${path}`]).status === 0
+    : existsSync(join(repo, path));
+const ruleFile = RULE_FILES[opt.agent as Agent];
+if (!ruleFile) throw new Error(`--agent takes one of ${Object.keys(RULE_FILES).join(", ")}`);
+const rulePath = exists(ruleFile) ? ruleFile : "plugin/hooks/rule.md";
+
 const skill = read("plugin/skills/starbridge/SKILL.md");
 const front = /^---\n([\s\S]*?)\n---\n/.exec(skill);
 const pieces: Record<string, string> = {
-  "SessionStart rule (plugin/hooks/rule.md)": read("plugin/hooks/rule.md").trim(),
+  [`SessionStart rule (${rulePath})`]: read(rulePath).trim(),
   "Skill list entry (name, description)": (front?.[1] ?? "")
     .split("\n")
     .filter((l) => /^(name|description):/.test(l))

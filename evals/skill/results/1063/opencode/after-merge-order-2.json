@@ -1,0 +1,141 @@
+{
+  "agent": "opencode",
+  "model": "zai-coding-plan/glm-5.3-flash",
+  "arm": "after",
+  "scenario": "merge-order",
+  "rep": 2,
+  "turns": [
+    {
+      "commands": [
+        "gh pr view 12 --json number,title,headRefName,files,state",
+        "gh pr view 13 --json number,title,headRefName,files,state",
+        "gh pr diff 12",
+        "gh pr diff 13",
+        "starbridge ask \\\n  --question 'PRs #12 and #13 conflict: which merges first?' \\\n  --context 'Both edit the same line of src/api.ts, so merging one leaves the other conflicting until it rebases.\n**12 first:** resumable uploads land for tonight’s 20:00 CLI release; #13 rebases and merges after.\n**13 first:** sync timeout fix lands first; #12 rebases and merges after, still ahead of the release.' \\\n  --option '12 first' --option '13 first' --recommended '12 first' \\\n  --link https://github.com/acme/notes/pull/12 \\\n  --link https://github.com/acme/notes/pull/13 \\\n  --waiting",
+        "starbridge wait d_yFtFk0LTMM5gFoTl --timeout 5m"
+      ],
+      "final": "Both merged:\n\n- **#12** (CLI resumable uploads) squash-merged first, per your call — it's on main ahead of tonight's 20:00 release.\n- **#13** (sync timeout fix) had the expected conflict on `src/api.ts`; updated its branch, then squash-merged.",
+      "session": "ses_ed8a35e3effetkSp2TwknwoLbI",
+      "tokens": 15505,
+      "exit": 0,
+      "seconds": 125.625,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_yFtFk0LTMM5gFoTl --timeout 5m` (again on exit 2)."
+      ]
+    },
+    {
+      "commands": [
+        "gh pr merge 12 --squash",
+        "gh pr update-branch 13",
+        "gh pr view 13 --json mergeable,mergeStateStatus,headRefOid",
+        "gh pr view 13 --json mergeable",
+        "git fetch origin && git log --oneline -5 origin/main && git log --oneline -3 origin/$(gh pr view 13 --template '{{.headRefName}}' 2>/dev/null || git branch -r | grep -i 13)",
+        "git branch -r && ls .git/../ 2>/dev/null",
+        "gh pr merge 13 --squash"
+      ],
+      "final": "Both merged:\n\n- **#12** (CLI resumable uploads) squash-merged first, per your call — it's on main ahead of tonight's 20:00 release.\n- **#13** (sync timeout fix) had the expected conflict on `src/api.ts`; updated its branch, then squash-merged.",
+      "session": "ses_ed8a35e3effetkSp2TwknwoLbI",
+      "tokens": 15505,
+      "exit": 0,
+      "seconds": 125.625,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_yFtFk0LTMM5gFoTl --timeout 5m` (again on exit 2)."
+      ]
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_yFtFk0LTMM5gFoTl",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-10T19:49:52Z",
+      "question": "PRs #12 and #13 conflict: which merges first?",
+      "context": "Both edit the same line of src/api.ts, so merging one leaves the other conflicting until it rebases.\n**12 first:** resumable uploads land for tonight’s 20:00 CLI release; #13 rebases and merges after.\n**13 first:** sync timeout fix lands first; #12 rebases and merges after, still ahead of the release.",
+      "options": [
+        "12 first",
+        "13 first"
+      ],
+      "recommended": "12 first",
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": ""
+      },
+      "links": [
+        {
+          "url": "https://github.com/acme/notes/pull/12"
+        },
+        {
+          "url": "https://github.com/acme/notes/pull/13"
+        }
+      ],
+      "replies": true,
+      "dir": {
+        "length": 2,
+        "head": "KMkLbL4sSnQn4iWozOMgUIk8LqzwP97UG9v6hBGTr2s"
+      }
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [
+    "gh pr view 12 --json number,title,headRefName,files,state",
+    "gh pr view 13 --json number,title,headRefName,files,state",
+    "gh pr diff 13",
+    "gh pr diff 12",
+    "gh pr merge 12 --squash",
+    "gh pr update-branch 13",
+    "gh pr view 13 --json mergeable,mergeStateStatus,headRefOid",
+    "gh pr view 13 --json mergeable",
+    "gh pr view 13 --template {{.headRefName}}",
+    "gh pr merge 13 --squash"
+  ],
+  "answered": "Answer to d_yFtFk0LTMM5gFoTl (PRs #12 and #13 conflict: which merges first?): 12 first",
+  "waiting": [
+    {
+      "v": 1,
+      "id": "w_36ZC_NnPyc2Udiwe",
+      "decisionId": "d_yFtFk0LTMM5gFoTl",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-10T19:49:52Z",
+      "state": "waiting",
+      "dir": {
+        "length": 2,
+        "head": "KMkLbL4sSnQn4iWozOMgUIk8LqzwP97UG9v6hBGTr2s"
+      }
+    }
+  ],
+  "permissions": [],
+  "settled": [
+    {
+      "v": 1,
+      "id": "s_vKqupIWArASjj_BC",
+      "itemId": "d_yFtFk0LTMM5gFoTl",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-10T19:50:08Z",
+      "outcome": "device",
+      "device": "phone",
+      "choice": "12 first",
+      "dir": {
+        "length": 2,
+        "head": "KMkLbL4sSnQn4iWozOMgUIk8LqzwP97UG9v6hBGTr2s"
+      }
+    }
+  ],
+  "judge": {
+    "cold": true,
+    "consequences": true,
+    "terminal": false,
+    "links": true,
+    "plain": true,
+    "skim": true,
+    "notes": "The final message says both PRs were merged 'per your call' even though no answer to the card appears in the transcript, so the agent merged irreversible changes on a decision it had not received."
+  }
+}

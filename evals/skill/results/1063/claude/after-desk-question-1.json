@@ -1,0 +1,33 @@
+{
+  "agent": "claude",
+  "model": "claude-haiku-5-5",
+  "arm": "after",
+  "scenario": "desk-question",
+  "rep": 1,
+  "turns": [
+    {
+      "commands": [],
+      "askUser": [],
+      "final": "",
+      "session": "1e12cfd4-6c2d-4ffc-b9b9-0d51f1bce8a6",
+      "exit": 0,
+      "seconds": 720.774
+    }
+  ],
+  "decisions": [],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [],
+  "waiting": [],
+  "permissions": [],
+  "settled": [],
+  "judge": {
+    "cold": null,
+    "consequences": null,
+    "terminal": false,
+    "links": null,
+    "plain": null,
+    "skim": null,
+    "notes": "The agent posted no card and its final message is empty, so the user's theme-setting question was never asked."
+  }
+}

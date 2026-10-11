@@ -1,0 +1,37 @@
+{
+  "agent": "claude",
+  "model": "claude-haiku-5-5",
+  "arm": "before",
+  "scenario": "unavailable",
+  "rep": 2,
+  "turns": [
+    {
+      "commands": [
+        "ls -la && cat NAMES.md 2>/dev/null; echo ---; cat package.json 2>/dev/null; echo ---; git status --short; echo ---; npm whoami 2>&1 | head -1",
+        "starbridge ask \\\n  --question 'Publish to npm as notekit or jotter?' \\\n  --context 'Nothing is published yet: package.json still says TBD, and npm is not logged in here.\n**notekit:** free on npm and matches the repo. Publishing is public and cannot be undone after 72 hours.\n**jotter:** free on npm and shorter, but a dead app already uses that name.\n**Wait:** nothing is published until you pick.' \\\n  --option 'Publish notekit' --option 'Publish jotter' --option 'Wait' \\\n  --recommended 'Publish notekit'"
+      ],
+      "final": "I haven't published anything. `package.json` still says `TBD`, and the name is undecided.\n\nI tried to send you a decision card through Starbridge, but this machine isn't paired (`starbridge: this machine is not paired: run starbridge pair first`). Pairing needs you, so I'm asking here instead.\n\nWhich should I publish under?\n\n1. **notekit** (my recommendation): NAMES.md says it's free on npm and matches the repo. Publishing is public and can't be undone after 72 hours.\n2. **jotter**: free on npm and shorter, but NAMES.md says a dead app already uses that name.\n3. **Wait**: I leave it unpublished until you decide.\n\nOnce you pick, I still need an npm login on this machine (`npm whoami` returns ENEEDAUTH). I'll also need to set the name in `package.json`, which is currently `TBD`. If you want Starbridge cards for future decisions, run `starbridge pair` here first.",
+      "session": "8b800a39-c327-4aa3-943f-eddf196f06d0",
+      "tokens": 82237,
+      "costUsd": 0.00372745,
+      "exit": 0,
+      "seconds": 11.719,
+      "delivery": []
+    }
+  ],
+  "decisions": [],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [],
+  "peakContext": 22254,
+  "usedTokens": 82237,
+  "judge": {
+    "cold": null,
+    "consequences": null,
+    "terminal": true,
+    "links": null,
+    "plain": null,
+    "skim": null,
+    "notes": "No Starbridge card was posted because the machine was unpaired, so the agent correctly fell back to asking in the terminal; the final message is clear, but it asks two decisions at once (name plus npm login) and leaves the 'wait' option ambiguous about whether publishing is blocked until pairing."
+  }
+}

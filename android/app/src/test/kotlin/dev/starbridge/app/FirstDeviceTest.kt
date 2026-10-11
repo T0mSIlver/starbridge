@@ -147,10 +147,12 @@ class FirstDeviceTest {
         assertEquals(before.pin, disk.saved()!!.pin)
         assertEquals(account, disk.saved()!!.account)
         assertNotNull(disk.secrets().signSk)
-        // Sign-in offers the way out: signing out removes the keys.
+        // Sign-in offers the way out: signing out removes the keys, and the account's hold (#1192).
+        signedOut.pushHold.value = 45
         signedOut.signOut()
         until { !signedOut.keepsKeys.value }
         assertEquals(null, disk.saved()?.me)
+        assertEquals(null, signedOut.pushHold.value)
     }
 
     private fun until(pred: () -> Boolean) {

@@ -10,14 +10,16 @@ enum Sheet: Identifiable, Hashable {
 }
 
 /**
- * The inbox, in the order every client uses (spec/clients.md): runs first, then permission
- * prompts, then questions whose agent waits, then the rest, each oldest first. Snoozed and
- * History wait closed at the bottom.
+ * The inbox, in the order every client uses (spec/clients.md): runs first, in their own section,
+ * open until the owner closes it (#835), then permission prompts, then questions whose agent
+ * waits, then the rest, each oldest first. Snoozed and History wait closed at the bottom.
  */
 struct InboxView: View {
     let store: Store
     @Environment(\.scenePhase) private var scenePhase
     @State private var opened: Sheet?
+    /** The Runs section, open by default and remembered on this iPhone (#835). */
+    @AppStorage("runsOpen") private var runsOpen = true
     @State private var snoozedOpen = false
     @State private var historyOpen = false
     @State private var query = ""
@@ -29,11 +31,11 @@ struct InboxView: View {
 
     var body: some View {
         let decisions = store.openDecisions
-        let runs: [FeedItem] = store.shownRuns.map { .run($0) }
+        let runs = store.shownRuns
         let prompts: [FeedItem] = store.openPrompts.map { .prompt($0) }
         let waiting: [FeedItem] = decisions.filter { $0.waiting == "waiting" }.map { .decision($0) }
         let rest: [FeedItem] = decisions.filter { $0.waiting != "waiting" }.map { .decision($0) }
-        let feed = runs + prompts + waiting + rest
+        let feed = prompts + waiting + rest
         let snoozed: [FeedItem] = store.snoozedDecisions.map { .decision($0) }
         let history = store.history
         NavigationStack {
@@ -41,15 +43,21 @@ struct InboxView: View {
                 LazyVStack(spacing: Tokens.Spacing.s2) {
                     if let why = store.withheldWhy { HeldBanner(store: store, why: why) }
                     if !query.trimmingCharacters(in: .whitespaces).isEmpty {
-                        found(feed + snoozed, history)
+                        found(runs.map { .run($0) } + feed + snoozed, history)
                     } else {
+                        if !runs.isEmpty {
+                            // Closed, its head still names failed and lost runs, so closing it never hides a failure.
+                            Collapsible(title: "Runs", count: RunsHead.count(runs), symbol: "play.circle", open: $runsOpen, top: false, note: RunsHead.note(runs)) {
+                                ForEach(runs, id: \.id) { card(.run($0)) }
+                            }
+                        }
                         ForEach(groups(feed), id: \.title) { group in
                             if let title = group.title.isEmpty ? nil : group.title {
                                 GroupHeader(title: title, count: group.items.count, amber: group.amber)
                             }
                             ForEach(group.items) { card($0) }
                         }
-                        if feed.isEmpty, store.withheldWhy == nil {
+                        if feed.isEmpty, runs.isEmpty, store.withheldWhy == nil {
                             Text("Nothing needs you")
                                 .type(Tokens.Typography.heading)
                                 .frame(maxWidth: .infinity)
@@ -132,26 +140,22 @@ extension InboxView {
 
     /**
      * "Group by machine" splits the feed under each machine; "Group by waiting" puts what blocks
-     * an agent under "Waiting on you" and the rest under "When you can", runs above both.
+     * an agent under "Waiting on you" and the rest under "When you can". Runs keep their section above.
      */
     func groups(_ feed: [FeedItem]) -> [FeedGroup] {
         switch grouping {
         case .none:
             return [FeedGroup(title: "", items: feed)]
         case .machine:
-            // Runs keep their section above (#835).
             var order: [String] = []
             var byMachine: [String: [FeedItem]] = [:]
-            for item in feed where !item.isRun {
+            for item in feed {
                 if byMachine[item.machine] == nil { order.append(item.machine) }
                 byMachine[item.machine, default: []].append(item)
             }
-            return [FeedGroup(title: "", items: feed.filter(\.isRun))].filter { !$0.items.isEmpty } + order.map { FeedGroup(title: $0, items: byMachine[$0]!) }
+            return order.map { FeedGroup(title: $0, items: byMachine[$0]!) }
         case .waiting:
-            let runs = feed.filter(\.isRun)
-            let waiting = feed.filter { !$0.isRun && $0.waits }
-            let later = feed.filter { !$0.isRun && !$0.waits }
-            return [FeedGroup(title: "", items: runs), FeedGroup(title: "Waiting on you", items: waiting, amber: true), FeedGroup(title: "When you can", items: later)]
+            return [FeedGroup(title: "Waiting on you", items: feed.filter(\.waits), amber: true), FeedGroup(title: "When you can", items: feed.filter { !$0.waits })]
                 .filter { !$0.items.isEmpty }
         }
     }
@@ -226,7 +230,6 @@ enum FeedItem: Identifiable {
     }
 
     var machine: String { source.machine }
-    var isRun: Bool { if case .run = self { true } else { false } }
 
     /** A prompt always blocks; a question when its agent says it waits. */
     var waits: Bool {
@@ -278,6 +281,10 @@ private struct Collapsible<Content: View>: View {
     let count: String
     let symbol: String
     @Binding var open: Bool
+    /** Spaced from what is above it; the Runs section starts the list. */
+    var top = true
+    /** Said after the count, such as the Runs head's failed and lost runs. */
+    var note: Text?
     @ViewBuilder let content: Content
 
     var body: some View {
@@ -289,6 +296,7 @@ private struct Collapsible<Content: View>: View {
                     Image(systemName: symbol)
                     Text(title).type(Tokens.Typography.label)
                     Text(count).type(Tokens.Typography.machine).foregroundStyle(Tokens.Colors.fg2.color)
+                    if let note { note.type(Tokens.Typography.machine) }
                     Spacer()
                     Image(systemName: "chevron.down").rotationEffect(.degrees(open ? 180 : 0))
                 }
@@ -301,7 +309,24 @@ private struct Collapsible<Content: View>: View {
             .accessibilityValue(open ? "Expanded" : "Collapsed")
             if open { content }
         }
-        .padding(.top, Tokens.Spacing.s4)
+        .padding(.top, top ? Tokens.Spacing.s4 : 0)
+    }
+}
+
+/** What the Runs head says besides its title: how many, and the failed ones in red, then the lost (#835). */
+enum RunsHead {
+    static func count(_ runs: [SavedRun]) -> String { "\(runs.count)" }
+
+    static func words(_ runs: [SavedRun]) -> (failed: String?, lost: String?) {
+        let failed = runs.filter(\.failed).count
+        let lost = runs.filter(\.lost).count
+        return (failed > 0 ? "· \(failed) failed" : nil, lost > 0 ? "· \(lost) lost" : nil)
+    }
+
+    static func note(_ runs: [SavedRun]) -> Text? {
+        let (failed, lost) = words(runs)
+        let parts = [failed.map { Text($0).foregroundStyle(Tokens.Colors.bad.color) }, lost.map { Text($0).foregroundStyle(Tokens.Colors.fg2.color) }].compactMap(\.self)
+        return parts.isEmpty ? nil : parts.dropFirst().reduce(parts[0]) { Text("\($0) \($1)") }
     }
 }
 

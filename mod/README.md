@@ -93,7 +93,7 @@ pi install git:github.com/T0mSIlver/starbridge@v<version>
 
 In an interactive or RPC Pi session it submits each answer as a user message,
 which starts a turn when Pi is idle and runs after the current one when it is
-busy. It also adds the plugin's rule (`plugin/hooks/rule.md`) to Pi's system
+busy. It also adds its rule (`plugin/rules/pi.md`) to Pi's system
 prompt. `pi -p` gets no loop, so `starbridge ask` tells the agent there to
 `starbridge wait`.
 

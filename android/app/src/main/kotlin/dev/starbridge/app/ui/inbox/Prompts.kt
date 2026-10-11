@@ -79,6 +79,7 @@ import kotlinx.coroutines.delay
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import java.time.Instant
+import dev.starbridge.app.protocol.takeCodePoints
 
 /** What a prompt can do: allow for a scope, deny with an optional note, open its sheet. */
 class PromptActions(
@@ -295,7 +296,7 @@ fun PromptSheet(prompt: Prompt, now: Instant, actions: PromptActions) {
                 if (denying) {
                     TextField(
                         value = note,
-                        onValueChange = { note = it.take(500) },
+                        onValueChange = { note = it.takeCodePoints(500) },
                         placeholder = { Text("A note to the agent") },
                         colors = fieldColors(),
                         modifier = Modifier.fillMaxWidth(),

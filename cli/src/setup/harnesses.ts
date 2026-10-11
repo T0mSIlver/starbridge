@@ -8,7 +8,8 @@
  */
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import rule from "../../../plugin/hooks/rule.md" with { type: "text" };
+import agyRule from "../../../plugin/rules/antigravity.md" with { type: "text" };
+import opencodeRule from "../../../plugin/rules/opencode.md" with { type: "text" };
 import skill from "../../../plugin/skills/starbridge/SKILL.md" with { type: "text" };
 import { VERSION } from "../version";
 import agyFiles from "./antigravity-files.js";
@@ -177,7 +178,7 @@ function opencodeFiles(): Record<string, string> {
     ...Object.fromEntries(
       Object.entries(plugin).map(([path, body]) => [`starbridge/${path}`, body]),
     ),
-    "starbridge/plugin/hooks/rule.md": rule,
+    "starbridge/plugin/rules/opencode.md": opencodeRule,
   };
 }
 
@@ -310,7 +311,7 @@ function antigravityFiles(): Record<string, string> {
   return {
     ...agyFiles,
     // An always_on rule is in every conversation's context, as the SessionStart hook's is.
-    [AGY_RULE]: `---\n${marker("#")}\ntrigger: always_on\n---\n\n${rule}`,
+    [AGY_RULE]: `---\n${marker("#")}\ntrigger: always_on\n---\n\n${agyRule}`,
     "skills/starbridge/SKILL.md": SKILL,
   };
 }

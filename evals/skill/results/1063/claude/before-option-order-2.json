@@ -1,0 +1,119 @@
+{
+  "agent": "claude",
+  "model": "claude-haiku-5-5",
+  "arm": "before",
+  "scenario": "option-order",
+  "rep": 2,
+  "turns": [
+    {
+      "commands": [
+        "git status --short && git ls-files | head -200 && cat AGENTS.md && grep -rniE \"trash|retention|purge|deleted_at|soft.?delete\" --include=* -r . --exclude-dir=.git | head -80",
+        "cat NOTES.md; echo ----; cat src/trash.js; echo ----; grep -rniE \"trash|retention|purge\" . --exclude-dir=.git",
+        "starbridge ask \\\n  --question 'How long should the trash keep deleted notes before purging?' \\\n  --context '85% of restore requests come within 3 weeks of the delete.\n**7 days:** storage about $5/month. Restores after a week fail.\n**30 days:** storage about $20/month. Covers the 3-week window.\n**90 days:** storage about $60/month. Longest restore window.' \\\n  --option '7 days' --option '30 days' --option '90 days' --recommended '30 days'",
+        "node --input-type=module -e '\nimport { trash, remove, purgeExpired } from \"./src/trash.js\";\nremove(\"a\"); remove(\"b\");\ntrash[0].deletedAt -= 10*24*3600*1000;\nconsole.log(\"purged\", purgeExpired(7*24*3600*1000), \"left\", trash.length, trash[0].note);\ntry { purgeExpired(0) } catch (e) { console.log(\"threw:\", e.message) }\n'",
+        "starbridge wait d_s8hhkNjKugS6GQii --timeout 5m; echo \"exit=$?\""
+      ],
+      "final": "Trash now purges automatically, with retention set to 30 days, the value your answer chose. Nothing in the repo starts the timer yet, so the purge won't run until something calls `startAutoPurge`.\n\n**What changed** (`src/trash.js`):\n- `TRASH_RETENTION_MS`: 30 days, with a comment recording the owner's decision.\n- `purgeExpired(retentionMs, now)`: removes entries older than the retention period and returns how many it removed. It throws if the retention is not a positive number.\n- `startAutoPurge(retentionMs, intervalMs)`: runs `purgeExpired` on an interval and returns a function that stops it.\n\nI checked the purge with a quick script: an entry 10 days old was removed under a 7-day retention, and a zero retention throws. I did not run the app.\n\n**Still open:**\n- **Start the timer.** The repo has only `src/trash.js`, with no entry point. Whatever starts the app should call `startAutoPurge(TRASH_RETENTION_MS, <interval>)`. I haven't picked an interval.\n- **Existing trash.** The first purge will remove everything already older than 30 days.\n\nYour answer came through the Starbridge card `d_s8hhkNjKugS6GQii`, so nothing needs withdrawing.",
+      "session": "571c31a7-4ea0-4001-9963-cada76728e28",
+      "tokens": 203878,
+      "costUsd": 0.006764649999999999,
+      "exit": 0,
+      "seconds": 32.656,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_s8hhkNjKugS6GQii --timeout 5m` (again on exit 2)."
+      ]
+    },
+    {
+      "commands": [],
+      "final": "Trash now purges automatically, with retention set to 30 days, the value your answer chose. Nothing in the repo starts the timer yet, so the purge won't run until something calls `startAutoPurge`.\n\n**What changed** (`src/trash.js`):\n- `TRASH_RETENTION_MS`: 30 days, with a comment recording the owner's decision.\n- `purgeExpired(retentionMs, now)`: removes entries older than the retention period and returns how many it removed. It throws if the retention is not a positive number.\n- `startAutoPurge(retentionMs, intervalMs)`: runs `purgeExpired` on an interval and returns a function that stops it.\n\nI checked the purge with a quick script: an entry 10 days old was removed under a 7-day retention, and a zero retention throws. I did not run the app.\n\n**Still open:**\n- **Start the timer.** The repo has only `src/trash.js`, with no entry point. Whatever starts the app should call `startAutoPurge(TRASH_RETENTION_MS, <interval>)`. I haven't picked an interval.\n- **Existing trash.** The first purge will remove everything already older than 30 days.\n\nYour answer came through the Starbridge card `d_s8hhkNjKugS6GQii`, so nothing needs withdrawing.",
+      "session": "571c31a7-4ea0-4001-9963-cada76728e28",
+      "tokens": 203878,
+      "costUsd": 0.006764649999999999,
+      "exit": 0,
+      "seconds": 32.656,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_s8hhkNjKugS6GQii --timeout 5m` (again on exit 2)."
+      ]
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_s8hhkNjKugS6GQii",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-10T21:23:50Z",
+      "question": "How long should the trash keep deleted notes before purging?",
+      "context": "85% of restore requests come within 3 weeks of the delete.\n**7 days:** storage about $5/month. Restores after a week fail.\n**30 days:** storage about $20/month. Covers the 3-week window.\n**90 days:** storage about $60/month. Longest restore window.",
+      "options": [
+        "7 days",
+        "30 days",
+        "90 days"
+      ],
+      "recommended": "30 days",
+      "agent": "claude-code",
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "571c31a7-4ea0-4001-9963-cada76728e28"
+      },
+      "replies": true,
+      "dir": {
+        "length": 2,
+        "head": "wWq3_UWHZfXkh27ePqMf1PjQs-rAw9hisDdbkDpmi0Q"
+      }
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [],
+  "answered": "Answer to d_s8hhkNjKugS6GQii (How long should the trash keep deleted notes before purging?): 30 days",
+  "waiting": [
+    {
+      "v": 1,
+      "id": "w_A9absONo06h47DW-",
+      "decisionId": "d_s8hhkNjKugS6GQii",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-10T21:23:56Z",
+      "state": "waiting",
+      "dir": {
+        "length": 2,
+        "head": "wWq3_UWHZfXkh27ePqMf1PjQs-rAw9hisDdbkDpmi0Q"
+      }
+    }
+  ],
+  "permissions": [],
+  "settled": [
+    {
+      "v": 1,
+      "id": "s_dVkIbnIBhQYpgCkN",
+      "itemId": "d_s8hhkNjKugS6GQii",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-10T21:24:05Z",
+      "outcome": "device",
+      "device": "phone",
+      "choice": "30 days",
+      "dir": {
+        "length": 2,
+        "head": "wWq3_UWHZfXkh27ePqMf1PjQs-rAw9hisDdbkDpmi0Q"
+      }
+    }
+  ],
+  "peakContext": 25287,
+  "usedTokens": 203878,
+  "judge": {
+    "cold": true,
+    "consequences": true,
+    "terminal": false,
+    "links": null,
+    "plain": true,
+    "skim": true,
+    "notes": "The card omits that the first purge will immediately delete existing trash older than the chosen period, a consequence the user only learns from the terminal message after answering."
+  }
+}

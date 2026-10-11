@@ -259,8 +259,9 @@ private fun Join(busy: Boolean, actions: SetupActions, modifier: Modifier) {
     var deleting by rememberSaveable { mutableStateOf(false) }
     var scanError by rememberSaveable { mutableStateOf<String?>(null) }
     val scan = rememberScanner(onResult = { scanError = null; actions.joinWithCode(it) }, onError = { scanError = it })
-    if (recovering) return Recover(busy, actions, modifier) { recovering = false }
-    Step(
+    // Delete account shows on the recovery-key view too, where an owner with a lost key needs it (#1166).
+    if (recovering) Recover(busy, actions, modifier, onDelete = { deleting = true }) { recovering = false }
+    else Step(
         modifier,
         top = {
             Title("Add this phone", Modifier.padding(start = Spacing.s4, top = 48.dp, bottom = Spacing.s6))
@@ -349,7 +350,7 @@ private fun FirstDevice(busy: Boolean, actions: SetupActions, modifier: Modifier
 }
 
 @Composable
-private fun Recover(busy: Boolean, actions: SetupActions, modifier: Modifier, onBack: () -> Unit) {
+private fun Recover(busy: Boolean, actions: SetupActions, modifier: Modifier, onDelete: () -> Unit, onBack: () -> Unit) {
     var typedKey by rememberSaveable { mutableStateOf("") }
     var shown by rememberSaveable { mutableStateOf(false) }
     val reading = RecoveryKeys.read(typedKey)
@@ -387,7 +388,10 @@ private fun Recover(busy: Boolean, actions: SetupActions, modifier: Modifier, on
         },
         bottom = {
             Primary("Recover", busy, enabled = reading.complete) { actions.recover(typedKey) }
-            Link("Back", onBack)
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(Spacing.s6, Alignment.CenterHorizontally), verticalArrangement = Arrangement.spacedBy(Spacing.s6)) {
+                Link("Back", onBack)
+                Link("Delete account", onDelete)
+            }
         },
     )
 }

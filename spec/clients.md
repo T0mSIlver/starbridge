@@ -11,7 +11,8 @@
   itself in names nobody chose. Claude Code works in worktrees with generated names and names an
   unnamed session `<directory>-<hex>` (`nameSource: "derived"`), so the meta row showed the
   worktree and the session line a made-up name. The CLI now sends a git worktree's repository as
-  the project and leaves a derived session name out; clients show no bare session id either.
+  the project and replaces a derived session name with the session's first sentence
+  (spec/harnesses.md, #1181); clients show no bare session id either.
   The detail ends with one line: Snooze (Back now, Done) on the left, the session's name on the
   right as the link that opens it in Claude or Codex, or "Open in Claude" when it has no name. The
   "Attached by the agent" caption went: the chips sit inside the agent's words. The owner chose

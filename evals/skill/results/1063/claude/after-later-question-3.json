@@ -1,0 +1,104 @@
+{
+  "agent": "claude",
+  "model": "claude-haiku-5-5",
+  "arm": "after",
+  "scenario": "later-question",
+  "rep": 3,
+  "turns": [
+    {
+      "commands": [
+        "node scripts/lint.js; echo \"EXIT $?\"",
+        "node scripts/lint.js; echo \"EXIT $?\"; ls; cat RELEASE.md 2>/dev/null | head -40",
+        "starbridge ask \\\n  --question 'What should next week’s release be called?' \\\n  --context 'RELEASE.md says the next release ships Monday, and its name is still TBD.\n**Resumable Sync:** names the two changes: resumable uploads and faster sync.\n**Steady Sync:** same two changes, calmer name.\nYou can also type another name.' \\\n  --option 'Resumable Sync' --option 'Steady Sync'",
+        "starbridge wait d_51ZOStuDcR2dlcZ7 --timeout 5m --no-mark; echo \"EXIT $?\""
+      ],
+      "final": "Lint passes, and next week's release is named \"Resumable Sync\" in RELEASE.md.\n\n- **Lint:** `node scripts/lint.js` flagged two `var` declarations in `src/upload.js`. I changed both to `const`, since neither is reassigned. The script now exits 0.\n- **Release name:** I sent you a card through Starbridge with \"Resumable Sync\" and \"Steady Sync\" as options, and you could type another name. You answered \"Resumable Sync\", so I replaced `Name: TBD` in RELEASE.md with it. AGENTS.md says the owner names each release, so I left the name as your answer.\n\nNothing is committed. The working tree has the two modified files, `RELEASE.md` and `src/upload.js`.",
+      "session": "32e92e5f-c0f0-4681-8f23-1bf7d206b32f",
+      "tokens": 192997,
+      "costUsd": 0.005695639999999999,
+      "exit": 0,
+      "seconds": 134.832,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_51ZOStuDcR2dlcZ7 --timeout 5m` (again on exit 2)."
+      ]
+    },
+    {
+      "commands": [
+        "node scripts/lint.js; echo \"LINT EXIT $?\"; git status --short"
+      ],
+      "final": "Lint passes, and next week's release is named \"Resumable Sync\" in RELEASE.md.\n\n- **Lint:** `node scripts/lint.js` flagged two `var` declarations in `src/upload.js`. I changed both to `const`, since neither is reassigned. The script now exits 0.\n- **Release name:** I sent you a card through Starbridge with \"Resumable Sync\" and \"Steady Sync\" as options, and you could type another name. You answered \"Resumable Sync\", so I replaced `Name: TBD` in RELEASE.md with it. AGENTS.md says the owner names each release, so I left the name as your answer.\n\nNothing is committed. The working tree has the two modified files, `RELEASE.md` and `src/upload.js`.",
+      "session": "32e92e5f-c0f0-4681-8f23-1bf7d206b32f",
+      "tokens": 192997,
+      "costUsd": 0.005695639999999999,
+      "exit": 0,
+      "seconds": 134.832,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_51ZOStuDcR2dlcZ7 --timeout 5m` (again on exit 2)."
+      ]
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_51ZOStuDcR2dlcZ7",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-10T21:27:12Z",
+      "question": "What should next week’s release be called?",
+      "context": "RELEASE.md says the next release ships Monday, and its name is still TBD.\n**Resumable Sync:** names the two changes: resumable uploads and faster sync.\n**Steady Sync:** same two changes, calmer name.\nYou can also type another name.",
+      "options": [
+        "Resumable Sync",
+        "Steady Sync"
+      ],
+      "recommended": "Resumable Sync",
+      "agent": "claude-code",
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "32e92e5f-c0f0-4681-8f23-1bf7d206b32f"
+      },
+      "replies": true,
+      "dir": {
+        "length": 2,
+        "head": "t_iYvuJ-d-6SIjZ9Ry0qcYeWwQAwdSQ1QKgaQ5mSyek"
+      }
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [],
+  "answered": "Answer to d_51ZOStuDcR2dlcZ7 (What should next week’s release be called?): Resumable Sync",
+  "waiting": [],
+  "permissions": [],
+  "settled": [
+    {
+      "v": 1,
+      "id": "s_MZ-9---MzpAEjc_Z",
+      "itemId": "d_51ZOStuDcR2dlcZ7",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-10T21:29:12Z",
+      "outcome": "device",
+      "device": "phone",
+      "choice": "Resumable Sync",
+      "dir": {
+        "length": 2,
+        "head": "t_iYvuJ-d-6SIjZ9Ry0qcYeWwQAwdSQ1QKgaQ5mSyek"
+      }
+    }
+  ],
+  "peakContext": 23996,
+  "usedTokens": 192997,
+  "judge": {
+    "cold": false,
+    "consequences": false,
+    "terminal": true,
+    "links": null,
+    "plain": true,
+    "skim": false,
+    "notes": "The card never says what each option changes: it lists two names and a description that does not clearly distinguish them, so the user can't pick one from the card alone, and the recommended default is presented without a reason."
+  }
+}

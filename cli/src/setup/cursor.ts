@@ -8,8 +8,8 @@
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import cli from "../../../plugin/hooks/cli.sh" with { type: "text" };
-import rule from "../../../plugin/hooks/rule.md" with { type: "text" };
 import sessionStart from "../../../plugin/hooks/session-start.sh" with { type: "text" };
+import rule from "../../../plugin/rules/cursor.md" with { type: "text" };
 import { CURSOR_HOLD_MS } from "../hook";
 import { type FileState, SKILL } from "./harnesses";
 import { marker, ours } from "./marker";
@@ -47,7 +47,7 @@ function cursorFiles(sys: Home): Record<string, string> {
     [join(cursorHome(sys), "skills", "starbridge", "SKILL.md")]: SKILL,
     [join(dir, "README.md")]:
       `${marker("<!--", "-->")}\n\nThe scripts of Starbridge's entries in ~/.cursor/hooks.json.\n`,
-    // The Claude Code plugin's, so both harnesses add the same rule.
+    // The Claude Code plugin's script, with Cursor's rule beside it.
     [join(dir, "session-start.sh")]: sessionStart,
     [join(dir, "rule.md")]: rule,
     [join(dir, "cli.sh")]: cli,

@@ -44,6 +44,10 @@ const GRACE_MS = 1_000;
 /** The shell's code for a command that could not be found or started. */
 const EXIT_NOT_FOUND = 127;
 
+/** What `run` says in Codex's sandbox, where no device would hear of the run. */
+export const CODEX_SANDBOX =
+  "Codex's sandbox has no network, so no device would hear of this run, and the command did not start. Run the same `starbridge run` again outside the sandbox (escalated permissions, justified by the network the report needs). If the escalation is refused, run the command without `starbridge run`.";
+
 /** What a run update says, before the machine adds its name and the recipients. */
 export interface RunInput {
   id: string;
@@ -278,9 +282,7 @@ export class Reporter {
         // entry may come any time.
         if (e instanceof UsageError && !(e instanceof WithheldError)) this.off = true;
         if (!this.warned || this.off)
-          this.ctx.err(
-            `starbridge: the run was not reported: ${e.message}${this.ctx.env.CODEX_SANDBOX_NETWORK_DISABLED === "1" ? ". Codex's sandbox has no network: runs reach your devices when Codex runs the command outside it" : ""}`,
-          );
+          this.ctx.err(`starbridge: the run was not reported: ${e.message}`);
         this.warned = true;
       })
       .finally(() => {
@@ -336,6 +338,8 @@ export async function runCommand(ctx: Ctx, opts: RunOpts): Promise<number> {
   if (reason.length > 200) throw new UsageError("--reason takes at most 200 characters");
   const [bin, ...args] = opts.command;
   if (!bin) throw new UsageError("run needs the command after --: starbridge run ... -- <command>");
+  // Refused before the command starts, so a command that takes over the screen runs once (#1063).
+  if (ctx.env.CODEX_SANDBOX_NETWORK_DISABLED === "1") throw new UsageError(CODEX_SANDBOX);
 
   // On Windows `npm` is `npm.cmd`, which spawn finds only by its full name.
   let start: ReturnType<typeof spawnable>;

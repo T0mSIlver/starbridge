@@ -1,0 +1,181 @@
+{
+  "agent": "claude",
+  "model": "claude-haiku-5-5",
+  "arm": "after",
+  "scenario": "design-pick",
+  "rep": 1,
+  "turns": [
+    {
+      "commands": [
+        "git branch -a && git status --short && ls -la shots/ 2>/dev/null",
+        "starbridge ask \\\n  --question 'Which settings screen should I merge into main?' \\\n  --context 'Both variants pass the tests. Ship sends the chosen branch into main.\n**Compact:** 9 rows on one screen, so Language, Shortcuts and About show without scrolling.\n**Roomy:** 6 rows on one screen, taller rows; the last 3 need a scroll.' \\\n  --option 'Compact' --option 'Roomy' \\\n  --image shots/compact.png --image shots/roomy.png",
+        "starbridge wait d_OmLsLPP0jPQFmq_n --timeout 5m; echo \"exit=$?\""
+      ],
+      "final": "(exit 143) ",
+      "exit": 143,
+      "seconds": 720.619,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_OmLsLPP0jPQFmq_n --timeout 5m` (again on exit 2).",
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_oCh5L0XBOx9DAaSB --timeout 5m` (again on exit 2)."
+      ]
+    },
+    {
+      "commands": [
+        "git merge settings-compact 2>&1; echo \"exit=$?\"; git log --oneline -3",
+        "git log --oneline --all --graph -5 && echo --- && git diff --stat main settings-compact && echo --- && git diff --stat main settings-roomy && git status --short",
+        "git worktree list && git stash list && git ls-files | head -50 && grep -ril \"settings\" --include=*.kt --include=*.xml --include=*.java . 2>/dev/null | grep -v '/build/' | head",
+        "starbridge ask \\\n  --question 'Compact is picked, but its branch has no code. What now?' \\\n  --context 'The merge did nothing: settings-compact and settings-roomy both point at main (af4c922). Nothing is in main yet.\n**Commit it:** I will wait while you commit the Compact work to settings-compact, then merge it.\n**Stop:** I leave main unchanged; nothing is merged.' \\\n  --option 'Commit it' --option 'Stop' \\\n  --image shots/compact.png",
+        "starbridge wait d_oCh5L0XBOx9DAaSB --timeout 5m; echo \"exit=$?\"",
+        "starbridge wait d_oCh5L0XBOx9DAaSB --timeout 5m; echo \"exit=$?\"",
+        "starbridge wait d_oCh5L0XBOx9DAaSB --timeout 5m; echo \"exit=$?\""
+      ],
+      "final": "(exit 143) ",
+      "exit": 143,
+      "seconds": 720.619,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_OmLsLPP0jPQFmq_n --timeout 5m` (again on exit 2).",
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_oCh5L0XBOx9DAaSB --timeout 5m` (again on exit 2)."
+      ]
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_OmLsLPP0jPQFmq_n",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-10T19:52:17Z",
+      "question": "Which settings screen should I merge into main?",
+      "context": "Both variants pass the tests. Ship sends the chosen branch into main.\n**Compact:** 9 rows on one screen, so Language, Shortcuts and About show without scrolling.\n**Roomy:** 6 rows on one screen, taller rows; the last 3 need a scroll.",
+      "options": [
+        "Compact",
+        "Roomy"
+      ],
+      "recommended": "Compact",
+      "agent": "claude-code",
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "176303fe-23c8-4e0b-8326-6da631daeb72"
+      },
+      "images": [
+        {
+          "type": "image/png",
+          "width": 360,
+          "height": 640
+        },
+        {
+          "type": "image/png",
+          "width": 360,
+          "height": 640
+        }
+      ],
+      "replies": true,
+      "dir": {
+        "length": 2,
+        "head": "W4j7aBP9vhpP1hvA1LiwN4af5mpxMV02q6OwSPEo6_g"
+      }
+    }
+  ],
+  "laterDecisions": [
+    {
+      "v": 1,
+      "id": "d_oCh5L0XBOx9DAaSB",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-10T19:52:41Z",
+      "question": "Compact is picked, but its branch has no code. What now?",
+      "context": "The merge did nothing: settings-compact and settings-roomy both point at main (af4c922). Nothing is in main yet.\n**Commit it:** I will wait while you commit the Compact work to settings-compact, then merge it.\n**Stop:** I leave main unchanged; nothing is merged.",
+      "options": [
+        "Commit it",
+        "Stop"
+      ],
+      "recommended": "Commit it",
+      "agent": "claude-code",
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "176303fe-23c8-4e0b-8326-6da631daeb72"
+      },
+      "images": [
+        {
+          "type": "image/png",
+          "width": 360,
+          "height": 640
+        }
+      ],
+      "replies": true,
+      "dir": {
+        "length": 2,
+        "head": "W4j7aBP9vhpP1hvA1LiwN4af5mpxMV02q6OwSPEo6_g"
+      }
+    }
+  ],
+  "runs": [],
+  "gh": [],
+  "answered": "Answer to d_OmLsLPP0jPQFmq_n (Which settings screen should I merge into main?): Compact",
+  "waiting": [
+    {
+      "v": 1,
+      "id": "w_zewl4cleiEos-B2m",
+      "decisionId": "d_OmLsLPP0jPQFmq_n",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-10T19:52:18Z",
+      "state": "waiting",
+      "dir": {
+        "length": 2,
+        "head": "W4j7aBP9vhpP1hvA1LiwN4af5mpxMV02q6OwSPEo6_g"
+      }
+    },
+    {
+      "v": 1,
+      "id": "w_IMDABQLGzL8w8gWJ",
+      "decisionId": "d_oCh5L0XBOx9DAaSB",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-10T19:52:42Z",
+      "state": "waiting",
+      "dir": {
+        "length": 2,
+        "head": "W4j7aBP9vhpP1hvA1LiwN4af5mpxMV02q6OwSPEo6_g"
+      }
+    }
+  ],
+  "permissions": [],
+  "settled": [
+    {
+      "v": 1,
+      "id": "s_TDN0Pp4eNI5pTc3Q",
+      "itemId": "d_OmLsLPP0jPQFmq_n",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-10T19:52:33Z",
+      "outcome": "device",
+      "device": "phone",
+      "choice": "Compact",
+      "dir": {
+        "length": 2,
+        "head": "W4j7aBP9vhpP1hvA1LiwN4af5mpxMV02q6OwSPEo6_g"
+      }
+    }
+  ],
+  "peakContext": 25308,
+  "usedTokens": 276194,
+  "judge": {
+    "cold": true,
+    "consequences": true,
+    "terminal": false,
+    "links": null,
+    "plain": true,
+    "skim": true,
+    "notes": "The final terminal message is just \"(exit 143)\" with no question or wait for a reply, so the session ends without asking the user anything, though the card itself is clear."
+  }
+}

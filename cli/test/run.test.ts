@@ -150,6 +150,14 @@ test("without a title, a reason or a command, nothing runs", async () => {
   expect(await Bun.file(marker).exists()).toBe(false);
 });
 
+test("in Codex's sandbox, run refuses before the command starts and says how to escape it", async () => {
+  const ctx = testCtx({ STARBRIDGE_NO_AGENT: "1", CODEX_SANDBOX_NETWORK_DISABLED: "1" });
+  const marker = join(ctx.store.dir, "ran");
+  expect(await run(["run", "--title", "t", "--reason", "r", "--", "touch", marker], ctx)).toBe(1);
+  expect(ctx.errors.at(-1)).toContain("outside the sandbox");
+  expect(await Bun.file(marker).exists()).toBe(false);
+});
+
 test("with an agent running, the run goes through it", async () => {
   const machine = await paired(server);
   const socket = agentAddress(machine.store.dir);
@@ -344,7 +352,7 @@ test("the plugin's SessionStart hook adds the rule to reach the owner and the ru
   expect(out.hookSpecificOutput.hookEventName).toBe("SessionStart");
   const text = out.hookSpecificOutput.additionalContext as string;
   expect(text).toContain("Reach me through the `starbridge` skill, not here,");
-  expect(text).toContain("In Claude Code, a quick question may use AskUserQuestion");
+  expect(text).toContain("A quick question may use AskUserQuestion");
   expect(text).toContain("\n\nRun a command that blocks me");
   expect(text).toContain("`starbridge run`");
   expect(text).not.toContain("inference");

@@ -87,6 +87,24 @@ extension Store {
         try await syncRuns()
         withheldWhy = withheld()
         if !saved.outbox.isEmpty { _ = try await flush() }
+        // A push that would have closed them may never have come: iOS holds or drops background pushes (#1184).
+        await Notify.removeDelivered(about: closedItems)
+    }
+
+    /** How far the server's clock may run ahead of this iPhone's when it wakes a snooze, as Android allows. */
+    static let wakeSkew: TimeInterval = 120
+
+    /**
+     * Items whose notifications must go: questions answered, settled or snoozed for longer than
+     * the wake's skew, prompts no longer open, and everything from a revoked machine, which no
+     * answer reaches (#344).
+     */
+    var closedItems: Set<String> {
+        // A snooze about to end may already have its "Back from snooze" up, by a server clock ahead of this one.
+        let snoozed = { (d: SavedDecision) in d.snoozed.map { $0.timeIntervalSinceNow > Self.wakeSkew } ?? false }
+        let decisions = saved.decisions.filter { !$0.isOpen || snoozed($0) || !active($0.from) }.map(\.id)
+        let prompts = saved.prompts.filter { !$0.isOpen || !active($0.from) }.map(\.id)
+        return Set(decisions + prompts)
     }
 
     /** A sync the owner asked for, pulling the list: its failure shows. */
@@ -495,7 +513,10 @@ extension Store {
         Task {
             defer { tapped[id] = nil }
             do {
-                switch try await serial({ try await self.send(id, choice: choice, text: text) }) {
+                let sent = try await serial({ try await self.send(id, choice: choice, text: text) })
+                // Signed and kept, or moot: the typed reply has done its work. One not sent stays to edit.
+                if case .failed = sent {} else { drafts[id] = nil }
+                switch sent {
                 case let .queued(answer):
                     notice = "No connection. \(done ? "Done" : answer) will be sent when the iPhone is back online."
                 case .elsewhere:
@@ -513,11 +534,20 @@ extension Store {
                 }
             } catch let e as ApiError where e.status == 401 {
                 // The answer waits in the outbox for the next sign-in.
+                drafts[id] = nil
                 notice = describe(e)
             } catch {
                 notSent[id] = describe(error)
             }
         }
+    }
+
+    /** The Answer schema's cap on a reply's text, in code points. */
+    static let replyLimit = 4000
+
+    /** `text` cut to [replyLimit] code points. */
+    static func capped(_ text: String) -> String {
+        text.unicodeScalars.count <= replyLimit ? text : String(String.UnicodeScalarView(text.unicodeScalars.prefix(replyLimit)))
     }
 
     /**
@@ -526,13 +556,15 @@ extension Store {
      * once the server can be reached (#329). Tapping again repeats the first answer's outcome.
      */
     func send(_ id: String, choice: String?, text: String?) async throws -> Sent {
+        // A notification's Reply has no field to cap it.
+        let text = text.map(Self.capped)
         // Not even an answer queued before: its machine may be the one the server keeps revoked.
         if let why = withheld() { return .failed(why) }
         if let q = saved.outbox.first(where: { $0.decisionId == id }) { return try await post(q) }
         guard let d = decision(id) else { throw Notice(message: "No such question.") }
         if let answer = d.answer { return .answered(answer) }
         if d.answeredAt != nil { return .elsewhere }
-        if let choice, !d.body.options.contains(choice) { throw Notice(message: "Not one of the options.") }
+        if let choice, !d.body.options.contains(where: { sameOption($0, choice) }) { throw Notice(message: "Not one of the options.") }
         let done = choice == nil && text == nil
         // Done is for a question answered on its own page that takes it (#539).
         let page = d.body.done == true ? d.body.answerIn : nil

@@ -68,8 +68,7 @@ enum Notify {
         if let page = d.answerIn {
             actions.append(NotificationAction(id: "page", title: "Answer in \(page.title ?? URL(string: page.url)?.host() ?? page.url)", foreground: true))
         } else {
-            let ordered = d.recommended.map { r in [r] + d.options.filter { $0 != r } } ?? d.options
-            actions += ordered.prefix(3).map { NotificationAction(id: optionPrefix + $0, title: $0) }
+            actions += d.ordered.prefix(3).map { NotificationAction(id: optionPrefix + $0, title: $0) }
             if d.options.isEmpty || d.replies == true {
                 actions.append(NotificationAction(id: "reply", title: d.options.isEmpty ? "Answer" : "Reply", text: true))
             }
@@ -189,12 +188,16 @@ enum Notify {
     }
 
     /** Closes every notification about item `id`: answered, settled, or snoozed elsewhere. */
-    static func removeDelivered(about id: String) async {
+    static func removeDelivered(about id: String) async { await removeDelivered(about: [id]) }
+
+    /** Closes every notification about any of `items`. */
+    static func removeDelivered(about items: Set<String>) async {
+        guard !items.isEmpty else { return }
         let center = UNUserNotificationCenter.current()
         let ids = await center.deliveredNotifications()
-            .filter { $0.request.identifier == id || payload($0.request.content.userInfo).flatMap(item) == id }
+            .filter { items.contains($0.request.identifier) || payload($0.request.content.userInfo).flatMap(item).map(items.contains) == true }
             .map(\.request.identifier)
-        center.removeDeliveredNotifications(withIdentifiers: ids)
+        if !ids.isEmpty { center.removeDeliveredNotifications(withIdentifiers: ids) }
     }
 
     /** A quiet notification about item `id`, saying how its answer ended; a tap opens it. */

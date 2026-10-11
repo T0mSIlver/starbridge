@@ -1,0 +1,133 @@
+{
+  "agent": "claude",
+  "model": "claude-haiku-5-5",
+  "arm": "before",
+  "scenario": "design-pick",
+  "rep": 2,
+  "turns": [
+    {
+      "commands": [
+        "git status --short && git branch -a && git log --oneline --all --graph | head -20 && ls -la shots/ 2>/dev/null",
+        "git log --oneline main..settings-compact && git log --oneline main..settings-roomy && git diff --stat main settings-compact && git diff --stat main settings-roomy",
+        "git rev-parse main settings-compact settings-roomy && git diff --stat main settings-compact; git diff --stat main settings-roomy; echo done",
+        "starbridge ask \\\n  --question 'Which settings screen should ship to main?' \\\n  --context 'Both variants pass the tests. Pick one to merge.\n**Compact:** 8 rows on screen, 39 px each. Keeps Language, Shortcuts, About.\n**Roomy:** 6 rows on screen, 62 px each. Drops Language, Shortcuts, About.' \\\n  --option 'Compact' --option 'Roomy' \\\n  --image \"$PWD/shots/compact.png\" --image \"$PWD/shots/roomy.png\" \\\n  --waiting",
+        "starbridge wait d_WQoZt2y6bbRauqTf --timeout 5m; echo \"exit=$?\""
+      ],
+      "final": "Nothing shipped. The owner picked **Compact**, but `settings-compact` has no commits beyond `main`, so `git merge settings-compact` returned \"Already up to date\" and `main` is unchanged at `31fe0cf`.\n\n- **Why the merge is empty:** `settings-compact`, `settings-roomy`, and `main` all point at the same commit. The screenshots in `shots/` exist as untracked-by-branch files, and `git diff main settings-compact` is empty. The variant code is not committed to the branch, and I found no worktree or stash that holds it.\n- **The decision:** I posted a Starbridge card with both screenshots, and the owner answered \"Compact\". I did not pick a design myself, since `AGENTS.md` says the owner chooses between visual designs.\n- **Next step:** commit the compact variant's work to `settings-compact` (or tell me where it lives), then I'll run `git merge settings-compact` on `main`. I can also do the commit if you point me at the changes.",
+      "session": "9514e512-585f-4175-8698-56a0a2f007e1",
+      "tokens": 205006,
+      "costUsd": 0.006799499999999999,
+      "exit": 0,
+      "seconds": 38.263,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_WQoZt2y6bbRauqTf --timeout 5m` (again on exit 2)."
+      ]
+    },
+    {
+      "commands": [
+        "git worktree list; git stash list; git status --short --branched | head; git branch -vv; find . -path ./.git -prune -o -type f -newer AGENTS.md -print | head -30",
+        "git merge settings-compact; echo \"exit=$?\"; git log --oneline -1"
+      ],
+      "final": "Nothing shipped. The owner picked **Compact**, but `settings-compact` has no commits beyond `main`, so `git merge settings-compact` returned \"Already up to date\" and `main` is unchanged at `31fe0cf`.\n\n- **Why the merge is empty:** `settings-compact`, `settings-roomy`, and `main` all point at the same commit. The screenshots in `shots/` exist as untracked-by-branch files, and `git diff main settings-compact` is empty. The variant code is not committed to the branch, and I found no worktree or stash that holds it.\n- **The decision:** I posted a Starbridge card with both screenshots, and the owner answered \"Compact\". I did not pick a design myself, since `AGENTS.md` says the owner chooses between visual designs.\n- **Next step:** commit the compact variant's work to `settings-compact` (or tell me where it lives), then I'll run `git merge settings-compact` on `main`. I can also do the commit if you point me at the changes.",
+      "session": "9514e512-585f-4175-8698-56a0a2f007e1",
+      "tokens": 205006,
+      "costUsd": 0.006799499999999999,
+      "exit": 0,
+      "seconds": 38.263,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_WQoZt2y6bbRauqTf --timeout 5m` (again on exit 2)."
+      ]
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_WQoZt2y6bbRauqTf",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-10T19:52:07Z",
+      "question": "Which settings screen should ship to main?",
+      "context": "Both variants pass the tests. Pick one to merge.\n**Compact:** 8 rows on screen, 39 px each. Keeps Language, Shortcuts, About.\n**Roomy:** 6 rows on screen, 62 px each. Drops Language, Shortcuts, About.",
+      "options": [
+        "Compact",
+        "Roomy"
+      ],
+      "recommended": "Compact",
+      "agent": "claude-code",
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "9514e512-585f-4175-8698-56a0a2f007e1"
+      },
+      "images": [
+        {
+          "type": "image/png",
+          "width": 360,
+          "height": 640
+        },
+        {
+          "type": "image/png",
+          "width": 360,
+          "height": 640
+        }
+      ],
+      "replies": true,
+      "dir": {
+        "length": 2,
+        "head": "7QLLIJUPHKXIXzcvWsg2XzNjONQkFdAZHT4GsYTCqtA"
+      }
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [],
+  "answered": "Answer to d_WQoZt2y6bbRauqTf (Which settings screen should ship to main?): Compact",
+  "waiting": [
+    {
+      "v": 1,
+      "id": "w_ptMxXjNMJcPPtDUo",
+      "decisionId": "d_WQoZt2y6bbRauqTf",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-10T19:52:07Z",
+      "state": "waiting",
+      "dir": {
+        "length": 2,
+        "head": "7QLLIJUPHKXIXzcvWsg2XzNjONQkFdAZHT4GsYTCqtA"
+      }
+    }
+  ],
+  "permissions": [],
+  "settled": [
+    {
+      "v": 1,
+      "id": "s_g4Jyih3Y1t98s0EN",
+      "itemId": "d_WQoZt2y6bbRauqTf",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-10T19:52:24Z",
+      "outcome": "device",
+      "device": "phone",
+      "choice": "Compact",
+      "dir": {
+        "length": 2,
+        "head": "7QLLIJUPHKXIXzcvWsg2XzNjONQkFdAZHT4GsYTCqtA"
+      }
+    }
+  ],
+  "peakContext": 26079,
+  "usedTokens": 205006,
+  "judge": {
+    "cold": true,
+    "consequences": true,
+    "terminal": false,
+    "links": null,
+    "plain": true,
+    "skim": true,
+    "notes": "The final terminal message reports that nothing shipped and asks for a commit, but it does not wait on a clear question; the card itself is solid, though it omits that 'Compact' drops the nothing-to-merge problem and gives no hint the branch is empty."
+  }
+}

@@ -1,0 +1,73 @@
+{
+  "agent": "claude",
+  "model": "claude-haiku-5-5",
+  "arm": "after",
+  "scenario": "long-e2e",
+  "rep": 1,
+  "turns": [
+    {
+      "commands": [
+        "starbridge run --title 'iOS e2e' --reason 'takes over your screen and keyboard for about ten minutes' -- make e2e"
+      ],
+      "final": "The e2e suite passed: 4 of 4 onboarding flow tests, exit code 0.\n\nIt ran through `starbridge run` because it takes over your screen and keyboard. Since it finished cleanly, there's nothing waiting on you and no card was needed.",
+      "session": "ba4eff2f-5262-4852-9491-95a5674d70a1",
+      "tokens": 44474,
+      "costUsd": 0.0037504,
+      "exit": 0,
+      "seconds": 12.294,
+      "delivery": [],
+      "background": [
+        "starbridge run --title 'iOS e2e' --reason 'takes over your screen and keyboard for about ten minutes' -- make e2e"
+      ]
+    }
+  ],
+  "decisions": [],
+  "laterDecisions": [],
+  "runs": [
+    {
+      "v": 1,
+      "id": "r_QFtKT9XBSdlwcc_-",
+      "to": [
+        "phone"
+      ],
+      "title": "iOS e2e",
+      "reason": "takes over your screen and keyboard for about ten minutes",
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "ba4eff2f-5262-4852-9491-95a5674d70a1"
+      },
+      "startedAt": "2026-10-10T19:51:42Z",
+      "at": "2026-10-10T19:51:46.756Z",
+      "progress": {
+        "done": 4,
+        "total": 4,
+        "unit": "step"
+      },
+      "exit": {
+        "code": 0,
+        "at": "2026-10-10T19:51:46Z"
+      },
+      "dir": {
+        "length": 2,
+        "head": "EphlsHa5KoKgHOj2x5lSQkJcO5VW2rD3jsyIF3Ym8yk"
+      }
+    }
+  ],
+  "gh": [],
+  "waiting": [],
+  "permissions": [],
+  "settled": [],
+  "peakContext": 22252,
+  "usedTokens": 105898,
+  "judge": {
+    "cold": null,
+    "consequences": null,
+    "terminal": false,
+    "links": null,
+    "plain": null,
+    "skim": null,
+    "notes": ""
+  }
+}

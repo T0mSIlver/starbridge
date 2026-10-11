@@ -1,0 +1,101 @@
+{
+  "agent": "opencode",
+  "model": "zai-coding-plan/glm-5.3-flash",
+  "arm": "before",
+  "scenario": "later-question",
+  "rep": 2,
+  "turns": [
+    {
+      "commands": [
+        "node scripts/lint.js",
+        "git log --oneline -20",
+        "node scripts/lint.js && echo LINT-CLEAN",
+        "starbridge ask \\\n  --question 'What should next week’s release be called?' \\\n  --context 'RELEASE.md has \"Name: TBD\" and ships Monday: resumable uploads, faster sync on slow links. Pick a candidate or type your own.' \\\n  --option 'Long Haul' --option 'Steady Stream' --option 'Strong Signal' \\\n  --recommended 'Long Haul'",
+        "starbridge wait d_tm-etnh_48vuSXLC --timeout 5m --no-mark"
+      ],
+      "final": "Done, both lint errors fixed and the release named.\n\n- **Lint:** `var` → `const` in src/upload.js:2-3 (neither was reassigned); `node scripts/lint.js` now passes clean.\n- **Release name:** asked via Starbridge, you tapped \"Long Haul\", and RELEASE.md now reads `Name: Long Haul` — well ahead of Monday.",
+      "session": "ses_ed88339a6ffenfM5ajfg8tVcGA",
+      "tokens": 5887,
+      "exit": 0,
+      "seconds": 172.635,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_tm-etnh_48vuSXLC --timeout 5m` (again on exit 2)."
+      ]
+    },
+    {
+      "commands": [
+        "node scripts/lint.js && git diff"
+      ],
+      "final": "Done, both lint errors fixed and the release named.\n\n- **Lint:** `var` → `const` in src/upload.js:2-3 (neither was reassigned); `node scripts/lint.js` now passes clean.\n- **Release name:** asked via Starbridge, you tapped \"Long Haul\", and RELEASE.md now reads `Name: Long Haul` — well ahead of Monday.",
+      "session": "ses_ed88339a6ffenfM5ajfg8tVcGA",
+      "tokens": 5887,
+      "exit": 0,
+      "seconds": 172.635,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_tm-etnh_48vuSXLC --timeout 5m` (again on exit 2)."
+      ]
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_tm-etnh_48vuSXLC",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-10T20:24:50Z",
+      "question": "What should next week’s release be called?",
+      "context": "RELEASE.md has \"Name: TBD\" and ships Monday: resumable uploads, faster sync on slow links. Pick a candidate or type your own.",
+      "options": [
+        "Long Haul",
+        "Steady Stream",
+        "Strong Signal"
+      ],
+      "recommended": "Long Haul",
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": ""
+      },
+      "replies": true,
+      "dir": {
+        "length": 2,
+        "head": "J4gzD_YizVZiYm1mQiu8NY40Bk0QkSYTssqA4dhcwWs"
+      }
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [],
+  "answered": "Answer to d_tm-etnh_48vuSXLC (What should next week’s release be called?): Long Haul",
+  "waiting": [],
+  "permissions": [],
+  "settled": [
+    {
+      "v": 1,
+      "id": "s_cUiSVN4K1sZLxhnr",
+      "itemId": "d_tm-etnh_48vuSXLC",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-10T20:26:52Z",
+      "outcome": "device",
+      "device": "phone",
+      "choice": "Long Haul",
+      "dir": {
+        "length": 2,
+        "head": "J4gzD_YizVZiYm1mQiu8NY40Bk0QkSYTssqA4dhcwWs"
+      }
+    }
+  ],
+  "judge": {
+    "cold": true,
+    "consequences": false,
+    "terminal": false,
+    "links": null,
+    "plain": true,
+    "skim": false,
+    "notes": "The options are bare names with no description of what each one would change in RELEASE.md or the release, so the user can't tell them apart without knowing the candidates' meaning."
+  }
+}

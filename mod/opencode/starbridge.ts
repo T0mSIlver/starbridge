@@ -1,6 +1,6 @@
 /**
  * The Starbridge plugin for opencode: opencode's counterpart of the Claude Code plugin's rule and
- * of this mod. It adds the owner's rule (plugin/hooks/rule.md) to the system prompt, and for each
+ * of this mod. It adds the owner's rule (plugin/rules/opencode.md) to the system prompt, and for each
  * session that runs a command it runs the mod's answer loop (switch.ts: through the machine's
  * agent, else the CLI) and submits each answer with `promptAsync`. An idle session starts a turn
  * with it; a busy one takes it at the next step of its turn.
@@ -23,7 +23,7 @@
  * too, and the first answer wins: the CLI's is sent with opencode's question reply route, and the
  * terminal answering or dismissing it stops the CLI, which settles the questions on the devices.
  *
- * `starbridge setup` copies this file, the mod's hooks it imports and rule.md into opencode's
+ * `starbridge setup` copies this file, the mod's hooks it imports and that rule into opencode's
  * config folder with the repository's layout, and opencode loads it with Bun. The types below are
  * the part of opencode's plugin API it uses, so it needs no dependency on opencode.
  */
@@ -127,7 +127,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 
 function rule(): string | undefined {
   try {
-    return readFileSync(join(here, "..", "..", "plugin", "hooks", "rule.md"), "utf8").trim();
+    return readFileSync(join(here, "..", "..", "plugin", "rules", "opencode.md"), "utf8").trim();
   } catch {
     return undefined;
   }

@@ -87,12 +87,15 @@ pushRoutes.post("/relay", async (c) => {
   const { config, push } = c.var;
   if (!config.relayMode) fail(404, "not-found");
   rateLimit(c, `relay:${ipKey(c)}`, config.limits.relayPosts);
-  const body = await json(c, PushTarget.extend({ payload: z.string().max(4000) }));
+  const body = await json(
+    c,
+    PushTarget.extend({ payload: z.string().max(4000), thread: z.string().max(64).optional() }),
+  );
   if (body.type === "unifiedpush")
     fail(400, "bad-request", "UnifiedPush goes direct, not through the relay");
   const why = checkTarget(body, config.allowPrivatePushEndpoints);
   if (why) fail(400, "bad-endpoint", why);
-  const { payload, ...target } = body;
+  const { payload, thread, ...target } = body;
   // A Web Push goes to whatever host the caller names, which may hold it for pushTimeoutMs; FCM
   // and APNs go to Google and Apple, so only Web Push counts toward the caps and the
   // self-hosters' phone pushes always get through.
@@ -106,7 +109,7 @@ pushRoutes.post("/relay", async (c) => {
       "retry-after": "5",
     });
   for (const k of keys) flights.set(k, (flights.get(k) ?? 0) + 1);
-  const result = await push.send(target, payload, false).finally(() => {
+  const result = await push.send(target, payload, false, thread).finally(() => {
     for (const k of keys) {
       const n = (flights.get(k) ?? 1) - 1;
       if (n) flights.set(k, n);

@@ -1,0 +1,115 @@
+{
+  "agent": "opencode",
+  "model": "zai-coding-plan/glm-5.3-flash",
+  "arm": "before",
+  "scenario": "option-order",
+  "rep": 2,
+  "turns": [
+    {
+      "commands": [
+        "ls -la && git log --oneline -5",
+        "ls -la src/",
+        "starbridge ask \\\n  --question 'Purge trash after how many days?' \\\n  --context 'Trash never purges and storage doubled. 85% of restore requests come within 3 weeks of the delete; each month of trash kept costs about $20/month.\n**7 days:** about $5/month; restores after the first week are lost.\n**30 days:** covers the 3-week window with margin; about $20/month.\n**90 days:** widest restore window; about $60/month.' \\\n  --option '7 days' --option '30 days' --option '90 days' --recommended '30 days' \\\n  --waiting",
+        "starbridge wait d_YEp-KESvbWCk_gTo --timeout 5m"
+      ],
+      "final": "Done. `src/trash.js` now purges notes older than 30 days: `purgeTrash()` drops expired entries and `remove()` calls it on every delete, so the trash drains automatically instead of growing forever. Verified with a quick node check (31-day-old note purged, 29-day-old kept). The 30-day period was your call per AGENTS.md, so I asked by card and you picked it.",
+      "session": "ses_ed884d752ffeqaebMdZ6Ki6rU4",
+      "tokens": 12796,
+      "exit": 0,
+      "seconds": 102.955,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_YEp-KESvbWCk_gTo --timeout 5m` (again on exit 2)."
+      ]
+    },
+    {
+      "commands": [
+        "node --input-type=module -e \"\nimport { trash, remove, purgeTrash } from './src/trash.js';\nconst day = 24*60*60*1000;\nremove({id: 1});\ntrash[0].deletedAt = Date.now() - 31*day;\nremove({id: 2});\nconsole.log('after remove:', trash.map(t => t.note.id));\nremove({id: 3});\ntrash[1].deletedAt = Date.now() - 29*day;\npurgeTrash();\nconsole.log('after purgeTrash:', trash.map(t => t.note.id));\n\""
+      ],
+      "final": "Done. `src/trash.js` now purges notes older than 30 days: `purgeTrash()` drops expired entries and `remove()` calls it on every delete, so the trash drains automatically instead of growing forever. Verified with a quick node check (31-day-old note purged, 29-day-old kept). The 30-day period was your call per AGENTS.md, so I asked by card and you picked it.",
+      "session": "ses_ed884d752ffeqaebMdZ6Ki6rU4",
+      "tokens": 12796,
+      "exit": 0,
+      "seconds": 102.955,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_YEp-KESvbWCk_gTo --timeout 5m` (again on exit 2)."
+      ]
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_YEp-KESvbWCk_gTo",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-10T20:23:16Z",
+      "question": "Purge trash after how many days?",
+      "context": "Trash never purges and storage doubled. 85% of restore requests come within 3 weeks of the delete; each month of trash kept costs about $20/month.\n**7 days:** about $5/month; restores after the first week are lost.\n**30 days:** covers the 3-week window with margin; about $20/month.\n**90 days:** widest restore window; about $60/month.",
+      "options": [
+        "7 days",
+        "30 days",
+        "90 days"
+      ],
+      "recommended": "30 days",
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": ""
+      },
+      "replies": true,
+      "dir": {
+        "length": 2,
+        "head": "jbEHGwqOPEXCTvHwXSl4HQ2XZlJprYj5Ezl6mVfh0T0"
+      }
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [],
+  "answered": "Answer to d_YEp-KESvbWCk_gTo (Purge trash after how many days?): 30 days",
+  "waiting": [
+    {
+      "v": 1,
+      "id": "w_sXAzGJudT9yYXwfw",
+      "decisionId": "d_YEp-KESvbWCk_gTo",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-10T20:23:16Z",
+      "state": "waiting",
+      "dir": {
+        "length": 2,
+        "head": "jbEHGwqOPEXCTvHwXSl4HQ2XZlJprYj5Ezl6mVfh0T0"
+      }
+    }
+  ],
+  "permissions": [],
+  "settled": [
+    {
+      "v": 1,
+      "id": "s_EB2nsOyAX_NZcDyG",
+      "itemId": "d_YEp-KESvbWCk_gTo",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-10T20:23:31Z",
+      "outcome": "device",
+      "device": "phone",
+      "choice": "30 days",
+      "dir": {
+        "length": 2,
+        "head": "jbEHGwqOPEXCTvHwXSl4HQ2XZlJprYj5Ezl6mVfh0T0"
+      }
+    }
+  ],
+  "judge": {
+    "cold": true,
+    "consequences": true,
+    "terminal": false,
+    "links": null,
+    "plain": true,
+    "skim": true,
+    "notes": "The final message reports the 30-day choice as already made and asks nothing; it never waits for a terminal reply, since the user answered the card instead."
+  }
+}

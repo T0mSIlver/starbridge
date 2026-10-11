@@ -13,8 +13,9 @@ import { pushPayload } from "./routes/items";
 export function wakeSnoozes(db: Database, push: Push, inlineLimit: number, now = Date.now()): void {
   const due = db
     .query(
-      `SELECT account_id, id, kind, from_id, re, wake_at FROM items
-       WHERE wake_due IS NOT NULL AND wake_due <= ?`,
+      `SELECT i.account_id, i.id, i.kind, i.from_id, i.re, i.wake_at, q.from_id AS asker
+       FROM items i LEFT JOIN items q ON q.account_id = i.account_id AND q.id = i.re
+       WHERE i.wake_due IS NOT NULL AND i.wake_due <= ?`,
     )
     .all(new Date(now).toISOString()) as {
     account_id: string;
@@ -23,6 +24,7 @@ export function wakeSnoozes(db: Database, push: Push, inlineLimit: number, now =
     from_id: string;
     re: string | null;
     wake_at: string;
+    asker: string | null;
   }[];
   for (const s of due) {
     const boxes = db
@@ -49,7 +51,14 @@ export function wakeSnoozes(db: Database, push: Push, inlineLimit: number, now =
       wakeAt: s.wake_at,
       boxes,
     };
-    push.notify(s.account_id, devices, (device) => pushPayload(item, device, inlineLimit));
+    // A snooze is the device's: its return groups under the question's machine (#1168).
+    push.notify(
+      s.account_id,
+      devices,
+      (device) => pushPayload(item, device, inlineLimit),
+      undefined,
+      s.asker ?? undefined,
+    );
   }
 }
 

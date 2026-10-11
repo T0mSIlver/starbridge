@@ -29,4 +29,14 @@ final class VaultTests: XCTestCase {
         try vault.save(Secrets())
         XCTAssertEqual(try vault.load(), Secrets())
     }
+
+    /** An unreadable saved state takes its keys aside with it (#1159). */
+    func testSetAsideKeepsTheSecretsUnderTheTag() throws {
+        let aside = KeychainVault(service: vault.service, account: "\(vault.account).unreadable-1")
+        addTeardownBlock { try? aside.save(Secrets()) }
+        try vault.save(Secrets(session: "sb_1"))
+        try vault.setAside("1")
+        XCTAssertEqual(try vault.load(), Secrets())
+        XCTAssertEqual(try aside.load(), Secrets(session: "sb_1"))
+    }
 }

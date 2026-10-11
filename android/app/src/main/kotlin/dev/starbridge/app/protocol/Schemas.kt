@@ -36,6 +36,10 @@ internal fun time(s: String, what: String) = schema(epochMillis(s) != null, what
 // zod counts a string's length in code points, not UTF-16 units (#1082).
 internal fun len(s: String, min: Int, max: Int, what: String) = schema(s.codePointCount(0, s.length) in min..max, what)
 
+/** The first `max` code points, as the schemas count: a cut never splits an emoji's pair, which signing refuses (#1173). */
+fun String.takeCodePoints(max: Int): String =
+    if (codePointCount(0, length) <= max) this else substring(0, offsetByCodePoints(0, max))
+
 /**
  * A time zod's datetime accepts, as Date.parse reads it: a real date, hours to 23, offsets to
  * ±23:59, and milliseconds with finer digits dropped. Null when zod refuses it.

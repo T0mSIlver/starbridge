@@ -105,6 +105,11 @@ test("a long question's asking sentence is the title and the whole question lead
   const q = questionInput({ question: `${findings} ${ask} Both are cheap.`, options: DB.options });
   expect(q.question).toBe(ask);
   expect(q.context).toStartWith(`${findings} ${ask} Both are cheap.\n\n- `);
+  // An asking sentence may end in a closing bracket or quote after its "?" (#1165).
+  const bracketed = "Should I wait (or ship?)";
+  expect(questionInput({ question: `${findings} ${bracketed} Both are cheap.` }).question).toBe(
+    bracketed,
+  );
   // No sentence asks within 70 characters: the question stays whole, as before.
   const whole = `Which one, given ${"x".repeat(60)}?`;
   expect(questionInput({ question: whole })).toEqual({ question: whole, context: "" });

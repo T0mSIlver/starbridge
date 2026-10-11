@@ -1,0 +1,68 @@
+{
+  "agent": "opencode",
+  "model": "zai-coding-plan/glm-5.3-flash",
+  "arm": "before",
+  "scenario": "long-e2e",
+  "rep": 1,
+  "turns": [
+    {
+      "commands": [
+        "git status --short && git diff -- src/onboarding.txt",
+        "starbridge run --title 'Mac e2e' --reason 'drives the iOS simulator: takes over your screen and keyboard for about 10 minutes' -- bash -c 'make e2e'"
+      ],
+      "final": "`make e2e` passed: all 4 onboarding flows green. Your copy change didn't break anything.",
+      "session": "ses_ed89ef1b6ffekmgLx6iYkglw7F",
+      "tokens": 15900,
+      "exit": 0,
+      "seconds": 24.053,
+      "delivery": []
+    }
+  ],
+  "decisions": [],
+  "laterDecisions": [],
+  "runs": [
+    {
+      "v": 1,
+      "id": "r_YglKDbEiAcuSjtch",
+      "to": [
+        "phone"
+      ],
+      "title": "Mac e2e",
+      "reason": "drives the iOS simulator: takes over your screen and keyboard for about 10 minutes",
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": ""
+      },
+      "startedAt": "2026-10-10T19:54:11Z",
+      "at": "2026-10-10T19:54:15.749Z",
+      "progress": {
+        "done": 4,
+        "total": 4,
+        "unit": "step"
+      },
+      "exit": {
+        "code": 0,
+        "at": "2026-10-10T19:54:15Z"
+      },
+      "dir": {
+        "length": 2,
+        "head": "1C5cPgQJ2Yf6qsUBoUNJDjqg0tPsc853HIU-0hAiTpc"
+      }
+    }
+  ],
+  "gh": [],
+  "waiting": [],
+  "permissions": [],
+  "settled": [],
+  "judge": {
+    "cold": null,
+    "consequences": null,
+    "terminal": false,
+    "links": null,
+    "plain": null,
+    "skim": null,
+    "notes": "The agent ran a blocking e2e suite that takes over the owner's screen without wrapping it in `starbridge run`, so no card was posted and the user was never given a chance to be consulted about the run."
+  }
+}

@@ -1,0 +1,120 @@
+{
+  "agent": "claude",
+  "model": "claude-haiku-5-5",
+  "arm": "before",
+  "scenario": "later-question",
+  "rep": 1,
+  "turns": [
+    {
+      "commands": [
+        "node scripts/lint.js; echo \"exit=$?\"",
+        "ls -la && cat RELEASE.md 2>/dev/null; cat scripts/lint.js 2>/dev/null | head -100",
+        "cat -n src/upload.js && ls src && cat NAMES.md",
+        "node scripts/lint.js; echo \"exit=$?\"",
+        "starbridge ask \\\n  --question 'What should next week’s release be called?' \\\n  --context 'RELEASE.md ships Monday and still says “Name: TBD”.\n**Driftwood:** from NAMES.md.\n**Lantern:** from NAMES.md.\n**Juniper:** from NAMES.md.\nType another name if none fit.' \\\n  --option 'Driftwood' --option 'Lantern' --option 'Juniper' --recommended 'Lantern'",
+        "starbridge wait d_G42AzXSEpPbYK4-1 --timeout 5m; echo \"exit=$?\""
+      ],
+      "final": "Both parts are done.\n\n**Lint:** `node scripts/lint.js` reported two errors, both `var` in `src/upload.js` (lines 2–3). I changed them to `const`, since neither variable is reassigned. The script now exits 0.\n\n**Release name:** I sent you a card with the three candidates from NAMES.md (Driftwood, Lantern, Juniper). You picked **Lantern**, and I set `Name: Lantern` in RELEASE.md. AGENTS.md says the owner names each release, so tell me if that answer should have come from someone else.\n\nI didn't commit anything.",
+      "session": "40580a9f-58fc-4657-a2f7-a2dc29c7a6af",
+      "tokens": 173152,
+      "costUsd": 0.005469550000000001,
+      "exit": 0,
+      "seconds": 133.918,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_G42AzXSEpPbYK4-1 --timeout 5m` (again on exit 2)."
+      ]
+    },
+    {
+      "commands": [],
+      "final": "Both parts are done.\n\n**Lint:** `node scripts/lint.js` reported two errors, both `var` in `src/upload.js` (lines 2–3). I changed them to `const`, since neither variable is reassigned. The script now exits 0.\n\n**Release name:** I sent you a card with the three candidates from NAMES.md (Driftwood, Lantern, Juniper). You picked **Lantern**, and I set `Name: Lantern` in RELEASE.md. AGENTS.md says the owner names each release, so tell me if that answer should have come from someone else.\n\nI didn't commit anything.",
+      "session": "40580a9f-58fc-4657-a2f7-a2dc29c7a6af",
+      "tokens": 173152,
+      "costUsd": 0.005469550000000001,
+      "exit": 0,
+      "seconds": 133.918,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_G42AzXSEpPbYK4-1 --timeout 5m` (again on exit 2)."
+      ]
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_G42AzXSEpPbYK4-1",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-10T21:24:42Z",
+      "question": "What should next week’s release be called?",
+      "context": "RELEASE.md ships Monday and still says “Name: TBD”.\n**Driftwood:** from NAMES.md.\n**Lantern:** from NAMES.md.\n**Juniper:** from NAMES.md.\nType another name if none fit.",
+      "options": [
+        "Driftwood",
+        "Lantern",
+        "Juniper"
+      ],
+      "recommended": "Lantern",
+      "agent": "claude-code",
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "40580a9f-58fc-4657-a2f7-a2dc29c7a6af"
+      },
+      "replies": true,
+      "dir": {
+        "length": 2,
+        "head": "ww3MW12JLgfRqE7kbnUh9kHDoMed4AhViZUUG06HlvU"
+      }
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [],
+  "answered": "Answer to d_G42AzXSEpPbYK4-1 (What should next week’s release be called?): Lantern",
+  "waiting": [
+    {
+      "v": 1,
+      "id": "w_m7OApYn7w4EyBBOk",
+      "decisionId": "d_G42AzXSEpPbYK4-1",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-10T21:24:44Z",
+      "state": "waiting",
+      "dir": {
+        "length": 2,
+        "head": "ww3MW12JLgfRqE7kbnUh9kHDoMed4AhViZUUG06HlvU"
+      }
+    }
+  ],
+  "permissions": [],
+  "settled": [
+    {
+      "v": 1,
+      "id": "s_kALVfnqqJ-lZYWC8",
+      "itemId": "d_G42AzXSEpPbYK4-1",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-10T21:26:43Z",
+      "outcome": "device",
+      "device": "phone",
+      "choice": "Lantern",
+      "dir": {
+        "length": 2,
+        "head": "ww3MW12JLgfRqE7kbnUh9kHDoMed4AhViZUUG06HlvU"
+      }
+    }
+  ],
+  "peakContext": 24179,
+  "usedTokens": 173152,
+  "judge": {
+    "cold": true,
+    "consequences": false,
+    "terminal": false,
+    "links": null,
+    "plain": true,
+    "skim": false,
+    "notes": "The card never says why Lantern is recommended or what picking a name changes, so the user can't compare the options from the card alone, and the terminal message reports the choice as already made instead of waiting for a reply."
+  }
+}

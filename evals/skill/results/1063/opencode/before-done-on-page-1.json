@@ -1,0 +1,112 @@
+{
+  "agent": "opencode",
+  "model": "zai-coding-plan/glm-5.3-flash",
+  "arm": "before",
+  "scenario": "done-on-page",
+  "rep": 1,
+  "turns": [
+    {
+      "commands": [
+        "ls -la && git log --oneline -10 && git status",
+        "sh scripts/read-artifact.sh",
+        "starbridge ask \\\n  --question 'Pick a tier-name set for the pricing page?' \\\n  --context 'src/pricing.html is finished except for the tier names. Your artifact from the last session compares the three sets. Tap Pick on the set you want; the choice lands in this session and I fill the page in.' \\\n  --answer-in https://claude.ai/artifact/7c1e9a52-0d3b-4f6e-9a21-5b8c3d2e1f00 \\\n  --waiting",
+        "starbridge wait d_hk1QNo6kV1Y1049y --timeout 5m"
+      ],
+      "final": "Pricing page is done. The owner picked \"Starter, Plus, Studio\" on their artifact (card d_hk1QNo6kV1Y1049y, answered on its page); I filled the names into src/pricing.html:2-4 and removed the TODO. Not committed — say the word if you want that.",
+      "session": "ses_ed8811fa8ffeG61dwBcHSKPUws",
+      "tokens": 14859,
+      "exit": 0,
+      "seconds": 65.645,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_hk1QNo6kV1Y1049y --timeout 5m` (again on exit 2)."
+      ]
+    },
+    {
+      "commands": [
+        "sh scripts/read-artifact.sh"
+      ],
+      "final": "Pricing page is done. The owner picked \"Starter, Plus, Studio\" on their artifact (card d_hk1QNo6kV1Y1049y, answered on its page); I filled the names into src/pricing.html:2-4 and removed the TODO. Not committed — say the word if you want that.",
+      "session": "ses_ed8811fa8ffeG61dwBcHSKPUws",
+      "tokens": 14859,
+      "exit": 0,
+      "seconds": 65.645,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_hk1QNo6kV1Y1049y --timeout 5m` (again on exit 2)."
+      ]
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_hk1QNo6kV1Y1049y",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-10T20:27:02Z",
+      "question": "Pick a tier-name set for the pricing page?",
+      "context": "src/pricing.html is finished except for the tier names. Your artifact from the last session compares the three sets. Tap Pick on the set you want; the choice lands in this session and I fill the page in.",
+      "options": [],
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": ""
+      },
+      "answerIn": {
+        "url": "https://claude.ai/artifact/7c1e9a52-0d3b-4f6e-9a21-5b8c3d2e1f00"
+      },
+      "done": true,
+      "dir": {
+        "length": 2,
+        "head": "CuVAxQABfNosEoPUNhVxWKw0IPONt1kFPrJ8scypf5Y"
+      }
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [],
+  "answered": "Answer to d_hk1QNo6kV1Y1049y (Pick a tier-name set for the pricing page?): answered on its page; read the answer there",
+  "waiting": [
+    {
+      "v": 1,
+      "id": "w_Ll-dsNpG8qL4rMR5",
+      "decisionId": "d_hk1QNo6kV1Y1049y",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-10T20:27:02Z",
+      "state": "waiting",
+      "dir": {
+        "length": 2,
+        "head": "CuVAxQABfNosEoPUNhVxWKw0IPONt1kFPrJ8scypf5Y"
+      }
+    }
+  ],
+  "permissions": [],
+  "settled": [
+    {
+      "v": 1,
+      "id": "s_1KH5YRQ0w0fMHOig",
+      "itemId": "d_hk1QNo6kV1Y1049y",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-10T20:27:18Z",
+      "outcome": "device",
+      "device": "phone",
+      "dir": {
+        "length": 2,
+        "head": "CuVAxQABfNosEoPUNhVxWKw0IPONt1kFPrJ8scypf5Y"
+      }
+    }
+  ],
+  "judge": {
+    "cold": false,
+    "consequences": true,
+    "terminal": false,
+    "links": true,
+    "plain": true,
+    "skim": false,
+    "notes": "The card says \"Tap Pick on the set you want\" but has no options or Pick button, and it never names the three sets, so the user cannot choose without opening the artifact."
+  }
+}

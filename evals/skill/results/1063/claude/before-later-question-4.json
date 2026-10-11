@@ -1,0 +1,121 @@
+{
+  "agent": "claude",
+  "model": "claude-haiku-5-5",
+  "arm": "before",
+  "scenario": "later-question",
+  "rep": 4,
+  "turns": [
+    {
+      "commands": [
+        "node scripts/lint.js; echo \"exit=$?\"; ls; cat scripts/lint.js",
+        "cat -A src/upload.js | head -20; echo ---; cat RELEASE.md; echo ---; cat NAMES.md; echo ---; cat package.json",
+        "node scripts/lint.js; echo \"exit=$?\"",
+        "starbridge ask \\\n  --question 'What should we call next week’s release?' \\\n  --context 'RELEASE.md still says “Name: TBD”, and the release ships Monday.' \\\n  --option Driftwood --option Lantern --option Juniper",
+        "starbridge wait d_zEddd3DARR6RDMD5 --timeout 5m"
+      ],
+      "final": "Lint now passes, and the release is named Driftwood in RELEASE.md.\n\n- **Lint:** `node scripts/lint.js` flagged two `var` declarations in `src/upload.js` (`size` and `chunks`). Neither is reassigned, so I changed both to `const`. The script exits 0 now.\n- **Release name:** I sent you a card with Driftwood, Lantern and Juniper from NAMES.md. You answered Driftwood, and I set `Name: TBD` to `Name: Driftwood` in RELEASE.md.\n\nNothing is committed. The working tree has changes in `RELEASE.md` and `src/upload.js`.",
+      "session": "40d7df2f-092c-4564-85f3-09f84de14e64",
+      "tokens": 172019,
+      "costUsd": 0.0058083399999999995,
+      "exit": 0,
+      "seconds": 135.69,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_zEddd3DARR6RDMD5 --timeout 5m` (again on exit 2)."
+      ]
+    },
+    {
+      "commands": [
+        "node scripts/lint.js; echo \"lint exit=$?\"; git status --short"
+      ],
+      "final": "Lint now passes, and the release is named Driftwood in RELEASE.md.\n\n- **Lint:** `node scripts/lint.js` flagged two `var` declarations in `src/upload.js` (`size` and `chunks`). Neither is reassigned, so I changed both to `const`. The script exits 0 now.\n- **Release name:** I sent you a card with Driftwood, Lantern and Juniper from NAMES.md. You answered Driftwood, and I set `Name: TBD` to `Name: Driftwood` in RELEASE.md.\n\nNothing is committed. The working tree has changes in `RELEASE.md` and `src/upload.js`.",
+      "session": "40d7df2f-092c-4564-85f3-09f84de14e64",
+      "tokens": 172019,
+      "costUsd": 0.0058083399999999995,
+      "exit": 0,
+      "seconds": 135.69,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_zEddd3DARR6RDMD5 --timeout 5m` (again on exit 2)."
+      ]
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_zEddd3DARR6RDMD5",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-10T21:25:07Z",
+      "question": "What should we call next week’s release?",
+      "context": "RELEASE.md still says “Name: TBD”, and the release ships Monday.",
+      "options": [
+        "Driftwood",
+        "Lantern",
+        "Juniper"
+      ],
+      "recommended": "Driftwood",
+      "agent": "claude-code",
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "40d7df2f-092c-4564-85f3-09f84de14e64"
+      },
+      "replies": true,
+      "dir": {
+        "length": 2,
+        "head": "S5shyjo6XM4w0UV0c0Ac26qNpk9_7LppOhODDAlKP0s"
+      }
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [],
+  "answered": "Answer to d_zEddd3DARR6RDMD5 (What should we call next week’s release?): Driftwood",
+  "waiting": [
+    {
+      "v": 1,
+      "id": "w_bO46m8frJDltdva-",
+      "decisionId": "d_zEddd3DARR6RDMD5",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-10T21:25:10Z",
+      "state": "waiting",
+      "dir": {
+        "length": 2,
+        "head": "S5shyjo6XM4w0UV0c0Ac26qNpk9_7LppOhODDAlKP0s"
+      }
+    }
+  ],
+  "permissions": [],
+  "settled": [
+    {
+      "v": 1,
+      "id": "s_SF-Lhqylyw60kxSL",
+      "itemId": "d_zEddd3DARR6RDMD5",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-10T21:27:08Z",
+      "outcome": "device",
+      "device": "phone",
+      "choice": "Driftwood",
+      "dir": {
+        "length": 2,
+        "head": "S5shyjo6XM4w0UV0c0Ac26qNpk9_7LppOhODDAlKP0s"
+      }
+    }
+  ],
+  "peakContext": 24495,
+  "usedTokens": 172019,
+  "judge": {
+    "cold": false,
+    "consequences": false,
+    "terminal": false,
+    "links": null,
+    "plain": true,
+    "skim": false,
+    "notes": "The card never says what each option changes or why the name matters, and the agent's final message answers the question itself by setting Driftwood in RELEASE.md instead of asking the user in the terminal."
+  }
+}

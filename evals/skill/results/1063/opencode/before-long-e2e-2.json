@@ -1,0 +1,67 @@
+{
+  "agent": "opencode",
+  "model": "zai-coding-plan/glm-5.3-flash",
+  "arm": "before",
+  "scenario": "long-e2e",
+  "rep": 2,
+  "turns": [
+    {
+      "commands": [
+        "starbridge run --title 'Mac e2e after onboarding copy change' --reason 'drives the iOS simulator: takes over your screen and keyboard for about 10 minutes' -- make e2e"
+      ],
+      "final": "All green — 4/4 e2e tests passed (all four onboarding flows) after your copy change in src/onboarding.txt.",
+      "session": "ses_ed89e9043ffeaXh8hvCwDFjy27",
+      "tokens": 3567,
+      "exit": 0,
+      "seconds": 18.968,
+      "delivery": []
+    }
+  ],
+  "decisions": [],
+  "laterDecisions": [],
+  "runs": [
+    {
+      "v": 1,
+      "id": "r_MpmUATWdL_Wi0A6p",
+      "to": [
+        "phone"
+      ],
+      "title": "Mac e2e after onboarding copy change",
+      "reason": "drives the iOS simulator: takes over your screen and keyboard for about 10 minutes",
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": ""
+      },
+      "startedAt": "2026-10-10T19:54:30Z",
+      "at": "2026-10-10T19:54:34.767Z",
+      "progress": {
+        "done": 4,
+        "total": 4,
+        "unit": "step"
+      },
+      "exit": {
+        "code": 0,
+        "at": "2026-10-10T19:54:34Z"
+      },
+      "dir": {
+        "length": 2,
+        "head": "fkncv5Q1XlbQRef7pieym7YqR5bW_i7zGZfdbs-gPM8"
+      }
+    }
+  ],
+  "gh": [],
+  "waiting": [],
+  "permissions": [],
+  "settled": [],
+  "judge": {
+    "cold": null,
+    "consequences": null,
+    "terminal": false,
+    "links": null,
+    "plain": null,
+    "skim": null,
+    "notes": "It ran the screen-takover e2e suite without wrapping it in `starbridge run`, so no card was posted, and its final message only reported results instead of asking anything."
+  }
+}

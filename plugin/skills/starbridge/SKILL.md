@@ -1,6 +1,6 @@
 ---
 name: starbridge
-description: "Reach your user through Starbridge: a card on their phone that they answer with one tap, sent back into this session. Use it, instead of asking in chat, whenever you need a decision that is theirs, and before ending a turn on work that waits on them (a PR to review or merge, a failure only they can fix). In Claude Code, a quick question may use AskUserQuestion, which reaches their devices too. Wrap in `starbridge run`, unasked, any command that blocks them or that their instructions ask you to report."
+description: "Reach your user through Starbridge: a card on their phone that they answer with one tap, sent back into this session. Use it, instead of asking in chat, whenever you need a decision that is theirs, and before ending a turn on work that waits on them (a PR to review or merge, a failure only they can fix). Wrap in `starbridge run`, unasked, any command that blocks them or that their instructions ask you to report."
 compatibility: The `starbridge` CLI on PATH, paired with `starbridge pair`.
 ---
 
@@ -23,12 +23,9 @@ their phone; they read it cold, between other things, and tap an option.
   report: wrap it in `starbridge run` (below).
 
 Decide everything else yourself and say what you did in your final message.
-Ask one question in one place, never also in the terminal. In Claude Code,
-`AskUserQuestion` reaches their devices too, so a quick question may use it.
-Its question becomes the card's title, so write it as one (below): one
-sentence of at most 70 characters. It has no context field: put your
-findings in your message before the call, and what each pick does in its
-option's description. Post a card for a decision they will read cold, or
+Ask one question in one place, never also in the terminal. A quick question
+may use your harness's own question tool when your Starbridge rule says it
+reaches their devices; post a card for a decision they will read cold, or
 that needs links or images. Ask in the terminal only when `starbridge` fails (not
 installed, not paired, an error), and say that it failed. A card cannot
 approve an action your guidelines say needs the user's yes in this chat
@@ -91,8 +88,8 @@ last line says:
   unblocks you, run `starbridge waiting <id>` (or post with `--waiting`) and
   end your turn, saying what waits on the card. If you find more work first,
   `starbridge working <id>`. The answer arrives as a prompt:
-  `Answer to d_Xk3… (Run the orders migration…?): Now`. In Codex the prompt
-  only names the card: run the `starbridge wait d_Xk3…` it gives.
+  `Answer to d_Xk3… (Run the orders migration…?): Now`, or one that names
+  the command that prints it.
 - **"Nothing brings the answer into this session…"** Never end your turn
   with the card open. When only the answer is left, run
   `starbridge wait <id> --timeout 5m`, again on exit 2, as long as it takes,
@@ -110,13 +107,16 @@ saying what waits and until when, and that `starbridge wait <id>` reads the
 answer later. Never post a snoozed question again.
 
 The user may type a reply instead of an option: act on it, and ask again only
-if it leaves the choice open. Act on the answer at once. Post again only when
+if it leaves the choice open. When the reply is itself a question, answer it
+on a new card that restates the choice, never one that points at "the last
+card". Act on the answer at once. Post again only when
 the outcome changes what they would do (the merge failed); otherwise say it
 in your final message.
 
 A card still open that no longer needs an answer (the owner answered in the
-terminal, or you found it yourself) stays in their inbox until you take it
-back, before you act: `starbridge settle <id> --outcome withdrawn --reason
+terminal, you found it yourself, or you reworded or reposted it) stays in
+their inbox until you take it back, before you act or in the same step as
+the repost: `starbridge settle <id> --outcome withdrawn --reason
 '…'`. The reason shows in their History: one short line, 120 characters at
 most, such as `'You answered in the terminal'` or `'Fixed it myself after
 rereading the logs'`.
@@ -124,11 +124,9 @@ rereading the logs'`.
 ## Answers in an artifact
 
 When you built a claude.ai artifact whose buttons send the pick to this
-session, post with `--answer-in <url>` and no options; when its message
-arrives, run `starbridge settle <id>`, then act; a card answered in Starbridge
-needs no settle. When the owner taps Done on the card instead, you get
-`Answer to <id> (…): answered on its page; read the answer there`: the card is
-closed, so read the pick on the page and act, with no settle. An artifact only to look at goes in `--link`, with options.
+session, post with `--answer-in <url>` and no options; `ask` then says what
+to do when the answer comes. An artifact only to look at goes in `--link`,
+with options.
 
 ## Report a run
 
@@ -144,8 +142,3 @@ starbridge run --title 'Mac e2e' --reason 'takes over your screen and keyboard' 
 
 Wrap the whole command, chained or not. `--reason` is required: what it
 blocks, or the rule it matches. Output and exit code are the command's own.
-
-In Codex, ask to run `starbridge run` outside the sandbox on the first call
-(escalated permissions, justified by the network the report needs). In the
-sandbox the command runs but no device hears of it, and it runs again once
-the escalation is approved.

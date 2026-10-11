@@ -1,6 +1,6 @@
 /**
  * The Starbridge extension for the Pi coding agent: Pi's counterpart of the Claude Code plugin's
- * rule and of this mod. It adds the owner's rule (plugin/hooks/rule.md) to the system prompt, and
+ * rule and of this mod. It adds the owner's rule (plugin/rules/pi.md) to the system prompt, and
  * in an interactive or RPC session it runs the mod's answer loop (switch.ts: through the
  * machine's agent, else the CLI) and submits each answer as a user message. An idle session
  * starts a turn with it; a busy one runs it once the agent finishes (`deliverAs: "followUp"`).
@@ -78,7 +78,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 
 function rule(): string | undefined {
   try {
-    return readFileSync(join(here, "..", "..", "plugin", "hooks", "rule.md"), "utf8").trim();
+    return readFileSync(join(here, "..", "..", "plugin", "rules", "pi.md"), "utf8").trim();
   } catch {
     return undefined;
   }

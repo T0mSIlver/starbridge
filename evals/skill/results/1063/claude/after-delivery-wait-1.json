@@ -1,0 +1,34 @@
+{
+  "agent": "claude",
+  "model": "claude-haiku-5-5",
+  "arm": "after",
+  "scenario": "delivery-wait",
+  "rep": 1,
+  "turns": [
+    {
+      "commands": [],
+      "final": "",
+      "exit": 0,
+      "seconds": 721.773,
+      "delivery": [],
+      "background": [],
+      "tools": []
+    }
+  ],
+  "decisions": [],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [],
+  "waiting": [],
+  "permissions": [],
+  "settled": [],
+  "judge": {
+    "cold": null,
+    "consequences": null,
+    "terminal": false,
+    "links": null,
+    "plain": null,
+    "skim": null,
+    "notes": "No card was posted for the merge decision, and the final message is empty, so the user is never asked anything."
+  }
+}

@@ -1,0 +1,105 @@
+{
+  "agent": "claude",
+  "model": "claude-haiku-5-5",
+  "arm": "before",
+  "scenario": "done-on-page",
+  "rep": 2,
+  "turns": [
+    {
+      "commands": [
+        "git status --short && git log --oneline | head && find . -path ./.git -prune -o -type f -print | head -100 && cat src/pricing.html 2>/dev/null",
+        "ls -la /var/tmp/skill-eval-U0FO1F/before-done-on-page-2/cfg/projects/-var-tmp-skill-eval-U0FO1F-before-done-on-page-2-proj/memory/ 2>/dev/null && cat /var/tmp/skill-eval-U0FO1F/before-done-on-page-2/cfg/projects/-var-tmp-skill-eval-U0FO1F-before-done-on-page-2-proj/memory/MEMORY.md 2>/dev/null; ls /var/tmp/skill-eval-U0FO1F/before-done-on-page-2/proj/src 2>/dev/null",
+        "cat NOTES.md && echo ---- && cat scripts/read-artifact.sh && echo ---- && cat /var/tmp/skill-eval-U0FO1F/before-done-on-page-2/cfg/projects/-var-tmp-skill-eval-U0FO1F-before-done-on-page-2-proj/memory/pricing.html",
+        "sh scripts/read-artifact.sh; echo \"exit=$?\"; ls -la /var/tmp/skill-eval-U0FO1F/before-done-on-page-2/",
+        "starbridge ask \\\n  --question 'Which tier names should the pricing page use?' \\\n  --context 'The pricing page needs final names for its three tiers. Three name sets are in your comparison artifact, and none is picked yet.\nTap a Pick button there. The page will use that set.' \\\n  --answer-in https://claude.ai/artifact/7c1e9a52-0d3b-4f6e-9a21-5b8c3d2e1f00\necho \"exit=$?\"",
+        "starbridge wait d_DT2B4ZPzevlgfAO9 --timeout 5m; echo \"exit=$?\""
+      ],
+      "final": "I finished `src/pricing.html` with the tier names you picked: **Starter** ($0), **Plus** ($8), and **Studio** ($20). The change is uncommitted.\n\n- **Tier names:** The pick is \"Starter, Plus, Studio.\" I posted a card for it because the artifact had no pick yet. You answered on the artifact page, and I read the pick there with `scripts/read-artifact.sh`.\n- **Page structure:** Each tier is a `div.tier` inside a `section.pricing`, with a heading, a price line, and a one-line description. The `class` attributes match the existing fragment's style.\n- **Copy I wrote:** The one-line descriptions (\"For trying the notes site out.\", \"For individuals who publish regularly.\", \"For teams that need shared editing.\") are my placeholders. The prices came from the original file. Tell me if you want different wording or a feature list per tier.",
+      "session": "f22f3c64-5af8-4f19-bde1-cb66d2d26936",
+      "tokens": 258376,
+      "costUsd": 0.0078489,
+      "exit": 0,
+      "seconds": 67.164,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_DT2B4ZPzevlgfAO9 --timeout 5m` (again on exit 2)."
+      ]
+    },
+    {
+      "commands": [
+        "sh scripts/read-artifact.sh; echo \"exit=$?\"",
+        "cat src/pricing.html && git status --short"
+      ],
+      "final": "I finished `src/pricing.html` with the tier names you picked: **Starter** ($0), **Plus** ($8), and **Studio** ($20). The change is uncommitted.\n\n- **Tier names:** The pick is \"Starter, Plus, Studio.\" I posted a card for it because the artifact had no pick yet. You answered on the artifact page, and I read the pick there with `scripts/read-artifact.sh`.\n- **Page structure:** Each tier is a `div.tier` inside a `section.pricing`, with a heading, a price line, and a one-line description. The `class` attributes match the existing fragment's style.\n- **Copy I wrote:** The one-line descriptions (\"For trying the notes site out.\", \"For individuals who publish regularly.\", \"For teams that need shared editing.\") are my placeholders. The prices came from the original file. Tell me if you want different wording or a feature list per tier.",
+      "session": "f22f3c64-5af8-4f19-bde1-cb66d2d26936",
+      "tokens": 258376,
+      "costUsd": 0.0078489,
+      "exit": 0,
+      "seconds": 67.164,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_DT2B4ZPzevlgfAO9 --timeout 5m` (again on exit 2)."
+      ]
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_DT2B4ZPzevlgfAO9",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-10T20:45:26Z",
+      "question": "Which tier names should the pricing page use?",
+      "context": "The pricing page needs final names for its three tiers. Three name sets are in your comparison artifact, and none is picked yet.\nTap a Pick button there. The page will use that set.",
+      "options": [],
+      "agent": "claude-code",
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "f22f3c64-5af8-4f19-bde1-cb66d2d26936"
+      },
+      "answerIn": {
+        "url": "https://claude.ai/artifact/7c1e9a52-0d3b-4f6e-9a21-5b8c3d2e1f00"
+      },
+      "done": true,
+      "dir": {
+        "length": 2,
+        "head": "OuT-6-vtGyz1B-CV8kXkCneu8N-MGByYAR6R0-5CSYg"
+      }
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [],
+  "answered": "Answer to d_DT2B4ZPzevlgfAO9 (Which tier names should the pricing page use?): answered on its page; read the answer there",
+  "waiting": [],
+  "permissions": [],
+  "settled": [
+    {
+      "v": 1,
+      "id": "s__L7MZx5b5a4J3TkW",
+      "itemId": "d_DT2B4ZPzevlgfAO9",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-10T20:45:47Z",
+      "outcome": "device",
+      "device": "phone",
+      "dir": {
+        "length": 2,
+        "head": "OuT-6-vtGyz1B-CV8kXkCneu8N-MGByYAR6R0-5CSYg"
+      }
+    }
+  ],
+  "peakContext": 26968,
+  "usedTokens": 258376,
+  "judge": {
+    "cold": true,
+    "consequences": true,
+    "terminal": false,
+    "links": true,
+    "plain": true,
+    "skim": true,
+    "notes": "The final message reports finished work and never asks the user a question to wait on in the terminal; its closing offer to change wording is not a question about the tier names."
+  }
+}

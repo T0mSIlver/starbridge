@@ -1,4 +1,5 @@
 import Foundation
+import os
 import StarbridgeProtocol
 
 /** A response the server refused: its status and `{error, detail}` (PROTOCOL.md, "Server API"). */
@@ -8,6 +9,8 @@ struct ApiError: Error, CustomStringConvertible {
     let detail: String?
     /** For 426 `client-too-old`: the oldest release the server serves. */
     var minimum: String?
+    /** For 429: how long its `Retry-After` asks to wait. */
+    var retryAfter: TimeInterval?
 
     var description: String { [error ?? "HTTP \(status)", detail].compactMap(\.self).joined(separator: ": ") }
 }
@@ -47,7 +50,57 @@ struct Api {
     /** This release, as the server counts it and checks it against its minimum (PROTOCOL.md, "HTTP API"). */
     static let client = "ios/" + (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.0.0")
 
+    /**
+     * A deploy restarts the server in a few seconds (#150), so a 502 or 503, or a refused
+     * connection, is retried quietly for this long before the caller hears of it (#250).
+     */
+    static let retryFor: TimeInterval = 20
+
+    /**
+     * Until when a 429 with `Retry-After` holds every call of this app, a call's first try
+     * included: the server is up and said when to come back (#645). Such a call is retried
+     * whatever its method, since the request was refused before it did anything.
+     */
+    static let limitedUntil = OSAllocatedUnfairLock(initialState: Date.distantPast)
+
     private func call(_ method: String, _ path: String, _ body: JSON? = nil, headers: [String: String] = [:], wait: Int? = nil) async throws -> (Int, JSON?) {
+        let started = Date()
+        var pause: TimeInterval = 0.25
+        while true {
+            let limited = Api.limitedUntil.withLock { $0 }.timeIntervalSinceNow
+            if limited > 0 {
+                if Date().timeIntervalSince(started) + limited > Api.retryFor {
+                    throw ApiError(status: 429, error: "rate-limited", detail: "too many requests; retry later")
+                }
+                try await Task.sleep(for: .seconds(limited))
+                continue
+            }
+            do {
+                return try await once(method, path, body, headers: headers, wait: wait)
+            } catch let e as ApiError where e.status == 429 && e.retryAfter != nil {
+                // Jitter spreads this app's calls past the limit's window, not into its first moment.
+                let until = Date().addingTimeInterval(e.retryAfter! * Double.random(in: 1...1.25))
+                Api.limitedUntil.withLock { $0 = max($0, until) }
+                continue
+            } catch {
+                let transient = switch error {
+                case let e as ApiError: e.status == 502 || e.status == 503
+                // Refused: the request never left.
+                case let e as URLError where e.code == .cannotConnectToHost: true
+                // No network at all is not a restart: the caller says so at once.
+                case let e as URLError where [.notConnectedToInternet, .dataNotAllowed, .internationalRoamingOff, .cancelled].contains(e.code): false
+                // Any other failure may have reached the server, so only a read, safe to repeat, retries.
+                case is URLError: method == "GET"
+                default: false
+                }
+                if !transient || Date().timeIntervalSince(started) + pause > Api.retryFor { throw error }
+            }
+            try await Task.sleep(for: .seconds(pause))
+            pause = min(pause * 2, 4)
+        }
+    }
+
+    private func once(_ method: String, _ path: String, _ body: JSON?, headers: [String: String], wait: Int?) async throws -> (Int, JSON?) {
         guard let url = URL(string: server + "/v1" + path) else { throw ApiError(status: 0, error: "bad-server", detail: server) }
         var request = URLRequest(url: url)
         request.httpMethod = method
@@ -61,12 +114,29 @@ struct Api {
             request.httpBody = Data(body.text.utf8)
         }
         let (data, response) = try await http.data(for: request)
-        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+        let http = response as? HTTPURLResponse
+        let status = http?.statusCode ?? 0
         let json = data.isEmpty ? nil : try? JSON.parse(String(decoding: data, as: UTF8.self))
         guard (200..<300).contains(status) else {
-            throw ApiError(status: status, error: json?["error"]?.string, detail: json?["detail"]?.string, minimum: json?["minimum"]?.string)
+            let retryAfter = status == 429 ? http?.value(forHTTPHeaderField: "Retry-After").flatMap(Api.retryAfter) : nil
+            throw ApiError(status: status, error: json?["error"]?.string, detail: json?["detail"]?.string, minimum: json?["minimum"]?.string, retryAfter: retryAfter)
         }
         return (status, json)
+    }
+
+    /** `Retry-After` in seconds, from seconds or an HTTP date in any of its three forms; nil when unreadable. */
+    static func retryAfter(_ value: String) -> TimeInterval? {
+        let v = value.trimmingCharacters(in: .whitespaces)
+        if let seconds = TimeInterval(v) { return seconds.isFinite && seconds >= 0 ? seconds : nil }
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.timeZone = TimeZone(identifier: "GMT")
+        // IMF-fixdate, then the obsolete RFC 850 and asctime forms (RFC 9110, section 5.6.7).
+        for format in ["EEE, dd MMM yyyy HH:mm:ss zzz", "EEEE, dd-MMM-yy HH:mm:ss zzz", "EEE MMM d HH:mm:ss yyyy"] {
+            f.dateFormat = format
+            if let date = f.date(from: v) { return max(0, date.timeIntervalSinceNow) }
+        }
+        return nil
     }
 
     private func field(_ json: JSON?, _ key: String) throws -> JSON {

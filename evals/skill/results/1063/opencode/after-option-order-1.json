@@ -1,0 +1,116 @@
+{
+  "agent": "opencode",
+  "model": "zai-coding-plan/glm-5.3-flash",
+  "arm": "after",
+  "scenario": "option-order",
+  "rep": 1,
+  "turns": [
+    {
+      "commands": [
+        "git log --oneline -5 && git status --short",
+        "find src -type f | head -50",
+        "starbridge ask \\\n  --question 'Purge trash after how many days?' \\\n  --context 'Every deleted note now stays forever; each month of retention costs about $20/month at today'\"'\"'s volume. 85% of restore requests come within 3 weeks of the delete.\n**7 days:** about $5/month; loses most restores.\n**30 days:** covers the 3-week window (85%); about $20/month.\n**90 days:** covers nearly all restores; about $60/month.' \\\n  --option '7 days' --option '30 days' --option '90 days' --recommended '30 days' \\\n  --waiting",
+        "node --input-type=module -e \"\nimport { trash, remove, purge, setRetention, startAutoPurge } from './src/trash.js';\nsetRetention(30);\nconst t0 = Date.now();\nremove('a');\ntrash[0].deletedAt = t0 - 31*24*3600*1000;\nremove('b');\ntrash[1].deletedAt = t0 - 29*24*3600*1000;\npurge(t0);\nconsole.log(trash.length === 1 && trash[0].note === 'b' ? 'pass' : 'fail', JSON.stringify(trash));\n\"",
+        "starbridge wait d_B0gcs1i2o5y81kzy --timeout 5m"
+      ],
+      "final": "Done. The owner chose 30 days, which matches the default already in place.\n\n- `src/trash.js` now has `purge()` (removes entries older than `RETENTION_DAYS` = 30) and `startAutoPurge()` (purges hourly, starting immediately)\n- Verified: entries at 31 days are purged, 29 days kept\n\nCard `d_B0gcs1i2o5y81kzy` answered and closed; bill drops from unbounded to about $20/month.",
+      "session": "ses_ed8847b27ffeXhVPFFcnC3rgBD",
+      "tokens": 7060,
+      "exit": 0,
+      "seconds": 90.842,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_B0gcs1i2o5y81kzy --timeout 5m` (again on exit 2)."
+      ]
+    },
+    {
+      "commands": [
+        "git diff --stat"
+      ],
+      "final": "Done. The owner chose 30 days, which matches the default already in place.\n\n- `src/trash.js` now has `purge()` (removes entries older than `RETENTION_DAYS` = 30) and `startAutoPurge()` (purges hourly, starting immediately)\n- Verified: entries at 31 days are purged, 29 days kept\n\nCard `d_B0gcs1i2o5y81kzy` answered and closed; bill drops from unbounded to about $20/month.",
+      "session": "ses_ed8847b27ffeXhVPFFcnC3rgBD",
+      "tokens": 7060,
+      "exit": 0,
+      "seconds": 90.842,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_B0gcs1i2o5y81kzy --timeout 5m` (again on exit 2)."
+      ]
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_B0gcs1i2o5y81kzy",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-10T20:23:37Z",
+      "question": "Purge trash after how many days?",
+      "context": "Every deleted note now stays forever; each month of retention costs about $20/month at today's volume. 85% of restore requests come within 3 weeks of the delete.\n**7 days:** about $5/month; loses most restores.\n**30 days:** covers the 3-week window (85%); about $20/month.\n**90 days:** covers nearly all restores; about $60/month.",
+      "options": [
+        "7 days",
+        "30 days",
+        "90 days"
+      ],
+      "recommended": "30 days",
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": ""
+      },
+      "replies": true,
+      "dir": {
+        "length": 2,
+        "head": "EBxRfGsFN6y9hACqGtx6ij8S6UriBeFDURbh0-bT6U8"
+      }
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [],
+  "answered": "Answer to d_B0gcs1i2o5y81kzy (Purge trash after how many days?): 30 days",
+  "waiting": [
+    {
+      "v": 1,
+      "id": "w_Nzd4t3Wn1eEDOaV-",
+      "decisionId": "d_B0gcs1i2o5y81kzy",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-10T20:23:37Z",
+      "state": "waiting",
+      "dir": {
+        "length": 2,
+        "head": "EBxRfGsFN6y9hACqGtx6ij8S6UriBeFDURbh0-bT6U8"
+      }
+    }
+  ],
+  "permissions": [],
+  "settled": [
+    {
+      "v": 1,
+      "id": "s_gFMz7DDvi_YQNNj6",
+      "itemId": "d_B0gcs1i2o5y81kzy",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-10T20:24:09Z",
+      "outcome": "device",
+      "device": "phone",
+      "choice": "30 days",
+      "dir": {
+        "length": 2,
+        "head": "EBxRfGsFN6y9hACqGtx6ij8S6UriBeFDURbh0-bT6U8"
+      }
+    }
+  ],
+  "judge": {
+    "cold": true,
+    "consequences": true,
+    "terminal": false,
+    "links": null,
+    "plain": true,
+    "skim": true,
+    "notes": "The final terminal message reports the card's answer as settled and asks nothing, so the agent never waits for the user's reply in the terminal."
+  }
+}

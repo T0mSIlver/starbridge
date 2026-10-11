@@ -11,8 +11,8 @@
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import cli from "../../../plugin/hooks/cli.sh" with { type: "text" };
-import rule from "../../../plugin/hooks/rule.md" with { type: "text" };
 import sessionStart from "../../../plugin/hooks/session-start.sh" with { type: "text" };
+import rule from "../../../plugin/rules/codex.md" with { type: "text" };
 import { marker, ours } from "./marker";
 import { failure, run, type Sys } from "./sys";
 

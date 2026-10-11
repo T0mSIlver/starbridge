@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, setDefaultTimeout, test } from "bun:test";
-import { writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { LiveServer } from "@starbridge/server/test-support";
 import { Release } from "../src/agent/release";
@@ -169,12 +169,16 @@ test("a stopping agent never waits on GitHub (#1050)", async () => {
   }
 });
 
-test("an unreadable latest.json or agent.json neither stops the agent's check nor --version (#1050)", async () => {
+test("an unreadable latest.json is moved aside and read again; an unreadable agent.json stops neither the check nor --version (#1050, #1174)", async () => {
   const ctx = { ...testCtx({ STARBRIDGE_LATEST_URL: gh.url }), terminal: true };
-  ctx.store.saveLatest({ checkedAt: "2026-01-01T00:00:00Z", version: "99.0.0" });
   writeFileSync(join(ctx.store.dir, "latest.json"), "{");
   writeFileSync(join(ctx.store.dir, "agent.json"), "{");
-  expect(await checkLatest(ctx)).toBeUndefined();
+  const now = new Date("2026-10-11T08:00:00.000Z");
+  expect((await checkLatest(ctx, now))?.version).toBe("99.0.0");
+  expect(ctx.store.latest()?.version).toBe("99.0.0");
+  expect(
+    readFileSync(join(ctx.store.dir, "latest.json.unreadable-2026-10-11T08-00-00-000Z"), "utf8"),
+  ).toBe("{");
   const hub = { ctx, notify: () => {}, changed: async () => {}, log: () => {}, seen: () => false };
   await new Release(hub).tick();
   expect(await run(["--version"], ctx)).toBe(0);

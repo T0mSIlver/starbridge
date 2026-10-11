@@ -1,0 +1,72 @@
+{
+  "agent": "claude",
+  "model": "claude-haiku-5-5",
+  "arm": "before",
+  "scenario": "long-e2e",
+  "rep": 2,
+  "turns": [
+    {
+      "commands": [
+        "grep -n -A6 '^e2e' Makefile; echo ---; git status --short; echo ---; git diff --stat",
+        "starbridge run --title 'iOS e2e suite' --reason 'takes over your screen and keyboard for about ten minutes' -- make e2e",
+        "ls -la src/onboarding.txt 2>&1; git log --oneline -3; git status --short --ignored | head"
+      ],
+      "final": "The e2e suite passed: 4 of 4 onboarding flow tests.\n\nThe run took over your screen and keyboard, so I wrapped it in `starbridge run`. It finished without a card, so nothing needs your decision.\n\nOne thing to check: `git status` shows no changes, and `src/onboarding.txt` matches the only commit (`49f99a4 Initial commit`). The file was modified today at 21:51, so the copy the suite ran against may be the same as the committed one. If your copy has the new wording, it may not be saved to this path. Let me know if you want me to diff it against something else.",
+      "session": "b460e7e9-b37c-4154-958a-ead11d09d64c",
+      "tokens": 85202,
+      "costUsd": 0.00374823,
+      "exit": 0,
+      "seconds": 14.276,
+      "delivery": []
+    }
+  ],
+  "decisions": [],
+  "laterDecisions": [],
+  "runs": [
+    {
+      "v": 1,
+      "id": "r_SpOtYkoaNEOiUOY-",
+      "to": [
+        "phone"
+      ],
+      "title": "iOS e2e suite",
+      "reason": "takes over your screen and keyboard for about ten minutes",
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "b460e7e9-b37c-4154-958a-ead11d09d64c"
+      },
+      "startedAt": "2026-10-10T19:51:42Z",
+      "at": "2026-10-10T19:51:46.060Z",
+      "progress": {
+        "done": 4,
+        "total": 4,
+        "unit": "step"
+      },
+      "exit": {
+        "code": 0,
+        "at": "2026-10-10T19:51:46Z"
+      },
+      "dir": {
+        "length": 2,
+        "head": "LUkYQhxqwZ586REJNC1zMi4x_rZDsnCB73c5sVqQJlw"
+      }
+    }
+  ],
+  "gh": [],
+  "waiting": [],
+  "permissions": [],
+  "settled": [],
+  "peakContext": 22295,
+  "usedTokens": 85202,
+  "judge": {
+    "cold": null,
+    "consequences": null,
+    "terminal": true,
+    "links": null,
+    "plain": null,
+    "skim": null,
+    "notes": "The final message calls the run clean and says nothing needs a decision, then flags that the suite may have tested the unchanged committed copy of onboarding.txt, without asking the user directly whether their edited copy is the one that should have been tested."
+  }
+}

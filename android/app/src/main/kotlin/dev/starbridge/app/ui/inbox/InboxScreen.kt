@@ -140,6 +140,7 @@ import androidx.compose.material3.SnackbarResult
 import kotlinx.coroutines.launch
 import android.os.Build
 import android.widget.Toast
+import dev.starbridge.app.protocol.takeCodePoints
 
 @HiltViewModel
 class InboxViewModel @Inject constructor(private val store: Store, private val prefs: Prefs) : ViewModel() {
@@ -817,7 +818,7 @@ private fun FreeText(text: String, onText: (String) -> Unit, onAnswer: (String) 
     // the text wraps before the icon. It grows to 10 lines, then scrolls, as on the web (#947).
     TextField(
         value = text,
-        onValueChange = { onText(it.take(4000)) },
+        onValueChange = { onText(it.takeCodePoints(4000)) },
         placeholder = { Text("Your answer") },
         trailingIcon = {
             IconButton(onClick = send, enabled = text.isNotBlank()) { Symbol(Sym.Send, contentDescription = "Send") }

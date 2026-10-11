@@ -75,6 +75,7 @@ import java.time.temporal.ChronoUnit
 import kotlin.math.roundToInt
 import dev.starbridge.app.protocol.Decision as DecisionBody
 import dev.starbridge.app.protocol.Member as DirectoryMember
+import dev.starbridge.app.protocol.takeCodePoints
 
 /** Shows and clears notifications; the app's is [dev.starbridge.app.push.Notifier]. */
 interface Alerts {
@@ -194,6 +195,11 @@ class ServerStore(
     /** A sync that waits for the network, then retries until the server answers (#920). */
     private var catchUpJob: Job? = null
     override val pushHold = MutableStateFlow<Int?>(null)
+    /**
+     * Counts wipes, so a hold read or saved for the account before one never lands after it (#1192).
+     * Checked under `lock`, which every wipe holds.
+     */
+    @Volatile private var wipes = 0
     @Volatile private var inFront = false
     private var presenceJob: Job? = null
     private val beacon = Beacon({ present -> if (phase.value == Phase.Ready) api().presence(present) })
@@ -391,6 +397,9 @@ class ServerStore(
         notifyStates.value = emptyMap()
         deviceClients.value = emptyMap()
         machinesBehind.value = emptySet()
+        // The next account's hold shows once its own read succeeds, as on the web (#1192).
+        pushHold.value = null
+        wipes++
         joinJob?.cancel()
         showJob?.cancel()
         watchJob?.cancel()
@@ -496,7 +505,7 @@ class ServerStore(
     private fun newMember(): DirectoryMember {
         val boxKeys = sodium.boxKeyPair()
         val signKeys = sodium.signKeyPair()
-        val member = DirectoryMember(newId("d_"), "device", deviceName.take(100).ifBlank { "Android" }, toB64(boxKeys.public), toB64(signKeys.public))
+        val member = DirectoryMember(newId("d_"), "device", deviceName.takeCodePoints(100).ifBlank { "Android" }, toB64(boxKeys.public), toB64(signKeys.public))
         // The keys reach the disk before the server hears of them, so a crash cannot strand them.
         // New keys end any recovery attempt that made the ones they replace.
         persist(saved.copy(recovering = null), secrets.copy(boxPk = member.boxPk, boxSk = toB64(boxKeys.secret), signPk = member.signPk, signSk = toB64(signKeys.secret)))
@@ -1227,7 +1236,7 @@ class ServerStore(
             put("behavior", if (allow) "allow" else "deny")
             put("scope", chosen)
             put("inputHash", p.body.inputHash)
-            if (!allow) message?.trim()?.takeIf { it.isNotEmpty() }?.let { put("message", it.take(500)) }
+            if (!allow) message?.trim()?.takeIf { it.isNotEmpty() }?.let { put("message", it.takeCodePoints(500)) }
             // Lets the machine notice a server holding back entries, such as a revocation.
             directory?.let { d -> putJsonObject("dir") { put("length", d.length); put("head", d.head) } }
         }
@@ -1890,9 +1899,10 @@ class ServerStore(
     }
 
     override fun loadPushHold() {
+        val wiped = wipes
         scope.launch {
             // A server without the setting shows no row.
-            runCatching { api().pushHold() }.onSuccess { pushHold.value = it }
+            runCatching { api().pushHold() }.onSuccess { lock.withLock { if (wipes == wiped) pushHold.value = it } }
         }
     }
 
@@ -1923,14 +1933,15 @@ class ServerStore(
 
     override fun setPushHold(seconds: Int) {
         val was = pushHold.value
+        val wiped = wipes
         pushHold.value = seconds
         scope.launch {
-            runCatching { api().setPushHold(seconds) }
-                .onSuccess { pushHold.value = it }
-                .onFailure { e ->
-                    pushHold.value = was
-                    if (e is Exception) report(e)
-                }
+            val saved = runCatching { api().setPushHold(seconds) }
+            lock.withLock {
+                if (wipes != wiped) return@launch
+                saved.onSuccess { pushHold.value = it }.onFailure { pushHold.value = was }
+            }
+            (saved.exceptionOrNull() as? Exception)?.let { report(it) }
         }
     }
 

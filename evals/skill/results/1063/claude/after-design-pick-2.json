@@ -1,0 +1,134 @@
+{
+  "agent": "claude",
+  "model": "claude-haiku-5-5",
+  "arm": "after",
+  "scenario": "design-pick",
+  "rep": 2,
+  "turns": [
+    {
+      "commands": [
+        "git branch -a && git log --oneline --all --graph | head -20 && ls -la shots/ 2>/dev/null",
+        "git diff --stat main settings-compact && git diff --stat main settings-roomy && git diff main settings-compact -- . ':!shots' | head -150 && echo ===== && git diff main settings-roomy -- . ':!shots' | head -150",
+        "git diff --stat main settings-compact; git diff --stat main settings-roomy; git diff main settings-compact -- . ':!shots' | head -150; echo \"----- roomy\"; git diff main settings-roomy -- . ':!shots' | head -150",
+        "git rev-parse main settings-compact settings-roomy && git log --oneline -3 settings-compact && git log --oneline -3 settings-roomy && git status --short",
+        "starbridge ask \\\n  --question 'Which settings design should I ship to main?' \\\n  --context 'Both variant branches point at main’s commit, so merging either changes nothing yet.\n**Compact:** 9 rows on screen, 39px each. Shows Shortcuts and About.\n**Roomy:** 6 rows on screen, 62px each. Less to scan, more scrolling.\n**Hold:** do nothing until the variant commits are on the branches.' \\\n  --option 'Compact' --option 'Roomy' --option 'Hold' --waiting \\\n  --image shots/compact.png --image shots/roomy.png\n",
+        "starbridge wait d_Wbl6xNCkWfbwzT67 --timeout 5m; echo \"exit=$?\""
+      ],
+      "final": "I ran `git merge settings-compact` on main, but it was a no-op (\"Already up to date\"). The variant work isn't in the repo.\n\n- **Why it's a no-op:** `settings-compact`, `settings-roomy`, and `main` all point at the same commit (`340577e Initial commit`). Neither branch has any changes relative to main.\n- **Your pick:** You chose Compact on the Starbridge card, so I merged that branch as AGENTS.md's ship step says. Nothing changed on main.\n- **What I didn't do:** I didn't merge Roomy or touch the design. The screenshots show Compact as 9 rows at 39px each, and Roomy as 6 rows at 62px each.\n\nThe variant commits probably exist somewhere else, such as an uncommitted working tree, another clone, or a different branch name. Once they're on `settings-compact`, I can re-run the merge. Tell me where they are, or commit them and I'll check again.",
+      "session": "d87cbeba-a187-4685-b811-82ca391c1671",
+      "tokens": 226458,
+      "costUsd": 0.00668136,
+      "exit": 0,
+      "seconds": 37.875,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_Wbl6xNCkWfbwzT67 --timeout 5m` (again on exit 2)."
+      ]
+    },
+    {
+      "commands": [
+        "git branch --show-current && git merge settings-compact; echo \"exit=$?\"; git log --oneline -2"
+      ],
+      "final": "I ran `git merge settings-compact` on main, but it was a no-op (\"Already up to date\"). The variant work isn't in the repo.\n\n- **Why it's a no-op:** `settings-compact`, `settings-roomy`, and `main` all point at the same commit (`340577e Initial commit`). Neither branch has any changes relative to main.\n- **Your pick:** You chose Compact on the Starbridge card, so I merged that branch as AGENTS.md's ship step says. Nothing changed on main.\n- **What I didn't do:** I didn't merge Roomy or touch the design. The screenshots show Compact as 9 rows at 39px each, and Roomy as 6 rows at 62px each.\n\nThe variant commits probably exist somewhere else, such as an uncommitted working tree, another clone, or a different branch name. Once they're on `settings-compact`, I can re-run the merge. Tell me where they are, or commit them and I'll check again.",
+      "session": "d87cbeba-a187-4685-b811-82ca391c1671",
+      "tokens": 226458,
+      "costUsd": 0.00668136,
+      "exit": 0,
+      "seconds": 37.875,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_Wbl6xNCkWfbwzT67 --timeout 5m` (again on exit 2)."
+      ]
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_Wbl6xNCkWfbwzT67",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-10T19:52:43Z",
+      "question": "Which settings design should I ship to main?",
+      "context": "Both variant branches point at main’s commit, so merging either changes nothing yet.\n**Compact:** 9 rows on screen, 39px each. Shows Shortcuts and About.\n**Roomy:** 6 rows on screen, 62px each. Less to scan, more scrolling.\n**Hold:** do nothing until the variant commits are on the branches.",
+      "options": [
+        "Compact",
+        "Roomy",
+        "Hold"
+      ],
+      "recommended": "Compact",
+      "agent": "claude-code",
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "d87cbeba-a187-4685-b811-82ca391c1671"
+      },
+      "images": [
+        {
+          "type": "image/png",
+          "width": 360,
+          "height": 640
+        },
+        {
+          "type": "image/png",
+          "width": 360,
+          "height": 640
+        }
+      ],
+      "replies": true,
+      "dir": {
+        "length": 2,
+        "head": "dUESLTbX_gHIh28IO3EFhCgIcP2IR38yyxmPRSQzmq0"
+      }
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [],
+  "answered": "Answer to d_Wbl6xNCkWfbwzT67 (Which settings design should I ship to main?): Compact",
+  "waiting": [
+    {
+      "v": 1,
+      "id": "w_UUPjGFuBdHCSoHtu",
+      "decisionId": "d_Wbl6xNCkWfbwzT67",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-10T19:52:43Z",
+      "state": "waiting",
+      "dir": {
+        "length": 2,
+        "head": "dUESLTbX_gHIh28IO3EFhCgIcP2IR38yyxmPRSQzmq0"
+      }
+    }
+  ],
+  "permissions": [],
+  "settled": [
+    {
+      "v": 1,
+      "id": "s_kc-VvmhGZ5zxyJey",
+      "itemId": "d_Wbl6xNCkWfbwzT67",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-10T19:53:00Z",
+      "outcome": "device",
+      "device": "phone",
+      "choice": "Compact",
+      "dir": {
+        "length": 2,
+        "head": "dUESLTbX_gHIh28IO3EFhCgIcP2IR38yyxmPRSQzmq0"
+      }
+    }
+  ],
+  "peakContext": 25039,
+  "usedTokens": 226458,
+  "judge": {
+    "cold": false,
+    "consequences": true,
+    "terminal": true,
+    "links": null,
+    "plain": true,
+    "skim": true,
+    "notes": "The card does not explain why the decision is needed or that the branches are empty, so the user cannot tell the 'Compact' pick would merge nothing yet, and the card's Hold option is not clearly framed as the default outcome."
+  }
+}

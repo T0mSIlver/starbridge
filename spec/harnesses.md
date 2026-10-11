@@ -49,6 +49,13 @@ line, the safe side: at worst a prompt repeats an answer the agent already read.
   and ranks after Codex, Pi and opencode, which sessions start for reviews, and before Claude Code;
   its card title is the one Antigravity generates, read from
   `~/.gemini/<product>/annotations/<id>.pbtxt` (#960).
+- **A Claude Code session's name** (#970, #1181). `ask` sends the name the owner or Claude Desktop
+  gave the session. Claude Code names the rest itself: `<directory>-<hex>` (`nameSource:
+  "derived"`, `bridge-cse-<id>` under Remote Control), which says nothing, and later sometimes the
+  first prompt cut at about 50 characters with "..." (`"auto"`). For those and for an unnamed
+  session, `ask` titles the card with the first sentence of the session's first prompt, cut on a
+  word boundary to 60 characters, read from its transcript past command, system, tool-result,
+  compaction and peer lines. It reads up to that line and sends nothing else from the prompt.
 - **Cursor** (#955) gives its agent's commands `CURSOR_AGENT=1`, so `ask` names the agent
   `cursor`. `cursor-agent` also gives them `CURSOR_CONVERSATION_ID`, the session; the IDE does
   not (2026.10), so a question from an IDE chat names no session. Codex, Pi, opencode and
@@ -77,7 +84,7 @@ line, the safe side: at worst a prompt repeats an answer the agent already read.
   plugin's `Stop` hook stays as the fallback: it hands over answers that came in, and holds the
   end of a turn up to 10 minutes for a question marked waiting that has no route. The token
   stays in the machine's state file, readable by its owner only, like the process it came from.
-- **Pi and opencode** append `plugin/hooks/rule.md` to the system prompt and run the mod's own
+- **Pi and opencode** append their rule (`plugin/rules/pi.md`, `opencode.md`) to the system prompt and run the mod's own
   answer loop (`agent.ts`, `poller.ts`, `switch.ts`). opencode gives commands no session id, so
   its plugin sets `STARBRIDGE_OPENCODE_SESSION` through `shell.env`. After opencode restarts, the
   plugin resumes the loops of sessions still expecting an answer (#398); two processes showing one
@@ -100,18 +107,31 @@ line, the safe side: at worst a prompt repeats an answer the agent already read.
   agent reaches its user: a card for a decision that is
   theirs, a question before ending a turn on work that waits on them, `starbridge run` around commands
   that block them. Everything else the agent decides. It asks in the terminal only when
-  `starbridge` fails (#121). In Claude Code a quick question may use `AskUserQuestion`, since
-  its picker reaches the devices too (#848); a decision read cold, or needing links or images,
-  stays a card (#911). The skill holds its question to the card's rules (#1084): it becomes the
-  title, and with no context field agents put their findings in it, so the hook cut it at 300
-  characters and repeated it in the context. Findings go in the agent's message before the call
-  and in the options' descriptions. Agents still write long ones: of 314 questions on the dev
-  box, 61% passed 70 characters and 12% passed 300. So for a question past 70 characters, from
-  the question tool of any harness, the hook titles the card with its last sentence that asks
-  within 70 characters, and the whole question leads the context, read as written (#1085, Tom's
-  pick). That titled 125 of the 191 long ones. A question with no such sentence stays the title,
-  cut at 300 as before. The hook refuses no question: a refusal also closes the terminal picker
-  and costs the agent a retry.
+  `starbridge` fails (#121). A quick question may use the harness's own ask tool where it races
+  the devices (#848), which the harness's rule names; a decision read cold, or needing links or
+  images, stays a card (#911). That question becomes the card's title, and with no context field
+  agents put their findings in it, so the hook cut it at 300 characters and repeated it in the
+  context (#1084). Agents still write long ones: of 314 questions on the dev box, 61% passed 70
+  characters and 12% passed 300. So for a question past 70 characters, from the question tool of
+  any harness, the hook titles the card with its last sentence that asks within 70 characters,
+  and the whole question leads the context, read as written (#1085, Tom's pick). That titled 125
+  of the 191 long ones. A question with no such sentence stays the title, cut at 300 as before.
+  The hook refuses no question: a refusal also closes the terminal picker and costs the agent a
+  retry. The rule of each harness with an ask tool says to end its question with such a sentence.
+- One skill, a rule per harness (#1063). Every harness reads the same `SKILL.md`, which names no
+  harness: an agent in one never reads another's lines, the eval tests one text, and the file
+  stays plain agentskills.io for any harness that reads it. What differs by harness reaches the
+  agent in one of two places. What it must know before its first call goes in its session-start
+  rule: `plugin/rules/template.md` with only that harness's ask tool (none for Cursor, whose
+  `askQuestion` fires no hooks), rendered by `bun cli/scripts/rules.ts` into the committed `plugin/hooks/rule.md` (Claude Code's plugin) and
+  `plugin/rules/<harness>.md`, which setup, the Pi package and the opencode plugin read; a test
+  checks that they match the template and that none names another harness. The rest comes from
+  the CLI's output when it applies, at no standing cost: `ask` prints how this session gets the
+  answer, Codex's queued prompt names the command that prints it, `ask --answer-in` says to
+  settle when the page answers, and `run` in Codex's sandbox (`CODEX_SANDBOX_NETWORK_DISABLED=1`)
+  starts nothing and says to run it again with escalated permissions, so a command that takes
+  over the screen runs once. Per-harness skills, or reference files per harness, would cost the
+  same or one more read per use, and multiply what the eval must cover.
 - A question answers cold: its options answer it, and its context runs two to five lines, the fact
   that forces the choice, then one line per option saying what it changes. Links and images only
   when they help; one question per card. The first option is
@@ -124,6 +144,10 @@ line, the safe side: at worst a prompt repeats an answer the agent already read.
   nothing (names to pick from), and labels stay within 18 characters, where buttons still sit
   side by side. Plain words and numbers, after Tom's unslop rules. In 225 cards agents posted before this, the context's median was 430 characters and
   one in ten hid its options.
+- A reworded or reposted card withdraws the one it replaces in the same step, and a typed reply
+  that is itself a question gets a new card restating the choice, never one about "the last
+  card": a week's transcripts (2026-10-04 to 10-10) left about 8 superseded cards open, and one
+  question asked 4 times in 7 minutes (#1068).
 - Agents also wrap, unasked, any command that blocks the owner or needs them at the machine, and
   always give a reason (#60).
 - A card cannot approve an action the agent's own guidelines say needs the owner's yes in the
@@ -132,11 +156,11 @@ line, the safe side: at worst a prompt repeats an answer the agent already read.
   (#680).
 - Cursor (#954): a `sessionStart` entry that setup adds to `~/.cursor/hooks.json` runs the same
   script, copied to `~/.cursor/starbridge`, with `cursor`, which prints `{"additional_context":
-  <rule.md>}`; Cursor adds it to the session's context. Setup merges its entries into the
+  <plugin/rules/cursor.md>}`; Cursor adds it to the session's context. Setup merges its entries into the
   owner's file and knows them by that folder in their command; uninstall removes only those. A
   file that does not parse, such as one with comments, is left as it is, and setup prints what to
-  add. The rule's AskUserQuestion line is harmless there: Cursor's `askQuestion` fires no
-  hooks, so `starbridge ask` stays the way to the phone.
+  add. Cursor's rule names no ask tool: its `askQuestion` fires no hooks, so `starbridge ask`
+  stays the way to the phone.
 - `cursor-agent` also runs installed Claude Code plugins' hooks, Starbridge's among them (#958).
   Their input is Cursor's and carries `cursor_version`, which Claude Code never sends, so the
   Claude Code plugin's hooks step aside there and setup's Cursor hooks run: the rule comes once, and

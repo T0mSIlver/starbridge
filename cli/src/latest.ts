@@ -3,7 +3,7 @@
  * once a day and keeps it in `latest.json`; commands a person runs print one line on stderr when
  * it is newer than this binary. Nothing updates by itself: `starbridge update` does.
  */
-import type { LatestRelease } from "./config";
+import { type LatestRelease, StateFileError } from "./config";
 import type { Ctx } from "./context";
 import { compareVersions, type InstallKind } from "./release";
 import { MANAGED } from "./update";
@@ -23,7 +23,8 @@ export function updateCheckOn(ctx: Ctx): boolean {
 
 /**
  * Reads the latest release unless it was read in the last day, and saves it. Any failure leaves
- * `latest.json` as it was, so the next call tries again; it never throws. `signal` ends the
+ * `latest.json` as it was, so the next call tries again; it never throws. An unreadable
+ * `latest.json` is moved aside and read again from GitHub (#1174). `signal` ends the
  * request at once, so a stopping agent never waits on GitHub.
  */
 export async function checkLatest(
@@ -33,7 +34,12 @@ export async function checkLatest(
 ): Promise<LatestRelease | undefined> {
   let saved: LatestRelease | undefined;
   try {
-    saved = ctx.store.latest();
+    try {
+      saved = ctx.store.latest();
+    } catch (e) {
+      if (!(e instanceof StateFileError)) throw e;
+      ctx.store.setLatestAside(now);
+    }
     if (saved && now.getTime() - Date.parse(saved.checkedAt) < CHECK_EVERY_MS) return saved;
     const res = await fetch(ctx.env.STARBRIDGE_LATEST_URL ?? LATEST_URL, {
       headers: {

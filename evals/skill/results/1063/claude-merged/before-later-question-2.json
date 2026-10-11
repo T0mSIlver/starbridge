@@ -1,0 +1,106 @@
+{
+  "agent": "claude",
+  "model": "claude-haiku-5-5",
+  "arm": "before",
+  "scenario": "later-question",
+  "rep": 2,
+  "turns": [
+    {
+      "commands": [
+        "node scripts/lint.js; echo \"exit=$?\"; ls; git status --short",
+        "cat src/upload.js; echo ---; cat scripts/lint.js; echo ---; cat RELEASE.md; echo ---; cat NAMES.md",
+        "node scripts/lint.js; echo \"exit=$?\"",
+        "starbridge ask \\\n  --question 'What name should the Monday release have?' \\\n  --context 'RELEASE.md still says \"Name: TBD\" for the release that ships Monday, Oct 12.' \\\n  --option 'Driftwood' --option 'Lantern' --option 'Juniper'",
+        "starbridge wait d_PPMCr6e7Ul3TA6Zz --timeout 5m --no-mark; echo \"exit=$?\""
+      ],
+      "final": "Lint is clean, and the release is named Driftwood in RELEASE.md.\n\n- **Lint:** `node scripts/lint.js` reported two `var` declarations in `src/upload.js`. I changed both to `const`, since neither is reassigned. It now exits 0.\n- **Release name:** AGENTS.md says the owner names each release, so I asked you through Starbridge rather than picking one. You answered \"Driftwood\", and I set `Name: TBD` to `Name: Driftwood` in RELEASE.md.\n\nNothing is committed. The working tree has the two edits, `RELEASE.md` and `src/upload.js`.\n\nI took \"next week\" to mean the Monday release. Today is Sunday, Oct 11, so that is tomorrow, Oct 12. If you meant a different release, tell me and I'll change it.",
+      "session": "448410ad-0468-4460-b7b9-f847f12685df",
+      "tokens": 173674,
+      "costUsd": 0.005900369999999999,
+      "exit": 0,
+      "seconds": 135.851,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_PPMCr6e7Ul3TA6Zz --timeout 5m` (again on exit 2)."
+      ]
+    },
+    {
+      "commands": [
+        "node scripts/lint.js; echo \"lint exit=$?\"; git status --short; git diff --stat"
+      ],
+      "final": "Lint is clean, and the release is named Driftwood in RELEASE.md.\n\n- **Lint:** `node scripts/lint.js` reported two `var` declarations in `src/upload.js`. I changed both to `const`, since neither is reassigned. It now exits 0.\n- **Release name:** AGENTS.md says the owner names each release, so I asked you through Starbridge rather than picking one. You answered \"Driftwood\", and I set `Name: TBD` to `Name: Driftwood` in RELEASE.md.\n\nNothing is committed. The working tree has the two edits, `RELEASE.md` and `src/upload.js`.\n\nI took \"next week\" to mean the Monday release. Today is Sunday, Oct 11, so that is tomorrow, Oct 12. If you meant a different release, tell me and I'll change it.",
+      "session": "448410ad-0468-4460-b7b9-f847f12685df",
+      "tokens": 173674,
+      "costUsd": 0.005900369999999999,
+      "exit": 0,
+      "seconds": 135.851,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_PPMCr6e7Ul3TA6Zz --timeout 5m` (again on exit 2)."
+      ]
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_PPMCr6e7Ul3TA6Zz",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-11T11:04:10Z",
+      "question": "What name should the Monday release have?",
+      "context": "RELEASE.md still says \"Name: TBD\" for the release that ships Monday, Oct 12.",
+      "options": [
+        "Driftwood",
+        "Lantern",
+        "Juniper"
+      ],
+      "recommended": "Driftwood",
+      "agent": "claude-code",
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "448410ad-0468-4460-b7b9-f847f12685df"
+      },
+      "replies": true,
+      "dir": {
+        "length": 2,
+        "head": "6o20bCfkbW5SoxX9aDBuAB2ABZ3DkgT60uj8OjgAiMc"
+      }
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [],
+  "answered": "Answer to d_PPMCr6e7Ul3TA6Zz (What name should the Monday release have?): Driftwood",
+  "waiting": [],
+  "permissions": [],
+  "settled": [
+    {
+      "v": 1,
+      "id": "s_5OmhR1b5M7emysoL",
+      "itemId": "d_PPMCr6e7Ul3TA6Zz",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-11T11:06:11Z",
+      "outcome": "device",
+      "device": "phone",
+      "choice": "Driftwood",
+      "dir": {
+        "length": 2,
+        "head": "6o20bCfkbW5SoxX9aDBuAB2ABZ3DkgT60uj8OjgAiMc"
+      }
+    }
+  ],
+  "peakContext": 24802,
+  "usedTokens": 173674,
+  "judge": {
+    "cold": false,
+    "consequences": false,
+    "terminal": false,
+    "links": null,
+    "plain": true,
+    "skim": true,
+    "notes": "The card lists three names with no statement of what each choice changes, and the final message reports a choice already applied rather than asking the user a question in the terminal."
+  }
+}

@@ -435,7 +435,7 @@ request without the header, or with one the server cannot read, is served.
 | `GET /auth/app/signed-in?state=<challenge>` | device | `{signedIn}`: true once the app whose challenge this is traded its code for a session of the caller's account (#943); the server keeps each challenge's account 10 minutes, in memory |
 | `POST /auth/owner` | anyone | self-hosted: `{token}` against `OWNER_TOKEN`; sets the session and returns `{session}` |
 | `POST /auth/logout` | device | end the session |
-| `DELETE /account` | device, paired or not | delete the caller's account and everything the server holds for it: directory, members, sessions and revoked ones, machine tokens, items, push subscriptions, joins and pairings; 204. Its waits for answers, quotas, joins and pairing results end at once with 401, and a wait for a pairing request at the end of its wait, and the cookie is cleared. Today's usage events keep their counts under a random subject (#1104) |
+| `DELETE /account` | device, paired or not | delete the caller's account and everything the server holds for it: directory, members, sessions and revoked ones, machine tokens, items, push subscriptions, joins and pairings; 204. Its waits end at once: for answers, quotas and the account's joins with 401, for one join (`GET /joins/:id`) and a pairing result with 404, as the rows are gone; and a wait for a pairing request at the end of its wait, and the cookie is cleared. Today's usage events keep their counts under a random subject (#1104) |
 | `GET /auth/challenge` | device | `{nonce, expiresInSeconds}`: one nonce per session, single use, 5 minutes; asking again returns the outstanding one |
 | `POST /auth/bind` | device | `{member, sig}`: binds the session to that active device when `sig` checks against its signing key; 400 `no-challenge`, 401 `bad-signature`, 404 for no such active device, 409 `already-paired` when the session holds another device |
 | `GET /me` | device, machine | `{account, member, role}`; `member` is null until a device pairs |
@@ -543,7 +543,7 @@ options. For permission answers, see below.
 | `POST /push/subscriptions` | device | `{type: "fcm" \| "webpush" \| "unifiedpush" \| "apns", endpoint, keys?, environment?}` → `{id}`; URL endpoints must be public HTTPS; an `apns` endpoint is the device token in hex, and `environment` (`production` unless set, or `sandbox`) names its APNs environment; 409 `too-many-subscriptions` past 10 per device or 30 per account (re-subscribing a known endpoint always works) |
 | `DELETE /push/subscriptions/:id` | device | stop pushing there |
 | `GET /push/vapid` | anyone | `{publicKey}`: the VAPID key a browser subscribes with (the relay's when this server forwards Web Push) |
-| `POST /relay` | another server | relay mode only: `{type: "fcm" \| "webpush" \| "apns", endpoint, keys?, environment?, payload}` → `{result: "ok" \| "gone" \| "failed" \| "no-route"}`; rate-limited per IP; 503 `busy` with `Retry-After` while the server has 16 relayed Web Pushes in flight, or the address 4 |
+| `POST /relay` | another server | relay mode only: `{type: "fcm" \| "webpush" \| "apns", endpoint, keys?, environment?, payload, thread?}` → `{result: "ok" \| "gone" \| "failed" \| "no-route"}`; rate-limited per IP; 503 `busy` with `Retry-After` while the server has 16 relayed Web Pushes in flight, or the address 4 |
 
 A push payload is JSON text: `{v, kind, id, from, re?, wakeAt?, box?}` for a new item, with the device's
 own box when the payload stays within 3 KB, else without it and the device fetches
@@ -557,7 +557,8 @@ APNs gets it parsed, as the key `p` beside `aps`. A `decision`, `permission`, `w
 and a `snooze` whose `wakeAt` has passed go as alerts: `apns-push-type: alert`, priority 10,
 `aps.mutable-content: 1`, a placeholder `aps.alert` that the notification service extension
 replaces, `aps.category` (`decision`, `permission` or `join`) and `aps.thread-id` (the sending
-machine, or `join`). `apns-collapse-id` is the item id, or for `waiting` and `snooze` the
+machine; for a `snooze`, which a device sends, its question's machine, which a relayed push
+carries as `thread`; or `join`). `apns-collapse-id` is the item id, or for `waiting` and `snooze` the
 decision's (`re`). Everything else, `answered`, `settled` and a `snooze` as it is posted, goes as
 a background push: `apns-push-type: background`, priority 5, `aps.content-available: 1`. Each
 expires after a day. A payload over APNs' 4 KB goes without its box.
@@ -591,7 +592,7 @@ token.
 |---|---|---|
 | `PUT /presence` | device, machine | `{present}`: whether the owner sits at this screen ("Held pushes") → 204 |
 | `GET /settings` | device | the account's settings, `{pushHold}`: seconds a held push waits after the owner left the last screen, 30 unless set; 0 holds nothing, -1 pushes as soon as they leave (#1060); above 60, no longer offered, reads as 60 |
-| `PUT /settings` | device | `{pushHold}`, -1 to 300 → the settings as stored |
+| `PUT /settings` | device | `{pushHold}`, -1 to 300, stored as sent → the settings as `GET` reads them, so above 60 as 60 |
 
 ### Device notifications
 

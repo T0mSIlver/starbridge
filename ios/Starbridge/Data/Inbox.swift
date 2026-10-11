@@ -200,7 +200,10 @@ struct SavedRun: Codable, Equatable {
     /** When its machine last said anything about it. */
     var lastNews: Date { Dates.parse(body.at) ?? .distantPast }
 
-    /** Running with no update for RUN_STALE_MS: its machine is gone. */
+    /** Ended with a non-zero exit code. */
+    var failed: Bool { (body.exit?.code ?? 0) != 0 }
+
+        /** Running with no update for RUN_STALE_MS: its machine is gone. */
     var lost: Bool { body.exit == nil && Date().timeIntervalSince(lastNews) * 1000 > Double(RUN_STALE_MS) }
 }
 
@@ -247,3 +250,17 @@ enum Dates {
         return f.string(from: date)
     }
 }
+
+extension Decision {
+    /**
+     * The options, the agent's default first (spec/items.md, #191). Compared by code points, as
+     * the schema does: Swift's == would equate "é" and "e\u{301}", two options.
+     */
+    var ordered: [String] {
+        guard let r = recommended else { return options }
+        return [r] + options.filter { !sameOption($0, r) }
+    }
+}
+
+/** The same option, by code points, as the schema compares them. */
+func sameOption(_ a: String, _ b: String?) -> Bool { b.map { Array(a.unicodeScalars) == Array($0.unicodeScalars) } ?? false }

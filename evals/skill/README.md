@@ -81,4 +81,7 @@ bun evals/skill/grade.ts --no-judge evals/skill/results/624/claude
 `results/1008` holds `typed-answer`, where the owner answers an open card in the terminal: the
 agent should withdraw it with a short `--reason`.
 
+`results/1063` holds the skill without any harness's lines, each harness's own rule, and the
+CLI's new lines (#1063), on Claude Code and opencode.
+
 `results/964` holds the first Cursor and Antigravity runs (#964).

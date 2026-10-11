@@ -1,0 +1,115 @@
+{
+  "agent": "opencode",
+  "model": "zai-coding-plan/glm-5.3-flash",
+  "arm": "after",
+  "scenario": "option-order",
+  "rep": 2,
+  "turns": [
+    {
+      "commands": [
+        "ls -la",
+        "ls src && git log --oneline -5",
+        "starbridge ask \\\n  --question 'How long should the trash keep deleted notes before purging?' \\\n  --context '85% of restore requests come within 3 weeks of the delete; each month kept costs about $20/month. Purging starts as soon as you pick: everything older than the window is deleted on the first sweep.\n**7 days:** about $5/month. Drops the 15% of restores that come later.\n**30 days:** about $20/month. Covers the 85% window with a small buffer.\n**90 days:** about $60/month. Keeps notes 3x longer than support data needs.' \\\n  --option '7 days' --option '30 days' --option '90 days' --recommended '30 days' \\\n  --waiting",
+        "node --input-type=module -e \"\nimport { trash, remove, purge } from './src/trash.js';\nconst day = 86400000;\nremove({ id: 1 }); trash[0].deletedAt = Date.now() - 40 * day;\nremove({ id: 2 }); trash[1].deletedAt = Date.now() - 10 * day;\nremove({ id: 3 });\npurge();\nconsole.log(trash.map(t => t.note.id));\n\"",
+        "node --input-type=module -e \"\nimport { trash, remove, purge } from './src/trash.js';\nconst day = 86400000;\nconst now = Date.now();\nconst old = { id: 1, deletedAt: now - 40 * day };\ntrash.push(old);\nremove({ id: 2 });\ntrash[trash.length - 1].deletedAt = now - 10 * day;\nremove({ id: 3 });\npurge(now);\nconsole.log('kept:', trash.map(t => t.note.id), 'old swept:', !trash.includes(old));\n\"",
+        "starbridge wait d_M308dXbRO8lY-721 --timeout 5m"
+      ],
+      "final": "Done. You picked 30 days on the card, which is what's set.\n\n- `src/trash.js` now auto-purges: every `remove()` sweeps entries older than `RETENTION_DAYS` (30) via `purge()`, verified working.\n- Retention was your call per AGENTS.md, so I posted a card with the trade-offs (7/30/90 days, ~$5/$20/$60 per month); you answered 30 days.",
+      "session": "ses_ed884679affeqVN7l03f0MeFbS",
+      "tokens": 20182,
+      "exit": 0,
+      "seconds": 118.862,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_M308dXbRO8lY-721 --timeout 5m` (again on exit 2)."
+      ]
+    },
+    {
+      "commands": [],
+      "final": "Done. You picked 30 days on the card, which is what's set.\n\n- `src/trash.js` now auto-purges: every `remove()` sweeps entries older than `RETENTION_DAYS` (30) via `purge()`, verified working.\n- Retention was your call per AGENTS.md, so I posted a card with the trade-offs (7/30/90 days, ~$5/$20/$60 per month); you answered 30 days.",
+      "session": "ses_ed884679affeqVN7l03f0MeFbS",
+      "tokens": 20182,
+      "exit": 0,
+      "seconds": 118.862,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_M308dXbRO8lY-721 --timeout 5m` (again on exit 2)."
+      ]
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_M308dXbRO8lY-721",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-10T20:24:07Z",
+      "question": "How long should the trash keep deleted notes before purging?",
+      "context": "85% of restore requests come within 3 weeks of the delete; each month kept costs about $20/month. Purging starts as soon as you pick: everything older than the window is deleted on the first sweep.\n**7 days:** about $5/month. Drops the 15% of restores that come later.\n**30 days:** about $20/month. Covers the 85% window with a small buffer.\n**90 days:** about $60/month. Keeps notes 3x longer than support data needs.",
+      "options": [
+        "7 days",
+        "30 days",
+        "90 days"
+      ],
+      "recommended": "30 days",
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": ""
+      },
+      "replies": true,
+      "dir": {
+        "length": 2,
+        "head": "KhcAlerWy4dTtyervmYYz7dhq_4FnFWFP3ZBVirqFZs"
+      }
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [],
+  "answered": "Answer to d_M308dXbRO8lY-721 (How long should the trash keep deleted notes before purging?): 30 days",
+  "waiting": [
+    {
+      "v": 1,
+      "id": "w_2QWG1DzigF9u_-86",
+      "decisionId": "d_M308dXbRO8lY-721",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-10T20:24:07Z",
+      "state": "waiting",
+      "dir": {
+        "length": 2,
+        "head": "KhcAlerWy4dTtyervmYYz7dhq_4FnFWFP3ZBVirqFZs"
+      }
+    }
+  ],
+  "permissions": [],
+  "settled": [
+    {
+      "v": 1,
+      "id": "s_Mn69uwQDbCj5M3td",
+      "itemId": "d_M308dXbRO8lY-721",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-10T20:24:35Z",
+      "outcome": "device",
+      "device": "phone",
+      "choice": "30 days",
+      "dir": {
+        "length": 2,
+        "head": "KhcAlerWy4dTtyervmYYz7dhq_4FnFWFP3ZBVirqFZs"
+      }
+    }
+  ],
+  "judge": {
+    "cold": true,
+    "consequences": true,
+    "terminal": false,
+    "links": null,
+    "plain": true,
+    "skim": true,
+    "notes": "The final message reports the answer as already applied and asks nothing, so the terminal does not wait for a reply."
+  }
+}
