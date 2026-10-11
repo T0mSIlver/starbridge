@@ -141,7 +141,8 @@ try {
       .getByRole("button", { name: d.question, exact: true })
       .first()
       .dispatchEvent("click", undefined, { timeout: 30_000 });
-    const pane = page.locator('section[aria-label="Selected decision"]');
+    // The inbox's detail pane, as web/e2e/run.ts finds it (#1311).
+    const pane = page.locator('section[aria-label="Selected"]');
     await (opt.phone ? page.getByRole("heading", { name: d.question }) : pane.getByText(d.question)).waitFor();
     await page.waitForTimeout(300);
     await (opt.phone ? page : pane).screenshot({ path: join(out, `${name}.png`) });
