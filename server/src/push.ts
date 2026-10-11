@@ -182,6 +182,9 @@ export class Push {
   private readonly pending = new Set<Promise<unknown>>();
   private readonly queues = new Map<string, { running: number; waiting: (() => void)[] }>();
   private fcmToken?: { value: string; expires: number };
+  /** The relay's VAPID key, fetched at most once an hour, and the fetch under way. */
+  private relayVapid?: { key: string; expires: number };
+  private relayVapidFetch?: Promise<string | undefined>;
   private readonly apns?: Apns;
 
   /** Called with each push's outcome, for the daily usage counts. */
@@ -367,15 +370,25 @@ export class Push {
     }
   }
 
-  /** The VAPID public key browsers must subscribe with: ours, or the relay's. */
+  /**
+   * The VAPID public key browsers must subscribe with: ours, or the relay's. The relay's is kept
+   * an hour, so page loads don't each make a request to the relay.
+   */
   async vapidPublicKey(): Promise<string | undefined> {
     if (this.config.vapid) return this.config.vapid.publicKey;
-    if (!this.config.relayUrl) return undefined;
-    const res = await this.fetchFn(`${this.config.relayUrl}/v1/push/vapid`, {
-      signal: this.timeout(),
+    const { relayUrl } = this.config;
+    if (!relayUrl) return undefined;
+    if (this.relayVapid && this.relayVapid.expires > Date.now()) return this.relayVapid.key;
+    this.relayVapidFetch ??= (async () => {
+      const res = await this.fetchFn(`${relayUrl}/v1/push/vapid`, { signal: this.timeout() });
+      if (!res.ok) return undefined;
+      const key = ((await res.json()) as { publicKey?: string }).publicKey;
+      if (key) this.relayVapid = { key, expires: Date.now() + 3_600_000 };
+      return key;
+    })().finally(() => {
+      this.relayVapidFetch = undefined;
     });
-    if (!res.ok) return undefined;
-    return ((await res.json()) as { publicKey?: string }).publicKey;
+    return this.relayVapidFetch;
   }
 
   private async viaRelay(

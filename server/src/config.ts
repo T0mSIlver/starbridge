@@ -163,12 +163,24 @@ export function configFromEnv(env: Env = process.env): Config {
     limits: DEFAULT_LIMITS,
     minimumReleases: MINIMUM_RELEASES,
   };
-  if (config.demo) checkDemo(config);
+  if (config.demo) {
+    checkDemo(config);
+    config.maxMachines = DEMO_MACHINES;
+    config.limits = { ...config.limits, pendingPairings: DEMO_PAIRINGS };
+  }
   for (const [name, minimum] of Object.entries(config.minimumReleases))
     if (!isMinimumRelease(minimum))
       throw new Error(`minimum ${name} release: not MAJOR.MINOR.PATCH`);
   return config;
 }
+
+/**
+ * A demo server's caps. Its machine is the demo program's, and reviewers share its account, so
+ * none of them adds one whose items every other reviewer would see. Its database lives in a
+ * 64 MB tmpfs (deploy/demo/compose.yaml), which pairings at about 4 KB each must not fill.
+ */
+export const DEMO_MACHINES = 1;
+export const DEMO_PAIRINGS = 5_000;
 
 /**
  * A demo server approves every join, so it must never be the hosted one: prod sets

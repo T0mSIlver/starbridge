@@ -3,6 +3,7 @@ import { Hono } from "hono";
 import { deleteCookie } from "hono/cookie";
 import { randomToken, requireCaller, SESSION_COOKIE } from "../auth";
 import type { Deps, Env } from "../env";
+import { ipKey, rateLimit } from "../limits";
 import { forgetChallenges } from "./bind";
 
 /**
@@ -87,6 +88,7 @@ export const accountRoutes = new Hono<Env>();
  */
 accountRoutes.delete("/account", requireCaller("device"), (c) => {
   const { account } = c.var.caller;
+  rateLimit(c, `delete-account:${ipKey(c)}`, c.var.config.limits.accountDeletes);
   const waits = deleteAccount(c.var.db, account);
   if (waits) forgetAccount(c.var, account, waits);
   deleteCookie(c, SESSION_COOKIE, { path: "/" });

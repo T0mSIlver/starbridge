@@ -119,6 +119,11 @@ export const DEFAULT_LIMITS = {
    * storage at 256 MB each; a launch's office or carrier NAT signs up a handful an hour (#787).
    */
   signUps: [30, HOUR] as RateWindow,
+  /**
+   * Account deletions per address. A person deletes theirs once; on a server whose accounts
+   * start again at sign-in, as the demo's does, repeated deletions would keep it empty.
+   */
+  accountDeletes: [3, HOUR] as RateWindow,
   /** Owner-token sign-ins per address, so the token cannot be guessed fast. */
   ownerSignIns: [10, MINUTE] as RateWindow,
   /** Sign-in challenges per account, which a device signs to bind a new session. */

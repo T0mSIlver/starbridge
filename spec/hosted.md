@@ -96,4 +96,6 @@
   a starbridge.run `PUBLIC_URL`, GitHub sign-in or relay mode. A restart is a fresh account.
   Every prod deploy rebuilds it from the same commit (#1016): deployed by hand, it once fell behind
   prod and rejected the apps' item kinds, so reviewers saw an empty inbox. It restarts only when its
-  image changed, so a reviewer's account survives deploys that leave its code alone.
+  image changed, so a reviewer's account survives deploys that leave its code alone. Caddy counts
+  its `/v1/*` per address as prod's, and it caps machines at its own and pending pairings at
+  5,000, what its 64 MB tmpfs holds, since reviewers share one account and one container.
