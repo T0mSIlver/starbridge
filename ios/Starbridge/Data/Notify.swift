@@ -97,6 +97,15 @@ enum Notify {
     ]
 
     /**
+     * The server's placeholder, kept when the push could not be read: its text is the server's
+     * own, so it keeps no button that answers a question. A prompt's Allow and Deny stay, since
+     * the app reads the prompt before acting on either: Allow opens it (#356), Deny fetches it.
+     */
+    static func unread(_ placeholder: UNMutableNotificationContent) {
+        if placeholder.categoryIdentifier != "permission" { placeholder.categoryIdentifier = "" }
+    }
+
+    /**
      * Opens a pushed item with this iPhone's keys against its pinned directory. A payload without
      * this iPhone's box, too big for a push, comes from `fetch`; so does the decision a `waiting`
      * or `snooze` item names. Nil keeps the placeholder: an item that fails its checks, a signer
