@@ -153,7 +153,12 @@ function watched(c: Context<Env>, account: string) {
  * What a push carries: the recipient's own box when it fits, else the id to fetch. An item with
  * blobs (a decision's images) goes as its id, so the device fetches the images with it.
  */
-export function pushPayload(item: SealedItem, to: string, limit: number): string {
+export function pushPayload(
+  item: SealedItem,
+  to: string,
+  limit: number,
+  { due = false }: { due?: boolean } = {},
+): string {
   const head = {
     v: 1,
     kind: item.kind,
@@ -161,6 +166,9 @@ export function pushPayload(item: SealedItem, to: string, limit: number): string
     from: item.from,
     ...(item.re ? { re: item.re } : {}),
     ...(item.wakeAt ? { wakeAt: item.wakeAt } : {}),
+    // A snooze is pushed as it is posted and again at its time: `due` tells them apart, where a
+    // device's clock cannot once the first one comes late (#1290).
+    ...(item.kind === "snooze" ? { due } : {}),
   };
   const box = item.boxes.find((b) => b.to === to)?.box;
   const full = JSON.stringify({ ...head, box });

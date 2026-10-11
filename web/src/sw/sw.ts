@@ -31,6 +31,8 @@ type Payload =
       from: string;
       re?: string;
       wakeAt?: string;
+      /** A snooze's: false as it is posted, true at its time; absent from servers before #1290. */
+      due?: boolean;
       box?: string;
     }
   | { v: 1; kind: "answered"; id: string }
@@ -149,7 +151,10 @@ async function onPush(text: string): Promise<void> {
     if (!(await noteSnoozes(ctx, [z]))) return;
     const until = Date.parse(z.until);
     if (until <= Date.parse(z.at)) return; // Back now: the inbox lists it again, quietly.
-    if (Date.now() < until - WAKE_SKEW_MS) {
+    // The server says which push this is; an older one leaves it to this browser's clock, which
+    // takes a first push that comes late for the return (#1290).
+    const due = payload.due ?? Date.now() >= until - WAKE_SKEW_MS;
+    if (!due) {
       for (const n of await self.registration.getNotifications({ tag: tag(z.decisionId) }))
         n.close();
       return;
@@ -199,7 +204,8 @@ async function moot(account: string, id: string): Promise<boolean> {
 /**
  * How far a snooze's time may be ahead of this browser's clock when its second push comes: the
  * server sends it at the time, a little late, by its own clock. A snooze runs at least 5 minutes
- * (lib/snooze.ts), so its first push never passes for its second.
+ * (lib/snooze.ts), so its first push passes for its second only when it comes over 3 minutes
+ * late; servers since #1290 mark which push is which, and this applies only to older ones.
  */
 const WAKE_SKEW_MS = 2 * 60_000;
 

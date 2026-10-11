@@ -545,12 +545,14 @@ options. For permission answers, see below.
 | `GET /push/vapid` | anyone | `{publicKey}`: the VAPID key a browser subscribes with (the relay's when this server forwards Web Push) |
 | `POST /relay` | another server | relay mode only: `{type: "fcm" \| "webpush" \| "apns", endpoint, keys?, environment?, payload, thread?}` → `{result: "ok" \| "gone" \| "failed" \| "no-route"}`; rate-limited per IP; 503 `busy` with `Retry-After` while the server has 16 relayed Web Pushes in flight, or the address 4 |
 
-A push payload is JSON text: `{v, kind, id, from, re?, wakeAt?, box?}` for a new item, with the device's
+A push payload is JSON text: `{v, kind, id, from, re?, wakeAt?, due?, box?}` for a new item, with the device's
 own box when the payload stays within 3 KB, else without it and the device fetches
 `GET /items/:id`; `{v, kind: "answered", id}` to every device a decision or permission was
 sealed to once a device answers it; `{v, kind: "join", id}` to every device when a join is posted.
 A settled notice, a `waiting` item and a `snooze` are pushed as new items; a `snooze` once more
-at its `wakeAt` ("Snoozing"). FCM gets it as data field `p`; Web Push and UnifiedPush
+at its `wakeAt` ("Snoozing"). A `snooze`'s payload has `due`: `false` as it is posted, `true` at its
+`wakeAt`, so a device never takes a first push that comes late for the return (#1290). Servers
+before it send no `due`; a device then compares `wakeAt` with its clock. FCM gets it as data field `p`; Web Push and UnifiedPush
 encrypt it per RFC 8291.
 
 APNs gets it parsed, as the key `p` beside `aps`. A `decision`, `permission`, `waiting`, `join`,

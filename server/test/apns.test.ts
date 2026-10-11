@@ -244,6 +244,13 @@ test("closing and hiding go as background pushes; a waiting flip and a snooze's 
     wakeAt: "2026-10-10T11:59:00Z",
   });
   expect(back.headers).toMatchObject({ "apns-push-type": "alert", "apns-collapse-id": "d1" });
+  // `due` decides over the clock (#1290): a first push sent late still hides, a return shows.
+  const marked = (wakeAt: string, due: boolean) =>
+    req({ kind: "snooze", id: "z1", from: "phone", re: "d1", wakeAt, due }).headers[
+      "apns-push-type"
+    ];
+  expect(marked("2026-10-10T11:59:00Z", false)).toBe("background");
+  expect(marked("2026-10-10T18:00:00Z", true)).toBe("alert");
   const waiting = req({ kind: "waiting", id: "w1", from: "devbox", re: "d1" });
   expect(waiting.headers["apns-collapse-id"]).toBe("d1");
   expect(JSON.parse(waiting.body).aps.category).toBe("decision");

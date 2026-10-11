@@ -128,13 +128,14 @@ async function push(payload: object): Promise<void> {
 }
 
 /** A sealed item's push to this browser, its box inline. */
-const payload = (item: SealedItem) => ({
+const payload = (item: SealedItem, extra: object = {}) => ({
+  ...extra,
   v: 1,
   kind: item.kind,
   id: item.id,
   from: item.from,
   ...(item.re ? { re: item.re } : {}),
-  box: item.boxes[0]?.box,
+  box: item.boxes.find((b) => b.to === ctx.device.id)?.box,
 });
 
 /** Seals a body from the machine to this browser. */
@@ -201,4 +202,36 @@ test("a withheld push closes the question and prompt notifications only (#1281)"
   );
   expect(errors.at(-1)).toContain("holding back changes to your devices");
   expect(notes.map((n) => n.tag)).toEqual(["r:c", "q:claude/5h/low", "j:e"]);
+  // The head it kept would hold back every later push.
+  await store.del("heads", ctx.account);
+});
+
+test("a snooze's first push that comes late hides its question; its return shows it (#1290)", async () => {
+  const d = decision("d_late");
+  live.inject(d);
+  notes = [note("Question d_late", "d:d_late")];
+  // Five minutes from posting, its first push four minutes late: within the clock's 2-minute skew.
+  const now = Date.now();
+  const { id, boxPk } = ctx.device;
+  const z = seal(
+    "snooze",
+    {
+      v: 1,
+      id: "z_late",
+      decisionId: "d_late",
+      to: ["m_devbox", id],
+      until: new Date(now + 60_000).toISOString(),
+      at: new Date(now - 4 * 60_000).toISOString(),
+    },
+    { id: "phone", signKey: live.owner.device.keys.sign.privateKey },
+    [
+      { id: "m_devbox", boxPk: publicKeys(mKeys).boxPk },
+      { id, boxPk },
+    ],
+  );
+  const item = { ...z, re: "d_late", wakeAt: new Date(now + 60_000).toISOString() };
+  await push(payload(item, { wakeAt: item.wakeAt, due: false }));
+  expect(notes).toEqual([]);
+  await push(payload(item, { wakeAt: item.wakeAt, due: true }));
+  expect(notes.map((n) => n.tag)).toEqual(["d:d_late"]);
 });

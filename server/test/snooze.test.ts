@@ -126,7 +126,13 @@ test("a snooze reaches every device and the machine, and leaves its decision ope
   // The other device hears of it at once, with its wakeAt; no "answered" push.
   expect(sent).toHaveLength(1);
   expect(sent[0]?.to).toEqual([web.id]);
-  expect(sent[0]?.payload).toMatchObject({ kind: "snooze", id: z.id, re: d.id, wakeAt: z.wakeAt });
+  expect(sent[0]?.payload).toMatchObject({
+    kind: "snooze",
+    id: z.id,
+    re: d.id,
+    wakeAt: z.wakeAt,
+    due: false,
+  });
   expect((await list(web, "kind=snooze")).map((x) => x.item)).toEqual([
     { ...z, boxes: z.boxes.filter((b) => b.to === web.id) },
   ]);
@@ -190,8 +196,9 @@ test("at its time a snooze is pushed to every device once", async () => {
   wake(1);
   expect(sent).toEqual([]);
   wake(2);
-  expect(sent.map((p) => [p.to, p.payload.kind, p.payload.wakeAt])).toEqual([
-    [[phone.id, web.id], "snooze", z.wakeAt],
+  // Marked as its return, which a device's clock alone cannot tell from a late first push (#1290).
+  expect(sent.map((p) => [p.to, p.payload.kind, p.payload.wakeAt, p.payload.due])).toEqual([
+    [[phone.id, web.id], "snooze", z.wakeAt, true],
   ]);
   wake(3);
   expect(sent).toHaveLength(1);
