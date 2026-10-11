@@ -49,6 +49,19 @@ enum Notify {
         }
     }
 
+    /**
+     * Whether a background push closes its item's notification: an answer from anywhere, a
+     * settled notice, or a snooze as it is posted. A snooze's first push that comes after its
+     * time, the server's `due` false, leaves it: its return showed the question or will (#1320).
+     */
+    static func closes(_ p: JSON, now: Date = Date()) -> Bool {
+        switch p["kind"]?.string {
+        case "answered", "settled": true
+        case "snooze": !(p["due"]?.bool == false && (p["wakeAt"]?.string.flatMap(Dates.parse).map { $0 <= now } ?? false))
+        default: false
+        }
+    }
+
     /** The category of a question's own buttons. */
     static func category(_ decision: String) -> String { "d." + decision }
 

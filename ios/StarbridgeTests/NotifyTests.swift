@@ -133,4 +133,20 @@ final class NotifyTests: XCTestCase {
         let unopened = await Notify.shown(f.payload(try f.decision("d_y")), saved: f.saved, secrets: noKeys) { _ in nil }
         XCTAssertNil(unopened)
     }
+
+    /** Push services keep no order: a snooze's first push after its return leaves the question up (#1320). */
+    func testASnoozesFirstPushAfterItsTimeLeavesItsNotification() throws {
+        let now = Date()
+        func snooze(due: Bool?, wakeAt: Date) throws -> JSON {
+            var p: JSONObject = ["v": 1, "kind": "snooze", "id": "z_1", "from": "d_phone", "re": "d_1", "wakeAt": .string(Dates.format(wakeAt))]
+            if let due { p["due"] = .bool(due) }
+            return .object(p)
+        }
+        XCTAssertTrue(Notify.closes(try snooze(due: false, wakeAt: now.addingTimeInterval(300)), now: now))
+        XCTAssertFalse(Notify.closes(try snooze(due: false, wakeAt: now.addingTimeInterval(-60)), now: now))
+        // A server before #1290 sends no `due`: every snooze closes, as before.
+        XCTAssertTrue(Notify.closes(try snooze(due: nil, wakeAt: now.addingTimeInterval(-60)), now: now))
+        XCTAssertTrue(Notify.closes(.object(["v": 1, "kind": "answered", "id": "d_1"]), now: now))
+        XCTAssertFalse(Notify.closes(.object(["v": 1, "kind": "quota", "id": "q_1"]), now: now))
+    }
 }
