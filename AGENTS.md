@@ -42,6 +42,8 @@ command and its local agent), `plugin` and
   needs goes in its own small PR first.
 - Fill the PR's "Release notes" section: one `Product: line` per product a user sees change
   (Android, Web, Desktop, CLI, Server, Docs), or `None`. The release groups them by product.
+- Merge `main` into your branch only when it conflicts or you need a fix from `main`. Every
+  push reruns the whole CI, and a PR merges without being up to date.
 - Before a PR is ready, run the checks in
   [CONTRIBUTING.md, "Develop"](CONTRIBUTING.md#develop).
 - A Settings row you add or rename follows DESIGN.md's rule on Settings
@@ -52,6 +54,19 @@ command and its local agent), `plugin` and
   supersedes. A feature added to or changed in one client updates its row in
   `spec/parity.md`, and the PR opens an issue for each client the row says
   should follow.
+
+## CI runners
+
+A Linux job on the self-hosted boxes takes its `runs-on` from a repository
+variable, a JSON array of labels, with GitHub's runner as the fallback:
+`TRUSTED_RUNNER` for pushes to main, deploys and releases, `PR_LIGHT_RUNNER`,
+`PR_HEAVY_RUNNER` and `PR_DOCKER_RUNNER` for pull requests from this
+repository's branches. Never send a pull request job to `TRUSTED_RUNNER` or
+`ANDROID_RUNNER`, and never name a runner label in a workflow directly.
+Windows, macOS, KVM and Electron jobs stay on GitHub's runners. A job must not
+rely on an earlier one's files, and must run beside another on one box: no
+fixed host port, unique container, Compose project and image names.
+[docs/ci.md](docs/ci.md) has the boxes and how to debug them.
 
 ## Personal setup
 

@@ -39,7 +39,7 @@ export function testConfig(over: Partial<Config> = {}): Config {
     maxMachines: 5,
     maxWaitSeconds: 300,
     pushInlineLimit: 3072,
-    allowPrivatePushEndpoints: true,
+    privatePushHosts: "any",
     pushTimeoutMs: 2000,
     relayMode: false,
     demo: false,

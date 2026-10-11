@@ -20,8 +20,11 @@ export function desktopState(
     const item = e.item as InboxItem;
     const waiting = !!item.waitingSince;
     const d = item.decision;
+    // Its snooze is over (#571, #1229); a waiting agent says more, and a later flip to waiting
+    // shows again, so that line wins.
+    const back = !waiting && !!item.snoozedUntil && Date.parse(item.snoozedUntil) <= now;
     // A question answered on another page opens the window, where its link is.
-    const note = questionNote(item, { waiting });
+    const note = questionNote(item, { waiting, back });
     return {
       id: e.id,
       ...note,

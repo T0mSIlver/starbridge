@@ -1530,7 +1530,8 @@ class ServerStore(
     }
 
     /** For the notification's buttons: holds the lock like any other change. */
-    suspend fun sendFromNotification(id: String, choice: String?, text: String?) = lock.withLock { send(id, choice, text) }
+    /** A reply typed into a notification is cut as the in-app field cuts it (#1205). */
+    suspend fun sendFromNotification(id: String, choice: String?, text: String?) = lock.withLock { send(id, choice, text?.takeCodePoints(4000)) }
 
     /** The answer waiting to be sent for decision [id], if any. */
     fun queued(id: String): String? = saved.outbox.find { it.decisionId == id }?.answer

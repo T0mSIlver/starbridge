@@ -16,7 +16,7 @@ pushRoutes.post("/push/subscriptions", requireCaller("paired-device"), async (c)
   rateLimit(c, `push-sub:${c.var.caller.account}`, c.var.config.limits.pushSubscribes);
   const target = await json(c, PushTarget);
   recheck(c);
-  const why = checkTarget(target, c.var.config.allowPrivatePushEndpoints);
+  const why = checkTarget(target, c.var.config.privatePushHosts);
   if (why) fail(400, "bad-endpoint", why);
   const caller = c.var.caller;
   const member = memberOf(caller);
@@ -93,7 +93,7 @@ pushRoutes.post("/relay", async (c) => {
   );
   if (body.type === "unifiedpush")
     fail(400, "bad-request", "UnifiedPush goes direct, not through the relay");
-  const why = checkTarget(body, config.allowPrivatePushEndpoints);
+  const why = checkTarget(body, config.privatePushHosts);
   if (why) fail(400, "bad-endpoint", why);
   const { payload, thread, ...target } = body;
   // A Web Push goes to whatever host the caller names, which may hold it for pushTimeoutMs; FCM

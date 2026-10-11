@@ -198,12 +198,14 @@ export async function setup(sys: Sys, opts: SetupOpts): Promise<number> {
     ));
   // The later steps need the server and the pairing, so setup checks both first (#774).
   let again = false;
+  let gone: string | undefined;
   if (machine && !switching) {
     section(ctx, "Pairing");
     const pairing = await checkPairing(ctx);
     if (pairing === "paired") ctx.out(`✓ Paired as ${machine.name} on ${host(machine.server)}`);
     else if (pairing === "removed") {
-      ctx.out(`✗ ${host(machine.server)} no longer lists ${machine.name}`);
+      gone = `✗ ${host(machine.server)} no longer lists ${machine.name}`;
+      ctx.out(gone);
       again = await prompt.confirm("  Pair this machine again?", true);
       if (!again) {
         ctx.out("  To pair it again later:");
@@ -229,6 +231,8 @@ export async function setup(sys: Sys, opts: SetupOpts): Promise<number> {
       ...(opts.name ? { name: opts.name } : {}),
     });
     if (code !== 0) return code;
+    // Paired again in the same run: that step recovered, and the summary counts no failure (#1327).
+    if (gone && failed.includes(gone)) failed.splice(failed.indexOf(gone), 1);
     if (switching && machine)
       ctx.out(
         `  ${host(machine.server)} still lists ${machine.name}: revoke it under Devices there.`,
