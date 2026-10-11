@@ -58,7 +58,8 @@ Besides the web app's trust in its server:
 
 ## Formats
 
-- Binary values are base64url without padding. Times are ISO 8601 with seconds and an offset
+- Binary values are base64url without padding. Public keys, hashes and MACs are 32 bytes (43
+  characters), signatures 64 (86); any other length is `bad-schema` (#1283). Times are ISO 8601 with seconds and an offset
   (`Z` or `±HH:MM`, hours to 23) on a real date. A string's length limit counts code points, as
   zod does, not UTF-16 units: an emoji is one (#1082).
 - **Signed envelope** `{v, kind, signer, body, sig}`: `body` is JSON text kept exactly as signed;
@@ -786,9 +787,11 @@ first answer wins.
   "withdrawn", device?, behavior?: "allow" | "deny", choice?, text?, reason?}` closes any item its machine
   posted, a permission or a decision. For a permission, `keyboard` covers any answer outside
   Starbridge (terminal, Desktop, the Claude app) and `device` names the device whose answer the
-  machine applied, with `behavior` saying whether it allowed or denied. For a decision,
+  machine applied, with `behavior` saying whether it allowed or denied; `behavior` comes with no
+  other outcome. For a decision,
   `elsewhere` means it was answered outside Starbridge and `withdrawn` that the agent no longer
-  needs it, with the agent's `reason` why: one line of at most 120 characters; `device`, posted once the machine accepts a device's answer, names that device and
+  needs it, with the agent's `reason` why: one line of at most 120 characters, under no other
+  outcome (#1284); `device`, posted once the machine accepts a device's answer, names that device and
   repeats its `choice` or `text`, neither for a Done. An answer is sealed only to the machine, so this notice is how
   the other devices learn which answer won, for instance when two answered at once. Devices
   show it after the decision is answered, whenever it arrives; clients that predate the two

@@ -254,7 +254,14 @@ test("each step refuses the wrong caller or the wrong order", async () => {
     commitment: joinCommitment(j.eph.publicKey, j.request),
   });
   const approval = joinApproval(
-    { v: 1, join: j.id, account: acct.id, length: 2, head: "AAAA", approver: acct.device.id },
+    {
+      v: 1,
+      join: j.id,
+      account: acct.id,
+      length: 2,
+      head: "A".repeat(43),
+      approver: acct.device.id,
+    },
     theirs,
   );
   r = await s.call("POST", `/v1/joins/${j.id}/approve`, { token: phone(acct), body: { approval } });

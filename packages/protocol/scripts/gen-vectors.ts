@@ -65,6 +65,12 @@ import {
 import { concat, fromB64, sodium, utf8 } from "../src/sodium";
 
 const seed = (n: number) => new Uint8Array(32).fill(n);
+/** A pairing message MAC'd as `kind` under `key` without checking its body, as a forger would. */
+const macUnchecked = (kind: string, body: object, key: Uint8Array) => {
+  const text = JSON.stringify(body);
+  const message = concat(utf8(`starbridge/v1/${kind}`), new Uint8Array([0]), utf8(text));
+  return { body: text, mac: toB64(sodium.crypto_auth(message, key)) };
+};
 const ACCOUNT = "acct_tom";
 /** A recovery seed is 16 bytes. */
 const recoverySeedOf = (n: number) => new Uint8Array(16).fill(n);
@@ -458,6 +464,34 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
           ...chain.slice(0, -1),
           { ...chain[chain.length - 1], recoverySig: null } as unknown as SignedEnvelope,
         ],
+        expect: { error: "bad-schema" },
+      },
+      {
+        // Keys and signatures have their algorithms' lengths, so a malformed key never joins (#1283).
+        name: "member with a short box key",
+        entries: [
+          ...chain,
+          signRaw(
+            nextBody(next, {
+              op: "add",
+              member: {
+                ...evilMachine.member,
+                id: "phone3",
+                role: "device",
+                boxPk: "A".repeat(42),
+              },
+            }),
+            "phone",
+            phone.keys.sign.privateKey,
+          ),
+        ],
+        expect: { error: "bad-schema" },
+      },
+      {
+        name: "entry with a short signature",
+        entries: chain.map((e, i) =>
+          i === chain.length - 1 ? { ...e, sig: e.sig.slice(0, 85) } : e,
+        ),
         expect: { error: "bad-schema" },
       },
     ];
@@ -1303,6 +1337,24 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
         code: formatPairingCode(code),
         expect: "bad-mac",
       },
+      {
+        name: "request with a short signing key",
+        kind: "request",
+        message: macUnchecked(
+          "pairing-request",
+          { ...requestBody, signPk: requestBody.signPk.slice(0, 42) },
+          pairingKey(code),
+        ),
+        code: formatPairingCode(code),
+        expect: "bad-schema",
+      },
+      {
+        name: "request with a long MAC",
+        kind: "request",
+        message: { ...request, mac: `${request.mac}AA` },
+        code: formatPairingCode(code),
+        expect: "bad-schema",
+      },
     ],
   };
 
@@ -1433,6 +1485,16 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
         side: "approval",
         message: joinApproval({ ...joinApprovalBody, join: "ZZZZZZZZ" }, approverSide),
         expect: "id-mismatch",
+      },
+      {
+        name: "approval with a short head",
+        side: "approval",
+        message: macUnchecked(
+          "join-approval",
+          { ...joinApprovalBody, head: full.head.slice(0, 42) },
+          approverSide.mac,
+        ),
+        expect: "bad-schema",
       },
     ],
   };
@@ -2030,6 +2092,11 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
         valid: false,
       },
       { name: "unknown scope", body: { ...permissionAnswerBody, scope: "user" }, valid: false },
+      {
+        name: "a short input hash",
+        body: { ...permissionAnswerBody, inputHash: permissionAnswerBody.inputHash.slice(0, 42) },
+        valid: false,
+      },
       ...withHead(permissionAnswerBody),
     ],
     settled: [
@@ -2044,6 +2111,17 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
       {
         name: "a behavior that is neither allow nor deny",
         body: { ...settledBody, behavior: "ask" },
+        valid: false,
+      },
+      // behavior comes only with a device's outcome, reason only with withdrawn (#1284).
+      {
+        name: "a behavior at the keyboard",
+        body: { ...settledBody, outcome: "keyboard", device: undefined, behavior: "allow" },
+        valid: false,
+      },
+      {
+        name: "a reason on a device's outcome",
+        body: { ...settledBody, reason: "Fixed it myself after rereading the logs" },
         valid: false,
       },
       {
