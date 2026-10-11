@@ -655,6 +655,7 @@ server whose disk is full answers writes 503 `storage-full` with `Retry-After`; 
 | `PUT /presence` | 10 a minute per device or machine |
 | `PUT /release` | 30 an hour per machine |
 | `PUT /settings` | 30 a minute per account |
+| `PUT /notifications` | 30 a minute per device |
 | `POST /push/subscriptions` | 30 a minute per account, on top of the subscription caps |
 | `POST /relay`, on a relay server | 120 a minute per address |
 
