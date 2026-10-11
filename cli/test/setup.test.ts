@@ -833,7 +833,8 @@ test("Ctrl-C at the test decision withdraws it from the devices (#613)", async (
     prompt: { ...m.sys.prompt, confirm: async (q) => q.trim().startsWith("Send a test decision") },
   };
   const done = setup(sys, { noQuota: true, noAgents: true, noService: true });
-  await until(async () => (await server.opened("decision")).length === 1);
+  // Sent, and waiting for its answer: a Ctrl-C while it is still being sent is ask's to withdraw.
+  await until(async () => (await server.opened("waiting")).length === 1);
   stop.abort();
   expect(await done).toBe(0);
   expect(m.ctx.lines).toContain("– Skipped");
