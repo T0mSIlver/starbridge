@@ -1308,6 +1308,24 @@ test("on macOS, setup loads a launchd agent that runs the agent, and uninstall u
   expect(existsSync(path)).toBe(false);
 });
 
+test.each([
+  ["waits until bootout has removed the job", { FAKE_LAUNCHD_LINGER: "2" }],
+  ["tries again when launchd refuses a bootstrap with error 5", { FAKE_LAUNCHD_REFUSE: "1" }],
+])("on macOS, setup's restart of the agent %s (#1326)", async (_, env) => {
+  const m = await machine();
+  await startAgent(m.ctx);
+  const sys: Sys = { ...m.sys, platform: "darwin", arch: "arm64", uid: 501 };
+  // The plist exists but an older setup wrote it: setup restarts the job.
+  const path = join(m.home, "Library/LaunchAgents/run.starbridge.agent.plist");
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, "<!-- Written by starbridge 0.0.1; -->");
+  Object.assign(m.ctx.env, env);
+  expect(await setup(sys, { yes: true, readyTimeoutMs: 2_000 })).toBe(0);
+  expect(m.ctx.lines.join("\n")).not.toContain("Could not start the service");
+  const lc = m.calls().filter((c) => c.startsWith("launchctl"));
+  expect(lc.at(-1)).toBe(`launchctl bootstrap gui/501 ${path}`);
+});
+
 // The real launchd, on GitHub's macOS runners only: its label is the one an installed agent uses.
 test.if(process.platform === "darwin" && process.env.RUNNER_ENVIRONMENT === "github-hosted")(
   "on a Mac, launchd starts the agent from the plist setup writes, and stops it",
