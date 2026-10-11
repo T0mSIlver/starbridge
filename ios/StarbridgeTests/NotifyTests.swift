@@ -144,6 +144,8 @@ final class NotifyTests: XCTestCase {
         }
         XCTAssertTrue(Notify.closes(try snooze(due: false, wakeAt: now.addingTimeInterval(300)), now: now))
         XCTAssertFalse(Notify.closes(try snooze(due: false, wakeAt: now.addingTimeInterval(-60)), now: now))
+        // Its return may already show, by a server clock a minute ahead.
+        XCTAssertFalse(Notify.closes(try snooze(due: false, wakeAt: now.addingTimeInterval(60)), now: now))
         // A server before #1290 sends no `due`: every snooze closes, as before.
         XCTAssertTrue(Notify.closes(try snooze(due: nil, wakeAt: now.addingTimeInterval(-60)), now: now))
         XCTAssertTrue(Notify.closes(.object(["v": 1, "kind": "answered", "id": "d_1"]), now: now))

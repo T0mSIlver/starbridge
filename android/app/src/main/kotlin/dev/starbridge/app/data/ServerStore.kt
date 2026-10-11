@@ -1675,8 +1675,9 @@ class ServerStore(
                 // first push that comes late for the return (#1320).
                 val due = p["due"]?.jsonPrimitive?.booleanOrNull ?: !Instant.now().isBefore(until.minus(WAKE_SKEW))
                 if (!due) {
-                    // Once its time has passed, its return showed the question or will.
-                    if (Instant.now().isBefore(until)) alerts.cancel(body.decisionId)
+                    // Near or past its time, its return showed the question or will, maybe by a
+                    // server clock ahead of this one: cancelling would hide it.
+                    if (Instant.now().isBefore(until.minus(WAKE_SKEW))) alerts.cancel(body.decisionId)
                 } else if (updated.answeredAt == null && updated.answer == null) alerts.back(toUi(updated))
             }
             "quota" -> syncQuotas()

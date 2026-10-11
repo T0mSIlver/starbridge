@@ -212,21 +212,23 @@ class SnoozeTest {
         val store = store()
         val now = Instant.now()
         // A 5-minute snooze whose first push comes 4 minutes late, within the clock's 2-minute
-        // skew: still hidden (#1320).
+        // skew: no "Back from snooze" yet (#1320).
         runBlocking { store.onPush(push("z_1", now.plusSeconds(60), now.minus(Duration.ofMinutes(4)), due = false)) }
-        assertEquals(listOf("cancel d_1"), alerted)
+        assertEquals(emptyList<String>(), alerted)
         // Its return, marked, notifies even on a clock that runs behind.
         runBlocking { store.onPush(push("z_1", now.plus(Duration.ofMinutes(5)), now.minus(Duration.ofMinutes(4)), due = true)) }
-        assertEquals(listOf("cancel d_1", "back d_1"), alerted)
+        assertEquals(listOf("back d_1"), alerted)
     }
 
     @Test
     fun aFirstPushAfterItsTimeLeavesTheQuestionAlone() {
         val store = store()
         val now = Instant.now()
-        // Push services keep no order: the return already showed the question.
-        runBlocking { store.onPush(push("z_1", now.minusSeconds(60), now.minus(Duration.ofMinutes(6)), due = false)) }
-        assertEquals(emptyList<String>(), alerted)
+        // Push services keep no order: the return already showed the question, by a server clock
+        // a minute ahead of this one.
+        runBlocking { store.onPush(push("z_1", now.plusSeconds(60), now.minus(Duration.ofMinutes(5)), due = true)) }
+        runBlocking { store.onPush(push("z_1", now.plusSeconds(60), now.minus(Duration.ofMinutes(5)), due = false)) }
+        assertEquals(listOf("back d_1"), alerted)
     }
 
     @Test
