@@ -82,8 +82,11 @@ line, the safe side: at worst a prompt repeats an answer the agent already read.
   hold a turn's end, keeping the session busy. So `ask` promises a prompt only when the agent
   reaches that server, never in `agy -p`, which it tells by its parent process's arguments. The
   plugin's `Stop` hook stays as the fallback: it hands over answers that came in, and holds the
-  end of a turn up to 10 minutes for a question marked waiting that has no route. The token
-  stays in the machine's state file, readable by its owner only, like the process it came from.
+  end of a turn up to 10 minutes for a question marked waiting that has no route. While the agent
+  runs, it leaves out an answer the agent sends through the language server, until the agent
+  gives up on it, or the answer would arrive twice (#1278); and it marks answers taken only once
+  it printed them, so a hook cut short loses none (#1287). The token stays in the machine's state
+  file, readable by its owner only, like the process it came from.
 - **Pi and opencode** append their rule (`plugin/rules/pi.md`, `opencode.md`) to the system prompt and run the mod's own
   answer loop (`agent.ts`, `poller.ts`, `switch.ts`). opencode gives commands no session id, so
   its plugin sets `STARBRIDGE_OPENCODE_SESSION` through `shell.env`. After opencode restarts, the
