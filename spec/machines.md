@@ -152,7 +152,9 @@
   replaces it when it differs from this release's, uninstall removes it, and any other file at
   those paths is left alone, even a skill named `starbridge`, which another skill manager may have
   installed (#538). An owner who
-  deletes the line keeps the file. `starbridge update` runs the new binary's `setup --refresh`,
+  deletes the line keeps the file. Setup and uninstall remove only the files they write, then a
+  folder left empty: a file the owner put beside them, such as a skill's `references/`, stays,
+  and uninstall says so (#1324). `starbridge update` runs the new binary's `setup --refresh`,
   which rewrites the marked files that differ and restarts the local agent; Homebrew and npm users
   run it after upgrading, and the local agent refreshes the skills and rule when it starts.
 - **Allow rules** (#245, #322, #443, #488). So a new user's first question needs no prompt and no

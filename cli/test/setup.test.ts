@@ -1428,12 +1428,13 @@ test("Antigravity gets the plugin with the rule, the skill and the allow hook (#
     "command(starbridge hello)",
   ]);
 
-  // An older release's plugin is brought up to date, its stray files gone.
+  // An older release's plugin is brought up to date; a file the owner put there stays (#1324).
   writeFileSync(join(dir, "rules/starbridge.md"), "---\n# Written by starbridge 0.0.1\n---\nold\n");
-  writeFileSync(join(dir, "old.sh"), "");
+  writeFileSync(join(dir, "mine.sh"), "");
   expect(await refresh(m.sys)).toContain(`Updated ${dir}.`);
   expect(antigravityState(m.sys)).toBe("current");
-  expect(existsSync(join(dir, "old.sh"))).toBe(false);
+  expect(existsSync(join(dir, "mine.sh"))).toBe(true);
+  rmSync(join(dir, "mine.sh"));
 
   expect(await uninstallAgent(m.sys, "antigravity")).toBe(0);
   expect(existsSync(dir)).toBe(false);
