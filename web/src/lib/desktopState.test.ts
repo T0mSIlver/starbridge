@@ -90,3 +90,14 @@ test("a question answered on another page has no buttons: a click opens the wind
   ).entries;
   expect(e).toMatchObject({ options: [], reply: false });
 });
+
+test("past the app's 200, the most urgent 200 go, with the full count", () => {
+  const inbox = Array.from({ length: 250 }, (_, i) =>
+    question(`d${i}`, {}, i < 10 ? { waitingSince: "2026-10-08T11:10:00Z" } : {}),
+  );
+  const s = desktopState(inbox, [prompt], NOW);
+  expect(s.count).toBe(251);
+  expect(s.waiting).toBe(11);
+  expect(s.entries).toHaveLength(200);
+  expect(s.entries[0]?.id).toBe("p1");
+});
