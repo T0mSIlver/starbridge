@@ -108,19 +108,24 @@ jobs:
               - '!evals/**'
               - '!docs/**'
               - '!**/*.md'
-            # The CLI's suite reads the plugin and mod and runs the server, never web or the apps.
+            # The CLI's suite reads the plugin and mod and runs the server, never web, the apps or
+            # spec/. Its macOS job waits for GitHub's scarcest runner, so it skips what it cannot read.
             cli:
               - '**'
               - '!android/**'
               - '!desktop/**'
+              - '!ios/**'
               - '!web/**'
               - '!evals/**'
               - '!docs/**'
+              - '!spec/**'
               - '!deploy/**'
               - '!demo/**'
               - '!*.md'
               - '!.github/workflows/android.yml'
               - '!.github/workflows/desktop.yml'
+              - '!.github/workflows/ios.yml'
+              - '!.github/workflows/codeql*.yml'
             images:
               - '**/Dockerfile'
               - '**/*.Dockerfile'
