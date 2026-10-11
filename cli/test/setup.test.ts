@@ -637,6 +637,19 @@ test("Cursor: setup keeps the owner's config and skill, and refresh updates its 
   expect(readFileSync(config, "utf8")).toBe("{ // mine\n}");
 });
 
+test("a Claude Code settings file that is JSON but no object is left as it is, with what to add (#1335)", async () => {
+  const m = await machine();
+  for (const text of ["[]", "null", '"opus"']) {
+    writeFileSync(m.settings, text);
+    m.ctx.lines.length = 0;
+    expect(await setup(m.sys, { agent: "claude" })).toBe(0);
+    const out = m.ctx.lines.join("\n");
+    expect(out).not.toContain("starbridge commands allowed");
+    expect(out).toContain(`${m.settings} is not valid JSON: add Bash(starbridge ask:*)`);
+    expect(readFileSync(m.settings, "utf8")).toBe(text);
+  }
+});
+
 test("status names the Claude Code session it runs in when that session's mod never called (#863)", async () => {
   const m = await machine();
   await startAgent(m.ctx);
