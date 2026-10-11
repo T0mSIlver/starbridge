@@ -120,16 +120,19 @@ function markConversation(ctx: Ctx, id: string) {
 
 /**
  * Whether conversation `id` still has to run `starbridge hello` for its prompts to go out: prompts
- * on, a local agent to take the key, and no command of it registered yet.
+ * on, a local agent to take the key, and no command of it registered yet. Prompts off and no agent
+ * are often passing (the agent starts after Antigravity at login, the owner turns prompts on
+ * later), so they leave the conversation unmarked, to be asked again next time (#1336).
  */
 function needsHello(ctx: Ctx, id: unknown): boolean {
   if (typeof id !== "string" || !/^[\w-]+$/.test(id)) return false;
   if (existsSync(join(ctx.store.dir, "antigravity", id))) return false;
   // `agy -p` registers no route, so a hello there would only fail.
-  if (permissionsEnabled(ctx) && existsSync(socketPath(ctx.env, ctx.store.dir)) && !agyHeadless())
-    return true;
-  markConversation(ctx, id);
-  return false;
+  if (agyHeadless()) {
+    markConversation(ctx, id);
+    return false;
+  }
+  return permissionsEnabled(ctx) && existsSync(socketPath(ctx.env, ctx.store.dir));
 }
 
 /** What the agent is told, at the start of a turn, until the conversation registered. */

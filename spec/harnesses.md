@@ -289,7 +289,9 @@ the Cursor IDE, which this machine does not run.
   to run `starbridge hello`, and its `PreToolUse` denies the first other command once with the
   same words, which a model that passed over the first has to read (#962; the owner chose this
   over waiting for the session's first `ask`). One extra command per conversation; with no local
-  agent, or prompts off, neither happens. The app and the IDE are untested.
+  agent, or prompts off, neither happens, and the next turn asks again, since both pass: the
+  agent may start after Antigravity at login, or the owner turn prompts on later (#1336). The app
+  and the IDE are untested.
 - **A stalled server never holds a prompt** (#260): deadlines and SIGTERM cut every request the
   hook makes. When a hook dies mid-hold, the local agent settles its prompt as answered at the keyboard
   (#400).
