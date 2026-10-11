@@ -43,7 +43,7 @@ export const register: Register = (on) => {
       let r: Awaited<ReturnType<typeof $.http.fetch>>;
       if (isPortFile(socket)) {
         // Read each call: the agent writes a new port and token each time it starts.
-        const t = portTarget((await $.fs.read(socket)).text);
+        const t = portTarget(await $.fs.read(socket));
         const runs =
           t &&
           (await pidRuns(t.pid, env.OS === "Windows_NT", (argv) =>

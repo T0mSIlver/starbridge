@@ -219,9 +219,8 @@ can check that no session already asked what it is about to ask.
 
 ### Runs
 
-`starbridge run` wraps a command you want to follow: a build, a release, an eval, heavy work on
-your machine, or a test that takes over the screen or keyboard. Your devices show its title, its
-reason, the time elapsed and its progress, then pass or fail:
+`starbridge run` wraps a command that blocks you or needs you at the machine, and reports it to
+your devices ([Runs](../docs/index.md#runs) says what they show and how progress is read):
 
 ```bash
 starbridge run --title "Release 1.4" \
@@ -230,13 +229,8 @@ starbridge run --title "Release 1.4" \
 ```
 
 The output passes through unchanged, and `run` exits with the command's code, or 128 + n when
-signal n ended it. Progress comes from what the output prints: an OSC 9;4 sequence, `[3/7]` or
-`42%`. The output goes through a pipe, so tools that print progress only to a terminal show none.
-If the machine is not paired or the server is down, `run` warns once and runs the command anyway.
-
-The Starbridge skill has agents wrap, unasked, any command that blocks you or needs you at the machine. To hear about
-other commands, such as local inference, say so in their instruction files
-([Agent instructions](../docs/tell-your-agents.md)).
+signal n ended it. If the machine is not paired or the server is down, `run` warns once and runs
+the command anyway.
 
 ### Quotas
 
