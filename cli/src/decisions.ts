@@ -9,13 +9,16 @@ import {
   type Directory,
   noteHead as keepHead,
   open,
+  openBox,
   ProtocolError,
+  parseBody,
   parseWith,
   SETTLED_REASON_MAX,
   SealedItem,
   type SessionLink,
   type Settled,
   toWellFormed,
+  verify,
   verifyDirectory,
   type Waiting,
 } from "@starbridge/protocol";
@@ -538,7 +541,7 @@ async function settleMany(
   const st = ctx.store.state();
   const open = Object.entries(st.asked)
     // A settle whose notice failed is posted again.
-    .filter(([id, a]) => (!a.settled || a.unposted) && !a.revoked && !st.answers[id])
+    .filter(([id, a]) => (!a.settled || a.unposted) && !a.revoked && !a.refused && !st.answers[id])
     .filter(([, a]) => opts.all || a.session === opts.session)
     .map(([id]) => id);
   const whose = opts.all ? "this machine asked" : `session ${opts.session} asked`;
@@ -588,9 +591,9 @@ async function settleOne(
   reason?: string,
 ): Promise<boolean> {
   const asked = ctx.store.state().asked[id];
-  // Closed by a revoked device's answer the server holds: a notice would contradict it. A
-  // decision `settle` closed earlier is posted again, in case that post failed.
-  if (!asked || asked.revoked) return false;
+  // Closed by an answer the server holds, from a revoked device or refused here: a notice would
+  // contradict it. A decision `settle` closed earlier is posted again, in case that post failed.
+  if (!asked || asked.revoked || asked.refused) return false;
   const outcome = outcomeOpt ?? (asked.answerIn ? "elsewhere" : "withdrawn");
   // Closed here first: from now on no answer to it is accepted or delivered, even if the post fails.
   // An answer that already reached the agent closed it, and a withdrawal would contradict it;
@@ -954,6 +957,7 @@ export async function poll(
             if (asked) forget(asked);
           } catch (e) {
             ctx.err(`starbridge: ignored an answer: ${(e as Error).message}`);
+            refuse(raw, e, s, dir, st);
           }
         }
       }
@@ -1025,6 +1029,37 @@ async function announce(ctx: Ctx, s: Session, dir: Directory): Promise<void> {
       if (a) delete a.announce;
     });
   }
+}
+
+/**
+ * Closes the decision a refused answer's routing hint names, when a device signed that answer
+ * and the server took it anyway: from a device revoked before this machine fetched it, or with a
+ * hint its body contradicts. The server holds that decision answered and takes no other answer,
+ * so `wait` would wait forever (#1301). A refusal for any other reason, or of an item no device
+ * signed, leaves the decision open: a compromised server cannot close one by forging.
+ */
+function refuse(raw: unknown, e: unknown, s: Session, dir: Directory, st: State): void {
+  if (!(e instanceof ProtocolError)) return;
+  let re: string | undefined;
+  let decisionId: string;
+  try {
+    const item = parseWith(SealedItem, raw);
+    if (item.kind !== "answer" || item.re === undefined) return;
+    re = item.re;
+    const env = openBox(item, { id: s.machine.id, box: s.keys.box });
+    const signer = dir.members.get(env.signer)?.member;
+    if (env.signer !== item.from || signer?.role !== "device") return;
+    verify(env, signer.signPk);
+    decisionId = parseBody("answer", env.body).decisionId;
+  } catch {
+    return;
+  }
+  if (e.code !== "revoked-signer" && decisionId === re) return;
+  const asked = st.asked[re];
+  if (!asked || asked.settled || st.answers[re]) return;
+  asked.settled = true;
+  asked.refused = e.message;
+  forget(asked);
 }
 
 /** Drops a closed decision's body, so its plaintext does not stay on disk. */
@@ -1344,6 +1379,10 @@ export function closedError(ctx: Ctx, id: string | undefined): UsageError | unde
   if (a?.revoked)
     return new UsageError(
       `${id} was answered from a device removed since, so that answer does not count and no other will come: ask again if you still need it`,
+    );
+  if (a?.refused)
+    return new UsageError(
+      `${id} was answered from a device, but this machine refused that answer (${a.refused}) and no other will come: ask again if you still need it`,
     );
   if (a?.settled || (a?.answerIn && !a.done))
     return new UsageError(`${id} is settled or answered on its own page: no answer will come`);

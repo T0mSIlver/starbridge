@@ -98,6 +98,11 @@ export interface State {
        * server takes no other (#515).
        */
       revoked?: boolean;
+      /**
+       * Answered by a device, in an answer this machine refused (a revoked signer, a routing hint
+       * its body contradicts): why. The server holds it answered and takes no other (#1301).
+       */
+      refused?: string;
       /** The devices it was sealed to, the only ones whose answer counts. */
       to: string[];
       /**
