@@ -3,8 +3,11 @@
 - FCM and APNs go through the relay, since their credentials belong to the app's Firebase project
   and Apple team. Web Push
   goes through the relay only when a server has no VAPID keys; UnifiedPush always goes direct. The
-  relay is open, rate-limited per IP and in all (600 a minute in Caddy; 16 Web Pushes in flight
-  in the server, 4 per address), so nobody can aim it at a host or burn the VAPID key (#577). It
+  relay is open, rate-limited per IP and in all (600 a minute in Caddy; in the server, 64 Web
+  Pushes in flight, 4 per address, 8 per IPv6 /48 and 16 per push service host), so nobody can
+  aim it at a host or burn the VAPID key (#577). A push service that never answers holds a slot
+  for 10 s; the per-host cap bounds what any one host gets, and the caps per sender leave the
+  rest to other servers. It
   pushes only ciphertext or ids. A push carries the
   device's ciphertext when it fits FCM's 4 KB, else the item id.
 - Quota snapshots and runs skip Web Push: browsers drop subscriptions whose pushes show no

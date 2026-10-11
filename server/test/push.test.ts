@@ -442,6 +442,36 @@ test.each([
   expect((await relay("/wp/relay")).json).toEqual({ result: "ok" });
 });
 
+test.each([
+  // Two /64s of one /48: one holder of a /48 has 8 slots, not 4 per /64 (65,536 of them).
+  ["per IPv6 /48", { relaySendsPerNetwork: 1 }, "2001:db8:1:2::1", "2001:db8:1:3::1", "localhost"],
+  // Another sender and another host go through: the cap is the slow host's.
+  ["per push service host", { relaySendsPerHost: 1 }, "192.0.2.1", "192.0.2.2", "127.0.0.1"],
+])("the relay caps Web Pushes in flight %s", async (_, cap, firstIp, secondIp, otherHost) => {
+  const on = await makeServer({
+    ...fcmConfig(),
+    ...vapidConfig(),
+    relayMode: true,
+    trustProxy: true,
+    limits: { ...DEFAULT_LIMITS, ...cap },
+  });
+  const slow = browserSubscription("x").target;
+  const relay = (ip: string, url: string) =>
+    on.call("POST", "/v1/relay", {
+      body: { ...slow, endpoint: url, payload: "{}" },
+      headers: { "x-forwarded-for": ip },
+    });
+  const slowPath = `/slow/relay-${Object.keys(cap)[0]}`;
+  const first = relay(firstIp, `${base()}${slowPath}`);
+  while (!seen.some((x) => x.path === slowPath)) await Bun.sleep(10);
+  expect((await relay(secondIp, `${base()}/wp/relay`)).status).toBe(503);
+  const other = new URL(base());
+  other.hostname = otherHost;
+  const elsewhere = "relaySendsPerNetwork" in cap ? "2001:db8:2::1" : secondIp;
+  expect((await relay(elsewhere, `${other.origin}/wp/relay`)).json).toEqual({ result: "ok" });
+  expect((await first).json).toEqual({ result: "ok" });
+});
+
 test("a relay without credentials of its own does not forward onward", async () => {
   const on = await makeServer({ relayMode: true, relayUrl: "http://localhost:1" });
   const r = await on.call("POST", "/v1/relay", {
