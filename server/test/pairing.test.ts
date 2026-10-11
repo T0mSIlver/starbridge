@@ -260,6 +260,26 @@ test("an approval naming another account is refused", async () => {
   expect(r.status).toBe(400);
 });
 
+test("a request with a lone surrogate is bad-schema, as clients read it (#1303)", async () => {
+  const s = await makeServer();
+  const code = newPairingCode();
+  const body = {
+    v: 1,
+    rendezvous: code.rendezvous,
+    role: "machine",
+    id: "devbox",
+    name: "dev \ud800 box",
+    ...publicKeys(generateMemberKeys()),
+    at,
+  };
+  // The server cannot check the MAC, so any will do.
+  const request = { body: JSON.stringify(body), mac: "A".repeat(43) };
+  const r = await s.call("POST", "/v1/pairings", {
+    body: { request, claimHash: claimHash("x") },
+  });
+  expect([r.status, r.json.error]).toEqual([400, "bad-schema"]);
+});
+
 test("pairing requests are rate-limited per IP", async () => {
   const s = await makeServer();
   const statuses: number[] = [];

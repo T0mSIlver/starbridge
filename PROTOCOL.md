@@ -506,7 +506,7 @@ again, answered.
 The server keeps only the latest quota item from each machine, and drops old items as Limits says. Refusals: 403 when the caller's
 role may not post this kind or `from` is not the caller; 400 `unknown-recipient` when a box goes
 to anyone but active devices (machine-signed kinds) or the asking machine (device-signed kinds;
-a `snooze` goes to the asking machine and every active device);
+a `snooze` goes to the asking machine and every active device, none left out);
 404 when `re` names no such item, one sealed to another device, or one another machine posted;
 409 `already-answered` when the item `re` names is answered or settled, 409 `expired` for a
 permission answered more than 10 minutes after it arrived, 409 `already-settled` for a second
@@ -646,7 +646,7 @@ server whose disk is full answers writes 503 `storage-full` with `Retry-After`; 
 | `POST /pairings` | 30 a minute per address; 50 unapproved pairings per address, an IPv6 client counting as its /48: 429 `too-many-pairings` |
 | `GET /pairings/:rendezvous` | 30 a minute per account |
 | `GET /pairings/:rendezvous/result` | 150 a minute per address: 50 waiting pairings polling every 25 s |
-| Pairing messages | 4 KB each: 400 `bad-schema` |
+| Pairing and join messages | 4 KB each: 400 `bad-schema` |
 | `GET /pairings/:rendezvous/result` and `GET /pairings/:rendezvous?wait=` waiting | 4 per pairing: 429 `too-many-waits` |
 | `POST /joins` | 10 a minute per account; request text 4 KB: 400 `bad-schema` |
 | `GET /joins` waiting | 16 per account; `GET /joins/:id` waiting: 4 per join: 429 `too-many-waits` |
@@ -655,6 +655,7 @@ server whose disk is full answers writes 503 `storage-full` with `Retry-After`; 
 | `PUT /presence` | 10 a minute per device or machine |
 | `PUT /release` | 30 an hour per machine |
 | `PUT /settings` | 30 a minute per account |
+| `PUT /notifications` | 30 a minute per device |
 | `POST /push/subscriptions` | 30 a minute per account, on top of the subscription caps |
 | `POST /relay`, on a relay server | 120 a minute per address |
 

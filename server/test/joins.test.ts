@@ -105,7 +105,13 @@ async function compare(s: Server, acct: Account, j: Joiner) {
   return { mine, theirs };
 }
 
-async function approve(s: Server, acct: Account, j: Joiner, keys: ReturnType<typeof approverKeys>) {
+async function approve(
+  s: Server,
+  acct: Account,
+  j: Joiner,
+  keys: ReturnType<typeof approverKeys>,
+  pad = "",
+) {
   const body = openJoinRequest(j.request);
   const signer = { id: acct.device.id, signKey: acct.device.keys.sign.privateKey };
   const member = {
@@ -132,7 +138,14 @@ async function approve(s: Server, acct: Account, j: Joiner, keys: ReturnType<typ
     },
     keys,
   );
-  return s.call("POST", `/v1/joins/${j.id}/approve`, { token: phone(acct), body: { approval } });
+  // The server reads the body but cannot check the MAC, so a padded copy reaches its limits.
+  const sent = pad
+    ? { ...approval, body: JSON.stringify({ ...JSON.parse(approval.body), pad }) }
+    : approval;
+  return s.call("POST", `/v1/joins/${j.id}/approve`, {
+    token: phone(acct),
+    body: { approval: sent },
+  });
 }
 
 test("a signed-in browser joins by digits, and the phone hears of it live", async () => {
@@ -270,6 +283,27 @@ test("each step refuses the wrong caller or the wrong order", async () => {
   expect((await approve(s, acct, j, theirs)).status).toBe(200);
   r = await s.call("POST", `/v1/joins/${j.id}/approve`, { token: phone(acct), body: { approval } });
   expect(r.json.error).toBe("closed");
+});
+
+test("join messages hold at most 4 KB, as pairing messages do (#1304)", async () => {
+  const s = await makeServer();
+  const acct = await setupAccount(s);
+  // 2,100 characters of two bytes each: under 4,096 UTF-16 units, over 4 KB.
+  const eph = newJoinKeyPair();
+  const id = newJoinId();
+  const keys = generateMemberKeys();
+  const body = { v: 1, join: id, account: acct.id, id: `w_${id}`, name: "New browser", at };
+  const request = JSON.stringify({ ...body, ...publicKeys(keys), pad: "é".repeat(2100) });
+  const r = await s.call("POST", "/v1/joins", {
+    token: await signIn(s),
+    body: { request, commitment: joinCommitment(eph.publicKey, request) },
+  });
+  expect([r.status, r.json.error]).toEqual([400, "bad-schema"]);
+
+  const { j } = await ask(s, acct);
+  const { theirs } = await compare(s, acct, j);
+  const big = await approve(s, acct, j, theirs, "x".repeat(5000));
+  expect([big.status, big.json.error]).toEqual([400, "bad-schema"]);
 });
 
 test("cancelling closes the request, and a new request replaces the session's last", async () => {
