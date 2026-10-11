@@ -370,8 +370,13 @@ test("a machine the server no longer lists: setup offers to pair again, else sto
     expect(await done).toBe(yes ? 0 : 1);
     const out = m.ctx.lines.join("\n");
     expect(out).toContain(`✗ ${server.url} no longer lists`);
-    if (yes) expect(m.ctx.store.machine()?.id).not.toBe(before);
-    else {
+    if (yes) {
+      expect(m.ctx.store.machine()?.id).not.toBe(before);
+      // Paired again in the same run: no failed step left (#1327).
+      expect(out).not.toContain("step failed");
+      expect(out).not.toContain("steps failed");
+      expect(out).not.toContain("Retry once fixed");
+    } else {
       expect(out).toEndWith("  To pair it again later:\n    starbridge setup");
       expect(out).not.toContain("Agents");
     }
