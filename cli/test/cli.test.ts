@@ -1072,6 +1072,45 @@ test("re-sealing stops at a 429 and waits its Retry-After, leaving the window to
   expect(posts).toBe(3);
 });
 
+test("SIGTERM ends an ask whose post the server never answers (#1288)", async () => {
+  const ctx = await paired(server);
+  server.stalls.push("POST /items");
+  const stop = new AbortController();
+  const asked = run([...ASK, "--session", "s"], { ...ctx, signal: stop.signal });
+  await until(() => server.log.includes("POST /items"));
+  stop.abort();
+  const ended = await Promise.race([
+    asked.then(
+      () => true,
+      () => true,
+    ),
+    Bun.sleep(5000).then(() => false),
+  ]);
+  expect(ended).toBe(true);
+});
+
+test("a decision whose post lost its reply is withdrawn, so its card does not stay on the devices (#1289)", async () => {
+  const ctx = await paired(server);
+  server.lostReplies.push("POST /items");
+  const stop = new AbortController();
+  const asked = run([...ASK, "--session", "s"], { ...ctx, signal: stop.signal });
+  await until(async () => (await server.opened("decision")).length === 1);
+  stop.abort();
+  const ended = await Promise.race([
+    asked.then(
+      () => true,
+      () => true,
+    ),
+    Bun.sleep(5000).then(() => false),
+  ]);
+  expect(ended).toBe(true);
+  const [decision] = await server.opened("decision");
+  await until(async () => (await server.opened("settled")).length === 1);
+  expect(await server.opened("settled")).toMatchObject([
+    { itemId: decision?.id, outcome: "withdrawn" },
+  ]);
+});
+
 test("ask on a full account says so in plain words (#586)", async () => {
   server.stop();
   server = await LiveServer.start({ limits: { ...DEFAULT_LIMITS, storedBytes: 1 } });

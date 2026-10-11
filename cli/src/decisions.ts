@@ -99,6 +99,13 @@ export const EXIT_INTERRUPTED = 130;
 const MAX_POLL_SECONDS = 300;
 /** Pause before retrying after a network or server error. */
 const RETRY_MS = 5_000;
+/**
+ * How long a decision's post may take, its images included: a server that takes the connection
+ * and never answers would otherwise hold `ask` for ever, past SIGTERM (#1288).
+ */
+const POST_MS = 60_000;
+/** How long the withdrawal of a decision whose post failed may take. */
+const WITHDRAW_MS = 5_000;
 
 /**
  * Fills in which session asks, from the asking process's environment and directory. Unless the
@@ -325,7 +332,9 @@ function sealWithPictures(
  * answer reaches the session that asked. Returns the decision.
  */
 export async function postDecision(ctx: Ctx, s: Session, input: AskInput): Promise<Decision> {
-  const dir = await refreshDirectory(ctx, s);
+  const deadline = AbortSignal.timeout(POST_MS);
+  const signal = ctx.signal ? AbortSignal.any([ctx.signal, deadline]) : deadline;
+  const dir = await refreshDirectory(ctx, s, signal);
   const pictures = (input.images ?? []).map((i) =>
     typeof i === "string" ? loadPicture(i) : loadPicture(i.path, i.alt),
   );
@@ -348,27 +357,49 @@ export async function postDecision(ctx: Ctx, s: Session, input: AskInput): Promi
   // A wait for this decision starts at the cursor known now, so it never misses its answer.
   const cursor = ctx.store.state().cursor;
   // Asked already waiting, its waiting state pushes instead, so the notification says so.
-  await s.api.postItem(input.waiting ? { ...item, quiet: true } : item);
-  ctx.store.updateState((st) => {
-    st.asked[decision.id] = {
-      question: decision.question,
-      options: decision.options,
-      askedAt: decision.createdAt,
-      to: decision.to,
-      body: decision,
-      ...(cursor !== undefined ? { cursor } : {}),
-      ...(decision.source.session && !input.held ? { session: decision.source.session } : {}),
-      ...(decision.source.sessionTitle ? { sessionTitle: decision.source.sessionTitle } : {}),
-      project: decision.source.project,
-      ...(decision.answerIn ? { answerIn: true } : {}),
-      ...(decision.done ? { done: true } : {}),
-      ...(input.codex && decision.source.session ? { codex: input.codex } : {}),
-      ...(input.antigravity && decision.source.session ? { antigravity: input.antigravity } : {}),
-      ...(input.extensionAnswers && decision.source.session ? { extensionAnswers: true } : {}),
-      ...(input.held ? { held: true } : {}),
-      ...(input.picker ? { picker: input.picker } : {}),
-    };
-  });
+  const record = () =>
+    ctx.store.updateState((st) => {
+      st.asked[decision.id] = {
+        question: decision.question,
+        options: decision.options,
+        askedAt: decision.createdAt,
+        to: decision.to,
+        body: decision,
+        ...(cursor !== undefined ? { cursor } : {}),
+        ...(decision.source.session && !input.held ? { session: decision.source.session } : {}),
+        ...(decision.source.sessionTitle ? { sessionTitle: decision.source.sessionTitle } : {}),
+        project: decision.source.project,
+        ...(decision.answerIn ? { answerIn: true } : {}),
+        ...(decision.done ? { done: true } : {}),
+        ...(input.codex && decision.source.session ? { codex: input.codex } : {}),
+        ...(input.antigravity && decision.source.session ? { antigravity: input.antigravity } : {}),
+        ...(input.extensionAnswers && decision.source.session ? { extensionAnswers: true } : {}),
+        ...(input.held ? { held: true } : {}),
+        ...(input.picker ? { picker: input.picker } : {}),
+      };
+    });
+  try {
+    await s.api.postItem(input.waiting ? { ...item, quiet: true } : item, signal);
+  } catch (e) {
+    // Refused: the server stored nothing. Otherwise it may have stored the decision before the
+    // reply was lost (#1289): withdrawn, or its card stays open on the devices and its answer
+    // finds no decision here. A server that never got it refuses this, which changes nothing.
+    if (!(e instanceof ApiError) || e.status >= 500) {
+      record();
+      await settleOne(
+        { ...ctx, signal: undefined },
+        s,
+        dir,
+        decision.id,
+        "withdrawn",
+        false,
+        undefined,
+        AbortSignal.timeout(WITHDRAW_MS),
+      ).catch(() => {});
+    }
+    throw e;
+  }
+  record();
   if (input.waiting) await markWaiting(ctx, () => postWaiting(ctx, s, decision.id, "waiting"));
   return decision;
 }
@@ -586,6 +617,7 @@ async function settleOne(
   outcomeOpt: "elsewhere" | "withdrawn" | undefined,
   bulk = false,
   reason?: string,
+  signal?: AbortSignal,
 ): Promise<boolean> {
   const asked = ctx.store.state().asked[id];
   // Closed by a revoked device's answer the server holds: a notice would contradict it. A
@@ -621,6 +653,7 @@ async function settleOne(
   try {
     await s.api.postItem(
       seal("settled", body, { id: s.machine.id, signKey: s.keys.sign.privateKey }, to),
+      signal,
     );
   } catch (e) {
     // Answered or settled already: either way it is closed, which is what was asked. A bulk run
