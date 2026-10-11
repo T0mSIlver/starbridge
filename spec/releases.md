@@ -127,14 +127,15 @@
   binary and runs the whole CLI suite, which must pass: the launchd service and the screen readers
   run only on a Mac, so the real launchd starts and stops the agent there. Both jobs run each test
   file alone and kill one that hangs (`cli/scripts/test-each.ts`, #862).
-- **CI runners** (#146, #1204). Three self-hosted pools, one repository variable each: `RUNNER`
-  (`starbridge-ci`) runs main's tests, deploys and uptime checks; `ANDROID_RUNNER`
-  (`starbridge-android`) the Android builds; `PR_RUNNER` (`starbridge-pr`) the test and e2e jobs of
-  a pull request from this repository's own branches, so they start sooner than on GitHub's
-  runners. Dependabot's pull requests and forks' stay on GitHub's runners, and so does every other
-  pull request job: the desktop e2e needs Electron's libraries, the image builds Docker, and
-  Android, Windows and macOS their own systems. The PR pool holds no secrets, and no pull request
-  job reaches the other two pools, which run the deploy and the release. A fork's pull request
-  runs its own `ci.yml`, which could name any label, so a fork's run is never approved.
+- **CI runners** (#146, #1204, #1213). Self-hosted Linux runners in two pools that never share a
+  box: `trusted` runs main's tests, deploys, uptime checks and releases; `pr` runs the test, e2e
+  and image jobs of a pull request from this repository's own branches, so they start sooner than
+  on GitHub's runners. Each job names its pool through a repository variable holding a JSON array
+  of labels, and falls back to GitHub's runner when it is unset (docs/ci.md). Dependabot's and
+  forks' pull requests stay on GitHub's runners, and so do the desktop e2e (Electron's libraries),
+  Windows and macOS. Android builds on main and in releases use their own runner,
+  `ANDROID_RUNNER`. The PR pool holds no secrets, and no pull request job reaches the other two.
+  Each runner registers for one job, so every job starts clean. A fork's pull request runs its
+  own `ci.yml`, which could name any label, so a fork's run is never approved.
 - **Monitoring.** `uptime.yml` checks `/healthz`, `/healthz/backup` (fails when the last nightly
   backup is over 26 h old) and `/healthz/disk` (under 2 GB free), and opens one `outage` issue.

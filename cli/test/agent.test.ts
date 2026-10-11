@@ -1,8 +1,10 @@
 import { afterEach, beforeEach, expect, setDefaultTimeout, spyOn, test } from "bun:test";
 import {
+  copyFileSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   rmSync,
   statSync,
@@ -11,7 +13,7 @@ import {
 import { createServer, Server as HttpServer, type IncomingMessage, request } from "node:http";
 import { createServer as createNetServer } from "node:net";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { LiveServer } from "@starbridge/server/test-support";
 import { PNG } from "pngjs";
 import { proof, type SessionEvent, type Status } from "../src/agent/api";
@@ -22,6 +24,7 @@ import { run } from "../src/cli";
 import { hookCursorSession } from "../src/hook";
 import {
   agentAddress,
+  compiledFake,
   FAKE_CODEXBAR,
   fakeCommand,
   listenAt,
@@ -813,6 +816,26 @@ test.skipIf(WINDOWS)(
     expect((bound as number) & 0o077).toBe(0);
     expect(statSync(socket).mode & 0o777).toBe(0o600);
     expect(process.umask()).toBe(umask);
+  },
+);
+
+test.skipIf(!WINDOWS)(
+  "on Windows, an agent whose port file icacls cannot restrict does not serve (#1209)",
+  async () => {
+    const dir = mkdtempSync(join(tmpdir(), "starbridge-port-"));
+    const socket = join(dir, "agent.port");
+    const fakes = dirname(compiledFake('console.error("access denied"); process.exit(5);'));
+    copyFileSync(join(fakes, "fake.exe"), join(fakes, "icacls.exe"));
+    const path = process.env.PATH;
+    process.env.PATH = `${fakes};${path}`;
+    try {
+      await expect(machine({ socket })).rejects.toThrow(
+        "readable by this user only, so the agent does not serve: access denied",
+      );
+    } finally {
+      process.env.PATH = path;
+    }
+    expect(readdirSync(dir)).toEqual([]);
   },
 );
 

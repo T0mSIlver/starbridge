@@ -54,8 +54,8 @@ test("the count and one entry per item in Needs you, prompts first", () => {
   expect(s.entries).toEqual([
     {
       id: "p1",
-      title: "Bash on devbox",
-      body: "starbridge\nrm -rf build",
+      title: "Bash",
+      body: "devbox · starbridge\nrm -rf build",
       options: [],
       reply: false,
       waiting: true,
@@ -100,4 +100,27 @@ test("past the app's 200, the most urgent 200 go, with the full count", () => {
   expect(s.waiting).toBe(11);
   expect(s.entries).toHaveLength(200);
   expect(s.entries[0]?.id).toBe("p1");
+});
+
+test("a prompt is titled with what the agent says it does, else the tool", () => {
+  const described = {
+    permission: { ...prompt.permission, description: "Delete the build output" },
+  } as PromptItem;
+  const [a, b] = desktopState([], [described, prompt], NOW).entries;
+  expect(a.title).toBe("Delete the build output");
+  expect(b.title).toBe("Bash");
+});
+
+test("a question back from snooze says so, unless its agent waits on it", () => {
+  const ended = { snoozedUntil: "2026-10-08T11:50:00Z" };
+  const [waiting, back] = desktopState(
+    [
+      question("d1", {}, ended),
+      question("d2", {}, { ...ended, waitingSince: "2026-10-08T11:55:00Z" }),
+    ],
+    [],
+    NOW,
+  ).entries;
+  expect(back.body).toBe("Back from snooze · devbox · starbridge\nThe checkout tests pass. log");
+  expect(waiting.body).toStartWith("Waiting · ");
 });
