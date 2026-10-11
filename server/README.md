@@ -114,7 +114,8 @@ each browser's own push service still carries them, encrypted, such as Google's 
    VAPID_PRIVATE_KEY=...
    ```
 
-   If your ntfy is on a private address or plain HTTP, add `ALLOW_PRIVATE_PUSH_ENDPOINTS=1`. Then
+   If your ntfy is on a private address or plain HTTP, add its host, such as
+   `ALLOW_PRIVATE_PUSH_ENDPOINTS=ntfy.lan` or `ALLOW_PRIVATE_PUSH_ENDPOINTS=192.168.1.20`. Then
    restart: `docker compose -f server/compose.yaml up -d`. A browser that turned notifications on
    through the relay subscribes again with your key the next time it opens the page.
 
@@ -187,7 +188,7 @@ release, restore the copy you made before upgrading.
 <dt><code>VAPID_PUBLIC_KEY</code>, <code>VAPID_PRIVATE_KEY</code>, <code>VAPID_SUBJECT</code></dt>
 <dd>Web Push keys, to send browser notifications without the relay. Make them with <code>bunx web-push generate-vapid-keys</code>. Unset by default.</dd>
 <dt><code>ALLOW_PRIVATE_PUSH_ENDPOINTS</code></dt>
-<dd>Accept push endpoints on private addresses and plain HTTP, for an ntfy on your own network. Default: off.</dd>
+<dd>Hosts on your own network that push endpoints may name, over plain HTTP too, such as an ntfy: comma-separated names or addresses, without ports. Any account on the server can point its pushes at them. <code>1</code> still allows every private host, but the server warns at startup: every account could make it call any host on your network. Default: none.</dd>
 <dt><code>RELAY_MODE</code></dt>
 <dd>Serve <code>POST /v1/relay</code> for other servers, as starbridge.run does. Default: off.</dd>
 <dt><code>PUSH_TIMEOUT_MS</code></dt>

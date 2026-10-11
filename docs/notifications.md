@@ -1,54 +1,10 @@
-# One notification per question
+# Notifications
 
-Your harnesses and their apps notify you too: a terminal bell when Claude Code waits, a push from the
-Claude app, a banner from the Codex app. With Starbridge on, the same question can then reach you
-twice. Here is what each tool sends and how to turn it off once Starbridge covers it.
+Starbridge notifies you when an agent asks you something, waits on you, asks permission (once you
+[turn permission prompts on](tell-your-agents.md#what-each-harness-supports)), or when a run or a
+quota window has news.
 
-Starbridge notifies when an agent asks you something, waits on you, or asks permission (once you
-[turn permission prompts on](tell-your-agents.md#what-each-harness-supports)). An agent that asks
-through Starbridge often ends its turn to wait, so a tool's "turn done" notification arrives with
-the question. Turning those off leaves Starbridge alone, but you then hear nothing about a turn
-that ends without a question. `starbridge setup` changes none of these settings.
-
-Menu names come from each tool's documentation in October 2026 and may have moved since.
-
-<a id="agents-on-your-machine"></a>
-
-## Harnesses on your machine
-
-| Harness | What it notifies | Turn it off |
-|---|---|---|
-| Claude Code (terminal) | A desktop notification or bell when a permission prompt waits about 6 seconds, or a turn ended about 60 seconds ago and you haven't typed. Desktop notifications are on by default in Ghostty, Kitty and iTerm2. | `/config` → Local notifications → `notifications_disabled`, or `"preferredNotifChannel": "notifications_disabled"` in `~/.claude/settings.json`. A `Notification` hook you added still runs: remove it from `hooks` in the same file. |
-| Claude Code, Remote Control | A push to the Claude app for permission prompts and questions, and when Claude decides a finished task is worth one. Both are off by default. | `/config` → clear Push when actions required (permission prompts and questions) and Push when Claude decides (finished tasks). In settings: `inputNeededNotifEnabled` and `agentPushNotifEnabled`. |
-| Claude Code in Claude Desktop | A banner when a session asks permission, asks a question, or finishes a task while the app is in the background. | Settings → Permission request notifications, Question notifications and Task complete notifications: set each to Off. Sessions in a project follow the project's Notifications instead, in the project's sidebar menu. |
-| Codex CLI | A terminal notification when a turn ends or asks for approval, on by default. `notify` runs a program you choose when a turn ends. | In `~/.codex/config.toml`, `notifications = false` under `[tui]`, or `["approval-requested"]` while Starbridge's permission prompts are off. Remove the `notify` line. |
-| Codex app | A banner when a turn completes, and when Codex asks permission or a question. | Settings → Notifications: turn completion to Never. Keep the permission and question notifications, which Starbridge doesn't carry. |
-| opencode | Sounds and desktop notifications for questions, permissions, errors and finished sessions, only if you turned attention on. Off by default. | In `tui.json`, `"attention": { "enabled": false }`. A plugin you added that notifies on `session.idle`: remove it from your plugins folder. |
-| Pi | Nothing built in. The `notify.ts` example extension, if you installed it, notifies when the agent is done. | Remove the extension. |
-
-Sources: Claude Code [terminal](https://code.claude.com/docs/en/terminal-config#get-a-terminal-bell-or-notification),
-[notification events](https://code.claude.com/docs/en/hooks#notification),
-[Remote Control](https://code.claude.com/docs/en/remote-control#mobile-push-notifications) and
-[desktop](https://code.claude.com/docs/en/desktop); Codex
-[CLI](https://learn.chatgpt.com/docs/config-file/config-advanced) and
-[app](https://learn.chatgpt.com/docs/notifications); opencode
-[TUI](https://opencode.ai/docs/tui); Pi's
-[notify extension](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/examples/extensions/notify.ts).
-Claude Desktop's labels come from the app, as its documentation doesn't name them.
-
-## Apps and websites
-
-| App | What it notifies | Turn it off |
-|---|---|---|
-| Claude app (Android, iOS) | The Remote Control pushes above, and Dispatch sessions finishing or needing approval. | For Remote Control, the `/config` toggles above. The Claude app's own notification settings aren't documented; use the phone's settings below. |
-| ChatGPT on the web | Codex notifications by category, by push, email or SMS depending on the category. | Settings → Notifications. The documentation doesn't list the categories. |
-| ChatGPT app (Android, iOS) | Not documented. | The phone's settings below. |
-| Any Android app | Notifications by category, which Android calls channels. | Settings → Notifications → App notifications → the app, then turn off a category. Or touch and hold one of its notifications, tap Settings, and turn off its category. |
-
-Sources: [ChatGPT notifications](https://learn.chatgpt.com/docs/notifications),
-[Android notifications](https://support.google.com/android/answer/9079661).
-
-## Starbridge's own
+## Starbridge's notifications
 
 On Android, Settings → Notifications → Notification settings opens Android's page for the app,
 with one category per kind:
@@ -59,49 +15,96 @@ with one category per kind:
 | Questions | Questions your agents work around until you answer. Sound only. |
 | Permission prompts | Agents waiting for you to allow a command or an edit. |
 | Join requests | A browser or phone signed in to your account asking to join. |
-| Runs | Commands your agents run that your rules name, until they pass or fail. |
-| Quotas | Quota windows running low, running out or resetting unused, as you pick them. Silent. |
+| Runs | Commands your agents run in `starbridge run`, until they pass or fail. |
+| Quotas | The [quota alerts](#quota-alerts) you pick. Silent. |
 
-On the web, notifications are on once you pick Turn on notifications in the inbox, and off in the
-browser's site settings for starbridge.run. A closed browser gets questions, permission prompts and
-join requests. Quota alerts, and runs that pass or fail, notify only while a Starbridge page is open, in
-the background too. A run notifies once when it ends, with the system's sound, as on Android. Settings → Notifications → Sound for new questions plays a chime in an open Starbridge page or web app, off by default. It needs notifications on in this browser, since the push is what starts it, and the page needs a click since it loaded before a browser lets it play. A closed web app makes your system's notification sound instead.
+On the web, pick Turn on notifications in the inbox; turn them off in the browser's site settings
+for starbridge.run. A closed browser still gets questions, permission prompts and join requests.
+Quota alerts and finished runs notify only while a Starbridge page is open, in the background
+too.
 
-In the Mac app, questions, permission prompts and runs that end play the macOS notification
-sound, a failed answer plays the error sound, and quota alerts are silent. Turn sounds off in System Settings →
-Notifications → Starbridge. macOS plays it at System Settings → Sound → Alert volume,
-on the output under Play sound effects through, which may not be your headphones.
-If macOS blocks Starbridge's notifications, Settings → Notifications says so, and turning on
-Notifications on this device opens System Settings → Notifications → Starbridge.
+Settings → Notifications → Sound for new questions plays a chime in an open Starbridge page, off
+by default. It needs notifications on in that browser, and a click on the page since it loaded.
 
+In the Mac app, questions, permission prompts and finished runs play the macOS notification
+sound, and quota alerts are silent. Turn sounds off in System Settings → Notifications →
+Starbridge. macOS plays them at System Settings → Sound → Alert volume, on the output under Play
+sound effects through, which may not be your headphones. If macOS blocks Starbridge's notifications, the app's Settings → Notifications says
+so.
+
+### Quiet other devices while you're at a screen
+
+With Settings → Notifications → Quiet other devices while you're at a screen, a question
+notifies only the device you are using: a Starbridge page or app you touched in the last minute.
+Your other devices notify after the hold time once you leave (30 s by default), if nobody
+answered.
+
+A computer counts too while it is unlocked and used in the last minute, once you run
+`starbridge config presence on` on it
+([presence](../cli/README.md#quiet-your-other-devices-while-you-re-here)). The Mac app counts
+without the CLI, in any app, window open or not. A locked or sleeping Mac never counts.
+
+### Quota alerts
 
 In Settings → Quotas, each quota window has a checkbox per alert:
 
 - **Runs out.** At the rate you have used it since it began, the window runs out before its
   reset. Starbridge judges the rate once 5% of the window has passed.
 - **50% left** and **20% left.** Half, or a fifth, of the window is left.
-- **Unused.** At that same rate, 30% or more of the window will be left unused when it resets.
-  This alert comes in the last hour before the reset for a window of a day or less, such as a
-  5-hour window, and in the last day for a longer one, such as a weekly window.
+- **Unused.** At that same rate, 30% or more of the window will be left when it resets. It comes
+  in the last hour before the reset for a window of a day or less, and in the last day for a
+  longer one.
 
 Weekly and monthly windows start with Runs out ticked, and 5-hour and daily windows with nothing.
-These settings belong to each device.
+Each device keeps its own choice.
 
-Permission prompts stay at the keyboard until you run `starbridge config permissions on` on the
-machine, and again after `starbridge config permissions off`.
+<a id="which-replaces-which"></a>
 
-Settings → Notifications → Quiet other devices while you’re at a screen keeps a question off your other devices
-while you use Starbridge: a page or the app you touched in the last minute. They stay quiet for as
-long as you are there, then for the hold time after you leave (30 s by default; 0 s notifies as
-soon as you leave or lock the screen), and notify if nothing answered it. Off notifies every device
-at once. A computer counts too once you run
-`starbridge config presence on` on it: unlocked and used in the last minute. The Mac app does the same without the CLI, in any app, window closed or
-not. A locked or sleeping Mac never counts.
+## Turn off the duplicates
 
-## Which replaces which
+Your harnesses and their apps notify you too, so the same question can reach you twice. An agent
+that asks through Starbridge often ends its turn to wait, so a harness's "turn done"
+notification arrives with the question.
+
+Turning those off leaves you nothing for a turn that ends without a question. `starbridge setup`
+changes none of these settings. Menu names come from each tool's documentation in October 2026.
 
 | Starbridge | Replaces |
 |---|---|
-| Waiting for you, Questions | Push when actions required in Claude Code, Question notifications in Claude Desktop, opencode's question sound, and the turn-done notifications above |
+| Waiting for you, Questions | Claude Code's Push when actions required, Claude Desktop's Question notifications, opencode's question sound, and the turn-done notifications below |
 | Permission prompts, once on | Permission prompt notifications in Claude Code, Claude Desktop, the Codex CLI and opencode |
-| Runs, Quotas | Nothing: the tools above don't notify about these. |
+| Runs, Quotas | Nothing: the harnesses don't notify about these. |
+
+<a id="agents-on-your-machine"></a>
+
+### Harnesses
+
+| Harness | What it notifies | Turn it off |
+|---|---|---|
+| Claude Code (terminal) | A desktop notification or bell when a permission prompt waits about 6 seconds, or a turn ended about 60 seconds ago and you haven't typed. On by default in Ghostty, Kitty and iTerm2. | `/config` → Local notifications → `notifications_disabled`, or `"preferredNotifChannel": "notifications_disabled"` in `~/.claude/settings.json`. Remove any `Notification` hook you added from `hooks` in the same file. |
+| Claude Code, Remote Control | A push to the Claude app for permission prompts and questions, and when Claude decides a finished task is worth one. Off by default. | `/config` → clear Push when actions required and Push when Claude decides. In settings: `inputNeededNotifEnabled` and `agentPushNotifEnabled`. |
+| Claude Code in Claude Desktop | A banner when a session asks permission, asks a question, or finishes a task while the app is in the background. | Settings → Permission request notifications, Question notifications and Task complete notifications: set each to Off. A project's sessions follow the project's Notifications, in its sidebar menu. |
+| Codex CLI | A terminal notification when a turn ends or asks for approval, on by default. `notify` runs a program you choose when a turn ends. | In `~/.codex/config.toml`, under `[tui]`, `notifications = false`, or `["approval-requested"]` while Starbridge's permission prompts are off. Remove the `notify` line. |
+| Codex app | A banner when a turn completes, and when Codex asks permission or a question. | Settings → Notifications: turn completion to Never. Keep the permission and question notifications, which Starbridge doesn't carry. |
+| Pi | Nothing built in. The `notify.ts` example extension notifies when the agent is done. | Remove the extension. |
+| opencode | Sounds and desktop notifications for questions, permissions, errors and finished sessions, if you turned attention on. Off by default. | In `tui.json`, `"attention": { "enabled": false }`. Remove any plugin you added that notifies on `session.idle`. |
+
+Sources: Claude Code [terminal](https://code.claude.com/docs/en/terminal-config#get-a-terminal-bell-or-notification),
+[notification events](https://code.claude.com/docs/en/hooks#notification),
+[Remote Control](https://code.claude.com/docs/en/remote-control#mobile-push-notifications) and
+[desktop](https://code.claude.com/docs/en/desktop) (Claude Desktop's labels come from the app);
+Codex [CLI](https://learn.chatgpt.com/docs/config-file/config-advanced) and
+[app](https://learn.chatgpt.com/docs/notifications); opencode [TUI](https://opencode.ai/docs/tui);
+Pi's [notify extension](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/examples/extensions/notify.ts).
+
+### Apps and websites
+
+| App | What it notifies | Turn it off |
+|---|---|---|
+| Claude app (Android, iOS) | The Remote Control pushes above, and Dispatch sessions finishing or needing approval. | For Remote Control, the `/config` toggles above. For the rest, the phone's settings below. |
+| ChatGPT on the web | Codex notifications by category, by push, email or SMS. | Settings → Notifications. |
+| ChatGPT app (Android, iOS) | Not documented. | The phone's settings below. |
+| Any Android app | Notifications by category, which Android calls channels. | Settings → Notifications → App notifications → the app, then turn off a category. Or touch and hold one of its notifications, tap Settings, and turn off its category. |
+
+Sources: [ChatGPT notifications](https://learn.chatgpt.com/docs/notifications),
+[Android notifications](https://support.google.com/android/answer/9079661).
