@@ -526,6 +526,11 @@ export interface SettleOpts {
   /** Every open decision this machine asked, once `confirm` agrees. */
   all?: boolean;
   confirm?: (question: string) => Promise<boolean>;
+  /**
+   * Cuts settling one decision by id; none by default, so a settle after Ctrl-C, such as setup's
+   * withdrawal of its test question, still goes out (#613).
+   */
+  deadline?: AbortSignal;
 }
 
 export async function settle(ctx: Ctx, opts: SettleOpts): Promise<number> {
@@ -548,8 +553,8 @@ export async function settle(ctx: Ctx, opts: SettleOpts): Promise<number> {
     if (!withdrawn && reason !== undefined)
       throw new UsageError("--reason is for --outcome withdrawn");
     const s = session(ctx);
-    const dir = await refreshDirectory(ctx, s, ctx.signal);
-    await settleOne(ctx, s, dir, id, outcome, false, reason, ctx.signal);
+    const dir = await refreshDirectory(ctx, s, opts.deadline);
+    await settleOne(ctx, s, dir, id, outcome, false, reason, opts.deadline);
     return 0;
   }
   if (reason !== undefined && outcome !== "withdrawn")
