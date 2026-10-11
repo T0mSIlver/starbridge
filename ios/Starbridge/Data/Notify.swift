@@ -141,10 +141,25 @@ enum Notify {
             return shown
         case let z as Snooze:
             guard let fetched = try? await fetch(z.decisionId), let d = open(fetched)?.body as? Decision else { return nil }
+            // Only the latest snooze this iPhone knows brings the question back (PROTOCOL.md,
+            // "Snoozing"). An extension can't drop an alert, so an older one's return says the
+            // newer time, quietly, and the app's next sync closes it.
+            if let later = laterSnooze(than: z, saved.decisions.first { $0.id == z.decisionId }) {
+                var shown = decision(d, prefix: "Snoozed until \(later.formatted(Date.FormatStyle(date: Calendar.current.isDateInToday(later) ? .omitted : .abbreviated, time: .shortened)))")
+                shown.quiet = true
+                return shown
+            }
             return decision(d, prefix: "Back from snooze")
         default:
             return nil
         }
+    }
+
+    /** When a snooze newer than `z` puts the question off until, from what the app saved; nil when `z` is the latest. */
+    static func laterSnooze(than z: Snooze, _ saved: SavedDecision?) -> Date? {
+        guard let saved, let at = saved.snoozedAt.flatMap(Dates.parse), let mine = Dates.parse(z.at), at > mine,
+              let until = saved.snoozed, until > Date() else { return nil }
+        return until
     }
 
     /**
