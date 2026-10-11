@@ -155,8 +155,9 @@ async function onPush(text: string): Promise<void> {
     // takes a first push that comes late for the return (#1290).
     const due = payload.due ?? Date.now() >= until - WAKE_SKEW_MS;
     if (!due) {
-      // Once its time has passed, its return showed the question or will: closing would hide it.
-      if (Date.now() < until)
+      // Near or past its time, its return showed the question or will, maybe by a server clock
+      // ahead of this one: closing would hide it.
+      if (Date.now() < until - WAKE_SKEW_MS)
         for (const n of await self.registration.getNotifications({ tag: tag(z.decisionId) }))
           n.close();
       return;
