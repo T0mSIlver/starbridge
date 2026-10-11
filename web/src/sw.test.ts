@@ -21,6 +21,8 @@ type Listener = (e: { data?: { text(): string }; waitUntil(p: Promise<unknown>):
 const listeners = new Map<string, Listener>();
 /** The notifications up, as the browser keeps them: one per tag. */
 let notes: Note[] = [];
+/** How many times the worker showed a notification. */
+let shows = 0;
 const errors: string[] = [];
 function note(title: string, tag: string): Note {
   const n: Note = {
@@ -37,6 +39,7 @@ Object.assign(globalThis, {
     addEventListener: (type: string, f: Listener) => listeners.set(type, f),
     registration: {
       showNotification: async (title: string, o: { tag?: string } = {}) => {
+        shows++;
         notes = [...notes.filter((n) => n.tag !== o.tag), note(title, o.tag ?? "")];
       },
       getNotifications: async (o: { tag?: string } = {}) =>
@@ -206,10 +209,11 @@ test("a withheld push closes the question and prompt notifications only (#1281)"
   await store.del("heads", ctx.account);
 });
 
-test("a snooze's first push that comes late hides its question; its return shows it (#1290)", async () => {
+test("a snooze's first push that comes late never notifies; its return does (#1290)", async () => {
   const d = decision("d_late");
   live.inject(d);
-  notes = [note("Question d_late", "d:d_late")];
+  notes = [];
+  const before = shows;
   // Five minutes from posting, its first push four minutes late: within the clock's 2-minute skew.
   const now = Date.now();
   const { id, boxPk } = ctx.device;
@@ -231,8 +235,9 @@ test("a snooze's first push that comes late hides its question; its return shows
   );
   const item = { ...z, re: "d_late", wakeAt: new Date(now + 60_000).toISOString() };
   await push(payload(item, { wakeAt: item.wakeAt, due: false }));
-  expect(notes).toEqual([]);
+  expect(shows).toBe(before);
   await push(payload(item, { wakeAt: item.wakeAt, due: true }));
+  expect(shows).toBe(before + 1);
   expect(notes.map((n) => n.tag)).toEqual(["d:d_late"]);
 });
 
