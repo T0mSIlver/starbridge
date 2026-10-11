@@ -214,11 +214,18 @@
 
 .head {
   display: grid;
+  /* A track no wider than the pane, so a long unbroken path wraps instead of widening it (#1254). */
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--s4);
   transition:
     background var(--t-state),
     padding var(--t-state),
     margin var(--t-state);
+}
+
+/* A question or a prompt's description, broken anywhere when one word is wider than the pane. */
+.title {
+  overflow-wrap: anywhere;
 }
 
 /* Filled while the agent waits: the same ground as its row (#191). The fill reaches past the
