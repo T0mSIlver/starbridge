@@ -46,7 +46,7 @@ extension Store {
                 machine: m.role == .machine,
                 addedAt: added[m.id].flatMap(Dates.parse) ?? .distantPast,
                 current: m.id == saved.me?.id,
-                check: m.role == .machine ? try? Pairings.checkCode(entries, id: m.id) : nil
+                check: m.role == .machine && !saved.scannedMachines.contains(m.id) ? try? Pairings.checkCode(entries, id: m.id) : nil
             )
         }
         return rows.filter { !$0.machine } + rows.filter(\.machine)
