@@ -92,10 +92,13 @@ jobs:
           if-no-files-found: ignore
 
   # A signed and notarized build to try, from main or by hand, never from a pull request: the
-  # Developer ID lives in the desktop-release environment, which only main and tags can use.
+  # Developer ID lives in the desktop-release environment, which only main and tags can use; the
+  # job checks the ref too, so a run by hand from a branch never reaches it.
   signed:
     name: signed build
-    if: github.event_name != 'pull_request' && vars.DESKTOP_SIGNING == 'true'
+    if: >-
+      github.event_name != 'pull_request' && vars.DESKTOP_SIGNING == 'true' &&
+      (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/'))
     needs: mac
     runs-on: macos-15
     timeout-minutes: 30
