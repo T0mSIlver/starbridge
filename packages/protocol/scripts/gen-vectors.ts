@@ -123,6 +123,13 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
           .replace("-", "\u3000")
           .replace("-", "\uFEFF"),
       ],
+      // While typing: the first character no key holds, and the count, in code points (#1305).
+      read: [
+        { typed: "144GU", count: 5, index: 4, char: "U" },
+        { typed: "\u{1F600}AB", count: 3, index: 0, char: "\u{1F600}" },
+        { typed: "AB-\u{1F600}C", count: 4, index: 2, char: "\u{1F600}" },
+        { typed: "\u{1F44D}\u{1F3FD}1", count: 3, index: 0, char: "\u{1F44D}" },
+      ],
     },
   };
 

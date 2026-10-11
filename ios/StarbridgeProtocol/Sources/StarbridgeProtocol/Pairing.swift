@@ -52,7 +52,8 @@ public enum Crockford {
         for u in text.uppercased().unicodeScalars where u != "-" && !space.contains(u) && !(0x2000...0x200A).contains(u.value) {
             scalars.append(u == "O" ? "0" : u == "I" || u == "L" ? "1" : u)
         }
-        return Array(String(scalars))
+        // One Character per code point, as strings count them (#1082): a skin tone is a character of its own.
+        return scalars.map(Character.init)
     }
 }
 
