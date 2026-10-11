@@ -236,14 +236,15 @@ test("a snooze's first push that comes late hides its question; its return shows
   expect(notes.map((n) => n.tag)).toEqual(["d:d_late"]);
 });
 
-test("a snooze's first push that comes after its return leaves the question up (#1290)", async () => {
+test("a snooze's first push that comes after its return leaves the question up, by a clock behind too (#1290)", async () => {
   const d = decision("d_order");
   live.inject(d);
   // Its return already showed the question; push services keep no order.
   notes = [note("Question d_order", "d:d_order")];
   const now = Date.now();
   const { id, boxPk } = ctx.device;
-  const until = new Date(now - 60_000).toISOString();
+  // Its time a minute ahead: the server's clock may run ahead of this browser's.
+  const until = new Date(now + 60_000).toISOString();
   const z = seal(
     "snooze",
     {
