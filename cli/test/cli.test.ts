@@ -799,6 +799,28 @@ test("Antigravity's Stop hook holds a waiting turn for its answer and hands it o
   expect(await stop("c-1")).toEqual([]);
 });
 
+test("an answer the Stop hook could not print is handed over by the next one (#1287)", async () => {
+  const ctx = await paired(server);
+  ctx.env = { ANTIGRAVITY_CONVERSATION_ID: "c-1" };
+  expect(await run(ASK, ctx)).toBe(0);
+  const id = ctx.lines.at(-1) as string;
+  await server.answer(id, { choice: "Merge" });
+  await poll(ctx, session(ctx), { cursor: ctx.store.state().cursor, seconds: 1, shared: true });
+  const input = JSON.stringify({ conversationId: "c-1" });
+  // Antigravity closed the hook's stdout.
+  const out = ctx.out;
+  ctx.out = () => {
+    throw new Error("write EPIPE");
+  };
+  expect(await hookStop(ctx, input, { agent: "antigravity" })).toBe(0);
+  ctx.out = out;
+  ctx.lines.length = 0;
+  expect(await hookStop(ctx, input, { agent: "antigravity" })).toBe(0);
+  expect(ctx.lines.map((l) => JSON.parse(l))).toEqual([
+    { decision: "continue", reason: `Answer to ${id} (Merge #12 now?): Merge` },
+  ]);
+});
+
 test("config turns permission prompts on and off", async () => {
   const ctx = await paired(server);
   expect(await run(["config"], ctx)).toBe(0);
