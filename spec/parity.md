@@ -39,6 +39,6 @@ opens an issue for each client the row says should follow.
 | Keyboard shortcuts (J K 1-4 A D /) | yes (from 1100 px) | no (only Enter to send, Esc in Find) | yes (as web) | not yet |
 | Sound | yes (off by default, only while a page is open) | yes (system notification channel sound) | yes (macOS default sound; Basso on "Answer not sent"; web Sound row hidden) | not yet |
 | Recover with the recovery key (revokes every other member) | yes | yes | yes (as web) | yes (#1116) |
-| Delete account (Settings and the join screen, its recovery-key view included, typed confirmation) | yes (#1104, #1117) | yes (#1104, #1117, #1166) | yes (as web) | yes (#1141: the inbox's ⋯ menu and the join screen; not the recovery-key view, #1195) |
+| Delete account (Settings and the join screen, its recovery-key view included, typed confirmation) | yes (#1104, #1117) | yes (#1104, #1117, #1166) | yes (as web) | yes (#1141, #1195: the inbox's ⋯ menu and the join screen, its recovery-key view included) |
 
 Only on desktop: the menu bar light, the Dock or menu bar choice, Open at Login, ⌃⌥S, and notifications while no browser runs.
