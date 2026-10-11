@@ -19,8 +19,9 @@ import {
   verifyDirectory,
   type Waiting,
 } from "@starbridge/protocol";
+import { Interrupted } from "./agent/client";
 import { type AgyRoute, ANTIGRAVITY_CONVERSATION, agyRoute, antigravityTitle } from "./antigravity";
-import { ApiError } from "./api";
+import { ApiError, Unreachable } from "./api";
 import { claudeSession } from "./claude";
 import { type CodexSession, codexAsker, codexSession, codexTitle } from "./codex";
 import type { State } from "./config";
@@ -334,7 +335,19 @@ function sealWithPictures(
 export async function postDecision(ctx: Ctx, s: Session, input: AskInput): Promise<Decision> {
   const deadline = AbortSignal.timeout(POST_MS);
   const signal = ctx.signal ? AbortSignal.any([ctx.signal, deadline]) : deadline;
-  const dir = await refreshDirectory(ctx, s, signal);
+  // Ctrl-C exits 130, as everywhere (CONTRACT.md); the deadline says what it cut.
+  const cut = (e: unknown) =>
+    ctx.signal?.aborted
+      ? new Interrupted()
+      : deadline.aborted
+        ? new Unreachable(`the server did not take the question within ${POST_MS / 1000} s`)
+        : e;
+  let dir: Directory;
+  try {
+    dir = await refreshDirectory(ctx, s, signal);
+  } catch (e) {
+    throw cut(e);
+  }
   const pictures = (input.images ?? []).map((i) =>
     typeof i === "string" ? loadPicture(i) : loadPicture(i.path, i.alt),
   );
@@ -397,7 +410,7 @@ export async function postDecision(ctx: Ctx, s: Session, input: AskInput): Promi
         AbortSignal.timeout(WITHDRAW_MS),
       ).catch(() => {});
     }
-    throw e;
+    throw cut(e);
   }
   record();
   if (input.waiting) await markWaiting(ctx, () => postWaiting(ctx, s, decision.id, "waiting"));

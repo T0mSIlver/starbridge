@@ -1079,14 +1079,8 @@ test("SIGTERM ends an ask whose post the server never answers (#1288)", async ()
   const asked = run([...ASK, "--session", "s"], { ...ctx, signal: stop.signal });
   await until(() => server.log.includes("POST /items"));
   stop.abort();
-  const ended = await Promise.race([
-    asked.then(
-      () => true,
-      () => true,
-    ),
-    Bun.sleep(5000).then(() => false),
-  ]);
-  expect(ended).toBe(true);
+  // Ctrl-C exits 130, as CONTRACT.md says.
+  expect(await Promise.race([asked, Bun.sleep(5000).then(() => "still running")])).toBe(130);
 });
 
 test("a decision whose post lost its reply is withdrawn, so its card does not stay on the devices (#1289)", async () => {
