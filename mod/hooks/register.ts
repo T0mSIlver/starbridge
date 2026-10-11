@@ -23,7 +23,10 @@ export const register: Register = (on) => {
   on("session.start", async ($, e, next) => {
     const started = await next(e);
     if (!wantsLoop(e.isInteractive, await $.env.get("CLAUDE_CODE_ENTRYPOINT"))) return started;
-    void loop?.stop();
+    // The new loop takes over the lines the old one submitted and has not confirmed yet, so it
+    // confirms them rather than submitting them again (#1337).
+    const before = loop;
+    void before?.stop();
     const env = {
       STARBRIDGE_AGENT_SOCKET: await $.env.get("STARBRIDGE_AGENT_SOCKET"),
       STARBRIDGE_CONFIG_DIR: await $.env.get("STARBRIDGE_CONFIG_DIR"),
@@ -67,38 +70,42 @@ export const register: Register = (on) => {
     const sessionId = () => $.session.id();
     const now = () => $.clock.now();
     const sleep = (ms: number) => $.clock.sleep(ms);
-    loop = new Switch({
-      // The CLI honours STARBRIDGE_NO_AGENT too, so the CLI path then reaches the server itself.
-      agentUp: async () =>
-        !env.STARBRIDGE_NO_AGENT && (await fetch("GET", "/v1/status")).status < 300,
-      agent: (unconfirmed) =>
-        new AgentLoop(
-          { sessionId, cwd: () => $.session.cwd(), fetch, now, sleep, submit, status, log },
-          unconfirmed,
-        ),
-      poller: (unconfirmed) =>
-        new Poller(
-          {
-            sessionId,
-            run: (argv, timeoutMs) => $.process.run(argv, { timeoutMs }),
-            read: (path) => $.fs.read(path),
-            write: (path, text) => $.fs.write(path, text),
-            mtime: async (path) => (await $.fs.stat(path).catch(() => undefined))?.mtimeMs,
-            now,
-            sleep,
-            submit,
-            status,
-            log,
-          },
-          dir,
-          undefined,
-          undefined,
-          unconfirmed,
-        ),
-      sleep,
-      clearStatus: () => status(undefined),
-      log,
-    });
+    loop = new Switch(
+      {
+        // The CLI honours STARBRIDGE_NO_AGENT too, so the CLI path then reaches the server itself.
+        agentUp: async () =>
+          !env.STARBRIDGE_NO_AGENT && (await fetch("GET", "/v1/status")).status < 300,
+        agent: (unconfirmed) =>
+          new AgentLoop(
+            { sessionId, cwd: () => $.session.cwd(), fetch, now, sleep, submit, status, log },
+            unconfirmed,
+          ),
+        poller: (unconfirmed) =>
+          new Poller(
+            {
+              sessionId,
+              run: (argv, timeoutMs) => $.process.run(argv, { timeoutMs }),
+              read: (path) => $.fs.read(path),
+              write: (path, text) => $.fs.write(path, text),
+              mtime: async (path) => (await $.fs.stat(path).catch(() => undefined))?.mtimeMs,
+              now,
+              sleep,
+              submit,
+              status,
+              log,
+            },
+            dir,
+            undefined,
+            undefined,
+            unconfirmed,
+          ),
+        sleep,
+        clearStatus: () => status(undefined),
+        log,
+      },
+      undefined,
+      before?.unconfirmed,
+    );
     return started;
   });
 
