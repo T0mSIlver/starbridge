@@ -70,18 +70,25 @@ export function isPrivateHost(hostname: string): boolean {
 
 /**
  * Judges an IPv6 address by the IPv4 address it embeds, where a translator could route it to
- * one: IPv4-compatible (`::a.b.c.d`, and so `::` and `::1`), IPv4-mapped, NAT64 and 6to4.
+ * one: IPv4-compatible (`::a.b.c.d`, and so `::` and `::1`), IPv4-mapped, IPv4-translated
+ * (`::ffff:0:a.b.c.d`, RFC 2765), NAT64 and 6to4.
  */
 function privateV6(ip: string): boolean {
   const [a = 0, b = 0, c = 0, d = 0, e = 0, f = 0, g = 0, h = 0] = v6Words(ip);
   const v4 = (hi: number, lo: number) => `${hi >> 8}.${hi & 255}.${lo >> 8}.${lo & 255}`;
   const zeroToE = a === 0 && b === 0 && c === 0 && d === 0 && e === 0;
   if (zeroToE && (f === 0 || f === 0xffff)) return privateV4(v4(g, h));
+  if (a === 0 && b === 0 && c === 0 && d === 0 && e === 0xffff && f === 0)
+    return privateV4(v4(g, h));
   if (a === 0x64 && b === 0xff9b && c === 0 && d === 0 && e === 0 && f === 0)
     return privateV4(v4(g, h));
   // Local-use NAT64 (64:ff9b:1::/48) places the IPv4 address by prefix length, so refuse it whole.
   if (a === 0x64 && b === 0xff9b && c === 1) return true;
   if (a === 0x2002) return privateV4(v4(b, c));
+  // Teredo (2001:0::/32) and ISATAP (interface ID 0:5efe or 200:5efe and an IPv4 address) are
+  // deprecated, so no push service uses them: refused whole.
+  if (a === 0x2001 && b === 0) return true;
+  if (f === 0x5efe && (e === 0 || e === 0x200)) return true;
   return (a & 0xfe00) === 0xfc00 || (a & 0xffc0) === 0xfe80;
 }
 
