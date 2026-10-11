@@ -149,17 +149,20 @@
 - **Nulls** (#505). A `null` in a field the schema does not make nullable refuses the item on every
   client, as zod does. Android, whose classes read null as absent, checks each declared field
   after `readable()` and ignores fields it does not declare, as zod strips them.
-- **Local state carries its format** (#473), and a file a client cannot read is kept, never
-  silently replaced. The CLI writes `v: 1` into `machine.json`, `directory.json` (`{v, entries}`),
+- **Local state carries its format** (#473), and a file a client cannot read is kept, never silently
+  replaced. The CLI writes `v: 1` into `machine.json`, `directory.json` (`{v, entries}`),
   `agent.json` and `state.json`; a file without `v` is format 1, and one that is not JSON, not an
   object or newer stops the command with its path and what to do; `latest.json`, only a cache of
   GitHub's answer, moves aside instead, as Android's files do (#1174). Android writes `v` into
   `state.bin` and `secrets.bin` and a format byte ahead of the Keystore blob; the two describe one
   device, so when either cannot be read both move to `<name>.unreadable-<time>` and the app starts
-  signed out and says so. Quota settings write their defaults, so a later default never changes a
-  saved choice. The web writes `v` into its localStorage values and leaves a newer format alone; a
-  damaged one, or one without `v`, is replaced at the next change, since it holds only display
-  choices. IndexedDB's own
+  signed out and says so. The iPhone app writes `v` into `saved.json`; when that file cannot be
+  decoded, it moves to `saved.json.unreadable-<time>`, the keychain item's secrets move to a second
+  item with the same tag, and the app starts signed out and says so. A file it cannot read at all,
+  as before the first unlock, or cannot move stays, and the app writes nothing until a launch can
+  (#1159). Quota settings write their defaults, so a later default never changes a saved choice. The
+  web writes `v` into its localStorage values and leaves a newer format alone; a damaged one, or one
+  without `v`, is replaced at the next change, since it holds only display choices. IndexedDB's own
   version is the records' format, and sign-out removes every record kind of the account.
 - **Old clients** (#468). Every client names its release in `starbridge-client:
   <name>/<version>` (`cli`, `android`, `web`, `mod`, `desktop`, `ios`; MAJOR.MINOR.PATCH). The server refuses

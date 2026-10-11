@@ -200,7 +200,7 @@ struct OptionButton: View {
     }
 }
 
-/** A question's options: in a row when two short ones fit, else stacked (#138). */
+/** A question's options, the default first: in a row when two short ones fit, else stacked (#138). */
 struct Options: View {
     let decision: Decision
     let amber: Bool
@@ -211,8 +211,9 @@ struct Options: View {
         let stack = decision.options.count > 2 || decision.options.contains { $0.count > 18 }
         let layout = stack ? AnyLayout(VStackLayout(spacing: Tokens.Spacing.s2)) : AnyLayout(HStackLayout(spacing: Tokens.Spacing.s2))
         layout {
-            ForEach(decision.options, id: \.self) { o in
-                OptionButton(label: o, strong: o == decision.recommended, amber: amber, height: height) { answer(o) }
+            // By place, not text: two options may differ only by code points.
+            ForEach(Array(decision.ordered.enumerated()), id: \.offset) { _, o in
+                OptionButton(label: o, strong: sameOption(o, decision.recommended), amber: amber, height: height) { answer(o) }
             }
         }
     }

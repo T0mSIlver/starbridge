@@ -23,6 +23,10 @@ struct DigitJoin: Codable, Equatable {
 
 /** What the app keeps between launches that is not secret. */
 struct Saved: Codable, Equatable {
+    /** The file's format (#473): this release reads only its own, and a file without `v` is format 1. */
+    static let format = 1
+
+    var v = Saved.format
     var server: String
     var account: String?
     /** The account already has a device, which this iPhone joins through. */
@@ -60,6 +64,10 @@ struct Saved: Codable, Equatable {
     /** A field a newer release added reads as its default, so an update keeps the saved state. */
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
+        v = try c.decodeIfPresent(Int.self, forKey: .v) ?? 1
+        guard v == Saved.format else {
+            throw DecodingError.dataCorruptedError(forKey: .v, in: c, debugDescription: "format \(v), this release reads \(Saved.format)")
+        }
         server = try c.decode(String.self, forKey: .server)
         account = try c.decodeIfPresent(String.self, forKey: .account)
         accountExists = try c.decodeIfPresent(Bool.self, forKey: .accountExists) ?? false
@@ -113,9 +121,48 @@ struct Disk {
         return Disk(url: group)
     }()
 
-    func load() -> Saved? {
-        guard let data = try? Data(contentsOf: url) else { return nil }
-        return try? JSONDecoder().decode(Saved.self, from: data)
+    /** The saved state, nil when there is none; throws when the file is there but unreadable. */
+    func read() throws -> Saved? {
+        guard FileManager.default.fileExists(atPath: url.path) else { return nil }
+        return try JSONDecoder().decode(Saved.self, from: Data(contentsOf: url))
+    }
+
+    /** The saved state, or nil when there is none or it cannot be read; moves nothing. */
+    func load() -> Saved? { try? read() }
+
+    /** What the app found at launch. */
+    enum Loaded {
+        case saved(Saved?)
+        /** Not this release's format, or damaged: kept as `saved.json.unreadable-<tag>`. */
+        case aside(tag: String)
+        /** Not read, or not moved aside: left where it is, and why. */
+        case stuck(String)
+    }
+
+    /**
+     * The saved state for the app. A file this release cannot decode, a newer release's or a
+     * damaged one, moves aside to `saved.json.unreadable-<tag>`, kept rather than overwritten
+     * (#473). A file it cannot read at all, such as before the first unlock, stays where it is.
+     */
+    func loadOrMoveAside() -> Loaded {
+        guard FileManager.default.fileExists(atPath: url.path) else { return .saved(nil) }
+        let data: Data
+        do {
+            data = try Data(contentsOf: url)
+        } catch {
+            return .stuck("\(error.localizedDescription)")
+        }
+        do {
+            return .saved(try JSONDecoder().decode(Saved.self, from: data))
+        } catch {
+            let tag = "\(Int(Date().timeIntervalSince1970 * 1000))-\(UUID().uuidString.prefix(8).lowercased())"
+            do {
+                try FileManager.default.moveItem(at: url, to: url.appendingPathExtension("unreadable-\(tag)"))
+                return .aside(tag: tag)
+            } catch {
+                return .stuck("\(error.localizedDescription)")
+            }
+        }
     }
 
     func save(_ saved: Saved) throws {

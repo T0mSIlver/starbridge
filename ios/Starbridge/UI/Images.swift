@@ -186,7 +186,7 @@ struct ImageOptions: View {
                 VStack(spacing: Tokens.Spacing.s2) {
                     Thumb(image: images[i]) { open(i) }
                         .frame(maxHeight: Tokens.Sizes.pick)
-                    OptionButton(label: option, strong: option == recommended, amber: amber, height: 48) { answer(option) }
+                    OptionButton(label: option, strong: sameOption(option, recommended), amber: amber, height: 48) { answer(option) }
                 }
             }
         }

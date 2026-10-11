@@ -23,6 +23,8 @@ struct Secrets: Codable, Equatable {
 protocol Vault {
     func load() throws -> Secrets
     func save(_ secrets: Secrets) throws
+    /** Keeps the secrets under `tag` and empties the item: they go with a saved state set aside. */
+    func setAside(_ tag: String) throws
 }
 
 struct VaultError: Error, CustomStringConvertible {
@@ -101,5 +103,12 @@ struct KeychainVault: Vault {
             status = SecItemAdd(query.merging(attributes) { $1 } as CFDictionary, nil)
         }
         guard status == errSecSuccess else { throw VaultError(status: status) }
+    }
+
+    func setAside(_ tag: String) throws {
+        let secrets = try load()
+        guard secrets != Secrets() else { return }
+        try KeychainVault(service: service, account: "\(account).unreadable-\(tag)", group: group).save(secrets)
+        try save(Secrets())
     }
 }

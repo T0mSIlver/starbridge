@@ -74,18 +74,25 @@ export function isPrivateHost(hostname: string): boolean {
 
 /**
  * Judges an IPv6 address by the IPv4 address it embeds, where a translator could route it to
- * one: IPv4-compatible (`::a.b.c.d`, and so `::` and `::1`), IPv4-mapped, NAT64 and 6to4.
+ * one: IPv4-compatible (`::a.b.c.d`, and so `::` and `::1`), IPv4-mapped, IPv4-translated
+ * (`::ffff:0:a.b.c.d`, RFC 2765), NAT64 and 6to4.
  */
 function privateV6(ip: string): boolean {
   const [a = 0, b = 0, c = 0, d = 0, e = 0, f = 0, g = 0, h = 0] = v6Words(ip);
   const v4 = (hi: number, lo: number) => `${hi >> 8}.${hi & 255}.${lo >> 8}.${lo & 255}`;
   const zeroToE = a === 0 && b === 0 && c === 0 && d === 0 && e === 0;
   if (zeroToE && (f === 0 || f === 0xffff)) return privateV4(v4(g, h));
+  if (a === 0 && b === 0 && c === 0 && d === 0 && e === 0xffff && f === 0)
+    return privateV4(v4(g, h));
   if (a === 0x64 && b === 0xff9b && c === 0 && d === 0 && e === 0 && f === 0)
     return privateV4(v4(g, h));
   // Local-use NAT64 (64:ff9b:1::/48) places the IPv4 address by prefix length, so refuse it whole.
   if (a === 0x64 && b === 0xff9b && c === 1) return true;
   if (a === 0x2002) return privateV4(v4(b, c));
+  // Teredo (2001:0::/32) and ISATAP (interface ID 0:5efe or 200:5efe and an IPv4 address) are
+  // deprecated, so no push service uses them: refused whole.
+  if (a === 0x2001 && b === 0) return true;
+  if (f === 0x5efe && (e === 0 || e === 0x200)) return true;
   return (a & 0xfe00) === 0xfc00 || (a & 0xffc0) === 0xfe80;
 }
 
@@ -220,13 +227,15 @@ export class Push {
 
   /**
    * Pushes `payload(member)` to every subscription of each member of `types`, without waiting.
-   * Each account has at most `ACCOUNT_CONCURRENCY` pushes in flight.
+   * Each account has at most `ACCOUNT_CONCURRENCY` pushes in flight. `thread` groups an APNs
+   * alert under another machine than the payload's sender (`apnsRequest`).
    */
   notify(
     account: string,
     members: string[],
     payload: (member: string) => string,
     types: PushType[] = PushType.options,
+    thread?: string,
   ): void {
     if (members.length === 0) return;
     const subs = this.db
@@ -254,7 +263,7 @@ export class Push {
       this.queue(account, s.type, async () => {
         // The push may have waited its turn while the device was revoked or unsubscribed.
         if (!this.stillSubscribed(account, s.id)) return;
-        const r = await this.send(target, body);
+        const r = await this.send(target, body, true, thread);
         this.onSent?.(s.type, r);
         if (r === "gone") this.db.query("DELETE FROM push_subscriptions WHERE id = ?").run(s.id);
       });
@@ -330,7 +339,12 @@ export class Push {
    * Sends one push: directly when this server holds the credentials, else via the relay unless
    * `relay` is false (the relay itself never forwards onward).
    */
-  async send(target: PushTarget, payload: string, relay = true): Promise<PushResult> {
+  async send(
+    target: PushTarget,
+    payload: string,
+    relay = true,
+    thread?: string,
+  ): Promise<PushResult> {
     try {
       switch (target.type) {
         case "fcm":
@@ -347,8 +361,9 @@ export class Push {
               target.endpoint,
               target.environment ?? "production",
               payload,
+              thread,
             );
-          return relay ? await this.viaRelay(target, payload) : "no-route";
+          return relay ? await this.viaRelay(target, payload, thread) : "no-route";
       }
     } catch (e) {
       console.error(`push to ${target.type} failed:`, e);
@@ -367,12 +382,16 @@ export class Push {
     return ((await res.json()) as { publicKey?: string }).publicKey;
   }
 
-  private async viaRelay(target: PushTarget, payload: string): Promise<PushResult> {
+  private async viaRelay(
+    target: PushTarget,
+    payload: string,
+    thread?: string,
+  ): Promise<PushResult> {
     if (!this.config.relayUrl) return "no-route";
     const res = await this.fetchFn(`${this.config.relayUrl}/v1/relay`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ ...target, payload }),
+      body: JSON.stringify({ ...target, payload, ...(thread ? { thread } : {}) }),
       signal: this.timeout(),
     });
     if (!res.ok) return "failed";

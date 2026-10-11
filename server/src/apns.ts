@@ -31,9 +31,15 @@ export interface ApnsRequest {
  * an alert with `mutable-content`, so the app's notification service extension replaces the
  * placeholder with what the box says; the payload rides in `p` as JSON. What only closes or
  * hides a notification (`answered`, a settled notice, a snooze as it is posted) goes as a
- * background push, which iOS may hold or drop: the app syncs when it opens.
+ * background push, which iOS may hold or drop: the app syncs when it opens. `thread` is the machine
+ * an item from a device is about: a snooze's return groups under the question's machine (#1168).
  */
-export function apnsRequest(payload: string, topic: string, now = Date.now()): ApnsRequest {
+export function apnsRequest(
+  payload: string,
+  topic: string,
+  now = Date.now(),
+  thread?: string,
+): ApnsRequest {
   const head = JSON.parse(payload) as {
     kind: string;
     id: string;
@@ -63,7 +69,7 @@ export function apnsRequest(payload: string, topic: string, now = Date.now()): A
       "mutable-content": 1,
       category: shown.category,
       // Grouped by machine; a join comes from no machine.
-      "thread-id": head.kind === "join" ? "join" : (head.from ?? "starbridge"),
+      "thread-id": head.kind === "join" ? "join" : (thread ?? head.from ?? "starbridge"),
     };
   } else {
     // APNs refuses priority 10 for a background push.
@@ -102,8 +108,13 @@ export class Apns {
    * and dropping its subscription for that would silence a device that works (the lesson of
    * #1011). Every other refusal, a timeout or an outage keeps the subscription.
    */
-  async send(token: string, environment: ApnsEnvironment, payload: string): Promise<PushResult> {
-    const req = apnsRequest(payload, this.config.topic);
+  async send(
+    token: string,
+    environment: ApnsEnvironment,
+    payload: string,
+    thread?: string,
+  ): Promise<PushResult> {
+    const req = apnsRequest(payload, this.config.topic, Date.now(), thread);
     const first = await this.post(environment, token, req);
     if (first.status === 200) return "ok";
     if (first.status === 410) return "gone";

@@ -1,4 +1,5 @@
 import StarbridgeProtocol
+import UserNotifications
 import XCTest
 @testable import Starbridge
 
@@ -142,6 +143,17 @@ final class InboxTests: XCTestCase {
         XCTAssertEqual(store.openPrompts.map(\.id), ["p_one"])
         XCTAssertEqual(store.shownRuns.map(\.id), ["r_one"])
 
+        // Notifications, as APNs would have shown them: a sync closes those of items it finds closed (#1184).
+        _ = try await UNUserNotificationCenter.current().requestAuthorization(options: [.provisional, .alert])
+        func delivered() async -> Set<String> { Set(await UNUserNotificationCenter.current().deliveredNotifications().map(\.request.identifier)) }
+        func show(_ id: String) async throws {
+            await Notify.post(id, kind: "decision", title: "Ship it?", subtitle: nil, body: "")
+            for _ in 0..<50 where await !delivered().contains(id) { try await Task.sleep(for: .milliseconds(100)) }
+            let shown = await delivered()
+            XCTAssertTrue(shown.contains(id))
+        }
+        try await show("d_one")
+
         // --- Answered online: it leaves at the tap, and the machine gets it ---
         store.answer("d_one", choice: "Yes", text: nil)
         XCTAssertTrue(store.openDecisions.isEmpty)
@@ -150,6 +162,9 @@ final class InboxTests: XCTestCase {
         var got = try await answers()
         XCTAssertEqual(got.map(\.decisionId), ["d_one"])
         XCTAssertEqual(got.first?.choice, "Yes")
+        await store.refresh()
+        var shown = await delivered()
+        XCTAssertFalse(shown.contains("d_one"))
 
         await store.answerPrompt("p_one", allow: true)
         XCTAssertNil(store.notice)
@@ -215,5 +230,14 @@ final class InboxTests: XCTestCase {
         await store.snooze("d_four", until: Date())
         XCTAssertNil(store.notice)
         XCTAssertTrue(store.openDecisions.contains { $0.id == "d_four" })
+
+        // --- The machine is revoked: its open question leaves, and so does its notification (#344, #1184) ---
+        try await show("d_four")
+        let revoke = Directories.revokeEntry(try await directory(), signer: phone.id, signKey: phoneSign, id: machine.id, at: now())
+        try await call(phoneSession, "POST", "/directory", ["entry": revoke.json])
+        await store.refresh()
+        XCTAssertFalse(store.openDecisions.contains { $0.id == "d_four" })
+        shown = await delivered()
+        XCTAssertFalse(shown.contains("d_four"))
     }
 }

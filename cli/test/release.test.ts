@@ -228,6 +228,18 @@ describe.skipIf(WINDOWS).each(verifiers)("install.sh checking with %s", (verifie
     release = fakeReleases("9.9.9");
     expect((await run(release.url, release.pubkey, "v9.9.9")).code).toBe(0);
   });
+
+  test("refuses an older signed release served as the latest", async () => {
+    release = fakeReleases("9.9.9", { signed: "1.0.0" });
+    const r = await run(release.url, release.pubkey);
+    expect(r.err).toContain('SHA256SUMS is signed for "starbridge v1.0.0", not starbridge v9.9.9');
+    expect(existsSync(r.bin)).toBe(false);
+  });
+
+  test("refuses a plain-HTTP mirror off this machine", async () => {
+    const r = await run("http://releases.example/releases", "x");
+    expect(r.err).toContain("STARBRIDGE_RELEASES_URL must be an https URL");
+  });
 });
 
 /** The `n`th line of a signature file, changed by `f`. */
