@@ -235,3 +235,31 @@ test("a snooze's first push that comes late hides its question; its return shows
   await push(payload(item, { wakeAt: item.wakeAt, due: true }));
   expect(notes.map((n) => n.tag)).toEqual(["d:d_late"]);
 });
+
+test("a snooze's first push that comes after its return leaves the question up (#1290)", async () => {
+  const d = decision("d_order");
+  live.inject(d);
+  // Its return already showed the question; push services keep no order.
+  notes = [note("Question d_order", "d:d_order")];
+  const now = Date.now();
+  const { id, boxPk } = ctx.device;
+  const until = new Date(now - 60_000).toISOString();
+  const z = seal(
+    "snooze",
+    {
+      v: 1,
+      id: "z_order",
+      decisionId: "d_order",
+      to: ["m_devbox", id],
+      until,
+      at: new Date(now - 6 * 60_000).toISOString(),
+    },
+    { id: "phone", signKey: live.owner.device.keys.sign.privateKey },
+    [
+      { id: "m_devbox", boxPk: publicKeys(mKeys).boxPk },
+      { id, boxPk },
+    ],
+  );
+  await push(payload({ ...z, re: "d_order", wakeAt: until }, { wakeAt: until, due: false }));
+  expect(notes.map((n) => n.tag)).toEqual(["d:d_order"]);
+});

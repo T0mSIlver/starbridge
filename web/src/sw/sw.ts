@@ -155,8 +155,10 @@ async function onPush(text: string): Promise<void> {
     // takes a first push that comes late for the return (#1290).
     const due = payload.due ?? Date.now() >= until - WAKE_SKEW_MS;
     if (!due) {
-      for (const n of await self.registration.getNotifications({ tag: tag(z.decisionId) }))
-        n.close();
+      // Once its time has passed, its return showed the question or will: closing would hide it.
+      if (Date.now() < until)
+        for (const n of await self.registration.getNotifications({ tag: tag(z.decisionId) }))
+          n.close();
       return;
     }
     if (answered.has(`${account}/${z.decisionId}`)) return;
