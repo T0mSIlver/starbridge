@@ -535,7 +535,8 @@ export async function settle(ctx: Ctx, opts: SettleOpts): Promise<number> {
     if (!withdrawn && reason !== undefined)
       throw new UsageError("--reason is for --outcome withdrawn");
     const s = session(ctx);
-    await settleOne(ctx, s, await refreshDirectory(ctx, s), id, outcome, false, reason);
+    const dir = await refreshDirectory(ctx, s, ctx.signal);
+    await settleOne(ctx, s, dir, id, outcome, false, reason, ctx.signal);
     return 0;
   }
   if (reason !== undefined && outcome !== "withdrawn")

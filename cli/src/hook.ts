@@ -369,9 +369,12 @@ export function pickerOpen(st: ReturnType<Ctx["store"]["state"]>, session: strin
 }
 
 async function settlePicker(ctx: Ctx, session: string, outcome: "elsewhere" | "withdrawn") {
+  // Its own deadline, not SIGTERM's: a stalled server would hold the hook until the harness
+  // kills it (#1286).
+  const sub = { ...ctx, signal: AbortSignal.timeout(REPORT_MS) };
   await Promise.all(
     pickerOpen(ctx.store.state(), session).map((id) =>
-      settle({ ...ctx, signal: undefined }, { id, outcome, ...pickerReason(outcome) }).catch((e) =>
+      settle(sub, { id, outcome, ...pickerReason(outcome) }).catch((e) =>
         ctx.err(`starbridge: could not settle ${id}: ${(e as Error).message}`),
       ),
     ),
