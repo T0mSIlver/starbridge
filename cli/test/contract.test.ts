@@ -1,6 +1,6 @@
 // Pins what agents and the plugins parse (cli/CONTRACT.md): stable from 0.1.0.
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { LiveServer } from "@starbridge/server/test-support";
@@ -166,4 +166,24 @@ test("decisions --open lists the open questions as JSON lines, until answered or
   ctx.lines.length = 0;
   expect(await run(["decisions", "--open"], ctx)).toBe(0);
   expect(ctx.lines).toEqual([]);
+});
+
+// What CONTRACT.md's settle row says it prints, in each case (#1340).
+test("settle --session prints the lines CONTRACT.md documents", async () => {
+  const row = readFileSync(join(import.meta.dir, "../CONTRACT.md"), "utf8")
+    .split("\n")
+    .find((l) => l.startsWith("| `settle --session <id>`")) as string;
+  const ctx = await paired(server);
+  const settled = async () => {
+    ctx.lines.length = 0;
+    expect(await run(["settle", "--session", "s", "--outcome", "elsewhere"], ctx)).toBe(0);
+    return ctx.lines.at(-1) as string;
+  };
+  expect(row).toContain(`\`${(await settled()).replace(" s ", " <id> ")}\``);
+  for (const n of [1, 2]) {
+    for (let i = 0; i < n; i++)
+      expect(await run(["ask", "--question", "Ship?", "--session", "s"], ctx)).toBe(0);
+    const line = await settled();
+    expect(row).toContain(`\`${n === 1 ? line : line.replace("2", "<n>")}\``);
+  }
 });
