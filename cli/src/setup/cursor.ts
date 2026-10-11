@@ -6,7 +6,7 @@
  * neither its skills nor its sessionStart and stop hooks (2026.10.01).
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, join, relative } from "node:path";
+import { dirname, isAbsolute, join, relative } from "node:path";
 import cli from "../../../plugin/hooks/cli.sh" with { type: "text" };
 import sessionStart from "../../../plugin/hooks/session-start.sh" with { type: "text" };
 import rule from "../../../plugin/rules/cursor.md" with { type: "text" };
@@ -201,9 +201,10 @@ export function removeCursorFiles(sys: Home): string[] {
   const done: string[] = [];
   // The owner's files beside Starbridge's stay (#1324).
   const remove = (dir: string) => {
+    // Relative paths, so Windows' separators match too.
     const files = Object.keys(cursorFiles(sys))
-      .filter((path) => path.startsWith(`${dir}/`))
-      .map((path) => relative(dir, path));
+      .map((path) => relative(dir, path))
+      .filter((path) => !path.startsWith("..") && !isAbsolute(path));
     done.push(removedLine(dir, removeWritten(dir, files)));
   };
   if (ours(readText(join(cursorSkillDir(sys), "SKILL.md")))) remove(cursorSkillDir(sys));
