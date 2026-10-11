@@ -10,16 +10,19 @@ import {
 } from "../src";
 import keys from "../vectors/keys.json";
 
-beforeAll(() => ready);
+const key = keys.recovery.key;
+// Read once libsodium is loaded: at module load it may not be yet (#1256).
+let seed: Uint8Array;
+beforeAll(async () => {
+  await ready;
+  seed = recoverySeedFromKey(key);
+});
 
 test("a new account gets a key of seven groups of four", () => {
   expect(recoveryKey(generateRecoverySeed())).toMatch(
     /^[0-9A-HJKMNP-TV-Z]{4}(-[0-9A-HJKMNP-TV-Z]{4}){6}$/,
   );
 });
-
-const key = keys.recovery.key;
-const seed = recoverySeedFromKey(key);
 
 test.each([
   ["lower case", key.toLowerCase()],

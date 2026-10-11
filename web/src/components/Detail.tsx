@@ -224,7 +224,7 @@ export function QuestionDetail({
           waiting={!!since}
           size="comfy"
         />
-        <h2 className="t-heading">{d.question}</h2>
+        <h2 className={`t-heading ${s.title}`}>{d.question}</h2>
         {snoozed && (
           <p className={`t-small ${s.snoozed}`}>
             <Icon name="snooze" size={16} />
@@ -447,7 +447,7 @@ export function PromptDetail({
         <div className={s.toolHead}>
           <KindTile type="prompt" filled={!closed} size={28} />
           {/* What the agent says the call does, else the tool (#805). */}
-          <h2 className="t-action">{p.description || p.tool}</h2>
+          <h2 className={`t-action ${s.title}`}>{p.description || p.tool}</h2>
         </div>
       </Head>
       {/* The whole input, never the capped summary: Allow covers all of it (#274). */}
