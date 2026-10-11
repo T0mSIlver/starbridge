@@ -115,9 +115,12 @@ try {
     const rec = JSON.parse(readFileSync(file, "utf8"));
     const d = rec.decisions[Number(index)];
     const name = `${basename(file, ".json")}-d${index}`;
-    // The images run.ts saved beside the records.
-    const images = (d.images ?? []).map((_: unknown, j: number) =>
-      join(dirname(file), `${rec.agent}-${basename(file, ".json")}-d${index}-img${j}.png`),
+    // The images run.ts saved beside the records, named by their type (#1302).
+    const images = (d.images ?? []).map((img: { type: string }, j: number) =>
+      join(
+        dirname(file),
+        `${rec.agent}-${basename(file, ".json")}-d${index}-img${j}.${img.type === "image/png" ? "png" : "jpg"}`,
+      ),
     );
     const card = {
       question: d.question,
