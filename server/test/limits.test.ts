@@ -12,12 +12,14 @@ import {
   pairingRequest,
   publicKeys,
   type QuotaSnapshot,
+  ready,
   recoverEntry,
   recoveryEntry,
   recoveryKeyPair,
   type SealedItem,
   type Settled,
   seal,
+  sealImage,
   toB64,
 } from "@starbridge/protocol";
 import { openDb } from "../src/db";
@@ -117,6 +119,32 @@ test("machines' items spend a byte budget a minute, replaced and stored ones onl
   expect(r.status).toBe(429);
   expect(r.json.detail).toContain("MB");
   expect((await post(s, devbox, quota(devbox, phone))).status).toBe(429);
+});
+
+test("a re-seal spends the budget for the images it keeps, which the server writes again", async () => {
+  await ready;
+  const { blob, ref } = sealImage(new Uint8Array(30_000).map((_, i) => i % 251));
+  const { s, phone, devbox } = await setup({
+    postedBytes: [Math.floor(blob.length * 2.5), 60_000],
+  });
+  const body: Decision = {
+    v: 1,
+    id: "d-images",
+    to: [phone.id],
+    createdAt: at,
+    question: "Ship it?",
+    context: "",
+    options: ["yes", "no"],
+    recommended: "yes",
+    source: { machine: devbox.id, project: "starbridge", session: "s1" },
+    images: [{ type: "image/png", width: 10, height: 10, ...ref }],
+  };
+  const sealed = () =>
+    seal("decision", body, { id: devbox.id, signKey: devbox.keys.sign.privateKey }, [phone.member]);
+  expect((await post(s, devbox, { ...sealed(), blobs: [blob] })).status).toBe(201);
+  expect((await post(s, devbox, { ...sealed(), reseal: true })).status).toBe(201);
+  const r = await post(s, devbox, { ...sealed(), reseal: true });
+  expect(r.status).toBe(429);
 });
 
 test("a looping machine spends its own window first, and the owner's answers always pass", async () => {
