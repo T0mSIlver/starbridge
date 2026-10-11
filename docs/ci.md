@@ -104,7 +104,5 @@ ssh sb-hp 'journalctl -u gh-runner@1 -n 50 --no-pager; df -h /; free -h'
   `journalctl --user -u starbridge-runner-feed -n 50` on the feeding machine.
 - A runner's own logs are in `/home/runner/slots/<n>/_diag`, kept for three days.
 - The disk is full: `ssh <box> sudo systemctl start gh-runner-cleanup`.
-- A cached download looks broken (a job fails on one slot only): `ssh <box> sudo -u runner touch
-  /run/gh-runner/<n>.drop-tools`, and the slot empties its tool cache before its next job.
 - A job hangs: `sudo systemctl restart gh-runner@<n>` kills it and wipes the slot; GitHub marks
   the job failed.
