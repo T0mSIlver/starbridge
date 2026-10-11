@@ -7,7 +7,8 @@
   Pushes in flight, 4 per address, 8 per IPv6 /48 and 16 per push service host), so nobody can
   aim it at a host or burn the VAPID key (#577). A push service that never answers holds a slot
   for 10 s; the per-host cap bounds what any one host gets, and the caps per sender leave the
-  rest to other servers. It
+  rest to other servers. The server refuses relay mode with `ALLOW_PRIVATE_PUSH_ENDPOINTS`, which
+  is for a self-hoster's own network. It
   pushes only ciphertext or ids. A push carries the
   device's ciphertext when it fits FCM's 4 KB, else the item id.
 - Quota snapshots and runs skip Web Push: browsers drop subscriptions whose pushes show no

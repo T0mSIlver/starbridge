@@ -4,7 +4,7 @@ import { type Decision, type QuotaSnapshot, type Run, seal } from "@starbridge/p
 import * as ece from "http_ece";
 import webpush from "web-push";
 import { createApp } from "../src/app";
-import type { Config } from "../src/config";
+import { type Config, configFromEnv } from "../src/config";
 import { DEFAULT_LIMITS } from "../src/limits";
 import { checkTarget } from "../src/push";
 import { aggregate, dayOf } from "../src/usage";
@@ -383,6 +383,14 @@ test("relay mode: a server without credentials forwards FCM and Web Push through
   } finally {
     relayServer.stop(true);
   }
+});
+
+test("a relay never allows private push endpoints: it pushes for anyone who asks", () => {
+  expect(() => configFromEnv({ RELAY_MODE: "1", ALLOW_PRIVATE_PUSH_ENDPOINTS: "1" })).toThrow(
+    "RELAY_MODE is refused with ALLOW_PRIVATE_PUSH_ENDPOINTS",
+  );
+  expect(configFromEnv({ RELAY_MODE: "1" }).relayMode).toBe(true);
+  expect(configFromEnv({ ALLOW_PRIVATE_PUSH_ENDPOINTS: "1" }).allowPrivatePushEndpoints).toBe(true);
 });
 
 test("the relay route is off unless RELAY_MODE, refuses UnifiedPush and private endpoints", async () => {
