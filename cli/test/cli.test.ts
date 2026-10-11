@@ -1183,21 +1183,24 @@ test("an answer from a device revoked before the machine fetched it closes the d
   await laptopAnswer(ctx, laptop, id);
   await server.revoke("laptop");
   expect(await run(["wait", id, "--timeout", "5s"], ctx)).toBe(1);
-  expect(ctx.errors.join("\n")).toContain("refused that answer");
+  expect(ctx.errors.join("\n")).toContain("removed since");
+  expect(ctx.store.state().asked[id]).toMatchObject({ settled: true, revoked: true });
   ctx.lines.length = 0;
   expect(await run(["decisions", "--open"], ctx)).toBe(0);
   expect(ctx.lines.join("")).not.toContain(id);
 });
 
-test("an answer whose routing hint names another decision closes the one the server marked answered (#1301)", async () => {
+test("a revoked device's answer whose routing hint names another decision closes neither (#1301)", async () => {
   const ctx = await paired(server);
   const laptop = await server.addDevice("laptop");
   await run([...ASK, "--session", "s"], ctx);
   await run(["ask", "--question", "Name the branch?", "--session", "s"], ctx);
   const [first, second] = ctx.lines.slice(-2) as [string, string];
+  // The hint is not signed: only the body says which decision a device answered.
   await laptopAnswer(ctx, laptop, second, first);
-  expect(await run(["wait", first, "--timeout", "5s"], ctx)).toBe(1);
-  expect(ctx.errors.join("\n")).toContain("refused that answer");
+  await server.revoke("laptop");
+  expect(await run(["wait", first, "--timeout", "1s"], ctx)).toBe(2);
+  expect(ctx.store.state().asked[first]?.settled).toBeUndefined();
   expect(ctx.store.state().asked[second]?.settled).toBeUndefined();
 });
 
