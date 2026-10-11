@@ -1,4 +1,4 @@
-import { beforeAll, expect, test } from "bun:test";
+import { expect, test } from "bun:test";
 import {
   generateRecoverySeed,
   RecoveryKeyError,
@@ -10,7 +10,8 @@ import {
 } from "../src";
 import keys from "../vectors/keys.json";
 
-beforeAll(() => ready);
+// The key below is read as the module loads, before any beforeAll runs.
+await ready;
 
 test("a new account gets a key of seven groups of four", () => {
   expect(recoveryKey(generateRecoverySeed())).toMatch(
