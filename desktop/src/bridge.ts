@@ -57,7 +57,8 @@ export function parseState(x: unknown): PageState | null {
     entries.push(entry);
   }
   // Pages before #1031 send neither: their entries say who waits, and a count means signed in.
-  const waiting = x.waiting ?? entries.filter((e) => e.waiting).length;
+  // All of them, past the cap too.
+  const waiting = x.waiting ?? x.entries.filter((e) => isObject(e) && e.waiting === true).length;
   if (typeof waiting !== "number" || !Number.isInteger(waiting) || waiting < 0 || waiting > count)
     return null;
   const account = x.account ?? "ready";

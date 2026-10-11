@@ -22,6 +22,15 @@ test("past 200 entries, the first 200 are kept with the full count", () => {
   expect(s?.entries.map((e) => e.id)).toEqual(entries.slice(0, 200).map((e) => e.id));
 });
 
+test("a page before #1031 with over 200 entries counts the waiting among all of them", () => {
+  const entries = Array.from({ length: 250 }, (_, i) => ({
+    ...entry,
+    id: `d-${i}`,
+    waiting: i >= 240,
+  }));
+  expect(parseState({ count: 250, entries })?.waiting).toBe(10);
+});
+
 test("a page before #1031 counts the waiting from its entries", () => {
   expect(parseState({ count: 1, entries: [{ ...entry, waiting: true }] })).toMatchObject({
     waiting: 1,
