@@ -8,11 +8,13 @@ dir=/home/runner/slots/$n
 q=/run/gh-runner
 
 # Everything a job leaves goes except the tool cache, _work/_tool: Node, Bun, pnpm's store and
-# Firefox, which jobs look up by version or hash. A container can leave root's files behind, which
-# only a container can delete.
+# Firefox, which jobs look up by version or hash. The tool cache goes too when the disk is 80% full
+# or /run/gh-runner/<n>.drop-tools exists. A container can leave root's files behind, which only a
+# container can delete.
 wipe() {
   local keep=_tool
   [ "$(df --output=pcent / | tail -1 | tr -dc 0-9)" -ge 80 ] && keep=
+  [ -e "$q/$n.drop-tools" ] && keep= && rm -f "$q/$n.drop-tools"
   mkdir -p "$dir/_work"
   find "$dir/_work" -mindepth 1 -maxdepth 1 ! -name "${keep:-.}" -exec rm -rf {} + 2>/dev/null ||
     docker run --rm -v "$dir/_work:/w" busybox find /w -mindepth 1 -maxdepth 1 ! -name "${keep:-.}" -exec rm -rf {} +
