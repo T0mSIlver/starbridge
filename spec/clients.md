@@ -26,7 +26,7 @@
   language rather than the Clock setting. Phones open the times in place under Snooze; the
   desktop web opens them in a popover. A
   snoozed question leaves Needs you, the count and the badge, and its notification closes on
-  every device; it waits in a collapsed "Snoozed · n" group after them, soonest back first, its
+  every device (on Safari when the page next reads the inbox; spec/push.md, #1363); it waits in a collapsed "Snoozed · n" group after them, soonest back first, its
   time slot "Until 18:00", with no amber and no answer buttons even when its agent waits. Opened,
   it says "Snoozed until …" and offers Snooze again (replaces the time) and Back now. At its time
   it returns to its place and notifies once, "Back from snooze", never again. The owner chose

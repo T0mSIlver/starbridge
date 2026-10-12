@@ -50,7 +50,7 @@
   That is 24 reads a minute per visible page, inside the per-address limit; 100 such pages cost
   about a tenth of a core (#664 has the numbers). A hidden page still reads nothing, except in
   the desktop app, which notifies from its inbox and prompts and so reads them while hidden (#886).
-- **Notifications.** The service worker shows one per question and closes it once answered. Its
+- **Notifications.** The service worker shows one per question and closes it once answered (on Safari the page closes it; spec/push.md, #1363). Its
   actions answer only for the account it was shown for (#274). Signing out, revocation or adopting
   new keys closes them all (#311).
 - **Sound**: off by default. The page plays it when a push reaches it, since a service worker
