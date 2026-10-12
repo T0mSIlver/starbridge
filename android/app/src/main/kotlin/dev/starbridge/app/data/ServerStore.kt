@@ -876,6 +876,8 @@ class ServerStore(
     /** Fetches what is new and replays the whole chain; it must extend the pin. */
     private suspend fun syncDirectory() {
         val fresh = api().directory(saved.entries.size)
+        // Nothing new: the chain verified at start, or when it last grew, still holds (#1469).
+        if (fresh.isEmpty() && directory?.members?.get(me.id)?.active == true) return
         val all = saved.entries + fresh
         val dir = directories.verify(all, saved.account, saved.pin)
         directory = dir

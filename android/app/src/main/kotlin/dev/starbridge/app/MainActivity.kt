@@ -7,6 +7,7 @@ import android.graphics.Color
 import android.graphics.drawable.ColorDrawable
 import android.os.Build
 import android.os.Bundle
+import android.os.SystemClock
 import android.text.format.DateFormat
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
@@ -65,6 +66,9 @@ class MainActivity : ComponentActivity() {
 
     private val askNotifications = registerForActivityResult(ActivityResultContracts.RequestPermission()) {}
 
+    /** When [onResume] last synced: a launch resumes, then composes, and syncs once (#1469). */
+    private var resumeSyncAt = 0L
+
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
         // The bars' icons follow the system's light or dark mode, as the theme does.
@@ -92,7 +96,8 @@ class MainActivity : ComponentActivity() {
                     // The recovery key's screens keep themselves out of screenshots (SetupScreen).
                     if (phase == Phase.Ready) {
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) askNotifications.launch(Manifest.permission.POST_NOTIFICATIONS)
-                        store.refresh(shown = false)
+                        // Ready since launch, onResume just synced; a sign-in or join syncs here.
+                        if (SystemClock.elapsedRealtime() - resumeSyncAt > 2_000) store.refresh(shown = false)
                     }
                 }
                 val tooOld by store.tooOld.collectAsStateWithLifecycle()
@@ -122,7 +127,10 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         system24.value = DateFormat.is24HourFormat(this)
         // Pull to refresh shows its indicator; the syncs on launch and resume run without it.
-        if (store.phase.value == Phase.Ready) store.refresh(shown = false)
+        if (store.phase.value == Phase.Ready) {
+            store.refresh(shown = false)
+            resumeSyncAt = SystemClock.elapsedRealtime()
+        }
         // Join requests arrive live while the app is in front; a push covers the rest.
         store.watchJoins(true)
         store.foreground(true)
