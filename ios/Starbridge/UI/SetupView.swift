@@ -187,15 +187,15 @@ private struct SignInStep: View {
             }
         } bottom: {
             if !selfHosted {
-                // Apple's button, drawn as Primary is: App Store guideline 4.8 wants it no less
-                // prominent than GitHub's.
+                Button { gitHub(Store.defaultServer) } label: { Label { Text("Sign in with GitHub") } icon: { Image("GitHub").resizable().frame(width: 20, height: 20) } }
+                    .buttonStyle(Primary(busy: store.busy))
+                    .disabled(store.busy)
+                // As tall and as wide as GitHub's: App Store guideline 4.8 wants Apple's no less
+                // prominent (spec/sign-in.md).
                 SignInWithAppleButton(.signIn, onRequest: appleRequest, onCompletion: appleDone)
                     .signInWithAppleButtonStyle(colorScheme == .dark ? .white : .black)
                     .frame(height: 56)
                     .clipShape(Capsule())
-                    .disabled(store.busy)
-                Button { gitHub(Store.defaultServer) } label: { Label { Text("Sign in with GitHub") } icon: { Image("GitHub").resizable().frame(width: 20, height: 20) } }
-                    .buttonStyle(Secondary())
                     .disabled(store.busy)
                 LinkButton(text: "Use your own server") {
                     selfHosted = true
