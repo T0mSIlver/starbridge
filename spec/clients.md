@@ -40,6 +40,14 @@
   shows the next open item beside the list, or the list on a phone. A refused answer comes back in
   the list, never in a reopened view. Left open, the view showed an answer the owner had just
   given.
+- **No answer waits for a pull** (#1390, #1392). The apps keep an answer the server could not take
+  (offline, a 5xx, or a 429 during a rate-limit hold) and send it again on their own, never during
+  the hold, when a post fails at once: Android through WorkManager, iOS by a retry while the app
+  runs, from 5 s doubling to 5 minutes, and a background refresh behind it. A sync sends the
+  outbox right after the directory, before reads that may fail. An answer sat until a pull to
+  refresh: the retry posted during the hold and backed off, and the sync's first read failed
+  before it reached the outbox. The notice blames the connection only when there is none:
+  otherwise "Hold isn't sent yet. Retrying."
 - **History** lists answered questions and the last 7 days of prompts, with how and where each was
   answered. A question settled `elsewhere` without a page to answer in was answered in the
   agent's own picker or terminal, so it reads "at the keyboard", never "by the agent", which

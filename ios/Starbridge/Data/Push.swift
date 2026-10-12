@@ -1,3 +1,4 @@
+import BackgroundTasks
 import Foundation
 import StarbridgeProtocol
 import UIKit
@@ -74,7 +75,7 @@ extension Store {
         switch sent {
         case .answered, .elsewhere:
             await Self.removeDelivered(about: id)
-        case let .queued(answer):
+        case let .queued(answer, _):
             await replace(id, with: "\(answer) · waiting to send")
         case let .failed(why):
             notSent[id] = why
@@ -132,12 +133,34 @@ extension Store {
     }
 }
 
+/**
+ * A background refresh that sends the answers left in the outbox while the app is behind
+ * (#1392). iOS picks the time, not before `earliestBeginDate`; asking again replaces the request.
+ */
+enum AnswerRefresh {
+    static let id = "dev.starbridge.ios.answers"
+
+    /** Asks for a turn once the rate-limit hold, if any, is over; a simulator refuses, which changes nothing. */
+    @MainActor static func schedule() {
+        let request = BGAppRefreshTaskRequest(identifier: id)
+        request.earliestBeginDate = max(Date(), Api.limitedUntil.withLock { $0 })
+        try? BGTaskScheduler.shared.submit(request)
+    }
+}
+
 /** Routes notifications for the app: pushes, taps and buttons. */
 final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
     lazy var store = Store(deviceName: UIDevice.current.name)
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
         UNUserNotificationCenter.current().delegate = self
+        let store = store
+        BGTaskScheduler.shared.register(forTaskWithIdentifier: AnswerRefresh.id, using: .main) { task in
+            // Handed over on the main queue, where the turn runs and ends.
+            nonisolated(unsafe) let task = task
+            let turn = Task { @MainActor in task.setTaskCompleted(success: await store.flushInBackground()) }
+            task.expirationHandler = { turn.cancel() }
+        }
         return true
     }
 

@@ -75,6 +75,8 @@ final class Store {
     @ObservationIgnored var lost: Set<String> = []
     @ObservationIgnored var queue: Task<Void, Never>?
     @ObservationIgnored var pollTask: Task<Void, Never>?
+    /** Sends the outbox again while answers wait in it (#1392). */
+    @ObservationIgnored var answerRetry: Task<Void, Never>?
     @ObservationIgnored var presenceTask: Task<Void, Never>?
     @ObservationIgnored var inFront = false
     @ObservationIgnored private(set) var beacon: Beacon!
@@ -729,6 +731,8 @@ final class Store {
         joinTask = nil
         pollTask?.cancel()
         pollTask = nil
+        answerRetry?.cancel()
+        answerRetry = nil
         presenceTask?.cancel()
         presenceTask = nil
         pushHold = nil

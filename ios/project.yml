@@ -48,9 +48,13 @@ targets:
           UIColorName: ""
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
-        # A background push says a question was answered elsewhere, so its notification goes.
+        # A background push says a question was answered elsewhere, so its notification goes; a
+        # background refresh sends the answers left in the outbox (#1392).
         UIBackgroundModes:
           - remote-notification
+          - fetch
+        BGTaskSchedulerPermittedIdentifiers:
+          - dev.starbridge.ios.answers
         NSCameraUsageDescription: Starbridge scans the QR code that your other device shows, to add this iPhone to your account.
         # GitHub sign-in comes back on starbridge://auth (PROTOCOL.md, "Auth").
         CFBundleURLTypes:
