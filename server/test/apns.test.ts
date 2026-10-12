@@ -286,12 +286,12 @@ test("a sandbox subscription goes to the sandbox; subscribing again takes the ne
 
 test("an APNs subscription needs a hex token; environment is for APNs only", async () => {
   const t = (endpoint: string, environment?: "production" | "sandbox", type = "apns" as const) =>
-    checkTarget({ type, endpoint, environment }, false);
+    checkTarget({ type, endpoint, environment }, []);
   expect(t(OK)).toBeUndefined();
   expect(t(OK, "sandbox")).toBeUndefined();
   for (const bad of ["xyz", "ab".repeat(8), `${OK}0`, "https://push.example/x"])
     expect(t(bad)).toBe("not an APNs token");
-  expect(checkTarget({ type: "fcm", endpoint: "tok", environment: "sandbox" }, false)).toBe(
+  expect(checkTarget({ type: "fcm", endpoint: "tok", environment: "sandbox" }, [])).toBe(
     "environment is for apns only",
   );
   const { s, acct } = await setup({});

@@ -12,6 +12,9 @@ export type DesktopEntry = {
   waiting: boolean;
 };
 
+/** The most entries the app reads (desktop/src/bridge.ts); older apps refuse a longer list (#1279). */
+export const DESKTOP_MAX_ENTRIES = 200;
+
 export type DesktopAnswer = { id: string; choice: string } | { id: string; text: string };
 
 /** Where the app stays (desktop/src/settings.ts). */

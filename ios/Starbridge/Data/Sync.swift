@@ -231,9 +231,14 @@ extension Store {
     /** The owner revoked that member themselves: forget the heads that name it, and read again. */
     func stopWaiting() async {
         guard let id = heldRevoked else { return }
+        forgetHeads(of: id)
+        await refresh()
+    }
+
+    /** Forgets the heads that name `id`, a member this iPhone knows the owner revoked. */
+    func forgetHeads(of id: String) {
         var h = heads
         if HeadBook.forget(&h, id: id) { keep(h) }
-        await refresh()
     }
 
     /**

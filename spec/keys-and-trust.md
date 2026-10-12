@@ -49,7 +49,11 @@
   Devices shows a machine's code, as "Same code as on the machine?", only while the machine
   can still ask: for `CHECK_CONFIRM_MS` (10 minutes, in `packages/protocol`) from its `add`
   entry, the time `starbridge pair` waits for an answer (#939). After that the code answers no
-  question, and a line nobody needs reads as one to act on.
+  question, and a line nobody needs reads as one to act on. The phone that approved a machine
+  from its QR never shows it: the check key proved the entry, so that machine asks nothing
+  (#1329). Other devices keep the 10 minutes, since they cannot tell the paths apart: only the
+  machine learns that the proof matched, and a "scanned" flag the server passed on would let a
+  hostile server hide the code on exactly the path it guards.
   A phone without the app opens the printed link or types the code instead, and the machine
   asks. The code stays after `#`, where Android 0.1.0's scanner reads it, so that scanner still
   pairs (and the machine asks); 0.1.0's camera opens nothing until the app updates.

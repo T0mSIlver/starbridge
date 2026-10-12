@@ -112,7 +112,7 @@ test("the agent tells the server its release and the latest, so devices see it b
     });
     await release.tick();
     expect(await server.releases()).toEqual({
-      [me]: { version: VERSION, latest: "99.0.0", behind: true },
+      [me]: { version: VERSION, latest: "99.0.0", behind: true, updatedAt: null },
     });
     // Nothing changed: nothing sent.
     const puts = () => server.log.filter((l) => l === "PUT /release").length;
@@ -128,6 +128,7 @@ test("the agent tells the server its release and the latest, so devices see it b
       version: VERSION,
       latest: null,
       behind: false,
+      updatedAt: null,
     });
   } finally {
     server.stop();

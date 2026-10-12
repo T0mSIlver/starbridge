@@ -109,6 +109,15 @@
         "mac": "vYy8H69qithRuj5DTr7BXsRUoLQdfKx_yRn8f0dOMCY"
       },
       "expect": "id-mismatch"
+    },
+    {
+      "name": "approval with a short head",
+      "side": "approval",
+      "message": {
+        "body": "{\"v\":1,\"join\":\"04106105\",\"account\":\"acct_tom\",\"length\":5,\"head\":\"TdBZayVVAsmhRVyZ4dlv3NyKOX4Hlges_zqxc_sALr\",\"approver\":\"phone\"}",
+        "mac": "l4Lc67eYLVVLHuZDA8sxheFsFoXxcJq7lmNdp2lVhEE"
+      },
+      "expect": "bad-schema"
     }
   ]
 }
