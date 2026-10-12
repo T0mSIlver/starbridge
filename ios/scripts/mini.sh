@@ -49,7 +49,7 @@ fi
 
 # status and clean need no tree; the script comes over standard input (nothing reads it after).
 case $action in
-  status) exec ssh "$host" bash -s -- status < "$remote_script" ;;
+  status) exec ssh "$host" env "SB_MINI_SLOTS=$slots" bash -s -- status < "$remote_script" ;;
   clean) exec ssh "$host" bash -s -- clean "$(q "$key")" < "$remote_script" ;;
 esac
 
@@ -110,10 +110,10 @@ rsync -a --delete \
   "$repo/" "$host:sb-cache/src/$key/" || { say "rsync failed"; exit 1; }
 t_synced=$SECONDS
 
-# TEST_RUNNER_* variables reach the test process; pass them on.
+# TEST_RUNNER_* variables reach the test process, SB_MINI_* limits mini-remote.sh; pass them on.
 envs=()
 while IFS='=' read -r name value; do
-  case $name in TEST_RUNNER_*) envs+=("$(q "$name=$value")") ;; esac
+  case $name in TEST_RUNNER_*|SB_MINI_*) envs+=("$(q "$name=$value")") ;; esac
 done < <(env)
 
 ssh_opts=(-o ServerAliveInterval=15)
