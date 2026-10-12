@@ -337,6 +337,11 @@ class ProtocolVectorsTest {
             assertEquals(recovery.str("seed"), toB64(RecoveryKeys.seed(typed, sodium)))
         }
         assertEquals("Character 5, \"U\", is not in a recovery key.", RecoveryKeys.read(key.take(5) + "U" + key.drop(6)).problem)
+        for (r in recovery.getValue("read").jsonArray.map { it.jsonObject }) {
+            val reading = RecoveryKeys.read(r.str("typed"))
+            assertEquals(r.getValue("count").jsonPrimitive.int, reading.count)
+            assertEquals("Character ${r.getValue("index").jsonPrimitive.int + 1}, \"${r.str("char")}\", is not in a recovery key.", reading.problem)
+        }
         assertEquals("A character is wrong. Check each group against what you wrote down.", RecoveryKeys.read(key.take(5) + (if (key[5] == '2') '3' else '2') + key.drop(6), sodium).problem)
         assertEquals(null, RecoveryKeys.read(key.take(9)).problem)
         assertEquals("A recovery key has 28 characters; this has 8.", RecoveryKeys.read(key.take(9), sodium).problem)

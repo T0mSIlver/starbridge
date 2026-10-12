@@ -33,8 +33,8 @@ public struct JoinRequestBody: Equatable, Sendable {
         account = try f.id("account")
         id = try f.id("id")
         name = try f.text("name", 1, 100)
-        boxPk = try f.b64("boxPk")
-        signPk = try f.b64("signPk")
+        boxPk = try f.bytes32("boxPk")
+        signPk = try f.bytes32("signPk")
         at = try f.time("at")
     }
 
@@ -66,7 +66,7 @@ public struct JoinApprovalBody: Equatable, Sendable {
         account = try f.id("account")
         length = try f.int("length")
         try schema(length > 0, "length")
-        head = try f.b64("head")
+        head = try f.bytes32("head")
         approver = try f.id("approver")
     }
 

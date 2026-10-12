@@ -8,17 +8,19 @@ struct QRScanner: UIViewControllerRepresentable {
 
     /**
      * Whether the scanner can open, asking for the camera the first time: VisionKit counts it
-     * unavailable until the owner allows the camera. Nil when it can, else why not.
+     * unavailable until the owner allows the camera. Nil when it can, else why not, and the other
+     * way: typing the code when adding a device, comparing digits when joining.
      */
-    static func whyNot() async -> String? {
-        guard DataScannerViewController.isSupported else { return "This iPhone can't scan QR codes. Compare digits instead." }
+    static func whyNot(typing: Bool = false) async -> String? {
+        let instead = typing ? "Type the code instead." : "Compare digits instead."
+        guard DataScannerViewController.isSupported else { return "This iPhone can't scan QR codes. \(instead)" }
         if AVCaptureDevice.authorizationStatus(for: .video) == .notDetermined {
             _ = await AVCaptureDevice.requestAccess(for: .video)
         }
         if AVCaptureDevice.authorizationStatus(for: .video) != .authorized {
-            return "Starbridge can't use the camera. Allow it in Settings, or compare digits instead."
+            return "Starbridge can't use the camera. Allow it in Settings, or \(instead.prefix(1).lowercased() + instead.dropFirst())"
         }
-        return DataScannerViewController.isAvailable ? nil : "The camera is busy or restricted. Compare digits instead."
+        return DataScannerViewController.isAvailable ? nil : "The camera is busy or restricted. \(instead)"
     }
 
     func makeUIViewController(context: Context) -> DataScannerViewController {

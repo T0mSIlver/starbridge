@@ -15,6 +15,22 @@ test("a page's state reads as sent", () => {
   expect(parseState(state)).toEqual(state);
 });
 
+test("past 200 entries, the first 200 are kept with the full count", () => {
+  const entries = Array.from({ length: 250 }, (_, i) => ({ ...entry, id: `d-${i}` }));
+  const s = parseState({ count: 250, entries, waiting: 0 });
+  expect(s?.count).toBe(250);
+  expect(s?.entries.map((e) => e.id)).toEqual(entries.slice(0, 200).map((e) => e.id));
+});
+
+test("a page before #1031 with over 200 entries counts the waiting among all of them", () => {
+  const entries = Array.from({ length: 250 }, (_, i) => ({
+    ...entry,
+    id: `d-${i}`,
+    waiting: i >= 240,
+  }));
+  expect(parseState({ count: 250, entries })?.waiting).toBe(10);
+});
+
 test("a page before #1031 counts the waiting from its entries", () => {
   expect(parseState({ count: 1, entries: [{ ...entry, waiting: true }] })).toMatchObject({
     waiting: 1,
@@ -35,7 +51,6 @@ test.each([
   ["five options", { count: 1, entries: [{ ...entry, options: ["a", "b", "c", "d", "e"] }] }],
   ["an empty option", { count: 1, entries: [{ ...entry, options: ["", "b"] }] }],
   ["a function", { count: 1, entries: [{ ...entry, title: () => 1 }] }],
-  ["too many entries", { count: 201, entries: Array(201).fill(entry) }],
   ["an array", []],
   ["more waiting than counted", { count: 1, entries: [], waiting: 2 }],
   ["an unknown account", { count: 0, entries: [], account: "admin" }],

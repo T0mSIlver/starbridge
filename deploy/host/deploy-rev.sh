@@ -15,7 +15,12 @@ exec 9>/run/starbridge-deploy.lock
 flock 9
 
 repo=/var/lib/starbridge/repo.git
-export GIT_SSH_COMMAND="ssh -i /etc/starbridge/github-deploy-key -o IdentitiesOnly=yes -o UserKnownHostsFile=/var/lib/starbridge/known_hosts -o StrictHostKeyChecking=accept-new"
+# GitHub's published host key (docs.github.com, "GitHub's SSH key fingerprints"), not whichever
+# key the first fetch on a new box happens to see: what it fetches runs as root.
+known=/var/lib/starbridge/github_known_hosts
+mkdir -p /var/lib/starbridge
+echo "github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl" > $known
+export GIT_SSH_COMMAND="ssh -i /etc/starbridge/github-deploy-key -o IdentitiesOnly=yes -o UserKnownHostsFile=$known -o StrictHostKeyChecking=yes"
 [ -d $repo ] || git init -q --bare $repo
 git -C $repo fetch -q git@github.com:T0mSIlver/starbridge.git +main:main
 git -C $repo merge-base --is-ancestor "$rev" main || { echo "$rev is not on main" >&2; exit 1; }

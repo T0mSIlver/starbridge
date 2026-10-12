@@ -5,6 +5,8 @@ import {
   PairingApprovalBody,
   PairingMessage,
   PairingRequestBody,
+  ProtocolError,
+  parseWith,
 } from "@starbridge/protocol";
 import { Hono } from "hono";
 import { z } from "zod";
@@ -15,8 +17,8 @@ import { ipKey, rateLimit } from "../limits";
 import { activeMember } from "./directory";
 
 const LIFETIME_MS = 10 * 60_000;
-/** A pairing message's JSON, in bytes, so waiting pairings cannot fill the disk. */
-const MESSAGE_BYTES = 4 * 1024;
+/** A pairing message's JSON, in bytes, so waiting pairings and joins cannot fill the disk. */
+export const MESSAGE_BYTES = 4 * 1024;
 const RENDEZVOUS = /^[0-9A-HJKMNP-TV-Z]{8}$/;
 
 interface Pairing {
@@ -34,19 +36,23 @@ interface Pairing {
   refused: string | null;
 }
 
-function parseBody<T extends z.ZodType>(schema: T, text: string): z.infer<T> {
+/** A pairing or join message's body, checked as clients check it, lone surrogates included (#1303). */
+export function parseBody<T extends z.ZodType>(schema: T, text: string): z.infer<T> {
   let value: unknown;
   try {
     value = JSON.parse(text);
   } catch {
     fail(400, "bad-schema", "body is not JSON");
   }
-  const r = schema.safeParse(value);
-  if (!r.success) fail(400, "bad-schema", r.error.issues[0]?.message);
-  return r.data;
+  try {
+    return parseWith(schema, value);
+  } catch (e) {
+    if (e instanceof ProtocolError) fail(400, "bad-schema", e.message);
+    throw e;
+  }
 }
 
-const Bounded = PairingMessage.refine(
+export const Bounded = PairingMessage.refine(
   (m) => Buffer.byteLength(JSON.stringify(m)) <= MESSAGE_BYTES,
   `a pairing message is at most ${MESSAGE_BYTES} bytes`,
 );

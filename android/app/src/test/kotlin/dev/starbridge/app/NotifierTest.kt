@@ -148,8 +148,24 @@ class NotifierTest {
         val d = fake.decisions.first { it.id == "d1" }
         notifier.decision(d)
         val n = posted()
-        assertEquals(listOf("Server first", "CLI first"), n.publicVersion.actions.map { it.title.toString() })
+        // It takes typed replies too: Reply stays on the lock screen, as Answer does (#1339).
+        assertEquals(listOf("Server first", "CLI first", "Reply"), n.publicVersion.actions.map { it.title.toString() })
         assertFalse(n.allowSystemGeneratedContextualActions)
+    }
+
+    // A question that takes typed replies too gets Reply beside its options, as on the iPhone and
+    // the desktop; Android shows three buttons, so Reply takes the third (#1339).
+    @Test
+    fun aQuestionThatTakesRepliesOffersReplyBesideItsOptions() {
+        val d = fake.decisions.first { it.id == "d1" }
+        assertTrue(d.replies)
+        notifier.decision(d)
+        posted().actions.let { actions ->
+            assertEquals(listOf("Server first", "CLI first", "Reply"), actions.map { it.title.toString() })
+            assertEquals(1, actions.last().remoteInputs.size)
+        }
+        notifier.decision(d.copy(options = d.options + listOf("Both", "Neither")))
+        assertEquals(listOf("Server first", "CLI first", "Reply"), posted().actions.map { it.title.toString() })
     }
 
     // Waiting alerts on its own channel, the header ticking on the lock screen too; a flip back

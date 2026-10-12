@@ -1,7 +1,35 @@
 #!/bin/sh
-# Stands in for `launchctl`: logs each call; the agent is always running.
+# Stands in for `launchctl`: logs each call; the agent runs unless booted out. As launchd does
+# (#1326), a bootout leaves the job going away for FAKE_LAUNCHD_LINGER more prints, and a
+# bootstrap meanwhile fails with error 5; FAKE_LAUNCHD_REFUSE refuses the first bootstraps too.
 echo "launchctl $*" >>"$FAKE_LOG"
+mkdir -p "$FAKE_STATE"
+going="$FAKE_STATE/launchd-going"
+out="$FAKE_STATE/launchd-out"
+refused="$FAKE_STATE/launchd-refused"
+left=$(cat "$going" 2>/dev/null || echo 0)
 case "$1" in
-  print) echo "	state = running" ;;
+  bootout)
+    echo "${FAKE_LAUNCHD_LINGER:-0}" >"$going"
+    touch "$out"
+    ;;
+  print)
+    if [ "$left" -gt 0 ]; then
+      echo $((left - 1)) >"$going"
+    elif [ -e "$out" ]; then
+      echo "Could not find service \"run.starbridge.agent\" in domain for user gui: 501" >&2
+      exit 113
+    fi
+    echo "	state = running"
+    ;;
+  bootstrap)
+    n=$(cat "$refused" 2>/dev/null || echo 0)
+    if [ "$left" -gt 0 ] || [ "$n" -lt "${FAKE_LAUNCHD_REFUSE:-0}" ]; then
+      echo $((n + 1)) >"$refused"
+      echo "Bootstrap failed: 5: Input/output error" >&2
+      exit 5
+    fi
+    rm -f "$out"
+    ;;
 esac
 exit 0

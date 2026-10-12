@@ -85,8 +85,10 @@ function keyChars(text: string): string {
  * typing fixes a short key.
  */
 export function readRecoveryKey(text: string, opts: { typing?: boolean } = {}): RecoveryKeyReading {
-  const chars = keyChars(text);
-  const index = [...chars].findIndex((c) => !CROCKFORD.includes(c));
+  const key = keyChars(text);
+  // Code points, as strings count them (#1082): an emoji is one character, not two halves (#1305).
+  const chars = [...key];
+  const index = chars.findIndex((c) => !CROCKFORD.includes(c));
   const problem: RecoveryKeyProblem | null =
     index >= 0
       ? { kind: "bad-character", index, char: chars[index] as string }
@@ -94,7 +96,7 @@ export function readRecoveryKey(text: string, opts: { typing?: boolean } = {}): 
         ? null
         : chars.length !== KEY_CHARS
           ? { kind: "length", count: chars.length }
-          : checks(chars)
+          : checks(key)
             ? null
             : { kind: "checksum" };
   return { count: chars.length, problem };

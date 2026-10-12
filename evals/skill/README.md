@@ -54,8 +54,9 @@ time. Cursor's free plan runs only `auto`. `TMPDIR` must be outside your home, w
 ancestor's `AGENTS.md` or `CLAUDE.md` would reach the agent. A Codex home is 60 MB, so parallel
 runs can fill a small /tmp.
 
-`grade.ts` scores each run: twelve checks read the record, five ask Claude Haiku through
-`claude -p` in a throwaway config dir (stored in the record, so grading again is free). A model
+`grade.ts` scores each run against the checks in its `CHECKS`: most read the record, and those
+marked `judge` ask Claude Haiku through `claude -p` in a throwaway config dir (stored in the
+record, so grading again is free). A model
 provider's error, such as a rate limit, makes the run a failed run rather than a score.
 `render.ts` shows cards in the real web inbox (headless Chromium) and saves a screenshot of each.
 

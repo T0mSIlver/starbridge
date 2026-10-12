@@ -137,8 +137,15 @@ you to report it.
 
 ```bash
 starbridge run --title 'Mac e2e' --reason 'takes over your screen and keyboard' \
-  -- bash -c 'make build && make e2e'
+  -- bash -c 'echo "[1/2] build" && make build && echo "[2/2] e2e" && make e2e'
 ```
 
 Wrap the whole command, chained or not. `--reason` is required: what it
 blocks, or the rule it matches. Output and exit code are the command's own.
+
+Devices show the title, reason, elapsed time, progress and exit code, never
+the output. Progress comes from the output: `[n/m]` step counts, `N%`, and
+terminal progress sequences (OSC 9;4). The output goes through a pipe, so a
+tool that draws progress only in a terminal shows none: prefer its plain
+progress flag (`docker build --progress=plain`). Before each step of a
+multi-step command, echo `[n/m]`, as above.

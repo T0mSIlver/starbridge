@@ -284,22 +284,24 @@ class Notifier(private val context: Context, private val prefs: Prefs) : Alerts 
             )
             return listOf(NotificationCompat.Action.Builder(0, "Answer in ${page.place()}", view).build())
         }
-        if (decision.options.isEmpty()) {
+        val typed = { title: String ->
             val input = RemoteInput.Builder(AnswerReceiver.EXTRA_TEXT).setLabel("Your answer").build()
-            return listOf(
-                NotificationCompat.Action.Builder(0, "Answer", answerIntent(decision, null, tag(decision.id), mutable = true))
-                    .addRemoteInput(input)
-                    .setAllowGeneratedReplies(false)
-                    .setAuthenticationRequired(false)
-                    .build(),
-            )
+            NotificationCompat.Action.Builder(0, title, answerIntent(decision, null, tag(decision.id), mutable = true))
+                .addRemoteInput(input)
+                .setAllowGeneratedReplies(false)
+                .setAuthenticationRequired(false)
+                .build()
         }
-        // Android shows three buttons; the agent's default leads, the app holds the rest.
-        return decision.ordered.take(3).mapIndexed { i, option ->
+        if (decision.options.isEmpty()) return listOf(typed("Answer"))
+        // Android shows three buttons; the agent's default leads, the app holds the rest. A
+        // question that takes typed replies too gives the third to Reply, which takes any answer
+        // (#1339).
+        val options = decision.ordered.take(if (decision.replies) 2 else 3).mapIndexed { i, option ->
             NotificationCompat.Action.Builder(0, option, answerIntent(decision, option, tag(decision.id) * 31 + i, mutable = false))
                 .setAuthenticationRequired(false)
                 .build()
         }
+        return if (decision.replies) options + typed("Reply") else options
     }
 
     /** Replaces the buttons with the answer, then clears itself. */
