@@ -79,6 +79,32 @@
       "144G J289 144G J289 144G J289 153S",
       "l44G-J289-l44G-J289-l44G-J289-l53S",
       "144G J289　144G﻿J289-144G-J289-153S"
+    ],
+    "read": [
+      {
+        "typed": "144GU",
+        "count": 5,
+        "index": 4,
+        "char": "U"
+      },
+      {
+        "typed": "😀AB",
+        "count": 3,
+        "index": 0,
+        "char": "😀"
+      },
+      {
+        "typed": "AB-😀C",
+        "count": 4,
+        "index": 2,
+        "char": "😀"
+      },
+      {
+        "typed": "👍🏽1",
+        "count": 3,
+        "index": 0,
+        "char": "👍"
+      }
     ]
   }
 }

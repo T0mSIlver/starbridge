@@ -1,12 +1,12 @@
 // What the desktop app shows, from the page's inbox and prompts (#886).
-import type { DesktopEntry } from "./desktop";
+import { DESKTOP_MAX_ENTRIES, type DesktopEntry } from "./desktop";
 import { needsYou } from "./feed";
 import { promptNote, questionNote } from "./notes";
 import type { InboxItem, PromptItem } from "./types";
 
 /**
  * What the app shows: the Needs-you count, how many of those an agent waits on (its widget,
- * #1031), and one notification per item.
+ * #1031), and one notification per item, up to the app's cap (#1279).
  */
 export function desktopState(
   inbox: InboxItem[],
@@ -20,8 +20,11 @@ export function desktopState(
     const item = e.item as InboxItem;
     const waiting = !!item.waitingSince;
     const d = item.decision;
+    // Its snooze is over (#571, #1229); a waiting agent says more, and a later flip to waiting
+    // shows again, so that line wins.
+    const back = !waiting && !!item.snoozedUntil && Date.parse(item.snoozedUntil) <= now;
     // A question answered on another page opens the window, where its link is.
-    const note = questionNote(item, { waiting });
+    const note = questionNote(item, { waiting, back });
     return {
       id: e.id,
       ...note,
@@ -30,5 +33,10 @@ export function desktopState(
       waiting,
     };
   });
-  return { count: open.length, waiting: entries.filter((e) => e.waiting).length, entries };
+  // The most urgent first, as Needs you lists them; the count and the waiting cover them all.
+  return {
+    count: open.length,
+    waiting: entries.filter((e) => e.waiting).length,
+    entries: entries.slice(0, DESKTOP_MAX_ENTRIES),
+  };
 }

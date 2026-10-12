@@ -41,21 +41,24 @@ export interface Answered {
 }
 
 const ID = /^[A-Za-z0-9_.:-]{1,128}$/;
+/** The most entries read, first first: the page sends the most urgent first (#1279). */
 const MAX_ENTRIES = 200;
 
 export function parseState(x: unknown): PageState | null {
-  if (!isObject(x) || !Array.isArray(x.entries) || x.entries.length > MAX_ENTRIES) return null;
+  if (!isObject(x) || !Array.isArray(x.entries)) return null;
   const { count } = x;
   if (typeof count !== "number" || !Number.isInteger(count) || count < 0 || count > 99_999)
     return null;
   const entries: Entry[] = [];
-  for (const e of x.entries) {
+  // Past the cap, the rest are dropped, not the state: the count and the widget stay right.
+  for (const e of x.entries.slice(0, MAX_ENTRIES)) {
     const entry = parseEntry(e);
     if (!entry) return null;
     entries.push(entry);
   }
   // Pages before #1031 send neither: their entries say who waits, and a count means signed in.
-  const waiting = x.waiting ?? entries.filter((e) => e.waiting).length;
+  // All of them, past the cap too.
+  const waiting = x.waiting ?? x.entries.filter((e) => isObject(e) && e.waiting === true).length;
   if (typeof waiting !== "number" || !Number.isInteger(waiting) || waiting < 0 || waiting > count)
     return null;
   const account = x.account ?? "ready";

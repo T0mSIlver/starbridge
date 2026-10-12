@@ -17,6 +17,7 @@ import { codexPluginDir, refreshCodexPluginFiles } from "./codex-plugin";
 import { cursorHooksPath, cursorSkillDir, cursorState, installCursorFiles } from "./cursor";
 import { markedSkill, marker, ours } from "./marker";
 import plugin from "./opencode-files.js";
+import { removedLine, removeWritten } from "./remove";
 import { failure, run, type Sys, which } from "./sys";
 
 /** What the Codex skill steps need: the agent has no prompt. */
@@ -65,12 +66,11 @@ export function installCodexSkill(sys: Home) {
   writeFileSync(join(dir, "SKILL.md"), SKILL);
 }
 
-/** Removes the skill folder, only when it holds the skill setup wrote. */
-export function removeCodexSkill(sys: Sys): boolean {
+/** Removes the skill setup wrote, keeping the owner's files beside it. Says what it did, if anything. */
+export function removeCodexSkill(sys: Sys): string | undefined {
   const dir = codexSkillDir(sys);
-  if (!ours(readText(join(dir, "SKILL.md")))) return false;
-  rmSync(dir, { recursive: true, force: true });
-  return true;
+  if (!ours(readText(join(dir, "SKILL.md")))) return undefined;
+  return removedLine(dir, removeWritten(dir, ["SKILL.md"]));
 }
 
 /**
@@ -244,27 +244,28 @@ export function installOpencode(sys: Home, present = false): string[] {
   return foreign;
 }
 
-/** Removes what setup wrote, only the files that are Starbridge's. Returns what it removed. */
+/**
+ * Removes what setup wrote, only the files that are Starbridge's; the owner's files beside them
+ * stay. Returns one line per thing done.
+ */
 export function removeOpencode(sys: Home): string[] {
   const dir = opencodeDir(sys);
   const done: string[] = [];
   const read = (path: string) => readIn(dir, path);
-  if (ours(read(SKILL_FILE))) {
-    rmSync(join(dir, "skills/starbridge"), { recursive: true, force: true });
-    done.push(join(dir, "skills/starbridge"));
-  }
+  const remove = (folder: string) => {
+    const files = Object.keys(opencodeFiles())
+      .filter((path) => path.startsWith(`${folder}/`))
+      .map((path) => path.slice(folder.length + 1));
+    done.push(removedLine(join(dir, folder), removeWritten(join(dir, folder), files)));
+  };
+  if (ours(read(SKILL_FILE))) remove("skills/starbridge");
   if (ours(read(ENTRY_FILE))) {
     rmSync(join(dir, ENTRY_FILE), { force: true });
-    done.push(join(dir, ENTRY_FILE));
+    done.push(`Removed ${join(dir, ENTRY_FILE)}.`);
   }
   // An entry the owner wrote stays, and so does the code it loads.
-  if (
-    read(ENTRY_FILE) === undefined &&
-    read("starbridge/mod/opencode/starbridge.ts") !== undefined
-  ) {
-    rmSync(join(dir, "starbridge"), { recursive: true, force: true });
-    done.push(join(dir, "starbridge"));
-  }
+  if (read(ENTRY_FILE) === undefined && read("starbridge/mod/opencode/starbridge.ts") !== undefined)
+    remove("starbridge");
   return done;
 }
 
@@ -306,32 +307,41 @@ export function antigravityDir(sys: Home): string {
 
 const AGY_RULE = "rules/starbridge.md";
 
-/** Every file of the Antigravity plugin, by path inside its folder. */
+/**
+ * Every file of the Antigravity plugin, by path inside its folder, the rule first: written first,
+ * it marks a plugin an interrupted install left half written as Starbridge's (#1334). A file a
+ * later release stops writing stays listed, so a refresh or a removal still takes it away.
+ */
 function antigravityFiles(): Record<string, string> {
   return {
-    ...agyFiles,
     // An always_on rule is in every conversation's context, as the SessionStart hook's is.
     [AGY_RULE]: `---\n${marker("#")}\ntrigger: always_on\n---\n\n${agyRule}`,
+    ...agyFiles,
     "skills/starbridge/SKILL.md": SKILL,
   };
 }
 
-/** Whether Antigravity has the plugin, and whether it is this CLI's; one without the marker is someone else's. */
+/**
+ * Whether Antigravity has the plugin, and whether it is this CLI's: its rule has the marker. With
+ * no rule, it is when another of its files is as this release writes it, as after an interrupted
+ * install or the rule deleted (#1334); a rule without the marker is the owner's.
+ */
 export function antigravityState(sys: Home): FileState {
   const dir = antigravityDir(sys);
   if (!existsSync(dir)) return "missing";
   const ruleText = readIn(dir, AGY_RULE);
-  if (!ours(ruleText)) return "foreign";
+  const ourFiles = () =>
+    Object.entries(agyFiles).some(([path, want]) => readIn(dir, path) === want);
+  if (ruleText === undefined ? !ourFiles() : !ours(ruleText)) return "foreign";
   const current = Object.entries(antigravityFiles()).every(
     ([path, want]) => readIn(dir, path) === want,
   );
   return current ? "current" : "outdated";
 }
 
-/** Writes the plugin, replacing the folder so a file an older release wrote does not linger. */
+/** Writes the plugin's files; the owner's files in its folder stay. */
 export function installAntigravity(sys: Home) {
   const dir = antigravityDir(sys);
-  rmSync(dir, { recursive: true, force: true });
   for (const [path, body] of Object.entries(antigravityFiles())) {
     mkdirSync(dirname(join(dir, path)), { recursive: true });
     writeFileSync(join(dir, path), body);
@@ -403,11 +413,12 @@ export function removeAgyAllow(sys: Home): boolean {
   return true;
 }
 
-/** Removes the plugin, only when it is the one setup wrote. */
-export function removeAntigravity(sys: Home): boolean {
-  if (antigravityState(sys) === "missing" || antigravityState(sys) === "foreign") return false;
-  rmSync(antigravityDir(sys), { recursive: true, force: true });
-  return true;
+/** Removes the plugin, only when it is the one setup wrote; the owner's files in its folder stay. */
+export function removeAntigravity(sys: Home): string | undefined {
+  const state = antigravityState(sys);
+  if (state === "missing" || state === "foreign") return undefined;
+  const dir = antigravityDir(sys);
+  return removedLine(dir, removeWritten(dir, Object.keys(antigravityFiles())));
 }
 
 /**

@@ -140,6 +140,11 @@ data class Saved(
     val recoverySeen: Int = -1,
     /** Runs dismissed on this phone (#827), by id, with the `at` of the update dismissed. */
     val dismissedRuns: Map<String, String> = emptyMap(),
+    /**
+     * Machines this phone approved from their QR, whose check key proves the entry to the
+     * machine, which then asks nothing: Devices shows them no check code (#1329).
+     */
+    val scannedMachines: List<String> = emptyList(),
 )
 
 /**

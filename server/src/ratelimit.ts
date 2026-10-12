@@ -36,9 +36,16 @@ export class RateLimiter {
     return w.count + cost <= limit ? 0 : Math.max(1, Math.ceil((w.start + windowMs - t) / 1000));
   }
 
-  /** Drops the windows whose key names a deleted account (#1104). */
+  /**
+   * Drops the windows of a deleted account (#1104): keys `<kind>:<account>` and
+   * `<kind>:<account>:<member>`. Only that segment counts, since member ids are the client's
+   * to choose (#1231).
+   */
   forget(account: string): void {
-    for (const k of this.windows.keys()) if (k.includes(account)) this.windows.delete(k);
+    for (const k of this.windows.keys()) {
+      const rest = k.slice(k.indexOf(":") + 1);
+      if (rest === account || rest.startsWith(`${account}:`)) this.windows.delete(k);
+    }
   }
 
   /** Each window ends by its own length, so a short window's sweep never resets a long one. */

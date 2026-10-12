@@ -34,6 +34,7 @@ import {
   parseContext,
   parsePairingCode,
   readable,
+  readRecoveryKey,
   ready,
   recoveryKey,
   recoveryKeyPair,
@@ -403,6 +404,11 @@ test("the recovery key reads back to its seed and signing key", () => {
   expect(toB64(recoverySeedFromKey(recovery.key))).toBe(recovery.seed);
   for (const typed of recovery.typed) expect(toB64(recoverySeedFromKey(typed))).toBe(recovery.seed);
   expect(toB64(recoveryKeyPair(fromB64(recovery.seed)).publicKey)).toBe(recovery.signPk);
+  for (const r of recovery.read)
+    expect(readRecoveryKey(r.typed, { typing: true })).toEqual({
+      count: r.count,
+      problem: { kind: "bad-character", index: r.index, char: r.char },
+    });
 });
 
 test("the generator reproduces the committed vectors, sealed boxes aside", async () => {

@@ -1,4 +1,4 @@
-import type { Entry } from "./bridge";
+import type { Entry, PageState } from "./bridge";
 
 /** A shown notification, as the notifier needs it. */
 export interface Shown {
@@ -19,6 +19,11 @@ export class Notifier {
     private readonly remember: (ids: string[]) => void = () => {},
   ) {
     for (const id of known) this.shown.set(id, { waiting: true });
+  }
+
+  /** Takes the page's state; while the page loads, its empty list says nothing about the items (#1227). */
+  page(state: PageState): void {
+    if (state.account !== "loading") this.update(state.entries);
   }
 
   update(entries: Entry[]): void {
