@@ -1,6 +1,23 @@
 # Sign-in
 
 - The hosted server signs in with GitHub; a self-hosted server with `OWNER_TOKEN`.
+- **Sign in with Apple** (#1411). App Store guideline 4.8 asks an app that signs in with GitHub
+  to offer Sign in with Apple too, so starbridge.run offers both, on every client: an account
+  made with Apple on the iPhone must sign in on the page and on Android as well. A self-hosted
+  server has no Apple key, so its clients show only its own methods.
+  - Starbridge asks Apple for no name and no email, as it keeps no email from GitHub: the data
+    is end-to-end encrypted and an account is only a sign-in's stable id. So Hide My Email never
+    arises, and the privacy page stays as it is. The server keeps Apple's user id (`sub`) and the
+    refresh token of the account's last Apple sign-in, only to revoke it when the account is
+    deleted, which Apple asks of an app that deletes accounts.
+  - An Apple id no account holds makes a new account, as a new GitHub id does: with no email
+    there is nothing to match people by. Settings → Sign-in methods adds the other provider to
+    the signed-in account, and removes one while another stays. An id another account holds is
+    refused there, since moving it would strand that account's devices.
+  - The iPhone signs in natively (AuthenticationServices), with a nonce Apple puts in the
+    identity token and an authorization code the server trades once, so a token caught on its
+    way is worthless (PROTOCOL.md, "Auth"). Its button comes first and filled, GitHub's under it,
+    since 4.8 wants Apple's no less prominent.
 - The owner can pause sign-ups (#784), for a launch-day flood or a box near its limits: a GitHub
   user with no account gets "not taking new accounts right now" on the page and in the app, while
   every existing account signs in as before. `bun server.js signups pause|resume` writes and
