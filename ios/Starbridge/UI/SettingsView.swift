@@ -111,6 +111,13 @@ struct SettingsView: View {
                 }
                 .listRowBackground(Tokens.Colors.surface.color)
 
+                Section("Devices") {
+                    NavigationLink { DevicesView(store: store) } label: {
+                        LabeledContent("Devices and machines", value: "\(store.devices.count)")
+                    }
+                }
+                .listRowBackground(Tokens.Colors.surface.color)
+
                 Section("Account") {
                     LabeledContent("Server", value: store.saved.server)
                     LabeledContent("This iPhone", value: store.me?.name ?? "")

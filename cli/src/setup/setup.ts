@@ -677,7 +677,12 @@ async function testDecision(ctx: Ctx, name: string) {
     code = EXIT_INTERRUPTED;
   }
   if (code === 2) ctx.out("✗ No answer within 10 minutes");
-  if (code !== EXIT_INTERRUPTED || !id) return;
+  if (code !== EXIT_INTERRUPTED) return;
+  // Cut while it was being sent: `ask` withdrew it already (#1289).
+  if (!id) {
+    ctx.out("– Skipped");
+    return;
+  }
   try {
     await settle(ctx, { id, outcome: "withdrawn", reason: "Skipped in starbridge setup" });
     ctx.out("– Skipped");

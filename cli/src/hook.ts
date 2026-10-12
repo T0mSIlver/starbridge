@@ -369,11 +369,15 @@ export function pickerOpen(st: ReturnType<Ctx["store"]["state"]>, session: strin
 }
 
 async function settlePicker(ctx: Ctx, session: string, outcome: "elsewhere" | "withdrawn") {
+  // Its own deadline, not SIGTERM's: a stalled server would hold the hook until the harness
+  // kills it (#1286).
+  const deadline = AbortSignal.timeout(REPORT_MS);
   await Promise.all(
     pickerOpen(ctx.store.state(), session).map((id) =>
-      settle({ ...ctx, signal: undefined }, { id, outcome, ...pickerReason(outcome) }).catch((e) =>
-        ctx.err(`starbridge: could not settle ${id}: ${(e as Error).message}`),
-      ),
+      settle(
+        { ...ctx, signal: undefined },
+        { id, outcome, ...pickerReason(outcome), deadline },
+      ).catch((e) => ctx.err(`starbridge: could not settle ${id}: ${(e as Error).message}`)),
     ),
   );
 }
@@ -632,7 +636,9 @@ export async function hookQuestion(
     );
     const picked = results.map((r) => (r.status === "fulfilled" ? r.value : undefined));
     const error = results.find((r) => r.status === "rejected");
-    if (error) ctx.err(`starbridge: question not sent: ${(error.reason as Error).message}`);
+    // Stopped (the terminal answered, SIGTERM): nothing went wrong.
+    if (error && !signal.aborted)
+      ctx.err(`starbridge: question not sent: ${(error.reason as Error).message}`);
     if (picked.every((p) => p !== undefined) && !signal.aborted) {
       ctx.out(JSON.stringify({ answers: picked }));
       return 0;

@@ -20,6 +20,7 @@ import { proof, type SessionEvent, type Status } from "../src/agent/api";
 import { AgentClient, AgentError, Interrupted, NoAgent } from "../src/agent/client";
 import { makeAgent } from "../src/agent/main";
 import type { Agent } from "../src/agent/server";
+import { hookStop } from "../src/antigravity";
 import { run } from "../src/cli";
 import { hookCursorSession } from "../src/hook";
 import {
@@ -585,6 +586,46 @@ test("the agent sends an Antigravity conversation's answer through its language 
     const away = testCtx({ ...env, ANTIGRAVITY_LS_ADDRESS: `example.com:${ls.port}` });
     await ask(away, "--project", "p");
     expect(away.errors.at(-1)).toContain("run `starbridge wait");
+  } finally {
+    ls.stop(true);
+  }
+});
+
+test("the Stop hook leaves an answer the agent sends through the language server to it, so it arrives once (#1278)", async () => {
+  const { ctx, socket } = await machine();
+  const sent: string[] = [];
+  // A language server that takes the connection but fails each send: the answer stays queued.
+  const ls = Bun.serve({
+    hostname: "127.0.0.1",
+    port: 0,
+    async fetch(req) {
+      const url = new URL(req.url);
+      if (url.pathname === "/healthz") return Response.json({ status: "ok" });
+      if (url.pathname.endsWith("/SendUserCascadeMessage")) {
+        sent.push(url.pathname);
+        return new Response("busy", { status: 503 });
+      }
+      if (url.pathname.endsWith("/GetCascadeTrajectoryGeneratorMetadata"))
+        return Response.json({ generatorMetadata: [{ chatModel: { model: "MODEL_A" } }] });
+      return Response.json({});
+    },
+  });
+  try {
+    ctx.env = {
+      ...ctx.env,
+      STARBRIDGE_AGENT_SOCKET: socket,
+      ANTIGRAVITY_CONVERSATION_ID: "c-1",
+      ANTIGRAVITY_LS_ADDRESS: `127.0.0.1:${ls.port}`,
+      ANTIGRAVITY_CSRF_TOKEN: "tok",
+    };
+    const id = await ask(ctx, "--project", "p");
+    await server.answer(id, { choice: "Merge" });
+    await until(() => sent.length > 0);
+    ctx.lines.length = 0;
+    expect(
+      await hookStop(ctx, JSON.stringify({ conversationId: "c-1" }), { agent: "antigravity" }),
+    ).toBe(0);
+    expect(ctx.lines).toEqual([]);
   } finally {
     ls.stop(true);
   }

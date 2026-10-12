@@ -1796,6 +1796,8 @@ class ServerStore(
             // no one to compare check codes (#795).
             val check = pendingCheckKey?.let { pairings.checkProof(saved.entries, body.id, it) }
             api().approve(code.rendezvous, pairings.approval(PairingApprovalBody(1, code.rendezvous, saved.account!!, after.length, after.head, me.id, check), code))
+            // That machine asks nothing, so its check code answers no question here (#1329).
+            if (check != null) persist(saved.copy(scannedMachines = (saved.scannedMachines + body.id).distinct()))
             pending = null
             pendingCheckKey = null
             approval.value = Approval.Done(body.name)
@@ -2320,7 +2322,7 @@ class ServerStore(
             Member(
                 m.id, m.name, if (machine) Kind.Machine else Kind.Device, instant(added[m.id]) ?: Instant.EPOCH,
                 current = m.id == saved.me?.id,
-                check = if (machine) runCatching { pairings.checkCode(saved.entries, m.id) }.getOrNull() else null,
+                check = if (machine && m.id !in saved.scannedMachines) runCatching { pairings.checkCode(saved.entries, m.id) }.getOrNull() else null,
             )
         }
     }

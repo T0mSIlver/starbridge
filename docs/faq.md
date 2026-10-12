@@ -4,25 +4,19 @@
 
 ### How is it different from ntfy, Pushover or a webhook?
 
-Those deliver a notification. ntfy's action buttons can send a request back, but nothing puts it
-into the waiting session, so you still walk to the terminal to answer. Starbridge puts your tap
-into the waiting session as its next prompt.
-
-A permission answer is signed by your device and bound to one call by a hash of its input, so it
-can't approve a different command. ntfy can still deliver Starbridge's notifications, through
-UnifiedPush on a [self-hosted server](../server/README.md#notifications).
+Those deliver a notification, and you still walk to the terminal to answer. Starbridge puts your
+tap into the waiting session as its next prompt. ntfy can still deliver Starbridge's
+notifications, through UnifiedPush on a [self-hosted server](../server/README.md#notifications).
 
 ### Why not the harnesses' own mobile apps?
 
-Each covers one harness; the Claude app, for example, answers permission prompts for Remote
-Control sessions. Starbridge puts the questions of every session, machine and harness in one
-inbox, with your runs.
+Each covers one harness. Starbridge puts the questions of every session, machine and harness in
+one inbox.
 
 ### How is it different from Happy or Omnara?
 
 Those mirror the whole session so you drive it from the phone. Starbridge carries only the
-decisions the agent asks you for and the runs it reports, and you keep using the harness as
-before.
+decisions the agent asks you for and the runs it reports.
 
 ## Privacy and security
 
@@ -32,9 +26,8 @@ Every question, answer, permission prompt, run, quota snapshot, image and link i
 (Ed25519) and sealed with libsodium's `crypto_box_seal` to each of your devices' keys. Keys are
 made on your devices and machines, and the server holds none that opens the items.
 
-A machine pairs with a 24-character code whose secret never reaches the server. The device list
-is a signed hash chain that every client pins, so the server can't add a key of its own or roll
-back a revocation unseen.
+The device list is a signed hash chain that every client pins, so the server can't add a key of
+its own or roll back a revocation unseen.
 
 The server sees your GitHub numeric id, device and machine ids, public keys, the names you give
 devices and machines, and push tokens. For each item, it sees its kind, id, sender, recipients,
@@ -77,8 +70,8 @@ for up to 2 weeks ([privacy page](https://starbridge.run/privacy)).
 
 ### Why GitHub sign-in?
 
-People who run coding agents have a GitHub account, and the server then stores no password or
-email, only the numeric GitHub id. A self-hosted server can use an owner token instead.
+The server then stores no password or email, only the numeric GitHub id. A self-hosted server can
+use an owner token instead.
 
 ## Setup
 
@@ -109,9 +102,7 @@ A quota window that empties mid-task stalls the agent like an unanswered questio
 warns before a window runs out, and before one resets with quota unused.
 
 [CodexBar](https://github.com/steipete/CodexBar), by Peter Steinberger, is open source and already
-reads more than a dozen providers' plans, so Starbridge reads its output instead of writing its
-own reader; the author contributes to it. It reads plan usage on your machine, and Starbridge
-encrypts the snapshot like every other item.
+reads more than a dozen providers' plans, so Starbridge uses it instead of writing its own reader.
 
 ### Do you trust CodexBar's code?
 
@@ -137,15 +128,11 @@ phones and browsers.
 
 ### Why is the CLI 82 MB?
 
-It is TypeScript compiled with `bun build --compile`, so the binary carries the Bun runtime, and
-it shares the signing and sealing code with the web app and the server.
-
+It is TypeScript compiled with `bun build --compile`, so the binary carries the Bun runtime.
 `starbridge --version` takes about 45 ms, and the background service holds about 35 MB of memory
-of its own, 80 MB with the runtime it maps. After each tool call, the Claude Code plugin's hook
-checks in under a millisecond whether a permission prompt is open, and starts the CLI only if one
-is.
+of its own.
 
 ### Will the hosted server hold up?
 
-A load test ran the production stack on two cores with the VPS's memory. It holds about 5000
-signed-in users and 15 to 20 new visitors a second. The VPS can be resized in minutes.
+A load test of the production stack, on two cores and the VPS's memory, held about 5000 signed-in users and
+15 to 20 new visitors a second.

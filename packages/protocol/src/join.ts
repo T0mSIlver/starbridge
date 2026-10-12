@@ -2,7 +2,7 @@ import { z } from "zod";
 import { parseWith } from "./envelope";
 import type { KeyPair } from "./keys";
 import { encodeCrockford, PairingMessage } from "./pairing";
-import { B64, Id, Time } from "./schemas";
+import { Bytes32, Id, Time } from "./schemas";
 import { concat, fromB64, ProtocolError, sodium, toB64, utf8 } from "./sodium";
 
 /**
@@ -33,8 +33,8 @@ export const JoinRequestBody = z.object({
   account: Id,
   id: Id,
   name: z.string().min(1).max(100),
-  boxPk: B64,
-  signPk: B64,
+  boxPk: Bytes32,
+  signPk: Bytes32,
   at: Time,
 });
 export type JoinRequestBody = z.infer<typeof JoinRequestBody>;
@@ -45,7 +45,7 @@ export const JoinApprovalBody = z.object({
   account: Id,
   /** The directory up to and including the new device's entry. */
   length: z.number().int().positive(),
-  head: B64,
+  head: Bytes32,
   approver: Id,
 });
 export type JoinApprovalBody = z.infer<typeof JoinApprovalBody>;

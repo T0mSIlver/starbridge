@@ -51,6 +51,8 @@ final class Store {
     var drafts: [String: String] = [:]
     /** The account's hold time in seconds (#848); nil on a server without it, which shows no row. */
     var pushHold: Int?
+    /** What Devices shows beside the chain, read when it opens. */
+    var deviceInfo = DeviceInfo()
 
     /** Decisions this iPhone's answer lost to another device's, until the machine says which won. */
     @ObservationIgnored var lost: Set<String> = []
@@ -708,6 +710,7 @@ final class Store {
         notSent = [:]
         drafts = [:]
         tooOld = nil
+        deviceInfo = DeviceInfo()
         withheldWhy = nil
         persist(Saved(server: saved.server), Secrets())
         try? FileManager.default.removeItem(at: SavedImage.directory)
