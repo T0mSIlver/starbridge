@@ -205,8 +205,9 @@ private struct SignInStep: View {
     }
 
     /**
-     * Opens GitHub's sign-in in the browser sheet, which shares Safari's GitHub sign-in, and
-     * ends when the server hands the code on to starbridge://auth.
+     * Opens GitHub's sign-in in the browser sheet, which shares Safari's GitHub sign-in. On
+     * starbridge.run from iOS 17.4 it ends on the https callback GitHub redirects to (#1115);
+     * elsewhere when the server hands the code on to starbridge://auth.
      */
     private func gitHub(_ server: String) {
         guard let url = store.gitHubSignInURL(server: server) else {
@@ -215,7 +216,14 @@ private struct SignInStep: View {
         }
         Task {
             do {
-                let link = try await webAuthenticationSession.authenticate(using: url, callbackURLScheme: "starbridge", preferredBrowserSession: .shared)
+                let link: URL
+                if #available(iOS 17.4, *), let https = SignIn.httpsCallback(server: store.saved.server) {
+                    link = try await webAuthenticationSession.authenticate(
+                        using: url, callback: .https(host: https.host, path: https.path),
+                        preferredBrowserSession: .shared, additionalHeaderFields: [:])
+                } else {
+                    link = try await webAuthenticationSession.authenticate(using: url, callbackURLScheme: "starbridge", preferredBrowserSession: .shared)
+                }
                 await store.receiveSignIn(link)
             } catch {
                 store.abandonSignIn()
