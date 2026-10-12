@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { type Context, Hono } from "hono";
 import { z } from "zod";
 import { fail, memberOf, randomToken, recheck, requireCaller } from "../auth";
 import type { Env } from "../env";
@@ -74,10 +74,23 @@ pushRoutes.get("/push/vapid", async (c) => {
 });
 
 /**
- * Relayed Web Pushes in flight, per push service (one per app) and per address, for the
- * relaySends and relaySendsPerClient caps.
+ * Relayed Web Pushes in flight, per push service (one per app), keyed as `relaySlots` names
+ * them, for the relaySends caps.
  */
 const relaying = new WeakMap<object, Map<string, number>>();
+
+/** The slots a relayed Web Push takes, each with its cap. */
+function relaySlots(c: Context<Env>, endpoint: string): [string, number][] {
+  const { limits } = c.var.config;
+  return [
+    ["", limits.relaySends],
+    [`address ${ipKey(c)}`, limits.relaySendsPerClient],
+    // An IPv4 address is its own /48, already capped tighter above.
+    [`network ${ipKey(c, 48)}`, limits.relaySendsPerNetwork],
+    // `push.example.` and `push.example` are one host.
+    [`host ${new URL(endpoint).hostname.replace(/\.$/, "")}`, limits.relaySendsPerHost],
+  ];
+}
 
 /**
  * Relay mode: forwards another server's push with this server's FCM, APNs and VAPID credentials.
@@ -101,16 +114,14 @@ pushRoutes.post("/relay", async (c) => {
   // self-hosters' phone pushes always get through.
   const flights = relaying.get(push) ?? new Map<string, number>();
   relaying.set(push, flights);
-  const keys = target.type === "webpush" ? ["", ipKey(c)] : [];
-  const full = (k: string) =>
-    (flights.get(k) ?? 0) >= (k ? config.limits.relaySendsPerClient : config.limits.relaySends);
-  if (keys.some(full))
+  const keys = target.type === "webpush" ? relaySlots(c, target.endpoint) : [];
+  if (keys.some(([k, cap]) => (flights.get(k) ?? 0) >= cap))
     return c.json({ error: "busy", detail: "too many pushes in flight; retry later" }, 503, {
       "retry-after": "5",
     });
-  for (const k of keys) flights.set(k, (flights.get(k) ?? 0) + 1);
+  for (const [k] of keys) flights.set(k, (flights.get(k) ?? 0) + 1);
   const result = await push.send(target, payload, false, thread).finally(() => {
-    for (const k of keys) {
+    for (const [k] of keys) {
       const n = (flights.get(k) ?? 1) - 1;
       if (n) flights.set(k, n);
       else flights.delete(k);

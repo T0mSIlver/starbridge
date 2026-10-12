@@ -8,12 +8,11 @@
 # See docs/ci.md.
 set -uo pipefail
 REPO=T0mSIlver/starbridge
-# SSH host, runner name prefix, labels. starbridge-ci and starbridge-pr: the labels of the runners
-# these replaced, which branches made before the change still ask for.
+# SSH host, runner name prefix, labels.
 BOXES=(
-  "sb-dell2 dell2 self-hosted,linux,x64,starbridge,trusted,heavy,docker,starbridge-ci"
-  "sb-dell3 dell3 self-hosted,linux,x64,starbridge,pr,heavy,docker,starbridge-pr"
-  "sb-hp hp self-hosted,linux,x64,starbridge,pr,light,docker,starbridge-pr"
+  "sb-dell2 dell2 self-hosted,linux,x64,starbridge,trusted,heavy,docker"
+  "sb-dell3 dell3 self-hosted,linux,x64,starbridge,pr,heavy,docker"
+  "sb-hp hp self-hosted,linux,x64,starbridge,pr,light,docker"
 )
 # Bounded: a box that reboots mid-call must not hold the round. No shared SSH connection, which
 # would outlive a box's reboot.

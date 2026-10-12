@@ -27,7 +27,7 @@ make the approval's MAC, so the page can approve the machine into a chain the se
 lists the machine, and pair a stand-in machine of the same name into the owner's real account.
 The server would then relay between the two and read everything the real machine sends. The
 machine's check code stops this ("Pairing"): approved from a browser, the machine saves the
-pairing only once the owner says the Android app shows the same code beside it, which differs
+pairing only once the owner says the Starbridge app shows the same code beside it, which differs
 for a machine the server paired elsewhere. Compared against the web page instead, it proves
 nothing, since the server writes that page.
 
@@ -58,7 +58,8 @@ Besides the web app's trust in its server:
 
 ## Formats
 
-- Binary values are base64url without padding. Times are ISO 8601 with seconds and an offset
+- Binary values are base64url without padding. Public keys, hashes and MACs are 32 bytes (43
+  characters), signatures 64 (86); any other length is `bad-schema` (#1283). Times are ISO 8601 with seconds and an offset
   (`Z` or `±HH:MM`, hours to 23) on a real date. A string's length limit counts code points, as
   zod does, not UTF-16 units: an emoji is one (#1082).
 - **Signed envelope** `{v, kind, signer, body, sig}`: `body` is JSON text kept exactly as signed;
@@ -262,15 +263,15 @@ A machine's check code shows that the machine joined the owner's own chain (#795
 is the first 80 bits of `BLAKE2b-256("starbridge/v1/check" NUL body NUL sig)` over the `add`
 entry that added the machine, its body and its signature as sent, as 16 Crockford base32
 characters in four groups. That body holds the machine's keys and name, and through `prev` the
-whole chain before it. The Android app and the web page show each active machine's code under
+whole chain before it. The Android and iPhone apps and the web page show each active machine's code under
 Devices, computed from the chain they verified.
 
 The machine's QR code carries a check key, 80 bits as 16 Crockford base32 characters, in text
 with no scheme: `starbridge-pair?server=<server>&k=<key>#<code>` (`machineQrText`, `newCheckKey`,
 `checkKeyFromLink`). A phone's camera shows it as text rather than handing it to an app, so the
-key reaches only the Android app's own scanner, never a page the server writes or another app that
+key reaches only the apps' own scanners, never a page the server writes or another app that
 claims a link. The printed link and code leave it out. CLIs before it put the same query and code
-in a `starbridge://pair` link (`appPairingLink`), which the app still reads. An Android app that read the key adds `check` to its approval:
+in a `starbridge://pair` link (`appPairingLink`), which the app still reads. An Android or iPhone app that read the key adds `check` to its approval:
 `crypto_auth` over the same bytes `checkCode` hashes, keyed by
 `BLAKE2b-256("starbridge/v1/check-key" NUL key)` (`checkProof`). The machine then, after it
 verified the chain:
@@ -278,7 +279,7 @@ verified the chain:
 - with a `check` that verifies over its own `add` entry, saves the pairing;
 - with a `check` that does not, saves nothing: the app wrote another entry;
 - with no `check` (a browser, a typed code, an app that predates it), shows its code and saves
-  the pairing once a person answers that the Android app shows the same. With no terminal, the
+  the pairing once a person answers that the Starbridge app shows the same. With no terminal, the
   answer comes from `starbridge pair --confirm` or `--reject`. A no, or no answer within 10
   minutes, saves nothing.
 
@@ -506,7 +507,7 @@ again, answered.
 The server keeps only the latest quota item from each machine, and drops old items as Limits says. Refusals: 403 when the caller's
 role may not post this kind or `from` is not the caller; 400 `unknown-recipient` when a box goes
 to anyone but active devices (machine-signed kinds) or the asking machine (device-signed kinds;
-a `snooze` goes to the asking machine and every active device);
+a `snooze` goes to the asking machine and every active device, none left out);
 404 when `re` names no such item, one sealed to another device, or one another machine posted;
 409 `already-answered` when the item `re` names is answered or settled, 409 `expired` for a
 permission answered more than 10 minutes after it arrived, 409 `already-settled` for a second
@@ -543,7 +544,7 @@ options. For permission answers, see below.
 | `POST /push/subscriptions` | device | `{type: "fcm" \| "webpush" \| "unifiedpush" \| "apns", endpoint, keys?, environment?}` → `{id}`; URL endpoints must be public HTTPS; an `apns` endpoint is the device token in hex, and `environment` (`production` unless set, or `sandbox`) names its APNs environment; 409 `too-many-subscriptions` past 10 per device or 30 per account (re-subscribing a known endpoint always works) |
 | `DELETE /push/subscriptions/:id` | device | stop pushing there |
 | `GET /push/vapid` | anyone | `{publicKey}`: the VAPID key a browser subscribes with (the relay's when this server forwards Web Push) |
-| `POST /relay` | another server | relay mode only: `{type: "fcm" \| "webpush" \| "apns", endpoint, keys?, environment?, payload, thread?}` → `{result: "ok" \| "gone" \| "failed" \| "no-route"}`; rate-limited per IP; 503 `busy` with `Retry-After` while the server has 16 relayed Web Pushes in flight, or the address 4 |
+| `POST /relay` | another server | relay mode only: `{type: "fcm" \| "webpush" \| "apns", endpoint, keys?, environment?, payload, thread?}` → `{result: "ok" \| "gone" \| "failed" \| "no-route"}`; rate-limited per IP; 503 `busy` with `Retry-After` while the server has 64 relayed Web Pushes in flight, the address 4, its IPv6 /48 8, or the push service's host 16 |
 
 A push payload is JSON text: `{v, kind, id, from, re?, wakeAt?, box?}` for a new item, with the device's
 own box when the payload stays within 3 KB, else without it and the device fetches
@@ -646,7 +647,7 @@ server whose disk is full answers writes 503 `storage-full` with `Retry-After`; 
 | `POST /pairings` | 30 a minute per address; 50 unapproved pairings per address, an IPv6 client counting as its /48: 429 `too-many-pairings` |
 | `GET /pairings/:rendezvous` | 30 a minute per account |
 | `GET /pairings/:rendezvous/result` | 150 a minute per address: 50 waiting pairings polling every 25 s |
-| Pairing messages | 4 KB each: 400 `bad-schema` |
+| Pairing and join messages | 4 KB each: 400 `bad-schema` |
 | `GET /pairings/:rendezvous/result` and `GET /pairings/:rendezvous?wait=` waiting | 4 per pairing: 429 `too-many-waits` |
 | `POST /joins` | 10 a minute per account; request text 4 KB: 400 `bad-schema` |
 | `GET /joins` waiting | 16 per account; `GET /joins/:id` waiting: 4 per join: 429 `too-many-waits` |
@@ -787,9 +788,11 @@ first answer wins.
   "withdrawn", device?, behavior?: "allow" | "deny", choice?, text?, reason?}` closes any item its machine
   posted, a permission or a decision. For a permission, `keyboard` covers any answer outside
   Starbridge (terminal, Desktop, the Claude app) and `device` names the device whose answer the
-  machine applied, with `behavior` saying whether it allowed or denied. For a decision,
+  machine applied, with `behavior` saying whether it allowed or denied; `behavior` comes with no
+  other outcome. For a decision,
   `elsewhere` means it was answered outside Starbridge and `withdrawn` that the agent no longer
-  needs it, with the agent's `reason` why: one line of at most 120 characters; `device`, posted once the machine accepts a device's answer, names that device and
+  needs it, with the agent's `reason` why: one line of at most 120 characters, under no other
+  outcome (#1284); `device`, posted once the machine accepts a device's answer, names that device and
   repeats its `choice` or `text`, neither for a Done. An answer is sealed only to the machine, so this notice is how
   the other devices learn which answer won, for instance when two answered at once. Devices
   show it after the decision is answered, whenever it arrives; clients that predate the two

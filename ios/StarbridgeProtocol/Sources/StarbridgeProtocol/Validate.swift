@@ -15,6 +15,11 @@ func checkB64(_ s: String, _ what: String) throws {
     try schema(!s.utf8.isEmpty && s.utf8.allSatisfy(isB64Char), what)
 }
 
+/** `Bytes32` (43 characters: a public key, a BLAKE2b-256 hash, a MAC) or `Bytes64` (86: a signature), #1283. */
+func checkBytes(_ s: String, _ chars: Int, _ what: String) throws {
+    try schema(s.utf8.count == chars && s.utf8.allSatisfy(isB64Char), what)
+}
+
 /** `Id`: 1 to 64 base64url characters. */
 func checkId(_ s: String, _ what: String) throws {
     try schema((1...64).contains(s.utf8.count) && s.utf8.allSatisfy(isB64Char), what)
@@ -226,6 +231,20 @@ struct Fields {
     func b64(_ key: String) throws -> String {
         let s = try string(key)
         try checkB64(s, name(key))
+        return s
+    }
+
+    /** 32 bytes as base64url: `Bytes32`. */
+    func bytes32(_ key: String) throws -> String {
+        let s = try string(key)
+        try checkBytes(s, 43, name(key))
+        return s
+    }
+
+    /** 64 bytes as base64url: `Bytes64`. */
+    func bytes64(_ key: String) throws -> String {
+        let s = try string(key)
+        try checkBytes(s, 86, name(key))
         return s
     }
 

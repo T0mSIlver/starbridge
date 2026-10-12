@@ -23,8 +23,8 @@ for starbridge.run. A closed browser still gets questions, permission prompts an
 Quota alerts and finished runs notify only while a Starbridge page is open, in the background
 too.
 
-Settings → Notifications → Sound for new questions plays a chime in an open Starbridge page, off
-by default. It needs notifications on in that browser, and a click on the page since it loaded.
+Settings → Notifications → Sound for new questions plays a chime in an open Starbridge page, once
+notifications are on in that browser and you have clicked the page.
 
 In the Mac app, questions, permission prompts and finished runs play the macOS notification
 sound, and quota alerts are silent. Turn sounds off in System Settings → Notifications →
@@ -40,9 +40,10 @@ Your other devices notify after the hold time once you leave (30 s by default), 
 answered.
 
 A computer counts too while it is unlocked and used in the last minute, once you run
-`starbridge config presence on` on it
-([presence](../cli/README.md#quiet-your-other-devices-while-you-re-here)). The Mac app counts
-without the CLI, in any app, window open or not. A locked or sleeping Mac never counts.
+`starbridge config presence on` on it. It tells the server only yes or no, on macOS, Windows,
+and Linux under GNOME or X11 with `xprintidle`.
+
+The Mac app counts without the CLI, window open or not. A locked or sleeping Mac never counts.
 
 ### Quota alerts
 
@@ -62,16 +63,13 @@ Each device keeps its own choice.
 
 ## Turn off the duplicates
 
-Your harnesses and their apps notify you too, so the same question can reach you twice. An agent
-that asks through Starbridge often ends its turn to wait, so a harness's "turn done"
-notification arrives with the question.
-
-Turning those off leaves you nothing for a turn that ends without a question. `starbridge setup`
-changes none of these settings. Menu names come from each tool's documentation in October 2026.
+Your harnesses and their apps notify you too, so the same question can reach you twice. Their
+"turn done" notifications often arrive with a question, but turning them off leaves you nothing
+for a turn that ends without one. Menu names are from October 2026.
 
 | Starbridge | Replaces |
 |---|---|
-| Waiting for you, Questions | Claude Code's Push when actions required, Claude Desktop's Question notifications, opencode's question sound, and the turn-done notifications below |
+| Waiting for you, Questions | Claude Code's Push when actions required, Claude Desktop's Question notifications, opencode's question sound, and the harnesses' turn-done notifications |
 | Permission prompts, once on | Permission prompt notifications in Claude Code, Claude Desktop, the Codex CLI and opencode |
 | Runs, Quotas | Nothing: the harnesses don't notify about these. |
 
@@ -101,9 +99,9 @@ Pi's [notify extension](https://github.com/earendil-works/pi/blob/main/packages/
 
 | App | What it notifies | Turn it off |
 |---|---|---|
-| Claude app (Android, iOS) | The Remote Control pushes above, and Dispatch sessions finishing or needing approval. | For Remote Control, the `/config` toggles above. For the rest, the phone's settings below. |
+| Claude app (Android, iOS) | Claude Code's Remote Control pushes, and Dispatch sessions finishing or needing approval. | For Remote Control, Claude Code's `/config` toggles. For the rest, the phone's notification settings for the app. |
 | ChatGPT on the web | Codex notifications by category, by push, email or SMS. | Settings → Notifications. |
-| ChatGPT app (Android, iOS) | Not documented. | The phone's settings below. |
+| ChatGPT app (Android, iOS) | Not documented. | the phone's notification settings for the app. |
 | Any Android app | Notifications by category, which Android calls channels. | Settings → Notifications → App notifications → the app, then turn off a category. Or touch and hold one of its notifications, tap Settings, and turn off its category. |
 
 Sources: [ChatGPT notifications](https://learn.chatgpt.com/docs/notifications),

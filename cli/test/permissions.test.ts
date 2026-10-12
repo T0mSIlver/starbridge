@@ -836,6 +836,21 @@ test("a device answers Claude Code's picker, permissions on or off, and the sess
   expect((await server.opened("settled")).map((s) => s.outcome)).toEqual(["device", "device"]);
 });
 
+test("withdrawing the picker's cards gives up on a server that never answers (#1286)", async () => {
+  const ctx = await paired(server);
+  const stop = new AbortController();
+  const done = hookPermission({ ...ctx, signal: stop.signal }, picker(PICKED.slice(0, 1)), {
+    agent: "claude-code",
+  });
+  await until(async () => (await server.opened("waiting")).length === 1);
+  server.stalls.push("POST /items");
+  const settled = hookSettle(ctx, pickerDone(PICKED.slice(0, 1)), { agent: "claude-code" });
+  const ended = await Promise.race([settled.then(() => true), Bun.sleep(10_000).then(() => false)]);
+  expect(ended).toBe(true);
+  stop.abort();
+  await done;
+});
+
 test("an answer in the picker settles its cards as answered elsewhere, and Esc does too", async () => {
   const ctx = await paired(server);
   const stop = new AbortController();

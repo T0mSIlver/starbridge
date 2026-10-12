@@ -21,9 +21,9 @@ so setup cannot ask its own questions: ask them yourself, then run it with `--ye
 4. Run `starbridge setup --yes` with the flags I gave ($ARGUMENTS) and the answers from step 3,
    in the background. When it is not paired yet, it prints a pairing link and a code: give me
    both at once. I open the link on my phone, or type the code under Devices in the Starbridge
-   app or web page, within 10 minutes. Once approved from anywhere but the Android app's
+   app or web page, within 10 minutes. Once approved from anywhere but the Starbridge app's
    scanner, setup prints a check code and waits: show me the code and ask whether the Starbridge
-   Android app shows the same beside this machine under Devices. Run `starbridge pair --confirm`
+   app shows the same beside this machine under Devices. Run `starbridge pair --confirm`
    if I say yes, `starbridge pair --reject` if I say no. Never answer for me.
 5. When setup finishes, give me its result in a few lines: the providers it uploads, whether the
    agent runs, and anything that failed with the command that fixes it. Sessions load the plugins

@@ -50,7 +50,7 @@ export async function pair(
   const id = `m_${randomBytes(9).toString("base64url")}`;
   const name = opts.name ?? previous?.name ?? hostname();
   const claim = newClaimSecret();
-  // Only the QR carries it: the Android app that scans it confirms the check code by itself.
+  // Only the QR carries it: the Starbridge app (Android or iPhone) that scans it confirms the check code by itself.
   const checkKey = newCheckKey();
 
   // The server's 10 minutes start when it stores the pairing, after this: ending here first
@@ -84,7 +84,7 @@ export async function pair(
   // so it does not wrap in an 80-column terminal.
   ctx.out(`Pairing code: ${formatPairingCode(code)}`);
   // Text with no scheme, which a camera hands to no app: only the app's scanner reads the check key.
-  ctx.out("  Scan this with the Starbridge Android app:");
+  ctx.out("  Scan this with the Starbridge app:");
   for (const line of terminalQr(machineQrText(server, code, checkKey))) ctx.out(line);
   ctx.out(`  No app? Open  ${link}`);
   ctx.out("  Or type the code under Devices in the app or web page. It expires in 10 minutes.");
@@ -121,14 +121,14 @@ export async function pair(
   const dir = verifyDirectory(entries, { account: approval.account, pin });
   checkJoined(dir, { id, role: "machine", ...publicKeys(keys) });
   // A hostile server that read the code in a browser could have approved this machine into a
-  // chain it controls: only the Android app, from the QR, or the owner comparing with it can tell
+  // chain it controls: only the Starbridge app, from the QR, or the owner comparing with it can tell
   // (#795).
   const again = opts.again ?? "starbridge pair";
   const check = checkCode(entries, id);
   if (approval.check !== undefined) {
     if (!verifyCheckProof(entries, id, checkKey, approval.check))
       throw new UsageError(
-        `the Android app that scanned the QR code saw another check code, so a server may have paired this machine into an account it controls. Nothing is saved: revoke "${name}" under Devices, then run \`${again}\` again`,
+        `the Starbridge app that scanned the QR code saw another check code, so a server may have paired this machine into an account it controls. Nothing is saved: revoke "${name}" under Devices, then run \`${again}\` again`,
       );
   } else {
     const answer = await confirmCheck(ctx, check, name);
@@ -228,7 +228,7 @@ export function sendConfirm(ctx: Ctx, same: boolean): number {
 }
 
 /**
- * Shows `code` and asks the owner whether the Android app shows the same beside the machine, on
+ * Shows `code` and asks the owner whether the Starbridge app shows the same beside the machine, on
  * this terminal or through `starbridge pair --confirm` or `--reject`. Undefined when nobody
  * answered in time.
  */
@@ -246,7 +246,7 @@ async function confirmCheck(
   const tty = process.stdin.isTTY;
   ctx.out(`Check code: ${code}`);
   ctx.out(
-    `  The Starbridge Android app shows "${name}" under Devices with its check code. A browser shows what the server sends, so compare with the app if you have it. An app that shows no code needs updating.`,
+    `  The Starbridge app shows "${name}" under Devices with its check code. A browser shows what the server sends, so compare with the app if you have it. An app that shows no code needs updating.`,
   );
   ctx.out(
     tty

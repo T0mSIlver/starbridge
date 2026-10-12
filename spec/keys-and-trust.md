@@ -33,11 +33,11 @@
   entry rather than the keys: a pairing request proves no private key, so a stand-in can copy the
   machine's keys, and a fork can keep the owner's entry 0. The entry's `prev` ties it to the
   chain, and its signature, which the server cannot predict, stops a search for two entries that
-  match. The machine's QR carries a second secret, the check key, and an Android app that scanned
-  it proves with it which entry it wrote, so the machine saves the pairing without asking: the
+  match. The machine's QR carries a second secret, the check key, and an Android or iPhone app that
+  scanned it proves with it which entry it wrote, so the machine saves the pairing without asking: the
   code never reached a browser on that path, and the owner should not have to do anything. Every
   other path (a browser, a typed code, Android 0.1.0) ends with the machine showing the whole
-  code and asking `Same code? [Y/n]`, Enter for yes, if the Android app shows the same; the
+  code and asking `Same code? [Y/n]`, Enter for yes, if the Starbridge app shows the same; the
   browser shows it too, after Approve, for an owner with no app. Tom chose one keypress over
   typing a group, and Enter over `y` (2026-10-08), accepting that an agent running setup, or a
   stray Enter, can confirm it. The QR code is text with no scheme, read by the app's own scanner
@@ -49,7 +49,11 @@
   Devices shows a machine's code, as "Same code as on the machine?", only while the machine
   can still ask: for `CHECK_CONFIRM_MS` (10 minutes, in `packages/protocol`) from its `add`
   entry, the time `starbridge pair` waits for an answer (#939). After that the code answers no
-  question, and a line nobody needs reads as one to act on.
+  question, and a line nobody needs reads as one to act on. The phone that approved a machine
+  from its QR never shows it: the check key proved the entry, so that machine asks nothing
+  (#1329). Other devices keep the 10 minutes, since they cannot tell the paths apart: only the
+  machine learns that the proof matched, and a "scanned" flag the server passed on would let a
+  hostile server hide the code on exactly the path it guards.
   A phone without the app opens the printed link or types the code instead, and the machine
   asks. The code stays after `#`, where Android 0.1.0's scanner reads it, so that scanner still
   pairs (and the machine asks); 0.1.0's camera opens nothing until the app updates.

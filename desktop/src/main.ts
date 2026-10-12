@@ -18,6 +18,7 @@ import {
   Tray,
   type WebContents,
 } from "electron";
+import { Answers } from "./answers";
 import { type Answer, type Entry, parseAnswered, parseState } from "./bridge";
 import { Notifier, type Shown } from "./notifier";
 import { linkPage, opensOutside, serverOrigin, staysInWindow } from "./origin";
@@ -75,7 +76,11 @@ let updateReady = false;
 /** Links that arrived before the window existed. */
 const early: string[] = [];
 /** Answers handed to the page, until it says they went out. */
-const pending = new Map<string, NodeJS.Timeout>();
+const pending = new Answers(
+  (id, why) => notSent(id, why),
+  (id) => notifier.close(id),
+  ANSWER_MS,
+);
 
 if (!app.requestSingleInstanceLock()) app.quit();
 else start();
@@ -139,11 +144,7 @@ async function ready(): Promise<void> {
   });
   ipcMain.on("answered", (e, x) => {
     const a = fromPage(e) && parseAnswered(x);
-    if (!a || !pending.has(a.id)) return;
-    clearTimeout(pending.get(a.id));
-    pending.delete(a.id);
-    if (a.error) notSent(a.id, a.error);
-    else notifier.close(a.id);
+    if (a) pending.settle(a);
   });
   // Not secret, and asked while the page is still loading, so only the window is checked.
   ipcMain.on("place?", (e) => {
@@ -575,21 +576,14 @@ function answer(a: Answer): void {
     notSent(a.id, "Starbridge is not signed in.");
     return;
   }
-  clearTimeout(pending.get(a.id));
-  pending.set(
-    a.id,
-    setTimeout(() => {
-      pending.delete(a.id);
-      notSent(a.id, "Starbridge did not answer in time.");
-    }, ANSWER_MS),
-  );
+  pending.start(a.id);
   win.webContents.send("answer", a);
 }
 
 /** Failure notices, kept until closed: macOS drops a collected notification and its handlers. */
 const notices = new Set<Notification>();
 
-function notSent(id: string, why: string): void {
+function notSent(id: string, why: string): Shown {
   // macOS's error sound, apart from the default one a question plays (#1055).
   const n = new Notification({ title: "Answer not sent", body: why, sound: "Basso" });
   notices.add(n);
@@ -603,6 +597,7 @@ function notSent(id: string, why: string): void {
     setBlocked(true);
   });
   n.show();
+  return n;
 }
 
 /** Numbers each reading, so the page's word on one is not taken for another's. */

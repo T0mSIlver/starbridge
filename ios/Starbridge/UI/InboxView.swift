@@ -16,14 +16,12 @@ enum Sheet: Identifiable, Hashable {
  */
 struct InboxView: View {
     let store: Store
-    @Environment(\.scenePhase) private var scenePhase
     @State private var opened: Sheet?
     /** The Runs section, open by default and remembered on this iPhone (#835). */
     @AppStorage("runsOpen") private var runsOpen = true
     @State private var snoozedOpen = false
     @State private var historyOpen = false
     @State private var query = ""
-    @State private var deleting = false
     /** One feed, or grouped by machine or by waiting, remembered on this iPhone. */
     @AppStorage("grouping") private var grouping = Grouping.none
     /** Answer buttons on cards: Always, When the agent waits, or Never (#138). */
@@ -41,6 +39,7 @@ struct InboxView: View {
         NavigationStack {
             ScrollView {
                 LazyVStack(spacing: Tokens.Spacing.s2) {
+                    if let notice = store.recoveryInfo?.notice { RecoveryBanner(store: store, notice: notice) }
                     if let why = store.withheldWhy { HeldBanner(store: store, why: why) }
                     if !query.trimmingCharacters(in: .whitespaces).isEmpty {
                         found(runs.map { .run($0) } + feed + snoozed, history)
@@ -89,21 +88,12 @@ struct InboxView: View {
                         Picker("View", selection: $grouping) {
                             ForEach(Grouping.allCases, id: \.self) { Text($0.label).tag($0) }
                         }
-                        Picker("Answer buttons", selection: $answerButtons) {
-                            ForEach(AnswerButtons.allCases, id: \.self) { Text($0.label).tag($0) }
-                        }
-                        .pickerStyle(.menu)
-                        Section("This iPhone: \(store.me?.name ?? "")") {
-                            Button("Sign out", role: .destructive) { Task { await store.signOut() } }
-                            Button("Delete account", role: .destructive) { deleting = true }
-                        }
                     } label: {
                         Image(systemName: "ellipsis.circle").accessibilityLabel("Options")
                     }
                 }
             }
         }
-        .deleteAccount(store: store, isPresented: $deleting, text: DeleteAccount.paired)
         .sheet(item: $opened) { which in
             Group {
                 switch which {
@@ -114,17 +104,10 @@ struct InboxView: View {
             .presentationDetents([.medium, .large])
             .presentationDragIndicator(.visible)
         }
-        .task {
-            store.startPolling()
-            await store.enableNotifications()
-        }
         .onChange(of: store.openRequest, initial: true) { _, request in
             guard let request else { return }
             opened = request
             store.openRequest = nil
-        }
-        .onChange(of: scenePhase) { _, phase in
-            if phase == .active { store.startPolling() } else { store.stopPolling() }
         }
     }
 }
@@ -200,9 +183,9 @@ enum AnswerButtons: String, CaseIterable {
 
     var label: String {
         switch self {
-        case .always: "Answer buttons: Always"
-        case .waiting: "Answer buttons: When the agent waits"
-        case .never: "Answer buttons: Never"
+        case .always: "Always"
+        case .waiting: "When the agent waits"
+        case .never: "Never"
         }
     }
 }
@@ -490,6 +473,26 @@ private struct RunCard: View {
                 }
             }
         }
+    }
+}
+
+/** A replacement of the recovery key made on another device (#348), said once. */
+private struct RecoveryBanner: View {
+    let store: Store
+    let notice: RecoveryNotice
+
+    var body: some View {
+        HStack(spacing: Tokens.Spacing.s2) {
+            Text("Recovery key replaced on \(notice.by), \(notice.at.formatted(.dateTime.month(.abbreviated).day())), \(notice.at.formatted(date: .omitted, time: .shortened)).")
+                .type(Tokens.Typography.body)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            Button("OK") { store.dismissRecoveryNotice(notice.seq) }
+                .type(Tokens.Typography.label)
+                .frame(minWidth: Tokens.Sizes.tap, minHeight: Tokens.Sizes.tap)
+        }
+        .padding(.leading, Tokens.Spacing.s4)
+        .padding(.vertical, Tokens.Spacing.s2)
+        .background(RoundedRectangle(cornerRadius: Tokens.Radius.lg).fill(Tokens.Colors.surface2.color))
     }
 }
 

@@ -48,6 +48,7 @@ command and its local agent), `plugin` and
   [CONTRIBUTING.md, "Develop"](CONTRIBUTING.md#develop).
 - A Settings row you add or rename follows DESIGN.md's rule on Settings
   copy: a title that stands alone, a subtitle only when it must.
+- Docs (`README.md`, `docs/`, `cli/README.md`, `server/README.md`) follow [docs/AGENTS.md](docs/AGENTS.md).
 - When a change makes or changes a product decision, update its file under
   `spec/`: the rule, why in a clause, and the issue. Replace what it
   supersedes. A feature added to or changed in one client updates its row in
