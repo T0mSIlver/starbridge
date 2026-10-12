@@ -1639,10 +1639,18 @@ export async function openSettled(ctx: Ctx, item: SealedItem) {
   return { machine: signer.id, settled: body as Settled };
 }
 
-/** Settled notices after `cursor`, keyed by "machine/permission id". */
+/**
+ * Settled notices after `cursor`, keyed by "machine/permission id". Without one, the read starts
+ * at the kept inbox's cursor (#1380) rather than at the first notice the server holds: a notice
+ * before it closed a prompt the server no longer lists open, which the page never shows (#1455).
+ */
 export async function loadSettled(ctx: Ctx, cursor?: string) {
   const out = new Map<string, Settled>();
   let at = cursor;
+  if (at === undefined) {
+    const kept = await store.get("kept", ctx.account);
+    if (kept?.device === ctx.device.id) at = kept.cursor;
+  }
   for (;;) {
     const page = await api.items("settled", at);
     for (const s of page.items) {

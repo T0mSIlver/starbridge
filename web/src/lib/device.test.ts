@@ -463,6 +463,29 @@ test("a kept inbox reads only what came after it, and follows what the server dr
   }
 });
 
+test("the first read of settled notices starts at the kept inbox's cursor (#1455)", async () => {
+  const fresh = (await device.deviceContext(ctx.account)) as device.Ctx;
+  const asks: string[] = [];
+  const served = globalThis.fetch;
+  globalThis.fetch = (async (input: string, init?: RequestInit) => {
+    if (!input.startsWith("/v1/items?kind=settled")) return served(input, init);
+    asks.push(new URL(input, "http://x").searchParams.get("after") ?? "");
+    return Response.json({ items: [], cursor: "7" });
+  }) as typeof fetch;
+  try {
+    await device.loadSettled(fresh);
+    await store.put("kept", { device: fresh.device.id, cursor: "7", items: [] }, ctx.account);
+    await device.loadSettled(fresh);
+    // Another device's kept items say nothing of this one's reads.
+    await store.put("kept", { device: "d_other", cursor: "9", items: [] }, ctx.account);
+    await device.loadSettled(fresh);
+    expect(asks).toEqual(["", "7", ""]);
+  } finally {
+    globalThis.fetch = served;
+    await store.del("kept", ctx.account);
+  }
+});
+
 test("an answered question lists without its images, which load once shown and stay kept (#1382)", async () => {
   const at = "2026-10-06T12:00:00Z";
   const { keys, member: machine } = asker as NonNullable<typeof asker>;
