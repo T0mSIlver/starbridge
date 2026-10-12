@@ -207,7 +207,7 @@ export async function status(sys: Sys): Promise<number> {
     } else if (id === "pi") {
       const pi = piPackage(sys);
       out(
-        `Pi package: ${pi === PI_PACKAGE ? "installed" : `${pi} (\`starbridge setup\` moves it to v${VERSION})`}`,
+        `Pi package: ${pi === PI_PACKAGE ? "installed" : `${pi} (\`starbridge update\` moves it to v${VERSION})`}`,
       );
     } else if (id === "cursor") {
       const state = cursorState(sys);
