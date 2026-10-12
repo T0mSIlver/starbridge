@@ -68,5 +68,5 @@ They run when the test process gets a self-hosted server with no device yet, sta
 TEST_RUNNER_STARBRIDGE_TEST_SERVER=http://localhost:18731 TEST_RUNNER_STARBRIDGE_TEST_OWNER_TOKEN=test xcodebuild -project Starbridge.xcodeproj -scheme Starbridge -destination "platform=iOS Simulator,name=iPhone 16" test
 ```
 
-CI runs both, with the server, in `.github/workflows/ios.yml`. Builds are for the simulator until
-signing lands with the TestFlight upload.
+CI runs both, with the server, in `.github/workflows/ios.yml`. Each release tag uploads the app to
+TestFlight from `.github/workflows/release.yml` (spec/releases.md, "The iPhone app on TestFlight").
