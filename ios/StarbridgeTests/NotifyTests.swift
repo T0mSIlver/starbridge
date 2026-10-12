@@ -1,4 +1,5 @@
 import StarbridgeProtocol
+import UserNotifications
 import XCTest
 @testable import Starbridge
 
@@ -172,5 +173,18 @@ final class NotifyTests: XCTestCase {
         XCTAssertTrue(Notify.closes(try snooze(due: nil, wakeAt: now.addingTimeInterval(-60)), now: now))
         XCTAssertTrue(Notify.closes(.object(["v": 1, "kind": "answered", "id": "d_1"]), now: now))
         XCTAssertFalse(Notify.closes(.object(["v": 1, "kind": "quota", "id": "q_1"]), now: now))
+    }
+
+    /** A question's buttons answer locked only while Show Previews is Always (#1384). */
+    func testQuestionButtonsAskForTheUnlockUnlessPreviewsShowAlways() async throws {
+        let f = try NotifyFixture()
+        let read = await Notify.shown(f.payload(try f.decision("d_lock", replies: true)), saved: f.saved, secrets: f.secrets) { _ in nil }
+        let shown = try XCTUnwrap(read)
+        func unlocks(_ previews: UNShowPreviewsSetting) -> [Bool] {
+            Notify.category("d.d_lock", Notify.lockScreen(shown.actions, previews: previews)).actions.map { $0.options.contains(.authenticationRequired) }
+        }
+        XCTAssertEqual(unlocks(.always), [false, false, false, false])
+        XCTAssertEqual(unlocks(.whenAuthenticated), [true, true, true, true])
+        XCTAssertEqual(unlocks(.never), [true, true, true, true])
     }
 }

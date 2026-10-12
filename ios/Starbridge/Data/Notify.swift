@@ -268,16 +268,32 @@ enum Notify {
     }
 
     /**
+     * A question's buttons answer from the lock screen only while Show Previews is Always, as
+     * Android's follow sensitive content (#1375, #1384). At When Unlocked or Never the lock screen
+     * hides what the question says, and the buttons ask for the unlock first.
+     */
+    static func lockScreen(_ actions: [NotificationAction], previews: UNShowPreviewsSetting) -> [NotificationAction] {
+        previews == .always ? actions : actions.map { var a = $0; a.unlock = true; return a }
+    }
+
+    /**
      * Adds a question's own category, keeping the others: a category's buttons are fixed when it
      * is registered, and each question's options are its own. At most 64 questions keep theirs.
+     * Show Previews is read at each registration; a question registered before it changed gets
+     * its buttons again with the new unlock.
      */
     static func register(_ id: String, _ actions: [NotificationAction]) async {
         let center = UNUserNotificationCenter.current()
+        let actions = id.hasPrefix("d.") ? lockScreen(actions, previews: await center.notificationSettings().showPreviewsSetting) : actions
+        let wanted = category(id, actions)
         var categories = await center.notificationCategories()
-        guard !categories.contains(where: { $0.identifier == id }) else { return }
+        if let had = categories.first(where: { $0.identifier == id }) {
+            guard had.actions.map(\.options) != wanted.actions.map(\.options) else { return }
+            categories.remove(had)
+        }
         let questions = categories.filter { $0.identifier.hasPrefix("d.") }
         if questions.count >= 64 { categories.subtract(questions.prefix(questions.count - 63)) }
-        categories.insert(category(id, actions))
+        categories.insert(wanted)
         categories.insert(category("permission", permissionActions))
         center.setNotificationCategories(categories)
         // The center reads its categories again before the notification shows.
