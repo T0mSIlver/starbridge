@@ -274,7 +274,7 @@ class AnswerQueueTest {
         setUp()
         offline = true
         val store = store()
-        assertEquals(Sent.Queued("Hold"), runBlocking { store.sendFromNotification("d_ship", "Hold", null) })
+        assertEquals(Sent.Queued("Hold", offline = true), runBlocking { store.sendFromNotification("d_ship", "Hold", null) })
         assertEquals(listOf("cancel d_ship"), shown)
         offline = false
         assertTrue(runBlocking { store.flushAnswers() })
