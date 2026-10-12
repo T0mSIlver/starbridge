@@ -26,11 +26,18 @@
   version a visitor could fail without, and the actions; no subtitles. Android has two buttons
   (the APK, Obtainium) and the Play testing links. No copy says "signed".
   The CLI never sits in a device card: a machine runs the agents, a device is where you answer.
-- **Keyboard shortcuts** (#970) are written down once, in Settings → Inbox: J and K, 1 to 4, A
-  and D from 1100 px, and / anywhere. Hints on the buttons and the Find box crowded the detail,
-  and hints in some places but not others read as missing ones.
+- **Keyboard shortcuts** (#970) are written down once, in Settings → Inbox: J and K at any width
+  (#1432), 1 to 4, A and D from 1100 px, and / anywhere. Hints on the buttons and the Find box
+  crowded the detail, and hints in some places but not others read as missing ones.
 - **Back** (#347). Under 1100 px an open item is `/?item=<id>`, its own history entry, so Back
-  returns to the list. Dialogs are modal `<dialog>`s, which Chrome on Android closes on Back.
+  returns to the list. J and K, and an answer that opens the next card, replace that entry rather
+  than add one, so Back still returns to the list (#1432). Dialogs are modal `<dialog>`s, which
+  Chrome on Android closes on Back.
+- **After an answer under 1100 px** (Tom, 2026-10-12, #1432). With a mouse or trackpad (`(hover:
+  hover) and (pointer: fine)`), the next open card opens, by the wide layout's rule: the next open
+  one below, else the one above, never History; none left, the list. On a touch screen the list
+  comes back, as on Android, since a tap meant for the answered card could land on the next one's
+  buttons. A snooze moves on the same way.
 - **Backoff** (#332). All calls in a page share one backoff, 250 ms doubling to 30 s with jitter,
   ended by any answer or the browser's online event. Pollers skip their turn while it waits.
 - **The browser keeps the inbox** (Tom, 2026-10-12, #1380). A page load read every question from

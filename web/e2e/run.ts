@@ -933,7 +933,7 @@ async function main() {
         ],
         machineHome,
       );
-      await picks.waitFor(/^d_\S+$/m);
+      const [picksId] = await picks.waitFor(/^d_\S+$/m);
       await page.setViewportSize({ width: 390, height: 844 });
       await page
         .locator("[data-row]", { hasText: LAYOUTS })
@@ -979,6 +979,24 @@ async function main() {
         await page.screenshot({ path: join(SHOTS, `picks-phone-${scheme}.png`) });
       }
       await page.emulateMedia({ reducedMotion: "no-preference" });
+      // In place of the list, J and K open the next and previous card on the open card's history
+      // entry, so Back still returns to the list (#1432).
+      const openId = () => page.evaluate(() => new URLSearchParams(location.search).get("item"));
+      const entries = await page.evaluate(() => history.length);
+      await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+      let back = "k";
+      await page.keyboard.press("j");
+      if ((await openId()) === picksId) {
+        back = "j";
+        await page.keyboard.press("k");
+      }
+      const stepped = await openId();
+      if (!stepped || stepped === picksId) throw new Error(`J and K under 1100 px open ${stepped}`);
+      await page.getByRole("heading", { name: LAYOUTS }).waitFor({ state: "detached" });
+      await page.keyboard.press(back);
+      await page.getByRole("heading", { name: LAYOUTS }).waitFor();
+      if ((await openId()) !== picksId || (await page.evaluate(() => history.length)) !== entries)
+        throw new Error("J and K under 1100 px did not step back, or added history entries");
       // The reply field is open under the picks too (#849); in it, Shift+Enter starts a new line and
       // Enter sends (#562).
       const reply = page.getByRole("textbox", { name: "Your answer" });
@@ -992,8 +1010,9 @@ async function main() {
         throw new Error(
           `Shift+Enter did not start a new line: ${JSON.stringify(await reply.inputValue())}`,
         );
-      // At Enter, before the server replies, the phone is back on the list without the question
-      // (#895, #927).
+      // At Enter, before the server replies, the question goes (#895, #927). With a mouse the next
+      // open card takes its place, and Back returns to the list without the question (#1432); a
+      // touch screen goes straight back to the list (selection.test.ts).
       let release = () => {};
       const held = new Promise<void>((done) => {
         release = done;
@@ -1004,6 +1023,12 @@ async function main() {
       });
       await reply.press("Enter");
       await page.getByRole("heading", { name: LAYOUTS }).waitFor({ state: "detached" });
+      const next = await openId();
+      if (!next || next === picksId)
+        throw new Error(`with a mouse, an answer under 1100 px opens ${next}, not the next card`);
+      await page.goBack();
+      await page.waitForFunction(() => location.search === "");
+      await page.locator("button[data-id]").first().waitFor();
       const left = await page.locator("[data-row]", { hasText: LAYOUTS }).count();
       release();
       await page.unroute("**/v1/items");

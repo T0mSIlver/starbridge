@@ -17,13 +17,13 @@ import {
 } from "@/lib/feed";
 import { matches, useFind } from "@/lib/find";
 import { clockTime } from "@/lib/format";
-import { closeItem, linkedItem, openItem, stackItem, useOpened } from "@/lib/opened";
+import { closeItem, linkedItem, openItem, replaceItem, stackItem, useOpened } from "@/lib/opened";
 import { AnsweredFirst, answerPlace, promptOutcome } from "@/lib/outcome";
 import { fitsRow } from "@/lib/permissionInput";
 import { type Prefs, usePref } from "@/lib/prefs";
 import { holdsQuotas } from "@/lib/quotaSettings";
 import { runState } from "@/lib/runs";
-import { afterAnswer, selectedId, step } from "@/lib/selection";
+import { afterAnswer, afterAnswerNarrow, selectedId, step } from "@/lib/selection";
 import type { InboxItem, PromptItem } from "@/lib/types";
 import { useApp } from "./AppProvider";
 import { PromptDetail, QuestionDetail } from "./Detail";
@@ -54,6 +54,8 @@ import ui from "./ui.module.css";
 
 // From here the list and the detail sit side by side (Inbox.module.css).
 const WIDE = "(min-width: 1100px)";
+// A mouse or trackpad, where an answer under 1100 px opens the next card instead of the list.
+const FINE = "(hover: hover) and (pointer: fine)";
 
 function useWide(): boolean {
   return useSyncExternalStore(
@@ -169,24 +171,34 @@ export function Inbox() {
     if (wide && selected && picked !== selected) setPicked(selected);
   }, [wide, selected, picked]);
 
-  const latest = useRef({ ids, selected });
-  latest.current = { ids, selected };
+  const latest = useRef({ ids, selected, wide });
+  latest.current = { ids, selected, wide };
   const listRef = useRef<HTMLDivElement>(null);
   useRowMotion(
     listRef,
     all.map((e) => e.id),
     `${grouping} ${find} ${wide}`,
   );
+  // J and K at any width: beside the list they move the selection; in place of the list they open
+  // the next card on the open one's history entry, so Back still returns to the list.
   useEffect(() => {
-    if (!wide) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.ctrlKey || e.metaKey || e.altKey) return;
       if ((e.target as HTMLElement).closest("input, textarea, [contenteditable]")) return;
       const by = e.key === "j" || e.key === "J" ? 1 : e.key === "k" || e.key === "K" ? -1 : 0;
       if (!by) return;
-      const next = step(latest.current.ids, latest.current.selected, by);
+      const { ids, selected, wide } = latest.current;
+      const next = step(ids, selected, by);
       if (next === undefined) return;
       e.preventDefault();
+      if (!wide) {
+        if (selected === undefined) openItem(next);
+        else if (next !== selected) {
+          replaceItem(next);
+          window.scrollTo(0, 0);
+        }
+        return;
+      }
       setPicked(next);
       const list = listRef.current;
       const row = list?.querySelector<HTMLElement>(`[data-id="${CSS.escape(next)}"]`);
@@ -195,16 +207,26 @@ export function Inbox() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [wide]);
+  }, []);
 
   const openIds = needs.map((e) => e.id);
-  // Beside the list, the next open item takes its place; on a phone, the list comes back.
-  const moveOn = (id: string) => {
-    answeredHere.current.add(id);
-    if (!wide) closeItem();
+  // Beside the list, the next open item takes its place. In place of the list, it does too with a
+  // mouse; on a touch screen the list comes back.
+  const leave = (id: string) => {
     const next = afterAnswer(openIds, id);
     setPicked((cur) => (cur === id ? next : cur));
-    return next;
+    if (wide || opened !== id) return next;
+    const narrowNext = afterAnswerNarrow(openIds, id, window.matchMedia(FINE).matches);
+    if (narrowNext === undefined) closeItem();
+    else {
+      replaceItem(narrowNext);
+      window.scrollTo(0, 0);
+    }
+    return narrowNext;
+  };
+  const moveOn = (id: string) => {
+    answeredHere.current.add(id);
+    return leave(id);
   };
   // It moves on at the click, as the question leaves (#895). A refused answer brings its row back
   // saying why; one another device beat stays selected, saying what won (#330).
@@ -227,9 +249,7 @@ export function Inbox() {
   const snoozeQuestion = async (item: InboxItem, until: Date) => {
     await snooze(item, until.toISOString());
     if (until.getTime() <= Date.now()) return;
-    if (!wide) closeItem();
-    const next = afterAnswer(openIds, item.decision.id);
-    setPicked((cur) => (cur === item.decision.id ? next : cur));
+    leave(item.decision.id);
   };
   const answerOne = async (item: PromptItem, reply: Parameters<typeof answerPrompt>[1]) => {
     await answerPrompt(item, reply);

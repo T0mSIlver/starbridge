@@ -41,7 +41,8 @@ source says so on its `Parity:` line, which CI requires: `spec/parity.md`, the f
 | Pairing: link (`/pair#code`) | yes | yes (App Link and `starbridge://pair`) | yes (`starbridge://pair`) | yes (`starbridge://pair`, #1239; the https link opens the web page until the app claims it, #1115) |
 | Pairing: typed code | yes | yes | yes | yes (#1239) |
 | Pairing: approve a join by digits (Compare digits) | yes | yes | yes (as web) | yes (#1158: over any screen while the app is in front; the notification opens the app) |
-| Keyboard shortcuts (J K 1-4 A D /) | yes (from 1100 px) | no (only Enter to send, Esc in Find) | yes (as web) | not yet |
+| After an answer, the next open card opens | yes (beside the list; under 1100 px only with a mouse, #1432) | no (touch: the inbox comes back) | yes (as web) | no (touch, as Android) |
+| Keyboard shortcuts (J K 1-4 A D /) | yes (J, K and / at any width, #1432; 1-4, A, D from 1100 px) | no (only Enter to send, Esc in Find) | yes (as web) | not yet |
 | Sound | yes (off by default, only while a page is open) | yes (system notification channel sound) | yes (macOS default sound; Basso on "Answer not sent"; web Sound row hidden) | not yet |
 | Recover with the recovery key (revokes every other member) | yes | yes | yes (as web) | yes (#1116) |
 | Delete account (Settings and the join screen, its recovery-key view included, typed confirmation) | yes (#1104, #1117) | yes (#1104, #1117, #1166) | yes (as web) | yes (#1141, #1195, #1233: Settings and the join screen, its recovery-key view included) |
