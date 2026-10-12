@@ -57,11 +57,14 @@ secrets() {
       "$pw" "$(openssl rand -hex 16)" > "$LOAD_DIR/umami.env"
   }
   # Prod's Caddyfile, served on plain HTTP at :18000 inside the compose network: the upstreams
-  # by service name, and the admin API open to the published port. The client's address, which
+  # by service name, and the admin API open to the published port. The stats host moves to plain
+  # HTTP at :18001, unpublished, and the demo host goes: under their real names Caddy would ask
+  # for their certificates, and nothing here serves the demo (#1221). The client's address, which
   # Caddy's and the server's and Umami's per-address limits key on, is the X-Sim-IP header the
   # clients send for each user: Caddy trusts it from the compose network as prod trusts
   # CF-Connecting-IP from Cloudflare (#799), and without it the address is the connection's.
-  sed -e 's/^starbridge\.run {/http:\/\/:18000 {/' -e 's/^\tservers {/\tadmin 0.0.0.0:2019\n\tservers {/' \
+  sed -e 's/^starbridge\.run {/http:\/\/:18000 {/' -e 's/^stats\.starbridge\.run {/http:\/\/:18001 {/' \
+    -e '/^demo\.starbridge\.run {/,/^}/d' -e 's/^\tservers {/\tadmin 0.0.0.0:2019\n\tservers {/' \
     -e 's/127\.0\.0\.1:8080/server:8080/; s/127\.0\.0\.1:3001/umami:3000/' \
     -e 's/127\.0\.0\.1:3010/web-a:3000/; s/127\.0\.0\.1:3011/web-b:3000/' \
     -e 's/trusted_proxies static .*/trusted_proxies static private_ranges/' \

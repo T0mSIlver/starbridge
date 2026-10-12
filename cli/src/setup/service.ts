@@ -302,6 +302,31 @@ const systemctl = (sys: Sys, ...args: string[]) =>
 const launchctl = (sys: Sys, ...args: string[]) =>
   run(sys, "launchctl", args, { timeoutMs: 30_000 });
 
+/** How often, and how many times, setup looks whether launchd has removed the old job. */
+const GONE_MS = 250;
+const GONE_TRIES = 40;
+/** Bootstraps refused with error 5 before setup gives up. */
+const BOOTSTRAP_TRIES = 3;
+
+/**
+ * Restarts the launchd job from `path`. bootout returns before launchd has removed the job, and
+ * a bootstrap meanwhile fails with "5: Input/output error" (#1326): so it waits, up to 10 s,
+ * until `print` no longer finds the job, and tries a bootstrap refused with error 5 again.
+ */
+async function relaunch(sys: Sys, path: string) {
+  const job = `gui/${sys.uid}/${LABEL}`;
+  await launchctl(sys, "bootout", job);
+  for (let i = 0; i < GONE_TRIES && (await launchctl(sys, "print", job))?.code === 0; i++)
+    await sys.ctx.sleep(GONE_MS);
+  for (let tries = 1; ; tries++) {
+    const r = await launchctl(sys, "bootstrap", `gui/${sys.uid}`, path);
+    if (r?.code === 0) return;
+    const busy = r?.code === 5 || /Bootstrap failed: 5:/.test(failure(r));
+    if (!busy || tries >= BOOTSTRAP_TRIES) throw new Error(`launchctl bootstrap: ${failure(r)}`);
+    await sys.ctx.sleep(GONE_MS * 4);
+  }
+}
+
 /** Why the service cannot be installed here, or undefined when it can. */
 export async function unavailable(sys: Sys): Promise<string | undefined> {
   const k = kind(sys);
@@ -380,11 +405,7 @@ export async function installService(
       const r = await systemctl(sys, ...args);
       if (r?.code !== 0) throw new Error(`systemctl --user ${args.join(" ")}: ${failure(r)}`);
     }
-  } else if (go) {
-    await launchctl(sys, "bootout", `gui/${sys.uid}/${LABEL}`);
-    const r = await launchctl(sys, "bootstrap", `gui/${sys.uid}`, path);
-    if (r?.code !== 0) throw new Error(`launchctl bootstrap: ${failure(r)}`);
-  }
+  } else if (go) await relaunch(sys, path);
   return { path, restarted: go };
 }
 

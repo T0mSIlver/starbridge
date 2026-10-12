@@ -58,11 +58,11 @@ final class InboxTests: XCTestCase {
     private func now(_ offset: TimeInterval = 0) -> String { Dates.format(Date().addingTimeInterval(offset)) }
 
     func testListsAndAnswers() async throws {
-        let session = try await Api(server: server, session: nil).ownerSignIn(token: token)
+        let session = try await Api(server: server, session: nil).ownerSession(token: token)
         let before = try await Api(server: server, session: session).directory(from: 0)
         try XCTSkipUnless(before.isEmpty, "the server's account already has devices")
         addTeardownBlock { [server, token] in
-            let s = try? await Api(server: server, session: nil).ownerSignIn(token: token)
+            let s = try? await Api(server: server, session: nil).ownerSession(token: token)
             var request = URLRequest(url: URL(string: server + "/v1/account")!)
             request.httpMethod = "DELETE"
             request.setValue("Bearer \(s ?? "")", forHTTPHeaderField: "Authorization")
@@ -76,7 +76,7 @@ final class InboxTests: XCTestCase {
         config.protocolClasses = [Offline.self]
         let vault = MemoryVault()
         let store = Store(vault: vault, disk: Disk(url: dir.appendingPathComponent("saved.json")), deviceName: "Test iPhone", http: URLSession(configuration: config))
-        await store.signInWithOwnerToken(server: server, token: token)
+        await store.signInWaiting(server: server, token: token)
         await store.setUpFirstDevice()
         await store.confirmRecoveryKey()
         XCTAssertEqual(store.phase, .ready)

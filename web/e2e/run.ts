@@ -662,7 +662,7 @@ async function main() {
     {
       const row = page
         .getByRole("region", { name: "Devices" })
-        .locator('[class*="__device"]')
+        .getByTestId("device")
         .filter({ hasText: "devbox" });
       const shown = await row.getByTestId("device-check").textContent();
       if (shown !== `Same code as on the machine? ${devboxCheck}`)
@@ -1618,7 +1618,7 @@ async function main() {
       await shoot(page, `settings-names-${b / 3 + 1}`);
       for (const name of batch) {
         await devices
-          .locator('[class*="__device"]')
+          .getByTestId("device")
           .filter({ hasText: name })
           .getByRole("button", { name: "Revoke" })
           .click();

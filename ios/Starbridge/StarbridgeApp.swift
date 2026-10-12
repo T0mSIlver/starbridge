@@ -25,7 +25,7 @@ struct Root: View {
             if let minimum = store.tooOld, store.phase != .signedOut {
                 UpdateView(minimum: minimum)
             } else if store.phase == .ready {
-                InboxView(store: store)
+                MainTabs(store: store)
             } else {
                 SetupView(store: store)
             }
