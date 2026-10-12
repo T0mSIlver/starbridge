@@ -381,17 +381,28 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       reload();
       return undefined;
     }
+    // A write of this page's own replaced the context meanwhile, from a later read.
+    if (ctxRef.current !== was) return ctxRef.current;
     ctxRef.current = fresh;
     if (fresh.dir.length !== was.dir.length) setBoot({ state: "ready", ctx: fresh });
     return fresh;
   }, [reload]);
-  // Pollers start together: those that ask while a read of the directory runs share it.
-  const currentRead = useRef<Promise<Ctx | undefined>>(undefined);
+  // Pollers start together: those that ask while a read of the directory runs share it, unless
+  // the context changed since it started (a write of this page's own, which read the directory
+  // after it), or it has run 10 s: one that hangs leaves the next ask a read of its own.
+  const currentRead = useRef<{ from?: Ctx; read: Promise<Ctx | undefined> }>(undefined);
   const current = useCallback(() => {
-    currentRead.current ??= current1().finally(() => {
-      currentRead.current = undefined;
-    });
-    return currentRead.current;
+    const shared = currentRead.current;
+    if (shared && shared.from === ctxRef.current) return shared.read;
+    const read = current1();
+    const mine = { from: ctxRef.current, read };
+    const drop = () => {
+      if (currentRead.current === mine) currentRead.current = undefined;
+    };
+    currentRead.current = mine;
+    read.finally(drop).catch(() => {});
+    setTimeout(drop, 10_000);
+    return read;
   }, [current1]);
 
   // A read asked for while one runs waits for it, and every ask meanwhile shares that one read.
