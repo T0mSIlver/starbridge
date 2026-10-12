@@ -53,6 +53,12 @@
   `PLAY_WIF_PROVIDER` and `PLAY_SERVICE_ACCOUNT`). Without them the job skips with a notice; a
   failed upload fails the run after the release is out. Run by hand on main, the job asks Play to
   validate the edit and discards it.
+- **Play listing images without the console** (#1436). Play Console's "Send changes for review" can
+  fail with an HTTP 400 and no reason. The `play-listing` workflow, run by hand from main
+  (`gh workflow run play-listing.yml --ref main`), replaces the en-US icon and feature graphic with
+  `android/store/` (drawn by `web/scripts/icons.ts --play`) through the Play Developer API, signing
+  in as the `play` job does, and commits the edit, which sends it for review; on failure it prints
+  Play's error body.
 - **The iPhone app on TestFlight** (#1397). Once the release is out, the `testflight` job archives
   the app on GitHub's macOS runner with the newest Xcode and uploads it to TestFlight, rcs and
   finals alike: App Store review needs a sign-in besides GitHub's (guideline 4.8), so testers are
