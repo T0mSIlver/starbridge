@@ -337,11 +337,12 @@ extension Store {
         }
         guard listed.item.kind == .decision, let o = open(listed.item, entries: entryJSON),
               let body = o.body as? Decision, body.id == id else { return }
-        let images = SavedImage.keep(listed.item, body)
-        if images.isEmpty { return }
-        // After any sync under way, which writes back the list it read.
+        // After any sync under way, which writes back the list it read and deletes the files it
+        // does not name: the files are written here, beside the list that names them.
         _ = try? await serial {
             guard let i = self.saved.decisions.firstIndex(where: { $0.id == id }), self.saved.decisions[i].imagesPending else { return }
+            let images = SavedImage.keep(listed.item, body)
+            if images.isEmpty { return }
             var s = self.saved
             s.decisions[i].images = images
             self.persist(s)
