@@ -91,6 +91,8 @@ function session(id: string) {
   const s = {
     id,
     submitted: [] as string[],
+    /** What the host's `starting` answers. */
+    starting: false,
     calls: [] as string[],
     status: undefined as string | undefined,
     logs: [] as string[],
@@ -112,6 +114,7 @@ function session(id: string) {
     submit: (text) => {
       s.submitted.push(text);
     },
+    starting: () => s.starting,
     status: (text) => {
       s.status = text;
     },
@@ -267,6 +270,28 @@ test("each session gets its own answers through the agent, once, confirmed", asy
   expect(a.s.status).toBeUndefined();
 });
 
+test("while a submitted prompt waits for its turn, no events request waits (#1446)", async () => {
+  await startAgent();
+  const a = session("s-a");
+  // Mid-turn: the prompt's turn starts only after the running one.
+  loop({
+    ...a.host,
+    submit: (text) => {
+      a.s.submitted.push(text);
+      a.s.starting = true;
+    },
+  });
+  const d = await ask("Merge #12 now?", "s-a");
+  await until(() => a.s.calls.some((c) => c.startsWith("GET")));
+  await server.answer(d, { choice: "No" });
+  await until(() => a.s.submitted.length === 1);
+  const after = a.s.calls.length;
+  await until(() => a.s.calls.slice(after).filter((c) => c.includes("/events")).length >= 2);
+  expect(a.s.calls.slice(after).filter((c) => c.includes("/events?wait=1"))).toEqual([]);
+  a.s.starting = false;
+  await until(() => a.s.calls.slice(after).some((c) => c.includes("/events?wait=1")));
+});
+
 test("an answer that arrives during a /clear waits for the old session", async () => {
   await startAgent();
   const a = session("s-clear");
@@ -347,6 +372,7 @@ test("with no agent the CLI path delivers, and the switch follows the agent comi
             submit: (t) => {
               a.s.submitted.push(t);
             },
+            starting: () => false,
             status: () => {},
             log: (t) => a.s.logs.push(t),
           },

@@ -55,6 +55,7 @@ test("a loop that replaces another mid-confirm does not submit its answer again 
     submit: (text) => {
       submitted.push(text);
     },
+    starting: () => false,
     status: () => {},
     log: () => {},
   };
