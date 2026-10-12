@@ -55,6 +55,9 @@ data class SavedDecision(
     val images: List<String?> = emptyList(),
 ) {
     val body: Decision by parsed("decision", text)
+
+    /** Listed answered without its images: the sheet fetches them when it shows (#1382). */
+    val imagesPending: Boolean get() = images.isEmpty() && !body.images.isNullOrEmpty()
 }
 
 /**

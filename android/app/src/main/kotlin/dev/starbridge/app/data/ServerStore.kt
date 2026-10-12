@@ -993,7 +993,8 @@ class ServerStore(
         val waits = mutableListOf<Pair<String, Waiting>>()
         val snoozes = mutableListOf<Snooze>()
         while (true) {
-            val page = api().items("decision,settled,waiting,snooze", cursor)
+            // An answered question's images download when its sheet shows them (#1382).
+            val page = api().items("decision,settled,waiting,snooze", cursor, openBlobs = true)
             // Held: the cursor stays, so these items are read again once the hold ends.
             if (scan(page.items.map { it.item })) return
             for (listed in page.items) {
@@ -1052,9 +1053,44 @@ class ServerStore(
      * [d] with the agent's waiting state from [w], or null when [w] changes nothing: it must come
      * from the machine that asked, and only a later update replaces an earlier one.
      */
-    /** [d] with its images opened from [item]'s blobs, once, as it is kept (#685). */
+    /**
+     * [d] with its images opened from [item]'s blobs, once, as it is kept (#685). Listed answered
+     * without them, it keeps none until its sheet shows it ([loadImages]).
+     */
     private fun saved(item: SealedItem, d: SavedDecision): SavedDecision =
-        if (d.body.images.isNullOrEmpty()) d else d.copy(images = images.openAll(d.body.images.orEmpty(), item.blobs))
+        if (d.body.images.isNullOrEmpty() || item.blobs == null) d else d.copy(images = images.openAll(d.body.images.orEmpty(), item.blobs))
+
+    /** Questions whose images this run fetched or is fetching (#1382). */
+    private val imagesAsked = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+
+    /**
+     * Fetches the images of a question listed without them (#1382), each checked against the hash
+     * its signed body holds, and keeps them. Once per question while the app runs, unless the fetch
+     * fails: one whose images fail to open stays without them.
+     */
+    override fun loadImages(id: String) {
+        if (saved.decisions.find { it.body.id == id }?.imagesPending != true || !imagesAsked.add(id)) return
+        scope.launch {
+            val listed = try {
+                api().item(id)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // Offline or refused: the next show asks again.
+                imagesAsked.remove(id)
+                return@launch
+            }
+            // After any sync under way, which writes back the list it read.
+            lock.withLock {
+                val (_, body) = open(listed.item) ?: return@withLock
+                if (listed.item.kind != "decision" || body !is dev.starbridge.app.protocol.Decision || body.id != id) return@withLock
+                val opened = images.openAll(body.images.orEmpty(), listed.item.blobs)
+                if (opened.all { it == null }) return@withLock
+                val d = saved.decisions.find { it.body.id == id }?.takeIf { it.imagesPending } ?: return@withLock
+                persist(saved.copy(decisions = saved.decisions.map { if (it === d) d.copy(images = opened) else it }))
+            }
+        }
+    }
 
     /** Fetches decision [id] and keeps it; null when it does not open. */
     private suspend fun fetchDecision(id: String): SavedDecision? {
@@ -2266,7 +2302,9 @@ class ServerStore(
             waiting = d.waiting == "waiting",
             waitingSince = if (d.waiting == "waiting") instant(d.waitingAt) else null,
             snoozedUntil = snoozedUntil(d),
-            images = b.images.orEmpty().mapIndexedNotNull { i, it -> d.images.getOrNull(i)?.let { data -> Image(data, it.width, it.height, it.alt) } },
+            // Pending, each holds its place at its shape until it downloads (#1382).
+            images = if (d.imagesPending) b.images.orEmpty().map { Image("", it.width, it.height, it.alt) }
+            else b.images.orEmpty().mapIndexedNotNull { i, it -> d.images.getOrNull(i)?.let { data -> Image(data, it.width, it.height, it.alt) } },
             links = b.links.orEmpty().map { Link(it.url, it.title) },
             answerIn = b.answerIn?.let { Link(it.url, it.title) },
             answer = d.answer,
