@@ -81,6 +81,8 @@ let signIn: SignIn | null = null;
 let updates: Updates | null = null;
 /** GitHub's page for the releases; the end-to-end test sets a stand-in (test/smoke.ts). */
 const RELEASES = process.env.STARBRIDGE_RELEASES ?? "https://github.com/T0mSIlver/starbridge";
+/** Whether the window's last page failed to load, which leaves its URL on the server. */
+let failed = false;
 /** Links that arrived before the window existed. */
 const early: string[] = [];
 /** Answers handed to the page, until it says they went out. */
@@ -338,7 +340,13 @@ function createWindow(): void {
   });
   win.webContents.on("did-fail-load", (_e, code, _desc, url, mainFrame) => {
     // -3 is a navigation the page or the app cancelled.
-    if (mainFrame && code !== -3) retry = setTimeout(() => win?.loadURL(url), 5_000);
+    if (!mainFrame || code === -3) return;
+    failed = true;
+    retry = setTimeout(() => win?.loadURL(url), 5_000);
+  });
+  // Only a page that came back clears it: the error page keeps the server's URL.
+  win.webContents.on("did-navigate", () => {
+    failed = false;
   });
   win.once("show", () => mark("shown"));
   win.once("ready-to-show", () => mark("painted"));
@@ -448,7 +456,7 @@ function menu(forTray = true): Menu {
 
 /** The page's Settings; while the page can't load, the server window, where a wrong one is fixed. */
 function showSettings(): void {
-  if (!win || !fromServer(win.webContents.getURL())) {
+  if (!win || failed || !fromServer(win.webContents.getURL())) {
     showServer();
     return;
   }
