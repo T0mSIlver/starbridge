@@ -49,6 +49,10 @@ command and its local agent), `plugin` and
 - A Settings row you add or rename follows DESIGN.md's rule on Settings
   copy: a title that stands alone, a subtitle only when it must.
 - Docs (`README.md`, `docs/`, `cli/README.md`, `server/README.md`) follow [docs/AGENTS.md](docs/AGENTS.md).
+- A change to how one client behaves or what it says searches the other clients (web, Android,
+  iOS, desktop) for the same rule or string. Fix them in the same PR when the fix is small;
+  otherwise open an issue for each. Fixes that reached one client and not the others came back
+  as bugs days later (#1372).
 - When a change makes or changes a product decision, update its file under
   `spec/`: the rule, why in a clause, and the issue. Replace what it
   supersedes. A feature added to or changed in one client updates its row in
