@@ -32,7 +32,7 @@ jobs:
             echo "No client source changed."
             exit 0
           fi
-          line=$(tr -d '\r' <<<"$BODY" | grep -m1 -E '^Parity:' | sed -E 's/^Parity:[[:space:]]*//')
+          line=$(tr -d '\r' <<<"$BODY" | sed -nE '/^Parity:/{s/^Parity:[[:space:]]*//p;q}')
           if [ -z "$line" ]; then
             echo "::error::This changes a client. Fill the PR's Parity: line: spec/parity.md, the follow-up issues, or none and why."
             exit 1
