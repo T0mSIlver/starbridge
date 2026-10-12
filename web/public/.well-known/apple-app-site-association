@@ -1,0 +1,13 @@
+{
+  "applinks": {
+    "details": [
+      {
+        "appIDs": ["3N63N7U9R3.dev.starbridge.ios"],
+        "components": [{ "/": "/v1/auth/github/callback/app" }]
+      }
+    ]
+  },
+  "webcredentials": {
+    "apps": ["3N63N7U9R3.dev.starbridge.ios"]
+  }
+}

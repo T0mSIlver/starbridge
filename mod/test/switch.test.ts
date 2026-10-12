@@ -85,3 +85,55 @@ test("a loop that replaces another mid-confirm does not submit its answer again 
   await second.stop();
   expect(submitted).toEqual(["Answer to d1: Merge"]);
 });
+
+test("a host that throws once its session is gone does not reject the loop (#1365)", async () => {
+  const unhandled: unknown[] = [];
+  const onUnhandled = (e: unknown) => unhandled.push(e);
+  process.on("unhandledRejection", onUnhandled);
+  try {
+    // Pi's `ctx` after the session was replaced or reloaded.
+    let replaced = false;
+    const live = <T>(value: T) => {
+      if (replaced) throw new Error("This extension ctx is stale after session replacement");
+      return value;
+    };
+    const host: Host = {
+      sessionId: async () => live("s1"),
+      run: async () => ({ exitCode: 0, stdout: "", stderr: "" }),
+      read: async () => {
+        throw new Error("ENOENT");
+      },
+      write: async () => {},
+      mtime: async () => undefined,
+      now: async () => Date.now(),
+      sleep: (ms) => Bun.sleep(Math.min(ms, 20)),
+      submit: () => live(undefined),
+      status: () => live(undefined),
+      log: () => {},
+    };
+    const loop = new Switch(
+      {
+        agentUp: async () => false,
+        agent: () => {
+          throw new Error("no agent");
+        },
+        poller: (u) => new Poller(host, "/sb", "starbridge", FAST, u),
+        sleep: (ms) => Bun.sleep(Math.min(ms, 20)),
+        clearStatus: () => live(undefined),
+        log: () => {},
+      },
+      50,
+    );
+    await Bun.sleep(30);
+    expect(loop.mode).toBe("cli");
+    // Pi's `session_shutdown`, then the new session's start makes the old `ctx` throw; the loop
+    // wakes from its probe after that and stops the poller, which reads the session id.
+    await loop.stop();
+    replaced = true;
+    await loop.done;
+    await Bun.sleep(100);
+    expect(unhandled).toEqual([]);
+  } finally {
+    process.off("unhandledRejection", onUnhandled);
+  }
+});

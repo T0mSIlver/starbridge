@@ -43,17 +43,17 @@ if (location.origin === arg("origin")) {
     shown = s === true;
     onShown?.();
   });
-  let app: unknown = ipcRenderer.sendSync("app?");
-  let onApp: (() => void) | null = null;
-  ipcRenderer.on("app", (_e, a: unknown) => {
-    app = a;
-    onApp?.();
+  // The updater's state and settings (#1398): the app checks them, so they pass as they come.
+  let updateStatus: unknown = ipcRenderer.sendSync("update-status?");
+  let updateSettings: unknown = ipcRenderer.sendSync("update-settings?");
+  let onUpdate: (() => void) | null = null;
+  ipcRenderer.on("update-status", (_e, s: unknown) => {
+    updateStatus = s;
+    onUpdate?.();
   });
-  let onSettings: (() => void) | null = null;
-  // Settings… in the menu bar's menu: the page routes there itself, else (an older page) loads it.
-  ipcRenderer.on("settings", () => {
-    if (onSettings) onSettings();
-    else location.assign("/settings");
+  ipcRenderer.on("update-settings", (_e, s: unknown) => {
+    updateSettings = s;
+    onUpdate?.();
   });
   ipcRenderer.on("place", (_e, p: unknown) => {
     place = p;
@@ -115,21 +115,20 @@ if (location.origin === arg("origin")) {
     },
     /** Opens System Settings → Notifications → Starbridge. */
     openNotificationSettings: () => ipcRenderer.send("notification-settings"),
-    /** The app's own settings: `{login, releaseCandidates, server, update}` (src/settings.ts). */
-    app: () => app,
-    /** Called when they change. */
-    onApp: (f: (() => void) | null) => {
-      onApp = f;
-    },
-    /** Turns one switch: `{login: boolean}` or `{releaseCandidates: boolean}`. */
-    setApp: (change: unknown) => ipcRenderer.send("app", change),
-    /** Opens the window where the owner sets the server; the app restarts on a new one. */
-    openServer: () => ipcRenderer.send("open-server"),
-    /** Quits and installs the downloaded update. */
-    restartToUpdate: () => ipcRenderer.send("restart-to-update"),
-    /** Called on Settings… in the menu bar's menu, to show the page's Settings. */
-    onSettings: (f: (() => void) | null) => {
-      onSettings = f;
+    /**
+     * Where the update stands: `{state}` with "idle", "checking", "available", "downloading",
+     * "ready" or "error", and its `version`, `percent` or `message` (src/updates.ts). Null while
+     * the app runs no updater.
+     */
+    updateStatus: () => updateStatus,
+    /** `{releaseCandidates, autoDownload}`. */
+    updateSettings: () => updateSettings,
+    setUpdateSettings: (s: unknown) => ipcRenderer.send("update-settings", s),
+    /** "check", "download", or "install", which restarts the app. */
+    updateAction: (a: unknown) => ipcRenderer.send("update-action", a),
+    /** Called when the status or the settings change. */
+    onUpdate: (f: (() => void) | null) => {
+      onUpdate = f;
     },
     /** Opens an item whose notification was clicked. */
     onOpen: (f: (id: string) => void) => {

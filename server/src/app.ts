@@ -5,6 +5,7 @@ import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { getCookie } from "hono/cookie";
 import { HTTPException } from "hono/http-exception";
+import { Apple } from "./apple";
 import { AppSignIns } from "./appSignIns";
 import { SESSION_COOKIE } from "./auth";
 import { clientVersion } from "./clients";
@@ -46,6 +47,7 @@ export async function createApp(config: Config, fetchFn: typeof fetch = fetch) {
     config,
     db,
     push: new Push(config, db, fetchFn),
+    apple: config.apple && new Apple(config.apple, fetchFn),
     answers: new Waiters(),
     quotas: new Waiters(),
     quotaAsks: new Map(),

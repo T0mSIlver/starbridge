@@ -53,6 +53,31 @@
   `PLAY_WIF_PROVIDER` and `PLAY_SERVICE_ACCOUNT`). Without them the job skips with a notice; a
   failed upload fails the run after the release is out. Run by hand on main, the job asks Play to
   validate the edit and discards it.
+- **Play listing images without the console** (#1436). Play Console's "Send changes for review" can
+  fail with an HTTP 400 and no reason. The `play-listing` workflow, run by hand from main
+  (`gh workflow run play-listing.yml --ref main`), replaces the en-US icon and feature graphic with
+  `android/store/` (drawn by `web/scripts/icons.ts --play`) through the Play Developer API, signing
+  in as the `play` job does, and commits the edit, which sends it for review; on failure it prints
+  Play's error body.
+- **The iPhone app on TestFlight** (#1397). Once the release is out, the `testflight` job archives
+  the app on GitHub's macOS runner with the newest Xcode and uploads it to TestFlight, rcs and
+  finals alike: App Store review needs a sign-in besides GitHub's (guideline 4.8), so testers are
+  the only users yet. xcodebuild's own Apple sign-in refuses the App Store Connect API key (the
+  `ASC_API_KEY_P8` secret of the `ios-release` environment, open to main and `v*` tags; variables
+  `ASC_KEY_ID` and `ASC_ISSUER_ID`) that the REST API takes, so the job signs through the REST API
+  (`ios/scripts/asc-signing.rb`, #1419): it registers the App IDs and their capabilities when
+  missing, creates an Apple Distribution certificate from a key made on the runner and an App
+  Store profile per App ID, and revokes and deletes them at its end. No certificate is stored to
+  leak or rotate, and uploaded builds stay valid, since the App Store re-signs them. The archive
+  builds unsigned and `ios/scripts/adhoc-sign.sh` signs it ad hoc with each target's entitlements,
+  which the export keeps (#1415); altool uploads with the same key. App Groups need the group
+  registered once by hand, which the REST API cannot do. The key needs the Admin role, which
+  creating certificates takes (#1409). Before signing, `ios/scripts/asc-check.rb` signs in with it
+  and says why App Store Connect refuses it, with the public key's SHA-256 to compare with the
+  .p8 kept offline. The marketing version is the tag's without `-rc.N`, since Apple
+  takes three numbers only; the build number is the run's number and attempt, unique per upload.
+  Run by hand on main, the job archives and exports without uploading, or with `testflight_only`
+  builds the app alone and uploads it.
 - **Signing and deploy secrets in environments** (#1121). The Android keystore, its password and
   alias, `google-services.json`, the minisign key and the Homebrew tap key are secrets of the
   `release` environment, open to main and `v*` tags; the `android`, `release` and `homebrew` jobs
@@ -72,9 +97,10 @@
   the tag also builds the macOS app on GitHub's macOS runner, signed with the Developer ID and
   notarized, its secrets in the `desktop-release` environment, and adds its DMGs, zips and
   `latest-mac.yml` to the Release. Every 6 hours and at start, the app reads that file from the
-  release it follows, downloads the zip, and installs it on quit or from Settings' Restart. It
-  follows GitHub's latest release, or with Get release candidates on in Settings, the newest
-  rc when that is newer (#1071, #1449); an app installed from an rc starts with it on. Turning it off cancels
+  release it follows, downloads the zip (or waits for the rail's Update available, with Settings' "Download updates
+  automatically" off), and installs it on quit or from the rail's Restart to update (#1398). It
+  follows GitHub's latest release, or with Settings' "Release candidates" on, the newest
+  rc when that is newer (#1071); an app installed from an rc starts with it on. Turning it off cancels
   an rc download under way; one already downloaded still installs on quit, since Squirrel holds it. The app picks the
   release from the `releases/latest` redirect and the releases feed: electron-updater's own GitHub
   lookup keeps an app installed from an rc on rcs and never offers it a final, and GitHub's API

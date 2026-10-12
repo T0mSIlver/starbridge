@@ -1,4 +1,5 @@
-import { closeSync, openSync, readdirSync, readFileSync, readSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { closeSync, existsSync, openSync, readdirSync, readFileSync, readSync } from "node:fs";
 import { join } from "node:path";
 import type { SessionLink } from "@starbridge/protocol";
 
@@ -25,6 +26,7 @@ interface SessionRecord {
   bridgeSessionId?: unknown;
   hostSessionId?: unknown;
   updatedAt?: unknown;
+  pid?: unknown;
 }
 
 /**
@@ -44,13 +46,15 @@ function firstObject(text: string): SessionRecord | undefined {
 const str = (v: unknown) => (typeof v === "string" && v.length > 0 ? v : undefined);
 const SAFE_ID = /^[A-Za-z0-9_-]{1,200}$/;
 
-/** The session `sessionId`'s title and links, or undefined when Claude Code has no record of it. */
-export function claudeSession(
-  env: { CLAUDE_CONFIG_DIR?: string; HOME?: string },
+type ClaudeEnv = { CLAUDE_CONFIG_DIR?: string; HOME?: string };
+
+/** Claude Code's newest record of session `sessionId`, and the directory it keeps them under. */
+function sessionRecord(
+  env: ClaudeEnv,
   sessionId: string,
-): ClaudeSession | undefined {
+): { base: string; found: SessionRecord } | undefined {
   const base = env.CLAUDE_CONFIG_DIR || (env.HOME && join(env.HOME, ".claude"));
-  if (!base) return undefined;
+  if (!base || !sessionId) return undefined;
   const dir = join(base, "sessions");
   let names: string[];
   try {
@@ -70,7 +74,14 @@ export function claudeSession(
     if (rec?.sessionId !== sessionId) continue;
     if (!found || Number(rec.updatedAt ?? 0) > Number(found.updatedAt ?? 0)) found = rec;
   }
-  if (!found) return undefined;
+  return found ? { base, found } : undefined;
+}
+
+/** The session `sessionId`'s title and links, or undefined when Claude Code has no record of it. */
+export function claudeSession(env: ClaudeEnv, sessionId: string): ClaudeSession | undefined {
+  const r = sessionRecord(env, sessionId);
+  if (!r) return undefined;
+  const { base, found } = r;
   const links: SessionLink[] = [];
   const bridge = str(found.bridgeSessionId);
   if (bridge && SAFE_ID.test(bridge))
@@ -205,4 +216,72 @@ function titleOf(prompt: string): string | undefined {
   }
   title = title.replace(/(\.{2,}|…)$/, "").replace(/[\s,;:(\-–—]+$/, "");
   return title || undefined;
+}
+
+/** Starbridge's Claude Code plugins, by the name in their manifest. */
+const OUR_PLUGINS = ["starbridge", "starbridge-mod"];
+
+/** A Starbridge plugin that a Claude Code session loads from a `--plugin-dir` with no hooks. */
+export interface HooklessCopy {
+  name: string;
+  dir: string;
+}
+
+/** The arguments process `pid` runs with; empty where they cannot be read. */
+export function processArgs(pid: number): string[] {
+  try {
+    if (process.platform === "linux")
+      return readFileSync(`/proc/${pid}/cmdline`, "utf8").split("\0").filter(Boolean);
+    if (process.platform === "darwin") {
+      const r = spawnSync("ps", ["-o", "args=", "-p", String(pid)], {
+        encoding: "utf8",
+        timeout: 2_000,
+      });
+      return r.status === 0 ? (r.stdout ?? "").trim().split(/\s+/) : [];
+    }
+  } catch {}
+  return [];
+}
+
+/**
+ * The Starbridge plugins that the process running Claude Code session `sessionId` loads from a
+ * `--plugin-dir` without `hooks/hooks.json` (#1428). Claude desktop starts a session on another
+ * machine with copies of the plugins installed on the computer it runs on, synced without their
+ * hooks, and a `--plugin-dir` plugin replaces the installed one of its name: no mod runs in that
+ * session, and none of the starbridge plugin's hooks.
+ */
+export function hooklessCopies(
+  env: ClaudeEnv,
+  sessionId: string,
+  argsOf: (pid: number) => string[] = processArgs,
+): HooklessCopy[] {
+  const pid = sessionRecord(env, sessionId)?.found.pid;
+  if (!Number.isInteger(pid) || (pid as number) <= 1) return [];
+  const args = argsOf(pid as number);
+  const dirs: string[] = [];
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i] as string;
+    if (a === "--plugin-dir" && args[i + 1] !== undefined) dirs.push(args[++i] as string);
+    else if (a.startsWith("--plugin-dir=")) dirs.push(a.slice("--plugin-dir=".length));
+  }
+  const out: HooklessCopy[] = [];
+  for (const dir of dirs) {
+    let name: unknown;
+    try {
+      name = (
+        JSON.parse(readFileSync(join(dir, ".claude-plugin", "plugin.json"), "utf8")) as {
+          name?: unknown;
+        }
+      ).name;
+    } catch {
+      continue;
+    }
+    if (
+      typeof name === "string" &&
+      OUR_PLUGINS.includes(name) &&
+      !existsSync(join(dir, "hooks", "hooks.json"))
+    )
+      out.push({ name, dir });
+  }
+  return out;
 }

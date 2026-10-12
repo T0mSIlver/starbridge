@@ -115,16 +115,28 @@ export class Poller {
     this.leasePath = `${dir}/mod-poller.json`;
     this.cliPath = `${dir}/cli-path`;
     this.statePath = `${dir}/state.json`;
-    this.done = this.loop();
+    // Nothing awaits a loop that ended before `stop`: a rejection would take the harness down (#1365).
+    this.done = this.loop().catch((e) => {
+      try {
+        this.host.log(`starbridge: the answer loop stopped: ${(e as Error).message}`);
+      } catch {}
+    });
   }
 
-  /** Ends the loop after the current step and gives up the lease at once, so another session polls. */
+  /**
+   * Ends the loop after the current step and gives up the lease at once, so another session polls.
+   * Never rejects: it runs after the session ended, when the host may throw (#1365).
+   */
   async stop(): Promise<void> {
     this.stopped = true;
-    const me = await this.host.sessionId();
-    const lease = await this.readLease();
-    if (lease && (lease.session === me || lease.session === this.leasedAs))
-      await this.host.write(this.leasePath, JSON.stringify({ ...lease, until: 0 }));
+    try {
+      const me = await this.host.sessionId();
+      const lease = await this.readLease();
+      if (lease && (lease.session === me || lease.session === this.leasedAs))
+        await this.host.write(this.leasePath, JSON.stringify({ ...lease, until: 0 }));
+    } catch {
+      // The lease runs out on its own.
+    }
   }
 
   private async cli(): Promise<string> {

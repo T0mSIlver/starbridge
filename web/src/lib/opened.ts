@@ -44,6 +44,16 @@ export function openItem(id: string) {
   changed();
 }
 
+/**
+ * Puts `id` in place of the open item on the same history entry, so Back still returns to the
+ * list rather than through each item stepped to.
+ */
+export function replaceItem(id: string) {
+  if (inAddress() === id) return;
+  history.replaceState({ item: id }, "", address(id));
+  changed();
+}
+
 type Mark = { item?: string; linked?: boolean } | null;
 const ours = (id: string) => (history.state as Mark)?.item === id;
 

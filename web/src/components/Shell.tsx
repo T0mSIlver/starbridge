@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { desktop } from "@/lib/desktop";
 import { drafts } from "@/lib/drafts";
 import { needsYou } from "@/lib/feed";
 import { setFind, useFind } from "@/lib/find";
@@ -13,6 +12,7 @@ import { sending } from "@/lib/unsent";
 import { type Store, useApp } from "./AppProvider";
 import { Icon, type IconName, Mark } from "./icons";
 import s from "./Shell.module.css";
+import { UpdateButton } from "./UpdateButton";
 import ui from "./ui.module.css";
 
 const TABS: { href: string; label: string; icon: IconName }[] = [
@@ -41,11 +41,6 @@ export function Shell({ children }: { children: React.ReactNode }) {
       const url = new URL(targetURL);
       router.push(url.pathname + url.search);
     });
-  }, [router]);
-  // Settings… in the desktop app's menu bar menu (#1449).
-  useEffect(() => {
-    desktop?.onSettings?.(() => router.push("/settings"));
-    return () => desktop?.onSettings?.(null);
   }, [router]);
   useFreshBuild(busy);
   const app = useApp();
@@ -126,11 +121,15 @@ export function Shell({ children }: { children: React.ReactNode }) {
             </li>
           ))}
         </ul>
-        {machines > 0 && (
-          <p className={`t-caption ${s.machines}`}>
-            {machines} {machines === 1 ? "machine" : "machines"} paired
-          </p>
-        )}
+        <div className={s.foot}>
+          {machines > 0 && (
+            <p className={`t-small ${s.machines}`}>
+              <Icon name="server" size={18} />
+              {machines} {machines === 1 ? "machine" : "machines"}
+            </p>
+          )}
+          <UpdateButton />
+        </div>
       </nav>
       <main className={s.main}>
         {withheld && (

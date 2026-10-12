@@ -3,7 +3,7 @@
 // run follows the browser's redirects) and sets up the app as a device, pairs a machine, times the
 // switch between tabs, and answers `starbridge ask --wait` from the app's notifications: by a
 // button and by a typed reply; a question answered in the window closes its notification, and the
-// menu bar's climber follows Needs you. Notifications and the tray are watched in the main process.
+// menu bar's dot follows Needs you. Notifications and the tray are watched in the main process.
 //
 //   xvfb-run -a node desktop/test/stack.ts      (after `pnpm --filter @starbridge/desktop build`)
 import assert from "node:assert/strict";
@@ -307,10 +307,7 @@ try {
       "the question's notification",
     );
     assert.deepEqual(note.actions, ["Ship it", "Wait"]);
-    await until(
-      () => main((g) => g.tips.at(-1) === "Starbridge: 1 needs you"),
-      "the amber climber",
-    );
+    await until(() => main((g) => g.tips.at(-1) === "Starbridge: 1 needs you"), "the amber dot");
     // While the window is hidden, as when closed to the menu bar.
     await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.hide());
     await main((g) => {
@@ -319,10 +316,7 @@ try {
     });
     await first.waitFor(/Answer to d_\S+ \(Ship the desktop app\?\): Wait/);
     assert.equal(await first.exited, 0);
-    await until(
-      () => main((g) => g.tips.at(-1) === "Starbridge"),
-      "the climber back to one colour",
-    );
+    await until(() => main((g) => g.tips.at(-1) === "Starbridge"), "the dot back to one colour");
 
     step("a typed reply from the notification answers a question without options");
     const second = ask("Which branch should I rebase onto?");

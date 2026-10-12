@@ -58,6 +58,7 @@ import {
   revokeEntryAsync,
   type SealedItem,
   type Settled,
+  type ShownImage,
   type SignedEnvelope,
   type Snooze,
   sealAsync,
@@ -70,6 +71,7 @@ import {
 import { ApiError, api, backoff, type Stored } from "./api";
 import { generateDeviceKeys, sealOpener, signer } from "./crypto/keys";
 import { desktop } from "./desktop";
+import { type Kept, merge } from "./kept";
 import { otherServer } from "./otherServer";
 import * as store from "./store";
 import type {
@@ -285,7 +287,7 @@ export async function boot(): Promise<Boot> {
     // wipe does. The pin stays, so the server still cannot roll the chain back.
     const reg = await registration();
     await (await reg?.pushManager.getSubscription())?.unsubscribe().catch(() => {});
-    for (const kind of ["device", "answers", "promptAnswers"] as const)
+    for (const kind of ["device", "answers", "promptAnswers", "kept"] as const)
       await store.del(kind, account);
     await closeNotifications();
     return { state: "revoked", account, name: device.name, by: removedBy(verified, device.id) };
@@ -1255,12 +1257,21 @@ async function openDecision(
     notice && notice.outcome !== "device" && closing.at === s.answeredAt
       ? notice.outcome
       : undefined;
+  // Listed without its blobs (#1382): the images wait, at their size, until they are shown.
+  const pending = !!body.images?.length && !s.item.blobs;
   return {
     // Each image opens from its blob, sealed once for every device (#685).
     decision: {
       ...body,
-      ...(body.images ? { images: openImages(s.item, body.images) } : {}),
+      ...(body.images
+        ? {
+            images: pending
+              ? body.images.map(({ key: _, hash: __, ...image }) => ({ ...image, data: "" }))
+              : openImages(s.item, body.images),
+          }
+        : {}),
     } as ShownDecision,
+    ...(pending ? { imagesPending: true as const } : {}),
     machine,
     ...(s.answeredAt ? { answeredAt: s.answeredAt } : {}),
     ...(settled ? { settled } : {}),
@@ -1315,8 +1326,34 @@ export async function reverify(ctx: Ctx): Promise<Ctx | undefined> {
   return self?.active ? fresh : undefined;
 }
 
-/** Reads decisions after `inbox.cursor` and merges them in: answered ones come back answered. */
-export async function loadInbox(ctx: Ctx, inbox: Inbox = { items: [], rejected: [] }) {
+/**
+ * Reads decisions after `inbox.cursor` and merges them in: answered ones come back answered.
+ * With `keep`, what the server lists is kept sealed in this browser, and a read with no cursor
+ * starts from what is kept rather than from the first item (#1380).
+ */
+export async function loadInbox(
+  ctx: Ctx,
+  inbox: Inbox = { items: [], rejected: [] },
+  opts: { keep?: boolean } = {},
+): Promise<Inbox> {
+  // The kept items, and the decisions the server holds open now: those settle which kept
+  // questions it dropped, and whether what is kept still matches the server at all.
+  let kept: Kept | undefined;
+  let open: Set<string> | undefined;
+  if (opts.keep && inbox.cursor === undefined) {
+    const had = await store.get("kept", ctx.account);
+    if (had?.device === ctx.device.id) {
+      open = new Set();
+      let at: string | undefined;
+      for (;;) {
+        const page = await api.items("decision", at, { open: true });
+        for (const s of page.items) open.add(s.item.id);
+        at = page.cursor;
+        if (page.items.length < 100) break;
+      }
+      kept = had;
+    }
+  }
   const sent = (await store.get("answers", ctx.account)) ?? {};
   // Decisions opened before a machine was revoked no longer verify: drop them.
   const byId = new Map(
@@ -1375,13 +1412,43 @@ export async function loadInbox(ctx: Ctx, inbox: Inbox = { items: [], rejected: 
         rejected.push({ id: s.item.id, error: e instanceof Error ? e.message : String(e) });
     }
   };
+  for (const s of kept?.items ?? []) await take(s, false);
   for (const s of inbox.retry ?? []) await take(s, true);
-  let cursor = inbox.cursor;
+  let cursor = inbox.cursor ?? kept?.cursor;
+  const read: Stored[] = [];
   for (;;) {
-    const page = await api.items("decision,settled,waiting,snooze", cursor);
+    const page = await api.items("decision,settled,waiting,snooze", cursor, {
+      openBlobs: opts.keep,
+    });
     for (const s of page.items) await take(s, false);
+    if (opts.keep) read.push(...page.items);
     cursor = page.cursor;
     if (page.items.length < 100) break;
+  }
+  const drop = new Set<string>();
+  if (kept && open) {
+    const listed = new Set(read.filter((s) => s.item.kind === "decision").map((s) => s.item.id));
+    const held = new Set(
+      kept.items.filter((s) => s.item.kind === "decision").map((s) => s.item.id),
+    );
+    // An open question neither kept nor listed after the cursor: the server is not the one
+    // these were kept from (restored, or reset). Read it all again.
+    if ([...open].some((id) => !held.has(id) && !listed.has(id))) {
+      await store.del("kept", ctx.account);
+      return loadInbox(ctx, inbox, opts);
+    }
+    // Kept open, not open on the server and not listed since, so not answered either: the
+    // server dropped it (PROTOCOL.md, Limits). One listed since came after the open list.
+    for (const s of kept.items)
+      if (
+        s.item.kind === "decision" &&
+        !s.answeredAt &&
+        !open.has(s.item.id) &&
+        !listed.has(s.item.id)
+      ) {
+        drop.add(s.item.id);
+        byId.delete(s.item.id);
+      }
   }
   // The machine names the winner after the answer, so its notice often lists without the
   // decision, which an earlier read already holds.
@@ -1408,7 +1475,37 @@ export async function loadInbox(ctx: Ctx, inbox: Inbox = { items: [], rejected: 
     Object.entries(snoozes).map(([decisionId, z]) => ({ decisionId, at: z.at })),
   );
   await hold(ctx);
+  if (opts.keep && (read.length > 0 || drop.size > 0) && cursor !== undefined) {
+    const at = cursor;
+    await store.update("kept", ctx.account, (had) => ({
+      device: ctx.device.id,
+      cursor: at,
+      items: merge(had?.device === ctx.device.id ? had.items : [], read, drop),
+    }));
+  }
   return { items, cursor, rejected, retry, waits, snoozes } satisfies Inbox;
+}
+
+/**
+ * The images of a decision listed without them (#1382), fetched with the item and checked
+ * against the hashes its signed body holds; kept with the item, so they download once.
+ */
+export async function loadImages(ctx: Ctx, id: string): Promise<ShownImage[]> {
+  const s = await api.item(id);
+  const { body } = await openMachine(ctx, s.item, "decision");
+  if (body.id !== id) throw new Error("the server sent another question");
+  const images = openImages(s.item, (body as Decision).images);
+  const blobs = s.item.blobs;
+  // Kept for this device only; gone meanwhile, an empty record reads from the start next time.
+  if (blobs && (await store.get("kept", ctx.account))?.device === ctx.device.id)
+    await store.update("kept", ctx.account, (had) => ({
+      device: ctx.device.id,
+      cursor: had?.cursor ?? "",
+      items: (had?.items ?? []).map((k) =>
+        k.item.kind === "decision" && k.item.id === id ? { ...k, item: { ...k.item, blobs } } : k,
+      ),
+    }));
+  return images;
 }
 
 /** Signs the answer and seals it to the machine that asked, which must still be active. */

@@ -1,4 +1,5 @@
 import type { GitHubKind } from "@/lib/attachments";
+import { ARCH, DOT, VIEWBOX } from "./mark";
 
 // The web's own icon set, drawn to the mark (DESIGN.md, "Icons"): a 24-unit grid, 1.75 strokes,
 // round caps and joins, in currentColor.
@@ -178,6 +179,7 @@ const PATHS = {
       <path d="M20 4v4.5h-4.5" />
     </>
   ),
+  download: <path d="M12 4v11M7 10l5 5 5-5M5 20h14" />,
   expand: <path d="M14 4h6v6M10 20H4v-6M20 4l-6 6M4 20l6-6" />,
   github: (
     <path d="M9 19c-4 1.5-4-2-6-2.5m12 5v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.2 4.2 0 0 0-.1-3.2s-1.1-.3-3.5 1.3a12 12 0 0 0-6.2 0C6.5 2.8 5.4 3.1 5.4 3.1a4.2 4.2 0 0 0-.1 3.2A4.6 4.6 0 0 0 4 9.5c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21" />
@@ -221,13 +223,12 @@ export const Play = ({ size = 12 }: { size?: number }) => (
   </svg>
 );
 
-/** The space elevator (DESIGN.md, "The mark") without its ground: planet and tether in the text
-    colour, the climber in amber. */
+/** The mark (DESIGN.md, "The mark") without its ground: the arch in the text colour, the dot in
+    amber. Its bottom edge is the arch's feet, where a lockup's name stands. */
 export const Mark = ({ size = 20 }: { size?: number }) => (
-  <svg width={size} height={size} viewBox="18 18 72 72" aria-hidden="true" style={{ flex: "none" }}>
-    <circle cx="54" cy="148" r="80" fill="var(--fg)" />
-    <rect x="51.75" y="18" width="4.5" height="52" fill="var(--fg)" />
-    <rect x="48.5" y="34" width="11" height="20" rx="5.5" fill="var(--accent)" />
+  <svg width={size} height={size} viewBox={VIEWBOX} aria-hidden="true" style={{ flex: "none" }}>
+    <path d={ARCH} fill="var(--fg)" />
+    <circle cx={DOT.x} cy={DOT.y} r={DOT.r} fill="var(--accent)" />
   </svg>
 );
 

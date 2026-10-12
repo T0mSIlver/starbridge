@@ -14,7 +14,7 @@ import {
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
-import { type DesktopApp, type DesktopPlace, desktop } from "@/lib/desktop";
+import { type DesktopPlace, desktop } from "@/lib/desktop";
 import type { RecoveryState } from "@/lib/device";
 import { addedLabels, checkUntil, dayAndTime, releaseLabel, shownCheck } from "@/lib/format";
 import { AGENTS_GUIDE } from "@/lib/links";
@@ -31,6 +31,7 @@ import { Icon, type IconName } from "./icons";
 import { PhoneBar } from "./PhoneBar";
 import { useReorder } from "./Reorder";
 import s from "./Settings.module.css";
+import { useDesktopUpdates } from "./UpdateButton";
 import ui from "./ui.module.css";
 
 const load = () => import("@/lib/device");
@@ -161,7 +162,7 @@ function InboxSection() {
           missing ones (#970). */}
       <Row
         label="Keyboard shortcuts"
-        sub="In windows 1100 px wide or more: J and K move, 1 to 4 answer, A allows, D denies. / finds anywhere."
+        sub="J and K move between cards. In windows 1100 px wide or more, 1 to 4 answer, A allows, D denies. / finds anywhere."
       />
     </Section>
   );
@@ -866,65 +867,36 @@ function PlaceRow() {
   );
 }
 
-/** The desktop app's settings, read from the app and told again when they change. */
-function useDesktopApp(): DesktopApp | null {
-  const [app, setApp] = useState(() => desktop?.app?.() ?? null);
-  useEffect(() => {
-    desktop?.onApp?.(() => setApp(desktop?.app?.() ?? null));
-    return () => desktop?.onApp?.(null);
-  }, []);
-  return app;
-}
-
-/** Only in the desktop app: the settings its menu bar menu held before (#1449), and where it stays. */
-function AppSection() {
-  const app = useDesktopApp();
-  if (!desktop?.setApp || !app) return null;
-  const set = desktop.setApp;
+/**
+ * The desktop app's updates (#1398), which a browser has none of. Turning release candidates off
+ * drops one found or downloading; one downloaded still installs on quit (spec/releases.md).
+ */
+function UpdatesSection() {
+  const updates = useDesktopUpdates();
+  const set = desktop?.setUpdateSettings;
+  if (!updates || !set) return null;
+  const { releaseCandidates, autoDownload } = updates.settings;
   return (
-    <Section title="App">
-      <PlaceRow />
-      <Row label="Open Starbridge at login">
+    <Section title="Updates">
+      <Row label="Release candidates">
         <Switch
-          label="Open Starbridge at login"
-          checked={app.login}
-          onChange={(login) => set({ login })}
+          label="Release candidates"
+          checked={releaseCandidates}
+          onChange={(v) => set({ releaseCandidates: v })}
         />
       </Row>
-      {app.releaseCandidates !== null && (
-        <Row label="Get release candidates">
-          <Switch
-            label="Get release candidates"
-            checked={app.releaseCandidates}
-            onChange={(releaseCandidates) => set({ releaseCandidates })}
-          />
-        </Row>
-      )}
-      {app.update && (
-        <Row label={`Version ${app.update} downloaded`}>
-          <button
-            type="button"
-            className={`t-meta ${ui.btn} ${ui.sm}`}
-            onClick={() => desktop?.restartToUpdate?.()}
-          >
-            Restart
-          </button>
-        </Row>
-      )}
-      <Row label="Server" sub={app.server}>
-        <button
-          type="button"
-          className={`t-meta ${ui.btn} ${ui.sm} ${ui.ghost}`}
-          onClick={() => desktop?.openServer?.()}
-        >
-          Change
-        </button>
+      <Row label="Download updates automatically">
+        <Switch
+          label="Download updates automatically"
+          checked={autoDownload}
+          onChange={(v) => set({ autoDownload: v })}
+        />
       </Row>
     </Section>
   );
 }
 
-/** Colours and the clock: how the page looks, per browser; in an older desktop app, where it stays. */
+/** Colours and the clock: how the page looks, per browser; in the desktop app, where it stays. */
 function LookSection() {
   const [theme, setTheme] = usePref("theme");
   const [clock, setClock] = usePref("clock");
@@ -943,7 +915,7 @@ function LookSection() {
           onChange={setTheme}
         />
       </Row>
-      {!desktop?.setApp && <PlaceRow />}
+      <PlaceRow />
       <Row label="Time format">
         <Segmented<Prefs["clock"]>
           label="Time format"
@@ -1004,8 +976,8 @@ export function Settings() {
             <QuotaSections />
             <InboxSection />
             <DeviceSection data={data} />
-            <AppSection />
             <LookSection />
+            <UpdatesSection />
             <AccountSection />
           </>
         )}

@@ -38,7 +38,7 @@
   code never reached a browser on that path, and the owner should not have to do anything. Every
   other path (a browser, a typed code, Android 0.1.0) ends with the machine showing the whole
   code and asking `Same code? [Y/n]`, Enter for yes, if the Starbridge app shows the same; the
-  browser shows it too, after Approve, for an owner with no app. Tom chose one keypress over
+  browser shows it too, after Approve, for an owner with no app, and so does the Android app that approved a typed code or link, where the terminal waits on it (#1377). Tom chose one keypress over
   typing a group, and Enter over `y` (2026-10-08), accepting that an agent running setup, or a
   stray Enter, can confirm it. The QR code is text with no scheme, read by the app's own scanner
   as WhatsApp's in-app scan is (#1099): the check key lets the machine skip the question, so it

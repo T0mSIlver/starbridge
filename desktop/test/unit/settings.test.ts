@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { parseAppChange, readSettings } from "../../src/settings";
+import { readSettings } from "../../src/settings";
 
 function read(saved: object, version?: string) {
   const file = join(mkdtempSync(join(tmpdir(), "sb-settings-")), "settings.json");
@@ -28,16 +28,12 @@ test("an app installed from a release candidate follows them until the owner say
   expect(read({ releaseCandidates: false }, "1.2.0-rc.3").releaseCandidates).toBe(false);
 });
 
+test("updates download by themselves until the owner turns that off", () => {
+  expect(read({}).autoDownload).toBe(true);
+  expect(read({ autoDownload: false }).autoDownload).toBe(false);
+});
+
 test("the window keeps only a #rrggbb background from the page", () => {
   expect(read({ background: "#F4F4F4" }).background).toBe("#f4f4f4");
   expect(read({ background: "red; x" }).background).toBeUndefined();
-});
-
-test("the page turns one known switch at a time, to a boolean", () => {
-  expect(parseAppChange({ login: true })).toEqual({ login: true });
-  expect(parseAppChange({ releaseCandidates: false })).toEqual({ releaseCandidates: false });
-  expect(parseAppChange({ login: "yes" })).toBeNull();
-  expect(parseAppChange({ login: true, releaseCandidates: true })).toBeNull();
-  expect(parseAppChange({ server: true })).toBeNull();
-  expect(parseAppChange(null)).toBeNull();
 });

@@ -26,7 +26,7 @@
   language rather than the Clock setting. Phones open the times in place under Snooze; the
   desktop web opens them in a popover. A
   snoozed question leaves Needs you, the count and the badge, and its notification closes on
-  every device; it waits in a collapsed "Snoozed · n" group after them, soonest back first, its
+  every device (on Safari when the page next reads the inbox; spec/push.md, #1363); it waits in a collapsed "Snoozed · n" group after them, soonest back first, its
   time slot "Until 18:00", with no amber and no answer buttons even when its agent waits. Opened,
   it says "Snoozed until …" and offers Snooze again (replaces the time) and Back now. At its time
   it returns to its place and notifies once, "Back from snooze", never again. The owner chose
@@ -37,9 +37,18 @@
   Waiting for the server's reply kept the card up for its round trip, about a second on a phone.
   Answered from its open view, the view goes too (#927): Android's sheet, a question's or a
   prompt's, slides away with Material's own dismiss onto the inbox without the card, and the web
-  shows the next open item beside the list, or the list on a phone. A refused answer comes back in
+  shows the next open item beside the list, in its place under 1100 px with a mouse (#1432), or
+  the list on a touch screen. A refused answer comes back in
   the list, never in a reopened view. Left open, the view showed an answer the owner had just
   given.
+- **No answer waits for a pull** (#1390, #1392). The apps keep an answer the server could not take
+  (offline, a 5xx, or a 429 during a rate-limit hold) and send it again on their own, never during
+  the hold, when a post fails at once: Android through WorkManager, iOS by a retry while the app
+  runs, from 5 s doubling to 5 minutes, and a background refresh behind it. A sync sends the
+  outbox right after the directory, before reads that may fail. An answer sat until a pull to
+  refresh: the retry posted during the hold and backed off, and the sync's first read failed
+  before it reached the outbox. The notice blames the connection only when there is none:
+  otherwise "Hold isn't sent yet. Retrying."
 - **History** lists answered questions and the last 7 days of prompts, with how and where each was
   answered. A question settled `elsewhere` without a page to answer in was answered in the
   agent's own picker or terminal, so it reads "at the keyboard", never "by the agent", which
@@ -47,6 +56,12 @@
   reason shows the reason in its place: "Withdrawn · Fixed it myself after rereading the logs"
   (#1008). The owner chose it from mockups over a line of its own and over the reason after
   "Withdrawn:", which pushed the rest off a phone's row.
+- **History loads the last 7 days** (Tom, 2026-10-12, #1380): the server's own, since it drops
+  an answered question 7 days after its answer. Older rows, which a browser kept, wait behind
+  "Show older" at History's end; Find searches every row. An answered question's images
+  download when they come on screen in its detail (Tom, 2026-10-12, #1382): History rows show
+  none, so a long history costs no image the owner does not open. The server lists answered
+  questions without them (`blobs=open`), and the browser keeps them once fetched.
 - **Closed sections wait at the bottom** (#662, #682). Closed, History sits at the bottom of a
   short inbox and Snoozed just above it, out of the way; opened, each glides up under the items
   and its rows fade in. Opening Snoozed leaves History at the bottom.
@@ -104,9 +119,13 @@
   20 s. A write retries only when it cannot have landed; the web's writes retry on 502 and 503
   only, since it cannot tell a refused connection from a cut one.
 - **Rate limits** (#645). A 429 with `Retry-After` (seconds or a date) holds every call of the
-  page or app until then, first tries included, and the call is retried whatever its method, since
+  page or app until then, first tries included, except that the apps still send a presence beat
+  due during another call's hold, which the web holds (#1389), and the call is retried whatever its method, since
   it was refused before doing anything. A wait past the 20 s retry window reaches the caller as
-  429 `rate-limited`. A 429 without `Retry-After` is a cap and reaches the caller at once.
+  429 `rate-limited`. A 429 without `Retry-After` is a cap and reaches the caller at once. A
+  presence beat's 429 holds nothing else: its limit is per device and route, and the next beat
+  retries, so a few reloads in a minute no longer refuse a settings write for a minute (#1361,
+  #1372).
 - **Settings** (#914) in the same sections on both clients: Notifications (what decides whether
   something notifies here: Android's channels or this device's switch (#943), the hold, the web's
   sound, Android's Allow from notifications), Quotas (see "Quota alerts per window"), the Inbox's,

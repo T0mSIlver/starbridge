@@ -25,34 +25,10 @@ export interface Settings {
   notificationsAsked: boolean;
   /** Whether updates include release candidates, not only finals (#1071). */
   releaseCandidates: boolean;
+  /** Whether a release found downloads at once (#1398). */
+  autoDownload: boolean;
   /** The page's last background colour, which the window shows until the page paints. */
   background?: string;
-}
-
-/** The app's settings the page's Settings shows (#1449), which the menu bar's menu held before. */
-export interface AppSettings {
-  /** Whether macOS opens the app at login. */
-  login: boolean;
-  /** `Settings.releaseCandidates`; null in a development run, which never updates. */
-  releaseCandidates: boolean | null;
-  /** The server's host. */
-  server: string;
-  /** The version downloaded, which installs on quit or from Restart; null until there is one. */
-  update: string | null;
-}
-
-/** One change the page asks for: a switch it turned. */
-export type AppChange = { login: boolean } | { releaseCandidates: boolean };
-
-export function parseAppChange(x: unknown): AppChange | null {
-  if (typeof x !== "object" || x === null) return null;
-  const keys = Object.keys(x);
-  const [key] = keys;
-  const value = (x as Record<string, unknown>)[key ?? ""];
-  if (keys.length !== 1 || typeof value !== "boolean") return null;
-  if (key === "login") return { login: value };
-  if (key === "releaseCandidates") return { releaseCandidates: value };
-  return null;
 }
 
 /** A colour the page reports as its background: `#rrggbb` only. */
@@ -84,6 +60,7 @@ export function readSettings(file: string, version = ""): Settings {
       typeof saved.releaseCandidates === "boolean"
         ? saved.releaseCandidates
         : version.includes("-rc."),
+    autoDownload: typeof saved.autoDownload === "boolean" ? saved.autoDownload : true,
     background: parseBackground(saved.background) ?? undefined,
   };
 }

@@ -180,6 +180,7 @@ export function QuestionDetail({
   onDraft,
   onAnswer,
   onSnooze,
+  onShowImages,
 }: {
   item: InboxItem;
   now: number;
@@ -195,6 +196,8 @@ export function QuestionDetail({
   onAnswer: (reply: Reply) => Promise<void>;
   /** Puts it off until a time (#571); a time already passed brings it back. */
   onSnooze: (until: Date) => Promise<void>;
+  /** Fetches the images of an answered question listed without them (#1382). */
+  onShowImages?: () => void;
 }) {
   const d = item.decision;
   const { send, sending, lost } = useSend(onAnswer);
@@ -233,7 +236,7 @@ export function QuestionDetail({
         )}
       </Head>
       <Context text={d.context} className={`t-reading ${s.context}`} />
-      {!paired && <Images d={d} />}
+      {!paired && <Images d={d} onShow={onShowImages} />}
       <Links d={d} />
       {closed ? (
         <p className={`t-small ${s.closed}`}>{closed}</p>
