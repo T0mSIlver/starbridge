@@ -190,7 +190,7 @@ release, restore the copy you made before upgrading.
 <dt><code>ALLOW_PRIVATE_PUSH_ENDPOINTS</code></dt>
 <dd>Hosts on your own network that push endpoints may name, over plain HTTP too, such as an ntfy: comma-separated names or addresses, without ports. Any account on the server can point its pushes at them. <code>1</code> still allows every private host, but the server warns at startup: every account could make it call any host on your network. Default: none.</dd>
 <dt><code>RELAY_MODE</code></dt>
-<dd>Serve <code>POST /v1/relay</code> for other servers, as starbridge.run does. Default: off.</dd>
+<dd>Serve <code>POST /v1/relay</code> for other servers, as starbridge.run does. The server refuses it with <code>ALLOW_PRIVATE_PUSH_ENDPOINTS</code>, since the relay pushes for anyone who asks. Default: off.</dd>
 <dt><code>PUSH_TIMEOUT_MS</code></dt>
 <dd>How long one request to a push service may take. Default: 10000.</dd>
 <dt><code>PUSH_INLINE_LIMIT</code></dt>

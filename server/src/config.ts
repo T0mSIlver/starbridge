@@ -200,6 +200,9 @@ export function configFromEnv(env: Env = process.env): Config {
     limits: DEFAULT_LIMITS,
     minimumReleases: MINIMUM_RELEASES,
   };
+  // The relay pushes for anyone who asks; private endpoints are for a self-hoster's own devices.
+  if (config.relayMode && config.privatePushHosts.length)
+    throw new Error("RELAY_MODE is refused with ALLOW_PRIVATE_PUSH_ENDPOINTS");
   if (config.demo) checkDemo(config);
   for (const [name, minimum] of Object.entries(config.minimumReleases))
     if (!isMinimumRelease(minimum))

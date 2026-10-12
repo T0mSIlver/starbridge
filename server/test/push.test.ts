@@ -4,7 +4,7 @@ import { type Decision, type QuotaSnapshot, type Run, seal } from "@starbridge/p
 import * as ece from "http_ece";
 import webpush from "web-push";
 import { createApp } from "../src/app";
-import { type Config, privatePushHosts } from "../src/config";
+import { type Config, configFromEnv, privatePushHosts } from "../src/config";
 import { DEFAULT_LIMITS } from "../src/limits";
 import { checkTarget } from "../src/push";
 import { aggregate, dayOf } from "../src/usage";
@@ -402,6 +402,20 @@ test("relay mode: a server without credentials forwards FCM and Web Push through
   }
 });
 
+test("a relay never allows private push endpoints: it pushes for anyone who asks", () => {
+  expect(() => configFromEnv({ RELAY_MODE: "1", ALLOW_PRIVATE_PUSH_ENDPOINTS: "1" })).toThrow(
+    "RELAY_MODE is refused with ALLOW_PRIVATE_PUSH_ENDPOINTS",
+  );
+  expect(configFromEnv({ RELAY_MODE: "1" }).relayMode).toBe(true);
+  expect(() =>
+    configFromEnv({ RELAY_MODE: "1", ALLOW_PRIVATE_PUSH_ENDPOINTS: "ntfy.lan" }),
+  ).toThrow("RELAY_MODE is refused with ALLOW_PRIVATE_PUSH_ENDPOINTS");
+  expect(configFromEnv({ RELAY_MODE: "1", ALLOW_PRIVATE_PUSH_ENDPOINTS: "0" }).relayMode).toBe(
+    true,
+  );
+  expect(configFromEnv({ ALLOW_PRIVATE_PUSH_ENDPOINTS: "1" }).privatePushHosts).toBe("any");
+});
+
 test("the relay route is off unless RELAY_MODE, refuses UnifiedPush and private endpoints", async () => {
   const off = await makeServer(fcmConfig());
   const msg = { type: "fcm", endpoint: "tok-ok", payload: "{}" };
@@ -457,6 +471,39 @@ test.each([
   expect((await on.call("POST", "/v1/relay", { body: fcm })).json).toEqual({ result: "ok" });
   expect((await first).json).toEqual({ result: "ok" });
   expect((await relay("/wp/relay")).json).toEqual({ result: "ok" });
+});
+
+test.each([
+  // Two /64s of one /48: one holder of a /48 has 8 slots, not 4 per /64 (65,536 of them).
+  ["per IPv6 /48", { relaySendsPerNetwork: 1 }, "2001:db8:1:2::1", "2001:db8:1:3::1", "localhost"],
+  // Another sender and another host go through: the cap is the slow host's.
+  ["per push service host", { relaySendsPerHost: 1 }, "192.0.2.1", "192.0.2.2", "127.0.0.1"],
+])("the relay caps Web Pushes in flight %s", async (_, cap, firstIp, secondIp, otherHost) => {
+  const on = await makeServer({
+    ...fcmConfig(),
+    ...vapidConfig(),
+    relayMode: true,
+    trustProxy: true,
+    limits: { ...DEFAULT_LIMITS, ...cap },
+  });
+  const slow = browserSubscription("x").target;
+  const relay = (ip: string, url: string) =>
+    on.call("POST", "/v1/relay", {
+      body: { ...slow, endpoint: url, payload: "{}" },
+      headers: { "x-forwarded-for": ip },
+    });
+  const slowPath = `/slow/relay-${Object.keys(cap)[0]}`;
+  const first = relay(firstIp, `${base()}${slowPath}`);
+  while (!seen.some((x) => x.path === slowPath)) await Bun.sleep(10);
+  expect((await relay(secondIp, `${base()}/wp/relay`)).status).toBe(503);
+  // The same host with DNS's root dot.
+  const dotted = base().replace("localhost", "localhost.");
+  expect((await relay(secondIp, `${dotted}/wp/relay`)).status).toBe(503);
+  const other = new URL(base());
+  other.hostname = otherHost;
+  const elsewhere = "relaySendsPerNetwork" in cap ? "2001:db8:2::1" : secondIp;
+  expect((await relay(elsewhere, `${other.origin}/wp/relay`)).json).toEqual({ result: "ok" });
+  expect((await first).json).toEqual({ result: "ok" });
 });
 
 test("a relay without credentials of its own does not forward onward", async () => {

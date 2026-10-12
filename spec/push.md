@@ -3,8 +3,12 @@
 - FCM and APNs go through the relay, since their credentials belong to the app's Firebase project
   and Apple team. Web Push
   goes through the relay only when a server has no VAPID keys; UnifiedPush always goes direct. The
-  relay is open, rate-limited per IP and in all (600 a minute in Caddy; 16 Web Pushes in flight
-  in the server, 4 per address), so nobody can aim it at a host or burn the VAPID key (#577). It
+  relay is open, rate-limited per IP and in all (600 a minute in Caddy; in the server, 64 Web
+  Pushes in flight, 4 per address, 8 per IPv6 /48 and 16 per push service host), so nobody can
+  aim it at a host or burn the VAPID key (#577). A push service that never answers holds a slot
+  for 10 s; the per-host cap bounds what any one host gets, and the caps per sender leave the
+  rest to other servers. The server refuses relay mode with any `ALLOW_PRIVATE_PUSH_ENDPOINTS`
+  host, since those are for a self-hoster's own network. It
   pushes only ciphertext or ids. A push carries the
   device's ciphertext when it fits FCM's 4 KB, else the item id.
 - Quota snapshots and runs skip Web Push: browsers drop subscriptions whose pushes show no
@@ -35,8 +39,8 @@
   service uses them.
   `ALLOW_PRIVATE_PUSH_ENDPOINTS` names the private hosts a self-hoster's push endpoints may use,
   such as their own ntfy, over plain HTTP too; every other private address stays refused, since
-  any account on the server, and `/v1/relay` in relay mode, could otherwise make it call into the
-  owner's network. `1`, from when it was a yes/no flag, still allows every private host, with a
+  any account on the server could otherwise make it call into the owner's network. Relay mode
+  refuses any listed host. `1`, from when it was a yes/no flag, still allows every private host, with a
   warning at startup.
 - A server's VAPID key can change, as when a self-hoster leaves the relay for their own keys
   (#567). Each page boot compares the browser's subscription key with the server's and subscribes
