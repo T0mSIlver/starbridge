@@ -14,7 +14,9 @@
   the owner swiped away, so what asks for the owner (a question, a waiting flip, a snooze's
   return, a permission prompt, a join request) goes as an alert with `mutable-content`: the app's
   notification service extension opens the box and replaces the placeholder ("A question needs
-  you"), and if it fails the placeholder shows, which says nothing private. A question keeps one
+  you"), and if it fails the placeholder shows, which says nothing private. That placeholder keeps
+  no button that answers a question, since its text is the server's own; a prompt's Allow and
+  Deny stay, as the app reads the prompt before acting on either (#1354). A question keeps one
   notification: its waiting flips and its snooze's return carry its id as the collapse id, and
   replace it. What only closes or hides a notification (`answered`, a settled notice, a snooze as
   posted) goes as a background push, which iOS may hold or drop, so the app syncs when it opens;
