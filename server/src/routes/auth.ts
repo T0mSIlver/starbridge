@@ -222,7 +222,9 @@ authRoutes.get("/auth/github/callback/app", (c) => {
  * Apple code, which has dots where GitHub's has none, must come back with the verifier's.
  */
 authRoutes.post("/auth/app/session", async (c) => {
-  rateLimit(c, `github:${ipKey(c)}`, c.var.config.limits.githubCallbacks);
+  // The endpoint's own limit comes before the body is read, so malformed bodies count too; each
+  // provider's comes once the code says whose it is, so neither spends the other's.
+  rateLimit(c, `app-session:${ipKey(c)}`, c.var.config.limits.appSessions);
   const { code, verifier } = await json(
     c,
     z.object({ code: z.string().min(1).max(APPLE_CODE_MAX), verifier: z.string().regex(VERIFIER) }),
@@ -240,6 +242,7 @@ authRoutes.post("/auth/app/session", async (c) => {
       },
     );
   } else {
+    rateLimit(c, `github:${ipKey(c)}`, c.var.config.limits.githubCallbacks);
     if (code.length > 100) fail(400, "bad-code", "sign-in code unknown; sign in again");
     account = await gitHubAccount(c, code, verifier);
   }
@@ -340,6 +343,7 @@ authRoutes.post("/auth/apple/session", async (c) => {
  */
 authRoutes.get("/auth/apple", (c) => {
   const { apple, publicUrl, secureCookies } = c.var.config;
+  rateLimit(c, `apple-start:${ipKey(c)}`, c.var.config.limits.appleSignIns);
   const app = c.req.query("app") === "1";
   if (!apple?.servicesId) {
     if (app) fail(404, "not-configured", "Apple sign-in is off on this server");
@@ -404,6 +408,7 @@ authRoutes.get("/auth/apple/callback", async (c) => {
  */
 authRoutes.get("/auth/apple/callback/app", (c) => {
   const { appRedirectUri } = c.var.config;
+  rateLimit(c, `apple-start:${ipKey(c)}`, c.var.config.limits.appleSignIns);
   const { code = "", error = "", state = "" } = c.req.query();
   if (!CHALLENGE.test(state) || !(APPLE_CODE.test(code) || /^[A-Za-z0-9_-]{1,100}$/.test(error)))
     fail(400, "bad-state", "sign-in came from elsewhere; start again in the app");

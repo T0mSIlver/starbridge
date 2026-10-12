@@ -4,7 +4,7 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { setSignUps } from "../src/signups";
-import { makeServer, testConfig } from "../test-support/app";
+import { DEFAULT_LIMITS, makeServer, testConfig } from "../test-support/app";
 
 // A stand-in for Apple's keys, token and revoke endpoints.
 const apple = generateKeyPairSync("rsa", { modulusLength: 2048 });
@@ -226,4 +226,15 @@ test("an app's Apple sign-in binds the code to its challenge through Apple's non
   const web = await s.call("POST", "/v1/auth/apple/session", { body: signInBody("a1") });
   const me = async (t: string) => (await s.call("GET", "/v1/me", { token: t })).json.account;
   expect(await me(ok.json.session)).toBe(await me(web.json.session));
+});
+
+test("an app's Apple sign-in spends Apple's budget, not GitHub's", async () => {
+  const s = await makeServer(appleConfig());
+  const [n] = DEFAULT_LIMITS.githubCallbacks;
+  for (let i = 0; i < n; i++) await s.app.request("/v1/auth/github/callback?code=x&state=y");
+  expect((await s.app.request("/v1/auth/github/callback?code=x&state=y")).status).toBe(429);
+  const verifier = Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("base64url");
+  const code = `code-b1.${codes++}.${s256(verifier)}`;
+  const r = await s.call("POST", "/v1/auth/app/session", { body: { code, verifier } });
+  expect(r.status).toBe(200);
 });
