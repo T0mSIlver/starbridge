@@ -11,9 +11,8 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { delimiter, dirname, join } from "node:path";
+import { delimiter, join } from "node:path";
 import { compareVersions, platformAsset, RELEASE_KEY, verifyMinisign } from "../src/release";
-import { piSource } from "../src/setup/harnesses";
 import { update } from "../src/update";
 import { VERSION } from "../src/version";
 import { compiledFake, testCtx } from "./helpers";
