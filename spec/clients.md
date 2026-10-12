@@ -40,6 +40,11 @@
   shows the next open item beside the list, or the list on a phone. A refused answer comes back in
   the list, never in a reopened view. Left open, the view showed an answer the owner had just
   given.
+  Answered from a notification's button or reply, the notification goes at the tap too, and the
+  answer takes the card's path: queued and retried while the server is out of reach, silently.
+  Only a refusal brings the notification back, saying "Not sent:" and why (#1447). Kept up until
+  the server replied, it showed a spinner on Android, and "waiting to send" left a notification
+  behind for an answer already given.
 - **History** lists answered questions and the last 7 days of prompts, with how and where each was
   answered. A question settled `elsewhere` without a page to answer in was answered in the
   agent's own picker or terminal, so it reads "at the keyboard", never "by the agent", which

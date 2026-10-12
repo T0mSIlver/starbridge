@@ -570,8 +570,12 @@ function askNotificationsAfterSignIn(ses: Electron.Session): void {
   );
 }
 
-/** Hands an answer to the page, which sends it as if tapped there. */
+/**
+ * Hands an answer to the page, which sends it as if tapped there. Its notification goes at the
+ * tap, as the card does; only "Answer not sent" comes back (#1447).
+ */
 function answer(a: Answer): void {
+  notifier.close(a.id);
   if (!win || !fromServer(win.webContents.getURL())) {
     notSent(a.id, "Starbridge is not signed in.");
     return;

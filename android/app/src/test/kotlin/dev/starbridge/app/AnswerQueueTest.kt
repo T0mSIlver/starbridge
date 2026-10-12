@@ -113,9 +113,12 @@ class AnswerQueueTest {
         override fun wrap(plain: ByteArray) = plain
         override fun unwrap(wrapped: ByteArray) = wrapped
     })
+    /** What the notifications were told, in order. */
+    private val shown = CopyOnWriteArrayList<String>()
     private val alerts = object : Alerts {
         override fun decision(decision: Decision, silent: Boolean) {}
-        override fun cancel(id: String) {}
+        override fun cancel(id: String) { shown += "cancel $id" }
+        override fun failed(decision: Decision, why: String) { shown += "failed ${decision.id}" }
         override fun join(id: String, name: String) {}
         override fun prompt(prompt: Prompt) {}
         override fun cancelPrompt(prompt: Prompt) {}
@@ -223,6 +226,42 @@ class AnswerQueueTest {
         val sent = runBlocking { store.sendFromNotification("d_ship", null, long) }
         assertEquals(Sent.Answered("😀".repeat(4000)), sent)
         assertEquals(1, posted.size)
+    }
+
+    @Test
+    fun aNotificationAnswerTakesTheNotificationAwayBeforeTheServerRepliesAndLeavesItGone() {
+        setUp()
+        gate = CountDownLatch(1)
+        val store = store()
+        val sending = scope.async { store.sendFromNotification("d_ship", "Ship", null) }
+        runBlocking { withTimeout(5_000) { while (disk.saved()!!.outbox.isEmpty()) delay(10) } }
+        assertEquals(listOf("cancel d_ship"), shown)
+        gate.countDown()
+        assertEquals(Sent.Answered("Ship"), runBlocking { sending.await() })
+        assertEquals(listOf("cancel d_ship"), shown)
+    }
+
+    @Test
+    fun aRefusedNotificationAnswerBringsTheNotificationAndTheCardBack() {
+        setUp()
+        reply = { MockResponse(400, Headers.headersOf("content-type", "application/json"), """{"error":"bad-item"}""") }
+        val store = store()
+        assertTrue(runBlocking { store.sendFromNotification("d_ship", "Ship", null) } is Sent.Failed)
+        assertEquals(listOf("cancel d_ship", "failed d_ship"), shown)
+        store.decisions.value.single().let { assertTrue(it.isOpen); assertTrue(it.notSent != null) }
+    }
+
+    @Test
+    fun aNotificationAnswerTappedOfflineStaysGoneWhileItWaitsAndAfterItIsSent() {
+        setUp()
+        offline = true
+        val store = store()
+        assertEquals(Sent.Queued("Hold"), runBlocking { store.sendFromNotification("d_ship", "Hold", null) })
+        assertEquals(listOf("cancel d_ship"), shown)
+        offline = false
+        assertTrue(runBlocking { store.flushAnswers() })
+        assertEquals(1, posted.size)
+        assertTrue(shown.none { it.startsWith("failed") })
     }
 
     private val question = "Ship the dark mode toggle today?"
