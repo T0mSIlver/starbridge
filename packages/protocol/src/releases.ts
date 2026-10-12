@@ -19,8 +19,13 @@ export type MachineRelease = z.infer<typeof MachineRelease>;
 /**
  * `GET /releases`: each active machine that has said, by member id. `behind` is the server's
  * comparison, `version` below `latest`, so clients compare nothing; false while `latest` is null.
+ * `updatedAt` is when the machine last said a `version` other than the one before (#1266), so
+ * devices can say when it moved to `version`; null until it has.
  */
 export const MachineReleases = z.object({
-  machines: z.record(z.string(), MachineRelease.extend({ behind: z.boolean() })),
+  machines: z.record(
+    z.string(),
+    MachineRelease.extend({ behind: z.boolean(), updatedAt: z.string().nullable() }),
+  ),
 });
 export type MachineReleases = z.infer<typeof MachineReleases>;

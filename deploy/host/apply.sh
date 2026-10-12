@@ -114,9 +114,11 @@ healthy http://127.0.0.1:8080/healthz server
 # Umami migrates its database on its first start.
 healthy http://127.0.0.1:3001/api/heartbeat umami 120
 
-# /healthz/backup fails until a first backup ran; run one now rather than wait for the night.
+# /healthz/backup fails until a first backup ran; run one now rather than wait for the night. The
+# new server already serves, so a failed one doesn't fail the deploy: the backup watcher alerts
+# on the missing backup (#1217).
 [ -e "$(docker volume inspect -f '{{.Mountpoint}}' starbridge_data)/last-backup" ] ||
-  systemctl start starbridge-backup.service
+  systemctl start starbridge-backup.service || echo "apply.sh: the first backup failed" >&2
 
 # Cleanup last, and never a reason to fail a deploy that is already serving. Each build leaves
 # about 0.9 GB of cache; unpruned, a day of deploys left 27 GB of it on the 38 GB disk (#301).

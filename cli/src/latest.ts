@@ -1,7 +1,7 @@
 /**
  * Saying a new release is out (#1050). The local agent reads GitHub's latest release at most
  * once a day and keeps it in `latest.json`; commands a person runs print one line on stderr when
- * it is newer than this binary. Nothing updates by itself: `starbridge update` does.
+ * it is newer than this binary. On a script install the agent then installs it (#1266).
  */
 import { type LatestRelease, StateFileError } from "./config";
 import type { Ctx } from "./context";

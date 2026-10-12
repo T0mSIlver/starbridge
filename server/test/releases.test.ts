@@ -30,8 +30,8 @@ test("each machine says its release, and devices read which are behind (#1050)",
   expect((await put(devbox.token, { version: "0.1.2", latest: "0.2.0" })).status).toBe(204);
   expect((await put(laptop.token, { version: "0.2.0", latest: null })).status).toBe(204);
   expect(await releases()).toEqual({
-    devbox: { version: "0.1.2", latest: "0.2.0", behind: true },
-    laptop: { version: "0.2.0", latest: null, behind: false },
+    devbox: { version: "0.1.2", latest: "0.2.0", behind: true, updatedAt: null },
+    laptop: { version: "0.2.0", latest: null, behind: false, updatedAt: null },
   });
   // A release candidate of the latest is behind it; a newer one is not.
   await put(devbox.token, { version: "0.2.0-rc.1", latest: "0.2.0" });
@@ -48,4 +48,17 @@ test("a revoked machine drops out of the list (#1050)", async () => {
   await put(devbox.token, { version: "0.1.2", latest: "0.2.0" });
   await revoke(s, acct, "devbox");
   expect(await releases()).toEqual({});
+});
+
+test("a machine that says another release stamps when it moved (#1266)", async () => {
+  await put(devbox.token, { version: "0.1.2", latest: "0.2.0" });
+  await put(devbox.token, { version: "0.1.2", latest: "0.2.0" });
+  expect((await releases()).devbox.updatedAt).toBeNull();
+  const before = new Date().toISOString();
+  await put(devbox.token, { version: "0.2.0", latest: "0.2.0" });
+  const at = (await releases()).devbox.updatedAt;
+  expect(at >= before).toBe(true);
+  // The same release again keeps the time.
+  await put(devbox.token, { version: "0.2.0", latest: null });
+  expect((await releases()).devbox.updatedAt).toBe(at);
 });

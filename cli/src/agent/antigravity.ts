@@ -10,7 +10,7 @@
  */
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { type AgyRoute, lsCall } from "../antigravity";
+import { type AgyRoute, lsCall, onLoopback } from "../antigravity";
 import { permissionsEnabled } from "../permissions";
 import { selfCommand } from "../setup/sys";
 import { type Feature, HttpError, type Hub, pause } from "./server";
@@ -129,6 +129,8 @@ export class Antigravity implements Feature {
         const r = req.body as Partial<AgyRoute> | undefined;
         if (typeof r?.address !== "string" || typeof r.token !== "string")
           throw new HttpError(400, "bad-request", "post {address, token}");
+        if (!onLoopback(r.address))
+          throw new HttpError(400, "bad-request", "the address must be on loopback");
         this.add(r as AgyRoute);
         return {};
       },

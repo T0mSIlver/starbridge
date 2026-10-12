@@ -179,3 +179,20 @@ test("members with the same id in two accounts count as two", () => {
   expect(day["active.machines"]).toBe(2);
   expect(day["active.devices.android"]).toBe(2);
 });
+
+test("forgetting a deleted account keeps another account's members whose id contains its id (#1231)", () => {
+  const db = openDb(":memory:");
+  const usage = new Usage(db);
+  usage.record("active.machines", "acct-2/acct-1x");
+  usage.record("active.accounts", "acct-12");
+  usage.forget("acct-1");
+  const writes: string[] = [];
+  const query = db.query.bind(db);
+  db.query = ((sql: string) => {
+    writes.push(sql);
+    return query(sql);
+  }) as typeof db.query;
+  usage.record("active.machines", "acct-2/acct-1x");
+  usage.record("active.accounts", "acct-12");
+  expect(writes).toEqual([]);
+});

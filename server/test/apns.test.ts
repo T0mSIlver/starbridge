@@ -244,6 +244,13 @@ test("closing and hiding go as background pushes; a waiting flip and a snooze's 
     wakeAt: "2026-10-10T11:59:00Z",
   });
   expect(back.headers).toMatchObject({ "apns-push-type": "alert", "apns-collapse-id": "d1" });
+  // `due` decides over the clock (#1290): a first push sent late still hides, a return shows.
+  const marked = (wakeAt: string, due: boolean) =>
+    req({ kind: "snooze", id: "z1", from: "phone", re: "d1", wakeAt, due }).headers[
+      "apns-push-type"
+    ];
+  expect(marked("2026-10-10T11:59:00Z", false)).toBe("background");
+  expect(marked("2026-10-10T18:00:00Z", true)).toBe("alert");
   const waiting = req({ kind: "waiting", id: "w1", from: "devbox", re: "d1" });
   expect(waiting.headers["apns-collapse-id"]).toBe("d1");
   expect(JSON.parse(waiting.body).aps.category).toBe("decision");
@@ -286,12 +293,12 @@ test("a sandbox subscription goes to the sandbox; subscribing again takes the ne
 
 test("an APNs subscription needs a hex token; environment is for APNs only", async () => {
   const t = (endpoint: string, environment?: "production" | "sandbox", type = "apns" as const) =>
-    checkTarget({ type, endpoint, environment }, false);
+    checkTarget({ type, endpoint, environment }, []);
   expect(t(OK)).toBeUndefined();
   expect(t(OK, "sandbox")).toBeUndefined();
   for (const bad of ["xyz", "ab".repeat(8), `${OK}0`, "https://push.example/x"])
     expect(t(bad)).toBe("not an APNs token");
-  expect(checkTarget({ type: "fcm", endpoint: "tok", environment: "sandbox" }, false)).toBe(
+  expect(checkTarget({ type: "fcm", endpoint: "tok", environment: "sandbox" }, [])).toBe(
     "environment is for apns only",
   );
   const { s, acct } = await setup({});

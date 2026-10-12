@@ -67,11 +67,12 @@ async function setUp(page: Page) {
   page.setDefaultTimeout(30_000);
   page.on("console", (m) => m.type() === "error" && console.log(`[page] ${m.text()}`));
   await page.goto(ORIGIN);
-  await page.getByRole("button", { name: /sign in with the owner token/ }).click();
+  await page.getByRole("button", { name: "Sign in", exact: true }).first().click();
   await page.getByLabel("Owner token").fill(TOKEN);
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
-  await page.getByRole("button", { name: "Make keys" }).click();
-  await page.getByLabel(/I wrote these words down/).check();
+  await page.getByRole("button", { name: "Create the keys" }).click();
+  // Forced: in WebKit the checkbox's label takes the click.
+  await page.getByLabel(/I wrote this key down/).check({ force: true });
   await page.getByRole("button", { name: "Continue" }).click();
   await page.getByRole("heading", { name: "Inbox" }).waitFor();
 }

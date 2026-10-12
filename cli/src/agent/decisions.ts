@@ -179,7 +179,14 @@ export class Decisions implements Feature {
   }
 
   events(id: string): SessionEvent[] {
-    return sessionLines(this.ctx.store.state(), id);
+    const st = this.ctx.store.state();
+    // An answer with a language-server route goes that way (`deliverQueued`); the Stop hook takes
+    // it only once that gave up, or it would arrive twice (#1278).
+    return sessionLines(st, id).filter(
+      (l) =>
+        !st.asked[l.decisionId]?.antigravity ||
+        (this.retries.get(l.decisionId)?.tries ?? 0) >= CODEX_TRIES,
+    );
   }
 
   ack(id: string, tokens: string[]) {

@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import type { InboxItem } from "./types";
-import { withUnsent } from "./unsent";
+import { sending, whileSending, withUnsent } from "./unsent";
 
 const item = (id: string, answeredAt?: string) =>
   ({ decision: { id }, ...(answeredAt ? { answeredAt } : {}) }) as unknown as InboxItem;
@@ -26,4 +26,22 @@ test("an item the server lists answered keeps the server's state", () => {
     {},
   );
   expect(shown).toBe(answered);
+});
+
+test("an answer counts as sending until the server takes or refuses it (#1167)", async () => {
+  let settle: (ok: boolean) => void = () => {};
+  const send = whileSending(
+    () =>
+      new Promise<string>(
+        (res, rej) => (settle = (ok) => (ok ? res("at") : rej(new Error("502")))),
+      ),
+  );
+  expect(sending()).toBe(true);
+  settle(false);
+  await expect(send).rejects.toThrow("502");
+  expect(sending()).toBe(false);
+  const taken = whileSending(async () => "at");
+  expect(sending()).toBe(true);
+  expect(await taken).toBe("at");
+  expect(sending()).toBe(false);
 });

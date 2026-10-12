@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { Directory } from "./directory";
 import { parseWith } from "./envelope";
-import { B64, Id, Role, Time } from "./schemas";
+import { Bytes32, Id, Role, Time } from "./schemas";
 import { concat, fromB64, ProtocolError, sodium, toB64, utf8 } from "./sodium";
 
 /**
@@ -164,8 +164,8 @@ export const PairingRequestBody = z.object({
   role: Role,
   id: Id,
   name: z.string().min(1).max(100),
-  boxPk: B64,
-  signPk: B64,
+  boxPk: Bytes32,
+  signPk: Bytes32,
   at: Time,
 });
 export type PairingRequestBody = z.infer<typeof PairingRequestBody>;
@@ -176,15 +176,15 @@ export const PairingApprovalBody = z.object({
   account: Id,
   /** The directory up to and including the new member's entry. */
   length: z.number().int().positive(),
-  head: B64,
+  head: Bytes32,
   approver: Id,
   /** `checkProof` of the new machine's `add` entry, when the approver scanned its QR. */
-  check: B64.optional(),
+  check: Bytes32.optional(),
 });
 export type PairingApprovalBody = z.infer<typeof PairingApprovalBody>;
 
 /** A pairing message: JSON body text plus its HMAC-SHA-512-256 (`crypto_auth`). */
-export const PairingMessage = z.object({ body: z.string(), mac: B64 });
+export const PairingMessage = z.object({ body: z.string(), mac: Bytes32 });
 export type PairingMessage = z.infer<typeof PairingMessage>;
 
 type PairingKind = "pairing-request" | "pairing-approval";

@@ -19,7 +19,7 @@ permissions:
 
 jobs:
   check:
-    # Always Linux, whatever vars.RUNNER says: Linux is where setup installs the tarball.
+    # Always Linux, whatever the runner variables say: Linux is where setup installs the tarball.
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:

@@ -8,7 +8,8 @@
 # Windows PowerShell 5.1 and PowerShell 7.
 #
 # It accepts the binary only if its hash is in SHA256SUMS and SHA256SUMS carries the release
-# key's minisign signature, for STARBRIDGE_VERSION when that is set. Windows has no Ed25519
+# key's minisign signature for the version it installs: STARBRIDGE_VERSION, else the latest
+# release's tag, so an older signed release served in its place is refused. Windows has no Ed25519
 # check of its own, so it downloads minisign's official Windows build, pinned by its hash.
 #
 # STARBRIDGE_VERSION=1.2.3      a version other than the latest release
@@ -52,11 +53,27 @@
   }
   $arch = switch ($os) { { $_ -in 'X64', 'AMD64' } { 'x64' } 'Arm64' { 'arm64' } default { Fail "no build for $os; try npm i -g starbridge" } }
   $asset = "starbridge-windows-$arch.exe"
-  $version = if ($env:STARBRIDGE_VERSION) { $env:STARBRIDGE_VERSION -replace '^v', '' }
-  $base = if ($version) { "$Releases/download/v$version" } else { "$Releases/latest/download" }
+  # HTTPS only, but for a mirror on this machine, such as a test's.
+  if ($Releases -cnotmatch '^(https://|http://(127\.0\.0\.1|localhost)([:/]|$))') { Fail "STARBRIDGE_RELEASES_URL must be an https URL: $Releases" }
 
   # Windows PowerShell 5.1 may not offer TLS 1.2 by default, which GitHub requires.
   [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
+
+  $version = if ($env:STARBRIDGE_VERSION) { $env:STARBRIDGE_VERSION -replace '^v', '' }
+  if (-not $version) {
+    # The latest release's tag, which the signature must then name: where /latest redirects, unfollowed.
+    $latest = $null
+    try {
+      $req = [Net.HttpWebRequest]::Create("$Releases/latest")
+      $req.AllowAutoRedirect = $false
+      $res = $req.GetResponse()
+      $latest = $res.Headers['Location']
+      $res.Close()
+    } catch { $latest = $null }
+    if ("$latest" -cmatch '/tag/v([^/?#]+)$') { $version = $Matches[1] } else { Fail "could not find the latest release at $Releases/latest" }
+  }
+  if ($version -cnotmatch '^[0-9A-Za-z.-]+$') { Fail "not a release version: $version" }
+  $base = "$Releases/download/v$version"
 
   $tmp = Join-Path ([IO.Path]::GetTempPath()) "starbridge-$([guid]::NewGuid())"
   New-Item -ItemType Directory -Path $tmp | Out-Null
@@ -88,7 +105,7 @@
     $ErrorActionPreference = 'Stop'
     $signed = "$signed".Trim()
     if (-not $ok -or $signed -cnotmatch '^starbridge v\S+$') { Fail 'SHA256SUMS does not carry the release signature' }
-    if ($version -and $signed -cne "starbridge v$version") { Fail "SHA256SUMS is signed for `"$signed`", not starbridge v$version" }
+    if ($signed -cne "starbridge v$version") { Fail "SHA256SUMS is signed for `"$signed`", not starbridge v$version" }
 
     $want = $null
     foreach ($line in Get-Content -LiteralPath (Join-Path $tmp 'SHA256SUMS')) {

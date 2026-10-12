@@ -23,7 +23,10 @@ final class NotificationServiceTests: XCTestCase {
         let object = try JSONSerialization.jsonObject(with: Data(p.text.utf8))
         content.userInfo = ["aps": ["mutable-content": 1], "p": object]
         let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
-        guard let shown = await Notify.rewrite(Notify.payload(request.content.userInfo)) else { return content }
+        guard let shown = await Notify.rewrite(Notify.payload(request.content.userInfo)) else {
+            Notify.unread(content)
+            return content
+        }
         Notify.apply(shown, to: content)
         return content
     }
@@ -51,5 +54,16 @@ final class NotificationServiceTests: XCTestCase {
         let shown = try await deliver(f.payload(try f.decision("d_none")))
         XCTAssertEqual(shown.title, "Starbridge")
         XCTAssertEqual(shown.body, "A question needs you")
+    }
+
+    /** The placeholder's text is the server's: a question's buttons would answer what it says. */
+    func testAnUnreadPushKeepsNoAnswerButtons() {
+        let placeholder = UNMutableNotificationContent()
+        placeholder.categoryIdentifier = "d.d_19"
+        Notify.unread(placeholder)
+        XCTAssertEqual(placeholder.categoryIdentifier, "")
+        placeholder.categoryIdentifier = "permission"
+        Notify.unread(placeholder)
+        XCTAssertEqual(placeholder.categoryIdentifier, "permission")
     }
 }

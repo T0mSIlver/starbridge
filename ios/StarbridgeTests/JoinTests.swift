@@ -66,10 +66,17 @@ final class JoinTests: XCTestCase {
     func testJoinsByDigitsThenByCode() async throws {
         // The account's first device, made here: the one that approves.
         let api = Api(server: server, session: nil)
-        let session = try await api.ownerSignIn(token: token)
+        let session = try await api.ownerSession(token: token)
         let account = try await Api(server: server, session: session).me().account
         let entries0 = try await Api(server: server, session: session).directory(from: 0)
         try XCTSkipUnless(entries0.isEmpty, "the server's account already has devices")
+        // The tests after this one need an empty account; the approver's session deletes it.
+        addTeardownBlock { [server] in
+            var request = URLRequest(url: URL(string: server + "/v1/account")!)
+            request.httpMethod = "DELETE"
+            request.setValue("Bearer \(session)", forHTTPHeaderField: "Authorization")
+            _ = try? await URLSession.shared.data(for: request)
+        }
         let keys = MemberKeys.generate()
         let first = Member(id: "d_first", role: .device, name: "Approver", boxPk: toB64(keys.box.publicKey), signPk: toB64(keys.sign.publicKey))
         let recovery = RecoveryKeys.keyPair(RecoveryKeys.generateSeed())
@@ -85,7 +92,7 @@ final class JoinTests: XCTestCase {
         let store = Store(vault: vault, disk: Disk(url: dir.appendingPathComponent("saved.json")), deviceName: "Test iPhone")
 
         // --- By digits ---
-        await store.signInWithOwnerToken(server: server, token: token)
+        await store.signInWaiting(server: server, token: token)
         XCTAssertNil(store.notice)
         XCTAssertEqual(store.phase, .noDevice(accountExists: true))
         await store.askDevices()
@@ -129,7 +136,7 @@ final class JoinTests: XCTestCase {
         XCTAssertEqual(left.members[joiner.id]?.active, false)
 
         // --- By a scanned QR code ---
-        await store.signInWithOwnerToken(server: server, token: token)
+        await store.signInWaiting(server: server, token: token)
         let code = PairingCode.generate()
         await store.joinWithCode(Pairings.link(server: server, code: code))
         XCTAssertNil(store.notice)

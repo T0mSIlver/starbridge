@@ -60,6 +60,13 @@ struct Saved: Codable, Equatable {
     var heads: [SavedHead] = []
     /** This iPhone's APNs subscription, dropped at sign-out. */
     var pushId: String?
+    /** The last recovery key replacement the owner dismissed here (#348). */
+    var recoverySeen = 0
+    /**
+     * Machines this iPhone approved from their QR, whose check key proves the entry to the
+     * machine, which then asks nothing: Devices shows them no check code (#1329).
+     */
+    var scannedMachines: [String] = []
 
     init(server: String) { self.server = server }
 
@@ -91,6 +98,8 @@ struct Saved: Codable, Equatable {
         outbox = (try c.decodeIfPresent([Lossy<QueuedAnswer>].self, forKey: .outbox) ?? []).compactMap(\.value)
         heads = try c.decodeIfPresent([SavedHead].self, forKey: .heads) ?? []
         pushId = try c.decodeIfPresent(String.self, forKey: .pushId)
+        recoverySeen = try c.decodeIfPresent(Int.self, forKey: .recoverySeen) ?? 0
+        scannedMachines = try c.decodeIfPresent([String].self, forKey: .scannedMachines) ?? []
     }
 
     var pin: Pin? {

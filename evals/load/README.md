@@ -14,7 +14,7 @@ Needs Docker with Compose 2.24 or later, Bun, `jq` and `openssl`. Scratch files 
 evals/load/stack.sh up                         # build and start; Caddy on 127.0.0.1:18000
 bun evals/load/fake.ts --host 172.17.0.1       # fake GitHub and push services, left running
 bun evals/load/setup.ts --users 3000           # accounts, each with a phone, a machine and a page
-bun evals/load/load.ts --ramp 300,1000,2000,3000 --stage 180 --procs 6
+evals/load/stack.sh load --ramp 300,1000,2000,3000 --stage 180 --procs 6
 evals/load/stack.sh down                       # stop and delete the volumes
 ```
 
@@ -75,7 +75,7 @@ Each runs `load.ts` with `--until FILE`: it keeps its users going until FILE exi
 and reports what was lost or duplicated, plus a probe that loads `/` and `/healthz` every 100 ms.
 
 ```bash
-bun evals/load/load.ts --ramp 1000 --until $LOAD_DIR/stop --procs 6   # in one terminal
+evals/load/stack.sh load --ramp 1000 --until /load/stop --procs 6      # in one terminal; /load is LOAD_DIR
 docker kill starbridge-load-server-1                                    # kill the server,
 docker start starbridge-load-server-1                                   # then start it again
 evals/load/stack.sh deploy                                              # or roll out, as prod does

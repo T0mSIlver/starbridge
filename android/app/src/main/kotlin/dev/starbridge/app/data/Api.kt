@@ -20,6 +20,8 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.boolean
+import kotlinx.serialization.json.contentOrNull
+import java.time.Instant
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.put
 import okhttp3.MediaType.Companion.toMediaType
@@ -340,9 +342,22 @@ class Api(private val http: OkHttpClient, private val server: String, private va
         return read("devices") to read("clients")
     }
 
-    /** The machines whose CLI is older than the latest release they read (#1050), by member id. */
-    suspend fun machinesBehind(): Set<String> {
+    /** Each machine's CLI release (#1050, #1266), by member id. */
+    suspend fun machineReleases(): Map<String, MachineRelease> {
         val machines = call("GET", "/releases").second!!.jsonObject["machines"]?.jsonObject.orEmpty()
-        return machines.filterValues { it.jsonObject["behind"]?.jsonPrimitive?.boolean == true }.keys
+        return machines.mapValues { (_, v) ->
+            val m = v.jsonObject
+            MachineRelease(
+                version = m["version"]?.jsonPrimitive?.content.orEmpty(),
+                behind = m["behind"]?.jsonPrimitive?.boolean == true,
+                updatedAt = m["updatedAt"]?.jsonPrimitive?.contentOrNull?.let { runCatching { Instant.parse(it) }.getOrNull() },
+            )
+        }
     }
 }
+
+/**
+ * A machine's CLI release: whether it is behind the latest it read (#1050), and when it last
+ * moved to [version], null until the server saw it move (#1266).
+ */
+data class MachineRelease(val version: String, val behind: Boolean, val updatedAt: Instant?)

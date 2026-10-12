@@ -17,6 +17,7 @@ import {
   piChain,
   piRulesText,
 } from "./pi";
+import { installKind } from "./release";
 import { type Prompt, which } from "./setup/sys";
 
 /**
@@ -143,7 +144,7 @@ export async function offerPiAllow(ctx: Ctx, prompt: Prompt | undefined, quiet =
 }
 
 const USAGE =
-  "usage: starbridge config [permissions on|off] [presence on|off] [update-check on|off] [machine-kind server|desktop|laptop|cloud]";
+  "usage: starbridge config [permissions on|off] [presence on|off] [update-check on|off] [updates on|off] [machine-kind server|desktop|laptop|cloud]";
 
 /**
  * `starbridge config [<key> <value>]`: sets one setting, then prints them all. Turning permission
@@ -174,6 +175,10 @@ export async function configCommand(ctx: Ctx, args: string[], prompt?: Prompt): 
     if (value !== "on" && value !== "off") throw new UsageError(USAGE);
     const config = ctx.store.agentConfig();
     ctx.store.saveAgentConfig({ ...config, updateCheck: { enabled: value === "on" } });
+  } else if (key === "updates") {
+    if (value !== "on" && value !== "off") throw new UsageError(USAGE);
+    const config = ctx.store.agentConfig();
+    ctx.store.saveAgentConfig({ ...config, updates: { auto: value === "on" } });
   } else if (key === "machine-kind") {
     const kind = MachineKind.safeParse(value);
     if (!kind.success) throw new UsageError(USAGE);
@@ -184,6 +189,14 @@ export async function configCommand(ctx: Ctx, args: string[], prompt?: Prompt): 
   ctx.out(`permissions   ${permissionsEnabled(ctx) ? "on" : "off"}`);
   ctx.out(`presence      ${ctx.store.agentConfig().presence?.enabled ? "on" : "off"}`);
   ctx.out(`update-check  ${ctx.store.agentConfig().updateCheck?.enabled === false ? "off" : "on"}`);
+  ctx.out(`updates       ${updatesSetting(ctx)}`);
   ctx.out(`machine-kind  ${ctx.store.agentConfig().machineKind ?? "not set"}`);
   return 0;
+}
+
+/** `config`'s `updates` value (#1266): Homebrew and npm installs update through their manager. */
+function updatesSetting(ctx: Ctx): string {
+  const install = installKind();
+  if (install.kind !== "binary") return `through ${install.kind}`;
+  return ctx.store.agentConfig().updates?.auto === false ? "off" : "on";
 }

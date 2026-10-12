@@ -1,7 +1,20 @@
 import { expect, test } from "bun:test";
-import { bindMessage, toB64 } from "@starbridge/protocol";
+import {
+  addEntry,
+  bindMessage,
+  claimHash,
+  generateMemberKeys,
+  newPairingCode,
+  pairingApproval,
+  pairingRequest,
+  publicKeys,
+  toB64,
+} from "@starbridge/protocol";
 import {
   type Actor,
+  append,
+  at,
+  directory,
   makeServer,
   pair,
   revoke,
@@ -115,4 +128,49 @@ test("machines cannot ask for a challenge", async () => {
   const acct = await setupAccount(s);
   const machine = await pair(s, acct, "devbox", "machine");
   expect((await s.call("GET", "/v1/auth/challenge", { token: machine.token })).status).toBe(403);
+});
+
+test("a device that bound a session is paired: its pairing's approval then mints nothing", async () => {
+  const s = await makeServer();
+  const acct = await setupAccount(s);
+  const keys = generateMemberKeys();
+  const member = { id: "tablet", role: "device" as const, name: "tablet", ...publicKeys(keys) };
+  const code = newPairingCode();
+  const claim = "c".repeat(43);
+  const request = pairingRequest({ v: 1, rendezvous: code.rendezvous, ...member, at }, code);
+  expect(
+    (await s.call("POST", "/v1/pairings", { body: { request, claimHash: claimHash(claim) } }))
+      .status,
+  ).toBe(201);
+  const dir = await directory(s, acct.device.token);
+  const signer = { id: acct.device.id, signKey: acct.device.keys.sign.privateKey };
+  const added = await append(s, acct.device.token, addEntry(dir, signer, member, at));
+  expect(added.status).toBe(201);
+
+  // The new device's own session binds before the approval lands.
+  const session = await signIn(s);
+  const nonce = await challenge(s, session);
+  const sig = await sign(acct.id, "tablet", nonce, { keys });
+  expect(
+    (await s.call("POST", "/v1/auth/bind", { token: session, body: { member: "tablet", sig } }))
+      .status,
+  ).toBe(200);
+
+  const approval = pairingApproval(
+    {
+      v: 1,
+      rendezvous: code.rendezvous,
+      account: acct.id,
+      length: added.json.length,
+      head: added.json.head,
+      approver: acct.device.id,
+    },
+    code,
+  );
+  const r = await s.call("POST", `/v1/pairings/${code.rendezvous}/approve`, {
+    token: acct.device.token,
+    body: { approval },
+  });
+  expect(r.status).toBe(409);
+  expect(r.json.error).toBe("already-paired");
 });

@@ -220,6 +220,11 @@ export interface AgentConfig {
    * unless `starbridge config update-check off`.
    */
   updateCheck?: { enabled?: boolean };
+  /**
+   * Whether the agent installs new finals on a script install by itself (#1266); on unless
+   * `starbridge config updates off`.
+   */
+  updates?: { auto?: boolean };
   quota?: {
     /** The CodexBar providers to upload; none means no timer. */
     providers?: string[];
@@ -238,6 +243,16 @@ export interface LatestRelease {
   version: string;
   /** GitHub's ETag for it: a 304 answer to it costs no request from the hourly allowance. */
   etag?: string;
+}
+
+/** Updates of this machine (#1266), in `update.json`: the agent's last try and their outcomes. */
+export interface UpdateRecord {
+  /** When the agent last started `starbridge update`, and the release it went for. */
+  tried?: { at: string; version: string };
+  /** The last update that replaced the binary, whoever ran it. */
+  updated?: { at: string; from: string; to: string };
+  /** The last update that failed, cleared by one that succeeds. */
+  failed?: { at: string; version?: string; why: string };
 }
 
 /**
@@ -420,6 +435,25 @@ export class Store {
 
   saveLatest(l: LatestRelease) {
     this.write("latest.json", l);
+  }
+
+  /** Updates of this machine (#1266). */
+  updates(): UpdateRecord {
+    return this.read<UpdateRecord>("update.json") ?? {};
+  }
+
+  /** Re-reads `update.json`, applies `fn` and writes it back, under the lock. */
+  recordUpdate(fn: (r: UpdateRecord) => void) {
+    this.locked(() => {
+      let r: UpdateRecord = {};
+      try {
+        r = this.updates();
+      } catch {
+        // Only a record: an unreadable one starts over.
+      }
+      fn(r);
+      this.write("update.json", r);
+    });
   }
 
   /** Re-reads the state, applies `fn` and writes it back, under the lock. */
