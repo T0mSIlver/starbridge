@@ -283,10 +283,14 @@ struct Api {
         Listed(item: try SealedItem(json: try field(json, "item")), receivedAt: json["receivedAt"]?.string, answeredAt: json["answeredAt"]?.string)
     }
 
-    /** A page of items of `kinds` after `cursor`, 100 at most (PROTOCOL.md, "Items"). */
-    func items(_ kinds: String, after cursor: String) async throws -> ItemsPage {
+    /**
+     * A page of items of `kinds` after `cursor`, 100 at most (PROTOCOL.md, "Items"). With
+     * `openBlobs`, an answered decision lists without its images, which `item(_:)` gives (#1382).
+     */
+    func items(_ kinds: String, after cursor: String, openBlobs: Bool = false) async throws -> ItemsPage {
         var q = URLComponents()
         q.queryItems = [URLQueryItem(name: "kind", value: kinds), URLQueryItem(name: "after", value: cursor)]
+        if openBlobs { q.queryItems?.append(URLQueryItem(name: "blobs", value: "open")) }
         let body = try await call("GET", "/items?" + (q.percentEncodedQuery ?? "")).1
         guard let list = try field(body, "items").array else { throw ProtocolError(.badSchema, "items is not a list") }
         // One item this app cannot read never hides the rest.
