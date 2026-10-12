@@ -53,6 +53,17 @@
   `PLAY_WIF_PROVIDER` and `PLAY_SERVICE_ACCOUNT`). Without them the job skips with a notice; a
   failed upload fails the run after the release is out. Run by hand on main, the job asks Play to
   validate the edit and discards it.
+- **The iPhone app on TestFlight** (#1397). Once the release is out, the `testflight` job archives
+  the app on GitHub's macOS runner with the newest Xcode and uploads it to TestFlight, rcs and
+  finals alike: App Store review needs a sign-in besides GitHub's (guideline 4.8), so testers are
+  the only users yet. Signing is automatic, driven by an App Store Connect API key, the
+  `ASC_API_KEY_P8` secret of the `ios-release` environment, open to main and `v*` tags (variables
+  `ASC_KEY_ID` and `ASC_ISSUER_ID`): Xcode registers the App IDs, App Groups and profiles the
+  entitlements ask for, and Apple's cloud-managed certificate signs the export, so no certificate
+  or profile is stored to rotate. The marketing version is the tag's without `-rc.N`, since Apple
+  takes three numbers only; the build number is the run's number and attempt, unique per upload.
+  Run by hand on main, the job archives and exports without uploading, or with `testflight_only`
+  builds the app alone and uploads it.
 - **Signing and deploy secrets in environments** (#1121). The Android keystore, its password and
   alias, `google-services.json`, the minisign key and the Homebrew tap key are secrets of the
   `release` environment, open to main and `v*` tags; the `android`, `release` and `homebrew` jobs
