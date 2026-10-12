@@ -1,6 +1,7 @@
 # Signs in to App Store Connect with the API key that release.yml's testflight job hands to
 # xcodebuild, and says what fails before an archive does: the key file's shape, the runner's clock,
-# a key App Store Connect refuses (401), and a role that may not manage signing (403). It prints
+# a key App Store Connect refuses (401), a role that may not manage signing (403), and each App
+# ID's capabilities. It prints
 # the key's public half's SHA-256, never the key, to compare with the .p8 kept offline:
 #   openssl pkey -in AuthKey_<id>.p8 -pubout -outform DER | shasum -a 256
 # Usage: ruby asc-check.rb <AuthKey_<id>.p8> <key id> <issuer id>
@@ -54,6 +55,18 @@ http.start do
     count = (body["data"] || []).map { |d| d.dig("attributes", "bundleId") || d.dig("attributes", "identifier") }.inspect
     puts "GET #{q.split('?').first}: #{res.code} #{errors.empty? ? count : errors}#{skew ? " (runner clock #{skew}s off Apple's)" : ''}"
     failed ||= res.code != "200"
+  end
+  # What the export's signing starts from: each App ID and its capabilities.
+  res = http.get("/v1/bundleIds?filter[identifier]=dev.starbridge.ios,dev.starbridge.ios.notifications" \
+                 "&include=bundleIdCapabilities&fields[bundleIdCapabilities]=capabilityType&limit=10",
+                 "Authorization" => "Bearer #{jwt}")
+  if res.code == "200"
+    body = JSON.parse(res.body)
+    types = (body["included"] || []).map { |c| [c["id"], c.dig("attributes", "capabilityType")] }.to_h
+    (body["data"] || []).each do |d|
+      caps = (d.dig("relationships", "bundleIdCapabilities", "data") || []).map { |c| types[c["id"]] }.compact.sort
+      puts "App ID #{d.dig('attributes', 'identifier')}: #{caps.join(', ')}"
+    end
   end
 end
 exit(failed ? 1 : 0)
