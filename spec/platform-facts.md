@@ -5,7 +5,10 @@ What the code relies on, with the versions checked.
 - **Claude Code mods** (2.1.286 to 2.1.289): `$.http.fetch` aborts any request without a complete
   answer after 30 s. `$.prompt.submit` starts a turn in an idle session within 0.2 s; mid-turn it
   queues its own turn after the running one, and resolves only when that starts, so a poll loop
-  must not await it. Remote Control shows a submitted prompt on the phone. A hot reload aborts the
+  must not await it. Under Claude desktop (2.1.295, an Agent SDK session), a prompt queued
+  mid-turn starts only once the mod's open `$.http.fetch` or `$.process.run` returns, not when the
+  running turn ends; `$.clock.sleep` holds nothing back. So while a submitted prompt waits for its
+  turn, the mod's loop makes only short calls (#1446). Remote Control shows a submitted prompt on the phone. A hot reload aborts the
   mod's requests. `/resume` fires `session.end` with reason `resume` and no `session.start`. Mods
   load only from user or managed settings or an installed plugin, not project settings.
   Starbridge states 2.1.287, the oldest the mod works with, as its minimum, and setup says when

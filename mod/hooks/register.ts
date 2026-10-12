@@ -19,6 +19,8 @@ import { Switch, wantsLoop } from "./switch.ts";
  */
 export const register: Register = (on) => {
   let loop: Switch | undefined;
+  /** Prompts submitted whose turn has not started. */
+  let waiting = 0;
 
   on("session.start", async ($, e, next) => {
     const started = await next(e);
@@ -66,7 +68,13 @@ export const register: Register = (on) => {
     };
     const log = (text: string) => $.ui.log(text, { to: "debug" });
     const status = (text: string | undefined) => $.ui.status(text);
-    const submit = (text: string) => void $.prompt.submit({ text });
+    // `$.prompt.submit` resolves when the prompt's turn starts: mid-turn, once the running one ends.
+    const submit = (text: string) => {
+      waiting++;
+      const started = () => void waiting--;
+      $.prompt.submit({ text }).then(started, started);
+    };
+    const starting = () => waiting > 0;
     const sessionId = () => $.session.id();
     const now = () => $.clock.now();
     const sleep = (ms: number) => $.clock.sleep(ms);
@@ -77,7 +85,17 @@ export const register: Register = (on) => {
           !env.STARBRIDGE_NO_AGENT && (await fetch("GET", "/v1/status")).status < 300,
         agent: (unconfirmed) =>
           new AgentLoop(
-            { sessionId, cwd: () => $.session.cwd(), fetch, now, sleep, submit, status, log },
+            {
+              sessionId,
+              cwd: () => $.session.cwd(),
+              fetch,
+              now,
+              sleep,
+              submit,
+              starting,
+              status,
+              log,
+            },
             unconfirmed,
           ),
         poller: (unconfirmed) =>
@@ -91,6 +109,7 @@ export const register: Register = (on) => {
               now,
               sleep,
               submit,
+              starting,
               status,
               log,
             },
