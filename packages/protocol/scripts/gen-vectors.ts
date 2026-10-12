@@ -2641,6 +2641,7 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
       holdChoices: [...PUSH_HOLD_CHOICES],
     },
     retryForMs: 20_000,
+    // The longest permission input a card's line holds, in UTF-16 units.
     rowInputMax: 200,
     snooze: {
       minMs: 5 * 60_000,

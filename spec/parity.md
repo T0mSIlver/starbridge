@@ -5,7 +5,9 @@ an issue number points at the work. What a feature does is in its area's file; t
 only where it exists. A PR that adds or changes a feature in one client updates its row, and
 opens an issue for each client the row says should follow. Every PR that changes a client's
 source says so on its `Parity:` line, which CI requires: `spec/parity.md`, the follow-up issues, or
-`none` and why (#1422).
+`none` and why (#1422). A rule every client applies on its own (snooze times, option order,
+presence, retry, limits) lives in `packages/protocol/vectors/rules.json`, which the web's,
+Android's and iOS's tests read, so a change to one fails the others until they follow (#1429).
 
 | Feature | Web | Android | Desktop | iOS |
 |---|---|---|---|---|
