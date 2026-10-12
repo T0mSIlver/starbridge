@@ -19,6 +19,13 @@
   filled near 18 visitors a second (#593), and a copy costs less than a render. With the cookie,
   `/` is the app as before; the page swaps to sign-in when the browser holds a device, after a
   failed sign-in, or on "Use your own server".
+- **Landing: devices, then machines** (#1232). "Get the app" comes before the install box: a new
+  user signs in on a device first (the first device shows the recovery key), then installs on each
+  machine that runs agents. One card per device, three of equal size (Android, iPhone, Mac app) and
+  no browser card, since the hero already signs in. Each card holds the platform, the minimum
+  version a visitor could fail without, and the actions; no subtitles. Android has two buttons
+  (the APK, Obtainium) and the Play testing links. No copy says "signed".
+  The CLI never sits in a device card: a machine runs the agents, a device is where you answer.
 - **Keyboard shortcuts** (#970) are written down once, in Settings → Inbox: J and K, 1 to 4, A
   and D from 1100 px, and / anywhere. Hints on the buttons and the Find box crowded the detail,
   and hints in some places but not others read as missing ones.
