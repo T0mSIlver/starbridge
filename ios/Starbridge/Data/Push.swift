@@ -127,7 +127,7 @@ extension Store {
      */
     func backgroundPush(_ userInfo: [AnyHashable: Any]) async {
         guard let p = Notify.payload(userInfo), let id = Notify.item(p) else { return }
-        if ["answered", "settled", "snooze"].contains(p["kind"]?.string) { await Self.removeDelivered(about: id) }
+        if Notify.closes(p) { await Self.removeDelivered(about: id) }
         try? await serial { try await self.sync() }
     }
 }

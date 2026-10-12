@@ -82,8 +82,11 @@ line, the safe side: at worst a prompt repeats an answer the agent already read.
   hold a turn's end, keeping the session busy. So `ask` promises a prompt only when the agent
   reaches that server, never in `agy -p`, which it tells by its parent process's arguments. The
   plugin's `Stop` hook stays as the fallback: it hands over answers that came in, and holds the
-  end of a turn up to 10 minutes for a question marked waiting that has no route. The token
-  stays in the machine's state file, readable by its owner only, like the process it came from.
+  end of a turn up to 10 minutes for a question marked waiting that has no route. While the agent
+  runs, it leaves out an answer the agent sends through the language server, until the agent
+  gives up on it, or the answer would arrive twice (#1278); and it marks answers taken only once
+  it printed them, so a hook cut short loses none (#1287). The token stays in the machine's state
+  file, readable by its owner only, like the process it came from.
 - **Pi and opencode** append their rule (`plugin/rules/pi.md`, `opencode.md`) to the system prompt and run the mod's own
   answer loop (`agent.ts`, `poller.ts`, `switch.ts`). opencode gives commands no session id, so
   its plugin sets `STARBRIDGE_OPENCODE_SESSION` through `shell.env`. After opencode restarts, the
@@ -289,7 +292,9 @@ the Cursor IDE, which this machine does not run.
   to run `starbridge hello`, and its `PreToolUse` denies the first other command once with the
   same words, which a model that passed over the first has to read (#962; the owner chose this
   over waiting for the session's first `ask`). One extra command per conversation; with no local
-  agent, or prompts off, neither happens. The app and the IDE are untested.
+  agent, or prompts off, neither happens, and the next turn asks again, since both pass: the
+  agent may start after Antigravity at login, or the owner turn prompts on later (#1336). The app
+  and the IDE are untested.
 - **A stalled server never holds a prompt** (#260): deadlines and SIGTERM cut every request the
   hook makes. When a hook dies mid-hold, the local agent settles its prompt as answered at the keyboard
   (#400).

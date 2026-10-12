@@ -48,6 +48,15 @@ test("items notified before a restart stay quiet", () => {
   expect(shown).toEqual(["b"]);
 });
 
+test("the page's loading state does not forget items notified before a restart", () => {
+  const { n, shown, closed, saved } = setup(["a"]);
+  n.page({ count: 0, entries: [], waiting: 0, account: "loading" });
+  n.page({ count: 1, entries: [entry("a", true)], waiting: 1, account: "ready" });
+  expect(shown).toEqual([]);
+  expect(closed).toEqual([]);
+  expect(saved.at(-1)).toEqual(["a"]);
+});
+
 test("an answered item's notification closes and does not come back while it is listed", () => {
   const { n, shown, closed } = setup();
   n.update([entry("a")]);

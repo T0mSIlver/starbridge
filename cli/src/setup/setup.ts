@@ -9,12 +9,14 @@ import type { Status } from "../agent/api";
 import { AgentClient, Interrupted, withAgent } from "../agent/client";
 import { askVia, quotaVia } from "../agent/commands";
 import { ApiError, REMOVED, Unreachable } from "../api";
+import { autoOn } from "../autoupdate";
 import type { AgentConfig } from "../config";
 import { type Ctx, refreshDirectory, session, UsageError } from "../context";
 import { type AskInput, answerPrefix, ask, EXIT_INTERRUPTED, settle } from "../decisions";
 import { DEFAULT_SERVER, pair } from "../pair";
 import { permissionsEnabled } from "../permissions";
 import { pushOnce } from "../quota";
+import { installKind } from "../release";
 import { rememberMachineKind } from "../settings";
 import { VERSION } from "../version";
 import {
@@ -198,12 +200,14 @@ export async function setup(sys: Sys, opts: SetupOpts): Promise<number> {
     ));
   // The later steps need the server and the pairing, so setup checks both first (#774).
   let again = false;
+  let gone: string | undefined;
   if (machine && !switching) {
     section(ctx, "Pairing");
     const pairing = await checkPairing(ctx);
     if (pairing === "paired") ctx.out(`✓ Paired as ${machine.name} on ${host(machine.server)}`);
     else if (pairing === "removed") {
-      ctx.out(`✗ ${host(machine.server)} no longer lists ${machine.name}`);
+      gone = `✗ ${host(machine.server)} no longer lists ${machine.name}`;
+      ctx.out(gone);
       again = await prompt.confirm("  Pair this machine again?", true);
       if (!again) {
         ctx.out("  To pair it again later:");
@@ -229,6 +233,8 @@ export async function setup(sys: Sys, opts: SetupOpts): Promise<number> {
       ...(opts.name ? { name: opts.name } : {}),
     });
     if (code !== 0) return code;
+    // Paired again in the same run: that step recovered, and the summary counts no failure (#1327).
+    if (gone && failed.includes(gone)) failed.splice(failed.indexOf(gone), 1);
     if (switching && machine)
       ctx.out(
         `  ${host(machine.server)} still lists ${machine.name}: revoke it under Devices there.`,
@@ -284,6 +290,10 @@ export async function setup(sys: Sys, opts: SetupOpts): Promise<number> {
     !["desktop", "laptop"].includes(ctx.store.agentConfig().machineKind ?? "")
       ? []
       : ([["Quiet other devices while here", "starbridge config presence on"]] as const)),
+    // Script installs update by themselves (#1266): the one line that says so, and how to stop it.
+    ...(autoOn(ctx, installKind())
+      ? ([["Stop automatic updates", "starbridge config updates off"]] as const)
+      : []),
     ["Remove from one agent", `starbridge uninstall --agent ${one}`],
     ["Remove everything", "starbridge uninstall"],
   ]))
@@ -673,7 +683,12 @@ async function testDecision(ctx: Ctx, name: string) {
     code = EXIT_INTERRUPTED;
   }
   if (code === 2) ctx.out("✗ No answer within 10 minutes");
-  if (code !== EXIT_INTERRUPTED || !id) return;
+  if (code !== EXIT_INTERRUPTED) return;
+  // Cut while it was being sent: `ask` withdrew it already (#1289).
+  if (!id) {
+    ctx.out("– Skipped");
+    return;
+  }
   try {
     await settle(ctx, { id, outcome: "withdrawn", reason: "Skipped in starbridge setup" });
     ctx.out("– Skipped");

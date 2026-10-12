@@ -68,6 +68,19 @@ test("the terminal answering first settles the questions still open, as answered
   expect((await server.opened("settled")).map((s) => s.outcome)).toEqual(["elsewhere"]);
 });
 
+test("a snooze keeps the question waiting, and the answer after it still reaches opencode (#1226)", async () => {
+  const ctx = await paired(server);
+  const done = hookQuestion(ctx, hookInput([DB]), { agent: "opencode" });
+  await until(async () => (await server.opened("waiting")).length === 1);
+  const [db] = await server.opened("decision");
+  await server.snooze(db?.id as string, new Date(Date.now() + 3_600_000));
+  await new Promise((r) => setTimeout(r, 1000));
+  expect(await server.opened("settled")).toEqual([]);
+  await server.answer(db?.id as string, { choice: "Redis" });
+  expect(await done).toBe(0);
+  expect(ctx.lines).toEqual([JSON.stringify({ answers: [["Redis"]] })]);
+});
+
 test("Pi's ask_user_question posts as Pi's (#966)", async () => {
   const ctx = await paired(server);
   const stop = new AbortController();

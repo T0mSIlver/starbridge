@@ -530,7 +530,7 @@ test("while disabled the hooks post nothing and print nothing", async () => {
   expect(await run(["config", "permissions", "off"], ctx)).toBe(0);
   expect(await hookPermission(ctx, request(), { agent: "claude-code" })).toBe(0);
   // The config listing only: the hook printed nothing.
-  expect(ctx.lines).toHaveLength(4);
+  expect(ctx.lines).toHaveLength(5);
   expect(ctx.lines[0]).toBe("permissions   off");
   expect(await server.opened("permission")).toEqual([]);
   const status = await new AgentClient(agentAddress(ctx.store.dir)).call<Status>(
@@ -834,6 +834,21 @@ test("a device answers Claude Code's picker, permissions on or off, and the sess
   // The PostToolUse that follows finds nothing open: only the devices' answers were announced.
   expect(await hookSettle(ctx, pickerDone(), { agent: "claude-code" })).toBe(0);
   expect((await server.opened("settled")).map((s) => s.outcome)).toEqual(["device", "device"]);
+});
+
+test("withdrawing the picker's cards gives up on a server that never answers (#1286)", async () => {
+  const ctx = await paired(server);
+  const stop = new AbortController();
+  const done = hookPermission({ ...ctx, signal: stop.signal }, picker(PICKED.slice(0, 1)), {
+    agent: "claude-code",
+  });
+  await until(async () => (await server.opened("waiting")).length === 1);
+  server.stalls.push("POST /items");
+  const settled = hookSettle(ctx, pickerDone(PICKED.slice(0, 1)), { agent: "claude-code" });
+  const ended = await Promise.race([settled.then(() => true), Bun.sleep(10_000).then(() => false)]);
+  expect(ended).toBe(true);
+  stop.abort();
+  await done;
 });
 
 test("an answer in the picker settles its cards as answered elsewhere, and Esc does too", async () => {

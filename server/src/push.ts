@@ -5,7 +5,7 @@ import { isIP } from "node:net";
 import webpush from "web-push";
 import { z } from "zod";
 import { Apns } from "./apns";
-import type { Config } from "./config";
+import { type Config, type PrivatePushHosts, pushHostKey } from "./config";
 
 export const PushType = z.enum(["fcm", "webpush", "unifiedpush", "apns"]);
 export type PushType = z.infer<typeof PushType>;
@@ -25,8 +25,12 @@ export type PushTarget = z.infer<typeof PushTarget>;
 /** "gone" means the target no longer exists and its subscription should be dropped. */
 export type PushResult = "ok" | "gone" | "failed" | "no-route";
 
+/** Whether `url`'s host is one the server's owner allowed though private (`privatePushHosts`). */
+export const allowedPrivate = (url: URL, hosts: PrivatePushHosts) =>
+  hosts === "any" || hosts.includes(pushHostKey(url.hostname));
+
 /** Returns why `target` cannot be accepted, or undefined. */
-export function checkTarget(target: PushTarget, allowPrivate: boolean): string | undefined {
+export function checkTarget(target: PushTarget, hosts: PrivatePushHosts): string | undefined {
   if (target.environment && target.type !== "apns") return "environment is for apns only";
   if (target.type === "fcm") {
     return /^[A-Za-z0-9_:.-]+$/.test(target.endpoint) ? undefined : "not an FCM token";
@@ -40,7 +44,7 @@ export function checkTarget(target: PushTarget, allowPrivate: boolean): string |
   } catch {
     return "endpoint is not a URL";
   }
-  if (allowPrivate)
+  if (allowedPrivate(url, hosts))
     return url.protocol === "https:" || url.protocol === "http:" ? undefined : "bad scheme";
   if (url.protocol !== "https:") return "endpoint must be https";
   if (isPrivateHost(url.hostname)) return "endpoint is a private address";
@@ -70,18 +74,25 @@ export function isPrivateHost(hostname: string): boolean {
 
 /**
  * Judges an IPv6 address by the IPv4 address it embeds, where a translator could route it to
- * one: IPv4-compatible (`::a.b.c.d`, and so `::` and `::1`), IPv4-mapped, NAT64 and 6to4.
+ * one: IPv4-compatible (`::a.b.c.d`, and so `::` and `::1`), IPv4-mapped, IPv4-translated
+ * (`::ffff:0:a.b.c.d`, RFC 2765), NAT64 and 6to4.
  */
 function privateV6(ip: string): boolean {
   const [a = 0, b = 0, c = 0, d = 0, e = 0, f = 0, g = 0, h = 0] = v6Words(ip);
   const v4 = (hi: number, lo: number) => `${hi >> 8}.${hi & 255}.${lo >> 8}.${lo & 255}`;
   const zeroToE = a === 0 && b === 0 && c === 0 && d === 0 && e === 0;
   if (zeroToE && (f === 0 || f === 0xffff)) return privateV4(v4(g, h));
+  if (a === 0 && b === 0 && c === 0 && d === 0 && e === 0xffff && f === 0)
+    return privateV4(v4(g, h));
   if (a === 0x64 && b === 0xff9b && c === 0 && d === 0 && e === 0 && f === 0)
     return privateV4(v4(g, h));
   // Local-use NAT64 (64:ff9b:1::/48) places the IPv4 address by prefix length, so refuse it whole.
   if (a === 0x64 && b === 0xff9b && c === 1) return true;
   if (a === 0x2002) return privateV4(v4(b, c));
+  // Teredo (2001:0::/32) and ISATAP (interface ID 0:5efe or 200:5efe and an IPv4 address) are
+  // deprecated, so no push service uses them: refused whole.
+  if (a === 0x2001 && b === 0) return true;
+  if (f === 0x5efe && (e === 0 || e === 0x200)) return true;
   return (a & 0xfe00) === 0xfc00 || (a & 0xffc0) === 0xfe80;
 }
 
@@ -175,6 +186,9 @@ export class Push {
   private readonly pending = new Set<Promise<unknown>>();
   private readonly queues = new Map<string, { running: number; waiting: (() => void)[] }>();
   private fcmToken?: { value: string; expires: number };
+  /** The relay's VAPID key, fetched at most once an hour, and the fetch under way. */
+  private relayVapid?: { key: string; expires: number };
+  private relayVapidFetch?: Promise<string | undefined>;
   private readonly apns?: Apns;
 
   /** Called with each push's outcome, for the daily usage counts. */
@@ -360,15 +374,25 @@ export class Push {
     }
   }
 
-  /** The VAPID public key browsers must subscribe with: ours, or the relay's. */
+  /**
+   * The VAPID public key browsers must subscribe with: ours, or the relay's. The relay's is kept
+   * an hour, so page loads don't each make a request to the relay.
+   */
   async vapidPublicKey(): Promise<string | undefined> {
     if (this.config.vapid) return this.config.vapid.publicKey;
-    if (!this.config.relayUrl) return undefined;
-    const res = await this.fetchFn(`${this.config.relayUrl}/v1/push/vapid`, {
-      signal: this.timeout(),
+    const { relayUrl } = this.config;
+    if (!relayUrl) return undefined;
+    if (this.relayVapid && this.relayVapid.expires > Date.now()) return this.relayVapid.key;
+    this.relayVapidFetch ??= (async () => {
+      const res = await this.fetchFn(`${relayUrl}/v1/push/vapid`, { signal: this.timeout() });
+      if (!res.ok) return undefined;
+      const key = ((await res.json()) as { publicKey?: string }).publicKey;
+      if (key) this.relayVapid = { key, expires: Date.now() + 3_600_000 };
+      return key;
+    })().finally(() => {
+      this.relayVapidFetch = undefined;
     });
-    if (!res.ok) return undefined;
-    return ((await res.json()) as { publicKey?: string }).publicKey;
+    return this.relayVapidFetch;
   }
 
   private async viaRelay(
@@ -424,7 +448,7 @@ export class Push {
       body: req.body ? new Uint8Array(req.body) : null,
     };
     let status: number;
-    if (this.config.allowPrivatePushEndpoints) {
+    if (allowedPrivate(new URL(req.endpoint), this.config.privatePushHosts)) {
       const res = await this.fetchFn(req.endpoint, {
         ...out,
         redirect: "manual",

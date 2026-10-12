@@ -110,7 +110,9 @@
   Each update's `at` carries milliseconds (#867): devices keep the update with the latest `at`,
   and with whole seconds the start and the first progress tied, so a phone that got the start's
   push first kept it and showed no step until the next progress, 10 s later.
-  Output goes through a pipe, so tools that print progress only to a terminal show none.
+  Output goes through a pipe, so tools that print progress only to a terminal show none. The
+  skill says so: an agent echoes `[n/m]` before each step of a multi-step command and prefers a
+  tool's plain progress flag, since nothing else reports steps a command does not print (#1267).
 - Devices call a run lost 3 minutes after its last update (#190, #249); the server cannot read a
   sealed run, so this is client-side. A lost run shows "Lost, no news for 3 min 37 s" and no
   elapsed time, since its last news may predate most of its life. A run with no progress shows an

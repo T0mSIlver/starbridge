@@ -240,11 +240,27 @@ demo.starbridge.run {
 	encode zstd gzip
 	@server path /v1/* /healthz
 	handle @server {
-		# As for prod's server above.
-		reverse_proxy 127.0.0.1:8090 {
-			transport http {
-				keepalive 25s
-				keepalive_idle_conns_per_host 4096
+		route {
+			# As prod's v1_address above: one address cannot hold the demo's container.
+			rate_limit {
+				disable_metrics
+				zone demo_address {
+					match {
+						path /v1/*
+					}
+					key {client_ip}
+					ipv6_prefix 64
+					events 3000
+					window 1m
+				}
+			}
+			# As for prod's server above, which says why X-Forwarded-For holds the client alone.
+			reverse_proxy 127.0.0.1:8090 {
+				header_up X-Forwarded-For {client_ip}
+				transport http {
+					keepalive 25s
+					keepalive_idle_conns_per_host 4096
+				}
 			}
 		}
 	}
