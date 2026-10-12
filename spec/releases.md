@@ -56,11 +56,13 @@
 - **The iPhone app on TestFlight** (#1397). Once the release is out, the `testflight` job archives
   the app on GitHub's macOS runner with the newest Xcode and uploads it to TestFlight, rcs and
   finals alike: App Store review needs a sign-in besides GitHub's (guideline 4.8), so testers are
-  the only users yet. Signing is automatic, driven by an App Store Connect API key, the
+  the only users yet. The export signs automatically, driven by an App Store Connect API key, the
   `ASC_API_KEY_P8` secret of the `ios-release` environment, open to main and `v*` tags (variables
-  `ASC_KEY_ID` and `ASC_ISSUER_ID`): Xcode registers the App IDs, App Groups and profiles the
-  entitlements ask for, and Apple's cloud-managed certificate signs the export, so no certificate
-  or profile is stored to rotate. The key needs the Admin role: no other API key may use
+  `ASC_KEY_ID` and `ASC_ISSUER_ID`): Xcode makes the profiles the entitlements ask for, and
+  Apple's cloud-managed certificate signs, so no certificate or profile is stored to rotate.
+  xcodebuild takes the key only to export, so the archive builds unsigned and
+  `ios/scripts/adhoc-sign.sh` signs it ad hoc with each target's entitlements, which the export
+  keeps (#1415); that also needs no registered device, as a development profile would. The key needs the Admin role: no other API key may use
   cloud-managed certificates (#1409). Before archiving, `ios/scripts/asc-check.rb` signs in with it
   and says why App Store Connect refuses it, with the public key's SHA-256 to compare with the
   .p8 kept offline, since xcodebuild reports a refused key only as missing profiles. The marketing version is the tag's without `-rc.N`, since Apple

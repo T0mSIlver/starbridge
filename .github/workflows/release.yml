@@ -397,10 +397,11 @@ jobs:
           fi
 
   # The iPhone app to TestFlight, rcs and finals alike, once the release is out (#1397): App Store review
-  # waits on another sign-in than GitHub's (guideline 4.8), so testers are the only users yet. Signing is
-  # automatic, driven by the App Store Connect API key of the ios-release environment, open to main and v*
-  # tags: Xcode registers the App IDs, App Groups and profiles the entitlements need, and Apple's cloud
-  # certificate signs the export, so no certificate is kept here. The marketing version is the tag's
+  # waits on another sign-in than GitHub's (guideline 4.8), so testers are the only users yet. The archive
+  # builds unsigned and is signed ad hoc with its entitlements; the export signs it for the App Store
+  # automatically, driven by the App Store Connect API key of the ios-release environment, open to main
+  # and v* tags, the only xcodebuild step that takes one: Xcode makes the profiles, and Apple's cloud
+  # certificate signs, so no certificate is kept here. The marketing version is the tag's
   # without -rc.N; the build number is the run's, unique per upload. Run by hand on main, it archives and
   # exports without uploading, unless testflight_only asks. Without the ASC_KEY_ID and ASC_ISSUER_ID
   # variables the job skips.
@@ -455,17 +456,16 @@ jobs:
       - if: steps.setup.outputs.set
         name: Archive
         env:
-          ASC_KEY_ID: ${{ vars.ASC_KEY_ID }}
-          ASC_ISSUER_ID: ${{ vars.ASC_ISSUER_ID }}
           VERSION: ${{ needs.version.outputs.version }}
           BUILD: ${{ github.run_number }}.${{ github.run_attempt }}
+        # xcodebuild takes the API key only to export (#1415): the archive builds unsigned, then is
+        # signed ad hoc with its entitlements, which the export keeps when it signs for the App Store.
         run: |
           xcodebuild -quiet -project Starbridge.xcodeproj -scheme Starbridge -configuration Release \
             -destination generic/platform=iOS -archivePath "$RUNNER_TEMP/Starbridge.xcarchive" \
-            -allowProvisioningUpdates -authenticationKeyPath "$RUNNER_TEMP/asc/AuthKey_$ASC_KEY_ID.p8" \
-            -authenticationKeyID "$ASC_KEY_ID" -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
-            CODE_SIGN_STYLE=Automatic MARKETING_VERSION="${VERSION%%-*}" CURRENT_PROJECT_VERSION="$BUILD" \
+            CODE_SIGNING_ALLOWED=NO MARKETING_VERSION="${VERSION%%-*}" CURRENT_PROJECT_VERSION="$BUILD" \
             archive
+          scripts/adhoc-sign.sh "$RUNNER_TEMP/Starbridge.xcarchive"
       # The export re-signs for the App Store, which also turns the push entitlement to production.
       - if: steps.setup.outputs.set
         name: ${{ (startsWith(github.ref, 'refs/tags/v') || inputs.testflight_only) && 'Upload to TestFlight' || 'Export' }}
