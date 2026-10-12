@@ -605,3 +605,14 @@ test("posting and answering an item never scans the account's items or boxes", a
   });
   expect(scans).toEqual([]);
 });
+
+test("forgetting a deleted account keeps another account's windows whose member id contains its id (#1231)", () => {
+  const limiter = new RateLimiter(() => 0);
+  for (const k of ["items:acct-1", "items:acct-1:m1", "items:acct-2:acct-1x", "bytes:acct-12"])
+    limiter.allow(k, 1, 60_000);
+  limiter.forget("acct-1");
+  expect(limiter.allow("items:acct-1", 1, 60_000)).toBe(true);
+  expect(limiter.allow("items:acct-1:m1", 1, 60_000)).toBe(true);
+  expect(limiter.allow("items:acct-2:acct-1x", 1, 60_000)).toBe(false);
+  expect(limiter.allow("bytes:acct-12", 1, 60_000)).toBe(false);
+});

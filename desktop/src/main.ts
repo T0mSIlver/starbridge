@@ -134,7 +134,7 @@ async function ready(): Promise<void> {
     if (!state) return;
     needs = state.count;
     paintTray();
-    notifier.update(state.entries);
+    notifier.page(state);
     widgets.show(snapshot(state));
   });
   ipcMain.on("answered", (e, x) => {

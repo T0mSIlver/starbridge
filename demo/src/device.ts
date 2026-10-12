@@ -128,10 +128,12 @@ export class DemoDevice {
     this.keys = generateMemberKeys();
     await this.checkDemo();
     await this.signIn();
-    const me = await this.call<{ account: string; member: string | null }>("GET", "/me");
-    if (me.member !== null)
+    // An owner-token session is never bound to a member, so /me can't tell whether the account
+    // has keys: its directory can (#1218).
+    const { entries } = await this.call<{ entries: unknown[] }>("GET", "/directory");
+    if (entries.length > 0)
       throw new Error("the account already has keys: start on an empty database");
-    this.account = me.account;
+    this.account = (await this.call<{ account: string }>("GET", "/me")).account;
     const seed = generateRecoverySeed();
     const entry = genesisEntry({
       account: this.account,

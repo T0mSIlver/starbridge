@@ -215,6 +215,16 @@ class AnswerQueueTest {
         assertEquals(1, posted.size)
     }
 
+    @Test
+    fun aLongReplyFromANotificationIsCutAsTheFieldCutsIt() {
+        setUp()
+        val store = store()
+        val long = "😀".repeat(4001)
+        val sent = runBlocking { store.sendFromNotification("d_ship", null, long) }
+        assertEquals(Sent.Answered("😀".repeat(4000)), sent)
+        assertEquals(1, posted.size)
+    }
+
     private val question = "Ship the dark mode toggle today?"
 
     /** The inbox as the app shows it, over [store]'s decisions. */
