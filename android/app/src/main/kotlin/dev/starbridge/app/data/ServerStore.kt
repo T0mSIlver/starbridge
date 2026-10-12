@@ -435,6 +435,12 @@ class ServerStore(
         return SignIn.url(saved.server, verifier)
     }
 
+    override fun appleSignInUrl(): String {
+        val verifier = SignIn.newVerifier()
+        persist(saved.copy(server = defaultServer), secrets.copy(signInVerifier = verifier))
+        return SignIn.url(saved.server, verifier, "apple")
+    }
+
     /**
      * Only for the sign-in this phone started: without its verifier the code is worthless, and a
      * redirect with no sign-in pending is ignored. The code works once, whatever the outcome.

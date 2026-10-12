@@ -47,7 +47,7 @@ Android's and iOS's tests read, so a change to one fails the others until they f
 | Keyboard shortcuts (J K 1-4 A D /) | yes (J, K and / at any width, #1432; 1-4, A, D from 1100 px) | no (only Enter to send, Esc in Find) | yes (as web) | not yet |
 | Sound | yes (off by default, only while a page is open) | yes (system notification channel sound) | yes (macOS default sound; Basso on "Answer not sent"; web Sound row hidden) | not yet |
 | Recover with the recovery key (revokes every other member) | yes | yes | yes (as web) | yes (#1116) |
-| Sign in with Apple (no name or email asked) | yes (#1411: under Other ways to sign in) | not yet (#1411) | yes (as web, in the browser) | yes (#1411: under GitHub's, the same size) |
+| Sign in with Apple (no name or email asked) | yes (#1411: under Other ways to sign in) | yes (#1411: under Other ways to sign in) | yes (as web, in the browser) | yes (#1411: under GitHub's, the same size) |
 | Delete account (Settings and the join screen, its recovery-key view included, typed confirmation) | yes (#1104, #1117) | yes (#1104, #1117, #1166) | yes (as web) | yes (#1141, #1195, #1233: Settings and the join screen, its recovery-key view included) |
 
 Only on desktop: the menu bar light, the Dock or menu bar choice, Open at Login, ⌃⌥S, notifications while no browser runs, and the app's updates (the rail's button and Settings → Updates, #1398).
