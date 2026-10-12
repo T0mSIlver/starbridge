@@ -217,31 +217,30 @@ authRoutes.get("/auth/github/callback/app", (c) => {
 });
 
 /**
- * The app trades the code and the verifier behind its challenge for a session: an Apple code the
- * server holds for that challenge, else GitHub's, which GitHub binds to it.
+ * The app trades the code and the verifier behind its challenge for a session. GitHub binds its
+ * code to the challenge; Apple signs the challenge into the identity token as its nonce, so an
+ * Apple code, which has dots where GitHub's has none, must come back with the verifier's.
  */
 authRoutes.post("/auth/app/session", async (c) => {
+  rateLimit(c, `github:${ipKey(c)}`, c.var.config.limits.githubCallbacks);
   const { code, verifier } = await json(
     c,
     z.object({ code: z.string().min(1).max(APPLE_CODE_MAX), verifier: z.string().regex(VERIFIER) }),
   );
-  const held = c.var.apple?.take(code);
   let account: string;
-  if (held !== undefined) {
+  if (code.includes(".")) {
     rateLimit(c, `apple:${ipKey(c)}`, c.var.config.limits.appleSignIns);
-    if (!safeEqual(held, s256(verifier)))
-      fail(400, "bad-code", "sign-in code unknown, used, expired or not yours; sign in again");
     account = await appleAccount(
       c,
       "servicesId",
       code,
       callbackUrl(c.var.config.publicUrl, true, "apple"),
+      {
+        nonce: s256(verifier),
+      },
     );
   } else {
-    rateLimit(c, `github:${ipKey(c)}`, c.var.config.limits.githubCallbacks);
-    // GitHub's codes are short words; anything else is an Apple code no longer held.
-    if (!/^[A-Za-z0-9_-]{1,100}$/.test(code))
-      fail(400, "bad-code", "sign-in code unknown, used, expired or not yours; sign in again");
+    if (code.length > 100) fail(400, "bad-code", "sign-in code unknown; sign in again");
     account = await gitHubAccount(c, code, verifier);
   }
   c.var.appSignIns.add(s256(verifier), account);
@@ -269,26 +268,32 @@ const APPLE_STATE_COOKIE = "sb_apple";
 
 /**
  * Trades an Apple code issued to the App ID or the Services ID, and returns its account, made on
- * first sign-in, keeping the refresh token that deleting the account revokes. With the app's
- * identity token, the code must be the same user's. A code or token Apple refuses is a 400
- * `bad-code`.
+ * first sign-in, keeping the refresh token that deleting the account revokes. With the iPhone
+ * app's identity token, the code must be the same user's; with an app's nonce alone, Apple must
+ * have signed that nonce into the code's token. A code or token Apple refuses is a 400 `bad-code`.
  */
 async function appleAccount(
   c: Context<Env>,
   client: "appId" | "servicesId",
   code: string,
   redirectUri?: string,
-  token?: { identityToken: string; nonce: string },
+  /** The app's identity token and nonce, or the nonce Apple must have signed into the code's token. */
+  proof?: { identityToken: string; nonce: string } | { nonce: string },
 ): Promise<string> {
   const apple = c.var.apple;
   const clientId = c.var.config.apple?.[client];
   if (!apple || !clientId) fail(404, "not-configured", "Apple sign-in is off on this server");
   let traded: Awaited<ReturnType<typeof apple.exchange>>;
   try {
-    const shown = token && (await apple.verify(token.identityToken, [clientId], token.nonce));
+    const shown =
+      proof && "identityToken" in proof
+        ? await apple.verify(proof.identityToken, [clientId], proof.nonce)
+        : undefined;
     traded = await apple.exchange(clientId, code, redirectUri);
     if (shown && traded.identity.sub !== shown.sub)
       throw new AppleRefused("code is another user's");
+    if (proof && !shown && !safeEqual(traded.identity.nonce ?? "", proof.nonce))
+      throw new AppleRefused("code is not this verifier's");
   } catch (e) {
     if (e instanceof AppleRefused) fail(400, "bad-code", `Apple sign-in refused: ${e.message}`);
     console.error(`Apple sign-in: ${e}`);
@@ -358,6 +363,9 @@ authRoutes.get("/auth/apple", (c) => {
   url.searchParams.set("response_type", "code");
   url.searchParams.set("response_mode", "query");
   url.searchParams.set("state", state);
+  // Apple signs the nonce into the identity token: the app's challenge binds the code to it,
+  // as GitHub's code_challenge does.
+  if (app) url.searchParams.set("nonce", challenge);
   return c.redirect(url.toString());
 });
 
@@ -390,18 +398,17 @@ authRoutes.get("/auth/apple/callback", async (c) => {
 });
 
 /**
- * An app's Apple sign-in comes back. No app claims this path, so the server holds the code for
- * the app's challenge and hands it on to `APP_REDIRECT_URI`, as GitHub's: the app trades it at
- * `POST /auth/app/session` with its verifier.
+ * An app's Apple sign-in comes back. No app claims this path, so the code goes on to
+ * `APP_REDIRECT_URI`, as GitHub's: it is worthless without the verifier whose challenge Apple
+ * signed in as the nonce.
  */
 authRoutes.get("/auth/apple/callback/app", (c) => {
   const { appRedirectUri } = c.var.config;
   const { code = "", error = "", state = "" } = c.req.query();
   if (!CHALLENGE.test(state) || !(APPLE_CODE.test(code) || /^[A-Za-z0-9_-]{1,100}$/.test(error)))
     fail(400, "bad-state", "sign-in came from elsewhere; start again in the app");
-  if (!APPLE_CODE.test(code)) return c.redirect(`${appRedirectUri}?error=${error}&state=${state}`);
-  c.var.apple?.hold(code, state);
-  return c.redirect(`${appRedirectUri}?code=${encodeURIComponent(code)}&state=${state}`);
+  const sent = APPLE_CODE.test(code) ? `code=${code}` : `error=${error}`;
+  return c.redirect(`${appRedirectUri}?${sent}&state=${state}`);
 });
 
 /** Self-hosted sign-in with OWNER_TOKEN; the session also comes back for the Android app. */
