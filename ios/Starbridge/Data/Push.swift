@@ -40,7 +40,13 @@ extension Store {
         if directory == nil { try await syncDirectory() }
         let listed = try await api().item(id)
         if directory?.members[listed.item.from] == nil { try await syncDirectory() }
-        guard let o = open(listed.item, entries: saved.entries.compactMap { try? JSON.parse($0) }) else { return }
+        var opened = open(listed.item, entries: saved.entries.compactMap { try? JSON.parse($0) })
+        // Sealed at a head past the chain this iPhone holds, the saved one at launch say: read it and try once more.
+        if opened == nil {
+            try await syncDirectory()
+            opened = open(listed.item, entries: saved.entries.compactMap { try? JSON.parse($0) })
+        }
+        guard let o = opened else { return }
         var s = saved
         switch listed.item.kind {
         case .decision:
