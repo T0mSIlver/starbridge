@@ -215,8 +215,14 @@
   font-weight: 600;
 }
 
-.machines {
+/* The rail's foot: the machines paired, and the desktop app's update (#1398). */
+.foot {
   grid-row: 5;
+  display: grid;
+  gap: var(--s2);
+}
+
+.machines {
   padding: 0 var(--s2h);
   color: var(--fg3);
 }

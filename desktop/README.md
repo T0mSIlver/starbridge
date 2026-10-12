@@ -15,9 +15,11 @@ pnpm --filter @starbridge/desktop start
 
 `STARBRIDGE_SERVER=http://localhost:3000` points a run at a local server; otherwise the app uses
 the server set from its menu bar icon (right-click, "Server: …"), starbridge.run by default.
+`STARBRIDGE_RELEASES` points the updater, which otherwise runs only in a packaged app, at another
+repository's GitHub page or a stand-in for it.
 
 Tests: `pnpm test` (unit) and `pnpm e2e`, which launches the app on a stand-in page and checks the
-bridge, the menu bar icon and the notifications (`xvfb-run -a` on Linux). The `desktop` workflow
+bridge, the menu bar icon, the notifications and an update from a stand-in release feed (`xvfb-run -a` on Linux). The `desktop` workflow
 runs both on GitHub's macOS runner and keeps the DMGs. `test/stack.ts` runs the app on the whole
 product (server, built web page, CLI, a stand-in GitHub): it signs in through the browser and
 pairs in the app's window, times the switch between tabs, and answers `starbridge ask --wait`
@@ -50,6 +52,12 @@ The page finds `window.starbridgeDesktop` only on the configured server's origin
   `openNotificationSettings()` opens System Settings → Notifications → Starbridge and forgets
   the refusal until the next notification (#1069).
   The page's `document.visibilityState` stays "visible" in the app, which never throttles it.
+- `updateStatus()`: where the update stands, `{state}` with `"idle"`, `"checking"`,
+  `"available"`, `"downloading"`, `"ready"` or `"error"`, and its `version`, `percent` or
+  `message` (`src/updates.ts`); null while the app runs no updater. `updateSettings()` and
+  `setUpdateSettings(s)`: `{releaseCandidates, autoDownload}`, either field. `updateAction(a)`:
+  `"check"`, `"download"`, or `"install"`, which restarts the app. `onUpdate(f)`: `f()` runs when
+  the status or the settings change (#1398).
 
 The main process checks that each message comes from the window's top frame on that origin, and
 checks every field again.
