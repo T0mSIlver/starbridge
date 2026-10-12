@@ -90,9 +90,10 @@
   the inbox shows "Add a machine" with the install command in place of "Nothing needs you", and
   under it the way to pair the machine that setup then shows: Scan a QR code on Android, then
   Other ways to add a device, and Add a device on the web, which has no scanner. Each opens the
-  same Add a device as Devices, with the same words. Android's text says to scan the terminal's QR
-  code with that button, since the camera app can't read it (#795): a tester pointed his camera
-  at it, saw nothing happen, then had to find the scanner under Settings, then Devices.
+  same Add a device as Devices, with the same words. Android's text says to scan the QR code from
+  the terminal: a tester pointed his camera at it, which reads no app's code (#795), then had to
+  find the scanner under Settings, then Devices. The text gives only the instruction (owner's
+  rule): the screen needs no why.
 - **Setup** (`cli/src/setup/`; #68, #239, #245) installs the CodexBar release this Starbridge
   release pins, taking the static musl build where the glibc one would not start, and
   `starbridge update` moves that install to the new binary's pin (#568). Each release PR pins
