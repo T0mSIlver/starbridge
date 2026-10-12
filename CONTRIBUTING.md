@@ -24,7 +24,8 @@ For Android, in `android/`:
 Each package's README says how to run it: [server](server/README.md#run-from-source),
 [web](web/README.md), [CLI](cli/README.md), [mod](mod/README.md#develop),
 [desktop](desktop/README.md#develop), [Android](android/README.md#build) and
-[iPhone](ios/README.md#build-and-test).
+[iPhone](ios/README.md#build-and-test); agents on the dev box build it on the Mac mini with
+`ios/scripts/mini.sh` ([how](ios/README.md#build-on-the-mac-mini)).
 [PROTOCOL.md](PROTOCOL.md) holds the wire format, [DESIGN.md](DESIGN.md) the look, [SPEC.md](SPEC.md) indexes the decisions, one file per area under `spec/`, and
 [cli/CONTRACT.md](cli/CONTRACT.md) the CLI commands and output that plugins and agents rely on.
 
