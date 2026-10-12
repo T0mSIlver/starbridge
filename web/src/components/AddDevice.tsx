@@ -38,6 +38,7 @@ export function AddDevice() {
   const cancelShown = useRef<() => void>(undefined);
   /** The code of the last pairing link this tab opened. */
   const latest = useRef<string>(undefined);
+  const field = useRef<HTMLInputElement>(null);
   const now = useNow(!!shown);
   useEffect(() => () => cancelShown.current?.(), []);
 
@@ -94,7 +95,11 @@ export function AddDevice() {
       });
       return true;
     };
-    if (!arrive()) showQr();
+    // From the empty inbox (#1378): a machine's code goes in the field, so no QR code first.
+    if (!arrive()) {
+      if (new URLSearchParams(window.location.search).has("machine")) field.current?.focus();
+      else showQr();
+    }
     window.addEventListener("hashchange", arrive);
     return () => window.removeEventListener("hashchange", arrive);
   }, []);
@@ -253,6 +258,7 @@ export function AddDevice() {
           <div className={p.codeRow}>
             <input
               id="pairing-code"
+              ref={field}
               className={`t-snippet ${p.input}`}
               autoComplete="off"
               spellCheck={false}

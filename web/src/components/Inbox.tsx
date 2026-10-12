@@ -951,10 +951,10 @@ function NoMachine() {
         Install Starbridge on each machine that runs your agents, then enter the pairing code from
         your terminal.
       </p>
-      <InstallBox />
+      <InstallBox setup />
       {/* Where the pairing code goes, one tap away (#1367). */}
       <div>
-        <Link href="/settings/devices/add" className={`t-meta ${ui.btn} ${ui.sm}`}>
+        <Link href="/settings/devices/add?machine" className={`t-meta ${ui.btn} ${ui.sm}`}>
           Add a device
         </Link>
       </div>

@@ -305,6 +305,7 @@ fun Main(decisions: List<Decision>, notice: StateFlow<String?>, dismiss: () -> U
                         val view by vm.view.collectAsStateWithLifecycle()
                         val recovery by vm.recovery.collectAsStateWithLifecycle()
                         val members by vm.members.collectAsStateWithLifecycle()
+                        val server by vm.server.collectAsStateWithLifecycle()
                         InboxScreen(
                             decisions,
                             // A running run's timer, a lost run's "no news for" and the clock of
@@ -330,6 +331,7 @@ fun Main(decisions: List<Decision>, notice: StateFlow<String?>, dismiss: () -> U
                             notificationsOff = notificationsOff,
                             // Members load with the directory, which always holds this phone.
                             noMachine = members.isNotEmpty() && members.none { it.kind == Kind.Machine },
+                            server = server,
                             onScan = { devices.actions.lookUp(it); backStack.add(AddDeviceKey) },
                             onAddDevice = { backStack.add(AddDeviceKey) },
                             snackbar = host,
