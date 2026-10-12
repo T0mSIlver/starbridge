@@ -340,8 +340,8 @@ jobs:
       # stats password it imports is written as on a host without one.
       - if: ${{ !cancelled() }}
         run: |
-          sudo sh deploy/host/caddy-auth.sh
-          docker run --rm -v "$PWD/deploy/Caddyfile:/etc/caddy/Caddyfile:ro" -v /etc/starbridge/caddy:/etc/caddy/secrets:ro \
+          sh deploy/host/caddy-auth.sh "$RUNNER_TEMP/caddy"
+          docker run --rm -v "$PWD/deploy/Caddyfile:/etc/caddy/Caddyfile:ro" -v "$RUNNER_TEMP/caddy:/etc/caddy/secrets:ro" \
             "$(cat "$RUNNER_TEMP/caddy.iid")" caddy validate --adapter caddyfile --config /etc/caddy/Caddyfile
 
   # The CLI on Windows (#552): a built binary and the whole suite must pass (#884). Bun on Windows
