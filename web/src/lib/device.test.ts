@@ -42,6 +42,13 @@ let forge: ((path: string) => Response | undefined) | undefined;
  * keys were still stored when it last listed them.
  */
 const shown = { open: 0, closed: 0, keys: false };
+/** A machine in the directory, with its keys, for tests after the one that pairs it. */
+let asker:
+  | {
+      keys: ReturnType<typeof generateMemberKeys>;
+      member: { id: string; role: "machine"; name: string; boxPk: string; signPk: string };
+    }
+  | undefined;
 
 beforeAll(async () => {
   live = await LiveServer.start();
@@ -267,6 +274,7 @@ test("a machine's settled notice closes only that machine's decisions (#362)", a
   }
   const fresh = (await device.deviceContext(ctx.account)) as device.Ctx;
   const [asks, closes] = machines as [(typeof machines)[0], (typeof machines)[0]];
+  asker = asks;
   const to = [fresh.device.id];
   const { id, name, boxPk, signPk } = fresh.device;
   const recipient = [{ id, role: "device" as const, name, boxPk, signPk }];
@@ -370,6 +378,87 @@ test("a machine's settled notice closes only that machine's decisions (#362)", a
     expect(closedByPhrase(won as InboxItem)).toBe(`on ${phone}`);
   } finally {
     globalThis.fetch = served;
+  }
+});
+
+test("a kept inbox reads only what came after it, and follows what the server dropped (#1380)", async () => {
+  const at = "2026-10-06T12:00:00Z";
+  // The machine the settled-notice test paired: the account holds 5 at most.
+  const { keys, member: machine } = asker as NonNullable<typeof asker>;
+  const fresh = (await device.deviceContext(ctx.account)) as device.Ctx;
+  const { id, name, boxPk, signPk } = fresh.device;
+  const recipient = [{ id, role: "device" as const, name, boxPk, signPk }];
+  const asked = (decisionId: string, cursor: string, answeredAt?: string) => ({
+    item: seal(
+      "decision",
+      {
+        v: 1,
+        id: decisionId,
+        to: [id],
+        createdAt: at,
+        question: `${decisionId}?`,
+        context: "",
+        options: ["Yes", "No"],
+        recommended: "Yes",
+        source: { machine: "asks", project: "p", session: "s" },
+      },
+      { id: machine.id, signKey: keys.sign.privateKey },
+      recipient,
+    ),
+    cursor,
+    receivedAt: at,
+    ...(answeredAt ? { answeredAt } : {}),
+  });
+  // The server's list, in cursor order, and what the page asked of it.
+  let listed = [asked("d_open", "1"), asked("d_done", "2", at)];
+  const asks: string[] = [];
+  let askedLate: ReturnType<typeof asked> | undefined;
+  const served = globalThis.fetch;
+  globalThis.fetch = (async (input: string, init?: RequestInit) => {
+    if (!input.startsWith("/v1/items?kind=decision")) return served(input, init);
+    const q = new URL(input, "http://x").searchParams;
+    asks.push(`${q.get("kind")} ${q.get("after") ?? ""}${q.get("open") ? " open" : ""}`);
+    const after = Number(q.get("after") ?? 0);
+    const items = listed.filter(
+      (s) => Number(s.cursor) > after && (!q.get("open") || !s.answeredAt),
+    );
+    // A question asked right after the page listed the open ones.
+    if (q.get("open") && askedLate) listed.push(askedLate);
+    return Response.json({ items, cursor: items.at(-1)?.cursor ?? String(after) });
+  }) as typeof fetch;
+  const ids = (inbox: device.Inbox) => inbox.items.map((i) => i.decision.id).sort();
+  const keep = { keep: true };
+  try {
+    expect(ids(await device.loadInbox(fresh, undefined, keep))).toEqual(["d_done", "d_open"]);
+    expect(asks).toEqual(["decision,settled,waiting,snooze "]);
+    // A page load: the open list, then only what came after the kept cursor.
+    asks.length = 0;
+    expect(ids(await device.loadInbox(fresh, undefined, keep))).toEqual(["d_done", "d_open"]);
+    expect(asks).toEqual(["decision  open", "decision,settled,waiting,snooze 2"]);
+    // The server dropped the open question unanswered: it goes, kept no more. One asked after
+    // the open list stays.
+    listed = listed.filter((s) => s.item.id !== "d_open");
+    askedLate = asked("d_late", "3");
+    expect(ids(await device.loadInbox(fresh, undefined, keep))).toEqual(["d_done", "d_late"]);
+    askedLate = undefined;
+    expect((await store.get("kept", ctx.account))?.items.map((s) => s.item.id)).toEqual([
+      "d_done",
+      "d_late",
+    ]);
+    expect(ids(await device.loadInbox(fresh, undefined, keep))).toEqual(["d_done", "d_late"]);
+    // Another server, or the same one reset: an open question it lists before the kept cursor
+    // means the kept items are not its own, so it reads all again.
+    listed = [asked("d_new", "1")];
+    asks.length = 0;
+    expect(ids(await device.loadInbox(fresh, undefined, keep))).toEqual(["d_new"]);
+    expect(asks).toEqual([
+      "decision  open",
+      "decision,settled,waiting,snooze 3",
+      "decision,settled,waiting,snooze ",
+    ]);
+  } finally {
+    globalThis.fetch = served;
+    await store.del("kept", ctx.account);
   }
 });
 

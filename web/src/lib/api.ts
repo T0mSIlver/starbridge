@@ -158,7 +158,16 @@ function pause(ms: number, signal?: AbortSignal): Promise<void> {
 async function call<T>(
   method: string,
   path: string,
-  opts: { body?: unknown; headers?: Record<string, string>; signal?: AbortSignal } = {},
+  opts: {
+    body?: unknown;
+    headers?: Record<string, string>;
+    signal?: AbortSignal;
+    /**
+     * A 429 answers this call alone instead of holding every call: its limit is its own, and its
+     * caller tries again later anyway (#1361).
+     */
+    ownLimit?: boolean;
+  } = {},
 ): Promise<T> {
   const started = Date.now();
   let res: Response;
@@ -197,13 +206,14 @@ async function call<T>(
       if (method !== "GET") throw new Unreachable(offline());
       continue;
     }
-    const after = res.status === 429 ? retryAfter(res) : null;
+    const after = res.status === 429 && !opts.ownLimit ? retryAfter(res) : null;
     if (res.status !== 502 && res.status !== 503 && after === null) break;
     await res.body?.cancel();
     if (after === null) unanswered();
     else limited(after);
   }
-  answered();
+  // A 429 of its own says nothing of a hold another call's 429 set meanwhile.
+  if (!(opts.ownLimit && res.status === 429)) answered();
   const text = await res.text();
   let json: unknown;
   try {
@@ -314,7 +324,8 @@ export const api = {
   askQuota: (wait: number) =>
     call<{ askedAt: string; behind: number }>("POST", `/quota/ask?wait=${wait}`),
   /** Whether the owner sits at this page (#848): one bit. */
-  presence: (present: boolean) => call<void>("PUT", "/presence", { body: { present } }),
+  presence: (present: boolean) =>
+    call<void>("PUT", "/presence", { body: { present }, ownLimit: true }),
   settings: () => call<AccountSettings>("GET", "/settings"),
   saveSettings: (settings: AccountSettings) =>
     call<AccountSettings>("PUT", "/settings", { body: settings }),

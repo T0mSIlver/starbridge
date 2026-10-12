@@ -371,6 +371,7 @@ class ScreenshotTest(private val dark: Boolean) {
     @Test fun addDevice() = capture("add-device") { Phone(null, 0) { AddDeviceScreen(Approval.Idle, deviceActions) } }
 
     @Test fun addDeviceJoined() = capture("add-device-joined") { Phone(null, 0) { AddDeviceScreen(Approval.Done("Chrome on Mac"), deviceActions) } }
+    @Test fun addDeviceMachineJoined() = capture("add-device-machine-joined") { Phone(null, 0) { AddDeviceScreen(Approval.Done("CI runner on the Mac", check = "4KX7-91QM-ZD3P-8WHT"), deviceActions) } }
 
     @Test fun setupRecover() = capture("setup-recover", before = {
         compose.onNodeWithText("Use the recovery key").performClick()

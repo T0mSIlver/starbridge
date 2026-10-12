@@ -256,7 +256,11 @@ sealed interface Approval {
     data class Approving(val found: Found) : Approval
     /** This phone shows a QR code (a pairing link) and waits for a new phone to scan it. */
     data class Showing(val code: String, val link: String) : Approval
-    data class Done(val name: String) : Approval
+    /**
+     * [check]: a machine's check code, when it paired by a typed code or link and its terminal
+     * asks the owner to compare it (#1377); a scanned QR code needs none.
+     */
+    data class Done(val name: String, val check: String? = null) : Approval
     data class Failed(val message: String) : Approval
 }
 
