@@ -165,8 +165,11 @@ struct SavedPrompt: Codable, Equatable {
         return visible(shown.isEmpty ? body.summary : shown)
     }
 
+    /** The longest input a card's line holds, in UTF-16 units as the web and Android count it. */
+    static let rowInputMax = 200
+
     /** Whether the whole input fits a card's line, so the card may carry Allow (#356). */
-    var fitsRow: Bool { let s = fullInput; return s.count <= 200 && !s.contains("\n") }
+    var fitsRow: Bool { let s = fullInput; return s.utf16.count <= Self.rowInputMax && !s.contains("\n") }
 
     /** Still answerable here: unanswered, and inside its answer window. */
     var isOpen: Bool {

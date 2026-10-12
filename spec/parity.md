@@ -3,7 +3,10 @@
 Which client has each feature a user sees. A cell is `yes`, `no` with why, `n/a`, or `not yet`;
 an issue number points at the work. What a feature does is in its area's file; this table says
 only where it exists. A PR that adds or changes a feature in one client updates its row, and
-opens an issue for each client the row says should follow.
+opens an issue for each client the row says should follow. A rule every client applies on its own
+(snooze times, option order, presence, retry, limits) lives in `packages/protocol/vectors/rules.json`,
+which the web's, Android's and iOS's tests read, so a change to one fails the others until they
+follow (#1429).
 
 | Feature | Web | Android | Desktop | iOS |
 |---|---|---|---|---|
