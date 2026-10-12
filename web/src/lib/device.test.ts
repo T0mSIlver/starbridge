@@ -432,15 +432,21 @@ test("a kept inbox reads only what came after it, and follows what the server dr
   try {
     expect(ids(await device.loadInbox(fresh, undefined, keep))).toEqual(["d_done", "d_open"]);
     expect(asks).toEqual(["decision,settled,waiting,snooze "]);
-    // A page load: the open list, then only what came after the kept cursor.
+    // A page load: the open list, then only what came after the kept cursor. The kept open
+    // question shows before the answered ones open and that read starts (#1458).
     asks.length = 0;
-    expect(ids(await device.loadInbox(fresh, undefined, keep))).toEqual(["d_done", "d_open"]);
+    const early: string[][] = [];
+    const showing = { keep: true, early: (i: device.Inbox) => early.push([...ids(i), ...asks]) };
+    expect(ids(await device.loadInbox(fresh, undefined, showing))).toEqual(["d_done", "d_open"]);
     expect(asks).toEqual(["decision  open", "decision,settled,waiting,snooze 2"]);
-    // The server dropped the open question unanswered: it goes, kept no more. One asked after
-    // the open list stays.
+    expect(early).toEqual([["d_open", "decision  open"]]);
+    // The server dropped the open question unanswered: it goes, kept no more, and never shows
+    // early. One asked after the open list stays.
     listed = listed.filter((s) => s.item.id !== "d_open");
     askedLate = asked("d_late", "3");
-    expect(ids(await device.loadInbox(fresh, undefined, keep))).toEqual(["d_done", "d_late"]);
+    early.length = 0;
+    expect(ids(await device.loadInbox(fresh, undefined, showing))).toEqual(["d_done", "d_late"]);
+    expect(early).toEqual([]);
     askedLate = undefined;
     expect((await store.get("kept", ctx.account))?.items.map((s) => s.item.id)).toEqual([
       "d_done",
