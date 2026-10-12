@@ -19,7 +19,11 @@ import org.unifiedpush.android.connector.PushService
 import org.unifiedpush.android.connector.data.PushEndpoint
 import org.unifiedpush.android.connector.data.PushMessage
 
-/** A notification button: signs and sends the answer, the screen locked or not. */
+/**
+ * A question's notification button: signs and sends the answer. While the phone is locked it
+ * answers only if the lock screen shows sensitive content (#1375); the buttons ask for the unlock
+ * otherwise, but an app with notification access can send their intents itself, as with Allow (#274).
+ */
 class AnswerReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val id = intent.getStringExtra(EXTRA_ID) ?: return
@@ -27,6 +31,10 @@ class AnswerReceiver : BroadcastReceiver() {
         val text = RemoteInput.getResultsFromIntent(intent)?.getCharSequence(EXTRA_TEXT)?.toString()?.trim()?.takeIf { it.isNotEmpty() }
         if (choice == null && text == null) return
         val app = context.app()
+        if (context.getSystemService(KeyguardManager::class.java).isDeviceLocked && !LockScreen.showsContent(context)) {
+            app.store().decisions.value.find { it.id == id }?.let { app.notifier().failed(it, "unlock the phone to answer") }
+            return
+        }
         val pending = goAsync()
         app.scope().launch {
             val decision = app.store().decisions.value.find { it.id == id }

@@ -10,6 +10,14 @@
 - **Notifications** show at most three options; a fourth needs the app. A prompt's shows only its
   command. Android's contextual chips are off, so the only buttons are answers. With sensitive
   content hidden, the lock screen's public version carries the same buttons.
+- **Lock-screen answers follow sensitive content** (#1375). A question's buttons answer from the
+  lock screen only while Android shows sensitive notification content there: notifications on
+  the lock screen, "Sensitive notifications" on (a work profile has its own switch), no device
+  policy hiding them, and neither question channel set to hide content. Otherwise they ask for the
+  unlock, and the receiver refuses an answer that arrives while the phone is locked, since an app
+  with notification access can send a button's intent itself (#274). An owner who hides content
+  on the lock screen expects the locked phone to take no answers either; one who shows it reads and
+  answers there. The setting is read at each post and each answer.
 - **No answer is lost** (#329, #331). An answer is sealed, signed and stored before it is posted;
   WorkManager sends it once a network is up. A retry the server already took gets
   `already-answered`, which the app counts as its own when an earlier attempt may have landed.
