@@ -43,6 +43,18 @@ if (location.origin === arg("origin")) {
     shown = s === true;
     onShown?.();
   });
+  // The updater's state and settings (#1398): the app checks them, so they pass as they come.
+  let updateStatus: unknown = ipcRenderer.sendSync("update-status?");
+  let updateSettings: unknown = ipcRenderer.sendSync("update-settings?");
+  let onUpdate: (() => void) | null = null;
+  ipcRenderer.on("update-status", (_e, s: unknown) => {
+    updateStatus = s;
+    onUpdate?.();
+  });
+  ipcRenderer.on("update-settings", (_e, s: unknown) => {
+    updateSettings = s;
+    onUpdate?.();
+  });
   ipcRenderer.on("place", (_e, p: unknown) => {
     place = p;
   });
@@ -103,6 +115,21 @@ if (location.origin === arg("origin")) {
     },
     /** Opens System Settings → Notifications → Starbridge. */
     openNotificationSettings: () => ipcRenderer.send("notification-settings"),
+    /**
+     * Where the update stands: `{state}` with "idle", "checking", "available", "downloading",
+     * "ready" or "error", and its `version`, `percent` or `message` (src/updates.ts). Null while
+     * the app runs no updater.
+     */
+    updateStatus: () => updateStatus,
+    /** `{releaseCandidates, autoDownload}`. */
+    updateSettings: () => updateSettings,
+    setUpdateSettings: (s: unknown) => ipcRenderer.send("update-settings", s),
+    /** "check", "download", or "install", which restarts the app. */
+    updateAction: (a: unknown) => ipcRenderer.send("update-action", a),
+    /** Called when the status or the settings change. */
+    onUpdate: (f: (() => void) | null) => {
+      onUpdate = f;
+    },
     /** Opens an item whose notification was clicked. */
     onOpen: (f: (id: string) => void) => {
       onOpen = f;

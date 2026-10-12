@@ -3,10 +3,11 @@
 Which client has each feature a user sees. A cell is `yes`, `no` with why, `n/a`, or `not yet`;
 an issue number points at the work. What a feature does is in its area's file; this table says
 only where it exists. A PR that adds or changes a feature in one client updates its row, and
-opens an issue for each client the row says should follow. A rule every client applies on its own
-(snooze times, option order, presence, retry, limits) lives in `packages/protocol/vectors/rules.json`,
-which the web's, Android's and iOS's tests read, so a change to one fails the others until they
-follow (#1429).
+opens an issue for each client the row says should follow. Every PR that changes a client's
+source says so on its `Parity:` line, which CI requires: `spec/parity.md`, the follow-up issues, or
+`none` and why (#1422). A rule every client applies on its own (snooze times, option order,
+presence, retry, limits) lives in `packages/protocol/vectors/rules.json`, which the web's,
+Android's and iOS's tests read, so a change to one fails the others until they follow (#1429).
 
 | Feature | Web | Android | Desktop | iOS |
 |---|---|---|---|---|
@@ -28,7 +29,7 @@ follow (#1429).
 | Notification: permission prompts | yes (taps open the page; no Allow/Deny) | yes (Allow / Deny buttons) | yes (no Allow/Deny; opens window) | yes (#1137: Deny answers from the notification; Allow opens the prompt, which shows the whole input first) |
 | Notification: runs | yes (#1064: pass or fail, while a page is open; runs skip Web Push) | yes (Live Update on Android 16) | yes (#1064: pass or fail, the page's own, shown by the app) | no (APNs gets no runs, as Web Push) |
 | Notification: quota alerts | yes (only while a page is open) | yes (low-importance channel) | yes (the page's own, shown by the app) | yes (#1235: only when the app reads quotas, while it is open or woken by another push, since APNs gets no quota snapshots; quiet, in Notification Center) |
-| Answer from a notification: option buttons | yes (only if every option fits the browser's action limit) | yes (at most 3 options; 2 when the question also takes replies, #1339) | yes | yes (#1137: at most 3, the agent's default first) |
+| Answer from a notification: option buttons | yes (only if every option fits the browser's action limit) | yes (at most 3 options; 2 when the question also takes replies, #1339) | yes | yes (#1137: at most 3, the agent's default first, with Reply beside them) |
 | Answer from a notification: typed reply | no (service worker has no input action) | yes (RemoteInput: Answer without options, Reply beside them, #1339) | yes (Reply button) | yes (#1137: Reply, or Answer for a question without options) |
 | Answer a question from the lock screen | n/a (the browser's notifications) | yes while the lock screen shows sensitive content, else after the unlock (#1375) | n/a (macOS's notifications) | yes while Show Previews is Always, else after the unlock (#1384) |
 | Presence (holds other devices' pushes) | yes (#848) | yes (#848) | yes (#945, uses Mac lock/idle) | yes (#1241: in front and touched or typed in the last minute; the hold time in Settings → Notifications) |
@@ -42,9 +43,10 @@ follow (#1429).
 | Pairing: link (`/pair#code`) | yes | yes (App Link and `starbridge://pair`) | yes (`starbridge://pair`) | yes (`starbridge://pair`, #1239; the https link opens the web page until the app claims it, #1115) |
 | Pairing: typed code | yes | yes | yes | yes (#1239) |
 | Pairing: approve a join by digits (Compare digits) | yes | yes | yes (as web) | yes (#1158: over any screen while the app is in front; the notification opens the app) |
-| Keyboard shortcuts (J K 1-4 A D /) | yes (from 1100 px) | no (only Enter to send, Esc in Find) | yes (as web) | not yet |
+| After an answer, the next open card opens | yes (beside the list; under 1100 px only with a mouse, #1432) | no (touch: the inbox comes back) | yes (as web) | no (touch, as Android) |
+| Keyboard shortcuts (J K 1-4 A D /) | yes (J, K and / at any width, #1432; 1-4, A, D from 1100 px) | no (only Enter to send, Esc in Find) | yes (as web) | not yet |
 | Sound | yes (off by default, only while a page is open) | yes (system notification channel sound) | yes (macOS default sound; Basso on "Answer not sent"; web Sound row hidden) | not yet |
 | Recover with the recovery key (revokes every other member) | yes | yes | yes (as web) | yes (#1116) |
 | Delete account (Settings and the join screen, its recovery-key view included, typed confirmation) | yes (#1104, #1117) | yes (#1104, #1117, #1166) | yes (as web) | yes (#1141, #1195, #1233: Settings and the join screen, its recovery-key view included) |
 
-Only on desktop: the menu bar light, the Dock or menu bar choice, Open at Login, ⌃⌥S, and notifications while no browser runs.
+Only on desktop: the menu bar light, the Dock or menu bar choice, Open at Login, ⌃⌥S, notifications while no browser runs, and the app's updates (the rail's button and Settings → Updates, #1398).

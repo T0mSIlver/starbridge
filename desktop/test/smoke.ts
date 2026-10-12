@@ -1,16 +1,17 @@
 // Launches the app on a stand-in server page and checks the bridge end to end: the window loads
-// the page, the page's count turns the menu bar's climber amber, a question notifies with its options, a button
+// the page, the page's count turns the menu bar's dot amber, a question notifies with its options, a button
 // and a typed reply answer through the page, the notification closes once the question leaves,
 // the window refuses another origin, a hidden window still notifies, and the Mac's lock and quitting
-// reach the page as away. Notifications and the tray are watched in the main
+// reach the page as away, and an update from a stand-in release feed downloads with its progress. Notifications and the tray are watched in the main
 // process, so no OS notification is needed (GitHub's macOS runners cannot grant the permission).
 //
 //   pnpm --filter @starbridge/desktop e2e     (on Linux: xvfb-run -a …)
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { _electron as electron } from "playwright";
 
@@ -22,6 +23,7 @@ type StandIn = {
   answers: unknown[];
   send(entries: unknown[]): void;
   readings: { away: boolean; idleMs: number | null }[];
+  updates: { state: string; percent?: number; version?: string }[];
 };
 
 /** What the main process records in place of the OS. */
@@ -44,6 +46,9 @@ window.send = (entries) => b.update({ count: entries.length, entries });
 // Away, as the page's presence would say absent: the server hears it, even as the app quits.
 window.readings = [];
 if (b) b.onScreen(async () => { const r = b.screen(); window.readings.push(r); if (r.away) await fetch("/away", { method: "POST" }); });
+// Downloads wait for the owner's click, which the test makes.
+window.updates = [];
+if (b) { b.setUpdateSettings({ autoDownload: false }); b.onUpdate(() => { const u = b.updateStatus(); if (u) window.updates.push(u); }); }
 </script>`;
 
 /** Requests other than GET, by path. */
@@ -67,11 +72,61 @@ async function until<T>(f: () => Promise<T>, what: string): Promise<T> {
   throw new Error(`timed out waiting for ${what}`);
 }
 
+/**
+ * GitHub's release pages for a 9.9.9 (src/updater.ts), whose file comes in slowly so the
+ * download's progress shows. Linux's updater reads latest-linux.yml, macOS's latest-mac.yml.
+ */
+// Linux's updater installs it on quit and runs it: a script that does nothing.
+const UPDATE = Buffer.from(`#!/bin/sh\nexit 0\n#${"-".repeat(2_000_000)}\n`);
+const updateFile = MAC ? "Starbridge-9.9.9-mac.zip" : "Starbridge-9.9.9.AppImage";
+const updateYml = `version: 9.9.9
+files:
+  - url: ${updateFile}
+    sha512: ${createHash("sha512").update(UPDATE).digest("base64")}
+    size: ${UPDATE.length}
+path: ${updateFile}
+releaseDate: '2026-10-12T00:00:00.000Z'
+`;
+const releases = createServer(async (req, res) => {
+  // The updater adds ?noCache=… to what it reads.
+  const path = (req.url ?? "").split("?")[0] ?? "";
+  if (path === "/releases/latest")
+    return res.writeHead(302, { location: `${url(releases)}/releases/tag/v9.9.9` }).end();
+  // The version under test may be an rc, which follows the feed too; it lists none newer.
+  if (path === "/releases.atom") return res.end("<feed></feed>");
+  if (/^\/releases\/download\/v9\.9\.9\/latest-(mac|linux)\.yml$/.test(path))
+    return res.setHeader("content-type", "text/yaml").end(updateYml);
+  if (path === `/releases/download/v9.9.9/${updateFile}`) {
+    res.writeHead(200, { "content-length": UPDATE.length });
+    const step = Math.ceil(UPDATE.length / 10);
+    for (let i = 0; i < 10; i++) {
+      res.write(UPDATE.subarray(i * step, (i + 1) * step));
+      await new Promise((r) => setTimeout(r, 400));
+    }
+    return res.end();
+  }
+  res.writeHead(404).end();
+});
+await new Promise<void>((done) => releases.listen(0, "127.0.0.1", done));
+// An unpackaged app's updater reads its download folder's name from this file, which electron-builder
+// writes into a packaged one as app-update.yml.
+const CACHE = "starbridge-smoke-updater";
+writeFileSync(join(DESKTOP, "dev-app-update.yml"), `updaterCacheDirName: ${CACHE}\n`);
+
 const server = await serve(PAGE);
 const other = await serve(`<title>other</title>`);
+const data = mkdtempSync(join(tmpdir(), "sb-desktop-"));
+// Linux's updater replaces the AppImage it runs from, which a development run has none of.
+const appImage = join(data, "Starbridge.AppImage");
+writeFileSync(appImage, "");
 const app = await electron.launch({
-  args: [DESKTOP, `--user-data-dir=${mkdtempSync(join(tmpdir(), "sb-desktop-"))}`],
-  env: { ...process.env, STARBRIDGE_SERVER: url(server) },
+  args: [DESKTOP, `--user-data-dir=${data}`],
+  env: {
+    ...process.env,
+    STARBRIDGE_SERVER: url(server),
+    STARBRIDGE_RELEASES: url(releases),
+    APPIMAGE: appImage,
+  },
 });
 try {
   await app.evaluate(({ Notification, Tray, shell }) => {
@@ -133,7 +188,7 @@ try {
     ) as Promise<T>;
   await until(
     () => main((g) => g.tips.at(-1) === "Starbridge: 2 need you" && !g.template.at(-1)),
-    "the menu bar's amber climber",
+    "the menu bar's amber dot",
   );
   const shown = await main((g) =>
     g.shown.map((n: Electron.Notification) => ({
@@ -216,6 +271,29 @@ try {
     "the refused notification again",
   );
 
+  // An update (#1398): found, downloaded on the owner's click with its progress, then ready to
+  // restart. On macOS that is once the zip is in: Squirrel, which refuses this one, comes after.
+  const statuses = () => page.evaluate(() => (window as unknown as StandIn).updates);
+  await until(
+    async () => (await statuses()).some((u) => u.state === "available" && u.version === "9.9.9"),
+    "the update found",
+  );
+  await page.evaluate(`window.starbridgeDesktop.updateAction("download")`);
+  const last = await until(async () => {
+    const u = (await statuses()).at(-1);
+    return u && (u.state === "ready" || u.state === "error") ? u : null;
+  }, "the download to end");
+  const progress = (await statuses()).filter((u) => u.state === "downloading");
+  assert.ok(
+    progress.some((u) => (u.percent ?? 0) > 0 && (u.percent ?? 0) < 100),
+    "progress",
+  );
+  assert.deepEqual(last, { state: "ready", version: "9.9.9" });
+  assert.equal(
+    await page.evaluate(`window.starbridgeDesktop.updateSettings().autoDownload`),
+    false,
+  );
+
   // Kept in the Dock alone, the menu bar icon goes, and the page reads the choice after a reload.
   type Bridge = { place(): string; setPlace(p: string): void };
   const bridge = () => (window as unknown as { starbridgeDesktop: Bridge }).starbridgeDesktop;
@@ -265,4 +343,10 @@ try {
   await app.close();
   server.close();
   other.close();
+  releases.close();
+  rmSync(join(DESKTOP, "dev-app-update.yml"), { force: true });
+  rmSync(join(homedir(), MAC ? "Library/Caches" : ".cache", CACHE), {
+    recursive: true,
+    force: true,
+  });
 }

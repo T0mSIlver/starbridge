@@ -37,7 +37,8 @@
   Waiting for the server's reply kept the card up for its round trip, about a second on a phone.
   Answered from its open view, the view goes too (#927): Android's sheet, a question's or a
   prompt's, slides away with Material's own dismiss onto the inbox without the card, and the web
-  shows the next open item beside the list, or the list on a phone. A refused answer comes back in
+  shows the next open item beside the list, in its place under 1100 px with a mouse (#1432), or
+  the list on a touch screen. A refused answer comes back in
   the list, never in a reopened view. Left open, the view showed an answer the owner had just
   given.
 - **No answer waits for a pull** (#1390, #1392). The apps keep an answer the server could not take

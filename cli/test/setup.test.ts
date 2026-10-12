@@ -696,6 +696,49 @@ test("status names the Claude Code session it runs in when that session's mod ne
   expect(m.ctx.lines.join("\n")).not.toContain("Not this session");
 });
 
+test("status says when Claude desktop replaced the mod with a copy that has no hooks (#1428)", async () => {
+  const m = await machine();
+  await startAgent(m.ctx);
+  Object.assign(m.ctx.env, { CLAUDECODE: "1", CLAUDE_CODE_SESSION_ID: "s-1" });
+  // What Claude desktop passed the orchestrator's session on the dev box: the Mac's plugins,
+  // synced without `hooks/`.
+  const synced = mkdtempSync(join(tmpdir(), "starbridge-synced-"));
+  const plugin = (dir: string, name: string, hooks: boolean) => {
+    mkdirSync(join(synced, dir, ".claude-plugin"), { recursive: true });
+    writeFileSync(join(synced, dir, ".claude-plugin", "plugin.json"), JSON.stringify({ name }));
+    if (hooks) {
+      mkdirSync(join(synced, dir, "hooks"));
+      writeFileSync(join(synced, dir, "hooks", "hooks.json"), "{}");
+    }
+    return join(synced, dir);
+  };
+  const mod = plugin("4917e9633546766b", "starbridge-mod", false);
+  const skill = plugin("049f0f053f7ea84d", "starbridge", true);
+  const other = plugin("a71fbe145223bcc9", "localvoxtral", false);
+  // Claude Code's record of the session names the process that runs it.
+  m.ctx.env.CLAUDE_CONFIG_DIR = join(synced, "claude");
+  mkdirSync(join(synced, "claude", "sessions"), { recursive: true });
+  writeFileSync(
+    join(synced, "claude", "sessions", "4242.json"),
+    JSON.stringify({ pid: 4242, sessionId: "s-1", entrypoint: "claude-desktop" }),
+  );
+  const claude = ["claude", "--resume=s-1", `--plugin-dir=${mod}`, "--plugin-dir", skill];
+  const args = (pid: number) => (pid === 4242 ? [...claude, `--plugin-dir=${other}`] : []);
+  await status({ ...m.sys, argsOf: args });
+  const out = m.ctx.lines.join("\n");
+  expect(out).toContain("Not this session (s-1): no Starbridge mod runs in it");
+  expect(out).toContain(
+    `Claude desktop runs this session with its own copy of starbridge-mod (${mod}), synced without hooks`,
+  );
+  expect(out).not.toContain(skill);
+  expect(out).not.toContain(other);
+
+  // A session Claude Code runs with the installed plugins only says nothing more.
+  m.ctx.lines.length = 0;
+  await status({ ...m.sys, argsOf: () => ["claude", "--resume=s-1"] });
+  expect(m.ctx.lines.join("\n")).not.toContain("Claude desktop runs");
+});
+
 test("status lists the answers no session has taken, until a wait prints them (#557)", async () => {
   const m = await machine();
   const ask = ["ask", "--question", "Merge #12?", "--option", "Merge", "--option", "Wait"];

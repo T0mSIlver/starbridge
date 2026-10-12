@@ -49,11 +49,23 @@ a browser; the app adds a menu bar light and notifications, so a web release nee
   notifications are what find the block. Opening it forgets the refusal until the next
   notification, which then shows or flips the switch back. Devices reports such a Mac as blocked.
 - **The menu bar.** The mark in one colour, as macOS draws menu bar icons; while anything needs
-  the owner, its climber turns amber, the one amber light, with no count: the window says what
+  the owner, its dot turns amber, the one amber light, with no count: the window says what
   (owner's pick from mockups, 2026-10-09). A click shows the window; a right-click opens the menu:
   Open, Open at Login (off by default), Server, Quit. Closing the window keeps the app in the menu
   bar and drops its Dock icon, which shows again with the window. ⌃⌥S shows the window from
   anywhere.
+- **Updates** (#1398) live in the window, not the menus, as in T3 Code: a menu item went unseen,
+  so a downloaded update waited for a quit. At the foot of the rail, a button says "Update
+  available" (a click downloads), "Downloading 42%", "Restart to update" (a click quits, after
+  the page says the owner left, and installs), or "Update failed" (a click checks again), the first
+  and third with a dot in `fg`, never amber, which means an agent needs the owner. It shows
+  nothing while idle or checking, and a failed check only logs: it may be the network, and the
+  next one comes. Settings → Updates holds "Release candidates" (the menu's former "Get Release
+  Candidates", same default) and "Download updates automatically" (on). The bridge carries the
+  updater's state and three actions, check, download and restart, so the page decides nothing
+  about versions. A browser sees none of it, the one place the app's page differs from the
+  browser's besides "Keep Starbridge in". Under 600 px the rail gives way to the bottom bar, and
+  the button with it: an update still installs on quit.
 - **Menu bar or Dock** (#936). Settings' "Keep Starbridge in" picks the menu bar (the default
   above), the Dock (always, with no menu bar icon), or both, applied at once. One choice of three
   rather than two switches, so no combination leaves the app nowhere and nothing has to be

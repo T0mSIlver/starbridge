@@ -1,0 +1,44 @@
+# Replaces the Play listing's icon and feature graphic (android/store/) through the Play Developer
+# API, for when Play Console's "Send changes for review" fails with an HTTP 400 and no reason
+# (spec/releases.md). Run by hand from main:
+#   gh workflow run play-listing.yml --ref main
+# It signs in as the release's `play` job does and commits the edit, which sends it for review.
+name: Play listing
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  listing:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: play-release
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - id: setup
+        env:
+          SET: ${{ vars.PLAY_WIF_PROVIDER != '' && vars.PLAY_SERVICE_ACCOUNT != '' }}
+        run: |
+          [ "$SET" = true ] || { echo "::error::PLAY_WIF_PROVIDER or PLAY_SERVICE_ACCOUNT is not set."; exit 1; }
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.2
+      - id: auth
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0
+        with:
+          workload_identity_provider: ${{ vars.PLAY_WIF_PROVIDER }}
+          service_account: ${{ vars.PLAY_SERVICE_ACCOUNT }}
+          token_format: access_token
+          access_token_scopes: https://www.googleapis.com/auth/androidpublisher
+          create_credentials_file: false
+          export_environment_variables: false
+      - name: Update the listing
+        env:
+          PLAY_ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
+        run: bun cli/scripts/play-listing.ts android/store

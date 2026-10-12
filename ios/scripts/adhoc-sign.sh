@@ -1,8 +1,7 @@
 #!/bin/sh
 # Signs an archive built with CODE_SIGNING_ALLOWED=NO ad hoc, with each target's entitlements, so
-# that `xcodebuild -exportArchive` finds them when it signs for the App Store. xcodebuild signs
-# with an App Store Connect API key only when it exports (#1415), and building for a device with
-# signing on would need an account or a development profile.
+# that `xcodebuild -exportArchive` finds them when it signs for the App Store (#1415): building
+# for a device with signing on would need an Xcode account or a development profile.
 # Usage, from ios/ after `xcodegen generate`: scripts/adhoc-sign.sh <archive>
 set -eu
 team=3N63N7U9R3
