@@ -157,7 +157,7 @@ export function AddDevice() {
                             name: req.name,
                             icon: "desktop",
                             title: `${req.name} joined`,
-                            sub: `Its terminal shows a check code: press Enter there if it is this one. If not, revoke ${req.name} under Devices, as someone else may have its pairing code.`,
+                            sub: `Press Enter in its terminal if it shows this code. If not, revoke ${req.name} under Devices.`,
                             check,
                           }
                         : {

@@ -1807,7 +1807,8 @@ class ServerStore(
             if (check != null) persist(saved.copy(scannedMachines = (saved.scannedMachines + body.id).distinct()))
             pending = null
             pendingCheckKey = null
-            approval.value = Approval.Done(body.name)
+            val compare = if (body.role == "machine" && check == null) runCatching { pairings.checkCode(saved.entries, body.id) }.getOrNull() else null
+            approval.value = Approval.Done(body.name, compare)
         } catch (e: Exception) {
             approval.value = Approval.Failed(describe(e))
         }
