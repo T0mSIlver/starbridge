@@ -68,7 +68,7 @@ export class Updates {
   }
 
   async check(): Promise<void> {
-    const { releaseCandidates: rcs, autoDownload } = this.settings();
+    const { releaseCandidates: rcs } = this.settings();
     const s = this.status;
     // Turning release candidates off drops an rc found or downloading. One downloaded stays:
     // Squirrel has taken it, and installs it on quit.
@@ -89,9 +89,16 @@ export class Updates {
       this.set(before.state === "available" ? before : { state: "idle" });
       return;
     }
+    // The owner changed the settings while it looked: their check returned at once, so this
+    // one answers with what they say now.
+    const now = this.settings();
+    if (now.releaseCandidates !== rcs) {
+      this.status = before;
+      return this.check();
+    }
     if (!version) return this.set({ state: "idle" });
     this.set({ state: "available", version });
-    if (autoDownload) this.download();
+    if (now.autoDownload) this.download();
   }
 
   /** Downloads the version found; turning automatic downloads on downloads one waiting too. */

@@ -132,3 +132,17 @@ test("the page's requests are read strictly", () => {
   expect(parseUpdateSettings({})).toBeNull();
   expect(parseUpdateSettings(null)).toBeNull();
 });
+
+test("settings changed during a check count for its answer", async () => {
+  const settings = { releaseCandidates: true, autoDownload: true };
+  const { updates, engine, runs } = setup(null, settings);
+  engine.find = async (rcs) => {
+    // The owner turns both off while the first lookup runs.
+    settings.releaseCandidates = false;
+    settings.autoDownload = false;
+    return rcs ? "0.2.0-rc.1" : "0.1.9";
+  };
+  await updates.check();
+  expect(updates.status).toEqual({ state: "available", version: "0.1.9" });
+  expect(runs).toHaveLength(0);
+});
