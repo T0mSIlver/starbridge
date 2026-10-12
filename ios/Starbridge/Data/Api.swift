@@ -29,6 +29,15 @@ struct JoinView {
     let approval: JSON?
 }
 
+/** An open join as `GET /joins` lists it (PROTOCOL.md, "Joins"). */
+struct ListedJoin: Equatable {
+    let id: String
+    let request: String
+    let commitment: String
+    let approver: String?
+    let expiresAt: Date?
+}
+
 /** One item of a list: the sealed item, where the list stands after it, and when it was answered. */
 struct Listed {
     let item: SealedItem
@@ -202,6 +211,21 @@ struct Api {
         return try field(body, "approval")
     }
 
+    // --- Adding a member ---------------------------------------------------------
+
+    /** The request posted under a code's rendezvous id. */
+    func pairing(_ rendezvous: String) async throws -> JSON { try field(await call("GET", "/pairings/\(rendezvous)").1, "request") }
+
+    /** The request once a new member posts it under a code this iPhone shows; nil when `wait` seconds pass first. */
+    func awaitPairing(_ rendezvous: String, wait: Int) async throws -> JSON? {
+        let (status, body) = try await call("GET", "/pairings/\(rendezvous)?wait=\(wait)", wait: wait)
+        return status == 204 ? nil : try field(body, "request")
+    }
+
+    func approvePairing(_ rendezvous: String, approval: PairingMessage) async throws {
+        _ = try await call("POST", "/pairings/\(rendezvous)/approve", ["approval": approval.json])
+    }
+
     // --- Joining by digits -----------------------------------------------------
 
     private func join(_ body: JSON?) throws -> JoinView {
@@ -219,6 +243,26 @@ struct Api {
     /** The join; with `wait`, holds until its version passes `after`. */
     func join(id: String, after: Int, wait: Int) async throws -> JoinView {
         try join(await call("GET", "/joins/\(id)?after=\(after)&wait=\(wait)", wait: wait).1)
+    }
+
+    /** The open joins, holding until one changes past `after`; and where the list stands. */
+    func joins(after: String, wait: Int) async throws -> ([ListedJoin], String) {
+        let body = try await call("GET", "/joins?after=\(after)&wait=\(wait)", wait: wait).1
+        guard let list = try field(body, "joins").array else { throw ProtocolError(.badSchema, "joins is not a list") }
+        let joins = list.compactMap { j -> ListedJoin? in
+            guard let id = j["id"]?.string, let request = j["request"]?.string, let commitment = j["commitment"]?.string else { return nil }
+            return ListedJoin(id: id, request: request, commitment: commitment, approver: j["approver"]?.string, expiresAt: j["expiresAt"]?.string.flatMap(Dates.parse))
+        }
+        return (joins, try string(body, "cursor"))
+    }
+
+    /** Posts this device's ephemeral key as the join's one approver. */
+    func claimJoin(id: String, key: String, approver: String) async throws -> JoinView {
+        try join(await call("POST", "/joins/\(id)/approver", ["key": .string(key), "approver": .string(approver)]).1)
+    }
+
+    func approveJoin(id: String, approval: PairingMessage) async throws {
+        _ = try await call("POST", "/joins/\(id)/approve", ["approval": approval.json])
     }
 
     func revealJoin(id: String, key: String) async throws { _ = try await call("POST", "/joins/\(id)/reveal", ["key": .string(key)]) }
@@ -247,6 +291,15 @@ struct Api {
 
     func deleteItem(_ id: String) async throws { _ = try await call("DELETE", "/items/\(id)") }
 
+    /** The latest quota snapshot from each machine. */
+    func quota() async throws -> [Listed] {
+        guard let list = try field(try await call("GET", "/quota").1 ?? .null, "items").array else { throw ProtocolError(.badSchema, "items is not a list") }
+        return list.compactMap { try? listed($0) }
+    }
+
+    /** Asks every machine for a fresh snapshot, holding until they posted one or `wait` seconds pass. */
+    func askQuota(wait: Int) async throws { _ = try await call("POST", "/quota/ask?wait=\(wait)", wait: wait) }
+
     // --- Push ------------------------------------------------------------------
 
     /** Subscribes this iPhone's APNs token (hex) in its environment; re-subscribing a known one works. */
@@ -256,6 +309,36 @@ struct Api {
 
     func unsubscribe(_ id: String) async throws { _ = try await call("DELETE", "/push/subscriptions/\(id)") }
 
+    /** Whether the owner sits at this iPhone ("Held pushes", #848). */
+    func presence(_ present: Bool) async throws { _ = try await call("PUT", "/presence", ["present": .bool(present)]) }
+
+    /** The account's hold time in seconds (#848). */
+    func pushHold() async throws -> Int {
+        guard let n = try await call("GET", "/settings").1?["pushHold"]?.number else { throw ProtocolError(.badSchema, "settings without pushHold") }
+        return Int(n)
+    }
+
+    /** Sets the hold time; returns it as the server reads it back. */
+    func setPushHold(_ seconds: Int) async throws -> Int {
+        guard let n = try await call("PUT", "/settings", ["pushHold": .number(Double(seconds))]).1?["pushHold"]?.number else { throw ProtocolError(.badSchema, "settings without pushHold") }
+        return Int(n)
+    }
+
     /** Whether this iPhone notifies, for every device's Devices list (#943). */
     func notificationState(_ state: String) async throws { _ = try await call("PUT", "/notifications", ["state": .string(state)]) }
+
+    /** What each device last said of its notifications, and the app it said it from (#943, #1019), by member id. */
+    func notifications() async throws -> (states: [String: String], clients: [String: String]) {
+        let body = try await call("GET", "/notifications").1
+        func strings(_ key: String) -> [String: String] {
+            Dictionary((body?[key]?.object ?? JSONObject()).compactMap { k, v in v.string.map { (k, $0) } }, uniquingKeysWith: { $1 })
+        }
+        return (strings("devices"), strings("clients"))
+    }
+
+    /** The machines whose CLI is behind the latest release its agent read (#1050). */
+    func machinesBehind() async throws -> Set<String> {
+        let machines = try await call("GET", "/releases").1?["machines"]?.object ?? JSONObject()
+        return Set(machines.filter { $0.1["behind"]?.bool == true }.map(\.0))
+    }
 }

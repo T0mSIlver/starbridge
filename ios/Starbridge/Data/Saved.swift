@@ -52,12 +52,21 @@ struct Saved: Codable, Equatable {
     var decisions: [SavedDecision] = []
     var prompts: [SavedPrompt] = []
     var runs: [SavedRun] = []
+    /** The latest quota snapshot from each machine. */
+    var quotas: [SavedQuota] = []
     /** Runs dismissed here, with the update they hid, until a newer one comes. */
     var dismissedRuns: [String: String] = [:]
     var outbox: [QueuedAnswer] = []
     var heads: [SavedHead] = []
     /** This iPhone's APNs subscription, dropped at sign-out. */
     var pushId: String?
+    /** The last recovery key replacement the owner dismissed here (#348). */
+    var recoverySeen = 0
+    /**
+     * Machines this iPhone approved from their QR, whose check key proves the entry to the
+     * machine, which then asks nothing: Devices shows them no check code (#1329).
+     */
+    var scannedMachines: [String] = []
 
     init(server: String) { self.server = server }
 
@@ -84,10 +93,13 @@ struct Saved: Codable, Equatable {
         decisions = (try c.decodeIfPresent([Lossy<SavedDecision>].self, forKey: .decisions) ?? []).compactMap(\.value)
         prompts = (try c.decodeIfPresent([Lossy<SavedPrompt>].self, forKey: .prompts) ?? []).compactMap(\.value)
         runs = (try c.decodeIfPresent([Lossy<SavedRun>].self, forKey: .runs) ?? []).compactMap(\.value)
+        quotas = (try c.decodeIfPresent([Lossy<SavedQuota>].self, forKey: .quotas) ?? []).compactMap(\.value)
         dismissedRuns = try c.decodeIfPresent([String: String].self, forKey: .dismissedRuns) ?? [:]
         outbox = (try c.decodeIfPresent([Lossy<QueuedAnswer>].self, forKey: .outbox) ?? []).compactMap(\.value)
         heads = try c.decodeIfPresent([SavedHead].self, forKey: .heads) ?? []
         pushId = try c.decodeIfPresent(String.self, forKey: .pushId)
+        recoverySeen = try c.decodeIfPresent(Int.self, forKey: .recoverySeen) ?? 0
+        scannedMachines = try c.decodeIfPresent([String].self, forKey: .scannedMachines) ?? []
     }
 
     var pin: Pin? {

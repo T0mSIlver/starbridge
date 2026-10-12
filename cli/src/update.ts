@@ -2,6 +2,7 @@ import { spawn, spawnSync } from "node:child_process";
 import { chmodSync, existsSync, readdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, join } from "node:path";
+import type { UpdateRecord } from "./config";
 import type { Ctx } from "./context";
 import { resolveCommand, spawnable } from "./platform";
 import {
@@ -117,7 +118,12 @@ export async function update(
   // hold it back (#617). A release that does not check out stops everything.
   let self = 0;
   try {
-    if ((await updateSelf(ctx, install, pubkey)) && install.kind === "binary") {
+    const to = await updateSelf(ctx, install, pubkey);
+    if (to && install.kind === "binary") {
+      record(ctx, (r) => {
+        r.updated = { at: ctx.now().toISOString(), from: VERSION, to };
+        delete r.failed;
+      });
       // The new binary pins its own CodexBar: it updates that, finding itself up to date.
       const r = spawnSync(install.path, ["update"], {
         env: ctx.env as NodeJS.ProcessEnv,
@@ -127,6 +133,9 @@ export async function update(
       return r.status ?? 1;
     }
   } catch (e) {
+    record(ctx, (r) => {
+      r.failed = { at: ctx.now().toISOString(), why: (e as Error).message };
+    });
     if (e instanceof ReleaseError && !(e instanceof DownloadError)) throw e;
     ctx.out(`Could not update starbridge: ${(e as Error).message}`);
     self = 1;
@@ -135,21 +144,33 @@ export async function update(
   return Math.max(self, await updateCodexbar(sys, configured));
 }
 
-/** Returns whether it replaced the binary. */
-async function updateSelf(ctx: Ctx, install: InstallKind, pubkey: string): Promise<boolean> {
+/** Notes an outcome in `update.json` (#1266), which `status` reads; never fails the update. */
+function record(ctx: Ctx, fn: (r: UpdateRecord) => void) {
+  try {
+    ctx.store.recordUpdate(fn);
+  } catch {}
+}
+
+/** Returns the release it installed, or undefined when it replaced nothing. */
+async function updateSelf(
+  ctx: Ctx,
+  install: InstallKind,
+  pubkey: string,
+): Promise<string | undefined> {
   if (install.kind !== "binary") {
     ctx.out(`starbridge was installed with ${install.kind}: run ${MANAGED[install.kind].update}`);
-    return false;
+    return undefined;
   }
   const releases = ctx.env.STARBRIDGE_RELEASES_URL ?? RELEASES_URL;
   const latest = await latestVersion(releases);
   if (compareVersions(latest, VERSION) <= 0) {
     ctx.out(`starbridge ${VERSION} is up to date.`);
-    return false;
+    return undefined;
   }
   const bytes = await downloadVerified(latest, platformAsset(), { releases, pubkey });
-  // Written next to the binary, then renamed over it: a running copy keeps its old inode.
-  const next = join(dirname(install.path), ".starbridge.new");
+  // Written next to the binary, then renamed over it: a running copy keeps its old inode. One
+  // name per process, so an update the agent started and one a person ran never share it.
+  const next = join(dirname(install.path), `.starbridge.new.${process.pid}`);
   writeFileSync(next, bytes, { mode: 0o755 });
   chmodSync(next, 0o755);
   replaceBinary(next, install.path);
@@ -170,7 +191,7 @@ async function updateSelf(ctx: Ctx, install: InstallKind, pubkey: string): Promi
   }
   updatePlugins(ctx);
   movePiPackage(ctx, latest);
-  return true;
+  return latest;
 }
 
 /**

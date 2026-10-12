@@ -119,6 +119,11 @@ export const DEFAULT_LIMITS = {
    * storage at 256 MB each; a launch's office or carrier NAT signs up a handful an hour (#787).
    */
   signUps: [30, HOUR] as RateWindow,
+  /**
+   * Account deletions per address. A person deletes theirs once; on a server whose accounts
+   * start again at sign-in, as the demo's does, repeated deletions would keep it empty.
+   */
+  accountDeletes: [3, HOUR] as RateWindow,
   /** Owner-token sign-ins per address, so the token cannot be guessed fast. */
   ownerSignIns: [10, MINUTE] as RateWindow,
   /** Sign-in challenges per account, which a device signs to bind a new session. */
@@ -147,12 +152,16 @@ export const DEFAULT_LIMITS = {
   pairingsPerClient: 50,
 
   /**
-   * Relayed Web Pushes in flight on the whole server (RELAY_MODE), and per address. Each may
-   * take pushTimeoutMs, so a slow or hostile push service cannot pile up open requests; past
-   * either the relay answers 503. FCM, which goes to Google, does not count (#577).
+   * Relayed Web Pushes in flight (RELAY_MODE): on the whole server, per address, per IPv6 /48
+   * and per push service host. Each may take pushTimeoutMs, so a slow or hostile push service
+   * cannot pile up open requests; past any cap the relay answers 503. FCM, which goes to Google,
+   * does not count (#577). The caps per sender leave the rest to other servers, and the cap per
+   * host bounds what any one host gets.
    */
-  relaySends: 16,
+  relaySends: 64,
   relaySendsPerClient: 4,
+  relaySendsPerNetwork: 8,
+  relaySendsPerHost: 16,
 
   /** Push subscription writes per account. */
   pushSubscribes: [30, MINUTE] as RateWindow,

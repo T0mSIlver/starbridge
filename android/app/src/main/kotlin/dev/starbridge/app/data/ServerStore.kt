@@ -60,6 +60,7 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.encodeToJsonElement
 import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.add
@@ -396,7 +397,7 @@ class ServerStore(
         reportedNotify = null
         notifyStates.value = emptyMap()
         deviceClients.value = emptyMap()
-        machinesBehind.value = emptySet()
+        machineReleases.value = emptyMap()
         // The next account's hold shows once its own read succeeds, as on the web (#1192).
         pushHold.value = null
         wipes++
@@ -1530,7 +1531,8 @@ class ServerStore(
     }
 
     /** For the notification's buttons: holds the lock like any other change. */
-    suspend fun sendFromNotification(id: String, choice: String?, text: String?) = lock.withLock { send(id, choice, text) }
+    /** A reply typed into a notification is cut as the in-app field cuts it (#1205). */
+    suspend fun sendFromNotification(id: String, choice: String?, text: String?) = lock.withLock { send(id, choice, text?.takeCodePoints(4000)) }
 
     /** The answer waiting to be sent for decision [id], if any. */
     fun queued(id: String): String? = saved.outbox.find { it.decisionId == id }?.answer
@@ -1670,8 +1672,14 @@ class ServerStore(
                 if (updated !== d) persist(saved.copy(decisions = saved.decisions.map { if (it === d) updated else it }))
                 val until = instant(body.until) ?: return@withLock
                 if (!until.isAfter(instant(body.at) ?: until)) return@withLock // Back now: listed again, quietly.
-                if (Instant.now().isBefore(until.minus(WAKE_SKEW))) alerts.cancel(body.decisionId)
-                else if (updated.answeredAt == null && updated.answer == null) alerts.back(toUi(updated))
+                // The server says which push this is (#1290); without it, the clock, which takes a
+                // first push that comes late for the return (#1320).
+                val due = p["due"]?.jsonPrimitive?.booleanOrNull ?: !Instant.now().isBefore(until.minus(WAKE_SKEW))
+                if (!due) {
+                    // Near or past its time, its return showed the question or will, maybe by a
+                    // server clock ahead of this one: cancelling would hide it.
+                    if (Instant.now().isBefore(until.minus(WAKE_SKEW))) alerts.cancel(body.decisionId)
+                } else if (updated.answeredAt == null && updated.answer == null) alerts.back(toUi(updated))
             }
             "quota" -> syncQuotas()
             "join" -> {
@@ -1795,6 +1803,8 @@ class ServerStore(
             // no one to compare check codes (#795).
             val check = pendingCheckKey?.let { pairings.checkProof(saved.entries, body.id, it) }
             api().approve(code.rendezvous, pairings.approval(PairingApprovalBody(1, code.rendezvous, saved.account!!, after.length, after.head, me.id, check), code))
+            // That machine asks nothing, so its check code answers no question here (#1329).
+            if (check != null) persist(saved.copy(scannedMachines = (saved.scannedMachines + body.id).distinct()))
             pending = null
             pendingCheckKey = null
             approval.value = Approval.Done(body.name)
@@ -1908,7 +1918,7 @@ class ServerStore(
 
     override val notifyStates = MutableStateFlow<Map<String, String>>(emptyMap())
     override val deviceClients = MutableStateFlow<Map<String, String>>(emptyMap())
-    override val machinesBehind = MutableStateFlow<Set<String>>(emptySet())
+    override val machineReleases = MutableStateFlow<Map<String, MachineRelease>>(emptyMap())
     /** The state the server holds for this phone, once it took one. */
     private var reportedNotify: Boolean? = null
 
@@ -1920,7 +1930,7 @@ class ServerStore(
                 deviceClients.value = clients
             }
             // A server without the route: no machine shows an update.
-            runCatching { api().machinesBehind() }.onSuccess { machinesBehind.value = it }
+            runCatching { api().machineReleases() }.onSuccess { machineReleases.value = it }
         }
     }
 
@@ -2319,7 +2329,7 @@ class ServerStore(
             Member(
                 m.id, m.name, if (machine) Kind.Machine else Kind.Device, instant(added[m.id]) ?: Instant.EPOCH,
                 current = m.id == saved.me?.id,
-                check = if (machine) runCatching { pairings.checkCode(saved.entries, m.id) }.getOrNull() else null,
+                check = if (machine && m.id !in saved.scannedMachines) runCatching { pairings.checkCode(saved.entries, m.id) }.getOrNull() else null,
             )
         }
     }
@@ -2364,6 +2374,7 @@ internal fun doneText(page: DecisionLink) = "Answered in ${Link(page.url, page.t
 /**
  * How far a snooze's time may be ahead of the phone's clock when its second push comes: the server
  * sends it at the time, a little late, by its own clock. A snooze runs at least 5 minutes
- * (SNOOZE_MIN in ui/inbox/Snooze.kt), so its first push never passes for its second (#571).
+ * (SNOOZE_MIN in ui/inbox/Snooze.kt), so its first push passes for its second only when it comes
+ * over 3 minutes late (#571). Servers since #1290 say which push is which; this is for older ones.
  */
 private val WAKE_SKEW: java.time.Duration = java.time.Duration.ofMinutes(2)

@@ -84,15 +84,13 @@ extension Store {
         guard phase == .ready else { return }
         try await syncDecisions()
         try await syncPrompts()
+        try await syncQuotas()
         try await syncRuns()
         withheldWhy = withheld()
         if !saved.outbox.isEmpty { _ = try await flush() }
         // A push that would have closed them may never have come: iOS holds or drops background pushes (#1184).
         await Notify.removeDelivered(about: closedItems)
     }
-
-    /** How far the server's clock may run ahead of this iPhone's when it wakes a snooze, as Android allows. */
-    static let wakeSkew: TimeInterval = 120
 
     /**
      * Items whose notifications must go: questions answered, settled or snoozed for longer than
@@ -101,7 +99,7 @@ extension Store {
      */
     var closedItems: Set<String> {
         // A snooze about to end may already have its "Back from snooze" up, by a server clock ahead of this one.
-        let snoozed = { (d: SavedDecision) in d.snoozed.map { $0.timeIntervalSinceNow > Self.wakeSkew } ?? false }
+        let snoozed = { (d: SavedDecision) in d.snoozed.map { $0.timeIntervalSinceNow > Notify.wakeSkew } ?? false }
         let decisions = saved.decisions.filter { !$0.isOpen || snoozed($0) || !active($0.from) }.map(\.id)
         let prompts = saved.prompts.filter { !$0.isOpen || !active($0.from) }.map(\.id)
         return Set(decisions + prompts)
@@ -231,9 +229,14 @@ extension Store {
     /** The owner revoked that member themselves: forget the heads that name it, and read again. */
     func stopWaiting() async {
         guard let id = heldRevoked else { return }
+        forgetHeads(of: id)
+        await refresh()
+    }
+
+    /** Forgets the heads that name `id`, a member this iPhone knows the owner revoked. */
+    func forgetHeads(of id: String) {
         var h = heads
         if HeadBook.forget(&h, id: id) { keep(h) }
-        await refresh()
     }
 
     /**
@@ -241,7 +244,7 @@ extension Store {
      * rest. On a hold, reads the directory once more: a machine may only have signed an entry made
      * on another device since this iPhone's last read. True while the hold remains.
      */
-    private func scan(_ items: [SealedItem]) async throws -> Bool {
+    func scan(_ items: [SealedItem]) async throws -> Bool {
         let entries = entryJSON
         for item in items { _ = open(item, entries: entries) }
         if withheld(entries) == nil { return false }

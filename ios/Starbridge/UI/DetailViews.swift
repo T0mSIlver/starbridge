@@ -130,14 +130,27 @@ private struct Answering: View {
  * Snooze, under the reply field (#571): it opens the times in place: 1 hour and This evening, the
  * days as chips, a time, and "Snooze until 15:00". A snoozed question offers Snooze again and Back now.
  */
-private struct SnoozeControls: View {
+struct SnoozeControls: View {
     let store: Store
     let id: String
     let until: Date?
     let done: () -> Void
-    @State private var open = false
-    @State private var day = Calendar.current.startOfDay(for: Date())
-    @State private var time = Date()
+    @State private var open: Bool
+    @State private var day: Date
+    @State private var time: Date
+
+    /** `open`: the times show at once, as over the inbox after a swipe (#692). */
+    init(store: Store, id: String, until: Date?, open: Bool = false, done: @escaping () -> Void) {
+        self.store = store
+        self.id = id
+        self.until = until
+        self.done = done
+        let now = Date()
+        let today = Calendar.current.startOfDay(for: now)
+        _open = State(initialValue: open)
+        _day = State(initialValue: today)
+        _time = State(initialValue: open ? SnoozeTimes.start(today, now) : now)
+    }
 
     var body: some View {
         let now = Date()

@@ -7,7 +7,7 @@ struct NotifyFixture {
     let phone: Member
     let machine: Member
     let machineSign: SecretKey
-    let saved: Saved
+    var saved: Saved
     let secrets: Secrets
 
     init() throws {
@@ -55,6 +55,7 @@ struct NotifyFixture {
     func payload(_ item: SealedItem, box: Bool = true) -> JSON {
         var p: JSONObject = ["v": 1, "kind": .string(item.kind.rawValue), "id": .string(item.id), "from": .string(item.from)]
         if let re = item.re { p["re"] = .string(re) }
+        if let wakeAt = item.wakeAt { p["wakeAt"] = .string(wakeAt) }
         if box { p["box"] = .string(item.boxes[0].box) }
         return .object(p)
     }
@@ -101,6 +102,27 @@ final class NotifyTests: XCTestCase {
         XCTAssertEqual(working?.quiet, true)
     }
 
+    /** A snooze's return rings only when it is the latest snooze this iPhone knows (#1338). */
+    func testAnOlderSnoozesReturnStaysQuiet() async throws {
+        var f = try NotifyFixture()
+        let question = try f.decision("d_z")
+        let phoneSign = SecretKey(try fromB64(f.secrets.signSk!))
+        let first = Date().addingTimeInterval(-3600)
+        let snooze = try f.seal(.snooze, ["v": 1, "id": "z_1", "decisionId": "d_z", "to": [.string(f.phone.id)], "until": .string(Dates.format(Date())), "at": .string(Dates.format(first))], by: f.phone, key: phoneSign)
+        let back = await Notify.shown(f.payload(snooze), saved: f.saved, secrets: f.secrets) { _ in question }
+        XCTAssertEqual(back?.body, "Back from snooze · Tests pass. CI is green.")
+        XCTAssertEqual(back?.quiet, false)
+        // Snoozed again since, until later: the first snooze's return no longer brings it back.
+        let body: JSON = ["v": 1, "id": "d_z", "to": [.string(f.phone.id)], "createdAt": .string(Dates.format(first)), "question": "Merge the inbox PR?", "context": "", "options": [], "source": NotifyFixture.source]
+        var saved = try SavedDecision(from: f.machine.id, text: body.text, answeredAt: nil)
+        saved.snoozedAt = Dates.format(Date().addingTimeInterval(-60))
+        saved.snoozedUntil = Dates.format(Date().addingTimeInterval(7200))
+        f.saved.decisions = [saved]
+        let stale = await Notify.shown(f.payload(snooze), saved: f.saved, secrets: f.secrets) { _ in question }
+        XCTAssertEqual(stale?.quiet, true)
+        XCTAssertTrue(stale?.body.hasPrefix("Snoozed until ") == true, stale?.body ?? "")
+    }
+
     func testAPromptOpensTheAppToAllow() async throws {
         let f = try NotifyFixture()
         let at = Date()
@@ -132,5 +154,23 @@ final class NotifyTests: XCTestCase {
         noKeys.boxSk = nil
         let unopened = await Notify.shown(f.payload(try f.decision("d_y")), saved: f.saved, secrets: noKeys) { _ in nil }
         XCTAssertNil(unopened)
+    }
+
+    /** Push services keep no order: a snooze's first push after its return leaves the question up (#1320). */
+    func testASnoozesFirstPushAfterItsTimeLeavesItsNotification() throws {
+        let now = Date()
+        func snooze(due: Bool?, wakeAt: Date) throws -> JSON {
+            var p: JSONObject = ["v": 1, "kind": "snooze", "id": "z_1", "from": "d_phone", "re": "d_1", "wakeAt": .string(Dates.format(wakeAt))]
+            if let due { p["due"] = .bool(due) }
+            return .object(p)
+        }
+        XCTAssertTrue(Notify.closes(try snooze(due: false, wakeAt: now.addingTimeInterval(300)), now: now))
+        XCTAssertFalse(Notify.closes(try snooze(due: false, wakeAt: now.addingTimeInterval(-60)), now: now))
+        // Its return may already show, by a server clock a minute ahead.
+        XCTAssertFalse(Notify.closes(try snooze(due: false, wakeAt: now.addingTimeInterval(60)), now: now))
+        // A server before #1290 sends no `due`: every snooze closes, as before.
+        XCTAssertTrue(Notify.closes(try snooze(due: nil, wakeAt: now.addingTimeInterval(-60)), now: now))
+        XCTAssertTrue(Notify.closes(.object(["v": 1, "kind": "answered", "id": "d_1"]), now: now))
+        XCTAssertFalse(Notify.closes(.object(["v": 1, "kind": "quota", "id": "q_1"]), now: now))
     }
 }

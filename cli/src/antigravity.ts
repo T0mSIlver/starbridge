@@ -28,14 +28,21 @@ export interface AgyRoute {
 }
 
 /**
- * The conversation's route from its command's environment: only on loopback, since the token
- * goes with every call, and not in `agy -p`, whose server is gone once its run ends.
+ * Whether a route's address is on loopback, where Antigravity's language server listens. A
+ * route anywhere else is never called, since its token goes with every call.
+ */
+export function onLoopback(address: string): boolean {
+  return /^(localhost|127\.0\.0\.1|\[::1\]):\d+$/.test(address);
+}
+
+/**
+ * The conversation's route from its command's environment: only on loopback, and not in
+ * `agy -p`, whose server is gone once its run ends.
  */
 export function agyRoute(env: Ctx["env"]): AgyRoute | undefined {
   const address = env.ANTIGRAVITY_LS_ADDRESS;
   const token = env.ANTIGRAVITY_CSRF_TOKEN;
-  if (!address || !token || !/^(localhost|127\.0\.0\.1|\[::1\]):\d+$/.test(address))
-    return undefined;
+  if (!address || !token || !onLoopback(address)) return undefined;
   return agyHeadless() ? undefined : { address, token };
 }
 
@@ -77,6 +84,7 @@ export function agyHeadless(): boolean {
 const LS = "exa.language_server_pb.LanguageServerService";
 
 export async function lsCall<T>(route: AgyRoute, method: string, body: unknown): Promise<T> {
+  if (!onLoopback(route.address)) throw new Error(`${method}: ${route.address} is not on loopback`);
   const r = await fetch(`http://${route.address}/${LS}/${method}`, {
     method: "POST",
     headers: { "content-type": "application/json", "x-codeium-csrf-token": route.token },
@@ -120,16 +128,19 @@ function markConversation(ctx: Ctx, id: string) {
 
 /**
  * Whether conversation `id` still has to run `starbridge hello` for its prompts to go out: prompts
- * on, a local agent to take the key, and no command of it registered yet.
+ * on, a local agent to take the key, and no command of it registered yet. Prompts off and no agent
+ * are often passing (the agent starts after Antigravity at login, the owner turns prompts on
+ * later), so they leave the conversation unmarked, to be asked again next time (#1336).
  */
 function needsHello(ctx: Ctx, id: unknown): boolean {
   if (typeof id !== "string" || !/^[\w-]+$/.test(id)) return false;
   if (existsSync(join(ctx.store.dir, "antigravity", id))) return false;
   // `agy -p` registers no route, so a hello there would only fail.
-  if (permissionsEnabled(ctx) && existsSync(socketPath(ctx.env, ctx.store.dir)) && !agyHeadless())
-    return true;
-  markConversation(ctx, id);
-  return false;
+  if (agyHeadless()) {
+    markConversation(ctx, id);
+    return false;
+  }
+  return permissionsEnabled(ctx) && existsSync(socketPath(ctx.env, ctx.store.dir));
 }
 
 /** What the agent is told, at the start of a turn, until the conversation registered. */
@@ -174,6 +185,7 @@ export async function hello(ctx: Ctx): Promise<number> {
 
 /** Whether the route's language server answers, so its process still runs. */
 export async function agyReachable(route: AgyRoute): Promise<boolean> {
+  if (!onLoopback(route.address)) return false;
   try {
     const r = await fetch(`http://${route.address}/healthz`, {
       signal: AbortSignal.timeout(2_000),
@@ -342,8 +354,15 @@ export function waitsOn(st: State, id: string, now: Date): boolean {
   );
 }
 
-/** The lines of answers to conversation `id`, held up to `seconds` for one; each taken once. */
-async function takeLines(ctx: Ctx, id: string, seconds: number): Promise<string[]> {
+/**
+ * The lines of answers to conversation `id`, held up to `seconds` for one, and how to mark them
+ * taken: only once they are printed, or a print that fails loses them (#1287).
+ */
+async function takeLines(
+  ctx: Ctx,
+  id: string,
+  seconds: number,
+): Promise<{ lines: string[]; taken: () => Promise<unknown> }> {
   const path = `/v1/sessions/${encodeURIComponent(id)}`;
   return withAgent(
     ctx,
@@ -355,9 +374,10 @@ async function takeLines(ctx: Ctx, id: string, seconds: number): Promise<string[
         seconds * 1000 + 15_000,
         ctx.signal,
       );
-      if (events.length > 0)
-        await agent.call("POST", `${path}/ack`, { acks: events.map((e) => e.ack) });
-      return events.map((e) => e.line);
+      return {
+        lines: events.map((e) => e.line),
+        taken: () => agent.call("POST", `${path}/ack`, { acks: events.map((e) => e.ack) }),
+      };
     },
     async () => {
       let lines = sessionLines(ctx.store.state(), id);
@@ -365,14 +385,17 @@ async function takeLines(ctx: Ctx, id: string, seconds: number): Promise<string[
         await poll(ctx, session(ctx), { cursor: ctx.store.state().cursor, seconds, shared: true });
         lines = sessionLines(ctx.store.state(), id);
       }
-      ctx.store.updateState((st) =>
-        ackLines(
-          st,
-          id,
-          lines.map((l) => l.ack),
-        ),
-      );
-      return lines.map((l) => l.line);
+      return {
+        lines: lines.map((l) => l.line),
+        taken: async () =>
+          ctx.store.updateState((st) =>
+            ackLines(
+              st,
+              id,
+              lines.map((l) => l.ack),
+            ),
+          ),
+      };
     },
   );
 }
@@ -398,9 +421,10 @@ export async function hookStop(ctx: Ctx, text: string, opts: { agent?: string })
   let seconds = 0;
   try {
     for (;;) {
-      const lines = await takeLines(ctx, id, seconds);
+      const { lines, taken } = await takeLines(ctx, id, seconds);
       if (lines.length > 0) {
         ctx.out(JSON.stringify({ decision: "continue", reason: lines.join("\n") }));
+        await taken();
         return 0;
       }
       const left = until - ctx.now().getTime();

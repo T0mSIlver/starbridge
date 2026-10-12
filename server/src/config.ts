@@ -32,8 +32,11 @@ export interface Config {
   maxWaitSeconds: number;
   /** Pushes carry the device's box when the payload stays within this many bytes. */
   pushInlineLimit: number;
-  /** Let push subscriptions point at private addresses (a self-hoster's own ntfy). */
-  allowPrivatePushEndpoints: boolean;
+  /**
+   * Private hosts push subscriptions may point at, over HTTP too (a self-hoster's own ntfy), as
+   * `pushHostKey` writes them; "any" for every private host, the old yes/no flag's meaning.
+   */
+  privatePushHosts: PrivatePushHosts;
   /** Gives up on one request to a push service after this many milliseconds. */
   pushTimeoutMs: number;
 
@@ -86,6 +89,40 @@ export interface Config {
 
 type Env = Record<string, string | undefined>;
 
+export type PrivatePushHosts = "any" | string[];
+
+/** A URL's host as `privatePushHosts` lists it: lowercase, no brackets or trailing dot. */
+export const pushHostKey = (host: string) =>
+  host
+    .toLowerCase()
+    .replace(/^\[|\]$/g, "")
+    .replace(/\.+$/, "");
+
+/**
+ * `ALLOW_PRIVATE_PUSH_ENDPOINTS`: a comma-separated list of hosts. `1` or `true`, from before the
+ * list, still allows every private host, which `main.ts` warns about.
+ */
+export function privatePushHosts(v: string | undefined): PrivatePushHosts {
+  if (flag(v)) return "any";
+  return (v ?? "")
+    .split(",")
+    .map((h) => h.trim())
+    .filter((h) => h && h !== "0" && h !== "false")
+    .map(canonicalHost);
+}
+
+/** `host` as a URL names it, so `fd00:0::1` or `010.0.0.1` matches the endpoints that use it. */
+function canonicalHost(host: string): string {
+  const bare = host.replace(/^\[|\]$/g, "");
+  let url: URL | undefined;
+  try {
+    url = new URL(`http://${bare.includes(":") ? `[${bare}]` : bare}/`);
+  } catch {}
+  if (!url || url.port || url.username || `${url.pathname}${url.search}${url.hash}` !== "/")
+    throw new Error(`ALLOW_PRIVATE_PUSH_ENDPOINTS: not a host name or address: ${host}`);
+  return pushHostKey(url.hostname);
+}
+
 function flag(v: string | undefined): boolean {
   return v === "1" || v === "true";
 }
@@ -120,7 +157,7 @@ export function configFromEnv(env: Env = process.env): Config {
     maxMachines: int(env.MAX_MACHINES, 5),
     maxWaitSeconds: int(env.MAX_WAIT_SECONDS, 300),
     pushInlineLimit: int(env.PUSH_INLINE_LIMIT, 3072),
-    allowPrivatePushEndpoints: flag(env.ALLOW_PRIVATE_PUSH_ENDPOINTS),
+    privatePushHosts: privatePushHosts(env.ALLOW_PRIVATE_PUSH_ENDPOINTS),
     pushTimeoutMs: int(env.PUSH_TIMEOUT_MS, 10_000),
     fcm:
       env.FCM_PROJECT_ID && env.FCM_CLIENT_EMAIL && env.FCM_PRIVATE_KEY
@@ -163,12 +200,27 @@ export function configFromEnv(env: Env = process.env): Config {
     limits: DEFAULT_LIMITS,
     minimumReleases: MINIMUM_RELEASES,
   };
-  if (config.demo) checkDemo(config);
+  // The relay pushes for anyone who asks; private endpoints are for a self-hoster's own devices.
+  if (config.relayMode && config.privatePushHosts.length)
+    throw new Error("RELAY_MODE is refused with ALLOW_PRIVATE_PUSH_ENDPOINTS");
+  if (config.demo) {
+    checkDemo(config);
+    config.maxMachines = DEMO_MACHINES;
+    config.limits = { ...config.limits, pendingPairings: DEMO_PAIRINGS };
+  }
   for (const [name, minimum] of Object.entries(config.minimumReleases))
     if (!isMinimumRelease(minimum))
       throw new Error(`minimum ${name} release: not MAJOR.MINOR.PATCH`);
   return config;
 }
+
+/**
+ * A demo server's caps. Its machine is the demo program's, and reviewers share its account, so
+ * none of them adds one whose items every other reviewer would see. Its database lives in a
+ * 64 MB tmpfs (deploy/demo/compose.yaml), which pairings at about 4 KB each must not fill.
+ */
+export const DEMO_MACHINES = 1;
+export const DEMO_PAIRINGS = 5_000;
 
 /**
  * A demo server approves every join, so it must never be the hosted one: prod sets

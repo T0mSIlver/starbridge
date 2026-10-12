@@ -20,6 +20,9 @@ in the planning repo's `research/ios-app.md`).
 - **The inbox** follows spec/clients.md: runs, then permission prompts, then questions whose agent
   waits, then the rest; Snoozed and History closed at the bottom. With no push yet, the app reads
   the server every 10 s while it is in front.
+- **Quotas** (#1234) follow Android's tab: one card per provider, in the order and with the bars
+  Settings → Quotas sets on this iPhone. APNs carries no quota snapshots, so the app reads
+  `GET /quota` with the inbox.
 - **Answers** are signed, sealed and kept in an outbox before they are posted, as on Android
   (#329): one tapped offline is sent once the server can be reached.
 - **Notifications** (#1137): APNs carries each question as an alert with a placeholder, which the
@@ -30,6 +33,14 @@ in the planning repo's `research/ios-app.md`).
   background; a prompt's Deny answers there, its Allow opens the prompt. The simulator skips
   service extensions for `simctl push`, so `NotificationServiceTests` drives the extension's work
   (`Notify.rewrite`) against the shared keychain and app group instead.
+- **Presence** (#848) follows Android: in front, a touch anywhere in the window or a key typed
+  into a field says the owner is here, and only that bit reaches the server.
+- **Devices** (Settings → Devices and machines) follows Android: each device's notifications and
+  app, a machine's check code while `starbridge pair` asks, Update available, and Revoke. Add a
+  device looks up a typed, scanned or linked code before Approve, and proves a machine's check
+  key from its QR (#795), or shows a QR code for a new phone. Replace, under the recovery key,
+  takes the current key and posts the new one once the owner says it is stored (#348). A join by
+  digits from another browser or phone asks over any screen while the app is in front (#1158).
 - **Design tokens** are `Starbridge/Theme/Tokens.swift`, written from DESIGN.md by
   `bun web/scripts/tokens.ts`; type is SF Pro, scaled with Dynamic Type.
 

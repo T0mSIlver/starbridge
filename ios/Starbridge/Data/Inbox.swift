@@ -175,6 +175,28 @@ struct SavedPrompt: Codable, Equatable {
 }
 
 /** One update of a `starbridge run`, the latest this iPhone has. */
+/** A machine's latest quota snapshot, as this iPhone keeps it: its signer and the signed text. */
+struct SavedQuota: Codable, Equatable {
+    let from: String
+    let text: String
+    let body: QuotaSnapshot
+
+    enum CodingKeys: String, CodingKey { case from, text }
+
+    init(from: String, text: String) throws {
+        self.from = from
+        self.text = text
+        body = try parsedBody("quota", text)
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        try self.init(from: try c.decode(String.self, forKey: .from), text: try c.decode(String.self, forKey: .text))
+    }
+
+    static func == (a: SavedQuota, b: SavedQuota) -> Bool { a.from == b.from && a.text == b.text }
+}
+
 struct SavedRun: Codable, Equatable {
     let from: String
     let text: String

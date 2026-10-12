@@ -25,8 +25,14 @@ export function questionNote(
   };
 }
 
-/** A permission prompt's title and body; it has no buttons, since its input reads on the page. */
+/**
+ * A permission prompt's title and body; it has no buttons, since its input reads on the page.
+ * The title is what the agent says the call does, else the tool, as on every surface (#805, #1228).
+ */
 export function promptNote(item: PromptItem): { title: string; body: string } {
   const p = item.permission;
-  return { title: `${p.tool} on ${p.source.machine}`, body: `${p.source.project}\n${p.summary}` };
+  return {
+    title: p.description || p.tool,
+    body: `${p.source.machine} · ${p.source.project}\n${p.summary}`,
+  };
 }

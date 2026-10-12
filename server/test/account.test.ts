@@ -160,6 +160,15 @@ test("an unpaired session may delete its account; signing in again starts a new 
   expect((await s.call("GET", "/v1/me", { token: again })).json.account).not.toBe(first);
 });
 
+test("one address deletes at most 3 accounts an hour", async () => {
+  const s = await makeServer();
+  for (let i = 0; i < 3; i++)
+    expect((await s.call("DELETE", "/v1/account", { token: await signIn(s) })).status).toBe(204);
+  const r = await s.call("DELETE", "/v1/account", { token: await signIn(s) });
+  expect(r.status).toBe(429);
+  expect(r.json.error).toBe("rate-limited");
+});
+
 test("a machine cannot delete the account, nor can anyone signed out", async () => {
   const s = await makeServer();
   const acct = await setupAccount(s);

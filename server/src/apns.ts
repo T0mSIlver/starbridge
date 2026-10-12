@@ -46,11 +46,14 @@ export function apnsRequest(
     from?: string;
     re?: string;
     wakeAt?: string;
+    due?: boolean;
     box?: string;
   };
   // A snooze pushes twice: as it is posted, to hide the question, and at its wakeAt, to show it
-  // again (PROTOCOL.md, "Snoozing").
-  const hides = head.kind === "snooze" && head.wakeAt && Date.parse(head.wakeAt) > now;
+  // again (PROTOCOL.md, "Snoozing"). A relayed push from a server before #1290 has no `due`.
+  const hides =
+    head.kind === "snooze" &&
+    (head.due === undefined ? !!head.wakeAt && Date.parse(head.wakeAt) > now : !head.due);
   const shown = hides ? undefined : PLACEHOLDERS[head.kind];
   const headers: Record<string, string> = {
     "apns-topic": topic,

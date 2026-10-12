@@ -127,7 +127,7 @@ extension Store {
      */
     func backgroundPush(_ userInfo: [AnyHashable: Any]) async {
         guard let p = Notify.payload(userInfo), let id = Notify.item(p) else { return }
-        if ["answered", "settled", "snooze"].contains(p["kind"]?.string) { await Self.removeDelivered(about: id) }
+        if Notify.closes(p) { await Self.removeDelivered(about: id) }
         try? await serial { try await self.sync() }
     }
 }
@@ -150,9 +150,12 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         return .newData
     }
 
-    /** In front, a question still shows its banner: the owner may be looking at another one. */
+    /**
+     * In front, a question still shows its banner: the owner may be looking at another one. A
+     * quota alert only joins the list, as Android's low-importance channel shows no banner.
+     */
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification) async -> UNNotificationPresentationOptions {
-        [.banner, .list, .sound]
+        notification.request.identifier.hasPrefix(Notify.quotaPrefix) ? [.list] : [.banner, .list, .sound]
     }
 
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {

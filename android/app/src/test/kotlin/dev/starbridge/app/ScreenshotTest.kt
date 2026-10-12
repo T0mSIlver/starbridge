@@ -3,6 +3,7 @@ package dev.starbridge.app
 import dev.starbridge.app.ui.Refresh
 import dev.starbridge.app.ui.devices.RecoveryKeyScreen
 import dev.starbridge.app.ui.devices.RecoveryActions
+import dev.starbridge.app.data.MachineRelease
 import dev.starbridge.app.data.Replacing
 import dev.starbridge.app.data.RecoveryNotice
 import dev.starbridge.app.data.RecoveryUi
@@ -338,7 +339,7 @@ class ScreenshotTest(private val dark: Boolean) {
     @Test fun quotasFailed() = capture("quotas-failed") { QuotasScreen(fake.failedWindows, now, failures = fake.failures) }
 
     // Each device's notifications as it last said (#943): read-only, since only a device changes its own.
-    @Test fun devices() = capture("devices") { Phone(null, 0) { DevicesScreen(fake.members, now, deviceActions, notify = mapOf("m1" to "on", "m2" to "off", "m3" to "blocked"), clients = fake.clients, behind = setOf("m4")) } }
+    @Test fun devices() = capture("devices") { Phone(null, 0) { DevicesScreen(fake.members, now, deviceActions, notify = mapOf("m1" to "on", "m2" to "off", "m3" to "blocked"), clients = fake.clients, releases = mapOf("m4" to MachineRelease("0.1.4", behind = true, updatedAt = null))) } }
 
     // The recovery key under the members (#348): when and where it was set, with Replace.
     private val recovery = RecoveryUi(now.minusSeconds(86_400 * 2), "this phone", replaced = false)

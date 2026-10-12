@@ -31,6 +31,8 @@ type Payload =
       from: string;
       re?: string;
       wakeAt?: string;
+      /** A snooze's: false as it is posted, true at its time; absent from servers before #1290. */
+      due?: boolean;
       box?: string;
     }
   | { v: 1; kind: "answered"; id: string }
@@ -54,8 +56,10 @@ self.addEventListener("push", (e) => {
   e.waitUntil(
     onPush(e.data?.text() ?? "").catch(async (err) => {
       // Held (#362): the notifications already up would still let the owner answer from them.
+      // Run and quota alerts answer nothing, and would not show again, so they stay (#1281).
       if (err instanceof Withheld)
-        for (const n of await self.registration.getNotifications()) n.close();
+        for (const n of await self.registration.getNotifications())
+          if (n.tag.startsWith("d:") || n.tag.startsWith("p:")) n.close();
       // A push that fails to open or verify shows nothing; open pages log why.
       for (const c of await self.clients.matchAll({ type: "window" }))
         c.postMessage({ type: "starbridge:push-error", error: String(err) });
@@ -91,16 +95,22 @@ async function onPush(text: string): Promise<void> {
   }
   // Quota snapshots skip Web Push; the page notifies about quota alerts (quotaSettings.ts).
   if (payload.kind === "answer" || payload.kind === "quota") return;
+
+  // Every kind, a join request too, shows only while this browser is a device of the account
+  // it is signed in to: the server may still hold its endpoint under an account it left (#1230).
+  const ctx = account ? await deviceContext(account) : undefined;
+  if (!ctx) return;
   if (payload.kind === "join") {
+    // The server reads a join request only to a device of its account, so one pushed for an
+    // account this browser left, while it is a device of another, shows nothing.
+    const res = await fetch(`/v1/joins/${encodeURIComponent(payload.id)}`, { headers: CLIENT });
+    if (!res.ok) return;
     await self.registration.showNotification("A device wants to join", {
       body: "Open Starbridge to compare digits with it and approve it.",
       tag: `j:${payload.id}`,
     });
     return;
   }
-
-  const ctx = account ? await deviceContext(account) : undefined;
-  if (!ctx) return;
   let answeredAt: string | undefined;
   const item: SealedItem = payload.box
     ? {
@@ -141,9 +151,15 @@ async function onPush(text: string): Promise<void> {
     if (!(await noteSnoozes(ctx, [z]))) return;
     const until = Date.parse(z.until);
     if (until <= Date.parse(z.at)) return; // Back now: the inbox lists it again, quietly.
-    if (Date.now() < until - WAKE_SKEW_MS) {
-      for (const n of await self.registration.getNotifications({ tag: tag(z.decisionId) }))
-        n.close();
+    // The server says which push this is; an older one leaves it to this browser's clock, which
+    // takes a first push that comes late for the return (#1290).
+    const due = payload.due ?? Date.now() >= until - WAKE_SKEW_MS;
+    if (!due) {
+      // Near or past its time, its return showed the question or will, maybe by a server clock
+      // ahead of this one: closing would hide it.
+      if (Date.now() < until - WAKE_SKEW_MS)
+        for (const n of await self.registration.getNotifications({ tag: tag(z.decisionId) }))
+          n.close();
       return;
     }
     if (answered.has(`${account}/${z.decisionId}`)) return;
@@ -158,6 +174,10 @@ async function onPush(text: string): Promise<void> {
     // Back to working, the notification loses its waiting line without a sound (#191).
     const { machine, waiting } = await openWaiting(ctx, item);
     if (answered.has(`${account}/${waiting.decisionId}`)) return;
+    // A flip signed before the question's latest snooze, delivered late, is stale: the server
+    // pushes none while a snooze is pending, and the snooze's return notifies on its own (#1280).
+    const snoozed = (await store.get("snoozes", account as string))?.[waiting.decisionId];
+    if (snoozed && Date.parse(waiting.at) < Date.parse(snoozed)) return;
     const res = await fetch(`/v1/items/${encodeURIComponent(waiting.decisionId)}`, {
       headers: CLIENT,
     });
@@ -187,7 +207,8 @@ async function moot(account: string, id: string): Promise<boolean> {
 /**
  * How far a snooze's time may be ahead of this browser's clock when its second push comes: the
  * server sends it at the time, a little late, by its own clock. A snooze runs at least 5 minutes
- * (lib/snooze.ts), so its first push never passes for its second.
+ * (lib/snooze.ts), so its first push passes for its second only when it comes over 3 minutes
+ * late; servers since #1290 mark which push is which, and this applies only to older ones.
  */
 const WAKE_SKEW_MS = 2 * 60_000;
 

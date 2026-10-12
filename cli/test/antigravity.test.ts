@@ -29,14 +29,15 @@ test("with prompts on, a conversation that ran no starbridge command is told to,
     hookPreInvocation(ctx, JSON.stringify({ conversationId: id }), { agent: "antigravity" });
   const tool = (id: string, line: string) => () =>
     hookPreTool(ctx, call(id, line), { agent: "antigravity" });
-  // Prompts off: nothing to tell, and the conversation needs no CLI from then on.
+  // Prompts off: nothing to tell.
   expect(out(turn("c-0"))).toEqual([{}]);
   ctx.store.saveAgentConfig({ permissions: { enabled: true } });
-  expect(out(tool("c-0", "ls"))).toEqual([]);
   // No agent to take the key: nothing either.
   expect(out(tool("c-1", "ls"))).toEqual([]);
   writeFileSync(socket, "");
-  expect(JSON.stringify(out(turn("c-2")))).toContain("run `starbridge hello`");
+  // Both were passing states: those conversations are told too, once the agent runs (#1336).
+  for (const id of ["c-0", "c-1", "c-2"])
+    expect(JSON.stringify(out(turn(id)))).toContain("run `starbridge hello`");
   // The hello itself runs; the first other command is denied with the same words, once.
   expect(out(tool("c-2", "starbridge hello"))[0]?.decision).toBe("allow");
   expect(out(tool("c-2", "ls"))[0]?.decision).toBe("deny");

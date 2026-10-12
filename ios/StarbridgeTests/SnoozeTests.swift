@@ -36,4 +36,13 @@ final class SnoozeTests: XCTestCase {
         XCTAssertTrue(SnoozeTimes.allowed(now.addingTimeInterval(7 * 86_400), now))
         XCTAssertFalse(SnoozeTimes.allowed(now.addingTimeInterval(7 * 86_400 + 60), now))
     }
+
+    func testASwipeSnoozesForTheTimeSetOrAsks() {
+        XCTAssertEqual(SwipeSnooze.hour.until(at(11, 14, 0), calendar), at(11, 15, 0))
+        XCTAssertEqual(SwipeSnooze.threeHours.until(at(11, 14, 0), calendar), at(11, 17, 0))
+        XCTAssertEqual(SwipeSnooze.morning.until(at(11, 14, 0), calendar), at(12, 9, 0))
+        // At 1:00 the owner means this morning.
+        XCTAssertEqual(SwipeSnooze.morning.until(at(12, 1, 0), calendar), at(12, 9, 0))
+        XCTAssertNil(SwipeSnooze.ask.until(at(11, 14, 0), calendar))
+    }
 }

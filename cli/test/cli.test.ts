@@ -799,12 +799,34 @@ test("Antigravity's Stop hook holds a waiting turn for its answer and hands it o
   expect(await stop("c-1")).toEqual([]);
 });
 
+test("an answer the Stop hook could not print is handed over by the next one (#1287)", async () => {
+  const ctx = await paired(server);
+  ctx.env = { ANTIGRAVITY_CONVERSATION_ID: "c-1" };
+  expect(await run(ASK, ctx)).toBe(0);
+  const id = ctx.lines.at(-1) as string;
+  await server.answer(id, { choice: "Merge" });
+  await poll(ctx, session(ctx), { cursor: ctx.store.state().cursor, seconds: 1, shared: true });
+  const input = JSON.stringify({ conversationId: "c-1" });
+  // Antigravity closed the hook's stdout.
+  const out = ctx.out;
+  ctx.out = () => {
+    throw new Error("write EPIPE");
+  };
+  expect(await hookStop(ctx, input, { agent: "antigravity" })).toBe(0);
+  ctx.out = out;
+  ctx.lines.length = 0;
+  expect(await hookStop(ctx, input, { agent: "antigravity" })).toBe(0);
+  expect(ctx.lines.map((l) => JSON.parse(l))).toEqual([
+    { decision: "continue", reason: `Answer to ${id} (Merge #12 now?): Merge` },
+  ]);
+});
+
 test("config turns permission prompts on and off", async () => {
   const ctx = await paired(server);
   expect(await run(["config"], ctx)).toBe(0);
-  expect(ctx.lines.at(-4)).toBe("permissions   off");
+  expect(ctx.lines.at(-5)).toBe("permissions   off");
   expect(await run(["config", "permissions", "on"], ctx)).toBe(0);
-  expect(ctx.lines.at(-4)).toBe("permissions   on");
+  expect(ctx.lines.at(-5)).toBe("permissions   on");
   expect(await run(["config", "permissions", "maybe"], ctx)).toBe(1);
 });
 
@@ -1072,6 +1094,39 @@ test("re-sealing stops at a 429 and waits its Retry-After, leaving the window to
   expect(posts).toBe(3);
 });
 
+test("SIGTERM ends an ask whose post the server never answers (#1288)", async () => {
+  const ctx = await paired(server);
+  server.stalls.push("POST /items");
+  const stop = new AbortController();
+  const asked = run([...ASK, "--session", "s"], { ...ctx, signal: stop.signal });
+  await until(() => server.log.includes("POST /items"));
+  stop.abort();
+  // Ctrl-C exits 130, as CONTRACT.md says.
+  expect(await Promise.race([asked, Bun.sleep(5000).then(() => "still running")])).toBe(130);
+});
+
+test("a decision whose post lost its reply is withdrawn, so its card does not stay on the devices (#1289)", async () => {
+  const ctx = await paired(server);
+  server.lostReplies.push("POST /items");
+  const stop = new AbortController();
+  const asked = run([...ASK, "--session", "s"], { ...ctx, signal: stop.signal });
+  await until(async () => (await server.opened("decision")).length === 1);
+  stop.abort();
+  const ended = await Promise.race([
+    asked.then(
+      () => true,
+      () => true,
+    ),
+    Bun.sleep(5000).then(() => false),
+  ]);
+  expect(ended).toBe(true);
+  const [decision] = await server.opened("decision");
+  await until(async () => (await server.opened("settled")).length === 1);
+  expect(await server.opened("settled")).toMatchObject([
+    { itemId: decision?.id, outcome: "withdrawn" },
+  ]);
+});
+
 test("ask on a full account says so in plain words (#586)", async () => {
   server.stop();
   server = await LiveServer.start({ limits: { ...DEFAULT_LIMITS, storedBytes: 1 } });
@@ -1145,6 +1200,63 @@ test("through the local agent, wait says too that a revoked device answered (#51
   } finally {
     await agent.stop();
   }
+});
+
+/** Posts a laptop's answer to decision `id` as the laptop, its routing hint `re` if given. */
+async function laptopAnswer(
+  ctx: Awaited<ReturnType<typeof paired>>,
+  laptop: Awaited<ReturnType<LiveServer["addDevice"]>>,
+  id: string,
+  re?: string,
+) {
+  const machine = ctx.store.machine()?.id as string;
+  const answer: Answer = {
+    v: 1,
+    id: `a_${crypto.randomUUID()}`,
+    decisionId: id,
+    to: machine,
+    answeredAt: `${new Date().toISOString().slice(0, 19)}Z`,
+    choice: "Merge",
+  };
+  const member = (await server.directory()).members.get(machine)?.member;
+  const sealed = seal("answer", answer, { id: laptop.id, signKey: laptop.keys.sign.privateKey }, [
+    member as NonNullable<typeof member>,
+  ]);
+  const posted = await fetch(`${server.url}/v1/items`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${laptop.token}`, "content-type": "application/json" },
+    body: JSON.stringify(re ? { ...sealed, re } : sealed),
+  });
+  expect(posted.status).toBe(201);
+}
+
+test("an answer from a device revoked before the machine fetched it closes the decision, so wait fails at once (#1301)", async () => {
+  const ctx = await paired(server);
+  const laptop = await server.addDevice("laptop");
+  await run([...ASK, "--session", "s"], ctx);
+  const id = ctx.lines.at(-1) as string;
+  await laptopAnswer(ctx, laptop, id);
+  await server.revoke("laptop");
+  expect(await run(["wait", id, "--timeout", "5s"], ctx)).toBe(1);
+  expect(ctx.errors.join("\n")).toContain("removed since");
+  expect(ctx.store.state().asked[id]).toMatchObject({ settled: true, revoked: true });
+  ctx.lines.length = 0;
+  expect(await run(["decisions", "--open"], ctx)).toBe(0);
+  expect(ctx.lines.join("")).not.toContain(id);
+});
+
+test("a revoked device's answer whose routing hint names another decision closes neither (#1301)", async () => {
+  const ctx = await paired(server);
+  const laptop = await server.addDevice("laptop");
+  await run([...ASK, "--session", "s"], ctx);
+  await run(["ask", "--question", "Name the branch?", "--session", "s"], ctx);
+  const [first, second] = ctx.lines.slice(-2) as [string, string];
+  // The hint is not signed: only the body says which decision a device answered.
+  await laptopAnswer(ctx, laptop, second, first);
+  await server.revoke("laptop");
+  expect(await run(["wait", first, "--timeout", "1s"], ctx)).toBe(2);
+  expect(ctx.store.state().asked[first]?.settled).toBeUndefined();
+  expect(ctx.store.state().asked[second]?.settled).toBeUndefined();
 });
 
 test("a poll that brings no answer drops a revoked device's undelivered one (#491)", async () => {

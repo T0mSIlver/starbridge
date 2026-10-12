@@ -5,6 +5,8 @@ import SwiftUI
 enum Sheet: Identifiable, Hashable {
     case decision(String)
     case prompt(String)
+    /** A swiped question's snooze times, when the swipe asks for one (#692). */
+    case snooze(String)
 
     var id: Self { self }
 }
@@ -16,18 +18,20 @@ enum Sheet: Identifiable, Hashable {
  */
 struct InboxView: View {
     let store: Store
-    @Environment(\.scenePhase) private var scenePhase
     @State private var opened: Sheet?
     /** The Runs section, open by default and remembered on this iPhone (#835). */
     @AppStorage("runsOpen") private var runsOpen = true
     @State private var snoozedOpen = false
     @State private var historyOpen = false
     @State private var query = ""
-    @State private var deleting = false
     /** One feed, or grouped by machine or by waiting, remembered on this iPhone. */
     @AppStorage("grouping") private var grouping = Grouping.none
     /** Answer buttons on cards: Always, When the agent waits, or Never (#138). */
     @AppStorage("answerButtons") private var answerButtons = AnswerButtons.always
+    /** What a swipe right on a question does (#692). */
+    @AppStorage("swipeSnooze") private var swipe = SwipeSnooze.hour
+    /** A swiped snooze that took, offering Undo for a few seconds. */
+    @State private var undo: Swiped?
 
     var body: some View {
         let decisions = store.openDecisions
@@ -41,6 +45,7 @@ struct InboxView: View {
         NavigationStack {
             ScrollView {
                 LazyVStack(spacing: Tokens.Spacing.s2) {
+                    if let notice = store.recoveryInfo?.notice { RecoveryBanner(store: store, notice: notice) }
                     if let why = store.withheldWhy { HeldBanner(store: store, why: why) }
                     if !query.trimmingCharacters(in: .whitespaces).isEmpty {
                         found(runs.map { .run($0) } + feed + snoozed, history)
@@ -89,42 +94,40 @@ struct InboxView: View {
                         Picker("View", selection: $grouping) {
                             ForEach(Grouping.allCases, id: \.self) { Text($0.label).tag($0) }
                         }
-                        Picker("Answer buttons", selection: $answerButtons) {
-                            ForEach(AnswerButtons.allCases, id: \.self) { Text($0.label).tag($0) }
-                        }
-                        .pickerStyle(.menu)
-                        Section("This iPhone: \(store.me?.name ?? "")") {
-                            Button("Sign out", role: .destructive) { Task { await store.signOut() } }
-                            Button("Delete account", role: .destructive) { deleting = true }
-                        }
                     } label: {
                         Image(systemName: "ellipsis.circle").accessibilityLabel("Options")
                     }
                 }
             }
         }
-        .deleteAccount(store: store, isPresented: $deleting, text: DeleteAccount.paired)
         .sheet(item: $opened) { which in
             Group {
                 switch which {
                 case let .decision(id): DecisionDetail(store: store, id: id) { opened = nil }
                 case let .prompt(id): PromptDetail(store: store, id: id) { opened = nil }
+                case let .snooze(id): SnoozeSheet(store: store, id: id) { opened = nil }
                 }
             }
             .presentationDetents([.medium, .large])
             .presentationDragIndicator(.visible)
         }
-        .task {
-            store.startPolling()
-            await store.enableNotifications()
+        .overlay(alignment: .bottom) {
+            if let undo {
+                UndoBar(text: "Snoozed until \(Times.clock(undo.until, Date()))") {
+                    self.undo = nil
+                    Task { await store.snooze(undo.id, until: Date()) }
+                }
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+                .task(id: undo) {
+                    try? await Task.sleep(for: .seconds(4))
+                    if self.undo == undo { withAnimation { self.undo = nil } }
+                }
+            }
         }
         .onChange(of: store.openRequest, initial: true) { _, request in
             guard let request else { return }
             opened = request
             store.openRequest = nil
-        }
-        .onChange(of: scenePhase) { _, phase in
-            if phase == .active { store.startPolling() } else { store.stopPolling() }
         }
     }
 }
@@ -134,7 +137,24 @@ extension InboxView {
         switch item {
         case let .run(r): RunCard(run: r, store: store)
         case let .prompt(p): PromptCard(prompt: p, store: store) { opened = .prompt(p.id) }
-        case let .decision(d): DecisionCard(decision: d, store: store, buttons: answerButtons) { opened = .decision(d.id) }
+        case let .decision(d):
+            let card = DecisionCard(decision: d, store: store, buttons: answerButtons) { opened = .decision(d.id) }
+            if d.snoozed == nil { SwipeToSnooze { swiped(d.id) } content: { card } } else { card }
+        }
+    }
+
+    /**
+     * A swipe right snoozes for the time set in Settings, then offers Undo once the snooze took,
+     * or opens the times over the inbox (#692). One that failed says why instead.
+     */
+    func swiped(_ id: String) {
+        guard let until = swipe.until(Date()) else {
+            opened = .snooze(id)
+            return
+        }
+        Task {
+            await store.snooze(id, until: until)
+            if store.decision(id)?.snoozedUntil == Dates.format(until) { withAnimation { undo = Swiped(id: id, until: until) } }
         }
     }
 
@@ -200,9 +220,9 @@ enum AnswerButtons: String, CaseIterable {
 
     var label: String {
         switch self {
-        case .always: "Answer buttons: Always"
-        case .waiting: "Answer buttons: When the agent waits"
-        case .never: "Answer buttons: Never"
+        case .always: "Always"
+        case .waiting: "When the agent waits"
+        case .never: "Never"
         }
     }
 }
@@ -493,6 +513,26 @@ private struct RunCard: View {
     }
 }
 
+/** A replacement of the recovery key made on another device (#348), said once. */
+private struct RecoveryBanner: View {
+    let store: Store
+    let notice: RecoveryNotice
+
+    var body: some View {
+        HStack(spacing: Tokens.Spacing.s2) {
+            Text("Recovery key replaced on \(notice.by), \(notice.at.formatted(.dateTime.month(.abbreviated).day())), \(notice.at.formatted(date: .omitted, time: .shortened)).")
+                .type(Tokens.Typography.body)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            Button("OK") { store.dismissRecoveryNotice(notice.seq) }
+                .type(Tokens.Typography.label)
+                .frame(minWidth: Tokens.Sizes.tap, minHeight: Tokens.Sizes.tap)
+        }
+        .padding(.leading, Tokens.Spacing.s4)
+        .padding(.vertical, Tokens.Spacing.s2)
+        .background(RoundedRectangle(cornerRadius: Tokens.Radius.lg).fill(Tokens.Colors.surface2.color))
+    }
+}
+
 /** Nothing from the machines shows: the server holds back entries a machine has seen (#362). */
 private struct HeldBanner: View {
     let store: Store
@@ -508,5 +548,119 @@ private struct HeldBanner: View {
         .padding(Tokens.Spacing.s4)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(RoundedRectangle(cornerRadius: Tokens.Radius.lg).fill(Tokens.Colors.badSoft.color))
+    }
+}
+
+struct Swiped: Equatable {
+    let id: String
+    let until: Date
+}
+
+/** How far a card goes before letting go snoozes it (#692): 40% of its width. */
+private let swipeArms: CGFloat = 0.4
+
+/**
+ * A question's card that snoozes on a swipe right (#692), as Android's: past 40% of its width the
+ * panel behind it darkens, its icon fills and the phone ticks; let go there and it snoozes, while
+ * the card slides back. Let go earlier and nothing happens. VoiceOver gets a Snooze action.
+ */
+private struct SwipeToSnooze<Content: View>: View {
+    let onSwipe: () -> Void
+    @ViewBuilder let content: Content
+    @State private var offset: CGFloat = 0
+    @State private var width: CGFloat = 0
+    /** The drag's direction, settled by its first move: only a sideways one moves the card. */
+    @State private var sideways: Bool?
+    @Environment(\.scenePhase) private var scenePhase
+
+    var body: some View {
+        let armed = width > 0 && offset >= width * swipeArms
+        content
+            .offset(x: offset)
+            .background(alignment: .leading) {
+                // Only while it moves: at rest the panel would show at the card's rounded edges.
+                if offset > 0 {
+                    HStack(spacing: Tokens.Spacing.s2) {
+                        Image(systemName: armed ? "moon.zzz.fill" : "moon.zzz")
+                        Text("Snooze").type(Tokens.Typography.label)
+                    }
+                    .foregroundStyle(armed ? Tokens.Colors.fg.color : Tokens.Colors.fg2.color)
+                    .padding(.horizontal, Tokens.Spacing.s5)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+                    .background(RoundedRectangle(cornerRadius: Tokens.Radius.lg).fill(armed ? Tokens.Colors.lineStrong.color : Tokens.Colors.surface2.color))
+                    .accessibilityHidden(true)
+                }
+            }
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
+            .simultaneousGesture(
+                DragGesture(minimumDistance: 16)
+                    .onChanged { g in
+                        if sideways == nil { sideways = abs(g.translation.width) > abs(g.translation.height) }
+                        guard sideways == true else { return }
+                        offset = max(0, g.translation.width)
+                    }
+                    .onEnded { _ in
+                        let snooze = sideways == true && width > 0 && offset >= width * swipeArms
+                        sideways = nil
+                        withAnimation(.spring(duration: 0.3)) { offset = 0 }
+                        if snooze { onSwipe() }
+                    }
+            )
+            // Ticks crossing 40%, and again backing under it, but not as the card springs back after a snooze.
+            .sensoryFeedback(trigger: armed) { _, now in now || sideways != nil ? .impact(weight: .light) : nil }
+            .accessibilityAction(named: "Snooze", onSwipe)
+            // A drag cut short, by a call or the app leaving, never ends: the card goes back.
+            .onChange(of: scenePhase) {
+                sideways = nil
+                offset = 0
+            }
+    }
+}
+
+/** The times over the inbox, for a swiped card (#692): what the agent asked, then the times. */
+private struct SnoozeSheet: View {
+    let store: Store
+    let id: String
+    let close: () -> Void
+
+    var body: some View {
+        let open = store.decision(id)?.isOpen == true
+        ScrollView {
+            VStack(alignment: .leading, spacing: Tokens.Spacing.s4) {
+                if let d = store.decision(id), open {
+                    Text(d.body.question).type(Tokens.Typography.subtitle)
+                    SnoozeControls(store: store, id: id, until: nil, open: true, done: close)
+                } else {
+                    Text("This question is gone.").type(Tokens.Typography.body)
+                }
+            }
+            .padding(Tokens.Spacing.s5)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .background(Tokens.Colors.bg.color.ignoresSafeArea())
+        // Answered meanwhile, on this iPhone or another: nothing left to put off.
+        .onChange(of: open) { if !open { close() } }
+    }
+}
+
+/** A line at the bottom with one action, as Android's snackbar. */
+private struct UndoBar: View {
+    let text: String
+    let action: () -> Void
+
+    var body: some View {
+        HStack {
+            Text(text).type(Tokens.Typography.body)
+            Spacer()
+            Button("Undo", action: action)
+                .font(.system(size: Tokens.Typography.action.size, weight: .medium))
+                .frame(minHeight: Tokens.Sizes.tap)
+        }
+        .foregroundStyle(Tokens.Colors.bg.color)
+        .tint(Tokens.Colors.bg.color)
+        .padding(.horizontal, Tokens.Spacing.s4)
+        .background(RoundedRectangle(cornerRadius: Tokens.Radius.md).fill(Tokens.Colors.fg.color))
+        .padding(.horizontal, Tokens.Spacing.s3)
+        .padding(.bottom, Tokens.Spacing.s2)
     }
 }

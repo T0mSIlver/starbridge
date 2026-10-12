@@ -82,7 +82,7 @@ const HELP = `starbridge: post decisions to your devices, report runs, upload qu
 
   starbridge pair [--server <url>] [--name <name>] [--force]
       Make this machine's keys and print a pairing code to type on a device. Unless the
-      Starbridge Android app scanned the QR code, confirm that its check code matches.
+      Starbridge app scanned the QR code, confirm that its check code matches.
   starbridge pair --confirm | --reject
       Answer that for a waiting \`pair\` or \`setup\` that has no terminal.
       --server <url>          a self-hosted server (default: $STARBRIDGE_SERVER, else
@@ -179,7 +179,7 @@ const HELP = `starbridge: post decisions to your devices, report runs, upload qu
       (or with STARBRIDGE_NO_AGENT=1).
 
   starbridge config [permissions on|off] [presence on|off] [update-check on|off]
-                   [machine-kind server|desktop|laptop|cloud]
+                   [updates on|off] [machine-kind server|desktop|laptop|cloud]
       Print this machine's settings, or change one. permissions: send its Claude Code
       permission prompts to your devices, where they can be allowed or denied; the prompt
       stays open at the keyboard and the first answer wins. Off by default; while off, the
@@ -188,8 +188,11 @@ const HELP = `starbridge: post decisions to your devices, report runs, upload qu
       on your other devices wait a few seconds, so a question you answer here doesn't buzz
       them; the server hears only yes or no. Off by default. update-check: the agent reads
       the latest release from GitHub once a day, and commands you run say when it is newer
-      (STARBRIDGE_NO_UPDATE_CHECK=1 silences that line too). On by default. machine-kind: the
-      icon devices show, detected by setup.
+      (STARBRIDGE_NO_UPDATE_CHECK=1 silences that line too). On by default. updates: on an
+      install from install.sh or install.ps1, the agent runs \`starbridge update\` by itself
+      once a new release is out, while no question, permission prompt or run is in flight.
+      Needs update-check. On by default; Homebrew and npm installs update through their
+      manager. machine-kind: the icon devices show, detected by setup.
 
   starbridge hook permission --agent claude-code|pi|opencode|antigravity [--wait 570s]
   starbridge hook settle --agent claude-code

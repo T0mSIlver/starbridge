@@ -6,7 +6,6 @@ import {
   JoinApprovalBody,
   joinCommitment,
   openJoinRequest,
-  PairingMessage,
   ProtocolError,
 } from "@starbridge/protocol";
 import { type Context, Hono } from "hono";
@@ -16,6 +15,7 @@ import type { Env } from "../env";
 import { holdOpen, json, waitSeconds } from "../http";
 import { rateLimit } from "../limits";
 import { activeMember } from "./directory";
+import { Bounded, MESSAGE_BYTES, parseBody } from "./pairings";
 
 // Joining by digits (PROTOCOL.md, "Joining by digits"). The server relays the request, both
 // ephemeral keys and the approval; the digits and the MAC key never reach it.
@@ -112,7 +112,15 @@ joinRoutes.post("/joins", requireCaller("device"), async (c) => {
   rateLimit(c, `join:${caller.account}`, c.var.config.limits.joins);
   const { request, commitment } = await json(
     c,
-    z.object({ request: z.string().max(4096), commitment: Key }),
+    z.object({
+      request: z
+        .string()
+        .refine(
+          (r) => Buffer.byteLength(r) <= MESSAGE_BYTES,
+          `a join request is at most ${MESSAGE_BYTES} bytes`,
+        ),
+      commitment: Key,
+    }),
   );
   let body: ReturnType<typeof openJoinRequest>;
   try {
@@ -250,15 +258,10 @@ joinRoutes.post("/joins/:id/reveal", requireCaller("device"), async (c) => {
 });
 
 joinRoutes.post("/joins/:id/approve", requireCaller("paired-device"), async (c) => {
-  const { approval } = await json(c, z.object({ approval: PairingMessage }));
+  const { approval } = await json(c, z.object({ approval: Bounded }));
   const caller = c.var.caller;
   const { db } = c.var;
-  let body: JoinApprovalBody;
-  try {
-    body = JoinApprovalBody.parse(JSON.parse(approval.body));
-  } catch {
-    fail(400, "bad-schema", "approval body");
-  }
+  const body = parseBody(JoinApprovalBody, approval.body);
   const r = db.transaction(() => {
     recheck(c);
     const r = load(db, c.req.param("id"));

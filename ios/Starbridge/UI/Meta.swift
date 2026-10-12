@@ -34,6 +34,21 @@ enum Times {
         return date.formatted(.dateTime.weekday(.abbreviated)) + " " + time
     }
 
+    /** "just now", "12 min ago". */
+    static func ago(_ then: Date, _ now: Date) -> String { now.timeIntervalSince(then) < 60 ? "just now" : span(then, now) + " ago" }
+
+    /**
+     * A clock time in a sentence: "at 15:55" today, "tomorrow at 10:15", "yesterday at 10:15",
+     * else "on Oct 8 at 10:15".
+     */
+    static func clockAt(_ date: Date, _ now: Date, _ calendar: Calendar = .current) -> String {
+        let time = date.formatted(date: .omitted, time: .shortened)
+        if calendar.isDate(date, inSameDayAs: now) { return "at \(time)" }
+        if let next = calendar.date(byAdding: .day, value: 1, to: now), calendar.isDate(date, inSameDayAs: next) { return "tomorrow at \(time)" }
+        if let last = calendar.date(byAdding: .day, value: -1, to: now), calendar.isDate(date, inSameDayAs: last) { return "yesterday at \(time)" }
+        return "on \(date.formatted(.dateTime.month(.abbreviated).day())) at \(time)"
+    }
+
     /** "1 min 05 s", "2 h 03 min": a run's time. */
     static func elapsed(_ from: Date, _ to: Date) -> String {
         let s = max(0, Int(to.timeIntervalSince(from)))

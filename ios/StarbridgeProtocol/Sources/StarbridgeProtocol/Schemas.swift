@@ -29,8 +29,8 @@ public struct Member: Equatable, Sendable {
         id = try f.id("id")
         role = Role(rawValue: try f.oneOf("role", ["device", "machine"]))!
         name = try f.text("name", 1, 100)
-        boxPk = try f.b64("boxPk")
-        signPk = try f.b64("signPk")
+        boxPk = try f.bytes32("boxPk")
+        signPk = try f.bytes32("signPk")
     }
 
     public init(json: JSON) throws { try self.init(Fields(json, "member")) }
@@ -85,7 +85,7 @@ public struct DirectoryEntry: Equatable, Sendable {
         seq = try f.int("seq")
         try schema(seq >= 0, "seq")
         prev = try f.nullable("prev").map { try asString($0, "prev") }
-        if let prev { try checkB64(prev, "prev") }
+        if let prev { try checkBytes(prev, 43, "prev") }
         at = try f.time("at")
         // An op this client does not know is refused: skipping a recovery confirmation would keep
         // a replaced key trusted (PROTOCOL.md, "Directory").
@@ -93,15 +93,15 @@ public struct DirectoryEntry: Equatable, Sendable {
         case "add":
             let member = try Member(f.child("member"))
             let pk = try f.optString("recoveryPk")
-            if let pk { try checkB64(pk, "recoveryPk") }
+            if let pk { try checkBytes(pk, 43, "recoveryPk") }
             op = .add(member, recoveryPk: pk)
         case "revoke": op = .revoke(id: try f.id("id"))
         case "recover": op = .recover(try Member(f.child("member")))
-        case "recovery": op = .recovery(recoveryPk: try f.b64("recoveryPk"))
+        case "recovery": op = .recovery(recoveryPk: try f.bytes32("recoveryPk"))
         case "recovery-confirm":
             let proposal = try f.int("proposal")
             try schema(proposal >= 0, "proposal")
-            op = .recoveryConfirm(proposal: proposal, recoveryPk: try f.b64("recoveryPk"))
+            op = .recoveryConfirm(proposal: proposal, recoveryPk: try f.bytes32("recoveryPk"))
         default: throw ProtocolError(.badSchema, "op")
         }
     }
@@ -170,9 +170,9 @@ public struct SignedEnvelope: Equatable, Sendable {
         kind = try f.oneOf("kind", KINDS)
         signer = try f.id("signer")
         body = try f.string("body")
-        sig = try f.b64("sig")
+        sig = try f.bytes64("sig")
         recoverySig = try f.optString("recoverySig")
-        if let recoverySig { try checkB64(recoverySig, "recoverySig") }
+        if let recoverySig { try checkBytes(recoverySig, 86, "recoverySig") }
     }
 
     public var json: JSON {
@@ -365,10 +365,8 @@ public struct DecisionImage: Equatable, Sendable {
     public let alt: String?
 
     init(_ f: Fields) throws {
-        let key = try f.b64("key")
-        try schema(codePoints(key) == 43, "images.key")
-        let hash = try f.b64("hash")
-        try schema(codePoints(hash) == 43, "images.hash")
+        let key = try f.bytes32("key")
+        let hash = try f.bytes32("hash")
         ref = ImageRef(key: key, hash: hash)
         type = try f.oneOf("type", ["image/png", "image/jpeg"])
         width = try f.int("width")
@@ -424,8 +422,7 @@ public struct DirectoryHead: Equatable, Sendable {
     init(_ f: Fields) throws {
         length = try f.int("length")
         try schema((1...100_000).contains(length), "dir.length")
-        head = try f.b64("head")
-        try schema(codePoints(head) == 43, "dir.head")
+        head = try f.bytes32("head")
         by = try f.optId("by")
     }
 
@@ -632,7 +629,7 @@ public struct Permission: ItemBody, Equatable {
         summary = try f.text("summary", 1, 200)
         description = try f.optText("description", 0, 500)
         input = try f.text("input", 0, 8000)
-        inputHash = try f.b64("inputHash")
+        inputHash = try f.bytes32("inputHash")
         let suggestions = try f.array("suggestions")
         try schema(suggestions.count <= 2, "suggestions")
         self.suggestions = try suggestions.map { try PermissionSuggestion(Fields($0, "suggestions")) }
@@ -683,7 +680,7 @@ public struct PermissionAnswer: ItemBody, Equatable {
         answeredAt = try f.time("answeredAt")
         behavior = try f.oneOf("behavior", ["allow", "deny"])
         scope = PermissionScope(rawValue: try f.oneOf("scope", ["once", "session", "project"]))!
-        inputHash = try f.b64("inputHash")
+        inputHash = try f.bytes32("inputHash")
         message = try f.optText("message", 0, 500)
         dir = try optDir(f)
         if behavior == "deny" { try schema(scope == .once, "a deny is for this call only") }
@@ -743,6 +740,8 @@ public struct Settled: ItemBody, Equatable {
         try schema(device != nil || (choice == nil && text == nil), "choice and text come only with a device's outcome")
         try schema(choice == nil || text == nil, "at most one of choice and text")
         try schema((outcome == "device") == (device != nil), "device is set exactly when outcome is device")
+        try schema(behavior == nil || outcome == "device", "behavior comes only with a device's outcome")
+        try schema(reason == nil || outcome == "withdrawn", "reason comes only with outcome withdrawn")
     }
 
     public var json: JSON {

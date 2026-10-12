@@ -121,6 +121,9 @@ jobs:
       - name: Start a self-hosted server
         working-directory: server
         run: |
+          # The tests delete the account after each run that sets one up, more than the 3 an hour
+          # one address may.
+          DB_PATH="$RUNNER_TEMP/starbridge.db" bun run src/main.ts limits set accountDeletes 100/3600
           PORT=18731 DB_PATH="$RUNNER_TEMP/starbridge.db" OWNER_TOKEN=ci-owner-token bun run src/main.ts > "$RUNNER_TEMP/server.log" 2>&1 &
           for _ in $(seq 30); do curl -fs localhost:18731/healthz && exit 0; sleep 1; done
           cat "$RUNNER_TEMP/server.log"; exit 1

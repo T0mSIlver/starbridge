@@ -5,14 +5,15 @@
  * Not a local plugin under `~/.cursor/plugins/local`: `cursor-agent`'s interactive sessions load
  * neither its skills nor its sessionStart and stop hooks (2026.10.01).
  */
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname, isAbsolute, join, relative } from "node:path";
 import cli from "../../../plugin/hooks/cli.sh" with { type: "text" };
 import sessionStart from "../../../plugin/hooks/session-start.sh" with { type: "text" };
 import rule from "../../../plugin/rules/cursor.md" with { type: "text" };
 import { CURSOR_HOLD_MS } from "../hook";
 import { type FileState, SKILL } from "./harnesses";
 import { marker, ours } from "./marker";
+import { removedLine, removeWritten } from "./remove";
 import { type Sys, which } from "./sys";
 
 type Home = Pick<Sys, "ctx" | "home">;
@@ -198,10 +199,15 @@ export function installCursorFiles(sys: Home): boolean {
 /** Removes what setup wrote. Returns one line per thing done. */
 export function removeCursorFiles(sys: Home): string[] {
   const done: string[] = [];
-  if (ours(readText(join(cursorSkillDir(sys), "SKILL.md")))) {
-    rmSync(cursorSkillDir(sys), { recursive: true, force: true });
-    done.push(`Removed ${cursorSkillDir(sys)}.`);
-  }
+  // The owner's files beside Starbridge's stay (#1324).
+  const remove = (dir: string) => {
+    // Relative paths, so Windows' separators match too.
+    const files = Object.keys(cursorFiles(sys))
+      .map((path) => relative(dir, path))
+      .filter((path) => !path.startsWith("..") && !isAbsolute(path));
+    done.push(removedLine(dir, removeWritten(dir, files)));
+  };
+  if (ours(readText(join(cursorSkillDir(sys), "SKILL.md")))) remove(cursorSkillDir(sys));
   const file = readHooks(sys);
   // Only a file that holds Starbridge's entries is written.
   if (file && existsSync(cursorHooksPath(sys)) && hasOurs(sys, file)) {
@@ -209,10 +215,7 @@ export function removeCursorFiles(sys: Home): string[] {
     writeFileSync(cursorHooksPath(sys), `${JSON.stringify(next, null, 2)}\n`);
     done.push(`Removed Starbridge's entries from ${cursorHooksPath(sys)}.`);
   }
-  if (ours(readText(join(cursorScriptsDir(sys), "README.md")))) {
-    rmSync(cursorScriptsDir(sys), { recursive: true, force: true });
-    done.push(`Removed ${cursorScriptsDir(sys)}.`);
-  }
+  if (ours(readText(join(cursorScriptsDir(sys), "README.md")))) remove(cursorScriptsDir(sys));
   return done;
 }
 

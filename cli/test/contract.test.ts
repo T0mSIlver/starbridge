@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { LiveServer } from "@starbridge/server/test-support";
 import { run } from "../src/cli";
 import { codexNotice } from "../src/codex";
+import { hookQuestion } from "../src/hook";
 import { approveAndConfirm, paired, testCtx, until } from "./helpers";
 
 let server: LiveServer;
@@ -186,4 +187,20 @@ test("settle --session prints the lines CONTRACT.md documents", async () => {
     const line = await settled();
     expect(row).toContain(`\`${n === 1 ? line : line.replace("2", "<n>")}\``);
   }
+});
+
+// Codex goes to its own path (`--race`), which the dispatch picks before `hookQuestion` (#1291).
+test("CONTRACT.md's hook question lists the agents it takes", async () => {
+  const doc = readFileSync(join(import.meta.dir, "../CONTRACT.md"), "utf8");
+  const row = doc.split("\n").find((l) => l.startsWith("| `hook question` |")) as string;
+  const listed = (/--agent ([a-z\\|-]+)/.exec(row)?.[1] ?? "").split("\\|");
+  const ctx = testCtx();
+  const takes: string[] = [];
+  for (const agent of ["claude-code", "codex", "cursor", "opencode", "pi", "antigravity"]) {
+    ctx.errors.length = 0;
+    await hookQuestion(ctx, "{}", { agent });
+    if (!ctx.errors.join("\n").includes("--agent:")) takes.push(agent);
+  }
+  expect(listed.filter((a) => a !== "codex").sort()).toEqual(takes.sort());
+  expect(listed).toContain("codex");
 });

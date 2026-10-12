@@ -49,6 +49,23 @@ enum Notify {
         }
     }
 
+    /**
+     * Whether a background push closes its item's notification: an answer from anywhere, a
+     * settled notice, or a snooze as it is posted. A snooze's first push that comes near or after
+     * its time, the server's `due` false, leaves it: its return showed the question or will,
+     * maybe by a server clock ahead of this one (#1320).
+     */
+    static func closes(_ p: JSON, now: Date = Date()) -> Bool {
+        switch p["kind"]?.string {
+        case "answered", "settled": true
+        case "snooze": !(p["due"]?.bool == false && (p["wakeAt"]?.string.flatMap(Dates.parse).map { $0 <= now.addingTimeInterval(wakeSkew) } ?? false))
+        default: false
+        }
+    }
+
+    /** How far the server's clock may run ahead of this iPhone's when it wakes a snooze, as Android allows. */
+    static let wakeSkew: TimeInterval = 120
+
     /** The category of a question's own buttons. */
     static func category(_ decision: String) -> String { "d." + decision }
 
@@ -97,6 +114,15 @@ enum Notify {
     ]
 
     /**
+     * The server's placeholder, kept when the push could not be read: its text is the server's
+     * own, so it keeps no button that answers a question. A prompt's Allow and Deny stay, since
+     * the app reads the prompt before acting on either: Allow opens it (#356), Deny fetches it.
+     */
+    static func unread(_ placeholder: UNMutableNotificationContent) {
+        if placeholder.categoryIdentifier != "permission" { placeholder.categoryIdentifier = "" }
+    }
+
+    /**
      * Opens a pushed item with this iPhone's keys against its pinned directory. A payload without
      * this iPhone's box, too big for a push, comes from `fetch`; so does the decision a `waiting`
      * or `snooze` item names. Nil keeps the placeholder: an item that fails its checks, a signer
@@ -141,10 +167,25 @@ enum Notify {
             return shown
         case let z as Snooze:
             guard let fetched = try? await fetch(z.decisionId), let d = open(fetched)?.body as? Decision else { return nil }
+            // Only the latest snooze this iPhone knows brings the question back (PROTOCOL.md,
+            // "Snoozing"). An extension can't drop an alert, so an older one's return says the
+            // newer time, quietly, and the app's next sync closes it.
+            if let later = laterSnooze(than: z, saved.decisions.first { $0.id == z.decisionId }) {
+                var shown = decision(d, prefix: "Snoozed until \(later.formatted(Date.FormatStyle(date: Calendar.current.isDateInToday(later) ? .omitted : .abbreviated, time: .shortened)))")
+                shown.quiet = true
+                return shown
+            }
             return decision(d, prefix: "Back from snooze")
         default:
             return nil
         }
+    }
+
+    /** When a snooze newer than `z` puts the question off until, from what the app saved; nil when `z` is the latest. */
+    static func laterSnooze(than z: Snooze, _ saved: SavedDecision?) -> Date? {
+        guard let saved, let at = saved.snoozedAt.flatMap(Dates.parse), let mine = Dates.parse(z.at), at > mine,
+              let until = saved.snoozed, until > Date() else { return nil }
+        return until
     }
 
     /**
@@ -190,12 +231,15 @@ enum Notify {
     /** Closes every notification about item `id`: answered, settled, or snoozed elsewhere. */
     static func removeDelivered(about id: String) async { await removeDelivered(about: [id]) }
 
-    /** Closes every notification about any of `items`. */
+    /** What a notification is about, to close it: its item, or a join by digits. */
+    private static func about(_ p: JSON) -> String? { p["kind"]?.string == "join" ? p["id"]?.string : item(p) }
+
+    /** Closes every notification about any of `items`, or about any of those joins. */
     static func removeDelivered(about items: Set<String>) async {
         guard !items.isEmpty else { return }
         let center = UNUserNotificationCenter.current()
         let ids = await center.deliveredNotifications()
-            .filter { items.contains($0.request.identifier) || payload($0.request.content.userInfo).flatMap(item).map(items.contains) == true }
+            .filter { items.contains($0.request.identifier) || payload($0.request.content.userInfo).flatMap(about).map(items.contains) == true }
             .map(\.request.identifier)
         if !ids.isEmpty { center.removeDeliveredNotifications(withIdentifiers: ids) }
     }

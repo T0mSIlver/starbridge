@@ -144,8 +144,11 @@ class SnoozeTest {
         return ServerStore(disk, OkHttpClient(), sodium, envelopes, directories, Pairings(sodium), Joins(sodium), alerts, "Phone", server, false, scope)
     }
 
-    /** The web device snoozes d_1 until [until], sent at [sent]; the push as the server sends it. */
-    private fun push(id: String, until: Instant, sent: Instant): String {
+    /**
+     * The web device snoozes d_1 until [until], sent at [sent]; the push as the server sends it,
+     * with [due] from servers since #1290.
+     */
+    private fun push(id: String, until: Instant, sent: Instant, due: Boolean? = null): String {
         val item = envelopes.seal("snooze", buildJsonObject {
             put("v", 1)
             put("id", id)
@@ -161,6 +164,7 @@ class SnoozeTest {
             put("from", web.id)
             put("re", "d_1")
             put("wakeAt", item.wakeAt!!)
+            due?.let { put("due", it) }
             put("box", item.boxes.single { it.to == "phone" }.box)
         }.toString()
     }
@@ -200,6 +204,30 @@ class SnoozeTest {
         val now = Instant.now()
         // The server pushes the snooze again at its time: it ends now, sent hours ago.
         runBlocking { store.onPush(push("z_1", now.plusSeconds(30), now.minus(Duration.ofHours(3)))) }
+        assertEquals(listOf("back d_1"), alerted)
+    }
+
+    @Test
+    fun theServersMarkDecidesOverTheClock() {
+        val store = store()
+        val now = Instant.now()
+        // A 5-minute snooze whose first push comes 4 minutes late, within the clock's 2-minute
+        // skew: no "Back from snooze" yet (#1320).
+        runBlocking { store.onPush(push("z_1", now.plusSeconds(60), now.minus(Duration.ofMinutes(4)), due = false)) }
+        assertEquals(emptyList<String>(), alerted)
+        // Its return, marked, notifies even on a clock that runs behind.
+        runBlocking { store.onPush(push("z_1", now.plus(Duration.ofMinutes(5)), now.minus(Duration.ofMinutes(4)), due = true)) }
+        assertEquals(listOf("back d_1"), alerted)
+    }
+
+    @Test
+    fun aFirstPushAfterItsTimeLeavesTheQuestionAlone() {
+        val store = store()
+        val now = Instant.now()
+        // Push services keep no order: the return already showed the question, by a server clock
+        // a minute ahead of this one.
+        runBlocking { store.onPush(push("z_1", now.plusSeconds(60), now.minus(Duration.ofMinutes(5)), due = true)) }
+        runBlocking { store.onPush(push("z_1", now.plusSeconds(60), now.minus(Duration.ofMinutes(5)), due = false)) }
         assertEquals(listOf("back d_1"), alerted)
     }
 

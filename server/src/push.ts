@@ -5,7 +5,7 @@ import { isIP } from "node:net";
 import webpush from "web-push";
 import { z } from "zod";
 import { Apns } from "./apns";
-import type { Config } from "./config";
+import { type Config, type PrivatePushHosts, pushHostKey } from "./config";
 
 export const PushType = z.enum(["fcm", "webpush", "unifiedpush", "apns"]);
 export type PushType = z.infer<typeof PushType>;
@@ -25,8 +25,12 @@ export type PushTarget = z.infer<typeof PushTarget>;
 /** "gone" means the target no longer exists and its subscription should be dropped. */
 export type PushResult = "ok" | "gone" | "failed" | "no-route";
 
+/** Whether `url`'s host is one the server's owner allowed though private (`privatePushHosts`). */
+export const allowedPrivate = (url: URL, hosts: PrivatePushHosts) =>
+  hosts === "any" || hosts.includes(pushHostKey(url.hostname));
+
 /** Returns why `target` cannot be accepted, or undefined. */
-export function checkTarget(target: PushTarget, allowPrivate: boolean): string | undefined {
+export function checkTarget(target: PushTarget, hosts: PrivatePushHosts): string | undefined {
   if (target.environment && target.type !== "apns") return "environment is for apns only";
   if (target.type === "fcm") {
     return /^[A-Za-z0-9_:.-]+$/.test(target.endpoint) ? undefined : "not an FCM token";
@@ -40,7 +44,7 @@ export function checkTarget(target: PushTarget, allowPrivate: boolean): string |
   } catch {
     return "endpoint is not a URL";
   }
-  if (allowPrivate)
+  if (allowedPrivate(url, hosts))
     return url.protocol === "https:" || url.protocol === "http:" ? undefined : "bad scheme";
   if (url.protocol !== "https:") return "endpoint must be https";
   if (isPrivateHost(url.hostname)) return "endpoint is a private address";
@@ -182,6 +186,9 @@ export class Push {
   private readonly pending = new Set<Promise<unknown>>();
   private readonly queues = new Map<string, { running: number; waiting: (() => void)[] }>();
   private fcmToken?: { value: string; expires: number };
+  /** The relay's VAPID key, fetched at most once an hour, and the fetch under way. */
+  private relayVapid?: { key: string; expires: number };
+  private relayVapidFetch?: Promise<string | undefined>;
   private readonly apns?: Apns;
 
   /** Called with each push's outcome, for the daily usage counts. */
@@ -367,15 +374,25 @@ export class Push {
     }
   }
 
-  /** The VAPID public key browsers must subscribe with: ours, or the relay's. */
+  /**
+   * The VAPID public key browsers must subscribe with: ours, or the relay's. The relay's is kept
+   * an hour, so page loads don't each make a request to the relay.
+   */
   async vapidPublicKey(): Promise<string | undefined> {
     if (this.config.vapid) return this.config.vapid.publicKey;
-    if (!this.config.relayUrl) return undefined;
-    const res = await this.fetchFn(`${this.config.relayUrl}/v1/push/vapid`, {
-      signal: this.timeout(),
+    const { relayUrl } = this.config;
+    if (!relayUrl) return undefined;
+    if (this.relayVapid && this.relayVapid.expires > Date.now()) return this.relayVapid.key;
+    this.relayVapidFetch ??= (async () => {
+      const res = await this.fetchFn(`${relayUrl}/v1/push/vapid`, { signal: this.timeout() });
+      if (!res.ok) return undefined;
+      const key = ((await res.json()) as { publicKey?: string }).publicKey;
+      if (key) this.relayVapid = { key, expires: Date.now() + 3_600_000 };
+      return key;
+    })().finally(() => {
+      this.relayVapidFetch = undefined;
     });
-    if (!res.ok) return undefined;
-    return ((await res.json()) as { publicKey?: string }).publicKey;
+    return this.relayVapidFetch;
   }
 
   private async viaRelay(
@@ -431,7 +448,7 @@ export class Push {
       body: req.body ? new Uint8Array(req.body) : null,
     };
     let status: number;
-    if (this.config.allowPrivatePushEndpoints) {
+    if (allowedPrivate(new URL(req.endpoint), this.config.privatePushHosts)) {
       const res = await this.fetchFn(req.endpoint, {
         ...out,
         redirect: "manual",

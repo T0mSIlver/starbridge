@@ -68,3 +68,15 @@ export function tmpOutsideHome(): string {
   if (`${tmpdir()}/`.startsWith(`${homedir()}/`)) throw new Error("TMPDIR must be outside your home");
   return tmpdir();
 }
+
+/**
+ * opencode's login file as a run gets it: the API keys only (the Z.ai key), since an OAuth login
+ * in it would refresh in each run's copy.
+ */
+export function opencodeApiKeys(authJson: string): string {
+  const keys = Object.entries(JSON.parse(authJson) as Record<string, { type?: string }>).filter(
+    ([, login]) => login.type === "api",
+  );
+  if (!keys.length) throw new Error("no API key in opencode's auth.json: run `opencode auth login`");
+  return JSON.stringify(Object.fromEntries(keys));
+}

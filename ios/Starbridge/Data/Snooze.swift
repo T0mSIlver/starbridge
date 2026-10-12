@@ -46,8 +46,43 @@ enum SnoozeTimes {
         return day.formatted(.dateTime.weekday(.abbreviated).day())
     }
 
+    static let morningHour = 9
+    /** Before this hour, "tomorrow morning" is this morning: at 1:00 the owner means in 8 hours. */
+    static let nightEnds = 5
+
+    /** Tomorrow at 9:00, or this morning before 5:00. */
+    static func morning(_ now: Date, _ calendar: Calendar = .current) -> Date {
+        let today = calendar.startOfDay(for: now)
+        let day = calendar.component(.hour, from: now) < nightEnds ? today : calendar.date(byAdding: .day, value: 1, to: today)!
+        return calendar.date(bySettingHour: morningHour, minute: 0, second: 0, of: day) ?? day
+    }
+
     static func allowed(_ until: Date, _ now: Date) -> Bool {
         until >= now.addingTimeInterval(minimum) && until <= now.addingTimeInterval(maximum)
+    }
+}
+
+/** What a swipe right on a question does (#692): snooze for a set time, or ask for one. */
+enum SwipeSnooze: String, CaseIterable {
+    case hour, threeHours, morning, ask
+
+    var label: String {
+        switch self {
+        case .hour: "Snooze 1 hour"
+        case .threeHours: "Snooze 3 hours"
+        case .morning: "Snooze until tomorrow morning"
+        case .ask: "Ask for a time"
+        }
+    }
+
+    /** When it snoozes until, from `now`; nil when it asks. */
+    func until(_ now: Date, _ calendar: Calendar = .current) -> Date? {
+        switch self {
+        case .hour: now.addingTimeInterval(3600)
+        case .threeHours: now.addingTimeInterval(3 * 3600)
+        case .morning: SnoozeTimes.morning(now, calendar)
+        case .ask: nil
+        }
     }
 }
 

@@ -2133,6 +2133,20 @@
       "valid": false
     },
     {
+      "name": "a short input hash",
+      "body": {
+        "v": 1,
+        "id": "pans_1",
+        "permissionId": "perm_1",
+        "to": "devbox",
+        "answeredAt": "2026-10-04T10:01:00Z",
+        "behavior": "allow",
+        "scope": "session",
+        "inputHash": "vn1Rs4EDE--zdLaXkXyePSRJAmUegmDW02WYLSW_EI"
+      },
+      "valid": false
+    },
+    {
       "name": "with a directory head",
       "body": {
         "v": 1,
@@ -2337,6 +2351,39 @@
         "device": "phone",
         "at": "2026-10-04T10:01:00Z",
         "behavior": "ask"
+      },
+      "valid": false
+    },
+    {
+      "name": "a behavior at the keyboard",
+      "body": {
+        "v": 1,
+        "id": "set_1",
+        "itemId": "perm_1",
+        "to": [
+          "phone",
+          "phone2"
+        ],
+        "outcome": "keyboard",
+        "at": "2026-10-04T10:01:00Z",
+        "behavior": "allow"
+      },
+      "valid": false
+    },
+    {
+      "name": "a reason on a device's outcome",
+      "body": {
+        "v": 1,
+        "id": "set_1",
+        "itemId": "perm_1",
+        "to": [
+          "phone",
+          "phone2"
+        ],
+        "outcome": "device",
+        "device": "phone",
+        "at": "2026-10-04T10:01:00Z",
+        "reason": "Fixed it myself after rereading the logs"
       },
       "valid": false
     },

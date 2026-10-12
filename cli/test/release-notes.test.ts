@@ -41,6 +41,13 @@ Phone: a typo
   expect(parseNotes("No section.")).toBeUndefined();
 });
 
+test("a None line that says why is no note and no warning", () => {
+  expect(parseNotes("## Release notes\n\nNone: the iPhone app is not released yet\n")).toEqual({
+    notes: [],
+    unknown: [],
+  });
+});
+
 test("no HTML comment survives, even one split around another or left open", () => {
   const body = "## Release notes\n\n- Web: A <!<!-- x -->-- y --> fix.\n- Android: Kept. <!-- open";
   const notes = parseNotes(body)?.notes.map((n) => n.text);
