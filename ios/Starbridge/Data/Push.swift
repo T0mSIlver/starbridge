@@ -14,6 +14,7 @@ extension Store {
         let (granted, denied) = await Notify.authorize()
         try? await api().notificationState(denied ? "blocked" : granted ? "on" : "off")
         await Notify.register("permission", Notify.permissionActions)
+        await Notify.followPreviews()
         if granted { UIApplication.shared.registerForRemoteNotifications() }
     }
 

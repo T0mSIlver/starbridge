@@ -186,5 +186,15 @@ final class NotifyTests: XCTestCase {
         XCTAssertEqual(unlocks(.always), [false, false, false, false])
         XCTAssertEqual(unlocks(.whenAuthenticated), [true, true, true, true])
         XCTAssertEqual(unlocks(.never), [true, true, true, true])
+
+        // Registered at Always, then Show Previews changed: the question already shown follows it.
+        let open = Notify.category("d.d_lock", Notify.lockScreen(shown.actions, previews: .always))
+        let prompt = Notify.category("permission", Notify.permissionActions)
+        let locked = try XCTUnwrap(Notify.following([open, prompt], locked: true))
+        let question = try XCTUnwrap(locked.first { $0.identifier == "d.d_lock" })
+        XCTAssertEqual(question.actions.map { $0.options.contains(.authenticationRequired) }, [true, true, true, true])
+        XCTAssertTrue(question.actions.last is UNTextInputNotificationAction)
+        XCTAssertEqual(locked.first { $0.identifier == "permission" }?.actions.map(\.options), prompt.actions.map(\.options))
+        XCTAssertNil(Notify.following(locked, locked: true))
     }
 }

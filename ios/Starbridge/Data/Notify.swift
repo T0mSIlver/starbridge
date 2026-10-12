@@ -204,6 +204,7 @@ enum Notify {
         let api = Api(server: saved.server, session: secrets.session)
         let shown = await shown(p, saved: saved, secrets: secrets) { id in try await api.item(id).item }
         if let shown, !shown.actions.isEmpty { await register(shown.category, shown.actions) }
+        await followPreviews()
         log.info("\(p["kind"]?.string ?? "?", privacy: .public) \(shown == nil ? "kept the placeholder" : "shown", privacy: .public) in \(Int(Date().timeIntervalSince(start) * 1000)) ms, \(footprint() / 1_048_576) MB")
         return shown
     }
@@ -298,6 +299,37 @@ enum Notify {
         center.setNotificationCategories(categories)
         // The center reads its categories again before the notification shows.
         _ = await center.notificationCategories()
+    }
+
+    /**
+     * Show Previews may have changed since the questions' buttons were registered: sets their
+     * unlock again, so a question already on the lock screen follows it too (#1384). Runs as the
+     * app comes to the front and at each push.
+     */
+    static func followPreviews() async {
+        let center = UNUserNotificationCenter.current()
+        let locked = await center.notificationSettings().showPreviewsSetting != .always
+        if let updated = following(await center.notificationCategories(), locked: locked) {
+            center.setNotificationCategories(updated)
+        }
+    }
+
+    /** The categories with each question's buttons asking for the unlock when `locked`; nil when none changes. */
+    static func following(_ categories: Set<UNNotificationCategory>, locked: Bool) -> Set<UNNotificationCategory>? {
+        var changed = false
+        let updated = Set(categories.map { c -> UNNotificationCategory in
+            guard c.identifier.hasPrefix("d."), c.actions.contains(where: { $0.options.contains(.authenticationRequired) != locked }) else { return c }
+            changed = true
+            return UNNotificationCategory(identifier: c.identifier, actions: c.actions.map { a in
+                var options = a.options
+                if locked { options.insert(.authenticationRequired) } else { options.remove(.authenticationRequired) }
+                if let t = a as? UNTextInputNotificationAction {
+                    return UNTextInputNotificationAction(identifier: t.identifier, title: t.title, options: options, textInputButtonTitle: t.textInputButtonTitle, textInputPlaceholder: t.textInputPlaceholder)
+                }
+                return UNNotificationAction(identifier: a.identifier, title: a.title, options: options)
+            }, intentIdentifiers: c.intentIdentifiers)
+        })
+        return changed ? updated : nil
     }
 
     static func category(_ id: String, _ actions: [NotificationAction]) -> UNNotificationCategory {
