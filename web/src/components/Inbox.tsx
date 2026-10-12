@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { drafts } from "@/lib/drafts";
 import {
@@ -7,6 +8,7 @@ import {
   closedToday,
   type Entry,
   history,
+  isRecent,
   needsYou,
   type Past,
   promptOpen,
@@ -29,6 +31,7 @@ import {
   HistoryHead,
   machineIcon,
   NeedRow,
+  OlderHead,
   PastRow,
   RunRow,
   RunsHead,
@@ -90,6 +93,7 @@ export function Inbox() {
     dismissRun,
     answerPrompt,
     deviceName,
+    loadImages,
   } = app;
   const [grouping, setGrouping] = usePref("grouping");
   const [historyOpen, setHistoryOpen] = usePref("historyOpen");
@@ -135,6 +139,10 @@ export function Inbox() {
       !finding || matches(find, [p.entry.machine, p.entry.repo, ...text(p.entry), p.outcome, p.by]),
   );
   const showPast = historyOpen || finding;
+  // Find searches every row; the list shows the last 7 days until the owner asks for more.
+  const [showOlder, setShowOlder] = useState(false);
+  const older = finding || showOlder ? 0 : past.filter((p) => !isRecent(p, now)).length;
+  const listed = older > 0 ? past.filter((p) => isRecent(p, now)) : past;
   const view = finding ? "none" : grouping;
 
   // A question another device answered first stays selected, saying what won (#330).
@@ -142,7 +150,7 @@ export function Inbox() {
   const ids = [
     ...needs,
     ...(showSnoozed ? snoozed : []),
-    ...past.filter((p) => showPast || lost.current.has(p.entry.id)).map((p) => p.entry),
+    ...listed.filter((p) => showPast || lost.current.has(p.entry.id)).map((p) => p.entry),
   ].map((e) => e.id);
   const [picked, setPicked] = useState<string>();
   // Phones and narrow windows show the detail in place of the list once a row is tapped.
@@ -282,6 +290,10 @@ export function Inbox() {
         onDraft={(t) => (t ? drafts.set(id, t) : drafts.delete(id))}
         onAnswer={(r) => answerQuestion(e.item, r)}
         onSnooze={(until) => snoozeQuestion(e.item, until)}
+        onShowImages={() => {
+          // Failed, they stay pending; opening the question again tries again.
+          loadImages(e.item.decision.id).catch(() => {});
+        }}
       />
     );
   };
@@ -408,7 +420,7 @@ export function Inbox() {
           className={historyToggled ? "m-appear" : undefined}
           onAnimationEnd={() => setHistoryToggled(false)}
         >
-          {past.map((p) => (
+          {listed.map((p) => (
             <PastRow
               key={p.entry.id}
               past={p}
@@ -417,6 +429,7 @@ export function Inbox() {
               onSelect={() => (wide ? setPicked(p.entry.id) : openItem(p.entry.id))}
             />
           ))}
+          {older > 0 && <OlderHead count={older} comfy={comfy} onShow={() => setShowOlder(true)} />}
         </div>
       )}
     </>
@@ -941,16 +954,22 @@ function ViewMenu({
   );
 }
 
-/** The empty inbox of an account with no machine: what to install, where. */
+/** The empty inbox of an account with no machine: what to install, where, and Add a device. */
 function NoMachine() {
   return (
     <div className={s.noMachine}>
       <h2 className="t-heading">Add a machine</h2>
       <p className={`t-small ${s.noMachineText}`}>
-        Install Starbridge on each machine that runs your agents. Its setup shows a code to approve
-        here; then its agents' questions arrive in this inbox.
+        Install Starbridge on each machine that runs your agents, then enter the pairing code from
+        your terminal.
       </p>
-      <InstallBox />
+      <InstallBox setup />
+      {/* Where the pairing code goes, one tap away (#1367). */}
+      <div>
+        <Link href="/settings/devices/add?machine" className={`t-meta ${ui.btn} ${ui.sm}`}>
+          Add a device
+        </Link>
+      </div>
       <p className={`t-small ${s.noMachineText}`}>
         What setup does: <a href="/docs">the docs</a>
       </p>

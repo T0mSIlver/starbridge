@@ -27,6 +27,9 @@ import dev.starbridge.app.ui.inbox.rememberDrafts
 import com.goterl.lazysodium.LazySodiumJava
 import com.goterl.lazysodium.SodiumJava
 import dev.starbridge.app.data.Alerts
+import dev.starbridge.app.data.Api
+import dev.starbridge.app.data.ApiException
+import dev.starbridge.app.data.limitedUntil
 import dev.starbridge.app.data.Decision
 import dev.starbridge.app.data.Disk
 import dev.starbridge.app.data.Prompt
@@ -61,6 +64,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.decodeFromJsonElement
 import kotlinx.serialization.json.put
@@ -75,6 +79,7 @@ import okhttp3.OkHttpClient
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -91,7 +96,8 @@ import dev.starbridge.app.protocol.Decision as DecisionBody
 /**
  * An answer is never lost: offline it waits on the phone (#329), and a second tap sends nothing
  * more (#331). Its card goes at the tap, and a refused answer brings it back (#895); answered in
- * its sheet, the sheet goes too, and a refusal brings the card back, not the sheet (#927).
+ * its sheet, the sheet goes too, and a refusal brings the card back, not the sheet (#927). One
+ * refused during a rate-limit hold is sent once the hold ends, without a pull (#1390).
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [36])
@@ -126,6 +132,7 @@ class AnswerQueueTest {
     fun stop() {
         scope.cancel()
         http.close()
+        limitedUntil = 0L
     }
 
     /** A phone and a machine in one directory, and one open question from the machine. */
@@ -152,12 +159,19 @@ class AnswerQueueTest {
         })
         http.dispatcher = object : Dispatcher() {
             override fun dispatch(request: RecordedRequest): MockResponse =
-                if (request.method == "POST" && request.url.encodedPath == "/v1/items") {
-                    gate.await()
-                    posted += request.body!!.utf8()
-                    reply()
-                } else {
-                    MockResponse(404, Headers.headersOf(), "")
+                when {
+                    request.method == "POST" && request.url.encodedPath == "/v1/items" -> {
+                        gate.await()
+                        posted += request.body!!.utf8()
+                        reply()
+                    }
+                    request.url.encodedPath == "/v1/directory" ->
+                        MockResponse(200, Headers.headersOf("content-type", "application/json"), buildJsonObject { put("entries", buildJsonArray {}) }.toString())
+                    // Over its 10 a minute, as when the app came to the front a few times.
+                    request.url.encodedPath == "/v1/presence" ->
+                        MockResponse(429, Headers.headersOf("content-type", "application/json", "retry-after", "60"), """{"error":"rate-limited"}""")
+                    // Every other read fails: a sync gets no further than the directory.
+                    else -> MockResponse(404, Headers.headersOf(), "")
                 }
         }
         http.start()
@@ -188,6 +202,10 @@ class AnswerQueueTest {
         runBlocking { delay(200) }
         store.decisions.value.single().let { assertEquals("Hold", it.answer); assertTrue(it.sending) }
         assertEquals(0, posted.size)
+        assertEquals("No connection. Hold will be sent when the phone is back online.", store.notice.value)
+        // The worker's own failed run retries by its backoff: it asks for no new run.
+        assertFalse(runBlocking { store.flushAnswers() })
+        assertEquals(1, wakes)
 
         // The app was closed meanwhile: the answer is on disk, and the worker sends it.
         offline = false
@@ -328,5 +346,55 @@ class AnswerQueueTest {
         assertEquals(listOf<Any>(InboxKey), stack.toList())
         compose.onAllNodesWithText(question).assertCountEquals(1)
         compose.onNodeWithText("Not sent: bad-schema", substring = true).assertExists()
+    }
+
+    /** The app-wide hold a presence beat's 429 sets, for a minute (#1372). */
+    private fun presenceRefused() {
+        assertThrows(ApiException::class.java) { runBlocking { Api(client, http.url("/").toString().trimEnd('/'), "s").presence(true) } }
+        assertTrue(limitedUntil - System.currentTimeMillis() > 20_000)
+    }
+
+    @Test
+    fun anAnswerRefusedDuringARateLimitHoldIsSentOnceTheHoldEnds() {
+        setUp()
+        val store = store()
+        presenceRefused()
+        store.answer("d_ship", "Hold", null)
+        runBlocking { withTimeout(5_000) { while (store.notice.value == null) delay(10) } }
+        // Refused at once, without reaching the server: kept, shown not sent yet, a run asked for.
+        assertEquals("Hold isn't sent yet. Retrying.", store.notice.value)
+        store.decisions.value.single().let { assertEquals("Hold", it.answer); assertTrue(it.sending) }
+        assertEquals(1, disk.saved()!!.outbox.size)
+        assertEquals(1, wakes)
+        assertEquals(0, posted.size)
+
+        // The worker waits the hold out rather than failing at once and backing off.
+        val run = scope.async { store.flushAnswers() }
+        runBlocking { delay(500) }
+        assertFalse(run.isCompleted)
+        run.cancel()
+
+        // The hold nearly over, as when the worker comes back to it: it sends, and the card says so.
+        limitedUntil = System.currentTimeMillis() + 300
+        assertTrue(runBlocking { withTimeout(5_000) { store.flushAnswers() } })
+        assertEquals(1, posted.size)
+        store.decisions.value.single().let { assertEquals("Hold", it.answer); assertFalse(it.sending) }
+        assertTrue(disk.saved()!!.outbox.isEmpty())
+    }
+
+    @Test
+    fun aSyncSendsTheQueuedAnswerEvenWhenItsReadsFail() {
+        setUp()
+        offline = true
+        val store = store()
+        store.answer("d_ship", "Hold", null)
+        runBlocking { withTimeout(5_000) { while (disk.saved()!!.outbox.isEmpty() || wakes == 0) delay(10) } }
+
+        // Back online, the reads after the directory fail; the answer goes out before them.
+        offline = false
+        store.refresh(shown = false)
+        runBlocking { withTimeout(5_000) { while (posted.isEmpty() || store.decisions.value.single().sending) delay(10) } }
+        assertEquals(1, posted.size)
+        assertTrue(disk.saved()!!.outbox.isEmpty())
     }
 }

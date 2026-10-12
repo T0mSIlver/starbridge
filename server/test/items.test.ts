@@ -364,3 +364,28 @@ test("a decision's images are stored once for every device, and a re-seal keeps 
   const q = { ...quota("q-blobs"), blobs: [blob] };
   expect((await post(devbox, q)).json.error).toBe("bad-schema");
 });
+
+test("blobs=open lists an answered decision without its images, which its id still gives (#1382)", async () => {
+  const { blob, ref } = sealImage(new Uint8Array(1000).map((_, i) => i % 251));
+  const image = { type: "image/png" as const, width: 10, height: 10, ...ref };
+  const done = { ...decision([phone], { images: [image] }), blobs: [blob] };
+  const waits = { ...decision([phone], { images: [image] }), blobs: [blob] };
+  for (const d of [done, waits]) expect((await post(devbox, d)).status).toBe(201);
+  expect((await post(phone, answer(done))).status).toBe(201);
+  const list = async (query: string) =>
+    (await s.call("GET", `/v1/items?kind=decision${query}`, { token: phone.token })).json.items.map(
+      (x: { item: { id: string; blobs?: string[] } }) => [x.item.id, x.item.blobs?.length ?? 0],
+    );
+  // Older clients ask without it and still get every image inline.
+  expect(await list("")).toEqual([
+    [waits.id, 1],
+    [done.id, 1],
+  ]);
+  expect(await list("&blobs=open")).toEqual([
+    [waits.id, 1],
+    [done.id, 0],
+  ]);
+  const one = await s.call("GET", `/v1/items/${done.id}`, { token: phone.token });
+  expect(one.json.item.blobs).toEqual([blob]);
+  expect((await s.call("GET", "/v1/items?blobs=1", { token: phone.token })).status).toBe(400);
+});

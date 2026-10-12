@@ -72,12 +72,12 @@ struct Api {
      */
     static let limitedUntil = OSAllocatedUnfairLock(initialState: Date.distantPast)
 
-    private func call(_ method: String, _ path: String, _ body: JSON? = nil, headers: [String: String] = [:], wait: Int? = nil) async throws -> (Int, JSON?) {
+    private func call(_ method: String, _ path: String, _ body: JSON? = nil, headers: [String: String] = [:], wait: Int? = nil, ownLimit: Bool = false) async throws -> (Int, JSON?) {
         let started = Date()
         var pause: TimeInterval = 0.25
         while true {
             let limited = Api.limitedUntil.withLock { $0 }.timeIntervalSinceNow
-            if limited > 0 {
+            if !ownLimit && limited > 0 {
                 if Date().timeIntervalSince(started) + limited > Api.retryFor {
                     throw ApiError(status: 429, error: "rate-limited", detail: "too many requests; retry later")
                 }
@@ -87,6 +87,7 @@ struct Api {
             do {
                 return try await once(method, path, body, headers: headers, wait: wait)
             } catch let e as ApiError where e.status == 429 && e.retryAfter != nil {
+                if ownLimit { throw e }
                 // Jitter spreads this app's calls past the limit's window, not into its first moment.
                 let until = Date().addingTimeInterval(e.retryAfter! * Double.random(in: 1...1.25))
                 Api.limitedUntil.withLock { $0 = max($0, until) }
@@ -310,7 +311,7 @@ struct Api {
     func unsubscribe(_ id: String) async throws { _ = try await call("DELETE", "/push/subscriptions/\(id)") }
 
     /** Whether the owner sits at this iPhone ("Held pushes", #848). */
-    func presence(_ present: Bool) async throws { _ = try await call("PUT", "/presence", ["present": .bool(present)]) }
+    func presence(_ present: Bool) async throws { _ = try await call("PUT", "/presence", ["present": .bool(present)], ownLimit: true) }
 
     /** The account's hold time in seconds (#848). */
     func pushHold() async throws -> Int {
