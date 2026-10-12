@@ -60,7 +60,10 @@
   `ASC_API_KEY_P8` secret of the `ios-release` environment, open to main and `v*` tags (variables
   `ASC_KEY_ID` and `ASC_ISSUER_ID`): Xcode registers the App IDs, App Groups and profiles the
   entitlements ask for, and Apple's cloud-managed certificate signs the export, so no certificate
-  or profile is stored to rotate. The marketing version is the tag's without `-rc.N`, since Apple
+  or profile is stored to rotate. The key needs the Admin role: no other API key may use
+  cloud-managed certificates (#1409). Before archiving, `ios/scripts/asc-check.rb` signs in with it
+  and says why App Store Connect refuses it, with the public key's SHA-256 to compare with the
+  .p8 kept offline, since xcodebuild reports a refused key only as missing profiles. The marketing version is the tag's without `-rc.N`, since Apple
   takes three numbers only; the build number is the run's number and attempt, unique per upload.
   Run by hand on main, the job archives and exports without uploading, or with `testflight_only`
   builds the app alone and uploads it.
