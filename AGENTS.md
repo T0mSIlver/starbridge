@@ -53,7 +53,8 @@ command and its local agent), `plugin` and
   `spec/`: the rule, why in a clause, and the issue. Replace what it
   supersedes. A feature added to or changed in one client updates its row in
   `spec/parity.md`, and the PR opens an issue for each client the row says
-  should follow.
+  should follow. A PR that changes a client fills its `Parity:` line, which CI
+  checks.
 
 ## CI runners
 

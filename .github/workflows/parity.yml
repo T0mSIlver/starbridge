@@ -1,0 +1,44 @@
+name: parity
+
+# A pull request that changes a client's source says, on its "Parity:" line, what it means for the
+# other clients (spec/parity.md, #1422): `spec/parity.md` when it updates the row, the follow-up
+# issues, or `none` and why. This fails one with that line empty, and one that names
+# spec/parity.md without changing it. Its own workflow, so editing the body reruns only this.
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  pull-requests: read
+
+concurrency:
+  group: parity-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  line:
+    # GitHub's runner, whatever the runner variables say: it reads the API and checks out nothing.
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+          BODY: ${{ github.event.pull_request.body }}
+        run: |
+          files=$(gh api --paginate "repos/$REPO/pulls/$PR/files" --jq '.[].filename')
+          if ! grep -Eq '^(web/src|android/app/src/main|ios/(Starbridge|Notifications)|desktop/src)/' <<<"$files"; then
+            echo "No client source changed."
+            exit 0
+          fi
+          line=$(tr -d '\r' <<<"$BODY" | grep -m1 -E '^Parity:' | sed -E 's/^Parity:[[:space:]]*//')
+          if [ -z "$line" ]; then
+            echo "::error::This changes a client. Fill the PR's Parity: line: spec/parity.md, the follow-up issues, or none and why."
+            exit 1
+          fi
+          if grep -q 'spec/parity.md' <<<"$line" && ! grep -qx 'spec/parity.md' <<<"$files"; then
+            echo "::error::The Parity: line names spec/parity.md, which this pull request does not change."
+            exit 1
+          fi
+          echo "Parity: $line"
