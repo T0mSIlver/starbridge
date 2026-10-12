@@ -162,7 +162,7 @@ function InboxSection() {
           missing ones (#970). */}
       <Row
         label="Keyboard shortcuts"
-        sub="In windows 1100 px wide or more: J and K move, 1 to 4 answer, A allows, D denies. / finds anywhere."
+        sub="J and K move between cards. In windows 1100 px wide or more, 1 to 4 answer, A allows, D denies. / finds anywhere."
       />
     </Section>
   );
