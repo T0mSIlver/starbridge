@@ -417,7 +417,7 @@ test("a directory entry over 8 KB is refused", async () => {
   const member = { id: "big", role: "device" as const, name: "big", ...publicKeys(keys) };
   const signer = { id: acct.device.id, signKey: acct.device.keys.sign.privateKey };
   const entry = addEntry(dir, signer, member, at);
-  const r = await append(s, acct.device.token, { ...entry, sig: entry.sig.repeat(100) });
+  const r = await append(s, acct.device.token, { ...entry, body: entry.body + " ".repeat(9000) });
   expect(r.status).toBe(413);
 });
 
@@ -604,4 +604,15 @@ test("posting and answering an item never scans the account's items or boxes", a
     );
   });
   expect(scans).toEqual([]);
+});
+
+test("forgetting a deleted account keeps another account's windows whose member id contains its id (#1231)", () => {
+  const limiter = new RateLimiter(() => 0);
+  for (const k of ["items:acct-1", "items:acct-1:m1", "items:acct-2:acct-1x", "bytes:acct-12"])
+    limiter.allow(k, 1, 60_000);
+  limiter.forget("acct-1");
+  expect(limiter.allow("items:acct-1", 1, 60_000)).toBe(true);
+  expect(limiter.allow("items:acct-1:m1", 1, 60_000)).toBe(true);
+  expect(limiter.allow("items:acct-2:acct-1x", 1, 60_000)).toBe(false);
+  expect(limiter.allow("bytes:acct-12", 1, 60_000)).toBe(false);
 });

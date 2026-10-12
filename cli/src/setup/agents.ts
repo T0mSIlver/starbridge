@@ -358,12 +358,12 @@ export async function removeAgent(sys: Sys, id: AgentId): Promise<string[]> {
       break;
     }
     case "codex":
-      if (removeCodexSkill(sys)) done.push(`Removed ${codexSkillDir(sys)}.`);
+      done.push(...[removeCodexSkill(sys)].filter((l) => l !== undefined));
       if (removeCodexRule(sys)) done.push(`Removed ${codexRulePath(sys)}.`);
       done.push(...(await removeCodexPlugin(sys)));
       break;
     case "opencode":
-      for (const path of removeOpencode(sys)) done.push(`Removed ${path}.`);
+      done.push(...removeOpencode(sys));
       break;
     case "cursor":
       done.push(...removeCursorFiles(sys));
@@ -371,7 +371,7 @@ export async function removeAgent(sys: Sys, id: AgentId): Promise<string[]> {
         done.push(`Removed the starbridge allow rules from ${cursorConfigPath(sys)}.`);
       break;
     case "antigravity":
-      if (removeAntigravity(sys)) done.push(`Removed ${antigravityDir(sys)}.`);
+      done.push(...[removeAntigravity(sys)].filter((l) => l !== undefined));
       if (removeAgyAllow(sys))
         done.push(`Removed the starbridge allow entries from ${agySettingsPath(sys)}.`);
       break;

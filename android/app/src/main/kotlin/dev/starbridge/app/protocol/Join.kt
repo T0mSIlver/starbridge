@@ -26,8 +26,8 @@ data class JoinRequestBody(
         id(account, "account")
         id(id, "id")
         len(name, 1, 100, "name")
-        b64(boxPk, "boxPk")
-        b64(signPk, "signPk")
+        bytes32(boxPk, "boxPk")
+        bytes32(signPk, "signPk")
         time(at, "at")
     }
 
@@ -49,7 +49,7 @@ data class JoinApprovalBody(
         schema(join.length == 8, "join")
         id(account, "account")
         schema(length > 0, "length")
-        b64(head, "head")
+        bytes32(head, "head")
         id(approver, "approver")
     }
 }
@@ -135,7 +135,7 @@ class Joins(private val sodium: Sodium) {
     /** Checked by the joining device; it then verifies the directory with `{length, head}` as pin. */
     fun openApproval(msg: JsonElement, keys: JoinKeys, join: String): JoinApprovalBody {
         val m = parseJson(PairingMessage.serializer(), msg)
-        b64(m.mac, "mac")
+        bytes32(m.mac, "mac")
         val ok = try {
             sodium.authVerify(fromB64(m.mac), macMessage(m.body), keys.mac)
         } catch (e: ProtocolException) {

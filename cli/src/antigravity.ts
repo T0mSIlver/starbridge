@@ -120,16 +120,19 @@ function markConversation(ctx: Ctx, id: string) {
 
 /**
  * Whether conversation `id` still has to run `starbridge hello` for its prompts to go out: prompts
- * on, a local agent to take the key, and no command of it registered yet.
+ * on, a local agent to take the key, and no command of it registered yet. Prompts off and no agent
+ * are often passing (the agent starts after Antigravity at login, the owner turns prompts on
+ * later), so they leave the conversation unmarked, to be asked again next time (#1336).
  */
 function needsHello(ctx: Ctx, id: unknown): boolean {
   if (typeof id !== "string" || !/^[\w-]+$/.test(id)) return false;
   if (existsSync(join(ctx.store.dir, "antigravity", id))) return false;
   // `agy -p` registers no route, so a hello there would only fail.
-  if (permissionsEnabled(ctx) && existsSync(socketPath(ctx.env, ctx.store.dir)) && !agyHeadless())
-    return true;
-  markConversation(ctx, id);
-  return false;
+  if (agyHeadless()) {
+    markConversation(ctx, id);
+    return false;
+  }
+  return permissionsEnabled(ctx) && existsSync(socketPath(ctx.env, ctx.store.dir));
 }
 
 /** What the agent is told, at the start of a turn, until the conversation registered. */
@@ -342,8 +345,15 @@ export function waitsOn(st: State, id: string, now: Date): boolean {
   );
 }
 
-/** The lines of answers to conversation `id`, held up to `seconds` for one; each taken once. */
-async function takeLines(ctx: Ctx, id: string, seconds: number): Promise<string[]> {
+/**
+ * The lines of answers to conversation `id`, held up to `seconds` for one, and how to mark them
+ * taken: only once they are printed, or a print that fails loses them (#1287).
+ */
+async function takeLines(
+  ctx: Ctx,
+  id: string,
+  seconds: number,
+): Promise<{ lines: string[]; taken: () => Promise<unknown> }> {
   const path = `/v1/sessions/${encodeURIComponent(id)}`;
   return withAgent(
     ctx,
@@ -355,9 +365,10 @@ async function takeLines(ctx: Ctx, id: string, seconds: number): Promise<string[
         seconds * 1000 + 15_000,
         ctx.signal,
       );
-      if (events.length > 0)
-        await agent.call("POST", `${path}/ack`, { acks: events.map((e) => e.ack) });
-      return events.map((e) => e.line);
+      return {
+        lines: events.map((e) => e.line),
+        taken: () => agent.call("POST", `${path}/ack`, { acks: events.map((e) => e.ack) }),
+      };
     },
     async () => {
       let lines = sessionLines(ctx.store.state(), id);
@@ -365,14 +376,17 @@ async function takeLines(ctx: Ctx, id: string, seconds: number): Promise<string[
         await poll(ctx, session(ctx), { cursor: ctx.store.state().cursor, seconds, shared: true });
         lines = sessionLines(ctx.store.state(), id);
       }
-      ctx.store.updateState((st) =>
-        ackLines(
-          st,
-          id,
-          lines.map((l) => l.ack),
-        ),
-      );
-      return lines.map((l) => l.line);
+      return {
+        lines: lines.map((l) => l.line),
+        taken: async () =>
+          ctx.store.updateState((st) =>
+            ackLines(
+              st,
+              id,
+              lines.map((l) => l.ack),
+            ),
+          ),
+      };
     },
   );
 }
@@ -398,9 +412,10 @@ export async function hookStop(ctx: Ctx, text: string, opts: { agent?: string })
   let seconds = 0;
   try {
     for (;;) {
-      const lines = await takeLines(ctx, id, seconds);
+      const { lines, taken } = await takeLines(ctx, id, seconds);
       if (lines.length > 0) {
         ctx.out(JSON.stringify({ decision: "continue", reason: lines.join("\n") }));
+        await taken();
         return 0;
       }
       const left = until - ctx.now().getTime();

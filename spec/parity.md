@@ -25,8 +25,8 @@ opens an issue for each client the row says should follow.
 | Notification: permission prompts | yes (taps open the page; no Allow/Deny) | yes (Allow / Deny buttons) | yes (no Allow/Deny; opens window) | yes (#1137: Deny answers from the notification; Allow opens the prompt, which shows the whole input first) |
 | Notification: runs | yes (#1064: pass or fail, while a page is open; runs skip Web Push) | yes (Live Update on Android 16) | yes (#1064: pass or fail, the page's own, shown by the app) | no (APNs gets no runs, as Web Push) |
 | Notification: quota alerts | yes (only while a page is open) | yes (low-importance channel) | yes (the page's own, shown by the app) | no (APNs gets no quota snapshots, as Web Push) |
-| Answer from a notification: option buttons | yes (only if every option fits the browser's action limit) | yes (at most 3 options) | yes | yes (#1137: at most 3, the agent's default first) |
-| Answer from a notification: typed reply | no (service worker has no input action) | yes (RemoteInput "Your answer") | yes (Reply button) | yes (#1137: Reply, or Answer for a question without options) |
+| Answer from a notification: option buttons | yes (only if every option fits the browser's action limit) | yes (at most 3 options; 2 when the question also takes replies, #1339) | yes | yes (#1137: at most 3, the agent's default first) |
+| Answer from a notification: typed reply | no (service worker has no input action) | yes (RemoteInput: Answer without options, Reply beside them, #1339) | yes (Reply button) | yes (#1137: Reply, or Answer for a question without options) |
 | Presence (holds other devices' pushes) | yes (#848) | yes (#848) | yes (#945, uses Mac lock/idle) | not yet |
 | Offline outbox / no answer lost | no (retries 502/503 for 20 s; unsent answer kept in page memory only) | yes (#329, #331: sealed, stored, sent by WorkManager) | no (as web) | yes (#1122, #1137: sealed and stored; sent from a notification in the time iOS gives it, else when the app is open, every 10 s and on pull to refresh; no background retry yet) |
 | Update screen / update notice | yes (426 shows a reload-only screen) | yes (#497: "Update Starbridge" screen) | yes (auto-updater from GitHub Releases; 426 as web) | yes (#1122: 426 shows "Update Starbridge"; answers stay in the outbox) |
@@ -40,6 +40,6 @@ opens an issue for each client the row says should follow.
 | Keyboard shortcuts (J K 1-4 A D /) | yes (from 1100 px) | no (only Enter to send, Esc in Find) | yes (as web) | not yet |
 | Sound | yes (off by default, only while a page is open) | yes (system notification channel sound) | yes (macOS default sound; Basso on "Answer not sent"; web Sound row hidden) | not yet |
 | Recover with the recovery key (revokes every other member) | yes | yes | yes (as web) | yes (#1116) |
-| Delete account (Settings and the join screen, its recovery-key view included, typed confirmation) | yes (#1104, #1117) | yes (#1104, #1117, #1166) | yes (as web) | yes (#1141, #1233: Settings and the join screen; not the recovery-key view, #1195) |
+| Delete account (Settings and the join screen, its recovery-key view included, typed confirmation) | yes (#1104, #1117) | yes (#1104, #1117, #1166) | yes (as web) | yes (#1141, #1195, #1233: Settings and the join screen, its recovery-key view included) |
 
 Only on desktop: the menu bar light, the Dock or menu bar choice, Open at Login, ⌃⌥S, and notifications while no browser runs.

@@ -197,9 +197,11 @@ export function settingsPath(sys: Sys) {
   return join(claudeDir(sys), "settings.json");
 }
 
+/** User settings; undefined when the file is missing, does not parse or is no object (#1335). */
 function readSettings(sys: Sys): Settings | undefined {
   try {
-    return JSON.parse(readFileSync(settingsPath(sys), "utf8")) as Settings;
+    const v = JSON.parse(readFileSync(settingsPath(sys), "utf8")) as unknown;
+    return v && typeof v === "object" && !Array.isArray(v) ? (v as Settings) : undefined;
   } catch {
     return undefined;
   }
