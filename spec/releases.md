@@ -56,16 +56,19 @@
 - **The iPhone app on TestFlight** (#1397). Once the release is out, the `testflight` job archives
   the app on GitHub's macOS runner with the newest Xcode and uploads it to TestFlight, rcs and
   finals alike: App Store review needs a sign-in besides GitHub's (guideline 4.8), so testers are
-  the only users yet. The export signs automatically, driven by an App Store Connect API key, the
-  `ASC_API_KEY_P8` secret of the `ios-release` environment, open to main and `v*` tags (variables
-  `ASC_KEY_ID` and `ASC_ISSUER_ID`): Xcode makes the profiles the entitlements ask for, and
-  Apple's cloud-managed certificate signs, so no certificate or profile is stored to rotate.
-  xcodebuild takes the key only to export, so the archive builds unsigned and
-  `ios/scripts/adhoc-sign.sh` signs it ad hoc with each target's entitlements, which the export
-  keeps (#1415); that also needs no registered device, as a development profile would. The key needs the Admin role: no other API key may use
-  cloud-managed certificates (#1409). Before archiving, `ios/scripts/asc-check.rb` signs in with it
+  the only users yet. xcodebuild's own Apple sign-in refuses the App Store Connect API key (the
+  `ASC_API_KEY_P8` secret of the `ios-release` environment, open to main and `v*` tags; variables
+  `ASC_KEY_ID` and `ASC_ISSUER_ID`) that the REST API takes, so the job signs through the REST API
+  (`ios/scripts/asc-signing.rb`, #1419): it registers the App IDs and their capabilities when
+  missing, creates an Apple Distribution certificate from a key made on the runner and an App
+  Store profile per App ID, and revokes and deletes them at its end. No certificate is stored to
+  leak or rotate, and uploaded builds stay valid, since the App Store re-signs them. The archive
+  builds unsigned and `ios/scripts/adhoc-sign.sh` signs it ad hoc with each target's entitlements,
+  which the export keeps (#1415); altool uploads with the same key. App Groups need the group
+  registered once by hand, which the REST API cannot do. The key needs the Admin role, which
+  creating certificates takes (#1409). Before signing, `ios/scripts/asc-check.rb` signs in with it
   and says why App Store Connect refuses it, with the public key's SHA-256 to compare with the
-  .p8 kept offline, since xcodebuild reports a refused key only as missing profiles. The marketing version is the tag's without `-rc.N`, since Apple
+  .p8 kept offline. The marketing version is the tag's without `-rc.N`, since Apple
   takes three numbers only; the build number is the run's number and attempt, unique per upload.
   Run by hand on main, the job archives and exports without uploading, or with `testflight_only`
   builds the app alone and uploads it.

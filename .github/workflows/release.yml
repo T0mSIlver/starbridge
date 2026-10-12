@@ -398,19 +398,21 @@ jobs:
 
   # The iPhone app to TestFlight, rcs and finals alike, once the release is out (#1397): App Store review
   # waits on another sign-in than GitHub's (guideline 4.8), so testers are the only users yet. The archive
-  # builds unsigned and is signed ad hoc with its entitlements; the export signs it for the App Store
-  # automatically, driven by the App Store Connect API key of the ios-release environment, open to main
-  # and v* tags, the only xcodebuild step that takes one: Xcode makes the profiles, and Apple's cloud
-  # certificate signs, so no certificate is kept here. The marketing version is the tag's
-  # without -rc.N; the build number is the run's, unique per upload. Run by hand on main, it archives and
-  # exports without uploading, unless testflight_only asks. Without the ASC_KEY_ID and ASC_ISSUER_ID
-  # variables the job skips.
+  # builds unsigned and is signed ad hoc with its entitlements; the export signs it for the App Store with
+  # an Apple Distribution certificate and profiles this run makes through App Store Connect's REST API, with
+  # the API key of the ios-release environment (open to main and v* tags), and revokes at its end, so no
+  # certificate is kept here. altool uploads with the same key. The marketing version is the tag's without
+  # -rc.N; the build number is the run's, unique per upload. Run by hand on main, it archives and exports
+  # without uploading, unless testflight_only asks. Without the ASC_KEY_ID and ASC_ISSUER_ID variables the
+  # job skips.
   testflight:
     needs: [version, release]
     if: ${{ !cancelled() && needs.version.result == 'success' && !inputs.npm_only && (needs.release.result == 'success' || inputs.testflight_only) && (startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main') }}
     runs-on: macos-15
     timeout-minutes: 45
     environment: ios-release
+    # Each run holds an Apple Distribution certificate until its end, and Apple allows a few at once.
+    concurrency: testflight
     defaults:
       run:
         working-directory: ios
@@ -444,56 +446,83 @@ jobs:
           ASC_KEY_ID: ${{ vars.ASC_KEY_ID }}
         run: |
           umask 077
-          mkdir -p "$RUNNER_TEMP/asc"
-          printf '%s\n' "$ASC_API_KEY_P8" > "$RUNNER_TEMP/asc/AuthKey_$ASC_KEY_ID.p8"
+          # altool reads the key from ./private_keys.
+          mkdir -p "$RUNNER_TEMP/asc/private_keys"
+          printf '%s\n' "$ASC_API_KEY_P8" > "$RUNNER_TEMP/asc/private_keys/AuthKey_$ASC_KEY_ID.p8"
       # A refused key fails here with why, not as xcodebuild's missing profiles (#1409).
       - if: steps.setup.outputs.set
         name: The key signs in to App Store Connect
         env:
           ASC_KEY_ID: ${{ vars.ASC_KEY_ID }}
           ASC_ISSUER_ID: ${{ vars.ASC_ISSUER_ID }}
-        run: ruby scripts/asc-check.rb "$RUNNER_TEMP/asc/AuthKey_$ASC_KEY_ID.p8" "$ASC_KEY_ID" "$ASC_ISSUER_ID"
+        run: ruby scripts/asc-check.rb "$RUNNER_TEMP/asc/private_keys/AuthKey_$ASC_KEY_ID.p8" "$ASC_KEY_ID" "$ASC_ISSUER_ID"
       - if: steps.setup.outputs.set
         name: Archive
         env:
           VERSION: ${{ needs.version.outputs.version }}
           BUILD: ${{ github.run_number }}.${{ github.run_attempt }}
-        # xcodebuild takes the API key only to export (#1415): the archive builds unsigned, then is
-        # signed ad hoc with its entitlements, which the export keeps when it signs for the App Store.
+        # Built unsigned, then signed ad hoc with its entitlements, which the export keeps when it
+        # signs for the App Store (#1415).
         run: |
           xcodebuild -quiet -project Starbridge.xcodeproj -scheme Starbridge -configuration Release \
             -destination generic/platform=iOS -archivePath "$RUNNER_TEMP/Starbridge.xcarchive" \
             CODE_SIGNING_ALLOWED=NO MARKETING_VERSION="${VERSION%%-*}" CURRENT_PROJECT_VERSION="$BUILD" \
             archive
           scripts/adhoc-sign.sh "$RUNNER_TEMP/Starbridge.xcarchive"
-      # The export re-signs for the App Store, which also turns the push entitlement to production.
+      # xcodebuild's own sign-in refuses the API key that the REST API takes (#1419), so this run
+      # makes its own certificate and profiles through the REST API, in a keychain of its own.
       - if: steps.setup.outputs.set
-        name: ${{ (startsWith(github.ref, 'refs/tags/v') || inputs.testflight_only) && 'Upload to TestFlight' || 'Export' }}
+        name: Certificate and profiles
         env:
           ASC_KEY_ID: ${{ vars.ASC_KEY_ID }}
           ASC_ISSUER_ID: ${{ vars.ASC_ISSUER_ID }}
-          DESTINATION: ${{ (startsWith(github.ref, 'refs/tags/v') || inputs.testflight_only) && 'upload' || 'export' }}
         run: |
-          cat > "$RUNNER_TEMP/ExportOptions.plist" <<EOF
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0"><dict>
-            <key>method</key><string>app-store-connect</string>
-            <key>destination</key><string>$DESTINATION</string>
-            <key>signingStyle</key><string>automatic</string>
-            <key>teamID</key><string>3N63N7U9R3</string>
-            <key>manageAppVersionAndBuildNumber</key><false/>
-            <key>uploadSymbols</key><true/>
-          </dict></plist>
-          EOF
+          umask 077
+          export ASC_KEY_PATH="$RUNNER_TEMP/asc/private_keys/AuthKey_$ASC_KEY_ID.p8"
+          ruby scripts/asc-signing.rb prepare "$RUNNER_TEMP/asc/signing"
+          kc="$RUNNER_TEMP/asc/signing.keychain-db"
+          pw=$(openssl rand -hex 24)
+          security create-keychain -p "$pw" "$kc"
+          security set-keychain-settings -lut 3600 "$kc"
+          security unlock-keychain -p "$pw" "$kc"
+          curl -fsSL -o "$RUNNER_TEMP/wwdr.cer" https://www.apple.com/certificateauthority/AppleWWDRCAG3.cer
+          security import "$RUNNER_TEMP/wwdr.cer" -k "$kc" -t cert -f x509
+          security import "$RUNNER_TEMP/asc/signing/distribution.key" -k "$kc" -t priv -f openssl -T /usr/bin/codesign
+          security import "$RUNNER_TEMP/asc/signing/distribution.cer" -k "$kc" -t cert -f x509
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$pw" "$kc" > /dev/null
+          security list-keychains -d user -s "$kc" $(security list-keychains -d user | tr -d '"')
+          security find-identity -v -p codesigning "$kc"
+          for d in "$HOME/Library/MobileDevice/Provisioning Profiles" "$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles"; do
+            mkdir -p "$d"
+            cp "$RUNNER_TEMP"/asc/signing/*.mobileprovision "$d/"
+          done
+      # The export re-signs for the App Store, which also turns the push entitlement to production.
+      - if: steps.setup.outputs.set
+        name: Export
+        run: |
           xcodebuild -exportArchive -archivePath "$RUNNER_TEMP/Starbridge.xcarchive" \
-            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" -exportPath "$RUNNER_TEMP/export" \
-            -allowProvisioningUpdates -authenticationKeyPath "$RUNNER_TEMP/asc/AuthKey_$ASC_KEY_ID.p8" \
-            -authenticationKeyID "$ASC_KEY_ID" -authenticationKeyIssuerID "$ASC_ISSUER_ID"
+            -exportOptionsPlist "$RUNNER_TEMP/asc/signing/ExportOptions.plist" -exportPath "$RUNNER_TEMP/export"
+      - if: steps.setup.outputs.set && (startsWith(github.ref, 'refs/tags/v') || inputs.testflight_only)
+        name: Upload to TestFlight
+        working-directory: ${{ runner.temp }}/asc
+        env:
+          ASC_KEY_ID: ${{ vars.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ vars.ASC_ISSUER_ID }}
+        run: xcrun altool --upload-app -t ios -f "$RUNNER_TEMP/export/Starbridge.ipa" --apiKey "$ASC_KEY_ID" --apiIssuer "$ASC_ISSUER_ID"
       - if: always()
-        name: Remove the key
+        name: Revoke the certificate and remove the key
         working-directory: .
-        run: rm -rf "$RUNNER_TEMP/asc"
+        env:
+          ASC_KEY_ID: ${{ vars.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ vars.ASC_ISSUER_ID }}
+        run: |
+          status=0
+          if [ -f "$RUNNER_TEMP/asc/signing/state.json" ]; then
+            ASC_KEY_PATH="$RUNNER_TEMP/asc/private_keys/AuthKey_$ASC_KEY_ID.p8" ruby ios/scripts/asc-signing.rb cleanup "$RUNNER_TEMP/asc/signing" || status=1
+          fi
+          if [ -f "$RUNNER_TEMP/asc/signing.keychain-db" ]; then security delete-keychain "$RUNNER_TEMP/asc/signing.keychain-db"; fi
+          rm -rf "$RUNNER_TEMP/asc" "$HOME/Library/MobileDevice/Provisioning Profiles" "$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles"
+          exit $status
 
   homebrew:
     needs: [version, release]
