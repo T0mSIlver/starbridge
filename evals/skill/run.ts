@@ -79,8 +79,12 @@ mkdirSync(out, { recursive: true });
 // would hint the agent. Set TMPDIR to put it off a small /tmp. Each run's folder goes once its
 // record is written (a Codex home is 60 MB).
 const work = mkdtempSync(join(tmpOutsideHome(), "skill-eval-"));
+// What the runs started, stopped here too: the tmux sessions are detached, so a Ctrl-C would
+// leave their agents running in a deleted folder (#1223).
+const running = new Set<() => void>();
 // Also when a run throws: the homes go even if the eval dies (#313).
 process.on("exit", () => {
+  for (const stop of running) stop();
   if (!opt.keep) rmSync(work, { recursive: true, force: true });
 });
 for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"] as const)
@@ -485,6 +489,8 @@ async function interactiveTurn(
     model as string,
     prompt,
   ];
+  const kill = () => spawnSync("tmux", ["kill-session", "-t", tmux]);
+  running.add(kill);
   spawnSync("tmux", ["new-session", "-d", "-s", tmux, "-x", "200", "-y", "50", "-c", dir, ...cmd]);
   const file = join(cfg, "projects", dir.replace(/[^a-zA-Z0-9]/g, "-"), `${id}.jsonl`);
   const pane = () =>
@@ -519,7 +525,8 @@ async function interactiveTurn(
     }
     if (es.some((e) => e.type === "assistant") && Date.now() - quietSince > 8000) break;
   }
-  spawnSync("tmux", ["kill-session", "-t", tmux]);
+  kill();
+  running.delete(kill);
   const es = entries();
   // Turned away: denied (an older hook), or answered by the hook with the Starbridge instruction.
   const results = new Map<string, boolean>();
@@ -584,6 +591,11 @@ async function liveRun(
   const sb = env.STARBRIDGE_CONFIG_DIR as string;
   const procs: { kill(): void }[] = [];
   let stop = () => {};
+  const end = () => {
+    stop();
+    for (const p of procs) p.kill();
+  };
+  running.add(end);
   try {
     if (s.live?.mod) {
       // Named outright: sessions run without XDG_RUNTIME_DIR, which the agent's default path reads.
@@ -781,8 +793,8 @@ async function liveRun(
     rec.turns = [turnOf(ran.filter((x) => x.at < split))];
     if (answeredAt()) rec.turns.push(turnOf(ran.filter((x) => x.at >= split)));
   } finally {
-    stop();
-    for (const p of procs) p.kill();
+    end();
+    running.delete(end);
   }
 }
 
@@ -813,14 +825,20 @@ async function one(s: Scenario, arm: string, rep: number): Promise<RunRecord> {
   // plugin or skill under test.
   const armDir = arms[arm] as string;
   const plugin = join(armDir, "plugin");
+  // The harness's own rule (#1063), else the one rule every harness had before.
+  const own = join(plugin, "rules", `${agent}.md`);
+  const rule = readFileSync(existsSync(own) ? own : join(plugin, "hooks/rule.md"), "utf8");
   const login: Record<string, string> = {};
   if (agent === "claude") login.CLAUDE_CODE_OAUTH_TOKEN = claudeToken();
   else if (agent === "cursor") {
     Object.assign(login, cursorLogin());
     // What setup writes (cli/src/setup/cursor.ts): the skill, and the hooks running the plugin's
-    // scripts, which add the rule and register the conversation.
+    // scripts, which add the rule beside them and register the conversation (#1220).
     cpSync(join(plugin, "skills/starbridge"), join(home, ".cursor/skills/starbridge"), { recursive: true });
-    const hooks = join(plugin, "hooks");
+    const hooks = join(home, ".cursor/starbridge");
+    mkdirSync(hooks, { recursive: true });
+    for (const f of ["session-start.sh", "cli.sh"]) copyFileSync(join(plugin, "hooks", f), join(hooks, f));
+    writeFileSync(join(hooks, "rule.md"), rule);
     const session = `sh "${hooks}/cli.sh" hook session --agent cursor`;
     writeFileSync(
       join(home, ".cursor/hooks.json"),
@@ -849,7 +867,7 @@ async function one(s: Scenario, arm: string, rep: number): Promise<RunRecord> {
     mkdirSync(join(dir, "rules"));
     writeFileSync(
       join(dir, "rules/starbridge.md"),
-      `---\ntrigger: always_on\n---\n\n${readFileSync(join(plugin, "hooks/rule.md"), "utf8")}`,
+      `---\ntrigger: always_on\n---\n\n${rule}`,
     );
     cpSync(join(plugin, "skills/starbridge"), join(dir, "skills/starbridge"), { recursive: true });
   } else if (agent === "pi") {
@@ -874,9 +892,6 @@ async function one(s: Scenario, arm: string, rep: number): Promise<RunRecord> {
       if (r.status !== 0) throw new Error(`codex login --with-api-key: ${r.stderr}`);
     }
     cpSync(join(plugin, "skills/starbridge"), join(conf, "skills/starbridge"), { recursive: true });
-    // The harness's own rule (#1063), else the one rule every harness had before.
-    const own = join(plugin, "rules", `${agent}.md`);
-    const rule = readFileSync(existsSync(own) ? own : join(plugin, "hooks/rule.md"), "utf8");
     writeFileSync(join(conf, "AGENTS.md"), `${rule.trimEnd()}\n`);
   }
 

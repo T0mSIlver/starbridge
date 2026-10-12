@@ -91,16 +91,22 @@ async function onPush(text: string): Promise<void> {
   }
   // Quota snapshots skip Web Push; the page notifies about quota alerts (quotaSettings.ts).
   if (payload.kind === "answer" || payload.kind === "quota") return;
+
+  // Every kind, a join request too, shows only while this browser is a device of the account
+  // it is signed in to: the server may still hold its endpoint under an account it left (#1230).
+  const ctx = account ? await deviceContext(account) : undefined;
+  if (!ctx) return;
   if (payload.kind === "join") {
+    // The server reads a join request only to a device of its account, so one pushed for an
+    // account this browser left, while it is a device of another, shows nothing.
+    const res = await fetch(`/v1/joins/${encodeURIComponent(payload.id)}`, { headers: CLIENT });
+    if (!res.ok) return;
     await self.registration.showNotification("A device wants to join", {
       body: "Open Starbridge to compare digits with it and approve it.",
       tag: `j:${payload.id}`,
     });
     return;
   }
-
-  const ctx = account ? await deviceContext(account) : undefined;
-  if (!ctx) return;
   let answeredAt: string | undefined;
   const item: SealedItem = payload.box
     ? {

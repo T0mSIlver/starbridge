@@ -33,7 +33,8 @@ export function prNumber(subject: string): number | undefined {
 
 /**
  * The notes in a pull request body's "Release notes" section, one per `Product: text` line, or
- * undefined when it has no such section. "None" and HTML comments are not notes.
+ * undefined when it has no such section. "None", with or without ": reason", and HTML comments are
+ * not notes.
  */
 export function parseNotes(
   body: string,
@@ -54,7 +55,7 @@ export function parseNotes(
   for (const raw of lines.slice(start + 1)) {
     if (/^#{1,6}\s/.test(raw.trim())) break;
     const line = raw.trim().replace(/^[-*]\s+/, "");
-    if (!line || /^none\.?$/i.test(line)) continue;
+    if (!line || /^none(\.|:.*)?$/i.test(line)) continue;
     const m = /^([A-Za-z]+):\s*(.+)$/.exec(line);
     const product = m && PRODUCTS.find((p) => p.toLowerCase() === m[1]?.toLowerCase());
     if (m && product) notes.push({ product, text: (m[2] as string).trim(), pr });

@@ -52,7 +52,8 @@ public enum Crockford {
         for u in text.uppercased().unicodeScalars where u != "-" && !space.contains(u) && !(0x2000...0x200A).contains(u.value) {
             scalars.append(u == "O" ? "0" : u == "I" || u == "L" ? "1" : u)
         }
-        return Array(String(scalars))
+        // One Character per code point, as strings count them (#1082): a skin tone is a character of its own.
+        return scalars.map(Character.init)
     }
 }
 
@@ -137,8 +138,8 @@ public struct PairingRequestBody: Equatable, Sendable {
         role = Role(rawValue: try f.oneOf("role", ["device", "machine"]))!
         id = try f.id("id")
         name = try f.text("name", 1, 100)
-        boxPk = try f.b64("boxPk")
-        signPk = try f.b64("signPk")
+        boxPk = try f.bytes32("boxPk")
+        signPk = try f.bytes32("signPk")
         at = try f.time("at")
     }
 
@@ -173,10 +174,10 @@ public struct PairingApprovalBody: Equatable, Sendable {
         account = try f.id("account")
         length = try f.int("length")
         try schema(length > 0, "length")
-        head = try f.b64("head")
+        head = try f.bytes32("head")
         approver = try f.id("approver")
         check = try f.optString("check")
-        if let check { try checkB64(check, "check") }
+        if let check { try checkBytes(check, 43, "check") }
     }
 
     public var json: JSON {
@@ -196,7 +197,7 @@ public struct PairingMessage: Equatable, Sendable {
     public init(json: JSON) throws {
         let f = try Fields(json, "message")
         body = try f.string("body")
-        mac = try f.b64("mac")
+        mac = try f.bytes32("mac")
     }
 
     init(body: String, mac: String) {

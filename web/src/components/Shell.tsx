@@ -8,6 +8,7 @@ import { needsYou } from "@/lib/feed";
 import { setFind, useFind } from "@/lib/find";
 import { useFreshBuild } from "@/lib/freshBuild";
 import { holdsQuotas } from "@/lib/quotaSettings";
+import { sending } from "@/lib/unsent";
 import { type Store, useApp } from "./AppProvider";
 import { Icon, type IconName, Mark } from "./icons";
 import s from "./Shell.module.css";
@@ -19,8 +20,11 @@ const TABS: { href: string; label: string; icon: IconName }[] = [
   { href: "/settings", label: "Settings", icon: "settings" },
 ];
 
-/** A reload loses a typed reply, and anything under a tab, such as a pairing under way. */
-const busy = () => drafts.size > 0 || !TABS.some((t) => t.href === location.pathname);
+/**
+ * A reload loses a typed reply, an answer being sent, and anything under a tab, such as a pairing
+ * under way.
+ */
+const busy = () => drafts.size > 0 || sending() || !TABS.some((t) => t.href === location.pathname);
 
 type LaunchQueue = { setConsumer(fn: (p: { targetURL?: string }) => void): void };
 
