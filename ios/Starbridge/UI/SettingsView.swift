@@ -32,6 +32,13 @@ struct MainTabs: View {
             store.startPolling()
             await store.enableNotifications()
         }
+        // A pairing link opens Add a device with its code looked up (#611).
+        .sheet(item: Binding(get: { store.pairLink.map(PairLink.init) }, set: { store.pairLink = $0?.id })) { link in
+            NavigationStack {
+                AddDeviceView(store: store, lookUp: link.id)
+                    .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Close") { store.pairLink = nil } } }
+            }
+        }
         // A tapped notification opens its item over the inbox.
         .onChange(of: store.openRequest, initial: true) { _, request in
             if request != nil { tab = .inbox }
@@ -67,6 +74,9 @@ struct SettingsView: View {
                 Section("Devices") {
                     NavigationLink { DevicesView(store: store) } label: {
                         LabeledContent("Devices and machines", value: "\(store.devices.count)")
+                    }
+                    NavigationLink { AddDeviceView(store: store) } label: {
+                        Label("Add a device", systemImage: "qrcode")
                     }
                 }
                 .listRowBackground(Tokens.Colors.surface.color)
@@ -173,4 +183,8 @@ struct QuotaOrderView: View {
         .navigationTitle("Order")
         .navigationBarTitleDisplayMode(.inline)
     }
+}
+
+private struct PairLink: Identifiable {
+    let id: String
 }

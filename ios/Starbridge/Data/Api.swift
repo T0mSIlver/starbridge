@@ -202,6 +202,21 @@ struct Api {
         return try field(body, "approval")
     }
 
+    // --- Adding a member ---------------------------------------------------------
+
+    /** The request posted under a code's rendezvous id. */
+    func pairing(_ rendezvous: String) async throws -> JSON { try field(await call("GET", "/pairings/\(rendezvous)").1, "request") }
+
+    /** The request once a new member posts it under a code this iPhone shows; nil when `wait` seconds pass first. */
+    func awaitPairing(_ rendezvous: String, wait: Int) async throws -> JSON? {
+        let (status, body) = try await call("GET", "/pairings/\(rendezvous)?wait=\(wait)", wait: wait)
+        return status == 204 ? nil : try field(body, "request")
+    }
+
+    func approvePairing(_ rendezvous: String, approval: PairingMessage) async throws {
+        _ = try await call("POST", "/pairings/\(rendezvous)/approve", ["approval": approval.json])
+    }
+
     // --- Joining by digits -----------------------------------------------------
 
     private func join(_ body: JSON?) throws -> JoinView {

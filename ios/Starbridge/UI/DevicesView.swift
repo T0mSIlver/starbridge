@@ -5,6 +5,13 @@ import SwiftUI
 struct DevicesView: View {
     let store: Store
     @State private var revoking: DeviceRow?
+    @State private var scanning = false
+    /** Add a device, with the code the scanner read, if any. */
+    @State private var adding: AddDevice?
+
+    struct AddDevice: Hashable {
+        var lookUp: String?
+    }
 
     var body: some View {
         let rows = store.devices
@@ -19,6 +26,24 @@ struct DevicesView: View {
                     }
                 }
             }
+            Section {
+                Button {
+                    // A phone that cannot scan opens Add a device instead, to type the code.
+                    Task { if await QRScanner.whyNot(typing: true) == nil { scanning = true } else { adding = AddDevice() } }
+                } label: {
+                    Label("Scan a QR code", systemImage: "qrcode.viewfinder")
+                }
+                Button("Other ways to add a device") { adding = AddDevice() }
+            }
+            .listRowBackground(Tokens.Colors.surface.color)
+        }
+        .navigationDestination(item: $adding) { AddDeviceView(store: store, lookUp: $0.lookUp) }
+        .sheet(isPresented: $scanning) {
+            QRScanner { text in
+                scanning = false
+                adding = AddDevice(lookUp: text)
+            }
+            .ignoresSafeArea()
         }
         .scrollContentBackground(.hidden)
         .background(Tokens.Colors.bg.color.ignoresSafeArea())
