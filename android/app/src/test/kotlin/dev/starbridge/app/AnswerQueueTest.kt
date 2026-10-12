@@ -167,8 +167,8 @@ class AnswerQueueTest {
                     }
                     request.url.encodedPath == "/v1/directory" ->
                         MockResponse(200, Headers.headersOf("content-type", "application/json"), buildJsonObject { put("entries", buildJsonArray {}) }.toString())
-                    // Over its 10 a minute, as when the app came to the front a few times.
-                    request.url.encodedPath == "/v1/presence" ->
+                    // Over the per-address limit, as when the app made many calls in a minute (a presence beat's 429 sets no hold, #1372).
+                    request.url.encodedPath == "/v1/auth/challenge" ->
                         MockResponse(429, Headers.headersOf("content-type", "application/json", "retry-after", "60"), """{"error":"rate-limited"}""")
                     // Every other read fails: a sync gets no further than the directory.
                     else -> MockResponse(404, Headers.headersOf(), "")
@@ -348,9 +348,9 @@ class AnswerQueueTest {
         compose.onNodeWithText("Not sent: bad-schema", substring = true).assertExists()
     }
 
-    /** The app-wide hold a presence beat's 429 sets, for a minute (#1372). */
-    private fun presenceRefused() {
-        assertThrows(ApiException::class.java) { runBlocking { Api(client, http.url("/").toString().trimEnd('/'), "s").presence(true) } }
+    /** The app-wide hold another call's 429 with Retry-After sets, for a minute. */
+    private fun callRefused() {
+        assertThrows(ApiException::class.java) { runBlocking { Api(client, http.url("/").toString().trimEnd('/'), "s").challenge() } }
         assertTrue(limitedUntil - System.currentTimeMillis() > 20_000)
     }
 
@@ -358,7 +358,7 @@ class AnswerQueueTest {
     fun anAnswerRefusedDuringARateLimitHoldIsSentOnceTheHoldEnds() {
         setUp()
         val store = store()
-        presenceRefused()
+        callRefused()
         store.answer("d_ship", "Hold", null)
         runBlocking { withTimeout(5_000) { while (store.notice.value == null) delay(10) } }
         // Refused at once, without reaching the server: kept, shown not sent yet, a run asked for.
