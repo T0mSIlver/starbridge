@@ -934,6 +934,19 @@ async function main() {
         machineHome,
       );
       const [picksId] = await picks.waitFor(/^d_\S+$/m);
+      // A second open question, for J and K and the answer to move to (#1432).
+      const after = cli(
+        "ask-after",
+        [
+          "ask",
+          ...["--question", "Tag the release once the picks land?"],
+          ...["--option", "Tag it", "--option", "Wait"],
+          ...["--project", "starbridge", "--session", "e2e-after"],
+        ],
+        machineHome,
+      );
+      const [afterId] = await after.waitFor(/^d_\S+$/m);
+      await page.locator(`[data-row="${afterId}"]`).waitFor({ timeout: 30_000 });
       await page.setViewportSize({ width: 390, height: 844 });
       await page
         .locator("[data-row]", { hasText: LAYOUTS })
@@ -1024,7 +1037,7 @@ async function main() {
       await reply.press("Enter");
       await page.getByRole("heading", { name: LAYOUTS }).waitFor({ state: "detached" });
       const next = await openId();
-      if (!next || next === picksId)
+      if (next !== afterId)
         throw new Error(`with a mouse, an answer under 1100 px opens ${next}, not the next card`);
       await page.goBack();
       await page.waitForFunction(() => location.search === "");
@@ -1036,6 +1049,13 @@ async function main() {
         throw new Error("the answered question is still listed while its reply is sent");
       await picks.waitFor(/Answer to d_\S+ .*: Phone layout/);
       if ((await picks.exited) !== 0) throw new Error("ask --wait for the picks failed");
+      const withdraw = cli(
+        "withdraw-after",
+        ["settle", afterId as string, "--outcome", "withdrawn", "--reason", "Tagged by hand"],
+        machineHome,
+      );
+      if ((await withdraw.exited) !== 0) throw new Error("settle --outcome withdrawn failed");
+      await page.locator(`[data-row="${afterId}"]`).waitFor({ state: "detached", timeout: 30_000 });
       await page.setViewportSize(DESKTOP);
     }
 
