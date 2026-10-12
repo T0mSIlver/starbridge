@@ -4,6 +4,7 @@ import { type Context, Hono } from "hono";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import { HTTPException } from "hono/http-exception";
 import { z } from "zod";
+import { AppleRefused } from "../apple";
 import {
   createSession,
   fail,
@@ -44,8 +45,12 @@ function setSessionCookie(c: Parameters<typeof setCookie>[0], token: string, sec
 
 /** The sign-in methods this server offers, so the page shows only those (#670). */
 authRoutes.get("/auth/methods", (c) => {
-  const { github, ownerToken } = c.var.config;
-  const methods = [...(github ? ["github"] : []), ...(ownerToken ? ["owner"] : [])];
+  const { github, apple, ownerToken } = c.var.config;
+  const methods = [
+    ...(github ? ["github"] : []),
+    ...(apple ? ["apple"] : []),
+    ...(ownerToken ? ["owner"] : []),
+  ];
   return c.json({ methods });
 });
 
@@ -134,23 +139,34 @@ async function gitHubAccount(c: Context<Env>, code: string, verifier?: string): 
   const user = (await userRes.json().catch(() => ({}))) as { id?: unknown };
   if (!userRes.ok || typeof user.id !== "number") fail(502, "github", "user lookup failed");
 
+  // The page's sign-in is a navigation, which carries no client header; the apps send it.
+  return accountFor(c, "github_id", user.id, verifier === undefined ? "web" : "app");
+}
+
+/**
+ * The account a sign-in's provider id names, made on first sign-in unless sign-ups are paused or
+ * the address made too many. `column` is the provider's: `github_id` or `apple_sub`.
+ */
+function accountFor(
+  c: Context<Env>,
+  column: "github_id" | "apple_sub",
+  id: number | string,
+  via: string,
+): string {
   const db = c.var.db;
-  const existing = db.query("SELECT id FROM accounts WHERE github_id = ?").get(user.id) as {
+  const existing = db.query(`SELECT id FROM accounts WHERE ${column} = ?`).get(id) as {
     id: string;
   } | null;
-  if (!existing && signUpsPaused(c.var.config)) fail(403, "signups-paused", SIGNUPS_PAUSED);
-  if (!existing) rateLimit(c, `signup:${ipKey(c)}`, c.var.config.limits.signUps);
-  const account = existing?.id ?? newAccountId();
-  if (!existing) {
-    db.query("INSERT INTO accounts (id, github_id, created_at) VALUES (?, ?, ?)").run(
-      account,
-      user.id,
-      new Date().toISOString(),
-    );
-    // The page's sign-in is a navigation, which carries no client header; the apps send it.
-    const via = c.var.client?.name ?? (verifier === undefined ? "web" : "app");
-    c.var.funnel.reached(c, account, "first-sign-in", { via });
-  }
+  if (existing) return existing.id;
+  if (signUpsPaused(c.var.config)) fail(403, "signups-paused", SIGNUPS_PAUSED);
+  rateLimit(c, `signup:${ipKey(c)}`, c.var.config.limits.signUps);
+  const account = newAccountId();
+  db.query(`INSERT INTO accounts (id, ${column}, created_at) VALUES (?, ?, ?)`).run(
+    account,
+    id,
+    new Date().toISOString(),
+  );
+  c.var.funnel.reached(c, account, "first-sign-in", { via: c.var.client?.name ?? via });
   return account;
 }
 
@@ -223,6 +239,42 @@ authRoutes.get("/auth/app/signed-in", requireCaller("paired-device"), (c) => {
     signedIn: c.var.appSignIns.reached(state, c.var.caller.account),
   };
   return c.json(answer);
+});
+
+/**
+ * The iPhone app's Sign in with Apple (#1411): AuthenticationServices hands it an identity token
+ * and an authorization code for the App ID. The token must carry the SHA-256 of the app's nonce;
+ * trading the code, which works once, proves the token was not replayed and brings the refresh
+ * token that deleting the account revokes.
+ */
+authRoutes.post("/auth/apple/session", async (c) => {
+  const apple = c.var.apple;
+  const appId = c.var.config.apple?.appId;
+  if (!apple || !appId) fail(404, "not-configured", "Apple sign-in is off on this server");
+  rateLimit(c, `apple:${ipKey(c)}`, c.var.config.limits.appleSignIns);
+  const { identityToken, code, nonce } = await json(
+    c,
+    z.object({
+      identityToken: z.string().min(1).max(8192),
+      code: z.string().min(1).max(1024),
+      nonce: z.string().min(16).max(128),
+    }),
+  );
+  let traded: Awaited<ReturnType<typeof apple.exchange>>;
+  try {
+    const shown = await apple.verify(identityToken, [appId], nonce);
+    traded = await apple.exchange(appId, code);
+    if (traded.identity.sub !== shown.sub) throw new AppleRefused("code is another user's");
+  } catch (e) {
+    if (e instanceof AppleRefused) fail(400, "bad-code", `Apple sign-in refused: ${e.message}`);
+    console.error(`Apple sign-in: ${e}`);
+    fail(502, "apple", "Apple could not be reached");
+  }
+  const account = accountFor(c, "apple_sub", traded.identity.sub, "app");
+  c.var.db
+    .query("UPDATE accounts SET apple_client = ?, apple_refresh_token = ? WHERE id = ?")
+    .run(appId, traded.refreshToken, account);
+  return c.json({ session: createSession(c.var.db, account, c.var.config.limits.sessions) });
 });
 
 /** Self-hosted sign-in with OWNER_TOKEN; the session also comes back for the Android app. */

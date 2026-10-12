@@ -49,7 +49,9 @@ image is tagged by a hash of that file and built only when no image has the tag.
    app's APNs key is optional until it ships: `apns-key.p8` (the key Apple gives once) and
    `apns-key-id` (its 10-character id) become `APNS_PRIVATE_KEY` and `APNS_KEY_ID`, with the
    team id and bundle id set in `server-env.sh`. Without them, iPhone pushes go nowhere and their
-   subscriptions stay.
+   subscriptions stay. The Sign in with Apple key is optional too: `apple-signin-key.p8` and
+   `apple-signin-key-id` become `APPLE_PRIVATE_KEY` and `APPLE_KEY_ID`; without them the server
+   offers no Apple sign-in.
 4. `deploy/deploy.sh`.
 5. `deploy/setup-actions-deploy.sh` for deploys from Actions.
 
