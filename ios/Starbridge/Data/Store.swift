@@ -49,6 +49,8 @@ final class Store {
     var openRequest: Sheet?
     /** Replies typed and not sent, by decision id, while the app runs (#992). */
     var drafts: [String: String] = [:]
+    /** What Devices shows beside the chain, read when it opens. */
+    var deviceInfo = DeviceInfo()
 
     /** Decisions this iPhone's answer lost to another device's, until the machine says which won. */
     @ObservationIgnored var lost: Set<String> = []
@@ -699,6 +701,7 @@ final class Store {
         notSent = [:]
         drafts = [:]
         tooOld = nil
+        deviceInfo = DeviceInfo()
         withheldWhy = nil
         persist(Saved(server: saved.server), Secrets())
         try? FileManager.default.removeItem(at: SavedImage.directory)

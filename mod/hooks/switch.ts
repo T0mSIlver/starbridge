@@ -38,14 +38,17 @@ export class Switch {
   private poller: Poller | undefined;
   /** The last agent loop, for its `bye` at the end of the session. */
   private lastAgent: AgentLoop | undefined;
-  /** Shared by both loops, so a line submitted before a switch is not submitted again after. */
-  private readonly unconfirmed = new Set<string>();
   /** Resolves when the loop has ended. */
   readonly done: Promise<void>;
 
   constructor(
     private readonly paths: Paths,
     private readonly probeMs = 30_000,
+    /**
+     * Shared by both loops, so a line submitted before a switch is not submitted again after; and
+     * with the loop that replaces this one, which only confirms it then (#1337).
+     */
+    readonly unconfirmed = new Set<string>(),
   ) {
     this.done = this.loop();
   }

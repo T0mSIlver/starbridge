@@ -1,11 +1,12 @@
 // Pins what agents and the plugins parse (cli/CONTRACT.md): stable from 0.1.0.
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { LiveServer } from "@starbridge/server/test-support";
 import { run } from "../src/cli";
 import { codexNotice } from "../src/codex";
+import { hookQuestion } from "../src/hook";
 import { approveAndConfirm, paired, testCtx, until } from "./helpers";
 
 let server: LiveServer;
@@ -166,4 +167,20 @@ test("decisions --open lists the open questions as JSON lines, until answered or
   ctx.lines.length = 0;
   expect(await run(["decisions", "--open"], ctx)).toBe(0);
   expect(ctx.lines).toEqual([]);
+});
+
+// Codex goes to its own path (`--race`), which the dispatch picks before `hookQuestion` (#1291).
+test("CONTRACT.md's hook question lists the agents it takes", async () => {
+  const doc = readFileSync(join(import.meta.dir, "../CONTRACT.md"), "utf8");
+  const row = doc.split("\n").find((l) => l.startsWith("| `hook question` |")) as string;
+  const listed = (/--agent ([a-z\\|-]+)/.exec(row)?.[1] ?? "").split("\\|");
+  const ctx = testCtx();
+  const takes: string[] = [];
+  for (const agent of ["claude-code", "codex", "cursor", "opencode", "pi", "antigravity"]) {
+    ctx.errors.length = 0;
+    await hookQuestion(ctx, "{}", { agent });
+    if (!ctx.errors.join("\n").includes("--agent:")) takes.push(agent);
+  }
+  expect(listed.filter((a) => a !== "codex").sort()).toEqual(takes.sort());
+  expect(listed).toContain("codex");
 });

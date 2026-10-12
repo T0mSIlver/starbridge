@@ -1,6 +1,10 @@
 import { z } from "zod";
 
 export const B64 = z.string().regex(/^[A-Za-z0-9_-]+$/, "base64url without padding");
+/** 32 bytes as base64url: an X25519 or Ed25519 public key, a BLAKE2b-256 hash, a `crypto_auth` MAC. */
+export const Bytes32 = B64.length(43);
+/** 64 bytes as base64url: an Ed25519 signature. */
+export const Bytes64 = B64.length(86);
 /** Ids of members, decisions, answers and snapshots. */
 export const Id = z.string().regex(/^[A-Za-z0-9_-]{1,64}$/);
 export const Time = z.iso.datetime({ offset: true });
@@ -16,9 +20,9 @@ export const Member = z.object({
   role: Role,
   name: z.string().min(1).max(100),
   /** X25519, for sealed boxes. */
-  boxPk: B64,
+  boxPk: Bytes32,
   /** Ed25519, for signatures. */
-  signPk: B64,
+  signPk: Bytes32,
 });
 export type Member = z.infer<typeof Member>;
 
@@ -27,7 +31,7 @@ const EntryBase = {
   account: Id,
   seq: z.number().int().nonnegative(),
   /** Hash of the previous entry's body; null only on the first entry. */
-  prev: B64.nullable(),
+  prev: Bytes32.nullable(),
   at: Time,
 };
 
@@ -36,7 +40,7 @@ export const AddEntry = z.object({
   op: z.literal("add"),
   member: Member,
   /** Ed25519 public key of the recovery seed. Required on the first entry, absent after. */
-  recoveryPk: B64.optional(),
+  recoveryPk: Bytes32.optional(),
 });
 
 export const RevokeEntry = z.object({
@@ -60,7 +64,7 @@ export const RecoverEntry = z.object({
 export const RecoveryEntry = z.object({
   ...EntryBase,
   op: z.literal("recovery"),
-  recoveryPk: B64,
+  recoveryPk: Bytes32,
 });
 
 /** Makes the pending proposal's key the recovery key: signed by the current recovery key. */
@@ -69,7 +73,7 @@ export const RecoveryConfirmEntry = z.object({
   op: z.literal("recovery-confirm"),
   /** The proposal's `seq`, and the key it proposed, so a confirmation names what it approves. */
   proposal: z.number().int().nonnegative(),
-  recoveryPk: B64,
+  recoveryPk: Bytes32,
 });
 
 export const DirectoryEntry = z.discriminatedUnion("op", [
@@ -187,13 +191,13 @@ export const SignedEnvelope = z.object({
   kind: Kind,
   signer: Id,
   body: z.string(),
-  sig: B64,
+  sig: Bytes64,
   /**
    * Directory entry 0 and `recovery` entries only: the signature of the recovery key they name
    * over the same body, as signer "recovery". It ties the entry to that key, so a server that
    * copies a public recovery key into an entry of its own cannot pass it off during recovery.
    */
-  recoverySig: B64.optional(),
+  recoverySig: Bytes64.optional(),
 });
 export type SignedEnvelope = z.infer<typeof SignedEnvelope>;
 
@@ -205,9 +209,9 @@ export type SignedEnvelope = z.infer<typeof SignedEnvelope>;
  */
 export const ImageRef = z.object({
   /** The blob's secretbox key, 32 bytes. */
-  key: B64.length(43),
+  key: Bytes32,
   /** BLAKE2b-256 of "starbridge/v1/image" NUL and the blob's bytes. */
-  hash: B64.length(43),
+  hash: Bytes32,
 });
 export type ImageRef = z.infer<typeof ImageRef>;
 
@@ -342,7 +346,7 @@ export type DecisionLink = z.infer<typeof DecisionLink>;
  */
 export const DirectoryHead = z.object({
   length: z.number().int().min(1).max(100_000),
-  head: B64.length(43),
+  head: Bytes32,
   /** A machine passing on a device's longer head names that device. */
   by: Id.optional(),
 });
@@ -458,7 +462,7 @@ export const Permission = z
     /** The tool's input as JSON text, with secrets redacted on the machine. */
     input: z.string().max(8000),
     /** BLAKE2b-256 of the tool input before redaction (`hashInput`); answers repeat it. */
-    inputHash: B64,
+    inputHash: Bytes32,
     suggestions: z.array(PermissionSuggestion).max(2),
     expiresAt: Time,
     source: Source,
@@ -484,7 +488,7 @@ export const PermissionAnswer = z
     answeredAt: Time,
     behavior: z.enum(["allow", "deny"]),
     scope: PermissionScope,
-    inputHash: B64,
+    inputHash: Bytes32,
     /** On a deny: what the agent should do instead. */
     message: z.string().max(500).optional(),
     dir: DirectoryHead.optional(),
@@ -542,6 +546,12 @@ export const Settled = z
   })
   .refine((s) => (s.outcome === "device") === (s.device !== undefined), {
     message: "device is set exactly when outcome is device",
+  })
+  .refine((s) => s.behavior === undefined || s.outcome === "device", {
+    message: "behavior comes only with a device's outcome",
+  })
+  .refine((s) => s.reason === undefined || s.outcome === "withdrawn", {
+    message: "reason comes only with outcome withdrawn",
   });
 export type Settled = z.infer<typeof Settled>;
 

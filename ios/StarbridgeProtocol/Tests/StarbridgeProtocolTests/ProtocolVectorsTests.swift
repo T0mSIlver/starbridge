@@ -374,6 +374,11 @@ final class ProtocolVectorsTests: XCTestCase {
         XCTAssertNil(RecoveryKeys.read(String(chars[..<9]), typing: true).problem)
         XCTAssertEqual(RecoveryKeys.read(String(chars[..<9])).problem, .length(count: 8))
         XCTAssertEqual(RecoveryKeys.read("7KQU", typing: true).problem, .badCharacter(index: 3, char: "U"))
+        for r in recovery["read"]!.items {
+            let reading = RecoveryKeys.read(r.str("typed"), typing: true)
+            XCTAssertEqual(reading.count, Int(r["count"]!.number!), r.str("typed"))
+            XCTAssertEqual(reading.problem, .badCharacter(index: Int(r["index"]!.number!), char: Character(r.str("char"))), r.str("typed"))
+        }
     }
 
     /** Entries this client writes pass its own verifier, and so the vectors' rules. */
