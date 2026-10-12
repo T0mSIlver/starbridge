@@ -118,6 +118,9 @@ const CROP = { x: BOX.x0, y: BOX.y1 - W, size: W };
 // The same, with room for a halo or for pixels to round.
 const PAD = W * 0.06;
 const SMALL = { x: CROP.x - PAD, y: CROP.y - PAD, size: W + 2 * PAD };
+// The menu bar: as wide, with the arch centred top to bottom, as macOS centres the image in the bar
+// and the system icons in their own. On its feet, it sat 1.5 px below them at 1x (#1449).
+const TRAY = { ...SMALL, y: (BOX.y0 + BOX.y1) / 2 - SMALL.size / 2 };
 const vb = (c: { x: number; y: number; size: number }) =>
   `${r(c.x)} ${r(c.y)} ${r(c.size)} ${r(c.size)}`;
 
@@ -402,8 +405,8 @@ const TRAYS = {
   trayWaitingDark: shapes(FG, ACCENT),
 };
 for (const [name, body] of Object.entries(TRAYS)) {
-  writeFileSync(at(`desktop/assets/${name}.png`), await png({ viewBox: vb(SMALL), body }, 18));
-  writeFileSync(at(`desktop/assets/${name}@2x.png`), await png({ viewBox: vb(SMALL), body }, 36));
+  writeFileSync(at(`desktop/assets/${name}.png`), await png({ viewBox: vb(TRAY), body }, 18));
+  writeFileSync(at(`desktop/assets/${name}@2x.png`), await png({ viewBox: vb(TRAY), body }, 36));
 }
 
 // Play: the listing's icon (the launcher's shown area; Play rounds the corners) and its feature

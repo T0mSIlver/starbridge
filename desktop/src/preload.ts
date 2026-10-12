@@ -55,6 +55,19 @@ if (location.origin === arg("origin")) {
     updateSettings = s;
     onUpdate?.();
   });
+  let login = ipcRenderer.sendSync("login?") === true;
+  let onLogin: (() => void) | null = null;
+  ipcRenderer.on("login", (_e, l: unknown) => {
+    login = l === true;
+    onLogin?.();
+  });
+  const server: unknown = ipcRenderer.sendSync("server?");
+  let onSettings: (() => void) | null = null;
+  // Settings… in the menu bar's menu: the page routes there itself, else (an older page) loads it.
+  ipcRenderer.on("settings", () => {
+    if (onSettings) onSettings();
+    else location.assign("/settings");
+  });
   ipcRenderer.on("place", (_e, p: unknown) => {
     place = p;
   });
@@ -129,6 +142,20 @@ if (location.origin === arg("origin")) {
     /** Called when the status or the settings change. */
     onUpdate: (f: (() => void) | null) => {
       onUpdate = f;
+    },
+    /** Whether macOS opens the app at login. */
+    login: () => login,
+    setLogin: (l: unknown) => ipcRenderer.send("login", l),
+    onLogin: (f: (() => void) | null) => {
+      onLogin = f;
+    },
+    /** The server's host; the app restarts on another. */
+    server: () => server,
+    /** Opens the window where the owner sets the server. */
+    openServer: () => ipcRenderer.send("open-server"),
+    /** Called on Settings… in the menu bar's menu, to show the page's Settings. */
+    onSettings: (f: (() => void) | null) => {
+      onSettings = f;
     },
     /** Opens an item whose notification was clicked. */
     onOpen: (f: (id: string) => void) => {

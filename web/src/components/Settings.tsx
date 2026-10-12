@@ -867,6 +867,41 @@ function PlaceRow() {
   );
 }
 
+/** Whether macOS opens the desktop app at login, told again when the app changes it. */
+function useDesktopLogin(): boolean | undefined {
+  const [login, setLogin] = useState(() => desktop?.login?.());
+  useEffect(() => {
+    desktop?.onLogin?.(() => setLogin(desktop?.login?.()));
+    return () => desktop?.onLogin?.(null);
+  }, []);
+  return login;
+}
+
+/** Only in the desktop app: where it stays, and what its menu bar menu held before (#1449). */
+function AppSection() {
+  const login = useDesktopLogin();
+  const server = desktop?.server?.();
+  if (!desktop?.setLogin || login === undefined || !server) return null;
+  const setLogin = desktop.setLogin;
+  return (
+    <Section title="App">
+      <PlaceRow />
+      <Row label="Open Starbridge at login">
+        <Switch label="Open Starbridge at login" checked={login} onChange={setLogin} />
+      </Row>
+      <Row label="Server" sub={server}>
+        <button
+          type="button"
+          className={`t-meta ${ui.btn} ${ui.sm} ${ui.ghost}`}
+          onClick={() => desktop?.openServer?.()}
+        >
+          Change
+        </button>
+      </Row>
+    </Section>
+  );
+}
+
 /**
  * The desktop app's updates (#1398), which a browser has none of. Turning release candidates off
  * drops one found or downloading; one downloaded still installs on quit (spec/releases.md).
@@ -896,7 +931,7 @@ function UpdatesSection() {
   );
 }
 
-/** Colours and the clock: how the page looks, per browser; in the desktop app, where it stays. */
+/** Colours and the clock: how the page looks, per browser; in an older desktop app, where it stays. */
 function LookSection() {
   const [theme, setTheme] = usePref("theme");
   const [clock, setClock] = usePref("clock");
@@ -915,7 +950,7 @@ function LookSection() {
           onChange={setTheme}
         />
       </Row>
-      <PlaceRow />
+      {!desktop?.setLogin && <PlaceRow />}
       <Row label="Time format">
         <Segmented<Prefs["clock"]>
           label="Time format"
@@ -977,6 +1012,7 @@ export function Settings() {
             <InboxSection />
             <DeviceSection data={data} />
             <LookSection />
+            <AppSection />
             <UpdatesSection />
             <AccountSection />
           </>

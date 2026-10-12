@@ -212,6 +212,21 @@ async function ready(): Promise<void> {
   ipcMain.on("screen?", (e) => {
     e.returnValue = e.sender === win?.webContents ? screen?.read() : null;
   });
+  // Open at login and the server, which the menu bar's menu held before #1449.
+  ipcMain.on("login?", (e) => {
+    e.returnValue = e.sender === win?.webContents ? app.getLoginItemSettings().openAtLogin : null;
+  });
+  ipcMain.on("login", (e, x) => {
+    if (!fromPage(e) || typeof x !== "boolean") return;
+    app.setLoginItemSettings({ openAtLogin: x });
+    win?.webContents.send("login", app.getLoginItemSettings().openAtLogin);
+  });
+  ipcMain.on("server?", (e) => {
+    e.returnValue = e.sender === win?.webContents ? new URL(origin).host : null;
+  });
+  ipcMain.on("open-server", (e) => {
+    if (fromPage(e)) showServer();
+  });
   ipcMain.on("server", (e, x) => {
     if (e.sender !== serverWin?.webContents || typeof x !== "string") return;
     const next = serverOrigin(x);
@@ -388,10 +403,6 @@ function applyPlace(): void {
   }
   if (settings.place !== "menu" || win?.isVisible()) app.dock?.show();
   else app.dock?.hide();
-  paintDockMenu();
-}
-
-function paintDockMenu(): void {
   app.dock?.setMenu(menu(false));
 }
 
@@ -420,30 +431,32 @@ function paintTray(): void {
   );
 }
 
-/** The menu bar icon's menu; the Dock's leaves out Open and Quit, which macOS adds there. */
+/**
+ * The menu bar icon's menu: what the window can't do while it is closed (#1449); the rest is in
+ * the page's Settings. The Dock's leaves out Open and Quit, which macOS adds there.
+ */
 function menu(forTray = true): Menu {
-  const login = app.getLoginItemSettings().openAtLogin;
-  return Menu.buildFromTemplate([
-    ...(forTray
+  const prefs = { label: "Settings…", click: showSettings };
+  return Menu.buildFromTemplate(
+    forTray
       ? [
           { label: "Open Starbridge", accelerator: settings.shortcut, click: showWindow },
-          { type: "separator" as const },
+          prefs,
+          { type: "separator" },
+          { label: "Quit Starbridge", role: "quit" },
         ]
-      : []),
-    {
-      label: "Open at Login",
-      type: "checkbox",
-      checked: login,
-      click: () => {
-        app.setLoginItemSettings({ openAtLogin: !login });
-        paintDockMenu();
-      },
-    },
-    { label: `Server: ${new URL(origin).host}…`, click: showServer },
-    ...(forTray
-      ? [{ type: "separator" as const }, { label: "Quit Starbridge", role: "quit" as const }]
-      : []),
-  ]);
+      : [prefs],
+  );
+}
+
+/** The page's Settings; while the page can't load, the server window, where a wrong one is fixed. */
+function showSettings(): void {
+  if (!win || !fromServer(win.webContents.getURL())) {
+    showServer();
+    return;
+  }
+  win.webContents.send("settings");
+  showWindow();
 }
 
 function tellUpdate(s: UpdateStatus): void {
