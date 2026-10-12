@@ -123,7 +123,8 @@ export function Shell({ children }: { children: React.ReactNode }) {
         </ul>
         <div className={s.foot}>
           {machines > 0 && (
-            <p className={`t-caption ${s.machines}`}>
+            <p className={`t-small ${s.machines}`}>
+              <Icon name="server" size={18} />
               {machines} {machines === 1 ? "machine" : "machines"} paired
             </p>
           )}

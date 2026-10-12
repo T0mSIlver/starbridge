@@ -215,14 +215,19 @@
   font-weight: 600;
 }
 
-/* The rail's foot: the machines paired, and the desktop app's update (#1398). */
+/* The rail's foot: the machines paired, and the desktop app's update (#1398), as rows of one
+   shape, so they read as one footer. */
 .foot {
   grid-row: 5;
   display: grid;
-  gap: var(--s2);
+  gap: var(--s1);
 }
 
 .machines {
+  display: flex;
+  align-items: center;
+  gap: var(--s2h);
+  height: var(--s8);
   padding: 0 var(--s2h);
-  color: var(--fg3);
+  color: var(--fg2);
 }
