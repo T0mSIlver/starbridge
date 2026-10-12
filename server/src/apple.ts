@@ -30,6 +30,7 @@ const sha256hex = (s: string) => createHash("sha256").update(s).digest("hex");
  */
 export class Apple {
   private keys?: { at: number; byKid: Map<string, JsonWebKey> };
+  private readonly revoking = new Set<Promise<void>>();
   private readonly secrets = new Map<string, { value: Promise<string>; madeAt: number }>();
 
   constructor(
@@ -104,15 +105,29 @@ export class Apple {
     };
   }
 
-  /** Revokes a refresh token, so Apple lists Starbridge no more under the user's Apple ID. */
-  async revoke(clientId: string, refreshToken: string): Promise<void> {
-    const res = await this.post("/auth/revoke", {
-      client_id: clientId,
-      client_secret: await this.clientSecret(clientId),
-      token: refreshToken,
-      token_type_hint: "refresh_token",
-    });
-    if (!res.ok) throw new Error(`Apple revoke answered ${res.status}`);
+  /**
+   * Revokes a refresh token, so Apple lists Starbridge no more under the user's Apple ID. It runs
+   * after the reply, and [idle] lets a shutdown wait for it: the token is gone from the database
+   * by then, so nothing could retry it.
+   */
+  revoke(clientId: string, refreshToken: string): void {
+    const p = (async () => {
+      const res = await this.post("/auth/revoke", {
+        client_id: clientId,
+        client_secret: await this.clientSecret(clientId),
+        token: refreshToken,
+        token_type_hint: "refresh_token",
+      });
+      if (!res.ok) throw new Error(`Apple revoke answered ${res.status}`);
+    })()
+      .catch((e) => console.error(`Apple revoke on account deletion: ${e}`))
+      .finally(() => this.revoking.delete(p));
+    this.revoking.add(p);
+  }
+
+  /** Resolves once every revocation started so far has settled. */
+  async idle(): Promise<void> {
+    while (this.revoking.size > 0) await Promise.allSettled([...this.revoking]);
   }
 
   private post(path: string, form: Record<string, string>): Promise<Response> {

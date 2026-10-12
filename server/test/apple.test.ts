@@ -144,7 +144,8 @@ test("deleting an account revokes its Apple token (App Store 5.1.1(v))", async (
   const s = await makeServer(appleConfig());
   const { json } = await s.call("POST", "/v1/auth/apple/session", { body: signInBody("u7") });
   expect((await s.call("DELETE", "/v1/account", { token: json.session })).status).toBe(204);
-  for (let i = 0; i < 50 && !revoked.length; i++) await Bun.sleep(10);
+  // A shutdown waits for it, as for queued pushes.
+  await s.deps.apple?.idle();
   expect(revoked).toEqual([{ client_id: APP_ID, token: "rt-u7" }]);
 });
 
