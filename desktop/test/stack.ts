@@ -194,7 +194,20 @@ try {
     await page.getByRole("heading", { name: "Sign in to Starbridge" }).waitFor();
     const html = await (await fetch(ORIGIN, { headers: { cookie: "sb_desktop=1" } })).text();
     assert.ok(!html.includes("Know the moment"), "the server sent the app the landing page");
-    assert.equal(await page.getByRole("button", { name: "Use your own server" }).count(), 0);
+    // The server is chosen here, as on the web, in the app's own window (#1449).
+    await page.getByRole("button", { name: "Use your own server" }).click();
+    await until(
+      () =>
+        app.evaluate(({ BrowserWindow }) =>
+          BrowserWindow.getAllWindows().some((w) => w.getTitle() === "Server"),
+        ),
+      "the server window",
+    );
+    await app.evaluate(({ BrowserWindow }) =>
+      BrowserWindow.getAllWindows()
+        .find((w) => w.getTitle() === "Server")
+        ?.close(),
+    );
     await page.getByText("Opens your browser.").waitFor();
 
     step("sign in with GitHub (stub) through the browser, and set up the app as the first device");

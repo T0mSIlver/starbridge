@@ -38,6 +38,8 @@ export function startUpdates(
         if (feed && !feed.ok) throw new Error(`GitHub's feed answered ${feed.status}`);
         const tag = pickRelease(final ?? null, feed ? feedTags(await feed.text()) : [], rcs);
         if (!tag) return null;
+        // Each check points the updater at the tag it picked, so a download fetches the release
+        // the last check offered, even after an older one was downloaded (#1444).
         autoUpdater.setFeedURL({
           provider: "generic",
           url: `${releases}/releases/download/${tag}/`,

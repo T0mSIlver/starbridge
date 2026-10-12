@@ -709,7 +709,7 @@ extension Store {
         for q in saved.outbox {
             switch try await post(q) {
             case .queued: return false
-            case let .failed(why): notSent[q.decisionId] = why
+            case let .failed(why): await refused(q.decisionId, why: why)
             case .answered, .elsewhere: break
             }
         }

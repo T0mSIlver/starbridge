@@ -9,7 +9,7 @@ import { spawnSync } from "node:child_process";
 import { compareVersions } from "../src/release";
 
 /** The products a note can name, in the order the release shows them. */
-export const PRODUCTS = ["Android", "Web", "Desktop", "CLI", "Server", "Docs"] as const;
+export const PRODUCTS = ["Android", "iOS", "Web", "Desktop", "CLI", "Server", "Docs"] as const;
 export type Product = (typeof PRODUCTS)[number];
 
 export type Change = { subject: string; pr?: number; body?: string };
