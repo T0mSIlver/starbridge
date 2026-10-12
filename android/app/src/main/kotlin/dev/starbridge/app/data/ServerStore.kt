@@ -453,7 +453,7 @@ class ServerStore(
         val challenge = SignIn.challenge(verifier)
         val link = when (val r = SignIn.redirect(redirect)) {
             is SignIn.Redirect.Code -> r.takeIf { it.state == challenge } ?: return@run
-            is SignIn.Redirect.Denied -> if (r.state == challenge) throw IllegalStateException("GitHub sign-in didn't finish. Sign in again.") else return@run
+            is SignIn.Redirect.Denied -> if (r.state == challenge) throw IllegalStateException("Sign-in didn't finish. Sign in again.") else return@run
             null -> return@run
         }
         persist(newSecrets = secrets.copy(signInVerifier = null))
