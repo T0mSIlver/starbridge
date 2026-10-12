@@ -584,14 +584,10 @@ async function main() {
   await services.waitFor(/"event":"subscribed"/);
   await page.getByRole("button", { name: "Turn on notifications" }).waitFor({ state: "detached" });
 
-  step("approve `starbridge pair` from the Devices page");
+  step("approve `starbridge pair` from the empty inbox's Add a device (#1367)");
   const machineHome = join(tmp, "machine");
   const pair = cli("pair", ["pair", "--name", "devbox"], machineHome);
   const code = (await pair.waitFor(/Pairing code: (\S+)/))[1] as string;
-  await page
-    .getByRole("navigation", { name: "Main" })
-    .getByRole("link", { name: "Settings" })
-    .click();
   await follow(page, page.getByRole("link", { name: "Add a device" }), "/settings/devices/add");
   await page.getByLabel("Pair a machine or device").fill(code);
   await page.getByRole("button", { name: "Check code" }).click();
@@ -937,7 +933,20 @@ async function main() {
         ],
         machineHome,
       );
-      await picks.waitFor(/^d_\S+$/m);
+      const [picksId] = await picks.waitFor(/^d_\S+$/m);
+      // A second open question, for J and K and the answer to move to (#1432).
+      const after = cli(
+        "ask-after",
+        [
+          "ask",
+          ...["--question", "Tag the release once the picks land?"],
+          ...["--option", "Tag it", "--option", "Wait"],
+          ...["--project", "starbridge", "--session", "e2e-after"],
+        ],
+        machineHome,
+      );
+      const [afterId] = await after.waitFor(/^d_\S+$/m);
+      await page.locator(`[data-row="${afterId}"]`).waitFor({ timeout: 30_000 });
       await page.setViewportSize({ width: 390, height: 844 });
       await page
         .locator("[data-row]", { hasText: LAYOUTS })
@@ -983,6 +992,24 @@ async function main() {
         await page.screenshot({ path: join(SHOTS, `picks-phone-${scheme}.png`) });
       }
       await page.emulateMedia({ reducedMotion: "no-preference" });
+      // In place of the list, J and K open the next and previous card on the open card's history
+      // entry, so Back still returns to the list (#1432).
+      const openId = () => page.evaluate(() => new URLSearchParams(location.search).get("item"));
+      const entries = await page.evaluate(() => history.length);
+      await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+      let back = "k";
+      await page.keyboard.press("j");
+      if ((await openId()) === picksId) {
+        back = "j";
+        await page.keyboard.press("k");
+      }
+      const stepped = await openId();
+      if (!stepped || stepped === picksId) throw new Error(`J and K under 1100 px open ${stepped}`);
+      await page.getByRole("heading", { name: LAYOUTS }).waitFor({ state: "detached" });
+      await page.keyboard.press(back);
+      await page.getByRole("heading", { name: LAYOUTS }).waitFor();
+      if ((await openId()) !== picksId || (await page.evaluate(() => history.length)) !== entries)
+        throw new Error("J and K under 1100 px did not step back, or added history entries");
       // The reply field is open under the picks too (#849); in it, Shift+Enter starts a new line and
       // Enter sends (#562).
       const reply = page.getByRole("textbox", { name: "Your answer" });
@@ -996,8 +1023,9 @@ async function main() {
         throw new Error(
           `Shift+Enter did not start a new line: ${JSON.stringify(await reply.inputValue())}`,
         );
-      // At Enter, before the server replies, the phone is back on the list without the question
-      // (#895, #927).
+      // At Enter, before the server replies, the question goes (#895, #927). With a mouse the next
+      // open card takes its place, and Back returns to the list without the question (#1432); a
+      // touch screen goes straight back to the list (selection.test.ts).
       let release = () => {};
       const held = new Promise<void>((done) => {
         release = done;
@@ -1008,6 +1036,12 @@ async function main() {
       });
       await reply.press("Enter");
       await page.getByRole("heading", { name: LAYOUTS }).waitFor({ state: "detached" });
+      const next = await openId();
+      if (next !== afterId)
+        throw new Error(`with a mouse, an answer under 1100 px opens ${next}, not the next card`);
+      await page.goBack();
+      await page.waitForFunction(() => location.search === "");
+      await page.locator("button[data-id]").first().waitFor();
       const left = await page.locator("[data-row]", { hasText: LAYOUTS }).count();
       release();
       await page.unroute("**/v1/items");
@@ -1015,6 +1049,13 @@ async function main() {
         throw new Error("the answered question is still listed while its reply is sent");
       await picks.waitFor(/Answer to d_\S+ .*: Phone layout/);
       if ((await picks.exited) !== 0) throw new Error("ask --wait for the picks failed");
+      const withdraw = cli(
+        "withdraw-after",
+        ["settle", afterId as string, "--outcome", "withdrawn", "--reason", "Tagged by hand"],
+        machineHome,
+      );
+      if ((await withdraw.exited) !== 0) throw new Error("settle --outcome withdrawn failed");
+      await page.locator(`[data-row="${afterId}"]`).waitFor({ state: "detached", timeout: 30_000 });
       await page.setViewportSize(DESKTOP);
     }
 

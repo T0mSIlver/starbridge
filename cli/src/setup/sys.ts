@@ -17,6 +17,8 @@ export interface Sys {
   prompt: Prompt;
   /** The command that runs this binary, for the service: absolute paths. */
   self: string[];
+  /** The arguments a process runs with; `processArgs` when unset. */
+  argsOf?: (pid: number) => string[];
 }
 
 export interface Prompt {

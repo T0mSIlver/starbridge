@@ -32,15 +32,29 @@ export const ACCOUNT_TABLES = [
 export function deleteAccount(
   db: Database,
   account: string,
-): { members: string[]; joins: string[]; rendezvous: string[]; sessions: string[] } | null {
+): {
+  members: string[];
+  joins: string[];
+  rendezvous: string[];
+  sessions: string[];
+  /** The Apple refresh token to revoke, and the client id Apple issued it to. */
+  apple?: { client: string; token: string };
+} | null {
   return db.transaction(() => {
-    if (!db.query("SELECT 1 FROM accounts WHERE id = ?").get(account)) return null;
+    const row = db
+      .query("SELECT apple_client, apple_refresh_token FROM accounts WHERE id = ?")
+      .get(account) as { apple_client: string | null; apple_refresh_token: string | null } | null;
+    if (!row) return null;
     const ids = (sql: string) => (db.query(sql).all(account) as { id: string }[]).map((r) => r.id);
     const waits = {
       members: ids("SELECT id FROM members WHERE account_id = ?"),
       joins: ids("SELECT id FROM joins WHERE account_id = ?"),
       rendezvous: ids("SELECT rendezvous AS id FROM pairings WHERE account_id = ?"),
       sessions: ids("SELECT token_hash AS id FROM sessions WHERE account_id = ?"),
+      ...(row.apple_client &&
+        row.apple_refresh_token && {
+          apple: { client: row.apple_client, token: row.apple_refresh_token },
+        }),
     };
     for (const table of ACCOUNT_TABLES)
       db.query(`DELETE FROM ${table} WHERE account_id = ?`).run(account);
@@ -77,6 +91,9 @@ function forgetAccount(
   deps.joins.wake(`account:${account}`);
   for (const j of waits.joins) deps.joins.wake(`join:${j}`);
   for (const r of waits.rendezvous) deps.pairings.wake(r);
+  // Apple asks an app that deletes an account to revoke its Sign in with Apple tokens, which
+  // takes Starbridge off the user's Apple ID. The account is gone either way.
+  if (waits.apple) deps.apple?.revoke(waits.apple.client, waits.apple.token);
 }
 
 export const accountRoutes = new Hono<Env>();
@@ -84,7 +101,7 @@ export const accountRoutes = new Hono<Env>();
 /**
  * Deletes the caller's account and signs out every session and machine. Any signed-in session
  * may, paired or not: an app must let whoever signed in delete the account (App Store
- * 5.1.1(v)), and the GitHub sign-in that makes a session already controls the account.
+ * 5.1.1(v)), and the sign-in that makes a session already controls the account.
  */
 accountRoutes.delete("/account", requireCaller("device"), (c) => {
   const { account } = c.var.caller;

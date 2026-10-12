@@ -317,7 +317,7 @@ fun UpdateRequired(minimum: String, current: String, installer: Installer, updat
             Column(Modifier.padding(start = Spacing.s4, end = Spacing.s4, top = 48.dp, bottom = Spacing.s6), verticalArrangement = Arrangement.spacedBy(Spacing.s3)) {
                 Title("Update Starbridge")
                 Text(
-                    "Your server needs Starbridge $minimum or later. This phone has $current.",
+                    "Your server needs Starbridge $minimum or later. This phone has $current. Answers you gave are kept and sent once it is updated.",
                     style = StarbridgeTheme.type.body,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

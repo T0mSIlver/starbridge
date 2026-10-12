@@ -75,6 +75,8 @@ final class Store {
     @ObservationIgnored var lost: Set<String> = []
     @ObservationIgnored var queue: Task<Void, Never>?
     @ObservationIgnored var pollTask: Task<Void, Never>?
+    /** Sends the outbox again while answers wait in it (#1392). */
+    @ObservationIgnored var answerRetry: Task<Void, Never>?
     @ObservationIgnored var presenceTask: Task<Void, Never>?
     @ObservationIgnored var inFront = false
     @ObservationIgnored private(set) var beacon: Beacon!
@@ -130,6 +132,11 @@ final class Store {
         // Nothing is written this run, so the file and the keys stay for a launch that can read them.
         if let locked { notice = locked }
         beacon = Beacon { [weak self] present in try await self?.api().presence(present) }
+        // The saved chain, checked against the pin, as Android's store does at launch: Devices and the
+        // inbox's empty state read it before the first sync, and offline (#1370).
+        if !saved.entries.isEmpty, saved.pin != nil {
+            directory = try? Directories.verify(saved.entries.compactMap { try? JSON.parse($0) }, account: saved.account, pin: saved.pin)
+        }
         if saved.joining != nil { waitForApproval() }
         if saved.digitJoin != nil { waitForDigitJoin() }
     }
@@ -294,6 +301,24 @@ final class Store {
         var k = secrets
         k.signInVerifier = nil
         persist(nil, k)
+    }
+
+    /** Sign in with Apple on starbridge.run, the only server holding the App ID's key. */
+    func signInWithApple(identityToken: String, code: String, nonce: String) async {
+        await run { [self] in
+            var s = saved
+            s.server = Self.defaultServer
+            persist(s)
+            let session: String
+            do {
+                session = try await api().appleSession(identityToken: identityToken, code: code, nonce: nonce)
+            } catch let e as ApiError where e.error == "bad-code" {
+                throw Notice(message: "Sign-in expired. Sign in again.")
+            } catch let e as ApiError where e.error == "signups-paused" {
+                throw Notice(message: "New accounts are paused on this server.")
+            }
+            try await afterSignIn(session)
+        }
     }
 
     func signInWithOwnerToken(server: String, token: String) async {
@@ -729,6 +754,8 @@ final class Store {
         joinTask = nil
         pollTask?.cancel()
         pollTask = nil
+        answerRetry?.cancel()
+        answerRetry = nil
         presenceTask?.cancel()
         presenceTask = nil
         pushHold = nil

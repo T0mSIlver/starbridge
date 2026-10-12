@@ -14,6 +14,26 @@
 - Quota snapshots and runs skip Web Push: browsers drop subscriptions whose pushes show no
   notification (Firefox after 16). The web page polls them instead. They skip APNs too, where a
   silent push may never arrive; the iPhone app fetches them.
+- **Every Web Push to Safari shows a notification** (#1363). Safari drops a site's push
+  subscriptions once three of its pushes, counted over the subscription's whole life, showed no
+  notification within 30 s (WebKit's `maxSilentPushCount`), and permission stays, so nothing
+  told the owner. Every answer pushed `answered` to each device the question was sealed to, the
+  answering iPhone included, so after three answers the Home Screen app stopped getting
+  questions until it subscribed again: some questions notified and some only showed in the
+  inbox. So what only closes or hides a notification (`answered`, a settled notice, a snooze as
+  posted) skips subscriptions on Apple's push service; the page closes those notifications when
+  it reads the inbox and the prompts, as the iPhone app syncs when it opens. The service worker shows something
+  for every push that asks for the owner: its notification, or after 20 s still opening, or when
+  its fetch or check fails, the placeholder the iPhone app uses ("A question needs you"), which
+  opens the inbox and which the real notification replaces. On Safari, a push that ends with
+  nothing to show, such as a question answered before the phone woke, shows a quiet "Nothing new
+  needs you" that the page closes once open. Other browsers stay silent there, since they allow
+  some. A browser the owner turned on that boots with permission granted and no subscription
+  subscribes again, without asking (one that reads "default", as in #1362, sends only a
+  subscription it holds); one never turned on still waits for the banner or the
+  switch. An iPhone that lost its subscription before this fix needs the banner's tap once. Question
+  pushes already went at `Urgency: high` with a day's TTL and no `Topic`, so those were not the
+  cause.
 - **APNs for the iPhone app** (#1076). iOS throttles data-only pushes and drops them for an app
   the owner swiped away, so what asks for the owner (a question, a waiting flip, a snooze's
   return, a permission prompt, a join request) goes as an alert with `mutable-content`: the app's
@@ -62,6 +82,13 @@
   settings, channels), which the app only reads. Each device turns only its own notifications
   off, never another's (owner's rule), and says its state to the server, so Devices shows every
   device on, off or blocked, read-only.
+- **A browser's push is on when it holds a subscription** (#1362), whatever
+  `Notification.permission` says short of denied. In an iOS Home Screen app, the window a
+  notification's tap opens reads permission as "default" although it stands, so the Inbox offered
+  notifications again at random and Devices listed the iPhone off. A browser drops its
+  subscription when permission goes, so the subscription is the truer signal. Read before the
+  service worker is active, a subscription can read as none, so the page waits up to 3 s for the
+  worker before saying off.
 - **The hand-off to the desktop app** (#943). The app's GitHub sign-in passes through
   `/app/auth` in the default browser of its own machine. When that browser holds a device of the
   same account with notifications on, which the server confirms once the app traded its code,

@@ -32,6 +32,15 @@ targets:
         # group name is also a keychain access group.
         com.apple.security.application-groups:
           - group.dev.starbridge.ios
+        # starbridge.run's apple-app-site-association: the browser sheet ends GitHub's sign-in on
+        # its https callback (#1115), and the callback opens the app from Safari.
+        com.apple.developer.associated-domains:
+          - applinks:starbridge.run
+          - webcredentials:starbridge.run
+        # Sign in with Apple (#1411), which App Store guideline 4.8 asks of an app that signs in
+        # with GitHub.
+        com.apple.developer.applesignin:
+          - Default
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: dev.starbridge.ios
@@ -48,9 +57,13 @@ targets:
           UIColorName: ""
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
-        # A background push says a question was answered elsewhere, so its notification goes.
+        # A background push says a question was answered elsewhere, so its notification goes; a
+        # background refresh sends the answers left in the outbox (#1392).
         UIBackgroundModes:
           - remote-notification
+          - fetch
+        BGTaskSchedulerPermittedIdentifiers:
+          - dev.starbridge.ios.answers
         NSCameraUsageDescription: Starbridge scans the QR code that your other device shows, to add this iPhone to your account.
         # GitHub sign-in comes back on starbridge://auth (PROTOCOL.md, "Auth").
         CFBundleURLTypes:
