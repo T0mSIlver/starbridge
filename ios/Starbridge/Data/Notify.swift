@@ -284,6 +284,10 @@ enum Notify {
      * its buttons again with the new unlock.
      */
     static func register(_ id: String, _ actions: [NotificationAction]) async {
+        await changingCategories { await registerNow(id, actions) }
+    }
+
+    private static func registerNow(_ id: String, _ actions: [NotificationAction]) async {
         let center = UNUserNotificationCenter.current()
         let actions = id.hasPrefix("d.") ? lockScreen(actions, previews: await center.notificationSettings().showPreviewsSetting) : actions
         let wanted = category(id, actions)
@@ -307,11 +311,31 @@ enum Notify {
      * app comes to the front and at each push.
      */
     static func followPreviews() async {
-        let center = UNUserNotificationCenter.current()
-        let locked = await center.notificationSettings().showPreviewsSetting != .always
-        if let updated = following(await center.notificationCategories(), locked: locked) {
-            center.setNotificationCategories(updated)
+        await changingCategories {
+            let center = UNUserNotificationCenter.current()
+            let locked = await center.notificationSettings().showPreviewsSetting != .always
+            if let updated = following(await center.notificationCategories(), locked: locked) {
+                center.setNotificationCategories(updated)
+                _ = await center.notificationCategories()
+            }
         }
+    }
+
+    /** The last change to the categories, which the next one waits for. */
+    private static let lastChange = OSAllocatedUnfairLock<Task<Void, Never>?>(initialState: nil)
+
+    /**
+     * Runs category changes one after another: each reads the whole set and writes it back, so
+     * two at once, such as a launch's registration and its Show Previews check, would lose one.
+     */
+    private static func changingCategories(_ body: @escaping @Sendable () async -> Void) async {
+        let change = lastChange.withLock { last in
+            let previous = last
+            let next = Task { await previous?.value; await body() }
+            last = next
+            return next
+        }
+        await change.value
     }
 
     /** The categories with each question's buttons asking for the unlock when `locked`; nil when none changes. */
