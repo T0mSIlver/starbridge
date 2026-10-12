@@ -87,7 +87,8 @@
   grid-auto-flow: column;
   grid-auto-columns: minmax(0, 1fr);
   gap: var(--s8);
-  width: min(100%, var(--size-content));
+  /* Four cards in a row at the page's width, as the features above (#1232). */
+  width: min(100%, var(--size-page));
   margin-top: var(--s5);
 }
 
@@ -333,6 +334,13 @@
 
 /* Narrower than the showcase: the phone carries the hero, and every section stacks. */
 @media (max-width: 1279px) {
+  /* Two by two: four in a row leave each card's text a few words wide. */
+  .apps {
+    grid-auto-flow: row;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: min(100%, var(--size-content));
+  }
+
   .page > .showcase {
     height: auto;
     margin-top: var(--s12);
@@ -395,7 +403,7 @@
   }
 
   .apps {
-    grid-auto-flow: row;
+    grid-template-columns: minmax(0, 1fr);
     gap: var(--s6);
   }
 

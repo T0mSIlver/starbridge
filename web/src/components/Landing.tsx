@@ -287,6 +287,21 @@ export function Landing({ onOwnerToken }: { onOwnerToken: () => void }) {
             </div>
           )}
           <div className={s.app}>
+            <h3 className="t-prose">Mac</h3>
+            <p className={`t-reading ${s.dim}`}>
+              The signed app, for macOS 14 and later. Apple silicon and Intel.
+            </p>
+            <div className={s.appLinks}>
+              {/* The DMGs' names carry the version, so the link is to the latest release. */}
+              <a
+                href={`${REPO}/releases/latest`}
+                onClick={() => track("get-app", { via: "mac-dmg" })}
+              >
+                Download the DMG
+              </a>
+            </div>
+          </div>
+          <div className={s.app}>
             <h3 className="t-prose">iOS</h3>
             <p className={`t-reading ${s.dim}`}>
               Add {pageHost} to the Home Screen from Safari to get notifications, on iOS 16.4 and
