@@ -241,7 +241,18 @@ const V8 = "ALTER TABLE revoked_sessions ADD COLUMN account_id TEXT;";
 /** When each machine last reported a CLI release other than the one before (#1266). */
 const V9 = "ALTER TABLE members ADD COLUMN cli_updated_at TEXT;";
 
-export const MIGRATIONS = [V1, V2, V3, V4, V5, V6, V7, V8, V9];
+/**
+ * Sign in with Apple (#1411): Apple's user id, and the refresh token of the account's last Apple
+ * sign-in with the client id Apple issued it to, kept only to revoke it when the account goes.
+ */
+const V10 = `
+ALTER TABLE accounts ADD COLUMN apple_sub TEXT;
+ALTER TABLE accounts ADD COLUMN apple_client TEXT;
+ALTER TABLE accounts ADD COLUMN apple_refresh_token TEXT;
+CREATE UNIQUE INDEX accounts_apple_sub ON accounts (apple_sub);
+`;
+
+export const MIGRATIONS = [V1, V2, V3, V4, V5, V6, V7, V8, V9, V10];
 
 /** The `user_version` this server brings a database to. */
 export const SCHEMA_VERSION = MIGRATIONS.length;
