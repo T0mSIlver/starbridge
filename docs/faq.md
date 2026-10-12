@@ -1,141 +1,151 @@
 # FAQ
 
-## How is it different from ntfy, Pushover or a webhook?
+## Compared with other tools
 
-Those deliver a notification. ntfy's action buttons can send a request back, but nothing puts
-it into the waiting session, so you still walk to the terminal to answer. Starbridge carries the
-answer back: your tap goes into the waiting session as its next prompt. A permission answer
-is signed by your device and bound to one call by a hash of its input, so it can't approve a
-different command. ntfy can still deliver the notifications, through UnifiedPush on a
-[self-hosted server](../server/README.md#notifications).
+### How is it different from ntfy, Pushover or a webhook?
 
-## Why not the harnesses' own mobile apps?
+Those deliver a notification. ntfy's action buttons can send a request back, but nothing puts it
+into the waiting session, so you still walk to the terminal to answer. Starbridge puts your tap
+into the waiting session as its next prompt.
+
+A permission answer is signed by your device and bound to one call by a hash of its input, so it
+can't approve a different command. ntfy can still deliver Starbridge's notifications, through
+UnifiedPush on a [self-hosted server](../server/README.md#notifications).
+
+### Why not the harnesses' own mobile apps?
 
 Each covers one harness; the Claude app, for example, answers permission prompts for Remote
 Control sessions. Starbridge puts the questions of every session, machine and harness in one
-inbox, with the runs you follow. It doesn't remote-control the terminal: the agent decides what
-is worth asking you, with two to four options.
+inbox, with your runs.
 
-## How is it different from Happy or Omnara?
+### How is it different from Happy or Omnara?
 
 Those mirror the whole session so you drive it from the phone. Starbridge carries only the
-decisions the agent asks you for and the runs it reports. You keep using the harness as before.
+decisions the agent asks you for and the runs it reports, and you keep using the harness as
+before.
 
-## What does the server see?
+## Privacy and security
+
+### What does the server see?
 
 Every question, answer, permission prompt, run, quota snapshot, image and link is signed
 (Ed25519) and sealed with libsodium's `crypto_box_seal` to each of your devices' keys. Keys are
-made on your devices and machines, and the server holds none that opens the items. A machine
-pairs with a 24-character code whose secret never reaches the server. The device list is a
-signed hash chain that every client pins, so the server can't add a key of its own or roll back
-a revocation unseen.
+made on your devices and machines, and the server holds none that opens the items.
 
-What it does see: your GitHub numeric id, device and machine ids, public keys, the names you
-give devices and machines, and each item's kind, id, sender, recipients, the item it answers,
-size and times, when a snoozed question comes back, plus push tokens.
-It can hold items back or drop them.
+A machine pairs with a 24-character code whose secret never reaches the server. The device list
+is a signed hash chain that every client pins, so the server can't add a key of its own or roll
+back a revocation unseen.
+
+The server sees your GitHub numeric id, device and machine ids, public keys, the names you give
+devices and machines, and push tokens. For each item, it sees its kind, id, sender, recipients,
+the item it answers, its size and times, and when a snoozed question comes back. It can hold items
+back or drop them.
 
 The limits:
 
-- The web app is code the server sends on each load, so a compromised server could send a page
-  that uses or reads that browser's keys, approves permission prompts, or uses a pairing code
-  or recovery key typed into it. The Mac app shows that same page. The Android app and the CLI
-  are installed code. Where this matters, use the Android app and no browser, scan machines' QR codes with the app, or host
-  your own server; a self-hosted server still sends pushes through starbridge.run's relay
-  unless it has its own VAPID keys and uses UnifiedPush
-  ([Notifications](../server/README.md#notifications)).
-  [PROTOCOL.md](../PROTOCOL.md#the-web-app-trusts-its-server) says what such a page could do.
+- The web app is code the server sends on each load, and the Mac app shows that same page. A
+  compromised server could send a page that reads that browser's keys, approves permission
+  prompts, or uses a pairing code or recovery key typed into it
+  ([what such a page could do](../PROTOCOL.md#the-web-app-trusts-its-server)). The Android app
+  and the CLI are installed code. Where this matters, use the Android app and no browser, scan
+  machines' QR codes with the app, or host your own server.
+- A self-hosted server still sends pushes through starbridge.run's relay unless it has its own
+  VAPID keys and uses UnifiedPush ([Notifications](../server/README.md#notifications)).
 - A compromised machine can post anything as itself until you remove it.
 - Whoever holds the recovery key can take over the account.
 - No forward secrecy: whoever later gets a device's or machine's private key and the server's
   stored items opens the items still stored for it.
-- Approve only a join you started: anyone signed in to your GitHub account can ask to join.
+- Anyone signed in to your GitHub account can ask to join, so approve only a join you started.
 - No independent security review yet. The audits so far were by AI models and by the author.
 
 [PROTOCOL.md](../PROTOCOL.md) has the formats, pairing, the device list and the
 [permission security model](../PROTOCOL.md#security-model).
 
-## Does it work with open models?
+### What's kept, and for how long?
 
-Yes. Starbridge works at the harness's level, through its plugin or skill, so the model the
-agent runs on doesn't matter. Quotas read your AI plans through CodexBar; with no plan,
-`starbridge setup --no-quota` skips them, and CodexBar with them.
+The server deletes:
 
-## Which harnesses, and how well?
+- answered questions and their answers 7 days after the answer;
+- permission prompts 7 days after they arrive;
+- runs a day after their last update;
+- unanswered questions and quota snapshots after 30 days, or unanswered questions after 7 days
+  once an account holds more than 1000.
 
-A harness is the tool the agent runs in. Starbridge installs in six: Claude Code, Codex, Pi,
-opencode, Cursor and Antigravity. In each, questions and runs work, and your answer comes back as
-the session's next prompt, except in the Cursor IDE. Cursor's question picker and permission
-prompts stay at the keyboard. Any other harness can run `starbridge ask` and `starbridge wait`.
-[What each harness supports](tell-your-agents.md#what-each-harness-supports) has the details.
+Delete account, in Settings, deletes everything the server holds for your account at once and
+signs out every device and machine. The Android app has it from 0.1.5. Backups keep deleted data
+for up to 2 weeks ([privacy page](https://starbridge.run/privacy)).
 
-## Do I restart my harnesses after setup?
+### Why GitHub sign-in?
 
-Yes: sessions that were running before setup don't have Starbridge. Quit the harness and resume
-the session with its command, such as `claude --continue`; the
-[Overview](index.md#sessions-already-running) lists them.
+People who run coding agents have a GitHub account, and the server then stores no password or
+email, only the numeric GitHub id. A self-hosted server can use an owner token instead.
 
-## Which platforms?
+## Setup
+
+### Which harnesses, and how well?
+
+Starbridge installs in Claude Code, Codex, Pi, opencode, Cursor and Antigravity
+([What each harness supports](tell-your-agents.md#what-each-harness-supports)). Any other harness
+can run `starbridge ask` and `starbridge wait`.
+
+### Do I restart my harnesses after setup?
+
+Yes. A session started before setup doesn't have Starbridge: resume it
+([Sessions already running](index.md#sessions-already-running)).
+
+### Does it work with open models?
+
+Yes. Starbridge works through the harness's plugin or skill, so the model doesn't matter. With no
+AI plan, `starbridge setup --no-quota` skips quotas and CodexBar.
+
+### Which platforms?
 
 The CLI runs on Linux, macOS and Windows, x64 and arm64. Quotas need CodexBar, which has no
-Windows build, so a Windows machine uploads none. The app runs on Android, the desktop app on
-macOS, and the web app in any browser; on iOS 16.4 and later, add starbridge.run to the Home
-Screen from Safari to get notifications. A native iPhone app is in progress and not released.
+Windows build, so a Windows machine uploads none. [Start](index.md#start) lists the apps.
 
-## Why does Starbridge use CodexBar?
+### Why does Starbridge use CodexBar?
 
-An agent stops when it has a question for you, when it needs your permission, or when its quota
-runs out. A quota window that empties mid-task stalls the agent like an unanswered question, so
-Starbridge warns before a window runs out at the current pace, and when one is about to reset
-with quota unused.
-[CodexBar](https://github.com/steipete/CodexBar), by Peter Steinberger, is open source,
-maintained, and already reads more than a dozen providers' plans, so Starbridge reads its output
-instead of writing its own reader; the author contributes to it. It reads plan usage on your
-machine, and Starbridge encrypts the snapshot for your devices like every other item.
-CodexBar is optional: setup asks before installing it, `--no-quota` skips it, and questions,
-runs and permission prompts work without it.
+A quota window that empties mid-task stalls the agent like an unanswered question, so Starbridge
+warns before a window runs out, and before one resets with quota unused.
 
-## Do you trust CodexBar's code?
+[CodexBar](https://github.com/steipete/CodexBar), by Peter Steinberger, is open source and already
+reads more than a dozen providers' plans, so Starbridge reads its output instead of writing its
+own reader; the author contributes to it. It reads plan usage on your machine, and Starbridge
+encrypts the snapshot like every other item.
 
-On Linux and macOS, setup installs [CodexBar](https://github.com/steipete/CodexBar) with Homebrew where it is
-present, else from CodexBar's GitHub release. Each Starbridge release names one CodexBar release
-and the SHA-256 of its files, and setup and `starbridge update` install only that file, so a
-changed or newer CodexBar release reaches you only with a Starbridge release.
-`starbridge update --codexbar <version>` installs another release, checked only against the
-`.sha256` published beside it. Starbridge checks that CodexBar's output still reads right, but
-doesn't vouch for CodexBar's code.
-Your plan credentials stay on the machine, and only the encrypted snapshot goes up.
+### Do you trust CodexBar's code?
 
-## What does it cost?
+Starbridge checks that CodexBar's output still reads right, but doesn't vouch for its code. Your
+plan credentials stay on the machine, and only the encrypted snapshot goes up.
 
-Nothing. starbridge.run is a small VPS the author pays for. The [terms](https://starbridge.run/terms)
-promise 60 days' notice before any price and 30 days' notice before a shutdown. Each account
-takes up to 3 machines, the computers that run your harnesses, and any number of phones and
-browsers. Self-hosting is free, under the MIT licence.
+On Linux and macOS, setup installs CodexBar with Homebrew where it is present, else from
+CodexBar's GitHub release. Each Starbridge release names one CodexBar release and the SHA-256 of
+its files, and setup and `starbridge update` install only that file. A newer CodexBar release
+reaches you only with a Starbridge release, unless you pick one with
+`starbridge update --codexbar <version>`.
 
-## What's kept, and for how long?
+## Cost and scale
 
-The server deletes answered questions and their answers 7 days after the answer, permission
-prompts 7 days after they arrive, runs a day after their last update, and unanswered questions
-and quota snapshots after 30 days, or unanswered questions after 7 days once an account holds
-more than 1000. Delete account, in Settings on the web page and the Mac app, and in the Android
-app from 0.1.5, deletes everything the server holds for your account at once and signs out every
-device and machine. Backups keep deleted data for up to 2 weeks ([privacy page](https://starbridge.run/privacy)).
+### What does it cost?
 
-## Why GitHub sign-in?
+Nothing. starbridge.run is a small VPS the author pays for. The
+[terms](https://starbridge.run/terms) promise 60 days' notice before any price and 30 days'
+notice before a shutdown. Self-hosting is free, under the MIT licence.
 
-People who run coding agents have a GitHub account, and the server stores no password or email:
-it keeps only the numeric GitHub id. A self-hosted server can use an owner token instead.
+Each account takes up to 3 machines, the computers that run your harnesses, and any number of
+phones and browsers.
 
-## Why is the CLI 82 MB?
+### Why is the CLI 82 MB?
 
-It is TypeScript compiled with `bun build --compile`, so the binary carries the Bun runtime. It
-shares the signing and sealing code with the web app and the server. `starbridge --version`
-takes about 45 ms, and the background service holds about 35 MB of memory of its own, 80 MB
-with the runtime it maps. After each tool call, the Claude Code plugin's hook checks whether a
-permission prompt is open, which takes under a millisecond, and starts the CLI only if one is.
+It is TypeScript compiled with `bun build --compile`, so the binary carries the Bun runtime, and
+it shares the signing and sealing code with the web app and the server.
 
-## Will the hosted server hold up?
+`starbridge --version` takes about 45 ms, and the background service holds about 35 MB of memory
+of its own, 80 MB with the runtime it maps. After each tool call, the Claude Code plugin's hook
+checks in under a millisecond whether a permission prompt is open, and starts the CLI only if one
+is.
+
+### Will the hosted server hold up?
 
 A load test ran the production stack on two cores with the VPS's memory. It holds about 5000
 signed-in users and 15 to 20 new visitors a second. The VPS can be resized in minutes.
