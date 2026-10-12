@@ -20,3 +20,21 @@ export function withUnsent(
     return why ? { ...i, notSent: why } : i;
   });
 }
+
+let inFlight = 0;
+
+/**
+ * Runs `send`, counting it until it settles: a hidden page holding an answer, a decision's or a
+ * prompt's, does not reload onto a new build, which would drop it (#1167).
+ */
+export async function whileSending<T>(send: () => Promise<T>): Promise<T> {
+  inFlight++;
+  try {
+    return await send();
+  } finally {
+    inFlight--;
+  }
+}
+
+/** Whether an answer is on its way to the server. */
+export const sending = () => inFlight > 0;

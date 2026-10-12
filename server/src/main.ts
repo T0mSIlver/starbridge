@@ -15,6 +15,10 @@ if (process.argv[2] === "schema") {
   process.exit(0);
 }
 const config = configFromEnv();
+if (config.privatePushHosts === "any")
+  console.warn(
+    "ALLOW_PRIVATE_PUSH_ENDPOINTS=1 lets every account point pushes at any host on this network: list your push hosts instead, such as ALLOW_PRIVATE_PUSH_ENDPOINTS=ntfy.lan",
+  );
 
 // `usage [days]` prints the daily usage counts and exits. It runs on the server's host, so only
 // whoever can open the database can read them.

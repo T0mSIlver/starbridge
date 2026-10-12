@@ -211,7 +211,8 @@ function score(r: Rec, s: Scenario): Record<string, boolean | null> {
     ),
     run: r.runs.length > 0 && !hasCard,
     none: !hasCard && r.runs.length === 0,
-    terminal: !hasCard && (j ? j.terminal : false),
+    // Without a judge, as every judged check: not scored rather than failed (#1277).
+    terminal: !hasCard && (j ? j.terminal : null),
   }[s.expect];
   return {
     channel,

@@ -176,8 +176,9 @@ async function visitor() {
     for (const path of ["/docs", "/docs/faq"])
       await fetch(`${TARGET}${path}`, { headers: h }).then(got).catch(() => {});
   const r = Math.random();
+  // One draw for both shares, so the sign-ins' range starts where the sign-ups' ends (#1275).
   if (r < Number(values.signup)) return signup(addr);
-  if (r < Number(values.signin)) {
+  if (r < Number(values.signup) + Number(values.signin)) {
     counts.signins++;
     await fetch(`${TARGET}/v1/auth/github`, { headers: h, redirect: "manual" }).catch(() => {});
   }

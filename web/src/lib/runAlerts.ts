@@ -9,6 +9,12 @@ const SHOWN = "starbridge:run-notified";
 
 const tag = (id: string) => `r:${id}`;
 
+/**
+ * The notifications this page showed itself, by run id: without a service worker, as in the
+ * desktop app, nothing else finds them to close (#1190).
+ */
+const shownHere = new Map<string, Notification>();
+
 /** Whether a run that ends would notify here: this device's switch on, and the browser's permission. */
 export const runAlertsOn = () =>
   !switchedOff() && typeof Notification !== "undefined" && Notification.permission === "granted";
@@ -38,12 +44,21 @@ export async function notifyRuns(items: RunItem[], first: boolean): Promise<void
     const { title, body } = runNote(i);
     const opts = { body, tag: tag(i.run.id), silent: false };
     if (reg) await reg.showNotification(title, opts);
-    else new Notification(title, opts);
+    else {
+      const n = new Notification(title, opts);
+      // A run that ends again under its id replaces its notification, which shares the tag.
+      shownHere.set(i.run.id, n);
+      n.onclose = () => {
+        if (shownHere.get(i.run.id) === n) shownHere.delete(i.run.id);
+      };
+    }
   }
 }
 
 /** Closes a dismissed run's notification, as on Android. */
 export async function closeRun(id: string): Promise<void> {
+  shownHere.get(id)?.close();
+  shownHere.delete(id);
   const reg = await navigator.serviceWorker?.getRegistration();
   for (const n of (await reg?.getNotifications({ tag: tag(id) })) ?? []) n.close();
 }
