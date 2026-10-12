@@ -189,9 +189,17 @@ export function Inbox() {
   // History lays out its rows a page at a time, the next as the list scrolls near its end: 500
   // rows cost a phone over half a second on every switch to the Inbox (#1459).
   const [pastShown, setPastShown] = useState(PAST_PAGE);
+  // A Find that scrolled far leaves no long list behind it.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: resets when the query changes
+  useEffect(() => setPastShown(PAST_PAGE), [find]);
   const pastMore = useRef<HTMLDivElement>(null);
-  const pastUpTo = Math.max(pastShown, listed.findIndex((p) => p.entry.id === selected) + 1);
+  // Rows past the selected one too, so J lands on one laid out.
+  const pastUpTo = Math.max(
+    pastShown,
+    listed.findIndex((p) => p.entry.id === selected) + PAST_PAGE,
+  );
   const pastLeft = showPast && pastUpTo < listed.length;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: observes again after each page, so a sentinel still in view adds the next
   useEffect(() => {
     const end = pastMore.current;
     if (!pastLeft || !end) return;
