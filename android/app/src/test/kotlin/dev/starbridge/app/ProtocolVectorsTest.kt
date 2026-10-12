@@ -66,6 +66,9 @@ private val READ = setOf(
 /** Vector files only the machine's code runs: the local agent computes pace and alerts (#1147). */
 private val MACHINE_ONLY = setOf("pace.json")
 
+/** Rules the app applies itself, not the port: the app's own tests read them (#1429). */
+private val APP_RULES = setOf("rules.json")
+
 // Every case in packages/protocol/vectors that a client checks, against the Kotlin port. The
 // TypeScript tests run the same files, so both clients agree byte for byte.
 class ProtocolVectorsTest {
@@ -98,7 +101,7 @@ class ProtocolVectorsTest {
     fun everyVectorFileIsRead() {
         val dir = File(System.getProperty("starbridge.vectors") ?: error("starbridge.vectors not set"))
         val files = dir.list()!!.filter { it.endsWith(".json") }.toSet()
-        assertEquals("a vector file this port does not test", READ + MACHINE_ONLY, files)
+        assertEquals("a vector file this port does not test", READ + MACHINE_ONLY + APP_RULES, files)
     }
 
     @Test
