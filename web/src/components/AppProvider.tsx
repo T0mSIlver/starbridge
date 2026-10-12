@@ -284,6 +284,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     try {
       const d = await load();
       const b = await d.boot();
+      ctxSet.current++;
       setBoot(b);
       // Signed out, revoked or broken: nothing decrypted stays behind the page that says so.
       if (b.state !== "ready") {
@@ -350,6 +351,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   // The directory as last verified; read again before every load.
   const ctxRef = useRef(ctx);
   ctxRef.current = ctx;
+  /** Counts the contexts boot and this page's directory writes set (#1454). */
+  const ctxSet = useRef(0);
 
   /** The owner says they revoked `id`: its heads go, and everything loads again (#813). */
   const stopWaiting = useCallback(
@@ -364,6 +367,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   );
   const current1 = useCallback(async () => {
     const was = ctxRef.current;
+    const set = ctxSet.current;
     if (!was) return undefined;
     const d = await load();
     let fresh: Awaited<ReturnType<typeof d.reverify>>;
@@ -381,21 +385,21 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       reload();
       return undefined;
     }
-    // A write of this page's own replaced the context meanwhile, from a later read.
-    if (ctxRef.current !== was) return ctxRef.current;
+    // A boot or a write of this page's own replaced the context meanwhile, from a later read.
+    if (ctxSet.current !== set) return ctxRef.current;
     ctxRef.current = fresh;
     if (fresh.dir.length !== was.dir.length) setBoot({ state: "ready", ctx: fresh });
     return fresh;
   }, [reload]);
   // Pollers start together: those that ask while a read of the directory runs share it, unless
-  // the context changed since it started (a write of this page's own, which read the directory
-  // after it), or it has run 10 s: one that hangs leaves the next ask a read of its own.
-  const currentRead = useRef<{ from?: Ctx; read: Promise<Ctx | undefined> }>(undefined);
+  // a boot or a write of this page's own set the context since it started (each read the
+  // directory after it), or it has run 10 s: one that hangs leaves the next ask a read of its own.
+  const currentRead = useRef<{ set: number; read: Promise<Ctx | undefined> }>(undefined);
   const current = useCallback(() => {
     const shared = currentRead.current;
-    if (shared && shared.from === ctxRef.current) return shared.read;
+    if (shared && shared.set === ctxSet.current) return shared.read;
     const read = current1();
-    const mine = { from: ctxRef.current, read };
+    const mine = { set: ctxSet.current, read };
     const drop = () => {
       if (currentRead.current === mine) currentRead.current = undefined;
     };
@@ -838,7 +842,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     [ctx, refreshRuns, reload],
   );
 
-  const update = useCallback((next: Ctx) => setBoot({ state: "ready", ctx: next }), []);
+  const update = useCallback((next: Ctx) => {
+    ctxSet.current++;
+    setBoot({ state: "ready", ctx: next });
+  }, []);
 
   return (
     <Ctx_.Provider
