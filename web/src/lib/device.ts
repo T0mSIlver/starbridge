@@ -1649,7 +1649,12 @@ export async function loadSettled(ctx: Ctx, cursor?: string) {
   let at = cursor;
   if (at === undefined) {
     const kept = await store.get("kept", ctx.account);
-    if (kept?.device === ctx.device.id) at = kept.cursor;
+    // A prompt open now that lists at or before that cursor: a reset or restored server, whose
+    // notices may sit below it too, or one open since before the kept read. Read them all.
+    const open =
+      kept?.device === ctx.device.id &&
+      (await api.items("permission", undefined, { open: true })).items;
+    if (open && !open.some((s) => Number(s.cursor) <= Number(kept.cursor))) at = kept.cursor;
   }
   for (;;) {
     const page = await api.items("settled", at);
