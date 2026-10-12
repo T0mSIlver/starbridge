@@ -93,10 +93,7 @@ function forgetAccount(
   for (const r of waits.rendezvous) deps.pairings.wake(r);
   // Apple asks an app that deletes an account to revoke its Sign in with Apple tokens, which
   // takes Starbridge off the user's Apple ID. The account is gone either way.
-  if (waits.apple && deps.apple)
-    deps.apple
-      .revoke(waits.apple.client, waits.apple.token)
-      .catch((e) => console.error(`Apple revoke on account deletion: ${e}`));
+  if (waits.apple) deps.apple?.revoke(waits.apple.client, waits.apple.token);
 }
 
 export const accountRoutes = new Hono<Env>();
