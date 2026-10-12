@@ -32,10 +32,10 @@ opens an issue for each client the row says should follow.
 | Update screen / update notice | yes (426 shows a reload-only screen) | yes (#497: "Update Starbridge" screen) | yes (auto-updater from GitHub Releases; 426 as web) | yes (#1122: 426 shows "Update Starbridge"; answers stay in the outbox) |
 | Recovery key: copy / save | yes (Copy the key; saved checkbox) | yes (copy to clipboard, #817; save) | yes (as web) | yes at first-device setup (#1116: Copy, clearing after a minute, and "I stored this key"; no Save, since iOS lets no app add a password to the password manager); Replace in Devices not yet |
 | Devices list (notifies state, app icon, Revoke) | yes | yes | yes | yes (#1238: Settings → Devices and machines) |
-| Pairing: show QR for a new phone | yes | yes | yes | not yet |
-| Pairing: scan a QR | no (no scanner in web) | yes (Play services code scanner) | no (as web) | yes, to join this iPhone (VisionKit, #1105); a machine's QR not yet |
-| Pairing: link (`/pair#code`) | yes | yes (App Link and `starbridge://pair`) | yes (`starbridge://pair`) | not yet |
-| Pairing: typed code | yes | yes | yes | not yet |
+| Pairing: show QR for a new phone | yes | yes | yes | yes (#1239) |
+| Pairing: scan a QR | no (no scanner in web) | yes (Play services code scanner) | no (as web) | yes (VisionKit: to join this iPhone, #1105; a machine's or another device's code in Devices, with the check key, #1239) |
+| Pairing: link (`/pair#code`) | yes | yes (App Link and `starbridge://pair`) | yes (`starbridge://pair`) | yes (`starbridge://pair`, #1239; the https link opens the web page until the app claims it, #1115) |
+| Pairing: typed code | yes | yes | yes | yes (#1239) |
 | Keyboard shortcuts (J K 1-4 A D /) | yes (from 1100 px) | no (only Enter to send, Esc in Find) | yes (as web) | not yet |
 | Sound | yes (off by default, only while a page is open) | yes (system notification channel sound) | yes (macOS default sound; Basso on "Answer not sent"; web Sound row hidden) | not yet |
 | Recover with the recovery key (revokes every other member) | yes | yes | yes (as web) | yes (#1116) |

@@ -76,26 +76,29 @@ private struct Lede: View {
     }
 }
 
-/** The main action: filled in `fg`, the full width. */
-private struct Primary: ButtonStyle {
+/** The main action: filled in `fg`, or the accent for one that waits on the owner, the full width. */
+struct Primary: ButtonStyle {
     var busy = false
+    var accent = false
     @Environment(\.isEnabled) private var enabled
+
+    private var on: Color { (accent ? Tokens.Colors.onAccent : Tokens.Colors.bg).color }
 
     func makeBody(configuration: Configuration) -> some View {
         ZStack {
             configuration.label.opacity(busy ? 0 : 1)
-            if busy { ProgressView().tint(Tokens.Colors.bg.color) }
+            if busy { ProgressView().tint(on) }
         }
         .type(Tokens.Typography.action)
-        .foregroundStyle(Tokens.Colors.bg.color)
+        .foregroundStyle(on)
         .frame(maxWidth: .infinity, minHeight: 56)
-        .background(Capsule().fill(Tokens.Colors.fg.color.opacity(enabled ? 1 : 0.38)))
+        .background(Capsule().fill((accent ? Tokens.Colors.accent : Tokens.Colors.fg).color.opacity(enabled ? 1 : 0.38)))
         .opacity(configuration.isPressed ? 0.8 : 1)
     }
 }
 
 /** The second action: outlined. */
-private struct Secondary: ButtonStyle {
+struct Secondary: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .type(Tokens.Typography.action)
@@ -106,7 +109,7 @@ private struct Secondary: ButtonStyle {
 }
 
 /** A text field on a filled box, its label above what it holds. */
-private struct Filled<Field: View>: View {
+struct Filled<Field: View>: View {
     let label: String
     @ViewBuilder let field: Field
 

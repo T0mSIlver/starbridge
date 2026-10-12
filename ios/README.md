@@ -33,7 +33,9 @@ in the planning repo's `research/ios-app.md`).
 - **Presence** (#848) follows Android: in front, a touch anywhere in the window or a key typed
   into a field says the owner is here, and only that bit reaches the server.
 - **Devices** (Settings → Devices and machines) follows Android: each device's notifications and
-  app, a machine's check code while `starbridge pair` asks, Update available, and Revoke.
+  app, a machine's check code while `starbridge pair` asks, Update available, and Revoke. Add a
+  device looks up a typed, scanned or linked code before Approve, and proves a machine's check
+  key from its QR (#795), or shows a QR code for a new phone.
 - **Design tokens** are `Starbridge/Theme/Tokens.swift`, written from DESIGN.md by
   `bun web/scripts/tokens.ts`; type is SF Pro, scaled with Dynamic Type.
 

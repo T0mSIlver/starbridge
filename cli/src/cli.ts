@@ -82,7 +82,7 @@ const HELP = `starbridge: post decisions to your devices, report runs, upload qu
 
   starbridge pair [--server <url>] [--name <name>] [--force]
       Make this machine's keys and print a pairing code to type on a device. Unless the
-      Starbridge Android app scanned the QR code, confirm that its check code matches.
+      Starbridge app scanned the QR code, confirm that its check code matches.
   starbridge pair --confirm | --reject
       Answer that for a waiting \`pair\` or \`setup\` that has no terminal.
       --server <url>          a self-hosted server (default: $STARBRIDGE_SERVER, else
