@@ -557,7 +557,9 @@ it has no title. A session's title is words, in the reading face (#563).
   app and Android before naming it, and hide a row a client can't honour. A
   setting that needs another shows off and muted while that one is off, and
   turning it on turns the other on first. One name per setting on every
-  client (#1061).
+  client (#1061). A label the owner picked stays: Android's colours option
+  is "Material You", the Android term users know (Tom, 2026-10-12). A copy
+  pass never renames a label the owner picked; it asks first.
 - Light and dark are peers and follow the system setting; dark is the
   default where a platform reports no preference. Every screen ships in both.
 - Mobile width first. Tap targets are at least `size.tap`. Wider screens add a

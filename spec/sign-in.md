@@ -26,9 +26,13 @@
   redirect that no tap started; after a tap it does not. Self-hosted servers keep
   `starbridge://auth`, since the APK can bind only starbridge.run.
 - iPhone (#1105): the same PKCE sign-in through `ASWebAuthenticationSession`, which shares
-  Safari's GitHub sign-in and ends on `starbridge://auth`. On starbridge.run the browser therefore
-  stops on `/app/auth`, and the owner taps Open Starbridge once: catching the https callback
-  needs an associated domain, so a signed build (#1115).
+  Safari's GitHub sign-in. On starbridge.run from iOS 17.4 it ends on the https callback
+  `/v1/auth/github/callback/app`, as Android's App Link does, so the owner taps nothing after
+  GitHub (#1115): `/.well-known/apple-app-site-association` lists the app for that path
+  (applinks) and for webcredentials, which the https callback requires, and the app's Associated
+  Domains name starbridge.run. Older iOS and self-hosted servers, whose domain cannot list the
+  app, end on `starbridge://auth`, so on starbridge.run they stop on `/app/auth` and the owner
+  taps Open Starbridge once.
 - `assetlinks.json` lists only the release key, which Play App Signing also uses. A debug
   keystore's password is public, and an app signed with it would verify as the App Link handler
   (#569). Dogfood builds sign with the release key instead, opted into by a gitignored

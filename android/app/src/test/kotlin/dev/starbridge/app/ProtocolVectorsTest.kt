@@ -57,6 +57,15 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
 
+/** The vector files these tests read; [ProtocolVectorsTest.everyVectorFileIsRead] keeps it whole. */
+private val READ = setOf(
+    "context.json", "directory.json", "envelopes.json", "heads.json", "images.json", "join.json",
+    "keys.json", "pairing.json", "quota-alerts.json", "schemas.json",
+)
+
+/** Vector files only the machine's code runs: the local agent computes pace and alerts (#1147). */
+private val MACHINE_ONLY = setOf("pace.json")
+
 // Every case in packages/protocol/vectors that a client checks, against the Kotlin port. The
 // TypeScript tests run the same files, so both clients agree byte for byte.
 class ProtocolVectorsTest {
@@ -84,6 +93,13 @@ class ProtocolVectorsTest {
 
     private val keys = load("keys.json")
     private val directory = load("directory.json")
+
+    @Test
+    fun everyVectorFileIsRead() {
+        val dir = File(System.getProperty("starbridge.vectors") ?: error("starbridge.vectors not set"))
+        val files = dir.list()!!.filter { it.endsWith(".json") }.toSet()
+        assertEquals("a vector file this port does not test", READ + MACHINE_ONLY, files)
+    }
 
     @Test
     fun directory() {

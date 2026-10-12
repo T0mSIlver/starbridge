@@ -100,7 +100,10 @@ Besides the web app's trust in its server:
   `"starbridge/v1/image"` NUL and the blob's bytes, so the signature covers the image and each
   box holds a few dozen bytes per image. A client checks the hash, then opens the blob; one that
   fails either is left out, as a broken image. A push carries no blobs, so the server sends a
-  decision with blobs as its id. A re-seal (`reseal`) may leave `blobs` out: the server keeps
+  decision with blobs as its id. A list asked with `blobs=open` carries no blobs for answered
+  decisions, so a long history costs no image the owner does not look at; their images are
+  pending, not broken, until the device fetches the item by id (#1382). A server that ignores
+  the flag sends them all. A re-seal (`reseal`) may leave `blobs` out: the server keeps
   those it stored. `vectors/images.json` holds the cases.
   A decision with `answerIn` is answered on that page (a claude.ai artifact whose button wakes
   the agent), never in Starbridge: it has no options, devices show the page and no answer
@@ -409,7 +412,9 @@ request without the header, or with one the server cannot read, is served.
   session over HTTPS; the app ignores a redirect whose state is not its challenge, or with none.
   GitHub
   redirects to `/v1/auth/github/callback/app`, which the Android app claims as an App Link on
-  starbridge.run (`/.well-known/assetlinks.json` binds it to the app's signing keys). When the
+  starbridge.run (`/.well-known/assetlinks.json` binds it to the app's signing keys), and the
+  iPhone app's browser sheet catches there from iOS 17.4
+  (`/.well-known/apple-app-site-association`). When the
   browser gets the redirect instead, the server hands code and state on to `APP_REDIRECT_URI`:
   `starbridge://auth` by default, and on starbridge.run the App Link
   `https://starbridge.run/app/auth`, whose page has an "Open Starbridge" button to
@@ -481,7 +486,7 @@ createdAt, expiresAt, version}`; `state` is `open`, `comparing`, `approved` or `
 | Route | Who | What |
 |---|---|---|
 | `POST /items` | the kind's signing role | store a sealed item and push it to each recipient; 409 on a reused id; 409 `too-many-items` and 413 `too-large` past the caps in Limits; 403 `account-suspended` from a machine of an account the operator suspended (every machine write gets it; reads still pass) |
-| `GET /items?kind=<kinds>&after=<cursor>&open=1` | device | items with only the caller's box (and a decision's blobs), and `cursor`; `kinds` is a comma-separated list of machine-signed kinds and `snooze`, the machine-signed ones when left out; `open=1` keeps only unanswered decisions and permissions still in their answer window |
+| `GET /items?kind=<kinds>&after=<cursor>&open=1&blobs=open` | device | items with only the caller's box (and a decision's blobs), and `cursor`; `kinds` is a comma-separated list of machine-signed kinds and `snooze`, the machine-signed ones when left out; `open=1` keeps only unanswered decisions and permissions still in their answer window; `blobs=open` leaves an answered decision's blobs out, for `GET /items/:id` to give when the device shows its images (#1382) |
 | `DELETE /items/:id` | device | drop a run sealed to the caller, for every device (#827); 404 for any other kind, or a run already gone |
 | `GET /items/:id` | device, machine | one item, the caller's box only, with a decision's blobs; push points here when the item is over the inline limit (3 KB by default) |
 | `GET /quota` | device | the latest quota item from each machine |
@@ -575,7 +580,10 @@ is `quiet`, so devices learn at once that the machine sends quotas.
 Quota snapshots and runs go to FCM and UnifiedPush only, not to Web Push or APNs. Browsers expect every Web Push to show a
 notification and drop a subscription that keeps showing none (Firefox after 16), so the web page
 fetches `GET /quota` and `GET /items?kind=run` instead. Decisions, permissions, settled notices,
-waiting states, snoozes and `answered` still go to Web Push.
+waiting states, snoozes and `answered` still go to Web Push, except that what shows nothing
+(`answered`, a settled notice, a snooze as it is posted) skips Apple's push service
+(`*.push.apple.com`): Safari drops a subscription after three pushes that showed no notification
+within 30 s (#1363). Web Push requests carry `Urgency: high` and `TTL: 86400`.
 
 The server checks that a push URL's host resolves only to public addresses, then connects to the
 address it checked, with SNI and the certificate check still on the host name, so a DNS answer

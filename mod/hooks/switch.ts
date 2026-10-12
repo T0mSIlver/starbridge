@@ -50,7 +50,12 @@ export class Switch {
      */
     readonly unconfirmed = new Set<string>(),
   ) {
-    this.done = this.loop();
+    // Nothing awaits a loop that ended before `stop`: a rejection would take the harness down (#1365).
+    this.done = this.loop().catch((e) => {
+      try {
+        this.paths.log(`starbridge: the answer loop stopped: ${(e as Error).message}`);
+      } catch {}
+    });
   }
 
   /** Which loop runs now, for tests and the debug log. */

@@ -1,6 +1,6 @@
 {
   "name": "@starbridge/web",
-  "version": "0.1.5-rc.3",
+  "version": "0.1.6-rc.1",
   "private": true,
   "scripts": {
     "dev": "bun run sw && bun --bun next dev",

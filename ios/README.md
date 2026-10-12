@@ -8,7 +8,9 @@ in the planning repo's `research/ios-app.md`).
 
 - **Sign-in** goes through the browser with PKCE, as on Android (PROTOCOL.md, "Auth"):
   `ASWebAuthenticationSession` opens `/v1/auth/github?app=1&challenge=…` and ends on
-  `starbridge://auth`, where the app trades GitHub's code and its verifier for the session.
+  `https://starbridge.run/v1/auth/github/callback/app` (iOS 17.4 and later, through the
+  associated domain) or on `starbridge://auth` (older iOS, self-hosted servers), where the app
+  trades GitHub's code and its verifier for the session.
   Self-hosted servers also take the owner token.
 - **The first device** follows Android (#370): the app keeps the signed first entry and shows the
   recovery key once; the server gets the entry when the owner says they stored the key.
@@ -68,5 +70,5 @@ They run when the test process gets a self-hosted server with no device yet, sta
 TEST_RUNNER_STARBRIDGE_TEST_SERVER=http://localhost:18731 TEST_RUNNER_STARBRIDGE_TEST_OWNER_TOKEN=test xcodebuild -project Starbridge.xcodeproj -scheme Starbridge -destination "platform=iOS Simulator,name=iPhone 16" test
 ```
 
-CI runs both, with the server, in `.github/workflows/ios.yml`. Builds are for the simulator until
-signing lands with the TestFlight upload.
+CI runs both, with the server, in `.github/workflows/ios.yml`. Each release tag uploads the app to
+TestFlight from `.github/workflows/release.yml` (spec/releases.md, "The iPhone app on TestFlight").

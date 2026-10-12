@@ -37,4 +37,14 @@ final class SignInTests: XCTestCase {
             XCTAssertNil(SignIn.redirect(try XCTUnwrap(URL(string: link))), link)
         }
     }
+
+    func testOnlyStarbridgeRunEndsOnTheHttpsCallback() {
+        let https = SignIn.httpsCallback(server: "https://starbridge.run")
+        XCTAssertEqual(https?.host, "starbridge.run")
+        XCTAssertEqual(https?.path, "/v1/auth/github/callback/app")
+        // The app is not in a self-hosted server's apple-app-site-association.
+        for server in ["https://sb.example.com", "http://starbridge.run", "https://starbridge.run:8443", "https://starbridge.run.example.com", "http://localhost:18731"] {
+            XCTAssertNil(SignIn.httpsCallback(server: server), server)
+        }
+    }
 }

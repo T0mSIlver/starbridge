@@ -2,6 +2,7 @@
 // account, so a browser signed in to a second account keeps both devices apart.
 import type { Heads, Pin } from "@starbridge/protocol";
 import type { StoredKeys } from "./crypto/keys";
+import type { Kept } from "./kept";
 import type { PromptReply, Reply } from "./types";
 
 /** This browser's member of an account's directory. */
@@ -46,6 +47,8 @@ type Records = {
    * pushed for an older one shows nothing.
    */
   snoozes: Record<string, string>;
+  /** The inbox's items as listed, still sealed, and the cursor after them (#1380). */
+  kept: Kept;
 };
 
 /** Every record kind kept per account, so signing out can remove them all. */
@@ -60,6 +63,7 @@ const PER_ACCOUNT: Record<Exclude<keyof Records, "current">, true> = {
   heads: true,
   forgotten: true,
   snoozes: true,
+  kept: true,
 };
 export const ACCOUNT_KINDS = Object.keys(PER_ACCOUNT) as Exclude<keyof Records, "current">[];
 

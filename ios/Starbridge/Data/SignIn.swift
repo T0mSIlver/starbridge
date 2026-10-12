@@ -17,6 +17,17 @@ enum SignIn {
         URL(string: "\(server)/v1/auth/github?app=1&challenge=\(challenge(verifier))")
     }
 
+    /**
+     * The https page where a sign-in on `server` ends, for the browser sheet to catch from iOS
+     * 17.4, else nil. Only starbridge.run lists this app in its apple-app-site-association, so a
+     * self-hosted server's sign-in ends on starbridge://auth.
+     */
+    static func httpsCallback(server: String) -> (host: String, path: String)? {
+        guard let parts = URLComponents(string: server), parts.scheme == "https", parts.host == "starbridge.run",
+              parts.port == nil, parts.path.isEmpty || parts.path == "/" else { return nil }
+        return ("starbridge.run", "/v1/auth/github/callback/app")
+    }
+
     /** What ends a sign-in. */
     enum Redirect: Equatable {
         /** The code to trade, and the sign-in's state: its challenge. */
