@@ -110,6 +110,7 @@ function list(
   kinds: string[],
   from: number,
   openOnly = false,
+  openBlobs = false,
 ): Stored[] {
   // Open: unanswered items of answerable kinds, before their answer window closes.
   const open = openOnly
@@ -121,9 +122,13 @@ function list(
   const cutoffs = Object.fromEntries(
     Object.entries(ANSWERABLE_FOR).map(([k, ms]) => [k, new Date(now - ms).toISOString()]),
   );
+  // Blobs of answered decisions stay behind, for the device to fetch by id when it shows them.
+  const select = openBlobs
+    ? SELECT.replace("i.blobs", "CASE WHEN i.answered_at IS NULL THEN i.blobs END AS blobs")
+    : SELECT;
   const rows = db
     .query(
-      `${SELECT} WHERE i.account_id = ? AND b.to_id = ? AND i.seq > ?
+      `${select} WHERE i.account_id = ? AND b.to_id = ? AND i.seq > ?
        AND i.kind IN (SELECT value FROM json_each(?)) ${open} ORDER BY i.seq LIMIT ${PAGE}`,
     )
     .all(
@@ -572,7 +577,10 @@ itemRoutes.get("/items", requireCaller("paired-device"), (c) => {
   const from = after(c.req.query("after"));
   const caller = c.var.caller;
   const open = c.req.query("open") === "1";
-  const items = list(c.var.db, caller.account, memberOf(caller), kinds, from, open);
+  const blobs = c.req.query("blobs");
+  if (blobs !== undefined && blobs !== "open")
+    fail(400, "bad-request", "blobs is open or left out");
+  const items = list(c.var.db, caller.account, memberOf(caller), kinds, from, open, !!blobs);
   return c.json(page(items, from));
 });
 
