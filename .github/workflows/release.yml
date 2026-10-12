@@ -445,6 +445,13 @@ jobs:
           umask 077
           mkdir -p "$RUNNER_TEMP/asc"
           printf '%s\n' "$ASC_API_KEY_P8" > "$RUNNER_TEMP/asc/AuthKey_$ASC_KEY_ID.p8"
+      # A refused key fails here with why, not as xcodebuild's missing profiles (#1409).
+      - if: steps.setup.outputs.set
+        name: The key signs in to App Store Connect
+        env:
+          ASC_KEY_ID: ${{ vars.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ vars.ASC_ISSUER_ID }}
+        run: ruby scripts/asc-check.rb "$RUNNER_TEMP/asc/AuthKey_$ASC_KEY_ID.p8" "$ASC_KEY_ID" "$ASC_ISSUER_ID"
       - if: steps.setup.outputs.set
         name: Archive
         env:
