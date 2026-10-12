@@ -293,13 +293,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       if (b.state === "ready") {
         await inboxTurn(async () => {
           let landed = () => false;
+          const gen = generation.current;
           const loaded = await holding(() => {
             landed = inboxRead.current();
             return d.loadInbox(b.ctx, undefined, {
               keep: true,
               // The open questions show while the answered ones open; the full read replaces them.
+              // Never after a sign-out or revocation forgot the page's items meanwhile.
               early: (open) => {
-                if (landed()) setInbox(withImages(open, shownImages.current));
+                if (gen === generation.current && landed())
+                  setInbox(withImages(open, shownImages.current));
               },
             });
           });
