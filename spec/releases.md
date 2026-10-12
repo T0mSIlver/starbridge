@@ -91,9 +91,10 @@
   the tag also builds the macOS app on GitHub's macOS runner, signed with the Developer ID and
   notarized, its secrets in the `desktop-release` environment, and adds its DMGs, zips and
   `latest-mac.yml` to the Release. Every 6 hours and at start, the app reads that file from the
-  release it follows, downloads the zip, and installs it on quit or from Restart to Update. It
-  follows GitHub's latest release, or with Get Release Candidates checked in its menu, the newest
-  rc when that is newer (#1071); an app installed from an rc starts checked. Unchecking it cancels
+  release it follows, downloads the zip (or waits for the rail's Update available, with Settings' "Download updates
+  automatically" off), and installs it on quit or from the rail's Restart to update (#1398). It
+  follows GitHub's latest release, or with Settings' "Release candidates" on, the newest
+  rc when that is newer (#1071); an app installed from an rc starts with it on. Turning it off cancels
   an rc download under way; one already downloaded still installs on quit, since Squirrel holds it. The app picks the
   release from the `releases/latest` redirect and the releases feed: electron-updater's own GitHub
   lookup keeps an app installed from an rc on rcs and never offers it a final, and GitHub's API

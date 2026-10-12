@@ -12,6 +12,7 @@ import { sending } from "@/lib/unsent";
 import { type Store, useApp } from "./AppProvider";
 import { Icon, type IconName, Mark } from "./icons";
 import s from "./Shell.module.css";
+import { UpdateButton } from "./UpdateButton";
 import ui from "./ui.module.css";
 
 const TABS: { href: string; label: string; icon: IconName }[] = [
@@ -120,11 +121,15 @@ export function Shell({ children }: { children: React.ReactNode }) {
             </li>
           ))}
         </ul>
-        {machines > 0 && (
-          <p className={`t-caption ${s.machines}`}>
-            {machines} {machines === 1 ? "machine" : "machines"} paired
-          </p>
-        )}
+        <div className={s.foot}>
+          {machines > 0 && (
+            <p className={`t-small ${s.machines}`}>
+              <Icon name="server" size={18} />
+              {machines} {machines === 1 ? "machine" : "machines"}
+            </p>
+          )}
+          <UpdateButton />
+        </div>
       </nav>
       <main className={s.main}>
         {withheld && (

@@ -31,6 +31,7 @@ import { Icon, type IconName } from "./icons";
 import { PhoneBar } from "./PhoneBar";
 import { useReorder } from "./Reorder";
 import s from "./Settings.module.css";
+import { useDesktopUpdates } from "./UpdateButton";
 import ui from "./ui.module.css";
 
 const load = () => import("@/lib/device");
@@ -866,6 +867,35 @@ function PlaceRow() {
   );
 }
 
+/**
+ * The desktop app's updates (#1398), which a browser has none of. Turning release candidates off
+ * drops one found or downloading; one downloaded still installs on quit (spec/releases.md).
+ */
+function UpdatesSection() {
+  const updates = useDesktopUpdates();
+  const set = desktop?.setUpdateSettings;
+  if (!updates || !set) return null;
+  const { releaseCandidates, autoDownload } = updates.settings;
+  return (
+    <Section title="Updates">
+      <Row label="Release candidates">
+        <Switch
+          label="Release candidates"
+          checked={releaseCandidates}
+          onChange={(v) => set({ releaseCandidates: v })}
+        />
+      </Row>
+      <Row label="Download updates automatically">
+        <Switch
+          label="Download updates automatically"
+          checked={autoDownload}
+          onChange={(v) => set({ autoDownload: v })}
+        />
+      </Row>
+    </Section>
+  );
+}
+
 /** Colours and the clock: how the page looks, per browser; in the desktop app, where it stays. */
 function LookSection() {
   const [theme, setTheme] = usePref("theme");
@@ -947,6 +977,7 @@ export function Settings() {
             <InboxSection />
             <DeviceSection data={data} />
             <LookSection />
+            <UpdatesSection />
             <AccountSection />
           </>
         )}
