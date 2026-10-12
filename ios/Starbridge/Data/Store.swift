@@ -303,6 +303,24 @@ final class Store {
         persist(nil, k)
     }
 
+    /** Sign in with Apple on starbridge.run, the only server holding the App ID's key. */
+    func signInWithApple(identityToken: String, code: String, nonce: String) async {
+        await run { [self] in
+            var s = saved
+            s.server = Self.defaultServer
+            persist(s)
+            let session: String
+            do {
+                session = try await api().appleSession(identityToken: identityToken, code: code, nonce: nonce)
+            } catch let e as ApiError where e.error == "bad-code" {
+                throw Notice(message: "Sign-in expired. Sign in again.")
+            } catch let e as ApiError where e.error == "signups-paused" {
+                throw Notice(message: "New accounts are paused on this server.")
+            }
+            try await afterSignIn(session)
+        }
+    }
+
     func signInWithOwnerToken(server: String, token: String) async {
         await run { [self] in
             var s = saved

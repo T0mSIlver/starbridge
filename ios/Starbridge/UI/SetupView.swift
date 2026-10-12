@@ -160,7 +160,9 @@ private struct Tile: View {
 private struct SignInStep: View {
     let store: Store
     @Environment(\.webAuthenticationSession) private var webAuthenticationSession
+    @Environment(\.colorScheme) private var colorScheme
     @State private var selfHosted = false
+    @State private var nonce = ""
     @State private var server = ""
     @State private var token = ""
 
@@ -185,8 +187,15 @@ private struct SignInStep: View {
             }
         } bottom: {
             if !selfHosted {
+                // Apple's button, drawn as Primary is: App Store guideline 4.8 wants it no less
+                // prominent than GitHub's.
+                SignInWithAppleButton(.signIn, onRequest: appleRequest, onCompletion: appleDone)
+                    .signInWithAppleButtonStyle(colorScheme == .dark ? .white : .black)
+                    .frame(height: 56)
+                    .clipShape(Capsule())
+                    .disabled(store.busy)
                 Button { gitHub(Store.defaultServer) } label: { Label { Text("Sign in with GitHub") } icon: { Image("GitHub").resizable().frame(width: 20, height: 20) } }
-                    .buttonStyle(Primary(busy: store.busy))
+                    .buttonStyle(Secondary())
                     .disabled(store.busy)
                 LinkButton(text: "Use your own server") {
                     selfHosted = true
@@ -201,6 +210,28 @@ private struct SignInStep: View {
                     .disabled(store.busy || server.isEmpty)
                 LinkButton(text: "Use starbridge.run") { selfHosted = false }
             }
+        }
+    }
+
+    /** Asks Apple for no name and no email: the account is Apple's user id alone (spec/sign-in.md). */
+    private func appleRequest(_ request: ASAuthorizationAppleIDRequest) {
+        nonce = SignIn.newNonce()
+        request.requestedScopes = []
+        request.nonce = SignIn.nonceHash(nonce)
+    }
+
+    private func appleDone(_ result: Result<ASAuthorization, Error>) {
+        switch result {
+        case let .success(auth):
+            guard let credential = auth.credential as? ASAuthorizationAppleIDCredential,
+                  let token = credential.identityToken.flatMap({ String(data: $0, encoding: .utf8) }),
+                  let code = credential.authorizationCode.flatMap({ String(data: $0, encoding: .utf8) }) else {
+                store.notice = "Apple sign-in didn't finish. Sign in again."
+                return
+            }
+            Task { await store.signInWithApple(identityToken: token, code: code, nonce: nonce) }
+        case let .failure(error):
+            if (error as? ASAuthorizationError)?.code != .canceled { store.notice = store.describe(error) }
         }
     }
 
