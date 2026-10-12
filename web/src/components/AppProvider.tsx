@@ -362,7 +362,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     },
     [reload],
   );
-  const current = useCallback(async () => {
+  const current1 = useCallback(async () => {
     const was = ctxRef.current;
     if (!was) return undefined;
     const d = await load();
@@ -385,6 +385,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (fresh.dir.length !== was.dir.length) setBoot({ state: "ready", ctx: fresh });
     return fresh;
   }, [reload]);
+  // Pollers start together: those that ask while a read of the directory runs share it.
+  const currentRead = useRef<Promise<Ctx | undefined>>(undefined);
+  const current = useCallback(() => {
+    currentRead.current ??= current1().finally(() => {
+      currentRead.current = undefined;
+    });
+    return currentRead.current;
+  }, [current1]);
 
   // A read asked for while one runs waits for it, and every ask meanwhile shares that one read.
   const inboxNext = useRef<Promise<void>>(undefined);

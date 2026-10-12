@@ -165,9 +165,12 @@ class Unanchored extends Error {}
  * a genesis this browser's device signed anchors the chain (a first device cut off before it
  * pinned): any other the server could have made, listing keys it relayed (#354).
  */
-async function trusted(account: string): Promise<{ dir: Directory; entries: SignedEnvelope[] }> {
+async function trusted(
+  account: string,
+  read?: SignedEnvelope[],
+): Promise<{ dir: Directory; entries: SignedEnvelope[] }> {
   for (let attempt = 0; ; attempt++) {
-    const entries = await api.directory();
+    const entries = (attempt === 0 && read) || (await api.directory());
     const pin = await store.get("pin", account);
     if (!pin && !signedGenesis(account, entries[0], await store.get("device", account)))
       throw new Unanchored("no pin anchors this directory");
@@ -252,7 +255,7 @@ export async function boot(): Promise<Boot> {
   }
   let verified: { dir: Directory; entries: SignedEnvelope[] };
   try {
-    verified = await trusted(account);
+    verified = await trusted(account, entries);
   } catch (e) {
     // A join or recovery cut off before it pinned starts over (#354).
     if (e instanceof Unanchored) {
