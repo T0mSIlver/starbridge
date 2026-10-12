@@ -1,5 +1,5 @@
 // Launches the app on a stand-in server page and checks the bridge end to end: the window loads
-// the page, the page's count turns the menu bar's climber amber, a question notifies with its options, a button
+// the page, the page's count turns the menu bar's dot amber, a question notifies with its options, a button
 // and a typed reply answer through the page, the notification closes once the question leaves,
 // the window refuses another origin, a hidden window still notifies, and the Mac's lock and quitting
 // reach the page as away. Notifications and the tray are watched in the main
@@ -133,7 +133,7 @@ try {
     ) as Promise<T>;
   await until(
     () => main((g) => g.tips.at(-1) === "Starbridge: 2 need you" && !g.template.at(-1)),
-    "the menu bar's amber climber",
+    "the menu bar's amber dot",
   );
   const shown = await main((g) =>
     g.shown.map((n: Electron.Notification) => ({

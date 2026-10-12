@@ -56,7 +56,7 @@ let origin: string;
 let win: BrowserWindow | null = null;
 let serverWin: BrowserWindow | null = null;
 let tray: Tray | null = null;
-/** Items in Needs you, which turn the menu bar's climber amber. */
+/** Items in Needs you, which turn the menu bar's dot amber. */
 let needs = 0;
 let notifier: Notifier;
 /** The Needs you widget's snapshot (#1031). */
@@ -370,7 +370,7 @@ function paintDockMenu(): void {
 
 /**
  * The mark in the menu bar: one colour, as macOS draws menu bar icons, until something needs the
- * owner; then its climber is amber, the one amber light, as on the phone. No count: the window
+ * owner; then its dot is amber, the one amber light, as on the phone. No count: the window
  * says what. The amber icon carries its own colours, so it follows the menu bar's appearance.
  */
 function trayIcon(): Electron.NativeImage {

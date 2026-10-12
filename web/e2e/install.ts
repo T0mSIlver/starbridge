@@ -153,7 +153,7 @@ async function desktop(head: object) {
     }),
   );
   const maskable = await maskableFits(page);
-  check(maskable, "maskable icon: opaque, climber inside the 80% safe zone");
+  check(maskable, "maskable icon: opaque, mark inside the 80% safe zone");
 
   // The audit as a page, to screenshot.
   const report = await ctx.newPage();
@@ -170,7 +170,7 @@ async function desktop(head: object) {
     <h1>Starbridge install audit, Chromium ${ctx.browser()?.version() ?? ""}</h1>
     <p class=ok>Page.getInstallabilityErrors: ${errors.length ? errors.map((e) => e.errorId).join(", ") : "none, installable"}</p>
     <p class=ok>Page.getAppManifest: ${app.errors.length ? app.errors.map((e) => e.message).join(", ") : "no manifest errors or warnings"}</p>
-    <p class=ok>Maskable icon: opaque, climber inside the 80% safe zone</p>
+    <p class=ok>Maskable icon: opaque, mark inside the 80% safe zone</p>
     <h2>Manifest (${app.url})</h2><table>${rows({
       id: manifest.id,
       name: manifest.name,
@@ -240,9 +240,9 @@ async function desktop(head: object) {
 }
 
 /**
- * The maskable icon fills its square with no transparency, and its climber (the amber, the
- * part a mask must not cut) sits inside the central 80% circle. The planet and the tether run
- * off the edges by design, as on the Android adaptive icon.
+ * The maskable icon fills its square with no transparency, and its mark (every pixel brighter
+ * than the ground: the arch and the amber dot) sits inside the central 80% circle, which a mask
+ * must not cut.
  */
 async function maskableFits(page: Page): Promise<boolean> {
   return page.evaluate(async () => {
@@ -254,7 +254,7 @@ async function maskableFits(page: Page): Promise<boolean> {
     g.drawImage(img, 0, 0);
     const { data, width, height } = g.getImageData(0, 0, img.width, img.height);
     const r = (width * 0.4) ** 2;
-    let amber = 0;
+    let mark = 0;
     for (let y = 0; y < height; y++)
       for (let x = 0; x < width; x++) {
         const i = (y * width + x) * 4;
@@ -265,12 +265,12 @@ async function maskableFits(page: Page): Promise<boolean> {
           data[i + 3],
         ] as number[];
         if (alpha !== 255) return false;
-        if (red > 200 && green > 120 && green < 200 && blue < 100) {
-          amber++;
+        if (red + green + blue > 120) {
+          mark++;
           if ((x - width / 2) ** 2 + (y - height / 2) ** 2 > r) return false;
         }
       }
-    return amber > 0;
+    return mark > 0;
   });
 }
 

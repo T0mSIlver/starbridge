@@ -49,7 +49,7 @@ a browser; the app adds a menu bar light and notifications, so a web release nee
   notifications are what find the block. Opening it forgets the refusal until the next
   notification, which then shows or flips the switch back. Devices reports such a Mac as blocked.
 - **The menu bar.** The mark in one colour, as macOS draws menu bar icons; while anything needs
-  the owner, its climber turns amber, the one amber light, with no count: the window says what
+  the owner, its dot turns amber, the one amber light, with no count: the window says what
   (owner's pick from mockups, 2026-10-09). A click shows the window; a right-click opens the menu:
   Open, Open at Login (off by default), Server, Quit. Closing the window keeps the app in the menu
   bar and drops its Dock icon, which shows again with the window. ⌃⌥S shows the window from
