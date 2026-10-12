@@ -57,14 +57,19 @@ A rerun repairs only what is missing.
 
 ### Update and uninstall
 
-Once a day the background service reads the latest release; when it is newer, `setup`, `pair`,
-`config` and `--version` print a line saying so, and your devices show "Update available".
+Once a day the background service reads the latest release. On a script install, a newer one
+installs by itself within two hours, while no question, permission prompt or run is in flight; a
+failed update keeps the old version and tries again the next day. Otherwise `setup`, `pair`,
+`config` and `--version` print a line saying it is out. Your devices show "Update available"
+under a machine that is behind, else when it last updated and to what.
 
 | Command | Effect |
 |---|---|
 | `starbridge update` | Installs the latest release over a script install, then runs `setup --refresh` and updates the Claude Code plugins. Homebrew and npm installs update through their manager; then run `setup --refresh`. |
 | `starbridge update --codexbar <version>` | When the pinned CodexBar release breaks and your devices show quota errors, installs that release instead, until a later `starbridge update` ([Do you trust CodexBar's code?](../docs/faq.md#do-you-trust-codexbar-s-code)). |
-| `starbridge config update-check off` | Stops the daily check; `STARBRIDGE_NO_UPDATE_CHECK=1` silences the line. |
+| `starbridge config updates off` | Stops automatic updates; the line still says when a release is out. |
+| `starbridge config update-check off` | Stops the daily check, the line and automatic updates; `STARBRIDGE_NO_UPDATE_CHECK=1` does the same. |
+| `starbridge status` | Shows both versions, whether updates are automatic, what holds the next one, and the last update and failure. `~/.config/starbridge/update.log` holds the last automatic update's output. |
 | `starbridge uninstall` | Removes the background service, Starbridge from every harness and the binary, and asks your devices to revoke the machine. Asks before deleting the keys (`--purge` doesn't ask). |
 | `starbridge uninstall --agent <name>` | Removes Starbridge from one harness; setup leaves it out until `setup --agent <name>`. |
 

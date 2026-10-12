@@ -41,7 +41,14 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { parseArgs } from "node:util";
 import { LiveServer } from "../../server/test-support/index.ts";
-import { antigravityLogin, claudeToken, codexKey, cursorLogin, tmpOutsideHome } from "./login.ts";
+import {
+  antigravityLogin,
+  claudeToken,
+  codexKey,
+  cursorLogin,
+  opencodeApiKeys,
+  tmpOutsideHome,
+} from "./login.ts";
 import { type Scenario, scenarios } from "./scenarios.ts";
 
 const { values: opt } = parseArgs({
@@ -875,13 +882,14 @@ async function one(s: Scenario, arm: string, rep: number): Promise<RunRecord> {
     copyFileSync(join(homedir(), ".pi/agent/models.json"), join(cfg, "models.json"));
   } else {
     // opencode reads its config from `$XDG_CONFIG_HOME/opencode` and its login from
-    // `$XDG_DATA_HOME/opencode/auth.json` (the Z.ai key).
+    // `$XDG_DATA_HOME/opencode/auth.json`: the API keys alone (the Z.ai key).
     const conf = agent === "opencode" ? join(cfg, "opencode") : cfg;
     if (agent === "opencode") {
       mkdirSync(join(root, "data/opencode"), { recursive: true });
-      copyFileSync(
-        join(homedir(), ".local/share/opencode/auth.json"),
+      writeFileSync(
         join(root, "data/opencode/auth.json"),
+        opencodeApiKeys(readFileSync(join(homedir(), ".local/share/opencode/auth.json"), "utf8")),
+        { mode: 0o600 },
       );
     } else {
       const r = spawnSync(agentBin, ["login", "--with-api-key"], {

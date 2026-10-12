@@ -1,12 +1,15 @@
 import SwiftUI
 
-/** The tabs, as Android's (#1233): Inbox, with how many questions need the owner, and Settings. */
+/**
+ * The tabs, as Android's (#1233): Inbox, with how many questions need the owner, Quotas once a
+ * machine sends them (#914), and Settings.
+ */
 struct MainTabs: View {
     let store: Store
     @Environment(\.scenePhase) private var scenePhase
     @State private var tab = Tab.inbox
 
-    enum Tab: Hashable { case inbox, settings }
+    enum Tab: Hashable { case inbox, quotas, settings }
 
     var body: some View {
         let needYou = store.openDecisions.count
@@ -16,6 +19,11 @@ struct MainTabs: View {
                 // Hidden at 0.
                 .badge(needYou)
                 .tag(Tab.inbox)
+            if store.quotasHeld || tab == .quotas {
+                QuotasView(store: store)
+                    .tabItem { Label("Quotas", systemImage: "gauge.with.dots.needle.33percent") }
+                    .tag(Tab.quotas)
+            }
             SettingsView(store: store)
                 .tabItem { Label("Settings", systemImage: "gearshape") }
                 .tag(Tab.settings)
@@ -23,8 +31,10 @@ struct MainTabs: View {
         .task {
             store.startPolling()
             store.foreground(scenePhase == .active)
+            store.watchJoins(scenePhase == .active)
             await store.enableNotifications()
         }
+        .joinPrompt(store: store)
         // Presence (#848): a touch anywhere, or a key typed into a field, counts; never which.
         .background(TouchHook { store.touched() })
         .onReceive(NotificationCenter.default.publisher(for: UITextField.textDidChangeNotification)) { _ in store.touched() }
@@ -43,6 +53,7 @@ struct MainTabs: View {
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { store.startPolling() } else { store.stopPolling() }
             store.foreground(phase == .active)
+            store.watchJoins(phase == .active)
         }
     }
 }
@@ -108,6 +119,7 @@ struct SettingsView: View {
                 }
                 .listRowBackground(Tokens.Colors.surface.color)
                 .task { await store.loadPushHold() }
+                if store.quotasHeld { QuotaSections(store: store) }
 
                 Section("Answer buttons on cards") {
                     Picker("Answer buttons on cards", selection: $answerButtons) {
@@ -154,6 +166,82 @@ struct SettingsView: View {
 
     /** How to tell agents to ask through Starbridge. */
     static let guide = URL(string: "https://starbridge.run/docs/tell-your-agents")!
+}
+
+/**
+ * Settings → Quotas, as Android's (#930): how bars read, then Order, a page with Running out
+ * first and the providers, each with its handle and eye.
+ */
+private struct QuotaSections: View {
+    @Bindable var store: Store
+
+    var body: some View {
+        Section("Quotas") {
+            Picker("Bar shows", selection: $store.quotaSettings.showUsed) {
+                Text("Used").tag(true)
+                Text("Left").tag(false)
+            }
+            Picker("Reset times", selection: $store.quotaSettings.absoluteResets) {
+                Text("Resets in 2 h").tag(false)
+                Text("Resets 14:20").tag(true)
+            }
+            Picker("Workday ticks on weekly bars", selection: $store.quotaSettings.workDays) {
+                Text("Off").tag(Int?.none)
+                Text("4").tag(Int?.some(4))
+                Text("5").tag(Int?.some(5))
+                Text("7 days").tag(Int?.some(7))
+            }
+            NavigationLink("Order") { QuotaOrderView(store: store) }
+        }
+        .listRowBackground(Tokens.Colors.surface.color)
+    }
+}
+
+/** Running out first, then each provider in its order, with a handle to drag and an eye that shows or hides it. */
+struct QuotaOrderView: View {
+    @Bindable var store: Store
+
+    var body: some View {
+        let providers = store.quotaSettings.providers(store.quotaWindows)
+        List {
+            Section {
+                Toggle("Running out first", isOn: $store.quotaSettings.runningOutFirst)
+            }
+            .listRowBackground(Tokens.Colors.surface.color)
+            Section("Providers") {
+                ForEach(providers, id: \.self) { p in
+                    let shown = !store.quotaSettings.hidden.contains(p)
+                    HStack {
+                        Text(p).foregroundStyle(shown ? Tokens.Colors.fg.color : Tokens.Colors.fg3.color)
+                        Spacer()
+                        Button {
+                            var s = store.quotaSettings
+                            s.hidden = shown ? s.hidden + [p] : s.hidden.filter { $0 != p }
+                            store.quotaSettings = s
+                        } label: {
+                            Image(systemName: shown ? "eye" : "eye.slash")
+                                .foregroundStyle(shown ? Tokens.Colors.fg2.color : Tokens.Colors.fg3.color)
+                                .frame(minWidth: 44, minHeight: 44)
+                        }
+                        .buttonStyle(.borderless)
+                        .accessibilityLabel("Show \(p)")
+                        .accessibilityValue(shown ? "On" : "Off")
+                    }
+                }
+                .onMove { from, to in
+                    var order = providers
+                    order.move(fromOffsets: from, toOffset: to)
+                    store.quotaSettings.order = order
+                }
+            }
+            .listRowBackground(Tokens.Colors.surface.color)
+        }
+        .environment(\.editMode, .constant(.active))
+        .scrollContentBackground(.hidden)
+        .background(Tokens.Colors.bg.color.ignoresSafeArea())
+        .navigationTitle("Order")
+        .navigationBarTitleDisplayMode(.inline)
+    }
 }
 
 private struct PairLink: Identifiable {

@@ -76,6 +76,20 @@ export function addedLabels(
   );
 }
 
+/** What Devices says under a machine about its CLI (#1050, #1266): behind, or when it moved. */
+export function releaseLabel(m: {
+  version: string;
+  behind: boolean;
+  updatedAt: string | null;
+}): string | undefined {
+  if (m.behind) return "Update available";
+  if (!m.updatedAt) return undefined;
+  const day = new Date(m.updatedAt)
+    .toLocaleDateString(undefined, { day: "numeric", month: "short" })
+    .replaceAll(" ", "\u00a0");
+  return `Updated to ${m.version} on ${day}`;
+}
+
 /**
  * When Devices stops showing a machine's check code: `starbridge pair` waits CHECK_CONFIRM_MS
  * from the machine's approval for the owner to compare it, and no longer (#939).

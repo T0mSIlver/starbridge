@@ -18,7 +18,7 @@ opens an issue for each client the row says should follow.
 | Find | yes (rail box) | yes (Material 3 search view) | yes | yes (#1131: the system search field) |
 | Permission prompts, answer from the device (Allow / Deny) | yes | yes | yes | yes (#1122: Allow, Deny with a note, offered scopes) |
 | Runs (section, progress, dismiss) | yes | yes | yes | yes (#1122; the section #1170) |
-| Quotas tab | yes | yes | yes | not yet |
+| Quotas tab | yes | yes | yes | yes (#1234: read with the inbox every 10 s while the app is open, since APNs carries no snapshots; Order is a page under Settings → Quotas) |
 | Quota alerts per window (settings) | yes | yes | yes | not yet |
 | Widgets | n/a | yes (#894: Needs you, Quotas) | yes (#1031: Needs you only; no Quotas widget by owner's choice) | not yet |
 | Notification: questions | yes (Web Push) | yes | yes | yes (#1137: a service extension opens the sealed box in place of the server's placeholder; delivery on a device waits for TestFlight) |
@@ -30,12 +30,13 @@ opens an issue for each client the row says should follow.
 | Presence (holds other devices' pushes) | yes (#848) | yes (#848) | yes (#945, uses Mac lock/idle) | yes (#1241: in front and touched or typed in the last minute; the hold time in Settings → Notifications) |
 | Offline outbox / no answer lost | no (retries 502/503 for 20 s; unsent answer kept in page memory only) | yes (#329, #331: sealed, stored, sent by WorkManager) | no (as web) | yes (#1122, #1137: sealed and stored; sent from a notification in the time iOS gives it, else when the app is open, every 10 s and on pull to refresh; no background retry yet) |
 | Update screen / update notice | yes (426 shows a reload-only screen) | yes (#497: "Update Starbridge" screen) | yes (auto-updater from GitHub Releases; 426 as web) | yes (#1122: 426 shows "Update Starbridge"; answers stay in the outbox) |
-| Recovery key: copy / save | yes (Copy the key; saved checkbox) | yes (copy to clipboard, #817; save) | yes (as web) | yes at first-device setup (#1116: Copy, clearing after a minute, and "I stored this key"; no Save, since iOS lets no app add a password to the password manager); Replace in Devices not yet |
+| Recovery key: copy / save | yes (Copy the key; saved checkbox) | yes (copy to clipboard, #817; save) | yes (as web) | yes at first-device setup (#1116: Copy, clearing after a minute, and "I stored this key"; no Save, since iOS lets no app add a password to the password manager); Replace in Devices (#1240), with the same Copy |
 | Devices list (notifies state, app icon, Revoke) | yes | yes | yes | yes (#1238: Settings → Devices and machines) |
 | Pairing: show QR for a new phone | yes | yes | yes | yes (#1239) |
 | Pairing: scan a QR | no (no scanner in web) | yes (Play services code scanner) | no (as web) | yes (VisionKit: to join this iPhone, #1105; a machine's or another device's code in Devices, with the check key, #1239) |
 | Pairing: link (`/pair#code`) | yes | yes (App Link and `starbridge://pair`) | yes (`starbridge://pair`) | yes (`starbridge://pair`, #1239; the https link opens the web page until the app claims it, #1115) |
 | Pairing: typed code | yes | yes | yes | yes (#1239) |
+| Pairing: approve a join by digits (Compare digits) | yes | yes | yes (as web) | yes (#1158: over any screen while the app is in front; the notification opens the app) |
 | Keyboard shortcuts (J K 1-4 A D /) | yes (from 1100 px) | no (only Enter to send, Esc in Find) | yes (as web) | not yet |
 | Sound | yes (off by default, only while a page is open) | yes (system notification channel sound) | yes (macOS default sound; Basso on "Answer not sent"; web Sound row hidden) | not yet |
 | Recover with the recovery key (revokes every other member) | yes | yes | yes (as web) | yes (#1116) |

@@ -9,12 +9,14 @@ import type { Status } from "../agent/api";
 import { AgentClient, Interrupted, withAgent } from "../agent/client";
 import { askVia, quotaVia } from "../agent/commands";
 import { ApiError, REMOVED, Unreachable } from "../api";
+import { autoOn } from "../autoupdate";
 import type { AgentConfig } from "../config";
 import { type Ctx, refreshDirectory, session, UsageError } from "../context";
 import { type AskInput, answerPrefix, ask, EXIT_INTERRUPTED, settle } from "../decisions";
 import { DEFAULT_SERVER, pair } from "../pair";
 import { permissionsEnabled } from "../permissions";
 import { pushOnce } from "../quota";
+import { installKind } from "../release";
 import { rememberMachineKind } from "../settings";
 import { VERSION } from "../version";
 import {
@@ -288,6 +290,10 @@ export async function setup(sys: Sys, opts: SetupOpts): Promise<number> {
     !["desktop", "laptop"].includes(ctx.store.agentConfig().machineKind ?? "")
       ? []
       : ([["Quiet other devices while here", "starbridge config presence on"]] as const)),
+    // Script installs update by themselves (#1266): the one line that says so, and how to stop it.
+    ...(autoOn(ctx, installKind())
+      ? ([["Stop automatic updates", "starbridge config updates off"]] as const)
+      : []),
     ["Remove from one agent", `starbridge uninstall --agent ${one}`],
     ["Remove everything", "starbridge uninstall"],
   ]))

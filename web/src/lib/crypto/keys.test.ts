@@ -121,3 +121,15 @@ test("fresh keys open what libsodium seals to them, and refuse a tampered box", 
   const sig = await signer(keys.stored)(msg);
   expect(sodium.crypto_sign_verify_detached(sig, msg, keys.signPk)).toBe(true);
 });
+
+test("the storage probe gets keys of its own, never the device's", async () => {
+  let probed: StoredKeys | undefined;
+  const keys = await generateDeviceKeys(async (k) => {
+    probed = k;
+    return true;
+  });
+  expect(probed?.kind).toBe("webcrypto");
+  const msg = sodium.randombytes_buf(64);
+  const sig = await signer(probed as StoredKeys)(msg);
+  expect(sodium.crypto_sign_verify_detached(sig, msg, keys.signPk)).toBe(false);
+});

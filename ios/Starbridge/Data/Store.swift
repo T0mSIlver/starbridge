@@ -51,12 +51,25 @@ final class Store {
     var drafts: [String: String] = [:]
     /** The account's hold time in seconds (#848); nil on a server without it, which shows no row. */
     var pushHold: Int?
+    /** The server listed quota snapshots on the last read, even ones this iPhone cannot open yet. */
+    var quotasListed = false
+    /** Asking the machines for fresh quotas, for the Quotas tab's pull and first look (#661). */
+    var quotasAsking = false
+    /** How Quotas reads, on this iPhone only. */
+    var quotaSettings = QuotaSettings.load() {
+        didSet { quotaSettings.store() }
+    }
     /** What Devices shows beside the chain, read when it opens. */
     var deviceInfo = DeviceInfo()
     /** Where adding a machine or device stands. */
     var approval = Approval.idle
     /** A pairing link that opened the app, for Add a device to look up (#611). */
     var pairLink: String?
+    /** Where replacing the recovery key stands (#348). */
+    var replacing = Replacing.idle
+    /** The open joins by digits, while the app is in front. */
+    var joinAsks: [JoinAsk] = []
+    var comparison = Comparison.idle
 
     /** Decisions this iPhone's answer lost to another device's, until the machine says which won. */
     @ObservationIgnored var lost: Set<String> = []
@@ -75,6 +88,12 @@ final class Store {
     @ObservationIgnored var pairing: PendingPairing?
     /** The wait for a new phone to scan the QR code this iPhone shows. */
     @ObservationIgnored var showTask: Task<Void, Never>?
+    /** The keys of a replacement shown and not saved yet: in memory only. */
+    @ObservationIgnored var replacement: Replacement?
+    @ObservationIgnored var joinViews: [String: ListedJoin] = [:]
+    @ObservationIgnored var compared: Compared?
+    @ObservationIgnored var watchTask: Task<Void, Never>?
+    @ObservationIgnored var compareTask: Task<Void, Never>?
     @ObservationIgnored var directory: Directory?
     /** Why nothing may be stored this run: the saved state or its keys could not be read or set aside. */
     @ObservationIgnored private var locked: String?
@@ -723,7 +742,16 @@ final class Store {
         pairing = nil
         approval = .idle
         pairLink = nil
+        replacement = nil
+        replacing = .idle
+        watchTask?.cancel()
+        compareTask?.cancel()
+        joinViews = [:]
+        compared = nil
+        joinAsks = []
+        comparison = .idle
         withheldWhy = nil
+        quotasListed = false
         persist(Saved(server: saved.server), Secrets())
         try? FileManager.default.removeItem(at: SavedImage.directory)
     }

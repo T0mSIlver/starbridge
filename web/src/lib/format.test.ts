@@ -1,6 +1,6 @@
 import { afterEach, expect, setSystemTime, test } from "bun:test";
 import { CHECK_CONFIRM_MS } from "@starbridge/protocol";
-import { addedLabels, clockTime, origin, shownCheck } from "./format";
+import { addedLabels, clockTime, origin, releaseLabel, shownCheck } from "./format";
 
 afterEach(() => setSystemTime());
 
@@ -41,4 +41,11 @@ test("Devices shows a machine's check code only while `starbridge pair` waits fo
   setSystemTime(new Date(added.getTime() + CHECK_CONFIRM_MS));
   expect(shownCheck(machine)).toBeUndefined();
   expect(shownCheck({ addedAt: added.toISOString() }, added.getTime())).toBeUndefined();
+});
+
+test("a machine's row says it is behind, else when it moved to its release (#1266)", () => {
+  const m = { version: "0.1.6", updatedAt: "2026-10-11T12:00:00Z" };
+  expect(releaseLabel({ ...m, behind: true })).toBe("Update available");
+  expect(releaseLabel({ ...m, behind: false })).toMatch(/^Updated to 0\.1\.6 on .+$/);
+  expect(releaseLabel({ ...m, behind: false, updatedAt: null })).toBeUndefined();
 });

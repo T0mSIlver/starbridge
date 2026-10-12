@@ -309,44 +309,18 @@ private struct RecoverStep: View {
     let delete: () -> Void
     let back: () -> Void
     @State private var key = ""
-    @State private var shown = false
 
     var body: some View {
-        let reading = RecoveryKeys.read(key, typing: true)
-        let complete = reading.problem == nil && reading.count == RecoveryKeyText.chars
         Step {
             Title(text: "Recovery key")
             Lede(text: "Recovering removes every other device and machine from the account. Pair the ones you still have again from this iPhone afterwards.")
-            VStack(alignment: .leading, spacing: Tokens.Spacing.s1) {
-                Filled(label: "Your recovery key") {
-                    HStack {
-                        // Masked as a password, with the eye to check what was typed (#274).
-                        Group {
-                            if shown {
-                                TextField("Your recovery key", text: $key, prompt: Text("XXXX-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX"))
-                            } else {
-                                SecureField("Your recovery key", text: $key, prompt: Text("XXXX-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX"))
-                            }
-                        }
-                        .textInputAutocapitalization(.characters)
-                        .autocorrectionDisabled()
-                        .textContentType(.password)
-                        Button { shown.toggle() } label: { Image(systemName: shown ? "eye.slash" : "eye") }
-                            .frame(minWidth: Tokens.Sizes.tap, minHeight: Tokens.Sizes.tap)
-                            .accessibilityLabel(shown ? "Hide the key" : "Show the key")
-                    }
-                }
-                Text(RecoveryKeyText.problem(reading) ?? RecoveryKeyText.status(reading))
-                    .type(Tokens.Typography.caption)
-                    .foregroundStyle(reading.problem == nil ? Tokens.Colors.fg2.color : Tokens.Colors.bad.color)
-                    .padding(.horizontal, Tokens.Spacing.s4)
-            }
+            RecoveryKeyField(label: "Your recovery key", key: $key)
             .padding(.horizontal, Tokens.Spacing.s4)
             .padding(.top, Tokens.Spacing.s6)
         } bottom: {
             Button("Recover") { Task { await store.recover(key) } }
                 .buttonStyle(Primary(busy: store.busy))
-                .disabled(store.busy || !complete)
+                .disabled(store.busy || !RecoveryKeyField.complete(key))
             HStack(spacing: Tokens.Spacing.s6) {
                 LinkButton(text: "Back", action: back)
                 // A delete confirmed while Recover runs would do nothing.
@@ -365,38 +339,12 @@ private struct RecoveryKeyStep: View {
     let store: Store
     let key: String
     @State private var stored = false
-    @State private var copied = false
 
     var body: some View {
         Step {
             Title(text: "Your recovery key")
             Lede(text: "Keep this key in a password manager or on paper. If you lose every device, it adds a new one. This is the only time it is shown.")
-            VStack(spacing: Tokens.Spacing.s3) {
-                // Groups of four, never split across lines.
-                Text(key.split(separator: "-").joined(separator: " "))
-                    .font(.system(size: 22, design: .monospaced))
-                    .tracking(2)
-                    .multilineTextAlignment(.center)
-                    .frame(maxWidth: .infinity)
-                    .padding(Tokens.Spacing.s5)
-                    .background(RoundedRectangle(cornerRadius: Tokens.Radius.xl).fill(Tokens.Colors.surface.color))
-                    .accessibilityLabel(key.map(String.init).joined(separator: " "))
-                Button {
-                    RecoveryKeyText.copy(key)
-                    copied = true
-                } label: {
-                    Label("Copy", systemImage: "doc.on.doc")
-                }
-                .buttonStyle(Secondary())
-                if copied {
-                    Text("Copied. The clipboard clears itself in a minute.")
-                        .type(Tokens.Typography.small)
-                        .foregroundStyle(Tokens.Colors.fg2.color)
-                }
-                Toggle("I stored this key", isOn: $stored)
-                    .type(Tokens.Typography.body)
-                    .frame(minHeight: Tokens.Sizes.tap)
-            }
+            RecoveryKeyShown(key: key, stored: $stored)
             .padding(.horizontal, Tokens.Spacing.s4)
             .padding(.top, Tokens.Spacing.s6)
         } bottom: {
@@ -406,6 +354,81 @@ private struct RecoveryKeyStep: View {
             LinkButton(text: "Sign out") { Task { await store.signOut() } }
         }
         .privacyCover()
+    }
+}
+
+/** A recovery key to type: masked as a password, with the eye to check what was typed (#274). */
+struct RecoveryKeyField: View {
+    let label: String
+    @Binding var key: String
+    @State private var shown = false
+
+    static func complete(_ key: String) -> Bool {
+        let reading = RecoveryKeys.read(key, typing: true)
+        return reading.problem == nil && reading.count == RecoveryKeyText.chars
+    }
+
+    var body: some View {
+        let reading = RecoveryKeys.read(key, typing: true)
+        VStack(alignment: .leading, spacing: Tokens.Spacing.s1) {
+            Filled(label: label) {
+                HStack {
+                    Group {
+                        if shown {
+                            TextField(label, text: $key, prompt: Text("XXXX-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX"))
+                        } else {
+                            SecureField(label, text: $key, prompt: Text("XXXX-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX"))
+                        }
+                    }
+                    .textInputAutocapitalization(.characters)
+                    .autocorrectionDisabled()
+                    .textContentType(.password)
+                    Button { shown.toggle() } label: { Image(systemName: shown ? "eye.slash" : "eye") }
+                        .frame(minWidth: Tokens.Sizes.tap, minHeight: Tokens.Sizes.tap)
+                        .accessibilityLabel(shown ? "Hide the key" : "Show the key")
+                }
+            }
+            Text(RecoveryKeyText.problem(reading) ?? RecoveryKeyText.status(reading))
+                .type(Tokens.Typography.caption)
+                .foregroundStyle(reading.problem == nil ? Tokens.Colors.fg2.color : Tokens.Colors.bad.color)
+                .padding(.horizontal, Tokens.Spacing.s4)
+        }
+    }
+}
+
+/** A new recovery key, shown once: in groups of four, with Copy and "I stored this key". */
+struct RecoveryKeyShown: View {
+    let key: String
+    @Binding var stored: Bool
+    @State private var copied = false
+
+    var body: some View {
+        VStack(spacing: Tokens.Spacing.s3) {
+            // Groups of four, never split across lines.
+            Text(key.split(separator: "-").joined(separator: " "))
+                .font(.system(size: 22, design: .monospaced))
+                .tracking(2)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: .infinity)
+                .padding(Tokens.Spacing.s5)
+                .background(RoundedRectangle(cornerRadius: Tokens.Radius.xl).fill(Tokens.Colors.surface.color))
+                .accessibilityLabel(key.map(String.init).joined(separator: " "))
+            Button {
+                RecoveryKeyText.copy(key)
+                copied = true
+            } label: {
+                Label("Copy", systemImage: "doc.on.doc")
+            }
+            .buttonStyle(Secondary())
+            if copied {
+                Text("Copied. The clipboard clears itself in a minute.")
+                    .type(Tokens.Typography.small)
+                    .foregroundStyle(Tokens.Colors.fg2.color)
+            }
+            Toggle("I stored this key", isOn: $stored)
+                .type(Tokens.Typography.body)
+                .frame(minHeight: Tokens.Sizes.tap)
+        }
     }
 }
 

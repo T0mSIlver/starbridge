@@ -106,6 +106,12 @@ extension Store {
             let body = PairingApprovalBody(rendezvous: pending.code.rendezvous, account: account, length: after.length, head: after.head, approver: me.id, check: check)
             try await api().approvePairing(pending.code.rendezvous, approval: try Pairings.approval(body, code: pending.code))
             pairing = nil
+            // That machine asks nothing, so its check code answers no question here (#1329).
+            if check != nil, !saved.scannedMachines.contains(r.id) {
+                var s = saved
+                s.scannedMachines.append(r.id)
+                persist(s)
+            }
             approval = .done(r.name)
         } catch {
             approval = .failed(describe(error))

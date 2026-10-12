@@ -28,14 +28,21 @@ export interface AgyRoute {
 }
 
 /**
- * The conversation's route from its command's environment: only on loopback, since the token
- * goes with every call, and not in `agy -p`, whose server is gone once its run ends.
+ * Whether a route's address is on loopback, where Antigravity's language server listens. A
+ * route anywhere else is never called, since its token goes with every call.
+ */
+export function onLoopback(address: string): boolean {
+  return /^(localhost|127\.0\.0\.1|\[::1\]):\d+$/.test(address);
+}
+
+/**
+ * The conversation's route from its command's environment: only on loopback, and not in
+ * `agy -p`, whose server is gone once its run ends.
  */
 export function agyRoute(env: Ctx["env"]): AgyRoute | undefined {
   const address = env.ANTIGRAVITY_LS_ADDRESS;
   const token = env.ANTIGRAVITY_CSRF_TOKEN;
-  if (!address || !token || !/^(localhost|127\.0\.0\.1|\[::1\]):\d+$/.test(address))
-    return undefined;
+  if (!address || !token || !onLoopback(address)) return undefined;
   return agyHeadless() ? undefined : { address, token };
 }
 
@@ -77,6 +84,7 @@ export function agyHeadless(): boolean {
 const LS = "exa.language_server_pb.LanguageServerService";
 
 export async function lsCall<T>(route: AgyRoute, method: string, body: unknown): Promise<T> {
+  if (!onLoopback(route.address)) throw new Error(`${method}: ${route.address} is not on loopback`);
   const r = await fetch(`http://${route.address}/${LS}/${method}`, {
     method: "POST",
     headers: { "content-type": "application/json", "x-codeium-csrf-token": route.token },
@@ -177,6 +185,7 @@ export async function hello(ctx: Ctx): Promise<number> {
 
 /** Whether the route's language server answers, so its process still runs. */
 export async function agyReachable(route: AgyRoute): Promise<boolean> {
+  if (!onLoopback(route.address)) return false;
   try {
     const r = await fetch(`http://${route.address}/healthz`, {
       signal: AbortSignal.timeout(2_000),

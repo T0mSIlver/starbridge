@@ -53,9 +53,9 @@ starbridge.run, or [host your own](../server/README.md).
    curl -fsSL https://starbridge.run/install.sh | sh
    ```
 
-   It then runs `starbridge setup`. For Windows, Homebrew and npm, see
-   [The CLI](../cli/README.md#install). On your own server, use its address in place of
-   starbridge.run.
+   It then runs `starbridge setup`, and the CLI it installs updates itself. For Windows, Homebrew
+   and npm, see [The CLI](../cli/README.md#install). On your own server, use its address in place
+   of starbridge.run.
 
 3. **Pair the machine.** Setup prints a code, a link and a QR code. Scan the QR code with your
    phone, or open the link in a browser where you are signed in. On a machine with no browser,

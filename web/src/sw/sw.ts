@@ -54,8 +54,10 @@ self.addEventListener("push", (e) => {
   e.waitUntil(
     onPush(e.data?.text() ?? "").catch(async (err) => {
       // Held (#362): the notifications already up would still let the owner answer from them.
+      // Run and quota alerts answer nothing, and would not show again, so they stay (#1281).
       if (err instanceof Withheld)
-        for (const n of await self.registration.getNotifications()) n.close();
+        for (const n of await self.registration.getNotifications())
+          if (n.tag.startsWith("d:") || n.tag.startsWith("p:")) n.close();
       // A push that fails to open or verify shows nothing; open pages log why.
       for (const c of await self.clients.matchAll({ type: "window" }))
         c.postMessage({ type: "starbridge:push-error", error: String(err) });
@@ -164,6 +166,10 @@ async function onPush(text: string): Promise<void> {
     // Back to working, the notification loses its waiting line without a sound (#191).
     const { machine, waiting } = await openWaiting(ctx, item);
     if (answered.has(`${account}/${waiting.decisionId}`)) return;
+    // A flip signed before the question's latest snooze, delivered late, is stale: the server
+    // pushes none while a snooze is pending, and the snooze's return notifies on its own (#1280).
+    const snoozed = (await store.get("snoozes", account as string))?.[waiting.decisionId];
+    if (snoozed && Date.parse(waiting.at) < Date.parse(snoozed)) return;
     const res = await fetch(`/v1/items/${encodeURIComponent(waiting.decisionId)}`, {
       headers: CLIENT,
     });

@@ -396,7 +396,7 @@ class ServerStore(
         reportedNotify = null
         notifyStates.value = emptyMap()
         deviceClients.value = emptyMap()
-        machinesBehind.value = emptySet()
+        machineReleases.value = emptyMap()
         // The next account's hold shows once its own read succeeds, as on the web (#1192).
         pushHold.value = null
         wipes++
@@ -1911,7 +1911,7 @@ class ServerStore(
 
     override val notifyStates = MutableStateFlow<Map<String, String>>(emptyMap())
     override val deviceClients = MutableStateFlow<Map<String, String>>(emptyMap())
-    override val machinesBehind = MutableStateFlow<Set<String>>(emptySet())
+    override val machineReleases = MutableStateFlow<Map<String, MachineRelease>>(emptyMap())
     /** The state the server holds for this phone, once it took one. */
     private var reportedNotify: Boolean? = null
 
@@ -1923,7 +1923,7 @@ class ServerStore(
                 deviceClients.value = clients
             }
             // A server without the route: no machine shows an update.
-            runCatching { api().machinesBehind() }.onSuccess { machinesBehind.value = it }
+            runCatching { api().machineReleases() }.onSuccess { machineReleases.value = it }
         }
     }
 

@@ -110,6 +110,8 @@ final class PairingTests: XCTestCase {
         try Pairings.checkJoined(verified, id: devbox.member.id, role: .machine, boxPk: devbox.member.boxPk, signPk: devbox.member.signPk)
         XCTAssertTrue(Pairings.verifyCheckProof(entries, id: devbox.member.id, key: key, proof: try XCTUnwrap(approved.check)))
         XCTAssertEqual(store.devices.map(\.name), ["Test iPhone", "devbox"])
+        // That machine asks nothing, so Devices shows no check code for it (#1329).
+        XCTAssertNil(store.devices[1].check)
 
         // --- A typed code carries no proof: the machine asks its owner to compare codes ---
         let laptop = try await request(.machine, "laptop", code: PairingCode.generate())
@@ -119,6 +121,8 @@ final class PairingTests: XCTestCase {
         XCTAssertEqual(store.approval, .done("laptop"))
         let typed = try await result(laptop)
         XCTAssertNil(typed.check)
+        // The machine asks the owner to compare, so Devices shows the code.
+        XCTAssertNotNil(store.devices.first { $0.name == "laptop" }?.check)
 
         // --- This iPhone shows a QR code; a new phone scans it and posts under it ---
         store.showCode()

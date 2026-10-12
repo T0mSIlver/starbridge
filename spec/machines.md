@@ -217,8 +217,8 @@
   the next update removes that; `uninstall` deletes the binary from a detached cmd.exe two seconds
   after it exits (#552).
 - **Saying a release is out** (#1050). Before it, users learned of a new CLI only from the
-  server's 426 once a release was forced. A nudge, not a silent update, since an update
-  replaces the binary that hooks run mid-session and rewrites files in other tools. Once a day
+  server's 426 once a release was forced. Homebrew and npm installs, and script installs with
+  automatic updates off (below), get this nudge only. Once a day
   the local agent reads GitHub's `releases/latest` (no drafts or pre-releases), unauthenticated
   with the ETag of its last answer, since a 304 costs nothing from the 60 requests an hour an
   address gets, and a 10 s timeout; a failure changes nothing and is tried an hour later. It
@@ -236,3 +236,27 @@
   every machine can read itself. `config update-check off` stops the check and the line, and the
   machine then reports no latest; `STARBRIDGE_NO_UPDATE_CHECK=1` does the same wherever it is
   set, which for the agent means its service's environment.
+- **Automatic updates** (#1266). The nudge left users on the release they first installed: gh,
+  npm and Docker only notify, and their users fall behind the same way, while Claude Code,
+  Homebrew, VS Code and Chrome update by default. So a script install (install.sh, install.ps1)
+  installs each final by itself, on by default; setup asks nothing and lists
+  `starbridge config updates off` in its closing commands. Homebrew and npm installs keep the
+  nudge, since their manager owns the binary. Finals only: testers get rcs from the prerelease
+  and npm's `next`. The local agent installs when the latest release it read is newer than its
+  own, a random 0 to 2 hours after it first saw it, so machines that read it at the same hour do
+  not all download at once, and only while nothing is in flight on the machine: no question
+  asked in the last day still open, no permission prompt held, no run unfinished that reported in
+  the last 3 minutes. An update restarts the agent and replaces the binary hooks run, which would
+  cut those short. A question older than a day does not hold it, or one forgotten card would stop
+  updates for good. Held, it looks again every 10 minutes. It runs `starbridge update` itself,
+  the same signed download, `setup --refresh` and restart, so it writes nothing that command
+  does not, and runs it outside its own service (`systemd-run --user` under systemd, a detached
+  process elsewhere), since the refresh restarts the service and the manager would stop a child
+  with it. The agent records each try in `update.json` and the command's output goes to
+  `update.log`, both in the config folder; `update` records its outcome there too, whoever runs
+  it. A failure keeps the old binary, as `update` does, and the next try comes a day after the
+  last. `status` says whether updates are automatic, what holds one, the last update (from, to,
+  when) and the last failure with its reason. The server stamps the time a machine reports a
+  release other than the one before (`updatedAt` in `GET /releases`), so Devices says "Updated
+  to 0.1.6 on Oct 11" under it, whatever installed it. `config update-check off` stops the read,
+  and with it the updates.

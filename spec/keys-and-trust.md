@@ -109,11 +109,13 @@
   owner can tell their revocation from a forged one. Tom chose this over a button on every
   device, or none, on 2026-10-08 (#813).
 - **Browser keys** (#8, #116, #274, #283, #354). Non-extractable WebCrypto keys in IndexedDB,
-  read back once after writing, with raw libsodium keys where they don't return (WebKit reads an
-  X25519 `CryptoKey` back as null). A join or recovery keeps its keys under `pending` until the
+  with raw libsodium keys where storage doesn't return them (WebKit reads an X25519 `CryptoKey`
+  back as null). The check writes and reads back a throwaway pair, so a page closed midway
+  leaves no copy of the device's keys. A join or recovery keeps its keys under `pending` until the
   directory lists them, and pins before it saves the device. With no pin, a browser trusts only a
   genesis its own device signed. A browser that signs in again binds the session to its device by
-  signing a server nonce.
+  signing a server nonce; the device then counts as holding credentials, so no pairing or join
+  approval mints it another.
 - **Revoked members.** Only the verified chain revokes a browser (#310): a 401 `revoked` is
   unsigned, so the page keeps its keys. Once the chain shows it revoked, the browser deletes its
   keys, answers and push subscription, keeps the pin, and says which device removed it (#343).

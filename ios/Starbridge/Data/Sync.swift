@@ -84,6 +84,7 @@ extension Store {
         guard phase == .ready else { return }
         try await syncDecisions()
         try await syncPrompts()
+        try await syncQuotas()
         try await syncRuns()
         withheldWhy = withheld()
         if !saved.outbox.isEmpty { _ = try await flush() }
@@ -246,7 +247,7 @@ extension Store {
      * rest. On a hold, reads the directory once more: a machine may only have signed an entry made
      * on another device since this iPhone's last read. True while the hold remains.
      */
-    private func scan(_ items: [SealedItem]) async throws -> Bool {
+    func scan(_ items: [SealedItem]) async throws -> Bool {
         let entries = entryJSON
         for item in items { _ = open(item, entries: entries) }
         if withheld(entries) == nil { return false }

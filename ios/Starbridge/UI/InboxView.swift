@@ -39,6 +39,7 @@ struct InboxView: View {
         NavigationStack {
             ScrollView {
                 LazyVStack(spacing: Tokens.Spacing.s2) {
+                    if let notice = store.recoveryInfo?.notice { RecoveryBanner(store: store, notice: notice) }
                     if let why = store.withheldWhy { HeldBanner(store: store, why: why) }
                     if !query.trimmingCharacters(in: .whitespaces).isEmpty {
                         found(runs.map { .run($0) } + feed + snoozed, history)
@@ -472,6 +473,26 @@ private struct RunCard: View {
                 }
             }
         }
+    }
+}
+
+/** A replacement of the recovery key made on another device (#348), said once. */
+private struct RecoveryBanner: View {
+    let store: Store
+    let notice: RecoveryNotice
+
+    var body: some View {
+        HStack(spacing: Tokens.Spacing.s2) {
+            Text("Recovery key replaced on \(notice.by), \(notice.at.formatted(.dateTime.month(.abbreviated).day())), \(notice.at.formatted(date: .omitted, time: .shortened)).")
+                .type(Tokens.Typography.body)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            Button("OK") { store.dismissRecoveryNotice(notice.seq) }
+                .type(Tokens.Typography.label)
+                .frame(minWidth: Tokens.Sizes.tap, minHeight: Tokens.Sizes.tap)
+        }
+        .padding(.leading, Tokens.Spacing.s4)
+        .padding(.vertical, Tokens.Spacing.s2)
+        .background(RoundedRectangle(cornerRadius: Tokens.Radius.lg).fill(Tokens.Colors.surface2.color))
     }
 }
 

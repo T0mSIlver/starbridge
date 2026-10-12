@@ -6,6 +6,7 @@ struct DevicesView: View {
     let store: Store
     @State private var revoking: DeviceRow?
     @State private var scanning = false
+    @State private var replacing = false
     /** Add a device, with the code the scanner read, if any. */
     @State private var adding: AddDevice?
 
@@ -26,6 +27,11 @@ struct DevicesView: View {
                     }
                 }
             }
+            if let recovery = store.recoveryInfo {
+                Section {
+                    RecoveryRow(recovery: recovery) { replacing = true }
+                }
+            }
             Section {
                 Button {
                     // A phone that cannot scan opens Add a device instead, to type the code.
@@ -37,6 +43,7 @@ struct DevicesView: View {
             }
             .listRowBackground(Tokens.Colors.surface.color)
         }
+        .navigationDestination(isPresented: $replacing) { RecoveryReplaceView(store: store) }
         .navigationDestination(item: $adding) { AddDeviceView(store: store, lookUp: $0.lookUp) }
         .sheet(isPresented: $scanning) {
             QRScanner { text in
@@ -128,5 +135,31 @@ private struct MemberRow: View {
         if row.current { return "This iPhone" }
         if row.machine { return "Machine · \(added)" }
         return added.prefix(1).uppercased() + added.dropFirst()
+    }
+}
+
+/** The recovery key under the members: when and on which device it was set, with Replace (#348). */
+private struct RecoveryRow: View {
+    let recovery: RecoveryInfo
+    let onReplace: () -> Void
+
+    var body: some View {
+        HStack(spacing: Tokens.Spacing.s4) {
+            Image(systemName: "key").font(.system(size: 20)).frame(width: 28).accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Recovery key").type(Tokens.Typography.body)
+                Text("\(recovery.replaced ? "Replaced" : "Set") \(recovery.setAt.formatted(.dateTime.month(.abbreviated).day())), \(recovery.setAt.formatted(date: .omitted, time: .shortened)) on \(recovery.setBy)")
+                    .type(Tokens.Typography.small)
+                    .foregroundStyle(Tokens.Colors.fg2.color)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            Button("Replace", action: onReplace)
+                .buttonStyle(.borderless)
+                .type(Tokens.Typography.label)
+                .foregroundStyle(Tokens.Colors.fg.color)
+                .accessibilityLabel("Replace the recovery key")
+        }
+        .padding(.vertical, Tokens.Spacing.s1)
+        .listRowBackground(Tokens.Colors.surface.color)
     }
 }

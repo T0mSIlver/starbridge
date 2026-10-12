@@ -552,6 +552,10 @@ describe("update", () => {
       "starbridge 99.0.0",
     ]);
     expect(spawnSync(path, ["--version"], { encoding: "utf8" }).stdout).toBe("starbridge 99.0.0\n");
+    // What status reads, after an update the agent started or a person ran (#1266).
+    expect(c.store.updates()).toEqual({
+      updated: { at: expect.any(String), from: VERSION, to: "99.0.0" },
+    });
   });
 
   test("moves the Starbridge Pi package to the new release's tag", async () => {
@@ -576,10 +580,12 @@ describe("update", () => {
   test("keeps the binary when the download does not check out", async () => {
     release = fakeReleases("99.0.0", { tamper: "binary" });
     const path = installed();
-    await expect(update(ctx(), { kind: "binary", path }, release.pubkey)).rejects.toThrow(
+    const c = ctx();
+    await expect(update(c, { kind: "binary", path }, release.pubkey)).rejects.toThrow(
       "does not match its hash",
     );
     expect(readFileSync(path, "utf8")).toBe("old");
+    expect(c.store.updates().failed?.why).toContain("does not match its hash");
   });
 
   test("refuses an older signed release a mirror serves as the latest", async () => {

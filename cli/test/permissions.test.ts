@@ -530,7 +530,7 @@ test("while disabled the hooks post nothing and print nothing", async () => {
   expect(await run(["config", "permissions", "off"], ctx)).toBe(0);
   expect(await hookPermission(ctx, request(), { agent: "claude-code" })).toBe(0);
   // The config listing only: the hook printed nothing.
-  expect(ctx.lines).toHaveLength(4);
+  expect(ctx.lines).toHaveLength(5);
   expect(ctx.lines[0]).toBe("permissions   off");
   expect(await server.opened("permission")).toEqual([]);
   const status = await new AgentClient(agentAddress(ctx.store.dir)).call<Status>(

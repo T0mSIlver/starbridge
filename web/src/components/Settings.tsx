@@ -16,7 +16,7 @@ import { useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
 import { type DesktopPlace, desktop } from "@/lib/desktop";
 import type { RecoveryState } from "@/lib/device";
-import { addedLabels, checkUntil, dayAndTime, shownCheck } from "@/lib/format";
+import { addedLabels, checkUntil, dayAndTime, releaseLabel, shownCheck } from "@/lib/format";
 import { AGENTS_GUIDE } from "@/lib/links";
 import { blockedChanges, reports } from "@/lib/notify";
 import { applyTheme, type Prefs, usePref } from "@/lib/prefs";
@@ -639,16 +639,17 @@ function DeviceSection({ data }: { data: SettingsData }) {
   const [clock] = usePref("clock");
   const [notify, setNotify] = useState<Record<string, NotifyState>>({});
   const [clients, setClients] = useState<Record<string, string>>({});
-  const [behind, setBehind] = useState<Set<string>>(new Set());
+  const [releases, setReleases] = useState<Record<string, string>>({});
   useEffect(() => {
     if (!ctx) return;
     api.releases().then(
       (r) =>
-        setBehind(
-          new Set(
-            Object.entries(r.machines)
-              .filter(([, m]) => m.behind)
-              .map(([id]) => id),
+        setReleases(
+          Object.fromEntries(
+            Object.entries(r.machines).flatMap(([id, m]) => {
+              const label = releaseLabel(m);
+              return label ? [[id, label]] : [];
+            }),
           ),
         ),
       () => {},
@@ -729,7 +730,7 @@ function DeviceSection({ data }: { data: SettingsData }) {
                   {` · ${NOTIFY_LABELS[notify[d.id] as NotifyState]}`}
                 </span>
               )}
-              {behind.has(d.id) && " · Update available"}
+              {releases[d.id] && ` · ${releases[d.id]}`}
             </div>
             {shownCheck(d, now) && (
               <div className={`t-meta ${s.sub}`} data-testid="device-check">

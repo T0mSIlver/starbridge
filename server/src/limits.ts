@@ -147,12 +147,16 @@ export const DEFAULT_LIMITS = {
   pairingsPerClient: 50,
 
   /**
-   * Relayed Web Pushes in flight on the whole server (RELAY_MODE), and per address. Each may
-   * take pushTimeoutMs, so a slow or hostile push service cannot pile up open requests; past
-   * either the relay answers 503. FCM, which goes to Google, does not count (#577).
+   * Relayed Web Pushes in flight (RELAY_MODE): on the whole server, per address, per IPv6 /48
+   * and per push service host. Each may take pushTimeoutMs, so a slow or hostile push service
+   * cannot pile up open requests; past any cap the relay answers 503. FCM, which goes to Google,
+   * does not count (#577). The caps per sender leave the rest to other servers, and the cap per
+   * host bounds what any one host gets.
    */
-  relaySends: 16,
+  relaySends: 64,
   relaySendsPerClient: 4,
+  relaySendsPerNetwork: 8,
+  relaySendsPerHost: 16,
 
   /** Push subscription writes per account. */
   pushSubscribes: [30, MINUTE] as RateWindow,

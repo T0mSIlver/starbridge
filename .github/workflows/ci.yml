@@ -135,6 +135,8 @@ jobs:
               - 'pnpm-lock.yaml'
               - 'pnpm-workspace.yaml'
               - 'deploy/compose.yaml'
+              - 'deploy/Caddyfile'
+              - 'deploy/host/caddy-auth.sh'
               - 'deploy/demo/**'
               - '.github/workflows/ci.yml'
       # A failed comparison runs everything too.
@@ -332,7 +334,15 @@ jobs:
       - if: ${{ !cancelled() }}
         run: docker build --pull -f deploy/demo/Dockerfile .
       - if: ${{ !cancelled() }}
-        run: docker build -f deploy/caddy.Dockerfile deploy
+        run: docker build -f deploy/caddy.Dockerfile --iidfile "$RUNNER_TEMP/caddy.iid" deploy
+      # Compose mounts the Caddyfile at run time, so the build above never reads it: parse it here,
+      # with the rate_limit module it uses, rather than in the deploy's admin-API load (#1216). The
+      # stats password it imports is written as on a host without one.
+      - if: ${{ !cancelled() }}
+        run: |
+          sh deploy/host/caddy-auth.sh "$RUNNER_TEMP/caddy"
+          docker run --rm -v "$PWD/deploy/Caddyfile:/etc/caddy/Caddyfile:ro" -v "$RUNNER_TEMP/caddy:/etc/caddy/secrets:ro" \
+            "$(cat "$RUNNER_TEMP/caddy.iid")" caddy validate --adapter caddyfile --config /etc/caddy/Caddyfile
 
   # The CLI on Windows (#552): a built binary and the whole suite must pass (#884). Bun on Windows
   # can wedge in a test past its own timeout, so each file runs alone and a hung one is killed and

@@ -29,6 +29,15 @@ struct JoinView {
     let approval: JSON?
 }
 
+/** An open join as `GET /joins` lists it (PROTOCOL.md, "Joins"). */
+struct ListedJoin: Equatable {
+    let id: String
+    let request: String
+    let commitment: String
+    let approver: String?
+    let expiresAt: Date?
+}
+
 /** One item of a list: the sealed item, where the list stands after it, and when it was answered. */
 struct Listed {
     let item: SealedItem
@@ -236,6 +245,26 @@ struct Api {
         try join(await call("GET", "/joins/\(id)?after=\(after)&wait=\(wait)", wait: wait).1)
     }
 
+    /** The open joins, holding until one changes past `after`; and where the list stands. */
+    func joins(after: String, wait: Int) async throws -> ([ListedJoin], String) {
+        let body = try await call("GET", "/joins?after=\(after)&wait=\(wait)", wait: wait).1
+        guard let list = try field(body, "joins").array else { throw ProtocolError(.badSchema, "joins is not a list") }
+        let joins = list.compactMap { j -> ListedJoin? in
+            guard let id = j["id"]?.string, let request = j["request"]?.string, let commitment = j["commitment"]?.string else { return nil }
+            return ListedJoin(id: id, request: request, commitment: commitment, approver: j["approver"]?.string, expiresAt: j["expiresAt"]?.string.flatMap(Dates.parse))
+        }
+        return (joins, try string(body, "cursor"))
+    }
+
+    /** Posts this device's ephemeral key as the join's one approver. */
+    func claimJoin(id: String, key: String, approver: String) async throws -> JoinView {
+        try join(await call("POST", "/joins/\(id)/approver", ["key": .string(key), "approver": .string(approver)]).1)
+    }
+
+    func approveJoin(id: String, approval: PairingMessage) async throws {
+        _ = try await call("POST", "/joins/\(id)/approve", ["approval": approval.json])
+    }
+
     func revealJoin(id: String, key: String) async throws { _ = try await call("POST", "/joins/\(id)/reveal", ["key": .string(key)]) }
 
     func cancelJoin(id: String) async throws { _ = try await call("DELETE", "/joins/\(id)") }
@@ -261,6 +290,15 @@ struct Api {
     func postItem(_ item: JSON) async throws { _ = try await call("POST", "/items", item) }
 
     func deleteItem(_ id: String) async throws { _ = try await call("DELETE", "/items/\(id)") }
+
+    /** The latest quota snapshot from each machine. */
+    func quota() async throws -> [Listed] {
+        guard let list = try field(try await call("GET", "/quota").1 ?? .null, "items").array else { throw ProtocolError(.badSchema, "items is not a list") }
+        return list.compactMap { try? listed($0) }
+    }
+
+    /** Asks every machine for a fresh snapshot, holding until they posted one or `wait` seconds pass. */
+    func askQuota(wait: Int) async throws { _ = try await call("POST", "/quota/ask?wait=\(wait)", wait: wait) }
 
     // --- Push ------------------------------------------------------------------
 

@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { pathToFileURL } from "node:url";
 import { Antigravity, type RunHook } from "../src/agent/antigravity";
 import type { Hub } from "../src/agent/server";
+import { agyReachable, lsCall } from "../src/antigravity";
 import { testCtx, until } from "./helpers";
 
 /** The conversation's workspace, a real path on every platform. */
@@ -196,4 +197,17 @@ test("a device's pick, or a typed reply, answers Antigravity's question by optio
       { question: "Size?", selectedOptionIds: [], writeInResponse: "XL" },
     ],
   });
+});
+
+test("the agent takes and calls Antigravity routes on loopback only", async () => {
+  const agy = watcher(async () => "");
+  const post = (address: string) =>
+    (agy.routes[0] as { handle: (r: { body: unknown }) => Promise<unknown> }).handle({
+      body: { address, token: "tok" },
+    });
+  for (const address of ["10.0.0.5:4242", "example.com:80", "127.0.0.1.example.com:80"])
+    await expect(post(address)).rejects.toThrow("loopback");
+  const away = { address: "10.0.0.5:4242", token: "tok" };
+  expect(await agyReachable(away)).toBe(false);
+  await expect(lsCall(away, "GetCascadeTrajectory", {})).rejects.toThrow("loopback");
 });
