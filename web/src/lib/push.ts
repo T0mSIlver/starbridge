@@ -200,12 +200,15 @@ export function subscribeFailure(e: unknown, brave = "brave" in navigator): stri
  * keeps the permission.
  */
 export async function resubscribe(): Promise<void> {
-  if (!supported() || Notification.permission !== "granted" || getPref("pushOff")) return;
+  if (!supported() || Notification.permission === "denied" || getPref("pushOff")) return;
   const reg = await navigator.serviceWorker.getRegistration("/");
   if (!reg) return;
   // Read once the worker is active: at an iOS Home Screen app's cold start it reads none before.
   const existing = await subscription(navigator.serviceWorker);
-  if (!existing && !getPref("pushOn")) return;
+  // A subscription is sent again whatever permission reads short of denied: an iOS window a
+  // notification opened reads "default" although it stands (#1362). A new one needs "granted",
+  // since subscribing would otherwise ask, which needs a tap.
+  if (!existing && (!getPref("pushOn") || Notification.permission !== "granted")) return;
   const key = await api.vapid().catch(() => undefined);
   if (!existing && !key) return;
   const sub = await current(reg.pushManager, existing, key);

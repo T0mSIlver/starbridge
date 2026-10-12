@@ -22,14 +22,15 @@
   questions until it subscribed again: some questions notified and some only showed in the
   inbox. So what only closes or hides a notification (`answered`, a settled notice, a snooze as
   posted) skips subscriptions on Apple's push service; the page closes those notifications when
-  it reads the inbox, as the iPhone app syncs when it opens. The service worker shows something
+  it reads the inbox and the prompts, as the iPhone app syncs when it opens. The service worker shows something
   for every push that asks for the owner: its notification, or after 20 s still opening, or when
   its fetch or check fails, the placeholder the iPhone app uses ("A question needs you"), which
   opens the inbox and which the real notification replaces. On Safari, a push that ends with
   nothing to show, such as a question answered before the phone woke, shows a quiet "Nothing new
   needs you" that the page closes once open. Other browsers stay silent there, since they allow
   some. A browser the owner turned on that boots with permission granted and no subscription
-  subscribes again, without asking; one never turned on still waits for the banner or the
+  subscribes again, without asking (one that reads "default", as in #1362, sends only a
+  subscription it holds); one never turned on still waits for the banner or the
   switch. An iPhone that lost its subscription before this fix needs the banner's tap once. Question
   pushes already went at `Urgency: high` with a day's TTL and no `Topic`, so those were not the
   cause.

@@ -58,6 +58,17 @@ function closeStaleNotifications(inbox: Inbox): void {
   })().catch(() => {});
 }
 
+/** Closes the notifications of these permission prompts (#1363). */
+function closePromptNotifications(ids: string[]): void {
+  if (ids.length === 0) return;
+  (async () => {
+    const reg = await navigator.serviceWorker?.getRegistration("/").catch(() => undefined);
+    const tags = new Set(ids.map((id) => `p:${id}`));
+    for (const n of (await reg?.getNotifications().catch(() => [])) ?? [])
+      if (tags.has(n.tag)) n.close();
+  })().catch(() => {});
+}
+
 function single(read: () => Promise<unknown>): () => void {
   let running = false;
   return () => {
@@ -378,6 +389,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     for (const [k, v] of notices.settled) byKey.set(k, v);
     settledRef.current.cursor = notices.cursor;
     const at = Date.now();
+    // Prompts that left the open list, or that a settled notice closed: Safari gets no push that
+    // closes their notifications (#1363).
+    const openNow = new Set(open.map((p) => p.permission.id));
+    closePromptNotifications([
+      ...promptsRef.current.map((p) => p.permission.id).filter((id) => !openNow.has(id)),
+      ...[...notices.settled.values()].map((s) => s.itemId),
+    ]);
     setPrompts((was) => {
       const openIds = new Set(open.map((p) => p.permission.id));
       const closed = was
