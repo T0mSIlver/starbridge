@@ -269,7 +269,8 @@ extension Store {
         var waits: [(String, Waiting)] = []
         var snoozes: [Snooze] = []
         while true {
-            let page = try await api().items("decision,settled,waiting,snooze", after: cursor)
+            // An answered question's images download when its detail shows them (#1382).
+            let page = try await api().items("decision,settled,waiting,snooze", after: cursor, openBlobs: true)
             // Held: the cursor stays, so these items are read again once the hold ends.
             if try await scan(page.items.map(\.item)) { return }
             let entries = entryJSON
@@ -320,6 +321,31 @@ extension Store {
         s.decisions = Array(byId.values.sorted { $0.body.createdAt < $1.body.createdAt }.suffix(500))
         persist(s)
         SavedImage.prune(keeping: s.decisions)
+    }
+
+    /**
+     * Fetches the images of a question listed without them (#1382), each checked against the hash
+     * its signed body holds, and keeps them as the sync keeps an open question's. Once per question
+     * while the app runs, unless the fetch fails: one whose images fail to open stays without them.
+     */
+    func loadImages(_ id: String) async {
+        guard let d = decision(id), d.imagesPending, imagesAsked.insert(id).inserted else { return }
+        guard let listed = try? await api().item(id) else {
+            // Offline or refused: the next show asks again.
+            imagesAsked.remove(id)
+            return
+        }
+        guard listed.item.kind == .decision, let o = open(listed.item, entries: entryJSON),
+              let body = o.body as? Decision, body.id == id else { return }
+        let images = SavedImage.keep(listed.item, body)
+        if images.isEmpty { return }
+        // After any sync under way, which writes back the list it read.
+        _ = try? await serial {
+            guard let i = self.saved.decisions.firstIndex(where: { $0.id == id }), self.saved.decisions[i].imagesPending else { return }
+            var s = self.saved
+            s.decisions[i].images = images
+            self.persist(s)
+        }
     }
 
     /** `d` as its machine's notice closed it, with the agent's reason for a withdrawal (#1008). */
