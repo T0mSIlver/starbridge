@@ -81,6 +81,18 @@ const text = (e: Entry) =>
       ? [e.item.decision.question, e.item.decision.context, e.item.decision.source.sessionTitle]
       : [e.item.run.title, e.item.run.reason];
 
+/** History rows laid out at a time (#1459). */
+const PAST_PAGE = 50;
+
+/** The element `el` scrolls in: the list from 600 px, else the page. */
+function scroller(el: HTMLElement): HTMLElement | null {
+  for (let p = el.parentElement; p; p = p.parentElement) {
+    const y = getComputedStyle(p).overflowY;
+    if (y === "auto" || y === "scroll") return p;
+  }
+  return null;
+}
+
 export function Inbox() {
   const app = useApp();
   const {
@@ -174,6 +186,24 @@ export function Inbox() {
   const latest = useRef({ ids, selected, wide });
   latest.current = { ids, selected, wide };
   const listRef = useRef<HTMLDivElement>(null);
+  // History lays out its rows a page at a time, the next as the list scrolls near its end: 500
+  // rows cost a phone over half a second on every switch to the Inbox (#1459).
+  const [pastShown, setPastShown] = useState(PAST_PAGE);
+  const pastMore = useRef<HTMLDivElement>(null);
+  const pastUpTo = Math.max(pastShown, listed.findIndex((p) => p.entry.id === selected) + 1);
+  const pastLeft = showPast && pastUpTo < listed.length;
+  useEffect(() => {
+    const end = pastMore.current;
+    if (!pastLeft || !end) return;
+    const seen = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) setPastShown((n) => n + PAST_PAGE);
+      },
+      { root: scroller(end), rootMargin: "100% 0px" },
+    );
+    seen.observe(end);
+    return () => seen.disconnect();
+  }, [pastLeft, pastUpTo]);
   useRowMotion(
     listRef,
     all.map((e) => e.id),
@@ -440,7 +470,7 @@ export function Inbox() {
           className={historyToggled ? "m-appear" : undefined}
           onAnimationEnd={() => setHistoryToggled(false)}
         >
-          {listed.map((p) => (
+          {listed.slice(0, pastUpTo).map((p) => (
             <PastRow
               key={p.entry.id}
               past={p}
@@ -449,6 +479,7 @@ export function Inbox() {
               onSelect={() => (wide ? setPicked(p.entry.id) : openItem(p.entry.id))}
             />
           ))}
+          {pastLeft && <div ref={pastMore} className={s.pastMore} />}
           {older > 0 && <OlderHead count={older} comfy={comfy} onShow={() => setShowOlder(true)} />}
         </div>
       )}
