@@ -192,14 +192,18 @@ export function subscribeFailure(e: unknown, brave = "brave" in navigator): stri
 
 /**
  * Sends the current subscription again, so a server that dropped it pushes here once more, after
- * a new one if the server's key changed.
+ * a new one if the server's key changed. With permission granted and none left, it subscribes
+ * anew: Safari drops a subscription after pushes that showed nothing (#1363), and keeps the
+ * permission.
  */
 export async function resubscribe(): Promise<void> {
   if (!supported() || Notification.permission !== "granted" || getPref("pushOff")) return;
   const reg = await navigator.serviceWorker.getRegistration("/");
-  const existing = await reg?.pushManager.getSubscription();
-  if (!reg || !existing) return;
+  if (!reg) return;
+  // Read once the worker is active: at an iOS Home Screen app's cold start it reads none before.
+  const existing = await subscription(navigator.serviceWorker);
   const key = await api.vapid().catch(() => undefined);
+  if (!existing && !key) return;
   const sub = await current(reg.pushManager, existing, key);
   // Turned off while the key was read (#943): what a new key subscribed goes too.
   if (getPref("pushOff")) {

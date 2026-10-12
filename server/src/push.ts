@@ -25,6 +25,21 @@ export type PushTarget = z.infer<typeof PushTarget>;
 /** "gone" means the target no longer exists and its subscription should be dropped. */
 export type PushResult = "ok" | "gone" | "failed" | "no-route";
 
+/**
+ * Whether `endpoint` is Apple's Web Push service, which Safari subscribes with on iOS and macOS.
+ * Safari drops a site's subscriptions once three of its pushes, over the subscription's life,
+ * showed no notification within 30 s (WebKit's `maxSilentPushCount`), so a push that only closes
+ * or hides a notification never goes there (#1363).
+ */
+export function applePush(endpoint: string): boolean {
+  try {
+    const host = new URL(endpoint).hostname.toLowerCase();
+    return host === "push.apple.com" || host.endsWith(".push.apple.com");
+  } catch {
+    return false;
+  }
+}
+
 /** Whether `url`'s host is one the server's owner allowed though private (`privatePushHosts`). */
 export const allowedPrivate = (url: URL, hosts: PrivatePushHosts) =>
   hosts === "any" || hosts.includes(pushHostKey(url.hostname));
@@ -231,14 +246,19 @@ export class Push {
   /**
    * Pushes `payload(member)` to every subscription of each member of `types`, without waiting.
    * Each account has at most `ACCOUNT_CONCURRENCY` pushes in flight. `thread` groups an APNs
-   * alert under another machine than the payload's sender (`apnsRequest`).
+   * alert under another machine than the payload's sender (`apnsRequest`). `hides` marks a
+   * payload that shows nothing, only closes or hides a notification: it skips Apple's Web Push
+   * service (`applePush`).
    */
   notify(
     account: string,
     members: string[],
     payload: (member: string) => string,
-    types: PushType[] = PushType.options,
-    thread?: string,
+    {
+      types = PushType.options,
+      thread,
+      hides = false,
+    }: { types?: PushType[]; thread?: string; hides?: boolean } = {},
   ): void {
     if (members.length === 0) return;
     const subs = this.db
@@ -256,6 +276,7 @@ export class Push {
       environment: "production" | "sandbox" | null;
     }[];
     for (const s of subs) {
+      if (hides && s.type === "webpush" && applePush(s.endpoint)) continue;
       const target: PushTarget = {
         type: s.type,
         endpoint: s.endpoint,

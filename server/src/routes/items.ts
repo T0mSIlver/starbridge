@@ -517,8 +517,12 @@ itemRoutes.post("/items", requireCaller("paired"), async (c) => {
     if (rule.re?.open) {
       // A note for every device (a snooze): the others hide the decision, or show it again.
       const devices = to.filter((id) => id !== machine && id !== me && !unheard.includes(id));
-      c.var.push.notify(caller.account, devices, (device) =>
-        pushPayload(item, device, config.pushInlineLimit),
+      // It shows nothing as it is posted; its return at its time is a push of its own.
+      c.var.push.notify(
+        caller.account,
+        devices,
+        (device) => pushPayload(item, device, config.pushInlineLimit),
+        { hides: true },
       );
     } else {
       const payload = JSON.stringify({ v: 1, kind: "answered", id: item.re });
@@ -526,6 +530,7 @@ itemRoutes.post("/items", requireCaller("paired"), async (c) => {
         caller.account,
         answeredDevices.filter((id) => !unheard.includes(id)),
         () => payload,
+        { hides: true },
       );
     }
   } else if ((!item.quiet || firstQuota) && !snoozed) {
@@ -551,14 +556,16 @@ itemRoutes.post("/items", requireCaller("paired"), async (c) => {
     }
     // Browsers expect each Web Push to show a notification and drop subscriptions that keep
     // showing none, so quota snapshots and runs, which show none there, skip Web Push; pages
-    // fetch them instead.
+    // fetch them instead. A settled notice only closes one, so it skips Safari's (#1363).
     c.var.push.notify(
       caller.account,
       pushTo,
       // With the kept blobs, so a device a re-seal adds fetches the images too.
       (device) =>
         pushPayload({ ...item, ...(blobs ? { blobs } : {}) }, device, config.pushInlineLimit),
-      item.kind === "quota" || item.kind === "run" ? ["fcm", "unifiedpush"] : undefined,
+      item.kind === "quota" || item.kind === "run"
+        ? { types: ["fcm", "unifiedpush"] }
+        : { hides: item.kind === "settled" },
     );
   }
   return c.json({ cursor: String(seq) }, 201);

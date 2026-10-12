@@ -575,7 +575,10 @@ is `quiet`, so devices learn at once that the machine sends quotas.
 Quota snapshots and runs go to FCM and UnifiedPush only, not to Web Push or APNs. Browsers expect every Web Push to show a
 notification and drop a subscription that keeps showing none (Firefox after 16), so the web page
 fetches `GET /quota` and `GET /items?kind=run` instead. Decisions, permissions, settled notices,
-waiting states, snoozes and `answered` still go to Web Push.
+waiting states, snoozes and `answered` still go to Web Push, except that what shows nothing
+(`answered`, a settled notice, a snooze as it is posted) skips Apple's push service
+(`*.push.apple.com`): Safari drops a subscription after three pushes that showed no notification
+within 30 s (#1363). Web Push requests carry `Urgency: high` and `TTL: 86400`.
 
 The server checks that a push URL's host resolves only to public addresses, then connects to the
 address it checked, with SNI and the certificate check still on the host name, so a DNS answer

@@ -49,6 +49,15 @@ const DESKTOP_TICK_MS = 15_000;
  * A poller's read that skips its turn while the last one is still running, so requests that hang
  * rather than fail (a captive portal, a dead route) don't pile up before the backoff starts.
  */
+/** Closes notifications the inbox shows no longer need the owner (#1363). */
+function closeStaleNotifications(inbox: Inbox): void {
+  (async () => {
+    const reg = await navigator.serviceWorker?.getRegistration("/").catch(() => undefined);
+    const { closeStale } = await import("@/lib/pushFallback");
+    await closeStale(reg, inbox.items, inbox.snoozes, document.visibilityState === "visible");
+  })().catch(() => {});
+}
+
 function single(read: () => Promise<unknown>): () => void {
   let running = false;
   return () => {
@@ -251,6 +260,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         if (loaded && landed()) {
           inboxRef.current = loaded;
           setInbox(loaded);
+          closeStaleNotifications(loaded);
         }
         setInboxLoaded(true);
         const push = await import("@/lib/push");
@@ -348,6 +358,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     // The next read starts before React renders this one.
     inboxRef.current = loaded;
     setInbox(loaded);
+    closeStaleNotifications(loaded);
   }, [current, holding]);
 
   /**

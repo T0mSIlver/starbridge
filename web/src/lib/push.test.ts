@@ -60,6 +60,12 @@ test("a subscription made with another key is replaced by one with the server's 
   expect(pm.made[0]).toEqual(bytes(ownKey));
 });
 
+test("with none left, as after Safari dropped it (#1363), a subscription is made with the server's key", async () => {
+  const pm = fakeManager();
+  await current(pm, null, ownKey);
+  expect(pm.made).toEqual([bytes(ownKey)]);
+});
+
 test("without the server's key, an existing subscription is kept", async () => {
   const pm = fakeManager();
   const existing = fakeSub(relayKey);
