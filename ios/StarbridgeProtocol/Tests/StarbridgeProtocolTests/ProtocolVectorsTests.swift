@@ -12,8 +12,11 @@ private let vectorsDir = URL(fileURLWithPath: #filePath)
 /** The vector files these tests read; `testEveryVectorFileIsRead` keeps it whole. */
 private let READ: Set<String> = [
     "context.json", "directory.json", "envelopes.json", "heads.json", "images.json", "join.json",
-    "keys.json", "pace.json", "pairing.json", "quota-alerts.json", "schemas.json",
+    "keys.json", "pairing.json", "quota-alerts.json", "schemas.json",
 ]
+
+/** Vector files only the machine's code runs: the local agent computes pace and alerts (#1147). */
+private let MACHINE_ONLY: Set<String> = ["pace.json"]
 
 private func vectors(_ name: String) throws -> JSON {
     try JSON.parse(String(decoding: Data(contentsOf: vectorsDir.appendingPathComponent(name)), as: UTF8.self))
@@ -61,7 +64,7 @@ final class ProtocolVectorsTests: XCTestCase {
 
     func testEveryVectorFileIsRead() throws {
         let files = try FileManager.default.contentsOfDirectory(atPath: vectorsDir.path).filter { $0.hasSuffix(".json") }
-        XCTAssertEqual(Set(files), READ, "a vector file this port does not test")
+        XCTAssertEqual(Set(files), READ.union(MACHINE_ONLY), "a vector file this port does not test")
     }
 
     func testDirectory() throws {
@@ -249,19 +252,6 @@ final class ProtocolVectorsTests: XCTestCase {
                 }
             }
             XCTAssertEqual(got, c.str("expect"), c.str("name"))
-        }
-    }
-
-    func testPace() throws {
-        for c in try vectors("pace.json")["cases"]!.items {
-            let w = c["window"]!
-            let now = epochMillis(c.str("now"))!
-            let minutes = w.opt("windowMinutes").map { Int($0.number!) }
-            let pace = Paces.compute(usedPercent: w["usedPercent"]!.number!, windowMinutes: minutes, resetsAt: w.opt("resetsAt")?.string, now: now)
-            XCTAssertEqual(pace?.json ?? .null, c["expectPace"]!, c.str("name"))
-            let window = QuotaWindow(id: w.str("id"), label: w.str("label"), usedPercent: w["usedPercent"]!.number!, windowMinutes: minutes, resetsAt: w.opt("resetsAt")?.string, pace: pace)
-            let alerts = Paces.alerts(provider: c.str("provider"), window: window, now: now)
-            XCTAssertEqual(JSON.array(alerts.map(\.json)), c["expectAlerts"]!, c.str("name"))
         }
     }
 
