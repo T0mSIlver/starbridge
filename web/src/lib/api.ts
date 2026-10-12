@@ -212,7 +212,8 @@ async function call<T>(
     if (after === null) unanswered();
     else limited(after);
   }
-  answered();
+  // A 429 of its own says nothing of a hold another call's 429 set meanwhile.
+  if (!(opts.ownLimit && res.status === 429)) answered();
   const text = await res.text();
   let json: unknown;
   try {
