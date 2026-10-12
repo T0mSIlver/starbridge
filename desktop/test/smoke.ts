@@ -272,7 +272,7 @@ try {
   );
 
   // An update (#1398): found, downloaded on the owner's click with its progress, then ready to
-  // restart. macOS's Squirrel refuses this one, which no Developer ID signed, and says why.
+  // restart. On macOS that is once the zip is in: Squirrel, which refuses this one, comes after.
   const statuses = () => page.evaluate(() => (window as unknown as StandIn).updates);
   await until(
     async () => (await statuses()).some((u) => u.state === "available" && u.version === "9.9.9"),
@@ -288,7 +288,7 @@ try {
     progress.some((u) => (u.percent ?? 0) > 0 && (u.percent ?? 0) < 100),
     "progress",
   );
-  assert.equal(last?.state, MAC ? "error" : "ready");
+  assert.deepEqual(last, { state: "ready", version: "9.9.9" });
   assert.equal(
     await page.evaluate(`window.starbridgeDesktop.updateSettings().autoDownload`),
     false,

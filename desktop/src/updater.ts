@@ -10,7 +10,8 @@ const UPDATE_MS = 6 * 3_600_000;
  * latest-mac.yml says the version and the zip. Its own file, which main loads once the window
  * shows: electron-updater is most of the app's code, and nothing at start needs it. macOS installs
  * an update only when it carries the same Developer ID as the running app, so an ad hoc build
- * finds updates and fails to download them. `releases` is the repository's page,
+ * downloads updates and never installs them: Squirrel's refusal comes after the download, and is
+ * logged. `releases` is the repository's page,
  * https://github.com/T0mSIlver/starbridge but in the end-to-end test (test/smoke.ts).
  */
 export function startUpdates(
