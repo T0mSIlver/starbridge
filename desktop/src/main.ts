@@ -353,10 +353,11 @@ function guard(contents: WebContents): void {
     return { action: "deny" };
   });
   const leave = (e: { preventDefault(): void; url: string }) => {
-    if (contents === win?.webContents && startsSignIn(e.url, origin)) {
+    const start = contents === win?.webContents ? startsSignIn(e.url, origin) : null;
+    if (start) {
       e.preventDefault();
       signIn = newSignIn();
-      shell.openExternal(browserSignIn(origin, signIn));
+      shell.openExternal(browserSignIn(origin, signIn, start));
       return;
     }
     if (staysInWindow(e.url, origin) && contents === win?.webContents) return;

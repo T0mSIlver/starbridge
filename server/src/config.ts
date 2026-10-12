@@ -32,6 +32,8 @@ export interface Config {
     privateKey: string;
     /** The iPhone app's App ID, the audience of its identity tokens. */
     appId: string;
+    /** The Services ID of Apple's web sign-in, for the page and the other apps; unset, only the iPhone signs in with Apple. */
+    servicesId?: string;
     url: string;
   };
   /** Self-hosted sign-in: whoever presents this token owns the server's one account. */
@@ -172,6 +174,7 @@ export function configFromEnv(env: Env = process.env): Config {
             keyId: env.APPLE_KEY_ID,
             privateKey: env.APPLE_PRIVATE_KEY.replace(/\\n/g, "\n"),
             appId: env.APPLE_APP_ID ?? "dev.starbridge.ios",
+            servicesId: env.APPLE_SERVICES_ID || undefined,
             url: env.APPLE_URL ?? "https://appleid.apple.com",
           }
         : undefined,

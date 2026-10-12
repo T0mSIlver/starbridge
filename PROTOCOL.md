@@ -427,7 +427,12 @@ request without the header, or with one the server cannot read, is served.
   endpoint with a client secret signed by the team's Sign in with Apple key, and the identity
   token that comes back must name the same user. The account is Apple's stable user id (`sub`);
   the server keeps the refresh token of the account's last Apple sign-in only to revoke it at
-  `https://appleid.apple.com/auth/revoke` when the account is deleted.
+  `https://appleid.apple.com/auth/revoke` when the account is deleted. The page and the other
+  apps use Apple's web sign-in with the Services ID instead, as GitHub's, with no scope and
+  `response_mode=query`. Apple binds no code to a PKCE challenge, so for an app's sign-in the
+  server binds it: its callback holds the code with the state, the app's challenge, for 10
+  minutes, and hands it on to `APP_REDIRECT_URI`; the app trades it at `POST /auth/app/session`
+  as GitHub's, and only the verifier of that challenge takes it, once.
 - **Machines** send `Authorization: Bearer <machine token>`, issued when their pairing is
   approved. The server stores a hash of it and drops it when the directory revokes the machine.
 - A session with no device yet can read the directory and post joins, but reads and posts no
@@ -442,11 +447,14 @@ request without the header, or with one the server cannot read, is served.
 
 | Route | Who | What |
 |---|---|---|
-| `GET /auth/methods` | anyone | `{methods}`: the sign-in methods this server offers, `github`, `apple` and `owner` |
+| `GET /auth/methods` | anyone | `{methods}`: the sign-in methods this server offers, `github`, `apple` (Apple's web sign-in) and `owner` |
 | `GET /auth/github` | anyone | start GitHub sign-in; the app adds `?app=1&challenge=<S256 challenge>`; without GitHub on the server, the page goes to `/?signin=off` and the app gets 404 `not-configured` |
 | `GET /auth/github/callback` | anyone | finish it, set the session, redirect to `/`; on failure redirect to `/?signin=declined`, `expired` (state missing or not this browser's, kept an hour), `paused` (sign-ups paused and no account yet), `limited` (too many new accounts from the address) or `failed` |
+| `GET /auth/apple` | anyone | start Apple's web sign-in with the Services ID; the apps add `?app=1&challenge=<S256 challenge>`; without it on the server, the page goes to `/?signin=failed` and the app gets 404 `not-configured` |
+| `GET /auth/apple/callback` | anyone | finish the page's, as `/auth/github/callback`, with the same `signin` failures |
+| `GET /auth/apple/callback/app` | anyone | an app's: hold the code for the state, then redirect to `<APP_REDIRECT_URI>?code=<code>&state=<state>`, or Apple's `error` instead of the code; 400 `bad-state` without them |
 | `GET /auth/github/callback/app` | anyone | the browser got the app's sign-in: redirect to `<APP_REDIRECT_URI>?code=<code>&state=<state>`, or GitHub's `error` instead of the code; 400 `bad-state` without them |
-| `POST /auth/app/session` | the app | `{code, verifier}`: GitHub's code → `{session}`; 400 `bad-code` when GitHub refuses the code: unknown, used, expired or not this verifier's; 403 `signups-paused` while sign-ups are paused and the GitHub user has no account |
+| `POST /auth/app/session` | the app | `{code, verifier}`: an Apple code the server holds for this verifier's challenge, else GitHub's code → `{session}`; 400 `bad-code` when GitHub refuses the code: unknown, used, expired or not this verifier's; 403 `signups-paused` while sign-ups are paused and the GitHub user has no account |
 | `GET /auth/app/signed-in?state=<challenge>` | device | `{signedIn}`: true once the app whose challenge this is traded its code for a session of the caller's account (#943); the server keeps each challenge's account 10 minutes, in memory |
 | `POST /auth/apple/session` | the iPhone app | `{identityToken, code, nonce}` → `{session}`; 400 `bad-code` when Apple refuses the token or the code (another app's, expired, replayed, the nonce not the token's); 403 `signups-paused` as GitHub's; 404 `not-configured` without the team's key; 502 `apple` when Apple can't be reached |
 | `POST /auth/owner` | anyone | self-hosted: `{token}` against `OWNER_TOKEN`; sets the session and returns `{session}` |

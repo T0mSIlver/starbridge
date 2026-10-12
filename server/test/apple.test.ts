@@ -10,6 +10,7 @@ import { makeServer, testConfig } from "../test-support/app";
 const apple = generateKeyPairSync("rsa", { modulusLength: 2048 });
 const team = generateKeyPairSync("ec", { namedCurve: "P-256" });
 const APP_ID = "dev.starbridge.ios";
+const WEB_ID = "dev.starbridge.web";
 let server: ReturnType<typeof Bun.serve>;
 /** Codes work once, as Apple's do. */
 const used = new Set<string>();
@@ -88,6 +89,7 @@ function appleConfig() {
       keyId: "KEY",
       privateKey: team.privateKey.export({ format: "pem", type: "pkcs8" }).toString(),
       appId: APP_ID,
+      servicesId: WEB_ID,
       url: `http://localhost:${server.port}`,
     },
   };
@@ -107,6 +109,8 @@ function signInBody(sub: string, over: { token?: string; code?: string } = {}) {
 test("Sign in with Apple makes one account per Apple user and is listed among the methods", async () => {
   const s = await makeServer(appleConfig());
   expect((await s.call("GET", "/v1/auth/methods")).json.methods).toEqual(["apple", "owner"]);
+  const native = await makeServer({ apple: { ...appleConfig().apple, servicesId: undefined } });
+  expect((await native.call("GET", "/v1/auth/methods")).json.methods).toEqual(["owner"]);
   const first = await s.call("POST", "/v1/auth/apple/session", { body: signInBody("u1") });
   expect(first.status).toBe(200);
   const again = await s.call("POST", "/v1/auth/apple/session", { body: signInBody("u1") });
@@ -162,4 +166,62 @@ test("paused sign-ups refuse a new Apple user and let an existing one in", async
   expect(r.status).toBe(403);
   expect(r.json.error).toBe("signups-paused");
   setSignUps(testConfig({ dbPath }), true);
+});
+
+const s256 = (v: string) => createHash("sha256").update(v).digest("base64url");
+
+test("the page signs in with Apple's web flow: no scope, state in a cookie, the Services ID's code", async () => {
+  const s = await makeServer(appleConfig());
+  const start = await s.app.request("/v1/auth/apple");
+  const authorize = new URL(start.headers.get("location") ?? "");
+  expect(authorize.pathname).toBe("/auth/authorize");
+  expect(authorize.searchParams.get("client_id")).toBe(WEB_ID);
+  expect(authorize.searchParams.has("scope")).toBe(false);
+  expect(authorize.searchParams.get("response_mode")).toBe("query");
+  const cookie = (start.headers.get("set-cookie") ?? "").split(";")[0] ?? "";
+  const state = authorize.searchParams.get("state");
+  const back = new URL(authorize.searchParams.get("redirect_uri") ?? "");
+  expect(back.pathname).toBe("/v1/auth/apple/callback");
+  const code = `code-w1.${codes++}`;
+  const stranger = await s.app.request(`${back.pathname}?code=${code}&state=${state}`);
+  expect(stranger.headers.get("location")).toBe("/?signin=expired");
+  const res = await s.app.request(`${back.pathname}?code=${code}&state=${state}`, {
+    headers: { cookie },
+  });
+  expect(res.headers.get("location")).toBe("/");
+  expect(res.headers.get("set-cookie")).toContain("sb_session=sbs_");
+  const cancelled = await s.app.request(
+    `${back.pathname}?error=user_cancelled_authorize&state=${state}`,
+    {
+      headers: { cookie },
+    },
+  );
+  expect(cancelled.headers.get("location")).toBe("/?signin=declined");
+});
+
+test("an app's Apple sign-in: the server holds the code for its challenge, and only the verifier trades it", async () => {
+  const s = await makeServer(appleConfig());
+  const verifier = Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("base64url");
+  const challenge = s256(verifier);
+  const start = await s.app.request(`/v1/auth/apple?app=1&challenge=${challenge}`);
+  const authorize = new URL(start.headers.get("location") ?? "");
+  expect(authorize.searchParams.get("state")).toBe(challenge);
+  expect(authorize.searchParams.get("redirect_uri")).toEndWith("/v1/auth/apple/callback/app");
+  // Apple's codes carry dots.
+  const code = `code-a1.${codes++}.x`;
+  const back = await s.app.request(`/v1/auth/apple/callback/app?code=${code}&state=${challenge}`);
+  expect(back.headers.get("location")).toBe(`starbridge://auth?code=${code}&state=${challenge}`);
+  const other = Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("base64url");
+  const stolen = await s.call("POST", "/v1/auth/app/session", { body: { code, verifier: other } });
+  expect(stolen.status).toBe(400);
+  // The held code went with the failed try: it works once, whoever tries.
+  const late = await s.call("POST", "/v1/auth/app/session", { body: { code, verifier } });
+  expect(late.status).toBe(400);
+  const code2 = `code-a1.${codes++}`;
+  await s.app.request(`/v1/auth/apple/callback/app?code=${code2}&state=${challenge}`);
+  const ok = await s.call("POST", "/v1/auth/app/session", { body: { code: code2, verifier } });
+  expect(ok.status).toBe(200);
+  const web = await s.call("POST", "/v1/auth/apple/session", { body: signInBody("a1") });
+  const me = async (t: string) => (await s.call("GET", "/v1/me", { token: t })).json.account;
+  expect(await me(ok.json.session)).toBe(await me(web.json.session));
 });

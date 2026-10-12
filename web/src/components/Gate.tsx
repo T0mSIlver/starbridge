@@ -7,10 +7,10 @@ import { outdated } from "@/lib/api";
 import { desktop } from "@/lib/desktop";
 import type { FirstDevice as PreparedDevice, RecoveryEntry } from "@/lib/device";
 import { hasPairCode, holdPairCode } from "@/lib/pairLink";
-import { useGitHubSignIn } from "@/lib/signInMethods";
+import { useSignInMethods } from "@/lib/signInMethods";
 import { useApp } from "./AppProvider";
 import { ConfirmDialog } from "./ConfirmDialog";
-import { Icon } from "./icons";
+import { AppleLogo, Icon } from "./icons";
 import { Landing } from "./Landing";
 import { QrCode } from "./QrCode";
 import { FirstRunPage, Setup } from "./Setup";
@@ -76,10 +76,10 @@ function useDefaultName(initial = ""): [string, (v: string) => void] {
 
 /** What the server's `signin` says when GitHub sign-in failed (PROTOCOL.md, "Auth"). */
 const SIGN_IN_FAILED: Record<string, string> = {
-  declined: "GitHub didn't sign you in.",
+  declined: "The sign-in didn't finish.",
   expired:
     "Sign-in could not be matched to this browser: it took over an hour, or started elsewhere.",
-  failed: "GitHub didn't answer as expected.",
+  failed: "The sign-in service didn't answer as expected.",
   off: "This server has no GitHub sign-in. Sign in with its owner token.",
   limited: "Too many new accounts from this network in the last hour. Try again later.",
   paused:
@@ -107,7 +107,10 @@ function useSignInFailure(signedOut: boolean): string | undefined {
   return why;
 }
 
-/** GitHub sign-in; self-hosting sits behind "Use your own server" (spec/sign-in.md). */
+/**
+ * GitHub sign-in; Apple's sits behind "Other ways to sign in", self-hosting behind "Use your own
+ * server" (spec/sign-in.md).
+ */
 export function SignIn({
   ownServer = false,
   refused,
@@ -120,8 +123,9 @@ export function SignIn({
   failed?: string;
 }) {
   const { reload } = useApp();
-  const github = useGitHubSignIn();
+  const { github, apple } = useSignInMethods();
   const off = failed === "off" || !github;
+  const [others, setOthers] = useState(false);
   const [ownChosen, setOwn] = useState(ownServer);
   const own = ownChosen || off;
   const [token, setToken] = useState("");
@@ -146,7 +150,18 @@ export function SignIn({
           {failed ? "Sign in again" : "Continue with GitHub"}
         </a>
       )}
+      {apple && !off && others && (
+        <a href="/v1/auth/apple" className={`t-label ${ui.btn} ${ui.lg} ${s.go}`}>
+          <AppleLogo />
+          Continue with Apple
+        </a>
+      )}
       {desktop && !off && <p className={`t-meta ${s.dim}`}>Opens your browser.</p>}
+      {apple && !off && !others && !own && (
+        <button type="button" className={`t-meta ${s.link}`} onClick={() => setOthers(true)}>
+          Other ways to sign in
+        </button>
+      )}
       {own ? (
         <form
           className={s.field}

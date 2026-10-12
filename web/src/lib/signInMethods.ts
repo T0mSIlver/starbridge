@@ -6,18 +6,26 @@ import { api } from "./api";
 let asked: Promise<string[] | undefined> | undefined;
 
 /**
- * Whether this server offers GitHub sign-in (#670). True until the server says otherwise, so the
- * landing page's HTML keeps its buttons; a server that cannot be asked keeps them too.
+ * The sign-in methods this server offers (#670). GitHub until the server says otherwise, so the
+ * landing page's HTML keeps its buttons; a server that cannot be asked keeps them too. Apple's
+ * web sign-in only once the server lists it (#1411).
  */
-export function useGitHubSignIn(): boolean {
-  const [github, setGitHub] = useState(true);
+export function useSignInMethods(): { github: boolean; apple: boolean } {
+  const [methods, setMethods] = useState({ github: true, apple: false });
   useEffect(() => {
     asked ??= api.signInMethods().catch(() => undefined);
     let live = true;
-    asked.then((methods) => live && methods && setGitHub(methods.includes("github")));
+    asked.then(
+      (m) => live && m && setMethods({ github: m.includes("github"), apple: m.includes("apple") }),
+    );
     return () => {
       live = false;
     };
   }, []);
-  return github;
+  return methods;
+}
+
+/** Whether this server offers GitHub sign-in. */
+export function useGitHubSignIn(): boolean {
+  return useSignInMethods().github;
 }

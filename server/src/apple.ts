@@ -8,6 +8,10 @@ const ISSUER = "https://appleid.apple.com";
 const KEYS_TTL_MS = 3_600_000;
 /** Apple takes a client secret for up to 6 months; one lasts the server's day. */
 const SECRET_LIFETIME_S = 86_400;
+/** How long an app's code waits for the app to trade it, as GitHub's codes last 10 minutes. */
+const PENDING_MS = 10 * 60_000;
+/** Codes waiting at once; past this the oldest go, as a flood must not fill memory. */
+const PENDING_MAX = 10_000;
 /** Leeway for the clocks of Apple and this server. */
 const SKEW_S = 60;
 
@@ -30,6 +34,8 @@ const sha256hex = (s: string) => createHash("sha256").update(s).digest("hex");
  */
 export class Apple {
   private keys?: { at: number; byKid: Map<string, JsonWebKey> };
+  /** The app sign-ins whose code came back through the browser: code → the app's challenge. */
+  private readonly pending = new Map<string, { challenge: string; at: number }>();
   private readonly secrets = new Map<string, { value: Promise<string>; madeAt: number }>();
 
   constructor(
@@ -102,6 +108,25 @@ export class Apple {
       identity: await this.verify(body.id_token, [clientId]),
       refreshToken: body.refresh_token,
     };
+  }
+
+  /**
+   * Apple binds no code to a PKCE challenge, so the server does: the code that came back for the
+   * app's sign-in waits here with the app's challenge, until the app trades it with the verifier.
+   */
+  hold(code: string, challenge: string, now = Date.now()): void {
+    this.pending.delete(code);
+    this.pending.set(code, { challenge, at: now });
+    for (const [k, v] of this.pending)
+      if (this.pending.size > PENDING_MAX || now - v.at > PENDING_MS) this.pending.delete(k);
+      else break;
+  }
+
+  /** The challenge a held code came back for, once; undefined for a code not held or expired. */
+  take(code: string, now = Date.now()): string | undefined {
+    const held = this.pending.get(code);
+    this.pending.delete(code);
+    return held && now - held.at <= PENDING_MS ? held.challenge : undefined;
   }
 
   /** Revokes a refresh token, so Apple lists Starbridge no more under the user's Apple ID. */
