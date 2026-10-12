@@ -272,6 +272,16 @@ itemRoutes.post("/items", requireCaller("paired"), async (c) => {
             : `a ${item.kind} goes to the one machine that asked`,
         );
       machine = machines[0] as string;
+      // Every active device, so none keeps showing a question the owner put off (#1299).
+      if (rule.toDevices) {
+        const { n } = db
+          .query(
+            "SELECT COUNT(*) AS n FROM members WHERE account_id = ? AND role = 'device' AND active = 1",
+          )
+          .get(caller.account) as { n: number };
+        if (devices.length !== n)
+          fail(400, "unknown-recipient", `a ${item.kind} goes to every active device`);
+      }
     } else {
       for (const id of to)
         if (!activeMember(db, caller.account, id, "device"))

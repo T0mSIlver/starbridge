@@ -258,4 +258,19 @@ struct Api {
 
     /** Whether this iPhone notifies, for every device's Devices list (#943). */
     func notificationState(_ state: String) async throws { _ = try await call("PUT", "/notifications", ["state": .string(state)]) }
+
+    /** What each device last said of its notifications, and the app it said it from (#943, #1019), by member id. */
+    func notifications() async throws -> (states: [String: String], clients: [String: String]) {
+        let body = try await call("GET", "/notifications").1
+        func strings(_ key: String) -> [String: String] {
+            Dictionary((body?[key]?.object ?? JSONObject()).compactMap { k, v in v.string.map { (k, $0) } }, uniquingKeysWith: { $1 })
+        }
+        return (strings("devices"), strings("clients"))
+    }
+
+    /** The machines whose CLI is behind the latest release its agent read (#1050). */
+    func machinesBehind() async throws -> Set<String> {
+        let machines = try await call("GET", "/releases").1?["machines"]?.object ?? JSONObject()
+        return Set(machines.filter { $0.1["behind"]?.bool == true }.map(\.0))
+    }
 }

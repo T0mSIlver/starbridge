@@ -148,7 +148,14 @@ test("a server that answers the pairing itself is caught", () => {
   const shown = newPairingCode();
   // The server knows the rendezvous id but not the secret, so it guesses a key.
   const forged = pairingApproval(
-    { v: 1, rendezvous: shown.rendezvous, account: "acct", length: 1, head: "AAAA", approver: "x" },
+    {
+      v: 1,
+      rendezvous: shown.rendezvous,
+      account: "acct",
+      length: 1,
+      head: "A".repeat(43),
+      approver: "x",
+    },
     { rendezvous: shown.rendezvous, secret: newPairingCode().secret },
   );
   expect(code(() => openPairingApproval(forged, shown))).toBe("bad-mac");

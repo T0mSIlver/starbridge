@@ -8,7 +8,8 @@
 # `curl -fsSL https://my.host/install.sh | sh` sets the machine up with my.host.
 #
 # It accepts the binary only if its hash is in SHA256SUMS and SHA256SUMS carries the release
-# key's minisign signature, for STARBRIDGE_VERSION when that is set. It checks the signature with
+# key's minisign signature for the version it installs: STARBRIDGE_VERSION, else the latest
+# release's tag, so an older signed release served in its place is refused. It checks the signature with
 # minisign when installed, else OpenSSL 3, else Python 3 (RHEL 8 keeps one for dnf).
 #
 # STARBRIDGE_VERSION=1.2.3      a version other than the latest release
@@ -52,19 +53,39 @@ if [ "$os" = linux ] && ls /lib/ld-musl-* >/dev/null 2>&1; then
 fi
 asset=starbridge-$os-$arch
 
-if [ -n "${STARBRIDGE_VERSION:-}" ]; then
-  base=$RELEASES/download/v${STARBRIDGE_VERSION#v}
-else
-  base=$RELEASES/latest/download
-fi
+# HTTPS only, but for a mirror on this machine, such as a test's.
+proto='=https'
+case $RELEASES in
+  https://*) ;;
+  http://127.0.0.1[:/]* | http://localhost[:/]*) proto='=https,http' ;;
+  *) fail "STARBRIDGE_RELEASES_URL must be an https URL: $RELEASES" ;;
+esac
 
 if command -v curl >/dev/null 2>&1; then
-  get() { curl -fsL --proto '=https,http' -o "$2" "$1"; }
+  get() { curl -fsL --proto "$proto" --proto-redir "$proto" -o "$2" "$1"; }
+  # Where a URL redirects to, unfollowed.
+  located() { curl -fsS --proto "$proto" -o /dev/null -w '%{redirect_url}' "$1"; }
 elif command -v wget >/dev/null 2>&1; then
   get() { wget -q -O "$2" "$1"; }
+  located() { wget -S --max-redirect=0 -O /dev/null "$1" 2>&1 | tr -d '\r' | sed -n 's/^ *[Ll]ocation: *\([^ ]*\).*/\1/p' | tail -n 1; }
 else
   fail "needs curl or wget"
 fi
+
+if [ -n "${STARBRIDGE_VERSION:-}" ]; then
+  version=${STARBRIDGE_VERSION#v}
+else
+  # The latest release's tag, which the signature must then name.
+  latest=$(located "$RELEASES/latest") || latest=
+  case $latest in
+    */tag/v*) version=${latest##*/tag/v} ;;
+    *) fail "could not find the latest release at $RELEASES/latest" ;;
+  esac
+fi
+case $version in
+  "" | *[!0-9A-Za-z.-]*) fail "not a release version: $version" ;;
+esac
+base=$RELEASES/download/v$version
 
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
@@ -234,8 +255,8 @@ else
 fi
 # The trusted comment names the version the signature is for, whatever tag served it.
 signed=${comment#trusted comment: }
-if [ -n "${STARBRIDGE_VERSION:-}" ] && [ "$signed" != "starbridge v${STARBRIDGE_VERSION#v}" ]; then
-  fail "SHA256SUMS is signed for \"$signed\", not starbridge v${STARBRIDGE_VERSION#v}"
+if [ "$signed" != "starbridge v$version" ]; then
+  fail "SHA256SUMS is signed for \"$signed\", not starbridge v$version"
 fi
 
 want=$(awk -v f="$asset" '$2 == f || $2 == "*" f { print $1 }' "$tmp/SHA256SUMS")

@@ -30,6 +30,8 @@ in the planning repo's `research/ios-app.md`).
   background; a prompt's Deny answers there, its Allow opens the prompt. The simulator skips
   service extensions for `simctl push`, so `NotificationServiceTests` drives the extension's work
   (`Notify.rewrite`) against the shared keychain and app group instead.
+- **Devices** (Settings → Devices and machines) follows Android: each device's notifications and
+  app, a machine's check code while `starbridge pair` asks, Update available, and Revoke.
 - **Design tokens** are `Starbridge/Theme/Tokens.swift`, written from DESIGN.md by
   `bun web/scripts/tokens.ts`; type is SF Pro, scaled with Dynamic Type.
 

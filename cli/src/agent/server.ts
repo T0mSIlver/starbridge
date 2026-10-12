@@ -271,17 +271,25 @@ export class Agent implements Hub {
       mode: 0o600,
     });
     // Windows ignores the mode: the file would take its folder's ACL, which a config folder
-    // outside the profile may share with other users.
+    // outside the profile may share with other users. Without its own ACL, the token stays
+    // unwritten and the agent does not serve (#1209).
     if (process.platform === "win32") {
       const r = spawnSync(
         "icacls",
         [tmp, "/inheritance:r", "/grant:r", `${userInfo().username}:F`],
         { windowsHide: true, encoding: "utf8" },
       );
-      if (r.status !== 0)
-        this.log(
-          `could not make ${this.socket} readable by this user only: ${r.stdout}${r.stderr}`,
+      if (r.status !== 0) {
+        try {
+          unlinkSync(tmp);
+        } catch {}
+        server.close();
+        const why =
+          `${r.stdout ?? ""}${r.stderr ?? ""}`.trim() || r.error?.message || "icacls failed";
+        throw new UsageError(
+          `could not make ${this.socket} readable by this user only, so the agent does not serve: ${why}`,
         );
+      }
     }
     renameSync(tmp, this.socket);
     const token = this.token;
