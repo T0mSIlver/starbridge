@@ -99,8 +99,8 @@ Starbridge skill tells them when.
 ([Start](../docs/index.md#start)). `--server <url>` pairs with your own server; `--force` pairs
 again after a recovery.
 
-Unless the Android app scanned the QR code, the machine prints a check code: press Enter if the
-Android app shows the same one under Devices, `n` if not. With no terminal, answer with
+Unless the Starbridge app scanned the QR code, the machine prints a check code: press Enter if
+the Starbridge app shows the same one under Devices, `n` if not. With no terminal, answer with
 `starbridge pair --confirm` or `--reject`. A different code means a server paired the machine
 into an account it controls ([PROTOCOL.md](../PROTOCOL.md#pairing)), and the machine saves
 nothing.
