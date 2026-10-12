@@ -80,8 +80,14 @@ export class Updates {
     const { releaseCandidates: rcs } = this.settings();
     const s = this.status;
     // Turning release candidates off drops an rc found or downloading. One downloaded stays:
-    // Squirrel has taken it, and installs it on quit.
-    if ((s.state === "available" || s.state === "downloading") && rc(s.version) && !rcs) {
+    // Squirrel has taken it, and installs it on quit. A check under way drops it itself, once it
+    // sees the new settings.
+    if (
+      !this.looking &&
+      (s.state === "available" || s.state === "downloading") &&
+      rc(s.version) &&
+      !rcs
+    ) {
       this.cancel?.();
       this.cancel = null;
       this.set({ state: "idle" });
@@ -115,11 +121,9 @@ export class Updates {
     } else if (!version) {
       this.set({ state: "idle" });
       return this.settle();
-    } else if (held?.version === version) {
-      return this.settle();
     }
     // The engine now downloads what this check found, so the offer follows it.
-    this.set({ state: "available", version });
+    if (held?.version !== version) this.set({ state: "available", version });
     if (now.autoDownload) this.download();
     else this.settle();
   }

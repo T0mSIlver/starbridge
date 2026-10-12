@@ -166,6 +166,32 @@ test("an offered release gives way to a newer one, and a click during the check 
   expect(runs).toHaveLength(1);
 });
 
+test("turning automatic downloads on downloads the release offered", async () => {
+  const settings = { releaseCandidates: false, autoDownload: false };
+  const { updates, runs } = setup("0.2.0", settings);
+  await updates.check();
+  settings.autoDownload = true;
+  await updates.check();
+  expect(updates.status).toEqual({ state: "downloading", version: "0.2.0", percent: 0 });
+  expect(runs).toHaveLength(1);
+});
+
+test("release candidates turned off and on during a check keep the rc offered", async () => {
+  const settings = { releaseCandidates: true, autoDownload: false };
+  const { updates, engine } = setup("0.2.0-rc.1", settings);
+  await updates.check();
+  let found!: (v: string) => void;
+  engine.find = () => new Promise((r) => (found = r));
+  const checking = updates.check();
+  settings.releaseCandidates = false;
+  await updates.check();
+  settings.releaseCandidates = true;
+  await updates.check();
+  found("0.2.0-rc.1");
+  await checking;
+  expect(updates.status).toEqual({ state: "available", version: "0.2.0-rc.1" });
+});
+
 test("a downloaded update stays when a check finds nothing newer or fails", async () => {
   const { updates, engine, runs } = setup("0.1.6-rc.2", {
     releaseCandidates: true,
