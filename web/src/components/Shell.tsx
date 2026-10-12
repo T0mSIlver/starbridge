@@ -125,7 +125,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
           {machines > 0 && (
             <p className={`t-small ${s.machines}`}>
               <Icon name="server" size={18} />
-              {machines} {machines === 1 ? "machine" : "machines"} paired
+              {machines} {machines === 1 ? "machine" : "machines"}
             </p>
           )}
           <UpdateButton />
