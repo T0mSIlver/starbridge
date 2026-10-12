@@ -7,6 +7,11 @@ final class SignInTests: XCTestCase {
         XCTAssertEqual(SignIn.challenge("dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"), "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM")
     }
 
+    func testNonceHashIsSHA256InLowercaseHex() {
+        // The server compares Apple's nonce claim with this form (PROTOCOL.md, "Auth").
+        XCTAssertEqual(SignIn.nonceHash("abc"), "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad")
+    }
+
     func testVerifierIs43Base64urlCharacters() {
         let v = SignIn.newVerifier()
         XCTAssertEqual(v.count, 43)

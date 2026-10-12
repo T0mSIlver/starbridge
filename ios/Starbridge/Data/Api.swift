@@ -165,6 +165,13 @@ struct Api {
         try string(await call("POST", "/auth/app/session", ["code": .string(code), "verifier": .string(verifier)]).1, "session")
     }
 
+    /** Sign in with Apple: what AuthenticationServices handed the app, and the nonce it hashed into the request. */
+    func appleSession(identityToken: String, code: String, nonce: String) async throws -> String {
+        try string(await call("POST", "/auth/apple/session", [
+            "identityToken": .string(identityToken), "code": .string(code), "nonce": .string(nonce),
+        ]).1, "session")
+    }
+
     func ownerSignIn(token: String) async throws -> String {
         try string(await call("POST", "/auth/owner", ["token": .string(token)]).1, "session")
     }

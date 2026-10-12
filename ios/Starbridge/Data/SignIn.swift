@@ -55,4 +55,14 @@ enum SignIn {
         if query["error"] != nil { return .denied(state: state) }
         return nil
     }
+
+    /**
+     * A nonce for Sign in with Apple. The request carries its SHA-256 in hex, which Apple puts in
+     * the identity token; the server checks the token against the nonce itself (PROTOCOL.md, "Auth").
+     */
+    static func newNonce() -> String { toB64(Sodium.randomBytes(32)) }
+
+    static func nonceHash(_ nonce: String) -> String {
+        SHA256.hash(data: Data(nonce.utf8)).map { String(format: "%02x", $0) }.joined()
+    }
 }

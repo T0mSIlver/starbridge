@@ -37,6 +37,10 @@ targets:
         com.apple.developer.associated-domains:
           - applinks:starbridge.run
           - webcredentials:starbridge.run
+        # Sign in with Apple (#1411), which App Store guideline 4.8 asks of an app that signs in
+        # with GitHub.
+        com.apple.developer.applesignin:
+          - Default
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: dev.starbridge.ios
