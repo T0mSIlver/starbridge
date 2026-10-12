@@ -1,7 +1,7 @@
 # Desktop
 
 The macOS app (#886) is Electron around the configured server's web page (starbridge.run unless
-the owner sets another from the menu bar icon). The page signs in, pairs and keeps its keys as in
+the owner sets another in Settings). The page signs in, pairs and keeps its keys as in
 a browser; the app adds a menu bar light and notifications, so a web release needs no app release.
 
 - **The bridge.** The app's preload gives `window.starbridgeDesktop` to the server's origin only,
@@ -16,8 +16,9 @@ a browser; the app adds a menu bar light and notifications, so a web release nee
   on `starbridge://auth`, and the app trades it with its verifier for the session, which becomes
   the page's session cookie. Owner-token sign-in stays in the page.
 - **Signed out**, the app opens on sign-in, never on the landing page: the app sets an
-  `sb_desktop` cookie, which the server's landing and the page both read. Sign-in offers GitHub
-  only, since the server is set from the menu bar icon; a server without GitHub shows its
+  `sb_desktop` cookie, which the server's landing and the page both read. Sign-in offers GitHub,
+  and "Use your own server" opens the app's server window rather than the page's owner-token
+  form, since the app restarts on a new server (#1449); a server without GitHub shows its
   owner-token form. Setup says "this app" and suggests the name "Starbridge on Mac" (owner's pick
   from mockups, #905).
 - **Notifications.** One per item in Needs you, as on the phone: a question's options are its
@@ -50,10 +51,16 @@ a browser; the app adds a menu bar light and notifications, so a web release nee
   notification, which then shows or flips the switch back. Devices reports such a Mac as blocked.
 - **The menu bar.** The mark in one colour, as macOS draws menu bar icons; while anything needs
   the owner, its dot turns amber, the one amber light, with no count: the window says what
-  (owner's pick from mockups, 2026-10-09). A click shows the window; a right-click opens the menu:
-  Open, Open at Login (off by default), Server, Quit. Closing the window keeps the app in the menu
-  bar and drops its Dock icon, which shows again with the window. ⌃⌥S shows the window from
-  anywhere.
+  (owner's pick from mockups, 2026-10-09). A click shows the window, nothing else; a right-click
+  opens Open Starbridge, Settings… and Quit, so the app quits with its window closed (#1449). Open
+  at Login moved to Settings → App, desktop only, with Keep Starbridge in (from Look), as Open
+  Starbridge at login (off by default). The server has no Settings row: it is chosen at sign-in, as
+  on the web, so the default is hard to leave by mistake (owner's call). Settings… opens the
+  server window instead while the page can't load, so a wrong server can still be fixed. Closing the
+  window keeps the app in the menu bar and drops its Dock icon, which shows again with the window.
+  ⌃⌥S shows the window from anywhere.
+- **The menu bar icon** centres the arch top to bottom in its 18 pt image, as the system icons
+  are (#1449): standing on the image's bottom edge, as the other crops do, it sat 1.5 pt below them.
 - **Updates** (#1398) live in the window, not the menus, as in T3 Code: a menu item went unseen,
   so a downloaded update waited for a quit. At the foot of the rail, a button says "Update
   available" (a click downloads), "Downloading 42%", "Restart to update" (a click quits, after
@@ -70,7 +77,7 @@ a browser; the app adds a menu bar light and notifications, so a web release nee
 - **Menu bar or Dock** (#936). Settings' "Keep Starbridge in" picks the menu bar (the default
   above), the Dock (always, with no menu bar icon), or both, applied at once. One choice of three
   rather than two switches, so no combination leaves the app nowhere and nothing has to be
-  greyed out. The Dock icon's menu holds the menu bar's items, for when there is no menu bar icon.
+  greyed out. The Dock icon's menu holds Settings…, for when there is no menu bar icon.
 - **The window** has no title bar on macOS (owner's pick from mockups, #938): the page's rail
   already names the app and the page, and counts what needs the owner. The rail runs to the
   window's top in its own colour, the window's buttons sit in its first row before the app's name,

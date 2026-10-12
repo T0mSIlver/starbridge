@@ -71,6 +71,14 @@ export type DesktopBridge = {
   updateAction?(a: "check" | "download" | "install"): void;
   /** Called when the status or the settings change. */
   onUpdate?(f: (() => void) | null): void;
+  /** Whether macOS opens the app at login; absent before #1449, whose app kept it in its menu. */
+  login?(): boolean;
+  setLogin?(login: boolean): void;
+  onLogin?(f: (() => void) | null): void;
+  /** Opens the app's window for setting the server; the app restarts on a new one. */
+  openServer?(): void;
+  /** Called on Settings… in the menu bar's menu. */
+  onSettings?(f: (() => void) | null): void;
   onAnswer(f: (a: DesktopAnswer) => Promise<void>): void;
   onOpen(f: (id: string) => void): void;
 };

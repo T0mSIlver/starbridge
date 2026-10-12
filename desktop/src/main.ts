@@ -81,6 +81,8 @@ let signIn: SignIn | null = null;
 let updates: Updates | null = null;
 /** GitHub's page for the releases; the end-to-end test sets a stand-in (test/smoke.ts). */
 const RELEASES = process.env.STARBRIDGE_RELEASES ?? "https://github.com/T0mSIlver/starbridge";
+/** Whether the window's last page failed to load, which leaves its URL on the server. */
+let failed = false;
 /** Links that arrived before the window existed. */
 const early: string[] = [];
 /** Answers handed to the page, until it says they went out. */
@@ -212,6 +214,18 @@ async function ready(): Promise<void> {
   ipcMain.on("screen?", (e) => {
     e.returnValue = e.sender === win?.webContents ? screen?.read() : null;
   });
+  // Open at login and the server window, which the menu bar's menu held before #1449.
+  ipcMain.on("login?", (e) => {
+    e.returnValue = e.sender === win?.webContents ? app.getLoginItemSettings().openAtLogin : null;
+  });
+  ipcMain.on("login", (e, x) => {
+    if (!fromPage(e) || typeof x !== "boolean") return;
+    app.setLoginItemSettings({ openAtLogin: x });
+    win?.webContents.send("login", app.getLoginItemSettings().openAtLogin);
+  });
+  ipcMain.on("open-server", (e) => {
+    if (fromPage(e)) showServer();
+  });
   ipcMain.on("server", (e, x) => {
     if (e.sender !== serverWin?.webContents || typeof x !== "string") return;
     const next = serverOrigin(x);
@@ -326,7 +340,13 @@ function createWindow(): void {
   });
   win.webContents.on("did-fail-load", (_e, code, _desc, url, mainFrame) => {
     // -3 is a navigation the page or the app cancelled.
-    if (mainFrame && code !== -3) retry = setTimeout(() => win?.loadURL(url), 5_000);
+    if (!mainFrame || code === -3) return;
+    failed = true;
+    retry = setTimeout(() => win?.loadURL(url), 5_000);
+  });
+  // Only a page that came back clears it: the error page keeps the server's URL.
+  win.webContents.on("did-navigate", () => {
+    failed = false;
   });
   win.once("show", () => mark("shown"));
   win.once("ready-to-show", () => mark("painted"));
@@ -388,10 +408,6 @@ function applyPlace(): void {
   }
   if (settings.place !== "menu" || win?.isVisible()) app.dock?.show();
   else app.dock?.hide();
-  paintDockMenu();
-}
-
-function paintDockMenu(): void {
   app.dock?.setMenu(menu(false));
 }
 
@@ -420,30 +436,32 @@ function paintTray(): void {
   );
 }
 
-/** The menu bar icon's menu; the Dock's leaves out Open and Quit, which macOS adds there. */
+/**
+ * The menu bar icon's menu: what the window can't do while it is closed (#1449); the rest is in
+ * the page's Settings. The Dock's leaves out Open and Quit, which macOS adds there.
+ */
 function menu(forTray = true): Menu {
-  const login = app.getLoginItemSettings().openAtLogin;
-  return Menu.buildFromTemplate([
-    ...(forTray
+  const prefs = { label: "Settings…", click: showSettings };
+  return Menu.buildFromTemplate(
+    forTray
       ? [
           { label: "Open Starbridge", accelerator: settings.shortcut, click: showWindow },
-          { type: "separator" as const },
+          prefs,
+          { type: "separator" },
+          { label: "Quit Starbridge", role: "quit" },
         ]
-      : []),
-    {
-      label: "Open at Login",
-      type: "checkbox",
-      checked: login,
-      click: () => {
-        app.setLoginItemSettings({ openAtLogin: !login });
-        paintDockMenu();
-      },
-    },
-    { label: `Server: ${new URL(origin).host}…`, click: showServer },
-    ...(forTray
-      ? [{ type: "separator" as const }, { label: "Quit Starbridge", role: "quit" as const }]
-      : []),
-  ]);
+      : [prefs],
+  );
+}
+
+/** The page's Settings; while the page can't load, the server window, where a wrong one is fixed. */
+function showSettings(): void {
+  if (!win || failed || !fromServer(win.webContents.getURL())) {
+    showServer();
+    return;
+  }
+  win.webContents.send("settings");
+  showWindow();
 }
 
 function tellUpdate(s: UpdateStatus): void {

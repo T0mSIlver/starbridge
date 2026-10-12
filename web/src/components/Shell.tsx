@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { desktop } from "@/lib/desktop";
 import { drafts } from "@/lib/drafts";
 import { needsYou } from "@/lib/feed";
 import { setFind, useFind } from "@/lib/find";
@@ -41,6 +42,11 @@ export function Shell({ children }: { children: React.ReactNode }) {
       const url = new URL(targetURL);
       router.push(url.pathname + url.search);
     });
+  }, [router]);
+  // Settings… in the desktop app's menu bar menu (#1449).
+  useEffect(() => {
+    desktop?.onSettings?.(() => router.push("/settings"));
+    return () => desktop?.onSettings?.(null);
   }, [router]);
   useFreshBuild(busy);
   const app = useApp();

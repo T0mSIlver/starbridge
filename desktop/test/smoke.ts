@@ -146,8 +146,12 @@ try {
     Tray.prototype.setToolTip = (t: string) => {
       tips.push(t);
     };
-    Tray.prototype.setImage = (i: Electron.NativeImage) => {
+    Tray.prototype.setImage = function (this: Electron.Tray, i: Electron.NativeImage) {
+      g.tray = this;
       template.push(i.isTemplateImage());
+    };
+    Tray.prototype.popUpContextMenu = (m?: Electron.Menu) => {
+      g.menu = m;
     };
     Tray.prototype.destroy = () => {
       (g.destroyed as number)++;
@@ -294,6 +298,18 @@ try {
     false,
   );
 
+  // The menu bar icon's menu holds what the closed window can't do (#1449); Settings… opens the
+  // page's Settings, where the page reads Open at login over the bridge.
+  const labels = await app.evaluate(() => {
+    const g = globalThis as { tray?: Electron.Tray; menu?: Electron.Menu };
+    g.tray?.emit("right-click");
+    return g.menu?.items.map((i) => i.label);
+  });
+  assert.deepEqual(labels, ["Open Starbridge", "Settings…", "", "Quit Starbridge"]);
+  await app.evaluate(() => (globalThis as { menu?: Electron.Menu }).menu?.items[1]?.click());
+  await page.waitForURL((u) => u.pathname === "/settings");
+  assert.equal(await page.evaluate("window.starbridgeDesktop.login()"), false);
+
   // Kept in the Dock alone, the menu bar icon goes, and the page reads the choice after a reload.
   type Bridge = { place(): string; setPlace(p: string): void };
   const bridge = () => (window as unknown as { starbridgeDesktop: Bridge }).starbridgeDesktop;
@@ -338,6 +354,52 @@ try {
   // Quitting tells the page the owner left, and waits for it.
   await app.close();
   assert.equal(posted.length, 2, "away on quit");
+
+  // On a server that never answers, the error page keeps the server's URL; Settings… opens the
+  // server window, the one place left to fix it (#1449).
+  const closed = await serve("");
+  const gone = url(closed);
+  closed.close();
+  const offline = await electron.launch({
+    args: [DESKTOP, `--user-data-dir=${mkdtempSync(join(tmpdir(), "sb-desktop-"))}`],
+    env: { ...process.env, STARBRIDGE_SERVER: gone },
+  });
+  try {
+    await offline.evaluate(({ Tray }) => {
+      const g = globalThis as { tray?: Electron.Tray; menu?: Electron.Menu };
+      Tray.prototype.popUpContextMenu = (m?: Electron.Menu) => {
+        g.menu = m;
+      };
+      const setImage = Tray.prototype.setImage;
+      Tray.prototype.setImage = function (this: Electron.Tray, i: Electron.NativeImage) {
+        g.tray = this;
+        setImage.call(this, i);
+      };
+    });
+    await until(
+      () =>
+        offline.evaluate(
+          ({ BrowserWindow }, gone) =>
+            BrowserWindow.getAllWindows().some((w) => w.webContents.getURL().startsWith(gone)),
+          gone,
+        ),
+      "the failed load",
+    );
+    await offline.evaluate(() => {
+      const g = globalThis as { tray?: Electron.Tray; menu?: Electron.Menu };
+      g.tray?.emit("right-click");
+      g.menu?.items[1]?.click();
+    });
+    await until(
+      () =>
+        offline.evaluate(({ BrowserWindow }) =>
+          BrowserWindow.getAllWindows().some((w) => w.getTitle() === "Server"),
+        ),
+      "the server window",
+    );
+  } finally {
+    await offline.close();
+  }
   console.log("desktop smoke test passed");
 } finally {
   await app.close();
