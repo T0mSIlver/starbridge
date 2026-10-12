@@ -3,6 +3,7 @@ import XCTest
 @testable import Starbridge
 
 /** The app's rules against packages/protocol/vectors/rules.json, which the web's and Android's tests read too (#1429). */
+@MainActor
 final class ClientRulesTests: XCTestCase {
     private let rules: JSON = {
         let url = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
