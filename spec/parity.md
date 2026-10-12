@@ -3,7 +3,9 @@
 Which client has each feature a user sees. A cell is `yes`, `no` with why, `n/a`, or `not yet`;
 an issue number points at the work. What a feature does is in its area's file; this table says
 only where it exists. A PR that adds or changes a feature in one client updates its row, and
-opens an issue for each client the row says should follow.
+opens an issue for each client the row says should follow. Every PR that changes a client's
+source says so on its `Parity:` line, which CI requires: `spec/parity.md`, the follow-up issues, or
+`none` and why (#1422).
 
 | Feature | Web | Android | Desktop | iOS |
 |---|---|---|---|---|
