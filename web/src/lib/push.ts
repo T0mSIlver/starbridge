@@ -76,6 +76,7 @@ async function send(sub: PushSubscription): Promise<void> {
  */
 export async function disablePush(): Promise<PushState> {
   setPref("pushOff", true);
+  setPref("pushOn", false);
   const reg = supported() ? await navigator.serviceWorker.getRegistration("/") : undefined;
   const sub = await reg?.pushManager.getSubscription();
   if (sub) {
@@ -89,6 +90,7 @@ export async function disablePush(): Promise<PushState> {
       } catch (e) {
         // The server still pushes here: on it stays, and so does what it reports.
         setPref("pushOff", false);
+        setPref("pushOn", true);
         throw e;
       }
     }
@@ -118,6 +120,7 @@ export async function enablePush(): Promise<PushState> {
     throw new Error(subscribeFailure(e));
   }
   await send(sub);
+  setPref("pushOn", true);
   return "on";
 }
 
@@ -192,9 +195,9 @@ export function subscribeFailure(e: unknown, brave = "brave" in navigator): stri
 
 /**
  * Sends the current subscription again, so a server that dropped it pushes here once more, after
- * a new one if the server's key changed. With permission granted and none left, it subscribes
- * anew: Safari drops a subscription after pushes that showed nothing (#1363), and keeps the
- * permission.
+ * a new one if the server's key changed. With none left in a browser the owner turned on, it
+ * subscribes anew: Safari drops a subscription after pushes that showed nothing (#1363), and
+ * keeps the permission.
  */
 export async function resubscribe(): Promise<void> {
   if (!supported() || Notification.permission !== "granted" || getPref("pushOff")) return;
@@ -202,6 +205,7 @@ export async function resubscribe(): Promise<void> {
   if (!reg) return;
   // Read once the worker is active: at an iOS Home Screen app's cold start it reads none before.
   const existing = await subscription(navigator.serviceWorker);
+  if (!existing && !getPref("pushOn")) return;
   const key = await api.vapid().catch(() => undefined);
   if (!existing && !key) return;
   const sub = await current(reg.pushManager, existing, key);
@@ -211,4 +215,5 @@ export async function resubscribe(): Promise<void> {
     return;
   }
   await send(sub);
+  setPref("pushOn", true);
 }

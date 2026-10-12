@@ -28,8 +28,9 @@
   opens the inbox and which the real notification replaces. On Safari, a push that ends with
   nothing to show, such as a question answered before the phone woke, shows a quiet "Nothing new
   needs you" that the page closes once open. Other browsers stay silent there, since they allow
-  some. A page that boots with permission granted and no subscription subscribes again, so an
-  iPhone that lost its subscription before this fix gets it back at its next open. Question
+  some. A browser the owner turned on that boots with permission granted and no subscription
+  subscribes again, without asking; one never turned on still waits for the banner or the
+  switch. An iPhone that lost its subscription before this fix needs the banner's tap once. Question
   pushes already went at `Urgency: high` with a day's TTL and no `Topic`, so those were not the
   cause.
 - **APNs for the iPhone app** (#1076). iOS throttles data-only pushes and drops them for an app
