@@ -159,3 +159,11 @@ test("a pairing error reads as a sentence, without the API's code (#289)", () =>
     "Too many pairings waiting; retry later.",
   );
 });
+
+test("a presence beat's 429 holds no other call (#1361)", async () => {
+  const calls = serve({ retryAfter: "60" });
+  await expect(api.presence(true)).rejects.toMatchObject({ status: 429 });
+  expect(backingOff()).toBe(false);
+  expect(await api.challenge()).toBe("n");
+  expect(calls).toEqual(["PUT", "GET"]);
+});

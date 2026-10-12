@@ -106,7 +106,10 @@
 - **Rate limits** (#645). A 429 with `Retry-After` (seconds or a date) holds every call of the
   page or app until then, first tries included, and the call is retried whatever its method, since
   it was refused before doing anything. A wait past the 20 s retry window reaches the caller as
-  429 `rate-limited`. A 429 without `Retry-After` is a cap and reaches the caller at once.
+  429 `rate-limited`. A 429 without `Retry-After` is a cap and reaches the caller at once. A
+  presence beat's 429 holds nothing else: its limit is per device and route, and the next beat
+  retries, so a few reloads in a minute no longer refuse a settings write for a minute (#1361;
+  web so far, Android and iOS in #1372).
 - **Settings** (#914) in the same sections on both clients: Notifications (what decides whether
   something notifies here: Android's channels or this device's switch (#943), the hold, the web's
   sound, Android's Allow from notifications), Quotas (see "Quota alerts per window"), the Inbox's,
