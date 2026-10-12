@@ -1,7 +1,7 @@
 # Build from the repository root: docker build -f web/Dockerfile .
 FROM oven/bun:1.4.2@sha256:9114c058aeae42162ee16dd5084b95fe9473970bb6bcb5b232ab1630f0546895 AS bun
 
-FROM node:25-slim@sha256:81db02c4b671288a03915da9534dbd54f96d0e7c24d80ccc54f5b36b2e684370 AS build
+FROM node:26-slim@sha256:193fe51b64e77981119c98c2002c9e32a70e2f006fb4d25068ce0558998917f0 AS build
 COPY --from=bun /usr/local/bin/bun /usr/local/bin/bun
 WORKDIR /src
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
@@ -25,7 +25,7 @@ ARG ANALYTICS=
 ENV NEXT_PUBLIC_ANALYTICS=$ANALYTICS
 RUN cd web && bun run build
 
-FROM node:25-slim@sha256:81db02c4b671288a03915da9534dbd54f96d0e7c24d80ccc54f5b36b2e684370
+FROM node:26-slim@sha256:193fe51b64e77981119c98c2002c9e32a70e2f006fb4d25068ce0558998917f0
 WORKDIR /app
 COPY --from=build /src/web/.next/standalone ./
 COPY --from=build /src/web/.next/static web/.next/static

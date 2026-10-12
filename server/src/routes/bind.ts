@@ -62,6 +62,11 @@ bindRoutes.post("/auth/bind", requireCaller("device"), async (c) => {
     if (!verifyBind({ account: caller.account, member, nonce, sig }, m.sign_pk))
       fail(401, "bad-signature", "the signature does not check against the device's key");
     db.query("UPDATE sessions SET member_id = ? WHERE token_hash = ?").run(member, caller.session);
+    // The device holds a credential now: a pairing or join approved later mints it none.
+    db.query("UPDATE members SET claimed = 1 WHERE account_id = ? AND id = ?").run(
+      caller.account,
+      member,
+    );
   })();
   return c.json({ member });
 });

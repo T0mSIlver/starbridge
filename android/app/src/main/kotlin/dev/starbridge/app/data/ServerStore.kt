@@ -396,7 +396,7 @@ class ServerStore(
         reportedNotify = null
         notifyStates.value = emptyMap()
         deviceClients.value = emptyMap()
-        machinesBehind.value = emptySet()
+        machineReleases.value = emptyMap()
         // The next account's hold shows once its own read succeeds, as on the web (#1192).
         pushHold.value = null
         wipes++
@@ -1530,7 +1530,8 @@ class ServerStore(
     }
 
     /** For the notification's buttons: holds the lock like any other change. */
-    suspend fun sendFromNotification(id: String, choice: String?, text: String?) = lock.withLock { send(id, choice, text) }
+    /** A reply typed into a notification is cut as the in-app field cuts it (#1205). */
+    suspend fun sendFromNotification(id: String, choice: String?, text: String?) = lock.withLock { send(id, choice, text?.takeCodePoints(4000)) }
 
     /** The answer waiting to be sent for decision [id], if any. */
     fun queued(id: String): String? = saved.outbox.find { it.decisionId == id }?.answer
@@ -1795,6 +1796,8 @@ class ServerStore(
             // no one to compare check codes (#795).
             val check = pendingCheckKey?.let { pairings.checkProof(saved.entries, body.id, it) }
             api().approve(code.rendezvous, pairings.approval(PairingApprovalBody(1, code.rendezvous, saved.account!!, after.length, after.head, me.id, check), code))
+            // That machine asks nothing, so its check code answers no question here (#1329).
+            if (check != null) persist(saved.copy(scannedMachines = (saved.scannedMachines + body.id).distinct()))
             pending = null
             pendingCheckKey = null
             approval.value = Approval.Done(body.name)
@@ -1908,7 +1911,7 @@ class ServerStore(
 
     override val notifyStates = MutableStateFlow<Map<String, String>>(emptyMap())
     override val deviceClients = MutableStateFlow<Map<String, String>>(emptyMap())
-    override val machinesBehind = MutableStateFlow<Set<String>>(emptySet())
+    override val machineReleases = MutableStateFlow<Map<String, MachineRelease>>(emptyMap())
     /** The state the server holds for this phone, once it took one. */
     private var reportedNotify: Boolean? = null
 
@@ -1920,7 +1923,7 @@ class ServerStore(
                 deviceClients.value = clients
             }
             // A server without the route: no machine shows an update.
-            runCatching { api().machinesBehind() }.onSuccess { machinesBehind.value = it }
+            runCatching { api().machineReleases() }.onSuccess { machineReleases.value = it }
         }
     }
 
@@ -2319,7 +2322,7 @@ class ServerStore(
             Member(
                 m.id, m.name, if (machine) Kind.Machine else Kind.Device, instant(added[m.id]) ?: Instant.EPOCH,
                 current = m.id == saved.me?.id,
-                check = if (machine) runCatching { pairings.checkCode(saved.entries, m.id) }.getOrNull() else null,
+                check = if (machine && m.id !in saved.scannedMachines) runCatching { pairings.checkCode(saved.entries, m.id) }.getOrNull() else null,
             )
         }
     }

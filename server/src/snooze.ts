@@ -55,7 +55,7 @@ export function wakeSnoozes(db: Database, push: Push, inlineLimit: number, now =
     push.notify(
       s.account_id,
       devices,
-      (device) => pushPayload(item, device, inlineLimit),
+      (device) => pushPayload(item, device, inlineLimit, { due: true }),
       undefined,
       s.asker ?? undefined,
     );

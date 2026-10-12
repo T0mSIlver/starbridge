@@ -55,11 +55,14 @@ if (import.meta.main) {
   const web = `http://127.0.0.1:${process.env.WEB_PORT ?? port + 1}`;
   process.on("SIGTERM", () => process.exit(0));
   process.on("SIGINT", () => process.exit(0));
-  // Starts over only in an earlier stack's directory (it holds the database), never in another.
-  if (existsSync(dir) && readdirSync(dir).length > 0 && !existsSync(join(dir, "starbridge.db")))
+  // Starts over only in a directory an earlier stack marked as its own, never in another: a
+  // self-hosted server's database has the same name as the stack's (#1219).
+  const marker = join(dir, ".demo-video-stack");
+  if (existsSync(dir) && readdirSync(dir).length > 0 && !existsSync(marker))
     throw new Error(`${dir} is not empty and holds no earlier stack`);
   rmSync(dir, { recursive: true, force: true });
   mkdirSync(dir, { recursive: true });
+  writeFileSync(marker, "");
 
   const sbd = Bun.spawn(["bun", join(ROOT, "server/src/main.ts")], {
     env: {

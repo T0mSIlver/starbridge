@@ -45,6 +45,15 @@ test("refuses a server without DEMO=1", async () => {
   );
 });
 
+test("refuses an account that already has keys", async () => {
+  const s = await serve(true);
+  cleanup.push(s.stop);
+  await new DemoDevice(s.url, TOKEN, () => {}).createAccount();
+  await expect(new DemoDevice(s.url, TOKEN, () => {}).createAccount()).rejects.toThrow(
+    "start on an empty database",
+  );
+});
+
 /** A phone that signs in with the owner token and joins by digits, as a reviewer's does. */
 async function joinByDigits(url: string, phoneId = "pixel") {
   const call = async (method: string, path: string, session: string, body?: unknown) => {

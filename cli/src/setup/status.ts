@@ -1,12 +1,15 @@
 /** `starbridge status`: setup's checks, at any time. */
+import { join } from "node:path";
 import type { Status } from "../agent/api";
 import { AgentClient } from "../agent/client";
 import { REMOVED } from "../api";
-import type { LatestRelease } from "../config";
+import { autoOn, RETRY_MS } from "../autoupdate";
+import type { LatestRelease, UpdateRecord } from "../config";
 import type { Ctx } from "../context";
 import { deliverable } from "../decisions";
 import { newerRelease, updateCheckOn, updateCommand } from "../latest";
-import { installKind } from "../release";
+import { type InstallKind, installKind } from "../release";
+import { MANAGED } from "../update";
 import { VERSION } from "../version";
 import { AGENT_IDS, AGENTS, found as agentFound, installed, removedAgents } from "./agents";
 import { codexPlugin, codexPluginDir } from "./codex-plugin";
@@ -44,12 +47,46 @@ export function latestLine(ctx: Ctx): string {
     : `Latest: ${latest.version}, checked ${latest.checkedAt}`;
 }
 
+/**
+ * Automatic updates (#1266): whether they are on, the last update and the last failure, from
+ * `update.json`; what holds the next one comes from the agent.
+ */
+export function updateLines(ctx: Ctx, install: InstallKind): string[] {
+  const lines = [
+    install.kind !== "binary"
+      ? `Updates: through ${install.kind} (${MANAGED[install.kind].update})`
+      : autoOn(ctx, install)
+        ? "Updates: automatic (`starbridge config updates off`)"
+        : ctx.store.agentConfig().updates?.auto === false
+          ? "Updates: off (`starbridge config updates on`)"
+          : "Updates: off while the update check is",
+  ];
+  let r: UpdateRecord;
+  try {
+    r = ctx.store.updates();
+  } catch (e) {
+    return [...lines, `  ${(e as Error).message}`];
+  }
+  if (r.updated) lines.push(`  Last update: ${r.updated.from} to ${r.updated.to}, ${r.updated.at}`);
+  if (r.failed) {
+    const retry =
+      r.tried && autoOn(ctx, install)
+        ? `; tries again after ${new Date(Date.parse(r.tried.at) + RETRY_MS).toISOString()}`
+        : "";
+    lines.push(
+      `  Last failure: ${r.failed.at}${r.failed.version ? ` (${r.failed.version})` : ""}: ${r.failed.why}${retry}; output in ${join(ctx.store.dir, "update.log")}`,
+    );
+  }
+  return lines;
+}
+
 export async function status(sys: Sys): Promise<number> {
   const { ctx } = sys;
   const out = ctx.out;
   out(`starbridge ${VERSION} (${sys.self.join(" ")})`);
   for (const line of await otherCopies(sys)) out(line);
   out(latestLine(ctx));
+  for (const line of updateLines(ctx, installKind())) out(line);
 
   const machine = ctx.store.machine();
   out(
@@ -89,6 +126,7 @@ export async function status(sys: Sys): Promise<number> {
         ? `Quota: ${q.providers.join(", ")} every ${q.intervalSeconds / 60} min${q.lastPostAt ? `, last upload ${q.lastPostAt}` : ""}${q.lastError ? `, last error: ${q.lastError}` : ""}`
         : "Quota: no providers",
     );
+    if (agent.update) out(`Update: ${agent.update}`);
     out(`Sessions: ${agent.sessions.length}`);
     for (const x of agent.sessions)
       out(

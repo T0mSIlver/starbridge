@@ -5,6 +5,7 @@ import { type Ctx, parseDuration } from "../context";
 import { refreshFiles } from "../setup/harnesses";
 import { Antigravity } from "./antigravity";
 import { socketPath } from "./api";
+import { AutoUpdate } from "./autoupdate";
 import { Decisions } from "./decisions";
 import { Permissions } from "./permissions";
 import { Presence } from "./presence";
@@ -34,14 +35,16 @@ export function makeAgent(ctx: Ctx, opts: AgentOpts = {}): Agent {
   const agent = new Agent(ctx, socket, (hub) => {
     const q = new Quota(hub, quota);
     const presence = new Presence(hub);
+    const runs = new Runs(hub);
     return [
       new Decisions(hub, (why) => q.now(why)),
       q,
       new Permissions(hub, () => presence.present()),
-      new Runs(hub),
+      runs,
       presence,
       new Antigravity(hub),
       new Release(hub),
+      new AutoUpdate(hub, () => runs.inFlight()),
     ];
   });
   return agent;

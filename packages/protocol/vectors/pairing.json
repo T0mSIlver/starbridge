@@ -191,6 +191,26 @@
       },
       "code": "008J-4CT4-ANK7-F24S-NAXW-SQFE",
       "expect": "bad-mac"
+    },
+    {
+      "name": "request with a short signing key",
+      "kind": "request",
+      "message": {
+        "body": "{\"v\":1,\"rendezvous\":\"008J4CT4\",\"role\":\"machine\",\"id\":\"devbox\",\"name\":\"dev box\",\"boxPk\":\"deJw3ylSxXuoNnuoYYwXj5_lDbJ5nTBOdOkY2YVoYUY\",\"signPk\":\"EqQVksi3wX1AWeeym2Ho_5bHQV8vgDNI8vAX4Fueod\",\"at\":\"2026-10-04T09:09:00Z\"}",
+        "mac": "HDAIdw_nw_ATw3ZS8teTeGetWtpVZdwkIdMCRmLhkT0"
+      },
+      "code": "008J-4CT4-ANK7-F24S-NAXW-SQFE",
+      "expect": "bad-schema"
+    },
+    {
+      "name": "request with a long MAC",
+      "kind": "request",
+      "message": {
+        "body": "{\"v\":1,\"rendezvous\":\"008J4CT4\",\"role\":\"machine\",\"id\":\"devbox\",\"name\":\"dev box\",\"boxPk\":\"deJw3ylSxXuoNnuoYYwXj5_lDbJ5nTBOdOkY2YVoYUY\",\"signPk\":\"EqQVksi3wX1AWeeym2Ho_5bHQV8vgDNI8vAX4Fueodo\",\"at\":\"2026-10-04T09:09:00Z\"}",
+        "mac": "QsORlHtHD4iDX7SPgAsN3i4dwOgxaT7raxjCdnhwSLIAA"
+      },
+      "code": "008J-4CT4-ANK7-F24S-NAXW-SQFE",
+      "expect": "bad-schema"
     }
   ]
 }

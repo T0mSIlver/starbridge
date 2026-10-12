@@ -31,6 +31,10 @@ internal fun schema(ok: Boolean, what: String) {
 }
 
 internal fun b64(s: String, what: String) = schema(B64_RE.matches(s), what)
+/** 32 bytes as base64url: a public key, a BLAKE2b-256 hash, a MAC (Bytes32 in schemas.ts, #1283). */
+internal fun bytes32(s: String, what: String) = schema(s.length == 43 && B64_RE.matches(s), what)
+/** 64 bytes as base64url: an Ed25519 signature (Bytes64 in schemas.ts). */
+internal fun bytes64(s: String, what: String) = schema(s.length == 86 && B64_RE.matches(s), what)
 internal fun id(s: String, what: String) = schema(ID_RE.matches(s), what)
 internal fun time(s: String, what: String) = schema(epochMillis(s) != null, what)
 // zod counts a string's length in code points, not UTF-16 units (#1082).
@@ -105,8 +109,8 @@ data class Member(val id: String, val role: String, val name: String, val boxPk:
         id(id, "member id")
         schema(role == "device" || role == "machine", "role")
         len(name, 1, 100, "name")
-        b64(boxPk, "boxPk")
-        b64(signPk, "signPk")
+        bytes32(boxPk, "boxPk")
+        bytes32(signPk, "signPk")
     }
 }
 
@@ -131,13 +135,13 @@ data class DirectoryEntry(
         schema(v == 1, "v")
         id(account, "account")
         schema(seq >= 0, "seq")
-        prev?.let { b64(it, "prev") }
+        prev?.let { bytes32(it, "prev") }
         time(at, "at")
         when (op) {
             "add" -> {
                 schema(member != null, "member")
                 member!!.check()
-                recoveryPk?.let { b64(it, "recoveryPk") }
+                recoveryPk?.let { bytes32(it, "recoveryPk") }
             }
             "recover" -> {
                 schema(member != null, "member")
@@ -149,12 +153,12 @@ data class DirectoryEntry(
             }
             "recovery" -> {
                 schema(recoveryPk != null, "recoveryPk")
-                b64(recoveryPk!!, "recoveryPk")
+                bytes32(recoveryPk!!, "recoveryPk")
             }
             "recovery-confirm" -> {
                 schema(proposal != null && proposal >= 0, "proposal")
                 schema(recoveryPk != null, "recoveryPk")
-                b64(recoveryPk!!, "recoveryPk")
+                bytes32(recoveryPk!!, "recoveryPk")
             }
             // An op this client does not know: refused, since skipping a recovery confirmation
             // would keep a replaced key trusted (PROTOCOL.md, "Directory").
@@ -189,8 +193,7 @@ val KINDS = setOf("directory") + ITEM_KINDS
 data class DirectoryHead(val length: Int, val head: String, val by: String? = null) {
     fun check() {
         schema(length in 1..100_000, "dir.length")
-        b64(head, "dir.head")
-        schema(head.length == 43, "dir.head")
+        bytes32(head, "dir.head")
         by?.let { id(it, "dir.by") }
     }
 }
@@ -220,8 +223,8 @@ data class SignedEnvelope(
         schema(v == 1, "v")
         schema(kind in KINDS, "kind")
         id(signer, "signer")
-        b64(sig, "sig")
-        recoverySig?.let { b64(it, "recoverySig") }
+        bytes64(sig, "sig")
+        recoverySig?.let { bytes64(it, "recoverySig") }
     }
 }
 
@@ -340,10 +343,8 @@ data class DecisionImage(
     fun check() {
         schema(type in IMAGE_TYPES, "images.type")
         schema(width in 1..8192 && height in 1..8192, "images.size")
-        schema(key.length == 43, "images.key")
-        b64(key, "images.key")
-        schema(hash.length == 43, "images.hash")
-        b64(hash, "images.hash")
+        bytes32(key, "images.key")
+        bytes32(hash, "images.hash")
         alt?.let { len(it, 0, 300, "images.alt") }
     }
 }
@@ -484,7 +485,7 @@ data class Permission(
         len(summary, 1, 200, "summary")
         description?.let { len(it, 0, 500, "description") }
         len(input, 0, 8000, "input")
-        b64(inputHash, "inputHash")
+        bytes32(inputHash, "inputHash")
         schema(suggestions.size <= 2, "suggestions")
         for (x in suggestions) {
             len(x.label, 1, 100, "suggestion label")
@@ -524,7 +525,7 @@ data class PermissionAnswer(
         time(answeredAt, "answeredAt")
         schema(behavior == "allow" || behavior == "deny", "behavior")
         schema(scope in setOf("once", "session", "project"), "scope")
-        b64(inputHash, "inputHash")
+        bytes32(inputHash, "inputHash")
         message?.let { len(it, 0, 500, "message") }
         if (behavior == "deny") schema(scope == "once", "a deny is for this call only")
         else schema(message == null, "message is for a deny")
@@ -566,6 +567,8 @@ data class Settled(
         choice?.let { len(it, 0, 100, "choice") }
         text?.let { len(it, 0, 4000, "text") }
         behavior?.let { schema(it == "allow" || it == "deny", "behavior") }
+        schema(behavior == null || outcome == "device", "behavior comes only with a device's outcome")
+        schema(reason == null || outcome == "withdrawn", "reason comes only with outcome withdrawn")
         reason?.let {
             len(it, 1, SETTLED_REASON_MAX, "reason")
             schema('\n' !in it && '\r' !in it, "reason")
