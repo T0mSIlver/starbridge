@@ -4,9 +4,10 @@ import type { Status } from "../agent/api";
 import { AgentClient } from "../agent/client";
 import { REMOVED } from "../api";
 import { autoOn, RETRY_MS } from "../autoupdate";
+import { hooklessCopies } from "../claude";
 import type { LatestRelease, UpdateRecord } from "../config";
 import type { Ctx } from "../context";
-import { deliverable } from "../decisions";
+import { deliverable, hooklessLine } from "../decisions";
 import { newerRelease, updateCheckOn, updateCommand } from "../latest";
 import { type InstallKind, installKind } from "../release";
 import { MANAGED } from "../update";
@@ -138,10 +139,18 @@ export async function status(sys: Sys): Promise<number> {
       own &&
       ctx.env.CLAUDE_CODE_SESSION_ATTENDED !== "0" &&
       !agent.sessions.some((x) => x.id === own)
-    )
+    ) {
       out(
         `  Not this session (${own}): no Starbridge mod runs in it, so answers come back only through \`starbridge wait\``,
       );
+      const copies = hooklessCopies(ctx.env, own, sys.argsOf);
+      if (copies.length > 0) {
+        out(`    ${hooklessLine(copies)}`);
+        out(
+          "    A session started in a terminal on this machine runs the mod, and so does a Claude desktop session started once Claude Code on that computer has no Starbridge plugins.",
+        );
+      }
+    }
   }
 
   const svc = await serviceState(sys);
