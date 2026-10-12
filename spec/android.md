@@ -21,6 +21,12 @@
 - **No answer is lost** (#329, #331). An answer is sealed, signed and stored before it is posted;
   WorkManager sends it once a network is up. A retry the server already took gets
   `already-answered`, which the app counts as its own when an earlier attempt may have landed.
+- **No answer waits for a pull** (#1390). An answer refused during a rate-limit hold, or by a 5xx,
+  is retried by WorkManager, which waits out the hold before it posts: posting during it failed at
+  once and only lengthened the backoff, so the answer sat until a pull to refresh. A new failure
+  replaces a run waiting in backoff, and a sync sends the outbox right after the directory, before
+  reads that may fail. The notice blames the connection only when there is none: otherwise "Hold
+  isn't sent yet. Retrying."
 - **Short outages go unnoticed** (#920). A phone unlocks before its network, or its VPN's DNS, is
   back, so the sync on resume used to fail with the lookup's error. A sync started while Android
   counts no network as validated waits for one; a sync the network or server failed (unknown host,

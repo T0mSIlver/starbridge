@@ -115,8 +115,11 @@ private data class Tap(val answer: String, val at: Instant?)
 sealed interface Sent {
     /** The server took this device's answer, now or before: a second tap lands here (#331). */
     data class Answered(val answer: String) : Sent
-    /** Kept on the phone until the server can be reached; [AnswerWorker] sends it (#329). */
-    data class Queued(val answer: String) : Sent
+    /**
+     * Kept on the phone until the server takes it; [AnswerWorker] sends it (#329). [offline] when
+     * the request never got an answer, rather than a 429 or 5xx (#1390).
+     */
+    data class Queued(val answer: String, val offline: Boolean = false) : Sent
     data object Elsewhere : Sent
     data class Failed(val why: String) : Sent
 }
@@ -864,11 +867,12 @@ class ServerStore(
         if (phase.value != Phase.Ready) return
         syncDirectory()
         if (phase.value != Phase.Ready) return
+        // Before the reads: one failing, during a rate-limit hold say, must not keep an answer back (#1390).
+        if (saved.outbox.isNotEmpty()) flushHeld()
         syncDecisions()
         syncPrompts()
         syncQuotas()
         syncRuns()
-        if (saved.outbox.isNotEmpty()) flushHeld()
         // The server answered, so a push route that failed to register gets another try.
         pendingPush?.let { runCatching { subscribeHeld(it) } }
     }
@@ -1362,7 +1366,10 @@ class ServerStore(
         run(showBusy = false) {
             try {
                 when (val sent = send(id, choice, text)) {
-                    is Sent.Queued -> notice.value = "No connection. ${if (choice == null && text == null) "Done" else sent.answer} will be sent when the phone is back online."
+                    is Sent.Queued -> {
+                        val what = if (choice == null && text == null) "Done" else sent.answer
+                        notice.value = if (sent.offline) "No connection. $what will be sent when the phone is back online." else "$what isn't sent yet. Retrying."
+                    }
                     Sent.Elsewhere -> {
                         val d = saved.decisions.find { it.body.id == id }
                         val by = d?.answeredBy
@@ -1468,13 +1475,16 @@ class ServerStore(
         return post(queued)
     }
 
-    /** Posts a queued answer and settles it, or keeps it for [wakeWhenOnline] to send later. */
-    private suspend fun post(q: QueuedAnswer): Sent {
+    /**
+     * Posts a queued answer and settles it, or keeps it for [wakeWhenOnline] to send later. [wake]
+     * is false in [AnswerWorker]'s own run, which retries by its backoff instead.
+     */
+    private suspend fun post(q: QueuedAnswer, wake: Boolean = true): Sent {
         try {
             api().postItem(q.item)
         } catch (e: CancellationException) {
             // Cut off mid-request, by the notification's time limit say: it may have landed.
-            keep(q, landed = true)
+            keep(q, landed = true, wake)
             throw e
         } catch (e: ApiException) {
             return when {
@@ -1486,17 +1496,17 @@ class ServerStore(
                 }
                 // The session ended: report() asks to sign in again, and the answer waits for it.
                 e.status == 401 -> {
-                    keep(q, landed = false)
+                    keep(q, landed = false, wake)
                     throw e
                 }
                 // This release is refused: the answer waits for the updated app to send it.
                 e is TooOld -> {
                     describe(e)
-                    keep(q, landed = false)
+                    keep(q, landed = false, wake)
                     Sent.Queued(q.answer)
                 }
                 e.status >= 500 || e.status == 429 -> {
-                    keep(q, landed = e.status != 502 && e.status != 503 && e.status != 429)
+                    keep(q, landed = e.status != 502 && e.status != 503 && e.status != 429, wake)
                     Sent.Queued(q.answer)
                 }
                 else -> {
@@ -1506,18 +1516,18 @@ class ServerStore(
             }
         } catch (e: IOException) {
             // No route or no name: the request never left. Anything else may have reached it.
-            keep(q, landed = e !is java.net.ConnectException && e !is java.net.UnknownHostException && e !is java.net.NoRouteToHostException)
-            return Sent.Queued(q.answer)
+            keep(q, landed = e !is java.net.ConnectException && e !is java.net.UnknownHostException && e !is java.net.NoRouteToHostException, wake)
+            return Sent.Queued(q.answer, offline = true)
         }
         settle(q, q.answer)
         return Sent.Answered(q.answer)
     }
 
-    private fun keep(q: QueuedAnswer, landed: Boolean) {
+    private fun keep(q: QueuedAnswer, landed: Boolean, wake: Boolean) {
         if (landed && !q.mayHaveLanded) {
             persist(saved.copy(outbox = saved.outbox.map { if (it.decisionId == q.decisionId) it.copy(mayHaveLanded = true) else it }))
         }
-        wakeWhenOnline()
+        if (wake) wakeWhenOnline()
     }
 
     /** Takes the answer out of the outbox and marks its decision answered, by this device when [answer] is set. */
@@ -1539,12 +1549,23 @@ class ServerStore(
 
     /**
      * Sends the queued answers, oldest first, and tells the notifications how each ended. False
-     * while some still wait, so [AnswerWorker] tries again later.
+     * while some still wait, so [AnswerWorker] tries again later. It first waits out a rate-limit
+     * hold, outside the lock: posting during it would fail at once and only lengthen the worker's
+     * backoff (#1390).
      */
-    suspend fun flushAnswers(): Boolean = lock.withLock {
-        if (phase.value != Phase.Ready) return@withLock true
-        try {
-            flushHeld() && saved.outbox.isEmpty()
+    suspend fun flushAnswers(): Boolean {
+        while (true) {
+            val held = limitedUntil - System.currentTimeMillis()
+            if (held <= 0) break
+            delay(held)
+        }
+        return lock.withLock { flushQueued() }
+    }
+
+    private suspend fun flushQueued(): Boolean {
+        if (phase.value != Phase.Ready) return true
+        return try {
+            flushHeld(wake = false) && saved.outbox.isEmpty()
         } catch (e: IOException) {
             // The answers wait in the outbox, and their cards say "not sent yet".
             report(e, sync = true)
@@ -1552,12 +1573,12 @@ class ServerStore(
         }
     }
 
-    private suspend fun flushHeld(): Boolean {
+    private suspend fun flushHeld(wake: Boolean = true): Boolean {
         // Kept, and tried again once the hold ends.
         if (withheld() != null) return false
         for (q in saved.outbox) {
             val decision = decisions.value.find { it.id == q.decisionId }
-            when (val sent = post(q)) {
+            when (val sent = post(q, wake)) {
                 is Sent.Queued -> return false
                 is Sent.Answered -> decision?.let { alerts.answered(it, sent.answer) }
                 Sent.Elsewhere -> alerts.cancel(q.decisionId)
