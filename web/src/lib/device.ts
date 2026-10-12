@@ -1334,7 +1334,14 @@ export async function reverify(ctx: Ctx): Promise<Ctx | undefined> {
 export async function loadInbox(
   ctx: Ctx,
   inbox: Inbox = { items: [], rejected: [] },
-  opts: { keep?: boolean } = {},
+  opts: {
+    keep?: boolean;
+    /**
+     * Given the kept questions the server lists open, once they are opened and before the
+     * answered ones: a load shows what needs the owner first (#1458).
+     */
+    early?: (inbox: Inbox) => void;
+  } = {},
 ): Promise<Inbox> {
   // The kept items, and the decisions the server holds open now: those settle which kept
   // questions it dropped, and whether what is kept still matches the server at all.
@@ -1412,7 +1419,39 @@ export async function loadInbox(
         rejected.push({ id: s.item.id, error: e instanceof Error ? e.message : String(e) });
     }
   };
-  for (const s of kept?.items ?? []) await take(s, false);
+  // Only the machine that asked can say its agent waits on the question.
+  const shown = () =>
+    [...byId.values()].map((i) => {
+      const w = waits[`${i.machine.id}/${i.decision.id}`];
+      const z = snoozes[i.decision.id];
+      const { waitingSince: _, snoozedUntil: __, ...rest } = i;
+      return {
+        ...rest,
+        ...(w?.state === "waiting" ? { waitingSince: w.at } : {}),
+        // Back now ends at its own time, read before this browser's clock, which may run behind.
+        ...(z && Date.parse(z.until) > Date.parse(z.at) ? { snoozedUntil: z.until } : {}),
+      };
+    });
+  // What tells an open question's state first, then the questions, then the answered ones.
+  const first = (s: Stored) =>
+    s.item.kind === "waiting" ||
+    s.item.kind === "snooze" ||
+    (s.item.kind === "decision" && !s.answeredAt && !!open?.has(s.item.id));
+  const keptItems = kept?.items ?? [];
+  if (opts.early && open && open.size > 0) {
+    for (const s of keptItems) if (first(s)) await take(s, false);
+    if (byId.size > 0) {
+      // Never past a hold: while the server withholds entries, no machine's item shows (#362).
+      await hold(ctx);
+      opts.early({
+        items: shown(),
+        rejected: [...rejected],
+        waits: { ...waits },
+        snoozes: { ...snoozes },
+      });
+    }
+    for (const s of keptItems) if (!first(s)) await take(s, false);
+  } else for (const s of keptItems) await take(s, false);
   for (const s of inbox.retry ?? []) await take(s, true);
   let cursor = inbox.cursor ?? kept?.cursor;
   const read: Stored[] = [];
@@ -1458,18 +1497,7 @@ export async function loadInbox(
     if (item && answeredBy && !item.reply && key === `${item.machine.id}/${notice.itemId}`)
       byId.set(notice.itemId, { ...item, answeredBy });
   }
-  // Only the machine that asked can say its agent waits on the question.
-  const items = [...byId.values()].map((i) => {
-    const w = waits[`${i.machine.id}/${i.decision.id}`];
-    const z = snoozes[i.decision.id];
-    const { waitingSince: _, snoozedUntil: __, ...rest } = i;
-    return {
-      ...rest,
-      ...(w?.state === "waiting" ? { waitingSince: w.at } : {}),
-      // Back now ends at its own time, read before this browser's clock, which may run behind.
-      ...(z && Date.parse(z.until) > Date.parse(z.at) ? { snoozedUntil: z.until } : {}),
-    };
-  });
+  const items = shown();
   await noteSnoozes(
     ctx,
     Object.entries(snoozes).map(([decisionId, z]) => ({ decisionId, at: z.at })),

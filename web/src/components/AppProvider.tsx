@@ -295,7 +295,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           let landed = () => false;
           const loaded = await holding(() => {
             landed = inboxRead.current();
-            return d.loadInbox(b.ctx, undefined, { keep: true });
+            return d.loadInbox(b.ctx, undefined, {
+              keep: true,
+              // The open questions show while the answered ones open; the full read replaces them.
+              early: (open) => {
+                if (landed()) setInbox(withImages(open, shownImages.current));
+              },
+            });
           });
           if (loaded && landed()) {
             inboxRef.current = withImages(loaded, shownImages.current);
