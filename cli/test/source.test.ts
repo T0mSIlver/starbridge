@@ -3,6 +3,7 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { claudeSession } from "../src/claude";
+import { askLines } from "../src/decisions";
 import { projectName } from "../src/project";
 
 test("a git worktree's project is its repository, not its generated directory (#970)", () => {
@@ -37,4 +38,33 @@ test("a derived, missing or cut-short session name gives way to the first prompt
   // No transcript: a derived name stays out, an auto one stays as Claude Code cut it.
   expect(title("lost")).toBeUndefined();
   expect(title("auto-lost")).toBe("Run the drift checks with GLM 5.3 and then repor...");
+});
+
+test("ask says why nothing brings the answer when Claude desktop replaced the mod (#1428)", () => {
+  const root = mkdtempSync(join(tmpdir(), "starbridge-synced-"));
+  const dir = join(root, "4917e9633546766b");
+  mkdirSync(join(dir, ".claude-plugin"), { recursive: true });
+  writeFileSync(
+    join(dir, ".claude-plugin", "plugin.json"),
+    JSON.stringify({ name: "starbridge-mod" }),
+  );
+  mkdirSync(join(root, "sessions"));
+  writeFileSync(
+    join(root, "sessions", "4242.json"),
+    JSON.stringify({ pid: 4242, sessionId: "s-1" }),
+  );
+  const env = { CLAUDE_CONFIG_DIR: root };
+  const argsOf = (pid: number) => (pid === 4242 ? ["claude", "--plugin-dir", dir] : []);
+  const claude = { agent: "claude-code" as const, session: "s-1" };
+  expect(askLines(claude, "wait", env, argsOf)).toEqual([
+    `Claude desktop runs this session with its own copy of starbridge-mod (${dir}), synced without hooks from the computer it runs on, in place of this machine's.`,
+  ]);
+  // A mod answered after all, a `claude -p` run, which has none by design, or another session.
+  expect(askLines(claude, "prompt", env, argsOf)).toEqual([]);
+  expect(askLines({ ...claude, headless: true }, "wait", env, argsOf)).toEqual([]);
+  expect(askLines({ ...claude, session: "s-2" }, "wait", env, argsOf)).toEqual([]);
+  // The copy with its hooks is the mod itself.
+  mkdirSync(join(dir, "hooks"));
+  writeFileSync(join(dir, "hooks", "hooks.json"), "{}");
+  expect(askLines(claude, "wait", env, argsOf)).toEqual([]);
 });
