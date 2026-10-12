@@ -577,6 +577,8 @@ export function Gate({ visitor, children }: { visitor: boolean; children: React.
     () => false,
   );
   const [ownServer, setOwnServer] = useState(false);
+  // The landing page's header Sign in opens the sign-in screen, where other ways than GitHub are.
+  const [signingIn, setSigningIn] = useState(false);
   const failed = useSignInFailure(boot.state === "signed-out");
   const router = useRouter();
   const path = usePathname();
@@ -588,6 +590,7 @@ export function Gate({ visitor, children }: { visitor: boolean; children: React.
     path === "/" &&
     !desktop &&
     !ownServer &&
+    !signingIn &&
     !failed &&
     (boot.state === "loading"
       ? visitor && !signInReturn
@@ -608,7 +611,8 @@ export function Gate({ visitor, children }: { visitor: boolean; children: React.
     if (boot.state === "ready" && path !== "/pair" && hasPairCode()) router.replace("/pair");
   }, [boot.state, path, router]);
   if (old) return <Outdated />;
-  if (landing) return <Landing onOwnerToken={() => setOwnServer(true)} />;
+  if (landing)
+    return <Landing onOwnerToken={() => setOwnServer(true)} onSignIn={() => setSigningIn(true)} />;
   switch (boot.state) {
     case "loading":
       // Plain ground until boot knows the screen: sign-in or the app.
