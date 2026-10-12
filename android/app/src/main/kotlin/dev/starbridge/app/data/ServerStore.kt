@@ -100,11 +100,7 @@ interface Alerts {
      * decrypted questions and commands and let the owner answer.
      */
     fun clearAll() {}
-    /** An answer went out: shows it in place of the buttons. */
-    fun answered(decision: Decision, answer: String) {}
-    /** An answer waits for a connection. */
-    fun queued(decision: Decision, answer: String) {}
-    /** An answer the server refused; the buttons come back. */
+    /** An answer the server refused; the notification and its buttons come back. */
     fun failed(decision: Decision, why: String) {}
 }
 
@@ -1540,9 +1536,25 @@ class ServerStore(
         )
     }
 
-    /** For the notification's buttons: holds the lock like any other change. */
-    /** A reply typed into a notification is cut as the in-app field cuts it (#1205). */
-    suspend fun sendFromNotification(id: String, choice: String?, text: String?) = lock.withLock { send(id, choice, text?.takeCodePoints(4000)) }
+    /**
+     * For the notification's buttons. The notification goes at the tap, as the card does, and
+     * comes back only if the server refuses the answer; one left queued goes out with
+     * [AnswerWorker] (#1447). A reply typed into a notification is cut as the in-app field cuts
+     * it (#1205).
+     */
+    suspend fun sendFromNotification(id: String, choice: String?, text: String?): Sent {
+        alerts.cancel(id)
+        val sent = lock.withLock { send(id, choice, text?.takeCodePoints(4000)) }
+        if (sent is Sent.Failed) refused(id, sent.why)
+        return sent
+    }
+
+    /** The server refused this phone's answer to [id]: its card and its notification come back, saying [why]. */
+    fun refused(id: String, why: String) {
+        notSent[id] = why
+        showUnsent()
+        decisions.value.find { it.id == id }?.let { alerts.failed(it, why) }
+    }
 
     /** The answer waiting to be sent for decision [id], if any. */
     fun queued(id: String): String? = saved.outbox.find { it.decisionId == id }?.answer
@@ -1580,13 +1592,8 @@ class ServerStore(
             val decision = decisions.value.find { it.id == q.decisionId }
             when (val sent = post(q, wake)) {
                 is Sent.Queued -> return false
-                is Sent.Answered -> decision?.let { alerts.answered(it, sent.answer) }
-                Sent.Elsewhere -> alerts.cancel(q.decisionId)
-                is Sent.Failed -> {
-                    notSent[q.decisionId] = sent.why
-                    showUnsent()
-                    decision?.let { alerts.failed(it, sent.why) }
-                }
+                is Sent.Answered, Sent.Elsewhere -> alerts.cancel(q.decisionId)
+                is Sent.Failed -> refused(q.decisionId, sent.why)
             }
         }
         return true
@@ -1668,7 +1675,7 @@ class ServerStore(
                 val d = saved.decisions.find { it.body.id == body.decisionId } ?: fetchDecision(body.decisionId) ?: return@withLock
                 val updated = wait(d, from, body) ?: return@withLock
                 persist(saved.copy(decisions = saved.decisions.map { if (it === d) updated else it }))
-                if (d.answeredAt == null && d.answer == null && !isSnoozed(d) && (d.waiting == "waiting") != (updated.waiting == "waiting")) {
+                if (d.answeredAt == null && d.answer == null && saved.outbox.none { it.decisionId == d.body.id } && !isSnoozed(d) && (d.waiting == "waiting") != (updated.waiting == "waiting")) {
                     alerts.decision(toUi(updated), silent = updated.waiting != "waiting")
                 }
             }

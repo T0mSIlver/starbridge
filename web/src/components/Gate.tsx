@@ -189,9 +189,13 @@ export function SignIn({
           </button>
         </form>
       ) : (
-        // The desktop app sets its server from the menu bar icon instead.
-        !desktop && (
-          <button type="button" className={`t-meta ${s.link}`} onClick={() => setOwn(true)}>
+        // The desktop app sets its server in a window of its own, and restarts on it (#1449).
+        (!desktop || desktop.openServer) && (
+          <button
+            type="button"
+            className={`t-meta ${s.link}`}
+            onClick={() => (desktop?.openServer ? desktop.openServer() : setOwn(true))}
+          >
             Use your own server
           </button>
         )
