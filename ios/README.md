@@ -8,7 +8,9 @@ in the planning repo's `research/ios-app.md`).
 
 - **Sign-in** goes through the browser with PKCE, as on Android (PROTOCOL.md, "Auth"):
   `ASWebAuthenticationSession` opens `/v1/auth/github?app=1&challenge=…` and ends on
-  `starbridge://auth`, where the app trades GitHub's code and its verifier for the session.
+  `https://starbridge.run/v1/auth/github/callback/app` (iOS 17.4 and later, through the
+  associated domain) or on `starbridge://auth` (older iOS, self-hosted servers), where the app
+  trades GitHub's code and its verifier for the session.
   Self-hosted servers also take the owner token.
 - **The first device** follows Android (#370): the app keeps the signed first entry and shows the
   recovery key once; the server gets the entry when the owner says they stored the key.

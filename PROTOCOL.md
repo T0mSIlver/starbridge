@@ -412,7 +412,9 @@ request without the header, or with one the server cannot read, is served.
   session over HTTPS; the app ignores a redirect whose state is not its challenge, or with none.
   GitHub
   redirects to `/v1/auth/github/callback/app`, which the Android app claims as an App Link on
-  starbridge.run (`/.well-known/assetlinks.json` binds it to the app's signing keys). When the
+  starbridge.run (`/.well-known/assetlinks.json` binds it to the app's signing keys), and the
+  iPhone app's browser sheet catches there from iOS 17.4
+  (`/.well-known/apple-app-site-association`). When the
   browser gets the redirect instead, the server hands code and state on to `APP_REDIRECT_URI`:
   `starbridge://auth` by default, and on starbridge.run the App Link
   `https://starbridge.run/app/auth`, whose page has an "Open Starbridge" button to
