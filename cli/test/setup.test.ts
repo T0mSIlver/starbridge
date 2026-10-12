@@ -467,7 +467,7 @@ test("an agent installed after setup: status says so, and refresh installs it (#
   expect(existsSync(join(m.home, ".codex/skills/starbridge/SKILL.md"))).toBe(true);
 });
 
-test("refresh moves the Pi package to this release's tag, reports a failure, and respects uninstall --agent (#1366)", async () => {
+test("refresh moves the Pi package to this release's tag, reports a failure, and respects uninstall --agent (#1417)", async () => {
   const m = await machine();
   await setup(m.sys, { yes: true, noQuota: true, noService: true });
   const settings = join(m.home, ".pi/agent/settings.json");

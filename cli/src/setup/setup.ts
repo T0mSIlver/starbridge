@@ -103,7 +103,7 @@ export async function refresh(sys: Sys): Promise<string[]> {
   const removed = removedAgents(sys.ctx);
   for (const id of AGENT_IDS) {
     if (removed.includes(id) || !found(sys, id)) continue;
-    // The Pi package is pinned to a release tag, so an installed one at another tag moves (#1366).
+    // The Pi package is pinned to a release tag, so an installed one at another tag moves (#1417).
     if (id === "pi" && piPackage(sys) !== undefined && piPackage(sys) !== PI_PACKAGE) {
       try {
         await installPiPackage(sys);
