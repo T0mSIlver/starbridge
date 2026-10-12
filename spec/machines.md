@@ -165,6 +165,10 @@
   and uninstall says so (#1324). `starbridge update` runs the new binary's `setup --refresh`,
   which rewrites the marked files that differ and restarts the local agent; Homebrew and npm users
   run it after upgrading, and the local agent refreshes the skills and rule when it starts.
+  The refresh moves every harness integration to the new version, the Pi package included: Pi
+  pins the package to a release tag, so without it an update left Pi on an extension that no
+  longer matched the CLI (v0.1.1's crashed Pi, #1365). A failed move prints why and does not fail
+  the refresh (#1417).
 - **Allow rules** (#245, #322, #443, #488). So a new user's first question needs no prompt and no
   sandbox flag, setup allows `starbridge ask`, `waiting`, `working`, `wait` and `settle`: Claude
   Code allow rules, a Codex execpolicy file (`~/.codex/rules/starbridge.rules`) that runs them

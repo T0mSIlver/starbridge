@@ -25,6 +25,7 @@ import { run } from "../src/cli";
 import { session } from "../src/context";
 import { poll } from "../src/decisions";
 import { pushOnce } from "../src/quota";
+import { setRemoved } from "../src/setup/agents";
 import { codexPlugin } from "../src/setup/codex-plugin";
 import {
   compareCodexbar,
@@ -464,6 +465,32 @@ test("an agent installed after setup: status says so, and refresh installs it (#
   const done = await refresh(m.sys);
   expect(done).toContain("✓ Codex        skill, sandbox rule and plugin installed");
   expect(existsSync(join(m.home, ".codex/skills/starbridge/SKILL.md"))).toBe(true);
+});
+
+test("refresh moves the Pi package to this release's tag, reports a failure, and respects uninstall --agent (#1417)", async () => {
+  const m = await machine();
+  await setup(m.sys, { yes: true, noQuota: true, noService: true });
+  const settings = join(m.home, ".pi/agent/settings.json");
+  const old = "git:github.com/T0mSIlver/starbridge@v0.1.1";
+  writeFileSync(settings, JSON.stringify({ packages: [old] }));
+  expect(await refresh(m.sys)).toContain(`Updated the Pi package to v${VERSION}.`);
+  expect(JSON.parse(readFileSync(settings, "utf8")).packages).toEqual([PI_PACKAGE]);
+  expect((await refresh(m.sys)).filter((l) => l.includes("Pi package"))).toEqual([]);
+
+  // A failing `pi` leaves the old one, says so, and the refresh goes on.
+  writeFileSync(settings, JSON.stringify({ packages: [old] }));
+  m.ctx.env.PATH = [join(m.home, "failbin"), m.ctx.env.PATH].join(delimiter);
+  mkdirSync(join(m.home, "failbin"));
+  fakeCommand(join(m.home, "failbin", "pi"), "#!/bin/sh\necho 'fatal: no network' >&2\nexit 1\n");
+  const done = await refresh(m.sys);
+  expect(done).toContain(
+    `Could not update the Pi package to v${VERSION}: pi install ${PI_PACKAGE}: fatal: no network`,
+  );
+  expect(JSON.parse(readFileSync(settings, "utf8")).packages).toEqual([old]);
+
+  // `uninstall --agent pi` leaves it alone.
+  setRemoved(m.ctx, "pi", true);
+  expect((await refresh(m.sys)).filter((l) => l.includes("Pi package"))).toEqual([]);
 });
 
 test("a failed agent install says why and how to retry, and setup goes on (#750)", async () => {
