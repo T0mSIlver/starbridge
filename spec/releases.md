@@ -86,7 +86,7 @@
   them. The cost: a `release.yml` run dispatched from a branch fails its Android job, so dry runs
   go from main.
 - **Release notes by product** (#1057). A list of PR titles told users little. Each PR body has
-  a "Release notes" section, one `Product: line` per product a user sees change (Android, Web,
+  a "Release notes" section, one `Product: line` per product a user sees change (Android, iOS since TestFlight takes every tag (#1451), Web,
   Desktop, CLI, Server, Docs) or `None`, optionally `None: why`, written by whoever knows the change; it can be edited
   after merge until the tag. `cli/scripts/release-notes.ts` renders a section per product, empty
   ones omitted, then every PR inside a folded `<details>`. Grouping by paths was rejected: tests
