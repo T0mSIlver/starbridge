@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { current, sameKey, subscribeFailure } from "./push";
+import { current, pushState, sameKey, subscribeFailure, subscription } from "./push";
 
 const error = new DOMException("Registration failed - push service error", "AbortError");
 
@@ -73,4 +73,66 @@ test("a browser that doesn't report the subscription's key keeps it", () => {
   expect(sameKey(null, bytes(ownKey))).toBe(true);
   expect(sameKey(bytes(ownKey).buffer, bytes(ownKey))).toBe(true);
   expect(sameKey(bytes(relayKey).buffer, bytes(ownKey))).toBe(false);
+});
+
+type Reg = { active: object | null; pushManager: { getSubscription(): Promise<object | null> } };
+const reg = (active: boolean, sub: object | null): Reg => ({
+  active: active ? {} : null,
+  pushManager: { getSubscription: async () => sub },
+});
+const container = (found: Reg | undefined, ready: Promise<Reg>) =>
+  ({ getRegistration: async () => found, ready }) as unknown as Pick<
+    ServiceWorkerContainer,
+    "getRegistration" | "ready"
+  >;
+
+test("a subscription read before the worker is active is read again once it is (#1362)", async () => {
+  const sub = {};
+  let activate = (_: Reg) => {};
+  const ready = new Promise<Reg>((done) => {
+    activate = done;
+  });
+  // At an iOS cold start the registration is there, but no worker is active yet.
+  const read = subscription(container(reg(false, null), ready), 60_000);
+  activate(reg(true, sub));
+  expect(await read).toBe(sub as PushSubscription);
+});
+
+test("a page with no worker reads no subscription after the wait, not never", async () => {
+  const never = new Promise<Reg>(() => {});
+  expect(await subscription(container(undefined, never), 10)).toBeNull();
+});
+
+test("an active worker without a subscription reads none at once", async () => {
+  const never = new Promise<Reg>(() => {});
+  expect(await subscription(container(reg(true, null), never), 60_000)).toBeNull();
+});
+
+test("a subscribed iOS window that reads permission as default is on (#1362)", async () => {
+  const g = globalThis as Record<string, unknown>;
+  const saved = ["Notification", "PushManager", "matchMedia"].map((k) => [k, g[k]] as const);
+  const sw = Object.getOwnPropertyDescriptor(navigator, "serviceWorker");
+  const sub = {};
+  try {
+    // What a window opened by a notification's tap reads in a Home Screen app.
+    g.Notification = { permission: "default" };
+    g.PushManager = class {};
+    g.matchMedia = () => ({ matches: true });
+    Object.defineProperty(navigator, "serviceWorker", {
+      configurable: true,
+      value: container(reg(true, sub), Promise.resolve(reg(true, sub))),
+    });
+    expect(await pushState()).toBe("on");
+    Object.defineProperty(navigator, "serviceWorker", {
+      configurable: true,
+      value: container(reg(true, null), Promise.resolve(reg(true, null))),
+    });
+    expect(await pushState()).toBe("off");
+    g.Notification = { permission: "denied" };
+    expect(await pushState()).toBe("denied");
+  } finally {
+    for (const [k, v] of saved) g[k] = v;
+    if (sw) Object.defineProperty(navigator, "serviceWorker", sw);
+    else delete (navigator as { serviceWorker?: unknown }).serviceWorker;
+  }
 });

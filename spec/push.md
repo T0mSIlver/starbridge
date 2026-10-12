@@ -62,6 +62,13 @@
   settings, channels), which the app only reads. Each device turns only its own notifications
   off, never another's (owner's rule), and says its state to the server, so Devices shows every
   device on, off or blocked, read-only.
+- **A browser's push is on when it holds a subscription** (#1362), whatever
+  `Notification.permission` says short of denied. In an iOS Home Screen app, the window a
+  notification's tap opens reads permission as "default" although it stands, so the Inbox offered
+  notifications again at random and Devices listed the iPhone off. A browser drops its
+  subscription when permission goes, so the subscription is the truer signal. Read before the
+  service worker is active, a subscription can read as none, so the page waits up to 3 s for the
+  worker before saying off.
 - **The hand-off to the desktop app** (#943). The app's GitHub sign-in passes through
   `/app/auth` in the default browser of its own machine. When that browser holds a device of the
   same account with notifications on, which the server confirms once the app traded its code,

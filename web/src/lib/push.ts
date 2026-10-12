@@ -27,9 +27,34 @@ export async function pushState(): Promise<PushState> {
   if (Notification.permission === "denied") return "denied";
   // Off by the switch even when the browser kept its subscription: the server holds none.
   if (getPref("pushOff")) return "off";
-  const reg = await navigator.serviceWorker.getRegistration("/");
+  // The subscription says on, not Notification.permission: in an iOS Home Screen app, the window
+  // a notification's tap opens reads "default" although permission stands (#1362).
+  return (await subscription(navigator.serviceWorker)) ? "on" : "off";
+}
+
+/** How long `subscription` waits for a worker that is still starting. */
+export const READY_WAIT_MS = 3000;
+
+/**
+ * This browser's push subscription. Read before the worker is active, as at an iOS Home Screen
+ * app's cold start, a subscription can read as none; then this reads it again once the worker is
+ * ready, or gives up after `READY_WAIT_MS`, since a page that never registered one stays unready.
+ */
+export async function subscription(
+  sw: Pick<ServiceWorkerContainer, "getRegistration" | "ready">,
+  wait = READY_WAIT_MS,
+): Promise<PushSubscription | null> {
+  const reg = await sw.getRegistration("/");
   const sub = await reg?.pushManager.getSubscription();
-  return sub && Notification.permission === "granted" ? "on" : "off";
+  if (sub || reg?.active) return sub ?? null;
+  let timer: Parameters<typeof clearTimeout>[0];
+  const late = await Promise.race([
+    sw.ready,
+    new Promise<undefined>((done) => {
+      timer = setTimeout(done, wait);
+    }),
+  ]).finally(() => clearTimeout(timer));
+  return (await late?.pushManager.getSubscription()) ?? null;
 }
 
 function keyBytes(b64url: string): Uint8Array<ArrayBuffer> {
