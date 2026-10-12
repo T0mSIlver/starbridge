@@ -29,5 +29,12 @@ tmp=$(mktemp /etc/starbridge/server.env.XXXXXX)
     printf '%s\n' "APNS_KEY_ID='$(tr -d '\n' < $s/apns-key-id)'"
     printf '%s\n' "APNS_PRIVATE_KEY='$(awk '{printf "%s\\n", $0}' $s/apns-key.p8)'"
   fi
+  # The team's Sign in with Apple key (#1411), which signs the client secrets for Apple's token
+  # and revoke endpoints.
+  if [ -f $s/apple-signin-key.p8 ]; then
+    printf '%s\n' "APPLE_TEAM_ID='3N63N7U9R3'"
+    printf '%s\n' "APPLE_KEY_ID='$(tr -d '\n' < $s/apple-signin-key-id)'"
+    printf '%s\n' "APPLE_PRIVATE_KEY='$(awk '{printf "%s\\n", $0}' $s/apple-signin-key.p8)'"
+  fi
 } > "$tmp"
 mv "$tmp" /etc/starbridge/server.env

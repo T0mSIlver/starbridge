@@ -86,6 +86,13 @@
   landscape the shade is a fixed-width panel or a split column, narrower than the display (#490).
 - **Lock screen** (#389). Deny answers from there. Allow asks for the unlock, then opens the
   prompt's sheet. "Allow from notifications" in Settings (off, labelled unsafe) sends at once instead (#390).
+  Android refuses an Allow that arrives while the phone is locked, since an app with notification
+  access can send the button's intent without the unlock (#274).
+- **A question's lock-screen buttons follow what the lock screen shows** (#1375, #1384). They answer
+  from there only while the lock screen shows the question's words, else they ask for the unlock:
+  an owner who hides content there expects the locked phone to take no answers either. Android
+  reads its sensitive-content settings (android.md); the iPhone reads Show Previews, which iOS
+  gives apps, as each question's buttons are registered, and answers locked only at Always.
 - **Escapes** (#357, #410). Control and format characters show as escapes (`‮`), on the
   machine before sealing and again in every client, so a bidi override cannot reorder the command.
   An input with two keys that read alike once redacted or escaped stays at the keyboard.

@@ -25,7 +25,7 @@ import {
 import { Interrupted } from "./agent/client";
 import { type AgyRoute, ANTIGRAVITY_CONVERSATION, agyRoute, antigravityTitle } from "./antigravity";
 import { ApiError, Unreachable } from "./api";
-import { claudeSession } from "./claude";
+import { claudeSession, type HooklessCopy, hooklessCopies } from "./claude";
 import { type CodexSession, codexAsker, codexSession, codexTitle } from "./codex";
 import type { State } from "./config";
 import {
@@ -432,7 +432,11 @@ export async function ask(
   ctx.out(decision.id);
   // With no agent, nothing tells which sessions run a mod: the poller's lease says only that one
   // does (#537).
-  if (!opts.wait) ctx.err(deliveryLine(decision.id, delivery(resolved, false, false)));
+  if (!opts.wait) {
+    const d = delivery(resolved, false, false);
+    ctx.err(deliveryLine(decision.id, d));
+    for (const line of askLines(resolved, d, ctx.env)) ctx.err(line);
+  }
   if (input.answerIn !== undefined) ctx.err(answerInLine(decision.id));
   if (!opts.wait) return 0;
   return wait(ctx, { id: decision.id, timeout: opts.timeout, json: opts.json }, s);
@@ -893,6 +897,30 @@ export function deliveryLine(id: string, d: Delivery): string {
   return d === "prompt"
     ? "The answer will come back into this session as a new prompt."
     : `Nothing brings the answer into this session: when only the answer is left, run \`starbridge wait ${id} --timeout 5m\` (again on exit 2).`;
+}
+
+/**
+ * Why no mod runs in this Claude Code session when Claude desktop replaced Starbridge's plugins
+ * with copies that have no hooks (#1428).
+ */
+export function hooklessLine(copies: HooklessCopy[]): string {
+  const what = copies.map((c) => `${c.name} (${c.dir})`).join(" and ");
+  return `Claude desktop runs this session with its own ${copies.length > 1 ? "copies" : "copy"} of ${what}, synced without hooks from the computer it runs on, in place of this machine's.`;
+}
+
+/**
+ * What `ask` adds to the `wait` line in a Claude Code session that Claude desktop runs with
+ * hookless copies of Starbridge's plugins (#1428); none elsewhere.
+ */
+export function askLines(
+  input: Pick<AskInput, "agent" | "headless" | "session">,
+  d: Delivery,
+  env: Ctx["env"],
+  argsOf?: (pid: number) => string[],
+): string[] {
+  if (d !== "wait" || input.agent !== "claude-code" || input.headless || !input.session) return [];
+  const copies = hooklessCopies(env, input.session, argsOf);
+  return copies.length > 0 ? [hooklessLine(copies)] : [];
 }
 
 /**

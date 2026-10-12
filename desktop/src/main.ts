@@ -32,6 +32,13 @@ import {
 } from "./settings";
 import { browserSignIn, newSignIn, type SignIn, signInReturn, startsSignIn } from "./signin";
 import { mark, timing } from "./timing";
+import {
+  parseUpdateAction,
+  parseUpdateSettings,
+  type UpdateSettings,
+  type UpdateStatus,
+  type Updates,
+} from "./updates";
 import { snapshot, Widgets } from "./widgets";
 
 mark("main");
@@ -56,7 +63,7 @@ let origin: string;
 let win: BrowserWindow | null = null;
 let serverWin: BrowserWindow | null = null;
 let tray: Tray | null = null;
-/** Items in Needs you, which turn the menu bar's climber amber. */
+/** Items in Needs you, which turn the menu bar's dot amber. */
 let needs = 0;
 let notifier: Notifier;
 /** The Needs you widget's snapshot (#1031). */
@@ -70,9 +77,10 @@ let leaving: Promise<void> | null = null;
 let left = false;
 /** The GitHub sign-in sent to the browser, until its link comes back. */
 let signIn: SignIn | null = null;
-/** A release downloaded, which installs on quit or from Restart to Update. */
-let update: { install(): void; check(): void } | null = null;
-let updateReady = false;
+/** The update flow, which the page shows and drives (#1398); null until loaded, or unpackaged. */
+let updates: Updates | null = null;
+/** GitHub's page for the releases; the end-to-end test sets a stand-in (test/smoke.ts). */
+const RELEASES = process.env.STARBRIDGE_RELEASES ?? "https://github.com/T0mSIlver/starbridge";
 /** Links that arrived before the window existed. */
 const early: string[] = [];
 /** Answers handed to the page, until it says they went out. */
@@ -166,6 +174,27 @@ async function ready(): Promise<void> {
     save();
     win?.setBackgroundColor(background);
   });
+  // Asked at load: null until the updater loads, and in a run that never loads it.
+  ipcMain.on("update-status?", (e) => {
+    e.returnValue = e.sender === win?.webContents ? (updates?.status ?? null) : null;
+  });
+  ipcMain.on("update-settings?", (e) => {
+    e.returnValue = e.sender === win?.webContents ? updateSettings() : null;
+  });
+  ipcMain.on("update-settings", (e, x) => {
+    const change = fromPage(e) && parseUpdateSettings(x);
+    if (!change) return;
+    settings = { ...settings, ...change };
+    save();
+    win?.webContents.send("update-settings", updateSettings());
+    updates?.check();
+  });
+  ipcMain.on("update-action", (e, x) => {
+    const action = fromPage(e) && parseUpdateAction(x);
+    if (!action || !updates) return;
+    if (action === "install") installUpdate();
+    else updates.act(action);
+  });
   screen = new Screen(powerMonitor, tellScreen);
   setInterval(() => screen?.check(), SCREEN_CHECK_MS);
   ipcMain.on("blocked?", (e) => {
@@ -226,8 +255,12 @@ async function ready(): Promise<void> {
   checkForUpdates();
 }
 
+function updateSettings(): UpdateSettings {
+  return { releaseCandidates: settings.releaseCandidates, autoDownload: settings.autoDownload };
+}
+
 function checkForUpdates(): void {
-  if (!app.isPackaged) return;
+  if (!app.isPackaged && !process.env.STARBRIDGE_RELEASES) return;
   // Loaded late and by path, so the bundler keeps it out of main.js (src/updater.ts).
   setTimeout(() => {
     // Node keeps the compiled updater on disk, so later starts skip compiling its 0.5 MB.
@@ -235,13 +268,7 @@ function checkForUpdates(): void {
     const { startUpdates } = require(
       join(ROOT, "dist", "updater.js"),
     ) as typeof import("./updater");
-    update = startUpdates(
-      () => {
-        updateReady = true;
-        paintDockMenu();
-      },
-      () => settings.releaseCandidates,
-    );
+    updates = startUpdates(RELEASES, updateSettings, tellUpdate);
   }, 5_000);
 }
 
@@ -370,7 +397,7 @@ function paintDockMenu(): void {
 
 /**
  * The mark in the menu bar: one colour, as macOS draws menu bar icons, until something needs the
- * owner; then its climber is amber, the one amber light, as on the phone. No count: the window
+ * owner; then its dot is amber, the one amber light, as on the phone. No count: the window
  * says what. The amber icon carries its own colours, so it follows the menu bar's appearance.
  */
 function trayIcon(): Electron.NativeImage {
@@ -412,33 +439,22 @@ function menu(forTray = true): Menu {
         paintDockMenu();
       },
     },
-    ...(app.isPackaged
-      ? [
-          {
-            label: "Get Release Candidates",
-            type: "checkbox" as const,
-            checked: settings.releaseCandidates,
-            click: () => {
-              settings.releaseCandidates = !settings.releaseCandidates;
-              save();
-              paintDockMenu();
-              update?.check();
-            },
-          },
-        ]
-      : []),
     { label: `Server: ${new URL(origin).host}…`, click: showServer },
-    ...(updateReady ? [{ label: "Restart to Update", click: installUpdate }] : []),
     ...(forTray
       ? [{ type: "separator" as const }, { label: "Quit Starbridge", role: "quit" as const }]
       : []),
   ]);
 }
 
+function tellUpdate(s: UpdateStatus): void {
+  if (win && fromServer(win.webContents.getURL())) win.webContents.send("update-status", s);
+}
+
 /** Quits for the update: the window must close, not hide, or the install never starts. */
 function installUpdate(): void {
+  if (updates?.status.state !== "ready") return;
   quitting = true;
-  leave().then(() => update?.install());
+  leave().then(() => updates?.act("install"));
 }
 
 function showWindow(): void {

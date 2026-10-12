@@ -86,6 +86,14 @@
   A link from another server that this one doesn't know names that server, "This code is from
   starbridge.run, and this phone is signed in to …", instead of "No pairing with this code"
   (#671). Only a failed lookup says it, since a server can answer under several names.
+- **The empty inbox pairs the first machine** (#610, #1367). While the account has no machine,
+  the inbox shows "Add a machine" with the install command in place of "Nothing needs you", and
+  under it the way to pair the machine that setup then shows: Scan a QR code on Android and the
+  iPhone (#1370), then Other ways to add a device, and Add a device on the web, which has no scanner. Each opens the
+  same Add a device as Devices, with the same words. Android's text says to scan the QR code from
+  the terminal: a tester pointed his camera at it, which reads no app's code (#795), then had to
+  find the scanner under Settings, then Devices. The text gives only the instruction (owner's
+  rule): the screen needs no why.
 - **Setup** (`cli/src/setup/`; #68, #239, #245) installs the CodexBar release this Starbridge
   release pins, taking the static musl build where the glibc one would not start, and
   `starbridge update` moves that install to the new binary's pin (#568). Each release PR pins
@@ -157,6 +165,10 @@
   and uninstall says so (#1324). `starbridge update` runs the new binary's `setup --refresh`,
   which rewrites the marked files that differ and restarts the local agent; Homebrew and npm users
   run it after upgrading, and the local agent refreshes the skills and rule when it starts.
+  The refresh moves every harness integration to the new version, the Pi package included: Pi
+  pins the package to a release tag, so without it an update left Pi on an extension that no
+  longer matched the CLI (v0.1.1's crashed Pi, #1365). A failed move prints why and does not fail
+  the refresh (#1417).
 - **Allow rules** (#245, #322, #443, #488). So a new user's first question needs no prompt and no
   sandbox flag, setup allows `starbridge ask`, `waiting`, `working`, `wait` and `settle`: Claude
   Code allow rules, a Codex execpolicy file (`~/.codex/rules/starbridge.rules`) that runs them

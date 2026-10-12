@@ -25,6 +25,7 @@ import { run } from "../src/cli";
 import { session } from "../src/context";
 import { poll } from "../src/decisions";
 import { pushOnce } from "../src/quota";
+import { setRemoved } from "../src/setup/agents";
 import { codexPlugin } from "../src/setup/codex-plugin";
 import {
   compareCodexbar,
@@ -466,6 +467,32 @@ test("an agent installed after setup: status says so, and refresh installs it (#
   expect(existsSync(join(m.home, ".codex/skills/starbridge/SKILL.md"))).toBe(true);
 });
 
+test("refresh moves the Pi package to this release's tag, reports a failure, and respects uninstall --agent (#1417)", async () => {
+  const m = await machine();
+  await setup(m.sys, { yes: true, noQuota: true, noService: true });
+  const settings = join(m.home, ".pi/agent/settings.json");
+  const old = "git:github.com/T0mSIlver/starbridge@v0.1.1";
+  writeFileSync(settings, JSON.stringify({ packages: [old] }));
+  expect(await refresh(m.sys)).toContain(`Updated the Pi package to v${VERSION}.`);
+  expect(JSON.parse(readFileSync(settings, "utf8")).packages).toEqual([PI_PACKAGE]);
+  expect((await refresh(m.sys)).filter((l) => l.includes("Pi package"))).toEqual([]);
+
+  // A failing `pi` leaves the old one, says so, and the refresh goes on.
+  writeFileSync(settings, JSON.stringify({ packages: [old] }));
+  m.ctx.env.PATH = [join(m.home, "failbin"), m.ctx.env.PATH].join(delimiter);
+  mkdirSync(join(m.home, "failbin"));
+  fakeCommand(join(m.home, "failbin", "pi"), "#!/bin/sh\necho 'fatal: no network' >&2\nexit 1\n");
+  const done = await refresh(m.sys);
+  expect(done).toContain(
+    `Could not update the Pi package to v${VERSION}: pi install ${PI_PACKAGE}: fatal: no network`,
+  );
+  expect(JSON.parse(readFileSync(settings, "utf8")).packages).toEqual([old]);
+
+  // `uninstall --agent pi` leaves it alone.
+  setRemoved(m.ctx, "pi", true);
+  expect((await refresh(m.sys)).filter((l) => l.includes("Pi package"))).toEqual([]);
+});
+
 test("a failed agent install says why and how to retry, and setup goes on (#750)", async () => {
   const m = await machine();
   m.ctx.env.PATH = [join(m.home, "bin"), m.ctx.env.PATH].join(delimiter);
@@ -667,6 +694,49 @@ test("status names the Claude Code session it runs in when that session's mod ne
   m.ctx.env.CLAUDE_CODE_SESSION_ATTENDED = "0";
   await status(m.sys);
   expect(m.ctx.lines.join("\n")).not.toContain("Not this session");
+});
+
+test("status says when Claude desktop replaced the mod with a copy that has no hooks (#1428)", async () => {
+  const m = await machine();
+  await startAgent(m.ctx);
+  Object.assign(m.ctx.env, { CLAUDECODE: "1", CLAUDE_CODE_SESSION_ID: "s-1" });
+  // What Claude desktop passed the orchestrator's session on the dev box: the Mac's plugins,
+  // synced without `hooks/`.
+  const synced = mkdtempSync(join(tmpdir(), "starbridge-synced-"));
+  const plugin = (dir: string, name: string, hooks: boolean) => {
+    mkdirSync(join(synced, dir, ".claude-plugin"), { recursive: true });
+    writeFileSync(join(synced, dir, ".claude-plugin", "plugin.json"), JSON.stringify({ name }));
+    if (hooks) {
+      mkdirSync(join(synced, dir, "hooks"));
+      writeFileSync(join(synced, dir, "hooks", "hooks.json"), "{}");
+    }
+    return join(synced, dir);
+  };
+  const mod = plugin("4917e9633546766b", "starbridge-mod", false);
+  const skill = plugin("049f0f053f7ea84d", "starbridge", true);
+  const other = plugin("a71fbe145223bcc9", "localvoxtral", false);
+  // Claude Code's record of the session names the process that runs it.
+  m.ctx.env.CLAUDE_CONFIG_DIR = join(synced, "claude");
+  mkdirSync(join(synced, "claude", "sessions"), { recursive: true });
+  writeFileSync(
+    join(synced, "claude", "sessions", "4242.json"),
+    JSON.stringify({ pid: 4242, sessionId: "s-1", entrypoint: "claude-desktop" }),
+  );
+  const claude = ["claude", "--resume=s-1", `--plugin-dir=${mod}`, "--plugin-dir", skill];
+  const args = (pid: number) => (pid === 4242 ? [...claude, `--plugin-dir=${other}`] : []);
+  await status({ ...m.sys, argsOf: args });
+  const out = m.ctx.lines.join("\n");
+  expect(out).toContain("Not this session (s-1): no Starbridge mod runs in it");
+  expect(out).toContain(
+    `Claude desktop runs this session with its own copy of starbridge-mod (${mod}), synced without hooks`,
+  );
+  expect(out).not.toContain(skill);
+  expect(out).not.toContain(other);
+
+  // A session Claude Code runs with the installed plugins only says nothing more.
+  m.ctx.lines.length = 0;
+  await status({ ...m.sys, argsOf: () => ["claude", "--resume=s-1"] });
+  expect(m.ctx.lines.join("\n")).not.toContain("Claude desktop runs");
 });
 
 test("status lists the answers no session has taken, until a wait prints them (#557)", async () => {

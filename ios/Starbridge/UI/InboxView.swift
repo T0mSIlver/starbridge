@@ -1,5 +1,6 @@
 import StarbridgeProtocol
 import SwiftUI
+import UIKit
 
 /** What a sheet over the inbox shows. */
 enum Sheet: Identifiable, Hashable {
@@ -32,6 +33,10 @@ struct InboxView: View {
     @AppStorage("swipeSnooze") private var swipe = SwipeSnooze.hour
     /** A swiped snooze that took, offering Undo for a few seconds. */
     @State private var undo: Swiped?
+    /** The scanner, from the empty inbox of an account with no machine (#1370). */
+    @State private var scanning = false
+    /** Add a device, with the code the scanner read, if any. */
+    @State private var adding: DevicesView.AddDevice?
 
     var body: some View {
         let decisions = store.openDecisions
@@ -63,10 +68,19 @@ struct InboxView: View {
                             ForEach(group.items) { card($0) }
                         }
                         if feed.isEmpty, runs.isEmpty, store.withheldWhy == nil {
-                            Text("Nothing needs you")
-                                .type(Tokens.Typography.heading)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, Tokens.Spacing.s16)
+                            if NoMachine.shows(store.devices) {
+                                NoMachine(server: store.saved.server) {
+                                    // A phone that cannot scan opens Add a device instead, to type the code.
+                                    Task { if await QRScanner.whyNot(typing: true) == nil { scanning = true } else { adding = .init() } }
+                                } addDevice: {
+                                    adding = .init()
+                                }
+                            } else {
+                                Text("Nothing needs you")
+                                    .type(Tokens.Typography.heading)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, Tokens.Spacing.s16)
+                            }
                         }
                         if !snoozed.isEmpty {
                             Collapsible(title: "Snoozed", count: "\(snoozed.count)", symbol: "moon.zzz", open: $snoozedOpen) {
@@ -87,6 +101,7 @@ struct InboxView: View {
             .refreshable { await store.refresh() }
             .background(Tokens.Colors.bg.color.ignoresSafeArea())
             .navigationTitle("Inbox")
+            .navigationDestination(item: $adding) { AddDeviceView(store: store, lookUp: $0.lookUp) }
             .searchable(text: $query, prompt: "Find")
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
@@ -99,6 +114,13 @@ struct InboxView: View {
                     }
                 }
             }
+        }
+        .sheet(isPresented: $scanning) {
+            QRScanner { text in
+                scanning = false
+                adding = .init(lookUp: text)
+            }
+            .ignoresSafeArea()
         }
         .sheet(item: $opened) { which in
             Group {
@@ -662,5 +684,72 @@ private struct UndoBar: View {
         .background(RoundedRectangle(cornerRadius: Tokens.Radius.md).fill(Tokens.Colors.fg.color))
         .padding(.horizontal, Tokens.Spacing.s3)
         .padding(.bottom, Tokens.Spacing.s2)
+    }
+}
+
+/**
+ * A new account's empty inbox, as on Android and the web (#610, #1370): the install command to
+ * copy or send to the machine, then the scanner for the QR code its setup shows, one tap away.
+ */
+struct NoMachine: View {
+    let server: String
+    let scan: () -> Void
+    let addDevice: () -> Void
+
+    /** While the directory has been read and holds no machine. */
+    static func shows(_ rows: [DeviceRow]) -> Bool { !rows.isEmpty && !rows.contains(where: \.machine) }
+
+    /** The server's own install script, which pairs with it (#1378). */
+    static func install(_ server: String) -> String {
+        "curl -fsSL \(server.hasSuffix("/") ? String(server.dropLast()) : server)/install.sh | sh"
+    }
+
+    var body: some View {
+        let install = Self.install(server)
+        VStack(spacing: Tokens.Spacing.s4) {
+            Image(systemName: "desktopcomputer")
+                .font(.system(size: 52))
+                .frame(width: 140, height: 140)
+                .background(Circle().fill(Tokens.Colors.surface2.color))
+                .accessibilityHidden(true)
+            Text("Add a machine")
+                .type(Tokens.Typography.heading)
+                .accessibilityAddTraits(.isHeader)
+            Text("Install Starbridge on each machine that runs your agents, then scan the QR code from your terminal.")
+                .type(Tokens.Typography.body)
+                .foregroundStyle(Tokens.Colors.fg2.color)
+                .multilineTextAlignment(.center)
+            Text(install)
+                .type(Tokens.Typography.code)
+                .textSelection(.enabled)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(Tokens.Spacing.s4)
+                .background(RoundedRectangle(cornerRadius: Tokens.Radius.lg).fill(Tokens.Colors.surface2.color))
+            HStack(spacing: Tokens.Spacing.s2) {
+                Button {
+                    UIPasteboard.general.string = install
+                } label: {
+                    Label("Copy", systemImage: "doc.on.doc")
+                }
+                .buttonStyle(Secondary())
+                // To the computer, by mail or a chat, when this iPhone is not where the terminal is.
+                ShareLink(item: install) { Text("Send") }
+                    .buttonStyle(Secondary())
+            }
+            Button(action: scan) {
+                Label("Scan a QR code", systemImage: "qrcode.viewfinder")
+            }
+            .buttonStyle(Primary())
+            Button("Other ways to add a device", action: addDevice)
+                .type(Tokens.Typography.action)
+                .frame(minHeight: Tokens.Sizes.tap)
+            Link("Windows, Homebrew and npm", destination: URL(string: "https://starbridge.run/docs")!)
+                .type(Tokens.Typography.action)
+                .frame(minHeight: Tokens.Sizes.tap)
+        }
+        .foregroundStyle(Tokens.Colors.fg.color)
+        .padding(.top, Tokens.Spacing.s12)
+        .padding(.bottom, Tokens.Spacing.s8)
+        .padding(.horizontal, Tokens.Spacing.s2)
     }
 }

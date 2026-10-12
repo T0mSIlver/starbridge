@@ -27,9 +27,34 @@ export async function pushState(): Promise<PushState> {
   if (Notification.permission === "denied") return "denied";
   // Off by the switch even when the browser kept its subscription: the server holds none.
   if (getPref("pushOff")) return "off";
-  const reg = await navigator.serviceWorker.getRegistration("/");
+  // The subscription says on, not Notification.permission: in an iOS Home Screen app, the window
+  // a notification's tap opens reads "default" although permission stands (#1362).
+  return (await subscription(navigator.serviceWorker)) ? "on" : "off";
+}
+
+/** How long `subscription` waits for a worker that is still starting. */
+export const READY_WAIT_MS = 3000;
+
+/**
+ * This browser's push subscription. Read before the worker is active, as at an iOS Home Screen
+ * app's cold start, a subscription can read as none; then this reads it again once the worker is
+ * ready, or gives up after `READY_WAIT_MS`, since a page that never registered one stays unready.
+ */
+export async function subscription(
+  sw: Pick<ServiceWorkerContainer, "getRegistration" | "ready">,
+  wait = READY_WAIT_MS,
+): Promise<PushSubscription | null> {
+  const reg = await sw.getRegistration("/");
   const sub = await reg?.pushManager.getSubscription();
-  return sub && Notification.permission === "granted" ? "on" : "off";
+  if (sub || reg?.active) return sub ?? null;
+  let timer: Parameters<typeof clearTimeout>[0];
+  const late = await Promise.race([
+    sw.ready,
+    new Promise<undefined>((done) => {
+      timer = setTimeout(done, wait);
+    }),
+  ]).finally(() => clearTimeout(timer));
+  return (await late?.pushManager.getSubscription()) ?? null;
 }
 
 function keyBytes(b64url: string): Uint8Array<ArrayBuffer> {
@@ -51,6 +76,7 @@ async function send(sub: PushSubscription): Promise<void> {
  */
 export async function disablePush(): Promise<PushState> {
   setPref("pushOff", true);
+  setPref("pushOn", false);
   const reg = supported() ? await navigator.serviceWorker.getRegistration("/") : undefined;
   const sub = await reg?.pushManager.getSubscription();
   if (sub) {
@@ -64,6 +90,7 @@ export async function disablePush(): Promise<PushState> {
       } catch (e) {
         // The server still pushes here: on it stays, and so does what it reports.
         setPref("pushOff", false);
+        setPref("pushOn", true);
         throw e;
       }
     }
@@ -93,6 +120,7 @@ export async function enablePush(): Promise<PushState> {
     throw new Error(subscribeFailure(e));
   }
   await send(sub);
+  setPref("pushOn", true);
   return "on";
 }
 
@@ -167,14 +195,22 @@ export function subscribeFailure(e: unknown, brave = "brave" in navigator): stri
 
 /**
  * Sends the current subscription again, so a server that dropped it pushes here once more, after
- * a new one if the server's key changed.
+ * a new one if the server's key changed. With none left in a browser the owner turned on, it
+ * subscribes anew: Safari drops a subscription after pushes that showed nothing (#1363), and
+ * keeps the permission.
  */
 export async function resubscribe(): Promise<void> {
-  if (!supported() || Notification.permission !== "granted" || getPref("pushOff")) return;
+  if (!supported() || Notification.permission === "denied" || getPref("pushOff")) return;
   const reg = await navigator.serviceWorker.getRegistration("/");
-  const existing = await reg?.pushManager.getSubscription();
-  if (!reg || !existing) return;
+  if (!reg) return;
+  // Read once the worker is active: at an iOS Home Screen app's cold start it reads none before.
+  const existing = await subscription(navigator.serviceWorker);
+  // A subscription is sent again whatever permission reads short of denied: an iOS window a
+  // notification opened reads "default" although it stands (#1362). A new one needs "granted",
+  // since subscribing would otherwise ask, which needs a tap.
+  if (!existing && (!getPref("pushOn") || Notification.permission !== "granted")) return;
   const key = await api.vapid().catch(() => undefined);
+  if (!existing && !key) return;
   const sub = await current(reg.pushManager, existing, key);
   // Turned off while the key was read (#943): what a new key subscribed goes too.
   if (getPref("pushOff")) {
@@ -182,4 +218,5 @@ export async function resubscribe(): Promise<void> {
     return;
   }
   await send(sub);
+  setPref("pushOn", true);
 }

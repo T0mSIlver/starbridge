@@ -17,6 +17,7 @@ import {
 } from "../lib/device";
 import { promptNote, questionNote } from "../lib/notes";
 import { answerPlace } from "../lib/outcome";
+import { applePush, fallback, openPush, type Shown, type Unshown } from "../lib/pushFallback";
 import * as store from "../lib/store";
 import type { InboxItem, PromptItem, Reply } from "../lib/types";
 
@@ -53,19 +54,45 @@ self.addEventListener("install", () => self.skipWaiting());
 self.addEventListener("activate", (e) => e.waitUntil(self.clients.claim()));
 
 self.addEventListener("push", (e) => {
+  const text = e.data?.text() ?? "";
+  // A push that asks for the owner shows something, on Safari every push (#1363).
   e.waitUntil(
-    onPush(e.data?.text() ?? "").catch(async (err) => {
-      // Held (#362): the notifications already up would still let the owner answer from them.
-      // Run and quota alerts answer nothing, and would not show again, so they stay (#1281).
-      if (err instanceof Withheld)
-        for (const n of await self.registration.getNotifications())
-          if (n.tag.startsWith("d:") || n.tag.startsWith("p:")) n.close();
-      // A push that fails to open or verify shows nothing; open pages log why.
-      for (const c of await self.clients.matchAll({ type: "window" }))
-        c.postMessage({ type: "starbridge:push-error", error: String(err) });
-    }),
+    openPush(
+      (seen) => onPush(text, seen),
+      (why, seen) => showFallback(text, why, seen),
+      async (err) => {
+        // Held (#362): the notifications already up would still let the owner answer from them.
+        // Run and quota alerts answer nothing, and would not show again, so they stay (#1281).
+        if (err instanceof Withheld)
+          for (const n of await self.registration.getNotifications())
+            if (n.tag.startsWith("d:") || n.tag.startsWith("p:")) n.close();
+        // Open pages log why.
+        for (const c of await self.clients.matchAll({ type: "window" }))
+          c.postMessage({ type: "starbridge:push-error", error: String(err) });
+      },
+    ),
   );
 });
+
+async function showFallback(text: string, why: Unshown, seen: Shown): Promise<void> {
+  const sub = await self.registration.pushManager.getSubscription().catch(() => null);
+  const note = fallback(text, why, !!sub && applePush(sub.endpoint));
+  if (!note) return;
+  await self.registration.showNotification(note.title, note.options);
+  seen.shown = true;
+  seen.placeholder = note.options.tag;
+}
+
+/** Shows a notification for the push `seen` tracks. */
+async function show(seen: Shown, title: string, options: NotificationOptions): Promise<void> {
+  await self.registration.showNotification(title, options);
+  // The placeholder this push showed while late goes, unless this one replaced it. Safari keeps
+  // one under 30 s old.
+  if (seen.placeholder && seen.placeholder !== options.tag)
+    for (const n of await self.registration.getNotifications({ tag: seen.placeholder })) n.close();
+  seen.shown = true;
+  seen.placeholder = undefined;
+}
 
 self.addEventListener("notificationclick", (e) => {
   e.notification.close();
@@ -77,7 +104,7 @@ async function tellPages(kind: string): Promise<void> {
     c.postMessage({ type: "starbridge:push", kind });
 }
 
-async function onPush(text: string): Promise<void> {
+async function onPush(text: string, seen: Shown): Promise<void> {
   let payload: Payload;
   try {
     payload = JSON.parse(text) as Payload;
@@ -105,7 +132,7 @@ async function onPush(text: string): Promise<void> {
     // account this browser left, while it is a device of another, shows nothing.
     const res = await fetch(`/v1/joins/${encodeURIComponent(payload.id)}`, { headers: CLIENT });
     if (!res.ok) return;
-    await self.registration.showNotification("A device wants to join", {
+    await show(seen, "A device wants to join", {
       body: "Open Starbridge to compare digits with it and approve it.",
       tag: `j:${payload.id}`,
     });
@@ -132,10 +159,10 @@ async function onPush(text: string): Promise<void> {
 
   if (payload.kind === "decision") {
     const opened = await openPushedDecision(ctx, item);
-    if (!answeredAt && !opened.reply) await showDecision(account as string, opened);
+    if (!answeredAt && !opened.reply) await showDecision(seen, account as string, opened);
   } else if (payload.kind === "permission") {
     const opened = await openPushedPermission(ctx, item);
-    if (!answeredAt && !opened.reply) await showPrompt(account as string, opened);
+    if (!answeredAt && !opened.reply) await showPrompt(seen, account as string, opened);
   } else if (payload.kind === "settled") {
     // Checked like any item, so a forged notice cannot clear a real prompt.
     const { settled } = await openSettled(ctx, item);
@@ -164,11 +191,12 @@ async function onPush(text: string): Promise<void> {
     }
     if (answered.has(`${account}/${z.decisionId}`)) return;
     const res = await fetch(`/v1/items/${encodeURIComponent(z.decisionId)}`, { headers: CLIENT });
-    if (!res.ok) return;
+    // A question that can't be read now still needs the owner: the placeholder shows.
+    if (!res.ok) throw new Error(`the question read ${res.status}`);
     const stored = await res.json();
     if (stored.answeredAt) return;
     const opened = await openPushedDecision(ctx, stored.item);
-    if (!opened.reply) await showDecision(account as string, opened, false, false, true);
+    if (!opened.reply) await showDecision(seen, account as string, opened, false, false, true);
   } else if (payload.kind === "waiting") {
     // The agent ran out of other work: notify once more, in place of the question's notification.
     // Back to working, the notification loses its waiting line without a sound (#191).
@@ -181,13 +209,13 @@ async function onPush(text: string): Promise<void> {
     const res = await fetch(`/v1/items/${encodeURIComponent(waiting.decisionId)}`, {
       headers: CLIENT,
     });
-    if (!res.ok) return;
+    if (!res.ok) throw new Error(`the question read ${res.status}`);
     const stored = await res.json();
     if (stored.answeredAt) return;
     const opened = await openPushedDecision(ctx, stored.item);
     // Only the machine that asked can say its agent waits on the question.
     if (opened.machine.id !== machine || opened.reply) return;
-    await showDecision(account as string, opened, waiting.state === "waiting", true);
+    await showDecision(seen, account as string, opened, waiting.state === "waiting", true);
   }
 }
 
@@ -213,6 +241,7 @@ async function moot(account: string, id: string): Promise<boolean> {
 const WAKE_SKEW_MS = 2 * 60_000;
 
 async function showDecision(
+  seen: Shown,
   account: string,
   item: InboxItem,
   waiting = false,
@@ -250,7 +279,7 @@ async function showDecision(
     actions,
   };
   if (await done()) return;
-  await self.registration.showNotification(note.title, options_);
+  await show(seen, note.title, options_);
   // An answered push, or a sign-out, may have closed nothing while this one was still opening.
   if (await done())
     for (const n of await self.registration.getNotifications({ tag: tag(d.id) })) n.close();
@@ -260,12 +289,12 @@ async function showDecision(
  * A permission prompt: the browser cannot ask for an unlock, so every tap opens the page,
  * where the owner reads the full input before allowing it.
  */
-async function showPrompt(account: string, item: PromptItem): Promise<void> {
+async function showPrompt(seen: Shown, account: string, item: PromptItem): Promise<void> {
   const p = item.permission;
   const done = () => moot(account, p.id);
   if (await done()) return;
   const note = promptNote(item);
-  await self.registration.showNotification(note.title, {
+  await show(seen, note.title, {
     body: note.body,
     tag: promptTag(p.id),
     requireInteraction: true,

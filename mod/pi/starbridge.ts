@@ -127,7 +127,13 @@ export default function starbridge(pi: PiApi) {
         file ? { PI_SESSION_FILE: file } : {},
       );
     },
-    submit: (line) => pi.sendUserMessage(line, { deliverAs: "followUp" }),
+    submit: (line) => {
+      try {
+        pi.sendUserMessage(line, { deliverAs: "followUp" });
+      } catch {
+        // Pi replaced the session while the CLI ran: its `pi` is stale.
+      }
+    },
     notify: (text) => current?.ui.notify(text, "info"),
   });
 
@@ -136,7 +142,7 @@ export default function starbridge(pi: PiApi) {
     if (!ctx?.hasUI) return;
     // Pi shares one `ui` among extensions: its `custom` keeps the dialog the blocked event opens.
     asked.watch(ctx.ui);
-    void asked.prompt(data, { id: ctx.sessionManager.getSessionId(), cwd: ctx.cwd });
+    asked.prompt(data, { id: ctx.sessionManager.getSessionId(), cwd: ctx.cwd }).catch(() => {});
   });
   pi.events.on(BLOCKED_EVENT, (data) => asked.blocked(data));
 
@@ -202,13 +208,17 @@ export default function starbridge(pi: PiApi) {
                     // its own dialog takes the screen.
                     const turn = async () => {
                       if (!signal.aborted) {
-                        await ctx.ui.select(
-                          `Permission Required: sent to your devices through Starbridge\n${what}`,
-                          ["Answer here"],
-                          { signal },
-                        );
-                        // Closed because a device answered or the session ended: the keyboard did nothing.
-                        if (!signal.aborted) resolve();
+                        try {
+                          await ctx.ui.select(
+                            `Permission Required: sent to your devices through Starbridge\n${what}`,
+                            ["Answer here"],
+                            { signal },
+                          );
+                          // Closed because a device answered or the session ended: the keyboard did nothing.
+                          if (!signal.aborted) resolve();
+                        } catch {
+                          // Pi replaced the session: its `ctx` is stale, and nobody is at this dialog.
+                        }
                       }
                       await decided;
                     };
@@ -227,27 +237,47 @@ export default function starbridge(pi: PiApi) {
     current = ctx;
     ended = new AbortController();
     dialogs = Promise.resolve();
-    void loop?.stop();
+    loop?.stop().catch(() => {});
     loop = undefined;
     // `pi -p` and `--mode json` end after one prompt: nothing would be there to submit into.
     if (!ctx.hasUI) return;
+    // Pi makes `ctx` and `pi` throw once it replaces or reloads the session (#1365), while the
+    // loop may still run a step: it gets values read now, and no-ops once the session ended.
+    const id = ctx.sessionManager.getSessionId();
+    const cwd = ctx.cwd;
+    const ui = ctx.ui;
+    const over = ended.signal;
     const env: Record<string, string | undefined> = process.env;
     const dir = configDir(env);
     const socket = socketPath(env);
     const fetch = (method: string, path: string, body?: unknown) =>
       socketFetch(socket, method, path, body);
-    const sessionId = async () => ctx.sessionManager.getSessionId();
+    const sessionId = async () => id;
     const now = async () => Date.now();
-    const submit = (line: string) => pi.sendUserMessage(line, { deliverAs: "followUp" });
-    const status = (s: string | undefined) => ctx.ui.setStatus("starbridge", s);
+    // False keeps the line unconfirmed, for this session's next start.
+    const submit = (line: string) => {
+      if (over.aborted) return false;
+      try {
+        pi.sendUserMessage(line, { deliverAs: "followUp" });
+        return true;
+      } catch {
+        return false;
+      }
+    };
+    const status = (s: string | undefined) => {
+      if (over.aborted) return;
+      try {
+        ui.setStatus("starbridge", s);
+      } catch {}
+    };
     const log = (_s: string) => {};
-    env[ANSWERS_ENV] = ctx.sessionManager.getSessionId();
+    env[ANSWERS_ENV] = id;
     loop = new Switch({
       agentUp: async () =>
         !env.STARBRIDGE_NO_AGENT && (await fetch("GET", "/v1/status")).status < 300,
       agent: (unconfirmed) =>
         new AgentLoop(
-          { sessionId, cwd: async () => ctx.cwd, fetch, now, sleep, submit, status, log },
+          { sessionId, cwd: async () => cwd, fetch, now, sleep, submit, status, log },
           unconfirmed,
         ),
       poller: (unconfirmed) =>

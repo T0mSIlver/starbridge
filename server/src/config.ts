@@ -21,6 +21,19 @@ export interface Config {
     tokenUrl: string;
     apiUrl: string;
   };
+  /**
+   * Sign in with Apple (#1411), with the team's Sign in with Apple key, which signs the client
+   * secrets for Apple's token and revoke endpoints.
+   */
+  apple?: {
+    teamId: string;
+    keyId: string;
+    /** The .p8 file's PKCS#8 PEM. */
+    privateKey: string;
+    /** The iPhone app's App ID, the audience of its identity tokens. */
+    appId: string;
+    url: string;
+  };
   /** Self-hosted sign-in: whoever presents this token owns the server's one account. */
   ownerToken?: string;
   /** Where the GitHub callback sends the Android app, with a code it trades for a session. */
@@ -150,6 +163,16 @@ export function configFromEnv(env: Env = process.env): Config {
             authorizeUrl: env.GITHUB_AUTHORIZE_URL ?? "https://github.com/login/oauth/authorize",
             tokenUrl: env.GITHUB_TOKEN_URL ?? "https://github.com/login/oauth/access_token",
             apiUrl: env.GITHUB_API_URL ?? "https://api.github.com",
+          }
+        : undefined,
+    apple:
+      env.APPLE_TEAM_ID && env.APPLE_KEY_ID && env.APPLE_PRIVATE_KEY
+        ? {
+            teamId: env.APPLE_TEAM_ID,
+            keyId: env.APPLE_KEY_ID,
+            privateKey: env.APPLE_PRIVATE_KEY.replace(/\\n/g, "\n"),
+            appId: env.APPLE_APP_ID ?? "dev.starbridge.ios",
+            url: env.APPLE_URL ?? "https://appleid.apple.com",
           }
         : undefined,
     ownerToken: env.OWNER_TOKEN || undefined,

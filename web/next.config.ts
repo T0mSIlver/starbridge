@@ -30,6 +30,16 @@ const nextConfig: NextConfig = {
   transpilePackages: ["@starbridge/protocol"],
   // Tests import workspace packages the deploy image leaves out; `pnpm typecheck` covers them.
   typescript: { tsconfigPath: "tsconfig.build.json" },
+  // iOS reads the iPhone app's associated domains from a file with no extension, which Next would
+  // serve as application/octet-stream; Apple asks for JSON (#1115).
+  async headers() {
+    return [
+      {
+        source: "/.well-known/apple-app-site-association",
+        headers: [{ key: "Content-Type", value: "application/json" }],
+      },
+    ];
+  },
   async rewrites() {
     return [{ source: "/v1/:path*", destination: `${server}/v1/:path*` }];
   },

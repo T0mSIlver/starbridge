@@ -1,6 +1,7 @@
 import type { Database } from "bun:sqlite";
 import type { ClientVersion } from "@starbridge/protocol";
 import type { Server } from "bun";
+import type { Apple } from "./apple";
 import type { AppSignIns } from "./appSignIns";
 import type { Caller } from "./auth";
 import type { Config } from "./config";
@@ -17,6 +18,8 @@ export interface Deps {
   config: Config;
   db: Database;
   push: Push;
+  /** Sign in with Apple, when the server has the team's key. */
+  apple?: Apple;
   /** Wakes answer long-polls; keyed by "account/member". */
   answers: Waiters;
   /** Wakes `POST /quota/ask` waits when a machine posts a snapshot; keyed by account. */

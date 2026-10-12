@@ -5,8 +5,11 @@ import StarbridgeProtocol
 enum Sent: Equatable, Sendable {
     /** The server took it: this answer, or the same one sent before. */
     case answered(String)
-    /** Kept in the outbox until the server can be reached. */
-    case queued(String)
+    /**
+     * Kept in the outbox until the server takes it; `offline` when the request got no answer,
+     * rather than a 429 or 5xx (#1392).
+     */
+    case queued(String, offline: Bool)
     /** Another device answered first. */
     case elsewhere
     /** The server refused it, with why. */
@@ -77,17 +80,18 @@ extension Store {
 
     // --- Syncing --------------------------------------------------------------------
 
-    /** Reads everything new, then sends the answers waiting in the outbox. */
+    /** Reads the directory, sends the answers waiting in the outbox, then reads everything new. */
     func sync() async throws {
         guard phase == .ready else { return }
         try await syncDirectory()
         guard phase == .ready else { return }
+        // Before the reads: one failing, during a rate-limit hold say, must not keep an answer back (#1392).
+        if !saved.outbox.isEmpty { _ = try await flush() }
         try await syncDecisions()
         try await syncPrompts()
         try await syncQuotas()
         try await syncRuns()
         withheldWhy = withheld()
-        if !saved.outbox.isEmpty { _ = try await flush() }
         // A push that would have closed them may never have come: iOS holds or drops background pushes (#1184).
         await Notify.removeDelivered(about: closedItems)
     }
@@ -520,8 +524,9 @@ extension Store {
                 // Signed and kept, or moot: the typed reply has done its work. One not sent stays to edit.
                 if case .failed = sent {} else { drafts[id] = nil }
                 switch sent {
-                case let .queued(answer):
-                    notice = "No connection. \(done ? "Done" : answer) will be sent when the iPhone is back online."
+                case let .queued(answer, offline):
+                    let what = done ? "Done" : answer
+                    notice = offline ? "No connection. \(what) will be sent when the iPhone is back online." : "\(what) isn't sent yet. Retrying."
                 case .elsewhere:
                     let d = decision(id)
                     if let by = d?.answeredBy, let theirs = d?.theirAnswer {
@@ -610,11 +615,12 @@ extension Store {
             if e.status == 426 {
                 _ = describe(e)
                 keep(q, landed: false)
-                return .queued(q.answer)
+                return .queued(q.answer, offline: false)
             }
             if e.status >= 500 || e.status == 429 {
                 keep(q, landed: ![502, 503, 429].contains(e.status))
-                return .queued(q.answer)
+                retryAnswers()
+                return .queued(q.answer, offline: false)
             }
             var s = saved
             s.outbox.removeAll { $0.decisionId == q.decisionId }
@@ -624,7 +630,8 @@ extension Store {
             // No route or no name: the request never left. Anything else may have reached the server.
             let neverLeft: Set<URLError.Code> = [.notConnectedToInternet, .cannotFindHost, .cannotConnectToHost, .dnsLookupFailed, .dataNotAllowed, .internationalRoamingOff]
             keep(q, landed: !neverLeft.contains(e.code))
-            return .queued(q.answer)
+            retryAnswers()
+            return .queued(q.answer, offline: true)
         }
         settle(q, answer: q.answer)
         return .answered(q.answer)
@@ -646,6 +653,53 @@ extension Store {
             s.decisions[i].answer = answer
         }
         persist(s)
+    }
+
+    /**
+     * Sends the outbox again until it is empty, without waiting for a pull or the poll (#1392):
+     * after 5 s, doubling to 5 minutes, and never during a rate-limit hold, when a post fails at
+     * once. iOS suspends it behind the app; the background refresh asked for here
+     * ([AnswerRefresh]) sends what is left. A sign-in or an update ends it: the next sync sends.
+     */
+    func retryAnswers() {
+        AnswerRefresh.schedule()
+        guard answerRetry == nil else { return }
+        answerRetry = Task { [weak self] in
+            var pause: TimeInterval = 5
+            while true {
+                try? await Task.sleep(for: .seconds(pause))
+                await Self.waitOutHold()
+                guard let self, !Task.isCancelled, !saved.outbox.isEmpty, phase == .ready, tooOld == nil else { break }
+                guard let sent = try? await serial({ try await self.flush() }), !sent || !saved.outbox.isEmpty else { break }
+                pause = min(pause * 2, 300)
+            }
+            self?.answerRetry = nil
+        }
+    }
+
+    /** Returns once no rate-limit hold is on, or the task is cancelled; looks again each second. */
+    static func waitOutHold() async {
+        while !Task.isCancelled {
+            let left = Api.limitedUntil.withLock { $0 }.timeIntervalSinceNow
+            if left <= 0 { return }
+            try? await Task.sleep(for: .seconds(min(left, 1)))
+        }
+    }
+
+    /**
+     * A background refresh's turn (#1392): sends the outbox, and asks for another turn while some
+     * wait. It reads the directory first, as a sync does: a cold launch has none, and `flush`
+     * needs it to hold answers back while the server withholds entries.
+     */
+    func flushInBackground() async -> Bool {
+        await Self.waitOutHold()
+        let sent = (try? await serial {
+            guard self.phase == .ready else { return true }
+            try await self.syncDirectory()
+            return self.phase == .ready ? try await self.flush() : true
+        }) ?? false
+        if !saved.outbox.isEmpty && phase == .ready { AnswerRefresh.schedule() }
+        return sent
     }
 
     /** Sends the queued answers, oldest first; false while some still wait. */

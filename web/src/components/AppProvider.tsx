@@ -1,6 +1,6 @@
 "use client";
 
-import { PRESENCE_INPUT_MS, type Settled } from "@starbridge/protocol";
+import { PRESENCE_INPUT_MS, type Settled, type ShownImage } from "@starbridge/protocol";
 import {
   createContext,
   useCallback,
@@ -49,6 +49,26 @@ const DESKTOP_TICK_MS = 15_000;
  * A poller's read that skips its turn while the last one is still running, so requests that hang
  * rather than fail (a captive portal, a dead route) don't pile up before the backoff starts.
  */
+/** Closes notifications the inbox shows no longer need the owner (#1363). */
+function closeStaleNotifications(inbox: Inbox): void {
+  (async () => {
+    const reg = await navigator.serviceWorker?.getRegistration("/").catch(() => undefined);
+    const { closeStale } = await import("@/lib/pushFallback");
+    await closeStale(reg, inbox.items, inbox.snoozes, document.visibilityState === "visible");
+  })().catch(() => {});
+}
+
+/** Closes the notifications of these permission prompts (#1363). */
+function closePromptNotifications(ids: string[]): void {
+  if (ids.length === 0) return;
+  (async () => {
+    const reg = await navigator.serviceWorker?.getRegistration("/").catch(() => undefined);
+    const tags = new Set(ids.map((id) => `p:${id}`));
+    for (const n of (await reg?.getNotifications().catch(() => [])) ?? [])
+      if (tags.has(n.tag)) n.close();
+  })().catch(() => {});
+}
+
 function single(read: () => Promise<unknown>): () => void {
   let running = false;
   return () => {
@@ -59,6 +79,20 @@ function single(read: () => Promise<unknown>): () => void {
       .finally(() => {
         running = false;
       });
+  };
+}
+
+/** The inbox with the images this page fetched in place of those still pending (#1382). */
+function withImages(inbox: Inbox, shown: ReadonlyMap<string, ShownImage[]>): Inbox {
+  if (shown.size === 0) return inbox;
+  return {
+    ...inbox,
+    items: inbox.items.map((i) => {
+      const images = i.imagesPending && shown.get(i.decision.id);
+      if (!images) return i;
+      const { imagesPending: _, ...rest } = i;
+      return { ...rest, decision: { ...i.decision, images } };
+    }),
   };
 }
 
@@ -90,6 +124,8 @@ export type Store = {
   /** The last 7 days of prompts, once the log page loaded them. */
   promptLog?: PromptItem[];
   loadPromptLog: () => Promise<void>;
+  /** Fetches the images of an answered question listed without them (#1382). */
+  loadImages: (id: string) => Promise<void>;
   /** A directory member's name, for "Answered from Pixel". */
   deviceName: (id: string) => string;
   /** The mockups' devices, on /sample only (SampleProvider), where no device is ready. */
@@ -172,8 +208,19 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [runs, setRuns] = useState<Runs>();
   const inboxRef = useRef(inbox);
   inboxRef.current = inbox;
+  // Images fetched on this page by question id: a read that started before keeps them (#1382).
+  const shownImages = useRef(new Map<string, ShownImage[]>());
+  const fetchingImages = useRef(new Set<string>());
   // Inbox reads overlap (a load, pushes, polls): only the newest to start may land (#547).
   const inboxRead = useRef(newestWins());
+  // And they run one at a time, so a poll during the first load reads after it, not the same
+  // pages again from the start (#1380).
+  const inboxQueue = useRef<Promise<unknown>>(Promise.resolve());
+  const inboxTurn = useCallback((read: () => Promise<void>) => {
+    const turn = inboxQueue.current.then(read, read);
+    inboxQueue.current = turn.catch(() => {});
+    return turn;
+  }, []);
   const ctx = boot.state === "ready" ? boot.ctx : undefined;
 
   // Installed as an app from the landing page or the app, signed in or not (#590).
@@ -191,6 +238,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   /** Drops every machine's item the page holds in memory. */
   const forget = useCallback(() => {
     generation.current++;
+    shownImages.current.clear();
     // A read that starts before React renders the empty inbox must not reuse the old cursor.
     inboxRef.current = { items: [], rejected: [] };
     setInbox(inboxRef.current);
@@ -243,15 +291,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         settledRef.current = { byKey: new Map() };
       }
       if (b.state === "ready") {
-        let landed = () => false;
-        const loaded = await holding(() => {
-          landed = inboxRead.current();
-          return d.loadInbox(b.ctx);
+        await inboxTurn(async () => {
+          let landed = () => false;
+          const loaded = await holding(() => {
+            landed = inboxRead.current();
+            return d.loadInbox(b.ctx, undefined, { keep: true });
+          });
+          if (loaded && landed()) {
+            inboxRef.current = withImages(loaded, shownImages.current);
+            setInbox(inboxRef.current);
+            closeStaleNotifications(inboxRef.current);
+          }
         });
-        if (loaded && landed()) {
-          inboxRef.current = loaded;
-          setInbox(loaded);
-        }
         setInboxLoaded(true);
         const push = await import("@/lib/push");
         push.registerWorker();
@@ -266,7 +317,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setBoot({ state: "error", error: e instanceof Error ? e.message : String(e) });
       return "error";
     }
-  }, [forget, holding]);
+  }, [forget, holding, inboxTurn]);
 
   // One boot at a time: every poller that meets a 401 asks for one, and a second boot after the
   // first deleted a revoked browser's keys would replace "removed by" with Join. A request during
@@ -325,8 +376,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       return undefined;
     }
     if (!fresh) {
-      // Revoked from another device: boot shows why.
-      await reload();
+      // Revoked from another device: boot shows why. Not awaited: an inbox read calls this in
+      // its turn, and boot's own read waits for that turn to end.
+      reload();
       return undefined;
     }
     ctxRef.current = fresh;
@@ -334,21 +386,30 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return fresh;
   }, [reload]);
 
-  const refreshInbox = useCallback(async () => {
-    const fresh = await current();
-    if (!fresh) return;
-    const d = await load();
-    // The turn is taken with the base the read starts from, right before it lists.
-    let landed = () => false;
-    const loaded = await holding(() => {
-      landed = inboxRead.current();
-      return d.loadInbox(fresh, inboxRef.current);
+  // A read asked for while one runs waits for it, and every ask meanwhile shares that one read.
+  const inboxNext = useRef<Promise<void>>(undefined);
+  const refreshInbox = useCallback(() => {
+    if (inboxNext.current) return inboxNext.current;
+    const next = inboxTurn(async () => {
+      inboxNext.current = undefined;
+      const fresh = await current();
+      if (!fresh) return;
+      const d = await load();
+      // The turn is taken with the base the read starts from, right before it lists.
+      let landed = () => false;
+      const loaded = await holding(() => {
+        landed = inboxRead.current();
+        return d.loadInbox(fresh, inboxRef.current, { keep: true });
+      });
+      if (!loaded || !landed()) return;
+      // The next read starts before React renders this one.
+      inboxRef.current = withImages(loaded, shownImages.current);
+      setInbox(inboxRef.current);
+      closeStaleNotifications(inboxRef.current);
     });
-    if (!loaded || !landed()) return;
-    // The next read starts before React renders this one.
-    inboxRef.current = loaded;
-    setInbox(loaded);
-  }, [current, holding]);
+    inboxNext.current = next;
+    return next;
+  }, [current, holding, inboxTurn]);
 
   /**
    * Reads the open prompts and the settled notices since the last read. A prompt that left the
@@ -367,6 +428,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     for (const [k, v] of notices.settled) byKey.set(k, v);
     settledRef.current.cursor = notices.cursor;
     const at = Date.now();
+    // Prompts that left the open list, or that a settled notice closed: Safari gets no push that
+    // closes their notifications (#1363).
+    const openNow = new Set(open.map((p) => p.permission.id));
+    closePromptNotifications([
+      ...promptsRef.current.map((p) => p.permission.id).filter((id) => !openNow.has(id)),
+      ...[...notices.settled.values()].map((s) => s.itemId),
+    ]);
     setPrompts((was) => {
       const openIds = new Set(open.map((p) => p.permission.id));
       const closed = was
@@ -577,6 +645,24 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     [ctx, refreshPrompts, reload],
   );
 
+  const loadImages = useCallback(async (id: string) => {
+    const fresh = ctxRef.current;
+    if (!fresh || shownImages.current.has(id) || fetchingImages.current.has(id)) return;
+    fetchingImages.current.add(id);
+    const gen = generation.current;
+    try {
+      const d = await load();
+      const images = await d.loadImages(fresh, id);
+      // Forgotten meanwhile (signed out, revoked, held): nothing decrypted stays.
+      if (gen !== generation.current) return;
+      shownImages.current.set(id, images);
+    } finally {
+      fetchingImages.current.delete(id);
+    }
+    inboxRef.current = withImages(inboxRef.current, shownImages.current);
+    setInbox(inboxRef.current);
+  }, []);
+
   const loadPromptLog = useCallback(async () => {
     const fresh = await current();
     if (!fresh) return;
@@ -756,6 +842,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         answerPrompt,
         promptLog,
         loadPromptLog,
+        loadImages,
         deviceName,
         withheld,
         stopWaiting,
