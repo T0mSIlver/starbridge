@@ -18,6 +18,9 @@ private let READ: Set<String> = [
 /** Vector files only the machine's code runs: the local agent computes pace and alerts (#1147). */
 private let MACHINE_ONLY: Set<String> = ["pace.json"]
 
+/** Rules the app applies itself, not the port: the app's own tests read them (#1429). */
+private let APP_RULES: Set<String> = ["rules.json"]
+
 private func vectors(_ name: String) throws -> JSON {
     try JSON.parse(String(decoding: Data(contentsOf: vectorsDir.appendingPathComponent(name)), as: UTF8.self))
 }
@@ -64,7 +67,7 @@ final class ProtocolVectorsTests: XCTestCase {
 
     func testEveryVectorFileIsRead() throws {
         let files = try FileManager.default.contentsOfDirectory(atPath: vectorsDir.path).filter { $0.hasSuffix(".json") }
-        XCTAssertEqual(Set(files), READ.union(MACHINE_ONLY), "a vector file this port does not test")
+        XCTAssertEqual(Set(files), READ.union(MACHINE_ONLY).union(APP_RULES), "a vector file this port does not test")
     }
 
     func testDirectory() throws {
