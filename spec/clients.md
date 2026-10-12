@@ -118,7 +118,8 @@
   20 s. A write retries only when it cannot have landed; the web's writes retry on 502 and 503
   only, since it cannot tell a refused connection from a cut one.
 - **Rate limits** (#645). A 429 with `Retry-After` (seconds or a date) holds every call of the
-  page or app until then, first tries included, and the call is retried whatever its method, since
+  page or app until then, first tries included, except that the apps still send a presence beat
+  due during another call's hold, which the web holds (#1389), and the call is retried whatever its method, since
   it was refused before doing anything. A wait past the 20 s retry window reaches the caller as
   429 `rate-limited`. A 429 without `Retry-After` is a cap and reaches the caller at once. A
   presence beat's 429 holds nothing else: its limit is per device and route, and the next beat
