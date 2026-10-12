@@ -24,8 +24,3 @@ export function useSignInMethods(): { github: boolean; apple: boolean } {
   }, []);
   return methods;
 }
-
-/** Whether this server offers GitHub sign-in. */
-export function useGitHubSignIn(): boolean {
-  return useSignInMethods().github;
-}
