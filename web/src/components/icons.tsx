@@ -1,4 +1,5 @@
 import type { GitHubKind } from "@/lib/attachments";
+import { ARCH, DOT, VIEWBOX } from "./mark";
 
 // The web's own icon set, drawn to the mark (DESIGN.md, "Icons"): a 24-unit grid, 1.75 strokes,
 // round caps and joins, in currentColor.
@@ -221,13 +222,12 @@ export const Play = ({ size = 12 }: { size?: number }) => (
   </svg>
 );
 
-/** The space elevator (DESIGN.md, "The mark") without its ground: planet and tether in the text
-    colour, the climber in amber. */
+/** The mark (DESIGN.md, "The mark") without its ground: the arch in the text colour, the dot in
+    amber. Its bottom edge is the arch's feet, where a lockup's name stands. */
 export const Mark = ({ size = 20 }: { size?: number }) => (
-  <svg width={size} height={size} viewBox="18 18 72 72" aria-hidden="true" style={{ flex: "none" }}>
-    <circle cx="54" cy="148" r="80" fill="var(--fg)" />
-    <rect x="51.75" y="18" width="4.5" height="52" fill="var(--fg)" />
-    <rect x="48.5" y="34" width="11" height="20" rx="5.5" fill="var(--accent)" />
+  <svg width={size} height={size} viewBox={VIEWBOX} aria-hidden="true" style={{ flex: "none" }}>
+    <path d={ARCH} fill="var(--fg)" />
+    <circle cx={DOT.x} cy={DOT.y} r={DOT.r} fill="var(--accent)" />
   </svg>
 );
 
