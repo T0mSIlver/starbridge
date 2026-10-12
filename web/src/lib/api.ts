@@ -313,10 +313,11 @@ export const api = {
   cancelJoin: (id: string) => call<void>("DELETE", `/joins/${encodeURIComponent(id)}`),
 
   deleteItem: (id: string) => call<void>("DELETE", `/items/${encodeURIComponent(id)}`),
-  items: (kind: string, after?: string, opts: { open?: boolean } = {}) =>
+  /** `openBlobs`: answered decisions come without their images (#1382). */
+  items: (kind: string, after?: string, opts: { open?: boolean; openBlobs?: boolean } = {}) =>
     call<{ items: Stored[]; cursor: string }>(
       "GET",
-      `/items?kind=${kind}${after ? `&after=${encodeURIComponent(after)}` : ""}${opts.open ? "&open=1" : ""}`,
+      `/items?kind=${kind}${after ? `&after=${encodeURIComponent(after)}` : ""}${opts.open ? "&open=1" : ""}${opts.openBlobs ? "&blobs=open" : ""}`,
     ),
   item: (id: string) => call<Stored>("GET", `/items/${encodeURIComponent(id)}`),
   quota: async () => (await call<{ items: Stored[] }>("GET", "/quota")).items,

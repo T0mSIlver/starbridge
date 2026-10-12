@@ -47,3 +47,11 @@ test("a dropped decision goes, and its waiting state once it is not among the la
   expect(out).not.toContain("d");
   expect(out).not.toContain("w");
 });
+
+test("a decision listed again without its blobs keeps the ones it was kept with (#1382)", () => {
+  const open = listed("decision", "d");
+  (open.item as { blobs?: string[] }).blobs = ["blob"];
+  const [out] = merge([open], [listed("decision", "d", { answeredAt: at })], new Set());
+  expect(out?.item.blobs).toEqual(["blob"]);
+  expect(out?.answeredAt).toBe(at);
+});

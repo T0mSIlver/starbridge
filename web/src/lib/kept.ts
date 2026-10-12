@@ -26,8 +26,13 @@ export function merge(old: Stored[], read: Stored[], drop: ReadonlySet<string>):
   const byKey = new Map<string, Stored>();
   for (const s of [...old, ...read]) {
     const key = `${s.item.kind}/${s.item.id}`;
+    const had = byKey.get(key);
     byKey.delete(key);
-    byKey.set(key, s);
+    // Answered, a decision lists without the blobs it was kept with while open (#1382).
+    byKey.set(
+      key,
+      !s.item.blobs && had?.item.blobs ? { ...s, item: { ...s.item, blobs: had.item.blobs } } : s,
+    );
   }
   const all = [...byKey.values()].filter((s) => s.item.kind !== "decision" || !drop.has(s.item.id));
   const answered = all.filter((s) => s.item.kind === "decision" && s.answeredAt);

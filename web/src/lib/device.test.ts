@@ -21,6 +21,7 @@ import {
   recoveryKeyPair,
   revokeEntry,
   seal,
+  sealImage,
   toB64,
   verifyDirectory,
 } from "@starbridge/protocol";
@@ -456,6 +457,69 @@ test("a kept inbox reads only what came after it, and follows what the server dr
       "decision,settled,waiting,snooze 3",
       "decision,settled,waiting,snooze ",
     ]);
+  } finally {
+    globalThis.fetch = served;
+    await store.del("kept", ctx.account);
+  }
+});
+
+test("an answered question lists without its images, which load once shown and stay kept (#1382)", async () => {
+  const at = "2026-10-06T12:00:00Z";
+  const { keys, member: machine } = asker as NonNullable<typeof asker>;
+  const fresh = (await device.deviceContext(ctx.account)) as device.Ctx;
+  const { id, boxPk } = fresh.device;
+  const bytes = new Uint8Array(500).map((_, i) => i % 251);
+  const { blob, ref } = sealImage(bytes);
+  const item = {
+    ...seal(
+      "decision",
+      {
+        v: 1,
+        id: "d_pictured",
+        to: [id],
+        createdAt: at,
+        question: "Ship this layout?",
+        context: "",
+        options: ["Yes", "No"],
+        recommended: "Yes",
+        images: [{ type: "image/png" as const, width: 4, height: 3, ...ref }],
+        source: { machine: "asks", project: "p", session: "s" },
+      },
+      { id: machine.id, signKey: keys.sign.privateKey },
+      [{ id, boxPk }],
+    ),
+    blobs: [blob],
+  };
+  const stored = { item, cursor: "1", receivedAt: at, answeredAt: at };
+  const fetched: string[] = [];
+  const served = globalThis.fetch;
+  globalThis.fetch = (async (input: string, init?: RequestInit) => {
+    if (input === "/v1/items/d_pictured") {
+      fetched.push(input);
+      return Response.json(stored);
+    }
+    if (!input.startsWith("/v1/items?kind=decision")) return served(input, init);
+    const q = new URL(input, "http://x").searchParams;
+    if (q.get("open") || Number(q.get("after") ?? 0) >= 1)
+      return Response.json({ items: [], cursor: q.get("after") ?? "0" });
+    const { blobs: _, ...bare } = item;
+    const listed = q.get("blobs") === "open" ? { ...stored, item: bare } : stored;
+    return Response.json({ items: [listed], cursor: "1" });
+  }) as typeof fetch;
+  const keep = { keep: true };
+  try {
+    const [first] = (await device.loadInbox(fresh, undefined, keep)).items;
+    expect(first?.imagesPending).toBe(true);
+    expect(first?.decision.images).toEqual([{ type: "image/png", width: 4, height: 3, data: "" }]);
+    expect(fetched).toEqual([]);
+    expect(await device.loadImages(fresh, "d_pictured")).toEqual([
+      { type: "image/png", width: 4, height: 3, data: toB64(bytes) },
+    ]);
+    // The next load opens them from what this browser kept, with no fetch.
+    const [again] = (await device.loadInbox(fresh, undefined, keep)).items;
+    expect(again?.imagesPending).toBeUndefined();
+    expect(again?.decision.images?.[0]?.data).toBe(toB64(bytes));
+    expect(fetched).toEqual(["/v1/items/d_pictured"]);
   } finally {
     globalThis.fetch = served;
     await store.del("kept", ctx.account);

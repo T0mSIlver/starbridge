@@ -93,6 +93,7 @@ export function Inbox() {
     dismissRun,
     answerPrompt,
     deviceName,
+    loadImages,
   } = app;
   const [grouping, setGrouping] = usePref("grouping");
   const [historyOpen, setHistoryOpen] = usePref("historyOpen");
@@ -289,6 +290,10 @@ export function Inbox() {
         onDraft={(t) => (t ? drafts.set(id, t) : drafts.delete(id))}
         onAnswer={(r) => answerQuestion(e.item, r)}
         onSnooze={(until) => snoozeQuestion(e.item, until)}
+        onShowImages={() => {
+          // Failed, they stay pending; opening the question again tries again.
+          loadImages(e.item.decision.id).catch(() => {});
+        }}
       />
     );
   };

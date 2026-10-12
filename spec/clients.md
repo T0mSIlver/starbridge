@@ -49,9 +49,10 @@
   "Withdrawn:", which pushed the rest off a phone's row.
 - **History loads the last 7 days** (Tom, 2026-10-12, #1380): the server's own, since it drops
   an answered question 7 days after its answer. Older rows, which a browser kept, wait behind
-  "Show older" at History's end; Find searches every row. A History card's images are to
-  download when the card scrolls into view, once the protocol lists decisions without their
-  images (#1382); until then they come with the card.
+  "Show older" at History's end; Find searches every row. An answered question's images
+  download when they come on screen in its detail (Tom, 2026-10-12, #1382): History rows show
+  none, so a long history costs no image the owner does not open. The server lists answered
+  questions without them (`blobs=open`), and the browser keeps them once fetched.
 - **Closed sections wait at the bottom** (#662, #682). Closed, History sits at the bottom of a
   short inbox and Snoozed just above it, out of the way; opened, each glides up under the items
   and its rows fade in. Opening Snoozed leaves History at the bottom.

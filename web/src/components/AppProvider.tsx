@@ -1,6 +1,6 @@
 "use client";
 
-import { PRESENCE_INPUT_MS, type Settled } from "@starbridge/protocol";
+import { PRESENCE_INPUT_MS, type Settled, type ShownImage } from "@starbridge/protocol";
 import {
   createContext,
   useCallback,
@@ -62,6 +62,20 @@ function single(read: () => Promise<unknown>): () => void {
   };
 }
 
+/** The inbox with the images this page fetched in place of those still pending (#1382). */
+function withImages(inbox: Inbox, shown: ReadonlyMap<string, ShownImage[]>): Inbox {
+  if (shown.size === 0) return inbox;
+  return {
+    ...inbox,
+    items: inbox.items.map((i) => {
+      const images = i.imagesPending && shown.get(i.decision.id);
+      if (!images) return i;
+      const { imagesPending: _, ...rest } = i;
+      return { ...rest, decision: { ...i.decision, images } };
+    }),
+  };
+}
+
 export type Store = {
   boot: Boot | { state: "loading" } | { state: "error"; error: string };
   inbox: Inbox;
@@ -90,6 +104,8 @@ export type Store = {
   /** The last 7 days of prompts, once the log page loaded them. */
   promptLog?: PromptItem[];
   loadPromptLog: () => Promise<void>;
+  /** Fetches the images of an answered question listed without them (#1382). */
+  loadImages: (id: string) => Promise<void>;
   /** A directory member's name, for "Answered from Pixel". */
   deviceName: (id: string) => string;
   /** The mockups' devices, on /sample only (SampleProvider), where no device is ready. */
@@ -172,6 +188,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [runs, setRuns] = useState<Runs>();
   const inboxRef = useRef(inbox);
   inboxRef.current = inbox;
+  // Images fetched on this page by question id: a read that started before keeps them (#1382).
+  const shownImages = useRef(new Map<string, ShownImage[]>());
+  const fetchingImages = useRef(new Set<string>());
   // Inbox reads overlap (a load, pushes, polls): only the newest to start may land (#547).
   const inboxRead = useRef(newestWins());
   // And they run one at a time, so a poll during the first load reads after it, not the same
@@ -258,8 +277,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             return d.loadInbox(b.ctx, undefined, { keep: true });
           });
           if (loaded && landed()) {
-            inboxRef.current = loaded;
-            setInbox(loaded);
+            inboxRef.current = withImages(loaded, shownImages.current);
+            setInbox(inboxRef.current);
           }
         });
         setInboxLoaded(true);
@@ -362,8 +381,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       });
       if (!loaded || !landed()) return;
       // The next read starts before React renders this one.
-      inboxRef.current = loaded;
-      setInbox(loaded);
+      inboxRef.current = withImages(loaded, shownImages.current);
+      setInbox(inboxRef.current);
     });
     inboxNext.current = next;
     return next;
@@ -596,6 +615,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     [ctx, refreshPrompts, reload],
   );
 
+  const loadImages = useCallback(async (id: string) => {
+    const fresh = ctxRef.current;
+    if (!fresh || shownImages.current.has(id) || fetchingImages.current.has(id)) return;
+    fetchingImages.current.add(id);
+    try {
+      const d = await load();
+      shownImages.current.set(id, await d.loadImages(fresh, id));
+    } finally {
+      fetchingImages.current.delete(id);
+    }
+    inboxRef.current = withImages(inboxRef.current, shownImages.current);
+    setInbox(inboxRef.current);
+  }, []);
+
   const loadPromptLog = useCallback(async () => {
     const fresh = await current();
     if (!fresh) return;
@@ -775,6 +808,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         answerPrompt,
         promptLog,
         loadPromptLog,
+        loadImages,
         deviceName,
         withheld,
         stopWaiting,

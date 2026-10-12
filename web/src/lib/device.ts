@@ -58,6 +58,7 @@ import {
   revokeEntryAsync,
   type SealedItem,
   type Settled,
+  type ShownImage,
   type SignedEnvelope,
   type Snooze,
   sealAsync,
@@ -1256,12 +1257,21 @@ async function openDecision(
     notice && notice.outcome !== "device" && closing.at === s.answeredAt
       ? notice.outcome
       : undefined;
+  // Listed without its blobs (#1382): the images wait, at their size, until they are shown.
+  const pending = !!body.images?.length && !s.item.blobs;
   return {
     // Each image opens from its blob, sealed once for every device (#685).
     decision: {
       ...body,
-      ...(body.images ? { images: openImages(s.item, body.images) } : {}),
+      ...(body.images
+        ? {
+            images: pending
+              ? body.images.map(({ key: _, hash: __, ...image }) => ({ ...image, data: "" }))
+              : openImages(s.item, body.images),
+          }
+        : {}),
     } as ShownDecision,
+    ...(pending ? { imagesPending: true as const } : {}),
     machine,
     ...(s.answeredAt ? { answeredAt: s.answeredAt } : {}),
     ...(settled ? { settled } : {}),
@@ -1407,7 +1417,9 @@ export async function loadInbox(
   let cursor = inbox.cursor ?? kept?.cursor;
   const read: Stored[] = [];
   for (;;) {
-    const page = await api.items("decision,settled,waiting,snooze", cursor);
+    const page = await api.items("decision,settled,waiting,snooze", cursor, {
+      openBlobs: opts.keep,
+    });
     for (const s of page.items) await take(s, false);
     if (opts.keep) read.push(...page.items);
     cursor = page.cursor;
@@ -1472,6 +1484,28 @@ export async function loadInbox(
     }));
   }
   return { items, cursor, rejected, retry, waits, snoozes } satisfies Inbox;
+}
+
+/**
+ * The images of a decision listed without them (#1382), fetched with the item and checked
+ * against the hashes its signed body holds; kept with the item, so they download once.
+ */
+export async function loadImages(ctx: Ctx, id: string): Promise<ShownImage[]> {
+  const s = await api.item(id);
+  const { body } = await openMachine(ctx, s.item, "decision");
+  if (body.id !== id) throw new Error("the server sent another question");
+  const images = openImages(s.item, (body as Decision).images);
+  const blobs = s.item.blobs;
+  // Kept for this device only; gone meanwhile, an empty record reads from the start next time.
+  if (blobs && (await store.get("kept", ctx.account))?.device === ctx.device.id)
+    await store.update("kept", ctx.account, (had) => ({
+      device: ctx.device.id,
+      cursor: had?.cursor ?? "",
+      items: (had?.items ?? []).map((k) =>
+        k.item.kind === "decision" && k.item.id === id ? { ...k, item: { ...k.item, blobs } } : k,
+      ),
+    }));
+  return images;
 }
 
 /** Signs the answer and seals it to the machine that asked, which must still be active. */
