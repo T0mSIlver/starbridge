@@ -243,3 +243,8 @@
 :global(html):has(.panes) {
   scrollbar-gutter: auto;
 }
+
+/* Where History lays out its next rows (Inbox.tsx). */
+.pastMore {
+  height: 1px;
+}
