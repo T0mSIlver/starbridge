@@ -148,7 +148,7 @@ class ServerStore(
     private val lock = Mutex()
     private val images = Images(sodium)
     private val loaded = disk.load()
-    private var saved = loaded.first?.readable() ?: Saved(defaultServer)
+    private var saved = loaded.first?.readable()?.shed() ?: Saved(defaultServer, answeredImagesShed = true)
     private var secrets = loaded.second
     private var directory: Directory? = null
     private var pending: Pair<PairingCode, PairingRequestBody>? = null
@@ -226,6 +226,8 @@ class ServerStore(
     @Volatile private var savedDecisions: List<Decision> = emptyList()
 
     init {
+        // Written once without the answered questions' images, so the next launch reads less.
+        if (loaded.first?.answeredImagesShed == false) runCatching { disk.save(saved) }
         directory = runCatching { verified(saved.entries) }.getOrNull()
         publish()
         if (saved.joining != null) waitForApproval()
@@ -411,7 +413,7 @@ class ServerStore(
         alerts.clearAll()
         pendingPush = null
         confirmedPush = null
-        saved = Saved(saved.server, pushType = saved.pushType)
+        saved = Saved(saved.server, pushType = saved.pushType, answeredImagesShed = true)
         secrets = Secrets()
         directory = null
         pending = null
@@ -1080,13 +1082,14 @@ class ServerStore(
                 imagesAsked.remove(id)
                 return@launch
             }
-            // After any sync under way, which writes back the list it read.
-            lock.withLock {
-                val (_, body) = open(listed.item) ?: return@withLock
-                if (listed.item.kind != "decision" || body !is dev.starbridge.app.protocol.Decision || body.id != id) return@withLock
+            // After any sync under way, which writes back the list it read; a failed write is
+            // reported, as every locked run's is.
+            locked(showBusy = false) {
+                val (_, body) = open(listed.item) ?: return@locked
+                if (listed.item.kind != "decision" || body !is dev.starbridge.app.protocol.Decision || body.id != id) return@locked
                 val opened = images.openAll(body.images.orEmpty(), listed.item.blobs)
-                if (opened.all { it == null }) return@withLock
-                val d = saved.decisions.find { it.body.id == id }?.takeIf { it.imagesPending } ?: return@withLock
+                if (opened.all { it == null }) return@locked
+                val d = saved.decisions.find { it.body.id == id }?.takeIf { it.imagesPending } ?: return@locked
                 persist(saved.copy(decisions = saved.decisions.map { if (it === d) d.copy(images = opened) else it }))
             }
         }

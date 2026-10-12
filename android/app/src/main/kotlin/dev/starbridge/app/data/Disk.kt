@@ -108,6 +108,11 @@ data class Saved(
     val server: String,
     /** The file's format ([FORMAT]); written even at its default, so a later one can tell. */
     @OptIn(ExperimentalSerializationApi::class) @EncodeDefault val v: Int = FORMAT,
+    /**
+     * The answered questions' images are gone from this file (#1464): kept before they listed
+     * without them, they made it tens of megabytes, read whole at every launch.
+     */
+    val answeredImagesShed: Boolean = false,
     val account: String? = null,
     /** Another device already set the account up, so this one joins or recovers. */
     val accountExists: Boolean = false,
@@ -187,6 +192,12 @@ const val FORMAT = 1
  * [Saved] without the items whose kept text this app no longer reads, so a body never throws when
  * a screen reads it. Reading them again would not help: the server holds the same signed text.
  */
+/** This state without the images of answered questions, which download again when shown (#1464). */
+fun Saved.shed(): Saved = if (answeredImagesShed) this else copy(
+    answeredImagesShed = true,
+    decisions = decisions.map { if (it.answeredAt != null || it.answer != null) it.copy(images = emptyList()) else it },
+)
+
 fun Saved.readable(): Saved {
     fun ok(read: () -> Any?) = runCatching { read() }.onFailure { Log.w("Starbridge", "dropped a saved item: ${it.message}") }.isSuccess
     return copy(
