@@ -641,6 +641,7 @@ server whose disk is full answers writes 503 `storage-full` with `Retry-After`; 
 | Sessions | 50 per account; signing in past that ends the oldest, unpaired ones first |
 | `GET /auth/github/callback` and `POST /auth/app/session` | 60 a minute per address, together |
 | New accounts | 30 an hour per address, an IPv6 client counting as its /64: the page goes to `/?signin=limited`, the app gets 429 `rate-limited`; sign-ins of existing accounts don't count |
+| `DELETE /account` | 3 an hour per address, an IPv6 client counting as its /64: 429 `rate-limited` |
 | `POST /auth/owner` | 10 a minute per address |
 | `GET /auth/challenge` | 20 a minute per account |
 | `POST /pairings` | 30 a minute per address; 50 unapproved pairings per address, an IPv6 client counting as its /48: 429 `too-many-pairings` |
