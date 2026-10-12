@@ -483,7 +483,7 @@ private fun NoMachine(onScan: (String) -> Unit, onAddDevice: () -> Unit) {
         }
         Text("Add a machine", style = StarbridgeTheme.type.heading, color = MaterialTheme.colorScheme.onSurface, textAlign = TextAlign.Center, modifier = Modifier.semantics { heading() })
         Text(
-            "Install Starbridge on each machine that runs your agents. Its setup shows a code to approve here; then its agents’ questions arrive in this inbox.",
+            "Install Starbridge on each machine that runs your agents. Its setup shows a QR code in the terminal: scan it with Scan a QR code below, since the camera app can’t read it. Then its agents’ questions arrive in this inbox.",
             style = StarbridgeTheme.type.body,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,

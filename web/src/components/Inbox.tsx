@@ -948,8 +948,9 @@ function NoMachine() {
     <div className={s.noMachine}>
       <h2 className="t-heading">Add a machine</h2>
       <p className={`t-small ${s.noMachineText}`}>
-        Install Starbridge on each machine that runs your agents. Its setup shows a code to approve
-        here; then its agents' questions arrive in this inbox.
+        Install Starbridge on each machine that runs your agents. Its setup shows a pairing code in
+        the terminal: type it under Add a device below. Then its agents' questions arrive in this
+        inbox.
       </p>
       <InstallBox />
       {/* Its code, typed or from a pairing link, one tap away (#1367). */}
