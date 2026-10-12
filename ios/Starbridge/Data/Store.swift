@@ -130,6 +130,11 @@ final class Store {
         // Nothing is written this run, so the file and the keys stay for a launch that can read them.
         if let locked { notice = locked }
         beacon = Beacon { [weak self] present in try await self?.api().presence(present) }
+        // The saved chain, checked against the pin, as Android's store does at launch: Devices and the
+        // inbox's empty state read it before the first sync, and offline (#1370).
+        if !saved.entries.isEmpty, saved.pin != nil {
+            directory = try? Directories.verify(saved.entries.compactMap { try? JSON.parse($0) }, account: saved.account, pin: saved.pin)
+        }
         if saved.joining != nil { waitForApproval() }
         if saved.digitJoin != nil { waitForDigitJoin() }
     }
