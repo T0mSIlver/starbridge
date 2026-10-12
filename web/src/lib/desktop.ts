@@ -75,8 +75,6 @@ export type DesktopBridge = {
   login?(): boolean;
   setLogin?(login: boolean): void;
   onLogin?(f: (() => void) | null): void;
-  /** The server's host. */
-  server?(): string;
   /** Opens the app's window for setting the server; the app restarts on a new one. */
   openServer?(): void;
   /** Called on Settings… in the menu bar's menu. */

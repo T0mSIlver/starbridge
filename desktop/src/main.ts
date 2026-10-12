@@ -212,7 +212,7 @@ async function ready(): Promise<void> {
   ipcMain.on("screen?", (e) => {
     e.returnValue = e.sender === win?.webContents ? screen?.read() : null;
   });
-  // Open at login and the server, which the menu bar's menu held before #1449.
+  // Open at login and the server window, which the menu bar's menu held before #1449.
   ipcMain.on("login?", (e) => {
     e.returnValue = e.sender === win?.webContents ? app.getLoginItemSettings().openAtLogin : null;
   });
@@ -220,9 +220,6 @@ async function ready(): Promise<void> {
     if (!fromPage(e) || typeof x !== "boolean") return;
     app.setLoginItemSettings({ openAtLogin: x });
     win?.webContents.send("login", app.getLoginItemSettings().openAtLogin);
-  });
-  ipcMain.on("server?", (e) => {
-    e.returnValue = e.sender === win?.webContents ? new URL(origin).host : null;
   });
   ipcMain.on("open-server", (e) => {
     if (fromPage(e)) showServer();

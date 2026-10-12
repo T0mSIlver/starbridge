@@ -61,7 +61,6 @@ if (location.origin === arg("origin")) {
     login = l === true;
     onLogin?.();
   });
-  const server: unknown = ipcRenderer.sendSync("server?");
   let onSettings: (() => void) | null = null;
   // Settings… in the menu bar's menu: the page routes there itself, else (an older page) loads it.
   ipcRenderer.on("settings", () => {
@@ -149,8 +148,6 @@ if (location.origin === arg("origin")) {
     onLogin: (f: (() => void) | null) => {
       onLogin = f;
     },
-    /** The server's host; the app restarts on another. */
-    server: () => server,
     /** Opens the window where the owner sets the server. */
     openServer: () => ipcRenderer.send("open-server"),
     /** Called on Settings… in the menu bar's menu, to show the page's Settings. */

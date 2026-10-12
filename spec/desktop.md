@@ -52,10 +52,11 @@ a browser; the app adds a menu bar light and notifications, so a web release nee
 - **The menu bar.** The mark in one colour, as macOS draws menu bar icons; while anything needs
   the owner, its dot turns amber, the one amber light, with no count: the window says what
   (owner's pick from mockups, 2026-10-09). A click shows the window, nothing else; a right-click
-  opens Open Starbridge, Settings… and Quit, so the app quits with its window closed (#1449). The
-  menu's other items moved to Settings → App, desktop only: Keep Starbridge in (from Look), Open
-  Starbridge at login (off by default) and Server, which opens the server window. Settings… opens
-  that window instead while the page can't load, so a wrong server can still be fixed. Closing the
+  opens Open Starbridge, Settings… and Quit, so the app quits with its window closed (#1449). Open
+  at Login moved to Settings → App, desktop only, with Keep Starbridge in (from Look), as Open
+  Starbridge at login (off by default). The server has no Settings row: it is chosen at sign-in, as
+  on the web, so the default is hard to leave by mistake (owner's call). Settings… opens the
+  server window instead while the page can't load, so a wrong server can still be fixed. Closing the
   window keeps the app in the menu bar and drops its Dock icon, which shows again with the window.
   ⌃⌥S shows the window from anywhere.
 - **The menu bar icon** centres the arch top to bottom in its 18 pt image, as the system icons

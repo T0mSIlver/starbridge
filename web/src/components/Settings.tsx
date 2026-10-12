@@ -877,26 +877,19 @@ function useDesktopLogin(): boolean | undefined {
   return login;
 }
 
-/** Only in the desktop app: where it stays, and what its menu bar menu held before (#1449). */
+/**
+ * Only in the desktop app: where it stays, and Open at login from its old menu bar menu (#1449).
+ * The server is chosen at sign-in, as on the web, so the default is hard to leave by mistake.
+ */
 function AppSection() {
   const login = useDesktopLogin();
-  const server = desktop?.server?.();
-  if (!desktop?.setLogin || login === undefined || !server) return null;
+  if (!desktop?.setLogin || login === undefined) return null;
   const setLogin = desktop.setLogin;
   return (
     <Section title="App">
       <PlaceRow />
       <Row label="Open Starbridge at login">
         <Switch label="Open Starbridge at login" checked={login} onChange={setLogin} />
-      </Row>
-      <Row label="Server" sub={server}>
-        <button
-          type="button"
-          className={`t-meta ${ui.btn} ${ui.sm} ${ui.ghost}`}
-          onClick={() => desktop?.openServer?.()}
-        >
-          Change
-        </button>
       </Row>
     </Section>
   );

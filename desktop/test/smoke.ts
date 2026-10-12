@@ -299,7 +299,7 @@ try {
   );
 
   // The menu bar icon's menu holds what the closed window can't do (#1449); Settings… opens the
-  // page's Settings, where the page reads the server and Open at login over the bridge.
+  // page's Settings, where the page reads Open at login over the bridge.
   const labels = await app.evaluate(() => {
     const g = globalThis as { tray?: Electron.Tray; menu?: Electron.Menu };
     g.tray?.emit("right-click");
@@ -308,10 +308,7 @@ try {
   assert.deepEqual(labels, ["Open Starbridge", "Settings…", "", "Quit Starbridge"]);
   await app.evaluate(() => (globalThis as { menu?: Electron.Menu }).menu?.items[1]?.click());
   await page.waitForURL((u) => u.pathname === "/settings");
-  assert.deepEqual(
-    await page.evaluate("[window.starbridgeDesktop.server(), window.starbridgeDesktop.login()]"),
-    [new URL(url(server)).host, false],
-  );
+  assert.equal(await page.evaluate("window.starbridgeDesktop.login()"), false);
 
   // Kept in the Dock alone, the menu bar icon goes, and the page reads the choice after a reload.
   type Bridge = { place(): string; setPlace(p: string): void };
