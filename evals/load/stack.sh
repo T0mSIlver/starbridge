@@ -34,7 +34,8 @@ secrets() {
   {
     echo "PUBLIC_URL=http://localhost:18000"
     echo "TRUST_PROXY=1"
-    echo "RELAY_MODE=1"
+    # No RELAY_MODE: the server refuses it beside private push hosts, which the fakes need, and
+    # no scenario calls /v1/relay.
     echo "ALLOW_PRIVATE_PUSH_ENDPOINTS=1"
     echo "GITHUB_CLIENT_ID=load"
     echo "GITHUB_CLIENT_SECRET=load"
