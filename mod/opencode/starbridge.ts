@@ -496,6 +496,7 @@ async function server({ client, directory }: Input) {
         for (const q of questions.values()) if (q.session === session) q.stop.abort();
       } else if (event.type === "session.deleted") {
         const id = (event.properties as { info: { id: string } }).info.id;
+        for (const a of asks.values()) if (a.session === id) a.stop.abort();
         for (const q of questions.values()) if (q.session === id) q.stop.abort();
         void loops.get(id)?.end();
         loops.delete(id);

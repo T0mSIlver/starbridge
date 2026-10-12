@@ -28,14 +28,14 @@ final class FirstDeviceTests: XCTestCase {
     }
 
     func testSetsUpTheFirstDeviceThenRecovers() async throws {
-        let session = try await Api(server: server, session: nil).ownerSignIn(token: token)
+        let session = try await Api(server: server, session: nil).ownerSession(token: token)
         let owner = Api(server: server, session: session)
         let before = try await owner.directory(from: 0)
         try XCTSkipUnless(before.isEmpty, "the server's account already has devices")
         let account = try await owner.me().account
         addTeardownBlock { [server, token] in
             // A fresh owner session deletes the account; the next owner sign-in makes an empty one.
-            let s = try? await Api(server: server, session: nil).ownerSignIn(token: token)
+            let s = try? await Api(server: server, session: nil).ownerSession(token: token)
             var request = URLRequest(url: URL(string: server + "/v1/account")!)
             request.httpMethod = "DELETE"
             request.setValue("Bearer \(s ?? "")", forHTTPHeaderField: "Authorization")
@@ -45,7 +45,7 @@ final class FirstDeviceTests: XCTestCase {
         // --- The first device ---
         let firstVault = MemoryVault()
         let first = store(firstVault, "First iPhone")
-        await first.signInWithOwnerToken(server: server, token: token)
+        await first.signInWaiting(server: server, token: token)
         XCTAssertEqual(first.phase, .noDevice(accountExists: false))
         await first.setUpFirstDevice()
         XCTAssertNil(first.notice)
@@ -66,7 +66,7 @@ final class FirstDeviceTests: XCTestCase {
         // --- Recovering on another iPhone ---
         let secondVault = MemoryVault()
         let second = store(secondVault, "Second iPhone")
-        await second.signInWithOwnerToken(server: server, token: token)
+        await second.signInWaiting(server: server, token: token)
         XCTAssertEqual(second.phase, .noDevice(accountExists: true))
         // Another key, valid as a key but not this account's.
         await second.recover(RecoveryKeys.encode(RecoveryKeys.generateSeed()))

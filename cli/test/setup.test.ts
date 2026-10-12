@@ -642,6 +642,19 @@ test("Cursor: setup keeps the owner's config and skill, and refresh updates its 
   expect(readFileSync(config, "utf8")).toBe("{ // mine\n}");
 });
 
+test("a Claude Code settings file that is JSON but no object is left as it is, with what to add (#1335)", async () => {
+  const m = await machine();
+  for (const text of ["[]", "null", '"opus"']) {
+    writeFileSync(m.settings, text);
+    m.ctx.lines.length = 0;
+    expect(await setup(m.sys, { agent: "claude" })).toBe(0);
+    const out = m.ctx.lines.join("\n");
+    expect(out).not.toContain("starbridge commands allowed");
+    expect(out).toContain(`${m.settings} is not valid JSON: add Bash(starbridge ask:*)`);
+    expect(readFileSync(m.settings, "utf8")).toBe(text);
+  }
+});
+
 test("status names the Claude Code session it runs in when that session's mod never called (#863)", async () => {
   const m = await machine();
   await startAgent(m.ctx);
@@ -838,7 +851,8 @@ test("Ctrl-C at the test decision withdraws it from the devices (#613)", async (
     prompt: { ...m.sys.prompt, confirm: async (q) => q.trim().startsWith("Send a test decision") },
   };
   const done = setup(sys, { noQuota: true, noAgents: true, noService: true });
-  await until(async () => (await server.opened("decision")).length === 1);
+  // Sent, and waiting for its answer: a Ctrl-C while it is still being sent is ask's to withdraw.
+  await until(async () => (await server.opened("waiting")).length === 1);
   stop.abort();
   expect(await done).toBe(0);
   expect(m.ctx.lines).toContain("– Skipped");
@@ -1451,12 +1465,13 @@ test("Antigravity gets the plugin with the rule, the skill and the allow hook (#
     "command(starbridge hello)",
   ]);
 
-  // An older release's plugin is brought up to date, its stray files gone.
+  // An older release's plugin is brought up to date; a file the owner put there stays (#1324).
   writeFileSync(join(dir, "rules/starbridge.md"), "---\n# Written by starbridge 0.0.1\n---\nold\n");
-  writeFileSync(join(dir, "old.sh"), "");
+  writeFileSync(join(dir, "mine.sh"), "");
   expect(await refresh(m.sys)).toContain(`Updated ${dir}.`);
   expect(antigravityState(m.sys)).toBe("current");
-  expect(existsSync(join(dir, "old.sh"))).toBe(false);
+  expect(existsSync(join(dir, "mine.sh"))).toBe(true);
+  rmSync(join(dir, "mine.sh"));
 
   expect(await uninstallAgent(m.sys, "antigravity")).toBe(0);
   expect(existsSync(dir)).toBe(false);
