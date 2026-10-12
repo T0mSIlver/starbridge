@@ -218,6 +218,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   /** Drops every machine's item the page holds in memory. */
   const forget = useCallback(() => {
     generation.current++;
+    shownImages.current.clear();
     // A read that starts before React renders the empty inbox must not reuse the old cursor.
     inboxRef.current = { items: [], rejected: [] };
     setInbox(inboxRef.current);
@@ -619,9 +620,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const fresh = ctxRef.current;
     if (!fresh || shownImages.current.has(id) || fetchingImages.current.has(id)) return;
     fetchingImages.current.add(id);
+    const gen = generation.current;
     try {
       const d = await load();
-      shownImages.current.set(id, await d.loadImages(fresh, id));
+      const images = await d.loadImages(fresh, id);
+      // Forgotten meanwhile (signed out, revoked, held): nothing decrypted stays.
+      if (gen !== generation.current) return;
+      shownImages.current.set(id, images);
     } finally {
       fetchingImages.current.delete(id);
     }
