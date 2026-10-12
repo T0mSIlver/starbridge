@@ -335,8 +335,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       return undefined;
     }
     if (!fresh) {
-      // Revoked from another device: boot shows why.
-      await reload();
+      // Revoked from another device: boot shows why. Not awaited: an inbox read calls this in
+      // its turn, and boot's own read waits for that turn to end.
+      reload();
       return undefined;
     }
     ctxRef.current = fresh;

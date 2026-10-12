@@ -412,6 +412,7 @@ test("a kept inbox reads only what came after it, and follows what the server dr
   // The server's list, in cursor order, and what the page asked of it.
   let listed = [asked("d_open", "1"), asked("d_done", "2", at)];
   const asks: string[] = [];
+  let askedLate: ReturnType<typeof asked> | undefined;
   const served = globalThis.fetch;
   globalThis.fetch = (async (input: string, init?: RequestInit) => {
     if (!input.startsWith("/v1/items?kind=decision")) return served(input, init);
@@ -421,6 +422,8 @@ test("a kept inbox reads only what came after it, and follows what the server dr
     const items = listed.filter(
       (s) => Number(s.cursor) > after && (!q.get("open") || !s.answeredAt),
     );
+    // A question asked right after the page listed the open ones.
+    if (q.get("open") && askedLate) listed.push(askedLate);
     return Response.json({ items, cursor: items.at(-1)?.cursor ?? String(after) });
   }) as typeof fetch;
   const ids = (inbox: device.Inbox) => inbox.items.map((i) => i.decision.id).sort();
@@ -432,10 +435,17 @@ test("a kept inbox reads only what came after it, and follows what the server dr
     asks.length = 0;
     expect(ids(await device.loadInbox(fresh, undefined, keep))).toEqual(["d_done", "d_open"]);
     expect(asks).toEqual(["decision  open", "decision,settled,waiting,snooze 2"]);
-    // The server dropped the open question unanswered: it goes, kept no more.
+    // The server dropped the open question unanswered: it goes, kept no more. One asked after
+    // the open list stays.
     listed = listed.filter((s) => s.item.id !== "d_open");
-    expect(ids(await device.loadInbox(fresh, undefined, keep))).toEqual(["d_done"]);
-    expect((await store.get("kept", ctx.account))?.items.map((s) => s.item.id)).toEqual(["d_done"]);
+    askedLate = asked("d_late", "3");
+    expect(ids(await device.loadInbox(fresh, undefined, keep))).toEqual(["d_done", "d_late"]);
+    askedLate = undefined;
+    expect((await store.get("kept", ctx.account))?.items.map((s) => s.item.id)).toEqual([
+      "d_done",
+      "d_late",
+    ]);
+    expect(ids(await device.loadInbox(fresh, undefined, keep))).toEqual(["d_done", "d_late"]);
     // Another server, or the same one reset: an open question it lists before the kept cursor
     // means the kept items are not its own, so it reads all again.
     listed = [asked("d_new", "1")];
@@ -443,7 +453,7 @@ test("a kept inbox reads only what came after it, and follows what the server dr
     expect(ids(await device.loadInbox(fresh, undefined, keep))).toEqual(["d_new"]);
     expect(asks).toEqual([
       "decision  open",
-      "decision,settled,waiting,snooze 2",
+      "decision,settled,waiting,snooze 3",
       "decision,settled,waiting,snooze ",
     ]);
   } finally {

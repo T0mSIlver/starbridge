@@ -1415,20 +1415,27 @@ export async function loadInbox(
   }
   const drop = new Set<string>();
   if (kept && open) {
-    const latest = new Map<string, Stored>();
-    for (const s of [...kept.items, ...read])
-      if (s.item.kind === "decision") latest.set(s.item.id, s);
+    const listed = new Set(read.filter((s) => s.item.kind === "decision").map((s) => s.item.id));
+    const held = new Set(
+      kept.items.filter((s) => s.item.kind === "decision").map((s) => s.item.id),
+    );
     // An open question neither kept nor listed after the cursor: the server is not the one
     // these were kept from (restored, or reset). Read it all again.
-    if ([...open].some((id) => !latest.has(id))) {
+    if ([...open].some((id) => !held.has(id) && !listed.has(id))) {
       await store.del("kept", ctx.account);
       return loadInbox(ctx, inbox, opts);
     }
-    // Kept open, and open no more without an answer: the server dropped it (PROTOCOL.md, Limits).
-    for (const [id, s] of latest)
-      if (!s.answeredAt && !open.has(id)) {
-        drop.add(id);
-        byId.delete(id);
+    // Kept open, not open on the server and not listed since, so not answered either: the
+    // server dropped it (PROTOCOL.md, Limits). One listed since came after the open list.
+    for (const s of kept.items)
+      if (
+        s.item.kind === "decision" &&
+        !s.answeredAt &&
+        !open.has(s.item.id) &&
+        !listed.has(s.item.id)
+      ) {
+        drop.add(s.item.id);
+        byId.delete(s.item.id);
       }
   }
   // The machine names the winner after the answer, so its notice often lists without the
