@@ -107,19 +107,6 @@
   },
   "options": [
     {
-      "name": "none recommended",
-      "options": [
-        "Merge",
-        "Wait",
-        "Close"
-      ],
-      "ordered": [
-        "Merge",
-        "Wait",
-        "Close"
-      ]
-    },
-    {
       "name": "recommended moves first",
       "options": [
         "Merge",

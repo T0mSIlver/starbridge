@@ -2679,13 +2679,9 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
         { now: "2026-10-12T22:00", morning: "2026-10-13T09:00" },
       ],
     },
-    // A question's options, the agent's recommended one first (#191), compared by code points.
+    // A question's options, the agent's recommended one first (#191), compared by code points. A
+    // question with options always names one.
     options: [
-      {
-        name: "none recommended",
-        options: ["Merge", "Wait", "Close"],
-        ordered: ["Merge", "Wait", "Close"],
-      },
       {
         name: "recommended moves first",
         options: ["Merge", "Wait", "Close"],
