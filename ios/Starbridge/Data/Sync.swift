@@ -686,10 +686,18 @@ extension Store {
         }
     }
 
-    /** A background refresh's turn (#1392): sends the outbox, and asks for another turn while some wait. */
+    /**
+     * A background refresh's turn (#1392): sends the outbox, and asks for another turn while some
+     * wait. It reads the directory first, as a sync does: a cold launch has none, and `flush`
+     * needs it to hold answers back while the server withholds entries.
+     */
     func flushInBackground() async -> Bool {
         await Self.waitOutHold()
-        let sent = (try? await serial { self.phase == .ready ? try await self.flush() : true }) ?? false
+        let sent = (try? await serial {
+            guard self.phase == .ready else { return true }
+            try await self.syncDirectory()
+            return self.phase == .ready ? try await self.flush() : true
+        }) ?? false
         if !saved.outbox.isEmpty && phase == .ready { AnswerRefresh.schedule() }
         return sent
     }
