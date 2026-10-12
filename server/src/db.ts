@@ -238,7 +238,10 @@ const V7 = "ALTER TABLE push_subscriptions ADD COLUMN environment TEXT;";
  */
 const V8 = "ALTER TABLE revoked_sessions ADD COLUMN account_id TEXT;";
 
-export const MIGRATIONS = [V1, V2, V3, V4, V5, V6, V7, V8];
+/** When each machine last reported a CLI release other than the one before (#1266). */
+const V9 = "ALTER TABLE members ADD COLUMN cli_updated_at TEXT;";
+
+export const MIGRATIONS = [V1, V2, V3, V4, V5, V6, V7, V8, V9];
 
 /** The `user_version` this server brings a database to. */
 export const SCHEMA_VERSION = MIGRATIONS.length;

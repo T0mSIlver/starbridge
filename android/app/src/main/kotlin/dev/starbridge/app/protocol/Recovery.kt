@@ -54,16 +54,18 @@ object RecoveryKeys {
     /** While typing (no [sodium]), only what more typing cannot fix counts. */
     fun read(text: String, sodium: Sodium? = null): Reading {
         val chars = chars(text)
-        val bad = chars.indexOfFirst { it !in CROCKFORD }
+        // Code points, as strings count them (#1082): an emoji is one character, not two halves (#1305).
+        val points = chars.codePoints().toArray()
+        val bad = points.indexOfFirst { it > 0xffff || it.toChar() !in CROCKFORD }
         val problem = when {
-            bad >= 0 -> "Character ${bad + 1}, \"${chars[bad]}\", is not in a recovery key."
+            bad >= 0 -> "Character ${bad + 1}, \"${String(Character.toChars(points[bad]))}\", is not in a recovery key."
             sodium == null -> null
-            chars.length != CHARS -> "A recovery key has $CHARS characters; this has ${chars.length}."
+            points.size != CHARS -> "A recovery key has $CHARS characters; this has ${points.size}."
             !bytes(chars).let { b -> check(b.copyOf(16), sodium).let { c -> b[16] == c[0] && (b[17].toInt() and 0xf0).toByte() == c[1] } } ->
                 "A character is wrong. Check each group against what you wrote down."
             else -> null
         }
-        return Reading(chars.length, problem)
+        return Reading(points.size, problem)
     }
 
     /** The seed behind a typed key; throws with what is wrong. */

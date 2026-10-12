@@ -30,3 +30,12 @@ updates:
     groups:
       docker:
         patterns: ["*"]
+  # The third-party images deploy/compose.yaml pulls (#1274), which the docker ecosystem, reading
+  # Dockerfiles only, never sees.
+  - package-ecosystem: docker-compose
+    directory: /deploy
+    schedule:
+      interval: monthly
+    groups:
+      docker-compose:
+        patterns: ["*"]

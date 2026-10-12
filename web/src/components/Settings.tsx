@@ -704,7 +704,7 @@ function DeviceSection({ data }: { data: SettingsData }) {
     <Section title="Devices">
       {!all && <Pending rows={2} />}
       {shown.map((d) => (
-        <div key={d.id} className={s.device}>
+        <div key={d.id} className={s.device} data-testid="device">
           <span className={s.deviceIcon}>
             <Icon
               name={deviceIcon(d.role, d.self ? (desktop ? "desktop" : "web") : clients[d.id])}

@@ -236,6 +236,8 @@ itemRoutes.post("/items", requireCaller("paired"), async (c) => {
   // stored one spends it (#718). Nothing awaits between this check and the charge below.
   const budget = `bytes:${caller.account}`;
   if (!fromDevice) rateLimit(c, budget, limits.postedBytes, size, true);
+  // What the post writes, which the budget is charged: a re-seal rewrites the images it keeps.
+  let written = size;
 
   // Devices the referred item was sealed to, told once a device answers it.
   let answeredDevices: string[] = [];
@@ -272,6 +274,16 @@ itemRoutes.post("/items", requireCaller("paired"), async (c) => {
             : `a ${item.kind} goes to the one machine that asked`,
         );
       machine = machines[0] as string;
+      // Every active device, so none keeps showing a question the owner put off (#1299).
+      if (rule.toDevices) {
+        const { n } = db
+          .query(
+            "SELECT COUNT(*) AS n FROM members WHERE account_id = ? AND role = 'device' AND active = 1",
+          )
+          .get(caller.account) as { n: number };
+        if (devices.length !== n)
+          fail(400, "unknown-recipient", `a ${item.kind} goes to every active device`);
+      }
     } else {
       for (const id of to)
         if (!activeMember(db, caller.account, id, "device"))
@@ -392,6 +404,8 @@ itemRoutes.post("/items", requireCaller("paired"), async (c) => {
           const kept = blobBytes(blobs);
           if (size + kept > most) tooLarge();
           charged += kept;
+          written += kept;
+          rateLimit(c, budget, limits.postedBytes, written, true);
         }
       }
       db.query("DELETE FROM items WHERE account_id = ? AND id = ?").run(caller.account, item.id);
@@ -472,7 +486,7 @@ itemRoutes.post("/items", requireCaller("paired"), async (c) => {
     }
     return seq;
   })();
-  if (!fromDevice) c.var.limiter.retryAfter(budget, ...limits.postedBytes, size);
+  if (!fromDevice) c.var.limiter.retryAfter(budget, ...limits.postedBytes, written);
 
   c.var.usage.record(`items.${item.kind}`);
   if (answered && caller.role === "device") {

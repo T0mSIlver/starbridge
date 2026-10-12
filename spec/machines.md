@@ -28,8 +28,8 @@
   terminates it, so the agent also removes the file on SIGHUP (its console closing), SIGBREAK and
   any exit, and setup removes it after ending the agent; a stale `agent.port` stays possible
   after a hard kill, which the `pid` check covers.
-  `icacls` gives the file to its user only, as the 0600 mode does the socket. The service is a Scheduled Task
-  at the user's logon, registered from a marked XML file in `%LOCALAPPDATA%\starbridge` with the
+  `icacls` gives the file to its user only, as the 0600 mode does the socket; when it fails, the
+  agent does not serve (#1209). The service is a Scheduled Task at the user's logon, registered from a marked XML file in `%LOCALAPPDATA%\starbridge` with the
   ScheduledTasks cmdlets: it needs no administrator, unlike a Windows service, and restarts on
   failure, unlike the `Run` registry key. It runs the agent under `conhost.exe --headless`, since
   a console program opens a window, with no time limit, since a task stops after 3 days by
@@ -152,7 +152,9 @@
   replaces it when it differs from this release's, uninstall removes it, and any other file at
   those paths is left alone, even a skill named `starbridge`, which another skill manager may have
   installed (#538). An owner who
-  deletes the line keeps the file. `starbridge update` runs the new binary's `setup --refresh`,
+  deletes the line keeps the file. Setup and uninstall remove only the files they write, then a
+  folder left empty: a file the owner put beside them, such as a skill's `references/`, stays,
+  and uninstall says so (#1324). `starbridge update` runs the new binary's `setup --refresh`,
   which rewrites the marked files that differ and restarts the local agent; Homebrew and npm users
   run it after upgrading, and the local agent refreshes the skills and rule when it starts.
 - **Allow rules** (#245, #322, #443, #488). So a new user's first question needs no prompt and no
@@ -206,7 +208,10 @@
   http(s) origin goes into the script. It checks `SHA256SUMS` with
   minisign, else OpenSSL 3, else Python 3 (#1032): RHEL 8 ships OpenSSL 1.1.1, whose command line
   has no Ed25519 check, and no minisign, but always a Python for dnf. With none of them it stops
-  and prints the command that installs minisign on that distribution; no flag skips the check. `starbridge update` replaces script installs
+  and prints the command that installs minisign on that distribution; no flag skips the check.
+  The signature's trusted comment must name the version it installs: `STARBRIDGE_VERSION`, else the
+  tag `releases/latest` redirects to. Downloads go over HTTPS only, but from a mirror on the
+  machine itself. `starbridge update` replaces script installs
   and points Homebrew and npm installs at their manager. Windows refuses to replace or delete a
   running `.exe` but lets it be renamed, so `update` moves it aside to `starbridge.exe.old` and
   the next update removes that; `uninstall` deletes the binary from a detached cmd.exe two seconds
