@@ -9,7 +9,6 @@ import androidx.core.app.RemoteInput
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
 import dev.starbridge.app.data.ApiException
-import dev.starbridge.app.data.Sent
 import dev.starbridge.app.di.app
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
@@ -23,6 +22,7 @@ import org.unifiedpush.android.connector.data.PushMessage
  * A question's notification button: signs and sends the answer. While the phone is locked it
  * answers only if the lock screen shows sensitive content (#1375); the buttons ask for the unlock
  * otherwise, but an app with notification access can send their intents itself, as with Allow (#274).
+ * The notification goes at the tap (#1447).
  */
 class AnswerReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
@@ -37,20 +37,13 @@ class AnswerReceiver : BroadcastReceiver() {
         }
         val pending = goAsync()
         app.scope().launch {
-            val decision = app.store().decisions.value.find { it.id == id }
             try {
-                when (val sent = withTimeout(9_000) { app.store().sendFromNotification(id, choice, text) }) {
-                    is Sent.Answered -> decision?.let { app.notifier().answered(it, sent.answer) }
-                    is Sent.Queued -> decision?.let { app.notifier().queued(it, sent.answer) }
-                    Sent.Elsewhere -> app.notifier().cancel(id)
-                    is Sent.Failed -> decision?.let { app.notifier().failed(it, sent.why) }
-                }
+                withTimeout(9_000) { app.store().sendFromNotification(id, choice, text) }
             } catch (e: Exception) {
                 Log.w("Starbridge", "answer from notification failed", e)
-                // Out of time mid-request: the answer stays queued and goes out later.
-                val queued = app.store().queued(id)
-                if (queued != null) decision?.let { app.notifier().queued(it, queued) }
-                else decision?.let { app.notifier().failed(it, e.message ?: "no connection") }
+                // Out of time mid-request, the answer stays queued and goes out later; refused
+                // before it was queued, its notification comes back.
+                if (app.store().queued(id) == null) app.store().refused(id, e.message ?: "no connection")
             } finally {
                 pending.finish()
             }

@@ -41,6 +41,11 @@
   the list on a touch screen. A refused answer comes back in
   the list, never in a reopened view. Left open, the view showed an answer the owner had just
   given.
+  Answered from a notification's button or reply, the notification goes at the tap too, and the
+  answer takes the card's path: queued and retried while the server is out of reach, silently.
+  Only a refusal brings the notification back, saying "Not sent:" and why (#1447). Kept up until
+  the server replied, it showed a spinner on Android, and "waiting to send" left a notification
+  behind for an answer already given.
 - **No answer waits for a pull** (#1390, #1392). The apps keep an answer the server could not take
   (offline, a 5xx, or a 429 during a rate-limit hold) and send it again on their own, never during
   the hold, when a post fails at once: Android through WorkManager, iOS by a retry while the app

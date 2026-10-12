@@ -67,9 +67,11 @@ extension Store {
     /**
      * Answers from a notification's button or Reply, with the time iOS gives it in the
      * background: fetches the question when the inbox has not read it, then sends as a tap does.
-     * Tells the notification how it ended: gone once sent, else "waiting to send" or "Not sent".
+     * The notification goes at the tap, as the card does, and comes back saying "Not sent" only if
+     * the server refuses the answer; one left queued goes out with the outbox (#1447).
      */
     func answerFromNotification(_ id: String, choice: String?, text: String?) async {
+        await Self.removeDelivered(about: id)
         let sent: Sent
         do {
             sent = try await serial {
@@ -77,17 +79,17 @@ extension Store {
                 return try await self.send(id, choice: choice, text: text)
             }
         } catch {
+            // Signed out mid-send, say: the answer stays queued and goes out later.
+            if saved.outbox.contains(where: { $0.decisionId == id }) { return }
             sent = .failed(describe(error))
         }
-        switch sent {
-        case .answered, .elsewhere:
-            await Self.removeDelivered(about: id)
-        case let .queued(answer, _):
-            await replace(id, with: "\(answer) · waiting to send")
-        case let .failed(why):
-            notSent[id] = why
-            await replace(id, with: "Not sent: \(why)")
-        }
+        if case let .failed(why) = sent { await refused(id, why: why) }
+    }
+
+    /** The server refused this iPhone's answer to `id`: its card and its notification say why. */
+    func refused(_ id: String, why: String) async {
+        notSent[id] = why
+        await replace(id, with: "Not sent: \(why)")
     }
 
     /**
