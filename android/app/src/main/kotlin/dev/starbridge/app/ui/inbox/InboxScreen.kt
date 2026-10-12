@@ -112,6 +112,7 @@ import dev.starbridge.app.ui.Refresh
 import dev.starbridge.app.ui.Sym
 import dev.starbridge.app.ui.openNotificationSettings
 import dev.starbridge.app.ui.Symbol
+import dev.starbridge.app.ui.pairing.rememberScanner
 import dev.starbridge.app.ui.fieldColors
 import dev.starbridge.app.ui.groupGap
 import dev.starbridge.app.ui.groupShape
@@ -232,6 +233,10 @@ fun InboxScreen(
     notificationsOff: Boolean = false,
     /** The account has no active machine yet: the empty inbox says how to add one (#610). */
     noMachine: Boolean = false,
+    /** A machine's code the empty inbox's scanner read (#1367). */
+    onScan: (String) -> Unit = {},
+    /** Add a device, from the empty inbox, to type a code; also where a phone that cannot scan goes. */
+    onAddDevice: () -> Unit = {},
     /** Where a swipe's snooze offers Undo (#692). */
     snackbar: SnackbarHostState? = null,
 ) {
@@ -309,7 +314,7 @@ fun InboxScreen(
         if (notificationsOff && view.remindOff) item(key = "notifications-off") { NotificationsOff { onView(view.copy(remindOff = false)) } }
         runs(shownRuns, now, view.runsOpen, { onView(view.copy(runsOpen = it)) }, dismissRun, segmented = view.grouping != Grouping.None)
         if (needs.isEmpty()) {
-            if (shownRuns.isEmpty()) item(key = "empty") { if (noMachine) NoMachine() else Empty() }
+            if (shownRuns.isEmpty()) item(key = "empty") { if (noMachine) NoMachine(onScan, onAddDevice) else Empty() }
         } else {
             when (view.grouping) {
                 // In the order of each machine's most pressing need; runs keep their section above (#835).
@@ -461,10 +466,14 @@ private fun Empty() {
     }
 }
 
-/** A new account's empty inbox: the install command to copy or send to the machine. */
+/**
+ * A new account's empty inbox: the install command to copy or send to the machine, then the
+ * scanner for the QR code its setup shows, one tap away (#1367).
+ */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-private fun NoMachine() {
+private fun NoMachine(onScan: (String) -> Unit, onAddDevice: () -> Unit) {
+    val scan = rememberScanner(onResult = onScan, onError = { onAddDevice() })
     val context = LocalContext.current
     val clipboard = LocalClipboard.current
     val scope = rememberCoroutineScope()
@@ -497,6 +506,19 @@ private fun NoMachine() {
                 onClick = { runCatching { context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, INSTALL), null)) } },
                 modifier = Modifier.heightIn(min = Sizes.tap),
             ) { Text("Send", style = StarbridgeTheme.type.action) }
+        }
+        // As in Devices, and above the fold: a machine's QR code, else its code typed under Add a device.
+        FilledTonalButton(
+            onClick = scan,
+            colors = ButtonDefaults.filledTonalButtonColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHighest, contentColor = MaterialTheme.colorScheme.onSurface),
+            modifier = Modifier.fillMaxWidth().height(Sizes.tap),
+        ) {
+            Symbol(Sym.Qr, size = 20.dp)
+            Spacer(Modifier.width(Spacing.s2))
+            Text("Scan a QR code", style = StarbridgeTheme.type.action)
+        }
+        TextButton(onClick = onAddDevice, modifier = Modifier.heightIn(min = Sizes.tap)) {
+            Text("Other ways to add a device", style = StarbridgeTheme.type.action)
         }
         TextButton(onClick = { openLink(context, INSTALL_DOCS) }, modifier = Modifier.heightIn(min = Sizes.tap)) {
             Text("Windows, Homebrew and npm", style = StarbridgeTheme.type.action)

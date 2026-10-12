@@ -584,14 +584,10 @@ async function main() {
   await services.waitFor(/"event":"subscribed"/);
   await page.getByRole("button", { name: "Turn on notifications" }).waitFor({ state: "detached" });
 
-  step("approve `starbridge pair` from the Devices page");
+  step("approve `starbridge pair` from the empty inbox's Add a device (#1367)");
   const machineHome = join(tmp, "machine");
   const pair = cli("pair", ["pair", "--name", "devbox"], machineHome);
   const code = (await pair.waitFor(/Pairing code: (\S+)/))[1] as string;
-  await page
-    .getByRole("navigation", { name: "Main" })
-    .getByRole("link", { name: "Settings" })
-    .click();
   await follow(page, page.getByRole("link", { name: "Add a device" }), "/settings/devices/add");
   await page.getByLabel("Pair a machine or device").fill(code);
   await page.getByRole("button", { name: "Check code" }).click();

@@ -330,6 +330,8 @@ fun Main(decisions: List<Decision>, notice: StateFlow<String?>, dismiss: () -> U
                             notificationsOff = notificationsOff,
                             // Members load with the directory, which always holds this phone.
                             noMachine = members.isNotEmpty() && members.none { it.kind == Kind.Machine },
+                            onScan = { devices.actions.lookUp(it); backStack.add(AddDeviceKey) },
+                            onAddDevice = { backStack.add(AddDeviceKey) },
                             snackbar = host,
                         )
                     }
