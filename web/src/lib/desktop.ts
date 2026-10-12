@@ -26,6 +26,17 @@ export type DesktopPlace = "menu" | "dock" | "both";
  */
 export type DesktopScreen = { away: boolean; idleMs: number | null };
 
+/** The app's own settings, which its menu bar menu held before #1449 (desktop/src/settings.ts). */
+export type DesktopApp = {
+  login: boolean;
+  /** Null in a development run, which never updates. */
+  releaseCandidates: boolean | null;
+  /** The server's host. */
+  server: string;
+  /** The version downloaded and waiting for a restart. */
+  update: string | null;
+};
+
 export type DesktopBridge = {
   version: string;
   /** Absent before the app's 0.1.3. */
@@ -52,6 +63,15 @@ export type DesktopBridge = {
   onNotificationsBlocked?(f: (() => void) | null): void;
   /** Opens System Settings → Notifications → Starbridge. */
   openNotificationSettings?(): void;
+  /** The app's own settings; absent before #1449, whose app kept them in its menu bar menu. */
+  app?(): DesktopApp | null;
+  onApp?(f: (() => void) | null): void;
+  setApp?(change: { login: boolean } | { releaseCandidates: boolean }): void;
+  /** Opens the app's window for setting the server. */
+  openServer?(): void;
+  restartToUpdate?(): void;
+  /** Called on Settings… in the menu bar's menu. */
+  onSettings?(f: (() => void) | null): void;
   onAnswer(f: (a: DesktopAnswer) => Promise<void>): void;
   onOpen(f: (id: string) => void): void;
 };

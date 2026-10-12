@@ -13,16 +13,16 @@ const REPO = "T0mSIlver/starbridge";
  * finds updates and cannot install them; that error is logged, never shown.
  */
 export function startUpdates(
-  downloaded: () => void,
+  downloaded: (version: string) => void,
   rcs: () => boolean,
 ): { install(): void; check(): void } {
   autoUpdater.logger = console;
   // The download under way, which turning release candidates off cancels when it is one. One
   // already downloaded stays: Squirrel has taken it, and installs it on quit.
   let pending: { version: string; cancel(): void } | null = null;
-  autoUpdater.on("update-downloaded", () => {
+  autoUpdater.on("update-downloaded", (info) => {
     pending = null;
-    downloaded();
+    downloaded(info.version);
   });
   autoUpdater.on("error", (e) => console.warn("update:", e.message));
   const check = async () => {

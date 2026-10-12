@@ -14,7 +14,7 @@ pnpm --filter @starbridge/desktop start
 ```
 
 `STARBRIDGE_SERVER=http://localhost:3000` points a run at a local server; otherwise the app uses
-the server set from its menu bar icon (right-click, "Server: …"), starbridge.run by default.
+the server set in Settings → App → Server, starbridge.run by default.
 
 Tests: `pnpm test` (unit) and `pnpm e2e`, which launches the app on a stand-in page and checks the
 bridge, the menu bar icon and the notifications (`xvfb-run -a` on Linux). The `desktop` workflow

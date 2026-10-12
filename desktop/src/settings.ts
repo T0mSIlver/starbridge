@@ -29,6 +29,32 @@ export interface Settings {
   background?: string;
 }
 
+/** The app's settings the page's Settings shows (#1449), which the menu bar's menu held before. */
+export interface AppSettings {
+  /** Whether macOS opens the app at login. */
+  login: boolean;
+  /** `Settings.releaseCandidates`; null in a development run, which never updates. */
+  releaseCandidates: boolean | null;
+  /** The server's host. */
+  server: string;
+  /** The version downloaded, which installs on quit or from Restart; null until there is one. */
+  update: string | null;
+}
+
+/** One change the page asks for: a switch it turned. */
+export type AppChange = { login: boolean } | { releaseCandidates: boolean };
+
+export function parseAppChange(x: unknown): AppChange | null {
+  if (typeof x !== "object" || x === null) return null;
+  const keys = Object.keys(x);
+  const [key] = keys;
+  const value = (x as Record<string, unknown>)[key ?? ""];
+  if (keys.length !== 1 || typeof value !== "boolean") return null;
+  if (key === "login") return { login: value };
+  if (key === "releaseCandidates") return { releaseCandidates: value };
+  return null;
+}
+
 /** A colour the page reports as its background: `#rrggbb` only. */
 export const parseBackground = (x: unknown): string | null =>
   typeof x === "string" && /^#[0-9a-f]{6}$/i.test(x) ? x.toLowerCase() : null;

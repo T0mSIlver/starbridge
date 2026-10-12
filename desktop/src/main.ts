@@ -24,6 +24,8 @@ import { Notifier, type Shown } from "./notifier";
 import { linkPage, opensOutside, serverOrigin, staysInWindow } from "./origin";
 import { type Reading, SCREEN_CHECK_MS, Screen } from "./screen";
 import {
+  type AppSettings,
+  parseAppChange,
   parseBackground,
   parsePlace,
   readSettings,
@@ -70,9 +72,10 @@ let leaving: Promise<void> | null = null;
 let left = false;
 /** The GitHub sign-in sent to the browser, until its link comes back. */
 let signIn: SignIn | null = null;
-/** A release downloaded, which installs on quit or from Restart to Update. */
+/** A release downloaded, which installs on quit or from Settings' Restart. */
 let update: { install(): void; check(): void } | null = null;
-let updateReady = false;
+/** The version downloaded, once there is one. */
+let updateReady: string | null = null;
 /** Links that arrived before the window existed. */
 const early: string[] = [];
 /** Answers handed to the page, until it says they went out. */
@@ -183,6 +186,27 @@ async function ready(): Promise<void> {
   ipcMain.on("screen?", (e) => {
     e.returnValue = e.sender === win?.webContents ? screen?.read() : null;
   });
+  // The app's own settings, shown in the page's Settings (#1449).
+  ipcMain.on("app?", (e) => {
+    e.returnValue = e.sender === win?.webContents ? appSettings() : null;
+  });
+  ipcMain.on("app", (e, x) => {
+    const change = fromPage(e) && parseAppChange(x);
+    if (!change) return;
+    if ("login" in change) app.setLoginItemSettings({ openAtLogin: change.login });
+    else if (app.isPackaged && change.releaseCandidates !== settings.releaseCandidates) {
+      settings.releaseCandidates = change.releaseCandidates;
+      save();
+      update?.check();
+    }
+    tellApp();
+  });
+  ipcMain.on("open-server", (e) => {
+    if (fromPage(e)) showServer();
+  });
+  ipcMain.on("restart-to-update", (e) => {
+    if (fromPage(e) && updateReady) installUpdate();
+  });
   ipcMain.on("server", (e, x) => {
     if (e.sender !== serverWin?.webContents || typeof x !== "string") return;
     const next = serverOrigin(x);
@@ -236,9 +260,9 @@ function checkForUpdates(): void {
       join(ROOT, "dist", "updater.js"),
     ) as typeof import("./updater");
     update = startUpdates(
-      () => {
-        updateReady = true;
-        paintDockMenu();
+      (version) => {
+        updateReady = version;
+        tellApp();
       },
       () => settings.releaseCandidates,
     );
@@ -347,7 +371,7 @@ function guard(contents: WebContents): void {
 /**
  * Puts the app where the owner keeps it (Settings, "Keep Starbridge in"): the menu bar icon unless
  * the Dock alone, and the Dock icon always unless the menu bar alone, where it shows only with
- * the window. The Dock's menu holds the menu bar's items, for when there is no menu bar icon.
+ * the window.
  */
 function applyPlace(): void {
   if (settings.place === "dock") {
@@ -361,10 +385,6 @@ function applyPlace(): void {
   }
   if (settings.place !== "menu" || win?.isVisible()) app.dock?.show();
   else app.dock?.hide();
-  paintDockMenu();
-}
-
-function paintDockMenu(): void {
   app.dock?.setMenu(menu(false));
 }
 
@@ -393,46 +413,42 @@ function paintTray(): void {
   );
 }
 
-/** The menu bar icon's menu; the Dock's leaves out Open and Quit, which macOS adds there. */
+/**
+ * The menu bar icon's menu, kept to what the window can't do while it is closed (#1449); the app's
+ * settings are in the page's Settings. The Dock's leaves out Open and Quit, which macOS adds there.
+ */
 function menu(forTray = true): Menu {
-  const login = app.getLoginItemSettings().openAtLogin;
-  return Menu.buildFromTemplate([
-    ...(forTray
-      ? [
-          { label: "Open Starbridge", accelerator: settings.shortcut, click: showWindow },
-          { type: "separator" as const },
-        ]
-      : []),
-    {
-      label: "Open at Login",
-      type: "checkbox",
-      checked: login,
-      click: () => {
-        app.setLoginItemSettings({ openAtLogin: !login });
-        paintDockMenu();
-      },
-    },
-    ...(app.isPackaged
-      ? [
-          {
-            label: "Get Release Candidates",
-            type: "checkbox" as const,
-            checked: settings.releaseCandidates,
-            click: () => {
-              settings.releaseCandidates = !settings.releaseCandidates;
-              save();
-              paintDockMenu();
-              update?.check();
-            },
-          },
-        ]
-      : []),
-    { label: `Server: ${new URL(origin).host}…`, click: showServer },
-    ...(updateReady ? [{ label: "Restart to Update", click: installUpdate }] : []),
-    ...(forTray
-      ? [{ type: "separator" as const }, { label: "Quit Starbridge", role: "quit" as const }]
-      : []),
-  ]);
+  const open = { label: "Open Starbridge", accelerator: settings.shortcut, click: showWindow };
+  const prefs = { label: "Settings…", click: showSettings };
+  return Menu.buildFromTemplate(
+    forTray
+      ? [open, prefs, { type: "separator" }, { label: "Quit Starbridge", role: "quit" }]
+      : [prefs],
+  );
+}
+
+/** What the page's Settings shows of the app's own settings. */
+function appSettings(): AppSettings {
+  return {
+    login: app.getLoginItemSettings().openAtLogin,
+    releaseCandidates: app.isPackaged ? settings.releaseCandidates : null,
+    server: new URL(origin).host,
+    update: updateReady,
+  };
+}
+
+function tellApp(): void {
+  if (win && fromServer(win.webContents.getURL())) win.webContents.send("app", appSettings());
+}
+
+/** The page's Settings; while the page can't load, the server window, where a wrong one is fixed. */
+function showSettings(): void {
+  if (!win || !fromServer(win.webContents.getURL())) {
+    showServer();
+    return;
+  }
+  win.webContents.send("settings");
+  showWindow();
 }
 
 /** Quits for the update: the window must close, not hide, or the install never starts. */

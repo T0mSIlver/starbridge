@@ -42,4 +42,4 @@ opens an issue for each client the row says should follow.
 | Recover with the recovery key (revokes every other member) | yes | yes | yes (as web) | yes (#1116) |
 | Delete account (Settings and the join screen, its recovery-key view included, typed confirmation) | yes (#1104, #1117) | yes (#1104, #1117, #1166) | yes (as web) | yes (#1141, #1195, #1233: Settings and the join screen, its recovery-key view included) |
 
-Only on desktop: the menu bar light, the Dock or menu bar choice, Open at Login, ⌃⌥S, and notifications while no browser runs.
+Only on desktop: the menu bar light, and Settings → App (#1449): the Dock or menu bar choice, Open Starbridge at login, Get release candidates, Restart for a downloaded update, and the server; ⌃⌥S, and notifications while no browser runs.

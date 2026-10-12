@@ -24,17 +24,22 @@ const TILE = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
 // keeps it apart from the tether, as colour does in the full mark. In one colour it is a template
 // image, which macOS recolours for the menu bar; while something needs the owner, the climber is
 // amber, so the icon carries its own colours, one variant per menu bar appearance.
+// The crop (24 22 60 60) fills rows 1 to 15 of the 18: macOS centres the image in the bar, and a
+// glyph filling all 18 rows sat lower than the system icons beside it, whose base is row 15 (#1449).
 const tray = (
   fill: string,
   climber: string,
-) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="24 22 60 60">
+) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="18 18 72 72">
+  <clipPath id="crop"><rect x="24" y="22" width="60" height="60"/></clipPath>
   <mask id="gap"><rect x="0" y="0" width="108" height="108" fill="white"/>
     <rect x="45.5" y="31" width="17" height="26" rx="8.5" fill="black"/></mask>
-  <g mask="url(#gap)" fill="${fill}">
-    <circle cx="54" cy="148" r="80"/>
-    <rect x="51.75" y="18" width="4.5" height="52"/>
+  <g clip-path="url(#crop)">
+    <g mask="url(#gap)" fill="${fill}">
+      <circle cx="54" cy="148" r="80"/>
+      <rect x="51.75" y="18" width="4.5" height="52"/>
+    </g>
+    <rect x="48.5" y="34" width="11" height="20" rx="5.5" fill="${climber}"/>
   </g>
-  <rect x="48.5" y="34" width="11" height="20" rx="5.5" fill="${climber}"/>
 </svg>`;
 
 // Template: black; the light and dark variants use DESIGN.md's `fg` and `accent` of each scheme.

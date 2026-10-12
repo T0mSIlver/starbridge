@@ -14,7 +14,7 @@ import {
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
-import { type DesktopPlace, desktop } from "@/lib/desktop";
+import { type DesktopApp, type DesktopPlace, desktop } from "@/lib/desktop";
 import type { RecoveryState } from "@/lib/device";
 import { addedLabels, checkUntil, dayAndTime, releaseLabel, shownCheck } from "@/lib/format";
 import { AGENTS_GUIDE } from "@/lib/links";
@@ -866,7 +866,65 @@ function PlaceRow() {
   );
 }
 
-/** Colours and the clock: how the page looks, per browser; in the desktop app, where it stays. */
+/** The desktop app's settings, read from the app and told again when they change. */
+function useDesktopApp(): DesktopApp | null {
+  const [app, setApp] = useState(() => desktop?.app?.() ?? null);
+  useEffect(() => {
+    desktop?.onApp?.(() => setApp(desktop?.app?.() ?? null));
+    return () => desktop?.onApp?.(null);
+  }, []);
+  return app;
+}
+
+/** Only in the desktop app: the settings its menu bar menu held before (#1449), and where it stays. */
+function AppSection() {
+  const app = useDesktopApp();
+  if (!desktop?.setApp || !app) return null;
+  const set = desktop.setApp;
+  return (
+    <Section title="App">
+      <PlaceRow />
+      <Row label="Open Starbridge at login">
+        <Switch
+          label="Open Starbridge at login"
+          checked={app.login}
+          onChange={(login) => set({ login })}
+        />
+      </Row>
+      {app.releaseCandidates !== null && (
+        <Row label="Get release candidates">
+          <Switch
+            label="Get release candidates"
+            checked={app.releaseCandidates}
+            onChange={(releaseCandidates) => set({ releaseCandidates })}
+          />
+        </Row>
+      )}
+      {app.update && (
+        <Row label={`Version ${app.update} downloaded`}>
+          <button
+            type="button"
+            className={`t-meta ${ui.btn} ${ui.sm}`}
+            onClick={() => desktop?.restartToUpdate?.()}
+          >
+            Restart
+          </button>
+        </Row>
+      )}
+      <Row label="Server" sub={app.server}>
+        <button
+          type="button"
+          className={`t-meta ${ui.btn} ${ui.sm} ${ui.ghost}`}
+          onClick={() => desktop?.openServer?.()}
+        >
+          Change
+        </button>
+      </Row>
+    </Section>
+  );
+}
+
+/** Colours and the clock: how the page looks, per browser; in an older desktop app, where it stays. */
 function LookSection() {
   const [theme, setTheme] = usePref("theme");
   const [clock, setClock] = usePref("clock");
@@ -885,7 +943,7 @@ function LookSection() {
           onChange={setTheme}
         />
       </Row>
-      <PlaceRow />
+      {!desktop?.setApp && <PlaceRow />}
       <Row label="Time format">
         <Segmented<Prefs["clock"]>
           label="Time format"
@@ -946,6 +1004,7 @@ export function Settings() {
             <QuotaSections />
             <InboxSection />
             <DeviceSection data={data} />
+            <AppSection />
             <LookSection />
             <AccountSection />
           </>

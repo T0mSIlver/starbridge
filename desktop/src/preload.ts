@@ -43,6 +43,18 @@ if (location.origin === arg("origin")) {
     shown = s === true;
     onShown?.();
   });
+  let app: unknown = ipcRenderer.sendSync("app?");
+  let onApp: (() => void) | null = null;
+  ipcRenderer.on("app", (_e, a: unknown) => {
+    app = a;
+    onApp?.();
+  });
+  let onSettings: (() => void) | null = null;
+  // Settings… in the menu bar's menu: the page routes there itself, else (an older page) loads it.
+  ipcRenderer.on("settings", () => {
+    if (onSettings) onSettings();
+    else location.assign("/settings");
+  });
   ipcRenderer.on("place", (_e, p: unknown) => {
     place = p;
   });
@@ -103,6 +115,22 @@ if (location.origin === arg("origin")) {
     },
     /** Opens System Settings → Notifications → Starbridge. */
     openNotificationSettings: () => ipcRenderer.send("notification-settings"),
+    /** The app's own settings: `{login, releaseCandidates, server, update}` (src/settings.ts). */
+    app: () => app,
+    /** Called when they change. */
+    onApp: (f: (() => void) | null) => {
+      onApp = f;
+    },
+    /** Turns one switch: `{login: boolean}` or `{releaseCandidates: boolean}`. */
+    setApp: (change: unknown) => ipcRenderer.send("app", change),
+    /** Opens the window where the owner sets the server; the app restarts on a new one. */
+    openServer: () => ipcRenderer.send("open-server"),
+    /** Quits and installs the downloaded update. */
+    restartToUpdate: () => ipcRenderer.send("restart-to-update"),
+    /** Called on Settings… in the menu bar's menu, to show the page's Settings. */
+    onSettings: (f: (() => void) | null) => {
+      onSettings = f;
+    },
     /** Opens an item whose notification was clicked. */
     onOpen: (f: (id: string) => void) => {
       onOpen = f;
