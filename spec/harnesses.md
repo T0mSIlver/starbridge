@@ -35,6 +35,13 @@ line, the safe side: at worst a prompt repeats an answer the agent already read.
   re-reads the session id before submitting, so an answer that arrives during `/clear` waits for
   the session that asked; `/resume` keeps polling under the resumed id. Without a local agent the mod
   falls back to polling through the CLI, and both paths share the set of submitted lines.
+- **An answer survives the session's process** (#1517). The mod confirms a line as soon as it
+  submits it, so `wait` and `waiting` never print an answer already queued as a prompt. But
+  Claude Code loses a queued prompt when its process exits, so the mod also writes each line to
+  `mod-sent/<session>.json` in the CLI's config folder before submitting it, and removes it once
+  its turn starts. A process that finds lines another process left there submits them again,
+  once, which `--resume` does. Each line carries the submitting process's token from `$.state`,
+  so a hot reload, which keeps the queued prompt, submits nothing twice.
 - **Answers during a turn** (#1484). The decision's waiting state says when the agent needs its
   answer, so it needs no flag of its own: a decision marked waiting steers (the answer enters
   the running turn at the next tool call), any other queues (it comes once the turn ends, so it

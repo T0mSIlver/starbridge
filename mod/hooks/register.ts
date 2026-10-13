@@ -11,6 +11,7 @@ import {
 } from "./agent.ts";
 import { Handover } from "./handover.ts";
 import { configDir, Poller } from "./poller.ts";
+import { Sent } from "./sent.ts";
 import { Switch, wantsLoop } from "./switch.ts";
 
 /**
@@ -18,7 +19,8 @@ import { Switch, wantsLoop } from "./switch.ts";
  * (agent.ts), else through the CLI (poller.ts); switch.ts picks. A hot reload loads this module
  * afresh: the old loop dies with the old module, and `session.start` starts a new one. While the
  * main agent's turn runs, an answer it marked waiting goes out with its next tool result
- * instead, and any other waits for the turn's end (handover.ts).
+ * instead, and any other waits for the turn's end (handover.ts). An answer submitted as a prompt
+ * stays on record until its turn starts, so a process that exits first does not lose it (sent.ts).
  */
 export const register: Register = (on) => {
   let loop: Switch | undefined;
@@ -29,8 +31,10 @@ export const register: Register = (on) => {
     waiting++;
     const started = () => void waiting--;
     submitted.then(started, started);
+    return submitted;
   };
   const handover = new Handover();
+  let sent: Sent | undefined;
 
   on("session.start", async ($, e, next) => {
     handover.ended();
@@ -52,6 +56,19 @@ export const register: Register = (on) => {
     };
     const dir = configDir(env);
     const socket = socketPath(env);
+    // Kept across a hot reload, and new in each process (sent.ts); undefined on a build that
+    // lacks `$.state`.
+    const proc = { plugin: "starbridge-mod", key: "process" } as const;
+    let token: string | undefined;
+    try {
+      token = (await $.state.get(proc)).value;
+      if (!token) {
+        token = crypto.randomUUID();
+        await $.state.set(proc, token);
+      }
+    } catch {
+      token = undefined;
+    }
     const fetch = async (method: string, path: string, body?: unknown) => {
       const headers =
         body === undefined ? HEADERS : { ...HEADERS, "content-type": "application/json" };
@@ -79,12 +96,25 @@ export const register: Register = (on) => {
     };
     const log = (text: string) => $.ui.log(text, { to: "debug" });
     const status = (text: string | undefined) => $.ui.status(text);
-    const submit = (text: string, waiting: boolean, ack: string) =>
-      handover.submit(text, ack, waiting, (line) => track($.prompt.submit({ text: line })));
-    const starting = () => waiting > 0;
     const sessionId = () => $.session.id();
     const now = () => $.clock.now();
     const sleep = (ms: number) => $.clock.sleep(ms);
+    const records = new Sent(
+      {
+        sessionId,
+        read: (path) => $.fs.read(path),
+        write: (path, text) => $.fs.write(path, text),
+        now,
+        submit: (text) => track($.prompt.submit({ text })),
+        log,
+      },
+      dir,
+      token,
+    );
+    sent = records;
+    const submit = (text: string, waiting: boolean, ack: string) =>
+      handover.submit(text, ack, waiting, (line) => records.send(line, ack));
+    const starting = () => waiting > 0;
     loop = new Switch(
       {
         // The CLI honours STARBRIDGE_NO_AGENT too, so the CLI path then reaches the server itself.
@@ -132,18 +162,24 @@ export const register: Register = (on) => {
       undefined,
       before?.unconfirmed,
     );
+    void records.recover().catch((e) => log(`starbridge: ${(e as Error).message}`));
     return started;
   });
 
   // A subagent's run raises no `turn.start`; its `turn.complete` and tool calls carry its `agentId`.
   on("turn.start", async (_$, e, next) => {
     handover.started();
+    await sent?.started(e.text).catch(() => undefined);
     return next(e);
   });
 
   on("turn.complete", async (_$, e, next) => {
     const r = await next(e);
-    if (e.agentId === undefined) handover.ended();
+    if (e.agentId === undefined) {
+      handover.ended();
+      // After a `/resume`, or a submit that failed.
+      void sent?.recover().catch(() => undefined);
+    }
     return r;
   });
 
