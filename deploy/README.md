@@ -19,7 +19,7 @@ main that contains the deployed one, so the Actions key cannot roll back. It unp
 and runs `host/apply.sh`. `deploy/setup-actions-deploy.sh` installs both keys
 on the box; the private halves stay in `~/.config/starbridge/secrets`.
 
-To roll back, or to deploy a branch, from the operator's machine with any ref that is on GitHub:
+To deploy a commit by hand, from the operator's machine:
 
 ```bash
 deploy/deploy.sh                 # origin/main
@@ -66,7 +66,7 @@ image is tagged by a hash of that file and built only when no image has the tag.
 | Compose project | `sudo docker compose -p starbridge -f /opt/starbridge/deploy/compose.yaml` |
 | Database | volume `starbridge_data`, `/data/starbridge.db` in the container |
 | Backups | `/var/backups/starbridge/starbridge-YYYYMMDD.db` and `umami-YYYYMMDD.dump`, nightly at 03:15 UTC, 7 days; `deploy-*.db`, the last 2 deploys that ran a migration; both are `VACUUM INTO` copies. Hetzner backups cover the rest |
-| Docker prune | `starbridge-docker-prune.timer`, Sundays at 04:30 UTC: images no container uses and build cache, older than 7 days |
+| Docker prune | `starbridge-docker-prune.timer`, Sundays at 04:30 UTC: images no container uses and build cache, older than 7 days, except the server and web images, of which each deploy keeps the newest 5 |
 | Analytics | Umami (`umami`, `umami-db`), volume `starbridge_umami-db`; secrets in `/etc/starbridge/umami.env` and `umami-db.env`, made on the first deploy |
 | Analytics limits | Caddy (built with the `rate_limit` module, `caddy.Dockerfile`) takes 30 events a minute per address and 300 in all, 8 KB each; `starbridge-umami-trim.timer` keeps each table to 180 days and a million rows, hourly |
 | Uptime | `.github/workflows/uptime.yml` checks `/healthz`, `/healthz/backup` (503 once the last backup is over 26 h old) and `/healthz/disk` (503 under 2 GB free) hourly and opens an `outage` issue on failure |
