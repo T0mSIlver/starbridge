@@ -18,6 +18,11 @@ evals/load/stack.sh load --ramp 300,1000,2000,3000 --stage 180 --procs 6
 evals/load/stack.sh down                       # stop and delete the volumes
 ```
 
+On a machine without Bun, `evals/load/stack.sh fake` runs the fakes in a container and
+`evals/load/stack.sh setup --users 3000` runs `setup.ts` in one (it still needs
+`pnpm install --filter @starbridge/protocol` in the repository). `LOAD_FAKE=stack` puts the fakes
+on the stack's network, for a host whose firewall keeps containers off its own ports.
+
 `--host` is the host's address on Docker's default bridge
 (`docker network inspect bridge -f '{{(index .IPAM.Config 0).Gateway}}'`). Containers share the
 cores in `LOAD_CPUS` (default `8,9`); pick two the load script does not need.
@@ -48,6 +53,50 @@ What each user does, from the clients' code:
 | page | quota poll | every 60 s |
 | page | `GET /joins?wait=25` long-poll | always one open |
 | page | loads `/` | every 5 min |
+
+## Against a baseline
+
+`load.ts --json FILE` writes the run as JSON: each stage's rates, p50 and p99, answer delivery,
+error rate, each container's peak memory and CPU, the drain's counts, and every container's
+memory each 5 minutes. `compare.ts` reads two of them and names each regression; it exits 1 when
+it found one.
+
+```bash
+evals/load/stack.sh load --ramp 300,1000 --stage 600 --json /load/now.json
+bun evals/load/compare.ts $LOAD_DIR/now.json $LOAD_DIR/baseline.json --out $LOAD_DIR/verdict.json
+```
+
+A regression is a stage that broke, more answers lost or received twice, or, for a stage with
+the same users as the baseline's: p99 1.5 times the baseline's and 50 ms more, answer delivery
+p99 1.5 times and 250 ms more, the server's or Caddy's peak memory 1.25 times and 64 MB more,
+or errors 0.1% of requests more. A run of 3 hours or more is a soak: the server's mean memory in
+its last hour less that in its second must not pass the baseline's growth by 64 MB.
+
+Two settings make the stack fit a shared host, as on the staging VM, where the runs are weekly
+and monthly:
+
+- `LOAD_REVISION=<commit>` pulls the server and web images CI pushed for that commit instead of
+  building them.
+- `LOAD_SLICE=<name>.slice` puts every container, the clients included, in that systemd slice
+  (`slice.yaml`), so one CPU and memory cap holds the whole run:
+  `systemctl set-property --runtime sb-load.slice CPUQuota=150% MemoryMax=3G`.
+
+## The fleet
+
+A few dozen users run against a real server for weeks (staging, from its VM), as the synthetic
+fleet: `--until STOP` keeps them going, `--metrics FILE` appends a JSON line every `--every`
+seconds (300) under the name `--site` (prod or staging), and `--drop S` cuts each machine's long-poll after a random time averaging S
+seconds, as a flaky network would, so the line counts reconnects too. Each line holds every
+operation's count, errors, p50 and p99, answer delivery with the answers past 5 s, and the
+answers no machine got within 10 minutes (`lost`), received twice (`dup`) and decisions no page
+saw (`unseen`). Settled answers and decisions are forgotten, so memory stays flat, and lines older
+than 35 days go. `setup.ts --no-push` makes its users without push subscriptions, which a real
+server would keep sending to the fakes after they are gone.
+
+```bash
+LOAD_TARGET=https://staging.starbridge.run bun evals/load/load.ts --ramp 40 --procs 1 \
+  --until $LOAD_DIR/stop --metrics $LOAD_DIR/metrics.jsonl --site staging --drop 600
+```
 
 ## Launch spike
 

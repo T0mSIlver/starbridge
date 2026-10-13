@@ -1,4 +1,5 @@
 import type { LinkIcon } from "@starbridge/protocol";
+import { ARCH, DOT, VIEWBOX } from "./mark";
 
 // The web's own icon set, drawn to the mark (DESIGN.md, "Icons"): a 24-unit grid, 1.75 strokes,
 // round caps and joins, in currentColor.
@@ -178,6 +179,7 @@ const PATHS = {
       <path d="M20 4v4.5h-4.5" />
     </>
   ),
+  download: <path d="M12 4v11M7 10l5 5 5-5M5 20h14" />,
   expand: <path d="M14 4h6v6M10 20H4v-6M20 4l-6 6M4 20l6-6" />,
   github: (
     <path d="M9 19c-4 1.5-4-2-6-2.5m12 5v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.2 4.2 0 0 0-.1-3.2s-1.1-.3-3.5 1.3a12 12 0 0 0-6.2 0C6.5 2.8 5.4 3.1 5.4 3.1a4.2 4.2 0 0 0-.1 3.2A4.6 4.6 0 0 0 4 9.5c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21" />
@@ -214,6 +216,16 @@ export function Icon({
   );
 }
 
+/** Apple's logo, filled, for Sign in with Apple (Simple Icons, CC0). */
+export const AppleLogo = ({ size = 18 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true" style={{ flex: "none" }}>
+    <path
+      fill="currentColor"
+      d="M12.152 6.896c-.948 0-2.415-1.078-3.96-1.04-2.04.027-3.91 1.183-4.961 3.014-2.117 3.675-.546 9.103 1.519 12.09 1.013 1.454 2.208 3.09 3.792 3.039 1.52-.065 2.09-.987 3.935-.987 1.831 0 2.35.987 3.96.948 1.637-.026 2.676-1.48 3.676-2.948 1.156-1.688 1.636-3.325 1.662-3.415-.039-.013-3.182-1.221-3.22-4.857-.026-3.04 2.48-4.494 2.597-4.559-1.429-2.09-3.623-2.324-4.39-2.376-2-.156-3.675 1.09-4.61 1.09zM15.53 3.83c.843-1.012 1.4-2.427 1.245-3.83-1.207.052-2.662.805-3.532 1.818-.78.896-1.454 2.338-1.273 3.714 1.338.104 2.715-.688 3.559-1.701"
+    />
+  </svg>
+);
+
 /** A solid triangle, for a run in progress. */
 export const Play = ({ size = 12 }: { size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true" style={{ flex: "none" }}>
@@ -221,13 +233,12 @@ export const Play = ({ size = 12 }: { size?: number }) => (
   </svg>
 );
 
-/** The space elevator (DESIGN.md, "The mark") without its ground: planet and tether in the text
-    colour, the climber in amber. */
+/** The mark (DESIGN.md, "The mark") without its ground: the arch in the text colour, the dot in
+    amber. Its bottom edge is the arch's feet, where a lockup's name stands. */
 export const Mark = ({ size = 20 }: { size?: number }) => (
-  <svg width={size} height={size} viewBox="18 18 72 72" aria-hidden="true" style={{ flex: "none" }}>
-    <circle cx="54" cy="148" r="80" fill="var(--fg)" />
-    <rect x="51.75" y="18" width="4.5" height="52" fill="var(--fg)" />
-    <rect x="48.5" y="34" width="11" height="20" rx="5.5" fill="var(--accent)" />
+  <svg width={size} height={size} viewBox={VIEWBOX} aria-hidden="true" style={{ flex: "none" }}>
+    <path d={ARCH} fill="var(--fg)" />
+    <circle cx={DOT.x} cy={DOT.y} r={DOT.r} fill="var(--accent)" />
   </svg>
 );
 

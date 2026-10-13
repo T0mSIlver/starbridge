@@ -21,23 +21,27 @@ export function newSignIn(now = Date.now()): SignIn {
   return { verifier, challenge, at: now };
 }
 
-/** Whether the window is about to start the page's own GitHub sign-in on the server. */
-export function startsSignIn(url: string, origin: string): boolean {
+/**
+ * The sign-in the window is about to start on the server for the page: its start path, GitHub's
+ * or Apple's (#1411), else null.
+ */
+export function startsSignIn(url: string, origin: string): string | null {
   try {
     const u = new URL(url);
-    return u.origin === origin && u.pathname === "/v1/auth/github" && !u.searchParams.has("app");
+    const ours = ["/v1/auth/github", "/v1/auth/apple"].includes(u.pathname);
+    return u.origin === origin && ours && !u.searchParams.has("app") ? u.pathname : null;
   } catch {
-    return false;
+    return null;
   }
 }
 
-/** Where the browser goes to sign in for the app. */
-export function browserSignIn(origin: string, s: SignIn): string {
-  return `${origin}/v1/auth/github?app=1&challenge=${s.challenge}`;
+/** Where the browser goes to sign in for the app, from the start path the page took. */
+export function browserSignIn(origin: string, s: SignIn, path = "/v1/auth/github"): string {
+  return `${origin}${path}?app=1&challenge=${s.challenge}`;
 }
 
 /**
- * GitHub's answer in a `starbridge://auth` link, if it is for the sign-in this app started:
+ * The answer in a `starbridge://auth` link, if it is for the sign-in this app started:
  * its state must be our challenge, and recent.
  */
 export function signInReturn(
@@ -56,7 +60,8 @@ export function signInReturn(
   const word = /^[A-Za-z0-9_-]{1,100}$/;
   const code = url.searchParams.get("code") ?? "";
   const error = url.searchParams.get("error") ?? "";
-  if (word.test(code)) return { code };
+  // Apple's codes are longer, with dots.
+  if (/^[A-Za-z0-9._-]{1,1024}$/.test(code)) return { code };
   if (word.test(error)) return { error };
   return null;
 }

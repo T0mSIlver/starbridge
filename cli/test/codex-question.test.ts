@@ -130,7 +130,9 @@ unix("answered at the keyboard first, the card is settled elsewhere (#951)", asy
   const d = daemon([THREAD]);
   const ctx = await machine(d.home);
   const race = hookCodexQuestion(ctx, PRE_TOOL_USE, true);
-  await until(async () => (await server.opened("decision")).length === 1, 10_000);
+  // Once the post of the card returned, which marks it waiting: an abort that cuts the post short
+  // withdraws the card, since the server may hold it (#1547).
+  await until(async () => (await server.opened("waiting")).length === 1, 10_000);
   d.send({ method: "serverRequest/resolved", params: { threadId: THREAD, requestId: 0 } });
   await race;
   expect(d.got.some((m) => m.id === 0)).toBe(false);

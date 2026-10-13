@@ -91,11 +91,21 @@ jobs:
     if: needs.changes.outputs.protocol == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
+    env:
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
     defaults:
       run:
         working-directory: .
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # Docker Hub limits anonymous pulls per address, which self-hosted boxes and GitHub's
+      # runners share with others; a login counts against our account instead. Forks' and
+      # Dependabot's runs get no secret and pull anonymously.
+      - if: env.DOCKERHUB_TOKEN != ''
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          username: ${{ vars.DOCKERHUB_USERNAME }}
+          password: ${{ env.DOCKERHUB_TOKEN }}
       - run: docker build -t starbridge-swift -f ios/StarbridgeProtocol/linux.Dockerfile ios/StarbridgeProtocol
       - run: docker run --rm -v "$PWD:/repo" -w /repo/ios/StarbridgeProtocol starbridge-swift swift test
 

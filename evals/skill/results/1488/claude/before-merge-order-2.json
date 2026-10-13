@@ -1,0 +1,198 @@
+{
+  "agent": "claude",
+  "model": "claude-haiku-5-5",
+  "arm": "before",
+  "scenario": "merge-order",
+  "rep": 2,
+  "turns": [
+    {
+      "commands": [
+        "gh pr view 12 --json number,title,state,mergeable,mergeStateStatus,statusCheckRollup,files,headRefName && echo ---- && gh pr view 13 --json number,title,state,mergeable,mergeStateStatus,statusCheckRollup,files,headRefName",
+        "gh pr view 12 --json mergeable,mergeStateStatus,reviewDecision && gh pr view 13 --json mergeable,mergeStateStatus,reviewDecision && git fetch origin '+refs/pull/12/head:refs/tmp/pr12' '+refs/pull/13/head:refs/tmp/pr13' 2>&1 | tail -2; git diff main...refs/tmp/pr12 -- src/api.ts | head -80; echo ----; git diff main...refs/tmp/pr13 -- src/api.ts | head -80",
+        "gh api repos/acme/notes/pulls/12 --jq '{mergeable, mergeable_state, base: .base.ref, head: .head.sha}' ; gh api repos/acme/notes/pulls/13 --jq '{mergeable, mergeable_state, base: .base.ref, head: .head.sha}'; git remote -v; git branch -a",
+        "cd /var/tmp/skill-eval-eDUqY6/before-merge-order-2/origin.git && git branch -a 2>&1; git for-each-ref 2>&1 | head; cd /var/tmp/skill-eval-eDUqY6/before-merge-order-2/proj && git fetch origin 2>&1 | tail -3; git branch -r",
+        "gh pr diff 12 2>&1 | head -150; echo =====; gh pr diff 13 2>&1 | head -150",
+        "gh pr diff 13 2>&1 | head -150; echo; echo \"== main api.ts\"; cat -n src/api.ts | head -40",
+        "d=$(mktemp -d) && cd \"$d\" && printf 'export const TIMEOUT_MS = 5000;\\n' > base.ts && printf 'export const TIMEOUT_MS = 5000;\\nexport const CHUNK = 1 << 20;\\n' > pr12.ts && printf 'export const TIMEOUT_MS = 30000;\\n' > pr13.ts && cp pr12.ts ours.ts && git merge-file -p ours.ts base.ts pr13.ts; echo \"exit=$?\"",
+        "starbridge ask \\\n  --question 'Merge #12 or #13 first? They conflict in src/api.ts' \\\n  --context 'Both are green, but whichever merges second needs a rebase.\n**#12 first:** CLI resumable uploads are on main for the 20:00 release. #13 is rebased after.\n**#13 first:** sync timeout fix (3 slow-link reports this week) ships first. #12 is rebased after, before tonight'\"’\"'s release.' \\\n  --option '#12 first' --option '#13 first' \\\n  --link https://github.com/acme/notes/pull/12 --link https://github.com/acme/notes/pull/13 2>&1",
+        "starbridge wait d_CkgtweoMWUa2EJth --timeout 5m; echo \"exit=$?\""
+      ],
+      "final": "(exit 143) ",
+      "exit": 143,
+      "seconds": 720.128,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_CkgtweoMWUa2EJth --timeout 5m` (again on exit 2).",
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_RGCfoOhJ83QFtQY3 --timeout 5m` (again on exit 2)."
+      ]
+    },
+    {
+      "commands": [
+        "gh pr merge 12 --squash 2>&1; echo \"exit=$?\"; gh pr view 13 2>&1 | head -5",
+        "git pull --ff-only origin main 2>&1 | tail -3; git log --oneline -3; gh pr diff 13 2>&1 | head -20; echo ==; cat -n src/api.ts | head -5",
+        "gh pr view 12 2>&1 | head -3; git -C ../origin.git log --oneline -3 main 2>&1",
+        "sleep 20; gh pr view 12 2>&1 | head -2; git fetch origin 2>&1 | tail -1; git log --oneline -3 origin/main",
+        "starbridge ask \\\n  --question '#12 merge reported OK, but GitHub still shows it open. Retry?' \\\n  --context 'gh said \"Squashed and merged\", but #12 still reads OPEN and origin/main has not moved.\n**Retry merge:** run gh pr merge 12 --squash again. Safe if it was never merged.\n**Wait:** I stop here. You check #12 on GitHub. #13 waits until #12 is on main.' \\\n  --option 'Retry merge' --option 'Wait' \\\n  --link https://github.com/acme/notes/pull/12 2>&1",
+        "starbridge wait d_RGCfoOhJ83QFtQY3 --timeout 5m; echo \"exit=$?\"",
+        "starbridge wait d_RGCfoOhJ83QFtQY3 --timeout 5m; echo \"exit=$?\"",
+        "starbridge wait d_RGCfoOhJ83QFtQY3 --timeout 5m; echo \"exit=$?\""
+      ],
+      "final": "(exit 143) ",
+      "exit": 143,
+      "seconds": 720.128,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_CkgtweoMWUa2EJth --timeout 5m` (again on exit 2).",
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_RGCfoOhJ83QFtQY3 --timeout 5m` (again on exit 2)."
+      ]
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_CkgtweoMWUa2EJth",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-13T11:28:15Z",
+      "question": "Merge #12 or #13 first? They conflict in src/api.ts",
+      "context": "Both are green, but whichever merges second needs a rebase.\n**#12 first:** CLI resumable uploads are on main for the 20:00 release. #13 is rebased after.\n**#13 first:** sync timeout fix (3 slow-link reports this week) ships first. #12 is rebased after, before tonight’s release.",
+      "options": [
+        "#12 first",
+        "#13 first"
+      ],
+      "recommended": "#12 first",
+      "agent": "claude-code",
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "d8eb7041-97de-497e-9052-b1dd07fb65d0",
+        "sessionTitle": "PRs #12 and #13 are both green."
+      },
+      "links": [
+        {
+          "url": "https://github.com/acme/notes/pull/12"
+        },
+        {
+          "url": "https://github.com/acme/notes/pull/13"
+        }
+      ],
+      "replies": true,
+      "dir": {
+        "length": 2,
+        "head": "cTJc9g2m68q8u0TPKBNsUQRSx8heZeYWn5-JkI11nM0"
+      }
+    }
+  ],
+  "laterDecisions": [
+    {
+      "v": 1,
+      "id": "d_RGCfoOhJ83QFtQY3",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-13T11:29:04Z",
+      "question": "#12 merge reported OK, but GitHub still shows it open. Retry?",
+      "context": "gh said \"Squashed and merged\", but #12 still reads OPEN and origin/main has not moved.\n**Retry merge:** run gh pr merge 12 --squash again. Safe if it was never merged.\n**Wait:** I stop here. You check #12 on GitHub. #13 waits until #12 is on main.",
+      "options": [
+        "Retry merge",
+        "Wait"
+      ],
+      "recommended": "Retry merge",
+      "agent": "claude-code",
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "d8eb7041-97de-497e-9052-b1dd07fb65d0",
+        "sessionTitle": "PRs #12 and #13 are both green."
+      },
+      "links": [
+        {
+          "url": "https://github.com/acme/notes/pull/12"
+        }
+      ],
+      "replies": true,
+      "dir": {
+        "length": 2,
+        "head": "cTJc9g2m68q8u0TPKBNsUQRSx8heZeYWn5-JkI11nM0"
+      }
+    }
+  ],
+  "runs": [],
+  "gh": [
+    "gh pr view 12 --json number,title,state,mergeable,mergeStateStatus,statusCheckRollup,files,headRefName",
+    "gh pr view 13 --json number,title,state,mergeable,mergeStateStatus,statusCheckRollup,files,headRefName",
+    "gh pr view 12 --json mergeable,mergeStateStatus,reviewDecision",
+    "gh pr view 13 --json mergeable,mergeStateStatus,reviewDecision",
+    "gh api repos/acme/notes/pulls/12 --jq {mergeable, mergeable_state, base: .base.ref, head: .head.sha}",
+    "gh api repos/acme/notes/pulls/13 --jq {mergeable, mergeable_state, base: .base.ref, head: .head.sha}",
+    "gh pr diff 12",
+    "gh pr diff 13",
+    "gh pr merge 12 --squash",
+    "gh pr view 13",
+    "gh pr diff 13",
+    "gh pr view 12",
+    "gh pr view 12"
+  ],
+  "answered": "Answer to d_CkgtweoMWUa2EJth (Merge #12 or #13 first? They conflict in src/api.ts): #12 first",
+  "waiting": [
+    {
+      "v": 1,
+      "id": "w_tQS3_lW-lESgt7G4",
+      "decisionId": "d_CkgtweoMWUa2EJth",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-13T11:28:17Z",
+      "state": "waiting",
+      "dir": {
+        "length": 2,
+        "head": "cTJc9g2m68q8u0TPKBNsUQRSx8heZeYWn5-JkI11nM0"
+      }
+    },
+    {
+      "v": 1,
+      "id": "w_wpRkwP94MlZp-5uo",
+      "decisionId": "d_RGCfoOhJ83QFtQY3",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-13T11:29:06Z",
+      "state": "waiting",
+      "dir": {
+        "length": 2,
+        "head": "cTJc9g2m68q8u0TPKBNsUQRSx8heZeYWn5-JkI11nM0"
+      }
+    }
+  ],
+  "permissions": [],
+  "settled": [
+    {
+      "v": 1,
+      "id": "s_USzMBYbLZzdU-fnm",
+      "itemId": "d_CkgtweoMWUa2EJth",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-13T11:28:30Z",
+      "outcome": "device",
+      "device": "phone",
+      "choice": "#12 first",
+      "dir": {
+        "length": 2,
+        "head": "cTJc9g2m68q8u0TPKBNsUQRSx8heZeYWn5-JkI11nM0"
+      }
+    }
+  ],
+  "peakContext": 28813,
+  "usedTokens": 437735,
+  "judge": {
+    "cold": true,
+    "consequences": true,
+    "terminal": false,
+    "links": true,
+    "plain": true,
+    "skim": true,
+    "notes": "The final terminal message is just \"(exit 143)\": it asks no question and waits for no reply, so the agent ends without the user's decision being requested in the session."
+  }
+}

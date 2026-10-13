@@ -1,14 +1,15 @@
 # Runs on starbridge-1 as `sudo docker compose -p starbridge -f /opt/starbridge/deploy/compose.yaml`.
-# deploy/deploy.sh copies the repository to /opt/starbridge and builds the image there.
+# deploy/deploy.sh copies the repository to /opt/starbridge; host/apply.sh pulls the server and
+# web images deploy.yml pushed for that commit and writes REVISION to .env beside this file. The
+# build sections are for the load test (evals/load/stack.sh), which builds them itself.
 services:
   server:
     build:
       context: ..
       dockerfile: server/Dockerfile
-      # The commit, which /healthz names; deploy-rev.sh and deploy.sh set it.
       args:
         REVISION: ${REVISION:-unknown}
-    image: starbridge-server:latest
+    image: ghcr.io/t0msilver/starbridge-server:${REVISION:?host/apply.sh writes it to deploy/.env}
     restart: unless-stopped
     # Built by deploy/host/server-env.sh from the secrets in /etc/starbridge/secrets.
     env_file: /etc/starbridge/server.env
@@ -16,6 +17,9 @@ services:
     # (deploy/host/watch.sh). Cloudflare's free proxy, the emergency switch in front of the box,
     # ends a request at 100 s: long-polls return within 90 (#799).
     environment:
+      # The deployed commit, which /healthz names: an image is reused for a later commit that
+      # changed nothing it is built from (deploy.yml), so the one built into it can be older.
+      STARBRIDGE_REVISION: ${REVISION:?host/apply.sh writes it to deploy/.env}
       WATCH_PORT: "8081"
       MAX_WAIT_SECONDS: "90"
       # The server posts the launch funnel's steps to Umami (server/src/funnel.ts); the id is
@@ -42,7 +46,7 @@ services:
       # The public pages load Umami (below); a self-hosted build leaves it out.
       args:
         ANALYTICS: umami
-    image: starbridge-web:latest
+    image: &web-image ghcr.io/t0msilver/starbridge-web:${REVISION:?host/apply.sh writes it to deploy/.env}
     restart: unless-stopped
     environment: &web-env
       PUBLIC_URL: https://starbridge.run
@@ -51,8 +55,7 @@ services:
     logging: *logging
 
   web-b:
-    image: starbridge-web:latest
-    pull_policy: never
+    image: *web-image
     restart: unless-stopped
     environment: *web-env
     ports:

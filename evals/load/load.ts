@@ -12,11 +12,16 @@
  * stopping early once a stage's p99 passes 1 s or the server dies. At the end it stops posting,
  * waits for the last answers and decisions, and counts what was lost or came twice.
  *
+ * `--metrics FILE --until STOP` is the synthetic fleet: the same users for weeks against a real
+ * server (LOAD_TARGET), a JSON line appended to FILE every `--every` seconds, each answer or
+ * decision counted and forgotten once it arrived or was given up on, and `--drop` cutting the
+ * machines' long-polls as a flaky network would.
+ *
  *   evals/load/stack.sh load --ramp 300,1000,3000 --stage 120 --procs 4
  */
-import { readFileSync } from "node:fs";
+import { appendFileSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { parseArgs } from "node:util";
-import { box, expMs, Hist, id, LOAD_DIR, type User } from "./lib.ts";
+import { box, expMs, Hist, id, LOAD_DIR, type LoadResult, settle, type User } from "./lib.ts";
 
 const { values } = parseArgs({
   options: {
@@ -40,6 +45,15 @@ const { values } = parseArgs({
     idle: { type: "string" },
     worker: { type: "string" },
     out: { type: "string" },
+    /** The fleet: a line of metrics appended to this file every `--every` seconds. */
+    metrics: { type: "string" },
+    every: { type: "string", default: "300" },
+    /** The metrics lines' name for the server: prod or staging; its host when unset. */
+    site: { type: "string" },
+    /** Mean seconds before a machine's long-poll is cut, as a flaky network does; off when unset. */
+    drop: { type: "string" },
+    /** The result as JSON, for compare.ts: each stage, the final counts, memory every 5 min. */
+    json: { type: "string" },
   },
 });
 
@@ -48,12 +62,23 @@ const WINDOW_MS = 10_000;
 const TARGET = process.env.LOAD_TARGET ?? "http://caddy:18000";
 /** The host's cgroup tree, mounted into the load container. */
 const CGROUPS = process.env.LOAD_CGROUPS ?? "/sys/fs/cgroup";
+/**
+ * Where Docker puts the containers' cgroups: under stack.sh's LOAD_SLICE, or Docker's default.
+ * systemd nests a slice under each prefix of its name: a-b.slice is a.slice/a-b.slice.
+ */
+const SLICE = (process.env.LOAD_SLICE || "system.slice")
+  .replace(/\.slice$/, "")
+  .split("-")
+  .map((_, i, parts) => `${parts.slice(0, i + 1).join("-")}.slice`)
+  .join("/");
 /** One operation's window as a worker sends it. */
 type WorkerOp = { hist: { counts: (number | null)[]; n: number }; errors: Record<string, number> };
 const ramp = values.ramp.split(",").map(Number);
 const stageMs = Number(values.stage) * 1000;
 // Long-polls wait by design: their time is not latency.
 const WAITS = new Set(["answers.wait", "joins.wait"]);
+/** An answer slower than this misses the service target (spec/hosted.md). */
+const LATE_MS = 5000;
 
 /** The share `--pages` of users keep the web page open, spread evenly over user numbers. */
 const hasPage = (u: User) => (u.n * 0.618) % 1 < Number(values.pages);
@@ -90,6 +115,9 @@ async function worker(index: number, procs: number) {
   const acked = new Set<string>();
   const decisions = new Map<string, boolean>();
   let decisionsSeen = 0;
+  // Per window: answers past LATE_MS, and the fleet's (--metrics) give-ups, doubles and cut polls.
+  let counts = { late: 0, lost: 0, dup: 0, unseen: 0, reconnects: 0 };
+  const decidedAt = new Map<string, number>();
   let posting = true;
   let stopped = false;
 
@@ -101,6 +129,8 @@ async function worker(index: number, procs: number) {
     body?: unknown,
     /** The user's address, which a page load sends with no token. */
     ip = ipOf.get(token),
+    /** Cuts the request on purpose (--drop): status -1, and no error counted. */
+    signal?: AbortSignal,
     // biome-ignore lint/suspicious/noExplicitAny: each caller reads the fields it asked for
   ): Promise<{ status: number; json?: any }> {
     const t = performance.now();
@@ -113,6 +143,7 @@ async function worker(index: number, procs: number) {
           ...(body ? { "content-type": "application/json" } : {}),
         },
         body: body ? JSON.stringify(body) : undefined,
+        signal,
       });
       const text = await res.text();
       op(name).hist.add(performance.now() - t);
@@ -123,6 +154,7 @@ async function worker(index: number, procs: number) {
           text && res.headers.get("content-type")?.includes("json") ? JSON.parse(text) : undefined,
       };
     } catch (e) {
+      if (signal?.aborted) return { status: -1 };
       op(name).hist.add(performance.now() - t);
       const code = (e as { code?: string }).code ?? "net";
       op(name).errors[code] = (op(name).errors[code] ?? 0) + 1;
@@ -159,7 +191,15 @@ async function worker(index: number, procs: number) {
         dirAt = Date.now();
       }
       const q = `wait=${first ? 0 : 60}&directory=${u.directory}${cursor ? `&after=${cursor}` : ""}`;
-      const r = await call(first ? "answers" : "answers.wait", u.machine, "GET", `/answers?${q}`);
+      const cut = values.drop ? AbortSignal.timeout(expMs(Number(values.drop) * 1000)) : undefined;
+      const name = first ? "answers" : "answers.wait";
+      const r = await call(name, u.machine, "GET", `/answers?${q}`, undefined, undefined, cut);
+      if (r.status === -1) {
+        // Back after a moment, from the same cursor, as the agent after a network blip.
+        counts.reconnects++;
+        await pause(1000 + Math.random() * 9000);
+        continue;
+      }
       if (r.status !== 200) {
         failures++;
         await pause(Math.min(60_000, 2000 * 2 ** (failures - 1)));
@@ -170,7 +210,11 @@ async function worker(index: number, procs: number) {
         const at = answers.get(s.item.id);
         if (at === undefined) continue; // from an earlier run
         got.set(s.item.id, (got.get(s.item.id) ?? 0) + 1);
-        if (got.get(s.item.id) === 1) delivery.add(Date.now() - at);
+        if (got.get(s.item.id) !== 1) counts.dup++;
+        else {
+          delivery.add(Date.now() - at);
+          if (Date.now() - at > LATE_MS) counts.late++;
+        }
       }
       cursor = r.json.cursor;
       // Catches up on earlier runs' answers before waiting.
@@ -195,6 +239,7 @@ async function worker(index: number, procs: number) {
       };
       if (await post("post.decision", u.machine, item)) {
         if (hasPage(u)) decisions.set(d, false);
+        if (values.metrics) decidedAt.set(d, Date.now());
         answerLater(u, d);
       }
       await pause(expMs(3_600_000 / Number(values.decisions)));
@@ -215,8 +260,10 @@ async function worker(index: number, procs: number) {
     };
     // Counted from the first try: what the waiting session sees.
     answers.set(a, Date.now());
-    if (await post("post.answer", token, item)) acked.add(a);
-    else answers.delete(a);
+    // A post that landed after the fleet gave up on it (settle) stays out of the counts.
+    if (await post("post.answer", token, item)) {
+      if (answers.has(a)) acked.add(a);
+    } else answers.delete(a);
   }
 
   async function quotas(u: User) {
@@ -348,16 +395,22 @@ async function worker(index: number, procs: number) {
   let sent = 0;
   const tick = setInterval(() => {
     startUsers();
+    if (values.metrics) {
+      const gone = settle({ answers, got, acked, decisions, decidedAt }, Date.now());
+      counts.lost += gone.lost;
+      counts.unseen += gone.unseen;
+    }
     const out = Object.fromEntries([...ops].map(([k, v]) => [k, v]));
     try {
       process.stdout.write(
-        `${JSON.stringify({ w: sent++, users: started.size, ops: out, delivery })}\n`,
+        `${JSON.stringify({ w: sent++, users: started.size, ops: out, delivery, counts })}\n`,
       );
     } catch {
       process.exit(0); // the parent is gone
     }
     ops = new Map();
     delivery = new Hist();
+    counts = { late: 0, lost: 0, dup: 0, unseen: 0, reconnects: 0 };
   }, WINDOW_MS);
 
   // The parent says when to stop posting (stdin "drain") and when to stop altogether.
@@ -405,19 +458,32 @@ async function parent() {
       },
     ),
   );
+  // The fleet runs unwatched: a worker that dies would leave metrics lines with nothing in them,
+  // so the whole run stops and its supervisor starts it again.
+  let draining = false;
+  if (values.metrics)
+    for (const k of kids)
+      k.exited.then((code) => {
+        if (draining) return; // a worker exits once it sent its final counts
+        console.error(`a worker exited (${code})`);
+        process.exit(1);
+      });
   const containers = await containerIds();
 
   let cpuWas = await cpuUsage(containers);
   const log: string[] = [];
   const say = (s: string) => {
     console.log(s);
-    log.push(s);
+    // Kept only for --out: the fleet runs for weeks.
+    if (values.out) log.push(s);
   };
 
+  type Counts = Record<"late" | "lost" | "dup" | "unseen" | "reconnects", number>;
   type Window = {
     users: number;
     ops: Map<string, { hist: Hist; errors: Record<string, number> }>;
     delivery: Hist;
+    counts: Counts;
   };
   // Each worker numbers its windows; a window is done once every worker sent it.
   const open = new Map<number, Window & { reports: number }>();
@@ -445,6 +511,7 @@ async function parent() {
             users: 0,
             ops: new Map(),
             delivery: new Hist(),
+            counts: { late: 0, lost: 0, dup: 0, unseen: 0, reconnects: 0 },
             reports: 0,
           };
           open.set(line.w, win);
@@ -457,6 +524,8 @@ async function parent() {
               o.errors[code] = (o.errors[code] ?? 0) + n;
           }
           win.delivery.merge(line.delivery);
+          for (const [k, v] of Object.entries(line.counts as Counts))
+            win.counts[k as keyof Counts] += v;
           if (++win.reports === procs) {
             stageWins.push(win);
             open.delete(line.w);
@@ -488,7 +557,7 @@ async function parent() {
 
   // The failure tests: a page load and a server call every 100 ms, to see any request fail.
   const probe = { sent: 0, failed: 0, slowest: 0 };
-  if (values.until)
+  if (values.until && !values.metrics)
     (async () => {
       // Each round from an address of its own, so the probe never meets a per-address limit.
       for (let round = 0; ; round++) {
@@ -507,11 +576,16 @@ async function parent() {
       }
     })();
   let broke = "";
+  const result: LoadResult = { at: new Date(t0).toISOString(), stages: [], final: {}, memory: [] };
+  let sampledAt = 0;
+  let flushedAt = Date.now();
   const stages = values.until ? [ramp.at(-1) as number] : ramp;
   for (const [i, users] of stages.entries()) {
     stageWins = [];
     const stageEnd = values.until ? Infinity : t0 + (i + 1) * stageMs;
-    let peakMem = 0;
+    const peak: Record<string, number> = {};
+    const cpuSum: Record<string, number> = {};
+    let windows = 0;
     while (Date.now() < stageEnd) {
       if (values.until && (await Bun.file(values.until).exists())) break;
       await Bun.sleep(WINDOW_MS);
@@ -527,9 +601,21 @@ async function parent() {
         ]),
       );
       cpuWas = cpu;
-      peakMem = Math.max(peakMem, mem.server ?? 0);
+      windows++;
+      for (const [k, v] of Object.entries(mem)) peak[k] = Math.max(peak[k] ?? 0, v);
+      for (const [k, v] of Object.entries(cpuPct)) cpuSum[k] = (cpuSum[k] ?? 0) + Number(v);
+      // Every 5 minutes, the memory a soak's leak shows in (compare.ts).
+      if (Date.now() - sampledAt >= 300_000) {
+        sampledAt = Date.now();
+        result.memory.push({ t: Math.round((sampledAt - t0) / 1000), mb: round(mem) });
+      }
       const last = stageWins.at(-1);
       const s = last ? summarize([last]) : undefined;
+      if (values.metrics && Date.now() - flushedAt >= Number(values.every) * 1000) {
+        await writeMetrics(values.metrics, stageWins, (Date.now() - flushedAt) / 1000);
+        flushedAt = Date.now();
+        stageWins = [];
+      }
       say(
         `t=${((Date.now() - t0) / 1000).toFixed(0)}s users=${last?.users ?? 0} rps=${s ? (s.n / s.secs).toFixed(0) : 0} p50=${s?.req.q(0.5).toFixed(0)} p99=${s?.req.q(0.99).toFixed(0)}ms answer p99=${s?.delivery.q(0.99).toFixed(0)}ms mem MB ${fmt(mem)} cpu% ${JSON.stringify(cpuPct)} errors ${JSON.stringify(s?.errors ?? {})}`,
       );
@@ -541,8 +627,23 @@ async function parent() {
     // The stage's second half, once the users it added have settled in; all of a failure test.
     const s = summarize(stageWins.slice(values.until ? 0 : Math.floor(stageWins.length / 2)));
     const ops = [...s.perOp].map(([k, h]) => `${k} ${h.q(0.99).toFixed(0)}`).join(", ");
+    const errors = Object.values(s.errors).reduce((a, b) => a + b, 0);
+    result.stages.push({
+      users,
+      rps: Math.round(s.n / s.secs),
+      p50: Math.round(s.req.q(0.5)),
+      p99: Math.round(s.req.q(0.99)),
+      deliveryP50: Math.round(s.delivery.q(0.5)),
+      deliveryP99: Math.round(s.delivery.q(0.99)),
+      errorRate: s.n ? errors / s.n : 0,
+      peakMB: round(peak),
+      cpuPct: round(
+        Object.fromEntries(Object.entries(cpuSum).map(([k, v]) => [k, v / (windows || 1)])),
+      ),
+      p99ByOp: Object.fromEntries([...s.perOp].map(([k, h]) => [k, Math.round(h.q(0.99))])),
+    });
     say(
-      `STAGE users=${users} rps=${(s.n / s.secs).toFixed(0)} p50=${s.req.q(0.5).toFixed(0)}ms p99=${s.req.q(0.99).toFixed(0)}ms answer delivery p50=${s.delivery.q(0.5).toFixed(0)} p99=${s.delivery.q(0.99).toFixed(0)}ms peak server mem=${peakMem.toFixed(0)} MB errors=${JSON.stringify(s.errors)}\n  p99 by op (ms): ${ops}`,
+      `STAGE users=${users} rps=${(s.n / s.secs).toFixed(0)} p50=${s.req.q(0.5).toFixed(0)}ms p99=${s.req.q(0.99).toFixed(0)}ms answer delivery p50=${s.delivery.q(0.5).toFixed(0)} p99=${s.delivery.q(0.99).toFixed(0)}ms peak server mem=${(peak.server ?? 0).toFixed(0)} MB errors=${JSON.stringify(s.errors)}\n  p99 by op (ms): ${ops}`,
     );
     if (broke) break;
     if (s.req.q(0.99) > 1000) {
@@ -551,6 +652,7 @@ async function parent() {
     }
   }
   say(broke ? `BROKE: ${broke}` : "held every stage");
+  draining = true;
   for (const k of kids) {
     k.stdin.write("drain\n");
     k.stdin.flush();
@@ -570,8 +672,94 @@ async function parent() {
   if (values.until)
     say(`PROBE ${JSON.stringify({ ...probe, slowest: Math.round(probe.slowest) })}`);
   if (values.out) await Bun.write(values.out, `${log.join("\n")}\n`);
+  if (values.json) {
+    Object.assign(result, { final: total, ...(broke ? { broke } : {}) });
+    await Bun.write(values.json, `${JSON.stringify(result, null, 1)}\n`);
+  }
   for (const k of kids) k.kill();
   process.exit(0);
+}
+
+/**
+ * One line of the fleet's metrics (--metrics), for the service targets' cards: each operation's
+ * count, errors, p50 and p99 in ms (long-polls by count only), answer delivery with those past
+ * LATE_MS, and the windows' give-ups, doubles and cut polls. Lines older than 35 days go, once a
+ * day.
+ */
+async function writeMetrics(
+  file: string,
+  wins: {
+    users: number;
+    ops: Map<string, { hist: Hist; errors: Record<string, number> }>;
+    delivery: Hist;
+    counts: Record<string, number>;
+  }[],
+  secs: number,
+) {
+  const ops: Record<string, { n: number; err: number; p50?: number; p99?: number }> = {};
+  const hists = new Map<string, Hist>();
+  const delivery = new Hist();
+  const counts: Record<string, number> = { late: 0, lost: 0, dup: 0, unseen: 0, reconnects: 0 };
+  for (const w of wins) {
+    for (const [k, o] of w.ops) {
+      const h = hists.get(k) ?? new Hist();
+      hists.set(k, h);
+      h.merge(o.hist);
+      const e = Object.values(o.errors).reduce((a, b) => a + b, 0);
+      ops[k] = { n: (ops[k]?.n ?? 0) + o.hist.n, err: (ops[k]?.err ?? 0) + e };
+    }
+    delivery.merge(w.delivery);
+    for (const [k, v] of Object.entries(w.counts)) counts[k] = (counts[k] ?? 0) + v;
+  }
+  for (const [k, h] of hists)
+    if (!WAITS.has(k))
+      Object.assign(ops[k] ?? {}, { p50: Math.round(h.q(0.5)), p99: Math.round(h.q(0.99)) });
+  const errors = Object.values(ops).reduce((a, o) => a + o.err, 0);
+  const { late, ...rest } = counts;
+  const line = {
+    t: new Date().toISOString(),
+    source: "api",
+    site: values.site ?? new URL(TARGET).host,
+    window_s: Math.round(secs),
+    users: wins.at(-1)?.users ?? 0,
+    // A window with no request measured nothing.
+    ok:
+      Object.values(ops).some((o) => o.n > 0) &&
+      errors === 0 &&
+      !counts.lost &&
+      !counts.dup &&
+      !counts.unseen,
+    ops,
+    delivery: {
+      n: delivery.n,
+      p50: Math.round(delivery.q(0.5)),
+      p99: Math.round(delivery.q(0.99)),
+      late,
+    },
+    ...rest,
+  };
+  appendFileSync(file, `${JSON.stringify(line)}\n`);
+  const day = line.t.slice(0, 10);
+  if (day !== trimmedOn) {
+    trimmedOn = day;
+    const since = new Date(Date.now() - 35 * 86_400_000).toISOString();
+    const keep = readFileSync(file, "utf8")
+      .split("\n")
+      .filter((l) => {
+        try {
+          return JSON.parse(l).t >= since;
+        } catch {
+          return false;
+        }
+      });
+    writeFileSync(`${file}.tmp`, `${keep.join("\n")}\n`);
+    renameSync(`${file}.tmp`, file);
+  }
+}
+let trimmedOn = "";
+
+function round(m: Record<string, number>): Record<string, number> {
+  return Object.fromEntries(Object.entries(m).map(([k, v]) => [k, Math.round(v)]));
 }
 
 function fmt(m: Record<string, number>) {
@@ -607,7 +795,7 @@ async function containerIds(): Promise<Record<string, string>> {
 async function cgroupRead(id: string, file: string): Promise<string | undefined> {
   // Bun.file reads cgroup files as empty: they report size 0.
   try {
-    return readFileSync(`${CGROUPS}/system.slice/docker-${id}.scope/${file}`, "utf8");
+    return readFileSync(`${CGROUPS}/${SLICE}/docker-${id}.scope/${file}`, "utf8");
   } catch {
     return undefined;
   }

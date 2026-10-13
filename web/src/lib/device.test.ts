@@ -21,6 +21,7 @@ import {
   recoveryKeyPair,
   revokeEntry,
   seal,
+  sealImage,
   toB64,
   verifyDirectory,
 } from "@starbridge/protocol";
@@ -42,6 +43,13 @@ let forge: ((path: string) => Response | undefined) | undefined;
  * keys were still stored when it last listed them.
  */
 const shown = { open: 0, closed: 0, keys: false };
+/** A machine in the directory, with its keys, for tests after the one that pairs it. */
+let asker:
+  | {
+      keys: ReturnType<typeof generateMemberKeys>;
+      member: { id: string; role: "machine"; name: string; boxPk: string; signPk: string };
+    }
+  | undefined;
 
 beforeAll(async () => {
   live = await LiveServer.start();
@@ -267,6 +275,7 @@ test("a machine's settled notice closes only that machine's decisions (#362)", a
   }
   const fresh = (await device.deviceContext(ctx.account)) as device.Ctx;
   const [asks, closes] = machines as [(typeof machines)[0], (typeof machines)[0]];
+  asker = asks;
   const to = [fresh.device.id];
   const { id, name, boxPk, signPk } = fresh.device;
   const recipient = [{ id, role: "device" as const, name, boxPk, signPk }];
@@ -370,6 +379,221 @@ test("a machine's settled notice closes only that machine's decisions (#362)", a
     expect(closedByPhrase(won as InboxItem)).toBe(`on ${phone}`);
   } finally {
     globalThis.fetch = served;
+  }
+});
+
+test("a kept inbox reads only what came after it, and follows what the server dropped (#1380)", async () => {
+  const at = "2026-10-06T12:00:00Z";
+  // The machine the settled-notice test paired: the account holds 5 at most.
+  const { keys, member: machine } = asker as NonNullable<typeof asker>;
+  const fresh = (await device.deviceContext(ctx.account)) as device.Ctx;
+  const { id, name, boxPk, signPk } = fresh.device;
+  const recipient = [{ id, role: "device" as const, name, boxPk, signPk }];
+  const asked = (decisionId: string, cursor: string, answeredAt?: string) => ({
+    item: seal(
+      "decision",
+      {
+        v: 1,
+        id: decisionId,
+        to: [id],
+        createdAt: at,
+        question: `${decisionId}?`,
+        context: "",
+        options: ["Yes", "No"],
+        recommended: "Yes",
+        source: { machine: "asks", project: "p", session: "s" },
+      },
+      { id: machine.id, signKey: keys.sign.privateKey },
+      recipient,
+    ),
+    cursor,
+    receivedAt: at,
+    ...(answeredAt ? { answeredAt } : {}),
+  });
+  // The server's list, in cursor order, and what the page asked of it.
+  let listed = [asked("d_open", "1"), asked("d_done", "2", at)];
+  const asks: string[] = [];
+  let askedLate: ReturnType<typeof asked> | undefined;
+  const served = globalThis.fetch;
+  globalThis.fetch = (async (input: string, init?: RequestInit) => {
+    if (!input.startsWith("/v1/items?kind=decision")) return served(input, init);
+    const q = new URL(input, "http://x").searchParams;
+    asks.push(`${q.get("kind")} ${q.get("after") ?? ""}${q.get("open") ? " open" : ""}`);
+    const after = Number(q.get("after") ?? 0);
+    const items = listed.filter(
+      (s) => Number(s.cursor) > after && (!q.get("open") || !s.answeredAt),
+    );
+    // A question asked right after the page listed the open ones.
+    if (q.get("open") && askedLate) listed.push(askedLate);
+    return Response.json({ items, cursor: items.at(-1)?.cursor ?? String(after) });
+  }) as typeof fetch;
+  const ids = (inbox: device.Inbox) => inbox.items.map((i) => i.decision.id).sort();
+  const keep = { keep: true };
+  try {
+    expect(ids(await device.loadInbox(fresh, undefined, keep))).toEqual(["d_done", "d_open"]);
+    expect(asks).toEqual(["decision,settled,waiting,snooze "]);
+    // A page load: the open list, then only what came after the kept cursor. The kept open
+    // question shows before the answered ones open and that read starts (#1458).
+    asks.length = 0;
+    const early: string[][] = [];
+    const showing = { keep: true, early: (i: device.Inbox) => early.push([...ids(i), ...asks]) };
+    expect(ids(await device.loadInbox(fresh, undefined, showing))).toEqual(["d_done", "d_open"]);
+    expect(asks).toEqual(["decision  open", "decision,settled,waiting,snooze 2"]);
+    expect(early).toEqual([["d_open", "decision  open"]]);
+    // The server dropped the open question unanswered: it goes, kept no more, and never shows
+    // early. One asked after the open list stays.
+    listed = listed.filter((s) => s.item.id !== "d_open");
+    askedLate = asked("d_late", "3");
+    early.length = 0;
+    expect(ids(await device.loadInbox(fresh, undefined, showing))).toEqual(["d_done", "d_late"]);
+    expect(early).toEqual([]);
+    askedLate = undefined;
+    expect((await store.get("kept", ctx.account))?.items.map((s) => s.item.id)).toEqual([
+      "d_done",
+      "d_late",
+    ]);
+    expect(ids(await device.loadInbox(fresh, undefined, keep))).toEqual(["d_done", "d_late"]);
+    // Another server, or the same one reset: an open question it lists before the kept cursor
+    // means the kept items are not its own, so it reads all again.
+    listed = [asked("d_new", "1")];
+    asks.length = 0;
+    expect(ids(await device.loadInbox(fresh, undefined, keep))).toEqual(["d_new"]);
+    expect(asks).toEqual([
+      "decision  open",
+      "decision,settled,waiting,snooze 3",
+      "decision,settled,waiting,snooze ",
+    ]);
+  } finally {
+    globalThis.fetch = served;
+    await store.del("kept", ctx.account);
+  }
+});
+
+test("the first read of settled notices starts at the kept inbox's cursor (#1455)", async () => {
+  const fresh = (await device.deviceContext(ctx.account)) as device.Ctx;
+  const asks: string[] = [];
+  const served = globalThis.fetch;
+  globalThis.fetch = (async (input: string, init?: RequestInit) => {
+    if (input.startsWith("/v1/items?kind=permission"))
+      return Response.json({ items: openPrompts, cursor: "0" });
+    if (!input.startsWith("/v1/items?kind=settled")) return served(input, init);
+    asks.push(new URL(input, "http://x").searchParams.get("after") ?? "");
+    return Response.json({ items: [], cursor: "7" });
+  }) as typeof fetch;
+  let openPrompts: { cursor: string }[] = [];
+  try {
+    await device.loadSettled(fresh);
+    await store.put("kept", { device: fresh.device.id, cursor: "7", items: [] }, ctx.account);
+    await device.loadSettled(fresh);
+    // Another device's kept items say nothing of this one's reads.
+    // A prompt open at or before the kept cursor: a reset server, or one open since before.
+    openPrompts = [{ cursor: "3" }];
+    await device.loadSettled(fresh);
+    openPrompts = [{ cursor: "8" }];
+    await device.loadSettled(fresh);
+    await store.put("kept", { device: "d_other", cursor: "9", items: [] }, ctx.account);
+    await device.loadSettled(fresh);
+    expect(asks).toEqual(["", "7", "", "7", ""]);
+  } finally {
+    globalThis.fetch = served;
+    await store.del("kept", ctx.account);
+  }
+});
+
+test("an answered question lists without its images, which load once shown and stay kept (#1382)", async () => {
+  const at = "2026-10-06T12:00:00Z";
+  const { keys, member: machine } = asker as NonNullable<typeof asker>;
+  const fresh = (await device.deviceContext(ctx.account)) as device.Ctx;
+  const { id, boxPk } = fresh.device;
+  const bytes = new Uint8Array(500).map((_, i) => i % 251);
+  const { blob, ref } = sealImage(bytes);
+  const item = {
+    ...seal(
+      "decision",
+      {
+        v: 1,
+        id: "d_pictured",
+        to: [id],
+        createdAt: at,
+        question: "Ship this layout?",
+        context: "",
+        options: ["Yes", "No"],
+        recommended: "Yes",
+        images: [{ type: "image/png" as const, width: 4, height: 3, ...ref }],
+        source: { machine: "asks", project: "p", session: "s" },
+      },
+      { id: machine.id, signKey: keys.sign.privateKey },
+      [{ id, boxPk }],
+    ),
+    blobs: [blob],
+  };
+  const stored = { item, cursor: "1", receivedAt: at, answeredAt: at };
+  const fetched: string[] = [];
+  const served = globalThis.fetch;
+  globalThis.fetch = (async (input: string, init?: RequestInit) => {
+    if (input === "/v1/items/d_pictured") {
+      fetched.push(input);
+      return Response.json(stored);
+    }
+    if (!input.startsWith("/v1/items?kind=decision")) return served(input, init);
+    const q = new URL(input, "http://x").searchParams;
+    if (q.get("open") || Number(q.get("after") ?? 0) >= 1)
+      return Response.json({ items: [], cursor: q.get("after") ?? "0" });
+    const { blobs: _, ...bare } = item;
+    const listed = q.get("blobs") === "open" ? { ...stored, item: bare } : stored;
+    return Response.json({ items: [listed], cursor: "1" });
+  }) as typeof fetch;
+  const keep = { keep: true };
+  try {
+    const [first] = (await device.loadInbox(fresh, undefined, keep)).items;
+    expect(first?.imagesPending).toBe(true);
+    expect(first?.decision.images).toEqual([{ type: "image/png", width: 4, height: 3, data: "" }]);
+    expect(fetched).toEqual([]);
+    expect(await device.loadImages(fresh, "d_pictured")).toEqual([
+      { type: "image/png", width: 4, height: 3, data: toB64(bytes) },
+    ]);
+    // The next load opens them from what this browser kept, with no fetch.
+    const [again] = (await device.loadInbox(fresh, undefined, keep)).items;
+    expect(again?.imagesPending).toBeUndefined();
+    expect(again?.decision.images?.[0]?.data).toBe(toB64(bytes));
+    expect(fetched).toEqual(["/v1/items/d_pictured"]);
+    // Under a kept question's id, the server sends one naming another image, signed by the same
+    // machine: its blob opens against the kept refs only, so nothing shows (#1472).
+    const other = sealImage(new Uint8Array(500).map((_, i) => (i * 7) % 251));
+    const swap = (r: typeof ref) =>
+      seal(
+        "decision",
+        {
+          v: 1,
+          id: "d_swap",
+          to: [id],
+          createdAt: at,
+          question: "Ship that one?",
+          context: "",
+          options: ["Yes", "No"],
+          recommended: "Yes",
+          images: [{ type: "image/png" as const, width: 4, height: 3, ...r }],
+          source: { machine: "asks", project: "p", session: "s" },
+        },
+        { id: machine.id, signKey: keys.sign.privateKey },
+        [{ id, boxPk }],
+      );
+    await store.update("kept", ctx.account, (had) => ({
+      device: id,
+      cursor: had?.cursor ?? "1",
+      items: [
+        ...(had?.items ?? []),
+        { item: swap(ref), cursor: "2", receivedAt: at, answeredAt: at },
+      ],
+    }));
+    const sent = { item: { ...swap(other.ref), blobs: [other.blob] }, cursor: "3", receivedAt: at };
+    const swapServed = globalThis.fetch;
+    globalThis.fetch = (async (input: string, init?: RequestInit) =>
+      input === "/v1/items/d_swap" ? Response.json(sent) : swapServed(input, init)) as typeof fetch;
+    expect(await device.loadImages(fresh, "d_swap")).toEqual([]);
+  } finally {
+    globalThis.fetch = served;
+    await store.del("kept", ctx.account);
   }
 });
 

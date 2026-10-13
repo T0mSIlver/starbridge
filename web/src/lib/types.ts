@@ -47,6 +47,11 @@ export type InboxItem = {
   sending?: boolean;
   /** Why the server refused this browser's last answer; the question is open again (#895). */
   notSent?: string;
+  /**
+   * Answered and listed without its images (#1382): each image has its size and an empty
+   * `data` until the page fetches them, when the question's images come on screen.
+   */
+  imagesPending?: true;
 };
 
 /** An answer to a permission prompt: allow for a scope, or deny with a note to the agent. */

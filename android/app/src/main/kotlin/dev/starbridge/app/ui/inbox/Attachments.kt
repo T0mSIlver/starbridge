@@ -119,9 +119,11 @@ private fun ImageBox(image: Attached, size: DpSize, crop: Boolean, onOpen: () ->
     val edge = with(LocalDensity.current) { maxOf(size.width, size.height).roundToPx() * 2 }
     // Decoded off the main thread, so a list of image decisions scrolls smoothly; the inset
     // colour shows until it lands.
-    val bitmap by produceState<ImageBitmap?>(null, image.data, edge) {
+    val bitmap by produceState<ImageBitmap?>(null, image.data, image.file, edge) {
         value = withContext(Dispatchers.Default) { image.bitmap(edge)?.asImageBitmap() }
     }
+    // One still downloading (#1382) holds its place, with nothing to open yet.
+    val pending = image.pending
     Box(
         Modifier
             .size(size)
@@ -130,7 +132,7 @@ private fun ImageBox(image: Attached, size: DpSize, crop: Boolean, onOpen: () ->
             // No ripple: a finger that rests on the image before it drags the sheet would press
             // it, and the ripple starting and cancelling as the sheet moves is the one thing a
             // drag from the image did that one from the text did not (#246).
-            .clickable(interactionSource = null, indication = null, onClickLabel = "View full screen", onClick = onOpen)
+            .clickable(enabled = !pending, interactionSource = null, indication = null, onClickLabel = "View full screen", onClick = onOpen)
             // Labelled before the bitmap lands.
             .semantics { image.alt?.let { contentDescription = it } },
     ) {
@@ -144,18 +146,20 @@ private fun ImageBox(image: Attached, size: DpSize, crop: Boolean, onOpen: () ->
                 modifier = Modifier.fillMaxSize(),
             )
         }
-        // Says the image opens full screen, since nothing else on a touch screen does (#170).
-        Box(
-            Modifier
-                .align(Alignment.BottomEnd)
-                .padding(Spacing.s2)
-                .size(Spacing.s8)
-                .background(MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.72f), CircleShape)
-                // The glyph is text; keep it out of the image's label.
-                .clearAndSetSemantics {},
-            contentAlignment = Alignment.Center,
-        ) {
-            Symbol(Sym.Expand, size = Spacing.s5, tint = MaterialTheme.colorScheme.onSurface)
+        if (!pending) {
+            // Says the image opens full screen, since nothing else on a touch screen does (#170).
+            Box(
+                Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(Spacing.s2)
+                    .size(Spacing.s8)
+                    .background(MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.72f), CircleShape)
+                    // The glyph is text; keep it out of the image's label.
+                    .clearAndSetSemantics {},
+                contentAlignment = Alignment.Center,
+            ) {
+                Symbol(Sym.Expand, size = Spacing.s5, tint = MaterialTheme.colorScheme.onSurface)
+            }
         }
     }
 }

@@ -4,7 +4,7 @@ import { track } from "@/lib/analytics";
 import { HOSTED } from "@/lib/installCommands";
 import { AGENTS_GUIDE, REPO, SELF_HOST } from "@/lib/links";
 import { usePageOrigin } from "@/lib/pageOrigin";
-import { useGitHubSignIn } from "@/lib/signInMethods";
+import { useSignInMethods } from "@/lib/signInMethods";
 import { Analytics } from "./Analytics";
 import { InstallBox } from "./InstallBox";
 import { Icon, Mark } from "./icons";
@@ -97,9 +97,18 @@ function Section({
 }
 
 /** What a visitor without a device on this browser sees at `/` (design v2, direction B). */
-export function Landing({ onOwnerToken }: { onOwnerToken: () => void }) {
-  // A server without GitHub signs in with its owner token instead.
-  const github = useGitHubSignIn();
+export function Landing({
+  onOwnerToken,
+  onSignIn,
+}: {
+  onOwnerToken: () => void;
+  /** Shows the sign-in screen, which offers the other ways to sign in. */
+  onSignIn: () => void;
+}) {
+  // A server without GitHub signs in with its owner token instead. One that offers Apple too
+  // opens the sign-in screen from the header, where Apple sits under Other ways to sign in
+  // (#1411); the hero's button stays GitHub's.
+  const { github, apple } = useSignInMethods();
   // A self-hosted page names its own server where starbridge.run's names itself (#772).
   const origin = usePageOrigin();
   const hosted = origin === HOSTED;
@@ -119,7 +128,18 @@ export function Landing({ onOwnerToken }: { onOwnerToken: () => void }) {
           </a>
           <a href={REPO}>GitHub</a>
         </nav>
-        {github ? (
+        {github && apple ? (
+          <button
+            type="button"
+            className={`t-label ${ui.btn} ${ui.fill} ${s.signIn}`}
+            onClick={() => {
+              track("sign-in", { via: "header" });
+              onSignIn();
+            }}
+          >
+            Sign in
+          </button>
+        ) : github ? (
           <a
             href="/v1/auth/github"
             className={`t-label ${ui.btn} ${ui.fill} ${s.signIn}`}
@@ -235,65 +255,77 @@ export function Landing({ onOwnerToken }: { onOwnerToken: () => void }) {
         </div>
       </Section>
 
-      <section id="install" className={s.installSection}>
-        <h2 className="t-title">Install on each machine that runs agents</h2>
-        <p className={`t-small ${s.dim} ${s.wideOnly}`}>
-          After Homebrew or npm, run <code className={s.inlineCode}>starbridge setup</code> to pair
-          the machine and install Starbridge in your agents. The scripts run it for you.
-        </p>
-        <InstallBox counted />
-        <p className={`t-meta ${s.faint}`}>
-          Works with Claude Code, Codex, Pi, opencode, Cursor and Antigravity.
-        </p>
-      </section>
-
       <section id="get-the-app" className={s.installSection}>
         <h2 className="t-title">Get the app</h2>
         <div className={s.apps}>
           <div className={s.app}>
             <h3 className="t-prose">Android</h3>
-            <p className={`t-reading ${s.dim}`}>
-              The signed APK, for Android 12 and later. Add it to Obtainium to get updates.
-            </p>
-            <div className={s.appLinks}>
-              <a href={`${REPO}/releases`} onClick={() => track("get-app", { via: "releases" })}>
-                GitHub Releases
+            <p className={`t-meta ${s.dim}`}>Android 12 and later</p>
+            <div className={s.appActions}>
+              <a
+                href={`${REPO}/releases`}
+                className={`t-label ${ui.btn} ${ui.fill}`}
+                onClick={() => track("get-app", { via: "releases" })}
+              >
+                Download the APK
               </a>
-              <a href={OBTAINIUM} onClick={() => track("get-app", { via: "obtainium" })}>
+              <a
+                href={OBTAINIUM}
+                className={`t-label ${ui.btn}`}
+                onClick={() => track("get-app", { via: "obtainium" })}
+              >
                 Obtainium
               </a>
             </div>
-          </div>
-          {PLAY_TEST_OPEN && (
-            <div className={s.app}>
-              <h3 className="t-prose">Google Play</h3>
-              <p className={`t-reading ${s.dim}`}>
-                In closed testing, and looking for testers. Join the group, then opt in.
-              </p>
-              <div className={s.appLinks}>
+            {PLAY_TEST_OPEN && (
+              <p className={`t-meta ${s.faint} ${s.appNote}`}>
+                Play testing:{" "}
                 <a
                   href="https://groups.google.com/g/starbridge-testers"
                   onClick={() => track("get-app", { via: "play-group" })}
                 >
-                  Testers group
-                </a>
+                  group
+                </a>{" "}
+                then{" "}
                 <a
                   href="https://play.google.com/apps/testing/dev.starbridge.app"
                   onClick={() => track("get-app", { via: "play-opt-in" })}
                 >
-                  Opt in
+                  opt in
                 </a>
-              </div>
-            </div>
-          )}
+              </p>
+            )}
+          </div>
           <div className={s.app}>
-            <h3 className="t-prose">iOS</h3>
-            <p className={`t-reading ${s.dim}`}>
-              Add {pageHost} to the Home Screen from Safari to get notifications, on iOS 16.4 and
-              later. A native app is planned.
-            </p>
+            <h3 className="t-prose">iPhone</h3>
+            <p className={`t-meta ${s.dim}`}>Safari, iOS 16.4 and later</p>
+            <div className={s.appActions}>
+              <span className={`t-label ${s.homeScreen}`}>Add to Home Screen</span>
+            </div>
+          </div>
+          <div className={s.app}>
+            <h3 className="t-prose">Mac app</h3>
+            <p className={`t-meta ${s.dim}`}>macOS 14 and later</p>
+            <div className={s.appActions}>
+              {/* The DMGs' names carry the version, so the link is to the latest release. */}
+              <a
+                href={`${REPO}/releases/latest`}
+                className={`t-label ${ui.btn} ${ui.fill}`}
+                onClick={() => track("get-app", { via: "mac-dmg" })}
+              >
+                Download the DMG
+              </a>
+            </div>
           </div>
         </div>
+      </section>
+
+      <section id="install" className={s.installSection}>
+        <h2 className="t-title">Install on each machine that runs agents</h2>
+        <InstallBox counted />
+        <p className={`t-meta ${s.faint}`}>
+          Works with Claude Code, Codex, Pi, opencode, Cursor and Antigravity.
+        </p>
       </section>
 
       <footer className={`t-small ${s.foot}`}>

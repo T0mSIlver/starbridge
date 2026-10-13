@@ -48,7 +48,8 @@ export function Setup({
       <p className={`t-meta ${s.dim}`}>First device: {device}</p>
       <h1 className="t-heading">Save your recovery key</h1>
       <p className={`t-small ${s.lede}`}>
-        This key adds a new device if you lose every device. Starbridge shows it once.
+        Keep this key in a password manager or on paper. If you lose every device, it adds a new
+        one. This is the only time it is shown.
       </p>
       <p className={`t-snippet ${s.key}`} data-testid="recovery-key">
         {recoveryKey.split("-").map((group, i) => (

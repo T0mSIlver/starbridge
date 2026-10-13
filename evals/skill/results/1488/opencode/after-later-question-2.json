@@ -1,0 +1,98 @@
+{
+  "agent": "opencode",
+  "model": "zai-coding-plan/glm-5.3-flash",
+  "arm": "after",
+  "scenario": "later-question",
+  "rep": 2,
+  "turns": [
+    {
+      "commands": [
+        "node scripts/lint.js",
+        "node scripts/lint.js && echo LINT-OK",
+        "starbridge ask \\\n  --question 'What should we call next week’s release?' \\\n  --context 'RELEASE.md ships Monday and still says Name: TBD.\nIdeas from NAMES.md; tap one, or type any name.' \\\n  --option 'Driftwood' --option 'Lantern' --option 'Juniper'",
+        "starbridge wait d_7D2p7Tm0UOJlOz5i --timeout 5m --no-mark"
+      ],
+      "final": "Done:\n\n- **Lint fixed**: `src/upload.js` used `var` for two locals that never change (src/upload.js:2-3); changed to `const`. `node scripts/lint.js` now passes.\n- **Release name**: sent you a card with the NAMES.md ideas; you picked **Driftwood**, which is now in RELEASE.md — well ahead of Monday.",
+      "session": "ses_ecaf86835ffe7909fGaP4lercH",
+      "tokens": 7843,
+      "exit": 0,
+      "seconds": 173.228,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_7D2p7Tm0UOJlOz5i --timeout 5m` (again on exit 2)."
+      ]
+    },
+    {
+      "commands": [],
+      "final": "Done:\n\n- **Lint fixed**: `src/upload.js` used `var` for two locals that never change (src/upload.js:2-3); changed to `const`. `node scripts/lint.js` now passes.\n- **Release name**: sent you a card with the NAMES.md ideas; you picked **Driftwood**, which is now in RELEASE.md — well ahead of Monday.",
+      "session": "ses_ecaf86835ffe7909fGaP4lercH",
+      "tokens": 7843,
+      "exit": 0,
+      "seconds": 173.228,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_7D2p7Tm0UOJlOz5i --timeout 5m` (again on exit 2)."
+      ]
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_7D2p7Tm0UOJlOz5i",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-13T11:31:36Z",
+      "question": "What should we call next week’s release?",
+      "context": "RELEASE.md ships Monday and still says Name: TBD.\nIdeas from NAMES.md; tap one, or type any name.",
+      "options": [
+        "Driftwood",
+        "Lantern",
+        "Juniper"
+      ],
+      "recommended": "Driftwood",
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": ""
+      },
+      "replies": true,
+      "dir": {
+        "length": 2,
+        "head": "RJnupSs776qiB3KF8jPC_u-9NYDa-NbIlYGLVh-TNXA"
+      }
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [],
+  "answered": "Answer to d_7D2p7Tm0UOJlOz5i (What should we call next week’s release?): Driftwood",
+  "waiting": [],
+  "permissions": [],
+  "settled": [
+    {
+      "v": 1,
+      "id": "s_m_wlEGKt79ErtQlj",
+      "itemId": "d_7D2p7Tm0UOJlOz5i",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-13T11:33:37Z",
+      "outcome": "device",
+      "device": "phone",
+      "choice": "Driftwood",
+      "dir": {
+        "length": 2,
+        "head": "RJnupSs776qiB3KF8jPC_u-9NYDa-NbIlYGLVh-TNXA"
+      }
+    }
+  ],
+  "judge": {
+    "cold": false,
+    "consequences": false,
+    "terminal": false,
+    "links": null,
+    "plain": true,
+    "skim": true,
+    "notes": "The card never says what changes per option (naming the release Driftwood vs. Lantern vs. Juniper), and the final message reports the choice as already made instead of asking in the terminal, so the user's answer was never confirmed to be what they meant to pick."
+  }
+}

@@ -1,0 +1,123 @@
+{
+  "agent": "claude",
+  "model": "claude-haiku-5-5",
+  "arm": "after",
+  "scenario": "later-question",
+  "rep": 2,
+  "turns": [
+    {
+      "commands": [
+        "node scripts/lint.js; echo \"exit=$?\"",
+        "ls -la && cat RELEASE.md 2>/dev/null; cat scripts/lint.js",
+        "cat -n src/upload.js; echo ---; cat NAMES.md; echo ---; ls src",
+        "node scripts/lint.js; echo \"exit=$?\"",
+        "starbridge ask \\\n  --question 'What should next week’s release be called?' \\\n  --context 'RELEASE.md still says “Name: TBD”, and the release ships Monday.\nPick one of the names from NAMES.md, or type your own.' \\\n  --option 'Driftwood' --option 'Lantern' --option 'Juniper'",
+        "starbridge wait d_xAO6JgiKi5od7Ch6 --timeout 5m; echo \"exit=$?\""
+      ],
+      "final": "Lint passes, and next week's release is named Driftwood in RELEASE.md. I haven't committed anything.\n\n- **Lint:** `src/upload.js` used `var` on lines 2–3, which the lint script rejects. I changed both to `const`, since neither variable is reassigned. `node scripts/lint.js` now exits 0.\n- **Release name:** I asked you through Starbridge, and you answered Driftwood. I changed `Name: TBD` to `Name: Driftwood` in RELEASE.md. The candidates came from NAMES.md (Driftwood, Lantern, Juniper).\n\nThe changes are uncommitted in the working tree: `RELEASE.md` and `src/upload.js`.",
+      "session": "068a1784-1f5a-4033-b613-4826718e890f",
+      "tokens": 175767,
+      "costUsd": 0.0057736900000000015,
+      "exit": 0,
+      "seconds": 133.733,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_xAO6JgiKi5od7Ch6 --timeout 5m` (again on exit 2)."
+      ]
+    },
+    {
+      "commands": [
+        "node scripts/lint.js; echo \"lint exit=$?\"; git status --short; git diff"
+      ],
+      "final": "Lint passes, and next week's release is named Driftwood in RELEASE.md. I haven't committed anything.\n\n- **Lint:** `src/upload.js` used `var` on lines 2–3, which the lint script rejects. I changed both to `const`, since neither variable is reassigned. `node scripts/lint.js` now exits 0.\n- **Release name:** I asked you through Starbridge, and you answered Driftwood. I changed `Name: TBD` to `Name: Driftwood` in RELEASE.md. The candidates came from NAMES.md (Driftwood, Lantern, Juniper).\n\nThe changes are uncommitted in the working tree: `RELEASE.md` and `src/upload.js`.",
+      "session": "068a1784-1f5a-4033-b613-4826718e890f",
+      "tokens": 175767,
+      "costUsd": 0.0057736900000000015,
+      "exit": 0,
+      "seconds": 133.733,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_xAO6JgiKi5od7Ch6 --timeout 5m` (again on exit 2)."
+      ]
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_xAO6JgiKi5od7Ch6",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-13T11:38:02Z",
+      "question": "What should next week’s release be called?",
+      "context": "RELEASE.md still says “Name: TBD”, and the release ships Monday.\nPick one of the names from NAMES.md, or type your own.",
+      "options": [
+        "Driftwood",
+        "Lantern",
+        "Juniper"
+      ],
+      "recommended": "Driftwood",
+      "agent": "claude-code",
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "068a1784-1f5a-4033-b613-4826718e890f",
+        "sessionTitle": "Fix the lint errors (`node scripts/lint.js`)."
+      },
+      "replies": true,
+      "dir": {
+        "length": 2,
+        "head": "QzxkT4AA4u0XJf_YMJcUpInHZ6wbZYpvTJF4jWSlLWY"
+      }
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [],
+  "answered": "Answer to d_xAO6JgiKi5od7Ch6 (What should next week’s release be called?): Driftwood",
+  "waiting": [
+    {
+      "v": 1,
+      "id": "w_XaEdjtUrfkuyvTpB",
+      "decisionId": "d_xAO6JgiKi5od7Ch6",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-13T11:38:04Z",
+      "state": "waiting",
+      "dir": {
+        "length": 2,
+        "head": "QzxkT4AA4u0XJf_YMJcUpInHZ6wbZYpvTJF4jWSlLWY"
+      }
+    }
+  ],
+  "permissions": [],
+  "settled": [
+    {
+      "v": 1,
+      "id": "s_mUNYr_1kVk4irK5F",
+      "itemId": "d_xAO6JgiKi5od7Ch6",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-13T11:40:02Z",
+      "outcome": "device",
+      "device": "phone",
+      "choice": "Driftwood",
+      "dir": {
+        "length": 2,
+        "head": "QzxkT4AA4u0XJf_YMJcUpInHZ6wbZYpvTJF4jWSlLWY"
+      }
+    }
+  ],
+  "peakContext": 25122,
+  "usedTokens": 175767,
+  "judge": {
+    "cold": true,
+    "consequences": false,
+    "terminal": false,
+    "links": null,
+    "plain": true,
+    "skim": true,
+    "notes": "The card lists Driftwood, Lantern, and Juniper without saying what each name changes or why the choice matters beyond RELEASE.md's placeholder, and the final message reports the answer as done rather than asking the user anything in the terminal."
+  }
+}

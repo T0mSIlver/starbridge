@@ -9,11 +9,12 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
-import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.drawscope.withTransform
+import androidx.compose.ui.graphics.vector.PathParser
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
@@ -22,19 +23,24 @@ import dev.starbridge.app.ui.theme.StarbridgeTheme
 import kotlin.math.roundToInt
 
 /**
- * The mark drawn in the theme's colours: DESIGN.md's shapes, cropped to the visible 72 of the
- * 108-unit canvas (18 to 90), as the web's `Mark`. The climber is the only amber.
+ * The mark drawn in the theme's colours: the arch and the amber dot of design/mark.svg
+ * ([MarkShape]), in a square as wide as the arch whose bottom edge is the arch's feet, as the web's
+ * `Mark`. The dot is the only amber.
  */
 @Composable
 fun Mark(size: Dp, modifier: Modifier = Modifier) {
     val fg = MaterialTheme.colorScheme.onSurface
     val accent = StarbridgeTheme.colors.accent
+    val arch = remember { PathParser().parsePathString(MarkShape.ARCH).toPath() }
     Canvas(modifier.size(size).clipToBounds()) {
-        val k = this.size.width / 72f
-        fun at(x: Float, y: Float) = Offset((x - 18f) * k, (y - 18f) * k)
-        drawCircle(fg, radius = 80f * k, center = at(54f, 148f))
-        drawRect(fg, topLeft = at(51.75f, 18f), size = Size(4.5f * k, 52f * k))
-        drawRoundRect(accent, topLeft = at(48.5f, 34f), size = Size(11f * k, 20f * k), cornerRadius = CornerRadius(5.5f * k))
+        withTransform({
+            val k = this@Canvas.size.width / MarkShape.CROP_SIZE
+            scale(scaleX = k, scaleY = k, pivot = Offset.Zero)
+            translate(left = -MarkShape.CROP_X, top = -MarkShape.CROP_Y)
+        }) {
+            drawPath(arch, fg)
+            drawCircle(accent, radius = MarkShape.DOT_R, center = Offset(MarkShape.DOT_X, MarkShape.DOT_Y))
+        }
     }
 }
 

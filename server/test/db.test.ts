@@ -3,7 +3,7 @@ import { expect, test } from "bun:test";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { MIGRATIONS, migrate, openDb, SCHEMA_VERSION } from "../src/db";
+import { MIGRATIONS, migrate, NOT_ADDITIVE, openDb, refuses, SCHEMA_VERSION } from "../src/db";
 import { OLD_MIGRATIONS } from "./fixtures/migrations-v1-v6";
 
 const version = (db: Database) =>
@@ -125,4 +125,54 @@ test("a write that reads first waits for another connection's write lock", async
   })();
   expect(n).toBe(1);
   expect(await holder.exited).toBe(0);
+});
+
+test("a server opens a database one additive migration ahead, and refuses one that is not (#1555)", () => {
+  const steps = [
+    "CREATE TABLE additive_migrations (version INTEGER PRIMARY KEY)",
+    "CREATE TABLE a (x)",
+  ];
+  const dir = mkdtempSync(join(tmpdir(), "sb-db-"));
+  const ahead = (notAdditive: Set<number>) => {
+    const path = join(dir, `${notAdditive.size}.sqlite`);
+    const db = new Database(path);
+    migrate(db, [...steps, "ALTER TABLE a ADD COLUMN y"], notAdditive);
+    db.close();
+    return path;
+  };
+  const older = new Database(ahead(new Set()));
+  migrate(older, steps);
+  expect(version(older)).toBe(3);
+  older.run("INSERT INTO a (x) VALUES (1)");
+  expect(refuses(older, 1)).toContain("schema 3, newer than this server's 1");
+
+  const notAdditive = new Database(ahead(new Set([3])));
+  expect(refuses(notAdditive, 2)).toContain("not additive");
+  expect(() => migrate(notAdditive, steps)).toThrow("not additive");
+});
+
+test("every migration not listed in NOT_ADDITIVE only adds (#1555)", () => {
+  // A table, an index, or a column that a server predating it can leave out of its inserts.
+  const additive =
+    /^(CREATE TABLE \w+ \(|CREATE (UNIQUE )?INDEX \w+ ON |ALTER TABLE \w+ ADD COLUMN \w+ \w+( NOT NULL)?( DEFAULT .+)?$)/;
+  const wrong = MIGRATIONS.flatMap((sql, i) =>
+    NOT_ADDITIVE.has(i + 1)
+      ? []
+      : sql
+          .split(";")
+          .map((s) => s.replace(/\s+/g, " ").trim())
+          .filter(
+            (s) =>
+              s &&
+              (!additive.test(s) ||
+                (s.startsWith("ALTER") && s.includes("NOT NULL") && !s.includes("DEFAULT"))),
+          )
+          .map((s) => `V${i + 1}: ${s}`),
+  );
+  expect(wrong).toEqual([]);
+});
+
+test("openDb records the additive migrations it runs from V11 on (#1555)", () => {
+  const db = openDb(join(mkdtempSync(join(tmpdir(), "sb-db-")), "db.sqlite"));
+  expect(db.query("SELECT version FROM additive_migrations").all()).toEqual([{ version: 11 }]);
 });

@@ -1,0 +1,47 @@
+/* The rail's update button (#1398): a tab's shape and colours, so it sits in the rail as one. */
+.button {
+  display: flex;
+  align-items: center;
+  gap: var(--s2h);
+  width: 100%;
+  height: var(--s8);
+  padding: 0 var(--s2h);
+  border: 0;
+  border-radius: var(--radius-dense);
+  background: none;
+  color: var(--fg2);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background var(--t-fast) var(--ease),
+    color var(--t-fast) var(--ease);
+}
+
+@media (hover: hover) {
+  .button:not(:disabled):hover {
+    background: color-mix(in srgb, var(--surface2) 60%, transparent);
+    color: var(--fg);
+  }
+}
+
+/* Downloading: a state, not an action. */
+.button:disabled {
+  cursor: default;
+}
+
+.icon {
+  position: relative;
+  display: flex;
+}
+
+/* Something to do. Not amber, which means an agent needs the owner (DESIGN.md). */
+.dot {
+  position: absolute;
+  top: -1px;
+  right: -2px;
+  width: 7px;
+  height: 7px;
+  border: 1.5px solid var(--surface);
+  border-radius: 50%;
+  background: var(--fg);
+}

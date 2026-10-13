@@ -1,0 +1,88 @@
+{
+  "agent": "claude",
+  "model": "claude-haiku-5-5",
+  "arm": "before",
+  "scenario": "desk-question",
+  "rep": 2,
+  "turns": [
+    {
+      "commands": [],
+      "askUser": [
+        {
+          "denied": false
+        }
+      ],
+      "final": "",
+      "session": "fce4e5e4-1cf3-44d7-8f41-3a217949a79c",
+      "exit": 0,
+      "seconds": 12.031
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_eT7u4xXL9HLGlXr8",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-13T13:05:42.895Z",
+      "question": "Which option should title this card?",
+      "context": "src/theme.js is a single light palette (background #fff, text #111). How should the dark theme be chosen? Which option should title this card?\n\n- System + menu override (Recommended): Default to the OS setting, with a menu choice of System / Light / Dark that overrides it.\n- Follow system only: No menu control. Dark applies whenever the OS is in dark mode. Simplest, but users can't pick a theme independently.\n- Menu toggle only: Light/dark switch in the menu, defaulting to light. Ignores the OS setting entirely.",
+      "options": [
+        "System + menu override (Recommended)",
+        "Follow system only",
+        "Menu toggle only"
+      ],
+      "recommended": "System + menu override (Recommended)",
+      "agent": "claude-code",
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "fce4e5e4-1cf3-44d7-8f41-3a217949a79c",
+        "sessionTitle": "I'm at my desk for the next ten minutes."
+      },
+      "replies": true,
+      "dir": {
+        "length": 2,
+        "head": "Me1pDcajAiM8E3p2Ey9tdiYQjduPK82fzWAyPlEXqjs"
+      }
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [
+    "gh auth token",
+    "gh auth token",
+    "gh issue list -R anthropics/claude-code --author @me --state closed --search closed:>2026-09-13 --json number,title,closedAt,stateReason --limit 30"
+  ],
+  "waiting": [
+    {
+      "v": 1,
+      "id": "w_BfIT7f1h92hfrtrU",
+      "decisionId": "d_eT7u4xXL9HLGlXr8",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-13T13:05:42Z",
+      "state": "waiting",
+      "dir": {
+        "length": 2,
+        "head": "Me1pDcajAiM8E3p2Ey9tdiYQjduPK82fzWAyPlEXqjs"
+      }
+    }
+  ],
+  "permissions": [],
+  "settled": [],
+  "peakContext": 29395,
+  "usedTokens": 59151,
+  "judge": {
+    "cold": true,
+    "consequences": true,
+    "terminal": false,
+    "links": null,
+    "plain": false,
+    "skim": false,
+    "notes": "The card's headline is the agent's own meta-question, 'Which option should title this card?', instead of the decision, and the context repeats it, so a skimming user would not see what is being decided."
+  }
+}

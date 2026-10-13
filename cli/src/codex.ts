@@ -2,12 +2,14 @@
  * Codex sessions. Since Codex CLI 0.160 the interactive TUI runs its sessions in a shared
  * app-server daemon (feature `daemon_auto_start`, on by default), and `codex queue` adds a user
  * message to one of them: an idle session starts a turn with it, a busy one runs it next. The
- * agent delivers answers to Codex sessions that way, as the Claude Code mod submits them.
+ * agent delivers answers to Codex sessions that way, as the Claude Code mod submits them, and
+ * steers an answer the agent marked waiting into the running turn (#1486).
  */
 import { spawn } from "node:child_process";
 import { closeSync, fstatSync, openSync, readdirSync, readSync } from "node:fs";
 import { createConnection } from "node:net";
 import { join } from "node:path";
+import { CodexApp } from "./codex-app";
 import type { Ctx } from "./context";
 import { killTree, spawnable, which } from "./platform";
 
@@ -191,4 +193,63 @@ export function codexQueue(
       resolve(code === 0 ? undefined : last || `codex queue exited ${code}`);
     });
   });
+}
+
+const STEER_MS = 5_000;
+
+/**
+ * Hands `text` to Codex session `thread` within its running turn (#1486): the daemon's
+ * `turn/steer` adds it to the turn as a user message, which the model reads with the result of
+ * the tool call under way. Resolves false when no turn runs or the daemon cannot be reached, and
+ * the caller queues instead; true once the steer went out, even unconfirmed, since queueing too
+ * would hand the answer over twice. The control socket sits in a folder only the owner can open,
+ * so unlike `codex queue`'s arguments the text may hold the answer.
+ */
+export async function codexSteer(s: CodexSession, thread: string, text: string): Promise<boolean> {
+  let app: CodexApp | undefined;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let sent = false;
+  // Past the budget the caller queues: a steer that connected late must not go out too.
+  let late = false;
+  const steer = async () => {
+    const connected = await CodexApp.connect(s.home, () => {});
+    app = connected;
+    if (late) {
+      connected.close();
+      return false;
+    }
+    const turns = (await app.request("thread/turns/list", { threadId: thread, limit: 1 })) as {
+      data?: { id: string; status: string }[];
+    };
+    const turn = turns.data?.[0];
+    if (late || turn?.status !== "inProgress") return false;
+    const steered = app.request("turn/steer", {
+      threadId: thread,
+      expectedTurnId: turn.id,
+      input: [{ type: "text", text, text_elements: [] }],
+    });
+    sent = true;
+    // Refused when that turn ended meanwhile ("no active turn to steer").
+    await steered;
+    return true;
+  };
+  const steering = steer();
+  // It can still fail after the budget answered for it.
+  steering.catch(() => {});
+  try {
+    return await Promise.race([
+      steering,
+      new Promise<boolean>((resolve) => {
+        timer = setTimeout(() => {
+          late = !sent;
+          resolve(sent);
+        }, STEER_MS);
+      }),
+    ]);
+  } catch {
+    return false;
+  } finally {
+    clearTimeout(timer);
+    (app as CodexApp | undefined)?.close();
+  }
 }

@@ -1,0 +1,83 @@
+{
+  "agent": "opencode",
+  "model": "zai-coding-plan/glm-5.3-flash",
+  "arm": "after",
+  "scenario": "snoozed-release",
+  "rep": 1,
+  "turns": [
+    {
+      "commands": [
+        "node -p \"require('./package.json').name + ' ' + require('./package.json').version\" && git status --short && git log --oneline -5",
+        "starbridge ask \\\n  --question 'Publish @acme/notes 0.4.0 to npm now?' \\\n  --context 'Working tree is clean and package.json is at 0.4.0. A published version can never be taken back.\n**Publish now:** runs npm publish from the repo root.\n**Hold:** I do nothing until you say so.' \\\n  --option 'Publish now' --option 'Hold' --recommended 'Publish now' \\\n  --waiting",
+        "starbridge wait d_9zPZRlt0btLvoPlN --timeout 5m"
+      ],
+      "final": "The approval card was snoozed until tomorrow 09:00, so nothing is published. The publish of `@acme/notes` 0.4.0 waits on card `d_9zPZRlt0btLvoPlN`; `starbridge wait d_9zPZRlt0btLvoPlN` will read the answer after that time.",
+      "session": "ses_ecaf9bc37ffetaW4qTMs72OEQX",
+      "tokens": 12051,
+      "exit": 0,
+      "seconds": 55.279,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_9zPZRlt0btLvoPlN --timeout 5m` (again on exit 2)."
+      ]
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_9zPZRlt0btLvoPlN",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-13T11:29:57Z",
+      "question": "Publish @acme/notes 0.4.0 to npm now?",
+      "context": "Working tree is clean and package.json is at 0.4.0. A published version can never be taken back.\n**Publish now:** runs npm publish from the repo root.\n**Hold:** I do nothing until you say so.",
+      "options": [
+        "Publish now",
+        "Hold"
+      ],
+      "recommended": "Publish now",
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": ""
+      },
+      "replies": true,
+      "dir": {
+        "length": 2,
+        "head": "obIcGsXI9WNqROSLRjGJ2aWVz09-XWsRCway5nibEXw"
+      }
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [],
+  "snoozed": "2026-10-14T07:00:00.000Z",
+  "waiting": [
+    {
+      "v": 1,
+      "id": "w_wC4JPoa4sfQ_4U_m",
+      "decisionId": "d_9zPZRlt0btLvoPlN",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-13T11:29:57Z",
+      "state": "waiting",
+      "dir": {
+        "length": 2,
+        "head": "obIcGsXI9WNqROSLRjGJ2aWVz09-XWsRCway5nibEXw"
+      }
+    }
+  ],
+  "permissions": [],
+  "settled": [],
+  "judge": {
+    "cold": true,
+    "consequences": true,
+    "terminal": false,
+    "links": null,
+    "plain": true,
+    "skim": true,
+    "notes": "The final message only reports that the card is pending and that nothing ships by default, instead of asking the user a question and waiting for a reply in the terminal."
+  }
+}

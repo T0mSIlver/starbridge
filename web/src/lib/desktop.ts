@@ -26,6 +26,17 @@ export type DesktopPlace = "menu" | "dock" | "both";
  */
 export type DesktopScreen = { away: boolean; idleMs: number | null };
 
+/** Where the app's update stands (desktop/src/updates.ts, #1398). */
+export type DesktopUpdateStatus =
+  | { state: "idle" }
+  | { state: "checking" }
+  | { state: "available"; version: string }
+  | { state: "downloading"; version: string; percent: number }
+  | { state: "ready"; version: string }
+  | { state: "error"; message: string };
+
+export type DesktopUpdateSettings = { releaseCandidates: boolean; autoDownload: boolean };
+
 export type DesktopBridge = {
   version: string;
   /** Absent before the app's 0.1.3. */
@@ -52,6 +63,22 @@ export type DesktopBridge = {
   onNotificationsBlocked?(f: (() => void) | null): void;
   /** Opens System Settings → Notifications → Starbridge. */
   openNotificationSettings?(): void;
+  /** Null while the app runs no updater (a development run); absent before #1398. */
+  updateStatus?(): DesktopUpdateStatus | null;
+  updateSettings?(): DesktopUpdateSettings | null;
+  setUpdateSettings?(s: Partial<DesktopUpdateSettings>): void;
+  /** "install" restarts the app. */
+  updateAction?(a: "check" | "download" | "install"): void;
+  /** Called when the status or the settings change. */
+  onUpdate?(f: (() => void) | null): void;
+  /** Whether macOS opens the app at login; absent before #1449, whose app kept it in its menu. */
+  login?(): boolean;
+  setLogin?(login: boolean): void;
+  onLogin?(f: (() => void) | null): void;
+  /** Opens the app's window for setting the server; the app restarts on a new one. */
+  openServer?(): void;
+  /** Called on Settings… in the menu bar's menu. */
+  onSettings?(f: (() => void) | null): void;
   onAnswer(f: (a: DesktopAnswer) => Promise<void>): void;
   onOpen(f: (id: string) => void): void;
 };

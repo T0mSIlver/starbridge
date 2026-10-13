@@ -2,6 +2,7 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { configFromEnv } from "../src/config";
 import { setSignUps } from "../src/signups";
 import { DEFAULT_LIMITS, makeServer, setupAccount, signIn, testConfig } from "../test-support/app";
 
@@ -209,6 +210,35 @@ test("paused sign-ups refuse new GitHub accounts and let existing ones in (#784)
   expect(app.json.error).toBe("signups-paused");
   setSignUps(testConfig({ dbPath }), true);
   expect((await githubSignIn(s, 7)).headers.get("location")).toBe("/");
+});
+
+test("a sign-up list lets only its GitHub users make accounts (#1524)", async () => {
+  const dbPath = join(mkdtempSync(join(tmpdir(), "sb-signups-")), "sb.db");
+  const s = await makeServer({ ...githubConfig(), dbPath });
+  expect((await githubSignIn(s, 7)).headers.get("location")).toBe("/");
+  const listed = await makeServer({ ...githubConfig(), dbPath, signUpGitHubIds: new Set([42]) });
+  expect((await githubSignIn(listed, 42)).headers.get("location")).toBe("/");
+  // Made before the list: still signs in.
+  expect((await githubSignIn(listed, 7)).headers.get("location")).toBe("/");
+  expect((await githubSignIn(listed, 8)).headers.get("location")).toBe("/?signin=paused");
+  // Nor an owner account beside the list.
+  const owner = await makeServer({
+    dbPath,
+    ownerToken: "owner-secret",
+    signUpGitHubIds: new Set([42]),
+  });
+  const r = await owner.call("POST", "/v1/auth/owner", { body: { token: "owner-secret" } });
+  expect(r.status).toBe(403);
+  expect(r.json.error).toBe("signups-paused");
+});
+
+test("a sign-up list that is empty or not ids stops the server (#1524)", () => {
+  for (const bad of ["", " ", "42,", "0x2a", "42;43", "-1", "1.5", "0"])
+    expect(() => configFromEnv({ SIGNUP_GITHUB_IDS: bad })).toThrow("SIGNUP_GITHUB_IDS");
+  expect([...(configFromEnv({ SIGNUP_GITHUB_IDS: "42, 7" }).signUpGitHubIds ?? [])]).toEqual([
+    42, 7,
+  ]);
+  expect(configFromEnv({}).signUpGitHubIds).toBeUndefined();
 });
 
 test("new accounts are capped per address; existing ones still sign in (#787)", async () => {

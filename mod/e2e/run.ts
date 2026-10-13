@@ -33,7 +33,7 @@ import { parseArgs } from "node:util";
 import { LiveServer } from "@starbridge/server/test-support";
 import { $ } from "bun";
 import { configDir as cliConfigDir } from "../../cli/src/config";
-import { bashCommands, Claude, until } from "./claude.ts";
+import { bashCommands, Claude, type Entry, until } from "./claude.ts";
 import { TestDevice } from "./device.ts";
 import { Relay } from "./proxy.ts";
 
@@ -88,6 +88,18 @@ if (opt.local) {
     out += new TextDecoder().decode(value);
   }
   await local.approve((/Pairing code: (\S+)/.exec(out) as RegExpExecArray)[1] as string);
+  // A pairing with no app to scan the QR waits for the owner to confirm its check code (#795).
+  await until(
+    "the check code",
+    async () =>
+      (
+        await $`starbridge pair --confirm`
+          .env({ ...process.env, STARBRIDGE_CONFIG_DIR: configDir })
+          .nothrow()
+          .quiet()
+      ).exitCode === 0,
+    30_000,
+  );
   if ((await pairing.exited) !== 0) throw new Error("pairing failed");
   const server = local;
   owner = { answer: (id, choice) => server.answer(id, { choice }) };
@@ -185,6 +197,33 @@ async function answered(c: Claude, id: string, timeoutMs = 120_000, session = ()
     timeoutMs,
   );
 }
+
+/**
+ * Starts a turn of three 10 s commands in session `a` and answers decision `id` 3 s into the
+ * first. Returns when the answer was posted.
+ */
+async function busyAnswer(a: Claude, id: string): Promise<number> {
+  // Not `sleep`, which Claude Code moves to the background.
+  const busy = `python3 -c "import time; time.sleep(10); print('done')"`;
+  await a.send(
+    `Run exactly this with the Bash tool in the foreground three times, one call after another: ${busy}. Then reply with the word finished.`,
+  );
+  await until(
+    "the busy command",
+    () => bashCommands(a.transcript()).some((c) => c.includes("time.sleep(10)")),
+    60_000,
+  );
+  await Bun.sleep(3_000);
+  const posted = Date.now();
+  await owner.answer(id, "Beta");
+  return posted;
+}
+
+/** A user entry that carries a tool's result. */
+const toolResult = (e: Entry) =>
+  e.type === "user" &&
+  Array.isArray(e.message?.content) &&
+  (e.message.content as { type?: string }[]).some((b) => b.type === "tool_result");
 
 const secs = (ms: number) => `${(ms / 1000).toFixed(2)} s`;
 interface Row {
@@ -288,24 +327,43 @@ const cases: Record<string, () => Promise<Row>> = {
     };
   },
 
-  /** The answer arrives while a turn runs: it waits for that turn, then starts its own. */
+  /**
+   * The answer to a card marked waiting arrives while a turn runs: the next tool result carries
+   * it, and no prompt repeats it after the turn (#1484).
+   */
   async midturn() {
     const a = claude("midturn");
     await a.start();
-    const id = await ask(a.sessionId, "Mid-turn check?");
-    // Not `sleep`, which Claude Code moves to the background.
-    const busy = `python3 -c "import time; time.sleep(30); print('done')"`;
-    await a.send(
-      `Run exactly this with the Bash tool in the foreground: ${busy}. Then reply with the word finished.`,
-    );
-    await until(
-      "the busy command",
-      () => bashCommands(a.transcript()).some((c) => c.includes("time.sleep(30)")),
+    const id = await ask(a.sessionId, "Mid-turn check?", ["--waiting"]);
+    const posted = await busyAnswer(a, id);
+    const got = await until(
+      `answer to ${id} in a tool result`,
+      () => a.context(`Answer to ${id}`),
       60_000,
     );
-    await Bun.sleep(3_000);
-    const posted = Date.now();
-    await owner.answer(id, "Beta");
+    // Tool results that came back between the answer and the one that carried it.
+    const results = a
+      .transcript()
+      .filter((e) => toolResult(e) && Date.parse(e.timestamp ?? "") > posted)
+      .filter((e) => Date.parse(e.timestamp ?? "") < got.at).length;
+    await a.idle();
+    await Bun.sleep(5_000);
+    const repeated = a.prompt(`Answer to ${id}`);
+    await a.stop();
+    return {
+      name: "mid-turn, waiting",
+      result: results <= 1 && !repeated ? "pass" : "FAIL",
+      timing: `post → tool result ${secs(got.at - posted)}`,
+      note: `carried by tool result ${results} after the answer; ${repeated ? "repeated as a prompt after the turn" : "no prompt after the turn"}`,
+    };
+  },
+
+  /** The answer to a card that blocks nothing waits for the turn's end, then starts its own (#1484). */
+  async queued() {
+    const a = claude("queued");
+    await a.start();
+    const id = await ask(a.sessionId, "Queued check?");
+    const posted = await busyAnswer(a, id);
     const got = await answered(a, id, 120_000);
     // The running turn ended with the last assistant entry before the answer's prompt.
     const turnEnd = a
@@ -313,16 +371,19 @@ const cases: Record<string, () => Promise<Row>> = {
       .filter((e) => e.type === "assistant" && Date.parse(e.timestamp ?? "") <= got.at)
       .map((e) => Date.parse(e.timestamp ?? ""))
       .at(-1);
-    const queued = turnEnd !== undefined && turnEnd > posted + 10_000;
+    const after = turnEnd !== undefined && turnEnd > posted + 10_000;
+    const steered = a.context(`Answer to ${id}`);
     await a.idle();
     await a.stop();
     return {
-      name: "mid-turn",
-      result: queued ? "pass" : "FAIL",
+      name: "mid-turn, not waiting",
+      result: after && !steered ? "pass" : "FAIL",
       timing: `post → prompt ${secs(got.at - posted)}; turn end → prompt ${turnEnd ? secs(got.at - turnEnd) : "?"}`,
-      note: queued
-        ? "posted during a 30 s command; waited for the turn to end, then started its own"
-        : "the turn ended before the answer could queue behind it",
+      note: steered
+        ? "a tool result carried it"
+        : after
+          ? "waited for the turn to end, then started its own"
+          : "the turn ended before the answer came",
     };
   },
 

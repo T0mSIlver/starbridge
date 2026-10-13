@@ -60,6 +60,42 @@ function missingDir(sys: Sys): string | undefined {
   return path.includes(norm(dir)) ? undefined : dir;
 }
 
+const PATH_MARK = "# Added by starbridge setup";
+
+/**
+ * Takes the marker and the line `pathStep` wrote for `dir` out of each shell's startup file, with
+ * the blank line before, while the line is exactly as setup wrote it; removes a file left empty
+ * (#1494). Returns the files it changed.
+ */
+export function removePathLines(sys: Sys, dir: string): string[] {
+  if (sys.platform === "win32") return [];
+  const { join } = pathFor(sys.platform);
+  const home = sys.home;
+  const files = new Set([
+    join(sys.ctx.env.ZDOTDIR || home, ".zshrc"),
+    ...[".bashrc", ".bash_profile", ".bash_login", ".profile"].map((f) => join(home, f)),
+    join(home, ".config", "fish", "config.fish"),
+  ]);
+  const shown = dir.startsWith(`${home}/`) ? `$HOME${dir.slice(home.length)}` : dir;
+  const blocks = [`export PATH="${shown}:$PATH"`, `fish_add_path ${dir}`].map(
+    (line) => `${PATH_MARK}\n${line}\n`,
+  );
+  const done: string[] = [];
+  for (const file of files) {
+    const text = existsSync(file) ? readFileSync(file, "utf8") : "";
+    let left = text;
+    for (const block of blocks) {
+      left = left.split(`\n\n${block}`).join("\n").split(`\n${block}`).join("\n");
+      if (left.startsWith(block)) left = left.slice(block.length);
+    }
+    if (left === text) continue;
+    if (left.trim() === "") rmSync(file, { force: true });
+    else writeFileSync(file, left);
+    done.push(file);
+  }
+  return done;
+}
+
 /** The startup file of the owner's shell, and the line there that puts `dir` on the PATH. */
 export function shellProfile(sys: Sys, dir: string): { file: string; line: string } {
   const { basename, join } = pathFor(sys.platform);
@@ -109,7 +145,7 @@ export async function pathStep(sys: Sys): Promise<string[]> {
     mkdirSync(dirname(file), { recursive: true });
     appendFileSync(
       file,
-      `${text === "" || text.endsWith("\n") ? "" : "\n"}\n# Added by starbridge setup\n${line}\n`,
+      `${text === "" || text.endsWith("\n") ? "" : "\n"}\n${PATH_MARK}\n${line}\n`,
     );
     ctx.out(`Added \`${line}\` to ${shown}.`);
   } else if (!has) {

@@ -126,7 +126,7 @@ async function main() {
       ...["--option", "Commit and delete", "--option", "Commit only"],
       ...["--project", "research-control-plane", "--session", "narrow"],
     ]);
-    await ask.waitFor(/d_[\w-]+/);
+    const [askedId] = await ask.waitFor(/d_[\w-]+/);
 
     await page.goto(ORIGIN);
     const card = page.getByText(/^Commit the docs/).first();
@@ -135,6 +135,35 @@ async function main() {
     await card.click();
     await page.getByRole("heading", { name: /Commit the docs/ }).waitFor();
     await expectFits(page, "the detail");
+
+    // The last card, settled from the machine while it is open, returns to the empty list (#1583).
+    const empty = page.getByText("Nothing needs you");
+    const open = () => page.evaluate(() => new URLSearchParams(location.search).get("item"));
+    const settle = cli("settle", [
+      "settle",
+      askedId as string,
+      "--outcome",
+      "withdrawn",
+      "--reason",
+      "Done by hand",
+    ]);
+    if ((await settle.exited) !== 0) throw new Error("settle failed");
+    await empty.waitFor();
+    if (await open()) throw new Error("the settled last card is still open");
+    console.log("ok: settling the last card returns to the empty list");
+
+    // The same for the last card answered with a tap.
+    const again = cli("ask-again", [
+      "ask",
+      ...["--question", "Push the branch?", "--option", "Push", "--option", "Hold"],
+      ...["--project", "research-control-plane", "--session", "narrow-again"],
+    ]);
+    await again.waitFor(/d_[\w-]+/);
+    await page.getByText("Push the branch?").first().click();
+    await page.getByText("Hold", { exact: true }).click();
+    await empty.waitFor();
+    if (await open()) throw new Error("the answered last card is still open");
+    console.log("ok: answering the last card returns to the empty list");
   } catch (e) {
     await current?.screenshot({ path: join(tmpdir(), "starbridge-narrow-failure.png") });
     throw e;

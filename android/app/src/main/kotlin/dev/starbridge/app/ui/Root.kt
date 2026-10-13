@@ -177,9 +177,10 @@ fun Setup(phase: Phase, notice: StateFlow<String?>, dismiss: () -> Unit, openUrl
     val busy by vm.busy.collectAsStateWithLifecycle()
     val server by vm.server.collectAsStateWithLifecycle()
     val keepsKeys by vm.keepsKeys.collectAsStateWithLifecycle()
+    val joinLink by vm.joinLink.collectAsStateWithLifecycle()
     val host = Notices(notice, dismiss)
     Scaffold(snackbarHost = { SnackbarHost(host) }) { padding ->
-        SetupScreen(phase, server, busy, vm.actions, openUrl, Modifier.padding(padding), keepsKeys)
+        SetupScreen(phase, server, busy, vm.actions, openUrl, Modifier.padding(padding), keepsKeys, joinLink)
     }
 }
 
@@ -305,6 +306,7 @@ fun Main(decisions: List<Decision>, notice: StateFlow<String?>, dismiss: () -> U
                         val view by vm.view.collectAsStateWithLifecycle()
                         val recovery by vm.recovery.collectAsStateWithLifecycle()
                         val members by vm.members.collectAsStateWithLifecycle()
+                        val server by vm.server.collectAsStateWithLifecycle()
                         InboxScreen(
                             decisions,
                             // A running run's timer, a lost run's "no news for" and the clock of
@@ -330,6 +332,9 @@ fun Main(decisions: List<Decision>, notice: StateFlow<String?>, dismiss: () -> U
                             notificationsOff = notificationsOff,
                             // Members load with the directory, which always holds this phone.
                             noMachine = members.isNotEmpty() && members.none { it.kind == Kind.Machine },
+                            server = server,
+                            onScan = { devices.actions.lookUp(it); backStack.add(AddDeviceKey) },
+                            onAddDevice = { backStack.add(AddDeviceKey) },
                             snackbar = host,
                         )
                     }
@@ -351,6 +356,7 @@ fun Main(decisions: List<Decision>, notice: StateFlow<String?>, dismiss: () -> U
                         val vm: InboxViewModel = hiltViewModel()
                         val decisions by vm.decisions.collectAsStateWithLifecycle()
                         val d = decisions.find { it.id == key.id } ?: return@entry
+                        LaunchedEffect(d.id) { vm.loadImages(d.id) }
                         QuestionSheet(d, seconds(d.waiting, now), vm::answer, Replies(drafts), onSnooze = { vm.snooze(d.id, it) })
                     }
                     entry<PromptKey>(metadata = BottomSheetSceneStrategy.sheet) { key ->

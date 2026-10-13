@@ -24,6 +24,8 @@ let notes: Note[] = [];
 /** How many times the worker showed a notification. */
 let shows = 0;
 const errors: string[] = [];
+/** This browser's push service: Chrome's unless a test sets Safari's. */
+let endpoint = "https://fcm.googleapis.com/fcm/send/x";
 function note(title: string, tag: string): Note {
   const n: Note = {
     title,
@@ -44,6 +46,7 @@ Object.assign(globalThis, {
       },
       getNotifications: async (o: { tag?: string } = {}) =>
         notes.filter((n) => o.tag === undefined || n.tag === o.tag),
+      pushManager: { getSubscription: async () => ({ endpoint }) },
     },
     // The open page, which the worker tells why a push showed nothing.
     clients: {
@@ -196,7 +199,7 @@ test("a late waiting push signed before the question's snooze shows nothing (#12
   expect(notes.map((n) => n.title)).toEqual(["Question d_snoozed"]);
 });
 
-test("a withheld push closes the question and prompt notifications only (#1281)", async () => {
+test("a withheld push closes the question and prompt notifications only (#1281), and shows the placeholder (#1363)", async () => {
   notes = ["d:a", "p:b", "r:c", "q:claude/5h/low", "j:e"].map((tag) => note(tag, tag));
   const dir = await live.directory();
   // A head past the directory the server serves: it holds an entry back (#362).
@@ -204,7 +207,13 @@ test("a withheld push closes the question and prompt notifications only (#1281)"
     payload(decision("d_held", { dir: { length: dir.length + 1, head: "A".repeat(43) } })),
   );
   expect(errors.at(-1)).toContain("holding back changes to your devices");
-  expect(notes.map((n) => n.tag)).toEqual(["r:c", "q:claude/5h/low", "j:e"]);
+  // The question still needs the owner, so its placeholder shows, which has no buttons.
+  expect(notes.map((n) => [n.tag, n.title])).toEqual([
+    ["r:c", "r:c"],
+    ["q:claude/5h/low", "q:claude/5h/low"],
+    ["j:e", "j:e"],
+    ["d:d_held", "Starbridge"],
+  ]);
   // The head it kept would hold back every later push.
   await store.del("heads", ctx.account);
 });
@@ -268,4 +277,28 @@ test("a snooze's first push that comes after its return leaves the question up, 
   );
   await push(payload({ ...z, re: "d_order", wakeAt: until }, { wakeAt: until, due: false }));
   expect(notes.map((n) => n.tag)).toEqual(["d:d_order"]);
+});
+
+test("a question whose item cannot be read shows the placeholder, which tapped opens the inbox (#1363)", async () => {
+  notes = [];
+  // Too big to carry its box, and gone from the server: the fetch fails.
+  await push({ v: 1, kind: "decision", id: "d_unread", from: "m_devbox" });
+  expect(notes.map((n) => [n.tag, n.title])).toEqual([["d:d_unread", "Starbridge"]]);
+  // Its own notification, once it opens, takes the placeholder's place.
+  await push(payload(decision("d_unread")));
+  expect(notes.map((n) => [n.tag, n.title])).toEqual([["d:d_unread", "Question d_unread"]]);
+});
+
+test("on Safari, a push with nothing to show still shows a quiet notification (#1363)", async () => {
+  notes = [];
+  try {
+    await push({ v: 1, kind: "answered", id: "d_other" });
+    expect(notes).toEqual([]);
+    // Safari drops the subscription after three pushes that show nothing.
+    endpoint = "https://web.push.apple.com/QGx";
+    await push({ v: 1, kind: "answered", id: "d_other" });
+    expect(notes.map((n) => [n.tag, n.title])).toEqual([["quiet", "Starbridge"]]);
+  } finally {
+    endpoint = "https://fcm.googleapis.com/fcm/send/x";
+  }
 });

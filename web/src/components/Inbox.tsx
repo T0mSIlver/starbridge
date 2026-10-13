@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { drafts } from "@/lib/drafts";
 import {
@@ -7,6 +8,7 @@ import {
   closedToday,
   type Entry,
   history,
+  isRecent,
   needsYou,
   type Past,
   promptOpen,
@@ -15,13 +17,13 @@ import {
 } from "@/lib/feed";
 import { matches, useFind } from "@/lib/find";
 import { clockTime } from "@/lib/format";
-import { closeItem, linkedItem, openItem, stackItem, useOpened } from "@/lib/opened";
+import { closeItem, linkedItem, openItem, replaceItem, stackItem, useOpened } from "@/lib/opened";
 import { AnsweredFirst, answerPlace, promptOutcome } from "@/lib/outcome";
 import { fitsRow } from "@/lib/permissionInput";
 import { type Prefs, usePref } from "@/lib/prefs";
 import { holdsQuotas } from "@/lib/quotaSettings";
 import { runState } from "@/lib/runs";
-import { afterAnswer, selectedId, step } from "@/lib/selection";
+import { afterAnswer, afterAnswerNarrow, selectedId, step } from "@/lib/selection";
 import type { InboxItem, PromptItem } from "@/lib/types";
 import { useApp } from "./AppProvider";
 import { PromptDetail, QuestionDetail } from "./Detail";
@@ -29,6 +31,7 @@ import {
   HistoryHead,
   machineIcon,
   NeedRow,
+  OlderHead,
   PastRow,
   RunRow,
   RunsHead,
@@ -51,6 +54,8 @@ import ui from "./ui.module.css";
 
 // From here the list and the detail sit side by side (Inbox.module.css).
 const WIDE = "(min-width: 1100px)";
+// A mouse or trackpad, where an answer under 1100 px opens the next card instead of the list.
+const FINE = "(hover: hover) and (pointer: fine)";
 
 function useWide(): boolean {
   return useSyncExternalStore(
@@ -76,6 +81,18 @@ const text = (e: Entry) =>
       ? [e.item.decision.question, e.item.decision.context, e.item.decision.source.sessionTitle]
       : [e.item.run.title, e.item.run.reason];
 
+/** History rows laid out at a time (#1459). */
+const PAST_PAGE = 50;
+
+/** The element `el` scrolls in: the list from 600 px, else the page. */
+function scroller(el: HTMLElement): HTMLElement | null {
+  for (let p = el.parentElement; p; p = p.parentElement) {
+    const y = getComputedStyle(p).overflowY;
+    if (y === "auto" || y === "scroll") return p;
+  }
+  return null;
+}
+
 export function Inbox() {
   const app = useApp();
   const {
@@ -90,6 +107,7 @@ export function Inbox() {
     dismissRun,
     answerPrompt,
     deviceName,
+    loadImages,
   } = app;
   const [grouping, setGrouping] = usePref("grouping");
   const [historyOpen, setHistoryOpen] = usePref("historyOpen");
@@ -135,6 +153,10 @@ export function Inbox() {
       !finding || matches(find, [p.entry.machine, p.entry.repo, ...text(p.entry), p.outcome, p.by]),
   );
   const showPast = historyOpen || finding;
+  // Find searches every row; the list shows the last 7 days until the owner asks for more.
+  const [showOlder, setShowOlder] = useState(false);
+  const older = finding || showOlder ? 0 : past.filter((p) => !isRecent(p, now)).length;
+  const listed = older > 0 ? past.filter((p) => isRecent(p, now)) : past;
   const view = finding ? "none" : grouping;
 
   // A question another device answered first stays selected, saying what won (#330).
@@ -142,7 +164,7 @@ export function Inbox() {
   const ids = [
     ...needs,
     ...(showSnoozed ? snoozed : []),
-    ...past.filter((p) => showPast || lost.current.has(p.entry.id)).map((p) => p.entry),
+    ...listed.filter((p) => showPast || lost.current.has(p.entry.id)).map((p) => p.entry),
   ].map((e) => e.id);
   const [picked, setPicked] = useState<string>();
   // Phones and narrow windows show the detail in place of the list once a row is tapped.
@@ -161,24 +183,60 @@ export function Inbox() {
     if (wide && selected && picked !== selected) setPicked(selected);
   }, [wide, selected, picked]);
 
-  const latest = useRef({ ids, selected });
-  latest.current = { ids, selected };
+  const latest = useRef({ ids, selected, wide });
+  latest.current = { ids, selected, wide };
   const listRef = useRef<HTMLDivElement>(null);
+  // History lays out its rows a page at a time, the next as the list scrolls near its end: 500
+  // rows cost a phone over half a second on every switch to the Inbox (#1459).
+  const [pastShown, setPastShown] = useState(PAST_PAGE);
+  // A Find that scrolled far leaves no long list behind it.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: resets when the query changes
+  useEffect(() => setPastShown(PAST_PAGE), [find]);
+  const pastMore = useRef<HTMLDivElement>(null);
+  // Rows past the selected one too, so J lands on one laid out.
+  const pastUpTo = Math.max(
+    pastShown,
+    listed.findIndex((p) => p.entry.id === selected) + PAST_PAGE,
+  );
+  const pastLeft = showPast && pastUpTo < listed.length;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: observes again after each page, so a sentinel still in view adds the next
+  useEffect(() => {
+    const end = pastMore.current;
+    if (!pastLeft || !end) return;
+    const seen = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) setPastShown((n) => n + PAST_PAGE);
+      },
+      { root: scroller(end), rootMargin: "100% 0px" },
+    );
+    seen.observe(end);
+    return () => seen.disconnect();
+  }, [pastLeft, pastUpTo]);
   useRowMotion(
     listRef,
     all.map((e) => e.id),
     `${grouping} ${find} ${wide}`,
   );
+  // J and K at any width: beside the list they move the selection; in place of the list they open
+  // the next card on the open one's history entry, so Back still returns to the list.
   useEffect(() => {
-    if (!wide) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.ctrlKey || e.metaKey || e.altKey) return;
       if ((e.target as HTMLElement).closest("input, textarea, [contenteditable]")) return;
       const by = e.key === "j" || e.key === "J" ? 1 : e.key === "k" || e.key === "K" ? -1 : 0;
       if (!by) return;
-      const next = step(latest.current.ids, latest.current.selected, by);
+      const { ids, selected, wide } = latest.current;
+      const next = step(ids, selected, by);
       if (next === undefined) return;
       e.preventDefault();
+      if (!wide) {
+        if (selected === undefined) openItem(next);
+        else if (next !== selected) {
+          replaceItem(next);
+          window.scrollTo(0, 0);
+        }
+        return;
+      }
       setPicked(next);
       const list = listRef.current;
       const row = list?.querySelector<HTMLElement>(`[data-id="${CSS.escape(next)}"]`);
@@ -187,16 +245,26 @@ export function Inbox() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [wide]);
+  }, []);
 
   const openIds = needs.map((e) => e.id);
-  // Beside the list, the next open item takes its place; on a phone, the list comes back.
-  const moveOn = (id: string) => {
-    answeredHere.current.add(id);
-    if (!wide) closeItem();
+  // Beside the list, the next open item takes its place. In place of the list, it does too with a
+  // mouse; on a touch screen the list comes back.
+  const leave = (id: string) => {
     const next = afterAnswer(openIds, id);
     setPicked((cur) => (cur === id ? next : cur));
-    return next;
+    if (wide || opened !== id) return next;
+    const narrowNext = afterAnswerNarrow(openIds, id, window.matchMedia(FINE).matches);
+    if (narrowNext === undefined) closeItem();
+    else {
+      replaceItem(narrowNext);
+      window.scrollTo(0, 0);
+    }
+    return narrowNext;
+  };
+  const moveOn = (id: string) => {
+    answeredHere.current.add(id);
+    return leave(id);
   };
   // It moves on at the click, as the question leaves (#895). A refused answer brings its row back
   // saying why; one another device beat stays selected, saying what won (#330).
@@ -219,9 +287,7 @@ export function Inbox() {
   const snoozeQuestion = async (item: InboxItem, until: Date) => {
     await snooze(item, until.toISOString());
     if (until.getTime() <= Date.now()) return;
-    if (!wide) closeItem();
-    const next = afterAnswer(openIds, item.decision.id);
-    setPicked((cur) => (cur === item.decision.id ? next : cur));
+    leave(item.decision.id);
   };
   const answerOne = async (item: PromptItem, reply: Parameters<typeof answerPrompt>[1]) => {
     await answerPrompt(item, reply);
@@ -245,6 +311,18 @@ export function Inbox() {
   useEffect(() => {
     if (opened && !wide) stackItem();
   }, [opened, wide]);
+  // In place of the list, an open card another device settled (or snoozed) while it was on screen
+  // stays to say so, unless it was the last one: then the list returns, empty (#1583).
+  const seenOpen = useRef<string | undefined>(undefined);
+  const listedOpen = opened !== undefined && needs.some((e) => e.id === opened);
+  useEffect(() => {
+    if (wide || !opened) seenOpen.current = undefined;
+    else if (listedOpen) seenOpen.current = opened;
+    else if (seenOpen.current === opened && needs.length === 0 && !lost.current.has(opened)) {
+      seenOpen.current = undefined;
+      closeItem();
+    }
+  }, [wide, opened, listedOpen, needs.length]);
   // A wide window selects the item beside the list instead, opening History for a linked closed one.
   useEffect(() => {
     if (!wide || !opened || !resolved) return;
@@ -282,6 +360,10 @@ export function Inbox() {
         onDraft={(t) => (t ? drafts.set(id, t) : drafts.delete(id))}
         onAnswer={(r) => answerQuestion(e.item, r)}
         onSnooze={(until) => snoozeQuestion(e.item, until)}
+        onShowImages={() => {
+          // Failed, they stay pending; opening the question again tries again.
+          loadImages(e.item.decision.id).catch(() => {});
+        }}
       />
     );
   };
@@ -408,7 +490,7 @@ export function Inbox() {
           className={historyToggled ? "m-appear" : undefined}
           onAnimationEnd={() => setHistoryToggled(false)}
         >
-          {past.map((p) => (
+          {listed.slice(0, pastUpTo).map((p) => (
             <PastRow
               key={p.entry.id}
               past={p}
@@ -417,6 +499,8 @@ export function Inbox() {
               onSelect={() => (wide ? setPicked(p.entry.id) : openItem(p.entry.id))}
             />
           ))}
+          {pastLeft && <div ref={pastMore} className={s.pastMore} />}
+          {older > 0 && <OlderHead count={older} comfy={comfy} onShow={() => setShowOlder(true)} />}
         </div>
       )}
     </>
@@ -941,16 +1025,22 @@ function ViewMenu({
   );
 }
 
-/** The empty inbox of an account with no machine: what to install, where. */
+/** The empty inbox of an account with no machine: what to install, where, and Add a device. */
 function NoMachine() {
   return (
     <div className={s.noMachine}>
       <h2 className="t-heading">Add a machine</h2>
       <p className={`t-small ${s.noMachineText}`}>
-        Install Starbridge on each machine that runs your agents. Its setup shows a code to approve
-        here; then its agents' questions arrive in this inbox.
+        Install Starbridge on each machine that runs your agents, then enter the pairing code from
+        your terminal.
       </p>
-      <InstallBox />
+      <InstallBox setup />
+      {/* Where the pairing code goes, one tap away (#1367). */}
+      <div>
+        <Link href="/settings/devices/add?machine" className={`t-meta ${ui.btn} ${ui.sm}`}>
+          Add a device
+        </Link>
+      </div>
       <p className={`t-small ${s.noMachineText}`}>
         What setup does: <a href="/docs">the docs</a>
       </p>

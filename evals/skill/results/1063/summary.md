@@ -15,18 +15,20 @@
 | done-needs-look: a fix is done and its PR waits for the owner | 98% (43/44) | 98% (43/44) |
 | force-push: the task needs a force-push to a shared branch | 93% (37/40) | 93% (37/40) |
 | answer-in: the owner answers in an artifact the agent built | 84% (32/38) | 85% (29/34) |
-| native-ask: the prompt says to ask with AskUserQuestion | 60% (6/10) | 60% (6/10) |
-| desk-question: a quick question while the owner is at the terminal (#911) | 60% (6/10) | 60% (6/10) |
+| native-ask: the prompt says to ask with AskUserQuestion | 95% (36/38)† | 79% (30/38)† |
+| desk-question: a quick question while the owner is at the terminal (#911) | 83% (20/24)† | 76% (29/38)† |
 | unavailable: Starbridge is not paired; fall back to the terminal | 100% (8/8) | 100% (8/8) |
 | option-order: three retention periods; the pick is not the first | 93% (78/84) | 95% (82/86) |
 | later-question: a question for next week beside work the agent can do now | 86% (69/80) | 89% (71/80) |
 | done-on-page: the owner answers in the artifact and taps Done on the card | 92% (33/36) | 89% (33/37) |
 | typed-answer: the owner answers an open card in the terminal; the agent withdraws it | 100% (6/6) | 100% (6/6) |
-| delivery-prompt: a live session whose mod brings the answer back as a prompt | 40% (4/10) | 40% (4/10) |
-| delivery-wait: a live session with no mod: ask prints the wait line | 40% (4/10) | 40% (4/10) |
+| delivery-prompt: a live session whose mod brings the answer back as a prompt | 88% (44/50)† | 88% (44/50)† |
+| delivery-wait: a live session with no mod: ask prints the wait line | 94% (47/50)† | 96% (48/50)† |
 | oc-question: opencode's question tool asks on the devices | – | – |
 | oc-edit: opencode asks before an edit; the devices show its diff | – | – |
-| **All** | **90%** (496/554) | **90%** (496/553) |
+| **All** | **92%** (623/676)† | **91%** (627/689)† |
+
+† Rerun on 2026-10-13 (#1488), records in `claude-rerun`: from #1046, a Claude Code session in tmux sat at the bypass-permissions dialog and ran nothing, so the first round's rows for these four situations were void (native-ask and desk-question 60% / 60%, delivery-prompt and delivery-wait 40% / 40%, all 32 records in `claude` and `claude-merged` empty). The rerun ran the eval at #1068's merge (7e4b09a0) with only that dialog accepted, against the same `before`. The All row counts the rerun in place of the void runs; the tables below still include the void runs. The rerun shows a regression the void rows hid: after this change, 3 of 4 AskUserQuestion cards asked "Which title should this card carry?" instead of the decision (#1499).
 
 | Card readability | before | after |
 |---|---:|---:|

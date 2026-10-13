@@ -37,6 +37,8 @@ function session(id: string, opts: { gated?: boolean; timing?: Timing } = {}) {
   const s = {
     id,
     submitted: [] as string[],
+    /** What the host's `starting` answers. */
+    starting: false,
     runs: [] as string[][],
     status: undefined as string | undefined,
     logs: [] as string[],
@@ -83,6 +85,7 @@ function session(id: string, opts: { gated?: boolean; timing?: Timing } = {}) {
     submit: (text) => {
       s.submitted.push(text);
     },
+    starting: () => s.starting,
     status: (text) => {
       s.status = text;
     },
@@ -157,6 +160,31 @@ test("each answer reaches the session that asked, once, through one poller", asy
   // Each session confirmed its own answer, once.
   const acks = (s: Session) => s.get().runs.filter((x) => x.includes("--ack")).length;
   expect([acks(a), acks(b), acks(c)]).toEqual([1, 1, 0]);
+});
+
+test("while a submitted prompt waits for its turn, the poller's polls don't wait (#1446)", async () => {
+  const a = session("s-a");
+  const d = await ask("Merge #12 now?", "s-a");
+  await until(() => polling(a) > 0);
+  a.get().starting = true;
+  const after = a.get().runs.length;
+  const waits = () =>
+    a
+      .get()
+      .runs.slice(after)
+      .filter((r) => r.includes("--wait"))
+      .map((r) => r.at(-1));
+  await server.answer(d, { choice: "Yes" });
+  await until(() => a.get().submitted.length === 1);
+  await until(() => waits().length >= 3);
+  // A poll that read `starting` just before it turned true may still wait; none after it does.
+  expect(waits().slice(1)).toEqual(
+    waits()
+      .slice(1)
+      .map(() => "0"),
+  );
+  a.get().starting = false;
+  await until(() => waits().includes(String(FAST.waitSeconds)));
 });
 
 test("a forged answer is never submitted", async () => {
@@ -292,6 +320,7 @@ test("the poller starts the CLI setup recorded, and `starbridge` once that binar
     now: async () => Date.now(),
     sleep: (ms) => Bun.sleep(ms),
     submit: () => {},
+    starting: () => false,
     status: () => {},
     log: () => {},
   };
@@ -303,4 +332,26 @@ test("the poller starts the CLI setup recorded, and `starbridge` once that binar
   const seen = runs.length;
   await until(() => runs.length > seen);
   expect(runs.at(-1)?.[0]).toBe("starbridge");
+});
+
+test("a session that does not poll rereads a held answer every check, not back to back (#1484)", async () => {
+  const lead = session("s-lead");
+  await until(() => polling(lead) > 0);
+  const a = session("s-a", { timing: { ...FAST, checkMs: 100 } });
+  let held = true;
+  const host = a.get();
+  const d = await ask("Merge #12 now?", "s-a");
+  // The turn runs: the host holds the line back.
+  (a.poller as unknown as { host: Host }).host.submit = (text) => {
+    if (held) return false;
+    host.submitted.push(text);
+  };
+  await server.answer(d, { choice: "Yes" });
+  await until(() => host.runs.some((r) => !r.includes("--wait")));
+  const before = host.runs.length;
+  await Bun.sleep(600);
+  expect(host.runs.length - before).toBeLessThanOrEqual(8);
+  expect(host.submitted).toEqual([]);
+  held = false;
+  await until(() => host.submitted.length === 1);
 });

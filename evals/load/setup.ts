@@ -19,6 +19,8 @@ const { values } = parseArgs({
     concurrency: { type: "string", default: "16" },
     server: { type: "string", default: "http://127.0.0.1:18080" },
     fake: { type: "string", default: "http://host.docker.internal:18099" },
+    /** No push subscriptions (accounts.ts), for the fleet's users on a real server. */
+    "no-push": { type: "boolean", default: false },
   },
 });
 const FILE = `${LOAD_DIR}/users.jsonl`;
@@ -33,7 +35,12 @@ async function worker() {
   while (next < want) {
     const n = next++;
     const ip = `10.${(n >> 16) & 255}.${(n >> 8) & 255}.${n & 255}`;
-    const user = await makeUser(n, { server: values.server, fake: values.fake, ip });
+    const user = await makeUser(n, {
+      server: values.server,
+      fake: values.fake,
+      ip,
+      noPush: values["no-push"],
+    });
     appendFileSync(FILE, `${JSON.stringify(user)}\n`);
     if (++made % 100 === 0)
       console.log(`${have + made} users (${((Date.now() - started) / 1000).toFixed(0)} s)`);

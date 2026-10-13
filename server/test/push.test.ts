@@ -321,6 +321,40 @@ test("an answer pushes 'answered' to the decision's devices so they clear it", a
   expect(JSON.parse(fcmSends()[0].data.p)).toEqual({ v: 1, kind: "answered", id: "d1" });
 });
 
+test("Safari's push service gets questions but no push that only closes one (#1363)", async () => {
+  const apple: string[] = [];
+  const { s, acct, devbox } = await setup(vapidConfig(), (async (url, init) => {
+    const u = new URL(String(url));
+    if (u.hostname !== "web.push.apple.com") return fetch(url, init);
+    apple.push(u.pathname);
+    return new Response("", { status: 201 });
+  }) as typeof fetch);
+  // Safari drops a subscription after three pushes that show nothing, so "answered" skips it.
+  const safari = {
+    ...browserSubscription("safari").target,
+    endpoint: "https://web.push.apple.com/QGsafari",
+  };
+  const other = browserSubscription("other");
+  for (const body of [safari, other.target])
+    await s.call("POST", "/v1/push/subscriptions", { token: acct.device.token, body });
+  seen.length = 0;
+  const d = await postDecision(s, acct, devbox, "d1");
+  expect(apple).toEqual(["/QGsafari"]);
+  const a = seal(
+    "answer",
+    { v: 1, id: "a1", decisionId: d.id, to: "devbox", answeredAt: at, choice: "yes" },
+    { id: acct.device.id, signKey: acct.device.keys.sign.privateKey },
+    [devbox.member],
+  );
+  expect((await s.call("POST", "/v1/items", { token: acct.device.token, body: a })).status).toBe(
+    201,
+  );
+  await s.deps.push.idle();
+  expect(apple).toEqual(["/QGsafari"]);
+  const answered = seen.filter((x) => x.path === "/wp/other").map((x) => other.decrypt(x.body));
+  expect(answered.map((p) => JSON.parse(p).kind)).toEqual(["decision", "answered"]);
+});
+
 test("Web Push direct: the browser decrypts the payload; VAPID signs the request", async () => {
   const { s, acct, devbox } = await setup(vapidConfig());
   const browser = browserSubscription("ok");

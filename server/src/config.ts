@@ -21,8 +21,28 @@ export interface Config {
     tokenUrl: string;
     apiUrl: string;
   };
+  /**
+   * Sign in with Apple (#1411), with the team's Sign in with Apple key, which signs the client
+   * secrets for Apple's token and revoke endpoints.
+   */
+  apple?: {
+    teamId: string;
+    keyId: string;
+    /** The .p8 file's PKCS#8 PEM. */
+    privateKey: string;
+    /** The iPhone app's App ID, the audience of its identity tokens. */
+    appId: string;
+    /** The Services ID of Apple's web sign-in, for the page and the other apps; unset, only the iPhone signs in with Apple. */
+    servicesId?: string;
+    url: string;
+  };
   /** Self-hosted sign-in: whoever presents this token owns the server's one account. */
   ownerToken?: string;
+  /**
+   * When set, only these GitHub users may make an account, as on the staging server (#1524);
+   * accounts that exist sign in as before.
+   */
+  signUpGitHubIds?: ReadonlySet<number>;
   /** Where the GitHub callback sends the Android app, with a code it trades for a session. */
   appRedirectUri: string;
 
@@ -133,6 +153,19 @@ function int(v: string | undefined, fallback: number): number {
   return n;
 }
 
+/**
+ * SIGNUP_GITHUB_IDS: unset leaves sign-ups open. Set, it must name at least one GitHub id, each a
+ * decimal number: a typo or an empty value stops the server rather than opening or changing who
+ * can sign up.
+ */
+function signUpList(v: string | undefined): ReadonlySet<number> | undefined {
+  if (v === undefined) return undefined;
+  const ids = v.split(",").map((id) => id.trim());
+  if (!ids.every((id) => /^[1-9][0-9]{0,15}$/.test(id)))
+    throw new Error(`SIGNUP_GITHUB_IDS: not a comma-separated list of GitHub ids: ${v}`);
+  return new Set(ids.map(Number));
+}
+
 export function configFromEnv(env: Env = process.env): Config {
   const port = int(env.PORT, 8080);
   const publicUrl = (env.PUBLIC_URL ?? `http://localhost:${port}`).replace(/\/$/, "");
@@ -152,7 +185,19 @@ export function configFromEnv(env: Env = process.env): Config {
             apiUrl: env.GITHUB_API_URL ?? "https://api.github.com",
           }
         : undefined,
+    apple:
+      env.APPLE_TEAM_ID && env.APPLE_KEY_ID && env.APPLE_PRIVATE_KEY
+        ? {
+            teamId: env.APPLE_TEAM_ID,
+            keyId: env.APPLE_KEY_ID,
+            privateKey: env.APPLE_PRIVATE_KEY.replace(/\\n/g, "\n"),
+            appId: env.APPLE_APP_ID ?? "dev.starbridge.ios",
+            servicesId: env.APPLE_SERVICES_ID || undefined,
+            url: env.APPLE_URL ?? "https://appleid.apple.com",
+          }
+        : undefined,
     ownerToken: env.OWNER_TOKEN || undefined,
+    signUpGitHubIds: signUpList(env.SIGNUP_GITHUB_IDS),
     appRedirectUri: env.APP_REDIRECT_URI ?? "starbridge://auth",
     maxMachines: int(env.MAX_MACHINES, 5),
     maxWaitSeconds: int(env.MAX_WAIT_SECONDS, 300),

@@ -20,7 +20,7 @@ class RecoverDeleteTest {
     @get:Rule val compose = createComposeRule()
 
     @Test fun deleteAccountFromTheRecoveryKeyView() {
-        val actions = SetupActions({ "" }, { _, _ -> }, {}, {}, {}, {}, {}, {}, {}, {})
+        val actions = SetupActions({ "" }, { "" }, { _, _ -> }, {}, {}, {}, {}, {}, {}, {}, {})
         compose.setContent { StarbridgeTheme { SetupScreen(Phase.NoDevice(accountExists = true), "https://starbridge.run", false, actions, {}) } }
         compose.onNodeWithText("Use the recovery key").performClick()
         compose.onNodeWithText("Delete account").performClick()

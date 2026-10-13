@@ -6,11 +6,21 @@ compose="docker compose -p starbridge -f compose.yaml"
 # The commit, built into the server for /healthz. An older starbridge-deploy on the host passes
 # none and writes REVISION before this runs.
 export REVISION=${REVISION:-$(cat /opt/starbridge/REVISION 2>/dev/null || echo unknown)}
+# The server and web images are deploy.yml's, tagged by this commit (#1518). A commit that has
+# none, from before them or never deployed from main, stops at their pull, before any container
+# is replaced.
+case $REVISION in *[!0-9a-f]*) REVISION= ;; esac
+[ ${#REVISION} -eq 40 ] || { echo "apply.sh: REVISION is not a commit id" >&2; exit 1; }
+# Compose reads the tag from here, so every script on the box that runs it names this release.
+echo "REVISION=$REVISION" > .env
 
-install -m 644 host/starbridge-backup.service host/starbridge-backup.timer \
+install -m 644 host/starbridge-backup.service host/starbridge-backup.timer host/starbridge-offsite.service \
   host/starbridge-umami-trim.service host/starbridge-umami-trim.timer \
   host/starbridge-docker-prune.service host/starbridge-docker-prune.timer /etc/systemd/system/
 systemctl daemon-reload
+# The offsite backup's tools, on a host set up before it (#1482).
+command -v age >/dev/null && command -v zstd >/dev/null && command -v rsync >/dev/null ||
+  DEBIAN_FRONTEND=noninteractive apt-get install -yq age zstd rsync
 systemctl enable --now starbridge-backup.timer starbridge-umami-trim.timer starbridge-docker-prune.timer
 install -m 755 host/deploy-rev.sh /usr/local/sbin/starbridge-deploy
 
@@ -19,7 +29,11 @@ host/umami-env.sh
 host/caddy-auth.sh
 # The denylist's snippet, which the Caddyfile imports (host/switch.sh).
 host/switch.sh --regenerate
-$compose build --pull server web-a
+# Tagged by commit, they never change: one the box holds (a rollback's) needs no registry.
+for image in server web; do
+  docker image inspect "ghcr.io/t0msilver/starbridge-$image:$REVISION" >/dev/null 2>&1 ||
+    docker pull -q "ghcr.io/t0msilver/starbridge-$image:$REVISION" >/dev/null
+done
 # Caddy's image changes only when caddy.Dockerfile does: a new image recreates the container,
 # which drops every open connection. Its build is not reproducible (xcaddy fetches and compiles
 # afresh once the build cache is pruned), so it is tagged by a hash of the Dockerfile, which pins
@@ -42,10 +56,11 @@ healthy() {
   return 1
 }
 
-# The schema the new server migrates to, and the one the database is at. A database newer than the
-# server stops the deploy here, before anything is replaced: the server would refuse it at start
-# (server/src/db.ts), and nothing copies or migrates it down. That is a rollback past a migration,
-# or a database from before the schema was folded at launch; either needs the owner.
+# The schema the new server migrates to, and the one the database is at. A database the new server
+# would refuse at start stops the deploy here, before anything is replaced (`schema check`,
+# server/src/db.ts): one newer than the server, except by one additive migration (#1555), so a
+# rollback one release back passes. Nothing copies or migrates a database down; past that, the
+# owner restores the deploy's backup.
 mnt=$(docker volume inspect -f '{{.Mountpoint}}' starbridge_data 2>/dev/null) || mnt=
 db=$mnt/starbridge.db
 want= have=
@@ -56,10 +71,23 @@ if [ -n "$mnt" ] && [ -f "$db" ]; then
   # could no longer write the database.
   chown --reference="$db" "$db"-wal "$db"-shm 2>/dev/null || true
 fi
-if [ -n "$want" ] && [ -n "$have" ] && [ "$have" -gt "$want" ] 2>/dev/null; then
-  echo "apply.sh: $db is at schema $have, newer than this server's $want; nothing deployed." >&2
-  echo "Run the release that wrote it, or move the database aside to start empty." >&2
-  exit 1
+if [ -n "$mnt" ] && [ -f "$db" ]; then
+  # The server prints its verdict on stdout; Compose's progress goes to stderr.
+  check=$($compose run --rm --no-deps -T server bun server.js schema check 2>/dev/null) && ok=1 || ok=
+  check=$(printf '%s\n' "$check" | tail -n 1)
+  case $check in
+  ok) ;;
+  # A server from before `schema check` prints its version and exits 0: compare as it would.
+  [0-9]*)
+    if [ -n "$have" ] && [ "$have" -gt "$check" ] 2>/dev/null; then
+      echo "apply.sh: $db is at schema $have, newer than this server's $check; nothing deployed." >&2
+      exit 1
+    fi
+    ;;
+  *)
+    [ -n "$ok" ] || { echo "apply.sh: $check; nothing deployed." >&2; exit 1; }
+    ;;
+  esac
 fi
 
 # No request fails during a deploy (#150). The page runs as two copies: start the idle one, wait
@@ -123,7 +151,18 @@ healthy http://127.0.0.1:3001/api/heartbeat umami 120
 # Cleanup last, and never a reason to fail a deploy that is already serving. Each build leaves
 # about 0.9 GB of cache; unpruned, a day of deploys left 27 GB of it on the 38 GB disk (#301).
 # The newest 3 GB keep the next build fast.
+# The demo server moved to sb-staging (#1557): the copy this box ran goes, with its owner token.
+old=$(docker ps -aq --filter label=com.docker.compose.project=starbridge-demo)
+[ -z "$old" ] || docker rm -f $old >/dev/null || true
+docker image rm starbridge-demo:latest >/dev/null 2>&1 || true
+rm -rf /etc/starbridge-demo
 docker image prune -f >/dev/null || true
+# The newest 5 releases' images stay, for a rollback that needs no download; Docker refuses to
+# remove the ones in use.
+for image in server web; do
+  docker image ls "ghcr.io/t0msilver/starbridge-$image" --format '{{.CreatedAt}}\t{{.Repository}}:{{.Tag}}' |
+    sort -r | tail -n +6 | cut -f2 | xargs -r docker image rm >/dev/null 2>&1 || true
+done
 docker image ls starbridge-caddy --format '{{.Repository}}:{{.Tag}}' | grep -vx -e starbridge-caddy:latest -e "$caddy" |
   xargs -r docker image rm >/dev/null || true
 docker builder prune -f --keep-storage 3GB >/dev/null || true
