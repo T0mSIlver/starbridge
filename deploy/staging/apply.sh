@@ -12,6 +12,8 @@ case ${REVISION:-} in *[!0-9a-f]*) REVISION= ;; esac
 [ ${#REVISION} -eq 40 ] || { echo "staging/apply.sh: REVISION is not a commit id" >&2; exit 1; }
 export REVISION
 echo "REVISION=$REVISION" > .env
+# As prod's apply.sh does: the next deploy runs this commit's deploy command.
+install -m 755 staging/deploy-rev.sh /usr/local/sbin/starbridge-staging-deploy
 
 staging/server-env.sh
 # Prod's Caddyfile under staging's name, as evals/load/stack.sh rewrites it: the stats host on
