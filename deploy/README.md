@@ -16,7 +16,9 @@ Every push to main deploys once CI passes (`.github/workflows/deploy.yml`). Acti
 `/usr/local/sbin/starbridge-deploy <commit>` (`host/deploy-rev.sh`) and nothing else. That script
 fetches main from GitHub with a read-only deploy key and deploys only main's head, or a commit on
 main that contains the deployed one, so the Actions key cannot roll back. It unpacks the commit
-and runs `host/apply.sh`. `deploy/setup-actions-deploy.sh` installs both keys
+and runs `host/apply.sh`. Once the box runs the commit, the workflow asks sb-oracle for one
+round trip on the outside check's test account (secrets `SMOKE_SSH_KEY`, `SMOKE_KNOWN_HOSTS`,
+`SMOKE_SSH_TARGET`; the key's forced command runs nothing else). `deploy/setup-actions-deploy.sh` installs both keys
 on the box; the private halves stay in `~/.config/starbridge/secrets`.
 
 To deploy a commit by hand, from the operator's machine:
