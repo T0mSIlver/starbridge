@@ -1,7 +1,9 @@
+import { Database } from "bun:sqlite";
+import { existsSync } from "node:fs";
 import { createApp } from "./app";
 import { setSuspended } from "./auth";
 import { configFromEnv } from "./config";
-import { openDb, SCHEMA_VERSION } from "./db";
+import { openDb, refuses, SCHEMA_VERSION } from "./db";
 import { describe, parseValue, readOverrides, writeOverrides } from "./overrides";
 import { setSignUps, signUpsPaused } from "./signups";
 import { formatTop, top } from "./top";
@@ -9,8 +11,18 @@ import { formatReport, report } from "./usage";
 import { Waiters } from "./waiters";
 
 // `schema` prints the schema version this server migrates to, so a deploy backs the database up
-// only when it will run a migration (#586).
+// only when it will run a migration (#586). `schema check` says whether it would open the database
+// at DB_PATH, read-only, so a deploy or rollback stops before it replaces anything (#1555).
 if (process.argv[2] === "schema") {
+  if (process.argv[3] === "check") {
+    const path = process.env.DB_PATH ?? "./data/starbridge.db";
+    // No database yet: the server makes one.
+    const why = existsSync(path)
+      ? refuses(new Database(path, { readonly: true }), SCHEMA_VERSION)
+      : null;
+    console.log(why ?? "ok");
+    process.exit(why ? 1 : 0);
+  }
   console.log(SCHEMA_VERSION);
   process.exit(0);
 }
