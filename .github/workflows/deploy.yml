@@ -193,7 +193,7 @@ jobs:
           STAGING_TARGET: ${{ secrets.STAGING_SSH_TARGET }}
         run: |
           status() {
-            curl -fsS -X POST -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' \
+            curl -fsS --retry 5 --retry-delay 3 --retry-all-errors -X POST -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' \
               "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/statuses/$REV" \
               -d "$(jq -n --arg s "$1" --arg d "$2" --arg u "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
                 '{context: "staging", state: $s, description: $d, target_url: $u}')" >/dev/null
