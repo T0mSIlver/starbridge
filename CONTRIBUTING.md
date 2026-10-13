@@ -44,8 +44,10 @@ everyone by promotion, unchanged:
 | Desktop app | apps set to follow release candidates | every app |
 | iPhone app | TestFlight | TestFlight |
 
-The hosted page and server deploy from main before any tag, so every tag waits until
-starbridge.run runs its commit.
+Main deploys to staging only. An rc tag deploys its commit to starbridge.run, once staging passed
+it, and the release waits until starbridge.run runs it; a final deploys nothing, as starbridge.run
+already runs its rc. A hotfix between rcs: `gh workflow run deploy.yml -f sha=<commit>`, a commit
+of main that staging passed.
 
 1. Run `bun cli/scripts/version.ts 1.2.3-rc.1` from the repository root, merge it in a PR, and tag the merged
    commit `v1.2.3-rc.1`. The marketplace stays on the last final.

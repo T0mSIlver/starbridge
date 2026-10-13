@@ -178,8 +178,8 @@
   counts below its release) with 426 `client-too-old`, and serves a request without the header,
   so curl and scripts keep working. The CLI then says to run `starbridge update` and exits 1; the
   web shows one "Starbridge was updated" screen with Reload; Android shows an error that names
-  Google Play. The server and page deploy from main ahead of any tag, so main serves every release
-  from the minimum up and changes the protocol only by adding to it; a minimum rises only to a
+  Google Play. The server and page deploy with each rc, ahead of its apps (#1538), so they serve
+  every release from the minimum up and changes the protocol only by adding to it; a minimum rises only to a
   final that has been the latest release for 14 days, once the update nudge has reached machines
   and Play testers have moved past its rcs (#1070). Usage counts each member's first release of the day once
   (`active.clients.<name>.<major>.<minor>`), so made-up versions add one row a day.

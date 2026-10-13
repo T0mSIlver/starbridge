@@ -11,7 +11,10 @@ are off.
 
 ## Deploy
 
-Every push to main deploys once CI passes (`.github/workflows/deploy.yml`). Actions logs in as
+Every push to main goes to staging once CI passes (`.github/workflows/deploy.yml`, and "Staging"
+below). starbridge.run takes a commit by dispatch only: `release.yml` sends each rc tag's commit,
+and a hotfix is `gh workflow run deploy.yml -f sha=<commit>`; either way the commit must have
+passed on staging (its `staging` status). Actions logs in as
 `deploy` with its own key (secret `DEPLOY_SSH_KEY`), whose forced command runs
 `/usr/local/sbin/starbridge-deploy <commit>` (`host/deploy-rev.sh`) and nothing else. That script
 fetches main from GitHub with a read-only deploy key and deploys only main's head, or a commit on
