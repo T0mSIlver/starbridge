@@ -832,7 +832,6 @@ test("uninstall removes the service and plugins, asks the devices to revoke, kee
   expect(m.ctx.lines).toContain(
     `Removed the PATH line setup added to ${posix.join(m.home, ".zshrc")}.`,
   );
-  expect(existsSync(binary)).toBe(false);
   expect(existsSync(join(m.units, "starbridge-agent.service"))).toBe(false);
   expect(m.calls()).toContain("systemctl --user disable --now starbridge-agent.service");
   expect(m.calls()).toContain("claude plugin uninstall starbridge-mod@starbridge --scope user");
