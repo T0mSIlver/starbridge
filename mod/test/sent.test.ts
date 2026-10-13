@@ -72,7 +72,7 @@ const lines = (m: ReturnType<typeof machine>, session = "s1") =>
 test("a queued answer that a typed prompt ran ahead of stays on record until its own turn starts (#1517)", async () => {
   const m = machine();
   const p = m.process("s1", "proc-1");
-  expect(await p.sent.send([{ text: LINE, ack: "d_1" }])).toBe(true);
+  expect(await p.sent.send([{ text: LINE, ack: "d_1" }])).toEqual(["d_1"]);
   expect(p.submitted).toEqual([LINE]);
   // The owner's typed prompt dequeues first; its turn carries no answer.
   await p.sent.started("i said build it, go ahead");
@@ -93,7 +93,7 @@ test("a process that exits with an answer still queued: the next one on that ses
   await second.sent.recover();
   expect(second.submitted).toEqual([LINE]);
   // The loop hands the line over again if the first process never confirmed it: no second copy.
-  expect(await second.sent.send([{ text: LINE, ack: "d_1" }])).toBe(true);
+  expect(await second.sent.send([{ text: LINE, ack: "d_1" }])).toEqual(["d_1"]);
   await second.sent.recover();
   expect(second.submitted).toEqual([LINE]);
   await second.start(LINE);
@@ -111,7 +111,7 @@ test("after a hot reload the queued prompt is still there: the reloaded mod subm
   // `$.state` keeps the process's token across the reload.
   const after = m.process("s1", "proc-1");
   await after.sent.recover();
-  expect(await after.sent.send([{ text: LINE, ack: "d_1" }])).toBe(true);
+  expect(await after.sent.send([{ text: LINE, ack: "d_1" }])).toEqual(["d_1"]);
   expect(after.submitted).toEqual([]);
   // Only the new module's `turn.start` sees the turn.
   await after.sent.started(framed(LINE));
@@ -123,7 +123,7 @@ test("without `$.state` no answer goes out again: a reload could not be told fro
   await m.process("s1", undefined).sent.send([{ text: LINE, ack: "d_1" }]);
   const next = m.process("s1", undefined);
   await next.sent.recover();
-  expect(await next.sent.send([{ text: LINE, ack: "d_1" }])).toBe(true);
+  expect(await next.sent.send([{ text: LINE, ack: "d_1" }])).toEqual(["d_1"]);
   expect(next.submitted).toEqual([]);
 });
 
@@ -153,10 +153,10 @@ test("a line that cannot be recorded is not submitted, so the loop tries it agai
   const m = machine();
   const p = m.process("s1", "proc-1");
   m.disk.full = true;
-  expect(await p.sent.send([{ text: LINE, ack: "d_1" }])).toBe(false);
+  expect(await p.sent.send([{ text: LINE, ack: "d_1" }])).toEqual([]);
   expect(p.submitted).toEqual([]);
   m.disk.full = false;
-  expect(await p.sent.send([{ text: LINE, ack: "d_1" }])).toBe(true);
+  expect(await p.sent.send([{ text: LINE, ack: "d_1" }])).toEqual(["d_1"]);
   expect(p.submitted).toEqual([LINE]);
 });
 
@@ -180,7 +180,7 @@ test("a /clear while the line is recorded: nothing goes into the new session, an
   await Bun.sleep(5);
   current = "s2";
   release();
-  expect(await sending).toBe(false);
+  expect(await sending).toEqual([]);
   expect(p.submitted).toEqual([]);
   current = "s1";
   await p.sent.recover();
@@ -203,7 +203,7 @@ test("a second live process on the session leaves the first one's queued answer 
   m.live.add("s1");
   const second = m.process("s1", "proc-2");
   await second.sent.recover();
-  expect(await second.sent.send([{ text: LINE, ack: "d_1" }])).toBe(true);
+  expect(await second.sent.send([{ text: LINE, ack: "d_1" }])).toEqual(["d_1"]);
   expect(second.submitted).toEqual([]);
 });
 
@@ -297,7 +297,7 @@ test("a line handed over again after the other process ran it and exited is not 
     m.checking.run = async () => {};
     await first.start(LINE);
   };
-  expect(await second.sent.send([{ text: LINE, ack: "d_1" }])).toBe(true);
+  expect(await second.sent.send([{ text: LINE, ack: "d_1" }])).toEqual(["d_1"]);
   expect(second.submitted).toEqual([]);
 });
 
@@ -327,7 +327,7 @@ test("a line handed over while a new process takes it stays with that process (#
     m.checking.run = async () => {};
     await third.sent.recover();
   };
-  expect(await second.sent.send([{ text: LINE, ack: "d_1" }])).toBe(true);
+  expect(await second.sent.send([{ text: LINE, ack: "d_1" }])).toEqual(["d_1"]);
   expect(second.submitted).toEqual([]);
   expect(third.submitted).toEqual([LINE]);
 });
@@ -338,11 +338,11 @@ test("a file that cannot be read is left as it is, and the line is tried again (
   await p.sent.send([{ text: LINE, ack: "d_1" }]);
   m.disk.unreadable = true;
   const other = "Answer to d_2 (Ship?): Ship";
-  expect(await p.sent.send([{ text: other, ack: "d_2" }])).toBe(false);
+  expect(await p.sent.send([{ text: other, ack: "d_2" }])).toEqual([]);
   await p.sent.recover().catch(() => undefined);
   m.disk.unreadable = false;
   expect(lines(m).map((l) => l.ack)).toEqual(["d_1"]);
-  expect(await p.sent.send([{ text: other, ack: "d_2" }])).toBe(true);
+  expect(await p.sent.send([{ text: other, ack: "d_2" }])).toEqual(["d_2"]);
   expect(lines(m).map((l) => l.ack)).toEqual(["d_1", "d_2"]);
 });
 
@@ -379,7 +379,7 @@ test("answers pending at once go as one prompt, one line each in their order, an
       { text: LINE, ack: "d_1" },
       { text: two, ack: "d_2" },
     ]),
-  ).toBe(true);
+  ).toEqual(["d_1", "d_2"]);
   expect(p.submitted).toEqual([`${LINE}\n${two}`]);
   expect(lines(m).map((l) => l.ack)).toEqual(["d_1", "d_2"]);
   await p.start(`${LINE}\n${two}`);
@@ -396,4 +396,21 @@ test("a process that exits with several answers queued: the next one submits the
   const next = m.process("s1", "proc-2");
   await next.sent.recover();
   expect(next.submitted).toEqual([`${LINE}\n${two}`]);
+});
+
+test("a batch that cannot be recorded still confirms the line another live process has out (#1597)", async () => {
+  const m = machine();
+  await m.process("s1", "proc-1").sent.send([{ text: LINE, ack: "d_1" }]);
+  m.live.add("s1");
+  m.disk.full = true;
+  const second = m.process("s1", "proc-2");
+  const two = "Answer to d_2 (Ship it?): Ship";
+  // d_1 is queued in the other process: confirmed here, never submitted again; d_2 waits.
+  expect(
+    await second.sent.send([
+      { text: LINE, ack: "d_1" },
+      { text: two, ack: "d_2" },
+    ]),
+  ).toEqual(["d_1"]);
+  expect(second.submitted).toEqual([]);
 });

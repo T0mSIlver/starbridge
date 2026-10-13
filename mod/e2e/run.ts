@@ -190,10 +190,14 @@ async function ask(session: string, question: string, extra: string[] = []): Pro
   return r.stdout.toString().trim();
 }
 
+/**
+ * Waits for the answer to `id` in `c`: as a prompt, or with a tool result when it came while a
+ * turn ran (#1584).
+ */
 async function answered(c: Claude, id: string, timeoutMs = 120_000, session = () => c.sessionId) {
   return until(
     `answer to ${id} in ${c.name}`,
-    () => c.prompt(`Answer to ${id}`, session()),
+    () => c.prompt(`Answer to ${id}`, session()) ?? c.context(`Answer to ${id}`, session()),
     timeoutMs,
   );
 }
@@ -487,7 +491,11 @@ const cases: Record<string, () => Promise<Row>> = {
     const [gb, gc] = await Promise.all([answered(b, ib), answered(c, ic)]);
     await Promise.all([b.idle(), c.idle()]);
     await Bun.sleep(5_000);
-    const crossed = b.prompt(`Answer to ${ic}`) ?? c.prompt(`Answer to ${ib}`);
+    const crossed =
+      b.prompt(`Answer to ${ic}`) ??
+      b.context(`Answer to ${ic}`) ??
+      c.prompt(`Answer to ${ib}`) ??
+      c.context(`Answer to ${ib}`);
     const waited = noWaiting(b) ?? noWaiting(c);
     await Promise.all([b.stop(), c.stop()]);
     return {

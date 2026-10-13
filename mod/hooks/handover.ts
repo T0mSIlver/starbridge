@@ -23,12 +23,11 @@ export class Handover {
    * The loops' submit. Submits `lines` as one prompt with `enter` while no turn runs. During one,
    * keeps them, with the acks that confirm them, for the next tool call, and takes none: they
    * stay unconfirmed and come back in the next poll. A line a tool result already carried counts
-   * as taken without a second submit. Returns the acks taken: none when `enter` could not submit
-   * the lines.
+   * as taken without a second submit. Returns the acks taken, with those `enter` reports it took.
    */
   async submit(
     lines: Line[],
-    enter: (lines: Line[]) => boolean | Promise<boolean>,
+    enter: (lines: Line[]) => string[] | Promise<string[]>,
   ): Promise<string[]> {
     const carried = lines.filter((l) => this.handed.delete(l.text));
     const rest = lines.filter((l) => !carried.includes(l));
@@ -36,8 +35,8 @@ export class Handover {
       for (const l of rest) this.next.set(l.text, l.ack);
       return carried.map((l) => l.ack);
     }
-    const entered = rest.length > 0 && (await enter(rest));
-    return [...carried, ...(entered ? rest : [])].map((l) => l.ack);
+    const entered = rest.length > 0 ? await enter(rest) : [];
+    return [...carried.map((l) => l.ack), ...entered];
   }
 
   /** The main agent's turn started. */

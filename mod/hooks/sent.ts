@@ -71,32 +71,43 @@ export class Sent {
   ) {}
 
   /**
-   * Records `batch`, then submits it as one prompt (#1597). False when nothing went out: it could
-   * not be recorded, or a `/clear` or `/resume` came meanwhile. The loop then leaves the lines
-   * unconfirmed for a later try.
+   * Records `batch`, then submits it as one prompt (#1597). Returns the acks of the lines that went
+   * out, now or before: not those it could not record, or that a `/clear` or `/resume` held back
+   * meanwhile, which the loop leaves unconfirmed for a later try.
    */
-  send(batch: { text: string; ack: string }[]): Promise<boolean> {
+  send(batch: { text: string; ack: string }[]): Promise<string[]> {
     return this.alone(async () => {
       const me = await this.host.sessionId();
       const at = await this.host.now();
       let lines = await this.loaded(me);
-      if (!lines) return false;
+      if (!lines) return [];
       const entries: Line[] = [];
+      /** Lines already out, from this process or another. */
+      const out: string[] = [];
       for (const { text, ack } of batch) {
         // A process that died between recording a line and confirming it leaves both: the loop
         // hands the line over again, and the file holds it. It goes out once, as `recover` would.
         let known: Line | undefined = lines.find((l) => l.ack === ack);
-        if (known && (this.process === undefined || known.process === this.process)) continue;
+        if (known && (this.process === undefined || known.process === this.process)) {
+          out.push(ack);
+          continue;
+        }
         if (known && known.process !== "") {
-          if (await this.host.elsewhere(me).catch(() => false)) continue;
+          if (await this.host.elsewhere(me).catch(() => false)) {
+            out.push(ack);
+            continue;
+          }
           // The process may have run the line's turn before it exited: then the file lacks it. A
           // process that started meanwhile may hold it now.
           const before = known.process;
           const fresh = await this.loaded(me);
-          if (!fresh) return false;
+          if (!fresh) return out;
           lines = [...fresh.filter((l) => !entries.some((e) => e.ack === l.ack)), ...entries];
           known = lines.find((l) => l.ack === ack);
-          if (!known || (known.process !== "" && known.process !== before)) continue;
+          if (!known || (known.process !== "" && known.process !== before)) {
+            out.push(ack);
+            continue;
+          }
         }
         const entry: Line = known
           ? { ...known, process: this.process ?? "" }
@@ -104,22 +115,22 @@ export class Sent {
         lines = [...lines.filter((l) => l !== known), entry];
         entries.push(entry);
       }
-      if (entries.length === 0) return true;
+      if (entries.length === 0) return out;
       try {
         await this.save(me, lines);
       } catch (e) {
         const acks = entries.map((l) => l.ack).join(", ");
         this.host.log(`starbridge: could not record the answers ${acks}: ${(e as Error).message}`);
-        return false;
+        return out;
       }
       if ((await this.host.sessionId()) !== me) {
         // Left for session `me`: the loop holds the lines back until it is current again.
         const left = lines.map((l) => (entries.includes(l) ? { ...l, process: "" } : l));
         await this.save(me, left).catch(() => undefined);
-        return false;
+        return out;
       }
       this.enter(me, entries);
-      return true;
+      return [...out, ...entries.map((l) => l.ack)];
     });
   }
 

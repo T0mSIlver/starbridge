@@ -264,9 +264,11 @@ export class Decisions implements Feature {
       : ["sending to Antigravity", `Antigravity conversation ${session}`];
     // Into the running turn, waiting or not; with none running, queued (#1584).
     const steered = first.codex ? await this.steer(all) : [];
-    // A `waiting` printed one meanwhile.
+    // Read again: a `waiting` printed one meanwhile, or a `settle` closed it during the steer or
+    // an earlier session's delivery.
+    const fresh = this.ctx.store.state();
     const ids = all.filter(
-      (id) => !steered.includes(id) && !this.ctx.store.state().answers[id]?.seen,
+      (id) => !steered.includes(id) && !fresh.answers[id]?.seen && deliverable(fresh, id),
     );
     const done = (sent: string[], verb: string) => {
       for (const id of sent) this.retries.delete(id);
@@ -282,7 +284,7 @@ export class Decisions implements Feature {
     };
     if (steered.length > 0) done(steered, "steered");
     if (ids.length === 0) return;
-    const st = this.ctx.store.state();
+    const st = fresh;
     const error = first.codex
       ? await codexQueue(first.codex, session, codexNotice(ids))
       : await agySend(
@@ -323,6 +325,7 @@ export class Decisions implements Feature {
         const a = st.answers[id];
         const asked = st.asked[id];
         if (!a || a.seen || steering(a) || !asked?.codex || !asked.session) continue;
+        if (!deliverable(st, id)) continue;
         a.steering = Date.now();
         lines.push(answerLine(a.answer, asked.question));
         claimed.push(id);

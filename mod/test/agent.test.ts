@@ -253,7 +253,10 @@ test("mid-turn, an answer goes out with the next tool result, once, waiting or n
   await startAgent();
   const a = session("s-a");
   const handover = new Handover();
-  const enter = (lines: Line[]) => a.s.submitted.push(joinLines(lines)) > 0;
+  const enter = (lines: Line[]) => {
+    a.s.submitted.push(joinLines(lines));
+    return lines.map((l) => l.ack);
+  };
   const { loop: l } = loop({
     ...a.host,
     submit: (lines) => handover.submit(lines, enter),
@@ -279,7 +282,10 @@ test("mid-turn, a waiting answer that `waiting` printed meanwhile goes in no too
   await startAgent();
   const a = session("s-a");
   const handover = new Handover();
-  const enter = (lines: Line[]) => a.s.submitted.push(joinLines(lines)) > 0;
+  const enter = (lines: Line[]) => {
+    a.s.submitted.push(joinLines(lines));
+    return lines.map((l) => l.ack);
+  };
   const { loop: l } = loop({
     ...a.host,
     submit: (lines) => handover.submit(lines, enter),
@@ -302,7 +308,10 @@ test("an answer that came after the turn's last tool call comes as a prompt once
   await startAgent();
   const a = session("s-a");
   const handover = new Handover();
-  const enter = (lines: Line[]) => a.s.submitted.push(joinLines(lines)) > 0;
+  const enter = (lines: Line[]) => {
+    a.s.submitted.push(joinLines(lines));
+    return lines.map((l) => l.ack);
+  };
   loop({
     ...a.host,
     submit: (lines) => handover.submit(lines, enter),
