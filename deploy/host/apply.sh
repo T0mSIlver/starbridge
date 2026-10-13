@@ -29,8 +29,10 @@ host/umami-env.sh
 host/caddy-auth.sh
 # The denylist's snippet, which the Caddyfile imports (host/switch.sh).
 host/switch.sh --regenerate
+# Tagged by commit, they never change: one the box holds (a rollback's) needs no registry.
 for image in server web; do
-  docker pull -q "ghcr.io/t0msilver/starbridge-$image:$REVISION" >/dev/null
+  docker image inspect "ghcr.io/t0msilver/starbridge-$image:$REVISION" >/dev/null 2>&1 ||
+    docker pull -q "ghcr.io/t0msilver/starbridge-$image:$REVISION" >/dev/null
 done
 # Caddy's image changes only when caddy.Dockerfile does: a new image recreates the container,
 # which drops every open connection. Its build is not reproducible (xcaddy fetches and compiles
