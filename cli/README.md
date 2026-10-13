@@ -29,6 +29,8 @@ brew install T0mSIlver/starbridge/starbridge
 npm install -g starbridge
 ```
 
+`starbridge@next` on npm is the newest release candidate.
+
 ### What setup does
 
 A rerun repairs only what is missing.
@@ -118,9 +120,9 @@ starbridge ask --question "Merge #12 now?" --option Merge --option Wait
 
 | Command | Effect |
 |---|---|
-| `starbridge ask` | Posts a question with 2 to 4 `--option`s, or none for a free-text answer, and prints its id. `--wait` then waits for the answer. |
+| `starbridge ask` | Posts a question with 2 to 4 `--option`s, or none for a free-text answer, and prints its id. `--waiting` posts it as "Waiting for you"; `--wait` then waits for the answer. |
 | `starbridge wait <id> [--timeout 5m]` | Prints the answer; exits 2 when the time runs out, 3 when you snoozed the question. `--no-mark` doesn't show "Waiting for you". |
-| `starbridge waiting <id>` | Shows "Waiting for you" on every device and notifies you once more. |
+| `starbridge waiting <id>` | Shows "Waiting for you" on every device and notifies you once more. Prints the answer if it came in already. |
 | `starbridge working <id>` | Clears "Waiting for you"; the question stays open. |
 | `starbridge settle <id>` | Closes a question that no longer needs an answer. |
 | `starbridge answers --all --follow` | Prints each answer to this machine's questions as a JSON line, for an orchestrator. `--since 2h` skips older ones. |

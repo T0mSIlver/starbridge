@@ -14,11 +14,11 @@ them. Its routes are in `PROTOCOL.md`.
 
 ## Set it up
 
-1. With Docker installed, clone the latest release of this repository (replace `v0.1.4` with
-   its tag):
+1. With Docker installed, clone the
+   [latest release](https://github.com/T0mSIlver/starbridge/releases/latest), here `v0.1.6`:
 
    ```bash
-   git clone --branch v0.1.4 https://github.com/T0mSIlver/starbridge
+   git clone --branch v0.1.6 https://github.com/T0mSIlver/starbridge
    cd starbridge
    ```
 
@@ -96,8 +96,9 @@ question comes back, and the item sealed to that device, which it cannot open. T
 activity timeline your server sees, tied to a push address. It stores none of it, and counts
 relayed pushes only by type and result.
 
-Without the relay or UnifiedPush, the Android app gets no pushes: while it is open it checks for
-new items every 10 seconds, and nothing reaches the phone while it is closed. The web page still
+Without the relay, browsers get notifications only with your own VAPID keys, and the Android app
+only through UnifiedPush. Without UnifiedPush, the Android app checks for new items every 10
+seconds while it is open, and nothing reaches the phone while it is closed. The web page still
 updates on its own.
 
 ### Without the relay
@@ -140,10 +141,10 @@ with the server running:
 sudo sqlite3 "$(docker volume inspect -f '{{.Mountpoint}}' starbridge_data)/starbridge.db" ".backup 'starbridge-before.db'"
 ```
 
-Then check out the new release's tag, such as `v0.1.4`, and rebuild:
+Then check out the new release's tag, such as `v0.1.6`, and rebuild:
 
 ```bash
-git fetch --tags && git checkout v0.1.4
+git fetch --tags && git checkout v0.1.6
 docker compose -f server/compose.yaml up -d --build
 ```
 
@@ -182,13 +183,9 @@ release, restore the copy you made before upgrading.
 
 <dl>
 <dt><code>RELAY_URL</code></dt>
-<dd>The relay's origin, such as <code>https://starbridge.run</code>. Without it, and without your own Firebase, APNs or VAPID keys, Android, iPhone and Web Push notifications don't go out: the open app and web page still update, the app every 10 s, but nothing reaches a phone whose app is closed. UnifiedPush works without it. Unset by default.</dd>
-<dt><code>FCM_PROJECT_ID</code>, <code>FCM_CLIENT_EMAIL</code>, <code>FCM_PRIVATE_KEY</code></dt>
-<dd>A service account of the Android app's own Firebase project, which only starbridge.run holds. Self-hosters use the relay or UnifiedPush instead. Unset by default.</dd>
-<dt><code>APNS_KEY_ID</code>, <code>APNS_TEAM_ID</code>, <code>APNS_PRIVATE_KEY</code>, <code>APNS_TOPIC</code></dt>
-<dd>An APNs auth key of the iPhone app's Apple team, which only starbridge.run holds: its key id, the team id, the <code>.p8</code> file's contents (newlines may be written <code>\n</code>), and the app's bundle id (default <code>dev.starbridge.ios</code>). Self-hosters use the relay instead. Unset by default.</dd>
-<dt><code>APPLE_KEY_ID</code>, <code>APPLE_TEAM_ID</code>, <code>APPLE_PRIVATE_KEY</code>, <code>APPLE_APP_ID</code>, <code>APPLE_SERVICES_ID</code></dt>
-<dd>A Sign in with Apple key of the iPhone app's Apple team, which only starbridge.run holds: its key id, the team id, the <code>.p8</code> file's contents (newlines may be written <code>\n</code>), the app's bundle id (default <code>dev.starbridge.ios</code>), and the Services ID of Apple's web sign-in for the page and the other apps. It turns on Sign in with Apple. Unset by default.</dd>
+<dd>The relay's origin, such as <code>https://starbridge.run</code>. <a href="#notifications">Notifications</a> says what goes out without it. Unset by default.</dd>
+<dt><code>FCM_*</code>, <code>APNS_*</code>, <code>APPLE_*</code></dt>
+<dd>Keys of the apps' own Firebase project and Apple team, for Android and iPhone pushes and Sign in with Apple. Only starbridge.run holds them; a self-hosted server uses the relay or UnifiedPush instead. The names are in <code>server/src/config.ts</code>. Unset by default.</dd>
 <dt><code>VAPID_PUBLIC_KEY</code>, <code>VAPID_PRIVATE_KEY</code>, <code>VAPID_SUBJECT</code></dt>
 <dd>Web Push keys, to send browser notifications without the relay. Make them with <code>bunx web-push generate-vapid-keys</code>. Unset by default.</dd>
 <dt><code>ALLOW_PRIVATE_PUSH_ENDPOINTS</code></dt>

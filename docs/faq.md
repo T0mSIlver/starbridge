@@ -4,8 +4,8 @@
 
 ### How is it different from ntfy, Pushover or a webhook?
 
-Those deliver a notification, and you still walk to the terminal to answer. Starbridge puts your
-tap into the waiting session as its next prompt. ntfy can still deliver Starbridge's
+Those deliver a notification, and you still walk to the terminal to answer. With Starbridge, your
+answer comes back as the session's next prompt. ntfy can still deliver Starbridge's
 notifications, through UnifiedPush on a [self-hosted server](../server/README.md#notifications).
 
 ### Why not the harnesses' own mobile apps?
@@ -65,8 +65,7 @@ The server deletes:
   once an account holds more than 1000.
 
 Delete account, in Settings, deletes everything the server holds for your account at once and
-signs out every device and machine. The Android app has it from 0.1.5. Backups keep deleted data
-for up to 2 weeks ([privacy page](https://starbridge.run/privacy)).
+signs out every device and machine. Backups keep deleted data for up to 2 weeks ([privacy page](https://starbridge.run/privacy)).
 
 ### Why GitHub sign-in?
 
@@ -134,5 +133,6 @@ of its own.
 
 ### Will the hosted server hold up?
 
-A load test of the production stack, on two cores and the VPS's memory, held about 5000 signed-in users and
-15 to 20 new visitors a second.
+A load test of the production stack, on two cores and the VPS's memory, held about 5000 signed-in
+users and 15 to 20 new visitors a second. [status.starbridge.run](https://status.starbridge.run)
+shows whether it is up, and its last 30 days.
