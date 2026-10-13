@@ -1,0 +1,188 @@
+name: staging-app
+
+# The apps against staging (#1621). After a deploy, staging's gate is one API round trip with no
+# app in it, so a server change the apps cannot take (a field, a header, a push that never
+# arrives) would reach an rc unseen. Every night, main's Android build on an emulator and the
+# iPhone app's inbox test on a simulator sign in to staging with its owner token, which makes a
+# fresh owner account the run deletes afterwards. The Android run also receives a question
+# through staging's relay (starbridge.run) and FCM, opens it and answers; the machine that asked
+# reads the answer. It sets the `staging-app` status on the commit staging runs and keeps one
+# issue open while it fails. Nothing waits on it yet: prod's deploy reads only `staging`.
+#
+# Nightly rather than per deploy: main deploys 60 to 120 times a day, a run takes about 25
+# minutes, and the apps share one owner account, so runs go one at a time. By hand before an rc:
+# `gh workflow run staging-app.yml`.
+on:
+  schedule:
+    - cron: "30 4 * * *"
+  workflow_dispatch:
+
+# One owner account on staging: a second run would delete the first's.
+concurrency:
+  group: staging-app
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  STAGING_URL: https://staging.starbridge.run
+
+jobs:
+  android:
+    name: Android app on an emulator
+    # Not the self-hosted boxes: an emulator needs KVM, and the PR pool holds no secrets.
+    runs-on: ubuntu-24.04
+    environment: staging-app
+    timeout-minutes: 45
+    outputs:
+      staging: ${{ steps.staging.outputs.revision }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # The commit staging runs as its /healthz names it, for the status; the app is main's head.
+      - id: staging
+        run: |
+          rev=$(curl -fsS --retry 5 --retry-delay 3 --retry-all-errors -D - -o /dev/null "$STAGING_URL/healthz" | tr -d '\r' |
+            awk -F': ' 'tolower($1) == "x-starbridge-revision" { print $2 }')
+          case $rev in *[!0-9a-f]* | "") echo "::error::staging names no commit"; exit 1 ;; esac
+          [ ${#rev} -eq 40 ] || { echo "::error::staging names no commit"; exit 1; }
+          echo "revision=$rev" >> "$GITHUB_OUTPUT"
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.2
+      - run: pnpm install --frozen-lockfile
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+        with:
+          cache-read-only: ${{ github.ref != 'refs/heads/main' }}
+      # The release build the testers get, with Firebase's config: without it the app has no FCM
+      # and staging has nowhere to push. It signs with the debug key, as every build but a
+      # release's (STARBRIDGE_KEYSTORE empty).
+      - name: Build the release APK
+        working-directory: android
+        env:
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+          STARBRIDGE_KEYSTORE: ""
+        run: |
+          printf '%s' "$GOOGLE_SERVICES_JSON" > app/google-services.json
+          ./gradlew --no-daemon --console=plain -Pkotlin.compiler.execution.strategy=in-process assembleRelease
+          cp app/build/outputs/apk/release/*.apk "$RUNNER_TEMP/app.apk"
+          rm app/google-services.json
+      - name: Let the runner use KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      # google_apis: Play services, which receives the push, without the store.
+      - uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
+        env:
+          STAGING_OWNER_TOKEN: ${{ secrets.STAGING_OWNER_TOKEN }}
+        with:
+          api-level: 36
+          target: google_apis
+          arch: x86_64
+          disable-animations: true
+          emulator-options: -no-window -no-snapshot -no-audio -no-boot-anim -gpu swiftshader_indirect
+          script: ADB="$ANDROID_HOME/platform-tools/adb" bun demo/smoke/staging-android.ts "$RUNNER_TEMP/app.apk" staging-out
+      - if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: staging-app-android
+          path: staging-out/
+          if-no-files-found: ignore
+
+  # The iPhone app's inbox test (InboxTests) against staging: the app is the account's first
+  # device, a machine asks a question, a permission prompt and a run, and the app lists them and
+  # answers, online, offline and from a notification; the machine reads each answer. A simulator
+  # gets no push from APNs, so the push path is the Android run's alone. It runs after the Android
+  # job, which uses the same owner account.
+  ios:
+    name: iPhone app on the simulator
+    needs: android
+    if: ${{ !cancelled() }}
+    runs-on: macos-15
+    environment: staging-app
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: ios
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.2
+      # The test skips on an account that has devices: a failed Android run deleted its own.
+      - name: Clear what an earlier run left
+        working-directory: .
+        env:
+          STAGING_OWNER_TOKEN: ${{ secrets.STAGING_OWNER_TOKEN }}
+        run: bun demo/smoke/staging-clear.ts
+      - name: Newest Xcode
+        run: |
+          sudo xcode-select -s "$(printf '%s\n' /Applications/Xcode_*.app | grep -iv beta | sort -V | tail -1)"
+          xcodebuild -version
+      - name: XcodeGen 2.44.1
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/xcodegen.zip" https://github.com/yonaskolb/XcodeGen/releases/download/2.44.1/xcodegen.zip
+          echo "a2e905fb68446e9bb4008cdfe2e13e3f176d0cbcca828b71770f8e53fca91b73  $RUNNER_TEMP/xcodegen.zip" | shasum -a 256 -c
+          unzip -q "$RUNNER_TEMP/xcodegen.zip" -d "$RUNNER_TEMP"
+          "$RUNNER_TEMP/xcodegen/bin/xcodegen" generate
+      - name: Test
+        env:
+          TEST_RUNNER_STARBRIDGE_TEST_SERVER: ${{ env.STAGING_URL }}
+          TEST_RUNNER_STARBRIDGE_TEST_OWNER_TOKEN: ${{ secrets.STAGING_OWNER_TOKEN }}
+        run: |
+          sim=$(xcrun simctl list devices available -j | jq -r '[.devices[][] | select(.name | startswith("iPhone"))][0].udid')
+          set -o pipefail
+          xcodebuild -project Starbridge.xcodeproj -scheme Starbridge -destination "id=$sim" \
+            -only-testing:StarbridgeTests/InboxTests test 2>&1 | tee "$RUNNER_TEMP/test.log" |
+            grep -E "error:|Test Case .*(passed|failed|skipped)|\*\* TEST"
+          # A skipped test checked nothing.
+          grep -q "InboxTests testListsAndAnswers.*passed" "$RUNNER_TEMP/test.log"
+      # The account the test would have deleted had it not stopped half way.
+      - name: Delete the account
+        if: ${{ !cancelled() }}
+        working-directory: .
+        env:
+          STAGING_OWNER_TOKEN: ${{ secrets.STAGING_OWNER_TOKEN }}
+        run: bun demo/smoke/staging-clear.ts
+
+  # The commit status and the one open issue. Only for main's own runs: a run dispatched from a
+  # branch tests that branch's workflow and sets nothing.
+  report:
+    needs: [android, ios]
+    if: ${{ !cancelled() && github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+      statuses: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          sparse-checkout: .github
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          ANDROID: ${{ needs.android.result }}
+          IOS: ${{ needs.ios.result }}
+          REVISION: ${{ needs.android.outputs.staging }}
+        run: |
+          run="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          failed=''
+          [ "$ANDROID" = success ] || failed="$failed- Android app on an emulator: $ANDROID"$'\n'
+          [ "$IOS" = success ] || failed="$failed- iPhone app on the simulator: $IOS"$'\n'
+          if [ -n "$REVISION" ]; then
+            if [ -z "$failed" ]; then state=success desc="Android and iPhone apps pass on staging"
+            else state=failure desc="An app fails on staging"; fi
+            gh api "repos/$GITHUB_REPOSITORY/statuses/$REVISION" -f state="$state" -f context=staging-app \
+              -f description="$desc" -f target_url="$run" > /dev/null
+          fi
+          .github/scan-issue.sh staging-app "Staging: an app fails its check" \
+            "The nightly app check (staging-app.yml) failed against staging at ${REVISION:0:8}, with main's apps. A step's log and the Android run's screenshots and logcat are in the run." \
+            "$failed"
