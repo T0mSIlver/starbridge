@@ -41,7 +41,8 @@ line, the safe side: at worst a prompt repeats an answer the agent already read.
   `mod-sent/<session>.json` in the CLI's config folder before submitting it, and removes it once
   its turn starts. A process that finds lines another process left there submits them again,
   once, which `--resume` does. Each line carries the submitting process's token from `$.state`,
-  so a hot reload, which keeps the queued prompt, submits nothing twice.
+  so a hot reload, which keeps the queued prompt, submits nothing twice; nor does a process
+  while another live one runs that session, as Claude Code's `sessions/<pid>.json` shows.
 - **Answers during a turn** (#1484). The decision's waiting state says when the agent needs its
   answer, so it needs no flag of its own: a decision marked waiting steers (the answer enters
   the running turn at the next tool call), any other queues (it comes once the turn ends, so it
