@@ -70,6 +70,7 @@ import dev.starbridge.app.ui.inbox.Replies
 import dev.starbridge.app.ui.inbox.rememberDrafts
 import dev.starbridge.app.ui.inbox.PromptActions
 import dev.starbridge.app.ui.inbox.QuestionSheet
+import dev.starbridge.app.ui.inbox.onlyNeed
 import dev.starbridge.app.ui.inbox.PromptSheet
 import dev.starbridge.app.ui.inbox.snoozed
 import dev.starbridge.app.ui.quotas.QuotasScreen
@@ -355,9 +356,11 @@ fun Main(decisions: List<Decision>, notice: StateFlow<String?>, dismiss: () -> U
                     entry<DecisionKey>(metadata = BottomSheetSceneStrategy.sheet) { key ->
                         val vm: InboxViewModel = hiltViewModel()
                         val decisions by vm.decisions.collectAsStateWithLifecycle()
+                        val prompts by vm.prompts.collectAsStateWithLifecycle()
                         val d = decisions.find { it.id == key.id } ?: return@entry
                         LaunchedEffect(d.id) { vm.loadImages(d.id) }
-                        QuestionSheet(d, seconds(d.waiting, now), vm::answer, Replies(drafts), onSnooze = { vm.snooze(d.id, it) })
+                        val at = seconds(d.waiting, now)
+                        QuestionSheet(d, at, vm::answer, Replies(drafts), onSnooze = { vm.snooze(d.id, it) }, last = onlyNeed(d.id, decisions, prompts, at))
                     }
                     entry<PromptKey>(metadata = BottomSheetSceneStrategy.sheet) { key ->
                         val vm: InboxViewModel = hiltViewModel()
