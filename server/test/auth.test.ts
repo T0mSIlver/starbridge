@@ -222,7 +222,11 @@ test("a sign-up list lets only its GitHub users make accounts (#1524)", async ()
   expect((await githubSignIn(listed, 7)).headers.get("location")).toBe("/");
   expect((await githubSignIn(listed, 8)).headers.get("location")).toBe("/?signin=paused");
   // Nor an owner account beside the list.
-  const owner = await makeServer({ dbPath, ownerToken: "owner-secret", signUpGitHubIds: new Set([42]) });
+  const owner = await makeServer({
+    dbPath,
+    ownerToken: "owner-secret",
+    signUpGitHubIds: new Set([42]),
+  });
   const r = await owner.call("POST", "/v1/auth/owner", { body: { token: "owner-secret" } });
   expect(r.status).toBe(403);
   expect(r.json.error).toBe("signups-paused");
@@ -231,7 +235,9 @@ test("a sign-up list lets only its GitHub users make accounts (#1524)", async ()
 test("a sign-up list that is empty or not ids stops the server (#1524)", () => {
   for (const bad of ["", " ", "42,", "0x2a", "42;43", "-1", "1.5", "0"])
     expect(() => configFromEnv({ SIGNUP_GITHUB_IDS: bad })).toThrow("SIGNUP_GITHUB_IDS");
-  expect([...(configFromEnv({ SIGNUP_GITHUB_IDS: "42, 7" }).signUpGitHubIds ?? [])]).toEqual([42, 7]);
+  expect([...(configFromEnv({ SIGNUP_GITHUB_IDS: "42, 7" }).signUpGitHubIds ?? [])]).toEqual([
+    42, 7,
+  ]);
   expect(configFromEnv({}).signUpGitHubIds).toBeUndefined();
 });
 
