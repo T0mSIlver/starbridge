@@ -27,12 +27,12 @@ apt-get update -q
 apt-get install -yq docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin \
   git jq curl xvfb xauth unzip zstd
 
-# Node for the steps that run the box's own, and Firefox's system libraries for the e2e job.
+# Node for the steps that run the box's own, and Firefox's and WebKit's system libraries for the e2e job.
 if [ "$(/usr/local/bin/node -v 2>/dev/null)" != "v$NODE_VERSION" ]; then
   curl -fsSL "https://nodejs.org/dist/v$NODE_VERSION/node-v$NODE_VERSION-linux-x64.tar.xz" |
     tar xJ -C /usr/local --strip-components=1 --exclude=CHANGELOG.md --exclude=LICENSE --exclude=README.md
 fi
-/usr/local/bin/npx -y "playwright@$PLAYWRIGHT_VERSION" install-deps firefox
+/usr/local/bin/npx -y "playwright@$PLAYWRIGHT_VERSION" install-deps firefox webkit
 
 # The jobs' user: in the docker group, no sudo.
 id runner >/dev/null 2>&1 || useradd -m -s /bin/bash runner
