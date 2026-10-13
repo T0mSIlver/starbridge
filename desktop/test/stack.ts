@@ -274,7 +274,9 @@ try {
     assert.equal(await pair.exited, 0, "pair failed");
     await page.getByRole("link", { name: /^Inbox/ }).click();
 
-    step("switching tabs waits on nothing: no request for the page, the median switch painted within 100 ms");
+    step(
+      "switching tabs waits on nothing: no request for the page, the median switch painted within 100 ms",
+    );
     // The tabs prefetch their pages once they show (web: Shell.tsx); Quotas shows with quotas.
     const prefetched = page.waitForResponse((r) => /\/quotas\?_rsc=/.test(r.url()));
     const quota = cli(
