@@ -159,6 +159,11 @@ jobs:
       url: https://staging.starbridge.run
     env:
       REV: ${{ github.event.workflow_run.head_sha }}
+    # True only when staging deployed this commit and its round trip passed, or staging is not set
+    # up yet: prod deploys nothing else (#1528). A commit staging skipped as older than the one it
+    # runs is not passed, even when the job succeeds.
+    outputs:
+      passed: ${{ steps.deploy.outputs.passed }}
     steps:
       - id: deploy
         name: Deploy
@@ -169,14 +174,21 @@ jobs:
         run: |
           if [ -z "$STAGING_KEY" ]; then
             echo "::notice::No STAGING_SSH_KEY: staging not deployed."
+            echo "passed=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           umask 077
           printf '%s\n' "$STAGING_KEY" > "$RUNNER_TEMP/key"
           printf '%s\n' "$STAGING_KNOWN_HOSTS" > "$RUNNER_TEMP/known_hosts"
           ssh -i "$RUNNER_TEMP/key" -o IdentitiesOnly=yes -o UserKnownHostsFile="$RUNNER_TEMP/known_hosts" \
-            -o StrictHostKeyChecking=yes -o ConnectTimeout=20 "$STAGING_TARGET" "$REV"
+            -o StrictHostKeyChecking=yes -o ConnectTimeout=20 -o ServerAliveInterval=15 "$STAGING_TARGET" "$REV" |
+            tee "$RUNNER_TEMP/staging.log"
           echo "deployed=true" >> "$GITHUB_OUTPUT"
+          if [ "$(tail -n 1 "$RUNNER_TEMP/staging.log")" = "passed $REV" ]; then
+            echo "passed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::Staging did not take $REV: prod does not deploy it."
+          fi
       - name: Check the live revision
         if: steps.deploy.outputs.deployed == 'true'
         env:
@@ -198,6 +210,7 @@ jobs:
   # Prod deploys only a commit staging took and passed its round trip on (#1528).
   deploy:
     needs: [changed, images, staging]
+    if: needs.staging.outputs.passed == 'true'
     # On the job, not the workflow: a run for a failed or cancelled CI run skips this job without
     # joining the queue, so it cannot replace a deploy that is waiting.
     concurrency:

@@ -50,3 +50,6 @@ if [ -x /usr/local/sbin/sb-check-now ] && [ "$(cat $check/setup-state 2>/dev/nul
 else
   echo "no round trip: the staging check is not set up"
 fi
+# The last line deploy.yml reads: only a commit that went through all of the above lets prod
+# deploy it. A skipped older commit ends without it.
+echo "passed $rev"
