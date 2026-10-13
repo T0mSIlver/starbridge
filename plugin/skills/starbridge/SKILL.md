@@ -90,8 +90,8 @@ last line says:
   `starbridge waiting <id>` (or post with `--waiting`): it then reaches you
   with your next tool result, or once your turn ends, whichever comes first,
   and `waiting` prints it if it is already in. Do the work that does not
-  depend on it; when only the answer is left, end your turn, saying what
-  waits on the card. If the card stops blocking you, `starbridge working <id>`.
+  depend on it; when only the answer is left, run `starbridge waiting <id>`
+  if you have not, and end your turn, saying what waits on the card. If the card stops blocking you, `starbridge working <id>`.
   The answer reads `Answer to d_Xk3… (Run the orders migration…?): Now`, or
   names the command that prints it.
 - **"Nothing brings the answer into this session…"** Never end your turn
