@@ -136,9 +136,25 @@ async function main() {
     await page.getByRole("heading", { name: /Commit the docs/ }).waitFor();
     await expectFits(page, "the detail");
 
-    // The last card, settled from the machine while it is open, returns to the empty list (#1583).
     const empty = page.getByText("Nothing needs you");
     const open = () => page.evaluate(() => new URLSearchParams(location.search).get("item"));
+
+    // A Find query that matches no open card settles nothing: the open card stays (#1605). The
+    // Find box shows from 600 px.
+    await page.setViewportSize({ width: 800, height: 844 });
+    const finder = page.getByRole("textbox", { name: "Find" });
+    await finder.fill("zzz no such card");
+    await page.waitForTimeout(1000);
+    if (!(await open())) throw new Error("a Find query with no match closed the open card");
+    if (await page.getByText("Answered", { exact: true }).count())
+      throw new Error("a Find query with no match shows the open card as Answered");
+    await page.getByRole("heading", { name: /Commit the docs/ }).waitFor();
+    await finder.fill("");
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.getByRole("heading", { name: /Commit the docs/ }).waitFor();
+    console.log("ok: a Find query with no match keeps the open card");
+
+    // The last card, settled from the machine while it is open, returns to the empty list (#1583).
     const settle = cli("settle", [
       "settle",
       askedId as string,
