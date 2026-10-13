@@ -1,0 +1,192 @@
+name: internal
+
+# The owner runs main (#1540): every night at 03:00 UTC, when the app changed since the last
+# build, main's Android build goes to Play's internal testing track, which only the owner joins;
+# Alpha keeps the rcs. Its versionCode takes the next of slots 50 to 98 of the version under way,
+# between its rcs and its final (VersionCode.kt). The iPhone app follows to TestFlight's internal
+# testers once the repository variable IOS_MAIN_TESTFLIGHT is true, which waits on Apple's export
+# compliance code. The desktop app stays on rcs. Run by hand, it builds even when nothing changed,
+# to replace a broken night.
+on:
+  schedule:
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: internal
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  # What the internal track holds: the commit of its last build, and its highest code.
+  plan:
+    runs-on: ubuntu-latest
+    environment: play-release
+    # Play keeps one open edit per account: a second one, here or in release.yml, voids the first.
+    concurrency:
+      group: play-edit
+      cancel-in-progress: false
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      build: ${{ steps.plan.outputs.build }}
+      after: ${{ steps.plan.outputs.after }}
+    steps:
+      - id: setup
+        env:
+          SET: ${{ vars.PLAY_WIF_PROVIDER != '' && vars.PLAY_SERVICE_ACCOUNT != '' }}
+        run: |
+          if [ "$SET" = true ]; then echo "set=true" >> "$GITHUB_OUTPUT"
+          else echo "::notice::PLAY_WIF_PROVIDER or PLAY_SERVICE_ACCOUNT is not set; nothing built."; fi
+      - if: steps.setup.outputs.set
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          filter: blob:none
+      - if: steps.setup.outputs.set
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.2
+      - if: steps.setup.outputs.set
+        id: auth
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0
+        with:
+          workload_identity_provider: ${{ vars.PLAY_WIF_PROVIDER }}
+          service_account: ${{ vars.PLAY_SERVICE_ACCOUNT }}
+          token_format: access_token
+          access_token_scopes: https://www.googleapis.com/auth/androidpublisher
+          create_credentials_file: false
+          export_environment_variables: false
+      - if: steps.setup.outputs.set
+        id: plan
+        env:
+          PLAY_ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
+          BY_HAND: ${{ github.event_name == 'workflow_dispatch' }}
+        run: |
+          state=$(bun cli/scripts/play.ts internal-state)
+          echo "internal track: $state"
+          after=$(printf '%s' "$state" | jq -r .maxCode)
+          last=$(printf '%s' "$state" | jq -r '.name | capture("^main-(?<c>[0-9a-f]{8,40})$").c // ""')
+          build=true
+          if [ "$BY_HAND" != true ] && [ -n "$last" ] && git cat-file -e "$last^{commit}" 2>/dev/null &&
+            git diff --quiet "$last" HEAD -- android packages/protocol/vectors; then
+            build=false
+            echo "The app is unchanged since main-$last: no build tonight."
+          fi
+          echo "build=$build" >> "$GITHUB_OUTPUT"
+          echo "after=$after" >> "$GITHUB_OUTPUT"
+
+  # Signed with the upload key, as release.yml's Android job.
+  android:
+    needs: plan
+    if: needs.plan.outputs.build == 'true'
+    runs-on: ${{ vars.ANDROID_RUNNER || 'ubuntu-24.04' }}
+    environment: release
+    timeout-minutes: 40
+    defaults:
+      run:
+        working-directory: android
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: 21
+      # As in android.yml: self-hosted runners on one machine share one Gradle home.
+      - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+        with:
+          cache-read-only: true
+          cache-disabled: ${{ runner.environment == 'self-hosted' }}
+      - name: Build the signed App Bundle
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+          STARBRIDGE_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          STARBRIDGE_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          AFTER: ${{ needs.plan.outputs.after }}
+        run: |
+          umask 077
+          export STARBRIDGE_KEYSTORE="$RUNNER_TEMP/release.jks"
+          echo "$KEYSTORE_BASE64" | base64 -d > "$STARBRIDGE_KEYSTORE"
+          printf '%s' "$GOOGLE_SERVICES_JSON" > app/google-services.json
+          ./gradlew --no-daemon --console=plain -Pkotlin.compiler.execution.strategy=in-process bundleRelease \
+            -PmainAfter="$AFTER"
+          mkdir -p ../out
+          cp app/build/outputs/bundle/release/app-release.aab ../out/starbridge-main.aab
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: android-internal
+          path: out/
+          retention-days: 3
+
+  play:
+    needs: android
+    runs-on: ubuntu-latest
+    environment: play-release
+    # Play keeps one open edit per account: a second one, here or in release.yml, voids the first.
+    concurrency:
+      group: play-edit
+      cancel-in-progress: false
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          filter: blob:none
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.2
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: android-internal
+          path: out
+      - id: auth
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0
+        with:
+          workload_identity_provider: ${{ vars.PLAY_WIF_PROVIDER }}
+          service_account: ${{ vars.PLAY_SERVICE_ACCOUNT }}
+          token_format: access_token
+          access_token_scopes: https://www.googleapis.com/auth/androidpublisher
+          create_credentials_file: false
+          export_environment_variables: false
+      # Named after the commit, which the next night compares with; the notes list the day's
+      # merges that touched the app.
+      - name: Upload to the internal track
+        env:
+          PLAY_ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
+        run: |
+          { echo "### Android"; git log --since="25 hours ago" --format='- %s' -- android packages/protocol/vectors; } > notes.md
+          bun cli/scripts/play.ts out/starbridge-main.aab "main-${GITHUB_SHA::12}" notes.md --track internal \
+            --url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/commits/$GITHUB_SHA"
+
+  # release.yml's TestFlight job, from main, numbered by its run; TestFlight's internal testers get
+  # every build. Nightly too, when the iPhone app changed in the last day.
+  ios:
+    if: vars.IOS_MAIN_TESTFLIGHT == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: write
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          filter: blob:none
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          BY_HAND: ${{ github.event_name == 'workflow_dispatch' }}
+        run: |
+          if [ "$BY_HAND" != true ] && [ -z "$(git log --since='25 hours ago' --format=%H -- ios packages/protocol/vectors)" ]; then
+            echo "The iPhone app is unchanged since yesterday: no build tonight."
+            exit 0
+          fi
+          gh workflow run release.yml --repo "$GITHUB_REPOSITORY" --ref main \
+            -f version="$(jq -r .version cli/package.json)" -f testflight_only=true

@@ -85,13 +85,12 @@ last line says:
 
 - **"The answer will come back into this session as a new prompt."** Never
   wait for it: no `--wait`, no `starbridge wait`, not in a background task,
-  not with a monitor. The answer to a card that blocks nothing arrives once
-  your turn ends. When you need it before you go on, run
-  `starbridge waiting <id>` (or post with `--waiting`): it then reaches you
-  with your next tool result, or once your turn ends, whichever comes first,
-  and `waiting` prints it if it is already in. Do the work that does not
-  depend on it; when only the answer is left, end your turn, saying what
-  waits on the card. If the card stops blocking you, `starbridge working <id>`.
+  not with a monitor. While you work, it comes with your next tool result:
+  act on it then, even mid-task, since it may change the work. When only the
+  answer is left, run `starbridge waiting <id>` (or post with `--waiting`):
+  it tells them you are blocked, and prints the answer if it is already in.
+  Then end your turn, saying what waits on the card. If the card stops
+  blocking you, `starbridge working <id>`.
   The answer reads `Answer to d_Xk3… (Run the orders migration…?): Now`, or
   names the command that prints it.
 - **"Nothing brings the answer into this session…"** Never end your turn
@@ -123,7 +122,8 @@ their inbox until you take it back, before you act or in the same step as
 the repost: `starbridge settle <id> --outcome withdrawn --reason
 '…'`. The reason shows in their History: one short line, 120 characters at
 most, such as `'You answered in the terminal'` or `'Fixed it myself after
-rereading the logs'`.
+rereading the logs'`. When they had answered first, `settle` prints the
+answer instead: act on it.
 
 ## Answers in an artifact
 

@@ -97,3 +97,8 @@ and should mark the card waiting rather than wait in a background task or with a
 these, Claude Code runs in tmux sat at the bypass-permissions dialog and ran nothing, so
 `results/1063`'s Claude Code scores for `delivery-prompt`, `delivery-wait`, `native-ask` and
 `desk-question` measure no agent.
+
+`results/1584` holds the mod handing every answer to a running turn, not only one marked
+waiting, against `origin/main`, on `change-mid-turn` and `change-late`: a typed answer to a card
+that blocks nothing reverses work the turn is doing, early or near its end. `claude-wording`
+holds the skill's wording for it on the live situations it touches.
