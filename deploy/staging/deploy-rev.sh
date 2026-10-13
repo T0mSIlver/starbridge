@@ -42,7 +42,7 @@ REVISION=$rev $dir/deploy/staging/apply.sh
 echo "$rev" > $dir/REVISION
 # Then one round trip on staging's test account (#1528): a card, its Web Push, an answer read
 # back, from the outside check's staging instance on this VM (starbridge-planning,
-# infra/homelab-arm). Its failure fails the deploy, and prod waits for this one (deploy.yml).
+# infra/sb-staging). Its failure fails the deploy, and prod waits for this one (deploy.yml).
 # Until that instance is set up, it says so and passes.
 check=/var/lib/sb-check-staging
 if [ -x /usr/local/sbin/sb-check-now ] && [ "$(cat $check/setup-state 2>/dev/null)" = done ]; then
