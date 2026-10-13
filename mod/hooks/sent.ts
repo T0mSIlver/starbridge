@@ -12,13 +12,15 @@
  * Lines carry the token of the process that submitted them, which `$.state` keeps across a hot
  * reload: a reload leaves the queued prompt in place, so a reloaded mod submits nothing again.
  * Nor does a process that shares its session with another live one.
+ *
+ * Every operation reads the file afresh, since another process on the session writes it too.
  */
 
 export interface SentHost {
   /** The session's id now; a `/clear` or a `/resume` changes it. */
   sessionId(): Promise<string>;
-  /** Rejects when the file is missing. */
-  read(path: string): Promise<string>;
+  /** Undefined when the file is missing; rejects when it cannot be read. */
+  read(path: string): Promise<string | undefined>;
   /** Creates the file's folder as needed. */
   write(path: string, text: string): Promise<void>;
   now(): Promise<number>;
@@ -51,8 +53,8 @@ const MAX_REFUSED = 3;
 const MAX_AGE_MS = 30 * 24 * 3600_000;
 
 export class Sent {
-  /** Each session's lines as its file holds them, once read. */
-  private readonly sessions = new Map<string, Line[]>();
+  /** Sessions whose file this process read. */
+  private readonly sessions = new Set<string>();
   /** Sessions whose lines from other processes went out again. */
   private readonly recovered = new Set<string>();
   /** Every operation runs alone, from its read to its submit. */
@@ -77,13 +79,22 @@ export class Sent {
     return this.alone(async () => {
       const me = await this.host.sessionId();
       const at = await this.host.now();
-      const lines = await this.load(me);
+      let lines = await this.loaded(me);
+      if (!lines) return false;
       // A process that died between recording a line and confirming it leaves both: the loop
       // hands the line over again, and the file holds it. It goes out once, as `recover` would.
-      const known = lines.find((l) => l.ack === ack);
+      let known = lines.find((l) => l.ack === ack);
       if (known && (this.process === undefined || known.process === this.process)) return true;
-      if (known && known.process !== "" && (await this.host.elsewhere(me).catch(() => false)))
-        return true;
+      if (known && known.process !== "") {
+        if (await this.host.elsewhere(me).catch(() => false)) return true;
+        // The process may have run the line's turn before it exited: then the file lacks it. A
+        // process that started meanwhile may hold it now.
+        const before = known.process;
+        lines = await this.loaded(me);
+        if (!lines) return false;
+        known = lines.find((l) => l.ack === ack);
+        if (!known || (known.process !== "" && known.process !== before)) return true;
+      }
       const entry = known
         ? { ...known, process: this.process ?? "" }
         : { ack, line, process: this.process ?? "", at, refused: 0 };
@@ -111,7 +122,8 @@ export class Sent {
   started(text: string): Promise<void> {
     return this.alone(async () => {
       await this.load(await this.host.sessionId());
-      for (const [session, lines] of this.sessions) {
+      for (const session of this.sessions) {
+        const lines = await this.load(session);
         const left = lines.filter((l) => !text.includes(l.line));
         if (left.length < lines.length) await this.save(session, left).catch(() => undefined);
       }
@@ -128,23 +140,33 @@ export class Sent {
       if (this.process === undefined) return;
       const me = await this.host.sessionId();
       if (!me) return;
-      const lines = await this.load(me);
+      let lines = await this.load(me);
       // Other processes' lines go out once another live process no longer runs this session:
       // checked again at each turn's end until then.
       const theirs = (l: Line) => l.process !== "" && l.process !== this.process;
-      const take =
-        !this.recovered.has(me) &&
-        !(lines.some(theirs) && (await this.host.elsewhere(me).catch(() => false)));
-      if (take) this.recovered.add(me);
-      const due = lines.filter((l) => l.process === "" || (take && theirs(l)));
-      if (due.length === 0) return;
+      const key = (l: Line) => `${l.ack}\n${l.process}`;
+      const found = new Set(lines.filter(theirs).map(key));
+      let take = false;
+      if (!this.recovered.has(me)) {
+        take = !(found.size > 0 && (await this.host.elsewhere(me).catch(() => false)));
+        // A process that exited may have run some of its lines' turns since the first read, and
+        // one that started meanwhile may have recorded its own, which stay with it.
+        if (take && found.size > 0) lines = await this.load(me);
+      }
+      const due = lines.filter((l) => l.process === "" || (take && found.has(key(l))));
+      if (due.length === 0) {
+        if (take) this.recovered.add(me);
+        return;
+      }
       const keep = lines.filter((l) => !due.includes(l));
       const again: Line[] = [];
       for (const l of due)
         if (l.refused >= MAX_REFUSED)
           this.host.log(`starbridge: gave up on the answer ${l.ack}: refused ${l.refused} times`);
         else again.push({ ...l, process: this.process });
+      // Marked once saved: a failed write leaves the lines to the next try.
       await this.save(me, [...keep, ...again]);
+      if (take) this.recovered.add(me);
       if ((await this.host.sessionId()) !== me) {
         // Left for session `me`, as `send` leaves a line.
         this.recovered.delete(me);
@@ -205,24 +227,35 @@ export class Sent {
     return `${this.dir}/mod-sent/${encodeURIComponent(session)}.json`;
   }
 
+  /**
+   * Rejects when the file cannot be read, so that no write replaces lines it could not see. One
+   * that does not parse is replaced: holding every answer back on it would be worse.
+   */
   private async load(session: string): Promise<Line[]> {
-    const cached = this.sessions.get(session);
-    if (cached) return cached;
+    this.sessions.add(session);
+    const text = await this.host.read(this.path(session));
     let lines: Line[] = [];
     try {
-      const parsed = JSON.parse(await this.host.read(this.path(session)));
+      const parsed = JSON.parse(text ?? "[]");
       if (Array.isArray(parsed)) lines = parsed.filter(isLine);
     } catch {}
     const now = await this.host.now();
-    lines = lines.filter((l) => now - l.at < MAX_AGE_MS);
-    this.sessions.set(session, lines);
-    return lines;
+    return lines.filter((l) => now - l.at < MAX_AGE_MS);
   }
 
-  /** Writes `session`'s lines, and keeps them once written; rejects when the write fails. */
+  /** `load`, or undefined with a log line when the file cannot be read. */
+  private async loaded(session: string): Promise<Line[] | undefined> {
+    try {
+      return await this.load(session);
+    } catch (e) {
+      this.host.log(`starbridge: could not read the answers sent: ${(e as Error).message}`);
+      return undefined;
+    }
+  }
+
+  /** Writes `session`'s lines; rejects when the write fails. */
   private async save(session: string, lines: Line[]): Promise<void> {
     await this.host.write(this.path(session), JSON.stringify(lines));
-    this.sessions.set(session, lines);
   }
 }
 
@@ -252,12 +285,9 @@ export async function sessionElsewhere(
   for (const f of await fs.list(dir).catch(() => [])) {
     if (!/^\d+\.json$/.test(f.name) || f.name === `${own}.json`) continue;
     try {
-      const s = JSON.parse(await fs.read(`${dir}/${f.name}`)) as {
-        pid?: unknown;
-        sessionId?: unknown;
-      };
+      const s = firstObject(await fs.read(`${dir}/${f.name}`));
       if (
-        s.sessionId === session &&
+        s?.sessionId === session &&
         typeof s.pid === "number" &&
         s.pid !== own &&
         (await runs(s.pid))
@@ -266,4 +296,18 @@ export async function sessionElsewhere(
     } catch {}
   }
   return false;
+}
+
+/**
+ * The object a session record starts with. Claude Code rewrites the file without truncating it,
+ * so a shorter record leaves the end of the previous one after it, as cli/src/claude.ts reads it.
+ */
+function firstObject(text: string): { pid?: unknown; sessionId?: unknown } | undefined {
+  for (let end = text.indexOf("}"); end !== -1; end = text.indexOf("}", end + 1)) {
+    try {
+      const value = JSON.parse(text.slice(0, end + 1));
+      return value && typeof value === "object" ? value : undefined;
+    } catch {}
+  }
+  return undefined;
 }
