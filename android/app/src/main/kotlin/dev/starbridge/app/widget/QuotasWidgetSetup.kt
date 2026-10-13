@@ -106,8 +106,9 @@ internal fun QuotaPicker(plans: List<PickerPlan>, wide: Boolean, chosen: Choice?
                 item(key = "${plan.name}/$quota") {
                     if (!wide) PickRow(i, group.rows.size, quota, sub, mine?.quotas == listOf(quota), StarbridgeTheme.provider(plan.provider)) { onPick(Choice(plan, listOf(quota))) }
                     else {
-                        // A tap counts from the ticks shown, the widget's two included (#1465).
-                        val on = (ticked ?: mine)?.takeIf { it.plan == plan }?.quotas.orEmpty()
+                        // A tap counts from the ticks shown, the widget's two included (#1465), and
+                        // never from a quota that stopped reporting.
+                        val on = (ticked ?: mine)?.takeIf { it.plan == plan }?.quotas.orEmpty().filter { q -> group.rows.any { it.window.window == q } }
                         PickRow(i, group.rows.size, quota, sub, quota in on, StarbridgeTheme.provider(plan.provider), check = true) {
                             when {
                                 quota in on -> ticked = Choice(plan, on - quota)
