@@ -4,7 +4,8 @@
  *   bun run scripts/play.ts <aab> <version> <notes.md> [--track alpha|production] [--validate]
  * PLAY_ACCESS_TOKEN is an OAuth token for the androidpublisher scope; in CI, google-github-actions/auth
  * trades the job's OIDC token for one, so no key exists. --validate checks the edit
- * with Play and discards it, so nothing is published. Without it the edit is committed, which sends
+ * with Play and discards it, so nothing is published; a versionCode no higher than the track's
+ * (a dry run from main) is reported, not failed. Without it the edit is committed, which sends
  * it for review; with managed publishing on, it then waits in Play Console for Publish.
  */
 import { readFileSync } from "node:fs";
@@ -95,10 +96,25 @@ export async function upload(opts: {
       }),
     );
     if (opts.validate) {
-      await call("POST", `${at}:validate`);
-      console.log(
-        `Play accepts ${opts.version} (versionCode ${versionCode}) on ${opts.track}; nothing committed.`,
-      );
+      try {
+        await call("POST", `${at}:validate`);
+        console.log(
+          `Play accepts ${opts.version} (versionCode ${versionCode}) on ${opts.track}; nothing committed.`,
+        );
+      } catch (e) {
+        // A dry run from main carries a versionCode no higher than the track's, which Play refuses to
+        // roll out (#1530). The upload and the track edit it got through are what a dry run can check.
+        if (
+          !(
+            e instanceof PlayError &&
+            e.message.includes("does not allow any existing users to upgrade")
+          )
+        )
+          throw e;
+        console.log(
+          `Play took the bundle (versionCode ${versionCode}) and the ${opts.track} release, but would not roll ${opts.version} out: its versionCode is not above the track's. Nothing committed.`,
+        );
+      }
       await call("DELETE", at);
       return versionCode;
     }
