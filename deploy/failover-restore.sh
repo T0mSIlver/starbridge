@@ -4,7 +4,7 @@
 # (deploy/README.md, "Failover"). It decrypts the copy here, with the key only this machine
 # holds, checks it, and shreds the plain copy when done. A database already on the host is moved
 # aside, never overwritten.
-#   deploy/failover-restore.sh [HOST]     an SSH host with sudo; default sb-staging (homelab-arm)
+#   deploy/failover-restore.sh [HOST]     an SSH host with sudo; default sb-staging (sb-staging)
 set -eu
 host=${1:-sb-staging}
 age_key=$HOME/.config/starbridge/secrets/backup-age.key

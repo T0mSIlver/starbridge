@@ -45,7 +45,7 @@ image is tagged by a hash of that file and built only when no image has the tag.
 ## Failover
 
 When `starbridge-1` is gone for longer than restoring elsewhere takes (Hetzner down past about
-30 minutes, or the disk lost), homelab-arm takes over: the newest offsite copy from sb-oracle,
+30 minutes, or the disk lost), sb-staging takes over: the newest offsite copy from sb-oracle,
 prod's stack and secrets, and DNS pointed at it. Every write since the night's backup (03:15 UTC)
 is lost. The owner switches DNS; everything else runs from the operator's machine, with
 `h=ubuntu@79.76.109.122 k=~/.ssh/id_ed25519`:
@@ -63,7 +63,7 @@ is lost. The owner switches DNS; everything else runs from the operator's machin
    for `/healthz` to name the commit.
 7. Check: `ssh sb-oracle sudo sb-check-now` runs a round trip from outside.
 
-Failing back is the same in reverse once `starbridge-1` is back: a fresh backup from homelab-arm
+Failing back is the same in reverse once `starbridge-1` is back: a fresh backup from sb-staging
 (`backup.sh` runs there too), restored onto `starbridge-1`, then DNS, then
 `gh workflow enable deploy.yml`. Drills: `spec/releases.md`, "Failover".
 
