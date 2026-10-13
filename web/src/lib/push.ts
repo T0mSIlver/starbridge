@@ -24,12 +24,31 @@ export function registerWorker(): Promise<ServiceWorkerRegistration> | undefined
 export async function pushState(): Promise<PushState> {
   if (needsHomeScreen(thisBrowser())) return "install";
   if (!supported()) return "unsupported";
-  if (Notification.permission === "denied") return "denied";
+  if (await blocked()) return "denied";
   // Off by the switch even when the browser kept its subscription: the server holds none.
   if (getPref("pushOff")) return "off";
   // The subscription says on, not Notification.permission: in an iOS Home Screen app, the window
   // a notification's tap opens reads "default" although permission stands (#1362).
   return (await subscription(navigator.serviceWorker)) ? "on" : "off";
+}
+
+/**
+ * Whether the browser blocks notifications for this site. `Notification.permission` alone isn't
+ * enough: macOS Safari 27 keeps reading "denied" in the tab where the owner just clicked Allow
+ * (#1404). So a subscription, the push manager's own permission or the Permissions API saying
+ * otherwise wins.
+ */
+export async function blocked(permission: NotificationPermission = Notification.permission) {
+  if (permission !== "denied") return false;
+  const reg = await navigator.serviceWorker?.getRegistration("/").catch(() => undefined);
+  if (await reg?.pushManager.getSubscription().catch(() => null)) return false;
+  const pm = await reg?.pushManager.permissionState({ userVisibleOnly: true }).catch(() => "");
+  if (pm === "granted") return false;
+  const query = await navigator.permissions
+    ?.query({ name: "notifications" })
+    .then((s) => s.state)
+    .catch(() => "");
+  return query !== "granted";
 }
 
 /** How long `subscription` waits for a worker that is still starting. */
@@ -105,7 +124,9 @@ export async function enablePush(): Promise<PushState> {
   setPref("pushOff", false);
   const reg = await registerWorker();
   if (!reg) return "unsupported";
-  if ((await Notification.requestPermission()) !== "granted") return pushState();
+  const asked = await Notification.requestPermission();
+  // A "denied" the browser contradicts goes on to subscribe, which settles it (#1404).
+  if (asked !== "granted" && (asked !== "denied" || (await blocked(asked)))) return pushState();
   await navigator.serviceWorker.ready;
   const existing = await reg.pushManager.getSubscription();
   // Without the server's key, an existing subscription is still worth sending.
@@ -200,7 +221,7 @@ export function subscribeFailure(e: unknown, brave = "brave" in navigator): stri
  * keeps the permission.
  */
 export async function resubscribe(): Promise<void> {
-  if (!supported() || Notification.permission === "denied" || getPref("pushOff")) return;
+  if (!supported() || getPref("pushOff") || (await blocked())) return;
   const reg = await navigator.serviceWorker.getRegistration("/");
   if (!reg) return;
   // Read once the worker is active: at an iOS Home Screen app's cold start it reads none before.
