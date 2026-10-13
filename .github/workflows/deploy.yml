@@ -313,3 +313,23 @@ jobs:
         run: |
           curl -fsS --retry 10 --retry-delay 3 --retry-all-errors https://demo.starbridge.run/v1/demo |
             jq -e '.demo == true' >/dev/null || { echo "demo.starbridge.run is not a demo server"; exit 1; }
+      # A healthy server can still fail to push or answer. sb-oracle, the outside check's VM, runs
+      # one round trip on its test account now (#1522): a card, its Web Push, an answer read back.
+      # The key's forced command does only that (starbridge-planning, infra/oracle/check-now.sh).
+      - name: Round trip from outside
+        # sb-check-now gives up after 180 s; a dropped connection must not hold the deploy queue.
+        timeout-minutes: 5
+        env:
+          SMOKE_KEY: ${{ secrets.SMOKE_SSH_KEY }}
+          SMOKE_KNOWN_HOSTS: ${{ secrets.SMOKE_KNOWN_HOSTS }}
+          SMOKE_TARGET: ${{ secrets.SMOKE_SSH_TARGET }}
+        run: |
+          if [ -z "$SMOKE_KEY" ]; then
+            echo "::notice::No SMOKE_SSH_KEY: no round trip."
+            exit 0
+          fi
+          umask 077
+          printf '%s\n' "$SMOKE_KEY" > "$RUNNER_TEMP/smoke-key"
+          printf '%s\n' "$SMOKE_KNOWN_HOSTS" > "$RUNNER_TEMP/smoke-known-hosts"
+          ssh -i "$RUNNER_TEMP/smoke-key" -o IdentitiesOnly=yes -o UserKnownHostsFile="$RUNNER_TEMP/smoke-known-hosts" \
+            -o StrictHostKeyChecking=yes -o ConnectTimeout=20 -o ServerAliveInterval=15 "$SMOKE_TARGET"
