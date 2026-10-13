@@ -1,8 +1,8 @@
 name: scan
 
-# Known vulnerabilities in what we ship (#1542). Trivy scans the server and web images on ghcr.io
-# once deploy.yml has pushed them for a commit, and every week the images starbridge.run runs,
-# since new advisories come out after a build. osv-scanner reads the lockfiles weekly. Each keeps
+# Known vulnerabilities in what we ship (#1542). Trivy scans the server and web images that
+# starbridge.run and staging serve, after every deploy run and weekly, since new advisories come
+# out after a build. osv-scanner reads the lockfiles weekly. Each keeps
 # one issue open while it finds something, and closes it once a run finds nothing.
 on:
   workflow_run:
@@ -14,7 +14,7 @@ on:
   workflow_dispatch:
     inputs:
       revision:
-        description: Commit whose images to scan (default the one starbridge.run runs)
+        description: Commit whose images to scan (default the ones starbridge.run and staging serve)
         required: false
 
 concurrency:
@@ -42,43 +42,58 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           sparse-checkout: .github
+      # The commits starbridge.run and staging serve, as their /healthz names them: a deploy run's
+      # own commit can be newer than the one it deployed, and a dispatched deploy has none (#1542).
       - id: rev
         env:
-          REV: ${{ github.event.workflow_run.head_sha || inputs.revision }}
+          REV: ${{ inputs.revision }}
         run: |
-          if [ -z "$REV" ]; then
-            REV=$(curl -fsS --retry 5 --retry-delay 3 --retry-all-errors -D - -o /dev/null \
-              https://starbridge.run/healthz | tr -d '\r' |
-              awk -F': ' 'tolower($1) == "x-starbridge-revision" { print $2 }')
+          served() {
+            curl -fsS --retry 5 --retry-delay 3 --retry-all-errors -D - -o /dev/null "$1/healthz" | tr -d '\r' |
+              awk -F': ' 'tolower($1) == "x-starbridge-revision" { print $2 }'
+          }
+          if [ -n "$REV" ]; then
+            revs="$REV:dispatched"
+          else
+            revs="$(served https://starbridge.run || true):prod $(served https://staging.starbridge.run || true):staging"
           fi
-          case $REV in *[!0-9a-f]*) REV= ;; esac
-          [ ${#REV} -eq 40 ] || { echo "::error::no commit id to scan"; exit 1; }
-          # deploy.yml builds only when a file the images hold changed: no images, nothing to scan.
           token=$(curl -fsS "https://ghcr.io/token?scope=repository:t0msilver/starbridge-server:pull" | jq -r .token)
-          if ! curl -fsS -o /dev/null -H "Authorization: Bearer $token" \
-            -H 'Accept: application/vnd.oci.image.index.v1+json, application/vnd.docker.distribution.manifest.list.v2+json' \
-            "https://ghcr.io/v2/t0msilver/starbridge-server/manifests/$REV"; then
-            echo "::notice::No images for $REV: deploy.yml built none."
-            exit 0
-          fi
-          echo "rev=$REV" >> "$GITHUB_OUTPUT"
+          scan=
+          for pair in $revs; do
+            rev=${pair%%:*} where=${pair#*:}
+            case $rev in *[!0-9a-f]* | "") echo "::warning::$where names no commit id"; continue ;; esac
+            [ ${#rev} -eq 40 ] || { echo "::warning::$where names no commit id"; continue; }
+            case " $scan " in *" $rev:"*) continue ;; esac
+            # A commit with no images: deploy.yml built none for it.
+            if curl -fsS -o /dev/null -H "Authorization: Bearer $token" \
+              -H 'Accept: application/vnd.oci.image.index.v1+json, application/vnd.docker.distribution.manifest.list.v2+json' \
+              "https://ghcr.io/v2/t0msilver/starbridge-server/manifests/$rev"; then
+              scan="$scan $rev:$where"
+            else
+              echo "::notice::No images for $rev ($where)."
+            fi
+          done
+          echo "revs=${scan# }" >> "$GITHUB_OUTPUT"
       - id: scan
-        if: steps.rev.outputs.rev
+        if: steps.rev.outputs.revs
         env:
-          REV: ${{ steps.rev.outputs.rev }}
+          REVS: ${{ steps.rev.outputs.revs }}
           TRIVY_USERNAME: ${{ github.actor }}
           TRIVY_PASSWORD: ${{ github.token }}
         run: |
           mkdir -p "$RUNNER_TEMP/trivy"
-          echo "## Images at $REV" >> "$GITHUB_STEP_SUMMARY"
           : > "$RUNNER_TEMP/blocking.md"
-          for image in server web; do
-            # amd64, what starbridge.run runs; arm64 holds the same packages.
-            docker run --rm -e TRIVY_USERNAME -e TRIVY_PASSWORD -v "$RUNNER_TEMP/trivy:/root/.cache" "$TRIVY" \
-              image --quiet --platform linux/amd64 --scanners vuln --format json \
-              "ghcr.io/t0msilver/starbridge-$image:$REV" > "$RUNNER_TEMP/$image.json"
-            .github/scan-report.sh trivy "$image" < "$RUNNER_TEMP/$image.json" >> "$GITHUB_STEP_SUMMARY"
-            .github/scan-report.sh trivy-blocking "$image" < "$RUNNER_TEMP/$image.json" >> "$RUNNER_TEMP/blocking.md"
+          for pair in $REVS; do
+            rev=${pair%%:*} where=${pair#*:}
+            for image in server web; do
+              # amd64, what starbridge.run runs; arm64 holds the same packages.
+              docker run --rm -e TRIVY_USERNAME -e TRIVY_PASSWORD -v "$RUNNER_TEMP/trivy:/root/.cache" "$TRIVY" \
+                image --quiet --platform linux/amd64 --scanners vuln --format json \
+                "ghcr.io/t0msilver/starbridge-$image:$rev" > "$RUNNER_TEMP/$image.json"
+              name="$image at ${rev:0:8} ($where)"
+              .github/scan-report.sh trivy "$name" < "$RUNNER_TEMP/$image.json" >> "$GITHUB_STEP_SUMMARY"
+              .github/scan-report.sh trivy-blocking "$name" < "$RUNNER_TEMP/$image.json" >> "$RUNNER_TEMP/blocking.md"
+            done
           done
           {
             echo "blocking<<EOF"
@@ -86,17 +101,16 @@ jobs:
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
       - name: Open, update or close the issue
-        if: ${{ !cancelled() && steps.rev.outputs.rev }}
+        if: ${{ !cancelled() && steps.rev.outputs.revs }}
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           OUTCOME: ${{ steps.scan.outcome }}
           FOUND: ${{ steps.scan.outputs.blocking }}
-          REV: ${{ steps.rev.outputs.rev }}
         run: |
           [ "$OUTCOME" = success ] || FOUND="The scan itself failed; see the run."
           .github/scan-issue.sh image-scan "Image scan: fixable high or critical vulnerabilities" \
-            "Trivy found these in the images of $REV. Rebuilding the image picks up Debian's fixes; a package's fix needs a dependency update." "$FOUND" fail
+            "Trivy found these in the images starbridge.run and staging serve. Rebuilding the image picks up Debian's fixes; a package's fix needs a dependency update." "$FOUND" fail
 
   # Weekly, and by hand. Reports every finding: a lockfile entry with a fix is a dependency
   # update to make, one without is to watch. Dependabot's alerts cover the Gradle catalog, which

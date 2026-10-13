@@ -211,9 +211,10 @@
   own `ci.yml`, which could name any label, so a fork's run is never approved.
 - **Monitoring.** `uptime.yml` checks `/healthz`, `/healthz/backup` (fails when the last nightly
   backup is over 26 h old) and `/healthz/disk` (under 2 GB free), and opens one `outage` issue.
-- **Vulnerability scans** (#1542). `scan.yml` runs Trivy on the server and web images once
-  `deploy.yml` has pushed them, and weekly on the images starbridge.run runs, since advisories
-  appear after a build. A high or critical vulnerability with a fixed version fails the run; the
+- **Vulnerability scans** (#1542). `scan.yml` runs Trivy on the server and web images that
+  starbridge.run and staging serve, as their `/healthz` names them, after every deploy run and
+  weekly, since advisories appear after a build. Not the deploy run's own commit, which can be
+  newer than the one it deployed (#1560). A high or critical vulnerability with a fixed version fails the run; the
   rest are listed in its summary, since an advisory without a fix gives nothing to do. Both images
   take Debian's updates at build time, on a layer the commit id keeps out of the build cache, and the web
   image drops npm, which it never runs. osv-scanner reads the lockfiles weekly and reports every
