@@ -52,7 +52,8 @@
   repository's `play-release` environment, open to main and `v*` tags (repository variables
   `PLAY_WIF_PROVIDER` and `PLAY_SERVICE_ACCOUNT`). Without them the job skips with a notice; a
   failed upload fails the run after the release is out. Run by hand on main, the job asks Play to
-  validate the edit and discards it.
+  validate the edit and discards it; when Play refuses only because main's versionCode is not above the
+  track's, the job reports that and passes (#1530).
 - **Play listing images without the console** (#1436). Play Console's "Send changes for review" can
   fail with an HTTP 400 and no reason. The `play-listing` workflow, run by hand from main
   (`gh workflow run play-listing.yml --ref main`), replaces the en-US icon and feature graphic with
