@@ -11,6 +11,13 @@ function newer(a: number[], b: number[]): boolean {
   return i !== -1 && (a[i] ?? 0) > (b[i] ?? 0);
 }
 
+/** Whether release version `a` ("0.1.6-rc.2", no "v") is newer than `b`; false when either is not a release's. */
+export function newerVersion(a: string, b: string): boolean {
+  const x = parts(`v${a}`);
+  const y = parts(`v${b}`);
+  return !!x && !!y && newer(x, y);
+}
+
 /** The release tags a GitHub releases Atom feed links to. */
 export function feedTags(atom: string): string[] {
   return [...atom.matchAll(/\/releases\/tag\/([^"<\s]+)/g)].map((m) =>

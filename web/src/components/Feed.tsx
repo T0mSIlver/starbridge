@@ -479,6 +479,28 @@ export function HistoryHead({
   );
 }
 
+/** History's last row while it lists the last 7 days: opens the older rows this browser kept. */
+export function OlderHead({
+  count,
+  comfy,
+  onShow,
+}: {
+  count: number;
+  comfy?: boolean;
+  onShow: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      className={`${comfy ? "t-small" : "t-meta"} ${s.historyHead} ${comfy ? s.comfy : ""}`}
+      onClick={onShow}
+    >
+      <span className={s.historyTitle}>Show older</span>
+      <span>{count}</span>
+    </button>
+  );
+}
+
 /** Snoozed's head (#571): collapsed by default, its state remembered on this device. */
 export function SnoozedHead({
   open,

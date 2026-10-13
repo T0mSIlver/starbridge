@@ -63,6 +63,23 @@ final class ApiTests: XCTestCase {
         XCTAssertEqual(Scripted.requests, 1)
     }
 
+    func testAPresenceBeats429HoldsNoOtherCall() async throws {
+        Scripted.replies = [(429, ["Retry-After": "60"])]
+        await XCTAssertThrowsAsync(try await api.presence(true)) { XCTAssertEqual(($0 as? ApiError)?.status, 429) }
+        XCTAssertLessThanOrEqual(Api.limitedUntil.withLock { $0 }.timeIntervalSinceNow, 0)
+        let me = try await api.me()
+        XCTAssertEqual(me.account, "a_1")
+        XCTAssertEqual(Scripted.requests, 2)
+    }
+
+    func testAPresenceBeats429LeavesTheHoldAnotherCalls429SetMeanwhile() async throws {
+        Api.limitedUntil.withLock { $0 = Date().addingTimeInterval(60) }
+        Scripted.replies = [(429, ["Retry-After": "60"])]
+        await XCTAssertThrowsAsync(try await api.presence(true)) { XCTAssertEqual(($0 as? ApiError)?.status, 429) }
+        XCTAssertGreaterThan(Api.limitedUntil.withLock { $0 }.timeIntervalSinceNow, 0)
+        XCTAssertEqual(Scripted.requests, 1)
+    }
+
     func testRetryAfterReadsSecondsOrADate() {
         XCTAssertEqual(Api.retryAfter("30"), 30)
         XCTAssertEqual(Api.retryAfter("Wed, 21 Oct 2015 07:28:00 GMT"), 0)

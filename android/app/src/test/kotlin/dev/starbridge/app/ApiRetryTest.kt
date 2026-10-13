@@ -99,4 +99,27 @@ class ApiRetryTest {
         assertEquals("too-many-waits", e.error)
         assertEquals(1, s.requestCount)
     }
+
+    @Test
+    fun `a presence beat's 429 holds no other call (#1372)`() = runBlocking {
+        val s = server()
+        s.enqueue(limited("60"))
+        s.enqueue(reply(200, nonce))
+        val e = assertThrows(ApiException::class.java) { runBlocking { api(s).presence(true) } }
+        assertEquals(429, e.status)
+        assertEquals(0L, limitedUntil)
+        assertEquals("n", api(s).challenge())
+        assertEquals(2, s.requestCount)
+    }
+
+    @Test
+    fun `a presence beat's 429 leaves the hold another call's 429 set meanwhile (#1372)`() = runBlocking {
+        val s = server()
+        limitedUntil = System.currentTimeMillis() + 60_000L
+        s.enqueue(limited("60"))
+        val e = assertThrows(ApiException::class.java) { runBlocking { api(s).presence(true) } }
+        assertEquals(429, e.status)
+        assertTrue(limitedUntil > System.currentTimeMillis())
+        assertEquals(1, s.requestCount)
+    }
 }

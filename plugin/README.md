@@ -10,8 +10,8 @@ their own instruction files: [Agent instructions](https://starbridge.run/docs/te
 says where.
 
 When Claude Code opens its `AskUserQuestion` picker, a `PermissionRequest` hook
-posts the question to your devices too: the first answer, in the picker or on
-a device, wins, and the other closes as answered elsewhere. The `PreToolUse`
+posts the question to your devices too: each question shows at the keyboard and
+on your devices at once, and the first answer wins. The `PreToolUse`
 hook on `AskUserQuestion` is kept for CLIs before that, which send the agent
 to `starbridge ask` instead.
 

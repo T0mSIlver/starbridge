@@ -5,8 +5,11 @@ import StarbridgeProtocol
 enum Sent: Equatable, Sendable {
     /** The server took it: this answer, or the same one sent before. */
     case answered(String)
-    /** Kept in the outbox until the server can be reached. */
-    case queued(String)
+    /**
+     * Kept in the outbox until the server takes it; `offline` when the request got no answer,
+     * rather than a 429 or 5xx (#1392).
+     */
+    case queued(String, offline: Bool)
     /** Another device answered first. */
     case elsewhere
     /** The server refused it, with why. */
@@ -77,17 +80,18 @@ extension Store {
 
     // --- Syncing --------------------------------------------------------------------
 
-    /** Reads everything new, then sends the answers waiting in the outbox. */
+    /** Reads the directory, sends the answers waiting in the outbox, then reads everything new. */
     func sync() async throws {
         guard phase == .ready else { return }
         try await syncDirectory()
         guard phase == .ready else { return }
+        // Before the reads: one failing, during a rate-limit hold say, must not keep an answer back (#1392).
+        if !saved.outbox.isEmpty { _ = try await flush() }
         try await syncDecisions()
         try await syncPrompts()
         try await syncQuotas()
         try await syncRuns()
         withheldWhy = withheld()
-        if !saved.outbox.isEmpty { _ = try await flush() }
         // A push that would have closed them may never have come: iOS holds or drops background pushes (#1184).
         await Notify.removeDelivered(about: closedItems)
     }
@@ -265,7 +269,8 @@ extension Store {
         var waits: [(String, Waiting)] = []
         var snoozes: [Snooze] = []
         while true {
-            let page = try await api().items("decision,settled,waiting,snooze", after: cursor)
+            // An answered question's images download when its detail shows them (#1382).
+            let page = try await api().items("decision,settled,waiting,snooze", after: cursor, openBlobs: true)
             // Held: the cursor stays, so these items are read again once the hold ends.
             if try await scan(page.items.map(\.item)) { return }
             let entries = entryJSON
@@ -316,6 +321,34 @@ extension Store {
         s.decisions = Array(byId.values.sorted { $0.body.createdAt < $1.body.createdAt }.suffix(500))
         persist(s)
         SavedImage.prune(keeping: s.decisions)
+    }
+
+    /**
+     * Fetches the images of a question listed without them (#1382), each checked against the hash
+     * its signed body holds, and keeps them as the sync keeps an open question's. Once per question
+     * while the app runs, unless the fetch fails: one whose images fail to open stays without them.
+     */
+    func loadImages(_ id: String) async {
+        guard let d = decision(id), d.imagesPending, imagesAsked.insert(id).inserted else { return }
+        guard let listed = try? await api().item(id) else {
+            // Offline or refused: the next show asks again.
+            imagesAsked.remove(id)
+            return
+        }
+        // The same question from the same machine: each blob opens against the refs in the body
+        // this iPhone kept, never ones the server sends now under that id (#1472).
+        guard listed.item.kind == .decision, let o = open(listed.item, entries: entryJSON),
+              let body = o.body as? Decision, body.id == id, o.from == d.from else { return }
+        // After any sync under way, which writes back the list it read and deletes the files it
+        // does not name: the files are written here, beside the list that names them.
+        _ = try? await serial {
+            guard let i = self.saved.decisions.firstIndex(where: { $0.id == id }), self.saved.decisions[i].imagesPending else { return }
+            let images = SavedImage.keep(listed.item, self.saved.decisions[i].body)
+            if images.isEmpty { return }
+            var s = self.saved
+            s.decisions[i].images = images
+            self.persist(s)
+        }
     }
 
     /** `d` as its machine's notice closed it, with the agent's reason for a withdrawal (#1008). */
@@ -520,8 +553,9 @@ extension Store {
                 // Signed and kept, or moot: the typed reply has done its work. One not sent stays to edit.
                 if case .failed = sent {} else { drafts[id] = nil }
                 switch sent {
-                case let .queued(answer):
-                    notice = "No connection. \(done ? "Done" : answer) will be sent when the iPhone is back online."
+                case let .queued(answer, offline):
+                    let what = done ? "Done" : answer
+                    notice = offline ? "No connection. \(what) will be sent when the iPhone is back online." : "\(what) isn't sent yet. Retrying."
                 case .elsewhere:
                     let d = decision(id)
                     if let by = d?.answeredBy, let theirs = d?.theirAnswer {
@@ -610,11 +644,12 @@ extension Store {
             if e.status == 426 {
                 _ = describe(e)
                 keep(q, landed: false)
-                return .queued(q.answer)
+                return .queued(q.answer, offline: false)
             }
             if e.status >= 500 || e.status == 429 {
                 keep(q, landed: ![502, 503, 429].contains(e.status))
-                return .queued(q.answer)
+                retryAnswers()
+                return .queued(q.answer, offline: false)
             }
             var s = saved
             s.outbox.removeAll { $0.decisionId == q.decisionId }
@@ -624,7 +659,8 @@ extension Store {
             // No route or no name: the request never left. Anything else may have reached the server.
             let neverLeft: Set<URLError.Code> = [.notConnectedToInternet, .cannotFindHost, .cannotConnectToHost, .dnsLookupFailed, .dataNotAllowed, .internationalRoamingOff]
             keep(q, landed: !neverLeft.contains(e.code))
-            return .queued(q.answer)
+            retryAnswers()
+            return .queued(q.answer, offline: true)
         }
         settle(q, answer: q.answer)
         return .answered(q.answer)
@@ -648,6 +684,53 @@ extension Store {
         persist(s)
     }
 
+    /**
+     * Sends the outbox again until it is empty, without waiting for a pull or the poll (#1392):
+     * after 5 s, doubling to 5 minutes, and never during a rate-limit hold, when a post fails at
+     * once. iOS suspends it behind the app; the background refresh asked for here
+     * ([AnswerRefresh]) sends what is left. A sign-in or an update ends it: the next sync sends.
+     */
+    func retryAnswers() {
+        AnswerRefresh.schedule()
+        guard answerRetry == nil else { return }
+        answerRetry = Task { [weak self] in
+            var pause: TimeInterval = 5
+            while true {
+                try? await Task.sleep(for: .seconds(pause))
+                await Self.waitOutHold()
+                guard let self, !Task.isCancelled, !saved.outbox.isEmpty, phase == .ready, tooOld == nil else { break }
+                guard let sent = try? await serial({ try await self.flush() }), !sent || !saved.outbox.isEmpty else { break }
+                pause = min(pause * 2, 300)
+            }
+            self?.answerRetry = nil
+        }
+    }
+
+    /** Returns once no rate-limit hold is on, or the task is cancelled; looks again each second. */
+    static func waitOutHold() async {
+        while !Task.isCancelled {
+            let left = Api.limitedUntil.withLock { $0 }.timeIntervalSinceNow
+            if left <= 0 { return }
+            try? await Task.sleep(for: .seconds(min(left, 1)))
+        }
+    }
+
+    /**
+     * A background refresh's turn (#1392): sends the outbox, and asks for another turn while some
+     * wait. It reads the directory first, as a sync does: a cold launch has none, and `flush`
+     * needs it to hold answers back while the server withholds entries.
+     */
+    func flushInBackground() async -> Bool {
+        await Self.waitOutHold()
+        let sent = (try? await serial {
+            guard self.phase == .ready else { return true }
+            try await self.syncDirectory()
+            return self.phase == .ready ? try await self.flush() : true
+        }) ?? false
+        if !saved.outbox.isEmpty && phase == .ready { AnswerRefresh.schedule() }
+        return sent
+    }
+
     /** Sends the queued answers, oldest first; false while some still wait. */
     func flush() async throws -> Bool {
         // Kept, and tried again once the hold ends.
@@ -655,7 +738,7 @@ extension Store {
         for q in saved.outbox {
             switch try await post(q) {
             case .queued: return false
-            case let .failed(why): notSent[q.decisionId] = why
+            case let .failed(why): await refused(q.decisionId, why: why)
             case .answered, .elsewhere: break
             }
         }

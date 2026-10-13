@@ -9,18 +9,35 @@ import {
   signCall,
   socketPath,
 } from "./agent.ts";
+import { Handover } from "./handover.ts";
 import { configDir, Poller } from "./poller.ts";
+import { Sent, sessionElsewhere } from "./sent.ts";
 import { Switch, wantsLoop } from "./switch.ts";
 
 /**
  * Starts the answer loop in each session a person keeps open (`wantsLoop`): through the machine's agent when it runs
  * (agent.ts), else through the CLI (poller.ts); switch.ts picks. A hot reload loads this module
- * afresh: the old loop dies with the old module, and `session.start` starts a new one.
+ * afresh: the old loop dies with the old module, and `session.start` starts a new one. While the
+ * main agent's turn runs, an answer it marked waiting goes out with its next tool result
+ * instead, and any other waits for the turn's end (handover.ts). An answer submitted as a prompt
+ * stays on record until its turn starts, so a process that exits first does not lose it (sent.ts).
  */
 export const register: Register = (on) => {
   let loop: Switch | undefined;
+  /** Prompts submitted whose turn has not started. */
+  let waiting = 0;
+  // `$.prompt.submit` resolves when the prompt's turn starts: mid-turn, once the running one ends.
+  const track = (submitted: Promise<unknown>) => {
+    waiting++;
+    const started = () => void waiting--;
+    submitted.then(started, started);
+    return submitted;
+  };
+  const handover = new Handover();
+  let sent: Sent | undefined;
 
   on("session.start", async ($, e, next) => {
+    handover.ended();
     const started = await next(e);
     if (!wantsLoop(e.isInteractive, await $.env.get("CLAUDE_CODE_ENTRYPOINT"))) return started;
     // The new loop takes over the lines the old one submitted and has not confirmed yet, so it
@@ -31,6 +48,7 @@ export const register: Register = (on) => {
       STARBRIDGE_AGENT_SOCKET: await $.env.get("STARBRIDGE_AGENT_SOCKET"),
       STARBRIDGE_CONFIG_DIR: await $.env.get("STARBRIDGE_CONFIG_DIR"),
       STARBRIDGE_NO_AGENT: await $.env.get("STARBRIDGE_NO_AGENT"),
+      CLAUDE_CONFIG_DIR: await $.env.get("CLAUDE_CONFIG_DIR"),
       XDG_CONFIG_HOME: await $.env.get("XDG_CONFIG_HOME"),
       XDG_RUNTIME_DIR: await $.env.get("XDG_RUNTIME_DIR"),
       HOME: await $.env.get("HOME"),
@@ -39,6 +57,19 @@ export const register: Register = (on) => {
     };
     const dir = configDir(env);
     const socket = socketPath(env);
+    // Kept across a hot reload, and new in each process (sent.ts); undefined on a build that
+    // lacks `$.state`.
+    const proc = { plugin: "starbridge-mod", key: "process" } as const;
+    let token: string | undefined;
+    try {
+      token = (await $.state.get(proc)).value;
+      if (!token) {
+        token = crypto.randomUUID();
+        await $.state.set(proc, token);
+      }
+    } catch {
+      token = undefined;
+    }
     const fetch = async (method: string, path: string, body?: unknown) => {
       const headers =
         body === undefined ? HEADERS : { ...HEADERS, "content-type": "application/json" };
@@ -66,10 +97,40 @@ export const register: Register = (on) => {
     };
     const log = (text: string) => $.ui.log(text, { to: "debug" });
     const status = (text: string | undefined) => $.ui.status(text);
-    const submit = (text: string) => void $.prompt.submit({ text });
     const sessionId = () => $.session.id();
     const now = () => $.clock.now();
     const sleep = (ms: number) => $.clock.sleep(ms);
+    const records = new Sent(
+      {
+        sessionId,
+        read: async (path) => ((await $.fs.exists(path)) ? $.fs.read(path) : undefined),
+        write: (path, text) => $.fs.write(path, text),
+        now,
+        submit: (text) => track($.prompt.submit({ text })),
+        elsewhere: async (session) => {
+          // Claude Code's own pid, as the parent of the shell it runs; Windows has no `sh`.
+          if (env.OS === "Windows_NT") return false;
+          const own = Number(
+            (await $.process.run(["sh", "-c", "echo $PPID"], { timeoutMs: 10_000 })).stdout.trim(),
+          );
+          if (!own) return false;
+          return sessionElsewhere(
+            session,
+            own,
+            { list: (path) => $.fs.list(path), read: (path) => $.fs.read(path) },
+            `${env.CLAUDE_CONFIG_DIR || `${env.HOME}/.claude`}/sessions`,
+            (pid) => pidRuns(pid, false, (argv) => $.process.run(argv, { timeoutMs: 10_000 })),
+          );
+        },
+        log,
+      },
+      dir,
+      token,
+    );
+    sent = records;
+    const submit = (text: string, waiting: boolean, ack: string) =>
+      handover.submit(text, ack, waiting, (line) => records.send(line, ack));
+    const starting = () => waiting > 0;
     loop = new Switch(
       {
         // The CLI honours STARBRIDGE_NO_AGENT too, so the CLI path then reaches the server itself.
@@ -77,7 +138,17 @@ export const register: Register = (on) => {
           !env.STARBRIDGE_NO_AGENT && (await fetch("GET", "/v1/status")).status < 300,
         agent: (unconfirmed) =>
           new AgentLoop(
-            { sessionId, cwd: () => $.session.cwd(), fetch, now, sleep, submit, status, log },
+            {
+              sessionId,
+              cwd: () => $.session.cwd(),
+              fetch,
+              now,
+              sleep,
+              submit,
+              starting,
+              status,
+              log,
+            },
             unconfirmed,
           ),
         poller: (unconfirmed) =>
@@ -91,6 +162,7 @@ export const register: Register = (on) => {
               now,
               sleep,
               submit,
+              starting,
               status,
               log,
             },
@@ -106,12 +178,42 @@ export const register: Register = (on) => {
       undefined,
       before?.unconfirmed,
     );
+    void records.recover().catch((e) => log(`starbridge: ${(e as Error).message}`));
     return started;
+  });
+
+  // A subagent's run raises no `turn.start`; its `turn.complete` and tool calls carry its `agentId`.
+  on("turn.start", async (_$, e, next) => {
+    handover.started();
+    await sent?.started(e.text).catch(() => undefined);
+    return next(e);
+  });
+
+  on("turn.complete", async (_$, e, next) => {
+    const r = await next(e);
+    if (e.agentId === undefined) {
+      handover.ended();
+      // After a `/resume`, or a submit that failed.
+      void sent?.recover().catch(() => undefined);
+    }
+    return r;
+  });
+
+  on("tool.call", async ($, e, next) => {
+    const r = await next(e);
+    if (e.agentId !== undefined || r.deny !== undefined) return r;
+    const lines = await handover.take((acks) => loop?.claim(acks) ?? Promise.resolve([]));
+    if (lines.length === 0) return r;
+    $.ui.log(`starbridge: handed ${lines.length} answer(s) with the ${e.tool} result`, {
+      to: "debug",
+    });
+    return { ...r, context: [...(r.context ?? []), ...lines] };
   });
 
   // After a /clear or a /resume the process goes on under another session id, with no
   // `session.start`, and the loop reads the id each step. Only the end of the process stops it.
   on("session.end", async (_$, e, next) => {
+    handover.ended();
     if (e.reason !== "clear" && e.reason !== "resume") {
       await loop?.end();
       loop = undefined;

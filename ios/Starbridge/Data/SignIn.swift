@@ -17,6 +17,17 @@ enum SignIn {
         URL(string: "\(server)/v1/auth/github?app=1&challenge=\(challenge(verifier))")
     }
 
+    /**
+     * The https page where a sign-in on `server` ends, for the browser sheet to catch from iOS
+     * 17.4, else nil. Only starbridge.run lists this app in its apple-app-site-association, so a
+     * self-hosted server's sign-in ends on starbridge://auth.
+     */
+    static func httpsCallback(server: String) -> (host: String, path: String)? {
+        guard let parts = URLComponents(string: server), parts.scheme == "https", parts.host == "starbridge.run",
+              parts.port == nil, parts.path.isEmpty || parts.path == "/" else { return nil }
+        return ("starbridge.run", "/v1/auth/github/callback/app")
+    }
+
     /** What ends a sign-in. */
     enum Redirect: Equatable {
         /** The code to trade, and the sign-in's state: its challenge. */
@@ -43,5 +54,15 @@ enum SignIn {
         if let code = query["code"] { return .code(code, state: state) }
         if query["error"] != nil { return .denied(state: state) }
         return nil
+    }
+
+    /**
+     * A nonce for Sign in with Apple. The request carries its SHA-256 in hex, which Apple puts in
+     * the identity token; the server checks the token against the nonce itself (PROTOCOL.md, "Auth").
+     */
+    static func newNonce() -> String { toB64(Sodium.randomBytes(32)) }
+
+    static func nonceHash(_ nonce: String) -> String {
+        SHA256.hash(data: Data(nonce.utf8)).map { String(format: "%02x", $0) }.joined()
     }
 }

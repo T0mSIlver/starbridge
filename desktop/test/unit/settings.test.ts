@@ -28,6 +28,11 @@ test("an app installed from a release candidate follows them until the owner say
   expect(read({ releaseCandidates: false }, "1.2.0-rc.3").releaseCandidates).toBe(false);
 });
 
+test("updates download by themselves until the owner turns that off", () => {
+  expect(read({}).autoDownload).toBe(true);
+  expect(read({ autoDownload: false }).autoDownload).toBe(false);
+});
+
 test("the window keeps only a #rrggbb background from the page", () => {
   expect(read({ background: "#F4F4F4" }).background).toBe("#f4f4f4");
   expect(read({ background: "red; x" }).background).toBeUndefined();

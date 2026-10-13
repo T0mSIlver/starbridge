@@ -1,6 +1,6 @@
 #!/bin/sh
 # Deploys a pushed git ref (default: origin/main) to starbridge-1: unpacks it in
-# /opt/starbridge, rebuilds the server image there and restarts the stack.
+# /opt/starbridge, pulls the server and web images deploy.yml built for it and restarts the stack.
 set -eu
 ref=${1:-origin/main}
 host=${STARBRIDGE_HOST:-deploy@starbridge.run}
@@ -14,6 +14,19 @@ if [ -z "$(git branch -r --contains "$rev")" ]; then
   exit 1
 fi
 
+# Only commits deploy.yml deployed have images (#1518): main's since then. The box may still
+# hold them (the newest 5), else ghcr.io must.
+held=$(ssh -i "$key" "$host" "sudo docker image inspect ghcr.io/t0msilver/starbridge-server:$rev ghcr.io/t0msilver/starbridge-web:$rev >/dev/null 2>&1 && echo yes" || true)
+[ "$held" = yes ] || for image in server web; do
+  token=$(curl -fsS "https://ghcr.io/token?scope=repository:t0msilver/starbridge-$image:pull" | jq -r .token)
+  curl -fsS -o /dev/null -H "Authorization: Bearer $token" \
+    -H 'Accept: application/vnd.oci.image.index.v1+json, application/vnd.docker.distribution.manifest.list.v2+json' \
+    "https://ghcr.io/v2/t0msilver/starbridge-$image/manifests/$rev" || {
+    echo "ghcr.io has no $image image for $rev" >&2
+    exit 1
+  }
+done
+
 git archive --format=tar "$rev" | ssh -i "$key" "$host" "sudo sh -euc '
   # Shares the lock with starbridge-deploy, the deploy from Actions.
   exec 9>/run/starbridge-deploy.lock
@@ -26,7 +39,6 @@ git archive --format=tar "$rev" | ssh -i "$key" "$host" "sudo sh -euc '
   REVISION=$rev /opt/starbridge/deploy/host/apply.sh
   # Only once it is up and healthy: starbridge-deploy refuses revisions older than this one.
   echo $rev > /opt/starbridge/REVISION
-  /opt/starbridge/deploy/host/demo.sh || { echo \"$rev is live; the demo server did not deploy\" >&2; exit 1; }
 '"
 # The first deploy waits for Caddy's certificate. The server names the commit it was built from.
 # Headers to a file, not a pipe: an unreachable server must fail the script.

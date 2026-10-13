@@ -31,6 +31,8 @@ export interface Via {
   viaCaddy?: boolean;
   /** Told of each 429 before the call waits Retry-After and tries again, as a patient user. */
   limited?: (path: string, seconds: number) => void;
+  /** No push subscriptions: for users a real server keeps after the fakes are gone (the fleet). */
+  noPush?: boolean;
 }
 
 export async function makeUser(n: number, via: Via): Promise<User> {
@@ -174,6 +176,7 @@ export async function makeUser(n: number, via: Via): Promise<User> {
 
   const machine = await pair("mac", "machine");
   const web = await pair("web", "device", await signIn(github, false));
+  if (via.noPush) return { n, account, phone: phoneSession, machine, web, directory: 3 };
   must(
     await call("POST", "/push/subscriptions", {
       token: phoneSession,

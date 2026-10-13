@@ -6,7 +6,11 @@
   its TLS handshake and its HTTP/1.1 request headers, since every open connection costs Caddy
   memory, the VPS's first limit (#587). Caddy compresses every
   response and the web app none: Next's gzip ran on its one thread and filled it near 18 landing
-  page visitors a second (#593). Nightly SQLite backups, kept 7 days (#586).
+  page visitors a second (#593). Nightly SQLite backups, kept 7 days (#586), and an offsite copy of each, kept 14 days
+  on another provider's VM (#1482): encrypted on the VPS to a key that is on neither server, and
+  pushed with a key that can add files but not read, replace or delete them, so neither a
+  stolen VPS nor a stolen VM loses or leaks the backups. 14 days keeps /privacy's promise that
+  deleted data leaves backups within 2 weeks.
 - **Per-address pages and sign-ups** (#787). Caddy takes 600 page requests a minute per address
   outside `/v1` and `/_next/static`: each is Next rendering, 10 to 17 ms of CPU, and a visit with
   its link prefetches makes a few dozen. The server makes at most 30 new accounts an hour per
@@ -29,6 +33,11 @@
   (Caddy's hop to the server's published port), so about 5000 such users fit; CPU stays under
   one core. A new visitor to the landing page costs about 50 ms of CPU across Next and Caddy
   once Caddy compresses (#593), so the VPS serves 15 to 20 a second.
+- **Load regressions** (#1548). The load test runs weekly for an hour and monthly for 24 hours
+  on the staging VM, from staging's images, capped to 1.5 cores and 3 GB so staging keeps the
+  rest, and its result is compared with a stored baseline; a regression is a card to the owner.
+  Capacity was measured by hand twice before launch, while slow leaks and long-poll losses
+  show only over hours, and a release changes the server weekly.
 - **Machines** (#658). A hosted account takes 3 machines, the computers that run agents, and any
   number of phones and browsers; self-hosting sets its own (`MAX_MACHINES`, default 5). Each
   machine holds a long-poll, about 200 KB on the VPS, and 3 covers a laptop, a desktop and a
@@ -63,6 +72,22 @@
   overrides sit in `limits.json` beside the database, which the server reads every minute, so they
   survive restarts and deploys until unset. Retention periods are left out, since shortening one
   deletes data at the next sweep. A file that does not parse keeps the limits as they were.
+- **Service targets** (#1544). `/healthz` answers in 99.5% of each month's 5-minute slots; 99%
+  of the outside check's round trips pass (a card, its Web Push, the answer read back); 99% of
+  answers reach their machine within 5 s, the p99. A slot counts as down only when every vantage
+  that checked in it saw `/healthz` fail, so one checker's network spends no budget. The owner gets
+  an alert when a target misses more than twice what it allows over a day, which spends 2 days of
+  the month's budget in one: fast enough to act on, slow enough that one failed round trip does not
+  page. The checks run from two VMs on another provider, sb-oracle and sb-staging, every 5 minutes,
+  and the round trip every 15. Infra alerts and their recoveries go to the owner's Discord, posted
+  from sb-oracle, not to Starbridge cards, which are for decisions (#1565).
+- **Status page** (#1544). `status.starbridge.run` is a static page on Cloudflare Pages, built on
+  sb-oracle from both vantages' checks, so it stays up when the VPS is down and serves any crowd
+  without a server of ours. It is uploaded when its content changes or once a day, a few uploads
+  a day. It shows each part's state, 30 days of daily bars and the month against its target, and
+  publishes booleans and numbers only, never a check's error text, which can hold addresses. A Safari run on a Mac each night loads the landing page, the
+  docs and the app's sign-in screen, and registers the service worker, since Safari breaks in ways
+  the Firefox and Chromium checks do not see.
 - **Privacy and terms** (`/privacy`, `/terms`). Each claim follows the code: stored columns in
   `server/src/db.ts`, retention in `server/src/limits.ts`, logs and backups in `deploy/`. A change
   to what is stored changes the page, and the Play data-safety form. Contact is
@@ -94,8 +119,11 @@
   `demo/` is its first device and machine. It approves every join by digits without comparing,
   so a reviewer walks the same screens as a real second phone. The server refuses `DEMO=1` beside
   a starbridge.run `PUBLIC_URL`, GitHub sign-in or relay mode. A restart is a fresh account.
-  Every prod deploy rebuilds it from the same commit (#1016): deployed by hand, it once fell behind
-  prod and rejected the apps' item kinds, so reviewers saw an empty inbox. It restarts only when its
-  image changed, so a reviewer's account survives deploys that leave its code alone. Caddy counts
+  It runs on sb-staging, as a project of its own beside staging (#1557), so prod carries one service
+  less and prod's releases never restart it. Each staging deploy whose round trip passed rebuilds it
+  from that commit of main, which serves every release from the minimum up: deployed by hand, it
+  once fell behind prod and rejected the apps' item kinds, so reviewers saw an empty inbox (#1016).
+  It restarts only when its image changed, so a reviewer's account survives deploys that leave its
+  code alone. Caddy counts
   its `/v1/*` per address as prod's, and it caps machines at its own and pending pairings at
   5,000, what its 64 MB tmpfs holds, since reviewers share one account and one container.

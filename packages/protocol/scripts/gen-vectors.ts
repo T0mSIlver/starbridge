@@ -36,6 +36,9 @@ import {
   memberKeysFromSeeds,
   migrateQuotaAlerts,
   noteHead,
+  PRESENCE_BEAT_MS,
+  PRESENCE_INPUT_MS,
+  PUSH_HOLD_CHOICES,
   pairingApproval,
   pairingKey,
   pairingLink,
@@ -55,6 +58,7 @@ import {
   revokeEntry,
   type SealedItem,
   type SignedEnvelope,
+  SNOOZE_MAX_MS,
   seal,
   sign,
   signatureMessage,
@@ -2944,6 +2948,80 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
     ],
   };
 
+  // Rules each client applies on its own (#1429): the web, Android and iOS tests check theirs
+  // against these, so a change to one fails the others' tests until they follow.
+  const rules = {
+    note: "Rules every client applies on its own (#1429). A time without a zone is the device's local time.",
+    presence: {
+      inputMs: PRESENCE_INPUT_MS,
+      beatMs: PRESENCE_BEAT_MS,
+      checkMs: 10_000,
+      holdChoices: [...PUSH_HOLD_CHOICES],
+    },
+    retryForMs: 20_000,
+    // The longest permission input a card's line holds, in UTF-16 units.
+    rowInputMax: 200,
+    snooze: {
+      minMs: 5 * 60_000,
+      maxMs: SNOOZE_MAX_MS,
+      // The menu's fixed times: 1 hour, and This evening (18:00) until 17:00.
+      presets: [
+        {
+          now: "2026-10-12T10:20",
+          presets: [
+            ["1 hour", "2026-10-12T11:20"],
+            ["This evening", "2026-10-12T18:00"],
+          ],
+        },
+        {
+          now: "2026-10-12T16:59",
+          presets: [
+            ["1 hour", "2026-10-12T17:59"],
+            ["This evening", "2026-10-12T18:00"],
+          ],
+        },
+        { now: "2026-10-12T17:00", presets: [["1 hour", "2026-10-12T18:00"]] },
+        { now: "2026-10-12T23:30", presets: [["1 hour", "2026-10-13T00:30"]] },
+      ],
+      // Whether a snooze may end at `until`: 5 minutes from now on, at most 7 days ahead.
+      allowed: [
+        { now: "2026-10-12T10:00", until: "2026-10-12T09:59", allowed: false },
+        { now: "2026-10-12T10:00", until: "2026-10-12T10:04", allowed: false },
+        { now: "2026-10-12T10:00", until: "2026-10-12T10:05", allowed: true },
+        { now: "2026-10-12T10:00", until: "2026-10-19T10:00", allowed: true },
+        { now: "2026-10-12T10:00", until: "2026-10-19T10:01", allowed: false },
+      ],
+      // The morning a swipe snoozes until: tomorrow at 9:00, or this morning before 5:00 (#692).
+      morning: [
+        { now: "2026-10-12T04:59", morning: "2026-10-12T09:00" },
+        { now: "2026-10-12T05:00", morning: "2026-10-13T09:00" },
+        { now: "2026-10-12T22:00", morning: "2026-10-13T09:00" },
+      ],
+    },
+    // A question's options, the agent's recommended one first (#191), compared by code points. A
+    // question with options always names one.
+    options: [
+      {
+        name: "recommended moves first",
+        options: ["Merge", "Wait", "Close"],
+        recommended: "Close",
+        ordered: ["Close", "Merge", "Wait"],
+      },
+      {
+        name: "recommended already first",
+        options: ["Merge", "Wait", "Close"],
+        recommended: "Merge",
+        ordered: ["Merge", "Wait", "Close"],
+      },
+      {
+        name: "composed and decomposed are two options",
+        options: ["\u00e9", "e\u0301"],
+        recommended: "e\u0301",
+        ordered: ["e\u0301", "\u00e9"],
+      },
+    ],
+  };
+
   return {
     "heads.json": heads,
     "images.json": images,
@@ -2957,6 +3035,7 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
     "links.json": linksFile,
     "quota-alerts.json": quotaAlertsFile,
     "schemas.json": schemas,
+    "rules.json": rules,
   };
 }
 

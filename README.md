@@ -38,8 +38,7 @@ lists what works in each harness.
 [starbridge.run/docs](https://starbridge.run/docs): getting started, the CLI, agent instructions,
 notifications, self-hosting and the [FAQ](https://starbridge.run/docs/faq).
 
-CI runs the CLI's tests on Linux and macOS, and its platform tests on Windows, on every change
-to the CLI. A release publishes nothing until its APK passes a smoke test on an Android emulator.
+CI runs the CLI's tests on Linux (x64 and arm64), macOS and Windows on every change to the CLI. A release publishes nothing until its APK passes a smoke test on an Android emulator.
 
 ## Contributing
 

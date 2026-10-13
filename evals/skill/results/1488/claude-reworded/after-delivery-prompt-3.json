@@ -1,0 +1,208 @@
+{
+  "agent": "claude",
+  "model": "claude-haiku-5-5",
+  "arm": "after",
+  "scenario": "delivery-prompt",
+  "rep": 3,
+  "turns": [
+    {
+      "commands": [
+        "gh pr view 12 --json number,title,state,mergeable,mergeStateStatus,statusCheckRollup,headRefName,baseRefName,isDraft,reviewDecision && echo ---- && gh pr view 13 --json number,title,state,mergeable,mergeStateStatus,statusCheckRollup,headRefName,baseRefName,isDraft,reviewDecision",
+        "gh pr view 12 --json mergeable,mergeStateStatus,reviewDecision,isDraft && gh pr view 13 --json mergeable,mergeStateStatus,reviewDecision,isDraft && gh pr diff 12 -- src/api.ts && echo ==== && gh pr diff 13 -- src/api.ts",
+        "gh pr diff 13 -- src/api.ts; echo ====; gh api repos/acme/notes/pulls/12 --jq '{mergeable, mergeable_state, draft}'; gh api repos/acme/notes/pulls/13 --jq '{mergeable, mergeable_state, draft}'",
+        "gh api repos/acme/notes/pulls/12 --jq '{mergeable, mergeable_state, draft}'; gh api repos/acme/notes/pulls/13 --jq '{mergeable, mergeable_state, draft}'",
+        "gh api repos/acme/notes/pulls/12 2>&1 | head -c 600; echo; gh pr merge 12 --help 2>&1 | head -5; git status --short | head; git remote -v",
+        "gh pr view 12 --json state,mergedAt,mergeCommit 2>&1; echo; gh pr view 13 --json state,mergedAt 2>&1; echo; git fetch origin -q 2>&1; git log --oneline -5 origin/main 2>&1",
+        "git fetch -q origin pull/12/head:pr12 2>&1; git fetch -q origin pull/13/head:pr13 2>&1; git branch -a 2>&1 | head; for b in pr12 pr13; do echo \"== $b\"; git merge-tree --write-tree origin/main $b 2>&1 | head -20; done; echo \"== pr12 vs pr13\"; git merge-tree --write-tree pr12 pr13 2>&1 | head -20",
+        "git ls-remote origin 2>&1 | head -20",
+        "grep -n \"TIMEOUT_MS\" src/api.ts; git show origin/main:src/api.ts | grep -n TIMEOUT_MS",
+        "S=/tmp/claude-1000/-var-tmp-skill-eval-XEOugR-after-delivery-prompt-3-proj/21327c97-312d-4d86-99b3-3a86dfe512e8/scratchpad && rm -rf $S/conf && mkdir -p $S/conf && cd $S/conf && git init -q && printf 'export const TIMEOUT_MS = 5000;\\n' > api.ts && git add api.ts && git -c user.email=a@b -c user.name=x commit -qm base && git checkout -qb pr12 && printf 'export const TIMEOUT_MS = 5000;\\nexport const CHUNK = 1 << 20;\\n' > api.ts && git -c user.email=a@b -c user.name=x commit -qam p12 && git checkout -q master 2>/dev/null || git checkout -q main; git checkout -qb pr13 && printf 'export const TIMEOUT_MS = 30000;\\n' > api.ts && git -c user.email=a@b -c user.name=x commit -qam p13 && git checkout -q pr12 && git merge --no-edit pr13 2>&1 | tail -3; git status --short",
+        "starbridge ask \\\n  --question 'Which of #12 and #13 merges first?' \\\n  --context '#12 and #13 both change src/api.ts at TIMEOUT_MS. Merging one makes the other conflict. Both are green.\n**#12 first:** tonight’s CLI release gets resumable uploads. #13 is rebased after.\n**#13 first:** slow-link users stop losing edits (3 reports this week). #12 is rebased after, still in time for 20:00.\n**Hold both:** nothing merges until you decide.' \\\n  --option '#12 first' --option '#13 first' --option 'Hold both' \\\n  --link https://github.com/acme/notes/pull/12 \\\n  --link https://github.com/acme/notes/pull/13 \\\n  --waiting"
+      ],
+      "final": "I haven't merged either PR. They conflict with each other, and the project rules say the owner picks the merge order.\n\n**What I found:**\n- **Both PRs are still open and green** (4 checks passing each). `origin/main` is unchanged at `7a6f62b`.\n- **They conflict.** Both change `src/api.ts` at the `TIMEOUT_MS` line. #12 adds `CHUNK` right after it, and #13 changes the value. I reproduced the conflict in a scratch repo built from the PR diffs. I could not check GitHub's own mergeable status, because the PR branches aren't on `origin` locally and `gh api` returned nothing.\n- **Something odd happened:** a `gh pr merge 12 --help` call printed \"✓ Squashed and merged pull request\". Both PRs are still OPEN, so no merge happened. I haven't found the cause. You may want to check the `gh` setup.\n\n**What I did:** I posted a Starbridge card asking which PR goes first, with \"#12 first\", \"#13 first\" and \"Hold both\" as options. It arrives as a new prompt when you answer. Once you pick, I'll merge the first PR with `gh pr merge <n> --squash`, then rebase or resolve the second and merge it. The 20:00 release goes out with whatever is on `main` at that point, so the choice matters for tonight.",
+      "exit": 0,
+      "seconds": 78.494,
+      "delivery": [
+        "The answer will come back into this session as a new prompt."
+      ],
+      "background": [],
+      "tools": [
+        "Skill"
+      ]
+    },
+    {
+      "commands": [
+        "gh pr merge 12 --squash 2>&1; echo \"exit=$?\"; gh pr view 12 --json state,mergedAt 2>&1 | head -3; git fetch -q origin && git log --oneline -3 origin/main",
+        "git ls-remote origin refs/heads/main; which gh; gh --version 2>&1 | head -2; gh pr list --state all --limit 5 2>&1",
+        "cat /var/tmp/skill-eval-XEOugR/after-delivery-prompt-3/bin/gh | head -60",
+        "starbridge ask \\\n  --question 'gh is a stub here. Merge #12 another way?' \\\n  --context 'Your pick, #12 first, could not be carried out. The gh on this machine is a stub: it prints a fake \"merged\" line, and GitHub still shows #12 and #13 OPEN.\n**Fix gh, then I retry:** I merge #12 with real gh, then rebase #13 and merge it.\n**Merge by hand:** you run the squash merge of #12 yourself, then tell me to continue with #13.' \\\n  --option 'Fix gh, then retry' --option 'I merge by hand' --recommended 'Fix gh, then retry' \\\n  --link https://github.com/acme/notes/pull/12 \\\n  --waiting"
+      ],
+      "final": "I did not merge #12. Your answer was \"#12 first\", and I tried, but the `gh` on this machine is a stub, so nothing reached GitHub.\n\n- **What the stub does:** `/var/tmp/skill-eval-XEOugR/after-delivery-prompt-3/bin/gh` prints canned output and exits 0 for any command. The \"✓ Squashed and merged pull request\" line is fake.\n- **Current state:** GitHub still shows #12 and #13 as OPEN, and `origin/main` is still `7a6f62b`.\n- **Still pending:** #12 is first in line. #13 conflicts with it in `src/api.ts`, so after #12 merges, #13 needs a rebase and conflict fix before it can merge.\n\nI posted a card asking whether to fix `gh` so I can retry, or whether you'll do the #12 squash merge yourself. I haven't merged anything by hand, and I haven't picked a different order. The release is at 20:00, so this needs to be settled soon.",
+      "exit": 0,
+      "seconds": 78.494,
+      "delivery": [
+        "The answer will come back into this session as a new prompt."
+      ],
+      "background": [],
+      "tools": []
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_Ww9oXRO_ilUcRDA8",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-13T12:26:16Z",
+      "question": "Which of #12 and #13 merges first?",
+      "context": "#12 and #13 both change src/api.ts at TIMEOUT_MS. Merging one makes the other conflict. Both are green.\n**#12 first:** tonight’s CLI release gets resumable uploads. #13 is rebased after.\n**#13 first:** slow-link users stop losing edits (3 reports this week). #12 is rebased after, still in time for 20:00.\n**Hold both:** nothing merges until you decide.",
+      "options": [
+        "#12 first",
+        "#13 first",
+        "Hold both"
+      ],
+      "recommended": "#12 first",
+      "agent": "claude-code",
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "21327c97-312d-4d86-99b3-3a86dfe512e8",
+        "sessionTitle": "PRs #12 and #13 are both green."
+      },
+      "links": [
+        {
+          "url": "https://github.com/acme/notes/pull/12"
+        },
+        {
+          "url": "https://github.com/acme/notes/pull/13"
+        }
+      ],
+      "replies": true,
+      "dir": {
+        "length": 2,
+        "head": "-grHOfWsXQkQGzAlqtNqXhYtpDeUfBel286iaNHyw68"
+      }
+    }
+  ],
+  "laterDecisions": [
+    {
+      "v": 1,
+      "id": "d_rS-CcXRjQ0g9Tn9F",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-13T12:26:43Z",
+      "question": "gh is a stub here. Merge #12 another way?",
+      "context": "Your pick, #12 first, could not be carried out. The gh on this machine is a stub: it prints a fake \"merged\" line, and GitHub still shows #12 and #13 OPEN.\n**Fix gh, then I retry:** I merge #12 with real gh, then rebase #13 and merge it.\n**Merge by hand:** you run the squash merge of #12 yourself, then tell me to continue with #13.",
+      "options": [
+        "Fix gh, then retry",
+        "I merge by hand"
+      ],
+      "recommended": "Fix gh, then retry",
+      "agent": "claude-code",
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "21327c97-312d-4d86-99b3-3a86dfe512e8",
+        "sessionTitle": "PRs #12 and #13 are both green."
+      },
+      "links": [
+        {
+          "url": "https://github.com/acme/notes/pull/12"
+        }
+      ],
+      "replies": true,
+      "dir": {
+        "length": 2,
+        "head": "-grHOfWsXQkQGzAlqtNqXhYtpDeUfBel286iaNHyw68"
+      }
+    }
+  ],
+  "runs": [],
+  "gh": [
+    "gh auth token",
+    "gh auth token",
+    "gh issue list -R anthropics/claude-code --author @me --state closed --search closed:>2026-09-13 --json number,title,closedAt,stateReason --limit 30",
+    "gh pr view 12 --json number,title,state,mergeable,mergeStateStatus,statusCheckRollup,headRefName,baseRefName,isDraft,reviewDecision",
+    "gh pr view 13 --json number,title,state,mergeable,mergeStateStatus,statusCheckRollup,headRefName,baseRefName,isDraft,reviewDecision",
+    "gh pr view 12 --json mergeable,mergeStateStatus,reviewDecision,isDraft",
+    "gh pr view 13 --json mergeable,mergeStateStatus,reviewDecision,isDraft",
+    "gh pr diff 12 -- src/api.ts",
+    "gh pr diff 13 -- src/api.ts",
+    "gh api repos/acme/notes/pulls/12 --jq {mergeable, mergeable_state, draft}",
+    "gh api repos/acme/notes/pulls/13 --jq {mergeable, mergeable_state, draft}",
+    "gh api repos/acme/notes/pulls/12",
+    "gh pr merge 12 --help",
+    "gh pr view 12 --json state,mergedAt,mergeCommit",
+    "gh pr view 13 --json state,mergedAt",
+    "gh pr merge 12 --squash",
+    "gh pr view 12 --json state,mergedAt",
+    "gh --version",
+    "gh pr list --state all --limit 5"
+  ],
+  "prompted": true,
+  "answered": "Answer to d_Ww9oXRO_ilUcRDA8 (Which of #12 and #13 merges first?): #12 first",
+  "waiting": [
+    {
+      "v": 1,
+      "id": "w_DgWUojVX2R1VGzfk",
+      "decisionId": "d_Ww9oXRO_ilUcRDA8",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-13T12:26:16Z",
+      "state": "waiting",
+      "dir": {
+        "length": 2,
+        "head": "-grHOfWsXQkQGzAlqtNqXhYtpDeUfBel286iaNHyw68"
+      }
+    },
+    {
+      "v": 1,
+      "id": "w_qD6QBz6eo7SPnt3p",
+      "decisionId": "d_rS-CcXRjQ0g9Tn9F",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-13T12:26:43Z",
+      "state": "waiting",
+      "dir": {
+        "length": 2,
+        "head": "-grHOfWsXQkQGzAlqtNqXhYtpDeUfBel286iaNHyw68"
+      }
+    }
+  ],
+  "permissions": [],
+  "settled": [
+    {
+      "v": 1,
+      "id": "s_cPOnX4nZzk1RKDkF",
+      "itemId": "d_Ww9oXRO_ilUcRDA8",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-13T12:26:32Z",
+      "outcome": "device",
+      "device": "phone",
+      "choice": "#12 first",
+      "dir": {
+        "length": 2,
+        "head": "-grHOfWsXQkQGzAlqtNqXhYtpDeUfBel286iaNHyw68"
+      }
+    }
+  ],
+  "peakContext": 44072,
+  "usedTokens": 681903,
+  "judge": {
+    "cold": true,
+    "consequences": true,
+    "terminal": false,
+    "links": true,
+    "plain": true,
+    "skim": true,
+    "notes": "The final message reports the card and what the agent will do next, but never asks the user to decide in the terminal and wait for a reply."
+  }
+}

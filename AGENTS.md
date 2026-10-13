@@ -41,7 +41,7 @@ command and its local agent), `plugin` and
 - Keep a PR to its issue. A `packages/protocol` change that another change
   needs goes in its own small PR first.
 - Fill the PR's "Release notes" section: one `Product: line` per product a user sees change
-  (Android, Web, Desktop, CLI, Server, Docs), or `None`. The release groups them by product.
+  (Android, iOS, Web, Desktop, CLI, Server, Docs), or `None`. The release groups them by product.
 - Merge `main` into your branch only when it conflicts or you need a fix from `main`. Every
   push reruns the whole CI, and a PR merges without being up to date.
 - Before a PR is ready, run the checks in
@@ -49,11 +49,16 @@ command and its local agent), `plugin` and
 - A Settings row you add or rename follows DESIGN.md's rule on Settings
   copy: a title that stands alone, a subtitle only when it must.
 - Docs (`README.md`, `docs/`, `cli/README.md`, `server/README.md`) follow [docs/AGENTS.md](docs/AGENTS.md).
+- A change to how one client behaves or what it says searches the other clients (web, Android,
+  iOS, desktop) for the same rule or string. Fix them in the same PR when the fix is small;
+  otherwise open an issue for each. Fixes that reached one client and not the others came back
+  as bugs days later (#1372).
 - When a change makes or changes a product decision, update its file under
   `spec/`: the rule, why in a clause, and the issue. Replace what it
   supersedes. A feature added to or changed in one client updates its row in
   `spec/parity.md`, and the PR opens an issue for each client the row says
-  should follow.
+  should follow. A PR that changes a client fills its `Parity:` line, which CI
+  checks.
 
 ## CI runners
 

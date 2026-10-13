@@ -1,0 +1,99 @@
+{
+  "agent": "opencode",
+  "model": "zai-coding-plan/glm-5.3-flash",
+  "arm": "after",
+  "scenario": "later-question",
+  "rep": 1,
+  "turns": [
+    {
+      "commands": [
+        "node scripts/lint.js",
+        "node scripts/lint.js",
+        "git log --oneline -20 -- RELEASE.md; git log --all --oneline | head -20",
+        "starbridge ask \\\n  --question 'What should next week’s release be called?' \\\n  --context 'RELEASE.md needs the name before Monday; no rush. The release ships resumable uploads and faster sync on slow links. Pick an option or type your own name.\n**Steady Hand:** nods to uploads surviving bad connections.\n**Carry On:** resumes where it left off.\n**Slow Lane:** plain, about the slow-link sync win.' \\\n  --option 'Steady Hand' --option 'Carry On' --option 'Slow Lane' --recommended 'Steady Hand' \\\n  --link file://RELEASE.md 2>&1 || starbridge ask \\\n  --question 'What should next week’s release be called?' \\\n  --context 'RELEASE.md needs the name before Monday; no rush. The release ships resumable uploads and faster sync on slow links. Pick an option or type your own name.\n**Steady Hand:** nods to uploads surviving bad connections.\n**Carry On:** resumes where it left off.\n**Slow Lane:** plain, about the slow-link sync win.' \\\n  --option 'Steady Hand' --option 'Carry On' --option 'Slow Lane' --recommended 'Steady Hand'",
+        "starbridge wait d_3xPA5YuiOq4LtDXB --timeout 5m --no-mark"
+      ],
+      "final": "Done:\n\n- Lint fixed: `var` → `const` in src/upload.js:2-3; `node scripts/lint.js` is now clean.\n- Asked via Starbridge card (d_3xPA5YuiOq4LtDXB); you picked **Steady Hand**, now written into RELEASE.md.",
+      "session": "ses_ecaf8ca92ffeXUBIJ7vNrsGv3D",
+      "tokens": 19667,
+      "exit": 0,
+      "seconds": 173.018,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_3xPA5YuiOq4LtDXB --timeout 5m` (again on exit 2)."
+      ]
+    },
+    {
+      "commands": [],
+      "final": "Done:\n\n- Lint fixed: `var` → `const` in src/upload.js:2-3; `node scripts/lint.js` is now clean.\n- Asked via Starbridge card (d_3xPA5YuiOq4LtDXB); you picked **Steady Hand**, now written into RELEASE.md.",
+      "session": "ses_ecaf8ca92ffeXUBIJ7vNrsGv3D",
+      "tokens": 19667,
+      "exit": 0,
+      "seconds": 173.018,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_3xPA5YuiOq4LtDXB --timeout 5m` (again on exit 2)."
+      ]
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_3xPA5YuiOq4LtDXB",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-13T11:31:09Z",
+      "question": "What should next week’s release be called?",
+      "context": "RELEASE.md needs the name before Monday; no rush. The release ships resumable uploads and faster sync on slow links. Pick an option or type your own name.\n**Steady Hand:** nods to uploads surviving bad connections.\n**Carry On:** resumes where it left off.\n**Slow Lane:** plain, about the slow-link sync win.",
+      "options": [
+        "Steady Hand",
+        "Carry On",
+        "Slow Lane"
+      ],
+      "recommended": "Steady Hand",
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": ""
+      },
+      "replies": true,
+      "dir": {
+        "length": 2,
+        "head": "OzcIYBX3vSVM2S52DD_ErS9eLpxMsgm8LXdc0pCp1EY"
+      }
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [],
+  "answered": "Answer to d_3xPA5YuiOq4LtDXB (What should next week’s release be called?): Steady Hand",
+  "waiting": [],
+  "permissions": [],
+  "settled": [
+    {
+      "v": 1,
+      "id": "s_j1Ju4f2GweJpaQCg",
+      "itemId": "d_3xPA5YuiOq4LtDXB",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-13T11:33:10Z",
+      "outcome": "device",
+      "device": "phone",
+      "choice": "Steady Hand",
+      "dir": {
+        "length": 2,
+        "head": "OzcIYBX3vSVM2S52DD_ErS9eLpxMsgm8LXdc0pCp1EY"
+      }
+    }
+  ],
+  "judge": {
+    "cold": false,
+    "consequences": false,
+    "terminal": false,
+    "links": null,
+    "plain": false,
+    "skim": false,
+    "notes": "The card never says what each option changes, and the 'Steady Hand' recommendation plus the card's 'pick an option or type your own name' framing make it unclear the card is a real decision; the agent also answered the question on the user's behalf in the terminal rather than leaving the card as the single point of decision, and its final message reports a choice instead of waiting for a terminal reply."
+  }
+}

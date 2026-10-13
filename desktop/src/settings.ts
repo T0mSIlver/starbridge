@@ -25,6 +25,8 @@ export interface Settings {
   notificationsAsked: boolean;
   /** Whether updates include release candidates, not only finals (#1071). */
   releaseCandidates: boolean;
+  /** Whether a release found downloads at once (#1398). */
+  autoDownload: boolean;
   /** The page's last background colour, which the window shows until the page paints. */
   background?: string;
 }
@@ -58,6 +60,7 @@ export function readSettings(file: string, version = ""): Settings {
       typeof saved.releaseCandidates === "boolean"
         ? saved.releaseCandidates
         : version.includes("-rc."),
+    autoDownload: typeof saved.autoDownload === "boolean" ? saved.autoDownload : true,
     background: parseBackground(saved.background) ?? undefined,
   };
 }

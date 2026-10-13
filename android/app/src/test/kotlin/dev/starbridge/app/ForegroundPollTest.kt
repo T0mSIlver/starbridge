@@ -72,8 +72,8 @@ class ForegroundPollTest {
 
     private fun json(body: JsonElement) = MockResponse(200, okhttp3.Headers.headersOf("content-type", "application/json"), body.toString())
 
-    @Test
-    fun theAppInFrontReadsTheItemsUntilAPushArrives() {
+    /** A paired phone, a machine whose questions the server lists, and the store. */
+    private inner class World {
         val account = "acct"
         val at = "2026-10-06T12:00:00Z"
         val signKeys = sodium.signKeyPair()
@@ -82,7 +82,9 @@ class ForegroundPollTest {
         val machineSign = sodium.signKeyPair()
         val machine = Member("m_box", "machine", "box", toB64(sodium.boxKeyPair().public), toB64(machineSign.public))
         val entries = mutableListOf<JsonElement>(envelopeJson(directories.genesisEntry(account, phone, signKeys.secret, sodium.signKeyPair(), at)))
-        entries += envelopeJson(directories.addEntry(directories.verify(entries, account, null), "phone", signKeys.secret, machine, at))
+        init {
+            entries += envelopeJson(directories.addEntry(directories.verify(entries, account, null), "phone", signKeys.secret, machine, at))
+        }
         val dir = directories.verify(entries, account, null)
 
         fun decision(id: String) = envelopes.seal("decision", buildJsonObject {
@@ -101,39 +103,57 @@ class ForegroundPollTest {
         }
         val empty = buildJsonObject { put("items", buildJsonArray {}); put("cursor", "") }
         val reads = AtomicInteger()
+        /** How long the server takes to list the directory, which a sync reads under the lock. */
+        @Volatile var directoryMs = 0L
+        val notified = java.util.Collections.synchronizedList(mutableListOf<String>())
+        val store: ServerStore
 
-        http.dispatcher = object : Dispatcher() {
-            override fun dispatch(request: RecordedRequest): MockResponse = when (request.url.encodedPath) {
-                "/v1/directory" -> json(buildJsonObject { put("entries", buildJsonArray {}) })
-                "/v1/items" -> if (request.url.queryParameter("kind")!!.startsWith("decision")) {
-                    reads.incrementAndGet()
-                    // Every item from the start: the store skips the ones it has.
-                    json(page())
-                } else json(empty)
-                "/v1/quota" -> json(empty)
-                else -> MockResponse(404, okhttp3.Headers.headersOf(), "")
+        init {
+            http.dispatcher = object : Dispatcher() {
+                override fun dispatch(request: RecordedRequest): MockResponse = when (request.url.encodedPath) {
+                    "/v1/directory" -> {
+                        Thread.sleep(directoryMs)
+                        json(buildJsonObject { put("entries", buildJsonArray {}) })
+                    }
+                    "/v1/items" -> if (request.url.queryParameter("kind")!!.startsWith("decision")) {
+                        reads.incrementAndGet()
+                        // Every item from the start: the store skips the ones it has.
+                        json(page())
+                    } else json(empty)
+                    "/v1/quota" -> json(empty)
+                    else -> MockResponse(404, okhttp3.Headers.headersOf(), "")
+                }
             }
-        }
-        http.start()
+            http.start()
 
-        val identity = object : Vault {
-            override fun wrap(plain: ByteArray) = plain
-            override fun unwrap(wrapped: ByteArray) = wrapped
+            val identity = object : Vault {
+                override fun wrap(plain: ByteArray) = plain
+                override fun unwrap(wrapped: ByteArray) = wrapped
+            }
+            val disk = Disk(tmp.newFolder(), identity)
+            val server = http.url("/").toString().trimEnd('/')
+            disk.save(Saved(server, account = account, accountExists = true, me = phone, pin = Pin(dir.length, dir.head), entries = entries.toList()))
+            disk.save(Secrets(session = "s", boxPk = toB64(boxKeys.public), boxSk = toB64(boxKeys.secret), signPk = toB64(signKeys.public), signSk = toB64(signKeys.secret)))
+            val alerts = object : Alerts {
+                override fun decision(decision: Decision, silent: Boolean) { notified += decision.id }
+                override fun cancel(id: String) {}
+                override fun join(id: String, name: String) {}
+                override fun prompt(prompt: Prompt) {}
+                override fun cancelPrompt(prompt: Prompt) {}
+                override fun run(run: Run) {}
+            }
+            store = ServerStore(disk, OkHttpClient(), sodium, envelopes, directories, Pairings(sodium), Joins(sodium), alerts, "Phone", server, false, scope)
+            store.pollMs = 50
         }
-        val disk = Disk(tmp.newFolder(), identity)
-        val server = http.url("/").toString().trimEnd('/')
-        disk.save(Saved(server, account = account, accountExists = true, me = phone, pin = Pin(dir.length, dir.head), entries = entries.toList()))
-        disk.save(Secrets(session = "s", boxPk = toB64(boxKeys.public), boxSk = toB64(boxKeys.secret), signPk = toB64(signKeys.public), signSk = toB64(signKeys.secret)))
-        val alerts = object : Alerts {
-            override fun decision(decision: Decision, silent: Boolean) {}
-            override fun cancel(id: String) {}
-            override fun join(id: String, name: String) {}
-            override fun prompt(prompt: Prompt) {}
-            override fun cancelPrompt(prompt: Prompt) {}
-            override fun run(run: Run) {}
-        }
-        val store = ServerStore(disk, OkHttpClient(), sodium, envelopes, directories, Pairings(sodium), Joins(sodium), alerts, "Phone", server, false, scope)
-        store.pollMs = 50
+    }
+
+    @Test
+    fun theAppInFrontReadsTheItemsUntilAPushArrives() {
+        val w = World()
+        val store = w.store
+        val listed = w.listed
+        val reads = w.reads
+        fun decision(id: String) = w.decision(id)
 
         // In front, with no push: a question posted later shows without a pull.
         store.foreground(true)
@@ -159,6 +179,27 @@ class ForegroundPollTest {
         val pushed = reads.get()
         Thread.sleep(300)
         assertEquals(pushed, reads.get())
+    }
+
+    @Test
+    fun aPushThatWaitsPastItsTimeForTheLockIsStillNotified() {
+        val w = World()
+        w.store.pushWaitMs = 100
+        // A sync holds the lock past the push's time, as one retrying on a slow network does.
+        w.directoryMs = 1_000
+        w.store.refresh()
+        Thread.sleep(100)
+        val item = w.decision("d_late")
+        val payload = buildJsonObject {
+            put("v", 1); put("kind", "decision"); put("id", item.id); put("from", w.machine.id)
+            put("box", item.boxes.single().box)
+        }
+        val started = System.currentTimeMillis()
+        runBlocking { w.store.onPush(payload.toString()) }
+        // The push service's thread is let go on time, and the push is handled once the lock frees.
+        check(System.currentTimeMillis() - started < 800) { "onPush kept the thread" }
+        assertEquals(emptyList<String>(), w.notified.toList())
+        until { w.notified.toList() == listOf("d_late") }
     }
 
     private fun until(pred: () -> Boolean) {

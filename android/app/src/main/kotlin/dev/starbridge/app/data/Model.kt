@@ -23,8 +23,13 @@ data class Source(
 
 data class SessionLink(val kind: String, val url: String)
 
-/** An image the agent attached: a PNG or JPEG, base64url in [data], [width] by [height] pixels. */
-data class Image(val data: String, val width: Int, val height: Int, val alt: String? = null)
+/**
+ * An image the agent attached: a PNG or JPEG, [width] by [height] pixels, base64url in [data], or
+ * kept in [file] (#1471), read when it is decoded. Neither: it is still downloading (#1382).
+ */
+data class Image(val data: String, val width: Int, val height: Int, val alt: String? = null, val file: String? = null) {
+    val pending: Boolean get() = data.isEmpty() && file == null
+}
 
 /** A page the agent attached, such as a Claude artifact. */
 data class Link(val url: String, val title: String? = null)
@@ -256,7 +261,11 @@ sealed interface Approval {
     data class Approving(val found: Found) : Approval
     /** This phone shows a QR code (a pairing link) and waits for a new phone to scan it. */
     data class Showing(val code: String, val link: String) : Approval
-    data class Done(val name: String) : Approval
+    /**
+     * [check]: a machine's check code, when it paired by a typed code or link and its terminal
+     * asks the owner to compare it (#1377); a scanned QR code needs none.
+     */
+    data class Done(val name: String, val check: String? = null) : Approval
     data class Failed(val message: String) : Approval
 }
 

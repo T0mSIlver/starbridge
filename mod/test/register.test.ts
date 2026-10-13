@@ -43,3 +43,145 @@ test("on a port file, the mod reaches the agent at the port the file names (#128
   while (fetched.length === 0 && Date.now() < by) await Bun.sleep(20);
   expect(fetched[0]).toBe("http://127.0.0.1:47213/v1/status");
 });
+
+test("mid-turn, the main agent's next tool result carries an answer marked waiting, and the turn's end submits nothing (#1484)", async () => {
+  const { register } = (await import(REGISTER)) as {
+    register: (on: (event: string, h: Handler) => void) => void;
+  };
+  const handlers = new Map<string, Handler>();
+  register((event, h) => handlers.set(event, h));
+  const line = "Answer to d_1 (Merge #12 now?): No";
+  let acked = false;
+  let turn = false;
+  const submitted: string[] = [];
+  const env: Record<string, string> = { STARBRIDGE_AGENT_SOCKET: "/sb/agent.sock", HOME: "/sb" };
+  const $ = {
+    env: { get: async (name: string) => env[name] },
+    fs: { read: async () => "", write: async () => {}, stat: async () => undefined },
+    process: { run: async () => ({ exitCode: 0, stdout: "", stderr: "" }) },
+    http: {
+      fetch: async (url: string) => {
+        if (url.endsWith("/ack")) acked = true;
+        const events =
+          url.includes("/events") && turn && !acked
+            ? [{ type: "answer", ack: "k1", line, waiting: true }]
+            : [];
+        return { status: 200, headers: {}, text: JSON.stringify({ events }) };
+      },
+    },
+    ui: { log: () => {}, status: () => {} },
+    clock: { now: () => Date.now(), sleep: (ms: number) => Bun.sleep(Math.min(ms, 5)) },
+    prompt: {
+      submit: async ({ text }: { text: string }) => {
+        submitted.push(text);
+      },
+    },
+    session: { id: async () => "s1", cwd: async () => "/work" },
+  };
+  const call = (e: object, result: object) =>
+    handlers.get("tool.call")?.($, { tool: "Bash", ...e }, async () => result) as Promise<{
+      context?: string[];
+    }>;
+  await handlers.get("session.start")?.($, { isInteractive: true }, async () => undefined);
+  await handlers.get("turn.start")?.($, { text: "go", turnId: "t1" }, async () => undefined);
+  turn = true;
+  await Bun.sleep(100);
+  expect(submitted).toEqual([]);
+  // A subagent's call and a refused call carry nothing; the main agent's next result does.
+  expect((await call({ agentId: "a1" }, { result: "ok" })).context).toBeUndefined();
+  expect((await call({}, { deny: "no" })).context).toBeUndefined();
+  expect((await call({}, { result: "ok" })).context).toEqual([line]);
+  expect((await call({}, { result: "ok" })).context).toBeUndefined();
+  const by = Date.now() + 5000;
+  while (!acked && Date.now() < by) await Bun.sleep(20);
+  expect(acked).toBe(true);
+  await handlers.get("turn.complete")?.($, { turnId: "t1" }, async () => undefined);
+  expect(submitted).toEqual([]);
+  await handlers.get("session.end")?.($, { reason: "other" }, async () => undefined);
+});
+
+test("an answer queued behind a typed prompt when the process exits comes back once on resume, and not after a hot reload (#1517)", async () => {
+  const line = "Answer to d_1 (Build phase 1?): Build it";
+  const files = new Map<string, string>();
+  let acked = false;
+  /** One Claude Code process on session s1; `state` is its `$.state`, kept across hot reloads. */
+  const start = async (state: Map<string, unknown>) => {
+    const { register } = (await import(REGISTER)) as {
+      register: (on: (event: string, h: Handler) => void) => void;
+    };
+    const handlers = new Map<string, Handler>();
+    register((event, h) => handlers.set(event, h));
+    const submitted: string[] = [];
+    const env: Record<string, string> = { STARBRIDGE_AGENT_SOCKET: "/sb/agent.sock", HOME: "/sb" };
+    const $ = {
+      env: { get: async (name: string) => env[name] },
+      fs: {
+        read: async (path: string) => {
+          const text = files.get(path);
+          if (text === undefined) throw new Error(`no ${path}`);
+          return text;
+        },
+        write: async (path: string, text: string) => void files.set(path, text),
+        exists: async (path: string) => files.has(path),
+        stat: async () => undefined,
+        list: async () => [],
+      },
+      state: {
+        get: async (ref: { key: string }) => ({ value: state.get(ref.key), version: 0 }),
+        set: async (ref: { key: string }, value: unknown) => void state.set(ref.key, value),
+      },
+      process: { run: async () => ({ exitCode: 0, stdout: "", stderr: "" }) },
+      http: {
+        fetch: async (url: string) => {
+          if (url.endsWith("/ack")) acked = true;
+          const events =
+            url.includes("/events") && !acked ? [{ type: "answer", ack: "d_1", line }] : [];
+          return { status: 200, headers: {}, text: JSON.stringify({ events }) };
+        },
+      },
+      ui: { log: () => {}, status: () => {} },
+      clock: { now: () => Date.now(), sleep: (ms: number) => Bun.sleep(Math.min(ms, 5)) },
+      // Queued: it never starts in these processes.
+      prompt: {
+        submit: ({ text }: { text: string }) => {
+          submitted.push(text);
+          return new Promise(() => {});
+        },
+      },
+      session: { id: async () => "s1", cwd: async () => "/work" },
+    };
+    const on = (event: string, e: object) => handlers.get(event)?.($, e, async () => ({}));
+    await on("session.start", { isInteractive: true });
+    return { submitted, on };
+  };
+  const until = async (ok: () => boolean) => {
+    const by = Date.now() + 5000;
+    while (!ok() && Date.now() < by) await Bun.sleep(10);
+  };
+
+  const first = await start(new Map());
+  await until(() => acked);
+  expect(first.submitted).toEqual([line]);
+  // The owner's typed prompt runs ahead of the queued answer; then the process exits.
+  await first.on("turn.start", { text: "i said build it, go ahead", turnId: "t1" });
+  await first.on("turn.complete", { turnId: "t1" });
+
+  const resumed = await start(new Map());
+  await until(() => resumed.submitted.length > 0);
+  await Bun.sleep(50);
+  expect(resumed.submitted).toEqual([line]);
+
+  // A hot reload of the resumed process keeps its queued prompt: nothing goes out again.
+  const state = new Map<string, unknown>();
+  const again = await start(state);
+  await until(() => again.submitted.length > 0);
+  const reloaded = await start(state);
+  await Bun.sleep(100);
+  expect(reloaded.submitted).toEqual([]);
+  await reloaded.on("turn.start", {
+    text: `The starbridge-mod plugin sent a message:\n${line}\n\nThis is how…`,
+    turnId: "t2",
+  });
+  expect(JSON.parse(files.get("/sb/.config/starbridge/mod-sent/s1.json") ?? "")).toEqual([]);
+  for (const p of [first, resumed, again, reloaded]) await p.on("session.end", { reason: "other" });
+});

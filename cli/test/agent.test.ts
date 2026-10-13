@@ -146,6 +146,7 @@ test("two sessions each get only their own answers, held until they arrive, unti
       decisionId: d1,
       ack: d1,
       line: `Answer to ${d1} (Merge #12 now?): Wait`,
+      waiting: false,
     },
   ]);
   expect(await held2).toEqual([]);
@@ -190,7 +191,9 @@ test("several CLI clients at once: ask, wait, answers and quota push all go thro
     run(["wait", "--timeout", "20s"], wAny),
     run(["answers", "--session", "s2", "--wait", "20"], mod),
   ];
-  await Bun.sleep(200);
+  // Once the wait for one decision has marked it waiting: a fixed sleep lost that race on a slow
+  // runner (#1508).
+  await until(async () => (await server.opened("waiting")).length > 0, 10_000);
   await server.answer(ids[0] as string, { choice: "Merge" });
   await server.answer(ids[2] as string, { choice: "Wait" });
   await server.answer(ids[1] as string, { choice: "Merge" });
@@ -206,10 +209,12 @@ test("several CLI clients at once: ask, wait, answers and quota push all go thro
     decisionId: ids[2],
     ack: ids[2],
     line: `Answer to ${ids[2]} (Merge #12 now?): Wait`,
+    waiting: false,
   });
   expect(await run(["answers", "--session", "s2", "--ack", ids[2] as string], mod)).toBe(0);
+  expect(JSON.parse(mod.lines[1] as string)).toEqual({ acked: [ids[2]] });
   expect(await run(["answers", "--session", "s2"], mod)).toBe(0);
-  expect(mod.lines).toHaveLength(1);
+  expect(mod.lines).toHaveLength(2);
 
   const q = client(socket);
   expect(await run(["quota", "push", "--once", "--provider", "claude"], q)).toBe(0);
@@ -534,6 +539,92 @@ test.skipIf(WINDOWS)(
       expect(log()).toBe(queued);
       expect(await run(["wait", id, "--timeout", "10s"], c)).toBe(0);
       expect(c.lines.at(-1)).toBe(`Answer to ${id} (Merge #12 now?): Merge`);
+    } finally {
+      await codex.close();
+    }
+  },
+);
+
+/**
+ * A Codex home whose daemon speaks the control socket's protocol: the thread's latest turn has
+ * `status`, and `steered` holds each `turn/steer` it took. Its `codex` logs as `codexHome`'s.
+ */
+async function codexDaemon(status: "inProgress" | "completed", replyAfter = 0) {
+  const codex = await codexHome();
+  await codex.close();
+  const steered: unknown[] = [];
+  const daemon = Bun.serve({
+    unix: join(codex.env.CODEX_HOME, "app-server-control", "app-server-control.sock"),
+    fetch: (req, s) => (s.upgrade(req) ? undefined : new Response("no", { status: 400 })),
+    websocket: {
+      message(ws, text) {
+        const m = JSON.parse(String(text));
+        const reply = (result: unknown) => ws.send(JSON.stringify({ id: m.id, result }));
+        if (m.method === "initialize") reply({});
+        if (m.method === "thread/turns/list") reply({ data: [{ id: "turn1", items: [], status }] });
+        if (m.method === "turn/steer") {
+          steered.push(m.params);
+          setTimeout(() => reply({ turnId: "turn1" }), replyAfter);
+        }
+      },
+    },
+  });
+  return { ...codex, steered, close: async () => daemon.stop(true) };
+}
+
+for (const status of ["inProgress", "completed"] as const)
+  test.skipIf(WINDOWS)(
+    `an answer marked waiting ${status === "inProgress" ? "steers into a Codex session's running turn" : "queues when no Codex turn runs"} (#1486)`,
+    async () => {
+      const { socket } = await machine();
+      const codex = await codexDaemon(status);
+      const c = testCtx({ STARBRIDGE_AGENT_SOCKET: socket, ...codex.env });
+      try {
+        const id = await ask(c, "--project", "p", "--waiting");
+        await server.answer(id, { choice: "Merge" });
+        const log = () => (existsSync(codex.log) ? readFileSync(codex.log, "utf8") : "");
+        await until(() => codex.steered.length > 0 || log().endsWith("\n")).catch(() => {});
+        if (status === "inProgress") {
+          // The socket is the owner's alone, so the steer carries the answer itself.
+          expect(codex.steered).toEqual([
+            {
+              threadId: "t1",
+              expectedTurnId: "turn1",
+              input: [
+                {
+                  type: "text",
+                  text: `Answer to ${id} (Merge #12 now?): Merge`,
+                  text_elements: [],
+                },
+              ],
+            },
+          ]);
+          expect(log()).toBe("");
+        } else {
+          expect(codex.steered).toEqual([]);
+          expect(log()).toContain(
+            `queue --thread t1 --message Starbridge has the owner's answer to ${id}`,
+          );
+        }
+      } finally {
+        await codex.close();
+      }
+    },
+  );
+
+test.skipIf(WINDOWS)(
+  "a steer the daemon took but answers late is not queued too (#1486)",
+  async () => {
+    const { socket } = await machine();
+    const codex = await codexDaemon("inProgress", 7_000);
+    const c = testCtx({ STARBRIDGE_AGENT_SOCKET: socket, ...codex.env });
+    try {
+      const id = await ask(c, "--project", "p", "--waiting");
+      await server.answer(id, { choice: "Merge" });
+      await until(() => codex.steered.length > 0);
+      await Bun.sleep(8_000);
+      expect(codex.steered).toHaveLength(1);
+      expect(existsSync(codex.log)).toBe(false);
     } finally {
       await codex.close();
     }

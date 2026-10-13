@@ -13,7 +13,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { delimiter, dirname, join, relative, resolve, sep } from "node:path";
+import { delimiter, dirname, join, posix, relative, resolve, sep } from "node:path";
 import { gzipSync } from "node:zlib";
 import { LiveServer } from "@starbridge/server/test-support";
 import { type Status, socketPath } from "../src/agent/api";
@@ -25,6 +25,7 @@ import { run } from "../src/cli";
 import { session } from "../src/context";
 import { poll } from "../src/decisions";
 import { pushOnce } from "../src/quota";
+import { setRemoved } from "../src/setup/agents";
 import { codexPlugin } from "../src/setup/codex-plugin";
 import {
   compareCodexbar,
@@ -466,6 +467,32 @@ test("an agent installed after setup: status says so, and refresh installs it (#
   expect(existsSync(join(m.home, ".codex/skills/starbridge/SKILL.md"))).toBe(true);
 });
 
+test("refresh moves the Pi package to this release's tag, reports a failure, and respects uninstall --agent (#1417)", async () => {
+  const m = await machine();
+  await setup(m.sys, { yes: true, noQuota: true, noService: true });
+  const settings = join(m.home, ".pi/agent/settings.json");
+  const old = "git:github.com/T0mSIlver/starbridge@v0.1.1";
+  writeFileSync(settings, JSON.stringify({ packages: [old] }));
+  expect(await refresh(m.sys)).toContain(`Updated the Pi package to v${VERSION}.`);
+  expect(JSON.parse(readFileSync(settings, "utf8")).packages).toEqual([PI_PACKAGE]);
+  expect((await refresh(m.sys)).filter((l) => l.includes("Pi package"))).toEqual([]);
+
+  // A failing `pi` leaves the old one, says so, and the refresh goes on.
+  writeFileSync(settings, JSON.stringify({ packages: [old] }));
+  m.ctx.env.PATH = [join(m.home, "failbin"), m.ctx.env.PATH].join(delimiter);
+  mkdirSync(join(m.home, "failbin"));
+  fakeCommand(join(m.home, "failbin", "pi"), "#!/bin/sh\necho 'fatal: no network' >&2\nexit 1\n");
+  const done = await refresh(m.sys);
+  expect(done).toContain(
+    `Could not update the Pi package to v${VERSION}: pi install ${PI_PACKAGE}: fatal: no network`,
+  );
+  expect(JSON.parse(readFileSync(settings, "utf8")).packages).toEqual([old]);
+
+  // `uninstall --agent pi` leaves it alone.
+  setRemoved(m.ctx, "pi", true);
+  expect((await refresh(m.sys)).filter((l) => l.includes("Pi package"))).toEqual([]);
+});
+
 test("a failed agent install says why and how to retry, and setup goes on (#750)", async () => {
   const m = await machine();
   m.ctx.env.PATH = [join(m.home, "bin"), m.ctx.env.PATH].join(delimiter);
@@ -597,18 +624,21 @@ test("Cursor: setup keeps the owner's config and skill, and refresh updates its 
   // The owner's own hooks stay where setup adds its own, and after uninstall.
   const hooksFile = join(m.home, ".cursor/hooks.json");
   const mine = { command: "./audit.sh", timeout: 3 };
+  // One that runs Starbridge's script its own way is the owner's too (#1493).
+  const wrap = { command: `sh "${join(m.home, ".cursor/starbridge/cli.sh")}" status`, timeout: 3 };
   const withMine = JSON.parse(readFileSync(hooksFile, "utf8"));
   withMine.hooks.sessionStart.unshift(mine);
-  withMine.hooks.stop = [mine];
+  withMine.hooks.stop = [mine, wrap];
   writeFileSync(hooksFile, JSON.stringify(withMine));
   await refresh(m.sys);
   expect(JSON.parse(readFileSync(hooksFile, "utf8")).hooks.sessionStart[0]).toEqual(mine);
+  expect(JSON.parse(readFileSync(hooksFile, "utf8")).hooks.stop.slice(0, 2)).toEqual([mine, wrap]);
   expect(await run(["uninstall", "--agent", "cursor", "--yes"], m.ctx)).toBe(0);
   expect(existsSync(dir)).toBe(false);
   expect(existsSync(join(m.home, ".cursor/starbridge"))).toBe(false);
   expect(JSON.parse(readFileSync(hooksFile, "utf8"))).toEqual({
     version: 1,
-    hooks: { sessionStart: [mine], stop: [mine] },
+    hooks: { sessionStart: [mine], stop: [mine, wrap] },
   });
   // A hooks file with none of Starbridge's entries is never rewritten, and one setup cannot read
   // as Cursor's stays as it is; an owner's empty event stays too.
@@ -667,6 +697,49 @@ test("status names the Claude Code session it runs in when that session's mod ne
   m.ctx.env.CLAUDE_CODE_SESSION_ATTENDED = "0";
   await status(m.sys);
   expect(m.ctx.lines.join("\n")).not.toContain("Not this session");
+});
+
+test("status says when Claude desktop replaced the mod with a copy that has no hooks (#1428)", async () => {
+  const m = await machine();
+  await startAgent(m.ctx);
+  Object.assign(m.ctx.env, { CLAUDECODE: "1", CLAUDE_CODE_SESSION_ID: "s-1" });
+  // What Claude desktop passed the orchestrator's session on the dev box: the Mac's plugins,
+  // synced without `hooks/`.
+  const synced = mkdtempSync(join(tmpdir(), "starbridge-synced-"));
+  const plugin = (dir: string, name: string, hooks: boolean) => {
+    mkdirSync(join(synced, dir, ".claude-plugin"), { recursive: true });
+    writeFileSync(join(synced, dir, ".claude-plugin", "plugin.json"), JSON.stringify({ name }));
+    if (hooks) {
+      mkdirSync(join(synced, dir, "hooks"));
+      writeFileSync(join(synced, dir, "hooks", "hooks.json"), "{}");
+    }
+    return join(synced, dir);
+  };
+  const mod = plugin("4917e9633546766b", "starbridge-mod", false);
+  const skill = plugin("049f0f053f7ea84d", "starbridge", true);
+  const other = plugin("a71fbe145223bcc9", "localvoxtral", false);
+  // Claude Code's record of the session names the process that runs it.
+  m.ctx.env.CLAUDE_CONFIG_DIR = join(synced, "claude");
+  mkdirSync(join(synced, "claude", "sessions"), { recursive: true });
+  writeFileSync(
+    join(synced, "claude", "sessions", "4242.json"),
+    JSON.stringify({ pid: 4242, sessionId: "s-1", entrypoint: "claude-desktop" }),
+  );
+  const claude = ["claude", "--resume=s-1", `--plugin-dir=${mod}`, "--plugin-dir", skill];
+  const args = (pid: number) => (pid === 4242 ? [...claude, `--plugin-dir=${other}`] : []);
+  await status({ ...m.sys, argsOf: args });
+  const out = m.ctx.lines.join("\n");
+  expect(out).toContain("Not this session (s-1): no Starbridge mod runs in it");
+  expect(out).toContain(
+    `Claude desktop runs this session with its own copy of starbridge-mod (${mod}), synced without hooks`,
+  );
+  expect(out).not.toContain(skill);
+  expect(out).not.toContain(other);
+
+  // A session Claude Code runs with the installed plugins only says nothing more.
+  m.ctx.lines.length = 0;
+  await status({ ...m.sys, argsOf: () => ["claude", "--resume=s-1"] });
+  expect(m.ctx.lines.join("\n")).not.toContain("Claude desktop runs");
 });
 
 test("status lists the answers no session has taken, until a wait prints them (#557)", async () => {
@@ -746,15 +819,28 @@ test("uninstall removes the service and plugins, asks the devices to revoke, kee
   const permission = JSON.parse(readFileSync(pps, "utf8")).permission;
   expect(permission.bash).toEqual({ "*": "ask" });
   expect(permission.skill).toEqual({ starbridge: "allow" });
+  // The PATH line setup added to a startup file goes with the binary (#1494).
+  const zshrc = join(m.home, ".zshrc");
+  writeFileSync(
+    zshrc,
+    'alias l=ls\n\n# Added by starbridge setup\nexport PATH="$HOME/.local/bin:$PATH"\n',
+  );
+  const binary = posix.join(m.home, ".local/bin/starbridge");
+  mkdirSync(dirname(binary), { recursive: true });
+  writeFileSync(binary, "");
   m.ctx.lines.length = 0;
-  expect(await uninstall(m.sys, {})).toBe(0);
+  expect(await uninstall(m.sys, { install: { kind: "binary", path: binary } })).toBe(0);
+  expect(readFileSync(zshrc, "utf8")).toBe("alias l=ls\n");
+  // In the separators of the machine's platform, which a Windows host's home does not use.
+  expect(m.ctx.lines).toContain(
+    `Removed the PATH line setup added to ${posix.join(m.home, ".zshrc")}.`,
+  );
   expect(existsSync(join(m.units, "starbridge-agent.service"))).toBe(false);
   expect(m.calls()).toContain("systemctl --user disable --now starbridge-agent.service");
   expect(m.calls()).toContain("claude plugin uninstall starbridge-mod@starbridge --scope user");
   expect(m.calls()).toContain("claude plugin marketplace remove starbridge");
-  expect(
-    JSON.parse(readFileSync(join(m.home, ".claude/settings.json"), "utf8")).permissions.allow,
-  ).toEqual([]);
+  // An allow list left empty goes, and a file left empty too: setup created it (#1494).
+  expect(JSON.parse(readFileSync(m.settings, "utf8")).permissions).toBeUndefined();
   expect(existsSync(join(m.home, ".codex/skills/starbridge"))).toBe(false);
   expect(existsSync(join(m.home, ".codex/rules/starbridge.rules"))).toBe(false);
   expect(m.calls()).toContain("codex plugin remove starbridge@starbridge-cli");
@@ -763,9 +849,8 @@ test("uninstall removes the service and plugins, asks the devices to revoke, kee
   expect(readdirSync(join(m.home, ".config/opencode")).sort()).toEqual(["plugins", "skills"]);
   expect(readdirSync(join(m.home, ".config/opencode/plugins"))).toEqual([]);
   expect(readdirSync(join(m.home, ".cursor/skills"))).toEqual([]);
-  expect(
-    JSON.parse(readFileSync(join(m.home, ".cursor/cli-config.json"), "utf8")).permissions.allow,
-  ).toEqual([]);
+  expect(existsSync(join(m.home, ".cursor/cli-config.json"))).toBe(false);
+  expect(existsSync(join(m.home, ".cursor/hooks.json"))).toBe(false);
   expect(JSON.parse(readFileSync(pps, "utf8"))).toEqual({
     permission: { bash: { "*": "ask" } },
     authorizerChain: ["judge"],

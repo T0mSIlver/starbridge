@@ -31,6 +31,7 @@ struct DecisionDetail: View {
                     // Images over their options when there is one per option; else in rows (#536).
                     let picks = open && d.images.count >= 2 && d.images.count == d.body.options.count
                     if !d.images.isEmpty, !picks { ImageRows(images: d.images) { viewer = ViewerStart(index: $0) } }
+                    if d.imagesPending { PendingImages(images: d.body.images ?? []) }
                     if let links = d.body.links, !links.isEmpty { LinkChips(links: links, project: d.body.source.project) }
                     if let until {
                         Text("Snoozed until \(Times.clock(until, Date()))").type(Tokens.Typography.small).foregroundStyle(Tokens.Colors.fg2.color)
@@ -57,6 +58,7 @@ struct DecisionDetail: View {
             .foregroundStyle(Tokens.Colors.fg.color)
             .background(Tokens.Colors.bg.color.ignoresSafeArea())
             .fullScreenCover(item: $viewer) { ImageViewer(images: d.images, index: $0.index) }
+            .task(id: id) { await store.loadImages(id) }
         } else {
             Text("This question is gone.").type(Tokens.Typography.body).padding()
         }
