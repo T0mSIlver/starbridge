@@ -52,8 +52,9 @@ else
 fi
 # Then the Play reviewers' demo server, from this checkout, only after the round trip passed: a
 # project of its own, which restarts only when its code changed (host/demo.sh). Its failure is
-# reported but blocks no release.
-$dir/deploy/host/demo.sh || echo "the demo server did not deploy; see above" >&2
+# reported but blocks no release, and a cold build (about 5 minutes on this VM) is cut at 8, inside
+# the staging job's limit (deploy.yml).
+timeout 480 $dir/deploy/host/demo.sh || echo "the demo server did not deploy; see above" >&2
 # The last line deploy.yml reads: only a commit that went through all of the above lets prod
 # deploy it. A skipped older commit ends without it.
 echo "passed $rev"
