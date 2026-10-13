@@ -64,6 +64,7 @@ def stored(asc)
   rescue OpenSSL::PKCS12::PKCS12Error
     return [nil, "the stored .p12 does not open with its password"]
   end
+  return [nil, "the stored .p12 lacks its key or certificate"] unless p12.key && p12.certificate
   return [nil, "the stored key does not match its certificate"] unless p12.certificate.check_private_key(p12.key)
   return [nil, "the stored certificate expired on #{p12.certificate.not_after.utc.iso8601}"] if p12.certificate.not_after < Time.now + 86_400
   serial = p12.certificate.serial.to_s(16).upcase.sub(/\A0+/, "")
