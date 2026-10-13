@@ -10,6 +10,8 @@ host=${1:-sb-staging}
 age_key=$HOME/.config/starbridge/secrets/backup-age.key
 tmp=$(mktemp -d)
 trap 'shred -u "$tmp"/* 2>/dev/null; rm -rf "$tmp"' EXIT
+# A signal ends through the EXIT trap, so the plain copy never stays behind.
+trap 'exit 1' INT TERM HUP
 newest=$(ssh sb-oracle 'sudo ls -1 /srv/offsite/starbridge' | grep -E '^starbridge-[0-9]{8}\.db\.zst\.age$' | sort | tail -n 1)
 [ -n "$newest" ] || { echo "no offsite copy on sb-oracle" >&2; exit 1; }
 echo "restoring $newest"
@@ -17,16 +19,23 @@ ssh sb-oracle "sudo cat /srv/offsite/starbridge/$newest" > "$tmp/db.age"
 age -d -i "$age_key" "$tmp/db.age" | zstd -dq -o "$tmp/starbridge.db"
 sqlite3 -readonly "$tmp/starbridge.db" 'PRAGMA integrity_check' | grep -qx ok
 echo "schema $(sqlite3 -readonly "$tmp/starbridge.db" 'PRAGMA user_version'), $(sqlite3 -readonly "$tmp/starbridge.db" 'SELECT count(*) FROM accounts') accounts"
-# The server runs as bun (1000) in its container.
+# Under the deploy lock, with any container on the volume stopped while its database is swapped
+# (a failback onto a server that still runs), then started again. The server runs as bun (1000)
+# and writes its WAL beside the database, so the volume's directory is bun's too.
 ssh "$host" 'sudo sh -euc "
+  exec 9>/run/starbridge-deploy.lock
+  flock 9
   docker volume create starbridge_data >/dev/null
   mnt=\$(docker volume inspect -f {{.Mountpoint}} starbridge_data)
+  running=\$(docker ps -q --filter volume=starbridge_data)
+  [ -z \"\$running\" ] || docker stop \$running >/dev/null
   for f in starbridge.db starbridge.db-wal starbridge.db-shm; do
     [ ! -e \$mnt/\$f ] || mv \$mnt/\$f \$mnt/\$f.before-restore-\$(date -u +%Y%m%dT%H%M%S)
   done
   umask 077
   cat > \$mnt/starbridge.db.part
   mv \$mnt/starbridge.db.part \$mnt/starbridge.db
-  chown 1000:1000 \$mnt/starbridge.db
+  chown 1000:1000 \$mnt \$mnt/starbridge.db
+  [ -z \"\$running\" ] || docker start \$running >/dev/null
 "' < "$tmp/starbridge.db"
 echo "restored into $host's starbridge_data volume"
