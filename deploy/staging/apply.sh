@@ -14,9 +14,9 @@ echo "REVISION=$REVISION" > .env
 
 staging/server-env.sh
 # Prod's Caddyfile under staging's name, as evals/load/stack.sh rewrites it: the stats host on
-# plain HTTP at a port the firewall keeps closed, no demo host, and nothing indexed.
+# plain HTTP on the VM's loopback only, no demo host, and nothing indexed.
 sed -e 's/^starbridge\.run {/staging.starbridge.run {\n\theader X-Robots-Tag "noindex, nofollow"/' \
-  -e 's/^stats\.starbridge\.run {/http:\/\/127.0.0.1:18001 {/' -e '/^demo\.starbridge\.run {/,/^}/d' \
+  -e 's/^stats\.starbridge\.run {/http:\/\/127.0.0.1:18001 {\n\tbind 127.0.0.1/' -e '/^demo\.starbridge\.run {/,/^}/d' \
   Caddyfile > $etc/Caddyfile
 chmod 644 $etc/Caddyfile
 # Its stats host stays shut: no password is pushed here.
