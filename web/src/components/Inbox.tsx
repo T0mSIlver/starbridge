@@ -314,15 +314,17 @@ export function Inbox() {
   // In place of the list, an open card another device settled (or snoozed) while it was on screen
   // stays to say so, unless it was the last one: then the list returns, empty (#1583).
   const seenOpen = useRef<string | undefined>(undefined);
-  const listedOpen = opened !== undefined && needs.some((e) => e.id === opened);
+  // From every open card, not the ones Find keeps: a query that matches none settled nothing.
+  const openAll = all.filter((e) => e.type !== "run");
+  const listedOpen = opened !== undefined && openAll.some((e) => e.id === opened);
   useEffect(() => {
     if (wide || !opened) seenOpen.current = undefined;
     else if (listedOpen) seenOpen.current = opened;
-    else if (seenOpen.current === opened && needs.length === 0 && !lost.current.has(opened)) {
+    else if (seenOpen.current === opened && openAll.length === 0 && !lost.current.has(opened)) {
       seenOpen.current = undefined;
       closeItem();
     }
-  }, [wide, opened, listedOpen, needs.length]);
+  }, [wide, opened, listedOpen, openAll.length]);
   // A wide window selects the item beside the list instead, opening History for a linked closed one.
   useEffect(() => {
     if (!wide || !opened || !resolved) return;
