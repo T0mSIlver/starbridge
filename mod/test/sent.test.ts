@@ -11,10 +11,13 @@ function machine() {
   /** Sessions another live process runs too. */
   const live = new Set<string>();
   const disk = { full: false, slow: Promise.resolve() as Promise<unknown> };
+  /** Runs while a process checks for another live one on its session, before the answer. */
+  const checking = { run: async () => {} };
   return {
     files,
     disk,
     live,
+    checking,
     /** A process on session `session`: its prompts resolve when the test starts their turn. */
     process(session: string | (() => string), token: string | undefined) {
       const submitted: string[] = [];
@@ -37,7 +40,10 @@ function machine() {
           submitted.push(text);
           return new Promise((settle, fail) => pending.push({ text, settle, fail }));
         },
-        elsewhere: async (s) => live.has(s),
+        elsewhere: async (s) => {
+          await checking.run();
+          return live.has(s);
+        },
         log: () => {},
       };
       const sent = new Sent(host, "/sb", token);
@@ -251,4 +257,71 @@ test("a /clear while recover records its lines leaves them for the old session",
   current = "s1";
   await p.sent.recover();
   expect(p.submitted).toEqual([LINE]);
+});
+
+test("an answer the other live process ran before it exited is not submitted again (#1559)", async () => {
+  const m = machine();
+  const first = m.process("s1", "proc-1");
+  await first.sent.send(LINE, "d_1");
+  m.live.add("s1");
+  const second = m.process("s1", "proc-2");
+  await second.sent.recover();
+  expect(second.submitted).toEqual([]);
+  // The first process runs the answer's turn, then exits.
+  await first.start(LINE);
+  m.live.delete("s1");
+  await second.sent.recover();
+  expect(second.submitted).toEqual([]);
+});
+
+test("an answer the other process runs while this one checks for it is not submitted again (#1559)", async () => {
+  const m = machine();
+  const first = m.process("s1", "proc-1");
+  await first.sent.send(LINE, "d_1");
+  const second = m.process("s1", "proc-2");
+  // Between this process reading the file and finding no other process, the first one runs the
+  // answer's turn and exits.
+  m.checking.run = async () => {
+    m.checking.run = async () => {};
+    await first.start(LINE);
+  };
+  await second.sent.recover();
+  expect(second.submitted).toEqual([]);
+});
+
+test("a line handed over again after the other process ran it and exited is not submitted again (#1559)", async () => {
+  const m = machine();
+  const first = m.process("s1", "proc-1");
+  await first.sent.send(LINE, "d_1");
+  const second = m.process("s1", "proc-2");
+  m.checking.run = async () => {
+    m.checking.run = async () => {};
+    await first.start(LINE);
+  };
+  expect(await second.sent.send(LINE, "d_1")).toBe(true);
+  expect(second.submitted).toEqual([]);
+});
+
+test("a recovery whose write fails submits the answer at the next try (#1559)", async () => {
+  const m = machine();
+  await m.process("s1", "proc-1").sent.send(LINE, "d_1");
+  const next = m.process("s1", "proc-2");
+  m.disk.full = true;
+  await next.sent.recover().catch(() => undefined);
+  expect(next.submitted).toEqual([]);
+  m.disk.full = false;
+  await next.sent.recover();
+  expect(next.submitted).toEqual([LINE]);
+});
+
+test("a session record with bytes left after its object still names its process (#1559)", async () => {
+  // Claude Code rewrites the file in place, so a shorter record leaves the old one's tail.
+  const files: Record<string, string> = {
+    "/c/sessions/11.json": `${JSON.stringify({ pid: 11, sessionId: "s1" })}0,"name":"x"}`,
+  };
+  const fs = {
+    list: async () => Object.keys(files).map((p) => ({ name: p.slice("/c/sessions/".length) })),
+    read: async (p: string) => files[p] as string,
+  };
+  expect(await sessionElsewhere("s1", 10, fs, "/c/sessions", async () => true)).toBe(true);
 });
