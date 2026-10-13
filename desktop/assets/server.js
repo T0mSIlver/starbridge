@@ -13,3 +13,5 @@ bridge.onError((message) => {
   note.textContent = message;
   note.className = "error";
 });
+// The window takes the page's height, whatever the text size or message wraps to.
+new ResizeObserver(() => bridge.fit(document.body.offsetHeight)).observe(document.body);

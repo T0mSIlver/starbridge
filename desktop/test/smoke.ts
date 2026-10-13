@@ -397,6 +397,20 @@ try {
         ),
       "the server window",
     );
+    // Sized to its content (#1613): shown, with nothing to scroll and nothing cut off.
+    await until(
+      () =>
+        offline.evaluate(async ({ BrowserWindow }) => {
+          const w = BrowserWindow.getAllWindows().find((w) => w.getTitle() === "Server");
+          if (!w?.isVisible()) return false;
+          const [, h] = w.getContentSize();
+          const fit = await w.webContents.executeJavaScript(
+            "[document.documentElement.scrollHeight, document.querySelector('button[type=submit]').getBoundingClientRect().bottom]",
+          );
+          return fit[0] <= (h ?? 0) && fit[1] <= (h ?? 0);
+        }),
+      "the server window to fit its content",
+    );
   } finally {
     await offline.close();
   }
