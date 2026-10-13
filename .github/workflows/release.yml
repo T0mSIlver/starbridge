@@ -31,6 +31,10 @@ permissions:
 jobs:
   version:
     runs-on: ${{ vars.TRUSTED_RUNNER && fromJSON(vars.TRUSTED_RUNNER) || 'ubuntu-latest' }}
+    # An rc dispatches deploy.yml.
+    permissions:
+      actions: write
+      contents: read
     outputs:
       version: ${{ steps.v.outputs.version }}
     steps:
@@ -64,12 +68,23 @@ jobs:
         env:
           VERSION: ${{ steps.v.outputs.version }}
         run: bun cli/scripts/version.ts --final "$VERSION"
-      # The page and server deploy from main ahead of any tag; a release waits until starbridge.run,
-      # which the testers' and Play reviewers' apps talk to, runs what it ships. The deploy rebuilds
-      # the demo server from the same commit. A final ships its rc's commit plus the stamp.
+      # The page and server reach starbridge.run with each rc (#1538): an rc tag dispatches
+      # deploy.yml with its commit, which deploys it once staging passed it, and rebuilds the demo
+      # server from it. The release then waits until starbridge.run, which the testers' and Play
+      # reviewers' apps talk to, runs what it ships. A final is its rc's commit plus the stamp, which
+      # starbridge.run already runs, so it deploys nothing.
+      - if: startsWith(github.ref, 'refs/tags/v') && contains(github.ref_name, '-rc.')
+        name: Deploy the rc to starbridge.run
+        env:
+          GH_TOKEN: ${{ github.token }}
+        # Not gh: some self-hosted runners lack it.
+        run: |
+          curl -fsS -X POST -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' \
+            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/actions/workflows/deploy.yml/dispatches" \
+            -d "$(jq -n --arg sha "$(git rev-parse HEAD)" '{ref: "main", inputs: {sha: $sha}}')"
       - if: startsWith(github.ref, 'refs/tags/v')
         name: starbridge.run runs this release's commit
-        timeout-minutes: 45
+        timeout-minutes: 120
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ steps.v.outputs.version }}

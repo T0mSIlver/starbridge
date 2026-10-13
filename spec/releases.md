@@ -29,14 +29,20 @@
   prerelease, npm's `next`, Play's Alpha track and Mac apps set to follow release candidates; a
   final also reaches GitHub's latest release, which Obtainium, `install.sh`, `install.ps1`,
   `starbridge update`, the update nudge and other Mac apps read, npm's `latest`, Homebrew, and
-  Play production once open. The hosted page and server are on neither path: they deploy from
-  main, so every tag waits until starbridge.run runs its commit (its final, its rc's), which also
-  rebuilt the demo server. A final is promoted, not cut: `promote.yml` stamps the newest rc's
+  Play production once open. The hosted page and server deploy with each rc (below), so a final
+  ships code starbridge.run already runs and deploys nothing. A final is promoted, not cut: `promote.yml` stamps the newest rc's
   commit on a commit of its own, tags it and runs the release on that tag, so main never stops
   merging between an rc and its final, then pushes a branch that points main's marketplace at the
   final. The owner approves each promotion, after the rc has run on the maintainer's phone and no issue
   labelled `regression` is open, which the workflow also checks. Waiting N days instead was
   rejected: with five testers, no report is weak evidence, and v0.1.3 shipped broken without one.
+- **Cadence** (#1538). An rc whenever a batch of merges lands, about daily, since it is also what
+  puts server changes on starbridge.run; the owner promotes it once they have used it a day.
+  Channels stay: Android rcs and finals to Play's Alpha track and GitHub (production once Play's
+  12-tester test is passed), the desktop app's finals for everyone and rcs for apps installed from
+  an rc or with Get Release Candidates on, the CLI's rcs to npm's `next` and finals to `latest` and
+  Homebrew, the plugin marketplace on finals. The iPhone app follows Android once Apple's export
+  compliance code arrives: rcs to TestFlight, finals to the App Store.
 - **Play's Alpha track from CI** (#1024). Testers fell behind while each App Bundle went to Play
   Console by hand. Once the release is published, the `play` job uploads the tag's AAB to Alpha
   through the Play Developer API (`cli/scripts/play.ts`), status `completed`, with the GitHub
@@ -121,22 +127,31 @@
   candidate moves every version but the marketplace refs. Setup and `starbridge update` install
   the Pi package at the CLI's own tag. The mod keeps its own copy of the agent API revision, since
   Claude Code installs only `mod/`.
-- **Deploys** (#26, #150, #260, #1094). A merge to main deploys from Actions once CI passes, unless
-  no file the box builds from changed since the revision it runs, over SSH to a forced command that
-  deploys only main's head or a commit on main containing the deployed one; the box fetches it
-  itself. Rollbacks are manual (`deploy/deploy.sh`). The server and web images are built once per
-  deployed commit in `deploy.yml`, for amd64 and arm64, each on a runner of its architecture, and
-  pushed to ghcr.io, public, tagged by commit; the box pulls them rather than building (#1518), so
-  staging, prod and a failover host run the same build, and the box keeps its CPU for users. The box
-  keeps the newest 5 releases' images for a rollback. Caddy's and the demo server's images are still
-  built on the box: Caddy's by the hash of its Dockerfile, and the demo's restarts only when its
-  code changed, which a new image per commit would break. The deploy fails unless the live server
-  reports that commit or a later one (`x-starbridge-revision`). That header, and
-  `starbridge-deploy`'s argument, are refused unless they are 40 lowercase hex characters (#467),
-  since the workflow puts the revision in a `gh api` path. Then sb-oracle, the outside check's VM,
-  runs one round trip on its test account (#1522): a healthy server that cannot push or answer
-  fails the run at once, rather than at the check's next round trip up to 15 minutes later. Its
-  key's forced command only asks for that round trip and prints the result.
+- **Deploys** (#26, #150, #260, #1094, #1538). Main deploys to staging only; starbridge.run, the
+  server and the page, takes a commit when an rc is tagged, and only one staging passed. Every merge
+  used to reach users within minutes, so they ran code no tester had, between releases, and v0.1.3's
+  kind of break could reach them before its rc did. Now `release.yml` dispatches `deploy.yml` with
+  each rc tag's commit, and the owner dispatches a hotfix the same way (`gh workflow run deploy.yml
+  -f sha=<commit>`); a final is its rc plus the version stamp, so promotion deploys nothing. The
+  cost is that a server fix waits for an rc or a hotfix dispatch. The server keeps serving every
+  release from the minimum up (`spec/keys-and-trust.md`), so apps older than the page keep working.
+  A deploy goes over SSH to a forced command that deploys only main's head or a commit on main
+  containing the deployed one; the box fetches it itself. Rollbacks are the owner's
+  (`deploy/rollback.sh`, `deploy/deploy.sh`). The server and web images are built once per commit of
+  main in `deploy.yml`, for amd64 and arm64, each on a runner of its architecture, and pushed to
+  ghcr.io, public, tagged by commit (#1518); a commit that changes nothing they are built from
+  reuses the previous commit's under its own tag, and the deployed commit, not the built one, is
+  what `/healthz` names. The box pulls them rather than building, so staging, prod and a failover
+  host run the same build, and the box keeps its CPU for users. It keeps the newest 5 releases'
+  images for a rollback. Caddy's and the demo server's images are still built on the box: Caddy's by
+  the hash of its Dockerfile, and the demo's restarts only when its code changed, which a new image
+  per commit would break. The deploy fails unless the live server reports that commit or a later one
+  (`x-starbridge-revision`). That header, and `starbridge-deploy`'s argument, are refused unless
+  they are 40 lowercase hex characters (#467), since the workflow puts the revision in an API path.
+  Then sb-oracle, the outside check's VM, runs one round trip on its test account (#1522): a
+  healthy server that cannot push or answer fails the run at once, rather than at the check's next
+  round trip up to 15 minutes later. Its key's forced command only asks for that round trip and
+  prints the result.
 - **Rollback** (#1520). `deploy/rollback.sh` deploys the release before the running one, or a
   commit given, from the images the box holds, so it needs no download or build; the box keeps
   five releases, about 2.5 GB. It deploys that commit's whole tree, not only its images, so the
@@ -153,21 +168,22 @@
   - Mac app: covered by GitHub's latest; an app that already installed the bad one updates to
     the next release.
   - iPhone: expire the build in TestFlight.
-  - A server change that clients rely on stays: main serves every release from the minimum up
-    (`spec/keys-and-trust.md`), so rolling a client back never needs the server rolled back.
+  - A server change that clients rely on stays: the server serves every release from the minimum
+    up (`spec/keys-and-trust.md`), so rolling a client back never needs the server rolled back.
 - **Staging** (#1526). `staging.starbridge.run`, on sb-staging, an Oracle ARM VM, takes every
-  deploy of main before or beside prod, with the same images, compose file and Caddyfile, so a
-  deploy that breaks shows there first. Its data is synthetic, made through the real flows by the
+  commit of main, with prod's images, compose file and Caddyfile, so a deploy that breaks shows
+  there first. Its data is synthetic, made through the real flows by the
   load test's setup: a copy of prod's would be ciphertext plus GitHub ids and push endpoints on a
   second host, which `/privacy` does not allow. It has its own OAuth app, VAPID pair and no
   FCM or APNs key, so it pushes to no phone; only listed GitHub users can make an account
   (`SIGNUP_GITHUB_IDS`, #1524), and nothing is indexed. Its key's forced command deploys only
   a commit of main. ARM staging beside amd64 prod leaves architecture bugs to prod's smoke.
-- **Prod waits for staging** (#1528). Each deploy goes to staging first, which then runs one
-  round trip on its own test account (a card, its Web Push, an answer read back), and prod
-  deploys only once both passed for that commit: a release that cannot push now stops on
-  staging, where v0.1.3's kind of break would have shown before users saw it. `deploy/deploy.sh`
-  stays the owner's way around it.
+- **Prod waits for staging** (#1528). After each deploy, staging runs one round trip on its own test
+  account (a card, its Web Push, an answer read back) and sets the commit's `staging` status; prod
+  deploys only a commit whose status is success, waiting up to an hour for it, as an rc tag can
+  follow its merge by minutes. A commit staging skipped, being older than the one it runs, never
+  passes. A release that cannot push stops on staging. `deploy/deploy.sh` stays the owner's way
+  around it.
 - **No downtime** (#150, #508). The page runs as two copies; a deploy starts the idle one, waits
   for its health, then stops the other, and Caddy sends every request to the first healthy copy.
   The server stays one instance, since it holds the long-polls and SQLite; Caddy holds requests up

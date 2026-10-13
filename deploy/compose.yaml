@@ -17,6 +17,9 @@ services:
     # (deploy/host/watch.sh). Cloudflare's free proxy, the emergency switch in front of the box,
     # ends a request at 100 s: long-polls return within 90 (#799).
     environment:
+      # The deployed commit, which /healthz names: an image is reused for a later commit that
+      # changed nothing it is built from (deploy.yml), so the one built into it can be older.
+      STARBRIDGE_REVISION: ${REVISION:?host/apply.sh writes it to deploy/.env}
       WATCH_PORT: "8081"
       MAX_WAIT_SECONDS: "90"
       # The server posts the launch funnel's steps to Umami (server/src/funnel.ts); the id is
