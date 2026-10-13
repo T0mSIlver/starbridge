@@ -68,6 +68,7 @@ const CHECKS: { id: string; label: string; judge?: true; card?: true }[] = [
   { id: "flags", label: "Only current ask flags (no --default, no --json)" },
   { id: "mark", label: "Marked waiting only when blocked" },
   { id: "delivery", label: "Did what ask's last line said: waited, or ended the turn" },
+  { id: "steer", label: "Needed the answer mid-task: marked it waiting, no wait, no background task, no monitor" },
   { id: "done", label: "On Done: read the page, no settle, no new card" },
   { id: "withdrew", label: "Answered in the terminal: withdrew the card, saying why in one line" },
   { id: "question", label: "opencode's question reached the devices and its answer the session" },
@@ -311,6 +312,12 @@ function score(r: Rec, s: Scenario): Record<string, boolean | null> {
       if (said.some((l) => l.startsWith("Nothing brings"))) return waited;
       return null;
     })(),
+    // #1488: the one way to need an answer now is `starbridge waiting` (or `ask --waiting`).
+    steer: s.name === "mid-task"
+      ? all.some((c) => /starbridge\s+(ask\b[^\n]*--waiting\b|waiting\b)/.test(c)) &&
+        !all.some((c) => /starbridge\s+(ask\b[^\n]*--wait\b|wait\b)/.test(c)) &&
+        !r.turns.some((t) => (t.background ?? []).length > 0 || (t.tools ?? []).includes("Monitor"))
+      : null,
     done: s.done
       ? !!r.answered &&
         !all.some((c) => /starbridge\s+settle\b/.test(c)) &&
