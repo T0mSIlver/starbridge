@@ -6,8 +6,8 @@
 #   deploy/rollback.sh --list      the releases the box holds, newest first
 # It asks before deploying, unless given --yes. It deploys the commit's whole tree with
 # deploy/deploy.sh, so its compose file, Caddyfile and demo server come back too. apply.sh refuses
-# a database at a newer schema than that server's: rolling back past a migration needs the backup
-# taken before it (deploy/README.md, "Rollback").
+# a database that server would refuse: newer than its schema, except by one additive migration
+# (#1555). Rolling back further needs the backup taken before it (deploy/README.md, "Restore").
 set -eu
 host=${STARBRIDGE_HOST:-deploy@starbridge.run}
 key=$HOME/.ssh/starbridge_ed25519
