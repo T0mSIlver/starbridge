@@ -301,6 +301,37 @@ test("a line handed over again after the other process ran it and exited is not 
   expect(second.submitted).toEqual([]);
 });
 
+test("a process that starts while this one checks for a live one keeps its own answer (#1559)", async () => {
+  const m = machine();
+  await m.process("s1", "proc-1").sent.send(LINE, "d_1");
+  const second = m.process("s1", "proc-2");
+  const third = m.process("s1", "proc-3");
+  const other = "Answer to d_2 (Ship?): Ship";
+  // The first process has exited; the third starts and records its answer before its record of
+  // the session is listed.
+  m.checking.run = async () => {
+    m.checking.run = async () => {};
+    await third.sent.send(other, "d_2");
+  };
+  await second.sent.recover();
+  expect(second.submitted).toEqual([LINE]);
+  expect(third.submitted).toEqual([other]);
+});
+
+test("a line handed over while a new process takes it stays with that process (#1559)", async () => {
+  const m = machine();
+  await m.process("s1", "proc-1").sent.send(LINE, "d_1");
+  const second = m.process("s1", "proc-2");
+  const third = m.process("s1", "proc-3");
+  m.checking.run = async () => {
+    m.checking.run = async () => {};
+    await third.sent.recover();
+  };
+  expect(await second.sent.send(LINE, "d_1")).toBe(true);
+  expect(second.submitted).toEqual([]);
+  expect(third.submitted).toEqual([LINE]);
+});
+
 test("a file that cannot be read is left as it is, and the line is tried again (#1559)", async () => {
   const m = machine();
   const p = m.process("s1", "proc-1");

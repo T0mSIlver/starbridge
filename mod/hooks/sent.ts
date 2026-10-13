@@ -87,11 +87,13 @@ export class Sent {
       if (known && (this.process === undefined || known.process === this.process)) return true;
       if (known && known.process !== "") {
         if (await this.host.elsewhere(me).catch(() => false)) return true;
-        // The process may have run the line's turn before it exited: then the file lacks it.
+        // The process may have run the line's turn before it exited: then the file lacks it. A
+        // process that started meanwhile may hold it now.
+        const before = known.process;
         lines = await this.loaded(me);
         if (!lines) return false;
         known = lines.find((l) => l.ack === ack);
-        if (!known) return true;
+        if (!known || (known.process !== "" && known.process !== before)) return true;
       }
       const entry = known
         ? { ...known, process: this.process ?? "" }
@@ -142,13 +144,16 @@ export class Sent {
       // Other processes' lines go out once another live process no longer runs this session:
       // checked again at each turn's end until then.
       const theirs = (l: Line) => l.process !== "" && l.process !== this.process;
+      const key = (l: Line) => `${l.ack}\n${l.process}`;
+      const found = new Set(lines.filter(theirs).map(key));
       let take = false;
       if (!this.recovered.has(me)) {
-        take = !(lines.some(theirs) && (await this.host.elsewhere(me).catch(() => false)));
-        // A process that exited may have run some of its lines' turns since the first read.
-        if (take && lines.some(theirs)) lines = await this.load(me);
+        take = !(found.size > 0 && (await this.host.elsewhere(me).catch(() => false)));
+        // A process that exited may have run some of its lines' turns since the first read, and
+        // one that started meanwhile may have recorded its own, which stay with it.
+        if (take && found.size > 0) lines = await this.load(me);
       }
-      const due = lines.filter((l) => l.process === "" || (take && theirs(l)));
+      const due = lines.filter((l) => l.process === "" || (take && found.has(key(l))));
       if (due.length === 0) {
         if (take) this.recovered.add(me);
         return;
