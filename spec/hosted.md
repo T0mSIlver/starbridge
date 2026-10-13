@@ -76,10 +76,11 @@
   of the outside check's round trips pass (a card, its Web Push, the answer read back); 99% of
   answers reach their machine within 5 s, the p99. A slot counts as down only when every vantage
   that checked in it saw `/healthz` fail, so one checker's network spends no budget. The owner gets
-  a card when a target misses more than twice what it allows over a day, which spends 2 days of the
-  month's budget in one: fast enough to act on, slow enough that one failed round trip does not
+  an alert when a target misses more than twice what it allows over a day, which spends 2 days of
+  the month's budget in one: fast enough to act on, slow enough that one failed round trip does not
   page. The checks run from two VMs on another provider, sb-oracle and sb-staging, every 5 minutes,
-  and the round trip every 15.
+  and the round trip every 15. Infra alerts and their recoveries go to the owner's Discord, posted
+  from sb-oracle, not to Starbridge cards, which are for decisions (#1565).
 - **Status page** (#1544). `status.starbridge.run` is a static page on Cloudflare Pages, built on
   sb-oracle from both vantages' checks, so it stays up when the VPS is down and serves any crowd
   without a server of ours. It is uploaded when its content changes or once a day, a few uploads
