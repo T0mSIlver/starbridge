@@ -1355,7 +1355,11 @@ export function takeAnswer(
         ? st.answers[id]
         : undefined
       : Object.values(st.answers).find(
-          (a) => !a.seen && deliverable(st, a.answer.decisionId) && mine(st, a.answer.decisionId),
+          (a) =>
+            !a.seen &&
+            !steering(a) &&
+            deliverable(st, a.answer.decisionId) &&
+            mine(st, a.answer.decisionId),
         );
   if (!found(store.state())) return undefined;
   let taken: { answer: Answer; question?: string } | undefined;

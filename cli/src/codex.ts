@@ -209,13 +209,20 @@ export async function codexSteer(s: CodexSession, thread: string, text: string):
   let app: CodexApp | undefined;
   let timer: ReturnType<typeof setTimeout> | undefined;
   let sent = false;
+  // Past the budget the caller queues: a steer that connected late must not go out too.
+  let late = false;
   const steer = async () => {
-    app = await CodexApp.connect(s.home, () => {});
+    const connected = await CodexApp.connect(s.home, () => {});
+    app = connected;
+    if (late) {
+      connected.close();
+      return false;
+    }
     const turns = (await app.request("thread/turns/list", { threadId: thread, limit: 1 })) as {
       data?: { id: string; status: string }[];
     };
     const turn = turns.data?.[0];
-    if (turn?.status !== "inProgress") return false;
+    if (late || turn?.status !== "inProgress") return false;
     const steered = app.request("turn/steer", {
       threadId: thread,
       expectedTurnId: turn.id,
@@ -226,11 +233,17 @@ export async function codexSteer(s: CodexSession, thread: string, text: string):
     await steered;
     return true;
   };
+  const steering = steer();
+  // It can still fail after the budget answered for it.
+  steering.catch(() => {});
   try {
     return await Promise.race([
-      steer(),
+      steering,
       new Promise<boolean>((resolve) => {
-        timer = setTimeout(() => resolve(sent), STEER_MS);
+        timer = setTimeout(() => {
+          late = !sent;
+          resolve(sent);
+        }, STEER_MS);
       }),
     ]);
   } catch {
