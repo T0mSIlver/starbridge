@@ -52,6 +52,7 @@ test("mid-turn, the main agent's next tool result carries the answer, and the tu
   register((event, h) => handlers.set(event, h));
   const line = "Answer to d_1 (Merge #12 now?): No";
   let acked = false;
+  let turn = false;
   const submitted: string[] = [];
   const env: Record<string, string> = { STARBRIDGE_AGENT_SOCKET: "/sb/agent.sock", HOME: "/sb" };
   const $ = {
@@ -62,7 +63,7 @@ test("mid-turn, the main agent's next tool result carries the answer, and the tu
       fetch: async (url: string) => {
         if (url.endsWith("/ack")) acked = true;
         const events =
-          url.includes("/events") && !acked ? [{ type: "answer", ack: "k1", line }] : [];
+          url.includes("/events") && turn && !acked ? [{ type: "answer", ack: "k1", line }] : [];
         return { status: 200, headers: {}, text: JSON.stringify({ events }) };
       },
     },
@@ -79,8 +80,9 @@ test("mid-turn, the main agent's next tool result carries the answer, and the tu
     handlers.get("tool.call")?.($, { tool: "Bash", ...e }, async () => result) as Promise<{
       context?: string[];
     }>;
-  await handlers.get("turn.start")?.($, { text: "go", turnId: "t1" }, async () => undefined);
   await handlers.get("session.start")?.($, { isInteractive: true }, async () => undefined);
+  await handlers.get("turn.start")?.($, { text: "go", turnId: "t1" }, async () => undefined);
+  turn = true;
   await Bun.sleep(100);
   expect(submitted).toEqual([]);
   // A subagent's call and a refused call carry nothing; the main agent's next result does.
