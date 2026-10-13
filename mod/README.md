@@ -81,6 +81,11 @@ session. After an error the mod waits 2 s, then twice as long after each
 further error, up to a minute, and shows the error in the status line until a
 call succeeds.
 
+Claude Code runs a submitted prompt only once the running turn ends. So while
+the agent works, an answer to a decision it marked waiting goes with its next
+tool result, which it reads at once; any other answer stays unconfirmed until
+the turn ends, and the mod then submits it.
+
 ## Pi
 
 `pi/starbridge.ts` is the same answer loop as a Pi extension. It ships in the

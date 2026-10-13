@@ -1,6 +1,6 @@
 // One selection drives both the list highlight and the detail pane.
 import { expect, test } from "bun:test";
-import { afterAnswer, selectedId, step } from "./selection";
+import { afterAnswer, afterAnswerNarrow, selectedId, step } from "./selection";
 
 test("the first open row is selected until one is picked, and a pick survives new arrivals", () => {
   expect(selectedId(["a", "b"], undefined, "a")).toBe("a");
@@ -25,4 +25,13 @@ test("answering moves to the next open decision, else the previous, else stays",
   expect(afterAnswer(["a", "b", "c"], "b")).toBe("c");
   expect(afterAnswer(["a", "b"], "b")).toBe("a");
   expect(afterAnswer(["a"], "a")).toBeUndefined();
+});
+
+test("in place of the list, a mouse opens the next open decision and a touch screen the list (#1432)", () => {
+  expect(afterAnswerNarrow(["a", "b", "c"], "b", true)).toBe("c");
+  expect(afterAnswerNarrow(["a", "b"], "b", true)).toBe("a");
+  expect(afterAnswerNarrow(["a"], "a", true)).toBeUndefined();
+  // One not in the open list, such as a closed one answered again, goes back to the list.
+  expect(afterAnswerNarrow(["a"], "past", true)).toBeUndefined();
+  expect(afterAnswerNarrow(["a", "b"], "a", false)).toBeUndefined();
 });

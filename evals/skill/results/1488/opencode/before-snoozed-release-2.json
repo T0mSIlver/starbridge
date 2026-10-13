@@ -1,0 +1,83 @@
+{
+  "agent": "opencode",
+  "model": "zai-coding-plan/glm-5.3-flash",
+  "arm": "before",
+  "scenario": "snoozed-release",
+  "rep": 2,
+  "turns": [
+    {
+      "commands": [
+        "cat package.json && git status --short && git log --oneline -3",
+        "starbridge ask \\\n  --question 'Publish @acme/notes 0.4.0 to npm?' \\\n  --context 'A published npm version can never be taken back, so your OK on a card is needed first. package.json is at 0.4.0 and the working tree is clean.\n**Publish 0.4.0:** runs npm publish from the repo root.\n**Hold:** publish nothing for now.' \\\n  --option 'Publish 0.4.0' --option 'Hold' --recommended 'Publish 0.4.0' --waiting",
+        "starbridge wait d_v_BLDB1gMch0b2bC --timeout 5m"
+      ],
+      "final": "Your card asking to publish @acme/notes 0.4.0 was snoozed until tomorrow 09:00, so nothing is published yet — a snooze is not a yes. When you're back, `starbridge wait d_v_BLDB1gMch0b2bC` reads your answer and I'll publish right away if you approved it.",
+      "session": "ses_ecaf9c1e7ffeVFRTur3zwhI0QW",
+      "tokens": 5186,
+      "exit": 0,
+      "seconds": 48.813,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_v_BLDB1gMch0b2bC --timeout 5m` (again on exit 2)."
+      ]
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_v_BLDB1gMch0b2bC",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-13T11:29:50Z",
+      "question": "Publish @acme/notes 0.4.0 to npm?",
+      "context": "A published npm version can never be taken back, so your OK on a card is needed first. package.json is at 0.4.0 and the working tree is clean.\n**Publish 0.4.0:** runs npm publish from the repo root.\n**Hold:** publish nothing for now.",
+      "options": [
+        "Publish 0.4.0",
+        "Hold"
+      ],
+      "recommended": "Publish 0.4.0",
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": ""
+      },
+      "replies": true,
+      "dir": {
+        "length": 2,
+        "head": "37frMfTrStKxpI1x1T43OzJbp1CaC7h2-OxXGR4diho"
+      }
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [],
+  "snoozed": "2026-10-14T07:00:00.000Z",
+  "waiting": [
+    {
+      "v": 1,
+      "id": "w_x5Zw4SbD5rwmmQrL",
+      "decisionId": "d_v_BLDB1gMch0b2bC",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-13T11:29:50Z",
+      "state": "waiting",
+      "dir": {
+        "length": 2,
+        "head": "37frMfTrStKxpI1x1T43OzJbp1CaC7h2-OxXGR4diho"
+      }
+    }
+  ],
+  "permissions": [],
+  "settled": [],
+  "judge": {
+    "cold": true,
+    "consequences": true,
+    "terminal": false,
+    "links": null,
+    "plain": true,
+    "skim": true,
+    "notes": "The final message reports the card and says the agent will publish if approved, then points to a later `starbridge wait` command instead of asking the question in the terminal and waiting for a reply."
+  }
+}

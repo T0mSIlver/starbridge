@@ -1,4 +1,5 @@
 import ImageIO
+import StarbridgeProtocol
 import SwiftUI
 import UIKit
 
@@ -69,6 +70,29 @@ struct ImageRows: View {
                 .frame(maxHeight: maxHeight)
             }
         }
+    }
+}
+
+/** Where a question's images go while they download (#1382): each its shape, two to a row. */
+struct PendingImages: View {
+    let images: [DecisionImage]
+
+    var body: some View {
+        VStack(spacing: Tokens.Spacing.s2) {
+            ForEach(Array(stride(from: 0, to: images.count, by: 2)), id: \.self) { start in
+                let row = Array(images[start..<min(start + 2, images.count)])
+                let aspects = row.map { $0.height > 0 ? CGFloat($0.width) / CGFloat($0.height) : 1 }
+                HStack(spacing: Tokens.Spacing.s2) {
+                    ForEach(Array(aspects.enumerated()), id: \.offset) { _, aspect in
+                        RoundedRectangle(cornerRadius: Tokens.Radius.sm)
+                            .fill(Tokens.Colors.surface2.color)
+                            .aspectRatio(aspect, contentMode: .fit)
+                    }
+                }
+                .frame(maxHeight: Tokens.Sizes.media)
+            }
+        }
+        .accessibilityLabel("Images loading")
     }
 }
 

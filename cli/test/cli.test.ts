@@ -597,6 +597,34 @@ test("waiting and working flip a decision's state, and each flip pushes", async 
   expect(ctx.errors.at(-1)).toContain("already answered");
 });
 
+for (const via of ["the CLI", "the local agent"])
+  test(`through ${via}, waiting on an answer not yet handed over prints it, once (#1484)`, async () => {
+    const ctx = await paired(server);
+    const agent =
+      via === "the local agent"
+        ? makeAgent(ctx, { socket: agentAddress(ctx.store.dir), noQuota: true })
+        : undefined;
+    await agent?.start();
+    try {
+      await run([...ASK, "--session", "s1"], ctx);
+      const id = ctx.lines.at(-1) as string;
+      await server.answer(id, { choice: "Merge" });
+      await until(async () => {
+        ctx.lines.length = 0;
+        await run(["answers", "--session", "s1", "--wait", "1"], ctx);
+        return ctx.lines.length > 0;
+      });
+      expect(await run(["waiting", id], ctx)).toBe(0);
+      expect(ctx.lines.at(-1)).toBe(`Answer to ${id} (Merge #12 now?): Merge`);
+      ctx.lines.length = 0;
+      expect(await run(["answers", "--session", "s1"], ctx)).toBe(0);
+      expect(ctx.lines).toEqual([]);
+      expect(await run(["waiting", id], ctx)).toBe(1);
+    } finally {
+      await agent?.stop();
+    }
+  });
+
 test("waiting says when the owner snoozed the question, and wait says it once with exit 3", async () => {
   const ctx = await paired(server);
   await run(ASK, ctx);
@@ -1347,26 +1375,36 @@ test("answers hands each session only its own answers, until it confirms them", 
   await server.answer(theirs, { text: "multi\nline" });
   await server.answer(mine, { choice: "Wait" });
   expect(await run(["answers", "--session", "s1", "--wait", "5"], ctx)).toBe(0);
-  const handed = { decisionId: mine, ack: mine, line: `Answer to ${mine} (Merge #12 now?): Wait` };
+  const handed = {
+    decisionId: mine,
+    ack: mine,
+    line: `Answer to ${mine} (Merge #12 now?): Wait`,
+    waiting: false,
+  };
   expect(ctx.lines.map((l) => JSON.parse(l))).toEqual([handed]);
   // Unconfirmed, it is handed over again; another session cannot confirm it.
   expect(await run(["answers", "--session", "s2", "--ack", mine], ctx)).toBe(0);
+  expect(JSON.parse(ctx.lines[1] as string)).toEqual({ acked: [] });
   expect(await run(["answers", "--session", "s1"], ctx)).toBe(0);
-  expect(JSON.parse(ctx.lines[1] as string)).toEqual(handed);
+  expect(JSON.parse(ctx.lines[2] as string)).toEqual(handed);
   expect(await run(["answers", "--session", "s1", "--ack", mine], ctx)).toBe(0);
+  expect(JSON.parse(ctx.lines[3] as string)).toEqual({ acked: [mine] });
+  // Confirmed: handed over no more, and a second confirm confirms nothing (#1484).
   expect(await run(["answers", "--session", "s1"], ctx)).toBe(0);
-  expect(ctx.lines).toHaveLength(2);
+  expect(await run(["answers", "--session", "s1", "--ack", mine], ctx)).toBe(0);
+  expect(ctx.lines.slice(4).map((l) => JSON.parse(l))).toEqual([{ acked: [] }]);
 
   // s2's answer was stored by s1's poll; s2 takes it with no poll, only a read of the directory
   // to check the device still counts (#491).
   const polls = server.log.length;
+  ctx.lines.length = 0;
   expect(await run(["answers", "--session", "s2"], ctx)).toBe(0);
-  expect(JSON.parse(ctx.lines[2] as string).line).toBe(
+  expect(JSON.parse(ctx.lines[0] as string).line).toBe(
     `Answer to ${theirs} (Name the branch?): multi\nline`,
   );
   expect(server.log.slice(polls)).toEqual(["GET /directory"]);
   expect(await run(["answers", "--session", "s3"], ctx)).toBe(0);
-  expect(ctx.lines).toHaveLength(3);
+  expect(ctx.lines).toHaveLength(1);
 });
 
 test("answers exits 1 on a server error and keeps the cursor", async () => {

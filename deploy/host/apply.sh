@@ -14,10 +14,13 @@ case $REVISION in *[!0-9a-f]*) REVISION= ;; esac
 # Compose reads the tag from here, so every script on the box that runs it names this release.
 echo "REVISION=$REVISION" > .env
 
-install -m 644 host/starbridge-backup.service host/starbridge-backup.timer \
+install -m 644 host/starbridge-backup.service host/starbridge-backup.timer host/starbridge-offsite.service \
   host/starbridge-umami-trim.service host/starbridge-umami-trim.timer \
   host/starbridge-docker-prune.service host/starbridge-docker-prune.timer /etc/systemd/system/
 systemctl daemon-reload
+# The offsite backup's tools, on a host set up before it (#1482).
+command -v age >/dev/null && command -v zstd >/dev/null && command -v rsync >/dev/null ||
+  DEBIAN_FRONTEND=noninteractive apt-get install -yq age zstd rsync
 systemctl enable --now starbridge-backup.timer starbridge-umami-trim.timer starbridge-docker-prune.timer
 install -m 755 host/deploy-rev.sh /usr/local/sbin/starbridge-deploy
 

@@ -263,6 +263,12 @@ fun PairCard(approval: Approval, actions: DeviceActions, otherWays: @Composable 
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                         Text(f.code, style = StarbridgeTheme.type.machine, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        // As on the web: who may be approved (#1377).
+                        Text(
+                            if (f.kind == Kind.Machine) "Approve only if you just ran starbridge setup or pair on ${f.name}." else "Approve only if ${f.name} scanned or showed this code.",
+                            style = StarbridgeTheme.type.small,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Button(
                                 onClick = actions.approve,
@@ -290,6 +296,15 @@ fun PairCard(approval: Approval, actions: DeviceActions, otherWays: @Composable 
                                 Icon(Icons.Rounded.CheckCircle, contentDescription = null, tint = colors.ok)
                                 Spacer(Modifier.width(Spacing.s2))
                                 Text("${state.name} joined.", style = StarbridgeTheme.type.body, color = MaterialTheme.colorScheme.onSurface)
+                            }
+                            // Its terminal waits on this comparison (#1377); the web's words.
+                            state.check?.let { check ->
+                                Text("Check code $check", style = StarbridgeTheme.type.machine, color = MaterialTheme.colorScheme.onSurface)
+                                Text(
+                                    "Press Enter in its terminal if it shows this code. If not, revoke ${state.name} under Devices.",
+                                    style = StarbridgeTheme.type.small,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
                             }
                         }
                         Text("Add a machine or device", style = StarbridgeTheme.type.heading, color = MaterialTheme.colorScheme.onSurface)

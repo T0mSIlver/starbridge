@@ -10,9 +10,20 @@
 - **Notifications** show at most three options; a fourth needs the app. A prompt's shows only its
   command. Android's contextual chips are off, so the only buttons are answers. With sensitive
   content hidden, the lock screen's public version carries the same buttons.
+- **Lock-screen answers follow sensitive content** (#1375). A question's buttons answer from the
+  lock screen only while Android shows sensitive notification content there: notifications on
+  the lock screen, "Sensitive notifications" on (a work profile has its own switch), no device
+  policy hiding them, and neither question channel set to hide content. Otherwise they ask for the
+  unlock, and the receiver refuses an answer that arrives while the phone is locked, since an app
+  with notification access can send a button's intent itself (#274). An owner who hides content
+  on the lock screen expects the locked phone to take no answers either; one who shows it reads and
+  answers there. The setting is read at each post and each answer.
 - **No answer is lost** (#329, #331). An answer is sealed, signed and stored before it is posted;
   WorkManager sends it once a network is up. A retry the server already took gets
   `already-answered`, which the app counts as its own when an earlier attempt may have landed.
+- **No answer waits for a pull** (#1390; the rule in clients.md). WorkManager's run waits out a
+  rate-limit hold before it posts, and a new failure replaces a run waiting in backoff, so the
+  answer goes when the hold ends rather than after an earlier answer's backoff.
 - **Short outages go unnoticed** (#920). A phone unlocks before its network, or its VPN's DNS, is
   back, so the sync on resume used to fail with the lookup's error. A sync started while Android
   counts no network as validated waits for one; a sync the network or server failed (unknown host,

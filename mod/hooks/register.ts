@@ -9,18 +9,31 @@ import {
   signCall,
   socketPath,
 } from "./agent.ts";
+import { Handover } from "./handover.ts";
 import { configDir, Poller } from "./poller.ts";
 import { Switch, wantsLoop } from "./switch.ts";
 
 /**
  * Starts the answer loop in each session a person keeps open (`wantsLoop`): through the machine's agent when it runs
  * (agent.ts), else through the CLI (poller.ts); switch.ts picks. A hot reload loads this module
- * afresh: the old loop dies with the old module, and `session.start` starts a new one.
+ * afresh: the old loop dies with the old module, and `session.start` starts a new one. While the
+ * main agent's turn runs, an answer it marked waiting goes out with its next tool result
+ * instead, and any other waits for the turn's end (handover.ts).
  */
 export const register: Register = (on) => {
   let loop: Switch | undefined;
+  /** Prompts submitted whose turn has not started. */
+  let waiting = 0;
+  // `$.prompt.submit` resolves when the prompt's turn starts: mid-turn, once the running one ends.
+  const track = (submitted: Promise<unknown>) => {
+    waiting++;
+    const started = () => void waiting--;
+    submitted.then(started, started);
+  };
+  const handover = new Handover();
 
   on("session.start", async ($, e, next) => {
+    handover.ended();
     const started = await next(e);
     if (!wantsLoop(e.isInteractive, await $.env.get("CLAUDE_CODE_ENTRYPOINT"))) return started;
     // The new loop takes over the lines the old one submitted and has not confirmed yet, so it
@@ -66,7 +79,9 @@ export const register: Register = (on) => {
     };
     const log = (text: string) => $.ui.log(text, { to: "debug" });
     const status = (text: string | undefined) => $.ui.status(text);
-    const submit = (text: string) => void $.prompt.submit({ text });
+    const submit = (text: string, waiting: boolean, ack: string) =>
+      handover.submit(text, ack, waiting, (line) => track($.prompt.submit({ text: line })));
+    const starting = () => waiting > 0;
     const sessionId = () => $.session.id();
     const now = () => $.clock.now();
     const sleep = (ms: number) => $.clock.sleep(ms);
@@ -77,7 +92,17 @@ export const register: Register = (on) => {
           !env.STARBRIDGE_NO_AGENT && (await fetch("GET", "/v1/status")).status < 300,
         agent: (unconfirmed) =>
           new AgentLoop(
-            { sessionId, cwd: () => $.session.cwd(), fetch, now, sleep, submit, status, log },
+            {
+              sessionId,
+              cwd: () => $.session.cwd(),
+              fetch,
+              now,
+              sleep,
+              submit,
+              starting,
+              status,
+              log,
+            },
             unconfirmed,
           ),
         poller: (unconfirmed) =>
@@ -91,6 +116,7 @@ export const register: Register = (on) => {
               now,
               sleep,
               submit,
+              starting,
               status,
               log,
             },
@@ -109,9 +135,33 @@ export const register: Register = (on) => {
     return started;
   });
 
+  // A subagent's run raises no `turn.start`; its `turn.complete` and tool calls carry its `agentId`.
+  on("turn.start", async (_$, e, next) => {
+    handover.started();
+    return next(e);
+  });
+
+  on("turn.complete", async (_$, e, next) => {
+    const r = await next(e);
+    if (e.agentId === undefined) handover.ended();
+    return r;
+  });
+
+  on("tool.call", async ($, e, next) => {
+    const r = await next(e);
+    if (e.agentId !== undefined || r.deny !== undefined) return r;
+    const lines = await handover.take((acks) => loop?.claim(acks) ?? Promise.resolve([]));
+    if (lines.length === 0) return r;
+    $.ui.log(`starbridge: handed ${lines.length} answer(s) with the ${e.tool} result`, {
+      to: "debug",
+    });
+    return { ...r, context: [...(r.context ?? []), ...lines] };
+  });
+
   // After a /clear or a /resume the process goes on under another session id, with no
   // `session.start`, and the loop reads the id each step. Only the end of the process stops it.
   on("session.end", async (_$, e, next) => {
+    handover.ended();
     if (e.reason !== "clear" && e.reason !== "resume") {
       await loop?.end();
       loop = undefined;

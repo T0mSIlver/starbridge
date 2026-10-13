@@ -78,14 +78,22 @@
   that would first ask to become a device itself. A machine's QR code is text only the app's
   scanner reads instead (#795, #1099). The app
   opens Add a device with the code looked up, once the phone is in the account; a phone signed in
-  but not in the account yet joins with it instead, as another device's "Scan with the new phone"
-  code asks. Without the app,
+  but not in the account yet offers to join with it instead, as another device's "Scan with the
+  new phone" code asks, and joins once the owner taps Add this phone (Keys and trust, "Pairing"). Without the app,
   or on a self-hosted server, which the APK cannot claim, the link opens the web page as before,
   and a phone signed in to another server than starbridge.run hands a starbridge.run link to the
   browser, since its own server would know no such code (#722); where both the installed web app and the app claim it, Android opens the verified app.
   A link from another server that this one doesn't know names that server, "This code is from
   starbridge.run, and this phone is signed in to …", instead of "No pairing with this code"
   (#671). Only a failed lookup says it, since a server can answer under several names.
+- **The empty inbox pairs the first machine** (#610, #1367). While the account has no machine,
+  the inbox shows "Add a machine" with the install command in place of "Nothing needs you", and
+  under it the way to pair the machine that setup then shows: Scan a QR code on Android and the
+  iPhone (#1370), then Other ways to add a device, and Add a device on the web, which has no scanner. Each opens the
+  same Add a device as Devices, with the same words. Android's text says to scan the QR code from
+  the terminal: a tester pointed his camera at it, which reads no app's code (#795), then had to
+  find the scanner under Settings, then Devices. The text gives only the instruction (owner's
+  rule): the screen needs no why.
 - **Setup** (`cli/src/setup/`; #68, #239, #245) installs the CodexBar release this Starbridge
   release pins, taking the static musl build where the glibc one would not start, and
   `starbridge update` moves that install to the new binary's pin (#568). Each release PR pins
@@ -143,7 +151,9 @@
   the installers' folders. When the binary's folder is not on the PATH, setup offers to add it to
   the shell's startup file (`--yes` adds it), and its last lines say to open a new terminal or what to add, since
   install.sh's own hint scrolls away under setup. Windows gets the folder on the PATH from
-  install.ps1.
+  install.ps1. Uninstall, when it deletes the binary, takes that line and its marker comment out
+  of every shell's startup file while they are still as setup wrote them, and deletes a file left
+  empty (#1494).
 - **Files setup writes into other tools** (#474) start with one marker line, ``Written by
   starbridge <version>; `starbridge uninstall` removes it.``, in the file's comment syntax: the
   systemd unit, the launchd plist, the Codex rule, the opencode entry, the Antigravity plugin's
@@ -154,9 +164,15 @@
   installed (#538). An owner who
   deletes the line keeps the file. Setup and uninstall remove only the files they write, then a
   folder left empty: a file the owner put beside them, such as a skill's `references/`, stays,
-  and uninstall says so (#1324). `starbridge update` runs the new binary's `setup --refresh`,
+  and uninstall says so (#1324). A settings or hooks file that uninstall's edits leave holding
+  nothing, such as an allow list setup created, is deleted rather than left as `{}`: an empty file
+  and none mean the same to its tool (#1494). `starbridge update` runs the new binary's `setup --refresh`,
   which rewrites the marked files that differ and restarts the local agent; Homebrew and npm users
   run it after upgrading, and the local agent refreshes the skills and rule when it starts.
+  The refresh moves every harness integration to the new version, the Pi package included: Pi
+  pins the package to a release tag, so without it an update left Pi on an extension that no
+  longer matched the CLI (v0.1.1's crashed Pi, #1365). A failed move prints why and does not fail
+  the refresh (#1417).
 - **Allow rules** (#245, #322, #443, #488). So a new user's first question needs no prompt and no
   sandbox flag, setup allows `starbridge ask`, `waiting`, `working`, `wait` and `settle`: Claude
   Code allow rules, a Codex execpolicy file (`~/.codex/rules/starbridge.rules`) that runs them
@@ -187,7 +203,9 @@
   loads a local plugin's skill and hooks in `-p` but, in an interactive session, neither its skill
   nor its `sessionStart` and `stop` hooks (run 2026-10-09). Cursor also reads `~/.codex/skills`,
   so with Codex set up too it lists the skill twice; both copies are the same. Setup finds Cursor
-  by `cursor-agent` on the PATH or a `~/.cursor` folder.
+  by `cursor-agent` on the PATH or a `~/.cursor` folder. Its entries in `~/.cursor/hooks.json`
+  are known by the exact commands setup writes, so refresh and uninstall leave an owner's entry
+  that runs a script of `~/.cursor/starbridge` its own way (#1493).
 - **Docs** (#211) at `/docs` are the repository's Markdown files listed in `web/src/lib/docs.ts`,
   rendered by the web page. Links between them become `/docs` links; other relative links go to
   GitHub. Images are screenshots under `web/public`, served from the site root, so GitHub shows

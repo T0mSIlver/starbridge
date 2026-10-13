@@ -18,6 +18,7 @@ import {
   type Reply,
   socketPath,
 } from "../hooks/agent.ts";
+import { Handover } from "../hooks/handover.ts";
 import { socketFetch } from "../hooks/node.ts";
 import { Poller, type Timing } from "../hooks/poller.ts";
 import { Switch } from "../hooks/switch.ts";
@@ -91,6 +92,8 @@ function session(id: string) {
   const s = {
     id,
     submitted: [] as string[],
+    /** What the host's `starting` answers. */
+    starting: false,
     calls: [] as string[],
     status: undefined as string | undefined,
     logs: [] as string[],
@@ -112,6 +115,7 @@ function session(id: string) {
     submit: (text) => {
       s.submitted.push(text);
     },
+    starting: () => s.starting,
     status: (text) => {
       s.status = text;
     },
@@ -242,6 +246,78 @@ test("an answer the host refuses stays unconfirmed and comes back", async () => 
   expect(a.s.submitted).toEqual([`Answer to ${d} (Merge #12 now?): No`]);
 });
 
+test("mid-turn, an answer the agent marked waiting goes out with its next tool result, once (#1484)", async () => {
+  await startAgent();
+  const a = session("s-a");
+  const handover = new Handover();
+  const enter = (text: string) => void a.s.submitted.push(text);
+  const { loop: l } = loop({
+    ...a.host,
+    submit: (text, waiting, ack) => handover.submit(text, ack, waiting, enter),
+  });
+  handover.started();
+  const d = await ask("Merge #12 now?", "s-a");
+  expect(await run(["waiting", d], cli)).toBe(0);
+  await until(() => a.s.calls.some((c) => c.startsWith("GET")));
+  await server.answer(d, { choice: "No" });
+  let taken: string[] = [];
+  await until(async () => {
+    taken = await handover.take((acks) => l.claim(acks));
+    return taken.length > 0;
+  });
+  expect(taken).toEqual([`Answer to ${d} (Merge #12 now?): No`]);
+  // Confirmed with the tool result, so a new mod after a reload gets nothing.
+  expect(cli.store.state().answers[d]?.seen).toBe(true);
+  handover.ended();
+  await Bun.sleep(100);
+  expect(a.s.submitted).toEqual([]);
+});
+
+test("mid-turn, a waiting answer that `waiting` printed meanwhile goes in no tool result (#1484)", async () => {
+  await startAgent();
+  const a = session("s-a");
+  const handover = new Handover();
+  const enter = (text: string) => void a.s.submitted.push(text);
+  const { loop: l } = loop({
+    ...a.host,
+    submit: (text, waiting, ack) => handover.submit(text, ack, waiting, enter),
+  });
+  handover.started();
+  const d = await ask("Merge #12 now?", "s-a");
+  expect(await run(["waiting", d], cli)).toBe(0);
+  await server.answer(d, { choice: "No" });
+  // The loop keeps it for the next tool call; the agent's own `waiting` prints it first.
+  await until(() => a.s.calls.filter((c) => c.includes("/events")).length >= 3);
+  expect(await run(["waiting", d], cli)).toBe(0);
+  expect(cli.lines.at(-1)).toBe(`Answer to ${d} (Merge #12 now?): No`);
+  expect(await handover.take((acks) => l.claim(acks))).toEqual([]);
+  handover.ended();
+  await Bun.sleep(200);
+  expect(a.s.submitted).toEqual([]);
+});
+
+test("mid-turn, an answer that blocks nothing waits for the turn's end, then comes as a prompt (#1484)", async () => {
+  await startAgent();
+  const a = session("s-a");
+  const handover = new Handover();
+  const enter = (text: string) => void a.s.submitted.push(text);
+  const { loop: l } = loop({
+    ...a.host,
+    submit: (text, waiting, ack) => handover.submit(text, ack, waiting, enter),
+  });
+  handover.started();
+  const d = await ask("Merge #12 now?", "s-a");
+  await until(() => a.s.calls.some((c) => c.startsWith("GET")));
+  await server.answer(d, { choice: "No" });
+  // It comes back unconfirmed on each poll, and no tool result takes it.
+  await until(() => a.s.calls.filter((c) => c.includes("/events")).length >= 4);
+  expect(await handover.take((acks) => l.claim(acks))).toEqual([]);
+  expect(a.s.calls).not.toContain("POST /v1/sessions/s-a/ack");
+  handover.ended();
+  await until(() => a.s.calls.includes("POST /v1/sessions/s-a/ack"));
+  expect(a.s.submitted).toEqual([`Answer to ${d} (Merge #12 now?): No`]);
+});
+
 test("each session gets its own answers through the agent, once, confirmed", async () => {
   await startAgent();
   const a = session("s-a");
@@ -265,6 +341,28 @@ test("each session gets its own answers through the agent, once, confirmed", asy
   expect(a.s.calls[0]).toBe("POST /v1/sessions/s-a/hello");
   // No session ran the CLI: the mod has no `$.process.run` on this path at all.
   expect(a.s.status).toBeUndefined();
+});
+
+test("while a submitted prompt waits for its turn, no events request waits (#1446)", async () => {
+  await startAgent();
+  const a = session("s-a");
+  // Mid-turn: the prompt's turn starts only after the running one.
+  loop({
+    ...a.host,
+    submit: (text) => {
+      a.s.submitted.push(text);
+      a.s.starting = true;
+    },
+  });
+  const d = await ask("Merge #12 now?", "s-a");
+  await until(() => a.s.calls.some((c) => c.startsWith("GET")));
+  await server.answer(d, { choice: "No" });
+  await until(() => a.s.submitted.length === 1);
+  const after = a.s.calls.length;
+  await until(() => a.s.calls.slice(after).filter((c) => c.includes("/events")).length >= 2);
+  expect(a.s.calls.slice(after).filter((c) => c.includes("/events?wait=1"))).toEqual([]);
+  a.s.starting = false;
+  await until(() => a.s.calls.slice(after).some((c) => c.includes("/events?wait=1")));
 });
 
 test("an answer that arrives during a /clear waits for the old session", async () => {
@@ -347,6 +445,7 @@ test("with no agent the CLI path delivers, and the switch follows the agent comi
             submit: (t) => {
               a.s.submitted.push(t);
             },
+            starting: () => false,
             status: () => {},
             log: (t) => a.s.logs.push(t),
           },

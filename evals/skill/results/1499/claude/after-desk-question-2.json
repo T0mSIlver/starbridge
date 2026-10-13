@@ -1,0 +1,88 @@
+{
+  "agent": "claude",
+  "model": "claude-haiku-5-5",
+  "arm": "after",
+  "scenario": "desk-question",
+  "rep": 2,
+  "turns": [
+    {
+      "commands": [],
+      "askUser": [
+        {
+          "denied": false
+        }
+      ],
+      "final": "",
+      "session": "c35486d1-579e-47b7-988c-1914ec0d26f4",
+      "exit": 0,
+      "seconds": 10.027
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_YyFsJzGMtu8pp_oF",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-13T13:05:47.373Z",
+      "question": "Follow system setting, or add a menu toggle?",
+      "context": "- Both (Recommended): Default to the OS setting, with a menu toggle that overrides it and persists the choice.\n- Follow system only: Use prefers-color-scheme with no UI control. Simplest, but users can't pick independently of the OS.\n- Menu toggle only: Manual light/dark switch only, ignoring the OS setting. Needs a stored preference.",
+      "options": [
+        "Both (Recommended)",
+        "Follow system only",
+        "Menu toggle only"
+      ],
+      "recommended": "Both (Recommended)",
+      "agent": "claude-code",
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "c35486d1-579e-47b7-988c-1914ec0d26f4",
+        "sessionTitle": "I'm at my desk for the next ten minutes."
+      },
+      "replies": true,
+      "dir": {
+        "length": 2,
+        "head": "IoGmQH5BMf4B2Z0wSBk4HftvGJyZuNVjeRNSNrBdAeI"
+      }
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [
+    "gh auth token",
+    "gh auth token",
+    "gh issue list -R anthropics/claude-code --author @me --state closed --search closed:>2026-09-13 --json number,title,closedAt,stateReason --limit 30"
+  ],
+  "waiting": [
+    {
+      "v": 1,
+      "id": "w_HO44jI6Mrf1XhcIV",
+      "decisionId": "d_YyFsJzGMtu8pp_oF",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-13T13:05:47Z",
+      "state": "waiting",
+      "dir": {
+        "length": 2,
+        "head": "IoGmQH5BMf4B2Z0wSBk4HftvGJyZuNVjeRNSNrBdAeI"
+      }
+    }
+  ],
+  "permissions": [],
+  "settled": [],
+  "peakContext": 28527,
+  "usedTokens": 29551,
+  "judge": {
+    "cold": true,
+    "consequences": true,
+    "terminal": false,
+    "links": null,
+    "plain": true,
+    "skim": true,
+    "notes": "The final terminal message is blank, so it asks no question and gives the user nothing to reply to in the session, even though the card itself is clear."
+  }
+}

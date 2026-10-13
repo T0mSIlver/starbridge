@@ -56,8 +56,7 @@ export function wakeSnoozes(db: Database, push: Push, inlineLimit: number, now =
       s.account_id,
       devices,
       (device) => pushPayload(item, device, inlineLimit, { due: true }),
-      undefined,
-      s.asker ?? undefined,
+      { thread: s.asker ?? undefined },
     );
   }
 }
