@@ -355,6 +355,7 @@ fun Main(decisions: List<Decision>, notice: StateFlow<String?>, dismiss: () -> U
                         val vm: InboxViewModel = hiltViewModel()
                         val decisions by vm.decisions.collectAsStateWithLifecycle()
                         val d = decisions.find { it.id == key.id } ?: return@entry
+                        LaunchedEffect(d.id) { vm.loadImages(d.id) }
                         QuestionSheet(d, seconds(d.waiting, now), vm::answer, Replies(drafts), onSnooze = { vm.snooze(d.id, it) })
                     }
                     entry<PromptKey>(metadata = BottomSheetSceneStrategy.sheet) { key ->

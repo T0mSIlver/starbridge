@@ -103,6 +103,8 @@ interface Store {
     /** The account's hold time in seconds (#848), once read; null on a server without it. */
     val pushHold: StateFlow<Int?> get() = MutableStateFlow(null)
     fun loadPushHold() {}
+    /** Fetches the images of an answered question listed without them (#1382). */
+    fun loadImages(id: String) {}
     fun setPushHold(seconds: Int) {}
     /** What each device last said of its notifications (#943), once read. */
     val notifyStates: StateFlow<Map<String, String>> get() = MutableStateFlow(emptyMap())

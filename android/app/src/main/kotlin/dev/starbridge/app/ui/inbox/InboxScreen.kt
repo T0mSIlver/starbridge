@@ -156,6 +156,7 @@ class InboxViewModel @Inject constructor(private val store: Store, private val p
     fun answer(id: String, choice: String?, text: String?) = store.answer(id, choice, text)
     fun snooze(id: String, until: Instant) = store.snooze(id, until)
     fun dismissRun(id: String) = store.dismissRun(id)
+    fun loadImages(id: String) = store.loadImages(id)
     fun refresh() = store.refresh()
     val recovery = store.recovery
     val members = store.members
