@@ -23,3 +23,15 @@ nice -n 19 ionice -c 3 age -R "$s/backup-age.pub" -o "$tmp/$name" "$tmp/db.zst"
 nice -n 19 rsync --chmod=F600 -e "ssh -i $s/offsite-ssh-key -o BatchMode=yes \
   -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$s/offsite-known-hosts" \
   "$tmp/$name" "$(cat "$s/offsite-target"):$name"
+# Prod's schema, with no rows, for the migration rehearsal on staging (#1543): the user_version and
+# the CREATE statements, which the repository already publishes, so it goes unencrypted. Its
+# failure leaves the copy above in place; the rehearsal reports an export older than a day.
+schema=schema-$(basename "$src" .db | cut -d- -f2).sql
+{
+  printf 'PRAGMA user_version = %s;\n' "$(sqlite3 -readonly "$src" 'PRAGMA user_version')"
+  sqlite3 -readonly "$src" '.schema --nosys'
+} > "$tmp/$schema" &&
+  nice -n 19 rsync --chmod=F644 -e "ssh -i $s/offsite-ssh-key -o BatchMode=yes \
+    -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$s/offsite-known-hosts" \
+    "$tmp/$schema" "$(cat "$s/offsite-target"):$schema" ||
+  echo "offsite.sh: the schema export failed"
