@@ -1,7 +1,7 @@
 /**
- * Uploads a release's App Bundle to Google Play: Alpha, the testers' closed track (#1024), or
- * production, for a final once Play allows it (#1070):
- *   bun run scripts/play.ts <aab> <version> <notes.md> [--track alpha|production] [--validate]
+ * Uploads an App Bundle to Google Play: internal, the owner's builds of main (#1540), Alpha, the
+ * testers' closed track (#1024), or production, for a final once Play allows it (#1070):
+ *   bun run scripts/play.ts <aab> <version> <notes.md> [--track internal|alpha|production] [--url <link>] [--validate]
  * PLAY_ACCESS_TOKEN is an OAuth token for the androidpublisher scope; in CI, google-github-actions/auth
  * trades the job's OIDC token for one, so no key exists. --validate checks the edit
  * with Play and discards it, so nothing is published; a versionCode no higher than the track's
@@ -12,7 +12,7 @@ import { readFileSync } from "node:fs";
 import { parseArgs } from "node:util";
 
 export const PACKAGE = "dev.starbridge.app";
-export const TRACKS = ["alpha", "production"] as const;
+export const TRACKS = ["internal", "alpha", "production"] as const;
 export type Track = (typeof TRACKS)[number];
 // Play's limit on one language's release notes.
 const NOTES_MAX = 500;
@@ -142,17 +142,22 @@ class PlayError extends Error {}
 if (import.meta.main) {
   const { values, positionals } = parseArgs({
     allowPositionals: true,
-    options: { validate: { type: "boolean" }, track: { type: "string", default: "alpha" } },
+    options: {
+      validate: { type: "boolean" },
+      track: { type: "string", default: "alpha" },
+      // Where the notes' "More" link goes: the release's page by default.
+      url: { type: "string" },
+    },
   });
   const [aab, version, notesPath] = positionals;
   const track = values.track as Track;
   const token = process.env.PLAY_ACCESS_TOKEN;
   if (!aab || !version || !notesPath || !token || !TRACKS.includes(track)) {
     throw new Error(
-      "usage: PLAY_ACCESS_TOKEN=… play.ts <aab> <version> <notes.md> [--track alpha|production] [--validate]",
+      "usage: PLAY_ACCESS_TOKEN=… play.ts <aab> <version> <notes.md> [--track internal|alpha|production] [--url <link>] [--validate]",
     );
   }
-  const releaseUrl = `https://github.com/T0mSIlver/starbridge/releases/tag/v${version}`;
+  const releaseUrl = values.url ?? `https://github.com/T0mSIlver/starbridge/releases/tag/v${version}`;
   await upload({
     token,
     aab: readFileSync(aab),

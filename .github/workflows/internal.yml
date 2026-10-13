@@ -1,0 +1,156 @@
+name: internal
+
+# The owner dogfoods main on staging (#1540): each push to main that changes an app sends its build to
+# the owner's devices. Android goes to Play's internal testing track; Alpha keeps the rcs. The
+# iPhone app goes to TestFlight's internal testers once the repository variable IOS_MAIN_TESTFLIGHT
+# is true, which waits on Apple's export compliance code. The desktop app stays on rcs.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "android/**"
+      - "ios/**"
+      - "packages/protocol/vectors/**"
+      - ".github/workflows/internal.yml"
+
+# A newer push replaces a build still waiting; Play commits an edit only at its end.
+concurrency:
+  group: internal
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      android: ${{ steps.filter.outputs.android }}
+      ios: ${{ steps.filter.outputs.ios }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 2
+          filter: blob:none
+      - id: filter
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        with:
+          base: ${{ github.event.before }}
+          filters: |
+            android:
+              - 'android/**'
+              - 'packages/protocol/vectors/**'
+              - '.github/workflows/internal.yml'
+            ios:
+              - 'ios/**'
+              - 'packages/protocol/vectors/**'
+
+  # Signed with the upload key, as release.yml's Android job; its versionCode sits above every
+  # release's, so Play serves it to the internal track's testers over Alpha's rc.
+  android:
+    needs: changes
+    if: needs.changes.outputs.android == 'true'
+    runs-on: ${{ vars.ANDROID_RUNNER || 'ubuntu-24.04' }}
+    environment: release
+    timeout-minutes: 40
+    defaults:
+      run:
+        working-directory: android
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: 21
+      # As in android.yml: self-hosted runners on one machine share one Gradle home.
+      - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+        with:
+          cache-read-only: true
+          cache-disabled: ${{ runner.environment == 'self-hosted' }}
+      - name: Build the signed App Bundle
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+          STARBRIDGE_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          STARBRIDGE_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          umask 077
+          export STARBRIDGE_KEYSTORE="$RUNNER_TEMP/release.jks"
+          echo "$KEYSTORE_BASE64" | base64 -d > "$STARBRIDGE_KEYSTORE"
+          printf '%s' "$GOOGLE_SERVICES_JSON" > app/google-services.json
+          # Release codes reach 2 000 000 + MAJOR*1 000 000 + …; Play's ceiling is 2 100 000 000.
+          ./gradlew --no-daemon --console=plain -Pkotlin.compiler.execution.strategy=in-process bundleRelease \
+            -PversionCode=$((2000000000 + GITHUB_RUN_NUMBER))
+          mkdir -p ../out
+          cp app/build/outputs/bundle/release/app-release.aab ../out/starbridge-main.aab
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: android-internal
+          path: out/
+          retention-days: 3
+
+  play:
+    needs: android
+    runs-on: ubuntu-latest
+    environment: play-release
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - id: setup
+        env:
+          SET: ${{ vars.PLAY_WIF_PROVIDER != '' && vars.PLAY_SERVICE_ACCOUNT != '' }}
+        run: |
+          if [ "$SET" = true ]; then echo "set=true" >> "$GITHUB_OUTPUT"
+          else echo "::notice::PLAY_WIF_PROVIDER or PLAY_SERVICE_ACCOUNT is not set; nothing uploaded."; fi
+      - if: steps.setup.outputs.set
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - if: steps.setup.outputs.set
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.2
+      - if: steps.setup.outputs.set
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: android-internal
+          path: out
+      - if: steps.setup.outputs.set
+        id: auth
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0
+        with:
+          workload_identity_provider: ${{ vars.PLAY_WIF_PROVIDER }}
+          service_account: ${{ vars.PLAY_SERVICE_ACCOUNT }}
+          token_format: access_token
+          access_token_scopes: https://www.googleapis.com/auth/androidpublisher
+          create_credentials_file: false
+          export_environment_variables: false
+      # The release is named after the commit; its notes say what the push changed.
+      - if: steps.setup.outputs.set
+        name: Upload to the internal track
+        env:
+          PLAY_ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
+          SUBJECT: ${{ github.event.head_commit.message }}
+        run: |
+          printf '### Android\n- %s\n' "$(printf '%s\n' "$SUBJECT" | head -n 1)" > notes.md
+          bun cli/scripts/play.ts out/starbridge-main.aab "main-${GITHUB_SHA::8}" notes.md --track internal \
+            --url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/commit/$GITHUB_SHA"
+
+  # release.yml's TestFlight job, from main, numbered by its run; TestFlight's internal testers get
+  # every build.
+  ios:
+    needs: changes
+    if: needs.changes.outputs.ios == 'true' && vars.IOS_MAIN_TESTFLIGHT == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: write
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh workflow run release.yml --repo "$GITHUB_REPOSITORY" --ref main \
+            -f version="$(jq -r .version cli/package.json)" -f testflight_only=true
