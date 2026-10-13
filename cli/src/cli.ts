@@ -195,8 +195,8 @@ const HELP = `starbridge: post decisions to your devices, report runs, upload qu
       Needs update-check. On by default; Homebrew and npm installs update through their
       manager. machine-kind: the icon devices show, detected by setup.
 
-  starbridge hook permission --agent claude-code|pi|opencode|antigravity [--wait 570s]
-  starbridge hook settle --agent claude-code
+  starbridge hook permission --agent claude-code|codex|pi|opencode|antigravity [--wait 570s]
+  starbridge hook settle --agent claude-code|codex
       For Claude Code's PermissionRequest hook, and for its PostToolUse, PostToolUseFailure,
       PermissionDenied, Stop and SessionEnd hooks: hook JSON on stdin; prints the hook's decision, or nothing
       to leave the prompt to the keyboard. The Starbridge Pi extension runs it with --agent pi
@@ -210,7 +210,7 @@ const HELP = `starbridge: post decisions to your devices, report runs, upload qu
       For Claude Code's PreToolUse hook on AskUserQuestion, from older plugins: prints
       nothing, so the picker opens and hook permission races it.
 
-  starbridge hook question --agent opencode|pi|antigravity
+  starbridge hook question --agent opencode|pi|antigravity|codex
       For the Starbridge opencode plugin and Pi extension, on each call of opencode's question
       tool or Pi's ask_user_question, and for the agent on each of Antigravity's ask_question
       calls: posts each question to your devices, already waiting, and
