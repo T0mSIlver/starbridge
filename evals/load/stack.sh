@@ -20,9 +20,14 @@ here=$(cd "$(dirname "$0")" && pwd)
 repo=$(cd "$here/../.." && pwd)
 export LOAD_DIR="${LOAD_DIR:-$repo/.scratch/load}"
 # The fakes (fake.ts) listen on Docker's default bridge, which containers reach as
-# host.docker.internal.
+# host.docker.internal. LOAD_FAKE=stack runs them as a container on the stack's network instead,
+# for a host whose firewall keeps containers off its own ports (the staging VM).
 gw=$(docker network inspect bridge -f '{{(index .IPAM.Config 0).Gateway}}')
-fake="http://host.docker.internal:18099"
+if [ "${LOAD_FAKE:-}" = stack ]; then
+  fake=http://starbridge-load-fake:18099
+else
+  fake=http://host.docker.internal:18099
+fi
 slice=${LOAD_SLICE:+--cgroup-parent $LOAD_SLICE}
 bun_image=oven/bun:1.4.2
 compose() {
@@ -179,11 +184,17 @@ big-disk)
   healthy http://127.0.0.1:18080/healthz server 30
   ;;
 fake)
-  # fake.ts on the host's network, listening on Docker's bridge as it would run on the host.
+  # fake.ts on the host's network, listening on Docker's bridge as it would run on the host; with
+  # LOAD_FAKE=stack, on the stack's network (after up), where the server reaches it by name.
   docker rm -f starbridge-load-fake >/dev/null 2>&1 || true
-  docker run -d --name starbridge-load-fake --network host $slice \
-    -v "$here/fake.ts:/fake.ts:ro" $bun_image bun /fake.ts --host "$gw" >/dev/null
-  echo "fakes on $gw:18099"
+  if [ "${LOAD_FAKE:-}" = stack ]; then
+    docker run -d --name starbridge-load-fake --network starbridge-load_default $slice \
+      -v "$here/fake.ts:/fake.ts:ro" $bun_image bun /fake.ts --host 0.0.0.0 >/dev/null
+  else
+    docker run -d --name starbridge-load-fake --network host $slice \
+      -v "$here/fake.ts:/fake.ts:ro" $bun_image bun /fake.ts --host "$gw" >/dev/null
+  fi
+  echo "fakes on $fake"
   ;;
 load | spike | setup)
   # load.ts, spike.ts or setup.ts in its own container on the stack's network, so its sockets stay
@@ -192,7 +203,9 @@ load | spike | setup)
   # setup.ts needs packages/protocol's dependencies installed in the repository.
   script=$1
   shift
+  # The address the users' push subscriptions point at: the fakes, wherever they run.
   [ "$script" != setup ] || set -- --server http://server:8080 "$@"
+  [ "$script" = load ] || set -- --fake "$fake" "$@"
   docker run --rm -i --name "starbridge-$script-client" ${LOAD_CLIENT_CPUS:+--cpuset-cpus "$LOAD_CLIENT_CPUS"} $slice --network starbridge-load_default \
     --user "$(id -u):$(id -g)" --group-add "$(stat -c %g /var/run/docker.sock)" \
     -v "$repo:/repo:ro" -v "$LOAD_DIR:/load" -e LOAD_DIR=/load ${LOAD_TARGET:+-e LOAD_TARGET="$LOAD_TARGET"} \
