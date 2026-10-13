@@ -36,15 +36,17 @@
   gives way to it. A run reads as its title, else "Actions run"; a file (`/blob/…`) as its title,
   else its name; other GitHub pages as their title, else their path. No chip says "Open": the
   arrow does, and the word cost room on every chip.
-- **Link chips everywhere** (#1577). A Claude artifact leads with a window glyph, since Claude's
-  mark isn't licensed to us, and reads "Claude artifact". Only these kinds and GitHub's: in the
-  owner's transcripts GitHub and Claude artifacts are 89% of links, and every other host 2% or less.
-  One rule, `linkChip` in `packages/protocol` with `vectors/links.json`, gives every client the same
-  icon and text, because three URL parsers disagree at the edges. It reads the URL by hand and
-  matches only an exact host (`github.com`, `www.github.com`, `claude.ai`) with no user, port or
-  backslash; anything else keeps the plain chip, its title else its host and path. A decoded name
-  with a control, bidi or zero-width character stays encoded. No client fetches a link: no favicons,
-  nothing a page could learn or break.
+- **Link chips everywhere** (#1577). A Claude artifact leads with a window glyph and reads "Claude
+  artifact". No site logos beyond GitHub's Octicons (MIT) and no favicons (owner's pick): an icon
+  names the kind of page, and a favicon is a site's logo fetched rather than bundled. Which sites
+  get an icon later: #1617. Only these kinds and GitHub's: in the owner's transcripts GitHub and
+  Claude artifacts are 89% of links, and every other host 2% or less. One rule, `linkChip` in
+  `packages/protocol` with `vectors/links.json`, gives every client the same icon and text, because
+  three URL parsers disagree at the edges. It reads the URL by hand and matches only an exact host
+  (`github.com`, `www.github.com`, `claude.ai`) with no user, port or backslash; anything else
+  keeps the plain chip, its title else its host and path. A decoded name with a control, bidi or
+  zero-width character stays encoded. No client fetches a link: nothing a page could learn or
+  break.
 - **`answerIn`** names a page (a Claude artifact whose button messages the agent) where the
   question is answered. It has no options; the schema refuses both. It closes when the agent runs
   `starbridge settle`, or when the owner taps Done beside the page's link (#539): an agent that
