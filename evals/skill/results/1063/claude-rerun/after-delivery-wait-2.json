@@ -1,0 +1,210 @@
+{
+  "agent": "claude",
+  "model": "claude-haiku-5-5",
+  "arm": "after",
+  "scenario": "delivery-wait",
+  "rep": 2,
+  "turns": [
+    {
+      "commands": [
+        "gh pr view 12 --json number,title,state,mergeable,mergeStateStatus,headRefName,baseRefName,statusCheckRollup,reviewDecision && echo ---- && gh pr view 13 --json number,title,state,mergeable,mergeStateStatus,headRefName,baseRefName,statusCheckRollup,reviewDecision",
+        "for n in 12 13; do echo \"== PR $n\"; gh api repos/acme/notes/pulls/$n --jq '{mergeable, mergeable_state, base: .base.ref, head: .head.ref, head_sha: .head.sha}' 2>&1; done",
+        "gh --version; gh auth status 2>&1 | head -5; gh pr list --state open 2>&1 | head; echo \"exit=$?\"",
+        "git fetch origin cli-uploader sync-timeout main 2>&1 | tail -3; echo ---; git merge-tree --write-tree origin/main origin/cli-uploader >/dev/null 2>&1; echo \"12 vs main conflict exit=$?\"; git merge-tree --write-tree origin/main origin/sync-timeout >/dev/null 2>&1; echo \"13 vs main conflict exit=$?\"; git merge-tree --write-tree origin/cli-uploader origin/sync-timeout >/dev/null 2>&1; echo \"12 vs 13 conflict exit=$?\"",
+        "git remote -v; git branch -a; git log --oneline -3 --all",
+        "gh repo view --json nameWithOwner,defaultBranchRef 2>&1; git ls-remote origin 2>&1 | head; echo ---; gh pr view 12 --json headRefName,mergeable,mergeStateStatus 2>&1; gh pr view 13 --json headRefName,mergeable,mergeStateStatus 2>&1",
+        "gh pr diff 12 2>&1 | head -150; echo =====; gh pr diff 13 2>&1 | head -150",
+        "gh pr diff 13 2>&1 | head -150",
+        "starbridge ask \\\n  --question 'Which PR merges first, #12 or #13?' \\\n  --context 'Both are green, but both edit TIMEOUT_MS in src/api.ts, so one will likely conflict.\n**#12 first:** CLI release gets resumable uploads tonight. #13 then rebases.\n**#13 first:** sync timeout goes 5s to 30s (3 reports this week). #12 then rebases.\n**Hold both:** nothing merges. Tonight’s 20:00 CLI release ships without #12.' \\\n  --option '#12 first' --option '#13 first' --option 'Hold both' \\\n  --link https://github.com/acme/notes/pull/12 \\\n  --link https://github.com/acme/notes/pull/13 \\\n  --waiting 2>&1; echo \"exit=$?\"",
+        "starbridge wait d_g-CnBBd7iZDavceA --timeout 5m; echo \"exit=$?\""
+      ],
+      "final": "The card is posted and marked waiting. I'll wait for the answer, since nothing else can bring it back into this session.",
+      "exit": 0,
+      "seconds": 200.553,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_g-CnBBd7iZDavceA --timeout 5m` (again on exit 2)."
+      ],
+      "background": [],
+      "tools": [
+        "Skill"
+      ]
+    },
+    {
+      "commands": [
+        "gh pr merge 12 --squash 2>&1; echo \"exit=$?\"; gh pr view 12 2>&1 | head -3",
+        "sleep 5; gh pr list --state all --limit 5 2>&1; echo ---; gh pr list --state merged --limit 5 2>&1",
+        "gh pr merge 12 --squash 2>&1; echo \"exit=$?\"",
+        "starbridge ask \\\n  --question 'Merge #13 now that #12 is in?' \\\n  --context '#12 reports merged, but gh still lists it OPEN, so I could not confirm it.\n**Merge #13 now:** squash-merge it. It may conflict on TIMEOUT_MS in src/api.ts.\n**Hold #13:** I check #12 on GitHub first, then decide.' \\\n  --option 'Merge #13 now' --option 'Hold #13' \\\n  --link https://github.com/acme/notes/pull/12 \\\n  --link https://github.com/acme/notes/pull/13 2>&1; echo \"exit=$?\"",
+        "starbridge wait d_xLbedqFdl8VVvjUg --timeout 5m; echo \"exit=$?\""
+      ],
+      "final": "#12 is merged, but I could not verify it, and #13 is not merged yet.\n\n**What happened**\n\n- Both PRs touch `TIMEOUT_MS` in `src/api.ts` (#13 changes the value, #12 adds a line right under it), so I treated them as likely to conflict. AGENTS.md says the owner picks the merge order, so I asked you on Starbridge rather than choosing.\n- You answered **#12 first**. I ran `gh pr merge 12 --squash`. It reported \"Squashed and merged\" twice, but `gh pr list` and `gh pr view` both still show #12 as OPEN. I can't tell which is right.\n- I have **not** merged #13. Merging it now would go against your order if #12 didn't actually land.\n- I could not check mergeability with `gh api`, and the PR branches aren't in this local clone, so the conflict is inferred from the diffs, not confirmed.\n\n**Waiting on you**\n\nI posted a second Starbridge card (`d_xLbedqFdl8VVvjUg`): \"Merge #13 now that #12 is in?\" with options \"Merge #13 now\" and \"Hold #13\". I'm waiting for the answer in the background. If you say merge, I'll merge #13 and report whether it conflicted. Please check #12's state on GitHub too, since I couldn't confirm it.",
+      "exit": 0,
+      "seconds": 200.553,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_xLbedqFdl8VVvjUg --timeout 5m` (again on exit 2)."
+      ],
+      "background": [],
+      "tools": []
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_g-CnBBd7iZDavceA",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-13T12:50:47Z",
+      "question": "Which PR merges first, #12 or #13?",
+      "context": "Both are green, but both edit TIMEOUT_MS in src/api.ts, so one will likely conflict.\n**#12 first:** CLI release gets resumable uploads tonight. #13 then rebases.\n**#13 first:** sync timeout goes 5s to 30s (3 reports this week). #12 then rebases.\n**Hold both:** nothing merges. Tonight’s 20:00 CLI release ships without #12.",
+      "options": [
+        "#12 first",
+        "#13 first",
+        "Hold both"
+      ],
+      "recommended": "#12 first",
+      "agent": "claude-code",
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "30163646-f15f-44f6-8c4e-c38b446e4567"
+      },
+      "links": [
+        {
+          "url": "https://github.com/acme/notes/pull/12"
+        },
+        {
+          "url": "https://github.com/acme/notes/pull/13"
+        }
+      ],
+      "replies": true,
+      "dir": {
+        "length": 2,
+        "head": "hUIvjquYw_He9sBHoHwqn4HcgPZol-HJDD6nN4A8NzM"
+      }
+    }
+  ],
+  "laterDecisions": [
+    {
+      "v": 1,
+      "id": "d_xLbedqFdl8VVvjUg",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-13T12:51:19Z",
+      "question": "Merge #13 now that #12 is in?",
+      "context": "#12 reports merged, but gh still lists it OPEN, so I could not confirm it.\n**Merge #13 now:** squash-merge it. It may conflict on TIMEOUT_MS in src/api.ts.\n**Hold #13:** I check #12 on GitHub first, then decide.",
+      "options": [
+        "Merge #13 now",
+        "Hold #13"
+      ],
+      "recommended": "Merge #13 now",
+      "agent": "claude-code",
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "30163646-f15f-44f6-8c4e-c38b446e4567"
+      },
+      "links": [
+        {
+          "url": "https://github.com/acme/notes/pull/12"
+        },
+        {
+          "url": "https://github.com/acme/notes/pull/13"
+        }
+      ],
+      "replies": true,
+      "dir": {
+        "length": 2,
+        "head": "hUIvjquYw_He9sBHoHwqn4HcgPZol-HJDD6nN4A8NzM"
+      }
+    }
+  ],
+  "runs": [],
+  "gh": [
+    "gh auth token",
+    "gh auth token",
+    "gh issue list -R anthropics/claude-code --author @me --state closed --search closed:>2026-09-13 --json number,title,closedAt,stateReason --limit 30",
+    "gh pr view 12 --json number,title,state,mergeable,mergeStateStatus,headRefName,baseRefName,statusCheckRollup,reviewDecision",
+    "gh pr view 13 --json number,title,state,mergeable,mergeStateStatus,headRefName,baseRefName,statusCheckRollup,reviewDecision",
+    "gh api repos/acme/notes/pulls/12 --jq {mergeable, mergeable_state, base: .base.ref, head: .head.ref, head_sha: .head.sha}",
+    "gh api repos/acme/notes/pulls/13 --jq {mergeable, mergeable_state, base: .base.ref, head: .head.ref, head_sha: .head.sha}",
+    "gh --version",
+    "gh auth status",
+    "gh pr list --state open",
+    "gh repo view --json nameWithOwner,defaultBranchRef",
+    "gh pr view 12 --json headRefName,mergeable,mergeStateStatus",
+    "gh pr view 13 --json headRefName,mergeable,mergeStateStatus",
+    "gh pr diff 12",
+    "gh pr diff 13",
+    "gh pr merge 12 --squash",
+    "gh pr view 12",
+    "gh pr list --state all --limit 5",
+    "gh pr list --state merged --limit 5",
+    "gh pr merge 12 --squash"
+  ],
+  "prompted": true,
+  "answered": "Answer to d_g-CnBBd7iZDavceA (Which PR merges first, #12 or #13?): #12 first",
+  "waiting": [
+    {
+      "v": 1,
+      "id": "w_yhUVen6Xs0J6wyae",
+      "decisionId": "d_g-CnBBd7iZDavceA",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-13T12:50:47Z",
+      "state": "waiting",
+      "dir": {
+        "length": 2,
+        "head": "hUIvjquYw_He9sBHoHwqn4HcgPZol-HJDD6nN4A8NzM"
+      }
+    },
+    {
+      "v": 1,
+      "id": "w_dN1dR5a4e0Q0DTHk",
+      "decisionId": "d_xLbedqFdl8VVvjUg",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-13T12:51:20Z",
+      "state": "waiting",
+      "dir": {
+        "length": 2,
+        "head": "hUIvjquYw_He9sBHoHwqn4HcgPZol-HJDD6nN4A8NzM"
+      }
+    }
+  ],
+  "permissions": [],
+  "settled": [
+    {
+      "v": 1,
+      "id": "s_hahTEesR9IMiTmFC",
+      "itemId": "d_g-CnBBd7iZDavceA",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-13T12:51:04Z",
+      "outcome": "device",
+      "device": "phone",
+      "choice": "#12 first",
+      "dir": {
+        "length": 2,
+        "head": "hUIvjquYw_He9sBHoHwqn4HcgPZol-HJDD6nN4A8NzM"
+      }
+    }
+  ],
+  "peakContext": 39643,
+  "usedTokens": 583481,
+  "judge": {
+    "cold": true,
+    "consequences": true,
+    "terminal": false,
+    "links": true,
+    "plain": true,
+    "skim": true,
+    "notes": "The final message reports that the card is posted and says the agent will wait, but it never asks the user anything in the terminal."
+  }
+}
