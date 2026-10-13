@@ -65,7 +65,10 @@ type GitHub = { icon: LinkIcon; repo: string; ref?: string; text: string };
 
 /** What a github.com path points at; `text` is the label for a page with no ref. */
 function github(path: string): GitHub {
-  const trimmed = path.replace(/\/+$/, "");
+  // A loop, not /\/+$/, which backtracks quadratically over a long run of slashes.
+  let end = path.length;
+  while (end > 0 && path[end - 1] === "/") end--;
+  const trimmed = path.slice(0, end);
   const segments = trimmed.split("/");
   const [, owner, name, section, a = "", b = ""] = segments;
   const repo = owner && name ? name : "";
