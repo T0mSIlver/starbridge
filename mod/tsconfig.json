@@ -16,6 +16,7 @@
     "hooks/poller.ts",
     "hooks/agent.ts",
     "hooks/switch.ts",
+    "hooks/handover.ts",
     "hooks/node.ts",
     "opencode",
     "pi",

@@ -34,7 +34,8 @@ test("ask --input reads the fields from a file; ask prints the id, then how the 
   ctx.lines.length = 0;
   expect(await run(["answers", "--session", "s", "--wait", "1"], ctx)).toBe(0);
   expect(ctx.lines.map((l) => JSON.parse(l))).toEqual([
-    { decisionId: id, ack: id, line: `Answer to ${id} (Merge #12 now?): Merge` },
+    // The `wait` above marked it waiting.
+    { decisionId: id, ack: id, line: `Answer to ${id} (Merge #12 now?): Merge`, waiting: true },
   ]);
   ctx.lines.length = 0;
   expect(await run(["wait", id], ctx)).toBe(0);
@@ -203,4 +204,20 @@ test("CONTRACT.md's hook question lists the agents it takes", async () => {
   }
   expect(listed.filter((a) => a !== "codex").sort()).toEqual(takes.sort());
   expect(listed).toContain("codex");
+});
+
+test("help lists the agents CONTRACT.md gives each hook (#1496)", async () => {
+  const contract = readFileSync(join(import.meta.dir, "../CONTRACT.md"), "utf8");
+  const rows = [...contract.matchAll(/^\| `hook ([a-z-]+)` \| Flags? `--agent ([^`]+)`/gm)];
+  expect(rows.length).toBeGreaterThan(5);
+  const ctx = testCtx({});
+  expect(await run(["--help"], ctx)).toBe(0);
+  const help = ctx.lines.join("\n");
+  for (const [, hook, agents] of rows) {
+    const line = help.match(new RegExp(`starbridge hook ${hook} --agent (\\S+)`))?.[1];
+    expect([hook, line?.split("|").sort()]).toEqual([
+      hook,
+      (agents as string).replace(/\\\|/g, "|").split("|").sort(),
+    ]);
+  }
 });

@@ -460,11 +460,13 @@ async function interactiveTurn(
   const t0 = Date.now();
   const id = crypto.randomUUID();
   const tmux = `skill-eval-${id.slice(0, 8)}`;
-  // A fresh config dir would show onboarding and the folder-trust question first.
+  // A fresh config dir would show onboarding, the folder-trust question and, since the eval runs
+  // with bypassPermissions (#1021), its consent dialog first (#1488).
   writeFileSync(
     join(cfg, ".claude.json"),
     JSON.stringify({
       hasCompletedOnboarding: true,
+      bypassPermissionsModeAccepted: true,
       theme: "dark",
       projects: { [dir]: { hasTrustDialogAccepted: true } },
     }),
@@ -627,6 +629,7 @@ async function liveRun(
         join(cfg, ".claude.json"),
         JSON.stringify({
           hasCompletedOnboarding: true,
+          bypassPermissionsModeAccepted: true,
           theme: "dark",
           projects: { [proj]: { hasTrustDialogAccepted: true } },
         }),

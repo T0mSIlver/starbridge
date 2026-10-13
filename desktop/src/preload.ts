@@ -43,6 +43,30 @@ if (location.origin === arg("origin")) {
     shown = s === true;
     onShown?.();
   });
+  // The updater's state and settings (#1398): the app checks them, so they pass as they come.
+  let updateStatus: unknown = ipcRenderer.sendSync("update-status?");
+  let updateSettings: unknown = ipcRenderer.sendSync("update-settings?");
+  let onUpdate: (() => void) | null = null;
+  ipcRenderer.on("update-status", (_e, s: unknown) => {
+    updateStatus = s;
+    onUpdate?.();
+  });
+  ipcRenderer.on("update-settings", (_e, s: unknown) => {
+    updateSettings = s;
+    onUpdate?.();
+  });
+  let login = ipcRenderer.sendSync("login?") === true;
+  let onLogin: (() => void) | null = null;
+  ipcRenderer.on("login", (_e, l: unknown) => {
+    login = l === true;
+    onLogin?.();
+  });
+  let onSettings: (() => void) | null = null;
+  // Settings… in the menu bar's menu: the page routes there itself, else (an older page) loads it.
+  ipcRenderer.on("settings", () => {
+    if (onSettings) onSettings();
+    else location.assign("/settings");
+  });
   ipcRenderer.on("place", (_e, p: unknown) => {
     place = p;
   });
@@ -103,6 +127,33 @@ if (location.origin === arg("origin")) {
     },
     /** Opens System Settings → Notifications → Starbridge. */
     openNotificationSettings: () => ipcRenderer.send("notification-settings"),
+    /**
+     * Where the update stands: `{state}` with "idle", "checking", "available", "downloading",
+     * "ready" or "error", and its `version`, `percent` or `message` (src/updates.ts). Null while
+     * the app runs no updater.
+     */
+    updateStatus: () => updateStatus,
+    /** `{releaseCandidates, autoDownload}`. */
+    updateSettings: () => updateSettings,
+    setUpdateSettings: (s: unknown) => ipcRenderer.send("update-settings", s),
+    /** "check", "download", or "install", which restarts the app. */
+    updateAction: (a: unknown) => ipcRenderer.send("update-action", a),
+    /** Called when the status or the settings change. */
+    onUpdate: (f: (() => void) | null) => {
+      onUpdate = f;
+    },
+    /** Whether macOS opens the app at login. */
+    login: () => login,
+    setLogin: (l: unknown) => ipcRenderer.send("login", l),
+    onLogin: (f: (() => void) | null) => {
+      onLogin = f;
+    },
+    /** Opens the window where the owner sets the server. */
+    openServer: () => ipcRenderer.send("open-server"),
+    /** Called on Settings… in the menu bar's menu, to show the page's Settings. */
+    onSettings: (f: (() => void) | null) => {
+      onSettings = f;
+    },
     /** Opens an item whose notification was clicked. */
     onOpen: (f: (id: string) => void) => {
       onOpen = f;

@@ -17,7 +17,6 @@ import {
   ReleaseError,
 } from "./release";
 import { updateCodexbar } from "./setup/codexbar";
-import { piPackage, piSource } from "./setup/harnesses";
 import { installedService, kind, restartTask } from "./setup/service";
 import { defaults, makeSys, otherCopies } from "./setup/sys";
 import { VERSION } from "./version";
@@ -84,18 +83,6 @@ function updatePlugins(ctx: Ctx) {
     const r = sh(ctx, "claude", ["plugin", "update", id]);
     ctx.out(r?.ok ? `Updated the ${id} plugin.` : `Could not update the ${id} plugin: ${r?.out}`);
   }
-}
-
-/** Moves an installed Starbridge Pi package to `version`'s tag, as setup does for its own. */
-function movePiPackage(ctx: Ctx, version: string) {
-  if (!piPackage({ ctx, home: ctx.env.HOME ?? homedir() })) return;
-  const r = sh(ctx, "pi", ["install", piSource(version)]);
-  if (r === null) return;
-  ctx.out(
-    r.ok
-      ? `Moved the Starbridge Pi package to v${version}.`
-      : `Could not move the Starbridge Pi package to v${version}: ${r.out}`,
-  );
 }
 
 /**
@@ -190,7 +177,6 @@ async function updateSelf(
     await restartAgent(ctx);
   }
   updatePlugins(ctx);
-  movePiPackage(ctx, latest);
   return latest;
 }
 

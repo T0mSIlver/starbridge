@@ -37,3 +37,26 @@ test("update merges into the stored record", async () => {
     "d3",
   ]);
 });
+
+test("a change that throws rejects with its error, writes nothing and leaves the database free (#1495)", async () => {
+  await store.put("answers", { d1: { choice: "Yes", answeredAt: "2026-10-04T12:00:00Z" } }, "bad");
+  await store.put("pin", { length: 1, head: "h1" }, "bad");
+  const boom = new Error("another shape");
+  const throws = () => {
+    throw boom;
+  };
+  await expect(store.update("answers", "bad", throws)).rejects.toBe(boom);
+  await expect(store.updateWith("answers", "bad", "pin", throws)).rejects.toBe(boom);
+  await expect(store.extendPin("bad", { length: 2, head: "h2" }, throws)).rejects.toBe(boom);
+  expect(Object.keys((await store.get("answers", "bad")) ?? {})).toEqual(["d1"]);
+  expect(await store.get("pin", "bad")).toEqual({ length: 1, head: "h1" });
+  // No connection was left open: an upgrade goes through rather than blocking.
+  await new Promise<void>((resolve, reject) => {
+    const req = indexedDB.open("starbridge", 2);
+    req.onblocked = () => reject(new Error("blocked"));
+    req.onsuccess = () => {
+      req.result.close();
+      indexedDB.deleteDatabase("starbridge").onsuccess = () => resolve();
+    };
+  });
+});

@@ -47,8 +47,9 @@ import java.time.Instant
 
 /**
  * One notification per open decision. Its buttons are the options, the recommended one first,
- * and answer through [AnswerReceiver] without opening the app, from the lock screen too. A
- * decision without options gets a reply field instead.
+ * and answer through [AnswerReceiver] without opening the app, from the lock screen too while it
+ * shows sensitive content, else after the unlock ([LockScreen]). A decision without options gets a
+ * reply field instead.
  *
  * One notification per run: ongoing while it runs (a Live Update on Android 16 and later), then
  * pass or fail.
@@ -284,12 +285,14 @@ class Notifier(private val context: Context, private val prefs: Prefs) : Alerts 
             )
             return listOf(NotificationCompat.Action.Builder(0, "Answer in ${page.place()}", view).build())
         }
+        // Read at each post, so a repost (an answer, a failure, a snooze's return) follows a change.
+        val unlock = !LockScreen.showsContent(context)
         val typed = { title: String ->
             val input = RemoteInput.Builder(AnswerReceiver.EXTRA_TEXT).setLabel("Your answer").build()
             NotificationCompat.Action.Builder(0, title, answerIntent(decision, null, tag(decision.id), mutable = true))
                 .addRemoteInput(input)
                 .setAllowGeneratedReplies(false)
-                .setAuthenticationRequired(false)
+                .setAuthenticationRequired(unlock)
                 .build()
         }
         if (decision.options.isEmpty()) return listOf(typed("Answer"))
@@ -298,27 +301,10 @@ class Notifier(private val context: Context, private val prefs: Prefs) : Alerts 
         // (#1339).
         val options = decision.ordered.take(if (decision.replies) 2 else 3).mapIndexed { i, option ->
             NotificationCompat.Action.Builder(0, option, answerIntent(decision, option, tag(decision.id) * 31 + i, mutable = false))
-                .setAuthenticationRequired(false)
+                .setAuthenticationRequired(unlock)
                 .build()
         }
         return if (decision.replies) options + typed("Reply") else options
-    }
-
-    /** Replaces the buttons with the answer, then clears itself. */
-    override fun answered(decision: Decision, answer: String) {
-        if (!allowed()) return
-        @Suppress("MissingPermission")
-        manager.notify(
-            tag(decision.id),
-            base(decision).setContentText("Answered: $answer").setStyle(null).setTimeoutAfter(4_000).setSilent(true).build(),
-        )
-    }
-
-    /** Replaces the buttons with the answer and says it waits for a connection. */
-    override fun queued(decision: Decision, answer: String) {
-        if (!allowed()) return
-        @Suppress("MissingPermission")
-        manager.notify(tag(decision.id), base(decision).setContentText("$answer · waiting to send").setStyle(null).setSilent(true).build())
     }
 
     /** Keeps the buttons and says why the answer did not go through. */

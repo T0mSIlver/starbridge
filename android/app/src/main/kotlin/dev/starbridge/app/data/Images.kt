@@ -8,6 +8,11 @@ import android.graphics.BitmapFactory
 import android.net.Uri
 import dev.starbridge.app.protocol.fromB64
 
+/** Where [Image.file]s are read from: the app's [Disk], set by the store as it loads (#1471). */
+object ImageFiles {
+    @Volatile var read: (String) -> ByteArray? = { null }
+}
+
 /** The longest edge an image may have, as the protocol bounds `width` and `height`. */
 private const val MAX_IMAGE_EDGE = 8192
 
@@ -20,7 +25,7 @@ private const val MAX_PIXELS = 4096L * 4096
  * which a machine could understate (#360). Null when it does not decode, or is larger than declared.
  */
 fun Image.bitmap(maxEdge: Int): Bitmap? = try {
-    val bytes = fromB64(data)
+    val bytes = file?.let { ImageFiles.read(it) ?: return null } ?: fromB64(data)
     val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
     BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
     val (w, h) = bounds.outWidth to bounds.outHeight

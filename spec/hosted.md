@@ -6,7 +6,11 @@
   its TLS handshake and its HTTP/1.1 request headers, since every open connection costs Caddy
   memory, the VPS's first limit (#587). Caddy compresses every
   response and the web app none: Next's gzip ran on its one thread and filled it near 18 landing
-  page visitors a second (#593). Nightly SQLite backups, kept 7 days (#586).
+  page visitors a second (#593). Nightly SQLite backups, kept 7 days (#586), and an offsite copy of each, kept 14 days
+  on another provider's VM (#1482): encrypted on the VPS to a key that is on neither server, and
+  pushed with a key that can add files but not read, replace or delete them, so neither a
+  stolen VPS nor a stolen VM loses or leaks the backups. 14 days keeps /privacy's promise that
+  deleted data leaves backups within 2 weeks.
 - **Per-address pages and sign-ups** (#787). Caddy takes 600 page requests a minute per address
   outside `/v1` and `/_next/static`: each is Next rendering, 10 to 17 ms of CPU, and a visit with
   its link prefetches makes a few dozen. The server makes at most 30 new accounts an hour per

@@ -106,6 +106,8 @@ export interface SessionEvent {
   /** The prompt the mod submits into the session. */
   line: string;
   decisionId?: string;
+  /** An answer whose decision is marked waiting, which the mod hands over mid-turn (#1484). */
+  waiting?: boolean;
 }
 
 /** `GET /v1/status`. */

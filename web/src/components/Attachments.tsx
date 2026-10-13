@@ -1,6 +1,6 @@
 "use client";
 
-import { type CSSProperties, type ReactNode, useState } from "react";
+import { type CSSProperties, type ReactNode, useEffect, useRef, useState } from "react";
 import { githubLink, imageSrc, linkLabel } from "@/lib/attachments";
 import type { Decision } from "@/lib/types";
 import s from "./Attachments.module.css";
@@ -13,18 +13,46 @@ type Image = NonNullable<Decision["images"]>[number];
 export const rows = (n: number) =>
   Array.from({ length: Math.ceil(n / 2) }, (_, r) => [2 * r, 2 * r + 1].filter((i) => i < n));
 
-/** The decision's images, two to a row; each opens the viewer. */
-export function Images({ d }: { d: Decision }) {
+/**
+ * The decision's images, two to a row; each opens the viewer. Images listed without their bytes
+ * (#1382) hold their place at their size, and `onShow` fetches them once they come on screen.
+ */
+export function Images({ d, onShow }: { d: Decision; onShow?: () => void }) {
   const images = d.images ?? [];
   const [open, setOpen] = useState<number>();
+  const box = useRef<HTMLDivElement>(null);
+  const pending = images.some((i) => !i.data);
+  const show = useRef(onShow);
+  show.current = onShow;
+  useEffect(() => {
+    const el = box.current;
+    if (!pending || !el) return;
+    const seen = new IntersectionObserver((entries) => {
+      if (!entries.some((e) => e.isIntersecting)) return;
+      seen.disconnect();
+      show.current?.();
+    });
+    seen.observe(el);
+    return () => seen.disconnect();
+  }, [pending]);
   if (images.length === 0) return null;
   return (
-    <div className={s.images}>
+    <div className={s.images} ref={box} aria-busy={pending || undefined}>
       {rows(images.length).map((row) => (
         <ImageRow key={row[0]} images={row.map((i) => images[i])}>
-          {row.map((i) => (
-            <ImageButton key={i} img={images[i]} onOpen={() => setOpen(i)} />
-          ))}
+          {row.map((i) =>
+            images[i]?.data ? (
+              <ImageButton key={i} img={images[i]} onOpen={() => setOpen(i)} />
+            ) : (
+              <span
+                key={i}
+                className={s.image}
+                style={
+                  { "--r": (images[i]?.width ?? 1) / (images[i]?.height ?? 1) } as CSSProperties
+                }
+              />
+            ),
+          )}
         </ImageRow>
       ))}
       {open !== undefined && (

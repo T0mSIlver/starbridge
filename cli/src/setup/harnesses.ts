@@ -17,7 +17,7 @@ import { codexPluginDir, refreshCodexPluginFiles } from "./codex-plugin";
 import { cursorHooksPath, cursorSkillDir, cursorState, installCursorFiles } from "./cursor";
 import { markedSkill, marker, ours } from "./marker";
 import plugin from "./opencode-files.js";
-import { removedLine, removeWritten } from "./remove";
+import { removedLine, removeWritten, withoutAllow, writeLeft } from "./remove";
 import { failure, run, type Sys, which } from "./sys";
 
 /** What the Codex skill steps need: the agent has no prompt. */
@@ -406,10 +406,9 @@ export function addAgyAllow(sys: Home): boolean {
 /** Removes AGY_ALLOW from `agy`'s settings. False when none was there. */
 export function removeAgyAllow(sys: Home): boolean {
   const s = readAgySettings(sys);
-  const allow = agyAllowList(s);
-  if (!s?.permissions || !allow.some((r) => AGY_ALLOW.includes(r))) return false;
-  s.permissions.allow = allow.filter((r) => !AGY_ALLOW.includes(r));
-  writeFileSync(agySettingsPath(sys), `${JSON.stringify(s, null, 2)}\n`);
+  const left = s && withoutAllow(s, AGY_ALLOW);
+  if (!left) return false;
+  writeLeft(agySettingsPath(sys), left);
   return true;
 }
 

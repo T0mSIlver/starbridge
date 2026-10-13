@@ -204,6 +204,7 @@ enum Notify {
         let api = Api(server: saved.server, session: secrets.session)
         let shown = await shown(p, saved: saved, secrets: secrets) { id in try await api.item(id).item }
         if let shown, !shown.actions.isEmpty { await register(shown.category, shown.actions) }
+        await followPreviews()
         log.info("\(p["kind"]?.string ?? "?", privacy: .public) \(shown == nil ? "kept the placeholder" : "shown", privacy: .public) in \(Int(Date().timeIntervalSince(start) * 1000)) ms, \(footprint() / 1_048_576) MB")
         return shown
     }
@@ -268,20 +269,91 @@ enum Notify {
     }
 
     /**
+     * A question's buttons answer from the lock screen only while Show Previews is Always, as
+     * Android's follow sensitive content (#1375, #1384). At When Unlocked or Never the lock screen
+     * hides what the question says, and the buttons ask for the unlock first.
+     */
+    static func lockScreen(_ actions: [NotificationAction], previews: UNShowPreviewsSetting) -> [NotificationAction] {
+        previews == .always ? actions : actions.map { var a = $0; a.unlock = true; return a }
+    }
+
+    /**
      * Adds a question's own category, keeping the others: a category's buttons are fixed when it
      * is registered, and each question's options are its own. At most 64 questions keep theirs.
+     * Show Previews is read at each registration; a question registered before it changed gets
+     * its buttons again with the new unlock.
      */
     static func register(_ id: String, _ actions: [NotificationAction]) async {
+        await changingCategories { await registerNow(id, actions) }
+    }
+
+    private static func registerNow(_ id: String, _ actions: [NotificationAction]) async {
         let center = UNUserNotificationCenter.current()
+        let actions = id.hasPrefix("d.") ? lockScreen(actions, previews: await center.notificationSettings().showPreviewsSetting) : actions
+        let wanted = category(id, actions)
         var categories = await center.notificationCategories()
-        guard !categories.contains(where: { $0.identifier == id }) else { return }
+        if let had = categories.first(where: { $0.identifier == id }) {
+            guard had.actions.map(\.options) != wanted.actions.map(\.options) else { return }
+            categories.remove(had)
+        }
         let questions = categories.filter { $0.identifier.hasPrefix("d.") }
         if questions.count >= 64 { categories.subtract(questions.prefix(questions.count - 63)) }
-        categories.insert(category(id, actions))
+        categories.insert(wanted)
         categories.insert(category("permission", permissionActions))
         center.setNotificationCategories(categories)
         // The center reads its categories again before the notification shows.
         _ = await center.notificationCategories()
+    }
+
+    /**
+     * Show Previews may have changed since the questions' buttons were registered: sets their
+     * unlock again, so a question already on the lock screen follows it too (#1384). Runs as the
+     * app comes to the front and at each push.
+     */
+    static func followPreviews() async {
+        await changingCategories {
+            let center = UNUserNotificationCenter.current()
+            let locked = await center.notificationSettings().showPreviewsSetting != .always
+            if let updated = following(await center.notificationCategories(), locked: locked) {
+                center.setNotificationCategories(updated)
+                _ = await center.notificationCategories()
+            }
+        }
+    }
+
+    /** The last change to the categories, which the next one waits for. */
+    private static let lastChange = OSAllocatedUnfairLock<Task<Void, Never>?>(initialState: nil)
+
+    /**
+     * Runs category changes one after another: each reads the whole set and writes it back, so
+     * two at once, such as a launch's registration and its Show Previews check, would lose one.
+     */
+    private static func changingCategories(_ body: @escaping @Sendable () async -> Void) async {
+        let change = lastChange.withLock { last in
+            let previous = last
+            let next = Task { await previous?.value; await body() }
+            last = next
+            return next
+        }
+        await change.value
+    }
+
+    /** The categories with each question's buttons asking for the unlock when `locked`; nil when none changes. */
+    static func following(_ categories: Set<UNNotificationCategory>, locked: Bool) -> Set<UNNotificationCategory>? {
+        var changed = false
+        let updated = Set(categories.map { c -> UNNotificationCategory in
+            guard c.identifier.hasPrefix("d."), c.actions.contains(where: { $0.options.contains(.authenticationRequired) != locked }) else { return c }
+            changed = true
+            return UNNotificationCategory(identifier: c.identifier, actions: c.actions.map { a in
+                var options = a.options
+                if locked { options.insert(.authenticationRequired) } else { options.remove(.authenticationRequired) }
+                if let t = a as? UNTextInputNotificationAction {
+                    return UNTextInputNotificationAction(identifier: t.identifier, title: t.title, options: options, textInputButtonTitle: t.textInputButtonTitle, textInputPlaceholder: t.textInputPlaceholder)
+                }
+                return UNNotificationAction(identifier: a.identifier, title: a.title, options: options)
+            }, intentIdentifiers: c.intentIdentifiers)
+        })
+        return changed ? updated : nil
     }
 
     static func category(_ id: String, _ actions: [NotificationAction]) -> UNNotificationCategory {
