@@ -54,6 +54,8 @@ struct MainTabs: View {
             if phase == .active { store.startPolling() } else { store.stopPolling() }
             store.foreground(phase == .active)
             store.watchJoins(phase == .active)
+            // Back from Settings, Show Previews may have changed (#1384).
+            if phase == .active { Task { await Notify.followPreviews() } }
         }
     }
 }

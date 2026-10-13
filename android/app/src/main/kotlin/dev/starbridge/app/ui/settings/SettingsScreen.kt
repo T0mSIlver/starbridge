@@ -237,7 +237,7 @@ fun SettingsScreen(
 
         item { Section("Look") }
         item { RadioRow(0, 3, "Starbridge colours", colours == Colours.Starbridge) { actions.colours(Colours.Starbridge) } }
-        item { RadioRow(1, 3, "Wallpaper colours", colours == Colours.Wallpaper) { actions.colours(Colours.Wallpaper) } }
+        item { RadioRow(1, 3, "Material You", colours == Colours.Wallpaper) { actions.colours(Colours.Wallpaper) } }
         item {
             ChoiceRow(2, 3, "Time format") {
                 Segments(listOf(Clock.System to "System", Clock.H12 to "12-hour", Clock.H24 to "24-hour"), clock, actions.clock)

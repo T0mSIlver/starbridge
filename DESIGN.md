@@ -4,7 +4,7 @@ description: Beacon. A black, quiet screen where one amber light marks what need
 scheme: light-and-dark
 # Every colour is a hex (#rrggbb or #rrggbbaa) so the Kotlin output can read it.
 # Both schemes carry the same keys; the generator refuses a key missing from one.
-# Neutrals have no hue. Amber is the icon's climber.
+# Neutrals have no hue. Amber is the icon's dot.
 colors:
   light:
     bg: "#f4f4f4"
@@ -381,7 +381,7 @@ whose case (the face of Google's own apps) holds only on Android. Change a value
 
 Direction C, "Beacon" (spec/product.md, "Brand"). Soft black and neutral greys
 with no hue, large type, round cards, airy spacing. One
-accent: the amber of the icon's climber, which means "needs you" and nothing
+accent: the amber of the icon's dot, which means "needs you" and nothing
 else. Everything else is black, white and grey, except the quota bars, which
 fill in each provider's lab colour.
 
@@ -557,7 +557,9 @@ it has no title. A session's title is words, in the reading face (#563).
   app and Android before naming it, and hide a row a client can't honour. A
   setting that needs another shows off and muted while that one is off, and
   turning it on turns the other on first. One name per setting on every
-  client (#1061).
+  client (#1061). A label the owner picked stays: Android's colours option
+  is "Material You", the Android term users know (Tom, 2026-10-12). A copy
+  pass never renames a label the owner picked; it asks first.
 - Light and dark are peers and follow the system setting; dark is the
   default where a platform reports no preference. Every screen ships in both.
 - Mobile width first. Tap targets are at least `size.tap`. Wider screens add a
@@ -685,32 +687,42 @@ screen). GitHub links take GitHub's own Octicons (MIT), filled on their
 
 ## The mark
 
-The mark is a space elevator on a 108-unit canvas (the Android adaptive
-icon grid; the visible area is the central 72): a planet's edge (a circle at
-54,148, radius 80) and a tether (x 51.75 to 56.25, from the top edge down
-into the planet) in `fg` dark, and one amber climber, a capsule 11 wide and
-20 tall at 48.5,34, in `accent` dark. Where the mark has a ground, it is `bg`
-dark in both schemes, and the climber is the only amber. Single-colour uses (themed icon,
-notification icon) draw all three shapes in one colour.
+The mark is an arch from your machine (the wide leg) to your phone (the slim leg), with the amber
+dot crossing it: a question from your agent, or your answer. `design/mark.svg` holds its shapes on
+Android's adaptive icon grid of 108 units (the central 72 show; the circle of radius 33 around the
+centre survives every mask): the arch, outer radius 24.75, left leg 22 wide, right leg 9, straight
+legs 15.75 tall, feet rounded by 1.5, in `fg` dark; and the dot, radius 5.5, at the foot of the
+opening, in `accent` dark. The arch sits inside the safe circle, its box centred (#1466): the eye
+centres its symmetric dome against the mask, so centring its mass instead, which moves it
+toward the slim leg, reads as off-centre. Where the mark has a ground, it is `bg` dark in both schemes, and the dot
+is the only amber. Single-colour uses (Android's themed icon, the notification and menu bar icons,
+iOS's tinted icon) draw both shapes in one colour; the gap between them keeps the dot. The mark
+alone (rails, lockups, the tab and menu bar icons) is a square as wide as the arch, its bottom
+edge on the arch's feet.
+
+`node web/scripts/icons.ts` draws every file below from `design/mark.svg`, so changing the mark is
+one edit; with `--play <dir>` it also writes the Play listing's icon and feature graphic.
 
 | Where | File |
 |---|---|
+| The mark in code | `web/src/components/mark.ts`, Android `ui/MarkShape.kt`, iOS `UI/MarkShape.swift` |
 | Android launcher | `res/mipmap-anydpi/ic_launcher*.xml`, layers in `res/drawable/ic_launcher_*.xml` |
 | Android notification | `res/drawable/ic_notification.xml` (white, 24 dp) |
 | Web tab icon | `web/src/app/icon.svg` |
 | Web favicon and install icons | `web/src/app/favicon.ico` (16, 32, 48 px), `apple-icon.png` (180 px), `web/public/icon-*.png`, `manifest.ts` |
+| iOS app icon | `Assets.xcassets/AppIcon.appiconset`: default, dark and tinted |
+| macOS app and menu bar | `desktop/build/icon.png` (electron-builder makes the `.icns`), `desktop/assets/tray*.png` |
+| Link preview | the lockup in `web/scripts/og-image.html` |
 
-The tab icon is the mark as the page's rail draws it, with no ground, in
-`fg` and `accent` of the system's scheme, with a thin halo in the other
-scheme's `fg` so it stays legible on a tab strip that does not follow the
-system. The other web icons stand on the launcher's ground,
-since a home screen, or a browser that skips the SVG, shows them on any
-colour; `node web/scripts/icons.ts` renders them.
+The tab icon is the mark with no ground, in `fg` and `accent` of the system's scheme, with a thin
+halo in the other scheme's `fg` so it stays legible on a tab strip that does not follow the
+system; `favicon.ico`, for browsers that skip the SVG, is its light version. The other web icons
+and iOS's default icon stand on the launcher's ground, since a home screen shows them on any
+colour. iOS's dark and tinted icons have no ground: the system draws its own.
 
 The product name has no wordmark: it is "Starbridge" in the sans, weight 500. Beside the mark,
 the name stands on the mark's ground: its baseline sits on the mark's bottom
-edge (y 90 of the grid, where the planet's edge ends), and its "g" descends
-below. The gap is 0.4 × the mark's size (`s2` at 20 px). The web aligns them
+edge, the arch's feet, and its "g" descends below. The gap is 0.4 × the mark's size (`s2` at 20 px). The web aligns them
 with `align-items: baseline`, since a mark's synthesized baseline is its
 bottom edge; Android with `alignBy` (the mark at its height, the name at
 `LastBaseline`), in `ui/Lockup.kt`. The mark alone (favicon, app and notification icons, the

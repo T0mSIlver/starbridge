@@ -50,12 +50,29 @@ export class Switch {
      */
     readonly unconfirmed = new Set<string>(),
   ) {
-    this.done = this.loop();
+    // Nothing awaits a loop that ended before `stop`: a rejection would take the harness down (#1365).
+    this.done = this.loop().catch((e) => {
+      try {
+        this.paths.log(`starbridge: the answer loop stopped: ${(e as Error).message}`);
+      } catch {}
+    });
   }
 
   /** Which loop runs now, for tests and the debug log. */
   get mode(): "agent" | "cli" | undefined {
     return this.agent ? "agent" : this.poller ? "cli" : undefined;
+  }
+
+  /**
+   * Confirms through the loop that runs now the lines among `acks` still due to this session, and
+   * returns those; none when no loop runs or the call fails.
+   */
+  async claim(acks: string[]): Promise<string[]> {
+    try {
+      return (await (this.agent ?? this.poller)?.claim(acks)) ?? [];
+    } catch {
+      return [];
+    }
   }
 
   /** Ends the loop; the Poller gives up its lease at once. */

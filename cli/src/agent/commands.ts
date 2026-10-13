@@ -8,6 +8,7 @@ import {
   type AskInput,
   answerInLine,
   answerLine,
+  askLines,
   closedError,
   type Delivery,
   deliveryLine,
@@ -57,7 +58,10 @@ export async function askVia(
     { input: resolved },
   );
   ctx.out(id);
-  if (!opts.wait) ctx.err(deliveryLine(id, d));
+  if (!opts.wait) {
+    ctx.err(deliveryLine(id, d));
+    for (const line of askLines(resolved, d, ctx.env)) ctx.err(line);
+  }
   if (resolved.answerIn !== undefined) ctx.err(answerInLine(id));
   if (!opts.wait) return 0;
   return waitVia(ctx, agent, { id, timeout: opts.timeout, json: opts.json });
@@ -70,11 +74,15 @@ export async function waitingVia(
   ctx?: Ctx,
 ): Promise<number> {
   if (!opts.id) throw new UsageError(`${opts.state} needs a decision id`);
-  const r = await agent.call<{ snoozedUntil?: string }>(
+  const r = await agent.call<{ snoozedUntil?: string; answer?: Answer; question?: string }>(
     "POST",
     `/v1/decisions/${encodeURIComponent(opts.id)}/waiting`,
     { state: opts.state },
   );
+  if (ctx && r.answer) {
+    ctx.out(answerLine(r.answer, r.question));
+    return 0;
+  }
   if (ctx && r.snoozedUntil && opts.state === "waiting")
     ctx.out(
       snoozeLine(opts.id, ctx.store.state().asked[opts.id]?.question, r.snoozedUntil, ctx.now()),
@@ -163,7 +171,7 @@ export async function waitVia(
   return 0;
 }
 
-/** `answers` through the agent, for the mod: the session's events as `{decisionId, ack, line}`. */
+/** `answers` through the agent, for the mod: the session's events as `{decisionId, ack, line, waiting}`. */
 export async function answersVia(
   ctx: Ctx,
   agent: AgentClient,
@@ -172,7 +180,8 @@ export async function answersVia(
 ): Promise<number> {
   const path = `/v1/sessions/${encodeURIComponent(session)}`;
   if (opts.ack) {
-    await agent.call("POST", `${path}/ack`, { acks: opts.ack });
+    const r = await agent.call<{ acked?: string[] }>("POST", `${path}/ack`, { acks: opts.ack });
+    ctx.out(JSON.stringify({ acked: r.acked ?? [] }));
     return 0;
   }
   const wait = opts.wait === undefined ? 0 : waitSeconds(opts.wait);
@@ -185,7 +194,9 @@ export async function answersVia(
   );
   for (const e of events) {
     // The mod built for `answers` takes these fields; it skips lines without a decision id.
-    ctx.out(JSON.stringify({ decisionId: e.decisionId, ack: e.ack, line: e.line }));
+    ctx.out(
+      JSON.stringify({ decisionId: e.decisionId, ack: e.ack, line: e.line, waiting: e.waiting }),
+    );
   }
   return 0;
 }

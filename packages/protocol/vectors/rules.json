@@ -1,0 +1,150 @@
+{
+  "note": "Rules every client applies on its own (#1429). A time without a zone is the device's local time.",
+  "presence": {
+    "inputMs": 60000,
+    "beatMs": 30000,
+    "checkMs": 10000,
+    "holdChoices": [
+      0,
+      -1,
+      15,
+      30,
+      60
+    ]
+  },
+  "retryForMs": 20000,
+  "rowInputMax": 200,
+  "snooze": {
+    "minMs": 300000,
+    "maxMs": 604800000,
+    "presets": [
+      {
+        "now": "2026-10-12T10:20",
+        "presets": [
+          [
+            "1 hour",
+            "2026-10-12T11:20"
+          ],
+          [
+            "This evening",
+            "2026-10-12T18:00"
+          ]
+        ]
+      },
+      {
+        "now": "2026-10-12T16:59",
+        "presets": [
+          [
+            "1 hour",
+            "2026-10-12T17:59"
+          ],
+          [
+            "This evening",
+            "2026-10-12T18:00"
+          ]
+        ]
+      },
+      {
+        "now": "2026-10-12T17:00",
+        "presets": [
+          [
+            "1 hour",
+            "2026-10-12T18:00"
+          ]
+        ]
+      },
+      {
+        "now": "2026-10-12T23:30",
+        "presets": [
+          [
+            "1 hour",
+            "2026-10-13T00:30"
+          ]
+        ]
+      }
+    ],
+    "allowed": [
+      {
+        "now": "2026-10-12T10:00",
+        "until": "2026-10-12T09:59",
+        "allowed": false
+      },
+      {
+        "now": "2026-10-12T10:00",
+        "until": "2026-10-12T10:04",
+        "allowed": false
+      },
+      {
+        "now": "2026-10-12T10:00",
+        "until": "2026-10-12T10:05",
+        "allowed": true
+      },
+      {
+        "now": "2026-10-12T10:00",
+        "until": "2026-10-19T10:00",
+        "allowed": true
+      },
+      {
+        "now": "2026-10-12T10:00",
+        "until": "2026-10-19T10:01",
+        "allowed": false
+      }
+    ],
+    "morning": [
+      {
+        "now": "2026-10-12T04:59",
+        "morning": "2026-10-12T09:00"
+      },
+      {
+        "now": "2026-10-12T05:00",
+        "morning": "2026-10-13T09:00"
+      },
+      {
+        "now": "2026-10-12T22:00",
+        "morning": "2026-10-13T09:00"
+      }
+    ]
+  },
+  "options": [
+    {
+      "name": "recommended moves first",
+      "options": [
+        "Merge",
+        "Wait",
+        "Close"
+      ],
+      "recommended": "Close",
+      "ordered": [
+        "Close",
+        "Merge",
+        "Wait"
+      ]
+    },
+    {
+      "name": "recommended already first",
+      "options": [
+        "Merge",
+        "Wait",
+        "Close"
+      ],
+      "recommended": "Merge",
+      "ordered": [
+        "Merge",
+        "Wait",
+        "Close"
+      ]
+    },
+    {
+      "name": "composed and decomposed are two options",
+      "options": [
+        "é",
+        "é"
+      ],
+      "recommended": "é",
+      "ordered": [
+        "é",
+        "é"
+      ]
+    }
+  ]
+}

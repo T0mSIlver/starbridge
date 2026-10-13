@@ -53,6 +53,36 @@
   `PLAY_WIF_PROVIDER` and `PLAY_SERVICE_ACCOUNT`). Without them the job skips with a notice; a
   failed upload fails the run after the release is out. Run by hand on main, the job asks Play to
   validate the edit and discards it.
+- **Play listing images without the console** (#1436). Play Console's "Send changes for review" can
+  fail with an HTTP 400 and no reason. The `play-listing` workflow, run by hand from main
+  (`gh workflow run play-listing.yml --ref main`), replaces the en-US icon and feature graphic with
+  `android/store/` (drawn by `web/scripts/icons.ts --play`) through the Play Developer API, signing
+  in as the `play` job does, and commits the edit, which sends it for review; on failure it prints
+  Play's error body.
+- **The iPhone app on TestFlight** (#1397). Once the release is out, the `testflight` job archives
+  the app on GitHub's macOS runner with the newest Xcode and uploads it to TestFlight, rcs and
+  finals alike: App Store review needs a sign-in besides GitHub's (guideline 4.8), so testers are
+  the only users yet. xcodebuild's own Apple sign-in refuses the App Store Connect API key (the
+  `ASC_API_KEY_P8` secret of the `ios-release` environment, open to main and `v*` tags; variables
+  `ASC_KEY_ID` and `ASC_ISSUER_ID`) that the REST API takes, so the job signs through the REST API
+  (`ios/scripts/asc-signing.rb`, #1419): it registers the App IDs and their capabilities when
+  missing, and makes an App Store profile per App ID, deleted at its end. It signs with one stored
+  Apple Distribution certificate, its .p12 and password the `IOS_DISTRIBUTION_P12` and
+  `IOS_DISTRIBUTION_P12_PASSWORD` secrets of the same environment (#1479): a certificate made and
+  revoked per run had Apple email the owner on every release. When that secret is missing, or Apple
+  no longer lists the certificate or it expires within a day, the run makes its own from a key made
+  on the runner and revokes it at its end, with a warning. The stored one is issued off CI with
+  `asc-signing.rb issue` and lasts a year; the run warns 30 days before. Uploaded builds stay valid
+  past either, since the App Store re-signs them. The archive
+  builds unsigned and `ios/scripts/adhoc-sign.sh` signs it ad hoc with each target's entitlements,
+  which the export keeps (#1415); altool uploads with the same key. App Groups need the group
+  registered once by hand, which the REST API cannot do. The key needs the Admin role, which
+  creating certificates takes (#1409). Before signing, `ios/scripts/asc-check.rb` signs in with it
+  and says why App Store Connect refuses it, with the public key's SHA-256 to compare with the
+  .p8 kept offline. The marketing version is the tag's without `-rc.N`, since Apple
+  takes three numbers only; the build number is the run's number and attempt, unique per upload.
+  Run by hand on main, the job archives and exports without uploading, or with `testflight_only`
+  builds the app alone and uploads it.
 - **Signing and deploy secrets in environments** (#1121). The Android keystore, its password and
   alias, `google-services.json`, the minisign key and the Homebrew tap key are secrets of the
   `release` environment, open to main and `v*` tags; the `android`, `release` and `homebrew` jobs
@@ -61,7 +91,7 @@
   them. The cost: a `release.yml` run dispatched from a branch fails its Android job, so dry runs
   go from main.
 - **Release notes by product** (#1057). A list of PR titles told users little. Each PR body has
-  a "Release notes" section, one `Product: line` per product a user sees change (Android, Web,
+  a "Release notes" section, one `Product: line` per product a user sees change (Android, iOS since TestFlight takes every tag (#1451), Web,
   Desktop, CLI, Server, Docs) or `None`, optionally `None: why`, written by whoever knows the change; it can be edited
   after merge until the tag. `cli/scripts/release-notes.ts` renders a section per product, empty
   ones omitted, then every PR inside a folded `<details>`. Grouping by paths was rejected: tests
@@ -72,9 +102,10 @@
   the tag also builds the macOS app on GitHub's macOS runner, signed with the Developer ID and
   notarized, its secrets in the `desktop-release` environment, and adds its DMGs, zips and
   `latest-mac.yml` to the Release. Every 6 hours and at start, the app reads that file from the
-  release it follows, downloads the zip, and installs it on quit or from Restart to Update. It
-  follows GitHub's latest release, or with Get Release Candidates checked in its menu, the newest
-  rc when that is newer (#1071); an app installed from an rc starts checked. Unchecking it cancels
+  release it follows, downloads the zip (or waits for the rail's Update available, with Settings' "Download updates
+  automatically" off), and installs it on quit or from the rail's Restart to update (#1398). It
+  follows GitHub's latest release, or with Settings' "Release candidates" on, the newest
+  rc when that is newer (#1071); an app installed from an rc starts with it on. Turning it off cancels
   an rc download under way; one already downloaded still installs on quit, since Squirrel holds it. The app picks the
   release from the `releases/latest` redirect and the releases feed: electron-updater's own GitHub
   lookup keeps an app installed from an rc on rcs and never offers it a final, and GitHub's API
@@ -132,7 +163,7 @@
   since Dependabot reads only Dockerfiles (#1172). A workflow writes `pnpm-lock.yaml` into
   Dependabot's security PRs, which update `package.json` alone, then dispatches CI, since a push
   with `GITHUB_TOKEN` starts no workflow; that run sets the PR's `CI` status, failed when any job
-  fails or skips, Windows and macOS on a private repository aside (#1161). The images install pnpm
+  fails or skips, Windows, macOS and Linux ARM64 on a private repository aside (#1161). The images install pnpm
   with `npm install -g` at `packageManager`'s version, since node slim images ship no corepack
   (#430).
 - **CI** (#380). Main runs one at a time; a newer merge replaces the waiting run, and the head's
@@ -149,8 +180,8 @@
   suite, which must pass (#884). A private repository skips it, since GitHub's Windows runners need
   a public one or paid minutes. A `macos-latest` job (#877), skipped the same way, starts a built
   binary and runs the whole CLI suite, which must pass: the launchd service and the screen readers
-  run only on a Mac, so the real launchd starts and stops the agent there. Both jobs run each test
-  file alone and kill one that hangs (`cli/scripts/test-each.ts`, #862).
+  run only on a Mac, so the real launchd starts and stops the agent there. A `ubuntu-24.04-arm` job (#1481), skipped the same way, does the same for the
+  linux-arm64 binary. All three jobs run each test file alone and kill one that hangs (`cli/scripts/test-each.ts`, #862).
 - **CI runners** (#146, #1204, #1213). Self-hosted Linux runners in two pools that never share a
   box: `trusted` runs main's tests, deploys, uptime checks and releases; `pr` runs the test, e2e
   and image jobs of a pull request from this repository's own branches, so they start sooner than

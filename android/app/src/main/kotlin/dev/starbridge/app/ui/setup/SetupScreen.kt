@@ -22,6 +22,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -91,6 +92,7 @@ class SetupViewModel @Inject constructor(private val store: Store) : ViewModel()
     val keepsKeys = store.keepsKeys
     val actions = SetupActions(
         gitHub = store::gitHubSignInUrl,
+        apple = store::appleSignInUrl,
         ownerToken = store::signInWithOwnerToken,
         firstDevice = store::setUpFirstDevice,
         join = store::joinAccount,
@@ -102,12 +104,16 @@ class SetupViewModel @Inject constructor(private val store: Store) : ViewModel()
         saved = store::confirmRecoveryKey,
         signOut = store::signOut,
         deleteAccount = store::deleteAccount,
+        dropJoinLink = { store.offerJoinLink(null) },
     )
+    val joinLink = store.joinLink
 }
 
 class SetupActions(
     /** Returns the URL to open in the browser. */
     val gitHub: (server: String) -> String,
+    /** Apple's web sign-in on starbridge.run; the URL to open in the browser. */
+    val apple: () -> String,
     val ownerToken: (server: String, token: String) -> Unit,
     val firstDevice: () -> Unit,
     val join: () -> Unit,
@@ -120,6 +126,7 @@ class SetupActions(
     val signOut: () -> Unit,
     val confirmDigits: () -> Unit = {},
     val deleteAccount: () -> Unit = {},
+    val dropJoinLink: () -> Unit = {},
 )
 
 /**
@@ -127,10 +134,10 @@ class SetupActions(
  * are the fallback), or, on an empty account, create its keys and show the recovery key once.
  */
 @Composable
-fun SetupScreen(phase: Phase, server: String, busy: Boolean, actions: SetupActions, openUrl: (String) -> Unit, modifier: Modifier = Modifier, keepsKeys: Boolean = false) {
+fun SetupScreen(phase: Phase, server: String, busy: Boolean, actions: SetupActions, openUrl: (String) -> Unit, modifier: Modifier = Modifier, keepsKeys: Boolean = false, joinLink: String? = null) {
     when (phase) {
         Phase.SignedOut -> SignIn(server, busy, actions, openUrl, modifier, keepsKeys)
-        is Phase.NoDevice -> if (phase.accountExists) Join(busy, actions, modifier) else FirstDevice(busy, actions, modifier)
+        is Phase.NoDevice -> if (phase.accountExists) Join(busy, actions, modifier, joinLink) else FirstDevice(busy, actions, modifier)
         is Phase.Joining -> Waiting("Approve this phone", if (phase.scanned) "Approve it on the device that shows the QR code." else "Type this code on a device you already use: ${phase.code}", null, actions.cancelJoin, modifier)
         is Phase.JoiningByDigits -> when {
             phase.digits != null && !phase.matched -> Waiting("Compare digits", "Does your other device show the same digits?", phase.digits, actions.cancelJoin, modifier, onMatch = actions.confirmDigits)
@@ -204,6 +211,7 @@ private fun SignIn(server: String, busy: Boolean, actions: SetupActions, openUrl
     var selfHosted by rememberSaveable { mutableStateOf(server != BuildConfig.DEFAULT_SERVER) }
     var url by rememberSaveable { mutableStateOf(server) }
     var token by rememberSaveable { mutableStateOf("") }
+    var others by rememberSaveable { mutableStateOf(false) }
     Step(
         modifier,
         top = {
@@ -238,6 +246,16 @@ private fun SignIn(server: String, busy: Boolean, actions: SetupActions, openUrl
                 Primary("Sign in with GitHub", busy, icon = { Icon(painterResource(R.drawable.ic_github), contentDescription = null, modifier = Modifier.size(20.dp)) }) {
                     openUrl(actions.gitHub(BuildConfig.DEFAULT_SERVER))
                 }
+                // Apple's sign-in sits behind a link: GitHub is the main way, and an account made
+                // with Apple on the iPhone signs in here too (spec/sign-in.md).
+                if (others) {
+                    OutlinedButton(onClick = { openUrl(actions.apple()) }, enabled = !busy, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
+                        Icon(painterResource(R.drawable.ic_apple), contentDescription = null, modifier = Modifier.size(20.dp))
+                        Text("Sign in with Apple", style = StarbridgeTheme.type.action, modifier = Modifier.padding(start = Spacing.s2))
+                    }
+                } else {
+                    Link("Other ways to sign in") { others = true }
+                }
                 Link("Use your own server") { selfHosted = true }
             } else {
                 Primary("Sign in", busy, enabled = url.isNotBlank() && token.isNotBlank()) { actions.ownerToken(url, token) }
@@ -254,7 +272,7 @@ private fun SignIn(server: String, busy: Boolean, actions: SetupActions, openUrl
 
 /** The account has devices: this phone scans one's QR code, or compares digits with it. */
 @Composable
-private fun Join(busy: Boolean, actions: SetupActions, modifier: Modifier) {
+private fun Join(busy: Boolean, actions: SetupActions, modifier: Modifier, joinLink: String? = null) {
     var recovering by rememberSaveable { mutableStateOf(false) }
     var deleting by rememberSaveable { mutableStateOf(false) }
     var scanError by rememberSaveable { mutableStateOf<String?>(null) }
@@ -289,6 +307,16 @@ private fun Join(busy: Boolean, actions: SetupActions, modifier: Modifier) {
             onDismiss = { deleting = false },
         )
     }
+    // A pairing link joins only once the owner says so, as a scanned QR code does with its scan.
+    if (joinLink != null) {
+        AlertDialog(
+            onDismissRequest = actions.dropJoinLink,
+            title = { Text("Add this phone with this link?") },
+            text = { Text("Add it only if you opened the link from one of your devices' QR codes.", style = StarbridgeTheme.type.body) },
+            confirmButton = { TextButton(onClick = { actions.dropJoinLink(); actions.joinWithCode(joinLink) }) { Text("Add this phone") } },
+            dismissButton = { TextButton(onClick = actions.dropJoinLink) { Text("Cancel") } },
+        )
+    }
 }
 
 /**
@@ -317,7 +345,7 @@ fun UpdateRequired(minimum: String, current: String, installer: Installer, updat
             Column(Modifier.padding(start = Spacing.s4, end = Spacing.s4, top = 48.dp, bottom = Spacing.s6), verticalArrangement = Arrangement.spacedBy(Spacing.s3)) {
                 Title("Update Starbridge")
                 Text(
-                    "Your server needs Starbridge $minimum or later. This phone has $current.",
+                    "Your server needs Starbridge $minimum or later. This phone has $current. Answers you gave are kept and sent once it is updated.",
                     style = StarbridgeTheme.type.body,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

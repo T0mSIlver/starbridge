@@ -6,7 +6,7 @@
  */
 import { activeMembers, type Directory, ProtocolError } from "@starbridge/protocol";
 import { type AgyRoute, agyReachable, agySend } from "../antigravity";
-import { codexNotice, codexQueue, codexReachable } from "../codex";
+import { type CodexSession, codexNotice, codexQueue, codexReachable, codexSteer } from "../codex";
 import { type Ctx, iso, session, UsageError } from "../context";
 import {
   type AskInput,
@@ -22,8 +22,10 @@ import {
   postWaiting,
   sessionLines,
   snoozedUntil,
+  steering,
   takeAnswer,
   takeSnooze,
+  takeUnseen,
 } from "../decisions";
 import type { SessionEvent, Status } from "./api";
 import { type Feature, HttpError, type Hub, holdSeconds, pause } from "./server";
@@ -103,6 +105,10 @@ export class Decisions implements Feature {
             "unknown-decision",
             `${id} is not a decision this machine asked`,
           );
+        // A revoked device's answer is dropped first, as every hand-out does (#491).
+        if (state === "waiting") await this.beforeEvents();
+        const taken = state === "waiting" ? takeUnseen(this.ctx.store, id) : undefined;
+        if (taken) return { posted: false, ...taken };
         const posted = await postWaiting(this.ctx, session(this.ctx), id, state);
         const until = snoozedUntil(this.ctx.store.state(), id, this.ctx.now());
         return { posted, ...(until ? { snoozedUntil: until } : {}) };
@@ -189,8 +195,12 @@ export class Decisions implements Feature {
     );
   }
 
-  ack(id: string, tokens: string[]) {
-    this.ctx.store.updateState((st) => ackLines(st, id, tokens));
+  ack(id: string, tokens: string[]): string[] {
+    let acked: string[] = [];
+    this.ctx.store.updateState((st) => {
+      acked = ackLines(st, id, tokens);
+    });
+    return acked;
   }
 
   status(into: Status) {
@@ -217,7 +227,8 @@ export class Decisions implements Feature {
   }
 
   /**
-   * Queues each new answer to a Codex session into it with `codex queue`, and sends each to an
+   * Queues each new answer to a Codex session into it with `codex queue`, or steers it into the
+   * running turn when the decision is marked waiting (#1486), and sends each to an
    * Antigravity conversation through its language server (#961). Marks it seen only once that
    * succeeded: an agent that dies meanwhile delivers it again, rather than never. A session that
    * is gone gets CODEX_TRIES tries, a minute apart; the answer stays for a `wait`.
@@ -236,20 +247,25 @@ export class Decisions implements Feature {
       const [how, where] = asked.codex
         ? ["codex queue", `Codex session ${asked.session}`]
         : ["sending to Antigravity", `Antigravity conversation ${asked.session}`];
-      const error = asked.codex
-        ? await codexQueue(asked.codex, asked.session, codexNotice(id))
-        : await agySend(
-            asked.antigravity as AgyRoute,
-            asked.session,
-            answerLine(a.answer, asked.question),
-          );
+      const steered = asked.codex && asked.waiting?.state === "waiting" && (await this.steer(id));
+      // A `waiting` printed it meanwhile.
+      if (!steered && this.ctx.store.state().answers[id]?.seen) continue;
+      const error = steered
+        ? undefined
+        : asked.codex
+          ? await codexQueue(asked.codex, asked.session, codexNotice(id))
+          : await agySend(
+              asked.antigravity as AgyRoute,
+              asked.session,
+              answerLine(a.answer, asked.question),
+            );
       if (error === undefined) {
         this.retries.delete(id);
         this.ctx.store.updateState((st) => {
           const x = st.answers[id];
           if (x) x.seen = true;
         });
-        this.hub.log(`answer to ${id} queued into ${where}`);
+        this.hub.log(`answer to ${id} ${steered ? "steered" : "queued"} into ${where}`);
         continue;
       }
       const tries = retry.tries + 1;
@@ -260,6 +276,33 @@ export class Decisions implements Feature {
           : `answer to ${id}: ${how} failed ${tries} times (${error}); giving up`,
       );
     }
+  }
+
+  /**
+   * Steers the answer to `id`, marked waiting, into its Codex session's running turn (#1486).
+   * Claimed under the lock first, so a `waiting` meanwhile does not print it too. The claim is
+   * not `seen`: an agent that dies mid-steer leaves one that expires, and delivers it again.
+   */
+  private async steer(id: string): Promise<boolean> {
+    let line: string | undefined;
+    let route: { codex: CodexSession; session: string } | undefined;
+    this.ctx.store.updateState((st) => {
+      const a = st.answers[id];
+      const asked = st.asked[id];
+      if (!a || a.seen || steering(a) || !asked?.codex || !asked.session) return;
+      a.steering = Date.now();
+      line = answerLine(a.answer, asked.question);
+      route = { codex: asked.codex, session: asked.session };
+    });
+    if (!route || line === undefined) return false;
+    const steered = await codexSteer(route.codex, route.session, line);
+    this.ctx.store.updateState((st) => {
+      const a = st.answers[id];
+      if (!a) return;
+      delete a.steering;
+      if (steered) a.seen = true;
+    });
+    return steered;
   }
 
   /** One long-poll after another from the shared cursor, each held until an answer comes. */

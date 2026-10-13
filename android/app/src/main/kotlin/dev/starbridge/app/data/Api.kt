@@ -99,12 +99,12 @@ internal var limitedUntil = 0L
 class Api(private val http: OkHttpClient, private val server: String, private val session: String?, private val reach: Reach? = null) {
     private val json = "application/json".toMediaType()
 
-    private suspend fun call(method: String, path: String, body: JsonElement? = null, headers: Map<String, String> = emptyMap(), client: OkHttpClient = http): Pair<Int, JsonElement?> {
+    private suspend fun call(method: String, path: String, body: JsonElement? = null, headers: Map<String, String> = emptyMap(), client: OkHttpClient = http, ownLimit: Boolean = false): Pair<Int, JsonElement?> {
         val started = System.currentTimeMillis()
         var wait = 250L
         while (true) {
             val limited = limitedUntil - System.currentTimeMillis()
-            if (limited > 0) {
+            if (!ownLimit && limited > 0) {
                 if (System.currentTimeMillis() - started + limited > RETRY_FOR_MS) throw ApiException(429, "rate-limited", "too many requests; retry later")
                 delay(limited)
                 continue
@@ -114,6 +114,7 @@ class Api(private val http: OkHttpClient, private val server: String, private va
             } catch (e: IOException) {
                 if (Reach.transient(e)) reach?.failed() else reach?.reached()
                 if (e is ApiException && e.status == 429 && e.retryAfterMs != null) {
+                    if (ownLimit) throw e
                     // Jitter spreads this app's calls past the limit's window, not into its first moment.
                     limitedUntil = maxOf(limitedUntil, System.currentTimeMillis() + (e.retryAfterMs * (1 + Math.random() / 4)).toLong())
                     continue
@@ -271,8 +272,9 @@ class Api(private val http: OkHttpClient, private val server: String, private va
         call("POST", "/items", ProtocolJson.encodeToJsonElement(item))
     }
 
-    suspend fun items(kind: String, after: String): ItemPage {
-        val page = call("GET", "/items?kind=$kind&after=$after").second!!.jsonObject
+    /** With [openBlobs], an answered decision lists without its images, which [item] gives (#1382). */
+    suspend fun items(kind: String, after: String, openBlobs: Boolean = false): ItemPage {
+        val page = call("GET", "/items?kind=$kind&after=$after" + if (openBlobs) "&blobs=open" else "").second!!.jsonObject
         return ItemPage(listedItems(page.getValue("items")), page["cursor"]?.jsonPrimitive?.content ?: "")
     }
 
@@ -318,7 +320,7 @@ class Api(private val http: OkHttpClient, private val server: String, private va
 
     /** Whether the owner is using this phone (#848): one bit. */
     suspend fun presence(present: Boolean) {
-        call("PUT", "/presence", buildJsonObject { put("present", present) })
+        call("PUT", "/presence", buildJsonObject { put("present", present) }, ownLimit = true)
     }
 
     /** The account's hold time in seconds (#848). */
