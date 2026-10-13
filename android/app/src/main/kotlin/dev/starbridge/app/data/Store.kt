@@ -53,6 +53,9 @@ interface Store {
 
     /** The URL that starts GitHub sign-in; it ends at a link [SignIn.redirect] reads. */
     fun gitHubSignInUrl(server: String): String
+
+    /** Apple's web sign-in on starbridge.run, the only server holding Apple's keys (#1411). */
+    fun appleSignInUrl(): String
     /** The redirect that ends GitHub sign-in. */
     fun receiveSignIn(redirect: String)
     fun signInWithOwnerToken(server: String, token: String)

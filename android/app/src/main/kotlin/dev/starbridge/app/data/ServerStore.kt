@@ -431,6 +431,12 @@ class ServerStore(
         return SignIn.url(saved.server, verifier)
     }
 
+    override fun appleSignInUrl(): String {
+        val verifier = SignIn.newVerifier()
+        persist(saved.copy(server = defaultServer), secrets.copy(signInVerifier = verifier))
+        return SignIn.url(saved.server, verifier, "apple")
+    }
+
     /**
      * Only for the sign-in this phone started: without its verifier the code is worthless, and a
      * redirect with no sign-in pending is ignored. The code works once, whatever the outcome.
@@ -443,7 +449,7 @@ class ServerStore(
         val challenge = SignIn.challenge(verifier)
         val link = when (val r = SignIn.redirect(redirect)) {
             is SignIn.Redirect.Code -> r.takeIf { it.state == challenge } ?: return@run
-            is SignIn.Redirect.Denied -> if (r.state == challenge) throw IllegalStateException("GitHub sign-in didn't finish. Sign in again.") else return@run
+            is SignIn.Redirect.Denied -> if (r.state == challenge) throw IllegalStateException("Sign-in didn't finish. Sign in again.") else return@run
             null -> return@run
         }
         persist(newSecrets = secrets.copy(signInVerifier = null))
