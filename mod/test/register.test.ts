@@ -123,6 +123,7 @@ test("an answer queued behind a typed prompt when the process exits comes back o
         },
         write: async (path: string, text: string) => void files.set(path, text),
         stat: async () => undefined,
+        list: async () => [],
       },
       state: {
         get: async (ref: { key: string }) => ({ value: state.get(ref.key), version: 0 }),

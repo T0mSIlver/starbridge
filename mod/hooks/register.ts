@@ -11,7 +11,7 @@ import {
 } from "./agent.ts";
 import { Handover } from "./handover.ts";
 import { configDir, Poller } from "./poller.ts";
-import { Sent } from "./sent.ts";
+import { Sent, sessionElsewhere } from "./sent.ts";
 import { Switch, wantsLoop } from "./switch.ts";
 
 /**
@@ -48,6 +48,7 @@ export const register: Register = (on) => {
       STARBRIDGE_AGENT_SOCKET: await $.env.get("STARBRIDGE_AGENT_SOCKET"),
       STARBRIDGE_CONFIG_DIR: await $.env.get("STARBRIDGE_CONFIG_DIR"),
       STARBRIDGE_NO_AGENT: await $.env.get("STARBRIDGE_NO_AGENT"),
+      CLAUDE_CONFIG_DIR: await $.env.get("CLAUDE_CONFIG_DIR"),
       XDG_CONFIG_HOME: await $.env.get("XDG_CONFIG_HOME"),
       XDG_RUNTIME_DIR: await $.env.get("XDG_RUNTIME_DIR"),
       HOME: await $.env.get("HOME"),
@@ -106,6 +107,21 @@ export const register: Register = (on) => {
         write: (path, text) => $.fs.write(path, text),
         now,
         submit: (text) => track($.prompt.submit({ text })),
+        elsewhere: async (session) => {
+          // Claude Code's own pid, as the parent of the shell it runs; Windows has no `sh`.
+          if (env.OS === "Windows_NT") return false;
+          const own = Number(
+            (await $.process.run(["sh", "-c", "echo $PPID"], { timeoutMs: 10_000 })).stdout.trim(),
+          );
+          if (!own) return false;
+          return sessionElsewhere(
+            session,
+            own,
+            { list: (path) => $.fs.list(path), read: (path) => $.fs.read(path) },
+            `${env.CLAUDE_CONFIG_DIR || `${env.HOME}/.claude`}/sessions`,
+            (pid) => pidRuns(pid, false, (argv) => $.process.run(argv, { timeoutMs: 10_000 })),
+          );
+        },
         log,
       },
       dir,

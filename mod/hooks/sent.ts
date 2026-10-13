@@ -11,6 +11,7 @@
  *
  * Lines carry the token of the process that submitted them, which `$.state` keeps across a hot
  * reload: a reload leaves the queued prompt in place, so a reloaded mod submits nothing again.
+ * Nor does a process that shares its session with another live one.
  */
 
 export interface SentHost {
@@ -26,6 +27,11 @@ export interface SentHost {
    * refused it.
    */
   submit(text: string): Promise<unknown>;
+  /**
+   * Whether another live process runs `session`, such as a `claude --resume` in a second
+   * terminal: the lines it submitted may still be queued there.
+   */
+  elsewhere(session: string): Promise<boolean>;
   log(text: string): void;
 }
 
@@ -76,6 +82,8 @@ export class Sent {
       // hands the line over again, and the file holds it. It goes out once, as `recover` would.
       const known = lines.find((l) => l.ack === ack);
       if (known && (this.process === undefined || known.process === this.process)) return true;
+      if (known && known.process !== "" && (await this.host.elsewhere(me).catch(() => false)))
+        return true;
       const entry = known
         ? { ...known, process: this.process ?? "" }
         : { ack, line, process: this.process ?? "", at, refused: 0 };
@@ -123,7 +131,10 @@ export class Sent {
       const lines = await this.load(me);
       const first = !this.recovered.has(me);
       this.recovered.add(me);
-      const due = lines.filter((l) => l.process === "" || (first && l.process !== this.process));
+      const shared = first && (await this.host.elsewhere(me).catch(() => false));
+      const due = lines.filter(
+        (l) => l.process === "" || (first && !shared && l.process !== this.process),
+      );
       if (due.length === 0) return;
       const keep = lines.filter((l) => !due.includes(l));
       const again: Line[] = [];
@@ -219,4 +230,35 @@ function isLine(l: unknown): l is Line {
     typeof x.at === "number" &&
     typeof x.refused === "number"
   );
+}
+
+/**
+ * Whether a live Claude Code process other than `own` runs session `session`, from the
+ * `<pid>.json` files Claude Code keeps in `<its config folder>/sessions`; files of processes that
+ * ended stay behind, so `runs` checks each pid.
+ */
+export async function sessionElsewhere(
+  session: string,
+  own: number,
+  fs: { list(dir: string): Promise<{ name: string }[]>; read(path: string): Promise<string> },
+  dir: string,
+  runs: (pid: number) => Promise<boolean>,
+): Promise<boolean> {
+  for (const f of await fs.list(dir).catch(() => [])) {
+    if (!/^\d+\.json$/.test(f.name) || f.name === `${own}.json`) continue;
+    try {
+      const s = JSON.parse(await fs.read(`${dir}/${f.name}`)) as {
+        pid?: unknown;
+        sessionId?: unknown;
+      };
+      if (
+        s.sessionId === session &&
+        typeof s.pid === "number" &&
+        s.pid !== own &&
+        (await runs(s.pid))
+      )
+        return true;
+    } catch {}
+  }
+  return false;
 }

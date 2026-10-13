@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { Sent, type SentHost } from "../hooks/sent.ts";
+import { Sent, type SentHost, sessionElsewhere } from "../hooks/sent.ts";
 
 const LINE = "Answer to d_1 (Build phase 1?): Build it";
 const framed = (line: string) =>
@@ -8,10 +8,13 @@ const framed = (line: string) =>
 /** One machine's files, shared by the processes a test starts on it. */
 function machine() {
   const files = new Map<string, string>();
+  /** Sessions another live process runs too. */
+  const live = new Set<string>();
   const disk = { full: false, slow: Promise.resolve() as Promise<unknown> };
   return {
     files,
     disk,
+    live,
     /** A process on session `session`: its prompts resolve when the test starts their turn. */
     process(session: string | (() => string), token: string | undefined) {
       const submitted: string[] = [];
@@ -34,6 +37,7 @@ function machine() {
           submitted.push(text);
           return new Promise((settle, fail) => pending.push({ text, settle, fail }));
         },
+        elsewhere: async (s) => live.has(s),
         log: () => {},
       };
       const sent = new Sent(host, "/sb", token);
@@ -186,4 +190,31 @@ test("an answer queued in each of several processes that exit is still submitted
     await p.sent.recover();
     expect(p.submitted).toEqual([LINE]);
   }
+});
+
+test("a second live process on the session leaves the first one's queued answer alone", async () => {
+  const m = machine();
+  await m.process("s1", "proc-1").sent.send(LINE, "d_1");
+  m.live.add("s1");
+  const second = m.process("s1", "proc-2");
+  await second.sent.recover();
+  expect(await second.sent.send(LINE, "d_1")).toBe(true);
+  expect(second.submitted).toEqual([]);
+});
+
+test("another process runs the session when a live pid other than ours names it", async () => {
+  const files: Record<string, string> = {
+    "/c/sessions/10.json": JSON.stringify({ pid: 10, sessionId: "s1" }),
+    "/c/sessions/11.json": JSON.stringify({ pid: 11, sessionId: "s1" }),
+    "/c/sessions/12.json": JSON.stringify({ pid: 12, sessionId: "s2" }),
+  };
+  const fs = {
+    list: async () => Object.keys(files).map((p) => ({ name: p.slice("/c/sessions/".length) })),
+    read: async (p: string) => files[p] as string,
+  };
+  const live = (pids: number[]) => async (pid: number) => pids.includes(pid);
+  expect(await sessionElsewhere("s1", 10, fs, "/c/sessions", live([10, 11, 12]))).toBe(true);
+  // A file left by a process that ended.
+  expect(await sessionElsewhere("s1", 10, fs, "/c/sessions", live([10, 12]))).toBe(false);
+  expect(await sessionElsewhere("s2", 12, fs, "/c/sessions", live([10, 11, 12]))).toBe(false);
 });
