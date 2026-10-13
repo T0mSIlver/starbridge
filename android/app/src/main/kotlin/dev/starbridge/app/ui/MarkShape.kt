@@ -3,11 +3,11 @@ package dev.starbridge.app.ui
 
 /** The mark's shapes in the 108-unit grid, and the square that shows it alone. */
 internal object MarkShape {
-    const val ARCH = "M30.25,72.75 V58.5 A24.75,24.75 0 0 1 79.75,58.5 V72.75 A1.5,1.5 0 0 1 78.25,74.25 H72.25 A1.5,1.5 0 0 1 70.75,72.75 V58.5 A9.25,9.25 0 0 0 52.25,58.5 V72.75 A1.5,1.5 0 0 1 50.75,74.25 H31.75 A1.5,1.5 0 0 1 30.25,72.75 Z"
-    const val DOT_X = 61.5f
+    const val ARCH = "M29.25,72.75 V58.5 A24.75,24.75 0 0 1 78.75,58.5 V72.75 A1.5,1.5 0 0 1 77.25,74.25 H71.25 A1.5,1.5 0 0 1 69.75,72.75 V58.5 A9.25,9.25 0 0 0 51.25,58.5 V72.75 A1.5,1.5 0 0 1 49.75,74.25 H30.75 A1.5,1.5 0 0 1 29.25,72.75 Z"
+    const val DOT_X = 60.5f
     const val DOT_Y = 68.75f
     const val DOT_R = 5.5f
-    const val CROP_X = 30.25f
+    const val CROP_X = 29.25f
     const val CROP_Y = 24.75f
     const val CROP_SIZE = 49.5f
 }
