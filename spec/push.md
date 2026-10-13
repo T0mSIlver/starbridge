@@ -88,7 +88,9 @@
   notifications again at random and Devices listed the iPhone off. A browser drops its
   subscription when permission goes, so the subscription is the truer signal. Read before the
   service worker is active, a subscription can read as none, so the page waits up to 3 s for the
-  worker before saying off.
+  worker before saying off. A tab reading `denied` is blocked only when no subscription, push
+  manager permission or Permissions API answer says otherwise: macOS Safari 27 keeps reading
+  `denied` in the tab where the owner just clicked Allow (#1404).
 - **The hand-off to the desktop app** (#943). The app's GitHub sign-in passes through
   `/app/auth` in the default browser of its own machine. When that browser holds a device of the
   same account with notifications on, which the server confirms once the app traded its code,
