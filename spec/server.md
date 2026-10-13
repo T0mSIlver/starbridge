@@ -71,7 +71,7 @@
   either number can't be read, and keeps the last two (#586) for 7 days at most, as the nightly
   copies, so deleted data leaves backups within the 2 weeks /privacy promises (#721).
 - **Migration rehearsal** (#1543). Each night sb-staging runs main's newest server on a copy of
-  prod's schema, filled with synthetic users and items to the 2 GB cap, and posts a card when its
+  prod's schema, filled with synthetic users and items to the 2 GB cap, and alerts the owner when its
   migrations take over the 30 s or leave a schema other than its own (`evals/migrate/`). It also
   fails when prod's schema differs from what the migrations at prod's revision make. Only the
   schema leaves the VPS, with no rows: no copy of prod's data goes to staging.
