@@ -1242,6 +1242,8 @@ test("a decision whose answer came from a device revoked since is closed (#515)"
   const posts = server.log.filter((c) => c === "POST /items").length;
   expect(await run(["settle", id, "--reason", "No longer needed"], ctx)).toBe(0);
   expect(server.log.filter((c) => c === "POST /items").length).toBe(posts);
+  // Nor does it claim an answer it holds none of (#1575).
+  expect(ctx.errors.at(-1)).not.toContain("answered first");
 });
 
 test("through the local agent, wait says too that a revoked device answered (#515)", async () => {

@@ -573,7 +573,9 @@ export async function settle(ctx: Ctx, opts: SettleOpts): Promise<number> {
     ctx.store.updateState((st) => void dropRevoked(st, dir));
     const taken = takeUnseen(ctx.store, id);
     if (taken) ctx.out(answerLine(taken.answer, taken.question));
-    if (!(await settleOne(ctx, s, dir, id, outcome, false, reason, opts.deadline)))
+    const settled = await settleOne(ctx, s, dir, id, outcome, false, reason, opts.deadline);
+    // Not for one a removed device's answer closed: no answer is held, and `wait` says why.
+    if (!settled && ctx.store.state().answers[id])
       ctx.err(`starbridge: ${id} was answered first, so it stays answered`);
     return 0;
   }
