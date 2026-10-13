@@ -23,7 +23,11 @@ up)
   t1=$(now)
   ssh "$host" "sudo sh -euc '
     docker rm -f sb-drill-server sb-drill-caddy >/dev/null 2>&1 || true
-    # No sign-in, push or relay settings: the drill shows the copy boots and answers, nothing more.
+    # The copy must reach no phone or browser: its server would deliver due snoozes and held
+    # notifications, and UnifiedPush needs no credential. Without push subscriptions it has nowhere
+    # to send; without sign-in or relay settings it shows the copy boots and answers, nothing more.
+    sqlite3 \$(docker volume inspect -f {{.Mountpoint}} starbridge_data)/starbridge.db \
+      \"DELETE FROM push_subscriptions\"
     docker run -d --name sb-drill-server -p 127.0.0.1:18090:8080 -v starbridge_data:/data \
       -e PUBLIC_URL=https://$name ghcr.io/t0msilver/starbridge-server:$rev >/dev/null
     for _ in \$(seq 120); do curl -fsS http://127.0.0.1:18090/healthz >/dev/null 2>&1 && break; sleep 1; done
