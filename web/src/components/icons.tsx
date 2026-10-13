@@ -1,4 +1,4 @@
-import type { GitHubKind } from "@/lib/attachments";
+import type { LinkIcon } from "@starbridge/protocol";
 
 // The web's own icon set, drawn to the mark (DESIGN.md, "Icons"): a 24-unit grid, 1.75 strokes,
 // round caps and joins, in currentColor.
@@ -231,9 +231,9 @@ export const Mark = ({ size = 20 }: { size?: number }) => (
   </svg>
 );
 
-/** GitHub's Octicons (MIT, github.com/primer/octicons), filled on their 16-unit grid: a GitHub
-    link's kind on its chip (#971). */
-const OCTICONS: Record<GitHubKind, string> = {
+/** GitHub's Octicons (MIT, github.com/primer/octicons), filled on their 16-unit grid: a link's
+    icon on its chip, `linkChip`'s (#971, #1577). */
+const OCTICONS: Record<LinkIcon, string> = {
   // git-pull-request
   pull: "M1.5 3.25a2.25 2.25 0 1 1 3 2.122v5.256a2.251 2.251 0 1 1-1.5 0V5.372A2.25 2.25 0 0 1 1.5 3.25Zm5.677-.177L9.573.677A.25.25 0 0 1 10 .854V2.5h1A2.5 2.5 0 0 1 13.5 5v5.628a2.251 2.251 0 1 1-1.5 0V5a1 1 0 0 0-1-1h-1v1.646a.25.25 0 0 1-.427.177L7.177 3.427a.25.25 0 0 1 0-.354ZM3.75 2.5a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Zm0 9.5a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Zm8.25.75a.75.75 0 1 0 1.5 0 .75.75 0 0 0-1.5 0Z",
   // issue-opened
@@ -250,13 +250,23 @@ const OCTICONS: Record<GitHubKind, string> = {
   // git-commit
   commit:
     "M11.93 8.5a4.002 4.002 0 0 1-7.86 0H.75a.75.75 0 0 1 0-1.5h3.32a4.002 4.002 0 0 1 7.86 0h3.32a.75.75 0 0 1 0 1.5Zm-1.43-.75a2.5 2.5 0 1 0-5 0 2.5 2.5 0 0 0 5 0Z",
+  // file
+  file: "M2 1.75C2 .784 2.784 0 3.75 0h6.586c.464 0 .909.184 1.237.513l2.914 2.914c.329.328.513.773.513 1.237v9.586A1.75 1.75 0 0 1 13.25 16h-9.5A1.75 1.75 0 0 1 2 14.25Zm1.75-.25a.25.25 0 0 0-.25.25v12.5c0 .138.112.25.25.25h9.5a.25.25 0 0 0 .25-.25V6h-2.75A1.75 1.75 0 0 1 9 4.25V1.5Zm6.75.062V4.25c0 .138.112.25.25.25h2.688l-.011-.013-2.914-2.914-.013-.011Z",
+  // browser: a Claude artifact, a page of its own; Claude's mark isn't ours to use.
+  artifact:
+    "M0 2.75C0 1.784.784 1 1.75 1h12.5c.966 0 1.75.784 1.75 1.75v10.5A1.75 1.75 0 0 1 14.25 15H1.75A1.75 1.75 0 0 1 0 13.25ZM14.5 6h-13v7.25c0 .138.112.25.25.25h12.5a.25.25 0 0 0 .25-.25Zm-6-3.5v2h6V2.75a.25.25 0 0 0-.25-.25ZM5 2.5v2h2v-2Zm-3.25 0a.25.25 0 0 0-.25.25V4.5h2v-2Z",
   // mark-github
-  other:
+  github:
     "M8 0c4.42 0 8 3.58 8 8a8.013 8.013 0 0 1-5.45 7.59c-.4.08-.55-.17-.55-.38 0-.27.01-1.13.01-2.2 0-.75-.25-1.23-.54-1.48 1.78-.2 3.65-.88 3.65-3.95 0-.88-.31-1.59-.82-2.15.08-.2.36-1.02-.08-2.12 0 0-.67-.22-2.2.82-.64-.18-1.32-.27-2-.27-.68 0-1.36.09-2 .27-1.53-1.03-2.2-.82-2.2-.82-.44 1.1-.16 1.92-.08 2.12-.51.56-.82 1.28-.82 2.15 0 3.06 1.86 3.75 3.64 3.95-.23.2-.44.55-.51 1.07-.46.21-1.61.55-2.33-.66-.15-.24-.6-.83-1.23-.82-.67.01-.27.38.01.53.34.19.73.9.82 1.13.16.45.68 1.31 2.69.94 0 .67.01 1.3.01 1.49 0 .21-.15.45-.55.38A7.995 7.995 0 0 1 0 8c0-4.42 3.58-8 8-8Z",
 };
 
-export const Octicon = ({ kind, size = 16 }: { kind: GitHubKind; size?: number }) => (
-  <svg width={size} height={size} viewBox="0 0 16 16" aria-hidden="true" style={{ flex: "none" }}>
-    <path d={OCTICONS[kind]} fill="currentColor" />
-  </svg>
-);
+/** A link chip's icon; one the set lacks draws nothing, so the chip stays plain. */
+export const LinkGlyph = ({ icon, size = 16 }: { icon: LinkIcon; size?: number }) => {
+  const d = OCTICONS[icon];
+  if (!d) return null;
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" aria-hidden="true" style={{ flex: "none" }}>
+      <path d={d} fill="currentColor" />
+    </svg>
+  );
+};

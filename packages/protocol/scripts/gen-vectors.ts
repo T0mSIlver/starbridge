@@ -29,6 +29,7 @@ import {
   joinCommitment,
   joinerKeys,
   joinRequest,
+  linkChip,
   type Member,
   type MemberKeys,
   machineQrText,
@@ -1641,6 +1642,323 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
     cases: contextCases,
   };
 
+  // --- links.json ---
+  // Written by hand: each case is what the chip must show, so a client that drifts fails here.
+  const gh = "https://github.com/T0mSIlver/starbridge";
+  const linkCases: {
+    name: string;
+    url: string;
+    title?: string;
+    project?: string;
+    expect: { icon?: string; label: string };
+  }[] = [
+    // GitHub references (#971): the icon says what the number is, so the title gives way.
+    {
+      name: "pull request",
+      url: `${gh}/pull/86/files#diff`,
+      project: "starbridge",
+      expect: { icon: "pull", label: "#86" },
+    },
+    {
+      name: "pull request over its title",
+      url: `${gh}/pull/86`,
+      title: "Merge plan",
+      project: "starbridge",
+      expect: { icon: "pull", label: "#86" },
+    },
+    {
+      name: "issue, host and repo in any case",
+      url: "https://GitHub.com/T0mSIlver/Starbridge/issues/171",
+      project: "starbridge",
+      expect: { icon: "issue", label: "#171" },
+    },
+    {
+      name: "issue on www",
+      url: "https://www.github.com/T0mSIlver/starbridge/issues/2?q=1",
+      project: "starbridge",
+      expect: { icon: "issue", label: "#2" },
+    },
+    {
+      name: "discussion",
+      url: `${gh}/discussions/12`,
+      project: "starbridge",
+      expect: { icon: "discussion", label: "#12" },
+    },
+    {
+      name: "release tag",
+      url: `${gh}/releases/tag/v0.1.2`,
+      project: "starbridge",
+      expect: { icon: "release", label: "v0.1.2" },
+    },
+    {
+      name: "release tag, percent-decoded",
+      url: `${gh}/releases/tag/v1.0-beta%2B1`,
+      project: "starbridge",
+      expect: { icon: "release", label: "v1.0-beta+1" },
+    },
+    {
+      name: "release tag, a plus stays a plus",
+      url: `${gh}/releases/tag/v1+2`,
+      project: "starbridge",
+      expect: { icon: "release", label: "v1+2" },
+    },
+    {
+      name: "release tag, malformed escape as written",
+      url: `${gh}/releases/tag/v1%E0%A4`,
+      project: "starbridge",
+      expect: { icon: "release", label: "v1%E0%A4" },
+    },
+    {
+      name: "release tag, a bidi override stays encoded",
+      url: `${gh}/releases/tag/v1%E2%80%AEgpj.exe`,
+      project: "starbridge",
+      expect: { icon: "release", label: "v1%E2%80%AEgpj.exe" },
+    },
+    {
+      name: "release tag, a newline stays encoded",
+      url: `${gh}/releases/tag/v1%0Ax`,
+      project: "starbridge",
+      expect: { icon: "release", label: "v1%0Ax" },
+    },
+    {
+      name: "commit, short hash",
+      url: `${gh}/commit/63141E89a2b4c`,
+      project: "starbridge",
+      expect: { icon: "commit", label: "63141e8" },
+    },
+    {
+      name: "another repo leads",
+      url: "https://github.com/steipete/CodexBar/pull/412",
+      project: "starbridge",
+      expect: { icon: "pull", label: "CodexBar#412" },
+    },
+    {
+      name: "another repo's release",
+      url: "https://github.com/steipete/CodexBar/releases/tag/v1.2",
+      project: "starbridge",
+      expect: { icon: "release", label: "CodexBar v1.2" },
+    },
+    {
+      name: "no session project: the repo leads",
+      url: `${gh}/pull/86`,
+      expect: { icon: "pull", label: "starbridge#86" },
+    },
+    {
+      name: "a long tag is clipped",
+      url: `${gh}/releases/tag/${"v".repeat(60)}`,
+      project: "starbridge",
+      expect: { icon: "release", label: `${"v".repeat(39)}…` },
+    },
+    // Other GitHub pages: the title, else a label of their own.
+    {
+      name: "Actions run",
+      url: `${gh}/actions/runs/18234567890/job/5`,
+      project: "starbridge",
+      expect: { icon: "run", label: "Actions run" },
+    },
+    {
+      name: "Actions run with a title",
+      url: `${gh}/actions/runs/18234567890`,
+      title: "CI on #934",
+      project: "starbridge",
+      expect: { icon: "run", label: "CI on #934" },
+    },
+    {
+      name: "file reads as its name",
+      url: `${gh}/blob/main/spec/items.md#L27-L36`,
+      project: "starbridge",
+      expect: { icon: "file", label: "items.md" },
+    },
+    {
+      name: "file on a branch with slashes",
+      url: `${gh}/blob/t/943-mockups/mock943/index.html?plain=1`,
+      project: "starbridge",
+      expect: { icon: "file", label: "index.html" },
+    },
+    {
+      name: "file in another repo",
+      url: "https://github.com/T0mSIlver/starbridge-planning/blob/main/launch/notes.md",
+      project: "starbridge",
+      expect: { icon: "file", label: "notes.md" },
+    },
+    {
+      name: "file name percent-decoded",
+      url: `${gh}/blob/main/docs/r%C3%A9sum%C3%A9%20v2.md`,
+      expect: { icon: "file", label: "résumé v2.md" },
+    },
+    {
+      name: "file with a title",
+      url: `${gh}/blob/main/README.md`,
+      title: "The README",
+      expect: { icon: "file", label: "The README" },
+    },
+    {
+      name: "blob without a file is a page",
+      url: `${gh}/blob/main`,
+      project: "starbridge",
+      expect: { icon: "github", label: "T0mSIlver/starbridge/blob/main" },
+    },
+    {
+      name: "folder is a page",
+      url: `${gh}/tree/main/docs`,
+      project: "starbridge",
+      expect: { icon: "github", label: "T0mSIlver/starbridge/tree/main/docs" },
+    },
+    {
+      name: "a list of pulls is a page",
+      url: `${gh}/pulls`,
+      project: "starbridge",
+      expect: { icon: "github", label: "T0mSIlver/starbridge/pulls" },
+    },
+    {
+      name: "a new pull is a page",
+      url: `${gh}/pull/new/branch`,
+      project: "starbridge",
+      expect: { icon: "github", label: "T0mSIlver/starbridge/pull/new/branch" },
+    },
+    {
+      name: "a number past 20 digits is a page",
+      url: `${gh}/pull/${"1".repeat(21)}`,
+      project: "starbridge",
+      expect: { icon: "github", label: `T0mSIlver/starbridge/pull/${"1".repeat(13)}…` },
+    },
+    {
+      name: "a commit that isn't a hash is a page",
+      url: `${gh}/commit/main`,
+      project: "starbridge",
+      expect: { icon: "github", label: "T0mSIlver/starbridge/commit/main" },
+    },
+    {
+      name: "GitHub's home",
+      url: "https://github.com/",
+      expect: { icon: "github", label: "GitHub" },
+    },
+    {
+      name: "a double slash is a page",
+      url: "https://github.com//starbridge/pull/1",
+      expect: { icon: "github", label: "/starbridge/pull/1" },
+    },
+    // Claude artifacts.
+    {
+      name: "artifact",
+      url: "https://claude.ai/artifact/KBq5zAgWw9eZbRwsv2oXU9",
+      expect: { icon: "artifact", label: "Claude artifact" },
+    },
+    {
+      name: "Claude Code artifact",
+      url: "https://claude.ai/code/artifact/7c1d2e3f-0000-4000-8000-000000000000",
+      expect: { icon: "artifact", label: "Claude artifact" },
+    },
+    {
+      name: "public artifact with a title",
+      url: "https://claude.ai/public/artifacts/0b3f",
+      title: "Mockups",
+      expect: { icon: "artifact", label: "Mockups" },
+    },
+    {
+      name: "a chat is not an artifact",
+      url: "https://claude.ai/chat/0b3f",
+      expect: { label: "claude.ai/chat/0b3f" },
+    },
+    {
+      name: "a page under an artifact is not one",
+      url: "https://claude.ai/artifact/0b3f/edit",
+      expect: { label: "claude.ai/artifact/0b3f/edit" },
+    },
+    {
+      name: "an artifact elsewhere is not one",
+      url: "https://example.com/artifact/0b3f",
+      expect: { label: "example.com/artifact/0b3f" },
+    },
+    // Anything else, or not matched exactly: the plain chip, as before #1577.
+    {
+      name: "another host reads as host and path",
+      url: "https://www.example.com/",
+      expect: { label: "example.com" },
+    },
+    {
+      name: "another host with a title",
+      url: "https://play.google.com/console/u/1/developers/1/app/2/publishing",
+      title: "Play Console",
+      expect: { label: "Play Console" },
+    },
+    {
+      name: "a long path is clipped",
+      url: `https://example.com/${"a".repeat(60)}`,
+      expect: { label: `example.com/${"a".repeat(27)}…` },
+    },
+    {
+      name: "an emoji is never cut in half",
+      url: `${gh}/blob/main/${"a".repeat(38)}%F0%9F%98%80%F0%9F%98%80b`,
+      expect: { icon: "file", label: `${"a".repeat(38)}\u{1F600}…` },
+    },
+    {
+      name: "look-alike host",
+      url: "https://github.com.evil.com/T0mSIlver/starbridge/pull/1",
+      expect: { label: "github.com.evil.com/T0mSIlver/starbridg…" },
+    },
+    {
+      name: "subdomain",
+      url: "https://gist.github.com/o/1",
+      expect: { label: "gist.github.com/o/1" },
+    },
+    {
+      name: "punycode host",
+      url: "https://xn--gthub-n4a.com/o/r/pull/1",
+      expect: { label: "xn--gthub-n4a.com/o/r/pull/1" },
+    },
+    {
+      name: "user before the host: as written",
+      url: "https://github.com@evil.com/o/r/pull/1",
+      expect: { label: "https://github.com@evil.com/o/r/pull/1" },
+    },
+    {
+      name: "user and password: as written",
+      url: "https://a:b@github.com/o/r/pull/1",
+      expect: { label: "https://a:b@github.com/o/r/pull/1" },
+    },
+    {
+      name: "port: as written",
+      url: "https://github.com:443/o/r/pull/1",
+      expect: { label: "https://github.com:443/o/r/pull/1" },
+    },
+    {
+      name: "backslash: as written",
+      url: "https://evil.com\\@github.com/o/r/pull/1",
+      expect: { label: "https://evil.com\\@github.com/o/r/pull/1" },
+    },
+    {
+      name: "a trailing dot is another host",
+      url: "https://github.com./o/r/pull/1",
+      expect: { label: "github.com./o/r/pull/1" },
+    },
+    {
+      name: "the host only in the fragment",
+      url: "https://evil.com#github.com/o/r/pull/1",
+      expect: { label: "evil.com" },
+    },
+    {
+      name: "http is not https",
+      url: "http://github.com/o/r/pull/1",
+      expect: { label: "http://github.com/o/r/pull/1" },
+    },
+    { name: "empty host: as written", url: "https://%", expect: { label: "https://%" } },
+    {
+      name: "a very long URL is clipped",
+      url: `https://github.com.example/${"x/".repeat(1000)}`,
+      expect: { label: `github.com.example/${"x/".repeat(10)}…` },
+    },
+  ];
+  for (const c of linkCases) {
+    const got = linkChip({ url: c.url, title: c.title }, c.project);
+    if (JSON.stringify(got) !== JSON.stringify(c.expect))
+      throw new Error(`links.json "${c.name}": linkChip gives ${JSON.stringify(got)}`);
+  }
+  const linksFile = {
+    note: "linkChip({url, title}, project): a link chip's icon and text in every client (#971, #1577). No icon: the plain chip.",
+    cases: linkCases,
+  };
+
   // --- quota-alerts.json ---
   const custom = {
     ...DEFAULT_QUOTA_ALERTS,
@@ -2636,6 +2954,7 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
     "join.json": join,
     "pace.json": paceFile,
     "context.json": contextFile,
+    "links.json": linksFile,
     "quota-alerts.json": quotaAlertsFile,
     "schemas.json": schemas,
   };

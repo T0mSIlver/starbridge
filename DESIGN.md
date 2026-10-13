@@ -529,7 +529,8 @@ it has no title. A session's title is words, in the reading face (#563).
   "Open in Codex". No logos.
 - Links the agent attaches are chips after the context: the label and an
   open-outside icon, never the word "Open". A GitHub link leads with the
-  Octicon for its kind and reads as its reference ("#123", "v0.1.2").
+  Octicon for its kind and reads as its reference ("#123", "v0.1.2"); a
+  Claude artifact leads with the `browser` Octicon.
 - No key hints on buttons or fields: Settings lists the shortcuts.
 - An answered item goes to History, collapsed by default, as one line: the
   answer, the question, which device answered and when.
@@ -680,8 +681,9 @@ round caps and joins, no fills. Android uses Material Symbols Rounded tuned to
 Google Sans Flex. Every platform has the same icons by job: laptop, desktop, server and cloud (a
 machine's kind), permission prompt, question, run, quota, history, settings,
 devices, open in the agent, waiting, inbox, send, expand (an image opens full
-screen). GitHub links take GitHub's own Octicons (MIT), filled on their
-16-unit grid, on both clients.
+screen). Link chips take GitHub's Octicons (MIT), filled on their 16-unit
+grid, in every client: a GitHub link's kind, and `browser` for a Claude
+artifact. No other brand marks.
 
 ## The mark
 
