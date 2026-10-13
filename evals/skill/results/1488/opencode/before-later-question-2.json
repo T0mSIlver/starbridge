@@ -1,0 +1,102 @@
+{
+  "agent": "opencode",
+  "model": "zai-coding-plan/glm-5.3-flash",
+  "arm": "before",
+  "scenario": "later-question",
+  "rep": 2,
+  "turns": [
+    {
+      "commands": [
+        "node scripts/lint.js",
+        "node scripts/lint.js",
+        "cat RELEASE.md 2>/dev/null; git log --oneline -10",
+        "starbridge ask \\\n  --question 'What should Monday's release be called? Which name titles the card?' \\\n  --context 'RELEASE.md still says Name: TBD for the release that ships Monday.\nDue before Monday; no rush.\nTap an option or type your own name.' \\\n  --option 'Steady Haul' --option 'Carry On' --option 'Lifeline' --recommended 'Steady Haul'",
+        "starbridge ask \\\n  --question 'What should Monday’s release be called? Which name titles the card?' \\\n  --context 'RELEASE.md still says Name: TBD for the release that ships Monday.\nDue before Monday; no rush.\nTap an option or type your own name.' \\\n  --option 'Steady Haul' --option 'Carry On' --option 'Lifeline' --recommended 'Steady Haul'",
+        "starbridge wait d_F0Wh2JFnsmxLXPoU --timeout 5m --no-mark"
+      ],
+      "final": "Done:\n\n- **Lint fixed:** `src/upload.js:2-3` — `var` → `const`; `node scripts/lint.js` now passes.\n- **Release name:** asked via starbridge card (`d_F0Wh2JFnsmxLXPoU`), you answered **Steady Haul**, and I set it in `RELEASE.md`, well ahead of Monday.\n\nNothing is committed; say the word if you want a commit.",
+      "session": "ses_ecaf8e19cffeydyK4dd7eO7OKN",
+      "tokens": 8227,
+      "exit": 0,
+      "seconds": 229.622,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_F0Wh2JFnsmxLXPoU --timeout 5m` (again on exit 2)."
+      ]
+    },
+    {
+      "commands": [
+        "node scripts/lint.js && git diff"
+      ],
+      "final": "Done:\n\n- **Lint fixed:** `src/upload.js:2-3` — `var` → `const`; `node scripts/lint.js` now passes.\n- **Release name:** asked via starbridge card (`d_F0Wh2JFnsmxLXPoU`), you answered **Steady Haul**, and I set it in `RELEASE.md`, well ahead of Monday.\n\nNothing is committed; say the word if you want a commit.",
+      "session": "ses_ecaf8e19cffeydyK4dd7eO7OKN",
+      "tokens": 8227,
+      "exit": 0,
+      "seconds": 229.622,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_F0Wh2JFnsmxLXPoU --timeout 5m` (again on exit 2)."
+      ]
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_F0Wh2JFnsmxLXPoU",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-13T11:31:29Z",
+      "question": "What should Monday’s release be called? Which name titles the card?",
+      "context": "RELEASE.md still says Name: TBD for the release that ships Monday.\nDue before Monday; no rush.\nTap an option or type your own name.",
+      "options": [
+        "Steady Haul",
+        "Carry On",
+        "Lifeline"
+      ],
+      "recommended": "Steady Haul",
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": ""
+      },
+      "replies": true,
+      "dir": {
+        "length": 2,
+        "head": "Pkx_YRQAVzHHQvGpLKzdvkbHu-6-4-zeC2eAQF9YhWc"
+      }
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [],
+  "answered": "Answer to d_F0Wh2JFnsmxLXPoU (What should Monday’s release be called? Which name titles the card?): Steady Haul",
+  "waiting": [],
+  "permissions": [],
+  "settled": [
+    {
+      "v": 1,
+      "id": "s_QpIlJjutIKdPiPz9",
+      "itemId": "d_F0Wh2JFnsmxLXPoU",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-13T11:33:30Z",
+      "outcome": "device",
+      "device": "phone",
+      "choice": "Steady Haul",
+      "dir": {
+        "length": 2,
+        "head": "Pkx_YRQAVzHHQvGpLKzdvkbHu-6-4-zeC2eAQF9YhWc"
+      }
+    }
+  ],
+  "judge": {
+    "cold": false,
+    "consequences": false,
+    "terminal": false,
+    "links": null,
+    "plain": true,
+    "skim": false,
+    "notes": "The card never says what the options change; the release name only lands in RELEASE.md, and the card's 'Tap an option' context doesn't explain that, so the user can't decide cold."
+  }
+}
