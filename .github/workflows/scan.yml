@@ -58,11 +58,12 @@ jobs:
             revs="$(served https://starbridge.run || true):prod $(served https://staging.starbridge.run || true):staging"
           fi
           token=$(curl -fsS "https://ghcr.io/token?scope=repository:t0msilver/starbridge-server:pull" | jq -r .token)
-          scan=
+          scan= named=
           for pair in $revs; do
             rev=${pair%%:*} where=${pair#*:}
             case $rev in *[!0-9a-f]* | "") echo "::warning::$where names no commit id"; continue ;; esac
             [ ${#rev} -eq 40 ] || { echo "::warning::$where names no commit id"; continue; }
+            named=1
             case " $scan " in *" $rev:"*) continue ;; esac
             # A commit with no images: deploy.yml built none for it.
             if curl -fsS -o /dev/null -H "Authorization: Bearer $token" \
@@ -73,6 +74,8 @@ jobs:
               echo "::notice::No images for $rev ($where)."
             fi
           done
+          # Neither site answered: a green run would hide that nothing was scanned.
+          [ -n "$named" ] || { echo "::error::no site named a commit to scan"; exit 1; }
           echo "revs=${scan# }" >> "$GITHUB_OUTPUT"
       - id: scan
         if: steps.rev.outputs.revs
