@@ -141,6 +141,48 @@ jobs:
             }
           done
 
+  # Staging (staging.starbridge.run, on homelab-arm) runs the same images (deploy/staging/). Its
+  # key's forced command deploys a commit of main and nothing else; the box fetches it itself.
+  # Until the VM and the key exist, the job skips with a notice.
+  staging:
+    needs: [changed, images]
+    concurrency:
+      group: staging
+      cancel-in-progress: false
+    runs-on: ${{ vars.TRUSTED_RUNNER && fromJSON(vars.TRUSTED_RUNNER) || 'ubuntu-latest' }}
+    timeout-minutes: 15
+    permissions: {}
+    environment:
+      name: staging
+      url: https://staging.starbridge.run
+    env:
+      REV: ${{ github.event.workflow_run.head_sha }}
+    steps:
+      - id: deploy
+        name: Deploy
+        env:
+          STAGING_KEY: ${{ secrets.STAGING_SSH_KEY }}
+          STAGING_KNOWN_HOSTS: ${{ secrets.STAGING_KNOWN_HOSTS }}
+          STAGING_TARGET: ${{ secrets.STAGING_SSH_TARGET }}
+        run: |
+          if [ -z "$STAGING_KEY" ]; then
+            echo "::notice::No STAGING_SSH_KEY: staging not deployed."
+            exit 0
+          fi
+          umask 077
+          printf '%s\n' "$STAGING_KEY" > "$RUNNER_TEMP/key"
+          printf '%s\n' "$STAGING_KNOWN_HOSTS" > "$RUNNER_TEMP/known_hosts"
+          ssh -i "$RUNNER_TEMP/key" -o IdentitiesOnly=yes -o UserKnownHostsFile="$RUNNER_TEMP/known_hosts" \
+            -o StrictHostKeyChecking=yes -o ConnectTimeout=20 "$STAGING_TARGET" "$REV"
+          echo "deployed=true" >> "$GITHUB_OUTPUT"
+      - name: Check the live revision
+        if: steps.deploy.outputs.deployed == 'true'
+        run: |
+          got=$(curl -fsS --retry 10 --retry-delay 3 --retry-all-errors -D - -o /dev/null \
+            https://staging.starbridge.run/healthz | tr -d '\r' |
+            awk -F': ' 'tolower($1) == "x-starbridge-revision" { print $2 }')
+          [ "$got" = "$REV" ] || { echo "staging runs ${got:-no named revision}, not $REV"; exit 1; }
+
   deploy:
     needs: [changed, images]
     # On the job, not the workflow: a run for a failed or cancelled CI run skips this job without
