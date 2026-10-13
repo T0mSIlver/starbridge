@@ -1,0 +1,41 @@
+{
+ "schema": 1,
+ "updated": "2026-10-13T23:40:37.281Z",
+ "releases": [
+  {
+   "version": "0.1.7-rc.2",
+   "ring": "rc",
+   "shipped": "2026-10-13T21:21:15Z",
+   "channels": {
+    "github": true,
+    "npm": true,
+    "desktop": true,
+    "play": {
+     "track": "alpha",
+     "versionCode": 2010702
+    },
+    "testflight": {
+     "build": "46.1"
+    }
+   }
+  },
+  {
+   "version": "0.1.6",
+   "ring": "final",
+   "shipped": "2026-10-13T14:33:03Z",
+   "channels": {
+    "github": true,
+    "npm": true,
+    "homebrew": true,
+    "desktop": true,
+    "play": {
+     "track": "alpha",
+     "versionCode": 2010699
+    },
+    "testflight": {
+     "build": "43.2"
+    }
+   }
+  }
+ ]
+}
