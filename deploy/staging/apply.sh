@@ -1,8 +1,9 @@
 #!/bin/sh
 # Run as root on sb-staging by starbridge-staging-deploy (deploy-rev.sh beside this file), once
 # it unpacked a commit of main into /opt/starbridge-staging. Staging's part of host/apply.sh: the
-# same images and Caddy as prod, its own secrets (server-env.sh), and no Umami, backups or demo
-# server. The page runs as one copy, so a deploy may drop a request or two.
+# same images and Caddy as prod, its own secrets (server-env.sh), and no Umami or backups. The page
+# runs as one copy, so a deploy may drop a request or two. The demo server is a project of its own
+# (deploy-rev.sh), behind this Caddy.
 set -eu
 cd /opt/starbridge-staging/deploy
 compose="docker compose -p starbridge-staging -f compose.yaml -f staging/compose.yaml"
@@ -11,13 +12,18 @@ case ${REVISION:-} in *[!0-9a-f]*) REVISION= ;; esac
 [ ${#REVISION} -eq 40 ] || { echo "staging/apply.sh: REVISION is not a commit id" >&2; exit 1; }
 export REVISION
 echo "REVISION=$REVISION" > .env
+# As prod's apply.sh does: the next deploy runs this commit's deploy command.
+install -m 755 staging/deploy-rev.sh /usr/local/sbin/starbridge-staging-deploy
 
 staging/server-env.sh
 # Prod's Caddyfile under staging's name, as evals/load/stack.sh rewrites it: the stats host on
-# plain HTTP on the VM's loopback only, no demo host, and nothing indexed.
+# plain HTTP on the VM's loopback only, prod's demo host replaced by the demo's own block below,
+# and nothing indexed.
 sed -e 's/^starbridge\.run {/staging.starbridge.run {\n\theader X-Robots-Tag "noindex, nofollow"/' \
   -e 's/^stats\.starbridge\.run {/http:\/\/127.0.0.1:18001 {\n\tbind 127.0.0.1/' -e '/^demo\.starbridge\.run {/,/^}/d' \
   Caddyfile > $etc/Caddyfile
+# The Play reviewers' demo server lives here (demo/demo.caddy, #1557).
+{ echo; cat demo/demo.caddy; } >> $etc/Caddyfile
 chmod 644 $etc/Caddyfile
 # Its stats host stays shut: no password is pushed here.
 host/caddy-auth.sh $etc/caddy

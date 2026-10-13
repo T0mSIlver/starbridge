@@ -185,7 +185,7 @@ jobs:
       group: staging
       cancel-in-progress: false
     runs-on: ${{ vars.TRUSTED_RUNNER && fromJSON(vars.TRUSTED_RUNNER) || 'ubuntu-latest' }}
-    timeout-minutes: 15
+    timeout-minutes: 25
     permissions:
       statuses: write
     environment:
