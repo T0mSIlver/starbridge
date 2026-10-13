@@ -17,9 +17,12 @@ RUN bun build server/src/main.ts --target bun --outfile /out/server.js
 FROM oven/bun:1.4.2-slim@sha256:cb3bbbb08e13a4a2ff400f24c7a2a1d5efa83f6ef8544d52d95a519631e2fc61
 WORKDIR /app
 COPY --from=build /out/server.js .
-RUN mkdir /data && chown bun:bun /data
-USER bun
+# Debian's fixes since the base image was published: scan.yml fails on a high or critical
+# vulnerability that has one. REVISION differs on every commit, so this layer is never reused
+# from the build cache.
 ARG REVISION=unknown
+RUN apt-get update && apt-get -y upgrade && rm -rf /var/lib/apt/lists/* && mkdir /data && chown bun:bun /data
+USER bun
 ENV PORT=8080 DB_PATH=/data/starbridge.db STARBRIDGE_REVISION=$REVISION
 VOLUME /data
 EXPOSE 8080
