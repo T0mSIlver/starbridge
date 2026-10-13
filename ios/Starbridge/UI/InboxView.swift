@@ -37,6 +37,7 @@ struct InboxView: View {
     @State private var scanning = false
     /** Add a device, with the code the scanner read, if any. */
     @State private var adding: DevicesView.AddDevice?
+    @State private var lastSettled = LastSettled()
 
     var body: some View {
         let decisions = store.openDecisions
@@ -145,6 +146,10 @@ struct InboxView: View {
                     if self.undo == undo { withAnimation { self.undo = nil } }
                 }
             }
+        }
+        .onChange(of: LastSettled.Seen(opened: opened, needs: store.openPrompts.map(\.id) + decisions.map(\.id))) { _, seen in
+            // A device hold hides every item without settling any: the sheet stays.
+            if lastSettled.closes(seen), store.withheldWhy == nil { opened = nil }
         }
         .onChange(of: store.openRequest, initial: true) { _, request in
             guard let request else { return }
@@ -570,6 +575,34 @@ private struct HeldBanner: View {
         .padding(Tokens.Spacing.s4)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(RoundedRectangle(cornerRadius: Tokens.Radius.lg).fill(Tokens.Colors.badSoft.color))
+    }
+}
+
+/**
+ * An open question's sheet that another device or machine settles, or puts off, while it shows
+ * stays and says how it closed; unless it was the last item that needed the owner, then the sheet
+ * closes onto the empty inbox, as on web (#1587). One this iPhone answers closes at the tap anyway.
+ */
+struct LastSettled {
+    struct Seen: Equatable {
+        let opened: Sheet?
+        /** What needs the owner: open prompts' and questions' ids. */
+        let needs: [String]
+    }
+
+    /** The question the sheet showed while it still needed the owner. */
+    private var listed: String?
+
+    mutating func closes(_ seen: Seen) -> Bool {
+        guard case let .decision(id)? = seen.opened else {
+            listed = nil
+            return false
+        }
+        if seen.needs.contains(id) {
+            listed = id
+            return false
+        }
+        return listed == id && seen.needs.isEmpty
     }
 }
 
