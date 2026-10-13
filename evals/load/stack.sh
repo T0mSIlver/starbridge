@@ -103,7 +103,7 @@ healthy() {
 case "${1:-}" in
 up)
   secrets
-  echo "fakes: run 'bun evals/load/fake.ts --host $gw' before load"
+  echo "fakes: run 'evals/load/stack.sh fake' (or 'bun evals/load/fake.ts --host $gw') before load"
   if [ -n "${LOAD_REVISION:-}" ]; then
     compose pull server web-a
     # Caddy is built where it runs (deploy/host/apply.sh); a host that runs prod's or staging's
