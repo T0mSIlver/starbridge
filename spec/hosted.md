@@ -33,6 +33,11 @@
   (Caddy's hop to the server's published port), so about 5000 such users fit; CPU stays under
   one core. A new visitor to the landing page costs about 50 ms of CPU across Next and Caddy
   once Caddy compresses (#593), so the VPS serves 15 to 20 a second.
+- **Load regressions** (#1548). The load test runs weekly for an hour and monthly for 24 hours
+  on the staging VM, from staging's images, capped to 1.5 cores and 3 GB so staging keeps the
+  rest, and its result is compared with a stored baseline; a regression is a card to the owner.
+  Capacity was measured by hand twice before launch, while slow leaks and long-poll losses
+  show only over hours, and a release changes the server weekly.
 - **Machines** (#658). A hosted account takes 3 machines, the computers that run agents, and any
   number of phones and browsers; self-hosting sets its own (`MAX_MACHINES`, default 5). Each
   machine holds a long-poll, about 200 KB on the VPS, and 3 covers a laptop, a desktop and a
