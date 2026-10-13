@@ -43,9 +43,10 @@
   Claude artifacts are 89% of links, and every other host 2% or less. One rule, `linkChip` in
   `packages/protocol` with `vectors/links.json`, gives every client the same icon and text, because
   three URL parsers disagree at the edges. It reads the URL by hand and matches only an exact host
-  (`github.com`, `www.github.com`, `claude.ai`) with no user, port or backslash; anything else
-  keeps the plain chip, its title else its host and path. A decoded name with a control, bidi or
-  zero-width character stays encoded. No client fetches a link: nothing a page could learn or
+  (`github.com`, `www.github.com`, `claude.ai`) with no user, port or backslash, and a path with
+  no `.` or `..` segment, which would open another page than the chip names; anything else keeps
+  the plain chip, its title else its host and path. A decoded name with a control, bidi or other
+  invisible character stays encoded. No client fetches a link: nothing a page could learn or
   break.
 - **`answerIn`** names a page (a Claude artifact whose button messages the agent) where the
   question is answered. It has no options; the schema refuses both. It closes when the agent runs
