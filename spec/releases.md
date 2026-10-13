@@ -133,6 +133,24 @@
   reports that commit or a later one (`x-starbridge-revision`). That header, and
   `starbridge-deploy`'s argument, are refused unless they are 40 lowercase hex characters (#467),
   since the workflow puts the revision in a `gh api` path.
+- **Rollback** (#1520). `deploy/rollback.sh` deploys the release before the running one, or a
+  commit given, from the images the box holds, so it needs no download or build; the box keeps
+  five releases, about 2.5 GB. It deploys that commit's whole tree, not only its images, so the
+  compose file and Caddyfile match the server. It stops at a database migrated past that server
+  (`apply.sh`), so a rollback past a migration also restores that deploy's backup and loses the
+  writes since. Clients have no such switch, so a bad release is undone per channel:
+  - GitHub: mark the final a prerelease, so `releases/latest`, which Obtainium, `install.sh`,
+    `starbridge update`, the update nudge and the Mac app read, goes back to the previous final,
+    as for v0.1.3 (#1004). A bad rc is replaced by the next rc.
+  - npm: `npm dist-tag add starbridge@<previous> latest` (or `next` for an rc).
+  - Homebrew: revert the formula's commit in `T0mSIlver/homebrew-starbridge`.
+  - Android: Play cannot install a lower versionCode. Halt the release in Play Console, then
+    ship the last good code as a new rc, whose versionCode is higher.
+  - Mac app: covered by GitHub's latest; an app that already installed the bad one updates to
+    the next release.
+  - iPhone: expire the build in TestFlight.
+  - A server change that clients rely on stays: main serves every release from the minimum up
+    (`spec/keys-and-trust.md`), so rolling a client back never needs the server rolled back.
 - **No downtime** (#150, #508). The page runs as two copies; a deploy starts the idle one, waits
   for its health, then stops the other, and Caddy sends every request to the first healthy copy.
   The server stays one instance, since it holds the long-polls and SQLite; Caddy holds requests up
