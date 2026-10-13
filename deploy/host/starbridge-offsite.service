@@ -4,4 +4,6 @@ After=network-online.target
 
 [Service]
 Type=oneshot
+# The upload's length depends on the uplink; a stuck one still ends before the next night.
+TimeoutStartSec=6h
 ExecStart=/opt/starbridge/deploy/host/offsite.sh
