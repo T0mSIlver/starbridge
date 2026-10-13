@@ -12,7 +12,13 @@ What the code relies on, with the versions checked.
   reaches the model with that tool's result, mid-turn, as a PostToolUse hook's
   `additionalContext` does; the transcript records it as a `hook_additional_context` attachment.
   A plugin's own `prompt.submit` hook never sees the prompts it submits, and `$.session.send` to
-  its own session is refused as "no live session" (#1484). Remote Control shows a submitted prompt on the phone. A hot reload aborts the
+  its own session is refused as "no live session" (#1484). On 2.1.296 the queue drops no plugin
+  prompt and merges none: in an SDK session a typed or peer prompt dequeues ahead of a waiting
+  plugin prompt, which runs after it (the 2.5 min late answer of #1517). An interrupt (Esc, or
+  the SDK's) leaves it queued, and a hot reload waits for
+  the turn's end and keeps it. A process that exits loses it: `--resume` does not bring it back.
+  `turn.start` carries its text, framed as "The <plugin> plugin sent a message:". `$.state`
+  keeps a value across a hot reload and starts empty in each process (#1517). Remote Control shows a submitted prompt on the phone. A hot reload aborts the
   mod's requests. `/resume` fires `session.end` with reason `resume` and no `session.start`. Mods
   load only from user or managed settings or an installed plugin, not project settings.
   Starbridge states 2.1.287, the oldest the mod works with, as its minimum, and setup says when

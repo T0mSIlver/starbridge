@@ -30,7 +30,10 @@ test("Play notes keep the Android section alone and fit Play's 500 characters", 
 
 type Seen = { method: string; path: string; body: string };
 
-function fakePlay(commit: (seen: Seen[]) => Response | undefined = () => undefined) {
+function fakePlay(
+  commit: (seen: Seen[]) => Response | undefined = () => undefined,
+  validate?: Response,
+) {
   const seen: Seen[] = [];
   const server = Bun.serve({
     port: 0,
@@ -45,6 +48,7 @@ function fakePlay(commit: (seen: Seen[]) => Response | undefined = () => undefin
       if (s.path.startsWith(`/upload${app}/edits/e1/bundles`))
         return Response.json({ versionCode: 3020399 });
       if (s.path === `${app}/edits/e1/details`) return Response.json({ defaultLanguage: "fr-FR" });
+      if (s.path.includes(":validate") && validate) return validate;
       if (s.path.includes(":commit")) return commit(seen) ?? Response.json({ id: "e1" });
       return new Response(s.method === "DELETE" ? "" : "{}");
     },
@@ -105,4 +109,25 @@ test("a commit Play will not send for review is committed for the owner to send"
     play.seen.filter((s) => s.path.includes(":commit")).map((s) => s.path.replace(/.*:/, ":")),
   ).toEqual([":commit", ":commit?changesNotSentForReview=true"]);
   expect(play.seen.some((s) => s.method === "DELETE")).toBe(false);
+});
+
+test("validate reports a versionCode Play will not roll out, discards the edit and still passes", async () => {
+  const play = fakePlay(
+    undefined,
+    new Response(
+      '{"error":{"code":403,"message":"You cannot rollout this release because it does not allow any existing users to upgrade to the newly added APKs."}}',
+      { status: 403 },
+    ),
+  );
+  stop = () => play.server.stop(true);
+  expect(await play.run(true)).toBe(3020399);
+  expect(play.seen.at(-1)?.method).toBe("DELETE");
+  expect(play.seen.some((s) => s.path.includes(":commit"))).toBe(false);
+});
+
+test("validate still fails on any other refusal", async () => {
+  const play = fakePlay(undefined, new Response('{"error":{"message":"bad"}}', { status: 403 }));
+  stop = () => play.server.stop(true);
+  await expect(play.run(true)).rejects.toThrow("403");
+  expect(play.seen.at(-1)?.method).toBe("DELETE");
 });

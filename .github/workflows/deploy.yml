@@ -85,7 +85,16 @@ jobs:
       packages: write
     env:
       TAG: ghcr.io/t0msilver/starbridge-${{ matrix.image }}:${{ github.event.workflow_run.head_sha }}-${{ matrix.arch }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
     steps:
+      # Docker Hub limits anonymous pulls per address, which self-hosted boxes and GitHub's
+      # runners share with others; a login counts against our account instead. Forks' and
+      # Dependabot's runs get no secret and pull anonymously.
+      - if: env.DOCKERHUB_TOKEN != ''
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          username: ${{ vars.DOCKERHUB_USERNAME }}
+          password: ${{ env.DOCKERHUB_TOKEN }}
       - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
           registry: ghcr.io

@@ -58,7 +58,8 @@
   repository's `play-release` environment, open to main and `v*` tags (repository variables
   `PLAY_WIF_PROVIDER` and `PLAY_SERVICE_ACCOUNT`). Without them the job skips with a notice; a
   failed upload fails the run after the release is out. Run by hand on main, the job asks Play to
-  validate the edit and discards it.
+  validate the edit and discards it; when Play refuses only because main's versionCode is not above the
+  track's, the job reports that and passes (#1530).
 - **Play listing images without the console** (#1436). Play Console's "Send changes for review" can
   fail with an HTTP 400 and no reason. The `play-listing` workflow, run by hand from main
   (`gh workflow run play-listing.yml --ref main`), replaces the en-US icon and feature graphic with
@@ -147,6 +148,24 @@
   per commit would break. The deploy fails unless the live server reports that commit or a later one
   (`x-starbridge-revision`). That header, and `starbridge-deploy`'s argument, are refused unless
   they are 40 lowercase hex characters (#467), since the workflow puts the revision in an API path.
+- **Rollback** (#1520). `deploy/rollback.sh` deploys the release before the running one, or a
+  commit given, from the images the box holds, so it needs no download or build; the box keeps
+  five releases, about 2.5 GB. It deploys that commit's whole tree, not only its images, so the
+  compose file and Caddyfile match the server. It stops at a database migrated past that server
+  (`apply.sh`), so a rollback past a migration also restores that deploy's backup and loses the
+  writes since. Clients have no such switch, so a bad release is undone per channel:
+  - GitHub: mark the final a prerelease, so `releases/latest`, which Obtainium, `install.sh`,
+    `starbridge update`, the update nudge and the Mac app read, goes back to the previous final,
+    as for v0.1.3 (#1004). A bad rc is replaced by the next rc.
+  - npm: `npm dist-tag add starbridge@<previous> latest` (or `next` for an rc).
+  - Homebrew: revert the formula's commit in `T0mSIlver/homebrew-starbridge`.
+  - Android: Play cannot install a lower versionCode. Halt the release in Play Console, then
+    ship the last good code as a new rc, whose versionCode is higher.
+  - Mac app: covered by GitHub's latest; an app that already installed the bad one updates to
+    the next release.
+  - iPhone: expire the build in TestFlight.
+  - A server change that clients rely on stays: the server serves every release from the minimum
+    up (`spec/keys-and-trust.md`), so rolling a client back never needs the server rolled back.
 - **Staging** (#1526). `staging.starbridge.run`, on sb-staging, an Oracle ARM VM, takes every
   commit of main, with prod's images, compose file and Caddyfile, so a deploy that breaks shows
   there first. Its data is synthetic, made through the real flows by the
