@@ -183,8 +183,10 @@
   commit of main, with prod's images, compose file and Caddyfile, so a deploy that breaks shows
   there first. Its data is synthetic, made through the real flows by the
   load test's setup: a copy of prod's would be ciphertext plus GitHub ids and push endpoints on a
-  second host, which `/privacy` does not allow. It has its own OAuth app, VAPID pair and no
-  FCM or APNs key, so it pushes to no phone; only listed GitHub users can make an account
+  second host, which `/privacy` does not allow. It has its own OAuth app and VAPID pair and no
+  FCM or APNs key: phones get its pushes through starbridge.run's relay, as from a self-hosted
+  server, so the owner's real app works against it and the self-host push path gets used (#1540);
+  it relays for nobody. Only listed GitHub users can make an account
   (`SIGNUP_GITHUB_IDS`, #1524), and nothing is indexed. Its key's forced command deploys only
   a commit of main. ARM staging beside amd64 prod leaves architecture bugs to prod's smoke.
 - **Prod waits for staging** (#1528). After each deploy, staging runs one round trip on its own test
