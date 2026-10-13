@@ -103,8 +103,11 @@
   `demo/` is its first device and machine. It approves every join by digits without comparing,
   so a reviewer walks the same screens as a real second phone. The server refuses `DEMO=1` beside
   a starbridge.run `PUBLIC_URL`, GitHub sign-in or relay mode. A restart is a fresh account.
-  Every prod deploy rebuilds it from the same commit (#1016): deployed by hand, it once fell behind
-  prod and rejected the apps' item kinds, so reviewers saw an empty inbox. It restarts only when its
-  image changed, so a reviewer's account survives deploys that leave its code alone. Caddy counts
+  It runs on sb-staging, as a project of its own beside staging (#1557), so prod carries one service
+  less and prod's releases never restart it. Each staging deploy whose round trip passed rebuilds it
+  from that commit of main, which serves every release from the minimum up: deployed by hand, it
+  once fell behind prod and rejected the apps' item kinds, so reviewers saw an empty inbox (#1016).
+  It restarts only when its image changed, so a reviewer's account survives deploys that leave its
+  code alone. Caddy counts
   its `/v1/*` per address as prod's, and it caps machines at its own and pending pairings at
   5,000, what its 64 MB tmpfs holds, since reviewers share one account and one container.
