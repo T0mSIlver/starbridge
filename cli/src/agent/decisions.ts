@@ -22,6 +22,7 @@ import {
   postWaiting,
   sessionLines,
   snoozedUntil,
+  steering,
   takeAnswer,
   takeSnooze,
   takeUnseen,
@@ -279,8 +280,8 @@ export class Decisions implements Feature {
 
   /**
    * Steers the answer to `id`, marked waiting, into its Codex session's running turn (#1486).
-   * Claimed under the lock first, so a `waiting` meanwhile does not print it too; given back when
-   * no turn runs, for `codex queue`.
+   * Claimed under the lock first, so a `waiting` meanwhile does not print it too. The claim is
+   * not `seen`: an agent that dies mid-steer leaves one that expires, and delivers it again.
    */
   private async steer(id: string): Promise<boolean> {
     let line: string | undefined;
@@ -288,18 +289,20 @@ export class Decisions implements Feature {
     this.ctx.store.updateState((st) => {
       const a = st.answers[id];
       const asked = st.asked[id];
-      if (!a || a.seen || !asked?.codex || !asked.session) return;
-      a.seen = true;
+      if (!a || a.seen || steering(a) || !asked?.codex || !asked.session) return;
+      a.steering = Date.now();
       line = answerLine(a.answer, asked.question);
       route = { codex: asked.codex, session: asked.session };
     });
     if (!route || line === undefined) return false;
-    if (await codexSteer(route.codex, route.session, line)) return true;
+    const steered = await codexSteer(route.codex, route.session, line);
     this.ctx.store.updateState((st) => {
       const a = st.answers[id];
-      if (a) a.seen = false;
+      if (!a) return;
+      delete a.steering;
+      if (steered) a.seen = true;
     });
-    return false;
+    return steered;
   }
 
   /** One long-poll after another from the shared cursor, each held until an answer comes. */

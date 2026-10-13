@@ -547,7 +547,7 @@ test.skipIf(WINDOWS)(
  * A Codex home whose daemon speaks the control socket's protocol: the thread's latest turn has
  * `status`, and `steered` holds each `turn/steer` it took. Its `codex` logs as `codexHome`'s.
  */
-async function codexDaemon(status: "inProgress" | "completed") {
+async function codexDaemon(status: "inProgress" | "completed", replyAfter = 0) {
   const codex = await codexHome();
   await codex.close();
   const steered: unknown[] = [];
@@ -562,7 +562,7 @@ async function codexDaemon(status: "inProgress" | "completed") {
         if (m.method === "thread/turns/list") reply({ data: [{ id: "turn1", items: [], status }] });
         if (m.method === "turn/steer") {
           steered.push(m.params);
-          reply({ turnId: "turn1" });
+          setTimeout(() => reply({ turnId: "turn1" }), replyAfter);
         }
       },
     },
@@ -609,6 +609,25 @@ for (const status of ["inProgress", "completed"] as const)
       }
     },
   );
+
+test.skipIf(WINDOWS)(
+  "a steer the daemon took but answers late is not queued too (#1486)",
+  async () => {
+    const { socket } = await machine();
+    const codex = await codexDaemon("inProgress", 7_000);
+    const c = testCtx({ STARBRIDGE_AGENT_SOCKET: socket, ...codex.env });
+    try {
+      const id = await ask(c, "--project", "p", "--waiting");
+      await server.answer(id, { choice: "Merge" });
+      await until(() => codex.steered.length > 0);
+      await Bun.sleep(8_000);
+      expect(codex.steered).toHaveLength(1);
+      expect(existsSync(codex.log)).toBe(false);
+    } finally {
+      await codex.close();
+    }
+  },
+);
 
 test("the agent sends an Antigravity conversation's answer through its language server (#961)", async () => {
   const { socket } = await machine();

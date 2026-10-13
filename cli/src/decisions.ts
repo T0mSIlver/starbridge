@@ -1369,6 +1369,14 @@ export function takeAnswer(
   return taken;
 }
 
+/** Past this, a steer's claim is from an agent that died mid-steer (#1486); a steer takes 5 s at most. */
+const STEER_CLAIM_MS = 30_000;
+
+/** The local agent is steering this answer into a Codex turn (#1486): nothing else hands it over. */
+export function steering(a: { steering?: number }, now = Date.now()): boolean {
+  return a.steering !== undefined && now - a.steering < STEER_CLAIM_MS;
+}
+
 /**
  * `waiting` on a decision whose answer came but has not reached the agent: the agent needs it
  * now, so it gets it at once, marked printed, rather than after its turn (#1484).
@@ -1382,7 +1390,7 @@ export function takeUnseen(
   // both hand it over.
   store.updateState((st) => {
     const a = st.answers[id];
-    if (!a || a.seen || !deliverable(st, id)) return;
+    if (!a || a.seen || steering(a) || !deliverable(st, id)) return;
     a.seen = true;
     const question = st.asked[id]?.question;
     taken = { answer: a.answer, ...(question !== undefined ? { question } : {}) };

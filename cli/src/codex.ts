@@ -201,12 +201,14 @@ const STEER_MS = 5_000;
  * Hands `text` to Codex session `thread` within its running turn (#1486): the daemon's
  * `turn/steer` adds it to the turn as a user message, which the model reads with the result of
  * the tool call under way. Resolves false when no turn runs or the daemon cannot be reached, and
- * the caller queues instead. The control socket sits in a folder only the owner can open, so
- * unlike `codex queue`'s arguments the text may hold the answer.
+ * the caller queues instead; true once the steer went out, even unconfirmed, since queueing too
+ * would hand the answer over twice. The control socket sits in a folder only the owner can open,
+ * so unlike `codex queue`'s arguments the text may hold the answer.
  */
 export async function codexSteer(s: CodexSession, thread: string, text: string): Promise<boolean> {
   let app: CodexApp | undefined;
   let timer: ReturnType<typeof setTimeout> | undefined;
+  let sent = false;
   const steer = async () => {
     app = await CodexApp.connect(s.home, () => {});
     const turns = (await app.request("thread/turns/list", { threadId: thread, limit: 1 })) as {
@@ -214,19 +216,21 @@ export async function codexSteer(s: CodexSession, thread: string, text: string):
     };
     const turn = turns.data?.[0];
     if (turn?.status !== "inProgress") return false;
-    // Refused when that turn ended meanwhile ("no active turn to steer").
-    await app.request("turn/steer", {
+    const steered = app.request("turn/steer", {
       threadId: thread,
       expectedTurnId: turn.id,
       input: [{ type: "text", text, text_elements: [] }],
     });
+    sent = true;
+    // Refused when that turn ended meanwhile ("no active turn to steer").
+    await steered;
     return true;
   };
   try {
     return await Promise.race([
       steer(),
       new Promise<boolean>((resolve) => {
-        timer = setTimeout(() => resolve(false), STEER_MS);
+        timer = setTimeout(() => resolve(sent), STEER_MS);
       }),
     ]);
   } catch {
