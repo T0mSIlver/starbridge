@@ -177,6 +177,8 @@ jobs:
             echo "passed=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
+          # A failed deploy or round trip must fail the job through the tee below.
+          set -o pipefail
           umask 077
           printf '%s\n' "$STAGING_KEY" > "$RUNNER_TEMP/key"
           printf '%s\n' "$STAGING_KNOWN_HOSTS" > "$RUNNER_TEMP/known_hosts"
