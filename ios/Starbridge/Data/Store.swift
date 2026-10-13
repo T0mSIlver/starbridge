@@ -73,8 +73,6 @@ final class Store {
 
     /** Decisions this iPhone's answer lost to another device's, until the machine says which won. */
     @ObservationIgnored var lost: Set<String> = []
-    /** The count on the app icon, as last set here. */
-    @ObservationIgnored private var badgeShown: Int?
     /** Questions whose images this run fetched or is fetching (#1382). */
     @ObservationIgnored var imagesAsked: Set<String> = []
     @ObservationIgnored var queue: Task<Void, Never>?
@@ -184,13 +182,11 @@ final class Store {
     /**
      * The app icon's badge: the Needs-you count, none at 0 or signed out (#1603). Set as the saved
      * inbox changes and after each sync; while the app is closed, the notification extension sets
-     * it with each question it shows (`Notify.badge`). iOS's Badges setting for the app decides
-     * whether it shows.
+     * it with each question it shows (`Notify.badge`), so the app writes every time rather than
+     * only when its own count changed. iOS's Badges setting for the app decides whether it shows.
      */
     func showBadge() {
         let count = phase == .ready ? needYou : 0
-        guard count != badgeShown else { return }
-        badgeShown = count
         Task { await Notify.setBadge(count) }
     }
 
