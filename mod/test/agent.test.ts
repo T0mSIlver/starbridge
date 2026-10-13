@@ -18,6 +18,7 @@ import {
   type Reply,
   socketPath,
 } from "../hooks/agent.ts";
+import { Handover } from "../hooks/handover.ts";
 import { socketFetch } from "../hooks/node.ts";
 import { Poller, type Timing } from "../hooks/poller.ts";
 import { Switch } from "../hooks/switch.ts";
@@ -241,6 +242,48 @@ test("an answer the host refuses stays unconfirmed and comes back", async () => 
   expect(a.s.calls).not.toContain("POST /v1/sessions/s-a/ack");
   refuse = false;
   await until(() => a.s.submitted.length === 1);
+  await until(() => a.s.calls.includes("POST /v1/sessions/s-a/ack"));
+  expect(a.s.submitted).toEqual([`Answer to ${d} (Merge #12 now?): No`]);
+});
+
+test("an answer that arrives mid-turn goes out with the next tool result, once (#1484)", async () => {
+  await startAgent();
+  const a = session("s-a");
+  const handover = new Handover();
+  const enter = (text: string) => void a.s.submitted.push(text);
+  loop({ ...a.host, submit: (text) => handover.submit(text, enter) });
+  handover.started();
+  const d = await ask("Merge #12 now?", "s-a");
+  await until(() => a.s.calls.some((c) => c.startsWith("GET")));
+  await server.answer(d, { choice: "No" });
+  const line = `Answer to ${d} (Merge #12 now?): No`;
+  let taken: string[] = [];
+  await until(() => {
+    taken = handover.take();
+    return taken.length > 0;
+  });
+  expect(taken).toEqual([line]);
+  expect(a.s.submitted).toEqual([]);
+  await until(() => a.s.calls.includes("POST /v1/sessions/s-a/ack"));
+  handover.ended(enter);
+  expect(handover.take()).toEqual([]);
+  expect(a.s.submitted).toEqual([]);
+});
+
+test("an answer no tool call took is submitted when the turn ends, once (#1484)", async () => {
+  await startAgent();
+  const a = session("s-a");
+  const handover = new Handover();
+  const enter = (text: string) => void a.s.submitted.push(text);
+  loop({ ...a.host, submit: (text) => handover.submit(text, enter) });
+  handover.started();
+  const d = await ask("Merge #12 now?", "s-a");
+  await until(() => a.s.calls.some((c) => c.startsWith("GET")));
+  await server.answer(d, { choice: "No" });
+  // Held: the line comes back unconfirmed on each poll until the turn ends.
+  await until(() => a.s.calls.filter((c) => c.includes("/events")).length >= 4);
+  expect(a.s.calls).not.toContain("POST /v1/sessions/s-a/ack");
+  handover.ended(enter);
   await until(() => a.s.calls.includes("POST /v1/sessions/s-a/ack"));
   expect(a.s.submitted).toEqual([`Answer to ${d} (Merge #12 now?): No`]);
 });

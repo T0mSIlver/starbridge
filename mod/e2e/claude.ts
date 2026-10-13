@@ -12,6 +12,8 @@ export interface Entry {
   timestamp?: string;
   sessionId?: string;
   message?: { role?: string; content?: unknown; stop_reason?: string | null };
+  /** What a hook added to the context, such as a tool result's (`hook_additional_context`). */
+  attachment?: { type?: string; content?: unknown };
 }
 
 /** The text a user entry carries, or undefined for tool results and other entries. */
@@ -152,6 +154,17 @@ export class Claude {
     for (const e of this.transcript(id)) {
       const t = userText(e);
       if (t?.includes(needle)) return { at: Date.parse(e.timestamp ?? ""), text: t };
+    }
+    return undefined;
+  }
+
+  /** The first context a hook added in transcript `id` containing `needle`, with its time. */
+  context(needle: string, id = this.sessionId): { at: number; text: string } | undefined {
+    for (const e of this.transcript(id)) {
+      if (e.attachment?.type !== "hook_additional_context") continue;
+      const c = e.attachment.content;
+      const t = Array.isArray(c) ? c.join("\n") : String(c);
+      if (t.includes(needle)) return { at: Date.parse(e.timestamp ?? ""), text: t };
     }
     return undefined;
   }

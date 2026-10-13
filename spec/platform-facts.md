@@ -8,7 +8,11 @@ What the code relies on, with the versions checked.
   must not await it. Under Claude desktop (2.1.295, an Agent SDK session), a prompt queued
   mid-turn starts only once the mod's open `$.http.fetch` or `$.process.run` returns, not when the
   running turn ends; `$.clock.sleep` holds nothing back. So while a submitted prompt waits for its
-  turn, the mod's loop makes only short calls (#1446). Remote Control shows a submitted prompt on the phone. A hot reload aborts the
+  turn, the mod's loop makes only short calls (#1446). On 2.1.296 a `tool.call` hook's `context`
+  reaches the model with that tool's result, mid-turn, as a PostToolUse hook's
+  `additionalContext` does; the transcript records it as a `hook_additional_context` attachment.
+  A plugin's own `prompt.submit` hook never sees the prompts it submits, and `$.session.send` to
+  its own session is refused as "no live session" (#1484). Remote Control shows a submitted prompt on the phone. A hot reload aborts the
   mod's requests. `/resume` fires `session.end` with reason `resume` and no `session.start`. Mods
   load only from user or managed settings or an installed plugin, not project settings.
   Starbridge states 2.1.287, the oldest the mod works with, as its minimum, and setup says when
