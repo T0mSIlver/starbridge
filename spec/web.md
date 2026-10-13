@@ -38,6 +38,11 @@
   one below, else the one above, never History; none left, the list. On a touch screen the list
   comes back, as on Android, since a tap meant for the answered card could land on the next one's
   buttons. A snooze moves on the same way.
+- **The last open card settled elsewhere under 1100 px** (Tom, 2026-10-13, #1583). An open card that
+  another device or `starbridge settle` closes, or puts off, while it is on screen stays and says
+  how it closed; unless it was the last open one, then the list returns, empty ("Nothing needs
+  you"). A card answered here already leaves as above, so the same end state either way. A link to a
+  closed card still opens it.
 - **Backoff** (#332). All calls in a page share one backoff, 250 ms doubling to 30 s with jitter,
   ended by any answer or the browser's online event. Pollers skip their turn while it waits.
 - **The browser keeps the inbox** (Tom, 2026-10-12, #1380). A page load read every question from
