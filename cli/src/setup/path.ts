@@ -60,6 +60,39 @@ function missingDir(sys: Sys): string | undefined {
   return path.includes(norm(dir)) ? undefined : dir;
 }
 
+const PATH_MARK = "# Added by starbridge setup";
+
+/** The marker and the line after it, as `pathStep` writes them, with the blank line before. */
+const PATH_BLOCK = new RegExp(
+  `(^|\\n)${PATH_MARK}\\n(export PATH="[^"\\n]*:\\$PATH"|fish_add_path [^\\n]+)\\n`,
+  "g",
+);
+
+/**
+ * Takes the PATH line `pathStep` added out of each shell's startup file where it is still as setup
+ * wrote it, and removes a file left empty (#1494). Returns the files it changed.
+ */
+export function removePathLines(sys: Sys): string[] {
+  if (sys.platform === "win32") return [];
+  const { join } = pathFor(sys.platform);
+  const home = sys.home;
+  const files = new Set([
+    join(sys.ctx.env.ZDOTDIR || home, ".zshrc"),
+    ...[".bashrc", ".bash_profile", ".bash_login", ".profile"].map((f) => join(home, f)),
+    join(home, ".config", "fish", "config.fish"),
+  ]);
+  const done: string[] = [];
+  for (const file of files) {
+    const text = existsSync(file) ? readFileSync(file, "utf8") : "";
+    const left = text.replace(PATH_BLOCK, "");
+    if (left === text) continue;
+    if (left.trim() === "") rmSync(file, { force: true });
+    else writeFileSync(file, left);
+    done.push(file);
+  }
+  return done;
+}
+
 /** The startup file of the owner's shell, and the line there that puts `dir` on the PATH. */
 export function shellProfile(sys: Sys, dir: string): { file: string; line: string } {
   const { basename, join } = pathFor(sys.platform);
@@ -109,7 +142,7 @@ export async function pathStep(sys: Sys): Promise<string[]> {
     mkdirSync(dirname(file), { recursive: true });
     appendFileSync(
       file,
-      `${text === "" || text.endsWith("\n") ? "" : "\n"}\n# Added by starbridge setup\n${line}\n`,
+      `${text === "" || text.endsWith("\n") ? "" : "\n"}\n${PATH_MARK}\n${line}\n`,
     );
     ctx.out(`Added \`${line}\` to ${shown}.`);
   } else if (!has) {

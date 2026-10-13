@@ -19,6 +19,7 @@ import {
   setRemoved,
 } from "./agents";
 import { findCodexbar } from "./codexbar";
+import { removePathLines } from "./path";
 import { removeService } from "./service";
 import type { Sys } from "./sys";
 
@@ -97,8 +98,13 @@ export async function uninstall(sys: Sys, opts: UninstallOpts): Promise<number> 
         : "your package manager";
     ctx.out(`CodexBar stays installed (${cb.path}); remove it with ${how}.`);
   }
-  // The binary goes last, and only once nothing runs it any more.
-  if (opts.install && stopped) removeBinary(ctx, opts.install);
+  // The binary goes last, and only once nothing runs it any more; the PATH line with it.
+  if (opts.install && stopped) {
+    if (opts.install.kind === "binary")
+      for (const file of removePathLines(sys))
+        ctx.out(`Removed the PATH line setup added to ${file}.`);
+    removeBinary(ctx, opts.install);
+  }
   return stopped ? 0 : 1;
 }
 

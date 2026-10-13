@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 
 import { tmpdir } from "node:os";
 import { delimiter, join as hostJoin, posix } from "node:path";
 import { CLI_PATH } from "../src/config";
-import { pathStep, recordSelf } from "../src/setup/path";
+import { pathStep, recordSelf, removePathLines } from "../src/setup/path";
 import { defaults, type Prompt, type Sys } from "../src/setup/sys";
 import { bareEnv, SYSTEM_PATH, sh, slashes, testCtx } from "./helpers";
 
@@ -110,4 +110,32 @@ test("on macOS, bash's line goes where its login shell reads it, and a $HOME spe
   await pathStep({ ...s, prompt, self: [join(s.home, ".local/bin/starbridge")] });
   expect(asked).toEqual([]);
   expect(existsSync(join(s.home, ".bash_profile"))).toBe(false);
+});
+
+test("uninstall takes out the PATH line setup added, only while it is as setup wrote it (#1494)", async () => {
+  const s = sys({ SHELL: "/bin/zsh", PATH: "/usr/bin" }, []);
+  const withSelf = { ...s, self: [join(s.home, ".local/bin/starbridge")] };
+  // A file setup created goes; one it added to is left as it was.
+  await pathStep(withSelf);
+  const bashrc = join(s.home, ".bashrc");
+  writeFileSync(
+    bashrc,
+    'alias l=ls\n\n# Added by starbridge setup\nexport PATH="$HOME/.local/bin:$PATH"\n',
+  );
+  const fish = join(s.home, ".config/fish/config.fish");
+  mkdirSync(join(fish, ".."), { recursive: true });
+  writeFileSync(
+    fish,
+    `set x 1\n\n# Added by starbridge setup\nfish_add_path ${s.home}/.local/bin\n`,
+  );
+  // A line the owner changed stays.
+  const profile = join(s.home, ".profile");
+  const changed = '\n# Added by starbridge setup\nexport PATH="$HOME/.local/bin:$PATH:/opt/x"\n';
+  writeFileSync(profile, changed);
+  expect(removePathLines(s).sort()).toEqual([join(s.home, ".zshrc"), bashrc, fish].sort());
+  expect(existsSync(join(s.home, ".zshrc"))).toBe(false);
+  expect(readFileSync(bashrc, "utf8")).toBe("alias l=ls\n");
+  expect(readFileSync(fish, "utf8")).toBe("set x 1\n");
+  expect(readFileSync(profile, "utf8")).toBe(changed);
+  expect(removePathLines(s)).toEqual([]);
 });
