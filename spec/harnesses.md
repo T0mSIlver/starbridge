@@ -62,6 +62,16 @@ line, the safe side: at worst a prompt repeats an answer the agent already read.
   still tells the owner the agent is blocked, and `starbridge waiting <id>` prints an answer
   already in. The skill forbids waiting in a background task or with a monitor, which costs a
   process per card and can deliver an answer twice.
+- **Answers that come in together** (#1597). The answers one session has waiting when it is
+  handed them go as one message, one `Answer to …` line each, in the order they came, so five
+  answers queued behind a turn start one turn rather than five, each on part of the picture.
+  Claude Code's mod, Pi's extension and opencode's plugin take every line one poll brings as one
+  prompt; mid-turn the next tool result already carries them all. An answer that comes after
+  that poll goes on its own, or with the tool result after it: holding answers back to gather
+  more would delay the first. The mod records each line and drops it when the prompt's turn
+  starts, all at once. For Codex the agent steers them as one message, or queues one notice
+  naming every decision; Antigravity gets them in one message; Cursor's stop hook and
+  Antigravity's `Stop` hook already returned every answer in one follow-up.
 - **Which sessions run the mod's loop** (#863). Claude Code tells a mod whether a person is at
   the prompt, and says no both for `claude -p` and for sessions a host such as Claude desktop's
   Code tab or an IDE runs through the SDK. The mod tells them apart by `CLAUDE_CODE_ENTRYPOINT`:

@@ -71,46 +71,54 @@ export class Sent {
   ) {}
 
   /**
-   * Records `line`, then submits it. False when nothing went out: it could not be recorded, or a
-   * `/clear` or `/resume` came meanwhile. The loop then leaves the line unconfirmed for a later
-   * try.
+   * Records `batch`, then submits it as one prompt (#1597). False when nothing went out: it could
+   * not be recorded, or a `/clear` or `/resume` came meanwhile. The loop then leaves the lines
+   * unconfirmed for a later try.
    */
-  send(line: string, ack: string): Promise<boolean> {
+  send(batch: { text: string; ack: string }[]): Promise<boolean> {
     return this.alone(async () => {
       const me = await this.host.sessionId();
       const at = await this.host.now();
       let lines = await this.loaded(me);
       if (!lines) return false;
-      // A process that died between recording a line and confirming it leaves both: the loop
-      // hands the line over again, and the file holds it. It goes out once, as `recover` would.
-      let known = lines.find((l) => l.ack === ack);
-      if (known && (this.process === undefined || known.process === this.process)) return true;
-      if (known && known.process !== "") {
-        if (await this.host.elsewhere(me).catch(() => false)) return true;
-        // The process may have run the line's turn before it exited: then the file lacks it. A
-        // process that started meanwhile may hold it now.
-        const before = known.process;
-        lines = await this.loaded(me);
-        if (!lines) return false;
-        known = lines.find((l) => l.ack === ack);
-        if (!known || (known.process !== "" && known.process !== before)) return true;
+      const entries: Line[] = [];
+      for (const { text, ack } of batch) {
+        // A process that died between recording a line and confirming it leaves both: the loop
+        // hands the line over again, and the file holds it. It goes out once, as `recover` would.
+        let known: Line | undefined = lines.find((l) => l.ack === ack);
+        if (known && (this.process === undefined || known.process === this.process)) continue;
+        if (known && known.process !== "") {
+          if (await this.host.elsewhere(me).catch(() => false)) continue;
+          // The process may have run the line's turn before it exited: then the file lacks it. A
+          // process that started meanwhile may hold it now.
+          const before = known.process;
+          const fresh = await this.loaded(me);
+          if (!fresh) return false;
+          lines = [...fresh.filter((l) => !entries.some((e) => e.ack === l.ack)), ...entries];
+          known = lines.find((l) => l.ack === ack);
+          if (!known || (known.process !== "" && known.process !== before)) continue;
+        }
+        const entry: Line = known
+          ? { ...known, process: this.process ?? "" }
+          : { ack, line: text, process: this.process ?? "", at, refused: 0 };
+        lines = [...lines.filter((l) => l !== known), entry];
+        entries.push(entry);
       }
-      const entry = known
-        ? { ...known, process: this.process ?? "" }
-        : { ack, line, process: this.process ?? "", at, refused: 0 };
-      const rest = lines.filter((l) => l !== known);
+      if (entries.length === 0) return true;
       try {
-        await this.save(me, [...rest, entry]);
+        await this.save(me, lines);
       } catch (e) {
-        this.host.log(`starbridge: could not record the answer ${ack}: ${(e as Error).message}`);
+        const acks = entries.map((l) => l.ack).join(", ");
+        this.host.log(`starbridge: could not record the answers ${acks}: ${(e as Error).message}`);
         return false;
       }
       if ((await this.host.sessionId()) !== me) {
-        // Left for session `me`: the loop holds the line back until it is current again.
-        await this.save(me, [...rest, { ...entry, process: "" }]).catch(() => undefined);
+        // Left for session `me`: the loop holds the lines back until it is current again.
+        const left = lines.map((l) => (entries.includes(l) ? { ...l, process: "" } : l));
+        await this.save(me, left).catch(() => undefined);
         return false;
       }
-      this.enter(me, entry);
+      this.enter(me, entries);
       return true;
     });
   }
@@ -174,45 +182,48 @@ export class Sent {
         await this.save(me, [...keep, ...free]).catch(() => undefined);
         return;
       }
-      for (const l of again) {
+      for (const l of again)
         this.host.log(`starbridge: submitting the answer ${l.ack} again: its prompt never ran`);
-        this.enter(me, l);
-      }
+      if (again.length > 0) this.enter(me, again);
     });
   }
 
-  private enter(session: string, entry: Line) {
-    this.host.submit(entry.line).then(
+  /** Submits `entries` as one prompt, one line each. */
+  private enter(session: string, entries: Line[]) {
+    const acks = entries.map((l) => l.ack);
+    this.host.submit(entries.map((l) => l.line).join("\n")).then(
       (r) => {
         const drop = (r as { drop?: unknown } | undefined)?.drop;
-        if (typeof drop === "string") void this.failed(session, entry.ack, `refused: ${drop}`);
-        else void this.done(session, entry.ack);
+        if (typeof drop === "string") void this.failed(session, acks, `refused: ${drop}`);
+        else void this.done(session, acks);
       },
-      (e) => void this.failed(session, entry.ack, (e as Error)?.message ?? String(e)),
+      (e) => void this.failed(session, acks, (e as Error)?.message ?? String(e)),
     );
   }
 
-  /** `$.prompt.submit` resolved: the line's turn started. */
-  private done(session: string, ack: string) {
+  /** `$.prompt.submit` resolved: the lines' turn started. */
+  private done(session: string, acks: string[]) {
     return this.alone(async () => {
       const lines = await this.load(session);
-      if (lines.some((l) => l.ack === ack))
+      if (lines.some((l) => acks.includes(l.ack)))
         await this.save(
           session,
-          lines.filter((l) => l.ack !== ack),
+          lines.filter((l) => !acks.includes(l.ack)),
         ).catch(() => undefined);
     });
   }
 
-  /** The submit failed: the next `recover` submits the line again. */
-  private failed(session: string, ack: string, why: string) {
-    this.host.log(`starbridge: the answer ${ack} did not go in: ${why}`);
+  /** The submit failed: the next `recover` submits the lines again. */
+  private failed(session: string, acks: string[], why: string) {
+    this.host.log(`starbridge: the answers ${acks.join(", ")} did not go in: ${why}`);
     return this.alone(async () => {
       const lines = await this.load(session);
-      if (!lines.some((l) => l.ack === ack)) return;
+      if (!lines.some((l) => acks.includes(l.ack))) return;
       await this.save(
         session,
-        lines.map((l) => (l.ack === ack ? { ...l, process: "", refused: l.refused + 1 } : l)),
+        lines.map((l) =>
+          acks.includes(l.ack) ? { ...l, process: "", refused: l.refused + 1 } : l,
+        ),
       ).catch(() => undefined);
     });
   }

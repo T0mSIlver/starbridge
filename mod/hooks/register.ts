@@ -3,6 +3,7 @@ import {
   AgentLoop,
   HEADERS,
   isPortFile,
+  type Line,
   PROOF_HEADER,
   pidRuns,
   portTarget,
@@ -128,8 +129,7 @@ export const register: Register = (on) => {
       token,
     );
     sent = records;
-    const submit = (text: string, _waiting: boolean, ack: string) =>
-      handover.submit(text, ack, (line) => records.send(line, ack));
+    const submit = (lines: Line[]) => handover.submit(lines, (rest) => records.send(rest));
     const starting = () => waiting > 0;
     loop = new Switch(
       {

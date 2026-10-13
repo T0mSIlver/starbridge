@@ -14,6 +14,8 @@ import {
   AgentLoop,
   type AgentTiming,
   HEADERS,
+  joinLines,
+  type Line,
   pidRuns,
   type Reply,
   socketPath,
@@ -112,8 +114,9 @@ function session(id: string) {
     },
     now: async () => Date.now(),
     sleep: (ms) => Bun.sleep(ms),
-    submit: (text) => {
-      s.submitted.push(text);
+    submit: (lines) => {
+      s.submitted.push(joinLines(lines));
+      return lines.map((l) => l.ack);
     },
     starting: () => s.starting,
     status: (text) => {
@@ -228,11 +231,11 @@ test("an answer the host refuses stays unconfirmed and comes back", async () => 
   const tries: string[] = [];
   loop({
     ...a.host,
-    submit: async (text) => {
-      tries.push(text);
-      if (refuse) return false;
-      a.s.submitted.push(text);
-      return true;
+    submit: async (lines) => {
+      tries.push(joinLines(lines));
+      if (refuse) return [];
+      a.s.submitted.push(joinLines(lines));
+      return lines.map((l) => l.ack);
     },
   });
   const d = await ask("Merge #12 now?", "s-a");
@@ -250,10 +253,10 @@ test("mid-turn, an answer goes out with the next tool result, once, waiting or n
   await startAgent();
   const a = session("s-a");
   const handover = new Handover();
-  const enter = (text: string) => void a.s.submitted.push(text);
+  const enter = (lines: Line[]) => a.s.submitted.push(joinLines(lines)) > 0;
   const { loop: l } = loop({
     ...a.host,
-    submit: (text, _waiting, ack) => handover.submit(text, ack, enter),
+    submit: (lines) => handover.submit(lines, enter),
   });
   handover.started();
   const d = await ask("Merge #12 now?", "s-a");
@@ -276,10 +279,10 @@ test("mid-turn, a waiting answer that `waiting` printed meanwhile goes in no too
   await startAgent();
   const a = session("s-a");
   const handover = new Handover();
-  const enter = (text: string) => void a.s.submitted.push(text);
+  const enter = (lines: Line[]) => a.s.submitted.push(joinLines(lines)) > 0;
   const { loop: l } = loop({
     ...a.host,
-    submit: (text, _waiting, ack) => handover.submit(text, ack, enter),
+    submit: (lines) => handover.submit(lines, enter),
   });
   handover.started();
   const d = await ask("Merge #12 now?", "s-a");
@@ -299,10 +302,10 @@ test("an answer that came after the turn's last tool call comes as a prompt once
   await startAgent();
   const a = session("s-a");
   const handover = new Handover();
-  const enter = (text: string) => void a.s.submitted.push(text);
+  const enter = (lines: Line[]) => a.s.submitted.push(joinLines(lines)) > 0;
   loop({
     ...a.host,
-    submit: (text, _waiting, ack) => handover.submit(text, ack, enter),
+    submit: (lines) => handover.submit(lines, enter),
   });
   handover.started();
   const d = await ask("Merge #12 now?", "s-a");
@@ -314,6 +317,25 @@ test("an answer that came after the turn's last tool call comes as a prompt once
   handover.ended();
   await until(() => a.s.calls.includes("POST /v1/sessions/s-a/ack"));
   expect(a.s.submitted).toEqual([`Answer to ${d} (Merge #12 now?): No`]);
+});
+
+test("answers that wait together go as one prompt, one line each in answer order (#1597)", async () => {
+  await startAgent();
+  const a = session("s-a");
+  const d1 = await ask("Merge #12 now?", "s-a");
+  const d2 = await ask("Deploy tonight?", "s-a");
+  await server.answer(d1, { choice: "No" });
+  await server.answer(d2, { choice: "Yes" });
+  // Both in before the session's loop starts, as at the end of a turn.
+  await until(
+    async () =>
+      JSON.parse((await fetchOn("/v1/sessions/s-a/events", "GET")).text).events.length === 2,
+  );
+  loop(a.host);
+  await until(() => a.s.calls.includes("POST /v1/sessions/s-a/ack"));
+  expect(a.s.submitted).toEqual([
+    `Answer to ${d1} (Merge #12 now?): No\nAnswer to ${d2} (Deploy tonight?): Yes`,
+  ]);
 });
 
 test("each session gets its own answers through the agent, once, confirmed", async () => {
@@ -347,9 +369,10 @@ test("while a submitted prompt waits for its turn, no events request waits (#144
   // Mid-turn: the prompt's turn starts only after the running one.
   loop({
     ...a.host,
-    submit: (text) => {
-      a.s.submitted.push(text);
+    submit: (lines) => {
+      a.s.submitted.push(joinLines(lines));
       a.s.starting = true;
+      return lines.map((l) => l.ack);
     },
   });
   const d = await ask("Merge #12 now?", "s-a");
@@ -440,8 +463,9 @@ test("with no agent the CLI path delivers, and the switch follows the agent comi
             },
             now: async () => Date.now(),
             sleep: (ms) => Bun.sleep(ms),
-            submit: (t) => {
-              a.s.submitted.push(t);
+            submit: (lines) => {
+              a.s.submitted.push(joinLines(lines));
+              return lines.map((l) => l.ack);
             },
             starting: () => false,
             status: () => {},

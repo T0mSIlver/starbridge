@@ -22,7 +22,7 @@ import { readFileSync } from "node:fs";
 import { readFile, stat, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { AgentLoop, socketPath } from "../hooks/agent.ts";
+import { AgentLoop, joinLines, type Line, socketPath } from "../hooks/agent.ts";
 import { hookCommand, permissionHook, runCommand, sleep, socketFetch } from "../hooks/node.ts";
 import { configDir, Poller } from "../hooks/poller.ts";
 import { Switch } from "../hooks/switch.ts";
@@ -255,16 +255,16 @@ export default function starbridge(pi: PiApi) {
       socketFetch(socket, method, path, body);
     const sessionId = async () => id;
     const now = async () => Date.now();
-    // False keeps the line unconfirmed, for this session's next start.
-    // An answer enters the run after its current tool calls, waiting or not; an idle session
-    // starts a turn with it (#1484, #1584).
-    const submit = (line: string) => {
-      if (over.aborted) return false;
+    // The answers one poll brought go as one message (#1597), which enters the run after its
+    // current tool calls; an idle session starts a turn with it (#1484, #1584). Taking none keeps
+    // them unconfirmed, for this session's next start.
+    const submit = (lines: Line[]) => {
+      if (over.aborted) return [];
       try {
-        pi.sendUserMessage(line, { deliverAs: "steer" });
-        return true;
+        pi.sendUserMessage(joinLines(lines), { deliverAs: "steer" });
+        return lines.map((l) => l.ack);
       } catch {
-        return false;
+        return [];
       }
     };
     const status = (s: string | undefined) => {

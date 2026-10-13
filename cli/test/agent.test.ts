@@ -615,6 +615,34 @@ for (const status of ["inProgress", "completed"] as const)
   );
 
 test.skipIf(WINDOWS)(
+  "the answers waiting for a Codex session steer into its turn as one message (#1597)",
+  async () => {
+    const { ctx, socket, agent } = await machine();
+    const codex = await codexDaemon("inProgress");
+    const c = testCtx({ STARBRIDGE_AGENT_SOCKET: socket, ...codex.env });
+    try {
+      const d1 = await ask(c, "--project", "p");
+      const d2 = await ask(c, "--project", "p", "--question", "Deploy tonight?");
+      // Both come in while the agent is down, as after a restart.
+      await agent.stop();
+      await server.answer(d1, { choice: "Merge" });
+      await server.answer(d2, { choice: "Wait" });
+      const again = makeAgent(ctx, { socket });
+      await again.start();
+      agents.push(again);
+      await until(() => codex.steered.length > 0, 10_000);
+      await Bun.sleep(500);
+      expect(codex.steered).toHaveLength(1);
+      expect((codex.steered[0] as { input: { text: string }[] }).input[0]?.text).toBe(
+        `Answer to ${d1} (Merge #12 now?): Merge\nAnswer to ${d2} (Deploy tonight?): Wait`,
+      );
+    } finally {
+      await codex.close();
+    }
+  },
+);
+
+test.skipIf(WINDOWS)(
   "a steer the daemon took but answers late is not queued too (#1486)",
   async () => {
     const { socket } = await machine();
@@ -679,6 +707,48 @@ test("the agent sends an Antigravity conversation's answer through its language 
     const away = testCtx({ ...env, ANTIGRAVITY_LS_ADDRESS: `example.com:${ls.port}` });
     await ask(away, "--project", "p");
     expect(away.errors.at(-1)).toContain("run `starbridge wait");
+  } finally {
+    ls.stop(true);
+  }
+});
+
+test("the answers waiting for an Antigravity conversation go as one message (#1597)", async () => {
+  const { ctx, socket, agent } = await machine();
+  const texts: string[] = [];
+  const ls = Bun.serve({
+    hostname: "127.0.0.1",
+    port: 0,
+    async fetch(req) {
+      const url = new URL(req.url);
+      if (url.pathname === "/healthz") return Response.json({ status: "ok" });
+      const body = (await req.json()) as { items?: { text: string }[] };
+      if (url.pathname.endsWith("/SendUserCascadeMessage")) texts.push(body.items?.[0]?.text ?? "");
+      if (url.pathname.endsWith("/GetCascadeTrajectoryGeneratorMetadata"))
+        return Response.json({ generatorMetadata: [{ chatModel: { model: "MODEL_A" } }] });
+      return Response.json({});
+    },
+  });
+  try {
+    const c = testCtx({
+      STARBRIDGE_AGENT_SOCKET: socket,
+      ANTIGRAVITY_CONVERSATION_ID: "c-1",
+      ANTIGRAVITY_LS_ADDRESS: `127.0.0.1:${ls.port}`,
+      ANTIGRAVITY_CSRF_TOKEN: "tok",
+    });
+    const d1 = await ask(c, "--project", "p");
+    const d2 = await ask(c, "--project", "p", "--question", "Deploy tonight?");
+    // Both come in while the agent is down, as after a restart.
+    await agent.stop();
+    await server.answer(d1, { choice: "Merge" });
+    await server.answer(d2, { choice: "Wait" });
+    const again = makeAgent(ctx, { socket });
+    await again.start();
+    agents.push(again);
+    await until(() => texts.length > 0, 10_000);
+    await Bun.sleep(500);
+    expect(texts).toEqual([
+      `Answer to ${d1} (Merge #12 now?): Merge\nAnswer to ${d2} (Deploy tonight?): Wait`,
+    ]);
   } finally {
     ls.stop(true);
   }

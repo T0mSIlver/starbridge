@@ -1,3 +1,5 @@
+import type { Line } from "./agent.ts";
+
 /**
  * When an answer reaches the agent (#1484, #1584). Claude Code starts a prompt the mod submits only
  * after the running turn, which can be minutes away, and the turn meanwhile works without the
@@ -18,19 +20,24 @@ export class Handover {
   private readonly handed = new Set<string>();
 
   /**
-   * The loops' submit. Submits `text` with `enter` while no turn runs. During one, returns false,
-   * so the line stays unconfirmed and comes back in the next poll, and keeps it, and the `ack`
-   * that confirms it, for the next tool call. A line a tool result already carried
-   * returns true without a second submit. Otherwise returns what `enter` returns: false, or a
-   * promise of false, when it could not submit the line.
+   * The loops' submit. Submits `lines` as one prompt with `enter` while no turn runs. During one,
+   * keeps them, with the acks that confirm them, for the next tool call, and takes none: they
+   * stay unconfirmed and come back in the next poll. A line a tool result already carried counts
+   * as taken without a second submit. Returns the acks taken: none when `enter` could not submit
+   * the lines.
    */
-  submit(text: string, ack: string, enter: (text: string) => unknown): unknown {
-    if (this.handed.delete(text)) return true;
+  async submit(
+    lines: Line[],
+    enter: (lines: Line[]) => boolean | Promise<boolean>,
+  ): Promise<string[]> {
+    const carried = lines.filter((l) => this.handed.delete(l.text));
+    const rest = lines.filter((l) => !carried.includes(l));
     if (this.running) {
-      this.next.set(text, ack);
-      return false;
+      for (const l of rest) this.next.set(l.text, l.ack);
+      return carried.map((l) => l.ack);
     }
-    return enter(text) ?? true;
+    const entered = rest.length > 0 && (await enter(rest));
+    return [...carried, ...(entered ? rest : [])].map((l) => l.ack);
   }
 
   /** The main agent's turn started. */

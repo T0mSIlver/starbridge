@@ -83,7 +83,7 @@ call succeeds.
 Claude Code runs a submitted prompt only once the running turn ends. So while
 the agent works, an answer goes with its next tool result, which it reads at
 once; one that comes after the turn's last tool call is submitted when the
-turn ends.
+turn ends. The answers one poll brings go as one prompt, a line each (#1597).
 
 An answer submitted as a prompt stays in
 `~/.config/starbridge/mod-sent/<session>.json` until its turn starts. Claude

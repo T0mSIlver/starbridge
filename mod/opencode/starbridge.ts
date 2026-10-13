@@ -32,7 +32,7 @@ import { readFileSync } from "node:fs";
 import { link, mkdir, readdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { AgentLoop, socketPath } from "../hooks/agent.ts";
+import { AgentLoop, joinLines, type Line, socketPath } from "../hooks/agent.ts";
 import {
   answersOf,
   hookCommand,
@@ -326,20 +326,28 @@ async function server({ client, directory }: Input) {
     const sessionId = async () => id;
     // The loop confirms an answer only once opencode took it: a refused submit leaves it
     // unconfirmed, and the loop's next cycle tries again. A line another process is submitting
-    // stays unconfirmed here until that process marks it sent.
-    const submit = async (line: string) => {
-      const c = await claim(dir, id, line);
-      if (c.state !== "mine") return c.state === "sent";
+    // stays unconfirmed here until that process marks it sent. The lines this process claims go
+    // as one prompt (#1597).
+    const submit = async (lines: Line[]) => {
+      const claims = await Promise.all(lines.map((l) => claim(dir, id, l.text)));
+      const sent = lines.filter((_, i) => claims[i]?.state === "sent").map((l) => l.ack);
+      const mine = lines.flatMap((l, i) => {
+        const c = claims[i];
+        return c?.state === "mine" ? [{ ...l, token: c.token }] : [];
+      });
+      if (mine.length === 0) return sent;
       const r = await client.session
-        .promptAsync({ path: { id }, body: { parts: [{ type: "text", text: line }] } })
+        .promptAsync({ path: { id }, body: { parts: [{ type: "text", text: joinLines(mine) }] } })
         .catch((e: unknown) => ({ error: e }));
       if (!r.error) {
-        await submitted(dir, id, line);
-        return true;
+        await Promise.all(mine.map((l) => submitted(dir, id, l.text)));
+        return [...sent, ...mine.map((l) => l.ack)];
       }
-      log(`starbridge: opencode refused an answer, trying again: ${String(r.error)}`);
-      await unclaim(dir, id, line, c.token);
-      return false;
+      log(
+        `starbridge: opencode refused ${mine.length} answer(s), trying again: ${String(r.error)}`,
+      );
+      await Promise.all(mine.map((l) => unclaim(dir, id, l.text, l.token)));
+      return sent;
     };
     // Only Claude Code holds a queued prompt back behind an open call (#1446).
     const starting = () => false;
