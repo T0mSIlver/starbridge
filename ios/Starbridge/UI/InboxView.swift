@@ -148,7 +148,8 @@ struct InboxView: View {
             }
         }
         .onChange(of: LastSettled.Seen(opened: opened, needs: store.openPrompts.map(\.id) + decisions.map(\.id))) { _, seen in
-            if lastSettled.closes(seen) { opened = nil }
+            // A device hold hides every item without settling any: the sheet stays.
+            if lastSettled.closes(seen), store.withheldWhy == nil { opened = nil }
         }
         .onChange(of: store.openRequest, initial: true) { _, request in
             guard let request else { return }
