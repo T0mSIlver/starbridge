@@ -32,6 +32,7 @@ export const register: Register = (on) => {
   const handover = new Handover();
 
   on("session.start", async ($, e, next) => {
+    handover.reset();
     const started = await next(e);
     if (!wantsLoop(e.isInteractive, await $.env.get("CLAUDE_CODE_ENTRYPOINT"))) return started;
     // The new loop takes over the lines the old one submitted and has not confirmed yet, so it
@@ -159,6 +160,7 @@ export const register: Register = (on) => {
   // After a /clear or a /resume the process goes on under another session id, with no
   // `session.start`, and the loop reads the id each step. Only the end of the process stops it.
   on("session.end", async (_$, e, next) => {
+    handover.reset();
     if (e.reason !== "clear" && e.reason !== "resume") {
       await loop?.end();
       loop = undefined;

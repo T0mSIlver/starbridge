@@ -40,6 +40,15 @@ export class Handover {
     return lines;
   }
 
+  /**
+   * No turn runs, whatever the last `turn.start` said: the session ended or started. Held lines are
+   * still unconfirmed, so they come back in the next poll, for the session that asked.
+   */
+  reset() {
+    this.running = false;
+    this.held.clear();
+  }
+
   /** The main agent's turn ended: submits what no tool call took. */
   ended(enter: (text: string) => void) {
     this.running = false;
