@@ -460,9 +460,11 @@ async function parent() {
   );
   // The fleet runs unwatched: a worker that dies would leave metrics lines with nothing in them,
   // so the whole run stops and its supervisor starts it again.
+  let draining = false;
   if (values.metrics)
     for (const k of kids)
       k.exited.then((code) => {
+        if (draining) return; // a worker exits once it sent its final counts
         console.error(`a worker exited (${code})`);
         process.exit(1);
       });
@@ -650,6 +652,7 @@ async function parent() {
     }
   }
   say(broke ? `BROKE: ${broke}` : "held every stage");
+  draining = true;
   for (const k of kids) {
     k.stdin.write("drain\n");
     k.stdin.flush();
