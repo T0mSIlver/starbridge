@@ -101,7 +101,10 @@
   code changed, which a new image per commit would break. The deploy fails unless the live server
   reports that commit or a later one (`x-starbridge-revision`). That header, and
   `starbridge-deploy`'s argument, are refused unless they are 40 lowercase hex characters (#467),
-  since the workflow puts the revision in a `gh api` path.
+  since the workflow puts the revision in a `gh api` path. Then sb-oracle, the outside check's VM,
+  runs one round trip on its test account (#1522): a healthy server that cannot push or answer
+  fails the run at once, rather than at the check's next round trip up to 15 minutes later. Its
+  key's forced command only asks for that round trip and prints the result.
 - **No downtime** (#150, #508). The page runs as two copies; a deploy starts the idle one, waits
   for its health, then stops the other, and Caddy sends every request to the first healthy copy.
   The server stays one instance, since it holds the long-polls and SQLite; Caddy holds requests up
