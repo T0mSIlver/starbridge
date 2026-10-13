@@ -227,8 +227,8 @@ export class Decisions implements Feature {
   }
 
   /**
-   * Queues each new answer to a Codex session into it with `codex queue`, or steers it into the
-   * running turn when the decision is marked waiting (#1486), and sends each to an
+   * Steers each new answer to a Codex session into its running turn (#1486, #1584), or queues it
+   * with `codex queue` when none runs, and sends each to an
    * Antigravity conversation through its language server (#961). Marks it seen only once that
    * succeeded: an agent that dies meanwhile delivers it again, rather than never. A session that
    * is gone gets CODEX_TRIES tries, a minute apart; the answer stays for a `wait`.
@@ -247,7 +247,8 @@ export class Decisions implements Feature {
       const [how, where] = asked.codex
         ? ["codex queue", `Codex session ${asked.session}`]
         : ["sending to Antigravity", `Antigravity conversation ${asked.session}`];
-      const steered = asked.codex && asked.waiting?.state === "waiting" && (await this.steer(id));
+      // Into the running turn, waiting or not; with none running, queued (#1584).
+      const steered = asked.codex && (await this.steer(id));
       // A `waiting` printed it meanwhile.
       if (!steered && this.ctx.store.state().answers[id]?.seen) continue;
       const error = steered

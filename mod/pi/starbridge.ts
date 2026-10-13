@@ -3,8 +3,8 @@
  * rule and of this mod. It adds the owner's rule (plugin/rules/pi.md) to the system prompt, and
  * in an interactive or RPC session it runs the mod's answer loop (switch.ts: through the
  * machine's agent, else the CLI) and submits each answer as a user message. An idle session
- * starts a turn with it. A busy one takes an answer the agent marked waiting after its current
- * tool calls (`deliverAs: "steer"`), and any other once the agent finishes (`"followUp"`).
+ * starts a turn with it; a busy one takes it after its current tool calls (`deliverAs: "steer"`,
+ * #1584).
  *
  * While the loop runs, the session's commands get its id in STARBRIDGE_PI_ANSWERS, so `starbridge ask`
  * says the answer comes back as a prompt. In `pi -p` it says to `starbridge wait` instead.
@@ -256,12 +256,12 @@ export default function starbridge(pi: PiApi) {
     const sessionId = async () => id;
     const now = async () => Date.now();
     // False keeps the line unconfirmed, for this session's next start.
-    // An answer the agent marked waiting enters the run after its current tool calls; any other
-    // once the run ends. An idle session starts a turn either way (#1484).
-    const submit = (line: string, waiting: boolean) => {
+    // An answer enters the run after its current tool calls, waiting or not; an idle session
+    // starts a turn with it (#1484, #1584).
+    const submit = (line: string) => {
       if (over.aborted) return false;
       try {
-        pi.sendUserMessage(line, { deliverAs: waiting ? "steer" : "followUp" });
+        pi.sendUserMessage(line, { deliverAs: "steer" });
         return true;
       } catch {
         return false;

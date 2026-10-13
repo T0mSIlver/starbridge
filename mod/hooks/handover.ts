@@ -1,9 +1,9 @@
 /**
- * When an answer reaches the agent (#1484). Claude Code starts a prompt the mod submits only after
- * the running turn, which can be minutes away. An agent that marked the decision waiting needs the
- * answer now: while the main agent's turn runs, its next tool result carries it as context. Any
- * other answer waits for the turn to end, so it does not pull the agent off its task: the loops
- * leave it unconfirmed, and the first poll after the turn submits it. The mod's own
+ * When an answer reaches the agent (#1484, #1584). Claude Code starts a prompt the mod submits only
+ * after the running turn, which can be minutes away, and the turn meanwhile works without the
+ * owner's word. So while the main agent's turn runs, its next tool result carries the answer as
+ * context, waiting or not, as Claude Code does with a message typed during a turn. An answer that
+ * comes after the turn's last tool call goes as a prompt once the turn ends. The mod's own
  * `prompt.submit` hook never sees its own prompts, so it could not drop a second copy: a line goes
  * out one way only.
  */
@@ -19,15 +19,15 @@ export class Handover {
 
   /**
    * The loops' submit. Submits `text` with `enter` while no turn runs. During one, returns false,
-   * so the line stays unconfirmed and comes back in the next poll, and keeps a `waiting` line, and
-   * the `ack` that confirms it, for the next tool call. A line a tool result already carried
+   * so the line stays unconfirmed and comes back in the next poll, and keeps it, and the `ack`
+   * that confirms it, for the next tool call. A line a tool result already carried
    * returns true without a second submit. Otherwise returns what `enter` returns: false, or a
    * promise of false, when it could not submit the line.
    */
-  submit(text: string, ack: string, waiting: boolean, enter: (text: string) => unknown): unknown {
+  submit(text: string, ack: string, enter: (text: string) => unknown): unknown {
     if (this.handed.delete(text)) return true;
     if (this.running) {
-      if (waiting) this.next.set(text, ack);
+      this.next.set(text, ack);
       return false;
     }
     return enter(text) ?? true;

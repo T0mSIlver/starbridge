@@ -495,7 +495,8 @@ test("a call whose signal already aborted is interrupted without opening a reque
 async function codexHome(fail = false) {
   const home = mkdtempSync(join(tmpdir(), "starbridge-codex-"));
   mkdirSync(join(home, "app-server-control"));
-  const daemon = createNetServer();
+  // Reads and drops what a client sends, so it sees the client close.
+  const daemon = createNetServer((c) => c.resume());
   await new Promise<void>((r) =>
     daemon.listen(join(home, "app-server-control", "app-server-control.sock"), r),
   );
@@ -534,8 +535,9 @@ test.skipIf(WINDOWS)(
       // can read a process's arguments. The wait it names prints the answer.
       const queued = `${codex.env.CODEX_HOME} queue --thread t1 --message Starbridge has the owner's answer to ${id}: run \`starbridge wait ${id}\` to read it.\n`;
       // The fake codex creates its log before it has written the line: wait for the line itself.
+      // First the agent tries to steer it, which this daemon never answers: 5 s (#1584).
       const log = () => (existsSync(codex.log) ? readFileSync(codex.log, "utf8") : "");
-      await until(() => log() === queued).catch(() => {});
+      await until(() => log() === queued, 15_000).catch(() => {});
       expect(log()).toBe(queued);
       expect(await run(["wait", id, "--timeout", "10s"], c)).toBe(0);
       expect(c.lines.at(-1)).toBe(`Answer to ${id} (Merge #12 now?): Merge`);
@@ -574,13 +576,13 @@ async function codexDaemon(status: "inProgress" | "completed", replyAfter = 0) {
 
 for (const status of ["inProgress", "completed"] as const)
   test.skipIf(WINDOWS)(
-    `an answer marked waiting ${status === "inProgress" ? "steers into a Codex session's running turn" : "queues when no Codex turn runs"} (#1486)`,
+    `an answer to a card not marked waiting ${status === "inProgress" ? "steers into a Codex session's running turn" : "queues when no Codex turn runs"} (#1486, #1584)`,
     async () => {
       const { socket } = await machine();
       const codex = await codexDaemon(status);
       const c = testCtx({ STARBRIDGE_AGENT_SOCKET: socket, ...codex.env });
       try {
-        const id = await ask(c, "--project", "p", "--waiting");
+        const id = await ask(c, "--project", "p");
         await server.answer(id, { choice: "Merge" });
         const log = () => (existsSync(codex.log) ? readFileSync(codex.log, "utf8") : "");
         await until(() => codex.steered.length > 0 || log().endsWith("\n")).catch(() => {});

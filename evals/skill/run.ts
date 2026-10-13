@@ -200,6 +200,10 @@ export interface RunRecord {
   permissions?: Record<string, unknown>[];
   /** For a live session, whether the answer came back as a prompt. */
   prompted?: boolean;
+  /** Claude Code: the answer came in a tool result's context, mid-turn (#1584). */
+  steered?: boolean;
+  /** The scenario's `outcome` files as the run left them. */
+  files?: Record<string, string>;
   gh: string[];
   answered?: string;
   /** The card posted before the run (`card` situations) and the settled notices the devices got. */
@@ -678,7 +682,11 @@ async function liveRun(
           // The mod's prompt, in whatever entry carries it; a `wait`'s output is a tool result.
           if (e.type !== "assistant") {
             const text = JSON.stringify(e);
-            if (text.includes("Answer to d_") && !/tool_result|toolUseResult/.test(text)) rec.prompted = true;
+            // A real id: the skill's own example (`d_Xk3…`), loaded as a user entry, is no answer.
+            const answer = /Answer to d_[\w-]{16}\b/.test(text);
+            // A hook's context rides in an attachment beside the tool result it came with.
+            if (answer && e.type === "attachment" && /hook/.test(String(e.attachment?.type))) rec.steered = true;
+            else if (answer && !/tool_result|toolUseResult/.test(text)) rec.prompted = true;
           }
           if (e.type !== "assistant") continue;
           for (const b of e.message?.content ?? []) {
@@ -997,6 +1005,9 @@ async function one(s: Scenario, arm: string, rep: number): Promise<RunRecord> {
         writeFileSync(join(root, "page-pick"), "Picked: Starter, Plus, Studio\n");
         await live.answer(c.id, { done: true });
         rec.answered = `Answer to ${c.id} (${c.question}): answered on its page; read the answer there`;
+      } else if (s.reply) {
+        await live.answer(c.id, { text: s.reply });
+        rec.answered = `Answer to ${c.id} (${c.question}): ${s.reply}`;
       } else if (c.options.length === 0 && !c.answerIn) {
         // A card with no options takes a typed reply.
         await live.answer(c.id, { text: "Lantern" });
@@ -1071,6 +1082,10 @@ async function one(s: Scenario, arm: string, rep: number): Promise<RunRecord> {
       const before = answeredFirst ?? opened;
       rec.decisions = strip(before);
       rec.laterDecisions = strip(opened.filter((d) => !before.some((o) => o.id === d.id)));
+      if (s.outcome)
+        rec.files = Object.fromEntries(
+          s.outcome.files.map((f) => [f, existsSync(join(proj, f)) ? readFileSync(join(proj, f), "utf8") : ""]),
+        );
     }
     const first = s.live
       ? (rec.turns[0] as Turn & { session?: string })

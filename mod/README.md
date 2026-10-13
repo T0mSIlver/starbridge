@@ -81,9 +81,9 @@ further error, up to a minute, and shows the error in the status line until a
 call succeeds.
 
 Claude Code runs a submitted prompt only once the running turn ends. So while
-the agent works, an answer to a decision it marked waiting goes with its next
-tool result, which it reads at once; any other answer stays unconfirmed until
-the turn ends, and the mod then submits it.
+the agent works, an answer goes with its next tool result, which it reads at
+once; one that comes after the turn's last tool call is submitted when the
+turn ends.
 
 An answer submitted as a prompt stays in
 `~/.config/starbridge/mod-sent/<session>.json` until its turn starts. Claude
@@ -101,9 +101,8 @@ pi install git:github.com/T0mSIlver/starbridge@v<version>
 ```
 
 In an interactive or RPC Pi session it submits each answer as a user message,
-which starts a turn when Pi is idle. When Pi is busy, an answer to a decision
-marked waiting enters the running turn at its next tool call (`deliverAs:
-"steer"`), and any other runs after the turn (`"followUp"`). It also adds its rule (`plugin/rules/pi.md`) to Pi's system
+which starts a turn when Pi is idle. When Pi is busy, the answer enters the
+running turn at its next tool call (`deliverAs: "steer"`). It also adds its rule (`plugin/rules/pi.md`) to Pi's system
 prompt. `pi -p` gets no loop, so `starbridge ask` tells the agent there to
 `starbridge wait`.
 

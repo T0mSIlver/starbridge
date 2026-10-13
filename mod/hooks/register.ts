@@ -18,9 +18,9 @@ import { Switch, wantsLoop } from "./switch.ts";
  * Starts the answer loop in each session a person keeps open (`wantsLoop`): through the machine's agent when it runs
  * (agent.ts), else through the CLI (poller.ts); switch.ts picks. A hot reload loads this module
  * afresh: the old loop dies with the old module, and `session.start` starts a new one. While the
- * main agent's turn runs, an answer it marked waiting goes out with its next tool result
- * instead, and any other waits for the turn's end (handover.ts). An answer submitted as a prompt
- * stays on record until its turn starts, so a process that exits first does not lose it (sent.ts).
+ * main agent's turn runs, an answer goes out with its next tool result instead (handover.ts).
+ * An answer submitted as a prompt stays on record until its turn starts, so a process that exits
+ * first does not lose it (sent.ts).
  */
 export const register: Register = (on) => {
   let loop: Switch | undefined;
@@ -128,8 +128,8 @@ export const register: Register = (on) => {
       token,
     );
     sent = records;
-    const submit = (text: string, waiting: boolean, ack: string) =>
-      handover.submit(text, ack, waiting, (line) => records.send(line, ack));
+    const submit = (text: string, _waiting: boolean, ack: string) =>
+      handover.submit(text, ack, (line) => records.send(line, ack));
     const starting = () => waiting > 0;
     loop = new Switch(
       {

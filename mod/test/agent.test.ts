@@ -246,18 +246,17 @@ test("an answer the host refuses stays unconfirmed and comes back", async () => 
   expect(a.s.submitted).toEqual([`Answer to ${d} (Merge #12 now?): No`]);
 });
 
-test("mid-turn, an answer the agent marked waiting goes out with its next tool result, once (#1484)", async () => {
+test("mid-turn, an answer goes out with the next tool result, once, waiting or not (#1484, #1584)", async () => {
   await startAgent();
   const a = session("s-a");
   const handover = new Handover();
   const enter = (text: string) => void a.s.submitted.push(text);
   const { loop: l } = loop({
     ...a.host,
-    submit: (text, waiting, ack) => handover.submit(text, ack, waiting, enter),
+    submit: (text, _waiting, ack) => handover.submit(text, ack, enter),
   });
   handover.started();
   const d = await ask("Merge #12 now?", "s-a");
-  expect(await run(["waiting", d], cli)).toBe(0);
   await until(() => a.s.calls.some((c) => c.startsWith("GET")));
   await server.answer(d, { choice: "No" });
   let taken: string[] = [];
@@ -280,7 +279,7 @@ test("mid-turn, a waiting answer that `waiting` printed meanwhile goes in no too
   const enter = (text: string) => void a.s.submitted.push(text);
   const { loop: l } = loop({
     ...a.host,
-    submit: (text, waiting, ack) => handover.submit(text, ack, waiting, enter),
+    submit: (text, _waiting, ack) => handover.submit(text, ack, enter),
   });
   handover.started();
   const d = await ask("Merge #12 now?", "s-a");
@@ -296,22 +295,21 @@ test("mid-turn, a waiting answer that `waiting` printed meanwhile goes in no too
   expect(a.s.submitted).toEqual([]);
 });
 
-test("mid-turn, an answer that blocks nothing waits for the turn's end, then comes as a prompt (#1484)", async () => {
+test("an answer that came after the turn's last tool call comes as a prompt once the turn ends (#1584)", async () => {
   await startAgent();
   const a = session("s-a");
   const handover = new Handover();
   const enter = (text: string) => void a.s.submitted.push(text);
-  const { loop: l } = loop({
+  loop({
     ...a.host,
-    submit: (text, waiting, ack) => handover.submit(text, ack, waiting, enter),
+    submit: (text, _waiting, ack) => handover.submit(text, ack, enter),
   });
   handover.started();
   const d = await ask("Merge #12 now?", "s-a");
   await until(() => a.s.calls.some((c) => c.startsWith("GET")));
   await server.answer(d, { choice: "No" });
-  // It comes back unconfirmed on each poll, and no tool result takes it.
+  // Kept for a tool call that never comes: unconfirmed until the turn ends.
   await until(() => a.s.calls.filter((c) => c.includes("/events")).length >= 4);
-  expect(await handover.take((acks) => l.claim(acks))).toEqual([]);
   expect(a.s.calls).not.toContain("POST /v1/sessions/s-a/ack");
   handover.ended();
   await until(() => a.s.calls.includes("POST /v1/sessions/s-a/ack"));
