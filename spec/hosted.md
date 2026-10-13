@@ -78,8 +78,11 @@
 - **Status page** (#1544). `status.starbridge.run` is a static page on Cloudflare Pages, built on
   sb-oracle from both vantages' checks, so it stays up when the VPS is down and serves any crowd
   without a server of ours. It is uploaded when its content changes or once a day, a few uploads
-  a day. It shows each part's state, 30 days of daily bars and the month against its target, and
-  publishes booleans and numbers only, never a check's error text, which can hold addresses. A Safari run on a Mac each night loads the landing page, the
+  a day. It shows what a user recognises (web app, API, push notifications, answers) with 90
+  days of daily bars, 30 days of push and answer times, and incidents found in the checks'
+  history, with an Atom feed of them; staging stays off it. It publishes booleans and numbers
+  only, never a check's error text, which can hold addresses, and loads no script and nothing
+  from a third party: the app's own face is served beside it. A Safari run on a Mac each night loads the landing page, the
   docs and the app's sign-in screen, and registers the service worker, since Safari breaks in ways
   the Firefox and Chromium checks do not see.
 - **Privacy and terms** (`/privacy`, `/terms`). Each claim follows the code: stored columns in
