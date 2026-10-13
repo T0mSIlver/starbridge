@@ -6,6 +6,13 @@ compose="docker compose -p starbridge -f compose.yaml"
 # The commit, built into the server for /healthz. An older starbridge-deploy on the host passes
 # none and writes REVISION before this runs.
 export REVISION=${REVISION:-$(cat /opt/starbridge/REVISION 2>/dev/null || echo unknown)}
+# The server and web images are deploy.yml's, tagged by this commit (#1518). A commit that has
+# none, from before them or never deployed from main, stops at their pull, before any container
+# is replaced.
+case $REVISION in *[!0-9a-f]*) REVISION= ;; esac
+[ ${#REVISION} -eq 40 ] || { echo "apply.sh: REVISION is not a commit id" >&2; exit 1; }
+# Compose reads the tag from here, so every script on the box that runs it names this release.
+echo "REVISION=$REVISION" > .env
 
 install -m 644 host/starbridge-backup.service host/starbridge-backup.timer \
   host/starbridge-umami-trim.service host/starbridge-umami-trim.timer \
@@ -19,7 +26,9 @@ host/umami-env.sh
 host/caddy-auth.sh
 # The denylist's snippet, which the Caddyfile imports (host/switch.sh).
 host/switch.sh --regenerate
-$compose build --pull server web-a
+for image in server web; do
+  docker pull -q "ghcr.io/t0msilver/starbridge-$image:$REVISION" >/dev/null
+done
 # Caddy's image changes only when caddy.Dockerfile does: a new image recreates the container,
 # which drops every open connection. Its build is not reproducible (xcaddy fetches and compiles
 # afresh once the build cache is pruned), so it is tagged by a hash of the Dockerfile, which pins
@@ -124,6 +133,12 @@ healthy http://127.0.0.1:3001/api/heartbeat umami 120
 # about 0.9 GB of cache; unpruned, a day of deploys left 27 GB of it on the 38 GB disk (#301).
 # The newest 3 GB keep the next build fast.
 docker image prune -f >/dev/null || true
+# The newest 5 releases' images stay, for a rollback that needs no download; Docker refuses to
+# remove the ones in use.
+for image in server web; do
+  docker image ls "ghcr.io/t0msilver/starbridge-$image" --format '{{.CreatedAt}}\t{{.Repository}}:{{.Tag}}' |
+    sort -r | tail -n +6 | cut -f2 | xargs -r docker image rm >/dev/null 2>&1 || true
+done
 docker image ls starbridge-caddy --format '{{.Repository}}:{{.Tag}}' | grep -vx -e starbridge-caddy:latest -e "$caddy" |
   xargs -r docker image rm >/dev/null || true
 docker builder prune -f --keep-storage 3GB >/dev/null || true

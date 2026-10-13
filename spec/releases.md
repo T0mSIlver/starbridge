@@ -92,7 +92,13 @@
 - **Deploys** (#26, #150, #260, #1094). A merge to main deploys from Actions once CI passes, unless
   no file the box builds from changed since the revision it runs, over SSH to a forced command that
   deploys only main's head or a commit on main containing the deployed one; the box fetches it
-  itself. Rollbacks are manual (`deploy/deploy.sh`). The deploy fails unless the live server reports
+  itself. Rollbacks are manual (`deploy/deploy.sh`). The server and web images are built once per
+  deployed commit in `deploy.yml`, for amd64 and arm64, each on a runner of its architecture, and pushed to
+  ghcr.io, public, tagged by commit; the box pulls them rather than building (#1518), so staging, prod and a
+  failover host run the same build, and the box keeps its CPU for users. The box keeps the newest
+  5 releases' images for a rollback. Caddy's and the demo server's images are still built on the
+  box: Caddy's by the hash of its Dockerfile, and the demo's restarts only when its code changed,
+  which a new image per commit would break. The deploy fails unless the live server reports
   that commit or a later one (`x-starbridge-revision`). That header, and `starbridge-deploy`'s
   argument, are refused unless they are 40 lowercase hex characters (#467), since the workflow puts
   the revision in a `gh api` path.

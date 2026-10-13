@@ -315,7 +315,7 @@ jobs:
   # Builds the deployed images, without pushing them, when a pull request can change their base
   # images or dependencies: a change that breaks a build fails here, not at the deploy (#430).
   # Source changes outside these paths that a Dockerfile copies (docs/ for web, cli/ for the demo)
-  # are not covered. On a push, main's deploy builds them on the server.
+  # are not covered. On a push, deploy.yml builds and pushes them for both architectures.
   images:
     name: images
     needs: changes

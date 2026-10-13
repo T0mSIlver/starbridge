@@ -10,25 +10,19 @@ on:
 permissions: {}
 
 jobs:
-  deploy:
+  # Nothing to deploy when no file the box builds from changed since the revision it runs: what
+  # the Dockerfiles copy (server/Dockerfile, web/Dockerfile, deploy/demo/Dockerfile) and deploy/,
+  # which it applies. The run passes either way, so whoever waits for a merge to be live waits for
+  # this run, not for the live revision. Any doubt deploys.
+  changed:
     if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'
-    # On the job, not the workflow: a run for a failed or cancelled CI run skips this job without
-    # joining the queue, so it cannot replace a deploy that is waiting.
-    concurrency:
-      group: deploy
-      cancel-in-progress: false
     runs-on: ${{ vars.TRUSTED_RUNNER && fromJSON(vars.TRUSTED_RUNNER) || 'ubuntu-latest' }}
-    # Reads main's history to compare the live revision with this run's.
+    timeout-minutes: 5
     permissions:
       contents: read
-    environment:
-      name: starbridge.run
-      url: https://starbridge.run
+    outputs:
+      deploy: ${{ steps.changed.outputs.deploy }}
     steps:
-      # Nothing to deploy when no file the box builds from changed since the revision it runs:
-      # what the Dockerfiles copy (server/Dockerfile, web/Dockerfile, deploy/demo/Dockerfile) and
-      # deploy/, which it applies. The run passes either way, so whoever waits for a merge to be
-      # live waits for this run, not for the live revision. Any doubt deploys.
       - id: changed
         env:
           GH_TOKEN: ${{ github.token }}
@@ -51,10 +45,100 @@ jobs:
               fi
           fi
           echo "deploy=$deploy" >> "$GITHUB_OUTPUT"
+
+  # The server and web images, built once per deployed commit for both architectures and pushed
+  # to ghcr.io as <image>:<commit>; the box pulls them rather than building (#1518). arm64 is for
+  # the Oracle VMs, staging's and the failover target's. Each architecture builds natively on its
+  # own runner, GitHub's for arm64, and pushes <commit>-<arch>; the images job joins the two.
+  build:
+    needs: changed
+    if: needs.changed.outputs.deploy == 'true'
+    strategy:
+      matrix:
+        image: [server, web]
+        arch: [amd64, arm64]
+    runs-on: ${{ matrix.arch == 'arm64' && 'ubuntu-24.04-arm' || (vars.TRUSTED_RUNNER && fromJSON(vars.TRUSTED_RUNNER) || 'ubuntu-latest') }}
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    env:
+      TAG: ghcr.io/t0msilver/starbridge-${{ matrix.image }}:${{ github.event.workflow_run.head_sha }}-${{ matrix.arch }}
+    steps:
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      # A rerun of a deploy that failed later keeps the images it already pushed.
+      - id: have
+        run: |
+          if docker buildx imagetools inspect "$TAG" >/dev/null 2>&1; then
+            echo "have=true" >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.have.outputs.have != 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+      - if: steps.have.outputs.have != 'true'
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - if: steps.have.outputs.have != 'true'
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: ${{ matrix.image }}/Dockerfile
+          platforms: linux/${{ matrix.arch }}
+          pull: true
+          push: true
+          tags: ${{ env.TAG }}
+          # The commit, which /healthz names. The public pages load Umami from /stats, which a
+          # self-hosted build leaves out; behind a Caddy that serves no /stats, they load nothing.
+          build-args: |
+            REVISION=${{ github.event.workflow_run.head_sha }}
+            ANALYTICS=umami
+          labels: org.opencontainers.image.source=https://github.com/${{ github.repository }}
+          provenance: false
+          cache-from: type=gha,scope=${{ matrix.image }}-${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}-${{ matrix.arch }}
+
+  images:
+    needs: [changed, build]
+    runs-on: ${{ vars.TRUSTED_RUNNER && fromJSON(vars.TRUSTED_RUNNER) || 'ubuntu-latest' }}
+    timeout-minutes: 5
+    permissions:
+      packages: write
+    env:
+      REV: ${{ github.event.workflow_run.head_sha }}
+    steps:
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - run: |
+          for image in server web; do
+            name=ghcr.io/t0msilver/starbridge-$image
+            docker buildx imagetools create -t "$name:$REV" "$name:$REV-amd64" "$name:$REV-arm64"
+          done
+
+  deploy:
+    needs: [changed, images]
+    # On the job, not the workflow: a run for a failed or cancelled CI run skips this job without
+    # joining the queue, so it cannot replace a deploy that is waiting.
+    concurrency:
+      group: deploy
+      cancel-in-progress: false
+    runs-on: ${{ vars.TRUSTED_RUNNER && fromJSON(vars.TRUSTED_RUNNER) || 'ubuntu-latest' }}
+    # Reads main's history to compare the live revision with this run's.
+    permissions:
+      contents: read
+    environment:
+      name: starbridge.run
+      url: https://starbridge.run
+    steps:
       # The key's forced command on the box runs starbridge-deploy with this commit id and nothing
       # else (deploy/setup-actions-deploy.sh).
       - name: Deploy
-        if: steps.changed.outputs.deploy == 'true'
         env:
           DEPLOY_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
           KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
@@ -69,7 +153,6 @@ jobs:
       # the box refused this older one. Anything else is a deploy that never went live. REV is the
       # commit CI passed on, which can be older than main's head, the commit the run list shows.
       - name: Check the live revision
-        if: steps.changed.outputs.deploy == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           REV: ${{ github.event.workflow_run.head_sha }}
@@ -90,7 +173,6 @@ jobs:
           esac
       # The deploy also rebuilt the Play reviewers' demo server from this commit (#1016).
       - name: Check the demo server
-        if: steps.changed.outputs.deploy == 'true'
         run: |
           curl -fsS --retry 10 --retry-delay 3 --retry-all-errors https://demo.starbridge.run/v1/demo |
             jq -e '.demo == true' >/dev/null || { echo "demo.starbridge.run is not a demo server"; exit 1; }
