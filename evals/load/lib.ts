@@ -60,3 +60,31 @@ export function id(prefix: string): string {
 export function expMs(meanMs: number): number {
   return -Math.log(1 - Math.random()) * meanMs;
 }
+
+/** One stage of load.ts's `--json` result. Times in ms, memory in MB, CPU in % of a core. */
+export interface StageResult {
+  users: number;
+  rps: number;
+  p50: number;
+  p99: number;
+  deliveryP50: number;
+  deliveryP99: number;
+  /** Failed requests (status 400 and up, or no response) per request. */
+  errorRate: number;
+  /** Each container's peak memory, page cache left out. */
+  peakMB: Record<string, number>;
+  cpuPct: Record<string, number>;
+  p99ByOp: Record<string, number>;
+}
+
+/** load.ts's `--json` result, which compare.ts reads. */
+export interface LoadResult {
+  at: string;
+  stages: StageResult[];
+  /** The drain's counts: answers lost or received twice, decisions no page saw. */
+  final: Record<string, number>;
+  /** Set when a stage broke: the server died, or p99 passed 1 s. */
+  broke?: string;
+  /** Each container's memory every 5 minutes, `t` in seconds from the start. */
+  memory: { t: number; mb: Record<string, number> }[];
+}

@@ -133,7 +133,10 @@
   code changed, which a new image per commit would break. The deploy fails unless the live server
   reports that commit or a later one (`x-starbridge-revision`). That header, and
   `starbridge-deploy`'s argument, are refused unless they are 40 lowercase hex characters (#467),
-  since the workflow puts the revision in a `gh api` path.
+  since the workflow puts the revision in a `gh api` path. Then sb-oracle, the outside check's VM,
+  runs one round trip on its test account (#1522): a healthy server that cannot push or answer
+  fails the run at once, rather than at the check's next round trip up to 15 minutes later. Its
+  key's forced command only asks for that round trip and prints the result.
 - **Rollback** (#1520). `deploy/rollback.sh` deploys the release before the running one, or a
   commit given, from the images the box holds, so it needs no download or build; the box keeps
   five releases, about 2.5 GB. It deploys that commit's whole tree, not only its images, so the
@@ -208,3 +211,11 @@
   own `ci.yml`, which could name any label, so a fork's run is never approved.
 - **Monitoring.** `uptime.yml` checks `/healthz`, `/healthz/backup` (fails when the last nightly
   backup is over 26 h old) and `/healthz/disk` (under 2 GB free), and opens one `outage` issue.
+- **Vulnerability scans** (#1542). `scan.yml` runs Trivy on the server and web images once
+  `deploy.yml` has pushed them, and weekly on the images starbridge.run runs, since advisories
+  appear after a build. A high or critical vulnerability with a fixed version fails the run; the
+  rest are listed in its summary, since an advisory without a fix gives nothing to do. Both images
+  take Debian's updates at build time, on a layer the commit id keeps out of the build cache, and the web
+  image drops npm, which it never runs. osv-scanner reads the lockfiles weekly and reports every
+  finding. Each scan keeps one issue open while it finds something and closes it once a run finds
+  nothing. Dependabot's alerts cover the Gradle catalog, which osv-scanner cannot read.
