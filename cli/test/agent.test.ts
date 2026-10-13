@@ -543,6 +543,73 @@ test.skipIf(WINDOWS)(
   },
 );
 
+/**
+ * A Codex home whose daemon speaks the control socket's protocol: the thread's latest turn has
+ * `status`, and `steered` holds each `turn/steer` it took. Its `codex` logs as `codexHome`'s.
+ */
+async function codexDaemon(status: "inProgress" | "completed") {
+  const codex = await codexHome();
+  await codex.close();
+  const steered: unknown[] = [];
+  const daemon = Bun.serve({
+    unix: join(codex.env.CODEX_HOME, "app-server-control", "app-server-control.sock"),
+    fetch: (req, s) => (s.upgrade(req) ? undefined : new Response("no", { status: 400 })),
+    websocket: {
+      message(ws, text) {
+        const m = JSON.parse(String(text));
+        const reply = (result: unknown) => ws.send(JSON.stringify({ id: m.id, result }));
+        if (m.method === "initialize") reply({});
+        if (m.method === "thread/turns/list") reply({ data: [{ id: "turn1", items: [], status }] });
+        if (m.method === "turn/steer") {
+          steered.push(m.params);
+          reply({ turnId: "turn1" });
+        }
+      },
+    },
+  });
+  return { ...codex, steered, close: async () => daemon.stop(true) };
+}
+
+for (const status of ["inProgress", "completed"] as const)
+  test.skipIf(WINDOWS)(
+    `an answer marked waiting ${status === "inProgress" ? "steers into a Codex session's running turn" : "queues when no Codex turn runs"} (#1486)`,
+    async () => {
+      const { socket } = await machine();
+      const codex = await codexDaemon(status);
+      const c = testCtx({ STARBRIDGE_AGENT_SOCKET: socket, ...codex.env });
+      try {
+        const id = await ask(c, "--project", "p", "--waiting");
+        await server.answer(id, { choice: "Merge" });
+        const log = () => (existsSync(codex.log) ? readFileSync(codex.log, "utf8") : "");
+        await until(() => codex.steered.length > 0 || log().endsWith("\n")).catch(() => {});
+        if (status === "inProgress") {
+          // The socket is the owner's alone, so the steer carries the answer itself.
+          expect(codex.steered).toEqual([
+            {
+              threadId: "t1",
+              expectedTurnId: "turn1",
+              input: [
+                {
+                  type: "text",
+                  text: `Answer to ${id} (Merge #12 now?): Merge`,
+                  text_elements: [],
+                },
+              ],
+            },
+          ]);
+          expect(log()).toBe("");
+        } else {
+          expect(codex.steered).toEqual([]);
+          expect(log()).toContain(
+            `queue --thread t1 --message Starbridge has the owner's answer to ${id}`,
+          );
+        }
+      } finally {
+        await codex.close();
+      }
+    },
+  );
+
 test("the agent sends an Antigravity conversation's answer through its language server (#961)", async () => {
   const { socket } = await machine();
   const calls: { method: string; token: string | null; body: unknown }[] = [];

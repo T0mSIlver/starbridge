@@ -18,7 +18,7 @@ line, the safe side: at worst a prompt repeats an answer the agent already read.
 |---|---|
 | Claude Code: terminal, desktop app's Code tab, IDEs | The mod (`mod/`) long-polls the local agent's socket in 25 s cycles and submits each answer with `$.prompt.submit`; during a turn, an answer to a decision marked waiting goes with the next tool result instead, and any other waits for the turn's end (#1484) |
 | `claude -p`, Agent SDK scripts | `wait`: the run ends with its last turn, so the mod starts no loop there (#321) |
-| Codex TUI | The local agent runs `codex queue --thread <id>`; the message only says to run `starbridge wait <id>`, since other local users can read process arguments (#274). Retried each minute, 30 times |
+| Codex TUI | The local agent runs `codex queue --thread <id>`; the message only says to run `starbridge wait <id>`, since other local users can read process arguments (#274). Retried each minute, 30 times. During a turn, an answer to a decision marked waiting goes in with the daemon's `turn/steer` instead, answer and all (#1486) |
 | `codex exec` | `wait`: nothing runs a queued message once exec returns. The thread's rollout tells exec apart (#245) |
 | Pi TUI and RPC | The Pi extension (`mod/pi`) calls `pi.sendUserMessage(text, { deliverAs })`: `"steer"` for a decision marked waiting, `"followUp"` for any other (#232, #1484) |
 | opencode TUI and `serve` | The opencode plugin (`mod/opencode`) calls `client.session.promptAsync`, one loop per session (#300); a busy session takes it at its next step, waiting or not, since opencode has no working queue (#1484) |
@@ -43,10 +43,13 @@ line, the safe side: at worst a prompt repeats an answer the agent already read.
   and leaves any other unconfirmed until the turn ends. It goes out one way only: the mod's own
   `prompt.submit` hook never sees its own prompts, so it could not drop a second copy. A
   subagent's tool results carry none: the answer is for the agent that asked. Pi steers and
-  queues with `deliverAs`; opencode only steers; Codex, Antigravity and Cursor only queue, so
-  their answers come after the turn (#1486 for Codex). An agent that needs an answer it did not
-  mark waiting runs `starbridge waiting <id>`: one already in prints at once, a later one comes
-  with the next tool result. One way to need an answer now, so the skill forbids waiting in a
+  queues with `deliverAs`; opencode only steers. Codex steers with its daemon's `turn/steer`
+  over the control socket, which sits in a folder only the owner opens, so the steer carries the
+  answer rather than a pointer to it, and queues when no turn runs (#1486). Antigravity and
+  Cursor only queue, so their answers come after the turn. An agent that needs an answer it did
+  not mark waiting runs `starbridge waiting <id>`: one already in prints at once, a later one
+  comes with the next tool result. A Codex answer already queued has left: it comes after the
+  turn. One way to need an answer now, so the skill forbids waiting in a
   background task or with a monitor, which costs a process per card and can deliver it twice.
 - **Which sessions run the mod's loop** (#863). Claude Code tells a mod whether a person is at
   the prompt, and says no both for `claude -p` and for sessions a host such as Claude desktop's

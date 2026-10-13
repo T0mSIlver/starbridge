@@ -45,7 +45,12 @@ What the code relies on, with the versions checked.
   with a hash of the handler, not of the file. Plugins come from marketplaces, local or Git,
   read from `.agents/plugins/marketplace.json` or `.claude-plugin/marketplace.json`; a plugin's
   hooks run with `${PLUGIN_ROOT}` set. Hook events and outputs follow Claude Code's
-  (`SessionStart` `additionalContext`, `PermissionRequest`).
+  (`SessionStart` `additionalContext`, `PermissionRequest`). The daemon's `turn/steer`
+  (`threadId`, `expectedTurnId`, `input`) adds a user message to the running turn; the model reads
+  it with the result of the tool call under way, and nothing runs it again after the turn
+  (checked with the TUI on a scripted model: 2.4 s after the answer, with the next tool result,
+  #1486). `thread/turns/list` with `limit: 1` gives the running turn's id (`status:
+  "inProgress"`); with no turn running, `turn/steer` fails with "no active turn to steer".
 - **Pi** (0.87.1, 1.0.4, 1.2.0): `pi.sendUserMessage(..., { deliverAs: "followUp" })` behaves like
   `codex queue`; `"steer"` enters a busy run after its current tool calls, before the next model
   call, and skips none of them; an idle session starts a turn either way (1.2.0's
