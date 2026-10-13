@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from "bun:test";
-import { PACKAGE, playNotes, TRACKS, type Track, upload } from "../scripts/play";
+import { internalTrack, PACKAGE, playNotes, TRACKS, type Track, upload } from "../scripts/play";
 
 const URL_ = "https://github.com/T0mSIlver/starbridge/releases/tag/v1.2.3";
 
@@ -130,4 +130,28 @@ test("validate still fails on any other refusal", async () => {
   stop = () => play.server.stop(true);
   await expect(play.run(true)).rejects.toThrow("403");
   expect(play.seen.at(-1)?.method).toBe("DELETE");
+});
+
+test("the internal track's release name and highest code are read in an edit that is discarded (#1540)", async () => {
+  const seen: string[] = [];
+  const app = `/androidpublisher/v3/applications/${PACKAGE}`;
+  const server = Bun.serve({
+    port: 0,
+    fetch(req) {
+      const path = new URL(req.url).pathname;
+      seen.push(`${req.method} ${path}`);
+      if (path === `${app}/edits`) return Response.json({ id: "e2" });
+      if (path === `${app}/edits/e2/tracks/internal`)
+        return Response.json({
+          releases: [{ name: "main-1a2b3c4d", versionCodes: ["2010751", "2010750"] }],
+        });
+      return new Response("");
+    },
+  });
+  stop = () => server.stop(true);
+  expect(await internalTrack("tok", `http://localhost:${server.port}`)).toEqual({
+    name: "main-1a2b3c4d",
+    maxCode: 2010751,
+  });
+  expect(seen.at(-1)).toBe(`DELETE ${app}/edits/e2`);
 });
