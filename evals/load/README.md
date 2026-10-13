@@ -80,6 +80,23 @@ and monthly:
   (`slice.yaml`), so one CPU and memory cap holds the whole run:
   `systemctl set-property --runtime sb-load.slice CPUQuota=150% MemoryMax=3G`.
 
+## The fleet
+
+A few dozen users run against a real server for weeks (staging, from its VM), as the synthetic
+fleet: `--until STOP` keeps them going, `--metrics FILE` appends a JSON line every `--every`
+seconds (300) under the name `--site` (prod or staging), and `--drop S` cuts each machine's long-poll after a random time averaging S
+seconds, as a flaky network would, so the line counts reconnects too. Each line holds every
+operation's count, errors, p50 and p99, answer delivery with the answers past 5 s, and the
+answers no machine got within 10 minutes (`lost`), received twice (`dup`) and decisions no page
+saw (`unseen`). Settled answers and decisions are forgotten, so memory stays flat, and lines older
+than 35 days go. `setup.ts --no-push` makes its users without push subscriptions, which a real
+server would keep sending to the fakes after they are gone.
+
+```bash
+LOAD_TARGET=https://staging.starbridge.run bun evals/load/load.ts --ramp 40 --procs 1 \
+  --until $LOAD_DIR/stop --metrics $LOAD_DIR/metrics.jsonl --site staging --drop 600
+```
+
 ## Launch spike
 
 `spike.ts` adds what a front-page post brings on top of `load.ts`'s users: visitors arriving at
