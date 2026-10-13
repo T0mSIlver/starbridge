@@ -94,17 +94,21 @@ class AnsweredImagesTest {
             .getValue("cases").jsonArray.map { it.jsonObject }.first { it.getValue("expect").jsonPrimitive.content == "ok" }
         val ref = case.getValue("ref").jsonObject
         val blob = case.getValue("blob").jsonPrimitive.content
-        val pictured = envelopes.seal("decision", buildJsonObject {
-            put("v", 1); put("id", "d_pic"); putJsonArray("to") { add("phone") }; put("createdAt", at)
+        fun pictured(id: String, hash: String) = envelopes.seal("decision", buildJsonObject {
+            put("v", 1); put("id", id); putJsonArray("to") { add("phone") }; put("createdAt", at)
             put("question", "Which one?"); put("context", ""); putJsonArray("options") {}
             putJsonObject("source") { put("machine", "box"); put("project", "p"); put("session", "s") }
             putJsonArray("images") {
                 add(buildJsonObject {
                     put("type", "image/png"); put("width", 1); put("height", 1)
-                    put("key", ref.getValue("key").jsonPrimitive.content); put("hash", ref.getValue("hash").jsonPrimitive.content)
+                    put("key", ref.getValue("key").jsonPrimitive.content); put("hash", hash)
                 })
             }
         }, machine.id, machineSign.secret, listOf(phone))
+        val hash = ref.getValue("hash").jsonPrimitive.content
+        val pictured = pictured("d_pic", hash)
+        // Kept naming another image than the one the server later sends under its id.
+        val swapped = pictured("d_swap", hash.reversed())
         fun listed(item: SealedItem) = buildJsonObject {
             put("item", ProtocolJson.encodeToJsonElement(item)); put("cursor", "1"); put("receivedAt", at); put("answeredAt", at)
         }
@@ -117,11 +121,16 @@ class AnsweredImagesTest {
                 "/v1/items" -> if (request.url.queryParameter("kind")!!.startsWith("decision")) {
                     asked += request.url.queryParameter("blobs") ?: ""
                     // Answered, listed without its blobs.
-                    json(buildJsonObject { put("items", buildJsonArray { add(listed(pictured)) }); put("cursor", "1") })
+                    json(buildJsonObject { put("items", buildJsonArray { add(listed(pictured)); add(listed(swapped)) }); put("cursor", "2") })
                 } else json(empty)
                 "/v1/items/d_pic" -> {
                     asked += "item"
                     json(listed(pictured.copy(blobs = listOf(blob))))
+                }
+                // Signed by the same machine, with refs its blob opens against: not the kept ones.
+                "/v1/items/d_swap" -> {
+                    asked += "swap"
+                    json(listed(pictured("d_swap", hash).copy(blobs = listOf(blob))))
                 }
                 "/v1/quota" -> json(empty)
                 else -> MockResponse(404, okhttp3.Headers.headersOf(), "")
@@ -148,20 +157,27 @@ class AnsweredImagesTest {
         val store = ServerStore(disk, OkHttpClient(), sodium, envelopes, directories, Pairings(sodium), Joins(sodium), alerts, "Phone", server, false, scope)
 
         store.refresh()
-        until { store.decisions.value.isNotEmpty() }
+        fun pic() = store.decisions.value.single { it.id == "d_pic" }
+        until { store.decisions.value.size == 2 }
         assertEquals(listOf("open"), asked.toList())
         // Its place, at its shape, with nothing in it yet.
-        assertEquals(listOf(""), store.decisions.value.single().images.map { it.data })
+        assertEquals(listOf(""), pic().images.map { it.data })
 
         store.loadImages("d_pic")
-        until { store.decisions.value.single().images.single().data.isNotEmpty() }
-        assertEquals(case.getValue("plain").jsonPrimitive.content, store.decisions.value.single().images.single().data)
+        until { pic().images.single().data.isNotEmpty() }
+        assertEquals(case.getValue("plain").jsonPrimitive.content, pic().images.single().data)
         // Kept: showing it again fetches nothing.
         store.loadImages("d_pic")
         store.refresh()
         until { asked.size == 3 }
         assertEquals(listOf("open", "item", "open"), asked.toList())
-        until { disk.load().first?.decisions?.single()?.images?.singleOrNull() != null }
+        until { disk.load().first?.decisions?.single { it.body.id == "d_pic" }?.images?.singleOrNull() != null }
+
+        // An image that opens only against what the server sends now is never kept (#1464).
+        store.loadImages("d_swap")
+        until { "swap" in asked }
+        Thread.sleep(300)
+        assertEquals(listOf(""), store.decisions.value.single { it.id == "d_swap" }.images.map { it.data })
     }
 
     private fun until(pred: () -> Boolean) {

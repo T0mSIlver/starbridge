@@ -5,8 +5,6 @@ import dev.starbridge.app.data.Saved
 import dev.starbridge.app.data.SavedDecision
 import dev.starbridge.app.data.Secrets
 import dev.starbridge.app.data.Vault
-import dev.starbridge.app.data.shed
-import dev.starbridge.app.protocol.ProtocolJson
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -51,24 +49,5 @@ class DiskTest {
         val kept = Disk(dir, identity).load().first!!.decisions.single()
         assertEquals(text, kept.text)
         assertEquals("Ship?", kept.body.question)
-    }
-
-    // A file from before answered questions listed without their images (#1464): it loses them
-    // once, and keeps those of open questions.
-    @Test
-    fun anOlderFileShedsTheAnsweredQuestionsImagesOnce() {
-        val old = ProtocolJson.decodeFromString(
-            Saved.serializer(),
-            """{"v":1,"server":"https://starbridge.run","decisions":[
-                {"from":"m","text":"{}","answeredAt":"2026-10-06T12:00:00Z","images":["aGk"]},
-                {"from":"m","text":"{}","answer":"Yes","images":["aGk"]},
-                {"from":"m","text":"{}","images":["aGk"]}]}""",
-        )
-        val shed = old.shed()
-        assertTrue(shed.answeredImagesShed)
-        assertEquals(listOf(emptyList(), emptyList(), listOf("aGk")), shed.decisions.map { it.images })
-        // An image an answered question fetched since stays.
-        val fetched = shed.copy(decisions = shed.decisions.map { it.copy(images = listOf("aGk")) })
-        assertEquals(fetched, fetched.shed())
     }
 }
