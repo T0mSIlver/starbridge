@@ -44,6 +44,13 @@ A job on these boxes must not rely on what an earlier job left, and must be safe
 beside it on the same box: no fixed host port, and a unique name for any container, Compose
 project or image tag.
 
+A machine on the home network can resolve Gradle's dependencies through the home caching mirror
+of Google's Maven, Maven Central and the Gradle Plugin Portal, which keeps Maven Central's rate
+limit off the shared address. Gradle uses it when the machine's `~/.gradle/gradle.properties`
+(or the runner's `GRADLE_USER_HOME`) sets `starbridge.mavenMirror=http://192.168.1.49:8080`; the
+public repositories stay after it, so a machine without the property, GitHub's runners included,
+resolves as before. The dev box sets it.
+
 ## How a runner works
 
 - The setup files are in [`.github/runners`](../.github/runners). Each box runs one systemd unit
