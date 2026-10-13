@@ -146,6 +146,9 @@ async function main() {
     await finder.fill("zzz no such card");
     await page.waitForTimeout(1000);
     if (!(await open())) throw new Error("a Find query with no match closed the open card");
+    if (await page.getByText("Answered", { exact: true }).count())
+      throw new Error("a Find query with no match shows the open card as Answered");
+    await page.getByRole("heading", { name: /Commit the docs/ }).waitFor();
     await finder.fill("");
     await page.setViewportSize({ width: 390, height: 844 });
     await page.getByRole("heading", { name: /Commit the docs/ }).waitFor();

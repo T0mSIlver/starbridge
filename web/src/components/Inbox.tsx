@@ -295,7 +295,13 @@ export function Inbox() {
   };
 
   const pastOf = new Map(past.map((p) => [p.entry.id, p]));
-  const entryOf = new Map([...needs, ...snoozed].map((e) => [e.id, e]));
+  // Find narrows the list, not the open card's detail (#1605).
+  const entryOf = new Map(
+    [...all.filter((e) => e.type !== "run"), ...snoozedEntries(inbox.items, now)].map((e) => [
+      e.id,
+      e,
+    ]),
+  );
   // An item opened by a link or a reload is known once the inbox loaded, or the 7-day prompt
   // log for a closed prompt; after one try at the log, an unknown id counts as answered.
   const stillOpen = opened !== undefined && entryOf.has(opened);
