@@ -557,6 +557,40 @@ test("an answered question lists without its images, which load once shown and s
     expect(again?.imagesPending).toBeUndefined();
     expect(again?.decision.images?.[0]?.data).toBe(toB64(bytes));
     expect(fetched).toEqual(["/v1/items/d_pictured"]);
+    // Under a kept question's id, the server sends one naming another image, signed by the same
+    // machine: its blob opens against the kept refs only, so nothing shows (#1472).
+    const other = sealImage(new Uint8Array(500).map((_, i) => (i * 7) % 251));
+    const swap = (r: typeof ref) =>
+      seal(
+        "decision",
+        {
+          v: 1,
+          id: "d_swap",
+          to: [id],
+          createdAt: at,
+          question: "Ship that one?",
+          context: "",
+          options: ["Yes", "No"],
+          recommended: "Yes",
+          images: [{ type: "image/png" as const, width: 4, height: 3, ...r }],
+          source: { machine: "asks", project: "p", session: "s" },
+        },
+        { id: machine.id, signKey: keys.sign.privateKey },
+        [{ id, boxPk }],
+      );
+    await store.update("kept", ctx.account, (had) => ({
+      device: id,
+      cursor: had?.cursor ?? "1",
+      items: [
+        ...(had?.items ?? []),
+        { item: swap(ref), cursor: "2", receivedAt: at, answeredAt: at },
+      ],
+    }));
+    const sent = { item: { ...swap(other.ref), blobs: [other.blob] }, cursor: "3", receivedAt: at };
+    const swapServed = globalThis.fetch;
+    globalThis.fetch = (async (input: string, init?: RequestInit) =>
+      input === "/v1/items/d_swap" ? Response.json(sent) : swapServed(input, init)) as typeof fetch;
+    expect(await device.loadImages(fresh, "d_swap")).toEqual([]);
   } finally {
     globalThis.fetch = served;
     await store.del("kept", ctx.account);
