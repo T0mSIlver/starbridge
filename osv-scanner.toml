@@ -1,0 +1,6 @@
+# Read by the weekly lockfile scan (.github/workflows/scan.yml).
+
+[[IgnoredVulns]]
+id = "GHSA-hp3w-g68c-fv3c"
+ignoreUntil = 2027-01-13
+reason = "sprintf-js (no fixed version) comes only from the optional roarr, pulled by global-agent and @electron/get for Electron's build-time binary download; it ships in no runtime and roarr formats only its own log strings (#1554)."
