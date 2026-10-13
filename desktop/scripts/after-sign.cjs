@@ -16,8 +16,18 @@ exports.default = async (context) => {
   const zip = `${app}.zip`;
   run("ditto", ["-c", "-k", "--keepParent", app, zip]);
   // --wait exits non-zero unless the status is Accepted.
-  run("xcrun", ["notarytool", "submit", zip, "--wait",
-    "--key", APPLE_API_KEY, "--key-id", APPLE_API_KEY_ID, "--issuer", APPLE_API_ISSUER]);
+  run("xcrun", [
+    "notarytool",
+    "submit",
+    zip,
+    "--wait",
+    "--key",
+    APPLE_API_KEY,
+    "--key-id",
+    APPLE_API_KEY_ID,
+    "--issuer",
+    APPLE_API_ISSUER,
+  ]);
   for (let attempt = 1; ; attempt++) {
     try {
       run("xcrun", ["stapler", "staple", "-v", app]);
