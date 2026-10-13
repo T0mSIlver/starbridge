@@ -27,15 +27,17 @@ ssh "$host" 'sudo sh -euc "
   flock 9
   docker volume create starbridge_data >/dev/null
   mnt=\$(docker volume inspect -f {{.Mountpoint}} starbridge_data)
+  # The copy lands first, so a full disk fails here with the server still up.
+  umask 077
+  cat > \$mnt/starbridge.db.part
+  chown 1000:1000 \$mnt \$mnt/starbridge.db.part
   running=\$(docker ps -q --filter volume=starbridge_data)
   [ -z \"\$running\" ] || docker stop \$running >/dev/null
+  # Renames only, from here to the start: nothing in between needs room.
   for f in starbridge.db starbridge.db-wal starbridge.db-shm; do
     [ ! -e \$mnt/\$f ] || mv \$mnt/\$f \$mnt/\$f.before-restore-\$(date -u +%Y%m%dT%H%M%S)
   done
-  umask 077
-  cat > \$mnt/starbridge.db.part
   mv \$mnt/starbridge.db.part \$mnt/starbridge.db
-  chown 1000:1000 \$mnt \$mnt/starbridge.db
   [ -z \"\$running\" ] || docker start \$running >/dev/null
 "' < "$tmp/starbridge.db"
 echo "restored into $host's starbridge_data volume"
