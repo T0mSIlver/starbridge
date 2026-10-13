@@ -120,11 +120,11 @@ private fun ImageBox(image: Attached, size: DpSize, crop: Boolean, onOpen: () ->
     val edge = with(LocalDensity.current) { maxOf(size.width, size.height).roundToPx() * 2 }
     // Decoded off the main thread, so a list of image decisions scrolls smoothly; the inset
     // colour shows until it lands.
-    val bitmap by produceState<ImageBitmap?>(null, image.data, edge) {
+    val bitmap by produceState<ImageBitmap?>(null, image.data, image.file, edge) {
         value = withContext(Dispatchers.Default) { image.bitmap(edge)?.asImageBitmap() }
     }
     // One still downloading (#1382) holds its place, with nothing to open yet.
-    val pending = image.data.isEmpty()
+    val pending = image.pending
     Box(
         Modifier
             .size(size)

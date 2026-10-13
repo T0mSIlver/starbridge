@@ -23,8 +23,13 @@ data class Source(
 
 data class SessionLink(val kind: String, val url: String)
 
-/** An image the agent attached: a PNG or JPEG, base64url in [data], [width] by [height] pixels. */
-data class Image(val data: String, val width: Int, val height: Int, val alt: String? = null)
+/**
+ * An image the agent attached: a PNG or JPEG, [width] by [height] pixels, base64url in [data], or
+ * kept in [file] (#1471), read when it is decoded. Neither: it is still downloading (#1382).
+ */
+data class Image(val data: String, val width: Int, val height: Int, val alt: String? = null, val file: String? = null) {
+    val pending: Boolean get() = data.isEmpty() && file == null
+}
 
 /** A page the agent attached, such as a Claude artifact. */
 data class Link(val url: String, val title: String? = null)

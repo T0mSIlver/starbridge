@@ -5,6 +5,8 @@ import com.goterl.lazysodium.SodiumJava
 import dev.starbridge.app.data.Alerts
 import dev.starbridge.app.data.Decision
 import dev.starbridge.app.data.Disk
+import dev.starbridge.app.data.ImageFiles
+import dev.starbridge.app.data.SavedDecision
 import dev.starbridge.app.data.Prompt
 import dev.starbridge.app.data.Run
 import dev.starbridge.app.data.Saved
@@ -164,20 +166,80 @@ class AnsweredImagesTest {
         assertEquals(listOf(""), pic().images.map { it.data })
 
         store.loadImages("d_pic")
-        until { pic().images.single().data.isNotEmpty() }
-        assertEquals(case.getValue("plain").jsonPrimitive.content, pic().images.single().data)
+        until { pic().images.single().file != null }
+        // Kept in a file of its own, not in state.bin (#1471).
+        assertEquals(case.getValue("plain").jsonPrimitive.content, toB64(ImageFiles.read(pic().images.single().file!!)!!))
         // Kept: showing it again fetches nothing.
         store.loadImages("d_pic")
         store.refresh()
         until { asked.size == 3 }
         assertEquals(listOf("open", "item", "open"), asked.toList())
-        until { disk.load().first?.decisions?.single { it.body.id == "d_pic" }?.images?.singleOrNull() != null }
+        until { disk.load().first?.decisions?.single { it.body.id == "d_pic" }?.imageFiles?.singleOrNull() != null }
 
         // An image that opens only against what the server sends now is never kept (#1464).
         store.loadImages("d_swap")
         until { "swap" in asked }
         Thread.sleep(300)
-        assertEquals(listOf(""), store.decisions.value.single { it.id == "d_swap" }.images.map { it.data })
+        assertEquals(listOf(true), store.decisions.value.single { it.id == "d_swap" }.images.map { it.pending })
+    }
+
+    // An older app kept images inside state.bin: they move to files of their own once, and the
+    // state is written without them (#1471).
+    @Test
+    fun keptImagesMoveToFilesOnce() {
+        val text = """{"v":1,"id":"d_old","to":["phone"],"createdAt":"2026-10-06T10:00:00Z","question":"Ship?","context":"","options":["Yes","No"],"recommended":"Yes","source":{"machine":"devbox","project":"p","session":"s"},"images":[{"type":"image/png","width":1,"height":1,"key":"${"A".repeat(43)}","hash":"${"A".repeat(43)}"}]}"""
+        val identity = object : Vault {
+            override fun wrap(plain: ByteArray) = plain
+            override fun unwrap(wrapped: ByteArray) = wrapped
+        }
+        val dir = Files.createTempDirectory("starbridge").toFile()
+        val disk = Disk(dir, identity)
+        val bytes = byteArrayOf(1, 2, 3, 4)
+        // d_lost: an older app rewrote it without its file names; its file is still there.
+        val lost = text.replace("d_old", "d_lost")
+        disk.save(Saved("http://127.0.0.1:9", decisions = listOf(SavedDecision("m_box", text, images = listOf(toB64(bytes))), SavedDecision("m_box", lost))))
+        disk.putImage("d_lost.0", bytes)
+        // A file no kept question names, as one past the 500 leaves behind.
+        disk.putImage("d_gone.0", bytes)
+        val alerts = object : Alerts {
+            override fun decision(decision: Decision, silent: Boolean) {}
+            override fun cancel(id: String) {}
+            override fun join(id: String, name: String) {}
+            override fun prompt(prompt: Prompt) {}
+            override fun cancelPrompt(prompt: Prompt) {}
+            override fun run(run: Run) {}
+        }
+        val store = ServerStore(disk, OkHttpClient(), sodium, envelopes, directories, Pairings(sodium), Joins(sodium), alerts, "Phone", "http://127.0.0.1:9", false, scope)
+        val kept = disk.load().first!!.decisions
+        assertEquals(listOf(emptyList<String?>(), emptyList()), kept.map { it.images })
+        assertEquals(listOf(listOf("d_old.0"), listOf("d_lost.0")), kept.map { it.imageFiles })
+        assertTrue(bytes.contentEquals(ImageFiles.read("d_old.0")))
+        assertEquals(null, disk.image("d_gone.0"))
+        assertEquals(listOf("d_old.0", "d_lost.0"), store.decisions.value.sortedBy { it.id != "d_old" }.map { it.images.single().file })
+    }
+
+    // A state file that cannot be read is set aside, and may name every image: none goes (#1471).
+    @Test
+    fun noImageGoesWhileAStateFileIsSetAside() {
+        val identity = object : Vault {
+            override fun wrap(plain: ByteArray) = plain
+            override fun unwrap(wrapped: ByteArray) = wrapped
+        }
+        val dir = Files.createTempDirectory("starbridge").toFile()
+        val disk = Disk(dir, identity)
+        disk.save(Saved("http://127.0.0.1:9"))
+        disk.putImage("d_old.0", byteArrayOf(1))
+        java.io.File(dir, "secrets.bin").writeText("not json")
+        val alerts = object : Alerts {
+            override fun decision(decision: Decision, silent: Boolean) {}
+            override fun cancel(id: String) {}
+            override fun join(id: String, name: String) {}
+            override fun prompt(prompt: Prompt) {}
+            override fun cancelPrompt(prompt: Prompt) {}
+            override fun run(run: Run) {}
+        }
+        ServerStore(disk, OkHttpClient(), sodium, envelopes, directories, Pairings(sodium), Joins(sodium), alerts, "Phone", "http://127.0.0.1:9", false, scope)
+        assertTrue(disk.hasImage("d_old.0"))
     }
 
     private fun until(pred: () -> Boolean) {

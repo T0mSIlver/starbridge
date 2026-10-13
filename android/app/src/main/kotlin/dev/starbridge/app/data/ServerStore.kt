@@ -226,6 +226,8 @@ class ServerStore(
     @Volatile private var savedDecisions: List<Decision> = emptyList()
 
     init {
+        ImageFiles.read = disk::image
+        moveImagesToFiles()
         directory = runCatching { verified(saved.entries) }.getOrNull()
         publish()
         if (saved.joining != null) waitForApproval()
@@ -1066,7 +1068,42 @@ class ServerStore(
      * without them, it keeps none until its sheet shows it ([loadImages]).
      */
     private fun saved(item: SealedItem, d: SavedDecision): SavedDecision =
-        if (d.body.images.isNullOrEmpty() || item.blobs == null) d else d.copy(images = images.openAll(d.body.images.orEmpty(), item.blobs))
+        if (d.body.images.isNullOrEmpty() || item.blobs == null) d else filed(d, images.openAll(d.body.images.orEmpty(), item.blobs))
+
+    /** [d] with [opened] (base64url, null for one that did not open) each in its own file (#1471). */
+    private fun filed(d: SavedDecision, opened: List<String?>): SavedDecision =
+        d.copy(images = emptyList(), imageFiles = opened.mapIndexed { i, b64 -> b64?.let { disk.putImage("${d.body.id}.$i", fromB64(it)) } })
+
+    /**
+     * Moves the images an older app kept inside `state.bin` into files of their own, once (#1471).
+     * A question whose files cannot be written keeps its images where they were. A file's name is
+     * its question's id and the image's place, so a question an older app rewrote without
+     * [SavedDecision.imageFiles] finds its files again, and only a question no longer kept, such
+     * as one past the 500, loses its files. Nothing goes while a state file could not be read: the
+     * one set aside may name them.
+     */
+    private fun moveImagesToFiles() {
+        val moved = saved.decisions.map { d ->
+            when {
+                d.images.isNotEmpty() -> runCatching { filed(d, d.images) }.getOrElse { d }
+                d.imagesPending -> {
+                    val found = d.body.images.orEmpty().indices.map { i -> "${d.body.id}.$i".takeIf { disk.hasImage(it) } }
+                    // Only a whole set: one cut short by a failed write still fetches the rest.
+                    if (found.all { it != null }) d.copy(imageFiles = found) else d
+                }
+                else -> d
+            }
+        }
+        if (moved != saved.decisions) {
+            val next = saved.copy(decisions = moved)
+            // Written before anything else, so the next launch reads the small file.
+            if (runCatching { disk.save(next) }.isSuccess) saved = next
+        }
+        if (loaded.first != null && disk.unreadable.isEmpty()) {
+            val kept = saved.decisions.map { it.body.id }.toSet()
+            runCatching { disk.pruneImages { name -> name.substringBeforeLast('.') in kept } }
+        }
+    }
 
     /** Questions whose images this run fetched or is fetching (#1382). */
     private val imagesAsked = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
@@ -1098,7 +1135,7 @@ class ServerStore(
                 if (listed.item.kind != "decision" || listed.item.id != id || from != d.from) return@locked
                 val opened = images.openAll(d.body.images.orEmpty(), listed.item.blobs)
                 if (opened.all { it == null }) return@locked
-                persist(saved.copy(decisions = saved.decisions.map { if (it === d) d.copy(images = opened) else it }))
+                persist(saved.copy(decisions = saved.decisions.map { if (it === d) filed(d, opened) else it }))
             }
         }
     }
@@ -2314,8 +2351,12 @@ class ServerStore(
             waitingSince = if (d.waiting == "waiting") instant(d.waitingAt) else null,
             snoozedUntil = snoozedUntil(d),
             // Pending, each holds its place at its shape until it downloads (#1382).
-            images = if (d.imagesPending) b.images.orEmpty().map { Image("", it.width, it.height, it.alt) }
-            else b.images.orEmpty().mapIndexedNotNull { i, it -> d.images.getOrNull(i)?.let { data -> Image(data, it.width, it.height, it.alt) } },
+            images = when {
+                d.imagesPending -> b.images.orEmpty().map { Image("", it.width, it.height, it.alt) }
+                // Read from its file when it is decoded, off the main thread (#1471).
+                d.imageFiles.isNotEmpty() -> b.images.orEmpty().mapIndexedNotNull { i, it -> d.imageFiles.getOrNull(i)?.let { f -> Image("", it.width, it.height, it.alt, file = f) } }
+                else -> b.images.orEmpty().mapIndexedNotNull { i, it -> d.images.getOrNull(i)?.let { data -> Image(data, it.width, it.height, it.alt) } }
+            },
             links = b.links.orEmpty().map { Link(it.url, it.title) },
             answerIn = b.answerIn?.let { Link(it.url, it.title) },
             answer = d.answer,

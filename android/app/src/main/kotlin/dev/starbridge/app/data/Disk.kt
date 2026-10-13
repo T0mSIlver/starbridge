@@ -51,13 +51,18 @@ data class SavedDecision(
     /** The owner's latest snooze of it, from any device (#571): until when, and when it was sent. */
     val snoozedUntil: String? = null,
     val snoozedAt: String? = null,
-    /** Its images opened from their blobs, base64url, in order; null for one that did not open (#685). */
+    /**
+     * Its images opened from their blobs, base64url, in order; null for one that did not open
+     * (#685). Kept so by apps before #1471, which moves them into [imageFiles].
+     */
     val images: List<String?> = emptyList(),
+    /** Its images' files in [Disk]'s `images` folder, in order; null for one that did not open (#1471). */
+    val imageFiles: List<String?> = emptyList(),
 ) {
     val body: Decision by parsed("decision", text)
 
     /** Listed answered without its images: the sheet fetches them when it shows (#1382). */
-    val imagesPending: Boolean get() = images.isEmpty() && !body.images.isNullOrEmpty()
+    val imagesPending: Boolean get() = images.isEmpty() && imageFiles.isEmpty() && !body.images.isNullOrEmpty()
 }
 
 /**
@@ -242,5 +247,31 @@ class Disk(private val dir: File, private val vault: Vault) {
     fun wipe() {
         File(dir, "state.bin").delete()
         File(dir, "secrets.bin").delete()
+        File(dir, IMAGES).deleteRecursively()
+    }
+
+    /**
+     * Keeps an image in a file of its own, wrapped as the state is, so `state.bin`, read whole at
+     * launch, stays small (#1471). Returns its name.
+     */
+    fun putImage(name: String, bytes: ByteArray): String {
+        val images = File(dir, IMAGES).apply { mkdirs() }
+        val tmp = File(images, "$name.tmp")
+        tmp.writeBytes(vault.wrap(bytes))
+        check(tmp.renameTo(File(images, name)))
+        return name
+    }
+
+    fun image(name: String): ByteArray? = runCatching { vault.unwrap(File(File(dir, IMAGES), name).readBytes()) }.getOrNull()
+
+    fun hasImage(name: String): Boolean = File(File(dir, IMAGES), name).isFile
+
+    /** Deletes the image files [keep] refuses, and any left half written. */
+    fun pruneImages(keep: (String) -> Boolean) {
+        File(dir, IMAGES).listFiles()?.forEach { if (it.name.endsWith(".tmp") || !keep(it.name)) it.delete() }
+    }
+
+    private companion object {
+        const val IMAGES = "images"
     }
 }
