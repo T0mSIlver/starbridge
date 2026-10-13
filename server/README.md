@@ -184,12 +184,8 @@ release, restore the copy you made before upgrading.
 <dl>
 <dt><code>RELAY_URL</code></dt>
 <dd>The relay's origin, such as <code>https://starbridge.run</code>. <a href="#notifications">Notifications</a> says what goes out without it. Unset by default.</dd>
-<dt><code>FCM_PROJECT_ID</code>, <code>FCM_CLIENT_EMAIL</code>, <code>FCM_PRIVATE_KEY</code></dt>
-<dd>A service account of the Android app's own Firebase project, which only starbridge.run holds. Self-hosters use the relay or UnifiedPush instead. Unset by default.</dd>
-<dt><code>APNS_KEY_ID</code>, <code>APNS_TEAM_ID</code>, <code>APNS_PRIVATE_KEY</code>, <code>APNS_TOPIC</code></dt>
-<dd>An APNs auth key of the iPhone app's Apple team, which only starbridge.run holds: its key id, the team id, the <code>.p8</code> file's contents (newlines may be written <code>\n</code>), and the app's bundle id (default <code>dev.starbridge.ios</code>). Self-hosters use the relay instead. Unset by default.</dd>
-<dt><code>APPLE_KEY_ID</code>, <code>APPLE_TEAM_ID</code>, <code>APPLE_PRIVATE_KEY</code>, <code>APPLE_APP_ID</code>, <code>APPLE_SERVICES_ID</code></dt>
-<dd>A Sign in with Apple key of the iPhone app's Apple team, which only starbridge.run holds: its key id, the team id, the <code>.p8</code> file's contents (newlines may be written <code>\n</code>), the app's bundle id (default <code>dev.starbridge.ios</code>), and the Services ID of Apple's web sign-in for the page and the other apps. It turns on Sign in with Apple. Unset by default.</dd>
+<dt><code>FCM_*</code>, <code>APNS_*</code>, <code>APPLE_*</code></dt>
+<dd>Keys of the apps' own Firebase project and Apple team, for Android and iPhone pushes and Sign in with Apple. Only starbridge.run holds them; a self-hosted server uses the relay or UnifiedPush instead. The names are in <code>server/src/config.ts</code>. Unset by default.</dd>
 <dt><code>VAPID_PUBLIC_KEY</code>, <code>VAPID_PRIVATE_KEY</code>, <code>VAPID_SUBJECT</code></dt>
 <dd>Web Push keys, to send browser notifications without the relay. Make them with <code>bunx web-push generate-vapid-keys</code>. Unset by default.</dd>
 <dt><code>ALLOW_PRIVATE_PUSH_ENDPOINTS</code></dt>
