@@ -86,3 +86,10 @@ agent should withdraw it with a short `--reason`.
 CLI's new lines (#1063), on Claude Code and opencode.
 
 `results/964` holds the first Cursor and Antigravity runs (#964).
+
+`results/1488` holds the answer-delivery wording of #1487 against the text before it, on the four
+situations it touches and `mid-task`, where a live session needs the answer before its last step
+and should mark the card waiting rather than wait in a background task or with a monitor.
+`claude-reworded` and `opencode-reworded` hold a rewording that did no better. Live Claude Code
+runs before these sat at the bypass-permissions dialog and posted nothing, so earlier
+`delivery-prompt` and `delivery-wait` scores for Claude Code measure no agent.
