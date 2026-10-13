@@ -236,6 +236,12 @@ async function ready(): Promise<void> {
   ipcMain.on("open-server", (e) => {
     if (fromPage(e)) showServer();
   });
+  ipcMain.on("server-fit", (e, h) => {
+    if (e.sender !== serverWin?.webContents || typeof h !== "number" || !Number.isFinite(h)) return;
+    const [width] = serverWin.getContentSize();
+    serverWin.setContentSize(width ?? 420, Math.min(Math.max(Math.ceil(h), 120), 800));
+    if (!serverWin.isVisible()) serverWin.show();
+  });
   ipcMain.on("server", (e, x) => {
     if (e.sender !== serverWin?.webContents || typeof x !== "string") return;
     const next = serverOrigin(x);
@@ -517,8 +523,11 @@ function showServer(): void {
     return;
   }
   serverWin = new BrowserWindow({
+    // Content size, set to the page's own height once it reports it (#1613).
+    useContentSize: true,
     width: 420,
     height: 200,
+    show: false,
     resizable: false,
     minimizable: false,
     maximizable: false,
@@ -534,6 +543,9 @@ function showServer(): void {
   serverWin.on("closed", () => {
     serverWin = null;
   });
+  // Shown at the size of its content, so it never opens too short or jumps.
+  const w = serverWin;
+  setTimeout(() => w.isDestroyed() || w.isVisible() || w.show(), 2000);
   serverWin.loadFile(join(ASSETS, "server.html"));
 }
 
