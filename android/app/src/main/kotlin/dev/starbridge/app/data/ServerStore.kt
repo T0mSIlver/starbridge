@@ -1088,7 +1088,8 @@ class ServerStore(
                 d.images.isNotEmpty() -> runCatching { filed(d, d.images) }.getOrElse { d }
                 d.imagesPending -> {
                     val found = d.body.images.orEmpty().indices.map { i -> "${d.body.id}.$i".takeIf { disk.hasImage(it) } }
-                    if (found.any { it != null }) d.copy(imageFiles = found) else d
+                    // Only a whole set: one cut short by a failed write still fetches the rest.
+                    if (found.all { it != null }) d.copy(imageFiles = found) else d
                 }
                 else -> d
             }
