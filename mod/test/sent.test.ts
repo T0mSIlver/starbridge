@@ -218,3 +218,37 @@ test("another process runs the session when a live pid other than ours names it"
   expect(await sessionElsewhere("s1", 10, fs, "/c/sessions", live([10, 12]))).toBe(false);
   expect(await sessionElsewhere("s2", 12, fs, "/c/sessions", live([10, 11, 12]))).toBe(false);
 });
+
+test("once the other live process on the session exits, the next turn's end submits its answer", async () => {
+  const m = machine();
+  await m.process("s1", "proc-1").sent.send(LINE, "d_1");
+  m.live.add("s1");
+  const second = m.process("s1", "proc-2");
+  await second.sent.recover();
+  expect(second.submitted).toEqual([]);
+  m.live.delete("s1");
+  await second.sent.recover();
+  expect(second.submitted).toEqual([LINE]);
+  await second.sent.recover();
+  expect(second.submitted).toEqual([LINE]);
+});
+
+test("a /clear while recover records its lines leaves them for the old session", async () => {
+  const m = machine();
+  await m.process("s1", "proc-1").sent.send(LINE, "d_1");
+  let current = "s1";
+  const p = m.process(() => current, "proc-2");
+  let release = () => {};
+  m.disk.slow = new Promise((r) => {
+    release = () => r(undefined);
+  });
+  const recovering = p.sent.recover();
+  await Bun.sleep(5);
+  current = "s2";
+  release();
+  await recovering;
+  expect(p.submitted).toEqual([]);
+  current = "s1";
+  await p.sent.recover();
+  expect(p.submitted).toEqual([LINE]);
+});

@@ -120,7 +120,7 @@ export class Sent {
 
   /**
    * Submits again the current session's lines that another process submitted, or whose submit
-   * failed, once per session id. Then these come from this process, and only a turn start or a
+   * failed, once per session id, and not while another live process runs the session. Then these come from this process, and only a turn start or a
    * failed submit changes them.
    */
   recover(): Promise<void> {
@@ -129,12 +129,14 @@ export class Sent {
       const me = await this.host.sessionId();
       if (!me) return;
       const lines = await this.load(me);
-      const first = !this.recovered.has(me);
-      this.recovered.add(me);
-      const shared = first && (await this.host.elsewhere(me).catch(() => false));
-      const due = lines.filter(
-        (l) => l.process === "" || (first && !shared && l.process !== this.process),
-      );
+      // Other processes' lines go out once another live process no longer runs this session:
+      // checked again at each turn's end until then.
+      const theirs = (l: Line) => l.process !== "" && l.process !== this.process;
+      const take =
+        !this.recovered.has(me) &&
+        !(lines.some(theirs) && (await this.host.elsewhere(me).catch(() => false)));
+      if (take) this.recovered.add(me);
+      const due = lines.filter((l) => l.process === "" || (take && theirs(l)));
       if (due.length === 0) return;
       const keep = lines.filter((l) => !due.includes(l));
       const again: Line[] = [];
@@ -144,7 +146,10 @@ export class Sent {
         else again.push({ ...l, process: this.process });
       await this.save(me, [...keep, ...again]);
       if ((await this.host.sessionId()) !== me) {
+        // Left for session `me`, as `send` leaves a line.
         this.recovered.delete(me);
+        const free = again.map((l) => ({ ...l, process: "" }));
+        await this.save(me, [...keep, ...free]).catch(() => undefined);
         return;
       }
       for (const l of again) {
