@@ -52,11 +52,13 @@
   advises against publishing to a testing track more often. Play gives a phone the highest
   versionCode it may install, so main's builds take slots 50 to 98 of the version under way (the
   next patch after a final), between its rcs (1 to 49) and its final (99): the owner's phone takes
-  main over an rc and the final over both. A Google account in internal testing is no longer
-  eligible for closed testing, so the owner joins it with a second account and stays one of the 12
-  closed testers. The iPhone app follows to TestFlight's internal testers once Apple's export
-  compliance code arrives (`IOS_MAIN_TESTFLIGHT`); the Mac app stays on rcs, since a nightly
-  notarized build would cost a macOS runner a night for one user.
+  main over an rc and the final over both. Its versionName names its commit,
+  `0.1.7-rc.2+main.7e56e958`, which Play's About this app shows (#1610); the app's
+  `starbridge-client` header leaves that part out, so servers read the version as the rc's. A Google
+  account in internal testing is no longer eligible for closed testing, so the owner joins it with a
+  second account and stays one of the 12 closed testers. The iPhone app follows to TestFlight's
+  internal testers once Apple's export compliance code arrives (`IOS_MAIN_TESTFLIGHT`); the Mac app
+  stays on rcs, since a nightly notarized build would cost a macOS runner a night for one user.
 - **Play's Alpha track from CI** (#1024). Testers fell behind while each App Bundle went to Play
   Console by hand. Once the release is published, the `play` job uploads the tag's AAB to Alpha
   through the Play Developer API (`cli/scripts/play.ts`), status `completed`, with the GitHub
