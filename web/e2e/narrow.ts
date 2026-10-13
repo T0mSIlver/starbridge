@@ -4,9 +4,10 @@
 //   node web/e2e/narrow.ts   (Node 22.6+ runs it as is)
 //
 // Needs `npx playwright install webkit` once (and `install-deps webkit` on Linux). Builds the web
-// app, then serves it on port 3890 and the server on 3891, on localhost.
+// app, then serves it and the server on free ports of localhost. CI runs it in the devices part.
 import { type ChildProcess, spawn, spawnSync } from "node:child_process";
 import { cpSync, mkdtempSync, rmSync } from "node:fs";
+import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { type Page, webkit } from "playwright";
@@ -14,7 +15,23 @@ import { layoutProblems } from "./layout.ts";
 
 const ROOT = resolve(import.meta.dirname, "../..");
 const WEB = join(ROOT, "web");
-const PORTS = { web: 3890, server: 3891 };
+/**
+ * Ports nothing else listens on, so runs beside others on one machine never collide (as in
+ * run.ts). Each stays held until `free` hands it to its process.
+ */
+const held = new Map<number, ReturnType<typeof createServer>>();
+const hold = (): Promise<number> =>
+  new Promise((done) => {
+    const port = 20000 + Math.floor(Math.random() * 12000);
+    const s = createServer()
+      .once("error", () => done(hold()))
+      .listen(port, () => {
+        held.set(port, s);
+        done(port);
+      });
+  });
+const free = (port: number) => new Promise((done) => held.get(port)?.close(done));
+const PORTS = { web: await hold(), server: await hold() };
 const ORIGIN = `http://localhost:${PORTS.web}`;
 const SERVER = `http://localhost:${PORTS.server}`;
 const TOKEN = "narrow-check";
@@ -73,6 +90,7 @@ async function expectFits(page: Page, where: string) {
 }
 
 async function main() {
+  await free(PORTS.server);
   await start("server", "bun", ["run", "server/src/main.ts"], {
     PORT: PORTS.server,
     DB_PATH: join(tmp, "starbridge.db"),
@@ -85,6 +103,7 @@ async function main() {
   const standalone = join(WEB, ".next/standalone/web");
   cpSync(join(WEB, ".next/static"), join(standalone, ".next/static"), { recursive: true });
   cpSync(join(WEB, "public"), join(standalone, "public"), { recursive: true });
+  await free(PORTS.web);
   await start("web", "node", [join(standalone, "server.js")], {
     ...env,
     PORT: String(PORTS.web),
