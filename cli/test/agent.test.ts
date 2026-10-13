@@ -146,6 +146,7 @@ test("two sessions each get only their own answers, held until they arrive, unti
       decisionId: d1,
       ack: d1,
       line: `Answer to ${d1} (Merge #12 now?): Wait`,
+      waiting: false,
     },
   ]);
   expect(await held2).toEqual([]);
@@ -206,10 +207,12 @@ test("several CLI clients at once: ask, wait, answers and quota push all go thro
     decisionId: ids[2],
     ack: ids[2],
     line: `Answer to ${ids[2]} (Merge #12 now?): Wait`,
+    waiting: false,
   });
   expect(await run(["answers", "--session", "s2", "--ack", ids[2] as string], mod)).toBe(0);
+  expect(JSON.parse(mod.lines[1] as string)).toEqual({ acked: [ids[2]] });
   expect(await run(["answers", "--session", "s2"], mod)).toBe(0);
-  expect(mod.lines).toHaveLength(1);
+  expect(mod.lines).toHaveLength(2);
 
   const q = client(socket);
   expect(await run(["quota", "push", "--once", "--provider", "claude"], q)).toBe(0);

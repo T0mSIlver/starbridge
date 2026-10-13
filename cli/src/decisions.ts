@@ -499,6 +499,13 @@ export async function setWaiting(
   opts: { id?: string; state: Waiting["state"] },
 ): Promise<number> {
   if (!opts.id) throw new UsageError(`${opts.state} needs a decision id`);
+  // A revoked device's answer is dropped first, as every hand-out does (#491).
+  if (opts.state === "waiting") await dropRevokedNow(ctx);
+  const taken = opts.state === "waiting" ? takeUnseen(ctx.store, opts.id) : undefined;
+  if (taken) {
+    ctx.out(answerLine(taken.answer, taken.question));
+    return 0;
+  }
   const s = session(ctx);
   await postWaiting(ctx, s, opts.id, opts.state);
   // Without the agent nothing polls meanwhile: read every page since the question was asked,
@@ -1363,6 +1370,27 @@ export function takeAnswer(
 }
 
 /**
+ * `waiting` on a decision whose answer came but has not reached the agent: the agent needs it
+ * now, so it gets it at once, marked printed, rather than after its turn (#1484).
+ */
+export function takeUnseen(
+  store: Ctx["store"],
+  id: string,
+): { answer: Answer; question?: string } | undefined {
+  let taken: { answer: Answer; question?: string } | undefined;
+  // Checked and marked under one lock, so two `waiting`s, or one and the mod's confirm, never
+  // both hand it over.
+  store.updateState((st) => {
+    const a = st.answers[id];
+    if (!a || a.seen || !deliverable(st, id)) return;
+    a.seen = true;
+    const question = st.asked[id]?.question;
+    taken = { answer: a.answer, ...(question !== undefined ? { question } : {}) };
+  });
+  return taken;
+}
+
+/**
  * Waits for the answer to decision `id`, marking it `waiting`, or without `id` for the next
  * answer to any decision this machine asked. Exits 0 with the answer, or EXIT_TIMEOUT once
  * `--timeout` passes.
@@ -1483,6 +1511,11 @@ export interface SessionLine {
   /** What confirms it: the decision id. */
   ack: string;
   line: string;
+  /**
+   * The decision is marked waiting: the agent needs the answer now, so the mod hands it over at
+   * the agent's next tool call rather than after its turn (#1484).
+   */
+  waiting: boolean;
 }
 
 /** The answers to decisions session `session` asked that no `wait` printed nor the mod confirmed. */
@@ -1498,27 +1531,38 @@ export function sessionLines(st: State, session: string): SessionLine[] {
       decisionId: id,
       ack: id,
       line: answerLine(a.answer, asked.question),
+      waiting: asked.waiting?.state === "waiting",
     });
   }
   return lines;
 }
 
-/** Confirms lines session `session` submitted; tokens for other sessions' decisions do nothing. */
-export function ackLines(st: State, session: string, tokens: string[]) {
+/**
+ * Confirms lines session `session` submitted; tokens for other sessions' decisions do nothing.
+ * Returns the tokens it confirmed now: not one a `wait` or `waiting` printed first (#1484).
+ */
+export function ackLines(st: State, session: string, tokens: string[]): string[] {
+  const acked: string[] = [];
   for (const token of tokens) {
     const a = st.answers[token];
-    if (a && !a.seen && st.asked[token]?.session === session) a.seen = true;
+    if (a && !a.seen && st.asked[token]?.session === session) {
+      a.seen = true;
+      acked.push(token);
+    }
   }
+  return acked;
 }
 
 /** What `answers` prints for each line, as the mod reads it. */
 const printLine = (ctx: Ctx, l: SessionLine) =>
-  ctx.out(JSON.stringify({ decisionId: l.decisionId, ack: l.ack, line: l.line }));
+  ctx.out(
+    JSON.stringify({ decisionId: l.decisionId, ack: l.ack, line: l.line, waiting: l.waiting }),
+  );
 
 /**
  * For the Claude Code mod: hands over the answers to decisions that session `session` asked and
- * that neither a `wait` printed nor the mod confirmed, one JSON line `{decisionId, ack, line}`
- * each. The mod confirms each line it submitted with `--ack <ack>`; until then
+ * that neither a `wait` printed nor the mod confirmed, one JSON line `{decisionId, ack, line,
+ * waiting}` each. The mod confirms each line it submitted with `--ack <ack>`; until then
  * the next call hands it over again, so a line the mod held back (its session ended meanwhile) is
  * not lost. With `wait`, and nothing to hand over, first long-polls once for at most that many
  * seconds from the shared cursor. One cycle per call: an error exits 1, and the mod decides when
@@ -1532,8 +1576,12 @@ export async function answers(
   if (!target) throw new UsageError("answers needs --session");
   if (opts.ack) {
     if (opts.wait !== undefined) throw new UsageError("--ack takes no --wait");
-    const acked = opts.ack;
-    ctx.store.updateState((st) => ackLines(st, target, acked));
+    const tokens = opts.ack;
+    let acked: string[] = [];
+    ctx.store.updateState((st) => {
+      acked = ackLines(st, target, tokens);
+    });
+    ctx.out(JSON.stringify({ acked }));
     return 0;
   }
   const seconds = opts.wait === undefined ? undefined : waitSeconds(opts.wait);

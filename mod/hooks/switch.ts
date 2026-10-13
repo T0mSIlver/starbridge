@@ -63,6 +63,18 @@ export class Switch {
     return this.agent ? "agent" : this.poller ? "cli" : undefined;
   }
 
+  /**
+   * Confirms through the loop that runs now the lines among `acks` still due to this session, and
+   * returns those; none when no loop runs or the call fails.
+   */
+  async claim(acks: string[]): Promise<string[]> {
+    try {
+      return (await (this.agent ?? this.poller)?.claim(acks)) ?? [];
+    } catch {
+      return [];
+    }
+  }
+
   /** Ends the loop; the Poller gives up its lease at once. */
   async stop(): Promise<void> {
     this.stopped = true;

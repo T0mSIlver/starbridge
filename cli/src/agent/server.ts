@@ -77,7 +77,7 @@ export interface Feature {
   /** Runs before events are handed out, such as dropping a revoked device's answers (#491). */
   beforeEvents?(): Promise<void>;
   /** Confirms events; tokens this feature did not hand out must be ignored. */
-  ack?(session: string, tokens: string[]): void;
+  ack?(session: string, tokens: string[]): string[] | undefined;
   /** The session said `bye`: drop what belongs to that session. */
   bye?(session: string): void;
   /** A background loop; resolves once `signal` aborts. */
@@ -495,8 +495,9 @@ export class Agent implements Hub {
     if (!Array.isArray(acks) || !acks.every((a) => typeof a === "string"))
       throw new HttpError(400, "bad-request", "ack takes {acks: [string]}");
     this.touch(id, req);
-    for (const f of this.features) f.ack?.(id, acks);
-    return {};
+    // The tokens confirmed now, not ones a `wait` or `waiting` took first (#1484).
+    const acked = this.features.flatMap((f) => f.ack?.(id, acks) ?? []);
+    return { acked };
   }
 }
 

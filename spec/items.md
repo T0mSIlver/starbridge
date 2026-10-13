@@ -45,7 +45,8 @@
 - **Waiting state** (#122, #191, #202). A `waiting` item says whether the agent is blocked on the
   question. A flip either way pushes, so the phone moves the notification between channels. `ask
   --waiting` posts the question quietly and lets its `waiting` item push, so the first
-  notification already says waiting.
+  notification already says waiting. It also says when the answer reaches a busy agent: a waiting one at its next
+  tool call, any other once its turn ends (#1484, `spec/harnesses.md`).
 - **Settling** (#62, #405). `settle` closes a question as `elsewhere` or `withdrawn`. It never
   withdraws one whose answer reached the agent, since devices would hold both. `settle --session`
   and `settle --all` close every open question of a session or of the machine (#584), so a

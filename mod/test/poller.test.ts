@@ -333,3 +333,25 @@ test("the poller starts the CLI setup recorded, and `starbridge` once that binar
   await until(() => runs.length > seen);
   expect(runs.at(-1)?.[0]).toBe("starbridge");
 });
+
+test("a session that does not poll rereads a held answer every check, not back to back (#1484)", async () => {
+  const lead = session("s-lead");
+  await until(() => polling(lead) > 0);
+  const a = session("s-a", { timing: { ...FAST, checkMs: 100 } });
+  let held = true;
+  const host = a.get();
+  const d = await ask("Merge #12 now?", "s-a");
+  // The turn runs: the host holds the line back.
+  (a.poller as unknown as { host: Host }).host.submit = (text) => {
+    if (held) return false;
+    host.submitted.push(text);
+  };
+  await server.answer(d, { choice: "Yes" });
+  await until(() => host.runs.some((r) => !r.includes("--wait")));
+  const before = host.runs.length;
+  await Bun.sleep(600);
+  expect(host.runs.length - before).toBeLessThanOrEqual(8);
+  expect(host.submitted).toEqual([]);
+  held = false;
+  await until(() => host.submitted.length === 1);
+});

@@ -123,7 +123,8 @@ const HELP = `starbridge: post decisions to your devices, report runs, upload qu
   starbridge waiting <decision id>
   starbridge working <decision id>
       Show the owner that you are now blocked on the decision ("Waiting for you", which
-      notifies them once more), or back to working on other things.
+      notifies them once more), or back to working on other things. An answer that came in
+      and has not reached you yet, \`waiting\` prints instead.
 
   starbridge settle <decision id> [--outcome elsewhere|withdrawn] [--reason <text>]
   starbridge settle --session <id> | --all [--yes] [--outcome elsewhere|withdrawn]

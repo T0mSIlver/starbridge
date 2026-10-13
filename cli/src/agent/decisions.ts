@@ -24,6 +24,7 @@ import {
   snoozedUntil,
   takeAnswer,
   takeSnooze,
+  takeUnseen,
 } from "../decisions";
 import type { SessionEvent, Status } from "./api";
 import { type Feature, HttpError, type Hub, holdSeconds, pause } from "./server";
@@ -103,6 +104,10 @@ export class Decisions implements Feature {
             "unknown-decision",
             `${id} is not a decision this machine asked`,
           );
+        // A revoked device's answer is dropped first, as every hand-out does (#491).
+        if (state === "waiting") await this.beforeEvents();
+        const taken = state === "waiting" ? takeUnseen(this.ctx.store, id) : undefined;
+        if (taken) return { posted: false, ...taken };
         const posted = await postWaiting(this.ctx, session(this.ctx), id, state);
         const until = snoozedUntil(this.ctx.store.state(), id, this.ctx.now());
         return { posted, ...(until ? { snoozedUntil: until } : {}) };
@@ -189,8 +194,12 @@ export class Decisions implements Feature {
     );
   }
 
-  ack(id: string, tokens: string[]) {
-    this.ctx.store.updateState((st) => ackLines(st, id, tokens));
+  ack(id: string, tokens: string[]): string[] {
+    let acked: string[] = [];
+    this.ctx.store.updateState((st) => {
+      acked = ackLines(st, id, tokens);
+    });
+    return acked;
   }
 
   status(into: Status) {

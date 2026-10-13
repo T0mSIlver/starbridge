@@ -33,10 +33,11 @@ export interface AgentHost {
   sleep(ms: number): Promise<void>;
   /**
    * Must not wait for the turn to start: a prompt submitted mid-turn waits for its own. A host
-   * that can tell the submit failed returns or resolves false, and the line stays unconfirmed for
-   * a later try.
+   * that can tell the submit failed, or holds the line back for now, returns or resolves false,
+   * and the line stays unconfirmed for a later try. `waiting`: the agent marked the decision
+   * waiting, so it needs the answer now (#1484).
    */
-  submit(text: string): unknown;
+  submit(text: string, waiting: boolean, ack: string): unknown;
   /**
    * True while a submitted prompt waits for its turn. Claude Code starts a plugin's queued prompt
    * only once the mod's open `fetch` or `run` returns, so the loop then holds no long call (#1446).
@@ -177,6 +178,7 @@ interface Event {
   ack?: unknown;
   line?: unknown;
   decisionId?: unknown;
+  waiting?: unknown;
 }
 
 /** Why `AgentLoop.run` returned: `stop`, or the agent cannot serve this mod. */
@@ -213,6 +215,24 @@ export class AgentLoop {
       }
     }
     return "stopped";
+  }
+
+  /**
+   * Confirms the events among `acks` that the agent still hands this session, and returns those:
+   * a line a `wait` or `waiting` printed meanwhile is not handed over again (#1484).
+   */
+  async claim(acks: string[]): Promise<string[]> {
+    const me = await this.host.sessionId();
+    const r = await this.host.fetch("GET", `${path(me)}/events?wait=0`);
+    if (r.status < 200 || r.status >= 300) return [];
+    const pending = new Set((parse<{ events?: Event[] }>(r.text)?.events ?? []).map((e) => e.ack));
+    const mine = acks.filter((a) => pending.has(a));
+    if (mine.length === 0) return [];
+    const ack = await this.host.fetch("POST", `${path(me)}/ack`, { acks: mine });
+    if (ack.status < 200 || ack.status >= 300) return [];
+    // What it confirmed now: not a line a `wait` or `waiting` took since the read. An agent older
+    // than that names none.
+    return parse<{ acked?: string[] }>(ack.text)?.acked ?? mine;
   }
 
   /** Tells the agent the session ended, so its session-scoped state goes. */
@@ -255,7 +275,7 @@ export class AgentLoop {
         continue;
       }
       if (!this.unconfirmed.has(e.ack)) {
-        if ((await this.host.submit(e.line)) === false) continue;
+        if ((await this.host.submit(e.line, e.waiting === true, e.ack)) === false) continue;
         this.unconfirmed.add(e.ack);
         handed++;
       }
