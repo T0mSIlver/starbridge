@@ -568,7 +568,13 @@ export async function settle(ctx: Ctx, opts: SettleOpts): Promise<number> {
       throw new UsageError("--reason is for --outcome withdrawn");
     const s = session(ctx);
     const dir = await refreshDirectory(ctx, s, opts.deadline);
-    await settleOne(ctx, s, dir, id, outcome, false, reason, opts.deadline);
+    // An answer that came before the settle closed the decision: its session may not have it
+    // yet, such as one held for the end of the turn that settles (#1575), so it prints here.
+    ctx.store.updateState((st) => void dropRevoked(st, dir));
+    const taken = takeUnseen(ctx.store, id);
+    if (taken) ctx.out(answerLine(taken.answer, taken.question));
+    if (!(await settleOne(ctx, s, dir, id, outcome, false, reason, opts.deadline)))
+      ctx.err(`starbridge: ${id} was answered first, so it stays answered`);
     return 0;
   }
   if (reason !== undefined && outcome !== "withdrawn")
@@ -658,20 +664,20 @@ async function settleOne(
   if (!asked || asked.revoked) return false;
   const outcome = outcomeOpt ?? (asked.answerIn ? "elsewhere" : "withdrawn");
   // Closed here first: from now on no answer to it is accepted or delivered, even if the post fails.
-  // An answer that already reached the agent closed it, and a withdrawal would contradict it;
-  // checked in the same update, so a delivery in another process cannot slip in between.
-  // A bulk run, which lasts hours, also leaves alone one the owner answered since it started.
-  let delivered = false;
+  // An answer this machine accepted closed it, whether or not its session took it yet (#1575), and
+  // a withdrawal would contradict it; checked in the same update, so an answer accepted in
+  // another process cannot slip in between.
+  let answered = false;
   ctx.store.updateState((st) => {
-    delivered = bulk ? !!st.answers[id] : !!st.answers[id]?.seen;
+    answered = !!st.answers[id];
     const a = st.asked[id];
-    if (a && !delivered) {
+    if (a && !answered) {
       a.settled = true;
       a.unposted = true;
       forget(a);
     }
   });
-  if (delivered) return false;
+  if (answered) return false;
   const to = devices(ctx, dir);
   const body = {
     v: 1 as const,
@@ -1637,9 +1643,10 @@ export interface ObservedAnswer {
 }
 
 /**
- * Every answer the machine accepted that its session may have, oldest first, from `since` (ms)
- * on and leaving out the decision ids in `known`. Reads only: nothing is marked seen, so the
- * session that asked still gets each one.
+ * Every answer the machine accepted, oldest first, from `since` (ms) on and leaving out the
+ * decision ids in `known`: one whose decision was settled since stays, since it is still the
+ * owner's word (#1575). Reads only: nothing is marked seen, so the session that asked still gets
+ * each one.
  */
 export function observedAnswers(
   st: State,
@@ -1649,7 +1656,7 @@ export function observedAnswers(
   const lines: ObservedAnswer[] = [];
   for (const [id, { answer }] of Object.entries(st.answers)) {
     const asked = st.asked[id];
-    if (!asked || !deliverable(st, id) || opts.known?.has(id)) continue;
+    if (!asked || (asked.answerIn && !asked.done) || opts.known?.has(id)) continue;
     if (opts.since !== undefined && Date.parse(answer.answeredAt) < opts.since) continue;
     const { session, sessionTitle, project } = asked;
     lines.push({

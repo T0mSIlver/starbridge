@@ -559,6 +559,41 @@ test("settle leaves a decision whose answer reached the agent answered, not with
   expect((await server.opened("settled")).map((n) => n.outcome)).toEqual(["device"]);
 });
 
+test("settle after an answer its session has not taken prints it, and withdraws nothing (#1575)", async () => {
+  const ctx = await paired(server);
+  expect(await run([...ASK, "--session", "s1"], ctx)).toBe(0);
+  const id = ctx.lines.at(-1) as string;
+  await server.answer(id, { text: "Make it dreamier" });
+  // Accepted, and held for the end of the turn that now settles it.
+  await poll(ctx, session(ctx), { seconds: 0, shared: true });
+  ctx.lines.length = 0;
+  expect(await run(["settle", id, "--reason", "Reposted as a review"], ctx)).toBe(0);
+  expect(ctx.lines).toEqual([`Answer to ${id} (Merge #12 now?): Make it dreamier`]);
+  expect(ctx.errors.at(-1)).toContain("answered first");
+  expect((await server.opened("settled")).map((n) => n.outcome)).not.toContain("withdrawn");
+  // Handed over once: the session's loop gets nothing more.
+  ctx.lines.length = 0;
+  expect(await run(["answers", "--session", "s1"], ctx)).toBe(0);
+  expect(ctx.lines).toEqual([]);
+});
+
+test("answers --all lists an answer whose decision was settled since (#1575)", async () => {
+  const ctx = await paired(server);
+  expect(await run([...ASK, "--session", "s1"], ctx)).toBe(0);
+  const id = ctx.lines.at(-1) as string;
+  await server.answer(id, { text: "Make it dreamier" });
+  await poll(ctx, session(ctx), { seconds: 0, shared: true });
+  // As a settle before #1575 left it.
+  ctx.store.updateState((st) => {
+    (st.asked[id] as { settled?: boolean }).settled = true;
+  });
+  ctx.lines.length = 0;
+  expect(await run(["answers", "--all"], ctx)).toBe(0);
+  expect(ctx.lines.map((l) => JSON.parse(l))).toMatchObject([
+    { decisionId: id, text: "Make it dreamier", session: "s1" },
+  ]);
+});
+
 test("ask refuses a decision that would not stand alone", async () => {
   const ctx = await paired(server);
   expect(await run(["ask", "--question", "Q?", "--option", "Only"], ctx)).toBe(1);
@@ -949,18 +984,11 @@ test("an answer to a withdrawn or answerIn decision, or a Done to another, is ne
   const ctx = await paired(server);
   await run([...ASK, "--session", "s"], ctx);
   const late = ctx.lines.at(-1) as string;
-  await run([...ASK, "--session", "s"], ctx);
-  const early = ctx.lines.at(-1) as string;
   const page = "https://claude.ai/artifact/2ig2MyNRD484b7oZea5vkZ";
   await run(["ask", "--question", "Pick?", "--answer-in", page, "--session", "s"], ctx);
   const pointer = ctx.lines.at(-1) as string;
   await run([...ASK, "--session", "s"], ctx);
   const open = ctx.lines.at(-1) as string;
-  // Accepted before the agent withdrew it, still unread: it is never delivered.
-  await server.answer(early, { choice: "Merge" });
-  await poll(ctx, session(ctx), { cursor: ctx.store.state().cursor, seconds: 1, shared: true });
-  expect(ctx.store.state().answers[early]).toBeDefined();
-  await run(["settle", early, "--reason", "No longer needed"], ctx);
   await run(["settle", late, "--reason", "No longer needed"], ctx);
   // A compromised server held these signed answers and releases them now.
   await server.forge(
@@ -977,7 +1005,7 @@ test("an answer to a withdrawn or answerIn decision, or a Done to another, is ne
   expect(ctx.store.state().answers[open]).toBeUndefined();
   expect(ctx.errors.filter((e) => e.includes("ignored an answer"))).toHaveLength(3);
   expect(await run(["wait", "--timeout", "1s"], ctx)).toBe(2);
-  expect(await run(["wait", early, "--timeout", "1s"], ctx)).toBe(1);
+  expect(await run(["wait", late, "--timeout", "1s"], ctx)).toBe(1);
 });
 
 test("a device the decision was not sealed to cannot answer it", async () => {
