@@ -211,6 +211,17 @@ test("paused sign-ups refuse new GitHub accounts and let existing ones in (#784)
   expect((await githubSignIn(s, 7)).headers.get("location")).toBe("/");
 });
 
+test("a sign-up list lets only its GitHub users make accounts (#1524)", async () => {
+  const dbPath = join(mkdtempSync(join(tmpdir(), "sb-signups-")), "sb.db");
+  const s = await makeServer({ ...githubConfig(), dbPath });
+  expect((await githubSignIn(s, 7)).headers.get("location")).toBe("/");
+  const listed = await makeServer({ ...githubConfig(), dbPath, signUpGitHubIds: new Set([42]) });
+  expect((await githubSignIn(listed, 42)).headers.get("location")).toBe("/");
+  // Made before the list: still signs in.
+  expect((await githubSignIn(listed, 7)).headers.get("location")).toBe("/");
+  expect((await githubSignIn(listed, 8)).headers.get("location")).toBe("/?signin=paused");
+});
+
 test("new accounts are capped per address; existing ones still sign in (#787)", async () => {
   const s = await makeServer({
     ...githubConfig(),

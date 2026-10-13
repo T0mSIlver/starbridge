@@ -38,6 +38,11 @@ export interface Config {
   };
   /** Self-hosted sign-in: whoever presents this token owns the server's one account. */
   ownerToken?: string;
+  /**
+   * When set, only these GitHub users may make an account, as on the staging server (#1524);
+   * accounts that exist sign in as before.
+   */
+  signUpGitHubIds?: ReadonlySet<number>;
   /** Where the GitHub callback sends the Android app, with a code it trades for a session. */
   appRedirectUri: string;
 
@@ -179,6 +184,9 @@ export function configFromEnv(env: Env = process.env): Config {
           }
         : undefined,
     ownerToken: env.OWNER_TOKEN || undefined,
+    signUpGitHubIds: env.SIGNUP_GITHUB_IDS
+      ? new Set(env.SIGNUP_GITHUB_IDS.split(",").map((id) => int(id.trim(), 0)))
+      : undefined,
     appRedirectUri: env.APP_REDIRECT_URI ?? "starbridge://auth",
     maxMachines: int(env.MAX_MACHINES, 5),
     maxWaitSeconds: int(env.MAX_WAIT_SECONDS, 300),

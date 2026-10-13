@@ -26,6 +26,10 @@
   every existing account signs in as before. `bun server.js signups pause|resume` writes and
   removes a file beside the database, which the server reads on each new account, so it takes
   effect at once and survives restarts and deploys.
+- A server can list who may sign up (#1524): with `SIGNUP_GITHUB_IDS` set, only those GitHub
+  users can make an account, so the staging server takes no strangers. Others get the paused
+  sign-ups' 403 `signups-paused`, which every client already shows as "no new accounts here",
+  so no client changed.
 - The page shows only the sign-in methods its server offers (#670): `GET /v1/auth/methods` lists
   them, and without GitHub the landing page's and sign-in page's buttons open the owner token
   form. Until the server answers, the page shows GitHub, the hosted server's, so the landing
