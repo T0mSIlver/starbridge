@@ -73,6 +73,26 @@ TEST_RUNNER_STARBRIDGE_TEST_SERVER=http://localhost:18731 TEST_RUNNER_STARBRIDGE
 CI runs both, with the server, in `.github/workflows/ios.yml`. Each release tag uploads the app to
 TestFlight from `.github/workflows/release.yml` (spec/releases.md, "The iPhone app on TestFlight").
 
+### Renew the distribution certificate
+
+The release signs with an Apple Distribution certificate stored in the `ios-release` environment,
+valid a year. When a run warns that it expires soon, or that it was revoked, issue a new one with
+the CI's App Store Connect key, then store it without printing it:
+
+```bash
+ASC_KEY_PATH=AuthKey_<id>.p8 ASC_KEY_ID=<id> ASC_ISSUER_ID=<issuer> ruby ios/scripts/asc-signing.rb issue <private dir>
+```
+
+```bash
+base64 < <private dir>/distribution.p12 | tr -d '\n' | gh secret set IOS_DISTRIBUTION_P12 --env ios-release
+```
+
+```bash
+gh secret set IOS_DISTRIBUTION_P12_PASSWORD --env ios-release < <private dir>/distribution.p12.password
+```
+
+Then revoke the old certificate in Certificates, Identifiers & Profiles.
+
 ## Build on the Mac mini
 
 Agents on the dev box build and test here through one script, not their own rsync and `xcodebuild`:

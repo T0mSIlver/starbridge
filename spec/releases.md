@@ -66,9 +66,14 @@
   `ASC_API_KEY_P8` secret of the `ios-release` environment, open to main and `v*` tags; variables
   `ASC_KEY_ID` and `ASC_ISSUER_ID`) that the REST API takes, so the job signs through the REST API
   (`ios/scripts/asc-signing.rb`, #1419): it registers the App IDs and their capabilities when
-  missing, creates an Apple Distribution certificate from a key made on the runner and an App
-  Store profile per App ID, and revokes and deletes them at its end. No certificate is stored to
-  leak or rotate, and uploaded builds stay valid, since the App Store re-signs them. The archive
+  missing, and makes an App Store profile per App ID, deleted at its end. It signs with one stored
+  Apple Distribution certificate, its .p12 and password the `IOS_DISTRIBUTION_P12` and
+  `IOS_DISTRIBUTION_P12_PASSWORD` secrets of the same environment (#1479): a certificate made and
+  revoked per run had Apple email the owner on every release. When that secret is missing, or Apple
+  no longer lists the certificate or it expires within a day, the run makes its own from a key made
+  on the runner and revokes it at its end, with a warning. The stored one is issued off CI with
+  `asc-signing.rb issue` and lasts a year; the run warns 30 days before. Uploaded builds stay valid
+  past either, since the App Store re-signs them. The archive
   builds unsigned and `ios/scripts/adhoc-sign.sh` signs it ad hoc with each target's entitlements,
   which the export keeps (#1415); altool uploads with the same key. App Groups need the group
   registered once by hand, which the REST API cannot do. The key needs the Admin role, which
