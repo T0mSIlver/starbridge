@@ -16,7 +16,7 @@ const { values } = parseArgs({
   options: {
     server: { type: "string", default: "http://127.0.0.1:18080" },
     decisions: { type: "string", default: "20" },
-    concurrency: { type: "string", default: "16" },
+    concurrency: { type: "string", default: "64" },
   },
 });
 const users = readFileSync(`${LOAD_DIR}/users.jsonl`, "utf8")
