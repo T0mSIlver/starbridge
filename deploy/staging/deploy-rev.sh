@@ -1,8 +1,10 @@
 #!/bin/sh
 # Installed on homelab-arm as /usr/local/sbin/starbridge-staging-deploy (setup.sh) and run as root
 # by the forced command of deploy.yml's staging key, with one argument, a commit id. Deploys that
-# commit if it is on main, which it fetches itself over HTTPS, the repository being public. Unlike
-# prod's, it deploys older commits too: staging holds no user's data.
+# commit if it is on main, which it fetches itself over HTTPS, the repository being public. As on
+# prod, a commit older than the deployed one is skipped unless it is main's head: CI on an older
+# commit can finish after a newer one deployed, and its server would refuse a database the newer
+# one migrated.
 set -eu
 rev=${1:-}
 case $rev in
@@ -18,6 +20,17 @@ mkdir -p /var/lib/starbridge-staging
 [ -d $repo ] || git init -q --bare $repo
 git -C $repo fetch -q https://github.com/T0mSIlver/starbridge.git +main:main
 git -C $repo merge-base --is-ancestor "$rev" main || { echo "$rev is not on main" >&2; exit 1; }
+current=$(cat /opt/starbridge-staging/REVISION 2>/dev/null || true)
+if [ "$rev" != "$(git -C $repo rev-parse main)" ] &&
+  ! git -C $repo merge-base --is-ancestor "$current" "$rev" 2>/dev/null; then
+  echo "$rev is older than the deployed ${current:-release} and is not main's head; not deployed"
+  exit 0
+fi
+# seed.sh's seeding server holds the database meanwhile (seed-host.sh).
+if [ -n "$(docker ps -q -f name='^sb-seed-server$')" ]; then
+  echo "staging is being seeded; not deployed" >&2
+  exit 1
+fi
 
 dir=/opt/starbridge-staging
 rm -rf $dir.new $dir.old

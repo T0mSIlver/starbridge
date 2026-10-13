@@ -151,7 +151,9 @@ jobs:
       cancel-in-progress: false
     runs-on: ${{ vars.TRUSTED_RUNNER && fromJSON(vars.TRUSTED_RUNNER) || 'ubuntu-latest' }}
     timeout-minutes: 15
-    permissions: {}
+    # Compares staging's revision with this run's.
+    permissions:
+      contents: read
     environment:
       name: staging
       url: https://staging.starbridge.run
@@ -177,11 +179,21 @@ jobs:
           echo "deployed=true" >> "$GITHUB_OUTPUT"
       - name: Check the live revision
         if: steps.deploy.outputs.deployed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           got=$(curl -fsS --retry 10 --retry-delay 3 --retry-all-errors -D - -o /dev/null \
             https://staging.starbridge.run/healthz | tr -d '\r' |
             awk -F': ' 'tolower($1) == "x-starbridge-revision" { print $2 }')
-          [ "$got" = "$REV" ] || { echo "staging runs ${got:-no named revision}, not $REV"; exit 1; }
+          # Its commit, or a later one of main's when the box skipped this older one.
+          case $got in *[!0-9a-f]*) got= ;; esac
+          [ ${#got} -eq 40 ] || { echo "staging names no commit id"; exit 1; }
+          status=$(curl -fsS -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' \
+            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/compare/$REV...$got?per_page=1" | jq -r .status)
+          case $status in
+            identical | ahead) echo "staging runs $got" ;;
+            *) echo "staging runs $got, not $REV or later ($status)"; exit 1 ;;
+          esac
 
   deploy:
     needs: [changed, images]

@@ -13,6 +13,9 @@ s=/etc/starbridge-staging/secrets
 
 case ${1:-} in
 start)
+  # Not during a deploy; a deploy that starts later sees the seeding server and stops.
+  exec 9>/run/starbridge-staging-deploy.lock
+  flock -n 9 || { echo "seed-host.sh: a staging deploy is running; try again" >&2; exit 1; }
   fcm=$(awk '{printf "%s\\n", $0}')
   $compose stop server
   docker rm -f sb-seed-server sb-seed-fake >/dev/null 2>&1 || true
