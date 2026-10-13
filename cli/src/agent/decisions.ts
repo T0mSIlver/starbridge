@@ -104,6 +104,8 @@ export class Decisions implements Feature {
             "unknown-decision",
             `${id} is not a decision this machine asked`,
           );
+        // A revoked device's answer is dropped first, as every hand-out does (#491).
+        if (state === "waiting") await this.beforeEvents();
         const taken = state === "waiting" ? takeUnseen(this.ctx.store, id) : undefined;
         if (taken) return { posted: false, ...taken };
         const posted = await postWaiting(this.ctx, session(this.ctx), id, state);

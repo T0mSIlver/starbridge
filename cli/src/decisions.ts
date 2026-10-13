@@ -499,6 +499,8 @@ export async function setWaiting(
   opts: { id?: string; state: Waiting["state"] },
 ): Promise<number> {
   if (!opts.id) throw new UsageError(`${opts.state} needs a decision id`);
+  // A revoked device's answer is dropped first, as every hand-out does (#491).
+  if (opts.state === "waiting") await dropRevokedNow(ctx);
   const taken = opts.state === "waiting" ? takeUnseen(ctx.store, opts.id) : undefined;
   if (taken) {
     ctx.out(answerLine(taken.answer, taken.question));
