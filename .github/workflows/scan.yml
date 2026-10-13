@@ -58,7 +58,7 @@ jobs:
             revs="$(served https://starbridge.run || true):prod $(served https://staging.starbridge.run || true):staging"
           fi
           token=$(curl -fsS "https://ghcr.io/token?scope=repository:t0msilver/starbridge-server:pull" | jq -r .token)
-          scan= named=
+          scan='' named=''
           for pair in $revs; do
             rev=${pair%%:*} where=${pair#*:}
             case $rev in *[!0-9a-f]* | "") echo "::warning::$where names no commit id"; continue ;; esac
