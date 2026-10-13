@@ -1522,10 +1522,18 @@ export async function loadInbox(
  * against the hashes its signed body holds; kept with the item, so they download once.
  */
 export async function loadImages(ctx: Ctx, id: string): Promise<ShownImage[]> {
+  // Each blob opens against the body this browser kept, from the same machine: never refs the
+  // server sends now under that id (#1472).
+  const kept = (await store.get("kept", ctx.account))?.items.find(
+    (k) => k.item.kind === "decision" && k.item.id === id,
+  );
+  if (!kept) throw new Error("this question is not kept here");
+  const was = await openMachine(ctx, kept.item, "decision");
   const s = await api.item(id);
-  const { body } = await openMachine(ctx, s.item, "decision");
-  if (body.id !== id) throw new Error("the server sent another question");
-  const images = openImages(s.item, (body as Decision).images);
+  const { signer, body } = await openMachine(ctx, s.item, "decision");
+  if (body.id !== id || signer.id !== was.signer.id)
+    throw new Error("the server sent another question");
+  const images = openImages(s.item, (was.body as Decision).images);
   const blobs = s.item.blobs;
   // Kept for this device only; gone meanwhile, an empty record reads from the start next time.
   if (blobs && (await store.get("kept", ctx.account))?.device === ctx.device.id)
