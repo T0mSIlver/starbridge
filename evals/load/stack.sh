@@ -203,7 +203,9 @@ load | spike | setup)
   # setup.ts needs packages/protocol's dependencies installed in the repository.
   script=$1
   shift
-  [ "$script" != setup ] || set -- --server http://server:8080 --fake "$fake" "$@"
+  # The address the users' push subscriptions point at: the fakes, wherever they run.
+  [ "$script" != setup ] || set -- --server http://server:8080 "$@"
+  [ "$script" = load ] || set -- --fake "$fake" "$@"
   docker run --rm -i --name "starbridge-$script-client" ${LOAD_CLIENT_CPUS:+--cpuset-cpus "$LOAD_CLIENT_CPUS"} $slice --network starbridge-load_default \
     --user "$(id -u):$(id -g)" --group-add "$(stat -c %g /var/run/docker.sock)" \
     -v "$repo:/repo:ro" -v "$LOAD_DIR:/load" -e LOAD_DIR=/load ${LOAD_TARGET:+-e LOAD_TARGET="$LOAD_TARGET"} \
