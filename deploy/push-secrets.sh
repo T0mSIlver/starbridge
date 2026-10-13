@@ -3,7 +3,7 @@
 # the ones named as arguments, or all of them. Only these names, so a plain password never goes.
 set -eu
 host=${STARBRIDGE_HOST:-deploy@starbridge.run}
-key=$HOME/.ssh/starbridge_ed25519
+key=${STARBRIDGE_KEY:-$HOME/.ssh/starbridge_ed25519}
 src=$HOME/.config/starbridge/secrets
 all="github-oauth-client-secret fcm-service-account.json vapid-public-key vapid-private-key stats-password-hash apns-key.p8 apns-key-id apple-signin-key.p8 apple-signin-key-id backup-age.pub offsite-ssh-key offsite-known-hosts offsite-target"
 # The Apple keys are optional until the iPhone app ships, and the offsite backup's four (#1482) on

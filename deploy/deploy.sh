@@ -4,7 +4,7 @@
 set -eu
 ref=${1:-origin/main}
 host=${STARBRIDGE_HOST:-deploy@starbridge.run}
-key=$HOME/.ssh/starbridge_ed25519
+key=${STARBRIDGE_KEY:-$HOME/.ssh/starbridge_ed25519}
 cd "$(git rev-parse --show-toplevel)"
 
 git fetch -q origin

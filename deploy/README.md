@@ -42,6 +42,31 @@ through its admin API on `127.0.0.1:2019`. Caddy's container is recreated, which
 open connection, only when its definition in `compose.yaml` or `caddy.Dockerfile` changes: its
 image is tagged by a hash of that file and built only when no image has the tag.
 
+## Failover
+
+When `starbridge-1` is gone for longer than restoring elsewhere takes (Hetzner down past about
+30 minutes, or the disk lost), homelab-arm takes over: the newest offsite copy from sb-oracle,
+prod's stack and secrets, and DNS pointed at it. Every write since the night's backup (03:15 UTC)
+is lost. The owner switches DNS; everything else runs from the operator's machine, with
+`h=ubuntu@79.76.109.122 k=~/.ssh/id_ed25519`:
+
+1. Stop deploys, which would reach the new box with the wrong key: `gh workflow disable deploy.yml`.
+2. `deploy/failover-restore.sh sb-staging`: decrypts the newest copy here, checks it, and puts
+   it in the host's `starbridge_data` volume, moving any database there aside.
+3. Free ports 80 and 443: `ssh sb-staging sudo docker compose -p starbridge-staging -f /opt/starbridge-staging/deploy/compose.yaml -f /opt/starbridge-staging/deploy/staging/compose.yaml down`.
+4. Prod's secrets: `ssh sb-staging sudo install -d -m 700 /etc/starbridge/secrets`, then
+   `STARBRIDGE_HOST=$h STARBRIDGE_KEY=$k deploy/push-secrets.sh`.
+5. The owner points the A records of `starbridge.run`, `stats.starbridge.run` and
+   `demo.starbridge.run` at 79.76.109.122 in Cloudflare (DNS only).
+6. `STARBRIDGE_HOST=$h STARBRIDGE_KEY=$k deploy/deploy.sh <commit>`, the commit prod ran
+   (its last `deploy` run). Caddy gets its certificates once DNS points there; the script waits
+   for `/healthz` to name the commit.
+7. Check: `ssh sb-oracle sudo sb-check-now` runs a round trip from outside.
+
+Failing back is the same in reverse once `starbridge-1` is back: a fresh backup from homelab-arm
+(`backup.sh` runs there too), restored onto `starbridge-1`, then DNS, then
+`gh workflow enable deploy.yml`. Drills: `spec/releases.md`, "Failover".
+
 ## First setup
 
 1. As root: `ssh root@starbridge.run sh -s < deploy/host/setup.sh`. It installs Docker, git,
