@@ -12,7 +12,7 @@ private let vectorsDir = URL(fileURLWithPath: #filePath)
 /** The vector files these tests read; `testEveryVectorFileIsRead` keeps it whole. */
 private let READ: Set<String> = [
     "context.json", "directory.json", "envelopes.json", "heads.json", "images.json", "join.json",
-    "keys.json", "pairing.json", "quota-alerts.json", "schemas.json",
+    "keys.json", "links.json", "pairing.json", "quota-alerts.json", "schemas.json",
 ]
 
 /** Vector files only the machine's code runs: the local agent computes pace and alerts (#1147). */
@@ -255,6 +255,17 @@ final class ProtocolVectorsTests: XCTestCase {
                 }
             }
             XCTAssertEqual(got, c.str("expect"), c.str("name"))
+        }
+    }
+
+    func testLinks() throws {
+        for c in try vectors("links.json")["cases"]!.items {
+            let expect = c["expect"]!
+            let want = LinkChip(icon: expect.opt("icon").map { LinkIcon(rawValue: $0.string!)! }, label: expect.str("label"))
+            let got = linkChip(url: c.str("url"), title: c.opt("title")?.string, project: c.opt("project")?.string ?? "")
+            // By scalars: Swift's == is canonical equivalence, looser than the other clients' (#1088).
+            XCTAssertEqual(got.icon, want.icon, c.str("name"))
+            XCTAssertEqual(Array(got.label.unicodeScalars), Array(want.label.unicodeScalars), c.str("name"))
         }
     }
 
