@@ -200,6 +200,8 @@ jobs:
       # one round trip on its test account now (#1522): a card, its Web Push, an answer read back.
       # The key's forced command does only that (starbridge-planning, infra/oracle/check-now.sh).
       - name: Round trip from outside
+        # sb-check-now gives up after 180 s; a dropped connection must not hold the deploy queue.
+        timeout-minutes: 5
         env:
           SMOKE_KEY: ${{ secrets.SMOKE_SSH_KEY }}
           SMOKE_KNOWN_HOSTS: ${{ secrets.SMOKE_KNOWN_HOSTS }}
@@ -213,4 +215,4 @@ jobs:
           printf '%s\n' "$SMOKE_KEY" > "$RUNNER_TEMP/smoke-key"
           printf '%s\n' "$SMOKE_KNOWN_HOSTS" > "$RUNNER_TEMP/smoke-known-hosts"
           ssh -i "$RUNNER_TEMP/smoke-key" -o IdentitiesOnly=yes -o UserKnownHostsFile="$RUNNER_TEMP/smoke-known-hosts" \
-            -o StrictHostKeyChecking=yes -o ConnectTimeout=20 "$SMOKE_TARGET"
+            -o StrictHostKeyChecking=yes -o ConnectTimeout=20 -o ServerAliveInterval=15 "$SMOKE_TARGET"
