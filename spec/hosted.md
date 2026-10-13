@@ -75,10 +75,11 @@
   month's budget in one: fast enough to act on, slow enough that one failed round trip does not
   page. The checks run from two VMs on another provider, sb-oracle and sb-staging, every 5 minutes,
   and the round trip every 15.
-- **Status page** (#1544). `status.starbridge.run` is a static page on sb-staging, not the VPS, so
-  it stays up when starbridge.run is down. It shows each part's state, 30 days of daily bars and
-  the month against its target, and publishes booleans and numbers only, never a check's error
-  text, which can hold addresses. A Safari run on a Mac each night loads the landing page, the
+- **Status page** (#1544). `status.starbridge.run` is a static page on Cloudflare Pages, built on
+  sb-oracle from both vantages' checks, so it stays up when the VPS is down and serves any crowd
+  without a server of ours. It is uploaded when its content changes or once a day, a few uploads
+  a day. It shows each part's state, 30 days of daily bars and the month against its target, and
+  publishes booleans and numbers only, never a check's error text, which can hold addresses. A Safari run on a Mac each night loads the landing page, the
   docs and the app's sign-in screen, and registers the service worker, since Safari breaks in ways
   the Firefox and Chromium checks do not see.
 - **Privacy and terms** (`/privacy`, `/terms`). Each claim follows the code: stored columns in
