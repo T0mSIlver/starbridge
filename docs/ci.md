@@ -44,6 +44,11 @@ A job on these boxes must not rely on what an earlier job left, and must be safe
 beside it on the same box: no fixed host port, and a unique name for any container, Compose
 project or image tag.
 
+Docker Hub limits anonymous pulls per address, and the boxes share one. A job that pulls from it
+(`ci.yml`'s `images`, `deploy.yml`'s `build`, `ios.yml`'s Swift on Linux) logs in first, with the
+repository variable `DOCKERHUB_USERNAME` and the secret `DOCKERHUB_TOKEN`, a read-only token of a
+free account. Forks' and Dependabot's runs get no secret and pull anonymously.
+
 ## How a runner works
 
 - The setup files are in [`.github/runners`](../.github/runners). Each box runs one systemd unit

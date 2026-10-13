@@ -36,6 +36,20 @@ ghcr.io and rolls them out (`deploy/host/apply.sh`). The previous release stays 
 them. So only commits that `deploy.yml` deployed can be deployed again. The box keeps the newest 5
 releases' images. Caddy's and the demo server's images are still built on the box.
 
+## Rollback
+
+```bash
+deploy/rollback.sh --list        # the releases whose images the box holds, newest first
+deploy/rollback.sh               # back to the one before the running release
+deploy/rollback.sh <commit>      # back to that one
+```
+
+It shows both releases and asks, then deploys the older commit's whole tree with `deploy.sh`, so
+its compose file, Caddyfile and demo server come back too. A rollback past a release that migrated
+the database stops before anything changes (see Restore). The next merge to main deploys main's
+head again, so revert the bad commit first. Rolling back the apps, npm and Homebrew is a
+checklist in `spec/releases.md`.
+
 No request fails during a deploy (`spec/releases.md`). The page runs as two copies, `web-a` (port
 3010) and `web-b` (3011): the deploy starts the idle one, waits for its health, then stops the
 other, and Caddy sends requests to the first healthy copy. The server restarts in place; Caddy
