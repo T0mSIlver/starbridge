@@ -260,8 +260,10 @@ async function worker(index: number, procs: number) {
     };
     // Counted from the first try: what the waiting session sees.
     answers.set(a, Date.now());
-    if (await post("post.answer", token, item)) acked.add(a);
-    else answers.delete(a);
+    // A post that landed after the fleet gave up on it (settle) stays out of the counts.
+    if (await post("post.answer", token, item)) {
+      if (answers.has(a)) acked.add(a);
+    } else answers.delete(a);
   }
 
   async function quotas(u: User) {
@@ -456,6 +458,14 @@ async function parent() {
       },
     ),
   );
+  // The fleet runs unwatched: a worker that dies would leave metrics lines with nothing in them,
+  // so the whole run stops and its supervisor starts it again.
+  if (values.metrics)
+    for (const k of kids)
+      k.exited.then((code) => {
+        console.error(`a worker exited (${code})`);
+        process.exit(1);
+      });
   const containers = await containerIds();
 
   let cpuWas = await cpuUsage(containers);
@@ -709,7 +719,13 @@ async function writeMetrics(
     site: values.site ?? new URL(TARGET).host,
     window_s: Math.round(secs),
     users: wins.at(-1)?.users ?? 0,
-    ok: errors === 0 && !counts.lost && !counts.dup && !counts.unseen,
+    // A window with no request measured nothing.
+    ok:
+      Object.values(ops).some((o) => o.n > 0) &&
+      errors === 0 &&
+      !counts.lost &&
+      !counts.dup &&
+      !counts.unseen,
     ops,
     delivery: {
       n: delivery.n,
