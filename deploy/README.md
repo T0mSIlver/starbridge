@@ -65,7 +65,13 @@ is lost. The owner switches DNS; everything else runs from the operator's machin
 
 Failing back is the same in reverse once `starbridge-1` is back: a fresh backup from sb-staging
 (`backup.sh` runs there too), restored onto `starbridge-1`, then DNS, then
-`gh workflow enable deploy.yml`. Drills: `spec/releases.md`, "Failover".
+`gh workflow enable deploy.yml`.
+
+Drill it each quarter, with staging stopped: `deploy/failover-drill.sh up` restores the copy on
+sb-staging and boots prod's server on it behind a Caddy for `failover.starbridge.run`; the owner
+adds that A record (79.76.109.122, DNS only); `deploy/failover-drill.sh wait` times it to the
+first HTTPS answer; `deploy/failover-drill.sh down` shreds the copy, and the record goes. Results:
+`spec/releases.md`, "Failover".
 
 ## First setup
 

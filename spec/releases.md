@@ -133,6 +133,15 @@
   reports that commit or a later one (`x-starbridge-revision`). That header, and
   `starbridge-deploy`'s argument, are refused unless they are 40 lowercase hex characters (#467),
   since the workflow puts the revision in a `gh api` path.
+- **Failover** (#1532). If starbridge-1 is lost, sb-staging takes over by hand: the newest
+  offsite copy, prod's stack and secrets, and the owner's DNS switch (`deploy/README.md`).
+  Automatic failover was rejected: two writers on SQLite risk split brain, and an outage of the
+  only box is rare enough to page a human. Writes since the night's backup are lost. A drill
+  runs quarterly under a side name, `failover.starbridge.run`, so users never move
+  (`deploy/failover-drill.sh`). The first, 2026-10-13: the copy (schema 10, 5 accounts, 1568
+  items) restored in 2 s, prod's server answered on it 14 s later, and HTTPS answered 45 s after
+  the A record was saved. A real switch also waits out the old record's 300 s TTL, so about 7
+  minutes from the decision, plus the time to decide.
 - **No downtime** (#150, #508). The page runs as two copies; a deploy starts the idle one, waits
   for its health, then stops the other, and Caddy sends every request to the first healthy copy.
   The server stays one instance, since it holds the long-polls and SQLite; Caddy holds requests up
