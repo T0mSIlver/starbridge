@@ -19,6 +19,7 @@ jobs:
     runs-on: ${{ vars.TRUSTED_RUNNER && fromJSON(vars.TRUSTED_RUNNER) || 'ubuntu-latest' }}
     timeout-minutes: 5
     permissions:
+      actions: read
       contents: read
     outputs:
       deploy: ${{ steps.changed.outputs.deploy }}
@@ -33,7 +34,14 @@ jobs:
             https://starbridge.run/healthz | tr -d '\r' |
             awk -F': ' 'tolower($1) == "x-starbridge-revision" { print $2 }') || got=
           case $got in *[!0-9a-f]*) got= ;; esac
-          if [ ${#got} -eq 40 ]; then
+          # Another run still building or deploying puts its commit live after this check: a
+          # commit that reverts it would be skipped against a revision that is about to change.
+          busy=$(curl -fsS -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' \
+            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/actions/workflows/deploy.yml/runs?per_page=30" |
+            jq --argjson id "$GITHUB_RUN_ID" '[.workflow_runs[] | select(.id != $id and .status != "completed")] | length') || busy=1
+          if [ "$busy" != 0 ]; then
+            echo "Another deploy run has not finished: deploying."
+          elif [ ${#got} -eq 40 ]; then
             # Not gh: some self-hosted runners lack it (dell2-2). The compare lists at most 300
             # files; a longer list deploys.
             files=$(curl -fsS -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' \
@@ -119,6 +127,18 @@ jobs:
           for image in server web; do
             name=ghcr.io/t0msilver/starbridge-$image
             docker buildx imagetools create -t "$name:$REV" "$name:$REV-amd64" "$name:$REV-arm64"
+          done
+      # The box pulls without logging in. GitHub creates a package private, and only its settings
+      # page makes it public, once: until then, stop here rather than at the box.
+      - run: |
+          for image in server web; do
+            token=$(curl -fsS "https://ghcr.io/token?scope=repository:t0msilver/starbridge-$image:pull" | jq -r .token)
+            curl -fsS -o /dev/null -H "Authorization: Bearer $token" \
+              -H 'Accept: application/vnd.oci.image.index.v1+json, application/vnd.docker.distribution.manifest.list.v2+json' \
+              "https://ghcr.io/v2/t0msilver/starbridge-$image/manifests/$REV" || {
+              echo "::error::ghcr.io/t0msilver/starbridge-$image is not public: make it public at https://github.com/users/T0mSIlver/packages/container/starbridge-$image/settings"
+              exit 1
+            }
           done
 
   deploy:
