@@ -191,7 +191,9 @@ test("several CLI clients at once: ask, wait, answers and quota push all go thro
     run(["wait", "--timeout", "20s"], wAny),
     run(["answers", "--session", "s2", "--wait", "20"], mod),
   ];
-  await Bun.sleep(200);
+  // Once the wait for one decision has marked it waiting: a fixed sleep lost that race on a slow
+  // runner (#1508).
+  await until(async () => (await server.opened("waiting")).length > 0, 10_000);
   await server.answer(ids[0] as string, { choice: "Merge" });
   await server.answer(ids[2] as string, { choice: "Wait" });
   await server.answer(ids[1] as string, { choice: "Merge" });
