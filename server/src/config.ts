@@ -153,6 +153,19 @@ function int(v: string | undefined, fallback: number): number {
   return n;
 }
 
+/**
+ * SIGNUP_GITHUB_IDS: unset leaves sign-ups open. Set, it must name at least one GitHub id, each a
+ * decimal number: a typo or an empty value stops the server rather than opening or changing who
+ * can sign up.
+ */
+function signUpList(v: string | undefined): ReadonlySet<number> | undefined {
+  if (v === undefined) return undefined;
+  const ids = v.split(",").map((id) => id.trim());
+  if (!ids.every((id) => /^[1-9][0-9]{0,15}$/.test(id)))
+    throw new Error(`SIGNUP_GITHUB_IDS: not a comma-separated list of GitHub ids: ${v}`);
+  return new Set(ids.map(Number));
+}
+
 export function configFromEnv(env: Env = process.env): Config {
   const port = int(env.PORT, 8080);
   const publicUrl = (env.PUBLIC_URL ?? `http://localhost:${port}`).replace(/\/$/, "");
@@ -184,9 +197,7 @@ export function configFromEnv(env: Env = process.env): Config {
           }
         : undefined,
     ownerToken: env.OWNER_TOKEN || undefined,
-    signUpGitHubIds: env.SIGNUP_GITHUB_IDS
-      ? new Set(env.SIGNUP_GITHUB_IDS.split(",").map((id) => int(id.trim(), 0)))
-      : undefined,
+    signUpGitHubIds: signUpList(env.SIGNUP_GITHUB_IDS),
     appRedirectUri: env.APP_REDIRECT_URI ?? "starbridge://auth",
     maxMachines: int(env.MAX_MACHINES, 5),
     maxWaitSeconds: int(env.MAX_WAIT_SECONDS, 300),

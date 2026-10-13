@@ -431,6 +431,8 @@ authRoutes.post("/auth/owner", async (c) => {
   const existing = db.query("SELECT id FROM accounts WHERE owner = 1").get() as {
     id: string;
   } | null;
+  // A sign-up list names GitHub users only: no owner account is made beside it.
+  if (!existing && c.var.config.signUpGitHubIds) fail(403, "signups-paused", SIGNUPS_CLOSED);
   const account = existing?.id ?? newAccountId();
   if (!existing)
     db.query("INSERT INTO accounts (id, owner, created_at) VALUES (?, 1, ?)").run(
