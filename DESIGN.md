@@ -692,8 +692,9 @@ dot crossing it: a question from your agent, or your answer. `design/mark.svg` h
 Android's adaptive icon grid of 108 units (the central 72 show; the circle of radius 33 around the
 centre survives every mask): the arch, outer radius 24.75, left leg 22 wide, right leg 9, straight
 legs 15.75 tall, feet rounded by 1.5, in `fg` dark; and the dot, radius 5.5, at the foot of the
-opening, in `accent` dark. The arch sits inside the safe circle, centred halfway between its box
-and its centre of mass. Where the mark has a ground, it is `bg` dark in both schemes, and the dot
+opening, in `accent` dark. The arch sits inside the safe circle, its box centred (#1466): the eye
+centres its symmetric dome against the mask, so centring its mass instead, which moves it
+toward the slim leg, reads as off-centre. Where the mark has a ground, it is `bg` dark in both schemes, and the dot
 is the only amber. Single-colour uses (Android's themed icon, the notification and menu bar icons,
 iOS's tinted icon) draw both shapes in one colour; the gap between them keeps the dot. The mark
 alone (rails, lockups, the tab and menu bar icons) is a square as wide as the arch, its bottom
