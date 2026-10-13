@@ -72,22 +72,24 @@ done
 from_v=$(docker run --rm "$image:$from" bun server.js schema)
 to_v=$(docker run --rm "$image:$to" bun server.js schema)
 
+# Milliseconds since the epoch. Not %3N: uutils' date, Ubuntu 26.04's, prints every digit.
+ms() { echo $(($(date +%s%N) / 1000000)); }
 # Starts REV's server on DIR/starbridge.db and prints how long it took to answer /healthz, in ms;
 # fails when it stopped first or took over a minute.
 start() { # REV DIR
   # The image's server runs as bun, 1000.
   docker run --rm -v "$2:/d" --entrypoint chown sb-rehearse-tool -R 1000:1000 /d
-  t0=$(date +%s%3N)
+  t0=$(ms)
   docker run -d --name sb-rehearse-server --network "$net" --env-file "$dir/server.env" \
     -v "$2:/data" "$image:$1" >/dev/null
   while :; do
     if docker exec sb-rehearse-server bun -e \
       "fetch('http://localhost:8080/healthz').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))" 2>/dev/null; then
-      echo $(($(date +%s%3N) - t0))
+      echo $(($(ms) - t0))
       return 0
     fi
     [ "$(docker inspect -f '{{.State.Running}}' sb-rehearse-server)" = true ] || return 1
-    [ $(($(date +%s%3N) - t0)) -lt 60000 ] || return 1
+    [ $(($(ms) - t0)) -lt 60000 ] || return 1
     sleep 0.2
   done
 }
