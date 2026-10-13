@@ -56,6 +56,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.encodeToJsonElement
@@ -162,6 +163,9 @@ class ServerStore(
 
     /** A push reached this app since it started: the server can deliver, so nothing polls (#445). */
     @Volatile private var pushed = false
+
+    /** How long [onPush] keeps the push service's thread: FCM allows about 20 seconds. */
+    internal var pushWaitMs = 15_000L
 
     /** How often the app in front reads the items while no push has arrived. */
     internal var pollMs = 10_000L
@@ -1692,7 +1696,20 @@ class ServerStore(
     suspend fun onPush(payload: String): Unit {
         // Before the lock: a push that times out waiting for a poll still counts.
         pushed = true
-        onPushHeld(payload)
+        // On the app's scope, so a push that waits past the push service's budget for the lock,
+        // held by a sync retrying on a slow network, is still handled once the lock frees: with
+        // `pushed` set, no poll would read its item (#1497).
+        val job = scope.launch {
+            try {
+                onPushHeld(payload)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // Nothing may escape this coroutine: it would end the app (#253).
+                Log.w("Starbridge", "push failed", e)
+            }
+        }
+        withTimeoutOrNull(pushWaitMs) { job.join() }
     }
 
     private suspend fun onPushHeld(payload: String) = lock.withLock {

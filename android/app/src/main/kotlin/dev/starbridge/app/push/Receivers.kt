@@ -110,11 +110,9 @@ class PromptReceiver : BroadcastReceiver() {
 class FcmService : FirebaseMessagingService() {
     override fun onMessageReceived(message: RemoteMessage) {
         val p = message.data["p"] ?: return
-        // This runs on FCM's own worker thread, which allows about 20 seconds.
-        runBlocking {
-            runCatching { withTimeout(15_000) { app().store().onPush(p) } }
-                .onFailure { Log.w("Starbridge", "push failed", it) }
-        }
+        // This runs on FCM's own worker thread, which allows about 20 seconds; onPush returns
+        // within them.
+        runBlocking { app().store().onPush(p) }
     }
 
     override fun onNewToken(token: String) {
@@ -138,10 +136,7 @@ class UnifiedPushService : PushService() {
         if (!message.decrypted) return
         val app = app()
         val p = message.content.decodeToString()
-        app.scope().launch {
-            runCatching { withTimeout(15_000) { app.store().onPush(p) } }
-                .onFailure { Log.w("Starbridge", "push failed", it) }
-        }
+        app.scope().launch { app.store().onPush(p) }
     }
 
     override fun onRegistrationFailed(reason: FailedReason, instance: String) {

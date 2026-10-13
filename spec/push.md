@@ -100,7 +100,9 @@
   rule). The owner chose this from mockups over offers by device name both ways and over the
   switches alone.
 - An Android app in front syncs every 10 s until a push has reached it (#445), since a server
-  without a relay or UnifiedPush pushes nothing and cannot tell.
+  without a relay or UnifiedPush pushes nothing and cannot tell. A push that waits for a sync
+  holding the store past FCM's time is still handled once the sync ends, rather than dropped, since
+  that push has already stopped the polling that would have read its item (#1497).
 - **Android registers its push route at each start** (#1011), even when its token is unchanged.
   The server drops a subscription FCM once calls gone, and the phone, still holding the same
   token, never sent it again until a reinstall. An app update does not change the token or stop
