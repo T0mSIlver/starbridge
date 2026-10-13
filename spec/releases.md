@@ -139,7 +139,7 @@
   since Dependabot reads only Dockerfiles (#1172). A workflow writes `pnpm-lock.yaml` into
   Dependabot's security PRs, which update `package.json` alone, then dispatches CI, since a push
   with `GITHUB_TOKEN` starts no workflow; that run sets the PR's `CI` status, failed when any job
-  fails or skips, Windows and macOS on a private repository aside (#1161). The images install pnpm
+  fails or skips, Windows, macOS and Linux ARM64 on a private repository aside (#1161). The images install pnpm
   with `npm install -g` at `packageManager`'s version, since node slim images ship no corepack
   (#430).
 - **CI** (#380). Main runs one at a time; a newer merge replaces the waiting run, and the head's
@@ -156,8 +156,8 @@
   suite, which must pass (#884). A private repository skips it, since GitHub's Windows runners need
   a public one or paid minutes. A `macos-latest` job (#877), skipped the same way, starts a built
   binary and runs the whole CLI suite, which must pass: the launchd service and the screen readers
-  run only on a Mac, so the real launchd starts and stops the agent there. Both jobs run each test
-  file alone and kill one that hangs (`cli/scripts/test-each.ts`, #862).
+  run only on a Mac, so the real launchd starts and stops the agent there. A `ubuntu-24.04-arm` job (#1481), skipped the same way, does the same for the
+  linux-arm64 binary. All three jobs run each test file alone and kill one that hangs (`cli/scripts/test-each.ts`, #862).
 - **CI runners** (#146, #1204, #1213). Self-hosted Linux runners in two pools that never share a
   box: `trusted` runs main's tests, deploys, uptime checks and releases; `pr` runs the test, e2e
   and image jobs of a pull request from this repository's own branches, so they start sooner than

@@ -1,7 +1,7 @@
 # CI runners
 
 Most CI jobs run on GitHub's runners. Some run on three self-hosted Linux boxes, which start them
-sooner. Windows, macOS, the desktop app's e2e and anything that needs KVM stay on GitHub's runners,
+sooner. Windows, macOS, Linux ARM64, the desktop app's e2e and anything that needs KVM stay on GitHub's runners,
 and Android builds on main and in releases run on their own runner, `ANDROID_RUNNER`.
 
 ## Pools and labels
