@@ -65,6 +65,9 @@ interface Store {
     fun joinAccount()
     /** Joins with a code another device shows as a QR code: the scanned link, or the code typed. */
     fun joinWithCode(text: String)
+    /** A pairing link opened while this phone has yet to join, until the owner joins with it or not. */
+    val joinLink: StateFlow<String?>
+    fun offerJoinLink(link: String?)
     /** Asks the account's devices to approve this phone by comparing digits. */
     fun askDevices()
     /** The owner saw the same digits on the device comparing them: its approval may count. */

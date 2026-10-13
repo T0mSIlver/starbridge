@@ -26,7 +26,9 @@
   shows none until a device already in the account opens the request, and says to open one
   (#1117). A joining phone can also scan a browser's join QR code, which is another request, not
   an approval: the server refuses the second request (`taken`), and the phone says to show a QR
-  code from Add a device instead.
+  code from Add a device instead. A pairing link that opens the Android app before it has joined
+  asks "Add this phone with this link?" first: joining makes the phone's keys and replaces a join
+  or recovery under way, so it starts only from the owner's tap, as a scan does.
 - **A machine's check code** (#795). A pairing code that reaches a browser lets a hostile server
   approve the machine into a chain it controls, which no device in that chain can expose. The
   check code, 80 bits of a hash of the machine's `add` entry, tells the chains apart. It covers the

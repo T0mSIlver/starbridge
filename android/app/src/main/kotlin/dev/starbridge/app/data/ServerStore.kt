@@ -176,6 +176,7 @@ class ServerStore(
     private var compared: Triple<JoinView, JoinRequestBody, JoinKeys>? = null
 
     override val phase = MutableStateFlow<Phase>(Phase.SignedOut)
+    override val joinLink = MutableStateFlow<String?>(null)
     override val decisions = MutableStateFlow<List<Decision>>(emptyList())
     override val prompts = MutableStateFlow<List<Prompt>>(emptyList())
     override val windows = MutableStateFlow<List<QuotaWindow>>(emptyList())
@@ -279,6 +280,9 @@ class ServerStore(
             saved.me == null || saved.pin == null -> Phase.NoDevice(saved.accountExists)
             else -> Phase.Ready
         }
+        // An offered pairing link belongs to the setup it arrived in: a join, a recovery or a
+        // sign-out ends it, so it never resurfaces in another account's or server's setup.
+        if ((phase.value as? Phase.NoDevice)?.accountExists != true) joinLink.value = null
         server.value = saved.server
         push.value = push.value.copy(type = saved.pushType, registered = saved.push?.type == saved.pushType)
         // While the server holds back entries a machine has seen, no machine's item shows (#362).
@@ -569,6 +573,10 @@ class ServerStore(
     }
 
     override fun joinAccount() = run { join(pairings.newCode(), scanned = false) }
+
+    override fun offerJoinLink(link: String?) {
+        joinLink.value = link?.takeIf { (phase.value as? Phase.NoDevice)?.accountExists == true }
+    }
 
     override fun joinWithCode(text: String) = run {
         val code = try {
