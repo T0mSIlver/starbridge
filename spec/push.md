@@ -52,6 +52,16 @@
   debug build's token sent to production is `BadDeviceToken` there, and dropping it for that
   would silence a phone that works, the lesson of #1011. The iPhone app registers its token at
   each start, as Android does.
+- **The iPhone's app icon badge** (#1603). The icon carries the Needs-you count, as the Mac's Dock
+  does (#1602): open questions and permission prompts, snoozed ones out until they return, none at
+  0 or signed out. The server sends no `badge`, since it cannot count: snoozes and settled
+  notices are sealed. The notification extension sets the count on each alert it rewrites, from
+  the inbox the app saved plus that alert's item, and the app sets it as its inbox changes. A
+  push that only closes an item is a background push, which wakes the app to sync and recount
+  unless iOS holds it or the owner swiped the app away; then the badge counts one already gone
+  until the app opens. Only an alert would always run the extension, and an alert shows a
+  notification; hiding it takes Apple's notification-filtering entitlement. iOS's Badges setting
+  for the app decides whether it shows.
 - Caps (#27, #36, #37): 10 subscriptions a device, 30 an account; 4 pushes in flight and 200
   waiting per account, 10 s each. A push connects to the exact address that passed the
   private-range check, and is sent only if its subscription and device are still active (#260).

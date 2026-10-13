@@ -176,6 +176,18 @@ final class Store {
             saved = newSaved
         }
         if let newSecrets { secrets = newSecrets }
+        showBadge()
+    }
+
+    /**
+     * The app icon's badge: the Needs-you count, none at 0 or signed out (#1603). Set as the saved
+     * inbox changes and after each sync; while the app is closed, the notification extension sets
+     * it with each question it shows (`Notify.badge`), so the app writes every time rather than
+     * only when its own count changed. iOS's Badges setting for the app decides whether it shows.
+     */
+    func showBadge() {
+        let count = phase == .ready ? needYou : 0
+        Task { await Notify.setBadge(count) }
     }
 
     /** Stores the state; a failure shows as a notice, and the app goes on with it in memory. */
