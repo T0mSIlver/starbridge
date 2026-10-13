@@ -103,7 +103,7 @@ export const register: Register = (on) => {
     const records = new Sent(
       {
         sessionId,
-        read: (path) => $.fs.read(path),
+        read: async (path) => ((await $.fs.exists(path)) ? $.fs.read(path) : undefined),
         write: (path, text) => $.fs.write(path, text),
         now,
         submit: (text) => track($.prompt.submit({ text })),

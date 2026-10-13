@@ -10,7 +10,7 @@ function machine() {
   const files = new Map<string, string>();
   /** Sessions another live process runs too. */
   const live = new Set<string>();
-  const disk = { full: false, slow: Promise.resolve() as Promise<unknown> };
+  const disk = { full: false, unreadable: false, slow: Promise.resolve() as Promise<unknown> };
   /** Runs while a process checks for another live one on its session, before the answer. */
   const checking = { run: async () => {} };
   return {
@@ -26,9 +26,8 @@ function machine() {
       const host: SentHost = {
         sessionId: async () => (typeof session === "string" ? session : session()),
         read: async (path) => {
-          const text = files.get(path);
-          if (text === undefined) throw new Error(`no ${path}`);
-          return text;
+          if (disk.unreadable) throw new Error("EIO");
+          return files.get(path);
         },
         write: async (path, text) => {
           await disk.slow;
@@ -300,6 +299,20 @@ test("a line handed over again after the other process ran it and exited is not 
   };
   expect(await second.sent.send(LINE, "d_1")).toBe(true);
   expect(second.submitted).toEqual([]);
+});
+
+test("a file that cannot be read is left as it is, and the line is tried again (#1559)", async () => {
+  const m = machine();
+  const p = m.process("s1", "proc-1");
+  await p.sent.send(LINE, "d_1");
+  m.disk.unreadable = true;
+  const other = "Answer to d_2 (Ship?): Ship";
+  expect(await p.sent.send(other, "d_2")).toBe(false);
+  await p.sent.recover().catch(() => undefined);
+  m.disk.unreadable = false;
+  expect(lines(m).map((l) => l.ack)).toEqual(["d_1"]);
+  expect(await p.sent.send(other, "d_2")).toBe(true);
+  expect(lines(m).map((l) => l.ack)).toEqual(["d_1", "d_2"]);
 });
 
 test("a recovery whose write fails submits the answer at the next try (#1559)", async () => {

@@ -19,8 +19,8 @@
 export interface SentHost {
   /** The session's id now; a `/clear` or a `/resume` changes it. */
   sessionId(): Promise<string>;
-  /** Rejects when the file is missing. */
-  read(path: string): Promise<string>;
+  /** Undefined when the file is missing; rejects when it cannot be read. */
+  read(path: string): Promise<string | undefined>;
   /** Creates the file's folder as needed. */
   write(path: string, text: string): Promise<void>;
   now(): Promise<number>;
@@ -79,7 +79,8 @@ export class Sent {
     return this.alone(async () => {
       const me = await this.host.sessionId();
       const at = await this.host.now();
-      let lines = await this.load(me);
+      let lines = await this.loaded(me);
+      if (!lines) return false;
       // A process that died between recording a line and confirming it leaves both: the loop
       // hands the line over again, and the file holds it. It goes out once, as `recover` would.
       let known = lines.find((l) => l.ack === ack);
@@ -87,7 +88,8 @@ export class Sent {
       if (known && known.process !== "") {
         if (await this.host.elsewhere(me).catch(() => false)) return true;
         // The process may have run the line's turn before it exited: then the file lacks it.
-        lines = await this.load(me);
+        lines = await this.loaded(me);
+        if (!lines) return false;
         known = lines.find((l) => l.ack === ack);
         if (!known) return true;
       }
@@ -220,15 +222,30 @@ export class Sent {
     return `${this.dir}/mod-sent/${encodeURIComponent(session)}.json`;
   }
 
+  /**
+   * Rejects when the file cannot be read, so that no write replaces lines it could not see. One
+   * that does not parse is replaced: holding every answer back on it would be worse.
+   */
   private async load(session: string): Promise<Line[]> {
     this.sessions.add(session);
+    const text = await this.host.read(this.path(session));
     let lines: Line[] = [];
     try {
-      const parsed = JSON.parse(await this.host.read(this.path(session)));
+      const parsed = JSON.parse(text ?? "[]");
       if (Array.isArray(parsed)) lines = parsed.filter(isLine);
     } catch {}
     const now = await this.host.now();
     return lines.filter((l) => now - l.at < MAX_AGE_MS);
+  }
+
+  /** `load`, or undefined with a log line when the file cannot be read. */
+  private async loaded(session: string): Promise<Line[] | undefined> {
+    try {
+      return await this.load(session);
+    } catch (e) {
+      this.host.log(`starbridge: could not read the answers sent: ${(e as Error).message}`);
+      return undefined;
+    }
   }
 
   /** Writes `session`'s lines; rejects when the write fails. */
