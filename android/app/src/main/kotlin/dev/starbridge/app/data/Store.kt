@@ -53,6 +53,9 @@ interface Store {
 
     /** The URL that starts GitHub sign-in; it ends at a link [SignIn.redirect] reads. */
     fun gitHubSignInUrl(server: String): String
+
+    /** Apple's web sign-in on starbridge.run, the only server holding Apple's keys (#1411). */
+    fun appleSignInUrl(): String
     /** The redirect that ends GitHub sign-in. */
     fun receiveSignIn(redirect: String)
     fun signInWithOwnerToken(server: String, token: String)
@@ -62,6 +65,9 @@ interface Store {
     fun joinAccount()
     /** Joins with a code another device shows as a QR code: the scanned link, or the code typed. */
     fun joinWithCode(text: String)
+    /** A pairing link opened while this phone has yet to join, until the owner joins with it or not. */
+    val joinLink: StateFlow<String?>
+    fun offerJoinLink(link: String?)
     /** Asks the account's devices to approve this phone by comparing digits. */
     fun askDevices()
     /** The owner saw the same digits on the device comparing them: its approval may count. */
@@ -100,6 +106,8 @@ interface Store {
     /** The account's hold time in seconds (#848), once read; null on a server without it. */
     val pushHold: StateFlow<Int?> get() = MutableStateFlow(null)
     fun loadPushHold() {}
+    /** Fetches the images of an answered question listed without them (#1382). */
+    fun loadImages(id: String) {}
     fun setPushHold(seconds: Int) {}
     /** What each device last said of its notifications (#943), once read. */
     val notifyStates: StateFlow<Map<String, String>> get() = MutableStateFlow(emptyMap())

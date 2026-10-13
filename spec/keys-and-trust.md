@@ -26,7 +26,9 @@
   shows none until a device already in the account opens the request, and says to open one
   (#1117). A joining phone can also scan a browser's join QR code, which is another request, not
   an approval: the server refuses the second request (`taken`), and the phone says to show a QR
-  code from Add a device instead.
+  code from Add a device instead. A pairing link that opens the Android app before it has joined
+  asks "Add this phone with this link?" first: joining makes the phone's keys and replaces a join
+  or recovery under way, so it starts only from the owner's tap, as a scan does.
 - **A machine's check code** (#795). A pairing code that reaches a browser lets a hostile server
   approve the machine into a chain it controls, which no device in that chain can expose. The
   check code, 80 bits of a hash of the machine's `add` entry, tells the chains apart. It covers the
@@ -38,7 +40,7 @@
   code never reached a browser on that path, and the owner should not have to do anything. Every
   other path (a browser, a typed code, Android 0.1.0) ends with the machine showing the whole
   code and asking `Same code? [Y/n]`, Enter for yes, if the Starbridge app shows the same; the
-  browser shows it too, after Approve, for an owner with no app. Tom chose one keypress over
+  browser shows it too, after Approve, for an owner with no app, and so does the Android app that approved a typed code or link, where the terminal waits on it (#1377). Tom chose one keypress over
   typing a group, and Enter over `y` (2026-10-08), accepting that an agent running setup, or a
   stray Enter, can confirm it. The QR code is text with no scheme, read by the app's own scanner
   as WhatsApp's in-app scan is (#1099): the check key lets the machine skip the question, so it

@@ -1,0 +1,88 @@
+{
+  "agent": "claude",
+  "model": "claude-haiku-5-5",
+  "arm": "after",
+  "scenario": "desk-question",
+  "rep": 1,
+  "turns": [
+    {
+      "commands": [],
+      "askUser": [
+        {
+          "denied": false
+        }
+      ],
+      "final": "",
+      "session": "b014a0fd-744c-4211-a920-fdd6a2e1c83e",
+      "exit": 0,
+      "seconds": 10.023
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_g4z6VVqlFjJfE_YW",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-13T13:05:41.924Z",
+      "question": "Should the dark theme follow the system setting or use a menu toggle?",
+      "context": "How should the dark theme be chosen? Should the dark theme follow the system setting or use a menu toggle?\n\n- Both (Recommended): Follow the system setting by default, with a menu toggle that overrides it.\n- Follow system only: Dark theme applies whenever the OS is in dark mode. No menu control.\n- Menu toggle only: Users switch themes manually. The system setting is ignored.",
+      "options": [
+        "Both (Recommended)",
+        "Follow system only",
+        "Menu toggle only"
+      ],
+      "recommended": "Both (Recommended)",
+      "agent": "claude-code",
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "b014a0fd-744c-4211-a920-fdd6a2e1c83e",
+        "sessionTitle": "I'm at my desk for the next ten minutes."
+      },
+      "replies": true,
+      "dir": {
+        "length": 2,
+        "head": "Ks5DjC5XAAXzGMLLpErk7vdbTbLmB9t1nZuPr4bmf6s"
+      }
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [
+    "gh auth token",
+    "gh auth token",
+    "gh issue list -R anthropics/claude-code --author @me --state closed --search closed:>2026-09-13 --json number,title,closedAt,stateReason --limit 30"
+  ],
+  "waiting": [
+    {
+      "v": 1,
+      "id": "w_nNAukKQX4nVROQ1N",
+      "decisionId": "d_g4z6VVqlFjJfE_YW",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-13T13:05:41Z",
+      "state": "waiting",
+      "dir": {
+        "length": 2,
+        "head": "Ks5DjC5XAAXzGMLLpErk7vdbTbLmB9t1nZuPr4bmf6s"
+      }
+    }
+  ],
+  "permissions": [],
+  "settled": [],
+  "peakContext": 28529,
+  "usedTokens": 29781,
+  "judge": {
+    "cold": true,
+    "consequences": true,
+    "terminal": false,
+    "links": null,
+    "plain": true,
+    "skim": true,
+    "notes": "The final terminal message is empty, so the agent never asks the question or waits for a reply in the session."
+  }
+}

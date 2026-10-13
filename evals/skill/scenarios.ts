@@ -406,6 +406,28 @@ export const scenarios: Scenario[] = [
     agents: ["claude"],
   },
   {
+    name: "mid-task",
+    what: "a live session that needs the answer before its last step, with work to do first",
+    prompt:
+      "Replace every var in src/ with let or const, one file at a time, running `node scripts/lint.js` after each file. Then set the default log level in src/log.js: that one is my call (debug, info or warn), so ask me now and go on with the lint fixes meanwhile.",
+    expect: "ask",
+    blocks: true,
+    live: { mod: true },
+    build(dir) {
+      write(dir, {
+        "AGENTS.md": "# acme notes\n\n- The owner picks the default log level: it trades log volume against what support can see.\n",
+        // Slow, so the answer comes while the agent still works.
+        "scripts/lint.js":
+          'import { readdirSync, readFileSync } from "node:fs";\nawait new Promise((r) => setTimeout(r, 8000));\nlet bad = 0;\nfor (const f of readdirSync("src")) {\n  readFileSync(`src/${f}`, "utf8").split("\\n").forEach((l, i) => {\n    if (/\\bvar\\b/.test(l)) { console.log(`src/${f}:${i + 1}: use let or const, not var`); bad++; }\n  });\n}\nprocess.exit(bad ? 1 : 0);\n',
+        "package.json": '{ "name": "notes", "type": "module" }\n',
+        "src/upload.js": "export function upload(file) {\n  var size = file.length;\n  var chunks = Math.ceil(size / 1024);\n  return chunks;\n}\n",
+        "src/sync.js": "export function sync(notes) {\n  var pending = notes.filter((n) => n.dirty);\n  return pending.length;\n}\n",
+        "src/trash.js": "export function purge(trash, now) {\n  var cutoff = now - 30 * 86400000;\n  return trash.filter((t) => t.deletedAt > cutoff);\n}\n",
+        "src/log.js": "// TODO: the owner picks the default level.\nexport const LEVEL = \"TODO\";\n",
+      });
+    },
+  },
+  {
     name: "oc-question",
     what: "opencode's question tool asks on the devices",
     prompt:

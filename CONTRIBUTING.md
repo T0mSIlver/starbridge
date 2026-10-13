@@ -24,7 +24,8 @@ For Android, in `android/`:
 Each package's README says how to run it: [server](server/README.md#run-from-source),
 [web](web/README.md), [CLI](cli/README.md), [mod](mod/README.md#develop),
 [desktop](desktop/README.md#develop), [Android](android/README.md#build) and
-[iPhone](ios/README.md#build-and-test).
+[iPhone](ios/README.md#build-and-test); agents on the dev box build it on the Mac mini with
+`ios/scripts/mini.sh` ([how](ios/README.md#build-on-the-mac-mini)).
 [PROTOCOL.md](PROTOCOL.md) holds the wire format, [DESIGN.md](DESIGN.md) the look, [SPEC.md](SPEC.md) indexes the decisions, one file per area under `spec/`, and
 [cli/CONTRACT.md](cli/CONTRACT.md) the CLI commands and output that plugins and agents rely on.
 
@@ -41,6 +42,7 @@ everyone by promotion, unchanged:
 | Homebrew | — | the tap's formula |
 | Google Play | Alpha | Alpha, or production once `PLAY_PRODUCTION` is true |
 | Desktop app | apps set to follow release candidates | every app |
+| iPhone app | TestFlight | TestFlight |
 
 The hosted page and server deploy from main before any tag, so every tag waits until
 starbridge.run runs its commit.
@@ -77,7 +79,9 @@ Then it uploads the App Bundle to Google Play's Alpha track, rcs included, or a 
 the `PLAY_PRODUCTION` repository variable is true, signing in through
 workload identity federation with no key, once the `PLAY_WIF_PROVIDER` and `PLAY_SERVICE_ACCOUNT`
 repository variables are set; without them, upload the bundle in Play Console. Run by hand on main with a version above the last one Play has, the
-workflow only asks Play to validate the upload.
+workflow only asks Play to validate the upload. The iPhone app goes to TestFlight, signed through the App
+Store Connect API key in the `ios-release` environment. To upload one build alone, from main:
+`gh workflow run release.yml --ref main -f version=1.2.3 -f testflight_only=true`.
 
 The release notes come from `cli/scripts/release-notes.ts`: a section per product, from the
 "Release notes" section of each pull request's body (one `Product: line` per product, or `None`),

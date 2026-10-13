@@ -84,12 +84,16 @@ Go on with the work that does not depend on the answer, then do what `ask`'s
 last line says:
 
 - **"The answer will come back into this session as a new prompt."** Never
-  wait for it (no `--wait`, no `starbridge wait`). If only the answer
-  unblocks you, run `starbridge waiting <id>` (or post with `--waiting`) and
-  end your turn, saying what waits on the card. If you find more work first,
-  `starbridge working <id>`. The answer arrives as a prompt:
-  `Answer to d_Xk3… (Run the orders migration…?): Now`, or one that names
-  the command that prints it.
+  wait for it: no `--wait`, no `starbridge wait`, not in a background task,
+  not with a monitor. The answer to a card that blocks nothing arrives once
+  your turn ends. When you need it before you go on, run
+  `starbridge waiting <id>` (or post with `--waiting`): it then reaches you
+  with your next tool result, or once your turn ends, whichever comes first,
+  and `waiting` prints it if it is already in. Do the work that does not
+  depend on it; when only the answer is left, end your turn, saying what
+  waits on the card. If the card stops blocking you, `starbridge working <id>`.
+  The answer reads `Answer to d_Xk3… (Run the orders migration…?): Now`, or
+  names the command that prints it.
 - **"Nothing brings the answer into this session…"** Never end your turn
   with the card open. When only the answer is left, run
   `starbridge wait <id> --timeout 5m`, again on exit 2, as long as it takes,

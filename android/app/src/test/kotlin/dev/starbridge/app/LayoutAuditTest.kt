@@ -176,7 +176,7 @@ class LayoutAuditTest(private val shot: String, private val look: Look) {
     private val promptActions = PromptActions({ _, _, _, _ -> })
     private val deviceActions = DeviceActions({}, {}, {}, {}, {})
     private val settingsActions = SettingsActions({}, {}, {}, {}, {}, {})
-    private val setupActions = SetupActions({ "" }, { _, _ -> }, {}, {}, {}, {}, {}, {}, {}, {})
+    private val setupActions = SetupActions({ "" }, { "" }, { _, _ -> }, {}, {}, {}, {}, {}, {}, {}, {})
 
     private class Shot(val tab: Tab?, val bar: Boolean = true, val before: () -> Unit = {}, val content: @Composable () -> Unit)
 

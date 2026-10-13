@@ -96,6 +96,10 @@ fun snoozePresets(now: Instant, zone: ZoneId = ZoneId.systemDefault()): List<Pai
     )
 }
 
+/** The times above the days, as on the web and the iPhone: Tomorrow morning is the swipe's. */
+fun snoozeMenu(now: Instant, zone: ZoneId = ZoneId.systemDefault()) =
+    snoozePresets(now, zone).filter { (name, _) -> name != "Tomorrow morning" }
+
 /** Tomorrow at 9:00, or this morning before [NIGHT_ENDS]. */
 private fun morning(now: Instant, zone: ZoneId): Instant {
     val local = now.atZone(zone)
@@ -175,7 +179,7 @@ fun SnoozeTimes(now: Instant, modifier: Modifier = Modifier, onSnooze: (Instant)
     var day by rememberSaveable { mutableStateOf(days.first()) }
     val start = snoozeStart(day, now, zone)
     val dial = rememberTimePickerState(initialHour = start.hour, initialMinute = start.minute, is24Hour = h24)
-    val presets = snoozePresets(now, zone).filter { (name, _) -> name != "Tomorrow morning" }
+    val presets = snoozeMenu(now, zone)
     val until = day.atTime(dial.hour, dial.minute).atZone(zone).toInstant()
     // A tick per hour or minute the dial moves to, as Android's own clock dial gives (#997).
     val haptics = LocalHapticFeedback.current

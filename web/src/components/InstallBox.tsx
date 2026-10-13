@@ -12,14 +12,21 @@ import { Icon } from "./icons";
  * analytics, which only the landing page loads (lib/analytics.ts); the signed-in inbox shows the
  * box too (#610).
  */
-export function InstallBox({ counted = false }: { counted?: boolean }) {
+export function InstallBox({
+  counted = false,
+  setup = false,
+}: {
+  counted?: boolean;
+  /** Homebrew and npm run `starbridge setup` too, for a page that pairs next (#1378). */
+  setup?: boolean;
+}) {
   const [at, setAt] = useState(0);
   const [way, setWay] = useState(0);
   const [copied, setCopied] = useState(false);
   // The check shows for 2 s after a copy; another copy restarts it.
   const reset = useRef<ReturnType<typeof setTimeout>>(undefined);
   useEffect(() => () => clearTimeout(reset.current), []);
-  const INSTALL = installCommands(usePageOrigin());
+  const INSTALL = installCommands(usePageOrigin(), setup);
   const platform = INSTALL[at] ?? INSTALL[0];
   const [, cmd, method] = platform.methods[way] ?? platform.methods[0];
   const onCopied = () => {

@@ -1,3 +1,4 @@
+import BackgroundTasks
 import Foundation
 import StarbridgeProtocol
 import UIKit
@@ -14,6 +15,7 @@ extension Store {
         let (granted, denied) = await Notify.authorize()
         try? await api().notificationState(denied ? "blocked" : granted ? "on" : "off")
         await Notify.register("permission", Notify.permissionActions)
+        await Notify.followPreviews()
         if granted { UIApplication.shared.registerForRemoteNotifications() }
     }
 
@@ -40,7 +42,13 @@ extension Store {
         if directory == nil { try await syncDirectory() }
         let listed = try await api().item(id)
         if directory?.members[listed.item.from] == nil { try await syncDirectory() }
-        guard let o = open(listed.item, entries: saved.entries.compactMap { try? JSON.parse($0) }) else { return }
+        var opened = open(listed.item, entries: saved.entries.compactMap { try? JSON.parse($0) })
+        // Sealed at a head past the chain this iPhone holds, the saved one at launch say: read it and try once more.
+        if opened == nil {
+            try await syncDirectory()
+            opened = open(listed.item, entries: saved.entries.compactMap { try? JSON.parse($0) })
+        }
+        guard let o = opened else { return }
         var s = saved
         switch listed.item.kind {
         case .decision:
@@ -59,9 +67,11 @@ extension Store {
     /**
      * Answers from a notification's button or Reply, with the time iOS gives it in the
      * background: fetches the question when the inbox has not read it, then sends as a tap does.
-     * Tells the notification how it ended: gone once sent, else "waiting to send" or "Not sent".
+     * The notification goes at the tap, as the card does, and comes back saying "Not sent" only if
+     * the server refuses the answer; one left queued goes out with the outbox (#1447).
      */
     func answerFromNotification(_ id: String, choice: String?, text: String?) async {
+        await Self.removeDelivered(about: id)
         let sent: Sent
         do {
             sent = try await serial {
@@ -69,17 +79,17 @@ extension Store {
                 return try await self.send(id, choice: choice, text: text)
             }
         } catch {
+            // Signed out mid-send, say: the answer stays queued and goes out later.
+            if saved.outbox.contains(where: { $0.decisionId == id }) { return }
             sent = .failed(describe(error))
         }
-        switch sent {
-        case .answered, .elsewhere:
-            await Self.removeDelivered(about: id)
-        case let .queued(answer):
-            await replace(id, with: "\(answer) · waiting to send")
-        case let .failed(why):
-            notSent[id] = why
-            await replace(id, with: "Not sent: \(why)")
-        }
+        if case let .failed(why) = sent { await refused(id, why: why) }
+    }
+
+    /** The server refused this iPhone's answer to `id`: its card and its notification say why. */
+    func refused(_ id: String, why: String) async {
+        notSent[id] = why
+        await replace(id, with: "Not sent: \(why)")
     }
 
     /**
@@ -132,12 +142,34 @@ extension Store {
     }
 }
 
+/**
+ * A background refresh that sends the answers left in the outbox while the app is behind
+ * (#1392). iOS picks the time, not before `earliestBeginDate`; asking again replaces the request.
+ */
+enum AnswerRefresh {
+    static let id = "dev.starbridge.ios.answers"
+
+    /** Asks for a turn once the rate-limit hold, if any, is over; a simulator refuses, which changes nothing. */
+    @MainActor static func schedule() {
+        let request = BGAppRefreshTaskRequest(identifier: id)
+        request.earliestBeginDate = max(Date(), Api.limitedUntil.withLock { $0 })
+        try? BGTaskScheduler.shared.submit(request)
+    }
+}
+
 /** Routes notifications for the app: pushes, taps and buttons. */
 final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
     lazy var store = Store(deviceName: UIDevice.current.name)
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
         UNUserNotificationCenter.current().delegate = self
+        let store = store
+        BGTaskScheduler.shared.register(forTaskWithIdentifier: AnswerRefresh.id, using: .main) { task in
+            // Handed over on the main queue, where the turn runs and ends.
+            nonisolated(unsafe) let task = task
+            let turn = Task { @MainActor in task.setTaskCompleted(success: await store.flushInBackground()) }
+            task.expirationHandler = { turn.cancel() }
+        }
         return true
     }
 

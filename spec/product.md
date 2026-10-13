@@ -78,8 +78,9 @@ every argument escaped as cross-spawn does it, so no argument runs as a command.
 
 ## Brand
 
-The mark is a space elevator: a planet's edge, a vertical tether and one amber climber (#32). Stars
-were ruled out as a cliché of AI tools. The name stands on the mark's baseline in every lockup.
+The mark is an arch from the machine (its wide leg) to the phone (its slim leg), with an amber dot
+crossing it: a question or an answer (#1366). It replaced a space elevator (#32), which a tester
+could not name. Stars and letter marks were ruled out, stars as a cliché of AI tools. The name stands on the mark's baseline in every lockup.
 Beacon (#49): soft black and neutral greys, and amber as the only accent, meaning "needs you".
 Provider colours are CodexBar's, adjusted per scheme only as far as 3:1 contrast needs (#72).
 Tokens, type and components: `DESIGN.md`.

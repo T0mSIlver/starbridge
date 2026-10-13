@@ -139,9 +139,13 @@ export interface State {
   /**
    * Verified answers by decision id; `seen` once a `wait` has printed it or the mod confirmed it
    * submitted it (`answers --ack`). `announce` until the settled notice that names the answer
-   * reached the server, so every device learns which answer won (#330).
+   * reached the server, so every device learns which answer won (#330). `steering` while the
+   * agent steers it into a Codex turn (#1486), when that began, in ms.
    */
-  answers: Record<string, { answer: Answer; seen: boolean; device?: string; announce?: true }>;
+  answers: Record<
+    string,
+    { answer: Answer; seen: boolean; device?: string; announce?: true; steering?: number }
+  >;
   /**
    * The longest directory head each device signed into an answer: while a device active in the
    * machine's chain signed one that chain lacks, the server is withholding entries (PROTOCOL.md,

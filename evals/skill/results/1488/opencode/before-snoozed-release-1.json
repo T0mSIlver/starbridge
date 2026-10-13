@@ -1,0 +1,84 @@
+{
+  "agent": "opencode",
+  "model": "zai-coding-plan/glm-5.3-flash",
+  "arm": "before",
+  "scenario": "snoozed-release",
+  "rep": 1,
+  "turns": [
+    {
+      "commands": [
+        "git status && git log --oneline -5",
+        "ls -la && npm pack --dry-run 2>&1 | tail -5",
+        "starbridge ask \\\n  --question 'Publish @acme/notes 0.4.0 to npm now?' \\\n  --context 'v0.4.0 is ready: version bumped, changelog written, git clean on main. A published npm version can never be taken back.\n**Publish now:** runs npm publish from the repo root; the 3-file tarball (resumable uploads, slow-link sync fix) goes live for everyone.\n**Hold:** nothing is sent; tell me what to change first.' \\\n  --option 'Publish now' --option 'Hold' --recommended 'Publish now' \\\n  --waiting",
+        "starbridge wait d_AL_GyCcmmwS__xlE --timeout 5m"
+      ],
+      "final": "The approval card was snoozed until tomorrow 09:00 — that's not an answer, so I did not publish.\n\nNothing is left to do but the publish itself, which waits on the card. When you're back, `starbridge wait d_AL_GyCcmmwS__xlE` picks up your answer (or tap the card) and I'll run `npm publish` on your OK.",
+      "session": "ses_ecaf9e561ffeVZLgfF5Ve0Of9n",
+      "tokens": 13764,
+      "exit": 0,
+      "seconds": 71.715,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_AL_GyCcmmwS__xlE --timeout 5m` (again on exit 2)."
+      ]
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_AL_GyCcmmwS__xlE",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-13T11:30:03Z",
+      "question": "Publish @acme/notes 0.4.0 to npm now?",
+      "context": "v0.4.0 is ready: version bumped, changelog written, git clean on main. A published npm version can never be taken back.\n**Publish now:** runs npm publish from the repo root; the 3-file tarball (resumable uploads, slow-link sync fix) goes live for everyone.\n**Hold:** nothing is sent; tell me what to change first.",
+      "options": [
+        "Publish now",
+        "Hold"
+      ],
+      "recommended": "Publish now",
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": ""
+      },
+      "replies": true,
+      "dir": {
+        "length": 2,
+        "head": "ioqHLcMNN43wQF-A3UbOq2Mz5zoykeSxDkS3J3m81fQ"
+      }
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [],
+  "snoozed": "2026-10-14T07:00:00.000Z",
+  "waiting": [
+    {
+      "v": 1,
+      "id": "w_lrozKH63y9zv4uF-",
+      "decisionId": "d_AL_GyCcmmwS__xlE",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-13T11:30:03Z",
+      "state": "waiting",
+      "dir": {
+        "length": 2,
+        "head": "ioqHLcMNN43wQF-A3UbOq2Mz5zoykeSxDkS3J3m81fQ"
+      }
+    }
+  ],
+  "permissions": [],
+  "settled": [],
+  "judge": {
+    "cold": true,
+    "consequences": true,
+    "terminal": false,
+    "links": null,
+    "plain": true,
+    "skim": true,
+    "notes": "The terminal message asks no question and only points to a `starbridge wait` command, so a user reading the session gets no prompt to answer."
+  }
+}

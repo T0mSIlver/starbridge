@@ -72,12 +72,12 @@ struct Api {
      */
     static let limitedUntil = OSAllocatedUnfairLock(initialState: Date.distantPast)
 
-    private func call(_ method: String, _ path: String, _ body: JSON? = nil, headers: [String: String] = [:], wait: Int? = nil) async throws -> (Int, JSON?) {
+    private func call(_ method: String, _ path: String, _ body: JSON? = nil, headers: [String: String] = [:], wait: Int? = nil, ownLimit: Bool = false) async throws -> (Int, JSON?) {
         let started = Date()
         var pause: TimeInterval = 0.25
         while true {
             let limited = Api.limitedUntil.withLock { $0 }.timeIntervalSinceNow
-            if limited > 0 {
+            if !ownLimit && limited > 0 {
                 if Date().timeIntervalSince(started) + limited > Api.retryFor {
                     throw ApiError(status: 429, error: "rate-limited", detail: "too many requests; retry later")
                 }
@@ -87,6 +87,7 @@ struct Api {
             do {
                 return try await once(method, path, body, headers: headers, wait: wait)
             } catch let e as ApiError where e.status == 429 && e.retryAfter != nil {
+                if ownLimit { throw e }
                 // Jitter spreads this app's calls past the limit's window, not into its first moment.
                 let until = Date().addingTimeInterval(e.retryAfter! * Double.random(in: 1...1.25))
                 Api.limitedUntil.withLock { $0 = max($0, until) }
@@ -162,6 +163,13 @@ struct Api {
 
     func appSession(code: String, verifier: String) async throws -> String {
         try string(await call("POST", "/auth/app/session", ["code": .string(code), "verifier": .string(verifier)]).1, "session")
+    }
+
+    /** Sign in with Apple: what AuthenticationServices handed the app, and the nonce it hashed into the request. */
+    func appleSession(identityToken: String, code: String, nonce: String) async throws -> String {
+        try string(await call("POST", "/auth/apple/session", [
+            "identityToken": .string(identityToken), "code": .string(code), "nonce": .string(nonce),
+        ]).1, "session")
     }
 
     func ownerSignIn(token: String) async throws -> String {
@@ -275,10 +283,14 @@ struct Api {
         Listed(item: try SealedItem(json: try field(json, "item")), receivedAt: json["receivedAt"]?.string, answeredAt: json["answeredAt"]?.string)
     }
 
-    /** A page of items of `kinds` after `cursor`, 100 at most (PROTOCOL.md, "Items"). */
-    func items(_ kinds: String, after cursor: String) async throws -> ItemsPage {
+    /**
+     * A page of items of `kinds` after `cursor`, 100 at most (PROTOCOL.md, "Items"). With
+     * `openBlobs`, an answered decision lists without its images, which `item(_:)` gives (#1382).
+     */
+    func items(_ kinds: String, after cursor: String, openBlobs: Bool = false) async throws -> ItemsPage {
         var q = URLComponents()
         q.queryItems = [URLQueryItem(name: "kind", value: kinds), URLQueryItem(name: "after", value: cursor)]
+        if openBlobs { q.queryItems?.append(URLQueryItem(name: "blobs", value: "open")) }
         let body = try await call("GET", "/items?" + (q.percentEncodedQuery ?? "")).1
         guard let list = try field(body, "items").array else { throw ProtocolError(.badSchema, "items is not a list") }
         // One item this app cannot read never hides the rest.
@@ -310,7 +322,7 @@ struct Api {
     func unsubscribe(_ id: String) async throws { _ = try await call("DELETE", "/push/subscriptions/\(id)") }
 
     /** Whether the owner sits at this iPhone ("Held pushes", #848). */
-    func presence(_ present: Bool) async throws { _ = try await call("PUT", "/presence", ["present": .bool(present)]) }
+    func presence(_ present: Bool) async throws { _ = try await call("PUT", "/presence", ["present": .bool(present)], ownLimit: true) }
 
     /** The account's hold time in seconds (#848). */
     func pushHold() async throws -> Int {

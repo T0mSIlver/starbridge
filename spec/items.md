@@ -45,7 +45,8 @@
 - **Waiting state** (#122, #191, #202). A `waiting` item says whether the agent is blocked on the
   question. A flip either way pushes, so the phone moves the notification between channels. `ask
   --waiting` posts the question quietly and lets its `waiting` item push, so the first
-  notification already says waiting.
+  notification already says waiting. It also says when the answer reaches a busy agent: a waiting one at its next
+  tool call, any other once its turn ends (#1484, `spec/harnesses.md`).
 - **Settling** (#62, #405). `settle` closes a question as `elsewhere` or `withdrawn`. It never
   withdraws one whose answer reached the agent, since devices would hold both. `settle --session`
   and `settle --all` close every open question of a session or of the machine (#584), so a
@@ -86,6 +87,13 @@
   landscape the shade is a fixed-width panel or a split column, narrower than the display (#490).
 - **Lock screen** (#389). Deny answers from there. Allow asks for the unlock, then opens the
   prompt's sheet. "Allow from notifications" in Settings (off, labelled unsafe) sends at once instead (#390).
+  Android refuses an Allow that arrives while the phone is locked, since an app with notification
+  access can send the button's intent without the unlock (#274).
+- **A question's lock-screen buttons follow what the lock screen shows** (#1375, #1384). They answer
+  from there only while the lock screen shows the question's words, else they ask for the unlock:
+  an owner who hides content there expects the locked phone to take no answers either. Android
+  reads its sensitive-content settings (android.md); the iPhone reads Show Previews, which iOS
+  gives apps, as each question's buttons are registered, and answers locked only at Always.
 - **Escapes** (#357, #410). Control and format characters show as escapes (`‮`), on the
   machine before sealing and again in every client, so a bidi override cannot reorder the command.
   An input with two keys that read alike once redacted or escaped stays at the keyboard.
