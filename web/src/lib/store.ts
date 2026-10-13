@@ -127,6 +127,39 @@ export class StalePin extends Error {
 }
 
 /**
+ * Runs `body` in one readwrite transaction and settles when it commits or aborts. A request
+ * handler wrapped in `step` that throws aborts the transaction, which then rejects with what it
+ * threw: an abort fires no `error` event, so without `onabort` the write would never settle and
+ * its open connection would block a later upgrade (#1495).
+ */
+async function transact(
+  body: (s: IDBObjectStore, step: (f: () => void) => () => void) => void,
+): Promise<void> {
+  const d = await db();
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const tx = d.transaction(STORE, "readwrite");
+      let thrown: { e: unknown } | undefined;
+      const step = (f: () => void) => () => {
+        try {
+          f();
+        } catch (e) {
+          thrown = { e };
+          tx.abort();
+        }
+      };
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+      tx.onabort = () =>
+        reject(thrown ? thrown.e : (tx.error ?? new Error("the transaction was aborted")));
+      step(() => body(tx.objectStore(STORE), step))();
+    });
+  } finally {
+    d.close();
+  }
+}
+
+/**
  * Moves the pin to a verified chain, inside one transaction so the page and the service worker
  * cannot pass each other: the chain must extend the stored pin (`headAt(length)` gives its hash
  * after `length` entries), and a chain shorter than the stored pin is refused as stale, since
@@ -137,26 +170,18 @@ export async function extendPin(
   pin: Pin,
   headAt: (length: number) => string | undefined,
 ): Promise<void> {
-  const d = await db();
-  try {
-    await new Promise<void>((resolve, reject) => {
-      const tx = d.transaction(STORE, "readwrite");
-      const s = tx.objectStore(STORE);
-      const req = s.get(key("pin", account));
-      let failure: Error | undefined;
-      req.onsuccess = () => {
-        const old = req.result as Pin | undefined;
-        if (old && pin.length < old.length) failure = new StalePin();
-        else if (old && headAt(old.length) !== old.head)
-          failure = new Error("rollback: the chain does not extend the pinned one");
-        else if (!old || pin.length > old.length) s.put(pin, key("pin", account));
-      };
-      tx.oncomplete = () => (failure ? reject(failure) : resolve());
-      tx.onerror = () => reject(tx.error);
+  let failure: Error | undefined;
+  await transact((s, step) => {
+    const req = s.get(key("pin", account));
+    req.onsuccess = step(() => {
+      const old = req.result as Pin | undefined;
+      if (old && pin.length < old.length) failure = new StalePin();
+      else if (old && headAt(old.length) !== old.head)
+        failure = new Error("rollback: the chain does not extend the pinned one");
+      else if (!old || pin.length > old.length) s.put(pin, key("pin", account));
     });
-  } finally {
-    d.close();
-  }
+  });
+  if (failure) throw failure;
 }
 
 /** Read-modify-write of one record in a single transaction. */
@@ -165,19 +190,12 @@ export async function update<K extends keyof Records>(
   account: string,
   change: (old: Records[K] | undefined) => Records[K],
 ): Promise<void> {
-  const d = await db();
-  try {
-    await new Promise<void>((resolve, reject) => {
-      const tx = d.transaction(STORE, "readwrite");
-      const s = tx.objectStore(STORE);
-      const req = s.get(key(kind, account));
-      req.onsuccess = () => s.put(change(req.result as Records[K] | undefined), key(kind, account));
-      tx.oncomplete = () => resolve();
-      tx.onerror = () => reject(tx.error);
-    });
-  } finally {
-    d.close();
-  }
+  await transact((s, step) => {
+    const req = s.get(key(kind, account));
+    req.onsuccess = step(() =>
+      s.put(change(req.result as Records[K] | undefined), key(kind, account)),
+    );
+  });
 }
 
 /** Read-modify-write of one record, reading another in the same transaction. */
@@ -187,26 +205,18 @@ export async function updateWith<K extends keyof Records, R extends keyof Record
   read: R,
   change: (old: Records[K] | undefined, other: Records[R] | undefined) => Records[K],
 ): Promise<void> {
-  const d = await db();
-  try {
-    await new Promise<void>((resolve, reject) => {
-      const tx = d.transaction(STORE, "readwrite");
-      const s = tx.objectStore(STORE);
-      const other = s.get(key(read, account));
-      other.onsuccess = () => {
-        const req = s.get(key(kind, account));
-        req.onsuccess = () =>
-          s.put(
-            change(req.result as Records[K] | undefined, other.result as Records[R] | undefined),
-            key(kind, account),
-          );
-      };
-      tx.oncomplete = () => resolve();
-      tx.onerror = () => reject(tx.error);
+  await transact((s, step) => {
+    const other = s.get(key(read, account));
+    other.onsuccess = step(() => {
+      const req = s.get(key(kind, account));
+      req.onsuccess = step(() =>
+        s.put(
+          change(req.result as Records[K] | undefined, other.result as Records[R] | undefined),
+          key(kind, account),
+        ),
+      );
     });
-  } finally {
-    d.close();
-  }
+  });
 }
 
 /**
