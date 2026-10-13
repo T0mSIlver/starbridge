@@ -28,8 +28,8 @@ the lines; the hook outputs are pinned in `cli/test/permissions.test.ts`.
 | `hook pre-tool` | Flag `--agent antigravity`. Reads Antigravity's `PreToolUse` JSON on stdin; prints `{"decision":"allow","overwrite":{"BypassSandbox":true}}` when `toolCall` is a `run_command` whose `CommandLine` is one `starbridge ask`, `waiting`, `working`, `wait`, `settle` or `hello` command alone, `{"decision":"force_ask",…}` when the line runs one of them with more, `{"decision":"deny",…}` asking for `starbridge hello` for the first other command of a conversation that needs it (see `hook pre-invocation`), else nothing. Exits 0. |
 | `pair` | Prints `Pairing code: <code>` first. Once approved, unless the Starbridge app checked it from the QR code, prints `Check code: <code>` and waits for Enter (yes) or `n` on the terminal or for `pair --confirm` or `pair --reject`. |
 
-Codex sessions receive ``Starbridge has the owner's answer to <id>: run `starbridge wait <id>` to read it.``
-as a queued prompt. The plugins set `STARBRIDGE_PI_ANSWERS`, `STARBRIDGE_OPENCODE_SESSION`,
+Codex sessions receive ``Starbridge has the owner's answer to <id>: run `starbridge wait <id>` to read it.``, or for several answers at once ``Starbridge has the owner's answers to <id>, <id>: run `starbridge wait <id>` for each, in this order, to read them.``
+(#1597), as a queued prompt. The plugins set `STARBRIDGE_PI_ANSWERS`, `STARBRIDGE_OPENCODE_SESSION`,
 `STARBRIDGE_OPENCODE_TITLE` and `STARBRIDGE_OPENCODE_ANSWERS` for the commands their agents run,
 and read `STARBRIDGE_CONFIG_DIR`, `STARBRIDGE_AGENT_SOCKET` and `STARBRIDGE_NO_AGENT`.
 

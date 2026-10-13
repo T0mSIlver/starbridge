@@ -157,12 +157,14 @@ export function codexReachable(s: CodexSession): Promise<boolean> {
 const QUEUE_MS = 30_000;
 
 /**
- * What the agent queues into a Codex session for an answer. `codex queue` takes the message
- * only as an argument, which other local users can read in /proc/<pid>/cmdline, so it names the
- * decision and the command that prints the answer, never the question or the answer.
+ * What the agent queues into a Codex session for the answers to `ids`. `codex queue` takes the
+ * message only as an argument, which other local users can read in /proc/<pid>/cmdline, so it
+ * names the decisions and the command that prints each answer, never a question or an answer.
  */
-export function codexNotice(id: string): string {
-  return `Starbridge has the owner's answer to ${id}: run \`starbridge wait ${id}\` to read it.`;
+export function codexNotice(ids: string[]): string {
+  if (ids.length === 1)
+    return `Starbridge has the owner's answer to ${ids[0]}: run \`starbridge wait ${ids[0]}\` to read it.`;
+  return `Starbridge has the owner's answers to ${ids.join(", ")}: run \`starbridge wait <id>\` for each, in this order, to read them.`;
 }
 
 /** Queues `message` into Codex session `thread`; resolves to the error, or undefined. */

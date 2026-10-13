@@ -68,7 +68,9 @@ const CHECKS: { id: string; label: string; judge?: true; card?: true }[] = [
   { id: "flags", label: "Only current ask flags (no --default, no --json)" },
   { id: "mark", label: "Marked waiting only when blocked" },
   { id: "delivery", label: "Did what ask's last line said: waited, or ended the turn" },
-  { id: "steer", label: "Needed the answer mid-task: marked it waiting, no wait, no background task, no monitor" },
+  { id: "steer", label: "Needed the answer mid-task: marked it waiting or took it with a tool result, no wait, no background task, no monitor" },
+  { id: "changed", label: "Acted on a typed answer that changed the work: no file left on the old pick" },
+  { id: "inturn", label: "Took that answer within the turn that was running, not in a later one" },
   { id: "done", label: "On Done: read the page, no settle, no new card" },
   { id: "withdrew", label: "Answered in the terminal: withdrew the card, saying why in one line" },
   { id: "question", label: "opencode's question reached the devices and its answer the session" },
@@ -295,7 +297,8 @@ function score(r: Rec, s: Scenario): Record<string, boolean | null> {
       ? !all.some((c) => /starbridge\s+ask\b[^\n]*--(default|json)\b/.test(c))
       : null,
     // Marked waiting on the devices, or would have been had the answer not come first: the
-    // owner's answer can land before the agent's `wait`, which then marks nothing.
+    // owner's answer can land before the agent's `wait`, which then marks nothing, or come with a
+    // tool result before only the answer was left (#1584).
     mark:
       s.blocks === undefined || !hasCard
         ? null
@@ -303,22 +306,33 @@ function score(r: Rec, s: Scenario): Record<string, boolean | null> {
           ((r.waiting ?? []).some((w) => (w as { state?: string }).state === "waiting") ||
             all.some((c) =>
               /starbridge\s+(ask\b[^\n]*--waiting\b|waiting\b|wait\b(?![^\n]*--no-mark))/.test(c),
-            )),
+            ) ||
+            (s.blocks && !!r.steered)),
     delivery: (() => {
       const said = first?.delivery ?? [];
       const waited = all.some((c) => /starbridge\s+(ask\b[^\n]*--wait\b|wait\b)/.test(c));
       if (said.some((l) => l.startsWith("The answer will come back")))
-        return !cmds.some((c) => /starbridge\s+(ask\b[^\n]*--wait\b|wait\b)/.test(c)) && !!r.prompted;
+        return (
+          !cmds.some((c) => /starbridge\s+(ask\b[^\n]*--wait\b|wait\b)/.test(c)) &&
+          (!!r.prompted || !!r.steered)
+        );
       if (said.some((l) => l.startsWith("Nothing brings"))) return waited;
       return null;
     })(),
     // #1488: the one way to need an answer now is `starbridge waiting` (or `ask --waiting`).
     steer: s.name === "mid-task"
       ? ((r.waiting ?? []).some((w) => (w as { state?: string }).state === "waiting") ||
-          all.some((c) => /starbridge\s+(ask\b[\s\S]*--waiting\b|waiting\b)/.test(c))) &&
+          all.some((c) => /starbridge\s+(ask\b[\s\S]*--waiting\b|waiting\b)/.test(c)) ||
+          !!r.steered) &&
         !all.some((c) => /starbridge\s+(ask\b[^\n]*--wait\b|wait\b)/.test(c)) &&
         !r.turns.some((t) => (t.background ?? []).length > 0 || (t.tools ?? []).includes("Monitor"))
       : null,
+    changed: s.outcome
+      ? !!r.answered &&
+        Object.values(r.files ?? {}).length === s.outcome.files.length &&
+        Object.values(r.files ?? {}).every((t) => s.outcome?.right.test(t) && !s.outcome.wrong.test(t))
+      : null,
+    inturn: s.outcome?.inTurn ? !!r.answered && !!r.steered && !r.prompted : null,
     done: s.done
       ? !!r.answered &&
         !all.some((c) => /starbridge\s+settle\b/.test(c)) &&

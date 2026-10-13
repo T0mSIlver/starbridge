@@ -227,48 +227,80 @@ export class Decisions implements Feature {
   }
 
   /**
-   * Queues each new answer to a Codex session into it with `codex queue`, or steers it into the
-   * running turn when the decision is marked waiting (#1486), and sends each to an
-   * Antigravity conversation through its language server (#961). Marks it seen only once that
-   * succeeded: an agent that dies meanwhile delivers it again, rather than never. A session that
-   * is gone gets CODEX_TRIES tries, a minute apart; the answer stays for a `wait`.
+   * Steers the new answers to a Codex session into its running turn (#1486, #1584), or queues
+   * them with `codex queue` when none runs, and sends those to an Antigravity conversation
+   * through its language server (#961): the answers one session has waiting go as one message
+   * (#1597). Marks them seen only once that succeeded: an agent that dies meanwhile delivers them
+   * again, rather than never. A session that is gone gets CODEX_TRIES tries, a minute apart; the
+   * answers stay for a `wait`.
    */
   private async deliverQueued() {
     const now = Date.now();
-    for (const [id, a] of Object.entries(this.ctx.store.state().answers)) {
-      // Read again before each: another process may have found the directory behind meanwhile.
-      const st = this.ctx.store.state();
-      if (st.behind) return;
+    const st = this.ctx.store.state();
+    if (st.behind) return;
+    /** The ids due, in the order the answers came, by the session and route they go to. */
+    const due = new Map<string, string[]>();
+    for (const [id, a] of Object.entries(st.answers)) {
       const asked = st.asked[id];
       const route = asked?.codex ?? asked?.antigravity;
-      if (a.seen || !st.answers[id] || !route || !asked?.session || !deliverable(st, id)) continue;
+      if (a.seen || !route || !asked?.session || !deliverable(st, id)) continue;
       const retry = this.retries.get(id) ?? { tries: 0, at: 0 };
       if (retry.tries >= CODEX_TRIES || retry.at > now) continue;
-      const [how, where] = asked.codex
-        ? ["codex queue", `Codex session ${asked.session}`]
-        : ["sending to Antigravity", `Antigravity conversation ${asked.session}`];
-      const steered = asked.codex && asked.waiting?.state === "waiting" && (await this.steer(id));
-      // A `waiting` printed it meanwhile.
-      if (!steered && this.ctx.store.state().answers[id]?.seen) continue;
-      const error = steered
-        ? undefined
-        : asked.codex
-          ? await codexQueue(asked.codex, asked.session, codexNotice(id))
-          : await agySend(
-              asked.antigravity as AgyRoute,
-              asked.session,
-              answerLine(a.answer, asked.question),
-            );
-      if (error === undefined) {
-        this.retries.delete(id);
-        this.ctx.store.updateState((st) => {
+      const key = JSON.stringify([asked.codex ? "codex" : "agy", route, asked.session]);
+      due.set(key, [...(due.get(key) ?? []), id]);
+    }
+    for (const ids of due.values()) await this.deliverTo(ids, now);
+  }
+
+  /** Delivers the answers to `ids`, one session's, as one message. */
+  private async deliverTo(all: string[], now: number) {
+    // Read again: another process may have found the directory behind meanwhile.
+    if (this.ctx.store.state().behind) return;
+    const first = this.ctx.store.state().asked[all[0] as string];
+    if (!first?.session) return;
+    const session = first.session;
+    const [how, where] = first.codex
+      ? ["codex queue", `Codex session ${session}`]
+      : ["sending to Antigravity", `Antigravity conversation ${session}`];
+    // Into the running turn, waiting or not; with none running, queued (#1584).
+    const steered = first.codex ? await this.steer(all) : [];
+    // Read again: a `waiting` printed one meanwhile, or a `settle` closed it during the steer or
+    // an earlier session's delivery.
+    const fresh = this.ctx.store.state();
+    const ids = all.filter(
+      (id) => !steered.includes(id) && !fresh.answers[id]?.seen && deliverable(fresh, id),
+    );
+    const done = (sent: string[], verb: string) => {
+      for (const id of sent) this.retries.delete(id);
+      this.ctx.store.updateState((st) => {
+        for (const id of sent) {
           const x = st.answers[id];
           if (x) x.seen = true;
-        });
-        this.hub.log(`answer to ${id} ${steered ? "steered" : "queued"} into ${where}`);
-        continue;
-      }
-      const tries = retry.tries + 1;
+        }
+      });
+      this.hub.log(
+        `${sent.length > 1 ? "answers" : "answer"} to ${sent.join(", ")} ${verb} into ${where}`,
+      );
+    };
+    if (steered.length > 0) done(steered, "steered");
+    if (ids.length === 0) return;
+    const st = fresh;
+    const error = first.codex
+      ? await codexQueue(first.codex, session, codexNotice(ids))
+      : await agySend(
+          first.antigravity as AgyRoute,
+          session,
+          ids
+            .map((id) => {
+              const a = st.answers[id];
+              return a ? answerLine(a.answer, st.asked[id]?.question) : "";
+            })
+            .filter(Boolean)
+            .join("\n"),
+        );
+    if (error === undefined) return done(ids, "queued");
+    for (const id of ids) {
+      const tries = (this.retries.get(id)?.tries ?? 0) + 1;
       this.retries.set(id, { tries, at: now + CODEX_RETRY_MS });
       this.hub.log(
         tries < CODEX_TRIES
@@ -279,30 +311,38 @@ export class Decisions implements Feature {
   }
 
   /**
-   * Steers the answer to `id`, marked waiting, into its Codex session's running turn (#1486).
-   * Claimed under the lock first, so a `waiting` meanwhile does not print it too. The claim is
-   * not `seen`: an agent that dies mid-steer leaves one that expires, and delivers it again.
+   * Steers the answers to `ids`, one Codex session's, into its running turn as one message
+   * (#1486, #1597), and returns those it steered. Claimed under the lock first, so a `waiting`
+   * meanwhile does not print one too. The claim is not `seen`: an agent that dies mid-steer leaves
+   * one that expires, and delivers it again.
    */
-  private async steer(id: string): Promise<boolean> {
-    let line: string | undefined;
+  private async steer(ids: string[]): Promise<string[]> {
+    const lines: string[] = [];
+    const claimed: string[] = [];
     let route: { codex: CodexSession; session: string } | undefined;
     this.ctx.store.updateState((st) => {
-      const a = st.answers[id];
-      const asked = st.asked[id];
-      if (!a || a.seen || steering(a) || !asked?.codex || !asked.session) return;
-      a.steering = Date.now();
-      line = answerLine(a.answer, asked.question);
-      route = { codex: asked.codex, session: asked.session };
+      for (const id of ids) {
+        const a = st.answers[id];
+        const asked = st.asked[id];
+        if (!a || a.seen || steering(a) || !asked?.codex || !asked.session) continue;
+        if (!deliverable(st, id)) continue;
+        a.steering = Date.now();
+        lines.push(answerLine(a.answer, asked.question));
+        claimed.push(id);
+        route ??= { codex: asked.codex, session: asked.session };
+      }
     });
-    if (!route || line === undefined) return false;
-    const steered = await codexSteer(route.codex, route.session, line);
+    if (!route || claimed.length === 0) return [];
+    const steered = await codexSteer(route.codex, route.session, lines.join("\n"));
     this.ctx.store.updateState((st) => {
-      const a = st.answers[id];
-      if (!a) return;
-      delete a.steering;
-      if (steered) a.seen = true;
+      for (const id of claimed) {
+        const a = st.answers[id];
+        if (!a) continue;
+        delete a.steering;
+        if (steered) a.seen = true;
+      }
     });
-    return steered;
+    return steered ? claimed : [];
   }
 
   /** One long-poll after another from the shared cursor, each held until an answer comes. */
