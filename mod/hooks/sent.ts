@@ -35,11 +35,12 @@ interface Line {
   /** The token of the process that submitted it last; empty when that submit failed. */
   process: string;
   at: number;
-  tries: number;
+  /** Submits a hook refused or the engine rejected; a process exiting is not one. */
+  refused: number;
 }
 
-/** Submits after which a line that never started is dropped, with a log line. */
-const MAX_TRIES = 3;
+/** Refused submits after which a line is dropped, with a log line. */
+const MAX_REFUSED = 3;
 /** A line older than this is dropped: the server drops an unanswered decision after 30 days. */
 const MAX_AGE_MS = 30 * 24 * 3600_000;
 
@@ -48,8 +49,8 @@ export class Sent {
   private readonly sessions = new Map<string, Line[]>();
   /** Sessions whose lines from other processes went out again. */
   private readonly recovered = new Set<string>();
-  /** File writes, one after another. */
-  private writes: Promise<unknown> = Promise.resolve();
+  /** Every operation runs alone, from its read to its submit. */
+  private queue: Promise<unknown> = Promise.resolve();
 
   constructor(
     private readonly host: SentHost,
@@ -62,49 +63,51 @@ export class Sent {
   ) {}
 
   /**
-   * Records `line`, then submits it. False when it could not be recorded: nothing went out, and
-   * the loop leaves the line unconfirmed for a later try.
+   * Records `line`, then submits it. False when nothing went out: it could not be recorded, or a
+   * `/clear` or `/resume` came meanwhile. The loop then leaves the line unconfirmed for a later
+   * try.
    */
-  async send(line: string, ack: string): Promise<boolean> {
-    const me = await this.host.sessionId();
-    const at = await this.host.now();
-    const lines = await this.load(me);
-    // A process that died between recording a line and confirming it leaves both: the loop
-    // hands the line over again, and the file holds it. It goes out once, as `recover` would.
-    const known = lines.find((l) => l.ack === ack);
-    if (known && (this.process === undefined || known.process === this.process)) return true;
-    if (known && known.tries >= MAX_TRIES) {
-      this.host.log(`starbridge: gave up on the answer ${ack} after ${known.tries} submits`);
-      await this.save(
-        me,
-        lines.filter((l) => l !== known),
-      ).catch(() => undefined);
+  send(line: string, ack: string): Promise<boolean> {
+    return this.alone(async () => {
+      const me = await this.host.sessionId();
+      const at = await this.host.now();
+      const lines = await this.load(me);
+      // A process that died between recording a line and confirming it leaves both: the loop
+      // hands the line over again, and the file holds it. It goes out once, as `recover` would.
+      const known = lines.find((l) => l.ack === ack);
+      if (known && (this.process === undefined || known.process === this.process)) return true;
+      const entry = known
+        ? { ...known, process: this.process ?? "" }
+        : { ack, line, process: this.process ?? "", at, refused: 0 };
+      const rest = lines.filter((l) => l !== known);
+      try {
+        await this.save(me, [...rest, entry]);
+      } catch (e) {
+        this.host.log(`starbridge: could not record the answer ${ack}: ${(e as Error).message}`);
+        return false;
+      }
+      if ((await this.host.sessionId()) !== me) {
+        // Left for session `me`: the loop holds the line back until it is current again.
+        await this.save(me, [...rest, { ...entry, process: "" }]).catch(() => undefined);
+        return false;
+      }
+      this.enter(me, entry);
       return true;
-    }
-    const entry = known
-      ? { ...known, process: this.process ?? "", tries: known.tries + 1 }
-      : { ack, line, process: this.process ?? "", at, tries: 1 };
-    try {
-      await this.save(me, [...lines.filter((l) => l !== known), entry]);
-    } catch (e) {
-      this.host.log(`starbridge: could not record the answer ${ack}: ${(e as Error).message}`);
-      return false;
-    }
-    this.enter(me, entry);
-    return true;
+    });
   }
 
   /**
    * A turn started with `text`: each line it carries reached the model. Checks every session read
    * so far, since a `/clear` may come between the submit and the turn.
    */
-  async started(text: string): Promise<void> {
-    const me = await this.host.sessionId();
-    await this.load(me);
-    for (const [session, lines] of this.sessions) {
-      const left = lines.filter((l) => !text.includes(l.line));
-      if (left.length < lines.length) await this.save(session, left).catch(() => undefined);
-    }
+  started(text: string): Promise<void> {
+    return this.alone(async () => {
+      await this.load(await this.host.sessionId());
+      for (const [session, lines] of this.sessions) {
+        const left = lines.filter((l) => !text.includes(l.line));
+        if (left.length < lines.length) await this.save(session, left).catch(() => undefined);
+      }
+    });
   }
 
   /**
@@ -112,28 +115,32 @@ export class Sent {
    * failed, once per session id. Then these come from this process, and only a turn start or a
    * failed submit changes them.
    */
-  async recover(): Promise<void> {
-    if (this.process === undefined) return;
-    const me = await this.host.sessionId();
-    if (!me) return;
-    const lines = await this.load(me);
-    const first = !this.recovered.has(me);
-    this.recovered.add(me);
-    const due = lines.filter((l) => l.process === "" || (first && l.process !== this.process));
-    if (due.length === 0) return;
-    const keep: Line[] = [];
-    const again: Line[] = [];
-    for (const l of lines) {
-      if (!due.includes(l)) keep.push(l);
-      else if (l.tries >= MAX_TRIES)
-        this.host.log(`starbridge: gave up on the answer ${l.ack} after ${l.tries} submits`);
-      else again.push({ ...l, process: this.process, tries: l.tries + 1 });
-    }
-    await this.save(me, [...keep, ...again]);
-    for (const l of again) {
-      this.host.log(`starbridge: submitting the answer ${l.ack} again: its prompt never ran`);
-      this.enter(me, l);
-    }
+  recover(): Promise<void> {
+    return this.alone(async () => {
+      if (this.process === undefined) return;
+      const me = await this.host.sessionId();
+      if (!me) return;
+      const lines = await this.load(me);
+      const first = !this.recovered.has(me);
+      this.recovered.add(me);
+      const due = lines.filter((l) => l.process === "" || (first && l.process !== this.process));
+      if (due.length === 0) return;
+      const keep = lines.filter((l) => !due.includes(l));
+      const again: Line[] = [];
+      for (const l of due)
+        if (l.refused >= MAX_REFUSED)
+          this.host.log(`starbridge: gave up on the answer ${l.ack}: refused ${l.refused} times`);
+        else again.push({ ...l, process: this.process });
+      await this.save(me, [...keep, ...again]);
+      if ((await this.host.sessionId()) !== me) {
+        this.recovered.delete(me);
+        return;
+      }
+      for (const l of again) {
+        this.host.log(`starbridge: submitting the answer ${l.ack} again: its prompt never ran`);
+        this.enter(me, l);
+      }
+    });
   }
 
   private enter(session: string, entry: Line) {
@@ -148,24 +155,34 @@ export class Sent {
   }
 
   /** `$.prompt.submit` resolved: the line's turn started. */
-  private async done(session: string, ack: string) {
-    const lines = await this.load(session);
-    if (lines.some((l) => l.ack === ack))
-      await this.save(
-        session,
-        lines.filter((l) => l.ack !== ack),
-      ).catch(() => undefined);
+  private done(session: string, ack: string) {
+    return this.alone(async () => {
+      const lines = await this.load(session);
+      if (lines.some((l) => l.ack === ack))
+        await this.save(
+          session,
+          lines.filter((l) => l.ack !== ack),
+        ).catch(() => undefined);
+    });
   }
 
   /** The submit failed: the next `recover` submits the line again. */
-  private async failed(session: string, ack: string, why: string) {
+  private failed(session: string, ack: string, why: string) {
     this.host.log(`starbridge: the answer ${ack} did not go in: ${why}`);
-    const lines = await this.load(session);
-    if (!lines.some((l) => l.ack === ack)) return;
-    await this.save(
-      session,
-      lines.map((l) => (l.ack === ack ? { ...l, process: "" } : l)),
-    ).catch(() => undefined);
+    return this.alone(async () => {
+      const lines = await this.load(session);
+      if (!lines.some((l) => l.ack === ack)) return;
+      await this.save(
+        session,
+        lines.map((l) => (l.ack === ack ? { ...l, process: "", refused: l.refused + 1 } : l)),
+      ).catch(() => undefined);
+    });
+  }
+
+  private alone<T>(op: () => Promise<T>): Promise<T> {
+    const run = this.queue.then(op);
+    this.queue = run.catch(() => undefined);
+    return run;
   }
 
   private path(session: string) {
@@ -182,21 +199,14 @@ export class Sent {
     } catch {}
     const now = await this.host.now();
     lines = lines.filter((l) => now - l.at < MAX_AGE_MS);
-    // A read that raced another one for the same session keeps the first.
-    const raced = this.sessions.get(session);
-    if (raced) return raced;
     this.sessions.set(session, lines);
     return lines;
   }
 
-  /** Sets `session`'s lines and writes them; rejects when the write fails. */
-  private save(session: string, lines: Line[]): Promise<void> {
+  /** Writes `session`'s lines, and keeps them once written; rejects when the write fails. */
+  private async save(session: string, lines: Line[]): Promise<void> {
+    await this.host.write(this.path(session), JSON.stringify(lines));
     this.sessions.set(session, lines);
-    const write = this.writes.then(() =>
-      this.host.write(this.path(session), JSON.stringify(this.sessions.get(session) ?? [])),
-    );
-    this.writes = write.catch(() => undefined);
-    return write;
   }
 }
 
@@ -207,6 +217,6 @@ function isLine(l: unknown): l is Line {
     typeof x.line === "string" &&
     typeof x.process === "string" &&
     typeof x.at === "number" &&
-    typeof x.tries === "number"
+    typeof x.refused === "number"
   );
 }

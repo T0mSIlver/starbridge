@@ -8,23 +8,24 @@ const framed = (line: string) =>
 /** One machine's files, shared by the processes a test starts on it. */
 function machine() {
   const files = new Map<string, string>();
-  const disk = { full: false };
+  const disk = { full: false, slow: Promise.resolve() as Promise<unknown> };
   return {
     files,
     disk,
     /** A process on session `session`: its prompts resolve when the test starts their turn. */
-    process(session: string, token: string | undefined) {
+    process(session: string | (() => string), token: string | undefined) {
       const submitted: string[] = [];
       const pending: { text: string; settle: (r: unknown) => void; fail: (e: Error) => void }[] =
         [];
       const host: SentHost = {
-        sessionId: async () => session,
+        sessionId: async () => (typeof session === "string" ? session : session()),
         read: async (path) => {
           const text = files.get(path);
           if (text === undefined) throw new Error(`no ${path}`);
           return text;
         },
         write: async (path, text) => {
+          await disk.slow;
           if (disk.full) throw new Error("disk full");
           files.set(path, text);
         },
@@ -145,4 +146,44 @@ test("a line that cannot be recorded is not submitted, so the loop tries it agai
   m.disk.full = true;
   expect(await p.sent.send(LINE, "d_1")).toBe(false);
   expect(p.submitted).toEqual([]);
+  m.disk.full = false;
+  expect(await p.sent.send(LINE, "d_1")).toBe(true);
+  expect(p.submitted).toEqual([LINE]);
+});
+
+test("the loop and the recovery picking up a dead process's line at once submit it once", async () => {
+  const m = machine();
+  await m.process("s1", "proc-1").sent.send(LINE, "d_1");
+  const next = m.process("s1", "proc-2");
+  await Promise.all([next.sent.recover(), next.sent.send(LINE, "d_1")]);
+  expect(next.submitted).toEqual([LINE]);
+});
+
+test("a /clear while the line is recorded: nothing goes into the new session, and the old one gets it back", async () => {
+  const m = machine();
+  let current = "s1";
+  const p = m.process(() => current, "proc-1");
+  let release = () => {};
+  m.disk.slow = new Promise((r) => {
+    release = () => r(undefined);
+  });
+  const sending = p.sent.send(LINE, "d_1");
+  await Bun.sleep(5);
+  current = "s2";
+  release();
+  expect(await sending).toBe(false);
+  expect(p.submitted).toEqual([]);
+  current = "s1";
+  await p.sent.recover();
+  expect(p.submitted).toEqual([LINE]);
+});
+
+test("an answer queued in each of several processes that exit is still submitted by the next", async () => {
+  const m = machine();
+  await m.process("s1", "proc-0").sent.send(LINE, "d_1");
+  for (let i = 1; i <= 4; i++) {
+    const p = m.process("s1", `proc-${i}`);
+    await p.sent.recover();
+    expect(p.submitted).toEqual([LINE]);
+  }
 });
