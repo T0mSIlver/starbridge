@@ -14,8 +14,10 @@ if [ -z "$(git branch -r --contains "$rev")" ]; then
   exit 1
 fi
 
-# Only commits deploy.yml deployed have images (#1518): main's since then.
-for image in server web; do
+# Only commits deploy.yml deployed have images (#1518): main's since then. The box may still
+# hold them (the newest 5), else ghcr.io must.
+held=$(ssh -i "$key" "$host" "sudo docker image inspect ghcr.io/t0msilver/starbridge-server:$rev ghcr.io/t0msilver/starbridge-web:$rev >/dev/null 2>&1 && echo yes" || true)
+[ "$held" = yes ] || for image in server web; do
   token=$(curl -fsS "https://ghcr.io/token?scope=repository:t0msilver/starbridge-$image:pull" | jq -r .token)
   curl -fsS -o /dev/null -H "Authorization: Bearer $token" \
     -H 'Accept: application/vnd.oci.image.index.v1+json, application/vnd.docker.distribution.manifest.list.v2+json' \
