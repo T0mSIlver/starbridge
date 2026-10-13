@@ -21,7 +21,7 @@
  */
 import { appendFileSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { parseArgs } from "node:util";
-import { box, expMs, Hist, id, LOAD_DIR, type LoadResult, type User } from "./lib.ts";
+import { box, expMs, Hist, id, LOAD_DIR, type LoadResult, settle, type User } from "./lib.ts";
 
 const { values } = parseArgs({
   options: {
@@ -79,8 +79,6 @@ const stageMs = Number(values.stage) * 1000;
 const WAITS = new Set(["answers.wait", "joins.wait"]);
 /** An answer slower than this misses the service target (spec/hosted.md). */
 const LATE_MS = 5000;
-/** The fleet gives up on an answer or a decision after this long: lost, or unseen. */
-const GIVE_UP_MS = 600_000;
 
 /** The share `--pages` of users keep the web page open, spread evenly over user numbers. */
 const hasPage = (u: User) => (u.n * 0.618) % 1 < Number(values.pages);
@@ -391,33 +389,15 @@ async function worker(index: number, procs: number) {
       }, Math.random() * 5000);
     }
   };
-  /**
-   * The fleet's bookkeeping: an answer no machine got within GIVE_UP_MS is lost, a decision no
-   * page saw unseen; an answer that arrived is kept an hour more, to catch a double.
-   */
-  const settle = (now: number) => {
-    for (const [a, at] of answers) {
-      if (got.has(a)) {
-        if (now - at < 3_600_000) continue;
-      } else if (now - at < GIVE_UP_MS) continue;
-      else if (acked.has(a)) counts.lost++;
-      answers.delete(a);
-      got.delete(a);
-      acked.delete(a);
-    }
-    for (const [d, at] of decidedAt) {
-      if (now - at < GIVE_UP_MS) continue;
-      if (decisions.get(d) === false) counts.unseen++;
-      decisions.delete(d);
-      decidedAt.delete(d);
-    }
-  };
-
   startUsers();
   let sent = 0;
   const tick = setInterval(() => {
     startUsers();
-    if (values.metrics) settle(Date.now());
+    if (values.metrics) {
+      const gone = settle({ answers, got, acked, decisions, decidedAt }, Date.now());
+      counts.lost += gone.lost;
+      counts.unseen += gone.unseen;
+    }
     const out = Object.fromEntries([...ops].map(([k, v]) => [k, v]));
     try {
       process.stdout.write(
