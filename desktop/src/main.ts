@@ -19,6 +19,7 @@ import {
   type WebContents,
 } from "electron";
 import { Answers } from "./answers";
+import { badgeText } from "./badge";
 import { type Answer, type Entry, parseAnswered, parseState } from "./bridge";
 import { MenuBar, trayImageName } from "./menubar";
 import { Notifier, type Shown } from "./notifier";
@@ -67,6 +68,8 @@ let tray: Tray | null = null;
 const menuBar = new MenuBar(() => paintTray());
 /** Items in Needs you, which turn the menu bar's dot amber. */
 let needs = 0;
+/** The Dock icon's badge; "" clears it (badge.ts). */
+let badge = "";
 let notifier: Notifier;
 /** The Needs you widget's snapshot (#1031). */
 const widgets = Widgets.at(process.execPath);
@@ -153,6 +156,8 @@ async function ready(): Promise<void> {
     const state = fromPage(e) && parseState(x);
     if (!state) return;
     needs = state.count;
+    badge = badgeText(state) ?? badge;
+    paintBadge();
     paintTray();
     notifier.page(state);
     widgets.show(snapshot(state));
@@ -415,7 +420,13 @@ function applyPlace(): void {
   }
   if (settings.place !== "menu" || win?.isVisible()) app.dock?.show();
   else app.dock?.hide();
+  paintBadge();
   app.dock?.setMenu(menu(false));
+}
+
+/** Shows the badge on the Dock icon, which loses it when hidden, so each show repaints it. */
+function paintBadge(): void {
+  app.dock?.setBadge(badge);
 }
 
 /**
@@ -487,6 +498,7 @@ function showWindow(): void {
   win.focus();
   // After the window: bringing the Dock icon back is slow, and the window need not wait for it.
   app.dock?.show();
+  paintBadge();
   // From the click to the next frame the page draws: how fast a warm open feels.
   if (timing && win.webContents.getURL())
     win.webContents
