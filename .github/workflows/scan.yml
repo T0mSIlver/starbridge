@@ -31,7 +31,6 @@ jobs:
   # Fails on a high or critical vulnerability that has a fixed version; lists the rest in the
   # run's summary. A finding without a fix has nothing to act on yet.
   images:
-    if: github.event_name != 'workflow_run' || github.event.workflow_run.event == 'push'
     # Docker and gh, which some self-hosted boxes lack.
     runs-on: ubuntu-latest
     timeout-minutes: 15
