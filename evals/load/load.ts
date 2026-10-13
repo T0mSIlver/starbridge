@@ -16,7 +16,7 @@
  */
 import { readFileSync } from "node:fs";
 import { parseArgs } from "node:util";
-import { box, expMs, Hist, id, LOAD_DIR, type User } from "./lib.ts";
+import { box, expMs, Hist, id, LOAD_DIR, type LoadResult, type User } from "./lib.ts";
 
 const { values } = parseArgs({
   options: {
@@ -40,6 +40,8 @@ const { values } = parseArgs({
     idle: { type: "string" },
     worker: { type: "string" },
     out: { type: "string" },
+    /** The result as JSON, for compare.ts: each stage, the final counts, memory every 5 min. */
+    json: { type: "string" },
   },
 });
 
@@ -48,6 +50,15 @@ const WINDOW_MS = 10_000;
 const TARGET = process.env.LOAD_TARGET ?? "http://caddy:18000";
 /** The host's cgroup tree, mounted into the load container. */
 const CGROUPS = process.env.LOAD_CGROUPS ?? "/sys/fs/cgroup";
+/**
+ * Where Docker puts the containers' cgroups: under stack.sh's LOAD_SLICE, or Docker's default.
+ * systemd nests a slice under each prefix of its name: a-b.slice is a.slice/a-b.slice.
+ */
+const SLICE = (process.env.LOAD_SLICE || "system.slice")
+  .replace(/\.slice$/, "")
+  .split("-")
+  .map((_, i, parts) => `${parts.slice(0, i + 1).join("-")}.slice`)
+  .join("/");
 /** One operation's window as a worker sends it. */
 type WorkerOp = { hist: { counts: (number | null)[]; n: number }; errors: Record<string, number> };
 const ramp = values.ramp.split(",").map(Number);
@@ -507,11 +518,15 @@ async function parent() {
       }
     })();
   let broke = "";
+  const result: LoadResult = { at: new Date(t0).toISOString(), stages: [], final: {}, memory: [] };
+  let sampledAt = 0;
   const stages = values.until ? [ramp.at(-1) as number] : ramp;
   for (const [i, users] of stages.entries()) {
     stageWins = [];
     const stageEnd = values.until ? Infinity : t0 + (i + 1) * stageMs;
-    let peakMem = 0;
+    const peak: Record<string, number> = {};
+    const cpuSum: Record<string, number> = {};
+    let windows = 0;
     while (Date.now() < stageEnd) {
       if (values.until && (await Bun.file(values.until).exists())) break;
       await Bun.sleep(WINDOW_MS);
@@ -527,7 +542,14 @@ async function parent() {
         ]),
       );
       cpuWas = cpu;
-      peakMem = Math.max(peakMem, mem.server ?? 0);
+      windows++;
+      for (const [k, v] of Object.entries(mem)) peak[k] = Math.max(peak[k] ?? 0, v);
+      for (const [k, v] of Object.entries(cpuPct)) cpuSum[k] = (cpuSum[k] ?? 0) + Number(v);
+      // Every 5 minutes, the memory a soak's leak shows in (compare.ts).
+      if (Date.now() - sampledAt >= 300_000) {
+        sampledAt = Date.now();
+        result.memory.push({ t: Math.round((sampledAt - t0) / 1000), mb: round(mem) });
+      }
       const last = stageWins.at(-1);
       const s = last ? summarize([last]) : undefined;
       say(
@@ -541,8 +563,23 @@ async function parent() {
     // The stage's second half, once the users it added have settled in; all of a failure test.
     const s = summarize(stageWins.slice(values.until ? 0 : Math.floor(stageWins.length / 2)));
     const ops = [...s.perOp].map(([k, h]) => `${k} ${h.q(0.99).toFixed(0)}`).join(", ");
+    const errors = Object.values(s.errors).reduce((a, b) => a + b, 0);
+    result.stages.push({
+      users,
+      rps: Math.round(s.n / s.secs),
+      p50: Math.round(s.req.q(0.5)),
+      p99: Math.round(s.req.q(0.99)),
+      deliveryP50: Math.round(s.delivery.q(0.5)),
+      deliveryP99: Math.round(s.delivery.q(0.99)),
+      errorRate: s.n ? errors / s.n : 0,
+      peakMB: round(peak),
+      cpuPct: round(
+        Object.fromEntries(Object.entries(cpuSum).map(([k, v]) => [k, v / (windows || 1)])),
+      ),
+      p99ByOp: Object.fromEntries([...s.perOp].map(([k, h]) => [k, Math.round(h.q(0.99))])),
+    });
     say(
-      `STAGE users=${users} rps=${(s.n / s.secs).toFixed(0)} p50=${s.req.q(0.5).toFixed(0)}ms p99=${s.req.q(0.99).toFixed(0)}ms answer delivery p50=${s.delivery.q(0.5).toFixed(0)} p99=${s.delivery.q(0.99).toFixed(0)}ms peak server mem=${peakMem.toFixed(0)} MB errors=${JSON.stringify(s.errors)}\n  p99 by op (ms): ${ops}`,
+      `STAGE users=${users} rps=${(s.n / s.secs).toFixed(0)} p50=${s.req.q(0.5).toFixed(0)}ms p99=${s.req.q(0.99).toFixed(0)}ms answer delivery p50=${s.delivery.q(0.5).toFixed(0)} p99=${s.delivery.q(0.99).toFixed(0)}ms peak server mem=${(peak.server ?? 0).toFixed(0)} MB errors=${JSON.stringify(s.errors)}\n  p99 by op (ms): ${ops}`,
     );
     if (broke) break;
     if (s.req.q(0.99) > 1000) {
@@ -570,8 +607,16 @@ async function parent() {
   if (values.until)
     say(`PROBE ${JSON.stringify({ ...probe, slowest: Math.round(probe.slowest) })}`);
   if (values.out) await Bun.write(values.out, `${log.join("\n")}\n`);
+  if (values.json) {
+    Object.assign(result, { final: total, ...(broke ? { broke } : {}) });
+    await Bun.write(values.json, `${JSON.stringify(result, null, 1)}\n`);
+  }
   for (const k of kids) k.kill();
   process.exit(0);
+}
+
+function round(m: Record<string, number>): Record<string, number> {
+  return Object.fromEntries(Object.entries(m).map(([k, v]) => [k, Math.round(v)]));
 }
 
 function fmt(m: Record<string, number>) {
@@ -607,7 +652,7 @@ async function containerIds(): Promise<Record<string, string>> {
 async function cgroupRead(id: string, file: string): Promise<string | undefined> {
   // Bun.file reads cgroup files as empty: they report size 0.
   try {
-    return readFileSync(`${CGROUPS}/system.slice/docker-${id}.scope/${file}`, "utf8");
+    return readFileSync(`${CGROUPS}/${SLICE}/docker-${id}.scope/${file}`, "utf8");
   } catch {
     return undefined;
   }

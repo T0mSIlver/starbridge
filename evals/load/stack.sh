@@ -1,15 +1,20 @@
 #!/bin/sh
 # Prod's stack on this machine for the load and failure tests (README.md). Usage:
 #   evals/load/stack.sh up        build and start it; Caddy on http://127.0.0.1:18000
-#   evals/load/stack.sh load …    run load.ts against it, from a container on its network
+#   evals/load/stack.sh fake      start fake.ts in a container, for a machine without Bun
+#   evals/load/stack.sh setup …   run setup.ts against it, from a container on its network
+#   evals/load/stack.sh load …    run load.ts against it, the same way
 #   evals/load/stack.sh spike …   run spike.ts the same way
 #   evals/load/stack.sh deploy    roll it out again under load, as deploy/host/apply.sh does
 #   evals/load/stack.sh small-disk [MB]  move the server's data to an MB-sized tmpfs (sudo)
 #   evals/load/stack.sh big-disk  back to its volume, unmounting the small disk
-#   evals/load/stack.sh down      stop it and delete its volumes
+#   evals/load/stack.sh down      stop it and delete its volumes and users
 #   evals/load/stack.sh compose … any docker compose command on it
 # LOAD_DIR (default .scratch/load in the repository) holds its fake secrets, its Caddyfile and the
 # load script's users. It never talks to starbridge.run.
+# LOAD_REVISION=<commit> pulls the server and web images CI pushed for that commit instead of
+# building them. LOAD_SLICE=<name>.slice puts every container, the clients' included, in that
+# systemd slice, so its limits cap the whole run (Docker's systemd cgroup driver).
 set -eu
 here=$(cd "$(dirname "$0")" && pwd)
 repo=$(cd "$here/../.." && pwd)
@@ -18,10 +23,13 @@ export LOAD_DIR="${LOAD_DIR:-$repo/.scratch/load}"
 # host.docker.internal.
 gw=$(docker network inspect bridge -f '{{(index .IPAM.Config 0).Gateway}}')
 fake="http://host.docker.internal:18099"
+slice=${LOAD_SLICE:+--cgroup-parent $LOAD_SLICE}
+bun_image=oven/bun:1.4.2
 compose() {
-  # Prod pulls images tagged by its commit; this stack builds its own under this tag.
-  REVISION=load docker compose -p starbridge-load --project-directory "$repo/deploy" \
-    -f "$repo/deploy/compose.yaml" -f "$here/compose.yaml" ${LOAD_EXTRA:+-f "$LOAD_EXTRA"} "$@"
+  # Prod pulls images tagged by its commit; without LOAD_REVISION this stack builds its own.
+  REVISION=${LOAD_REVISION:-load} docker compose -p starbridge-load --project-directory "$repo/deploy" \
+    -f "$repo/deploy/compose.yaml" -f "$here/compose.yaml" ${LOAD_SLICE:+-f "$here/slice.yaml"} \
+    ${LOAD_EXTRA:+-f "$LOAD_EXTRA"} "$@"
 }
 
 secrets() {
@@ -29,9 +37,13 @@ secrets() {
   umask 077
   [ -e "$LOAD_DIR/fcm.pem" ] ||
     openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out "$LOAD_DIR/fcm.pem" 2>/dev/null
+  # A P-256 pair as web-push makes it, in Bun's container, so the host needs no Bun.
   [ -e "$LOAD_DIR/vapid.json" ] ||
-    (cd "$repo/server" && bun -e 'console.log(JSON.stringify(require("web-push").generateVAPIDKeys()))') \
-      > "$LOAD_DIR/vapid.json"
+    docker run --rm $bun_image bun -e '
+const k = await crypto.subtle.generateKey({ name: "ECDH", namedCurve: "P-256" }, true, ["deriveBits"]);
+const pub = Buffer.from(await crypto.subtle.exportKey("raw", k.publicKey)).toString("base64url");
+const { d } = await crypto.subtle.exportKey("jwk", k.privateKey);
+console.log(JSON.stringify({ publicKey: pub, privateKey: d }));' > "$LOAD_DIR/vapid.json"
   {
     echo "PUBLIC_URL=http://localhost:18000"
     echo "TRUST_PROXY=1"
@@ -91,8 +103,15 @@ healthy() {
 case "${1:-}" in
 up)
   secrets
-  echo "fakes: run 'bun evals/load/fake.ts --host $gw' before load"
-  compose build server web-a caddy
+  echo "fakes: run 'evals/load/stack.sh fake' (or 'bun evals/load/fake.ts --host $gw') before load"
+  if [ -n "${LOAD_REVISION:-}" ]; then
+    compose pull server web-a
+    # Caddy is built where it runs (deploy/host/apply.sh); a host that runs prod's or staging's
+    # stack already has it.
+    docker image inspect starbridge-caddy:latest >/dev/null 2>&1 || compose build caddy
+  else
+    compose build server web-a caddy
+  fi
   compose up -d server web-a umami umami-db caddy
   healthy http://127.0.0.1:18000/healthz server
   healthy http://127.0.0.1:18000/ web-a
@@ -159,21 +178,35 @@ big-disk)
   compose up -d server
   healthy http://127.0.0.1:18080/healthz server 30
   ;;
-load | spike)
-  # load.ts or spike.ts in its own container on the stack's network, so its sockets stay out of the
-  # machine's port range. It reads the containers' stats from the host's cgroups and the
-  # Docker socket. Paths it takes (--until, --out) are under /load, which is LOAD_DIR.
+fake)
+  # fake.ts on the host's network, listening on Docker's bridge as it would run on the host.
+  docker rm -f starbridge-load-fake >/dev/null 2>&1 || true
+  docker run -d --name starbridge-load-fake --network host $slice \
+    -v "$here/fake.ts:/fake.ts:ro" $bun_image bun /fake.ts --host "$gw" >/dev/null
+  echo "fakes on $gw:18099"
+  ;;
+load | spike | setup)
+  # load.ts, spike.ts or setup.ts in its own container on the stack's network, so its sockets stay
+  # out of the machine's port range. It reads the containers' stats from the host's cgroups and the
+  # Docker socket. Paths it takes (--until, --out, --json) are under /load, which is LOAD_DIR.
+  # setup.ts needs packages/protocol's dependencies installed in the repository.
   script=$1
   shift
-  docker run --rm -i --name "starbridge-$script-client" ${LOAD_CLIENT_CPUS:+--cpuset-cpus "$LOAD_CLIENT_CPUS"} --network starbridge-load_default \
+  [ "$script" != setup ] || set -- --server http://server:8080 "$@"
+  docker run --rm -i --name "starbridge-$script-client" ${LOAD_CLIENT_CPUS:+--cpuset-cpus "$LOAD_CLIENT_CPUS"} $slice --network starbridge-load_default \
     --user "$(id -u):$(id -g)" --group-add "$(stat -c %g /var/run/docker.sock)" \
     -v "$repo:/repo:ro" -v "$LOAD_DIR:/load" -e LOAD_DIR=/load ${LOAD_TARGET:+-e LOAD_TARGET="$LOAD_TARGET"} \
     -e BUN_CONFIG_MAX_HTTP_REQUESTS=65535 \
-    -v /sys/fs/cgroup:/host/cgroup:ro -e LOAD_CGROUPS=/host/cgroup \
+    -v /sys/fs/cgroup:/host/cgroup:ro -e LOAD_CGROUPS=/host/cgroup ${LOAD_SLICE:+-e LOAD_SLICE="$LOAD_SLICE"} \
     -v /var/run/docker.sock:/var/run/docker.sock --ulimit nofile=524288:524288 \
-    oven/bun:1.4.2 bun "/repo/evals/load/$script.ts" "$@"
+    $bun_image bun "/repo/evals/load/$script.ts" "$@"
   ;;
-down) compose down -v ;;
+down)
+  docker rm -f starbridge-load-fake >/dev/null 2>&1 || true
+  compose down -v
+  # Its users lived in the volume just deleted.
+  rm -f "$LOAD_DIR/users.jsonl"
+  ;;
 compose) shift; compose "$@" ;;
-*) sed -n '2,8p' "$0" >&2; exit 2 ;;
+*) sed -n '2,12p' "$0" >&2; exit 2 ;;
 esac
