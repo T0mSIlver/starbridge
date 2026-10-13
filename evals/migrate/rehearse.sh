@@ -93,16 +93,18 @@ start() { # REV DIR
     sleep 0.2
   done
 }
-stop() {
+# Stops the server started on DIR and hands DIR back to the caller, whose tools read and write it next.
+stop() { # DIR
   docker stop -t 30 sb-rehearse-server >/dev/null
   docker rm sb-rehearse-server >/dev/null
+  docker run --rm -v "$1:/d" --entrypoint chown sb-rehearse-tool -R "$(id -u):$(id -g)" /d
 }
 # The database REV's server makes from nothing, and its schema.
 fresh() { # REV
   rm -rf "$dir/fresh-$1"
   mkdir -p "$dir/fresh-$1"
   start "$1" "$dir/fresh-$1" >/dev/null || { docker logs --tail 20 sb-rehearse-server 2>&1; return 1; }
-  stop
+  stop "$dir/fresh-$1"
   tool sb-rehearse-tool bun evals/migrate/schema.ts dump "/work/fresh-$1/starbridge.db" > "$dir/fresh-$1.schema"
 }
 
@@ -111,6 +113,11 @@ fresh "$from" || finish false "the server at $from does not start on an empty da
 export_v=$(sed -n 's/^PRAGMA user_version *= *\([0-9]*\);$/\1/p' "$schema" | head -n 1)
 rm -rf "$dir/export.db" "$dir/export.schema"
 cp "$schema" "$dir/export.sql"
+case $export_v in
+  "" | *[!0-9]*) finish false "the schema export names no user_version" ;;
+esac
+[ "$export_v" -le "$from_v" ] ||
+  finish false "the schema export is at schema $export_v, newer than prod's $from at $from_v"
 if [ "$export_v" = "$from_v" ]; then
   tool sb-rehearse-tool bun evals/migrate/schema.ts load /work/export.sql /work/export.db "/work/fresh-$from/starbridge.db"
   tool sb-rehearse-tool bun evals/migrate/schema.ts dump /work/export.db > "$dir/export.schema"
@@ -119,7 +126,7 @@ if [ "$export_v" = "$from_v" ]; then
     finish false "prod's schema differs from the migrations at $from: $d"
   fi
 else
-  # The export is from last night; prod may have migrated since. Seed from what $from makes.
+  # The export is from last night, and prod may have migrated since: seed from what $from makes.
   echo "the export is at schema ${export_v:-?}, $from at $from_v: seeding from $from's own"
   cp "$dir/fresh-$from/starbridge.db" "$dir/export.db"
 fi
@@ -139,7 +146,7 @@ if [ ! -f "$seed" ]; then
   tool sb-rehearse-tool bun evals/load/setup.ts --users "$users" \
     --server http://sb-rehearse-server:8080 --fake http://sb-rehearse-fake:18099
   tool sb-rehearse-tool bun evals/migrate/fill.ts --server http://sb-rehearse-server:8080 --decisions "$decisions"
-  stop
+  stop "$dir/seed-work"
   docker rm -f sb-rehearse-fake >/dev/null
   tool sb-rehearse-tool bun evals/migrate/grow.ts /work/seed-work/starbridge.db --mb "$mb"
   mv "$dir/seed-work/starbridge.db" "$seed"
@@ -154,7 +161,7 @@ if ! ms=$(start "$to" "$dir/run"); then
   logs=$(docker logs --tail 5 sb-rehearse-server 2>&1)
   finish false "the server at $to did not answer /healthz within 60 s: $logs"
 fi
-stop
+stop "$dir/run"
 echo "answered /healthz after $ms ms"
 
 echo "[6/6] the migrated schema against the candidate's own"
