@@ -399,9 +399,10 @@ jobs:
   # The iPhone app to TestFlight, rcs and finals alike, once the release is out (#1397): App Store review
   # waits on another sign-in than GitHub's (guideline 4.8), so testers are the only users yet. The archive
   # builds unsigned and is signed ad hoc with its entitlements; the export signs it for the App Store with
-  # an Apple Distribution certificate and profiles this run makes through App Store Connect's REST API, with
-  # the API key of the ios-release environment (open to main and v* tags), and revokes at its end, so no
-  # certificate is kept here. altool uploads with the same key. The marketing version is the tag's without
+  # the Apple Distribution certificate stored in the ios-release environment (open to main and v* tags) and
+  # profiles this run makes through App Store Connect's REST API with that environment's API key (#1479).
+  # When the stored certificate is missing, expired or revoked, the run makes its own and revokes it at its
+  # end, which emails the account holder. altool uploads with the same key. The marketing version is the tag's without
   # -rc.N; the build number is the run's, unique per upload. Run by hand on main, it archives and exports
   # without uploading, unless testflight_only asks. Without the ASC_KEY_ID and ASC_ISSUER_ID variables the
   # job skips.
@@ -411,7 +412,7 @@ jobs:
     runs-on: macos-15
     timeout-minutes: 45
     environment: ios-release
-    # Each run holds an Apple Distribution certificate until its end, and Apple allows a few at once.
+    # A run without the stored certificate holds one of its own until its end, and Apple allows a few at once.
     concurrency: testflight
     defaults:
       run:
@@ -470,15 +471,21 @@ jobs:
             archive
           scripts/adhoc-sign.sh "$RUNNER_TEMP/Starbridge.xcarchive"
       # xcodebuild's own sign-in refuses the API key that the REST API takes (#1419), so this run
-      # makes its own certificate and profiles through the REST API, in a keychain of its own.
+      # makes its profiles through the REST API, in a keychain of its own.
       - if: steps.setup.outputs.set
         name: Certificate and profiles
         env:
           ASC_KEY_ID: ${{ vars.ASC_KEY_ID }}
           ASC_ISSUER_ID: ${{ vars.ASC_ISSUER_ID }}
+          P12: ${{ secrets.IOS_DISTRIBUTION_P12 }}
+          DISTRIBUTION_P12_PASSWORD: ${{ secrets.IOS_DISTRIBUTION_P12_PASSWORD }}
         run: |
           umask 077
           export ASC_KEY_PATH="$RUNNER_TEMP/asc/private_keys/AuthKey_$ASC_KEY_ID.p8"
+          if [ -n "$P12" ]; then
+            printf '%s' "$P12" | base64 -d > "$RUNNER_TEMP/asc/distribution.p12"
+            export DISTRIBUTION_P12="$RUNNER_TEMP/asc/distribution.p12"
+          fi
           ruby scripts/asc-signing.rb prepare "$RUNNER_TEMP/asc/signing"
           kc="$RUNNER_TEMP/asc/signing.keychain-db"
           pw=$(openssl rand -hex 24)
@@ -510,7 +517,7 @@ jobs:
           ASC_ISSUER_ID: ${{ vars.ASC_ISSUER_ID }}
         run: xcrun altool --upload-app -t ios -f "$RUNNER_TEMP/export/Starbridge.ipa" --apiKey "$ASC_KEY_ID" --apiIssuer "$ASC_ISSUER_ID"
       - if: always()
-        name: Revoke the certificate and remove the key
+        name: Delete the profiles, revoke a certificate this run made, remove the keys
         working-directory: .
         env:
           ASC_KEY_ID: ${{ vars.ASC_KEY_ID }}
