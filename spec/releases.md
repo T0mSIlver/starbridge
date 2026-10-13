@@ -155,6 +155,19 @@
   - iPhone: expire the build in TestFlight.
   - A server change that clients rely on stays: main serves every release from the minimum up
     (`spec/keys-and-trust.md`), so rolling a client back never needs the server rolled back.
+- **Staging** (#1526). `staging.starbridge.run`, on sb-staging, an Oracle ARM VM, takes every
+  deploy of main before or beside prod, with the same images, compose file and Caddyfile, so a
+  deploy that breaks shows there first. Its data is synthetic, made through the real flows by the
+  load test's setup: a copy of prod's would be ciphertext plus GitHub ids and push endpoints on a
+  second host, which `/privacy` does not allow. It has its own OAuth app, VAPID pair and no
+  FCM or APNs key, so it pushes to no phone; only listed GitHub users can make an account
+  (`SIGNUP_GITHUB_IDS`, #1524), and nothing is indexed. Its key's forced command deploys only
+  a commit of main. ARM staging beside amd64 prod leaves architecture bugs to prod's smoke.
+- **Prod waits for staging** (#1528). Each deploy goes to staging first, which then runs one
+  round trip on its own test account (a card, its Web Push, an answer read back), and prod
+  deploys only once both passed for that commit: a release that cannot push now stops on
+  staging, where v0.1.3's kind of break would have shown before users saw it. `deploy/deploy.sh`
+  stays the owner's way around it.
 - **No downtime** (#150, #508). The page runs as two copies; a deploy starts the idle one, waits
   for its health, then stops the other, and Caddy sends every request to the first healthy copy.
   The server stays one instance, since it holds the long-polls and SQLite; Caddy holds requests up
