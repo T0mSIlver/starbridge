@@ -49,7 +49,7 @@
 - **The last open item settled elsewhere** (Tom, 2026-10-13, #1583). A question's open view that
   another device or `starbridge settle` closes, or puts off, while it shows stays and says how it
   closed; unless nothing else needs the owner, then the inbox comes back, empty. The web does it
-  under 1100 px (spec/web.md); the iPhone's sheet closes (#1587).
+  under 1100 px (spec/web.md); Android's sheet closes (#1586), and the iPhone's (#1587).
 - **No answer waits for a pull** (#1390, #1392). The apps keep an answer the server could not take
   (offline, a 5xx, or a 429 during a rate-limit hold) and send it again on their own, never during
   the hold, when a post fails at once: Android through WorkManager, iOS by a retry while the app
