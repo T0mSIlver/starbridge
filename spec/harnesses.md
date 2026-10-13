@@ -142,7 +142,9 @@ line, the safe side: at worst a prompt repeats an answer the agent already read.
   and the whole question leads the context, read as written (#1085, Tom's pick). That titled 125
   of the 191 long ones. A question with no such sentence stays the title, cut at 300 as before.
   The hook refuses no question: a refusal also closes the terminal picker and costs the agent a
-  retry. The rule of each harness with an ask tool says to end its question with such a sentence.
+  retry. The rule of each harness with an ask tool says to end its question with the question
+  itself, in 70 characters at most: worded as "a sentence that asks … which titles the card",
+  Haiku asked which title the card should get (#1499).
 - One skill, a rule per harness (#1063). Every harness reads the same `SKILL.md`, which names no
   harness: an agent in one never reads another's lines, the eval tests one text, and the file
   stays plain agentskills.io for any harness that reads it. What differs by harness reaches the
