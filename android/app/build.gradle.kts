@@ -27,7 +27,9 @@ android {
         targetSdk = 36
         // Release builds pass -PversionName from the tag (v1.2.3 or v1.2.3-rc.4).
         val release = providers.gradleProperty("versionName").orNull ?: "0.1.7-rc.2"
-        versionName = release
+        // A build of main for Play's internal track also names its commit, which Play's About this
+        // app shows, so the owner sees which one the phone runs (#1610).
+        versionName = providers.gradleProperty("mainCommit").orNull?.let { "$release+main.$it" } ?: release
         // buildSrc/src/main/kotlin/VersionCode.kt.
         // A build of main for Play's internal track passes the track's highest code and takes the
         // next of its version's main slots (.github/workflows/internal.yml); every other build
