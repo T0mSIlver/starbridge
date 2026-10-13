@@ -427,7 +427,13 @@ request without the header, or with one the server cannot read, is served.
   endpoint with a client secret signed by the team's Sign in with Apple key, and the identity
   token that comes back must name the same user. The account is Apple's stable user id (`sub`);
   the server keeps the refresh token of the account's last Apple sign-in only to revoke it at
-  `https://appleid.apple.com/auth/revoke` when the account is deleted.
+  `https://appleid.apple.com/auth/revoke` when the account is deleted. The page and the other
+  apps use Apple's web sign-in with the Services ID instead, as GitHub's, with no scope and
+  `response_mode=query`. For an app's sign-in the server sends the app's challenge to Apple as
+  the `nonce` too, which Apple signs into the identity token: the server's callback hands the code
+  on to `APP_REDIRECT_URI`, and the app trades it at `POST /auth/app/session` as GitHub's, where
+  the token's nonce must be the S256 of the verifier. Apple's codes have dots and GitHub's none,
+  which tells the two apart.
 - **Machines** send `Authorization: Bearer <machine token>`, issued when their pairing is
   approved. The server stores a hash of it and drops it when the directory revokes the machine.
 - A session with no device yet can read the directory and post joins, but reads and posts no
@@ -442,11 +448,14 @@ request without the header, or with one the server cannot read, is served.
 
 | Route | Who | What |
 |---|---|---|
-| `GET /auth/methods` | anyone | `{methods}`: the sign-in methods this server offers, `github`, `apple` and `owner` |
+| `GET /auth/methods` | anyone | `{methods}`: the sign-in methods this server offers, `github`, `apple` (Apple's web sign-in) and `owner` |
 | `GET /auth/github` | anyone | start GitHub sign-in; the app adds `?app=1&challenge=<S256 challenge>`; without GitHub on the server, the page goes to `/?signin=off` and the app gets 404 `not-configured` |
 | `GET /auth/github/callback` | anyone | finish it, set the session, redirect to `/`; on failure redirect to `/?signin=declined`, `expired` (state missing or not this browser's, kept an hour), `paused` (sign-ups paused and no account yet), `limited` (too many new accounts from the address) or `failed` |
+| `GET /auth/apple` | anyone | start Apple's web sign-in with the Services ID; the apps add `?app=1&challenge=<S256 challenge>`; without it on the server, the page goes to `/?signin=failed` and the app gets 404 `not-configured` |
+| `GET /auth/apple/callback` | anyone | finish the page's, as `/auth/github/callback`, with the same `signin` failures |
+| `GET /auth/apple/callback/app` | anyone | an app's: redirect to `<APP_REDIRECT_URI>?code=<code>&state=<state>`, or Apple's `error` instead of the code; 400 `bad-state` without them |
 | `GET /auth/github/callback/app` | anyone | the browser got the app's sign-in: redirect to `<APP_REDIRECT_URI>?code=<code>&state=<state>`, or GitHub's `error` instead of the code; 400 `bad-state` without them |
-| `POST /auth/app/session` | the app | `{code, verifier}`: GitHub's code → `{session}`; 400 `bad-code` when GitHub refuses the code: unknown, used, expired or not this verifier's; 403 `signups-paused` while sign-ups are paused and the GitHub user has no account |
+| `POST /auth/app/session` | the app | `{code, verifier}`: GitHub's code, or Apple's (with dots) whose identity token's nonce is the verifier's challenge → `{session}`; 400 `bad-code` when GitHub refuses the code: unknown, used, expired or not this verifier's; 403 `signups-paused` while sign-ups are paused and the GitHub user has no account |
 | `GET /auth/app/signed-in?state=<challenge>` | device | `{signedIn}`: true once the app whose challenge this is traded its code for a session of the caller's account (#943); the server keeps each challenge's account 10 minutes, in memory |
 | `POST /auth/apple/session` | the iPhone app | `{identityToken, code, nonce}` → `{session}`; 400 `bad-code` when Apple refuses the token or the code (another app's, expired, replayed, the nonce not the token's); 403 `signups-paused` as GitHub's; 404 `not-configured` without the team's key; 502 `apple` when Apple can't be reached |
 | `POST /auth/owner` | anyone | self-hosted: `{token}` against `OWNER_TOKEN`; sets the session and returns `{session}` |
@@ -660,7 +669,9 @@ server whose disk is full answers writes 503 `storage-full` with `Retry-After`; 
 | `POST /directory` | 30 an hour per account |
 | Directory entries | from entry 200 on, a device's `add`: 409 `directory-full`; revocations and confirmations always pass, the recovery key may add 20 more devices, and devices may propose 20 more recovery keys; 8 KB per entry: 413 `too-large` |
 | Sessions | 50 per account; signing in past that ends the oldest, unpaired ones first |
-| `GET /auth/github/callback` and `POST /auth/app/session` | 60 a minute per address, together |
+| `GET /auth/github/callback` and `POST /auth/app/session` with GitHub's code | 60 a minute per address, together |
+| Apple sign-ins: `GET /auth/apple` and its app callback, together; `GET /auth/apple/callback`, `POST /auth/apple/session` and `POST /auth/app/session` with Apple's code, together | 60 a minute per address each |
+| `POST /auth/app/session`, either provider's code, counted before the body is read | 60 a minute per address |
 | New accounts | 30 an hour per address, an IPv6 client counting as its /64: the page goes to `/?signin=limited`, the app gets 429 `rate-limited`; sign-ins of existing accounts don't count |
 | `DELETE /account` | 3 an hour per address, an IPv6 client counting as its /64: 429 `rate-limited` |
 | `POST /auth/owner` | 10 a minute per address |

@@ -4,7 +4,7 @@ import { track } from "@/lib/analytics";
 import { HOSTED } from "@/lib/installCommands";
 import { AGENTS_GUIDE, REPO, SELF_HOST } from "@/lib/links";
 import { usePageOrigin } from "@/lib/pageOrigin";
-import { useGitHubSignIn } from "@/lib/signInMethods";
+import { useSignInMethods } from "@/lib/signInMethods";
 import { Analytics } from "./Analytics";
 import { InstallBox } from "./InstallBox";
 import { Icon, Mark } from "./icons";
@@ -97,9 +97,18 @@ function Section({
 }
 
 /** What a visitor without a device on this browser sees at `/` (design v2, direction B). */
-export function Landing({ onOwnerToken }: { onOwnerToken: () => void }) {
-  // A server without GitHub signs in with its owner token instead.
-  const github = useGitHubSignIn();
+export function Landing({
+  onOwnerToken,
+  onSignIn,
+}: {
+  onOwnerToken: () => void;
+  /** Shows the sign-in screen, which offers the other ways to sign in. */
+  onSignIn: () => void;
+}) {
+  // A server without GitHub signs in with its owner token instead. One that offers Apple too
+  // opens the sign-in screen from the header, where Apple sits under Other ways to sign in
+  // (#1411); the hero's button stays GitHub's.
+  const { github, apple } = useSignInMethods();
   // A self-hosted page names its own server where starbridge.run's names itself (#772).
   const origin = usePageOrigin();
   const hosted = origin === HOSTED;
@@ -119,7 +128,18 @@ export function Landing({ onOwnerToken }: { onOwnerToken: () => void }) {
           </a>
           <a href={REPO}>GitHub</a>
         </nav>
-        {github ? (
+        {github && apple ? (
+          <button
+            type="button"
+            className={`t-label ${ui.btn} ${ui.fill} ${s.signIn}`}
+            onClick={() => {
+              track("sign-in", { via: "header" });
+              onSignIn();
+            }}
+          >
+            Sign in
+          </button>
+        ) : github ? (
           <a
             href="/v1/auth/github"
             className={`t-label ${ui.btn} ${ui.fill} ${s.signIn}`}

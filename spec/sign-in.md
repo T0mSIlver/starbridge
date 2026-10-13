@@ -6,7 +6,9 @@
   main sign-in everywhere, and Apple shows only where it must: on the iPhone, GitHub's button
   then Apple's at the same size (4.8 wants Apple's no less prominent); on the page, Android and
   the desktop app, a small "Other ways to sign in" link under GitHub's button, so an account made
-  with Apple on the iPhone can add a browser or an Android phone. A self-hosted server has no
+  with Apple on the iPhone can add a browser or an Android phone. So that a new browser reaches
+  it, the landing page's header Sign in opens the sign-in screen; its hero button stays GitHub's.
+  A self-hosted server has no
   Apple key, so its clients show only its own methods.
   - Starbridge asks Apple for no name and no email, as it keeps no email from GitHub: the data
     is end-to-end encrypted and an account is only a sign-in's stable id. So Hide My Email never
