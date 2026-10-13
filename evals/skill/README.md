@@ -87,6 +87,9 @@ CLI's new lines (#1063), on Claude Code and opencode.
 
 `results/964` holds the first Cursor and Antigravity runs (#964).
 
+`results/1499` holds the ask-tool sentence of Claude Code's rule before and after #1499, on
+`native-ask` and `desk-question`.
+
 `results/1488` holds the answer-delivery wording of #1487 against the text before it, on the four
 situations it touches and `mid-task`, where a live session needs the answer before its last step
 and should mark the card waiting rather than wait in a background task or with a monitor.

@@ -98,10 +98,17 @@ function readHooks(sys: Home): HooksFile | undefined {
   }
 }
 
-/** An entry is Starbridge's when its command runs a script of its folder. */
+/**
+ * An entry is Starbridge's when its command is one setup writes; every release wrote a subset of
+ * today's. An owner's entry that runs a script of Starbridge's folder some other way stays theirs
+ * (#1493).
+ */
 function oursEntry(sys: Home, entry: unknown): boolean {
   const command = (entry as { command?: unknown } | null)?.command;
-  return typeof command === "string" && command.includes(cursorScriptsDir(sys));
+  return (
+    typeof command === "string" &&
+    Object.values(hookEntries(sys)).some((list) => list.some((e) => e.command === command))
+  );
 }
 
 /** Whether the file holds an entry of Starbridge's. */

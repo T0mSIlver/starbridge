@@ -624,18 +624,21 @@ test("Cursor: setup keeps the owner's config and skill, and refresh updates its 
   // The owner's own hooks stay where setup adds its own, and after uninstall.
   const hooksFile = join(m.home, ".cursor/hooks.json");
   const mine = { command: "./audit.sh", timeout: 3 };
+  // One that runs Starbridge's script its own way is the owner's too (#1493).
+  const wrap = { command: `sh "${join(m.home, ".cursor/starbridge/cli.sh")}" status`, timeout: 3 };
   const withMine = JSON.parse(readFileSync(hooksFile, "utf8"));
   withMine.hooks.sessionStart.unshift(mine);
-  withMine.hooks.stop = [mine];
+  withMine.hooks.stop = [mine, wrap];
   writeFileSync(hooksFile, JSON.stringify(withMine));
   await refresh(m.sys);
   expect(JSON.parse(readFileSync(hooksFile, "utf8")).hooks.sessionStart[0]).toEqual(mine);
+  expect(JSON.parse(readFileSync(hooksFile, "utf8")).hooks.stop.slice(0, 2)).toEqual([mine, wrap]);
   expect(await run(["uninstall", "--agent", "cursor", "--yes"], m.ctx)).toBe(0);
   expect(existsSync(dir)).toBe(false);
   expect(existsSync(join(m.home, ".cursor/starbridge"))).toBe(false);
   expect(JSON.parse(readFileSync(hooksFile, "utf8"))).toEqual({
     version: 1,
-    hooks: { sessionStart: [mine], stop: [mine] },
+    hooks: { sessionStart: [mine], stop: [mine, wrap] },
   });
   // A hooks file with none of Starbridge's entries is never rewritten, and one setup cannot read
   // as Cursor's stays as it is; an owner's empty event stays too.
