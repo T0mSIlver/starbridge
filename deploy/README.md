@@ -19,14 +19,20 @@ main that contains the deployed one, so the Actions key cannot roll back. It unp
 and runs `host/apply.sh`. `deploy/setup-actions-deploy.sh` installs both keys
 on the box; the private halves stay in `~/.config/starbridge/secrets`.
 
-To roll back, or to deploy a branch, from the operator's machine with any ref that is on GitHub:
+To deploy a commit by hand, from the operator's machine:
 
 ```bash
 deploy/deploy.sh                 # origin/main
 ```
 
-It unpacks the ref into `/opt/starbridge`, builds the server and web images on the box and rolls them
-out (`deploy/host/apply.sh`). The previous release stays in `/opt/starbridge.old`.
+It unpacks the ref into `/opt/starbridge`, pulls the server and web images for that commit from
+ghcr.io and rolls them out (`deploy/host/apply.sh`). The previous release stays in
+`/opt/starbridge.old`.
+
+`deploy.yml` builds those images once per deployed commit, for amd64 and arm64, and pushes them as
+`ghcr.io/t0msilver/starbridge-server:<commit>` and `starbridge-web:<commit>`; the box never builds
+them. So only commits that `deploy.yml` deployed can be deployed again. The box keeps the newest 5
+releases' images. Caddy's and the demo server's images are still built on the box.
 
 No request fails during a deploy (`spec/releases.md`). The page runs as two copies, `web-a` (port
 3010) and `web-b` (3011): the deploy starts the idle one, waits for its health, then stops the
@@ -63,7 +69,7 @@ image is tagged by a hash of that file and built only when no image has the tag.
 | Database | volume `starbridge_data`, `/data/starbridge.db` in the container |
 | Backups | `/var/backups/starbridge/starbridge-YYYYMMDD.db` and `umami-YYYYMMDD.dump`, nightly at 03:15 UTC, 7 days; `deploy-*.db`, the last 2 deploys that ran a migration; both are `VACUUM INTO` copies. Hetzner backups cover the rest |
 | Offsite backup | After each nightly backup, `starbridge-offsite.service` (`host/offsite.sh`) compresses the new copy, encrypts it with `age` to the owner's key, whose private half is on neither server, and pushes it over SSH to a host that only takes new files, which keeps 14 days (#1482). It needs `backup-age.pub`, `offsite-ssh-key`, `offsite-known-hosts` and `offsite-target` from `push-secrets.sh`; without them it does nothing |
-| Docker prune | `starbridge-docker-prune.timer`, Sundays at 04:30 UTC: images no container uses and build cache, older than 7 days |
+| Docker prune | `starbridge-docker-prune.timer`, Sundays at 04:30 UTC: images no container uses and build cache, older than 7 days, except the server and web images, of which each deploy keeps the newest 5 |
 | Analytics | Umami (`umami`, `umami-db`), volume `starbridge_umami-db`; secrets in `/etc/starbridge/umami.env` and `umami-db.env`, made on the first deploy |
 | Analytics limits | Caddy (built with the `rate_limit` module, `caddy.Dockerfile`) takes 30 events a minute per address and 300 in all, 8 KB each; `starbridge-umami-trim.timer` keeps each table to 180 days and a million rows, hourly |
 | Uptime | `.github/workflows/uptime.yml` checks `/healthz`, `/healthz/backup` (503 once the last backup is over 26 h old) and `/healthz/disk` (503 under 2 GB free) hourly and opens an `outage` issue on failure |

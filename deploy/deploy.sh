@@ -1,6 +1,6 @@
 #!/bin/sh
 # Deploys a pushed git ref (default: origin/main) to starbridge-1: unpacks it in
-# /opt/starbridge, rebuilds the server image there and restarts the stack.
+# /opt/starbridge, pulls the server and web images deploy.yml built for it and restarts the stack.
 set -eu
 ref=${1:-origin/main}
 host=${STARBRIDGE_HOST:-deploy@starbridge.run}
@@ -13,6 +13,17 @@ if [ -z "$(git branch -r --contains "$rev")" ]; then
   echo "$ref ($rev) is not on origin; push it first" >&2
   exit 1
 fi
+
+# Only commits deploy.yml deployed have images (#1518): main's since then.
+for image in server web; do
+  token=$(curl -fsS "https://ghcr.io/token?scope=repository:t0msilver/starbridge-$image:pull" | jq -r .token)
+  curl -fsS -o /dev/null -H "Authorization: Bearer $token" \
+    -H 'Accept: application/vnd.oci.image.index.v1+json, application/vnd.docker.distribution.manifest.list.v2+json' \
+    "https://ghcr.io/v2/t0msilver/starbridge-$image/manifests/$rev" || {
+    echo "ghcr.io has no $image image for $rev" >&2
+    exit 1
+  }
+done
 
 git archive --format=tar "$rev" | ssh -i "$key" "$host" "sudo sh -euc '
   # Shares the lock with starbridge-deploy, the deploy from Actions.

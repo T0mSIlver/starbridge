@@ -19,7 +19,8 @@ export LOAD_DIR="${LOAD_DIR:-$repo/.scratch/load}"
 gw=$(docker network inspect bridge -f '{{(index .IPAM.Config 0).Gateway}}')
 fake="http://host.docker.internal:18099"
 compose() {
-  docker compose -p starbridge-load --project-directory "$repo/deploy" \
+  # Prod pulls images tagged by its commit; this stack builds its own under this tag.
+  REVISION=load docker compose -p starbridge-load --project-directory "$repo/deploy" \
     -f "$repo/deploy/compose.yaml" -f "$here/compose.yaml" ${LOAD_EXTRA:+-f "$LOAD_EXTRA"} "$@"
 }
 
