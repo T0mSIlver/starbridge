@@ -13,6 +13,8 @@ name: staging-app
 # minutes, and the apps share one owner account, so runs go one at a time. By hand before an rc:
 # `gh workflow run staging-app.yml`.
 on:
+  push:
+    branches: [ci/1621-staging-app]
   schedule:
     - cron: "30 4 * * *"
   workflow_dispatch:
@@ -155,7 +157,7 @@ jobs:
   # branch tests that branch's workflow and sets nothing.
   report:
     needs: [android, ios]
-    if: ${{ !cancelled() && github.ref == 'refs/heads/main' }}
+    if: ${{ !cancelled() && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/ci/1621-staging-app') }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
