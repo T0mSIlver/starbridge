@@ -156,13 +156,13 @@ class MainActivity : ComponentActivity() {
             setIntent(Intent(this, MainActivity::class.java))
         }
         // A pairing link (#611). Signed in to an account this phone is not in yet: another device's
-        // code for this phone to join with. Otherwise a machine's or browser's request: Add a device
-        // with its code, once this phone is in the account.
+        // code for this phone to join with, once the owner says so. Otherwise a machine's or
+        // browser's request: Add a device with its code, once this phone is in the account.
         if (data != null && data.scheme == "https" && data.host == "starbridge.run" && data.path == "/pair") {
             // A phone on a self-hosted server would look the code up there and find nothing: the link
             // opens the web page in the browser, as it does without the app (#722).
             if (!store.server.value.toUri().host.equals(data.host, ignoreCase = true)) runCatching { startActivity(inBrowser(data)) }
-            else if ((store.phase.value as? Phase.NoDevice)?.accountExists == true) store.joinWithCode(data.toString())
+            else if ((store.phase.value as? Phase.NoDevice)?.accountExists == true) store.offerJoinLink(data.toString())
             else opening.trySend(PairLinkKey(data.toString(), System.nanoTime()))
             setIntent(Intent(this, MainActivity::class.java))
         }

@@ -78,8 +78,8 @@
   that would first ask to become a device itself. A machine's QR code is text only the app's
   scanner reads instead (#795, #1099). The app
   opens Add a device with the code looked up, once the phone is in the account; a phone signed in
-  but not in the account yet joins with it instead, as another device's "Scan with the new phone"
-  code asks. Without the app,
+  but not in the account yet offers to join with it instead, as another device's "Scan with the
+  new phone" code asks, and joins once the owner taps Add this phone (Keys and trust, "Pairing"). Without the app,
   or on a self-hosted server, which the APK cannot claim, the link opens the web page as before,
   and a phone signed in to another server than starbridge.run hands a starbridge.run link to the
   browser, since its own server would know no such code (#722); where both the installed web app and the app claim it, Android opens the verified app.

@@ -22,6 +22,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -103,7 +104,9 @@ class SetupViewModel @Inject constructor(private val store: Store) : ViewModel()
         saved = store::confirmRecoveryKey,
         signOut = store::signOut,
         deleteAccount = store::deleteAccount,
+        dropJoinLink = { store.offerJoinLink(null) },
     )
+    val joinLink = store.joinLink
 }
 
 class SetupActions(
@@ -123,6 +126,7 @@ class SetupActions(
     val signOut: () -> Unit,
     val confirmDigits: () -> Unit = {},
     val deleteAccount: () -> Unit = {},
+    val dropJoinLink: () -> Unit = {},
 )
 
 /**
@@ -130,10 +134,10 @@ class SetupActions(
  * are the fallback), or, on an empty account, create its keys and show the recovery key once.
  */
 @Composable
-fun SetupScreen(phase: Phase, server: String, busy: Boolean, actions: SetupActions, openUrl: (String) -> Unit, modifier: Modifier = Modifier, keepsKeys: Boolean = false) {
+fun SetupScreen(phase: Phase, server: String, busy: Boolean, actions: SetupActions, openUrl: (String) -> Unit, modifier: Modifier = Modifier, keepsKeys: Boolean = false, joinLink: String? = null) {
     when (phase) {
         Phase.SignedOut -> SignIn(server, busy, actions, openUrl, modifier, keepsKeys)
-        is Phase.NoDevice -> if (phase.accountExists) Join(busy, actions, modifier) else FirstDevice(busy, actions, modifier)
+        is Phase.NoDevice -> if (phase.accountExists) Join(busy, actions, modifier, joinLink) else FirstDevice(busy, actions, modifier)
         is Phase.Joining -> Waiting("Approve this phone", if (phase.scanned) "Approve it on the device that shows the QR code." else "Type this code on a device you already use: ${phase.code}", null, actions.cancelJoin, modifier)
         is Phase.JoiningByDigits -> when {
             phase.digits != null && !phase.matched -> Waiting("Compare digits", "Does your other device show the same digits?", phase.digits, actions.cancelJoin, modifier, onMatch = actions.confirmDigits)
@@ -268,7 +272,7 @@ private fun SignIn(server: String, busy: Boolean, actions: SetupActions, openUrl
 
 /** The account has devices: this phone scans one's QR code, or compares digits with it. */
 @Composable
-private fun Join(busy: Boolean, actions: SetupActions, modifier: Modifier) {
+private fun Join(busy: Boolean, actions: SetupActions, modifier: Modifier, joinLink: String? = null) {
     var recovering by rememberSaveable { mutableStateOf(false) }
     var deleting by rememberSaveable { mutableStateOf(false) }
     var scanError by rememberSaveable { mutableStateOf<String?>(null) }
@@ -301,6 +305,16 @@ private fun Join(busy: Boolean, actions: SetupActions, modifier: Modifier) {
             typed = "delete",
             onConfirm = { actions.deleteAccount(); deleting = false },
             onDismiss = { deleting = false },
+        )
+    }
+    // A pairing link joins only once the owner says so, as a scanned QR code does with its scan.
+    if (joinLink != null) {
+        AlertDialog(
+            onDismissRequest = actions.dropJoinLink,
+            title = { Text("Add this phone with this link?") },
+            text = { Text("Add it only if you opened the link from one of your devices' QR codes.", style = StarbridgeTheme.type.body) },
+            confirmButton = { TextButton(onClick = { actions.dropJoinLink(); actions.joinWithCode(joinLink) }) { Text("Add this phone") } },
+            dismissButton = { TextButton(onClick = actions.dropJoinLink) { Text("Cancel") } },
         )
     }
 }

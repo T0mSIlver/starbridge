@@ -566,6 +566,12 @@ class ServerStore(
 
     override fun joinAccount() = run { join(pairings.newCode(), scanned = false) }
 
+    override val joinLink = MutableStateFlow<String?>(null)
+
+    override fun offerJoinLink(link: String?) {
+        joinLink.value = link
+    }
+
     override fun joinWithCode(text: String) = run {
         val code = try {
             codeFromLink(text)
