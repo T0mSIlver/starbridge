@@ -12,7 +12,7 @@ Only `delivery-prompt` and `mid-task` run live sessions, where `ask` prints "The
 | snoozed-release | 98% (41/42) | 98% (41/42) | 98% (41/42) | 95% (40/42) | 88% (37/42) | 98% (41/42) |
 | later-question | 98% (39/40) | 88% (35/40) | 93% (37/40) | 83% (33/40) | 89% (71/80) | 93% (37/40) |
 
-\* Since #1021 a live Claude Code session sat at the bypass-permissions dialog and posted nothing; this round accepts it in the run's config. The 1063 figure measures no agent.
+\* From #1046, a Claude Code session in tmux (live and interactive situations) sat at the bypass-permissions dialog and ran nothing; this round accepts it in the run's config. The 1063 figure measures no agent, nor do its `delivery-wait`, `native-ask` and `desk-question` scores.
 
 - **mid-task's own check** (marked the card waiting, never waited, no background task, no monitor): Claude Code 1/2 before, 2/2 after; opencode 0/2 before, 1/2 after. One Claude Code run before #1487 waited in the foreground (`starbridge wait --no-mark`); no live run after it waited, and none, before or after, waited in a background task or with a monitor.
 - **delivery-prompt**: its card blocks the merge, so `starbridge waiting` is right there. One Claude Code run after #1487 ended its turn with the card unmarked. The other misses are the canned `gh`, which reports a merge that `gh pr view` then denies, and card wording the judge marks down.
