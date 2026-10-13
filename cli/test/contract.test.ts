@@ -34,7 +34,8 @@ test("ask --input reads the fields from a file; ask prints the id, then how the 
   ctx.lines.length = 0;
   expect(await run(["answers", "--session", "s", "--wait", "1"], ctx)).toBe(0);
   expect(ctx.lines.map((l) => JSON.parse(l))).toEqual([
-    { decisionId: id, ack: id, line: `Answer to ${id} (Merge #12 now?): Merge` },
+    // The `wait` above marked it waiting.
+    { decisionId: id, ack: id, line: `Answer to ${id} (Merge #12 now?): Merge`, waiting: true },
   ]);
   ctx.lines.length = 0;
   expect(await run(["wait", id], ctx)).toBe(0);

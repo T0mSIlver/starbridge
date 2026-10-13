@@ -44,7 +44,7 @@ test("on a port file, the mod reaches the agent at the port the file names (#128
   expect(fetched[0]).toBe("http://127.0.0.1:47213/v1/status");
 });
 
-test("mid-turn, the main agent's next tool result carries the answer, and the turn's end submits nothing (#1484)", async () => {
+test("mid-turn, the main agent's next tool result carries an answer marked waiting, and the turn's end submits nothing (#1484)", async () => {
   const { register } = (await import(REGISTER)) as {
     register: (on: (event: string, h: Handler) => void) => void;
   };
@@ -63,7 +63,9 @@ test("mid-turn, the main agent's next tool result carries the answer, and the tu
       fetch: async (url: string) => {
         if (url.endsWith("/ack")) acked = true;
         const events =
-          url.includes("/events") && turn && !acked ? [{ type: "answer", ack: "k1", line }] : [];
+          url.includes("/events") && turn && !acked
+            ? [{ type: "answer", ack: "k1", line, waiting: true }]
+            : [];
         return { status: 200, headers: {}, text: JSON.stringify({ events }) };
       },
     },

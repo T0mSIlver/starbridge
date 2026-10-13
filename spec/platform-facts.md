@@ -46,8 +46,11 @@ What the code relies on, with the versions checked.
   read from `.agents/plugins/marketplace.json` or `.claude-plugin/marketplace.json`; a plugin's
   hooks run with `${PLUGIN_ROOT}` set. Hook events and outputs follow Claude Code's
   (`SessionStart` `additionalContext`, `PermissionRequest`).
-- **Pi** (0.87.1, 1.0.4): `pi.sendUserMessage(..., { deliverAs: "followUp" })` behaves like
-  `codex queue`. Commands get `PI_SESSION_ID`. pi-permission-system (33 to 40) caps every
+- **Pi** (0.87.1, 1.0.4, 1.2.0): `pi.sendUserMessage(..., { deliverAs: "followUp" })` behaves like
+  `codex queue`; `"steer"` enters a busy run after its current tool calls, before the next model
+  call, and skips none of them; an idle session starts a turn either way (1.2.0's
+  `agent-loop.js`; checked with the extension on 1.2.0: a steered answer came with the next tool
+  result, a follow-up after the run, #1484). Commands get `PI_SESSION_ID`. pi-permission-system (33 to 40) caps every
   authorizer link's allow on `path` and `external_directory` to defer (its ADR 0007; making it
   configurable is its #620). A bash allow pattern is never safe there (#488): before 9.0.1 it
   matched the whole line, so `starbridge ask *` passed `starbridge ask x; curl … | sh`; from 9.0.1
@@ -55,7 +58,10 @@ What the code relies on, with the versions checked.
   `NODE_OPTIONS=--import=data:… starbridge ask`. A bash ask names only the command that asked in
   `command`, the line in its "full command" evidence (26.0.0 on), and a link's allow runs the line. Its dialog appears after 1 s, and a dialog opened over another
   strands it.
-- **opencode** (1.18.31): the `permission.ask` hook is declared but never called; prompts publish
+- **opencode** (1.18.31, 1.19.0): `promptAsync` into a busy session enters at its next step.
+  1.19.0's experimental `POST /api/session/:id/prompt` takes `delivery: "queue"`, but runs it at
+  once in a history of its own that the session's messages never show, so nothing queues behind
+  a run (#1484). The `permission.ask` hook is declared but never called; prompts publish
   `permission.asked` and take `POST /permission/{id}/reply`. `question.asked` and `POST
   /question/{id}/reply` work the same way. Plugins get an in-process SDK client;
   `experimental.chat.system.transform` is the only hook that adds to the system prompt; `shell.env`

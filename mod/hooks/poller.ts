@@ -26,10 +26,11 @@ export interface Host {
   sleep(ms: number): Promise<void>;
   /**
    * Must not wait for the turn to start: a prompt submitted mid-turn waits for its own. A host
-   * that can tell the submit failed returns or resolves false, and the line stays unconfirmed for
-   * a later try.
+   * that can tell the submit failed, or holds the line back for now, returns or resolves false,
+   * and the line stays unconfirmed for a later try. `waiting`: the agent marked the decision
+   * waiting, so it needs the answer now (#1484).
    */
-  submit(text: string): unknown;
+  submit(text: string, waiting: boolean): unknown;
   /** True while a submitted prompt waits for its turn: `AgentHost.starting`. */
   starting(): boolean;
   status(text: string | undefined): void;
@@ -95,6 +96,8 @@ function firstLine(stderr: string): string {
 export class Poller {
   private stopped = false;
   private failures = 0;
+  /** Lines the host held back in the last `answers`. */
+  private held = 0;
   /** The state file's time when this session last read it; a /clear makes it unread again. */
   private seen: { session: string; mtime: number; at: number } | undefined;
   /** The session id this poller last held the lease under; a `/clear` changes the id. */
@@ -186,7 +189,9 @@ export class Poller {
       await this.host.sleep(this.t.checkMs);
       return;
     }
-    if ((await this.answers(me, [])) !== undefined) this.seen = { session: me, mtime, at: now };
+    // A line the host held back for the turn's end is read again at the next check (#1484).
+    if ((await this.answers(me, [])) !== undefined && this.held === 0)
+      this.seen = { session: me, mtime, at: now };
   }
 
   /**
@@ -206,10 +211,11 @@ export class Poller {
     if (this.failures > 0) this.host.status(undefined);
     this.failures = 0;
     let handed = 0;
+    let held = 0;
     const done: string[] = [];
     for (const text of r.stdout.split("\n")) {
       if (!text.trim()) continue;
-      let parsed: { decisionId?: unknown; ack?: unknown; line?: unknown };
+      let parsed: { decisionId?: unknown; ack?: unknown; line?: unknown; waiting?: unknown };
       try {
         parsed = JSON.parse(text);
       } catch {
@@ -226,7 +232,10 @@ export class Poller {
         continue;
       }
       if (!this.unconfirmed.has(ack)) {
-        if ((await this.host.submit(line)) === false) continue;
+        if ((await this.host.submit(line, parsed.waiting === true)) === false) {
+          held++;
+          continue;
+        }
         this.unconfirmed.add(ack);
         handed++;
       }
@@ -240,6 +249,7 @@ export class Poller {
       }
       for (const id of done) this.unconfirmed.delete(id);
     }
+    this.held = held;
     return handed;
   }
 

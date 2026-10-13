@@ -597,6 +597,34 @@ test("waiting and working flip a decision's state, and each flip pushes", async 
   expect(ctx.errors.at(-1)).toContain("already answered");
 });
 
+for (const via of ["the CLI", "the local agent"])
+  test(`through ${via}, waiting on an answer not yet handed over prints it, once (#1484)`, async () => {
+    const ctx = await paired(server);
+    const agent =
+      via === "the local agent"
+        ? makeAgent(ctx, { socket: agentAddress(ctx.store.dir), noQuota: true })
+        : undefined;
+    await agent?.start();
+    try {
+      await run([...ASK, "--session", "s1"], ctx);
+      const id = ctx.lines.at(-1) as string;
+      await server.answer(id, { choice: "Merge" });
+      await until(async () => {
+        ctx.lines.length = 0;
+        await run(["answers", "--session", "s1", "--wait", "1"], ctx);
+        return ctx.lines.length > 0;
+      });
+      expect(await run(["waiting", id], ctx)).toBe(0);
+      expect(ctx.lines.at(-1)).toBe(`Answer to ${id} (Merge #12 now?): Merge`);
+      ctx.lines.length = 0;
+      expect(await run(["answers", "--session", "s1"], ctx)).toBe(0);
+      expect(ctx.lines).toEqual([]);
+      expect(await run(["waiting", id], ctx)).toBe(1);
+    } finally {
+      await agent?.stop();
+    }
+  });
+
 test("waiting says when the owner snoozed the question, and wait says it once with exit 3", async () => {
   const ctx = await paired(server);
   await run(ASK, ctx);
@@ -1347,7 +1375,12 @@ test("answers hands each session only its own answers, until it confirms them", 
   await server.answer(theirs, { text: "multi\nline" });
   await server.answer(mine, { choice: "Wait" });
   expect(await run(["answers", "--session", "s1", "--wait", "5"], ctx)).toBe(0);
-  const handed = { decisionId: mine, ack: mine, line: `Answer to ${mine} (Merge #12 now?): Wait` };
+  const handed = {
+    decisionId: mine,
+    ack: mine,
+    line: `Answer to ${mine} (Merge #12 now?): Wait`,
+    waiting: false,
+  };
   expect(ctx.lines.map((l) => JSON.parse(l))).toEqual([handed]);
   // Unconfirmed, it is handed over again; another session cannot confirm it.
   expect(await run(["answers", "--session", "s2", "--ack", mine], ctx)).toBe(0);

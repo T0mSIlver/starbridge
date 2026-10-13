@@ -33,10 +33,11 @@ export interface AgentHost {
   sleep(ms: number): Promise<void>;
   /**
    * Must not wait for the turn to start: a prompt submitted mid-turn waits for its own. A host
-   * that can tell the submit failed returns or resolves false, and the line stays unconfirmed for
-   * a later try.
+   * that can tell the submit failed, or holds the line back for now, returns or resolves false,
+   * and the line stays unconfirmed for a later try. `waiting`: the agent marked the decision
+   * waiting, so it needs the answer now (#1484).
    */
-  submit(text: string): unknown;
+  submit(text: string, waiting: boolean): unknown;
   /**
    * True while a submitted prompt waits for its turn. Claude Code starts a plugin's queued prompt
    * only once the mod's open `fetch` or `run` returns, so the loop then holds no long call (#1446).
@@ -177,6 +178,7 @@ interface Event {
   ack?: unknown;
   line?: unknown;
   decisionId?: unknown;
+  waiting?: unknown;
 }
 
 /** Why `AgentLoop.run` returned: `stop`, or the agent cannot serve this mod. */
@@ -255,7 +257,7 @@ export class AgentLoop {
         continue;
       }
       if (!this.unconfirmed.has(e.ack)) {
-        if ((await this.host.submit(e.line)) === false) continue;
+        if ((await this.host.submit(e.line, e.waiting === true)) === false) continue;
         this.unconfirmed.add(e.ack);
         handed++;
       }

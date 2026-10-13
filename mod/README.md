@@ -82,9 +82,9 @@ further error, up to a minute, and shows the error in the status line until a
 call succeeds.
 
 Claude Code runs a submitted prompt only once the running turn ends. So while
-the agent works, the mod holds each answer, unconfirmed, and adds it to the
-agent's next tool result, which the agent reads at once; when the turn ends,
-the mod submits what no tool call took.
+the agent works, an answer to a decision it marked waiting goes with its next
+tool result, which it reads at once; any other answer stays unconfirmed until
+the turn ends, and the mod then submits it.
 
 ## Pi
 

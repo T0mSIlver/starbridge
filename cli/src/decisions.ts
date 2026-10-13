@@ -499,6 +499,11 @@ export async function setWaiting(
   opts: { id?: string; state: Waiting["state"] },
 ): Promise<number> {
   if (!opts.id) throw new UsageError(`${opts.state} needs a decision id`);
+  const taken = opts.state === "waiting" ? takeUnseen(ctx.store, opts.id) : undefined;
+  if (taken) {
+    ctx.out(answerLine(taken.answer, taken.question));
+    return 0;
+  }
   const s = session(ctx);
   await postWaiting(ctx, s, opts.id, opts.state);
   // Without the agent nothing polls meanwhile: read every page since the question was asked,
@@ -1363,6 +1368,15 @@ export function takeAnswer(
 }
 
 /**
+ * `waiting` on a decision whose answer came but has not reached the agent: the agent needs it
+ * now, so it gets it at once, marked printed, rather than after its turn (#1484).
+ */
+export function takeUnseen(store: Ctx["store"], id: string) {
+  const a = store.state().answers[id];
+  return a && !a.seen ? takeAnswer(store, id) : undefined;
+}
+
+/**
  * Waits for the answer to decision `id`, marking it `waiting`, or without `id` for the next
  * answer to any decision this machine asked. Exits 0 with the answer, or EXIT_TIMEOUT once
  * `--timeout` passes.
@@ -1483,6 +1497,11 @@ export interface SessionLine {
   /** What confirms it: the decision id. */
   ack: string;
   line: string;
+  /**
+   * The decision is marked waiting: the agent needs the answer now, so the mod hands it over at
+   * the agent's next tool call rather than after its turn (#1484).
+   */
+  waiting: boolean;
 }
 
 /** The answers to decisions session `session` asked that no `wait` printed nor the mod confirmed. */
@@ -1498,6 +1517,7 @@ export function sessionLines(st: State, session: string): SessionLine[] {
       decisionId: id,
       ack: id,
       line: answerLine(a.answer, asked.question),
+      waiting: asked.waiting?.state === "waiting",
     });
   }
   return lines;
@@ -1513,12 +1533,14 @@ export function ackLines(st: State, session: string, tokens: string[]) {
 
 /** What `answers` prints for each line, as the mod reads it. */
 const printLine = (ctx: Ctx, l: SessionLine) =>
-  ctx.out(JSON.stringify({ decisionId: l.decisionId, ack: l.ack, line: l.line }));
+  ctx.out(
+    JSON.stringify({ decisionId: l.decisionId, ack: l.ack, line: l.line, waiting: l.waiting }),
+  );
 
 /**
  * For the Claude Code mod: hands over the answers to decisions that session `session` asked and
- * that neither a `wait` printed nor the mod confirmed, one JSON line `{decisionId, ack, line}`
- * each. The mod confirms each line it submitted with `--ack <ack>`; until then
+ * that neither a `wait` printed nor the mod confirmed, one JSON line `{decisionId, ack, line,
+ * waiting}` each. The mod confirms each line it submitted with `--ack <ack>`; until then
  * the next call hands it over again, so a line the mod held back (its session ended meanwhile) is
  * not lost. With `wait`, and nothing to hand over, first long-polls once for at most that many
  * seconds from the shared cursor. One cycle per call: an error exits 1, and the mod decides when

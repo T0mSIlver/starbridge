@@ -24,6 +24,7 @@ import {
   snoozedUntil,
   takeAnswer,
   takeSnooze,
+  takeUnseen,
 } from "../decisions";
 import type { SessionEvent, Status } from "./api";
 import { type Feature, HttpError, type Hub, holdSeconds, pause } from "./server";
@@ -103,6 +104,8 @@ export class Decisions implements Feature {
             "unknown-decision",
             `${id} is not a decision this machine asked`,
           );
+        const taken = state === "waiting" ? takeUnseen(this.ctx.store, id) : undefined;
+        if (taken) return { posted: false, ...taken };
         const posted = await postWaiting(this.ctx, session(this.ctx), id, state);
         const until = snoozedUntil(this.ctx.store.state(), id, this.ctx.now());
         return { posted, ...(until ? { snoozedUntil: until } : {}) };

@@ -74,11 +74,15 @@ export async function waitingVia(
   ctx?: Ctx,
 ): Promise<number> {
   if (!opts.id) throw new UsageError(`${opts.state} needs a decision id`);
-  const r = await agent.call<{ snoozedUntil?: string }>(
+  const r = await agent.call<{ snoozedUntil?: string; answer?: Answer; question?: string }>(
     "POST",
     `/v1/decisions/${encodeURIComponent(opts.id)}/waiting`,
     { state: opts.state },
   );
+  if (ctx && r.answer) {
+    ctx.out(answerLine(r.answer, r.question));
+    return 0;
+  }
   if (ctx && r.snoozedUntil && opts.state === "waiting")
     ctx.out(
       snoozeLine(opts.id, ctx.store.state().asked[opts.id]?.question, r.snoozedUntil, ctx.now()),
@@ -167,7 +171,7 @@ export async function waitVia(
   return 0;
 }
 
-/** `answers` through the agent, for the mod: the session's events as `{decisionId, ack, line}`. */
+/** `answers` through the agent, for the mod: the session's events as `{decisionId, ack, line, waiting}`. */
 export async function answersVia(
   ctx: Ctx,
   agent: AgentClient,
@@ -189,7 +193,9 @@ export async function answersVia(
   );
   for (const e of events) {
     // The mod built for `answers` takes these fields; it skips lines without a decision id.
-    ctx.out(JSON.stringify({ decisionId: e.decisionId, ack: e.ack, line: e.line }));
+    ctx.out(
+      JSON.stringify({ decisionId: e.decisionId, ack: e.ack, line: e.line, waiting: e.waiting }),
+    );
   }
   return 0;
 }
