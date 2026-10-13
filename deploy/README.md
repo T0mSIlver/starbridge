@@ -48,8 +48,10 @@ image is tagged by a hash of that file and built only when no image has the tag.
 main: the same images as prod, prod's compose file with `staging/compose.yaml` laid over it, and
 prod's Caddyfile under staging's host name with `X-Robots-Tag: noindex`. It has its own secrets
 and no Umami, backups or demo server. `deploy.yml`'s staging key runs only
-`starbridge-staging-deploy <commit>` (`staging/deploy-rev.sh`), which fetches main over HTTPS
-and runs `staging/apply.sh`.
+`starbridge-staging-deploy <commit>` (`staging/deploy-rev.sh`), which fetches main over HTTPS,
+runs `staging/apply.sh`, then one round trip on staging's test account through the outside
+check's staging instance on the VM (`sb-check-now /var/lib/sb-check-staging`). Prod's deploy
+waits for that job and runs only when it passed.
 
 | What | How |
 |---|---|

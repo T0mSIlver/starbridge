@@ -142,8 +142,8 @@ jobs:
           done
 
   # Staging (staging.starbridge.run, on homelab-arm) runs the same images (deploy/staging/). Its
-  # key's forced command deploys a commit of main and nothing else; the box fetches it itself.
-  # Until the VM and the key exist, the job skips with a notice.
+  # key's forced command deploys a commit of main and nothing else, the box fetching it itself,
+  # then runs one round trip there. Until the VM and the key exist, the job passes with a notice.
   staging:
     needs: [changed, images]
     concurrency:
@@ -183,8 +183,9 @@ jobs:
             awk -F': ' 'tolower($1) == "x-starbridge-revision" { print $2 }')
           [ "$got" = "$REV" ] || { echo "staging runs ${got:-no named revision}, not $REV"; exit 1; }
 
+  # Prod deploys only a commit staging took and passed its round trip on (#1528).
   deploy:
-    needs: [changed, images]
+    needs: [changed, images, staging]
     # On the job, not the workflow: a run for a failed or cancelled CI run skips this job without
     # joining the queue, so it cannot replace a deploy that is waiting.
     concurrency:
