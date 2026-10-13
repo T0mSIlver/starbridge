@@ -231,6 +231,26 @@ final class InboxTests: XCTestCase {
         XCTAssertNil(store.notice)
         XCTAssertTrue(store.openDecisions.contains { $0.id == "d_four" })
 
+        // --- Answered before this iPhone read it: listed without its image, fetched once shown (#1463) ---
+        let (blob5, ref5) = Images.seal(png)
+        let pictured5 = try Envelopes.seal(kind: .decision, body: .object([
+            "v": 1, "id": "d_five", "to": [.string(phone.id)], "createdAt": .string(now()), "question": "This one?", "context": "",
+            "options": [], "source": source,
+            "images": [["key": .string(ref5.key), "hash": .string(ref5.hash), "type": "image/png", "width": 20, "height": 10]],
+        ]), signer: machine.id, secretKey: keys.sign.secretKey, recipients: [phone])
+        var withBlob5 = try XCTUnwrap(pictured5.json.object)
+        withBlob5["blobs"] = [.string(blob5)]
+        try await call(machineToken, "POST", "/items", .object(withBlob5))
+        let settled5 = try Envelopes.seal(kind: .settled, body: .object([
+            "v": 1, "id": "s_five", "itemId": "d_five", "to": [.string(phone.id)], "at": .string(now()), "outcome": "elsewhere",
+        ]), signer: machine.id, secretKey: keys.sign.secretKey, recipients: [phone])
+        try await call(machineToken, "POST", "/items", settled5.json)
+        await store.refresh()
+        XCTAssertNotNil(store.decision("d_five")?.answeredAt)
+        XCTAssertEqual(store.decision("d_five")?.imagesPending, true)
+        await store.loadImages("d_five")
+        XCTAssertEqual(store.decision("d_five")?.images.first?.bytes, Data(png))
+
         // --- The machine is revoked: its open question leaves, and so does its notification (#344, #1184) ---
         try await show("d_four")
         let revoke = Directories.revokeEntry(try await directory(), signer: phone.id, signKey: phoneSign, id: machine.id, at: now())

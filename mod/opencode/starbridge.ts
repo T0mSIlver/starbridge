@@ -341,6 +341,8 @@ async function server({ client, directory }: Input) {
       await unclaim(dir, id, line, c.token);
       return false;
     };
+    // Only Claude Code holds a queued prompt back behind an open call (#1446).
+    const starting = () => false;
     loops.set(
       id,
       new Switch({
@@ -348,7 +350,17 @@ async function server({ client, directory }: Input) {
           !env.STARBRIDGE_NO_AGENT && (await fetch("GET", "/v1/status")).status < 300,
         agent: (unconfirmed) =>
           new AgentLoop(
-            { sessionId, cwd: async () => directory, fetch, now, sleep, submit, status, log },
+            {
+              sessionId,
+              cwd: async () => directory,
+              fetch,
+              now,
+              sleep,
+              submit,
+              starting,
+              status,
+              log,
+            },
             unconfirmed,
           ),
         poller: (unconfirmed) =>
@@ -362,6 +374,7 @@ async function server({ client, directory }: Input) {
               now,
               sleep,
               submit,
+              starting,
               status,
               log,
             },

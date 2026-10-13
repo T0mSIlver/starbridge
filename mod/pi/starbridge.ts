@@ -272,12 +272,14 @@ export default function starbridge(pi: PiApi) {
     };
     const log = (_s: string) => {};
     env[ANSWERS_ENV] = id;
+    // Only Claude Code holds a queued prompt back behind an open call (#1446).
+    const starting = () => false;
     loop = new Switch({
       agentUp: async () =>
         !env.STARBRIDGE_NO_AGENT && (await fetch("GET", "/v1/status")).status < 300,
       agent: (unconfirmed) =>
         new AgentLoop(
-          { sessionId, cwd: async () => cwd, fetch, now, sleep, submit, status, log },
+          { sessionId, cwd: async () => cwd, fetch, now, sleep, submit, starting, status, log },
           unconfirmed,
         ),
       poller: (unconfirmed) =>
@@ -291,6 +293,7 @@ export default function starbridge(pi: PiApi) {
             now,
             sleep,
             submit,
+            starting,
             status,
             log,
           },

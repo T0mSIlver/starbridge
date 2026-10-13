@@ -55,6 +55,7 @@ test("a loop that replaces another mid-confirm does not submit its answer again 
     submit: (text) => {
       submitted.push(text);
     },
+    starting: () => false,
     status: () => {},
     log: () => {},
   };
@@ -108,6 +109,7 @@ test("a host that throws once its session is gone does not reject the loop (#136
       now: async () => Date.now(),
       sleep: (ms) => Bun.sleep(Math.min(ms, 20)),
       submit: () => live(undefined),
+      starting: () => false,
       status: () => live(undefined),
       log: () => {},
     };

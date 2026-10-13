@@ -60,6 +60,8 @@ struct SavedDecision: Codable, Equatable {
 
     var id: String { body.id }
     var isOpen: Bool { answeredAt == nil && answer == nil }
+    /** Listed answered, without its images: the detail fetches them when it shows (#1382). */
+    var imagesPending: Bool { images.isEmpty && !(body.images ?? []).isEmpty }
 
     /** Until when the owner put it off; none after Back now, whose time is its own (#571). */
     var snoozed: Date? {

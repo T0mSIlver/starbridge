@@ -73,6 +73,8 @@ final class Store {
 
     /** Decisions this iPhone's answer lost to another device's, until the machine says which won. */
     @ObservationIgnored var lost: Set<String> = []
+    /** Questions whose images this run fetched or is fetching (#1382). */
+    @ObservationIgnored var imagesAsked: Set<String> = []
     @ObservationIgnored var queue: Task<Void, Never>?
     @ObservationIgnored var pollTask: Task<Void, Never>?
     /** Sends the outbox again while answers wait in it (#1392). */

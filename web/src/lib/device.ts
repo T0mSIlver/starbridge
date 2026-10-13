@@ -165,9 +165,12 @@ class Unanchored extends Error {}
  * a genesis this browser's device signed anchors the chain (a first device cut off before it
  * pinned): any other the server could have made, listing keys it relayed (#354).
  */
-async function trusted(account: string): Promise<{ dir: Directory; entries: SignedEnvelope[] }> {
+async function trusted(
+  account: string,
+  read?: SignedEnvelope[],
+): Promise<{ dir: Directory; entries: SignedEnvelope[] }> {
   for (let attempt = 0; ; attempt++) {
-    const entries = await api.directory();
+    const entries = (attempt === 0 && read) || (await api.directory());
     const pin = await store.get("pin", account);
     if (!pin && !signedGenesis(account, entries[0], await store.get("device", account)))
       throw new Unanchored("no pin anchors this directory");
@@ -252,7 +255,7 @@ export async function boot(): Promise<Boot> {
   }
   let verified: { dir: Directory; entries: SignedEnvelope[] };
   try {
-    verified = await trusted(account);
+    verified = await trusted(account, entries);
   } catch (e) {
     // A join or recovery cut off before it pinned starts over (#354).
     if (e instanceof Unanchored) {
@@ -1334,7 +1337,14 @@ export async function reverify(ctx: Ctx): Promise<Ctx | undefined> {
 export async function loadInbox(
   ctx: Ctx,
   inbox: Inbox = { items: [], rejected: [] },
-  opts: { keep?: boolean } = {},
+  opts: {
+    keep?: boolean;
+    /**
+     * Given the kept questions the server lists open, once they are opened and before the
+     * answered ones: a load shows what needs the owner first (#1458).
+     */
+    early?: (inbox: Inbox) => void;
+  } = {},
 ): Promise<Inbox> {
   // The kept items, and the decisions the server holds open now: those settle which kept
   // questions it dropped, and whether what is kept still matches the server at all.
@@ -1412,7 +1422,39 @@ export async function loadInbox(
         rejected.push({ id: s.item.id, error: e instanceof Error ? e.message : String(e) });
     }
   };
-  for (const s of kept?.items ?? []) await take(s, false);
+  // Only the machine that asked can say its agent waits on the question.
+  const shown = () =>
+    [...byId.values()].map((i) => {
+      const w = waits[`${i.machine.id}/${i.decision.id}`];
+      const z = snoozes[i.decision.id];
+      const { waitingSince: _, snoozedUntil: __, ...rest } = i;
+      return {
+        ...rest,
+        ...(w?.state === "waiting" ? { waitingSince: w.at } : {}),
+        // Back now ends at its own time, read before this browser's clock, which may run behind.
+        ...(z && Date.parse(z.until) > Date.parse(z.at) ? { snoozedUntil: z.until } : {}),
+      };
+    });
+  // What tells an open question's state first, then the questions, then the answered ones.
+  const first = (s: Stored) =>
+    s.item.kind === "waiting" ||
+    s.item.kind === "snooze" ||
+    (s.item.kind === "decision" && !s.answeredAt && !!open?.has(s.item.id));
+  const keptItems = kept?.items ?? [];
+  if (opts.early && open && open.size > 0) {
+    for (const s of keptItems) if (first(s)) await take(s, false);
+    if (byId.size > 0) {
+      // Never past a hold: while the server withholds entries, no machine's item shows (#362).
+      await hold(ctx);
+      opts.early({
+        items: shown(),
+        rejected: [...rejected],
+        waits: { ...waits },
+        snoozes: { ...snoozes },
+      });
+    }
+    for (const s of keptItems) if (!first(s)) await take(s, false);
+  } else for (const s of keptItems) await take(s, false);
   for (const s of inbox.retry ?? []) await take(s, true);
   let cursor = inbox.cursor ?? kept?.cursor;
   const read: Stored[] = [];
@@ -1458,18 +1500,7 @@ export async function loadInbox(
     if (item && answeredBy && !item.reply && key === `${item.machine.id}/${notice.itemId}`)
       byId.set(notice.itemId, { ...item, answeredBy });
   }
-  // Only the machine that asked can say its agent waits on the question.
-  const items = [...byId.values()].map((i) => {
-    const w = waits[`${i.machine.id}/${i.decision.id}`];
-    const z = snoozes[i.decision.id];
-    const { waitingSince: _, snoozedUntil: __, ...rest } = i;
-    return {
-      ...rest,
-      ...(w?.state === "waiting" ? { waitingSince: w.at } : {}),
-      // Back now ends at its own time, read before this browser's clock, which may run behind.
-      ...(z && Date.parse(z.until) > Date.parse(z.at) ? { snoozedUntil: z.until } : {}),
-    };
-  });
+  const items = shown();
   await noteSnoozes(
     ctx,
     Object.entries(snoozes).map(([decisionId, z]) => ({ decisionId, at: z.at })),
@@ -1639,10 +1670,23 @@ export async function openSettled(ctx: Ctx, item: SealedItem) {
   return { machine: signer.id, settled: body as Settled };
 }
 
-/** Settled notices after `cursor`, keyed by "machine/permission id". */
+/**
+ * Settled notices after `cursor`, keyed by "machine/permission id". Without one, the read starts
+ * at the kept inbox's cursor (#1380) rather than at the first notice the server holds: a notice
+ * before it closed a prompt the server no longer lists open, which the page never shows (#1455).
+ */
 export async function loadSettled(ctx: Ctx, cursor?: string) {
   const out = new Map<string, Settled>();
   let at = cursor;
+  if (at === undefined) {
+    const kept = await store.get("kept", ctx.account);
+    // A prompt open now that lists at or before that cursor: a reset or restored server, whose
+    // notices may sit below it too, or one open since before the kept read. Read them all.
+    const open =
+      kept?.device === ctx.device.id &&
+      (await api.items("permission", undefined, { open: true })).items;
+    if (open && !open.some((s) => Number(s.cursor) <= Number(kept.cursor))) at = kept.cursor;
+  }
   for (;;) {
     const page = await api.items("settled", at);
     for (const s of page.items) {
