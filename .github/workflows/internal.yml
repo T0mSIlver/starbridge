@@ -24,6 +24,10 @@ jobs:
   plan:
     runs-on: ubuntu-latest
     environment: play-release
+    # Play keeps one open edit per account: a second one, here or in release.yml, voids the first.
+    concurrency:
+      group: play-edit
+      cancel-in-progress: false
     timeout-minutes: 10
     permissions:
       contents: read
@@ -123,6 +127,10 @@ jobs:
     needs: android
     runs-on: ubuntu-latest
     environment: play-release
+    # Play keeps one open edit per account: a second one, here or in release.yml, voids the first.
+    concurrency:
+      group: play-edit
+      cancel-in-progress: false
     timeout-minutes: 15
     permissions:
       contents: read
