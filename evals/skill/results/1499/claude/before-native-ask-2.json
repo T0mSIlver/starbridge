@@ -1,0 +1,87 @@
+{
+  "agent": "claude",
+  "model": "claude-haiku-5-5",
+  "arm": "before",
+  "scenario": "native-ask",
+  "rep": 2,
+  "turns": [
+    {
+      "commands": [],
+      "askUser": [
+        {
+          "denied": false
+        }
+      ],
+      "final": "",
+      "session": "538aaf13-0e79-4738-aa84-118232d5d203",
+      "exit": 0,
+      "seconds": 10.026
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_-Z4mBnPxZo39uxtB",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-13T13:05:30.549Z",
+      "question": "Which title should this card get?",
+      "context": "Which error tracking service should the web app use? Sentry is hosted and free up to 5k errors a month, then $26/month, with session replay. GlitchTip is self-hosted on our VPS, free, but we patch and back it up ourselves (about an hour a month). Which title should this card get?\n\n- Sentry (Recommended): Hosted, zero maintenance. Free up to 5k errors/month, then $26/month. Includes session replay.\n- Self-hosted GlitchTip: Free, runs on our VPS. We handle patching and backups, about an hour a month.",
+      "options": [
+        "Sentry (Recommended)",
+        "Self-hosted GlitchTip"
+      ],
+      "recommended": "Sentry (Recommended)",
+      "agent": "claude-code",
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "538aaf13-0e79-4738-aa84-118232d5d203",
+        "sessionTitle": "We need error tracking in the web app."
+      },
+      "replies": true,
+      "dir": {
+        "length": 2,
+        "head": "5g-LUj2ywDtL-Yzye_vt-PjKLHbp2-pZ6Z6bnqwWtUU"
+      }
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [
+    "gh auth token",
+    "gh auth token",
+    "gh issue list -R anthropics/claude-code --author @me --state closed --search closed:>2026-09-13 --json number,title,closedAt,stateReason --limit 30"
+  ],
+  "waiting": [
+    {
+      "v": 1,
+      "id": "w_R2IY6csjg-at5iyW",
+      "decisionId": "d_-Z4mBnPxZo39uxtB",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-13T13:05:30Z",
+      "state": "waiting",
+      "dir": {
+        "length": 2,
+        "head": "5g-LUj2ywDtL-Yzye_vt-PjKLHbp2-pZ6Z6bnqwWtUU"
+      }
+    }
+  ],
+  "permissions": [],
+  "settled": [],
+  "peakContext": 29114,
+  "usedTokens": 58391,
+  "judge": {
+    "cold": true,
+    "consequences": true,
+    "terminal": false,
+    "links": null,
+    "plain": false,
+    "skim": false,
+    "notes": "The card's question field and the end of its context both read \"Which title should this card get?\" instead of the decision, so the headline a phone user sees is nonsense and the real question sits buried in the context."
+  }
+}

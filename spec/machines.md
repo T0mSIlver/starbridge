@@ -199,7 +199,9 @@
   loads a local plugin's skill and hooks in `-p` but, in an interactive session, neither its skill
   nor its `sessionStart` and `stop` hooks (run 2026-10-09). Cursor also reads `~/.codex/skills`,
   so with Codex set up too it lists the skill twice; both copies are the same. Setup finds Cursor
-  by `cursor-agent` on the PATH or a `~/.cursor` folder.
+  by `cursor-agent` on the PATH or a `~/.cursor` folder. Its entries in `~/.cursor/hooks.json`
+  are known by the exact commands setup writes, so refresh and uninstall leave an owner's entry
+  that runs a script of `~/.cursor/starbridge` its own way (#1493).
 - **Docs** (#211) at `/docs` are the repository's Markdown files listed in `web/src/lib/docs.ts`,
   rendered by the web page. Links between them become `/docs` links; other relative links go to
   GitHub. Images are screenshots under `web/public`, served from the site root, so GitHub shows

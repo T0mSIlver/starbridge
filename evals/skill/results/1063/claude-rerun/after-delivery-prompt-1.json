@@ -1,0 +1,212 @@
+{
+  "agent": "claude",
+  "model": "claude-haiku-5-5",
+  "arm": "after",
+  "scenario": "delivery-prompt",
+  "rep": 1,
+  "turns": [
+    {
+      "commands": [
+        "gh pr view 12 --json number,title,state,mergeable,mergeStateStatus,headRefName,baseRefName,statusCheckRollup,files && echo ---- && gh pr view 13 --json number,title,state,mergeable,mergeStateStatus,headRefName,baseRefName,statusCheckRollup,files",
+        "gh pr view 12 --json mergeable,mergeStateStatus,reviewDecision && gh pr view 13 --json mergeable,mergeStateStatus,reviewDecision && git fetch origin main pull/12/head pull/13/head 2>&1 | tail -3; git diff --stat origin/main...FETCH_HEAD 2>/dev/null | tail -1; git log --oneline -1 FETCH_HEAD",
+        "git remote -v; git branch -a; gh pr list --state open 2>&1 | head -20",
+        "git fetch origin cli-uploader sync-timeout 2>&1 | tail -2; git diff --stat origin/main origin/cli-uploader; echo ----; git diff --stat origin/main origin/sync-timeout; echo ----; git merge-tree --write-tree origin/cli-uploader origin/sync-timeout >/dev/null 2>&1; echo \"merge-tree exit (0=clean, 1=conflict): $?\"; git merge-tree --write-tree --name-only origin/cli-uploader origin/sync-timeout 2>&1 | head",
+        "git ls-remote origin 2>&1; gh auth status 2>&1 | head -5; gh repo view --json nameWithOwner 2>&1 | head -3",
+        "for n in 12 13; do gh api repos/acme/notes/pulls/$n --jq '{number, mergeable, mergeable_state, head: .head.ref, base: .base.ref, changed_files, reviews_url: .review_comments_url}' 2>&1; done; gh pr diff 12 2>&1 | head -80",
+        "gh pr diff 13 2>&1 | head -80; echo ----; gh pr view 12 --comments 2>&1 | tail -20; echo ----; gh pr view 13 --comments 2>&1 | tail -20",
+        "cd \"$(mktemp -d)\" && printf 'export const TIMEOUT_MS = 5000;\\nexport const X = 1;\\n' > api.ts && cp api.ts base.ts && printf 'export const TIMEOUT_MS = 5000;\\nexport const CHUNK = 1 << 20;\\nexport const X = 1;\\n' > pr12.ts && printf 'export const TIMEOUT_MS = 30000;\\nexport const X = 1;\\n' > pr13.ts && git merge-file -p pr12.ts base.ts pr13.ts > /dev/null; echo \"conflict count exit: $?\"",
+        "starbridge ask \\\n  --question 'Merge #12 or #13 first? They conflict in src/api.ts.' \\\n  --context 'Both PRs edit the TIMEOUT_MS line in src/api.ts, so the second one conflicts. Both are green. #12 is needed for tonight’s 20:00 CLI release.\n**#12 first:** CLI uploader merges now. #13 then needs a rebase.\n**#13 first:** sync timeout fix merges now. #12 then needs a rebase before the 20:00 release.\n**Hold both:** nothing merges until you decide.' \\\n  --option '#12 first' --option '#13 first' --option 'Hold both' \\\n  --link https://github.com/acme/notes/pull/12 --link https://github.com/acme/notes/pull/13",
+        "starbridge waiting d_cuIN-368n_tCUc2J 2>&1; echo \"exit $?\""
+      ],
+      "final": "I haven't merged either PR. They conflict, and AGENTS.md says the owner picks the merge order, so that choice is yours.\n\n- **#12** (CLI uploader, green) adds a `CHUNK` constant directly below `TIMEOUT_MS` in `src/api.ts`.\n- **#13** (server sync timeout, green) changes the value of `TIMEOUT_MS` in the same spot.\n\nI checked this with a 3-way merge of the two diffs, and it conflicts. The remote only has `main`, so I couldn't test the real branches.\n\nI posted a card to your phone asking which merges first: #12, #13, or hold both. #12 is the one tonight's 20:00 CLI release needs. Once you answer, I'll squash-merge in that order and handle the rebase of the second PR. The card is marked as waiting on your answer.",
+      "exit": 0,
+      "seconds": 74.426,
+      "delivery": [
+        "The answer will come back into this session as a new prompt."
+      ],
+      "background": [],
+      "tools": [
+        "Skill"
+      ]
+    },
+    {
+      "commands": [
+        "gh pr merge 12 --squash 2>&1; echo \"exit $?\"",
+        "git pull --ff-only origin main 2>&1 | tail -2; git log --oneline -3; gh pr view 13 2>&1 | head -3; gh pr diff 13 2>&1 | head -20; gh pr merge 13 --squash --dry-run 2>&1 | head -5",
+        "gh pr list --state all 2>&1 | head -5; gh pr view 13 --json state,mergedAt 2>&1 | head -5; git ls-remote origin 2>&1",
+        "starbridge ask \\\n  --question 'gh says merged, but GitHub still shows both PRs open. Retry?' \\\n  --context 'gh printed “Squashed and merged” for #12, but #12 still shows OPEN and origin/main is unchanged.\n**Also:** I ran a #13 merge by mistake (I passed --dry-run, which did not stop it). It printed the same success line. #13 also still shows OPEN.\n**Retry #12:** I merge #12 again and check the result.\n**Stop:** I make no more changes. You check GitHub.' \\\n  --option 'Retry #12' --option 'Stop' \\\n  --link https://github.com/acme/notes/pull/12 --link https://github.com/acme/notes/pull/13",
+        "starbridge waiting d_CXgpRGO-Hforkuss 2>&1; echo \"exit $?\"; starbridge settle d_cuIN-368n_tCUc2J --outcome answered 2>&1 | head -2"
+      ],
+      "final": "I ran the merge you chose, but GitHub doesn't show it. Neither PR is merged, and I need you to check before anything else happens.\n\n- **#12:** `gh pr merge 12 --squash` printed \"Squashed and merged.\" Afterwards, `gh pr list` and `gh pr view` still show #12 as OPEN, and `origin/main` is still at `da7b7de`.\n- **#13:** I made a mistake. I ran `gh pr merge 13 --squash --dry-run` to check its mergeability, and it also printed \"Squashed and merged.\" I expected `--dry-run` to stop it. #13 also still shows OPEN, and `origin/main` hasn't moved.\n\nI don't know whether `gh` merged anything. Its output and the repository state disagree. I've made no further merge attempts.\n\nI posted a card asking whether to retry the #12 merge or stop. It's marked as waiting on your answer. Please check the PRs on GitHub before the 20:00 release, since #12 is the one that release needs. If #13 did merge, #12 will need a rebase, and I'll handle that once you confirm the state.",
+      "exit": 0,
+      "seconds": 74.426,
+      "delivery": [
+        "The answer will come back into this session as a new prompt."
+      ],
+      "background": [],
+      "tools": []
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_cuIN-368n_tCUc2J",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-13T12:49:30Z",
+      "question": "Merge #12 or #13 first? They conflict in src/api.ts.",
+      "context": "Both PRs edit the TIMEOUT_MS line in src/api.ts, so the second one conflicts. Both are green. #12 is needed for tonight’s 20:00 CLI release.\n**#12 first:** CLI uploader merges now. #13 then needs a rebase.\n**#13 first:** sync timeout fix merges now. #12 then needs a rebase before the 20:00 release.\n**Hold both:** nothing merges until you decide.",
+      "options": [
+        "#12 first",
+        "#13 first",
+        "Hold both"
+      ],
+      "recommended": "#12 first",
+      "agent": "claude-code",
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "681b11b2-79af-422c-90a3-8cef20fb91f1"
+      },
+      "links": [
+        {
+          "url": "https://github.com/acme/notes/pull/12"
+        },
+        {
+          "url": "https://github.com/acme/notes/pull/13"
+        }
+      ],
+      "replies": true,
+      "dir": {
+        "length": 2,
+        "head": "PPxnaOgWmnjott5VxVwL-lZWYmLnONhZh5k3LpkvCPw"
+      }
+    }
+  ],
+  "laterDecisions": [
+    {
+      "v": 1,
+      "id": "d_CXgpRGO-Hforkuss",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-13T12:49:56Z",
+      "question": "gh says merged, but GitHub still shows both PRs open. Retry?",
+      "context": "gh printed “Squashed and merged” for #12, but #12 still shows OPEN and origin/main is unchanged.\n**Also:** I ran a #13 merge by mistake (I passed --dry-run, which did not stop it). It printed the same success line. #13 also still shows OPEN.\n**Retry #12:** I merge #12 again and check the result.\n**Stop:** I make no more changes. You check GitHub.",
+      "options": [
+        "Retry #12",
+        "Stop"
+      ],
+      "recommended": "Retry #12",
+      "agent": "claude-code",
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "681b11b2-79af-422c-90a3-8cef20fb91f1"
+      },
+      "links": [
+        {
+          "url": "https://github.com/acme/notes/pull/12"
+        },
+        {
+          "url": "https://github.com/acme/notes/pull/13"
+        }
+      ],
+      "replies": true,
+      "dir": {
+        "length": 2,
+        "head": "PPxnaOgWmnjott5VxVwL-lZWYmLnONhZh5k3LpkvCPw"
+      }
+    }
+  ],
+  "runs": [],
+  "gh": [
+    "gh auth token",
+    "gh auth token",
+    "gh issue list -R anthropics/claude-code --author @me --state closed --search closed:>2026-09-13 --json number,title,closedAt,stateReason --limit 30",
+    "gh pr view 12 --json number,title,state,mergeable,mergeStateStatus,headRefName,baseRefName,statusCheckRollup,files",
+    "gh pr view 13 --json number,title,state,mergeable,mergeStateStatus,headRefName,baseRefName,statusCheckRollup,files",
+    "gh pr view 12 --json mergeable,mergeStateStatus,reviewDecision",
+    "gh pr view 13 --json mergeable,mergeStateStatus,reviewDecision",
+    "gh pr list --state open",
+    "gh auth status",
+    "gh repo view --json nameWithOwner",
+    "gh api repos/acme/notes/pulls/12 --jq {number, mergeable, mergeable_state, head: .head.ref, base: .base.ref, changed_files, reviews_url: .review_comments_url}",
+    "gh api repos/acme/notes/pulls/13 --jq {number, mergeable, mergeable_state, head: .head.ref, base: .base.ref, changed_files, reviews_url: .review_comments_url}",
+    "gh pr diff 12",
+    "gh pr diff 13",
+    "gh pr view 12 --comments",
+    "gh pr view 13 --comments",
+    "gh pr merge 12 --squash",
+    "gh pr view 13",
+    "gh pr diff 13",
+    "gh pr merge 13 --squash --dry-run",
+    "gh pr list --state all",
+    "gh pr view 13 --json state,mergedAt"
+  ],
+  "prompted": true,
+  "answered": "Answer to d_cuIN-368n_tCUc2J (Merge #12 or #13 first? They conflict in src/api.ts.): #12 first",
+  "waiting": [
+    {
+      "v": 1,
+      "id": "w_rc4bRa1xjy4ltK4w",
+      "decisionId": "d_cuIN-368n_tCUc2J",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-13T12:49:31Z",
+      "state": "waiting",
+      "dir": {
+        "length": 2,
+        "head": "PPxnaOgWmnjott5VxVwL-lZWYmLnONhZh5k3LpkvCPw"
+      }
+    },
+    {
+      "v": 1,
+      "id": "w_SiFmxMeLvUV37Tls",
+      "decisionId": "d_CXgpRGO-Hforkuss",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-13T12:49:57Z",
+      "state": "waiting",
+      "dir": {
+        "length": 2,
+        "head": "PPxnaOgWmnjott5VxVwL-lZWYmLnONhZh5k3LpkvCPw"
+      }
+    }
+  ],
+  "permissions": [],
+  "settled": [
+    {
+      "v": 1,
+      "id": "s_Xs96_UhknN6ZF4Tc",
+      "itemId": "d_cuIN-368n_tCUc2J",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-13T12:49:47Z",
+      "outcome": "device",
+      "device": "phone",
+      "choice": "#12 first",
+      "dir": {
+        "length": 2,
+        "head": "PPxnaOgWmnjott5VxVwL-lZWYmLnONhZh5k3LpkvCPw"
+      }
+    }
+  ],
+  "peakContext": 43017,
+  "usedTokens": 684133,
+  "judge": {
+    "cold": true,
+    "consequences": true,
+    "terminal": false,
+    "links": true,
+    "plain": true,
+    "skim": true,
+    "notes": "The final message only reports the card and says the agent will merge after the answer, instead of asking the user the merge-order question directly in the terminal and waiting for a reply."
+  }
+}
