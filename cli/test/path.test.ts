@@ -128,14 +128,20 @@ test("uninstall takes out the PATH line setup added, only while it is as setup w
     fish,
     `set x 1\n\n# Added by starbridge setup\nfish_add_path ${s.home}/.local/bin\n`,
   );
-  // A line the owner changed stays.
+  // A line the owner changed stays, whatever they changed.
   const profile = join(s.home, ".profile");
-  const changed = '\n# Added by starbridge setup\nexport PATH="$HOME/.local/bin:$PATH:/opt/x"\n';
+  const changed = [":$PATH:/opt/x", ":$PATH", "/opt/tool:$HOME/.local/bin:$PATH"]
+    .map(
+      (end, i) =>
+        `\n# Added by starbridge setup\nexport PATH="${i === 1 ? "$HOME/bin" : i === 0 ? "$HOME/.local/bin" : ""}${end}"\n`,
+    )
+    .join("");
   writeFileSync(profile, changed);
-  expect(removePathLines(s).sort()).toEqual([join(s.home, ".zshrc"), bashrc, fish].sort());
+  const bin = join(s.home, ".local/bin");
+  expect(removePathLines(s, bin).sort()).toEqual([join(s.home, ".zshrc"), bashrc, fish].sort());
   expect(existsSync(join(s.home, ".zshrc"))).toBe(false);
   expect(readFileSync(bashrc, "utf8")).toBe("alias l=ls\n");
   expect(readFileSync(fish, "utf8")).toBe("set x 1\n");
   expect(readFileSync(profile, "utf8")).toBe(changed);
-  expect(removePathLines(s)).toEqual([]);
+  expect(removePathLines(s, bin)).toEqual([]);
 });

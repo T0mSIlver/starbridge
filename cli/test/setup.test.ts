@@ -13,7 +13,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { delimiter, dirname, join, relative, resolve, sep } from "node:path";
+import { delimiter, dirname, join, posix, relative, resolve, sep } from "node:path";
 import { gzipSync } from "node:zlib";
 import { LiveServer } from "@starbridge/server/test-support";
 import { type Status, socketPath } from "../src/agent/api";
@@ -822,13 +822,16 @@ test("uninstall removes the service and plugins, asks the devices to revoke, kee
     zshrc,
     'alias l=ls\n\n# Added by starbridge setup\nexport PATH="$HOME/.local/bin:$PATH"\n',
   );
-  const binary = join(m.home, ".local/bin/starbridge");
+  const binary = posix.join(m.home, ".local/bin/starbridge");
   mkdirSync(dirname(binary), { recursive: true });
   writeFileSync(binary, "");
   m.ctx.lines.length = 0;
   expect(await uninstall(m.sys, { install: { kind: "binary", path: binary } })).toBe(0);
   expect(readFileSync(zshrc, "utf8")).toBe("alias l=ls\n");
-  expect(m.ctx.lines).toContain(`Removed the PATH line setup added to ${zshrc}.`);
+  // In the separators of the machine's platform, which a Windows host's home does not use.
+  expect(m.ctx.lines).toContain(
+    `Removed the PATH line setup added to ${posix.join(m.home, ".zshrc")}.`,
+  );
   expect(existsSync(binary)).toBe(false);
   expect(existsSync(join(m.units, "starbridge-agent.service"))).toBe(false);
   expect(m.calls()).toContain("systemctl --user disable --now starbridge-agent.service");

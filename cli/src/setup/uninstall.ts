@@ -7,6 +7,7 @@ import { join } from "node:path";
 import { withAgent } from "../agent/client";
 import { askVia } from "../agent/commands";
 import { type AskInput, ask } from "../decisions";
+import { pathFor } from "../platform";
 import type { InstallKind } from "../release";
 import { removeBinary } from "../update";
 import {
@@ -101,7 +102,7 @@ export async function uninstall(sys: Sys, opts: UninstallOpts): Promise<number> 
   // The binary goes last, and only once nothing runs it any more; the PATH line with it.
   if (opts.install && stopped) {
     if (opts.install.kind === "binary")
-      for (const file of removePathLines(sys))
+      for (const file of removePathLines(sys, pathFor(sys.platform).dirname(opts.install.path)))
         ctx.out(`Removed the PATH line setup added to ${file}.`);
     removeBinary(ctx, opts.install);
   }

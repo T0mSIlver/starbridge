@@ -62,17 +62,12 @@ function missingDir(sys: Sys): string | undefined {
 
 const PATH_MARK = "# Added by starbridge setup";
 
-/** The marker and the line after it, as `pathStep` writes them, with the blank line before. */
-const PATH_BLOCK = new RegExp(
-  `(^|\\n)${PATH_MARK}\\n(export PATH="[^"\\n]*:\\$PATH"|fish_add_path [^\\n]+)\\n`,
-  "g",
-);
-
 /**
- * Takes the PATH line `pathStep` added out of each shell's startup file where it is still as setup
- * wrote it, and removes a file left empty (#1494). Returns the files it changed.
+ * Takes the marker and the line `pathStep` wrote for `dir` out of each shell's startup file, with
+ * the blank line before, while the line is exactly as setup wrote it; removes a file left empty
+ * (#1494). Returns the files it changed.
  */
-export function removePathLines(sys: Sys): string[] {
+export function removePathLines(sys: Sys, dir: string): string[] {
   if (sys.platform === "win32") return [];
   const { join } = pathFor(sys.platform);
   const home = sys.home;
@@ -81,10 +76,18 @@ export function removePathLines(sys: Sys): string[] {
     ...[".bashrc", ".bash_profile", ".bash_login", ".profile"].map((f) => join(home, f)),
     join(home, ".config", "fish", "config.fish"),
   ]);
+  const shown = dir.startsWith(`${home}/`) ? `$HOME${dir.slice(home.length)}` : dir;
+  const blocks = [`export PATH="${shown}:$PATH"`, `fish_add_path ${dir}`].map(
+    (line) => `${PATH_MARK}\n${line}\n`,
+  );
   const done: string[] = [];
   for (const file of files) {
     const text = existsSync(file) ? readFileSync(file, "utf8") : "";
-    const left = text.replace(PATH_BLOCK, "");
+    let left = text;
+    for (const block of blocks) {
+      left = left.split(`\n\n${block}`).join("\n").split(`\n${block}`).join("\n");
+      if (left.startsWith(block)) left = left.slice(block.length);
+    }
     if (left === text) continue;
     if (left.trim() === "") rmSync(file, { force: true });
     else writeFileSync(file, left);
