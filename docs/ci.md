@@ -49,7 +49,8 @@ of Google's Maven, Maven Central and the Gradle Plugin Portal, which keeps Maven
 limit off the shared address. Gradle uses it when the machine's `~/.gradle/gradle.properties`
 (or the runner's `GRADLE_USER_HOME`) sets `starbridge.mavenMirror=http://192.168.1.49:8080`; the
 public repositories stay after it, so a machine without the property, GitHub's runners included,
-resolves as before. The dev box sets it.
+resolves as before. The dev box sets it. Gradle stops on a mirror that does not answer rather than
+moving on, so while the mirror is down, take the line out.
 
 ## How a runner works
 
