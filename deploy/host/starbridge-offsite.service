@@ -1,0 +1,7 @@
+[Unit]
+Description=Send the newest Starbridge backup offsite, encrypted
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/opt/starbridge/deploy/host/offsite.sh

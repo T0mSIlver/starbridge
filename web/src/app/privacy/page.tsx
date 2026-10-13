@@ -10,7 +10,7 @@ export default function Privacy() {
     <LegalPage title="Privacy">
       <p>
         This covers the hosted service at starbridge.run and the Starbridge Android app. A server
-        you host yourself keeps its data on your own machine. Last updated: 11 October 2026.
+        you host yourself keeps its data on your own machine. Last updated: 13 October 2026.
       </p>
       <p>
         Operator: Tom Vaucourt, an individual in France, running Starbridge as a non-professional.
@@ -64,8 +64,9 @@ export default function Privacy() {
       <p>
         Your account, device list and push targets stay until you delete them (see Deletion). A
         nightly copy of the database is kept on the server for 7 days, and Hetzner keeps its own
-        backups of the server, with those copies, for 7 more, so deleted data can remain in backups
-        for up to 2 weeks.
+        backups of the server, with those copies, for 7 more. Each nightly copy is also encrypted
+        and kept on a server at Oracle for 14 days. Deleted data can remain in backups for up to 2
+        weeks.
       </p>
 
       <h2 className="t-heading">Whether you are at a screen</h2>
@@ -139,6 +140,10 @@ export default function Privacy() {
         </li>
         <li>
           <strong>Hetzner</strong> hosts the server in Helsinki, Finland, and stores its backups.
+        </li>
+        <li>
+          <strong>Oracle</strong> stores an encrypted copy of the nightly backup in Frankfurt,
+          Germany. The key that decrypts it is not on Oracle&apos;s server or ours.
         </li>
       </ul>
       <p>

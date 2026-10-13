@@ -5,9 +5,10 @@ set -eu
 host=${STARBRIDGE_HOST:-deploy@starbridge.run}
 key=$HOME/.ssh/starbridge_ed25519
 src=$HOME/.config/starbridge/secrets
-all="github-oauth-client-secret fcm-service-account.json vapid-public-key vapid-private-key stats-password-hash apns-key.p8 apns-key-id"
-# The APNs key is optional until the iPhone app ships: with no names given, a missing one is skipped.
-optional="apns-key.p8 apns-key-id"
+all="github-oauth-client-secret fcm-service-account.json vapid-public-key vapid-private-key stats-password-hash apns-key.p8 apns-key-id backup-age.pub offsite-ssh-key offsite-known-hosts offsite-target"
+# The APNs key is optional until the iPhone app ships, and the offsite backup's four (#1482) on a
+# self-hosted box: with no names given, a missing one is skipped.
+optional="apns-key.p8 apns-key-id backup-age.pub offsite-ssh-key offsite-known-hosts offsite-target"
 if [ $# -eq 0 ]; then
   files=
   for f in $all; do
