@@ -43,9 +43,14 @@ extension Store {
     /** Questions still to answer here: not answered, not snoozed, not sent from this iPhone. */
     var openDecisions: [SavedDecision] {
         if withheldWhy != nil { return [] }
-        let sending = unsent
-        return saved.decisions.filter { $0.isOpen && $0.snoozed == nil && sending[$0.id] == nil && active($0.from) }
+        return saved.openDecisions(sending: Set(unsent.keys), active: active)
     }
+
+    /**
+     * What needs the owner, as the app icon's badge counts it (#1603): open questions and
+     * permission prompts, snoozed ones out until they return, as the Mac's Dock badge (#1602).
+     */
+    var needYou: Int { openDecisions.count + openPrompts.count }
 
     /** Snoozed questions, soonest back first (#571). */
     var snoozedDecisions: [SavedDecision] {
@@ -65,7 +70,7 @@ extension Store {
 
     var openPrompts: [SavedPrompt] {
         if withheldWhy != nil { return [] }
-        return saved.prompts.filter { $0.isOpen && active($0.from) }
+        return saved.openPrompts(active: active)
     }
 
     var shownRuns: [SavedRun] {
@@ -92,6 +97,7 @@ extension Store {
         try await syncQuotas()
         try await syncRuns()
         withheldWhy = withheld()
+        showBadge()
         // A push that would have closed them may never have come: iOS holds or drops background pushes (#1184).
         await Notify.removeDelivered(about: closedItems)
     }

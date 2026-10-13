@@ -186,3 +186,14 @@ struct Disk {
         try target.setResourceValues(values)
     }
 }
+
+extension Saved {
+    /** Questions still to answer: not answered, not snoozed, not sent from this iPhone (`sending`), from a member still `active`. */
+    func openDecisions(sending: Set<String>, active: (String) -> Bool) -> [SavedDecision] {
+        decisions.filter { $0.isOpen && $0.snoozed == nil && !sending.contains($0.id) && active($0.from) }
+    }
+
+    func openPrompts(active: (String) -> Bool) -> [SavedPrompt] {
+        prompts.filter { $0.isOpen && active($0.from) }
+    }
+}

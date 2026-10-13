@@ -9,6 +9,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import dev.starbridge.app.data.Reach
 import dev.starbridge.app.ui.Notices
@@ -49,6 +50,9 @@ class OutageNoticeTest {
             compose.mainClock.advanceTimeBy(ms)
             compose.waitForIdle()
         }
+        // A notice the quiet time's timer brings up passes through several coroutines and the
+        // snackbar's own; on a loaded CI box one can land a beat after the clock moved (#1601).
+        fun shows(text: String) = compose.waitUntil(5_000) { compose.onAllNodesWithText(text).fetchSemanticsNodes().isNotEmpty() }
         after(100)
 
         // Unlocked while the network comes back: 2 s offline, then the sync gets through.
@@ -66,7 +70,7 @@ class OutageNoticeTest {
         after(Reach.QUIET_MS - 1_000)
         compose.onNodeWithText(unreachable).assertDoesNotExist()
         after(2_000)
-        compose.onNodeWithText(unreachable).assertExists()
+        shows(unreachable)
         // Still up long after a short snackbar would have gone.
         after(30_000)
         compose.onNodeWithText(unreachable).assertExists()
@@ -77,7 +81,7 @@ class OutageNoticeTest {
         // Offline for long: said, and replaced by a notice while one shows.
         reach.network(false)
         after(Reach.QUIET_MS + 1_000)
-        compose.onNodeWithText(offline).assertExists()
+        shows(offline)
         notice.value = "Already answered on another device."
         after(1_000)
         compose.onNodeWithText("Already answered on another device.").assertExists()

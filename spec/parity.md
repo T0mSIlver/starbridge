@@ -45,6 +45,7 @@ Android's and iOS's tests read, so a change to one fails the others until they f
 | Pairing: approve a join by digits (Compare digits) | yes | yes | yes (as web) | yes (#1158: over any screen while the app is in front; the notification opens the app) |
 | After an answer, the next open card opens | yes (beside the list; under 1100 px only with a mouse, #1432) | no (touch: the inbox comes back) | yes (as web) | no (touch, as Android) |
 | The open card settled elsewhere, the last one: the empty inbox comes back | yes (under 1100 px, #1583) | yes (#1586: the sheet closes) | yes (as web) | yes (#1587: the sheet closes) |
+| App icon badge with the Needs-you count | no | n/a (launcher dot follows notifications, drawn by the system) | yes (#1602: Dock icon while shown; macOS Badges setting) | yes (#1603: from the extension while the app is closed; a card closed elsewhere lowers it only when iOS wakes the app for its push, never after the owner swiped the app away, until it opens; Badges setting) |
 | Keyboard shortcuts (J K 1-4 A D /) | yes (J, K and / at any width, #1432; 1-4, A, D from 1100 px) | no (only Enter to send, Esc in Find) | yes (as web) | not yet |
 | Sound | yes (off by default, only while a page is open) | yes (system notification channel sound) | yes (macOS default sound; Basso on "Answer not sent"; web Sound row hidden) | not yet |
 | Recover with the recovery key (revokes every other member) | yes | yes | yes (as web) | yes (#1116) |
