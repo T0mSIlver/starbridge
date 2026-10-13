@@ -41,6 +41,13 @@ test("a release moves the marketplace to its tag; a release candidate leaves it"
   expect(check("7.1.0", dir)).toEqual([".claude-plugin/marketplace.json: v(none), want v7.1.0"]);
 });
 
+test("rc numbers stop at 49, below the versionCodes of main's builds (#1540)", () => {
+  const dir = copy();
+  expect(() => stamp("7.1.0-rc.50", dir)).toThrow("rc numbers stop at 49");
+  stamp("7.1.0-rc.49", dir);
+  expect(check("7.1.0-rc.49", dir)).toEqual([]);
+});
+
 test("main follows a promoted final's marketplace and keeps its rc's version", () => {
   const dir = copy();
   stamp("7.1.0-rc.2", dir);
