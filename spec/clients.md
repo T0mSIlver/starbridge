@@ -143,8 +143,8 @@
   and under Notifications on Android, and push delivery, a connection setting, sat with
   notifications.
 - **Sign out says the same on every client** (#1612): "This <Mac | browser | phone | iPhone> deletes its keys
-  and leaves your devices; your other devices and machines keep working. If it is your only device, you
-  need your recovery key to sign in again." Only the device word differs; the desktop app is a Mac, not a browser.
+  and is removed from your devices. Your other devices and machines keep working. If it's your only
+  device, you'll need your recovery key to sign in again." Only the device word differs; the desktop app is a Mac, not a browser.
 - **No quotas, no Quotas tab** (#914). Until the server holds a quota snapshot for the account,
   opened on this device or not, the Quotas tab, its settings and the web's quota column stay
   hidden, so an owner who skips CodexBar never sees an empty feature and the app stays about

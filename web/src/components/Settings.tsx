@@ -807,7 +807,7 @@ function AccountSection() {
       {asking && (
         <ConfirmDialog
           title="Sign out?"
-          text={`This ${desktop ? "Mac" : "browser"} deletes its keys and leaves your devices; your other devices and machines keep working. If it is your only device, you need your recovery key to sign in again.`}
+          text={`This ${desktop ? "Mac" : "browser"} deletes its keys and is removed from your devices. Your other devices and machines keep working. If it's your only device, you'll need your recovery key to sign in again.`}
           action="Sign out"
           onClose={() => setAsking(false)}
           onConfirm={async () => {

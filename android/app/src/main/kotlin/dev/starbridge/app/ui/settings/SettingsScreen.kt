@@ -258,7 +258,7 @@ fun SettingsScreen(
     if (signingOut) {
         Confirm(
             title = "Sign out?",
-            text = "This phone deletes its keys and leaves your devices; your other devices and machines keep working. If it is your only device, you need your recovery key to sign in again.",
+            text = "This phone deletes its keys and is removed from your devices. Your other devices and machines keep working. If it's your only device, you'll need your recovery key to sign in again.",
             action = "Sign out",
             onConfirm = { actions.signOut(); signingOut = false },
             onDismiss = { signingOut = false },
