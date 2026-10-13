@@ -1,0 +1,29 @@
+#!/bin/sh
+# Installed on homelab-arm as /usr/local/sbin/starbridge-staging-deploy (setup.sh) and run as root
+# by the forced command of deploy.yml's staging key, with one argument, a commit id. Deploys that
+# commit if it is on main, which it fetches itself over HTTPS, the repository being public. Unlike
+# prod's, it deploys older commits too: staging holds no user's data.
+set -eu
+rev=${1:-}
+case $rev in
+  *[!0-9a-f]* | "") echo "usage: starbridge-staging-deploy <40-hex commit id>" >&2; exit 2 ;;
+esac
+[ ${#rev} -eq 40 ] || { echo "usage: starbridge-staging-deploy <40-hex commit id>" >&2; exit 2; }
+
+exec 9>/run/starbridge-staging-deploy.lock
+flock 9
+
+repo=/var/lib/starbridge-staging/repo.git
+mkdir -p /var/lib/starbridge-staging
+[ -d $repo ] || git init -q --bare $repo
+git -C $repo fetch -q https://github.com/T0mSIlver/starbridge.git +main:main
+git -C $repo merge-base --is-ancestor "$rev" main || { echo "$rev is not on main" >&2; exit 1; }
+
+dir=/opt/starbridge-staging
+rm -rf $dir.new $dir.old
+mkdir $dir.new
+git -C $repo archive --format=tar "$rev" | tar -x -C $dir.new
+if [ -d $dir ]; then mv $dir $dir.old; fi
+mv $dir.new $dir
+REVISION=$rev $dir/deploy/staging/apply.sh
+echo "$rev" > $dir/REVISION

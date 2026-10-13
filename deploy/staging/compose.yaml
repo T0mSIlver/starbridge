@@ -1,0 +1,35 @@
+# Staging (staging.starbridge.run, on homelab-arm), laid over prod's compose.yaml by apply.sh:
+#   docker compose -p starbridge-staging -f /opt/starbridge-staging/deploy/compose.yaml \
+#     -f /opt/starbridge-staging/deploy/staging/compose.yaml
+# The same images and Caddy as prod, its own secrets, no Umami. Memory caps keep it to its share
+# of the VM (2 OCPU, 12 GB), which also runs the outside check.
+services:
+  server:
+    env_file: !override /etc/starbridge-staging/server.env
+    environment:
+      UMAMI_URL: !reset null
+      UMAMI_WEBSITE_ID: !reset null
+    mem_limit: 1g
+
+  web-a:
+    environment: &web-env
+      PUBLIC_URL: https://staging.starbridge.run
+    mem_limit: 512m
+
+  web-b:
+    environment: *web-env
+    mem_limit: 512m
+
+  # Not started on staging; their env files exist only on prod.
+  umami:
+    profiles: [prod]
+  umami-db:
+    profiles: [prod]
+
+  caddy:
+    volumes: !override
+      # Prod's Caddyfile with staging's host (apply.sh).
+      - /etc/starbridge-staging/Caddyfile:/etc/caddy/Caddyfile:ro
+      - /etc/starbridge-staging/caddy:/etc/caddy/secrets:ro
+      - caddy-data:/data
+      - caddy-config:/config
