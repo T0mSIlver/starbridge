@@ -1,0 +1,87 @@
+{
+  "agent": "claude",
+  "model": "claude-haiku-5-5",
+  "arm": "after",
+  "scenario": "native-ask",
+  "rep": 1,
+  "turns": [
+    {
+      "commands": [],
+      "askUser": [
+        {
+          "denied": false
+        }
+      ],
+      "final": "",
+      "session": "55deea15-3480-41c8-aa43-167a09dbeadb",
+      "exit": 0,
+      "seconds": 10.039
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_g2TJ4ATwIF7HASWf",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-13T13:05:29.751Z",
+      "question": "Which error tracking service should we wire into the web app?",
+      "context": "- Sentry (Recommended): Hosted. Free up to 5k errors/month, then $26/month. Session replay included. No ops work.\n- Self-hosted GlitchTip: Free, runs on our VPS. We patch and back it up ourselves, about an hour a month.",
+      "options": [
+        "Sentry (Recommended)",
+        "Self-hosted GlitchTip"
+      ],
+      "recommended": "Sentry (Recommended)",
+      "agent": "claude-code",
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "55deea15-3480-41c8-aa43-167a09dbeadb",
+        "sessionTitle": "We need error tracking in the web app."
+      },
+      "replies": true,
+      "dir": {
+        "length": 2,
+        "head": "er4aa6hAymY-e9WQ-7g49yu8J31SIJv_R_Bb57QDO_s"
+      }
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [
+    "gh auth token",
+    "gh auth token",
+    "gh issue list -R anthropics/claude-code --author @me --state closed --search closed:>2026-09-13 --json number,title,closedAt,stateReason --limit 30"
+  ],
+  "waiting": [
+    {
+      "v": 1,
+      "id": "w_wNHjqT1kKkT8QQEn",
+      "decisionId": "d_g2TJ4ATwIF7HASWf",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-13T13:05:29Z",
+      "state": "waiting",
+      "dir": {
+        "length": 2,
+        "head": "er4aa6hAymY-e9WQ-7g49yu8J31SIJv_R_Bb57QDO_s"
+      }
+    }
+  ],
+  "permissions": [],
+  "settled": [],
+  "peakContext": 28989,
+  "usedTokens": 58065,
+  "judge": {
+    "cold": true,
+    "consequences": true,
+    "terminal": false,
+    "links": null,
+    "plain": true,
+    "skim": true,
+    "notes": "The final terminal message is empty, so the agent never asks the question or waits for a reply in the terminal, which the card-only flow depends on."
+  }
+}
