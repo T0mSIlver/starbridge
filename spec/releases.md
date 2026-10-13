@@ -133,6 +133,14 @@
   reports that commit or a later one (`x-starbridge-revision`). That header, and
   `starbridge-deploy`'s argument, are refused unless they are 40 lowercase hex characters (#467),
   since the workflow puts the revision in a `gh api` path.
+- **Staging** (#1526). `staging.starbridge.run`, on homelab-arm, an Oracle ARM VM, takes every
+  deploy of main before or beside prod, with the same images, compose file and Caddyfile, so a
+  deploy that breaks shows there first. Its data is synthetic, made through the real flows by the
+  load test's setup: a copy of prod's would be ciphertext plus GitHub ids and push endpoints on a
+  second host, which `/privacy` does not allow. It has its own OAuth app, VAPID pair and no
+  FCM or APNs key, so it pushes to no phone; only listed GitHub users can make an account
+  (`SIGNUP_GITHUB_IDS`, #1524), and nothing is indexed. Its key's forced command deploys only
+  a commit of main. ARM staging beside amd64 prod leaves architecture bugs to prod's smoke.
 - **No downtime** (#150, #508). The page runs as two copies; a deploy starts the idle one, waits
   for its health, then stops the other, and Caddy sends every request to the first healthy copy.
   The server stays one instance, since it holds the long-polls and SQLite; Caddy holds requests up

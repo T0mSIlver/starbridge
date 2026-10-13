@@ -6,7 +6,8 @@
 set -eu
 dir=/opt/starbridge-staging
 compose="docker compose -p starbridge-staging -f $dir/deploy/compose.yaml -f $dir/deploy/staging/compose.yaml"
-image=ghcr.io/t0msilver/starbridge-server:$(cat $dir/REVISION)
+# The image apply.sh deployed.
+image=ghcr.io/t0msilver/starbridge-server:$(sed -n 's/^REVISION=//p' $dir/deploy/.env)
 fake=http://sb-seed-fake:18099
 s=/etc/starbridge-staging/secrets
 
