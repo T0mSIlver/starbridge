@@ -122,6 +122,7 @@ test("an answer queued behind a typed prompt when the process exits comes back o
           return text;
         },
         write: async (path: string, text: string) => void files.set(path, text),
+        exists: async (path: string) => files.has(path),
         stat: async () => undefined,
         list: async () => [],
       },
