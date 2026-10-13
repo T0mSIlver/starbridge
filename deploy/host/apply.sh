@@ -56,10 +56,11 @@ healthy() {
   return 1
 }
 
-# The schema the new server migrates to, and the one the database is at. A database newer than the
-# server stops the deploy here, before anything is replaced: the server would refuse it at start
-# (server/src/db.ts), and nothing copies or migrates it down. That is a rollback past a migration,
-# or a database from before the schema was folded at launch; either needs the owner.
+# The schema the new server migrates to, and the one the database is at. A database the new server
+# would refuse at start stops the deploy here, before anything is replaced (`schema check`,
+# server/src/db.ts): one newer than the server, except by one additive migration (#1555), so a
+# rollback one release back passes. Nothing copies or migrates a database down; past that, the
+# owner restores the deploy's backup.
 mnt=$(docker volume inspect -f '{{.Mountpoint}}' starbridge_data 2>/dev/null) || mnt=
 db=$mnt/starbridge.db
 want= have=
@@ -70,10 +71,23 @@ if [ -n "$mnt" ] && [ -f "$db" ]; then
   # could no longer write the database.
   chown --reference="$db" "$db"-wal "$db"-shm 2>/dev/null || true
 fi
-if [ -n "$want" ] && [ -n "$have" ] && [ "$have" -gt "$want" ] 2>/dev/null; then
-  echo "apply.sh: $db is at schema $have, newer than this server's $want; nothing deployed." >&2
-  echo "Run the release that wrote it, or move the database aside to start empty." >&2
-  exit 1
+if [ -n "$mnt" ] && [ -f "$db" ]; then
+  # The server prints its verdict on stdout; Compose's progress goes to stderr.
+  check=$($compose run --rm --no-deps -T server bun server.js schema check 2>/dev/null) && ok=1 || ok=
+  check=$(printf '%s\n' "$check" | tail -n 1)
+  case $check in
+  ok) ;;
+  # A server from before `schema check` prints its version and exits 0: compare as it would.
+  [0-9]*)
+    if [ -n "$have" ] && [ "$have" -gt "$check" ] 2>/dev/null; then
+      echo "apply.sh: $db is at schema $have, newer than this server's $check; nothing deployed." >&2
+      exit 1
+    fi
+    ;;
+  *)
+    [ -n "$ok" ] || { echo "apply.sh: $check; nothing deployed." >&2; exit 1; }
+    ;;
+  esac
 fi
 
 # No request fails during a deploy (#150). The page runs as two copies: start the idle one, wait

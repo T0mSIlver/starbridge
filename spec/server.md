@@ -53,8 +53,16 @@
   `POST /quota/ask` wakes the machines and holds until each posted, up to 25 s, under the 30 s at
   which proxies cut long polls; 6 a minute per account, since each runs CodexBar on every machine.
 - **Schema migrations** (#470). `PRAGMA user_version` counts the migrations a database has run;
-  each runs in one transaction with its version. A server refuses a database newer than it knows,
-  so a rollback past a migration fails at start instead of writing rows the newer schema misreads.
+  each runs in one transaction with its version. Migrations only add (#1555): a table, an index, or
+  a column that allows NULL or has a default, so a server that predates one still reads and
+  writes correctly. The database records each additive migration it ran, and a server opens a
+  database one additive migration ahead of it, so rolling back one release keeps the writes made
+  since the deploy instead of restoring its backup. Renaming or dropping takes two releases: one
+  stops using the column, the next drops it in a migration listed as not additive (`NOT_ADDITIVE`
+  in `server/src/db.ts`, which a test checks). A server refuses any other database newer than it
+  knows, so a rollback past such a migration fails at start instead of writing rows the newer
+  schema misreads. `bun server.js schema check` says, read-only, whether the server would open the
+  database, so a deploy or rollback can stop before it replaces anything.
   Version 1 is the whole schema: the six migrations before launch were folded into it when the
   hosted database was reset, so `apply.sh` stops a deploy whose database is newer than its server
   before it replaces anything. A migration changes the schema and never rewrites rows, to stay within the 30 s
@@ -62,6 +70,11 @@
   before a new server that migrates further than the database's `user_version` starts, or when
   either number can't be read, and keeps the last two (#586) for 7 days at most, as the nightly
   copies, so deleted data leaves backups within the 2 weeks /privacy promises (#721).
+- **Migration rehearsal** (#1543). Each night sb-staging runs main's newest server on a copy of
+  prod's schema, filled with synthetic users and items to the 2 GB cap, and alerts the owner when its
+  migrations take over the 30 s or leave a schema other than its own (`evals/migrate/`). It also
+  fails when prod's schema differs from what the migrations at prod's revision make. Only the
+  schema leaves the VPS, with no rows: no copy of prod's data goes to staging.
 - **Server-wide cap** (#586). Machines' items stop at 2 GB stored across accounts, with 503
   `storage-full` and a Retry-After of an hour; answers pass, so questions still close and expire.
   The hosted disk (38 GB, about 10 GB of it system and Docker, an alert at 2 GB free) holds the

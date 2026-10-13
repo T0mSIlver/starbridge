@@ -1,58 +1,71 @@
 name: deploy
 
-# Deploys main to starbridge.run once CI passes on it. deploy/deploy.sh stays for manual rollbacks.
+# Two ways in (#1538). A merge to main, once CI passes, goes to staging (staging.starbridge.run):
+# the images are built, staging deploys them and runs a round trip, and the commit gets the status
+# `staging`. starbridge.run takes a commit only by dispatch, `gh workflow run deploy.yml -f
+# sha=<commit>`: release.yml dispatches each rc tag's commit, and the owner a hotfix. Either way it
+# deploys only a commit whose `staging` status is success. deploy/deploy.sh and deploy/rollback.sh
+# stay the owner's way around it.
 on:
   workflow_run:
     workflows: [CI]
     types: [completed]
     branches: [main]
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: The commit to deploy to starbridge.run, 40 hex characters; it must have passed on staging
+        required: true
 
 permissions: {}
 
 jobs:
-  # Nothing to deploy when no file the box builds from changed since the revision it runs: what
-  # the Dockerfiles copy (server/Dockerfile, web/Dockerfile, deploy/demo/Dockerfile) and deploy/,
-  # which it applies. The run passes either way, so whoever waits for a merge to be live waits for
-  # this run, not for the live revision. Any doubt deploys.
+  # Staging takes every commit of main, so each one can go to prod. The images are built only when
+  # a file they are built from changed since the commit staging runs (Dockerfiles, what they copy,
+  # deploy/); otherwise that commit's images are tagged with this one's. Any doubt builds.
   changed:
-    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'
+    if: github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'
     runs-on: ${{ vars.TRUSTED_RUNNER && fromJSON(vars.TRUSTED_RUNNER) || 'ubuntu-latest' }}
     timeout-minutes: 5
     permissions:
       actions: read
       contents: read
     outputs:
-      deploy: ${{ steps.changed.outputs.deploy }}
+      build: ${{ steps.changed.outputs.build }}
+      base: ${{ steps.changed.outputs.base }}
     steps:
       - id: changed
         env:
           GH_TOKEN: ${{ github.token }}
           REV: ${{ github.event.workflow_run.head_sha }}
         run: |
-          deploy=true
+          build=true
           got=$(curl -fsS --retry 5 --retry-delay 3 --retry-all-errors -D - -o /dev/null \
-            https://starbridge.run/healthz | tr -d '\r' |
+            https://staging.starbridge.run/healthz | tr -d '\r' |
             awk -F': ' 'tolower($1) == "x-starbridge-revision" { print $2 }') || got=
           case $got in *[!0-9a-f]*) got= ;; esac
-          # Another run still building or deploying puts its commit live after this check: a
-          # commit that reverts it would be skipped against a revision that is about to change.
+          # Another run still building puts its commit on staging after this check: a commit that
+          # reverts it would reuse images about to be replaced.
           busy=$(curl -fsS -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' \
-            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/actions/workflows/deploy.yml/runs?per_page=30" |
+            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/actions/workflows/deploy.yml/runs?event=workflow_run&per_page=30" |
             jq --argjson id "$GITHUB_RUN_ID" '[.workflow_runs[] | select(.id != $id and .status != "completed")] | length') || busy=1
           if [ "$busy" != 0 ]; then
-            echo "Another deploy run has not finished: deploying."
+            echo "Another staging run has not finished: building."
           elif [ ${#got} -eq 40 ]; then
             # Not gh: some self-hosted runners lack it (dell2-2). The compare lists at most 300
-            # files; a longer list deploys.
+            # files; a longer list builds.
+            # Only for a commit that follows staging's: an older one compares as empty, and must
+            # not take a later commit's images.
             files=$(curl -fsS -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' \
               "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/compare/$got...$REV" |
-              jq -r 'if (.files | length) < 300 then .files[].filename else error("too many") end') &&
+              jq -r 'if (.status == "ahead" or .status == "identical") and (.files | length) < 300 then .files[].filename else error("not after staging, or too many") end') &&
               if ! printf '%s\n' "$files" | grep -qE '^(package\.json|pnpm-lock\.yaml|pnpm-workspace\.yaml|\.dockerignore|packages/|server/|web/|cli/|plugin/|mod/|demo/|docs/|deploy/)'; then
-                deploy=false
-                echo "Nothing the box builds from changed since $got: not deploying."
+                build=false
+                echo "Nothing the images are built from changed since $got: reusing its images."
+                echo "base=$got" >> "$GITHUB_OUTPUT"
               fi
           fi
-          echo "deploy=$deploy" >> "$GITHUB_OUTPUT"
+          echo "build=$build" >> "$GITHUB_OUTPUT"
 
   # The server and web images, built once per deployed commit for both architectures and pushed
   # to ghcr.io as <image>:<commit>; the box pulls them rather than building (#1518). arm64 is for
@@ -60,7 +73,7 @@ jobs:
   # own runner, GitHub's for arm64, and pushes <commit>-<arch>; the images job joins the two.
   build:
     needs: changed
-    if: needs.changed.outputs.deploy == 'true'
+    if: needs.changed.outputs.build == 'true'
     strategy:
       matrix:
         image: [server, web]
@@ -119,12 +132,14 @@ jobs:
 
   images:
     needs: [changed, build]
+    if: ${{ !cancelled() && needs.changed.result == 'success' && needs.build.result != 'failure' }}
     runs-on: ${{ vars.TRUSTED_RUNNER && fromJSON(vars.TRUSTED_RUNNER) || 'ubuntu-latest' }}
     timeout-minutes: 5
     permissions:
       packages: write
     env:
       REV: ${{ github.event.workflow_run.head_sha }}
+      BASE: ${{ needs.changed.outputs.base }}
     steps:
       - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
@@ -132,10 +147,19 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ github.token }}
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      # The two architectures' builds joined, or the images of the commit staging runs, when nothing
+      # they are built from changed: same bytes, this commit's tag.
       - run: |
           for image in server web; do
             name=ghcr.io/t0msilver/starbridge-$image
-            docker buildx imagetools create -t "$name:$REV" "$name:$REV-amd64" "$name:$REV-arm64"
+            # A commit's tag, once pushed, never changes: a rerun keeps it.
+            if docker buildx imagetools inspect "$name:$REV" >/dev/null 2>&1; then
+              echo "$name:$REV exists"
+            elif [ -n "$BASE" ]; then
+              docker buildx imagetools create -t "$name:$REV" "$name:$BASE"
+            else
+              docker buildx imagetools create -t "$name:$REV" "$name:$REV-amd64" "$name:$REV-arm64"
+            fi
           done
       # The box pulls without logging in. GitHub creates a package private, and only its settings
       # page makes it public, once: until then, stop here rather than at the box.
@@ -152,115 +176,129 @@ jobs:
 
   # Staging (staging.starbridge.run, on sb-staging) runs the same images (deploy/staging/). Its
   # key's forced command deploys a commit of main and nothing else, the box fetching it itself,
-  # then runs one round trip there. Until the VM and the key exist, the job passes with a notice.
+  # then runs one round trip there and ends with `passed <commit>`. The commit's `staging` status
+  # says whether it passed: prod deploys only one that did (#1528, #1538).
   staging:
     needs: [changed, images]
+    if: ${{ !cancelled() && needs.images.result == 'success' }}
     concurrency:
       group: staging
       cancel-in-progress: false
     runs-on: ${{ vars.TRUSTED_RUNNER && fromJSON(vars.TRUSTED_RUNNER) || 'ubuntu-latest' }}
     timeout-minutes: 25
-    # Compares staging's revision with this run's.
     permissions:
-      contents: read
+      statuses: write
     environment:
       name: staging
       url: https://staging.starbridge.run
     env:
       REV: ${{ github.event.workflow_run.head_sha }}
-    # True only when staging deployed this commit and its round trip passed, or staging is not set
-    # up yet: prod deploys nothing else (#1528). A commit staging skipped as older than the one it
-    # runs is not passed, even when the job succeeds.
-    outputs:
-      passed: ${{ steps.deploy.outputs.passed }}
+      GH_TOKEN: ${{ github.token }}
     steps:
-      - id: deploy
-        name: Deploy
+      - name: Deploy and run the round trip
         env:
           STAGING_KEY: ${{ secrets.STAGING_SSH_KEY }}
           STAGING_KNOWN_HOSTS: ${{ secrets.STAGING_KNOWN_HOSTS }}
           STAGING_TARGET: ${{ secrets.STAGING_SSH_TARGET }}
         run: |
+          status() {
+            curl -fsS --retry 5 --retry-delay 3 --retry-all-errors -X POST -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' \
+              "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/statuses/$REV" \
+              -d "$(jq -n --arg s "$1" --arg d "$2" --arg u "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
+                '{context: "staging", state: $s, description: $d, target_url: $u}')" >/dev/null
+          }
           if [ -z "$STAGING_KEY" ]; then
-            echo "::notice::No STAGING_SSH_KEY: staging not deployed."
-            echo "passed=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::No STAGING_SSH_KEY: staging not deployed, and prod takes nothing."
             exit 0
           fi
-          # A failed deploy or round trip must fail the job through the tee below.
+          status pending "Deploying to staging"
+          # A failed deploy or round trip fails the job through the tee.
           set -o pipefail
           umask 077
           printf '%s\n' "$STAGING_KEY" > "$RUNNER_TEMP/key"
           printf '%s\n' "$STAGING_KNOWN_HOSTS" > "$RUNNER_TEMP/known_hosts"
-          ssh -i "$RUNNER_TEMP/key" -o IdentitiesOnly=yes -o UserKnownHostsFile="$RUNNER_TEMP/known_hosts" \
+          if ! ssh -i "$RUNNER_TEMP/key" -o IdentitiesOnly=yes -o UserKnownHostsFile="$RUNNER_TEMP/known_hosts" \
             -o StrictHostKeyChecking=yes -o ConnectTimeout=20 -o ServerAliveInterval=15 "$STAGING_TARGET" "$REV" |
-            tee "$RUNNER_TEMP/staging.log"
-          echo "deployed=true" >> "$GITHUB_OUTPUT"
-          if [ "$(tail -n 1 "$RUNNER_TEMP/staging.log")" = "passed $REV" ]; then
-            echo "passed=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "::notice::Staging did not take $REV: prod does not deploy it."
+            tee "$RUNNER_TEMP/staging.log"; then
+            status failure "Staging's deploy or round trip failed"
+            exit 1
           fi
-      - name: Check the live revision
-        if: steps.deploy.outputs.deployed == 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
+          # A commit older than the one staging runs is skipped there, so it never passed.
+          if [ "$(tail -n 1 "$RUNNER_TEMP/staging.log")" != "passed $REV" ]; then
+            status error "Not deployed: staging runs a later commit"
+            exit 0
+          fi
+          # The server names the deployed commit (deploy/compose.yaml).
           got=$(curl -fsS --retry 10 --retry-delay 3 --retry-all-errors -D - -o /dev/null \
             https://staging.starbridge.run/healthz | tr -d '\r' |
-            awk -F': ' 'tolower($1) == "x-starbridge-revision" { print $2 }')
-          # Its commit, or a later one of main's when the box skipped this older one.
-          case $got in *[!0-9a-f]*) got= ;; esac
-          [ ${#got} -eq 40 ] || { echo "staging names no commit id"; exit 1; }
-          status=$(curl -fsS -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' \
-            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/compare/$REV...$got?per_page=1" | jq -r .status)
-          case $status in
-            identical | ahead) echo "staging runs $got" ;;
-            *) echo "staging runs $got, not $REV or later ($status)"; exit 1 ;;
-          esac
+            awk -F': ' 'tolower($1) == "x-starbridge-revision" { print $2 }') || got=
+          if [ "$got" != "$REV" ]; then
+            status failure "Staging names ${got:-no revision}"
+            echo "staging runs ${got:-no named revision}, not $REV"
+            exit 1
+          fi
+          status success "Deployed to staging; round trip passed"
 
-  # Prod deploys only a commit staging took and passed its round trip on (#1528).
+  # starbridge.run, by dispatch only: release.yml for each rc tag, the owner for a hotfix. It waits
+  # for the commit's `staging` status, up to an hour, as an rc tag can follow its merge by minutes,
+  # and deploys only on success.
   deploy:
-    needs: [changed, images, staging]
-    if: needs.staging.outputs.passed == 'true'
-    # On the job, not the workflow: a run for a failed or cancelled CI run skips this job without
-    # joining the queue, so it cannot replace a deploy that is waiting.
+    if: github.event_name == 'workflow_dispatch'
     concurrency:
       group: deploy
       cancel-in-progress: false
     runs-on: ${{ vars.TRUSTED_RUNNER && fromJSON(vars.TRUSTED_RUNNER) || 'ubuntu-latest' }}
-    # Reads main's history to compare the live revision with this run's.
+    timeout-minutes: 90
+    # Reads the commit's statuses and main's history.
     permissions:
       contents: read
+      statuses: read
     environment:
       name: starbridge.run
       url: https://starbridge.run
+    env:
+      REV: ${{ inputs.sha }}
+      GH_TOKEN: ${{ github.token }}
     steps:
+      - name: Staging passed this commit
+        timeout-minutes: 65
+        run: |
+          # It goes into an API path and the box's forced command: a full commit id only.
+          case $REV in *[!0-9a-f]* | "") echo "not a commit id: $REV"; exit 1 ;; esac
+          [ ${#REV} -eq 40 ] || { echo "not a full commit id: $REV"; exit 1; }
+          for _ in $(seq 120); do
+            state=$(curl -fsS -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' \
+              "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/commits/$REV/statuses?per_page=100" |
+              jq -r '[.[] | select(.context == "staging")][0].state // "none"') || state=none
+            case $state in
+              success) echo "staging passed $REV"; exit 0 ;;
+              failure | error) echo "staging did not pass $REV ($state): not deployed"; exit 1 ;;
+            esac
+            echo "staging: ${state}; waiting"
+            sleep 30
+          done
+          echo "staging never passed $REV within an hour"
+          exit 1
       # The key's forced command on the box runs starbridge-deploy with this commit id and nothing
-      # else (deploy/setup-actions-deploy.sh).
+      # else (deploy/setup-actions-deploy.sh); it refuses a commit older than the one deployed.
       - name: Deploy
         env:
           DEPLOY_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
           KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
-          REV: ${{ github.event.workflow_run.head_sha }}
         run: |
           umask 077
           printf '%s\n' "$DEPLOY_KEY" > "$RUNNER_TEMP/key"
           printf '%s\n' "$KNOWN_HOSTS" > "$RUNNER_TEMP/known_hosts"
           ssh -i "$RUNNER_TEMP/key" -o IdentitiesOnly=yes -o UserKnownHostsFile="$RUNNER_TEMP/known_hosts" \
             -o StrictHostKeyChecking=yes deploy@starbridge.run "$REV"
-      # The server names the commit it was built from: this run's, or a later one of main's when
-      # the box refused this older one. Anything else is a deploy that never went live. REV is the
-      # commit CI passed on, which can be older than main's head, the commit the run list shows.
+      # The server names the commit it runs: this one, or a later one when the box refused this
+      # older one. Anything else is a deploy that never went live.
       - name: Check the live revision
-        env:
-          GH_TOKEN: ${{ github.token }}
-          REV: ${{ github.event.workflow_run.head_sha }}
         run: |
           got=$(curl -fsS --retry 10 --retry-delay 3 --retry-all-errors -D - -o /dev/null \
             https://starbridge.run/healthz | tr -d '\r' |
             awk -F': ' 'tolower($1) == "x-starbridge-revision" { print $2 }')
           [ -n "$got" ] || { echo "starbridge.run names no revision"; exit 1; }
-          # It goes into an API path: only a commit id, as starbridge-deploy takes.
           case $got in *[!0-9a-f]*) got= ;; esac
           [ ${#got} -eq 40 ] || { echo "starbridge.run names no commit id"; exit 1; }
           # Not gh: some self-hosted runners lack it (dell2-2).

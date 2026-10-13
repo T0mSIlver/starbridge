@@ -20,7 +20,8 @@ evals/load/stack.sh down                       # stop and delete the volumes
 
 On a machine without Bun, `evals/load/stack.sh fake` runs the fakes in a container and
 `evals/load/stack.sh setup --users 3000` runs `setup.ts` in one (it still needs
-`pnpm install --filter @starbridge/protocol` in the repository).
+`pnpm install --filter @starbridge/protocol` in the repository). `LOAD_FAKE=stack` puts the fakes
+on the stack's network, for a host whose firewall keeps containers off its own ports.
 
 `--host` is the host's address on Docker's default bridge
 (`docker network inspect bridge -f '{{(index .IPAM.Config 0).Gateway}}'`). Containers share the
@@ -79,6 +80,23 @@ and monthly:
 - `LOAD_SLICE=<name>.slice` puts every container, the clients included, in that systemd slice
   (`slice.yaml`), so one CPU and memory cap holds the whole run:
   `systemctl set-property --runtime sb-load.slice CPUQuota=150% MemoryMax=3G`.
+
+## The fleet
+
+A few dozen users run against a real server for weeks (staging, from its VM), as the synthetic
+fleet: `--until STOP` keeps them going, `--metrics FILE` appends a JSON line every `--every`
+seconds (300) under the name `--site` (prod or staging), and `--drop S` cuts each machine's long-poll after a random time averaging S
+seconds, as a flaky network would, so the line counts reconnects too. Each line holds every
+operation's count, errors, p50 and p99, answer delivery with the answers past 5 s, and the
+answers no machine got within 10 minutes (`lost`), received twice (`dup`) and decisions no page
+saw (`unseen`). Settled answers and decisions are forgotten, so memory stays flat, and lines older
+than 35 days go. `setup.ts --no-push` makes its users without push subscriptions, which a real
+server would keep sending to the fakes after they are gone.
+
+```bash
+LOAD_TARGET=https://staging.starbridge.run bun evals/load/load.ts --ramp 40 --procs 1 \
+  --until $LOAD_DIR/stop --metrics $LOAD_DIR/metrics.jsonl --site staging --drop 600
+```
 
 ## Launch spike
 

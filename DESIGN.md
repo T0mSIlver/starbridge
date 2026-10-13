@@ -714,7 +714,8 @@ one edit; with `--play <dir>` it also writes the Play listing's icon and feature
 | macOS app and menu bar | `desktop/build/icon.png` (electron-builder makes the `.icns`), `desktop/assets/tray*.png` |
 | Link preview | the lockup in `web/scripts/og-image.html` |
 
-The tab icon is the mark with no ground, in `fg` and `accent` of the system's scheme, with a thin
+The tab icon is the mark with no ground, its box centred top to bottom in the square as the
+browser centres every favicon (#1562), in `fg` and `accent` of the system's scheme, with a thin
 halo in the other scheme's `fg` so it stays legible on a tab strip that does not follow the
 system; `favicon.ico`, for browsers that skip the SVG, is its light version. The other web icons
 and iOS's default icon stand on the launcher's ground, since a home screen shows them on any

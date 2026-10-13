@@ -252,7 +252,22 @@ ALTER TABLE accounts ADD COLUMN apple_refresh_token TEXT;
 CREATE UNIQUE INDEX accounts_apple_sub ON accounts (apple_sub);
 `;
 
-export const MIGRATIONS = [V1, V2, V3, V4, V5, V6, V7, V8, V9, V10];
+/**
+ * The additive migrations a database has run (D3, #1555), so a server one migration behind can
+ * still open it: a rollback of one release then keeps the writes made since the deploy.
+ */
+const V11 = "CREATE TABLE additive_migrations (version INTEGER PRIMARY KEY);";
+
+export const MIGRATIONS = [V1, V2, V3, V4, V5, V6, V7, V8, V9, V10, V11];
+
+/**
+ * Migrations that are not additive. Every other one only adds: a table, an index, or a column that
+ * allows NULL or has a default, so a server that predates it still reads and writes correctly
+ * (spec/server.md, "Schema migrations"). Renaming or dropping takes two releases: one that stops
+ * using the column, then one listed here that drops it. db.test.ts checks every migration not
+ * listed. Version 1 is the whole schema.
+ */
+export const NOT_ADDITIVE: ReadonlySet<number> = new Set([1]);
 
 /** The `user_version` this server brings a database to. */
 export const SCHEMA_VERSION = MIGRATIONS.length;
@@ -280,22 +295,48 @@ export function openDb(path: string): Database {
 }
 
 /**
- * Runs the migrations `db` lacks, each in its own transaction with the version it reaches. A
- * database newer than this server knows is refused, so a rolled-back server fails at start
- * rather than write rows a newer schema reads wrong.
+ * Why this server refuses `db`, or null when it opens it: a database newer than this server knows
+ * is refused, so a rolled-back server fails at start rather than write rows a newer schema reads
+ * wrong, unless it is one migration ahead and that one was additive.
  */
-export function migrate(db: Database, migrations: readonly string[]): void {
+export function refuses(db: Database, known: number): string | null {
   const { user_version: at } = db.query("PRAGMA user_version").get() as { user_version: number };
-  if (at > migrations.length) {
+  if (at <= known) return null;
+  const recorded =
+    at === known + 1 &&
+    db
+      .query("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'additive_migrations'")
+      .get() &&
+    db.query("SELECT 1 FROM additive_migrations WHERE version = ?").get(at);
+  if (recorded) return null;
+  return `the database is at schema ${at}, newer than this server's ${known}${at === known + 1 ? " by a migration that is not additive" : ""}: run the release that wrote it, or restore a backup`;
+}
+
+/**
+ * Runs the migrations `db` lacks, each in its own transaction with the version it reaches, and
+ * records each additive one once the table for it exists. A database this server refuses (above)
+ * throws.
+ */
+export function migrate(
+  db: Database,
+  migrations: readonly string[],
+  notAdditive: ReadonlySet<number> = NOT_ADDITIVE,
+): void {
+  const why = refuses(db, migrations.length);
+  if (why) {
     db.close();
-    throw new Error(
-      `the database is at schema ${at}, newer than this server's ${migrations.length}: run the release that wrote it, or restore a backup`,
-    );
+    throw new Error(why);
   }
+  const { user_version: at } = db.query("PRAGMA user_version").get() as { user_version: number };
   for (let v = at; v < migrations.length; v++)
     db.transaction(() => {
       db.run(migrations[v] as string);
       db.run(`PRAGMA user_version = ${v + 1}`);
+      const table = db
+        .query("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'additive_migrations'")
+        .get();
+      if (table && !notAdditive.has(v + 1))
+        db.run("INSERT OR IGNORE INTO additive_migrations (version) VALUES (?)", [v + 1]);
     })();
 }
 
