@@ -86,6 +86,11 @@ the agent works, an answer to a decision it marked waiting goes with its next
 tool result, which it reads at once; any other answer stays unconfirmed until
 the turn ends, and the mod then submits it.
 
+An answer submitted as a prompt stays in
+`~/.config/starbridge/mod-sent/<session>.json` until its turn starts. Claude
+Code loses a queued prompt when its process exits, so a later process on that
+session, such as `claude --resume`, submits it again, once.
+
 ## Pi
 
 `pi/starbridge.ts` is the same answer loop as a Pi extension. It ships in the

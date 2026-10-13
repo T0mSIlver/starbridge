@@ -44,13 +44,19 @@ A job on these boxes must not rely on what an earlier job left, and must be safe
 beside it on the same box: no fixed host port, and a unique name for any container, Compose
 project or image tag.
 
+Docker Hub limits anonymous pulls per address, and the boxes share one. A job that pulls from it
+(`ci.yml`'s `images`, `deploy.yml`'s `build`, `ios.yml`'s Swift on Linux) logs in first, with the
+repository variable `DOCKERHUB_USERNAME` and the secret `DOCKERHUB_TOKEN`, a read-only token of a
+free account. Forks' and Dependabot's runs get no secret and pull anonymously.
+
 A machine on the home network can resolve Gradle's dependencies through the home caching mirror
 of Google's Maven, Maven Central and the Gradle Plugin Portal, which keeps Maven Central's rate
 limit off the shared address. Gradle uses it when the machine's `~/.gradle/gradle.properties`
 (or the runner's `GRADLE_USER_HOME`) sets `starbridge.mavenMirror=http://192.168.1.49:8080`; the
 public repositories stay after it, so a machine without the property, GitHub's runners included,
-resolves as before. The dev box and the Android runner (`ci-1`, in `/home/dev/.gradle`) set it. Gradle stops on a mirror that does not answer rather than
-moving on, so while the mirror is down, take the line out.
+resolves as before. The dev box and the Android runner (`ci-1`, in `/home/dev/.gradle`) set it.
+Gradle stops on a mirror that does not answer rather than moving on, so while the mirror is
+down, take the line out.
 
 ## How a runner works
 

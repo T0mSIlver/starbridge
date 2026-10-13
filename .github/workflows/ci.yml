@@ -322,8 +322,18 @@ jobs:
     if: github.event_name != 'push' && needs.changes.outputs.images == 'true'
     runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]' && vars.PR_DOCKER_RUNNER && fromJSON(vars.PR_DOCKER_RUNNER) || 'ubuntu-latest' }}
     timeout-minutes: 30
+    env:
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # Docker Hub limits anonymous pulls per address, which self-hosted boxes and GitHub's
+      # runners share with others; a login counts against our account instead. Forks' and
+      # Dependabot's runs get no secret and pull anonymously.
+      - if: env.DOCKERHUB_TOKEN != ''
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          username: ${{ vars.DOCKERHUB_USERNAME }}
+          password: ${{ env.DOCKERHUB_TOKEN }}
       # One step each, so one broken image does not hide another. --pull as the deploy does, so a
       # stale local copy of a base image cannot pass here and fail there; Caddy's is not pulled
       # there either. No tags: jobs side by side on one box would overwrite each other's.

@@ -16,7 +16,7 @@ import {
 import type { Env } from "../env";
 import { json } from "../http";
 import { ipKey, rateLimit } from "../limits";
-import { SIGNUPS_PAUSED, signUpsPaused } from "../signups";
+import { SIGNUPS_CLOSED, SIGNUPS_PAUSED, signUpsPaused } from "../signups";
 
 const STATE_COOKIE = "sb_oauth";
 /** The page's `signin` when this server has no GitHub sign-in. */
@@ -145,8 +145,8 @@ async function gitHubAccount(c: Context<Env>, code: string, verifier?: string): 
 }
 
 /**
- * The account a sign-in's provider id names, made on first sign-in unless sign-ups are paused or
- * the address made too many. `column` is the provider's: `github_id` or `apple_sub`.
+ * The account a sign-in's provider id names, made on first sign-in unless sign-ups are paused,
+ * the server lists who may sign up and this user isn't listed, or the address made too many. `column` is the provider's: `github_id` or `apple_sub`.
  */
 function accountFor(
   c: Context<Env>,
@@ -160,6 +160,10 @@ function accountFor(
   } | null;
   if (existing) return existing.id;
   if (signUpsPaused(c.var.config)) fail(403, "signups-paused", SIGNUPS_PAUSED);
+  // The clients already show `signups-paused` as "no new accounts here".
+  const listed = c.var.config.signUpGitHubIds;
+  if (listed && !(column === "github_id" && listed.has(id as number)))
+    fail(403, "signups-paused", SIGNUPS_CLOSED);
   rateLimit(c, `signup:${ipKey(c)}`, c.var.config.limits.signUps);
   const account = newAccountId();
   db.query(`INSERT INTO accounts (id, ${column}, created_at) VALUES (?, ?, ?)`).run(
@@ -427,6 +431,8 @@ authRoutes.post("/auth/owner", async (c) => {
   const existing = db.query("SELECT id FROM accounts WHERE owner = 1").get() as {
     id: string;
   } | null;
+  // A sign-up list names GitHub users only: no owner account is made beside it.
+  if (!existing && c.var.config.signUpGitHubIds) fail(403, "signups-paused", SIGNUPS_CLOSED);
   const account = existing?.id ?? newAccountId();
   if (!existing)
     db.query("INSERT INTO accounts (id, owner, created_at) VALUES (?, 1, ?)").run(
