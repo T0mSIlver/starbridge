@@ -54,9 +54,11 @@ jobs:
           elif [ ${#got} -eq 40 ]; then
             # Not gh: some self-hosted runners lack it (dell2-2). The compare lists at most 300
             # files; a longer list builds.
+            # Only for a commit that follows staging's: an older one compares as empty, and must
+            # not take a later commit's images.
             files=$(curl -fsS -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' \
               "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/compare/$got...$REV" |
-              jq -r 'if (.files | length) < 300 then .files[].filename else error("too many") end') &&
+              jq -r 'if (.status == "ahead" or .status == "identical") and (.files | length) < 300 then .files[].filename else error("not after staging, or too many") end') &&
               if ! printf '%s\n' "$files" | grep -qE '^(package\.json|pnpm-lock\.yaml|pnpm-workspace\.yaml|\.dockerignore|packages/|server/|web/|cli/|plugin/|mod/|demo/|docs/|deploy/)'; then
                 build=false
                 echo "Nothing the images are built from changed since $got: reusing its images."
@@ -141,7 +143,10 @@ jobs:
       - run: |
           for image in server web; do
             name=ghcr.io/t0msilver/starbridge-$image
-            if [ -n "$BASE" ]; then
+            # A commit's tag, once pushed, never changes: a rerun keeps it.
+            if docker buildx imagetools inspect "$name:$REV" >/dev/null 2>&1; then
+              echo "$name:$REV exists"
+            elif [ -n "$BASE" ]; then
               docker buildx imagetools create -t "$name:$REV" "$name:$BASE"
             else
               docker buildx imagetools create -t "$name:$REV" "$name:$REV-amd64" "$name:$REV-arm64"
