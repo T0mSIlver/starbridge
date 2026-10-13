@@ -50,6 +50,10 @@ if [ -x /usr/local/sbin/sb-check-now ] && [ "$(cat $check/setup-state 2>/dev/nul
 else
   echo "no round trip: the staging check is not set up"
 fi
+# Then the Play reviewers' demo server, from this checkout, only after the round trip passed: a
+# project of its own, which restarts only when its code changed (host/demo.sh). Its failure is
+# reported but blocks no release.
+$dir/deploy/host/demo.sh || echo "the demo server did not deploy; see above" >&2
 # The last line deploy.yml reads: only a commit that went through all of the above lets prod
 # deploy it. A skipped older commit ends without it.
 echo "passed $rev"
