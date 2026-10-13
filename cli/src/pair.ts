@@ -87,7 +87,9 @@ export async function pair(
   ctx.out("  Scan this with the Starbridge app:");
   for (const line of terminalQr(machineQrText(server, code, checkKey))) ctx.out(line);
   ctx.out(`  No app? Open  ${link}`);
-  ctx.out("  Or type the code under Devices in the app or web page. It expires in 10 minutes.");
+  ctx.out(
+    "  Or type the code under Add a device in the app or web page. It expires in 10 minutes.",
+  );
 
   let result: { approval: unknown; token?: string } | undefined;
   while (!result) {

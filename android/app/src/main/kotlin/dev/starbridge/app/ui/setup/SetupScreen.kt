@@ -91,6 +91,7 @@ class SetupViewModel @Inject constructor(private val store: Store) : ViewModel()
     val keepsKeys = store.keepsKeys
     val actions = SetupActions(
         gitHub = store::gitHubSignInUrl,
+        apple = store::appleSignInUrl,
         ownerToken = store::signInWithOwnerToken,
         firstDevice = store::setUpFirstDevice,
         join = store::joinAccount,
@@ -108,6 +109,8 @@ class SetupViewModel @Inject constructor(private val store: Store) : ViewModel()
 class SetupActions(
     /** Returns the URL to open in the browser. */
     val gitHub: (server: String) -> String,
+    /** Apple's web sign-in on starbridge.run; the URL to open in the browser. */
+    val apple: () -> String,
     val ownerToken: (server: String, token: String) -> Unit,
     val firstDevice: () -> Unit,
     val join: () -> Unit,
@@ -204,6 +207,7 @@ private fun SignIn(server: String, busy: Boolean, actions: SetupActions, openUrl
     var selfHosted by rememberSaveable { mutableStateOf(server != BuildConfig.DEFAULT_SERVER) }
     var url by rememberSaveable { mutableStateOf(server) }
     var token by rememberSaveable { mutableStateOf("") }
+    var others by rememberSaveable { mutableStateOf(false) }
     Step(
         modifier,
         top = {
@@ -237,6 +241,16 @@ private fun SignIn(server: String, busy: Boolean, actions: SetupActions, openUrl
             if (!selfHosted) {
                 Primary("Sign in with GitHub", busy, icon = { Icon(painterResource(R.drawable.ic_github), contentDescription = null, modifier = Modifier.size(20.dp)) }) {
                     openUrl(actions.gitHub(BuildConfig.DEFAULT_SERVER))
+                }
+                // Apple's sign-in sits behind a link: GitHub is the main way, and an account made
+                // with Apple on the iPhone signs in here too (spec/sign-in.md).
+                if (others) {
+                    OutlinedButton(onClick = { openUrl(actions.apple()) }, enabled = !busy, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
+                        Icon(painterResource(R.drawable.ic_apple), contentDescription = null, modifier = Modifier.size(20.dp))
+                        Text("Sign in with Apple", style = StarbridgeTheme.type.action, modifier = Modifier.padding(start = Spacing.s2))
+                    }
+                } else {
+                    Link("Other ways to sign in") { others = true }
                 }
                 Link("Use your own server") { selfHosted = true }
             } else {
@@ -317,7 +331,7 @@ fun UpdateRequired(minimum: String, current: String, installer: Installer, updat
             Column(Modifier.padding(start = Spacing.s4, end = Spacing.s4, top = 48.dp, bottom = Spacing.s6), verticalArrangement = Arrangement.spacedBy(Spacing.s3)) {
                 Title("Update Starbridge")
                 Text(
-                    "Your server needs Starbridge $minimum or later. This phone has $current.",
+                    "Your server needs Starbridge $minimum or later. This phone has $current. Answers you gave are kept and sent once it is updated.",
                     style = StarbridgeTheme.type.body,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

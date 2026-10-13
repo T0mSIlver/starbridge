@@ -100,11 +100,7 @@ interface Alerts {
      * decrypted questions and commands and let the owner answer.
      */
     fun clearAll() {}
-    /** An answer went out: shows it in place of the buttons. */
-    fun answered(decision: Decision, answer: String) {}
-    /** An answer waits for a connection. */
-    fun queued(decision: Decision, answer: String) {}
-    /** An answer the server refused; the buttons come back. */
+    /** An answer the server refused; the notification and its buttons come back. */
     fun failed(decision: Decision, why: String) {}
 }
 
@@ -115,8 +111,11 @@ private data class Tap(val answer: String, val at: Instant?)
 sealed interface Sent {
     /** The server took this device's answer, now or before: a second tap lands here (#331). */
     data class Answered(val answer: String) : Sent
-    /** Kept on the phone until the server can be reached; [AnswerWorker] sends it (#329). */
-    data class Queued(val answer: String) : Sent
+    /**
+     * Kept on the phone until the server takes it; [AnswerWorker] sends it (#329). [offline] when
+     * the request never got an answer, rather than a 429 or 5xx (#1390).
+     */
+    data class Queued(val answer: String, val offline: Boolean = false) : Sent
     data object Elsewhere : Sent
     data class Failed(val why: String) : Sent
 }
@@ -227,6 +226,8 @@ class ServerStore(
     @Volatile private var savedDecisions: List<Decision> = emptyList()
 
     init {
+        ImageFiles.read = disk::image
+        moveImagesToFiles()
         directory = runCatching { verified(saved.entries) }.getOrNull()
         publish()
         if (saved.joining != null) waitForApproval()
@@ -432,6 +433,12 @@ class ServerStore(
         return SignIn.url(saved.server, verifier)
     }
 
+    override fun appleSignInUrl(): String {
+        val verifier = SignIn.newVerifier()
+        persist(saved.copy(server = defaultServer), secrets.copy(signInVerifier = verifier))
+        return SignIn.url(saved.server, verifier, "apple")
+    }
+
     /**
      * Only for the sign-in this phone started: without its verifier the code is worthless, and a
      * redirect with no sign-in pending is ignored. The code works once, whatever the outcome.
@@ -444,7 +451,7 @@ class ServerStore(
         val challenge = SignIn.challenge(verifier)
         val link = when (val r = SignIn.redirect(redirect)) {
             is SignIn.Redirect.Code -> r.takeIf { it.state == challenge } ?: return@run
-            is SignIn.Redirect.Denied -> if (r.state == challenge) throw IllegalStateException("GitHub sign-in didn't finish. Sign in again.") else return@run
+            is SignIn.Redirect.Denied -> if (r.state == challenge) throw IllegalStateException("Sign-in didn't finish. Sign in again.") else return@run
             null -> return@run
         }
         persist(newSecrets = secrets.copy(signInVerifier = null))
@@ -864,11 +871,12 @@ class ServerStore(
         if (phase.value != Phase.Ready) return
         syncDirectory()
         if (phase.value != Phase.Ready) return
+        // Before the reads: one failing, during a rate-limit hold say, must not keep an answer back (#1390).
+        if (saved.outbox.isNotEmpty()) flushHeld()
         syncDecisions()
         syncPrompts()
         syncQuotas()
         syncRuns()
-        if (saved.outbox.isNotEmpty()) flushHeld()
         // The server answered, so a push route that failed to register gets another try.
         pendingPush?.let { runCatching { subscribeHeld(it) } }
     }
@@ -876,6 +884,8 @@ class ServerStore(
     /** Fetches what is new and replays the whole chain; it must extend the pin. */
     private suspend fun syncDirectory() {
         val fresh = api().directory(saved.entries.size)
+        // Nothing new: the chain verified at start, or when it last grew, still holds (#1469).
+        if (fresh.isEmpty() && directory?.members?.get(me.id)?.active == true) return
         val all = saved.entries + fresh
         val dir = directories.verify(all, saved.account, saved.pin)
         directory = dir
@@ -993,7 +1003,8 @@ class ServerStore(
         val waits = mutableListOf<Pair<String, Waiting>>()
         val snoozes = mutableListOf<Snooze>()
         while (true) {
-            val page = api().items("decision,settled,waiting,snooze", cursor)
+            // An answered question's images download when its sheet shows them (#1382).
+            val page = api().items("decision,settled,waiting,snooze", cursor, openBlobs = true)
             // Held: the cursor stays, so these items are read again once the hold ends.
             if (scan(page.items.map { it.item })) return
             for (listed in page.items) {
@@ -1052,9 +1063,82 @@ class ServerStore(
      * [d] with the agent's waiting state from [w], or null when [w] changes nothing: it must come
      * from the machine that asked, and only a later update replaces an earlier one.
      */
-    /** [d] with its images opened from [item]'s blobs, once, as it is kept (#685). */
+    /**
+     * [d] with its images opened from [item]'s blobs, once, as it is kept (#685). Listed answered
+     * without them, it keeps none until its sheet shows it ([loadImages]).
+     */
     private fun saved(item: SealedItem, d: SavedDecision): SavedDecision =
-        if (d.body.images.isNullOrEmpty()) d else d.copy(images = images.openAll(d.body.images.orEmpty(), item.blobs))
+        if (d.body.images.isNullOrEmpty() || item.blobs == null) d else filed(d, images.openAll(d.body.images.orEmpty(), item.blobs))
+
+    /** [d] with [opened] (base64url, null for one that did not open) each in its own file (#1471). */
+    private fun filed(d: SavedDecision, opened: List<String?>): SavedDecision =
+        d.copy(images = emptyList(), imageFiles = opened.mapIndexed { i, b64 -> b64?.let { disk.putImage("${d.body.id}.$i", fromB64(it)) } })
+
+    /**
+     * Moves the images an older app kept inside `state.bin` into files of their own, once (#1471).
+     * A question whose files cannot be written keeps its images where they were. A file's name is
+     * its question's id and the image's place, so a question an older app rewrote without
+     * [SavedDecision.imageFiles] finds its files again, and only a question no longer kept, such
+     * as one past the 500, loses its files. Nothing goes while a state file could not be read: the
+     * one set aside may name them.
+     */
+    private fun moveImagesToFiles() {
+        val moved = saved.decisions.map { d ->
+            when {
+                d.images.isNotEmpty() -> runCatching { filed(d, d.images) }.getOrElse { d }
+                d.imagesPending -> {
+                    val found = d.body.images.orEmpty().indices.map { i -> "${d.body.id}.$i".takeIf { disk.hasImage(it) } }
+                    // Only a whole set: one cut short by a failed write still fetches the rest.
+                    if (found.all { it != null }) d.copy(imageFiles = found) else d
+                }
+                else -> d
+            }
+        }
+        if (moved != saved.decisions) {
+            val next = saved.copy(decisions = moved)
+            // Written before anything else, so the next launch reads the small file.
+            if (runCatching { disk.save(next) }.isSuccess) saved = next
+        }
+        if (loaded.first != null && disk.unreadable.isEmpty()) {
+            val kept = saved.decisions.map { it.body.id }.toSet()
+            runCatching { disk.pruneImages { name -> name.substringBeforeLast('.') in kept } }
+        }
+    }
+
+    /** Questions whose images this run fetched or is fetching (#1382). */
+    private val imagesAsked = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+
+    /**
+     * Fetches the images of a question listed without them (#1382), each checked against the hash
+     * its signed body holds, and keeps them. Once per question while the app runs, unless the fetch
+     * fails: one whose images fail to open stays without them.
+     */
+    override fun loadImages(id: String) {
+        if (saved.decisions.find { it.body.id == id }?.imagesPending != true || !imagesAsked.add(id)) return
+        scope.launch {
+            val listed = try {
+                api().item(id)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // Offline or refused: the next show asks again.
+                imagesAsked.remove(id)
+                return@launch
+            }
+            // After any sync under way, which writes back the list it read; a failed write is
+            // reported, as every locked run's is.
+            locked(showBusy = false) {
+                val d = saved.decisions.find { it.body.id == id }?.takeIf { it.imagesPending } ?: return@locked
+                // The same question from the same machine: each blob opens against the key and
+                // hash in the body this phone kept, never one the server sends now.
+                val (from, _) = open(listed.item) ?: return@locked
+                if (listed.item.kind != "decision" || listed.item.id != id || from != d.from) return@locked
+                val opened = images.openAll(d.body.images.orEmpty(), listed.item.blobs)
+                if (opened.all { it == null }) return@locked
+                persist(saved.copy(decisions = saved.decisions.map { if (it === d) filed(d, opened) else it }))
+            }
+        }
+    }
 
     /** Fetches decision [id] and keeps it; null when it does not open. */
     private suspend fun fetchDecision(id: String): SavedDecision? {
@@ -1362,7 +1446,10 @@ class ServerStore(
         run(showBusy = false) {
             try {
                 when (val sent = send(id, choice, text)) {
-                    is Sent.Queued -> notice.value = "No connection. ${if (choice == null && text == null) "Done" else sent.answer} will be sent when the phone is back online."
+                    is Sent.Queued -> {
+                        val what = if (choice == null && text == null) "Done" else sent.answer
+                        notice.value = if (sent.offline) "No connection. $what will be sent when the phone is back online." else "$what isn't sent yet. Retrying."
+                    }
                     Sent.Elsewhere -> {
                         val d = saved.decisions.find { it.body.id == id }
                         val by = d?.answeredBy
@@ -1468,13 +1555,16 @@ class ServerStore(
         return post(queued)
     }
 
-    /** Posts a queued answer and settles it, or keeps it for [wakeWhenOnline] to send later. */
-    private suspend fun post(q: QueuedAnswer): Sent {
+    /**
+     * Posts a queued answer and settles it, or keeps it for [wakeWhenOnline] to send later. [wake]
+     * is false in [AnswerWorker]'s own run, which retries by its backoff instead.
+     */
+    private suspend fun post(q: QueuedAnswer, wake: Boolean = true): Sent {
         try {
             api().postItem(q.item)
         } catch (e: CancellationException) {
             // Cut off mid-request, by the notification's time limit say: it may have landed.
-            keep(q, landed = true)
+            keep(q, landed = true, wake)
             throw e
         } catch (e: ApiException) {
             return when {
@@ -1486,17 +1576,17 @@ class ServerStore(
                 }
                 // The session ended: report() asks to sign in again, and the answer waits for it.
                 e.status == 401 -> {
-                    keep(q, landed = false)
+                    keep(q, landed = false, wake)
                     throw e
                 }
                 // This release is refused: the answer waits for the updated app to send it.
                 e is TooOld -> {
                     describe(e)
-                    keep(q, landed = false)
+                    keep(q, landed = false, wake)
                     Sent.Queued(q.answer)
                 }
                 e.status >= 500 || e.status == 429 -> {
-                    keep(q, landed = e.status != 502 && e.status != 503 && e.status != 429)
+                    keep(q, landed = e.status != 502 && e.status != 503 && e.status != 429, wake)
                     Sent.Queued(q.answer)
                 }
                 else -> {
@@ -1506,18 +1596,18 @@ class ServerStore(
             }
         } catch (e: IOException) {
             // No route or no name: the request never left. Anything else may have reached it.
-            keep(q, landed = e !is java.net.ConnectException && e !is java.net.UnknownHostException && e !is java.net.NoRouteToHostException)
-            return Sent.Queued(q.answer)
+            keep(q, landed = e !is java.net.ConnectException && e !is java.net.UnknownHostException && e !is java.net.NoRouteToHostException, wake)
+            return Sent.Queued(q.answer, offline = true)
         }
         settle(q, q.answer)
         return Sent.Answered(q.answer)
     }
 
-    private fun keep(q: QueuedAnswer, landed: Boolean) {
+    private fun keep(q: QueuedAnswer, landed: Boolean, wake: Boolean) {
         if (landed && !q.mayHaveLanded) {
             persist(saved.copy(outbox = saved.outbox.map { if (it.decisionId == q.decisionId) it.copy(mayHaveLanded = true) else it }))
         }
-        wakeWhenOnline()
+        if (wake) wakeWhenOnline()
     }
 
     /** Takes the answer out of the outbox and marks its decision answered, by this device when [answer] is set. */
@@ -1530,21 +1620,48 @@ class ServerStore(
         )
     }
 
-    /** For the notification's buttons: holds the lock like any other change. */
-    /** A reply typed into a notification is cut as the in-app field cuts it (#1205). */
-    suspend fun sendFromNotification(id: String, choice: String?, text: String?) = lock.withLock { send(id, choice, text?.takeCodePoints(4000)) }
+    /**
+     * For the notification's buttons. The notification goes at the tap, as the card does, and
+     * comes back only if the server refuses the answer; one left queued goes out with
+     * [AnswerWorker] (#1447). A reply typed into a notification is cut as the in-app field cuts
+     * it (#1205).
+     */
+    suspend fun sendFromNotification(id: String, choice: String?, text: String?): Sent {
+        alerts.cancel(id)
+        val sent = lock.withLock { send(id, choice, text?.takeCodePoints(4000)) }
+        if (sent is Sent.Failed) refused(id, sent.why)
+        return sent
+    }
+
+    /** The server refused this phone's answer to [id]: its card and its notification come back, saying [why]. */
+    fun refused(id: String, why: String) {
+        notSent[id] = why
+        showUnsent()
+        decisions.value.find { it.id == id }?.let { alerts.failed(it, why) }
+    }
 
     /** The answer waiting to be sent for decision [id], if any. */
     fun queued(id: String): String? = saved.outbox.find { it.decisionId == id }?.answer
 
     /**
      * Sends the queued answers, oldest first, and tells the notifications how each ended. False
-     * while some still wait, so [AnswerWorker] tries again later.
+     * while some still wait, so [AnswerWorker] tries again later. It first waits out a rate-limit
+     * hold, outside the lock: posting during it would fail at once and only lengthen the worker's
+     * backoff (#1390).
      */
-    suspend fun flushAnswers(): Boolean = lock.withLock {
-        if (phase.value != Phase.Ready) return@withLock true
-        try {
-            flushHeld() && saved.outbox.isEmpty()
+    suspend fun flushAnswers(): Boolean {
+        while (true) {
+            val held = limitedUntil - System.currentTimeMillis()
+            if (held <= 0) break
+            delay(held)
+        }
+        return lock.withLock { flushQueued() }
+    }
+
+    private suspend fun flushQueued(): Boolean {
+        if (phase.value != Phase.Ready) return true
+        return try {
+            flushHeld(wake = false) && saved.outbox.isEmpty()
         } catch (e: IOException) {
             // The answers wait in the outbox, and their cards say "not sent yet".
             report(e, sync = true)
@@ -1552,20 +1669,15 @@ class ServerStore(
         }
     }
 
-    private suspend fun flushHeld(): Boolean {
+    private suspend fun flushHeld(wake: Boolean = true): Boolean {
         // Kept, and tried again once the hold ends.
         if (withheld() != null) return false
         for (q in saved.outbox) {
             val decision = decisions.value.find { it.id == q.decisionId }
-            when (val sent = post(q)) {
+            when (val sent = post(q, wake)) {
                 is Sent.Queued -> return false
-                is Sent.Answered -> decision?.let { alerts.answered(it, sent.answer) }
-                Sent.Elsewhere -> alerts.cancel(q.decisionId)
-                is Sent.Failed -> {
-                    notSent[q.decisionId] = sent.why
-                    showUnsent()
-                    decision?.let { alerts.failed(it, sent.why) }
-                }
+                is Sent.Answered, Sent.Elsewhere -> alerts.cancel(q.decisionId)
+                is Sent.Failed -> refused(q.decisionId, sent.why)
             }
         }
         return true
@@ -1647,7 +1759,7 @@ class ServerStore(
                 val d = saved.decisions.find { it.body.id == body.decisionId } ?: fetchDecision(body.decisionId) ?: return@withLock
                 val updated = wait(d, from, body) ?: return@withLock
                 persist(saved.copy(decisions = saved.decisions.map { if (it === d) updated else it }))
-                if (d.answeredAt == null && d.answer == null && !isSnoozed(d) && (d.waiting == "waiting") != (updated.waiting == "waiting")) {
+                if (d.answeredAt == null && d.answer == null && saved.outbox.none { it.decisionId == d.body.id } && !isSnoozed(d) && (d.waiting == "waiting") != (updated.waiting == "waiting")) {
                     alerts.decision(toUi(updated), silent = updated.waiting != "waiting")
                 }
             }
@@ -1807,7 +1919,8 @@ class ServerStore(
             if (check != null) persist(saved.copy(scannedMachines = (saved.scannedMachines + body.id).distinct()))
             pending = null
             pendingCheckKey = null
-            approval.value = Approval.Done(body.name)
+            val compare = if (body.role == "machine" && check == null) runCatching { pairings.checkCode(saved.entries, body.id) }.getOrNull() else null
+            approval.value = Approval.Done(body.name, compare)
         } catch (e: Exception) {
             approval.value = Approval.Failed(describe(e))
         }
@@ -2237,7 +2350,13 @@ class ServerStore(
             waiting = d.waiting == "waiting",
             waitingSince = if (d.waiting == "waiting") instant(d.waitingAt) else null,
             snoozedUntil = snoozedUntil(d),
-            images = b.images.orEmpty().mapIndexedNotNull { i, it -> d.images.getOrNull(i)?.let { data -> Image(data, it.width, it.height, it.alt) } },
+            // Pending, each holds its place at its shape until it downloads (#1382).
+            images = when {
+                d.imagesPending -> b.images.orEmpty().map { Image("", it.width, it.height, it.alt) }
+                // Read from its file when it is decoded, off the main thread (#1471).
+                d.imageFiles.isNotEmpty() -> b.images.orEmpty().mapIndexedNotNull { i, it -> d.imageFiles.getOrNull(i)?.let { f -> Image("", it.width, it.height, it.alt, file = f) } }
+                else -> b.images.orEmpty().mapIndexedNotNull { i, it -> d.images.getOrNull(i)?.let { data -> Image(data, it.width, it.height, it.alt) } }
+            },
             links = b.links.orEmpty().map { Link(it.url, it.title) },
             answerIn = b.answerIn?.let { Link(it.url, it.title) },
             answer = d.answer,

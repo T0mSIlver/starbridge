@@ -100,7 +100,10 @@ Besides the web app's trust in its server:
   `"starbridge/v1/image"` NUL and the blob's bytes, so the signature covers the image and each
   box holds a few dozen bytes per image. A client checks the hash, then opens the blob; one that
   fails either is left out, as a broken image. A push carries no blobs, so the server sends a
-  decision with blobs as its id. A re-seal (`reseal`) may leave `blobs` out: the server keeps
+  decision with blobs as its id. A list asked with `blobs=open` carries no blobs for answered
+  decisions, so a long history costs no image the owner does not look at; their images are
+  pending, not broken, until the device fetches the item by id (#1382). A server that ignores
+  the flag sends them all. A re-seal (`reseal`) may leave `blobs` out: the server keeps
   those it stored. `vectors/images.json` holds the cases.
   A decision with `answerIn` is answered on that page (a claude.ai artifact whose button wakes
   the agent), never in Starbridge: it has no options, devices show the page and no answer
@@ -409,11 +412,28 @@ request without the header, or with one the server cannot read, is served.
   session over HTTPS; the app ignores a redirect whose state is not its challenge, or with none.
   GitHub
   redirects to `/v1/auth/github/callback/app`, which the Android app claims as an App Link on
-  starbridge.run (`/.well-known/assetlinks.json` binds it to the app's signing keys). When the
+  starbridge.run (`/.well-known/assetlinks.json` binds it to the app's signing keys), and the
+  iPhone app's browser sheet catches there from iOS 17.4
+  (`/.well-known/apple-app-site-association`). When the
   browser gets the redirect instead, the server hands code and state on to `APP_REDIRECT_URI`:
   `starbridge://auth` by default, and on starbridge.run the App Link
   `https://starbridge.run/app/auth`, whose page has an "Open Starbridge" button to
   `starbridge://auth`.
+- **Sign in with Apple** (#1411): the iPhone app asks Apple for no name and no email, and puts
+  the SHA-256 (hex) of a random nonce in its request. It sends the server Apple's identity token,
+  the authorization code and the nonce. The server checks the token against Apple's keys
+  (`https://appleid.apple.com/auth/keys`): issuer Apple, audience the App ID, not expired, the
+  nonce's hash in its `nonce` claim. It then trades the code, which works once, at Apple's token
+  endpoint with a client secret signed by the team's Sign in with Apple key, and the identity
+  token that comes back must name the same user. The account is Apple's stable user id (`sub`);
+  the server keeps the refresh token of the account's last Apple sign-in only to revoke it at
+  `https://appleid.apple.com/auth/revoke` when the account is deleted. The page and the other
+  apps use Apple's web sign-in with the Services ID instead, as GitHub's, with no scope and
+  `response_mode=query`. For an app's sign-in the server sends the app's challenge to Apple as
+  the `nonce` too, which Apple signs into the identity token: the server's callback hands the code
+  on to `APP_REDIRECT_URI`, and the app trades it at `POST /auth/app/session` as GitHub's, where
+  the token's nonce must be the S256 of the verifier. Apple's codes have dots and GitHub's none,
+  which tells the two apart.
 - **Machines** send `Authorization: Bearer <machine token>`, issued when their pairing is
   approved. The server stores a hash of it and drops it when the directory revokes the machine.
 - A session with no device yet can read the directory and post joins, but reads and posts no
@@ -428,15 +448,19 @@ request without the header, or with one the server cannot read, is served.
 
 | Route | Who | What |
 |---|---|---|
-| `GET /auth/methods` | anyone | `{methods}`: the sign-in methods this server offers, `github` and `owner` |
+| `GET /auth/methods` | anyone | `{methods}`: the sign-in methods this server offers, `github`, `apple` (Apple's web sign-in) and `owner` |
 | `GET /auth/github` | anyone | start GitHub sign-in; the app adds `?app=1&challenge=<S256 challenge>`; without GitHub on the server, the page goes to `/?signin=off` and the app gets 404 `not-configured` |
 | `GET /auth/github/callback` | anyone | finish it, set the session, redirect to `/`; on failure redirect to `/?signin=declined`, `expired` (state missing or not this browser's, kept an hour), `paused` (sign-ups paused and no account yet), `limited` (too many new accounts from the address) or `failed` |
+| `GET /auth/apple` | anyone | start Apple's web sign-in with the Services ID; the apps add `?app=1&challenge=<S256 challenge>`; without it on the server, the page goes to `/?signin=failed` and the app gets 404 `not-configured` |
+| `GET /auth/apple/callback` | anyone | finish the page's, as `/auth/github/callback`, with the same `signin` failures |
+| `GET /auth/apple/callback/app` | anyone | an app's: redirect to `<APP_REDIRECT_URI>?code=<code>&state=<state>`, or Apple's `error` instead of the code; 400 `bad-state` without them |
 | `GET /auth/github/callback/app` | anyone | the browser got the app's sign-in: redirect to `<APP_REDIRECT_URI>?code=<code>&state=<state>`, or GitHub's `error` instead of the code; 400 `bad-state` without them |
-| `POST /auth/app/session` | the app | `{code, verifier}`: GitHub's code → `{session}`; 400 `bad-code` when GitHub refuses the code: unknown, used, expired or not this verifier's; 403 `signups-paused` while sign-ups are paused and the GitHub user has no account |
+| `POST /auth/app/session` | the app | `{code, verifier}`: GitHub's code, or Apple's (with dots) whose identity token's nonce is the verifier's challenge → `{session}`; 400 `bad-code` when GitHub refuses the code: unknown, used, expired or not this verifier's; 403 `signups-paused` while sign-ups are paused and the GitHub user has no account |
 | `GET /auth/app/signed-in?state=<challenge>` | device | `{signedIn}`: true once the app whose challenge this is traded its code for a session of the caller's account (#943); the server keeps each challenge's account 10 minutes, in memory |
+| `POST /auth/apple/session` | the iPhone app | `{identityToken, code, nonce}` → `{session}`; 400 `bad-code` when Apple refuses the token or the code (another app's, expired, replayed, the nonce not the token's); 403 `signups-paused` as GitHub's; 404 `not-configured` without the team's key; 502 `apple` when Apple can't be reached |
 | `POST /auth/owner` | anyone | self-hosted: `{token}` against `OWNER_TOKEN`; sets the session and returns `{session}` |
 | `POST /auth/logout` | device | end the session |
-| `DELETE /account` | device, paired or not | delete the caller's account and everything the server holds for it: directory, members, sessions and revoked ones, machine tokens, items, push subscriptions, joins and pairings; 204. Its waits end at once: for answers, quotas and the account's joins with 401, for one join (`GET /joins/:id`) and a pairing result with 404, as the rows are gone; and a wait for a pairing request at the end of its wait, and the cookie is cleared. Today's usage events keep their counts under a random subject (#1104) |
+| `DELETE /account` | device, paired or not | delete the caller's account and everything the server holds for it: directory, members, sessions and revoked ones, machine tokens, items, push subscriptions, joins and pairings; 204. The account's Apple refresh token is revoked at Apple after the reply. Its waits end at once: for answers, quotas and the account's joins with 401, for one join (`GET /joins/:id`) and a pairing result with 404, as the rows are gone; and a wait for a pairing request at the end of its wait, and the cookie is cleared. Today's usage events keep their counts under a random subject (#1104) |
 | `GET /auth/challenge` | device | `{nonce, expiresInSeconds}`: one nonce per session, single use, 5 minutes; asking again returns the outstanding one |
 | `POST /auth/bind` | device | `{member, sig}`: binds the session to that active device when `sig` checks against its signing key; 400 `no-challenge`, 401 `bad-signature`, 404 for no such active device, 409 `already-paired` when the session holds another device |
 | `GET /me` | device, machine | `{account, member, role}`; `member` is null until a device pairs |
@@ -481,7 +505,7 @@ createdAt, expiresAt, version}`; `state` is `open`, `comparing`, `approved` or `
 | Route | Who | What |
 |---|---|---|
 | `POST /items` | the kind's signing role | store a sealed item and push it to each recipient; 409 on a reused id; 409 `too-many-items` and 413 `too-large` past the caps in Limits; 403 `account-suspended` from a machine of an account the operator suspended (every machine write gets it; reads still pass) |
-| `GET /items?kind=<kinds>&after=<cursor>&open=1` | device | items with only the caller's box (and a decision's blobs), and `cursor`; `kinds` is a comma-separated list of machine-signed kinds and `snooze`, the machine-signed ones when left out; `open=1` keeps only unanswered decisions and permissions still in their answer window |
+| `GET /items?kind=<kinds>&after=<cursor>&open=1&blobs=open` | device | items with only the caller's box (and a decision's blobs), and `cursor`; `kinds` is a comma-separated list of machine-signed kinds and `snooze`, the machine-signed ones when left out; `open=1` keeps only unanswered decisions and permissions still in their answer window; `blobs=open` leaves an answered decision's blobs out, for `GET /items/:id` to give when the device shows its images (#1382) |
 | `DELETE /items/:id` | device | drop a run sealed to the caller, for every device (#827); 404 for any other kind, or a run already gone |
 | `GET /items/:id` | device, machine | one item, the caller's box only, with a decision's blobs; push points here when the item is over the inline limit (3 KB by default) |
 | `GET /quota` | device | the latest quota item from each machine |
@@ -575,7 +599,10 @@ is `quiet`, so devices learn at once that the machine sends quotas.
 Quota snapshots and runs go to FCM and UnifiedPush only, not to Web Push or APNs. Browsers expect every Web Push to show a
 notification and drop a subscription that keeps showing none (Firefox after 16), so the web page
 fetches `GET /quota` and `GET /items?kind=run` instead. Decisions, permissions, settled notices,
-waiting states, snoozes and `answered` still go to Web Push.
+waiting states, snoozes and `answered` still go to Web Push, except that what shows nothing
+(`answered`, a settled notice, a snooze as it is posted) skips Apple's push service
+(`*.push.apple.com`): Safari drops a subscription after three pushes that showed no notification
+within 30 s (#1363). Web Push requests carry `Urgency: high` and `TTL: 86400`.
 
 The server checks that a push URL's host resolves only to public addresses, then connects to the
 address it checked, with SNI and the certificate check still on the host name, so a DNS answer
@@ -642,7 +669,9 @@ server whose disk is full answers writes 503 `storage-full` with `Retry-After`; 
 | `POST /directory` | 30 an hour per account |
 | Directory entries | from entry 200 on, a device's `add`: 409 `directory-full`; revocations and confirmations always pass, the recovery key may add 20 more devices, and devices may propose 20 more recovery keys; 8 KB per entry: 413 `too-large` |
 | Sessions | 50 per account; signing in past that ends the oldest, unpaired ones first |
-| `GET /auth/github/callback` and `POST /auth/app/session` | 60 a minute per address, together |
+| `GET /auth/github/callback` and `POST /auth/app/session` with GitHub's code | 60 a minute per address, together |
+| Apple sign-ins: `GET /auth/apple` and its app callback, together; `GET /auth/apple/callback`, `POST /auth/apple/session` and `POST /auth/app/session` with Apple's code, together | 60 a minute per address each |
+| `POST /auth/app/session`, either provider's code, counted before the body is read | 60 a minute per address |
 | New accounts | 30 an hour per address, an IPv6 client counting as its /64: the page goes to `/?signin=limited`, the app gets 429 `rate-limited`; sign-ins of existing accounts don't count |
 | `DELETE /account` | 3 an hour per address, an IPv6 client counting as its /64: 429 `rate-limited` |
 | `POST /auth/owner` | 10 a minute per address |

@@ -30,6 +30,8 @@ export interface Host {
    * a later try.
    */
   submit(text: string): unknown;
+  /** True while a submitted prompt waits for its turn: `AgentHost.starting`. */
+  starting(): boolean;
   status(text: string | undefined): void;
   log(text: string): void;
 }
@@ -43,7 +45,10 @@ export interface Timing {
   recheckMs: number;
   /** How long a lease lasts past its last renewal. */
   leaseMs: number;
-  /** A poll that comes back sooner than this with nothing waits out the rest. */
+  /**
+   * A poll that comes back sooner than this with nothing waits out the rest; while a prompt waits
+   * for its turn, polls don't wait and this is the time between them.
+   */
   minCycleMs: number;
   /** First retry delay after an error, doubled each time up to `maxBackoffMs`. */
   backoffMs: number;
@@ -115,16 +120,28 @@ export class Poller {
     this.leasePath = `${dir}/mod-poller.json`;
     this.cliPath = `${dir}/cli-path`;
     this.statePath = `${dir}/state.json`;
-    this.done = this.loop();
+    // Nothing awaits a loop that ended before `stop`: a rejection would take the harness down (#1365).
+    this.done = this.loop().catch((e) => {
+      try {
+        this.host.log(`starbridge: the answer loop stopped: ${(e as Error).message}`);
+      } catch {}
+    });
   }
 
-  /** Ends the loop after the current step and gives up the lease at once, so another session polls. */
+  /**
+   * Ends the loop after the current step and gives up the lease at once, so another session polls.
+   * Never rejects: it runs after the session ended, when the host may throw (#1365).
+   */
   async stop(): Promise<void> {
     this.stopped = true;
-    const me = await this.host.sessionId();
-    const lease = await this.readLease();
-    if (lease && (lease.session === me || lease.session === this.leasedAs))
-      await this.host.write(this.leasePath, JSON.stringify({ ...lease, until: 0 }));
+    try {
+      const me = await this.host.sessionId();
+      const lease = await this.readLease();
+      if (lease && (lease.session === me || lease.session === this.leasedAs))
+        await this.host.write(this.leasePath, JSON.stringify({ ...lease, until: 0 }));
+    } catch {
+      // The lease runs out on its own.
+    }
   }
 
   private async cli(): Promise<string> {
@@ -155,7 +172,8 @@ export class Poller {
     }
     if (await this.lease(me, this.t.leaseMs)) {
       const started = await this.host.now();
-      const handed = await this.answers(me, ["--wait", String(this.t.waitSeconds)]);
+      const wait = this.host.starting() ? 0 : this.t.waitSeconds;
+      const handed = await this.answers(me, ["--wait", String(wait)]);
       if (handed === undefined) return;
       const left = started + this.t.minCycleMs - (await this.host.now());
       if (handed === 0 && left > 0) await this.host.sleep(left);

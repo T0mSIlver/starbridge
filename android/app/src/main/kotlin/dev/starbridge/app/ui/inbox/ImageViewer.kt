@@ -83,7 +83,7 @@ private const val VIEW_EDGE = 4096
 
 @Composable
 private fun Zoomable(image: Attached, onZoom: (Boolean) -> Unit) {
-    val bitmap by produceState<ImageBitmap?>(null, image.data) {
+    val bitmap by produceState<ImageBitmap?>(null, image.data, image.file) {
         value = withContext(Dispatchers.Default) { image.bitmap(VIEW_EDGE)?.asImageBitmap() }
     }
     var scale by remember { mutableFloatStateOf(1f) }
@@ -111,7 +111,7 @@ private fun Zoomable(image: Attached, onZoom: (Boolean) -> Unit) {
                 contentScale = ContentScale.Fit,
                 modifier = Modifier
                     .fillMaxSize()
-                    .pointerInput(image.data) {
+                    .pointerInput(image.data, image.file) {
                         detectTapGestures(onDoubleTap = { at ->
                             if (scale > 1f) {
                                 set(1f, Offset.Zero)

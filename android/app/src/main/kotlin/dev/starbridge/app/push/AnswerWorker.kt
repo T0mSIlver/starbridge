@@ -17,13 +17,18 @@ class AnswerWorker(context: Context, params: WorkerParameters) : CoroutineWorker
     override suspend fun doWork(): Result = if (applicationContext.app().store().flushAnswers()) Result.success() else Result.retry()
 
     companion object {
-        /** One run at a time: a run already waiting sends every queued answer. */
+        /**
+         * One run at a time, and it sends every queued answer. A new failure replaces a run waiting
+         * in backoff, so the answer goes now rather than after an earlier answer's backoff (#1390).
+         * Only the store calls this, holding its lock, so the run it replaces is never mid-post;
+         * the worker's own failures retry by its backoff instead.
+         */
         fun schedule(context: Context) {
             val request = OneTimeWorkRequestBuilder<AnswerWorker>()
                 .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
                 .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
                 .build()
-            WorkManager.getInstance(context).enqueueUniqueWork("answers", ExistingWorkPolicy.KEEP, request)
+            WorkManager.getInstance(context).enqueueUniqueWork("answers", ExistingWorkPolicy.REPLACE, request)
         }
     }
 }

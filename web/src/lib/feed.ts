@@ -137,6 +137,11 @@ export function history(
 const sameDay = (a: Date, b: Date) => a.toDateString() === b.toDateString();
 
 /** How many of `past` closed today, in the device's zone. */
+/** History lists the last 7 days, the server's own; older rows, kept in this browser, wait. */
+export const RECENT_DAYS = 7;
+export const isRecent = (p: Past, now: number) =>
+  now - Date.parse(p.closed) < RECENT_DAYS * 86_400_000;
+
 export const closedToday = (past: Past[], now: number) =>
   past.filter((p) => sameDay(new Date(p.closed), new Date(now))).length;
 

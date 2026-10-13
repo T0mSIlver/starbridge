@@ -32,6 +32,13 @@ import {
 } from "./settings";
 import { browserSignIn, newSignIn, type SignIn, signInReturn, startsSignIn } from "./signin";
 import { mark, timing } from "./timing";
+import {
+  parseUpdateAction,
+  parseUpdateSettings,
+  type UpdateSettings,
+  type UpdateStatus,
+  type Updates,
+} from "./updates";
 import { snapshot, Widgets } from "./widgets";
 
 mark("main");
@@ -56,7 +63,7 @@ let origin: string;
 let win: BrowserWindow | null = null;
 let serverWin: BrowserWindow | null = null;
 let tray: Tray | null = null;
-/** Items in Needs you, which turn the menu bar's climber amber. */
+/** Items in Needs you, which turn the menu bar's dot amber. */
 let needs = 0;
 let notifier: Notifier;
 /** The Needs you widget's snapshot (#1031). */
@@ -70,9 +77,12 @@ let leaving: Promise<void> | null = null;
 let left = false;
 /** The GitHub sign-in sent to the browser, until its link comes back. */
 let signIn: SignIn | null = null;
-/** A release downloaded, which installs on quit or from Restart to Update. */
-let update: { install(): void; check(): void } | null = null;
-let updateReady = false;
+/** The update flow, which the page shows and drives (#1398); null until loaded, or unpackaged. */
+let updates: Updates | null = null;
+/** GitHub's page for the releases; the end-to-end test sets a stand-in (test/smoke.ts). */
+const RELEASES = process.env.STARBRIDGE_RELEASES ?? "https://github.com/T0mSIlver/starbridge";
+/** Whether the window's last page failed to load, which leaves its URL on the server. */
+let failed = false;
 /** Links that arrived before the window existed. */
 const early: string[] = [];
 /** Answers handed to the page, until it says they went out. */
@@ -166,6 +176,27 @@ async function ready(): Promise<void> {
     save();
     win?.setBackgroundColor(background);
   });
+  // Asked at load: null until the updater loads, and in a run that never loads it.
+  ipcMain.on("update-status?", (e) => {
+    e.returnValue = e.sender === win?.webContents ? (updates?.status ?? null) : null;
+  });
+  ipcMain.on("update-settings?", (e) => {
+    e.returnValue = e.sender === win?.webContents ? updateSettings() : null;
+  });
+  ipcMain.on("update-settings", (e, x) => {
+    const change = fromPage(e) && parseUpdateSettings(x);
+    if (!change) return;
+    settings = { ...settings, ...change };
+    save();
+    win?.webContents.send("update-settings", updateSettings());
+    updates?.check();
+  });
+  ipcMain.on("update-action", (e, x) => {
+    const action = fromPage(e) && parseUpdateAction(x);
+    if (!action || !updates) return;
+    if (action === "install") installUpdate();
+    else updates.act(action);
+  });
   screen = new Screen(powerMonitor, tellScreen);
   setInterval(() => screen?.check(), SCREEN_CHECK_MS);
   ipcMain.on("blocked?", (e) => {
@@ -182,6 +213,18 @@ async function ready(): Promise<void> {
   });
   ipcMain.on("screen?", (e) => {
     e.returnValue = e.sender === win?.webContents ? screen?.read() : null;
+  });
+  // Open at login and the server window, which the menu bar's menu held before #1449.
+  ipcMain.on("login?", (e) => {
+    e.returnValue = e.sender === win?.webContents ? app.getLoginItemSettings().openAtLogin : null;
+  });
+  ipcMain.on("login", (e, x) => {
+    if (!fromPage(e) || typeof x !== "boolean") return;
+    app.setLoginItemSettings({ openAtLogin: x });
+    win?.webContents.send("login", app.getLoginItemSettings().openAtLogin);
+  });
+  ipcMain.on("open-server", (e) => {
+    if (fromPage(e)) showServer();
   });
   ipcMain.on("server", (e, x) => {
     if (e.sender !== serverWin?.webContents || typeof x !== "string") return;
@@ -226,8 +269,12 @@ async function ready(): Promise<void> {
   checkForUpdates();
 }
 
+function updateSettings(): UpdateSettings {
+  return { releaseCandidates: settings.releaseCandidates, autoDownload: settings.autoDownload };
+}
+
 function checkForUpdates(): void {
-  if (!app.isPackaged) return;
+  if (!app.isPackaged && !process.env.STARBRIDGE_RELEASES) return;
   // Loaded late and by path, so the bundler keeps it out of main.js (src/updater.ts).
   setTimeout(() => {
     // Node keeps the compiled updater on disk, so later starts skip compiling its 0.5 MB.
@@ -235,13 +282,7 @@ function checkForUpdates(): void {
     const { startUpdates } = require(
       join(ROOT, "dist", "updater.js"),
     ) as typeof import("./updater");
-    update = startUpdates(
-      () => {
-        updateReady = true;
-        paintDockMenu();
-      },
-      () => settings.releaseCandidates,
-    );
+    updates = startUpdates(RELEASES, updateSettings, tellUpdate);
   }, 5_000);
 }
 
@@ -299,7 +340,13 @@ function createWindow(): void {
   });
   win.webContents.on("did-fail-load", (_e, code, _desc, url, mainFrame) => {
     // -3 is a navigation the page or the app cancelled.
-    if (mainFrame && code !== -3) retry = setTimeout(() => win?.loadURL(url), 5_000);
+    if (!mainFrame || code === -3) return;
+    failed = true;
+    retry = setTimeout(() => win?.loadURL(url), 5_000);
+  });
+  // Only a page that came back clears it: the error page keeps the server's URL.
+  win.webContents.on("did-navigate", () => {
+    failed = false;
   });
   win.once("show", () => mark("shown"));
   win.once("ready-to-show", () => mark("painted"));
@@ -326,10 +373,11 @@ function guard(contents: WebContents): void {
     return { action: "deny" };
   });
   const leave = (e: { preventDefault(): void; url: string }) => {
-    if (contents === win?.webContents && startsSignIn(e.url, origin)) {
+    const start = contents === win?.webContents ? startsSignIn(e.url, origin) : null;
+    if (start) {
       e.preventDefault();
       signIn = newSignIn();
-      shell.openExternal(browserSignIn(origin, signIn));
+      shell.openExternal(browserSignIn(origin, signIn, start));
       return;
     }
     if (staysInWindow(e.url, origin) && contents === win?.webContents) return;
@@ -361,16 +409,12 @@ function applyPlace(): void {
   }
   if (settings.place !== "menu" || win?.isVisible()) app.dock?.show();
   else app.dock?.hide();
-  paintDockMenu();
-}
-
-function paintDockMenu(): void {
   app.dock?.setMenu(menu(false));
 }
 
 /**
  * The mark in the menu bar: one colour, as macOS draws menu bar icons, until something needs the
- * owner; then its climber is amber, the one amber light, as on the phone. No count: the window
+ * owner; then its dot is amber, the one amber light, as on the phone. No count: the window
  * says what. The amber icon carries its own colours, so it follows the menu bar's appearance.
  */
 function trayIcon(): Electron.NativeImage {
@@ -393,52 +437,43 @@ function paintTray(): void {
   );
 }
 
-/** The menu bar icon's menu; the Dock's leaves out Open and Quit, which macOS adds there. */
+/**
+ * The menu bar icon's menu: what the window can't do while it is closed (#1449); the rest is in
+ * the page's Settings. The Dock's leaves out Open and Quit, which macOS adds there.
+ */
 function menu(forTray = true): Menu {
-  const login = app.getLoginItemSettings().openAtLogin;
-  return Menu.buildFromTemplate([
-    ...(forTray
+  const prefs = { label: "Settings…", click: showSettings };
+  return Menu.buildFromTemplate(
+    forTray
       ? [
           { label: "Open Starbridge", accelerator: settings.shortcut, click: showWindow },
-          { type: "separator" as const },
+          prefs,
+          { type: "separator" },
+          { label: "Quit Starbridge", role: "quit" },
         ]
-      : []),
-    {
-      label: "Open at Login",
-      type: "checkbox",
-      checked: login,
-      click: () => {
-        app.setLoginItemSettings({ openAtLogin: !login });
-        paintDockMenu();
-      },
-    },
-    ...(app.isPackaged
-      ? [
-          {
-            label: "Get Release Candidates",
-            type: "checkbox" as const,
-            checked: settings.releaseCandidates,
-            click: () => {
-              settings.releaseCandidates = !settings.releaseCandidates;
-              save();
-              paintDockMenu();
-              update?.check();
-            },
-          },
-        ]
-      : []),
-    { label: `Server: ${new URL(origin).host}…`, click: showServer },
-    ...(updateReady ? [{ label: "Restart to Update", click: installUpdate }] : []),
-    ...(forTray
-      ? [{ type: "separator" as const }, { label: "Quit Starbridge", role: "quit" as const }]
-      : []),
-  ]);
+      : [prefs],
+  );
+}
+
+/** The page's Settings; while the page can't load, the server window, where a wrong one is fixed. */
+function showSettings(): void {
+  if (!win || failed || !fromServer(win.webContents.getURL())) {
+    showServer();
+    return;
+  }
+  win.webContents.send("settings");
+  showWindow();
+}
+
+function tellUpdate(s: UpdateStatus): void {
+  if (win && fromServer(win.webContents.getURL())) win.webContents.send("update-status", s);
 }
 
 /** Quits for the update: the window must close, not hide, or the install never starts. */
 function installUpdate(): void {
+  if (updates?.status.state !== "ready") return;
   quitting = true;
-  leave().then(() => update?.install());
+  leave().then(() => updates?.act("install"));
 }
 
 function showWindow(): void {
@@ -570,8 +605,12 @@ function askNotificationsAfterSignIn(ses: Electron.Session): void {
   );
 }
 
-/** Hands an answer to the page, which sends it as if tapped there. */
+/**
+ * Hands an answer to the page, which sends it as if tapped there. Its notification goes at the
+ * tap, as the card does; only "Answer not sent" comes back (#1447).
+ */
 function answer(a: Answer): void {
+  notifier.close(a.id);
   if (!win || !fromServer(win.webContents.getURL())) {
     notSent(a.id, "Starbridge is not signed in.");
     return;

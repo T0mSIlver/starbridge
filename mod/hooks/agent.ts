@@ -12,7 +12,7 @@ import { configDir } from "./poller.ts";
 
 /** The agent API revision this mod speaks, sent in the `starbridge-api` header. */
 export const API = 1;
-export const VERSION = "0.1.5-rc.3";
+export const VERSION = "0.1.6-rc.4";
 const CLIENT = `starbridge-mod/${VERSION}`;
 
 /** Event types this mod submits; others are skipped and left unconfirmed, as the API asks. */
@@ -37,6 +37,11 @@ export interface AgentHost {
    * a later try.
    */
   submit(text: string): unknown;
+  /**
+   * True while a submitted prompt waits for its turn. Claude Code starts a plugin's queued prompt
+   * only once the mod's open `fetch` or `run` returns, so the loop then holds no long call (#1446).
+   */
+  starting(): boolean;
   status(text: string | undefined): void;
   log(text: string): void;
 }
@@ -44,7 +49,10 @@ export interface AgentHost {
 export interface AgentTiming {
   /** Seconds the agent may hold one events request (the host aborts a call after 30 s). */
   waitSeconds: number;
-  /** An events request that comes back sooner than this with nothing waits out the rest. */
+  /**
+   * An events request that comes back sooner than this with nothing waits out the rest; while a
+   * prompt waits for its turn, requests don't wait and this is the time between them.
+   */
   minCycleMs: number;
   /** First retry delay after an error, doubled each time up to `maxBackoffMs`. */
   backoffMs: number;
@@ -231,7 +239,8 @@ export class AgentLoop {
       this.greeted = me;
     }
     const started = await this.host.now();
-    const r = await this.host.fetch("GET", `${path(me)}/events?wait=${this.t.waitSeconds}`);
+    const wait = this.host.starting() ? 0 : this.t.waitSeconds;
+    const r = await this.host.fetch("GET", `${path(me)}/events?wait=${wait}`);
     if (!(await this.ok(r))) return;
     const events = parse<{ events?: Event[] }>(r.text)?.events ?? [];
     let handed = 0;

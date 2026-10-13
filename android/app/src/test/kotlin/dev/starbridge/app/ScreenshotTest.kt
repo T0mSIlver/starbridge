@@ -100,7 +100,7 @@ class ScreenshotTest(private val dark: Boolean) {
     private val decisionActions = DecisionActions({ _, _, _ -> }, {})
     private val deviceActions = DeviceActions({}, {}, {}, {}, {})
     private val settingsActions = SettingsActions({}, {}, {}, {}, {}, {})
-    private val setupActions = SetupActions({ "" }, { _, _ -> }, {}, {}, {}, {}, {}, {}, {}, {})
+    private val setupActions = SetupActions({ "" }, { "" }, { _, _ -> }, {}, {}, {}, {}, {}, {}, {}, {})
 
     private fun capture(name: String, before: () -> Unit = {}, content: @Composable () -> Unit) {
         compose.setContent {
@@ -371,6 +371,7 @@ class ScreenshotTest(private val dark: Boolean) {
     @Test fun addDevice() = capture("add-device") { Phone(null, 0) { AddDeviceScreen(Approval.Idle, deviceActions) } }
 
     @Test fun addDeviceJoined() = capture("add-device-joined") { Phone(null, 0) { AddDeviceScreen(Approval.Done("Chrome on Mac"), deviceActions) } }
+    @Test fun addDeviceMachineJoined() = capture("add-device-machine-joined") { Phone(null, 0) { AddDeviceScreen(Approval.Done("CI runner on the Mac", check = "4KX7-91QM-ZD3P-8WHT"), deviceActions) } }
 
     @Test fun setupRecover() = capture("setup-recover", before = {
         compose.onNodeWithText("Use the recovery key").performClick()
@@ -386,6 +387,10 @@ class ScreenshotTest(private val dark: Boolean) {
     @Test fun updateRequiredRelease() = capture("update-required-release") { Phone(null, 0) { UpdateRequired("1.2.0", "1.0.3", Installer.Other, update = {}) } }
 
     @Test fun setupSignIn() = capture("setup-sign-in") { Phone(null, 0) { SetupScreen(Phase.SignedOut, "https://starbridge.run", false, setupActions, {}) } }
+
+    @Test fun setupSignInOthers() = capture("setup-sign-in-others", before = { compose.onNodeWithText("Other ways to sign in").performClick() }) {
+        Phone(null, 0) { SetupScreen(Phase.SignedOut, "https://starbridge.run", false, setupActions, {}) }
+    }
 
     @Test fun setupFirstDevice() = capture("setup-first-device") { Phone(null, 0) { SetupScreen(Phase.NoDevice(accountExists = false), "https://starbridge.run", false, setupActions, {}) } }
 

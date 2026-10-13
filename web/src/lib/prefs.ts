@@ -22,6 +22,11 @@ export type Prefs = {
   sound: boolean;
   /** The owner turned this browser's notifications off (#943): no banner offers them again. */
   pushOff: boolean;
+  /**
+   * This browser held a subscription the owner turned on (#1363): one the browser dropped since,
+   * as Safari does, comes back at the next boot without asking.
+   */
+  pushOn: boolean;
   /** The desktop app notifies (#943); off, its window and menu bar light still show what waits. */
   desktopNotify: boolean;
 };
@@ -38,6 +43,7 @@ const DEFAULTS: Prefs = {
   asideWidth: null,
   sound: false,
   pushOff: false,
+  pushOn: false,
   desktopNotify: true,
 };
 

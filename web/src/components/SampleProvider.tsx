@@ -74,6 +74,7 @@ export function SampleProvider({
       setQuotaSettings,
       answerPrompt: noop,
       loadPromptLog: noop,
+      loadImages: noop,
       stopWaiting: noop,
       deviceName: (id) => id,
     };

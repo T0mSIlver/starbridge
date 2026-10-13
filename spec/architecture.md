@@ -8,7 +8,7 @@ agent sessions --CLI--> starbridge agent (one per machine) --HTTPS--> server <--
 
 | Path | What |
 |---|---|
-| `packages/protocol` | zod schemas, signing and sealing on libsodium, quota pace and alerts, JSON test vectors the Kotlin and Swift ports also pass |
+| `packages/protocol` | zod schemas, signing and sealing on libsodium, quota pace and alerts, JSON test vectors the Kotlin and Swift ports also pass, but for pace.json: only the local agent computes pace and alerts, so neither port has them (#1147) |
 | `server` | Hono on Bun with `bun:sqlite`, one Docker image; `RELAY_MODE` also makes it the push relay |
 | `cli` | the `starbridge` command and `starbridge agent` |
 | `plugin`, `mod` | Claude Code's two plugins: `starbridge` (skill and hooks) and `starbridge-mod`, split so that builds refusing mods keep the rest. `mod/pi` and `mod/opencode` hold the Pi extension and opencode plugin |

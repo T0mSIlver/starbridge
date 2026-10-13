@@ -113,6 +113,10 @@ export const DEFAULT_LIMITS = {
    * the load test (#619).
    */
   githubCallbacks: [60, MINUTE] as RateWindow,
+  /** Apple sign-ins started or finished per address, as GitHub's. */
+  appleSignIns: [60, MINUTE] as RateWindow,
+  /** The apps' code trades per address, either provider's, counted before the body is read. */
+  appSessions: [60, MINUTE] as RateWindow,
   /**
    * New accounts per address, an IPv6 client counting as its /64. Each GitHub account makes at
    * most one, but a script with many GitHub accounts behind one address could fill the server's

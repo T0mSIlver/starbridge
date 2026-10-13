@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108">
+  <title>Starbridge</title>
+  <!-- The mark (DESIGN.md, "The mark"), the source of every icon: `node web/scripts/icons.ts`
+       redraws them all from this file. The canvas is Android's adaptive icon grid: 108 units, the
+       central 72 visible, the circle of radius 33 around 54,54 safe in every mask. Keep the ids;
+       the arch may use M, L, H, V, A and Z, in absolute coordinates. -->
+  <rect id="ground" width="108" height="108" fill="#0c0c0c"/>
+  <path id="arch" fill="#f1f1f1" d="M29.25,72.75 V58.5 A24.75,24.75 0 0 1 78.75,58.5 V72.75 A1.5,1.5 0 0 1 77.25,74.25 H71.25 A1.5,1.5 0 0 1 69.75,72.75 V58.5 A9.25,9.25 0 0 0 51.25,58.5 V72.75 A1.5,1.5 0 0 1 49.75,74.25 H30.75 A1.5,1.5 0 0 1 29.25,72.75 Z"/>
+  <circle id="dot" fill="#f5a83b" cx="60.5" cy="68.75" r="5.5"/>
+</svg>

@@ -43,7 +43,7 @@ import {
   probe,
   probeSet,
 } from "./codexbar";
-import { refreshFiles } from "./harnesses";
+import { installPiPackage, PI_PACKAGE, piPackage, refreshFiles } from "./harnesses";
 import { ours } from "./marker";
 import { pathStep, recordSelf } from "./path";
 import {
@@ -103,6 +103,16 @@ export async function refresh(sys: Sys): Promise<string[]> {
   const removed = removedAgents(sys.ctx);
   for (const id of AGENT_IDS) {
     if (removed.includes(id) || !found(sys, id)) continue;
+    // The Pi package is pinned to a release tag, so an installed one at another tag moves (#1417).
+    if (id === "pi" && piPackage(sys) !== undefined && piPackage(sys) !== PI_PACKAGE) {
+      try {
+        await installPiPackage(sys);
+        done.push(`Updated the Pi package to v${VERSION}.`);
+      } catch (e) {
+        done.push(`Could not update the Pi package to v${VERSION}: ${(e as Error).message}`);
+      }
+      continue;
+    }
     // Codex installed before its plugin (#949), or with an older one, gets it here.
     const stale = id === "codex" && ["missing", "outdated"].includes(codexPlugin(sys));
     if (!stale && (await installed(sys, id))) continue;

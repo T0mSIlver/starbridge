@@ -6,9 +6,9 @@ import java.security.MessageDigest
 import java.security.SecureRandom
 
 /**
- * GitHub sign-in for the app, with PKCE (RFC 7636, PROTOCOL.md "Auth"). GitHub binds its code to
- * the challenge, so whoever catches the redirect, trading the code for a session needs the
- * verifier, which never leaves this phone.
+ * GitHub or Apple sign-in for the app, with PKCE (RFC 7636, PROTOCOL.md "Auth"). GitHub binds its
+ * code to the challenge, and the server binds Apple's, so whoever catches the redirect, trading the
+ * code for a session needs the verifier, which never leaves this phone.
  */
 object SignIn {
     /** 32 random bytes, base64url without padding: 43 characters. */
@@ -16,7 +16,9 @@ object SignIn {
 
     fun challenge(verifier: String): String = toB64(MessageDigest.getInstance("SHA-256").digest(verifier.toByteArray(Charsets.US_ASCII)))
 
-    fun url(server: String, verifier: String): String = "$server/v1/auth/github?app=1&challenge=${challenge(verifier)}"
+    /** Where the sign-in starts: `github`, or `apple` for Apple's web sign-in (#1411). */
+    fun url(server: String, verifier: String, provider: String = "github"): String =
+        "$server/v1/auth/$provider?app=1&challenge=${challenge(verifier)}"
 
     /** What ends a sign-in. */
     sealed interface Redirect {

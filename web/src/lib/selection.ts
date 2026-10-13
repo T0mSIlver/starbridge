@@ -24,3 +24,18 @@ export function afterAnswer(openIds: string[], id: string): string | undefined {
   if (at < 0) return id;
   return openIds[at + 1] ?? openIds[at - 1];
 }
+
+/**
+ * Under 1100 px, the item that opens in place of `id` once it is answered: with a mouse, the one
+ * the wide layout would select; on a touch screen none, so the list comes back, since a tap
+ * meant for the answered card could land on the next one's buttons (Tom, 2026-10-12, #1432).
+ */
+export function afterAnswerNarrow(
+  openIds: string[],
+  id: string,
+  fine: boolean,
+): string | undefined {
+  if (!fine) return undefined;
+  const next = afterAnswer(openIds, id);
+  return next === id ? undefined : next;
+}
