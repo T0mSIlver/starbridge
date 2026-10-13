@@ -1373,9 +1373,21 @@ export function takeAnswer(
  * `waiting` on a decision whose answer came but has not reached the agent: the agent needs it
  * now, so it gets it at once, marked printed, rather than after its turn (#1484).
  */
-export function takeUnseen(store: Ctx["store"], id: string) {
-  const a = store.state().answers[id];
-  return a && !a.seen ? takeAnswer(store, id) : undefined;
+export function takeUnseen(
+  store: Ctx["store"],
+  id: string,
+): { answer: Answer; question?: string } | undefined {
+  let taken: { answer: Answer; question?: string } | undefined;
+  // Checked and marked under one lock, so two `waiting`s, or one and the mod's confirm, never
+  // both hand it over.
+  store.updateState((st) => {
+    const a = st.answers[id];
+    if (!a || a.seen || !deliverable(st, id)) return;
+    a.seen = true;
+    const question = st.asked[id]?.question;
+    taken = { answer: a.answer, ...(question !== undefined ? { question } : {}) };
+  });
+  return taken;
 }
 
 /**

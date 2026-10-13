@@ -30,7 +30,7 @@ export interface Host {
    * and the line stays unconfirmed for a later try. `waiting`: the agent marked the decision
    * waiting, so it needs the answer now (#1484).
    */
-  submit(text: string, waiting: boolean): unknown;
+  submit(text: string, waiting: boolean, ack: string): unknown;
   /** True while a submitted prompt waits for its turn: `AgentHost.starting`. */
   starting(): boolean;
   status(text: string | undefined): void;
@@ -189,9 +189,34 @@ export class Poller {
       await this.host.sleep(this.t.checkMs);
       return;
     }
+    if ((await this.answers(me, [])) === undefined) return;
     // A line the host held back for the turn's end is read again at the next check (#1484).
-    if ((await this.answers(me, [])) !== undefined && this.held === 0)
-      this.seen = { session: me, mtime, at: now };
+    if (this.held === 0) this.seen = { session: me, mtime, at: now };
+    else await this.host.sleep(this.t.checkMs);
+  }
+
+  /**
+   * Confirms the lines among `acks` that the CLI still hands this session, and returns those: a
+   * line a `wait` or `waiting` printed meanwhile is not handed over again (#1484).
+   */
+  async claim(acks: string[]): Promise<string[]> {
+    const me = await this.host.sessionId();
+    const base = [await this.cli(), "answers", "--session", me];
+    const timeoutMs = (this.t.waitSeconds + 30) * 1000;
+    const r = await this.host.run(base, timeoutMs);
+    if (r.exitCode !== 0) return [];
+    const pending = new Set<string>();
+    for (const text of r.stdout.split("\n")) {
+      try {
+        const l = JSON.parse(text) as { decisionId?: unknown; ack?: unknown };
+        const ack = typeof l.ack === "string" ? l.ack : l.decisionId;
+        if (typeof ack === "string") pending.add(ack);
+      } catch {}
+    }
+    const mine = acks.filter((a) => pending.has(a));
+    if (mine.length === 0) return [];
+    const ack = await this.host.run([...base, ...mine.flatMap((a) => ["--ack", a])], timeoutMs);
+    return ack.exitCode === 0 ? mine : [];
   }
 
   /**
@@ -232,7 +257,7 @@ export class Poller {
         continue;
       }
       if (!this.unconfirmed.has(ack)) {
-        if ((await this.host.submit(line, parsed.waiting === true)) === false) {
+        if ((await this.host.submit(line, parsed.waiting === true, ack)) === false) {
           held++;
           continue;
         }

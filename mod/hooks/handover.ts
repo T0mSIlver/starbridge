@@ -9,21 +9,24 @@
  */
 export class Handover {
   private running = false;
-  /** Lines for the main agent's next tool call. */
-  private readonly next = new Set<string>();
-  /** Lines handed over in a tool result that the loop has not confirmed yet. */
+  /** Lines for the main agent's next tool call, by their line, with what confirms each. */
+  private readonly next = new Map<string, string>();
+  /**
+   * Lines a tool result carried, confirmed then: a loop that read one before that, and submits it
+   * now, finds it here and submits nothing.
+   */
   private readonly handed = new Set<string>();
 
   /**
    * The loops' submit. Submits `text` with `enter` while no turn runs. During one, returns false,
-   * so the line stays unconfirmed and comes back in the next poll, and keeps a `waiting` line for
-   * the next tool call. A line a tool result already carried returns true without a second submit,
-   * and the loop confirms it.
+   * so the line stays unconfirmed and comes back in the next poll, and keeps a `waiting` line, and
+   * the `ack` that confirms it, for the next tool call. A line a tool result already carried
+   * returns true without a second submit.
    */
-  submit(text: string, waiting: boolean, enter: (text: string) => void): boolean {
+  submit(text: string, ack: string, waiting: boolean, enter: (text: string) => void): boolean {
     if (this.handed.delete(text)) return true;
     if (this.running) {
-      if (waiting) this.next.add(text);
+      if (waiting) this.next.set(text, ack);
       return false;
     }
     enter(text);
@@ -35,12 +38,19 @@ export class Handover {
     this.running = true;
   }
 
-  /** The lines a main-agent tool result carries; they count as handed over. */
-  take(): string[] {
+  /**
+   * The lines a main-agent tool result carries. `claim` confirms them first and returns the acks
+   * still due: a line a `wait` or `waiting` printed meanwhile goes no further, and one confirmed
+   * here is not handed over again after a reload or a restart.
+   */
+  async take(claim: (acks: string[]) => Promise<string[]>): Promise<string[]> {
+    if (this.next.size === 0) return [];
     const lines = [...this.next];
     this.next.clear();
-    for (const line of lines) this.handed.add(line);
-    return lines;
+    const due = new Set(await claim(lines.map(([, ack]) => ack)));
+    const out = lines.filter(([, ack]) => due.has(ack)).map(([line]) => line);
+    for (const line of out) this.handed.add(line);
+    return out;
   }
 
   /**

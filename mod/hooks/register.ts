@@ -79,8 +79,8 @@ export const register: Register = (on) => {
     };
     const log = (text: string) => $.ui.log(text, { to: "debug" });
     const status = (text: string | undefined) => $.ui.status(text);
-    const submit = (text: string, waiting: boolean) =>
-      handover.submit(text, waiting, (line) => track($.prompt.submit({ text: line })));
+    const submit = (text: string, waiting: boolean, ack: string) =>
+      handover.submit(text, ack, waiting, (line) => track($.prompt.submit({ text: line })));
     const starting = () => waiting > 0;
     const sessionId = () => $.session.id();
     const now = () => $.clock.now();
@@ -150,7 +150,7 @@ export const register: Register = (on) => {
   on("tool.call", async ($, e, next) => {
     const r = await next(e);
     if (e.agentId !== undefined || r.deny !== undefined) return r;
-    const lines = handover.take();
+    const lines = await handover.take((acks) => loop?.claim(acks) ?? Promise.resolve([]));
     if (lines.length === 0) return r;
     $.ui.log(`starbridge: handed ${lines.length} answer(s) with the ${e.tool} result`, {
       to: "debug",
