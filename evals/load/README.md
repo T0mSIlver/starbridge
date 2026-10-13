@@ -20,7 +20,8 @@ evals/load/stack.sh down                       # stop and delete the volumes
 
 On a machine without Bun, `evals/load/stack.sh fake` runs the fakes in a container and
 `evals/load/stack.sh setup --users 3000` runs `setup.ts` in one (it still needs
-`pnpm install --filter @starbridge/protocol` in the repository).
+`pnpm install --filter @starbridge/protocol` in the repository). `LOAD_FAKE=stack` puts the fakes
+on the stack's network, for a host whose firewall keeps containers off its own ports.
 
 `--host` is the host's address on Docker's default bridge
 (`docker network inspect bridge -f '{{(index .IPAM.Config 0).Gateway}}'`). Containers share the
