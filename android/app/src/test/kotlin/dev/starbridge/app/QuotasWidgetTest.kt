@@ -12,6 +12,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.test.assertIsNotSelected
+import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
@@ -124,6 +126,21 @@ class QuotasWidgetTest {
         assertEquals(null, picked)
         compose.onNodeWithText("Weekly", substring = false).performClick()
         assertEquals(Choice(claude, listOf("Opus", "Weekly")), picked)
+    }
+
+    @Test fun aTapUnticksTheRowTappedFromTheTicksShown() {
+        // #1465: ticks were counted from none, so a tap on a ticked row unticked the other one.
+        var picked: Choice? = null
+        val chosen = Choice(claude, listOf("Weekly", "Opus"))
+        compose.setContent {
+            StarbridgeTheme { QuotaPicker(pickerPlans(windows, QuotaSettings(), now, true, chosen), wide = true, chosen = chosen, signedIn = true) { picked = it } }
+        }
+        compose.onNodeWithText("Opus").performClick()
+        compose.onNodeWithText("Opus").assertIsNotSelected()
+        compose.onNodeWithText("Weekly", substring = false).assertIsSelected()
+        assertEquals(null, picked)
+        compose.onNodeWithText("5-hour", substring = false).performClick()
+        assertEquals(Choice(claude, listOf("Weekly", "5-hour")), picked)
     }
 
     @Test fun aWindowThatRunsOutSaysWhenInWordsThatShortenToFit() {
