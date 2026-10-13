@@ -63,7 +63,12 @@ test("--list names the releases the box holds, newest first", () => {
   box(c2, [c1, c2, c3], [c1, c2, c3]);
   const r = rollback(["--list"]);
   expect(r.status).toBe(0);
-  expect(r.stdout.trim().split("\n").map((l) => l.split(" ")[0])).toEqual([c3, c2, c1].map((c) => c.slice(0, 7)));
+  expect(
+    r.stdout
+      .trim()
+      .split("\n")
+      .map((l) => l.split(" ")[0]),
+  ).toEqual([c3, c2, c1].map((c) => c.slice(0, 7)));
   expect(r.stdout).toContain("release 2 (running)");
 });
 
