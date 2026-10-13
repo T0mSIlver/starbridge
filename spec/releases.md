@@ -143,9 +143,9 @@
   reuses the previous commit's under its own tag, and the deployed commit, not the built one, is
   what `/healthz` names. The box pulls them rather than building, so staging, prod and a failover
   host run the same build, and the box keeps its CPU for users. It keeps the newest 5 releases'
-  images for a rollback. Caddy's and the demo server's images are still built on the box: Caddy's by
-  the hash of its Dockerfile, and the demo's restarts only when its code changed, which a new image
-  per commit would break. The deploy fails unless the live server reports that commit or a later one
+  images for a rollback. Caddy's image is still built on the box, by the hash of its Dockerfile, and
+  the demo server's on sb-staging (`spec/hosted.md`), where it restarts only when its code changed,
+  which a new image per commit would break. The deploy fails unless the live server reports that commit or a later one
   (`x-starbridge-revision`). That header, and `starbridge-deploy`'s argument, are refused unless
   they are 40 lowercase hex characters (#467), since the workflow puts the revision in an API path.
   Then sb-oracle, the outside check's VM, runs one round trip on its test account (#1522): a
