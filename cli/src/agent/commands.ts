@@ -180,7 +180,8 @@ export async function answersVia(
 ): Promise<number> {
   const path = `/v1/sessions/${encodeURIComponent(session)}`;
   if (opts.ack) {
-    await agent.call("POST", `${path}/ack`, { acks: opts.ack });
+    const r = await agent.call<{ acked?: string[] }>("POST", `${path}/ack`, { acks: opts.ack });
+    ctx.out(JSON.stringify({ acked: r.acked ?? [] }));
     return 0;
   }
   const wait = opts.wait === undefined ? 0 : waitSeconds(opts.wait);

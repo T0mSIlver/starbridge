@@ -216,7 +216,14 @@ export class Poller {
     const mine = acks.filter((a) => pending.has(a));
     if (mine.length === 0) return [];
     const ack = await this.host.run([...base, ...mine.flatMap((a) => ["--ack", a])], timeoutMs);
-    return ack.exitCode === 0 ? mine : [];
+    if (ack.exitCode !== 0) return [];
+    // What it confirmed now: not a line a `wait` or `waiting` took since the read. A CLI older
+    // than that prints nothing.
+    try {
+      const acked = (JSON.parse(ack.stdout) as { acked?: unknown }).acked;
+      if (Array.isArray(acked)) return acked.filter((a): a is string => typeof a === "string");
+    } catch {}
+    return mine;
   }
 
   /**

@@ -210,8 +210,9 @@ test("several CLI clients at once: ask, wait, answers and quota push all go thro
     waiting: false,
   });
   expect(await run(["answers", "--session", "s2", "--ack", ids[2] as string], mod)).toBe(0);
+  expect(JSON.parse(mod.lines[1] as string)).toEqual({ acked: [ids[2]] });
   expect(await run(["answers", "--session", "s2"], mod)).toBe(0);
-  expect(mod.lines).toHaveLength(1);
+  expect(mod.lines).toHaveLength(2);
 
   const q = client(socket);
   expect(await run(["quota", "push", "--once", "--provider", "claude"], q)).toBe(0);

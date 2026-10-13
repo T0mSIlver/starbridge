@@ -194,8 +194,12 @@ export class Decisions implements Feature {
     );
   }
 
-  ack(id: string, tokens: string[]) {
-    this.ctx.store.updateState((st) => ackLines(st, id, tokens));
+  ack(id: string, tokens: string[]): string[] {
+    let acked: string[] = [];
+    this.ctx.store.updateState((st) => {
+      acked = ackLines(st, id, tokens);
+    });
+    return acked;
   }
 
   status(into: Status) {

@@ -229,7 +229,10 @@ export class AgentLoop {
     const mine = acks.filter((a) => pending.has(a));
     if (mine.length === 0) return [];
     const ack = await this.host.fetch("POST", `${path(me)}/ack`, { acks: mine });
-    return ack.status >= 200 && ack.status < 300 ? mine : [];
+    if (ack.status < 200 || ack.status >= 300) return [];
+    // What it confirmed now: not a line a `wait` or `waiting` took since the read. An agent older
+    // than that names none.
+    return parse<{ acked?: string[] }>(ack.text)?.acked ?? mine;
   }
 
   /** Tells the agent the session ended, so its session-scoped state goes. */

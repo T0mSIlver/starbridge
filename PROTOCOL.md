@@ -941,7 +941,7 @@ for an unknown route or decision, 502 when the server refused or failed (`detail
 | `POST /sessions/:id/hello` | `{pid?, cwd?, title?, replaces?}`: a session starts → `{version}`; `replaces` names the id it had before a `/clear`, which the agent no longer counts as having a mod (#537) |
 | `POST /sessions/:id/bye` | the session ended; its session-scoped state goes |
 | `GET /sessions/:id/events?wait=<s>` | `{events: [{type, ack, line, decisionId?, waiting?}]}`: what the session has not confirmed, held up to `wait` while there is nothing; `waiting` is true for an answer to a decision marked waiting (#1484) |
-| `POST /sessions/:id/ack` | `{acks}`: confirm events by their `ack`; others' tokens do nothing |
+| `POST /sessions/:id/ack` | `{acks}` → `{acked}`: confirm events by their `ack`; others' tokens do nothing; `acked` names those confirmed now, not ones a `wait` or `waiting` took first (#1484) |
 | `POST /permissions` | `{hook, agent, source: {project, session, sessionTitle?, links?}, waitMs, handOver?}`: post a permission prompt from the hook's input → `{id}`; with `handOver` (Codex), `{present: true}` and nothing posted while presence reads the owner at this machine; 403 `disabled` until `starbridge config permissions on` |
 | `POST /permissions/:id/wait` | `{wait, handOver?}`: `{output}` once an accepted answer is in, the hook's stdout, handed out once; `{settled}` when the prompt ended another way, `keyboard` with `handOver` once the owner sits at this machine; `{}` when `wait` passed; a hook that hangs up mid-hold and holds no more within 5 s is gone, and the prompt settles as `keyboard` |
 | `POST /permissions/:id/settle` | `{outcome: "keyboard" \| "timeout"}` → `{settled}`: the hook's wait ended without an answer |

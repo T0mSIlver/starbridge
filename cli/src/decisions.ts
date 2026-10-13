@@ -1537,12 +1537,20 @@ export function sessionLines(st: State, session: string): SessionLine[] {
   return lines;
 }
 
-/** Confirms lines session `session` submitted; tokens for other sessions' decisions do nothing. */
-export function ackLines(st: State, session: string, tokens: string[]) {
+/**
+ * Confirms lines session `session` submitted; tokens for other sessions' decisions do nothing.
+ * Returns the tokens it confirmed now: not one a `wait` or `waiting` printed first (#1484).
+ */
+export function ackLines(st: State, session: string, tokens: string[]): string[] {
+  const acked: string[] = [];
   for (const token of tokens) {
     const a = st.answers[token];
-    if (a && !a.seen && st.asked[token]?.session === session) a.seen = true;
+    if (a && !a.seen && st.asked[token]?.session === session) {
+      a.seen = true;
+      acked.push(token);
+    }
   }
+  return acked;
 }
 
 /** What `answers` prints for each line, as the mod reads it. */
@@ -1568,8 +1576,12 @@ export async function answers(
   if (!target) throw new UsageError("answers needs --session");
   if (opts.ack) {
     if (opts.wait !== undefined) throw new UsageError("--ack takes no --wait");
-    const acked = opts.ack;
-    ctx.store.updateState((st) => ackLines(st, target, acked));
+    const tokens = opts.ack;
+    let acked: string[] = [];
+    ctx.store.updateState((st) => {
+      acked = ackLines(st, target, tokens);
+    });
+    ctx.out(JSON.stringify({ acked }));
     return 0;
   }
   const seconds = opts.wait === undefined ? undefined : waitSeconds(opts.wait);

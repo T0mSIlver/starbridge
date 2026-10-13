@@ -1384,22 +1384,27 @@ test("answers hands each session only its own answers, until it confirms them", 
   expect(ctx.lines.map((l) => JSON.parse(l))).toEqual([handed]);
   // Unconfirmed, it is handed over again; another session cannot confirm it.
   expect(await run(["answers", "--session", "s2", "--ack", mine], ctx)).toBe(0);
+  expect(JSON.parse(ctx.lines[1] as string)).toEqual({ acked: [] });
   expect(await run(["answers", "--session", "s1"], ctx)).toBe(0);
-  expect(JSON.parse(ctx.lines[1] as string)).toEqual(handed);
+  expect(JSON.parse(ctx.lines[2] as string)).toEqual(handed);
   expect(await run(["answers", "--session", "s1", "--ack", mine], ctx)).toBe(0);
+  expect(JSON.parse(ctx.lines[3] as string)).toEqual({ acked: [mine] });
+  // Confirmed: handed over no more, and a second confirm confirms nothing (#1484).
   expect(await run(["answers", "--session", "s1"], ctx)).toBe(0);
-  expect(ctx.lines).toHaveLength(2);
+  expect(await run(["answers", "--session", "s1", "--ack", mine], ctx)).toBe(0);
+  expect(ctx.lines.slice(4).map((l) => JSON.parse(l))).toEqual([{ acked: [] }]);
 
   // s2's answer was stored by s1's poll; s2 takes it with no poll, only a read of the directory
   // to check the device still counts (#491).
   const polls = server.log.length;
+  ctx.lines.length = 0;
   expect(await run(["answers", "--session", "s2"], ctx)).toBe(0);
-  expect(JSON.parse(ctx.lines[2] as string).line).toBe(
+  expect(JSON.parse(ctx.lines[0] as string).line).toBe(
     `Answer to ${theirs} (Name the branch?): multi\nline`,
   );
   expect(server.log.slice(polls)).toEqual(["GET /directory"]);
   expect(await run(["answers", "--session", "s3"], ctx)).toBe(0);
-  expect(ctx.lines).toHaveLength(3);
+  expect(ctx.lines).toHaveLength(1);
 });
 
 test("answers exits 1 on a server error and keeps the cursor", async () => {
