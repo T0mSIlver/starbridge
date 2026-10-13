@@ -151,7 +151,9 @@
   the installers' folders. When the binary's folder is not on the PATH, setup offers to add it to
   the shell's startup file (`--yes` adds it), and its last lines say to open a new terminal or what to add, since
   install.sh's own hint scrolls away under setup. Windows gets the folder on the PATH from
-  install.ps1.
+  install.ps1. Uninstall, when it deletes the binary, takes that line and its marker comment out
+  of every shell's startup file while they are still as setup wrote them, and deletes a file left
+  empty (#1494).
 - **Files setup writes into other tools** (#474) start with one marker line, ``Written by
   starbridge <version>; `starbridge uninstall` removes it.``, in the file's comment syntax: the
   systemd unit, the launchd plist, the Codex rule, the opencode entry, the Antigravity plugin's
@@ -162,7 +164,9 @@
   installed (#538). An owner who
   deletes the line keeps the file. Setup and uninstall remove only the files they write, then a
   folder left empty: a file the owner put beside them, such as a skill's `references/`, stays,
-  and uninstall says so (#1324). `starbridge update` runs the new binary's `setup --refresh`,
+  and uninstall says so (#1324). A settings or hooks file that uninstall's edits leave holding
+  nothing, such as an allow list setup created, is deleted rather than left as `{}`: an empty file
+  and none mean the same to its tool (#1494). `starbridge update` runs the new binary's `setup --refresh`,
   which rewrites the marked files that differ and restarts the local agent; Homebrew and npm users
   run it after upgrading, and the local agent refreshes the skills and rule when it starts.
   The refresh moves every harness integration to the new version, the Pi package included: Pi

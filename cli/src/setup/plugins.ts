@@ -1,6 +1,7 @@
 /** Setup's Claude Code step: the Starbridge marketplace and its two plugins, at user scope. */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { withoutAllow, writeLeft } from "./remove";
 import { failure, run, type Sys, which } from "./sys";
 
 export const MARKETPLACE = "starbridge";
@@ -269,9 +270,8 @@ export function addAllowRules(sys: Sys): boolean {
 /** Removes ALLOW_RULES from user settings. False when none was there. */
 export function removeAllowRules(sys: Sys): boolean {
   const s = readSettings(sys);
-  const allow = allowList(s);
-  if (!s?.permissions || !allow.some((r) => ALLOW_RULES.includes(r))) return false;
-  s.permissions.allow = allow.filter((r) => !ALLOW_RULES.includes(r));
-  writeSettings(sys, s);
+  const left = s && withoutAllow(s, ALLOW_RULES);
+  if (!left) return false;
+  writeLeft(settingsPath(sys), left);
   return true;
 }

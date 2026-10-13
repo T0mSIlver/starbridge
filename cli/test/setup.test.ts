@@ -13,7 +13,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { delimiter, dirname, join, relative, resolve, sep } from "node:path";
+import { delimiter, dirname, join, posix, relative, resolve, sep } from "node:path";
 import { gzipSync } from "node:zlib";
 import { LiveServer } from "@starbridge/server/test-support";
 import { type Status, socketPath } from "../src/agent/api";
@@ -819,15 +819,28 @@ test("uninstall removes the service and plugins, asks the devices to revoke, kee
   const permission = JSON.parse(readFileSync(pps, "utf8")).permission;
   expect(permission.bash).toEqual({ "*": "ask" });
   expect(permission.skill).toEqual({ starbridge: "allow" });
+  // The PATH line setup added to a startup file goes with the binary (#1494).
+  const zshrc = join(m.home, ".zshrc");
+  writeFileSync(
+    zshrc,
+    'alias l=ls\n\n# Added by starbridge setup\nexport PATH="$HOME/.local/bin:$PATH"\n',
+  );
+  const binary = posix.join(m.home, ".local/bin/starbridge");
+  mkdirSync(dirname(binary), { recursive: true });
+  writeFileSync(binary, "");
   m.ctx.lines.length = 0;
-  expect(await uninstall(m.sys, {})).toBe(0);
+  expect(await uninstall(m.sys, { install: { kind: "binary", path: binary } })).toBe(0);
+  expect(readFileSync(zshrc, "utf8")).toBe("alias l=ls\n");
+  // In the separators of the machine's platform, which a Windows host's home does not use.
+  expect(m.ctx.lines).toContain(
+    `Removed the PATH line setup added to ${posix.join(m.home, ".zshrc")}.`,
+  );
   expect(existsSync(join(m.units, "starbridge-agent.service"))).toBe(false);
   expect(m.calls()).toContain("systemctl --user disable --now starbridge-agent.service");
   expect(m.calls()).toContain("claude plugin uninstall starbridge-mod@starbridge --scope user");
   expect(m.calls()).toContain("claude plugin marketplace remove starbridge");
-  expect(
-    JSON.parse(readFileSync(join(m.home, ".claude/settings.json"), "utf8")).permissions.allow,
-  ).toEqual([]);
+  // An allow list left empty goes, and a file left empty too: setup created it (#1494).
+  expect(JSON.parse(readFileSync(m.settings, "utf8")).permissions).toBeUndefined();
   expect(existsSync(join(m.home, ".codex/skills/starbridge"))).toBe(false);
   expect(existsSync(join(m.home, ".codex/rules/starbridge.rules"))).toBe(false);
   expect(m.calls()).toContain("codex plugin remove starbridge@starbridge-cli");
@@ -836,9 +849,8 @@ test("uninstall removes the service and plugins, asks the devices to revoke, kee
   expect(readdirSync(join(m.home, ".config/opencode")).sort()).toEqual(["plugins", "skills"]);
   expect(readdirSync(join(m.home, ".config/opencode/plugins"))).toEqual([]);
   expect(readdirSync(join(m.home, ".cursor/skills"))).toEqual([]);
-  expect(
-    JSON.parse(readFileSync(join(m.home, ".cursor/cli-config.json"), "utf8")).permissions.allow,
-  ).toEqual([]);
+  expect(existsSync(join(m.home, ".cursor/cli-config.json"))).toBe(false);
+  expect(existsSync(join(m.home, ".cursor/hooks.json"))).toBe(false);
   expect(JSON.parse(readFileSync(pps, "utf8"))).toEqual({
     permission: { bash: { "*": "ask" } },
     authorizerChain: ["judge"],

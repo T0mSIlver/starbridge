@@ -13,7 +13,7 @@ import rule from "../../../plugin/rules/cursor.md" with { type: "text" };
 import { CURSOR_HOLD_MS } from "../hook";
 import { type FileState, SKILL } from "./harnesses";
 import { marker, ours } from "./marker";
-import { removedLine, removeWritten } from "./remove";
+import { removedLine, removeWritten, withoutAllow, writeLeft } from "./remove";
 import { type Sys, which } from "./sys";
 
 type Home = Pick<Sys, "ctx" | "home">;
@@ -218,8 +218,10 @@ export function removeCursorFiles(sys: Home): string[] {
   const file = readHooks(sys);
   // Only a file that holds Starbridge's entries is written.
   if (file && existsSync(cursorHooksPath(sys)) && hasOurs(sys, file)) {
-    const next = withEntries(sys, file, {}, false);
-    writeFileSync(cursorHooksPath(sys), `${JSON.stringify(next, null, 2)}\n`);
+    const { version, hooks, ...rest } = withEntries(sys, file, {}, false);
+    // With no hooks left, the version setup adds holds nothing either.
+    const empty = Object.keys(hooks ?? {}).length === 0 && Object.keys(rest).length === 0;
+    writeLeft(cursorHooksPath(sys), empty ? {} : { version, hooks, ...rest });
     done.push(`Removed Starbridge's entries from ${cursorHooksPath(sys)}.`);
   }
   if (ours(readText(join(cursorScriptsDir(sys), "README.md")))) remove(cursorScriptsDir(sys));
@@ -282,11 +284,8 @@ export function addCursorAllow(sys: Home): boolean {
 /** Removes the rules setup adds; whether it removed any. */
 export function removeCursorAllow(sys: Home): boolean {
   const c = readConfig(sys);
-  const allow = c?.permissions?.allow;
-  if (!c?.permissions || !Array.isArray(allow)) return false;
-  const kept = allow.filter((r) => !CURSOR_ALLOW.includes(r as string));
-  if (kept.length === allow.length) return false;
-  c.permissions.allow = kept;
-  writeFileSync(cursorConfigPath(sys), `${JSON.stringify(c, null, 2)}\n`);
+  const left = c && withoutAllow(c, CURSOR_ALLOW);
+  if (!left) return false;
+  writeLeft(cursorConfigPath(sys), left);
   return true;
 }
