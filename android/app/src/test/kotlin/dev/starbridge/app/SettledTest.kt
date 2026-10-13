@@ -152,7 +152,7 @@ class SettledTest {
             put("cursor", "3")
         }
         store.refresh()
-        until { store.decisions.value.single().theirAnswer != null }
+        until { store.decisions.value.singleOrNull()?.theirAnswer != null }
         val won = store.decisions.value.single()
         assertEquals("No", won.theirAnswer)
         assertEquals("tablet", won.answeredOn)
