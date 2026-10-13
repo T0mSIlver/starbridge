@@ -74,6 +74,12 @@ enum Notify {
 
     static func header(_ source: Source) -> String { [source.machine, source.project].filter { !$0.isEmpty }.joined(separator: " · ") }
 
+    /** Where the owner answers a decision with `answerIn`: "the artifact" for a Claude one, as on Android and the web. */
+    static func place(_ page: DecisionLink) -> String {
+        let chip = linkChip(url: page.url, title: page.title)
+        return page.title ?? (chip.icon == .artifact ? "the artifact" : chip.label)
+    }
+
     /**
      * A question's notification: its words, then its buttons, as Android's: the page's link for one
      * answered on its page, else up to 3 options with the agent's default first, and Reply where a
@@ -83,7 +89,7 @@ enum Notify {
         let words = contextText(d.context).replacingOccurrences(of: "\n", with: " ")
         var actions: [NotificationAction] = []
         if let page = d.answerIn {
-            actions.append(NotificationAction(id: "page", title: "Answer in \(page.title ?? URL(string: page.url)?.host() ?? page.url)", foreground: true))
+            actions.append(NotificationAction(id: "page", title: "Answer in \(place(page))", foreground: true))
         } else {
             actions += d.ordered.prefix(3).map { NotificationAction(id: optionPrefix + $0, title: $0) }
             if d.options.isEmpty || d.replies == true {

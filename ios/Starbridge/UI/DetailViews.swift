@@ -31,11 +31,7 @@ struct DecisionDetail: View {
                     // Images over their options when there is one per option; else in rows (#536).
                     let picks = open && d.images.count >= 2 && d.images.count == d.body.options.count
                     if !d.images.isEmpty, !picks { ImageRows(images: d.images) { viewer = ViewerStart(index: $0) } }
-                    ForEach(d.body.links ?? [], id: \.url) { link in
-                        if let url = URL(string: link.url) {
-                            Link(link.title ?? link.url, destination: url).type(Tokens.Typography.small).underline()
-                        }
-                    }
+                    if let links = d.body.links, !links.isEmpty { LinkChips(links: links, project: d.body.source.project) }
                     if let until {
                         Text("Snoozed until \(Times.clock(until, Date()))").type(Tokens.Typography.small).foregroundStyle(Tokens.Colors.fg2.color)
                     }
@@ -98,7 +94,7 @@ private struct Answering: View {
             if let page = body.answerIn, let url = URL(string: page.url) {
                 // Answered on its page, never here; Done says the owner did (#539).
                 Link(destination: url) {
-                    Text("Answer in \(page.title ?? url.host() ?? page.url)")
+                    Text("Answer in \(Notify.place(page))")
                         .type(Tokens.Typography.action)
                         .lineLimit(1)
                         .frame(maxWidth: .infinity, minHeight: 48)
