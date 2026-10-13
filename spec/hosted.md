@@ -67,6 +67,20 @@
   overrides sit in `limits.json` beside the database, which the server reads every minute, so they
   survive restarts and deploys until unset. Retention periods are left out, since shortening one
   deletes data at the next sweep. A file that does not parse keeps the limits as they were.
+- **Service targets** (#1544). `/healthz` answers in 99.5% of each month's 5-minute slots; 99%
+  of the outside check's round trips pass (a card, its Web Push, the answer read back); 99% of
+  answers reach their machine within 5 s, the p99. A slot counts as down only when every vantage
+  that checked in it saw `/healthz` fail, so one checker's network spends no budget. The owner gets
+  a card when a target misses more than twice what it allows over a day, which spends 2 days of the
+  month's budget in one: fast enough to act on, slow enough that one failed round trip does not
+  page. The checks run from two VMs on another provider, sb-oracle and sb-staging, every 5 minutes,
+  and the round trip every 15.
+- **Status page** (#1544). `status.starbridge.run` is a static page on sb-staging, not the VPS, so
+  it stays up when starbridge.run is down. It shows each part's state, 30 days of daily bars and
+  the month against its target, and publishes booleans and numbers only, never a check's error
+  text, which can hold addresses. A Safari run on a Mac each night loads the landing page, the
+  docs and the app's sign-in screen, and registers the service worker, since Safari breaks in ways
+  the Firefox and Chromium checks do not see.
 - **Privacy and terms** (`/privacy`, `/terms`). Each claim follows the code: stored columns in
   `server/src/db.ts`, retention in `server/src/limits.ts`, logs and backups in `deploy/`. A change
   to what is stored changes the page, and the Play data-safety form. Contact is
