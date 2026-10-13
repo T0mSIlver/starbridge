@@ -314,7 +314,8 @@ function score(r: Rec, s: Scenario): Record<string, boolean | null> {
     })(),
     // #1488: the one way to need an answer now is `starbridge waiting` (or `ask --waiting`).
     steer: s.name === "mid-task"
-      ? all.some((c) => /starbridge\s+(ask\b[^\n]*--waiting\b|waiting\b)/.test(c)) &&
+      ? ((r.waiting ?? []).some((w) => (w as { state?: string }).state === "waiting") ||
+          all.some((c) => /starbridge\s+(ask\b[\s\S]*--waiting\b|waiting\b)/.test(c))) &&
         !all.some((c) => /starbridge\s+(ask\b[^\n]*--wait\b|wait\b)/.test(c)) &&
         !r.turns.some((t) => (t.background ?? []).length > 0 || (t.tools ?? []).includes("Monitor"))
       : null,
