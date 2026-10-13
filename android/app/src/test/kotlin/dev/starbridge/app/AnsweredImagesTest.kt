@@ -195,8 +195,11 @@ class AnsweredImagesTest {
         val dir = Files.createTempDirectory("starbridge").toFile()
         val disk = Disk(dir, identity)
         val bytes = byteArrayOf(1, 2, 3, 4)
-        disk.save(Saved("http://127.0.0.1:9", decisions = listOf(SavedDecision("m_box", text, images = listOf(toB64(bytes))))))
-        // A file no question names, as one past the 500 leaves behind.
+        // d_lost: an older app rewrote it without its file names; its file is still there.
+        val lost = text.replace("d_old", "d_lost")
+        disk.save(Saved("http://127.0.0.1:9", decisions = listOf(SavedDecision("m_box", text, images = listOf(toB64(bytes))), SavedDecision("m_box", lost))))
+        disk.putImage("d_lost.0", bytes)
+        // A file no kept question names, as one past the 500 leaves behind.
         disk.putImage("d_gone.0", bytes)
         val alerts = object : Alerts {
             override fun decision(decision: Decision, silent: Boolean) {}
@@ -207,12 +210,36 @@ class AnsweredImagesTest {
             override fun run(run: Run) {}
         }
         val store = ServerStore(disk, OkHttpClient(), sodium, envelopes, directories, Pairings(sodium), Joins(sodium), alerts, "Phone", "http://127.0.0.1:9", false, scope)
-        val kept = disk.load().first!!.decisions.single()
-        assertEquals(emptyList<String?>(), kept.images)
-        assertEquals(listOf("d_old.0"), kept.imageFiles)
+        val kept = disk.load().first!!.decisions
+        assertEquals(listOf(emptyList<String?>(), emptyList()), kept.map { it.images })
+        assertEquals(listOf(listOf("d_old.0"), listOf("d_lost.0")), kept.map { it.imageFiles })
         assertTrue(bytes.contentEquals(ImageFiles.read("d_old.0")))
         assertEquals(null, disk.image("d_gone.0"))
-        assertEquals(listOf("d_old.0"), store.decisions.value.single().images.map { it.file })
+        assertEquals(listOf("d_old.0", "d_lost.0"), store.decisions.value.sortedBy { it.id != "d_old" }.map { it.images.single().file })
+    }
+
+    // A state file that cannot be read is set aside, and may name every image: none goes (#1471).
+    @Test
+    fun noImageGoesWhileAStateFileIsSetAside() {
+        val identity = object : Vault {
+            override fun wrap(plain: ByteArray) = plain
+            override fun unwrap(wrapped: ByteArray) = wrapped
+        }
+        val dir = Files.createTempDirectory("starbridge").toFile()
+        val disk = Disk(dir, identity)
+        disk.save(Saved("http://127.0.0.1:9"))
+        disk.putImage("d_old.0", byteArrayOf(1))
+        java.io.File(dir, "secrets.bin").writeText("not json")
+        val alerts = object : Alerts {
+            override fun decision(decision: Decision, silent: Boolean) {}
+            override fun cancel(id: String) {}
+            override fun join(id: String, name: String) {}
+            override fun prompt(prompt: Prompt) {}
+            override fun cancelPrompt(prompt: Prompt) {}
+            override fun run(run: Run) {}
+        }
+        ServerStore(disk, OkHttpClient(), sodium, envelopes, directories, Pairings(sodium), Joins(sodium), alerts, "Phone", "http://127.0.0.1:9", false, scope)
+        assertTrue(disk.hasImage("d_old.0"))
     }
 
     private fun until(pred: () -> Boolean) {

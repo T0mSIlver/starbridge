@@ -264,9 +264,11 @@ class Disk(private val dir: File, private val vault: Vault) {
 
     fun image(name: String): ByteArray? = runCatching { vault.unwrap(File(File(dir, IMAGES), name).readBytes()) }.getOrNull()
 
-    /** Deletes the image files no kept question names. */
-    fun pruneImages(keep: Set<String>) {
-        File(dir, IMAGES).listFiles()?.forEach { if (it.name !in keep) it.delete() }
+    fun hasImage(name: String): Boolean = File(File(dir, IMAGES), name).isFile
+
+    /** Deletes the image files [keep] refuses, and any left half written. */
+    fun pruneImages(keep: (String) -> Boolean) {
+        File(dir, IMAGES).listFiles()?.forEach { if (it.name.endsWith(".tmp") || !keep(it.name)) it.delete() }
     }
 
     private companion object {

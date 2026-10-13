@@ -1075,20 +1075,33 @@ class ServerStore(
         d.copy(images = emptyList(), imageFiles = opened.mapIndexed { i, b64 -> b64?.let { disk.putImage("${d.body.id}.$i", fromB64(it)) } })
 
     /**
-     * Moves the images an older app kept inside `state.bin` into files of their own, once, and
-     * deletes the files no kept question names, such as those of questions past the 500 (#1471).
-     * A question whose files cannot be written keeps its images where they were.
+     * Moves the images an older app kept inside `state.bin` into files of their own, once (#1471).
+     * A question whose files cannot be written keeps its images where they were. A file's name is
+     * its question's id and the image's place, so a question an older app rewrote without
+     * [SavedDecision.imageFiles] finds its files again, and only a question no longer kept, such
+     * as one past the 500, loses its files. Nothing goes while a state file could not be read: the
+     * one set aside may name them.
      */
     private fun moveImagesToFiles() {
         val moved = saved.decisions.map { d ->
-            if (d.images.isEmpty()) d else runCatching { filed(d, d.images) }.getOrElse { d }
+            when {
+                d.images.isNotEmpty() -> runCatching { filed(d, d.images) }.getOrElse { d }
+                d.imagesPending -> {
+                    val found = d.body.images.orEmpty().indices.map { i -> "${d.body.id}.$i".takeIf { disk.hasImage(it) } }
+                    if (found.any { it != null }) d.copy(imageFiles = found) else d
+                }
+                else -> d
+            }
         }
         if (moved != saved.decisions) {
             val next = saved.copy(decisions = moved)
             // Written before anything else, so the next launch reads the small file.
             if (runCatching { disk.save(next) }.isSuccess) saved = next
         }
-        runCatching { disk.pruneImages(saved.decisions.flatMap { it.imageFiles.filterNotNull() }.toSet()) }
+        if (loaded.first != null && disk.unreadable.isEmpty()) {
+            val kept = saved.decisions.map { it.body.id }.toSet()
+            runCatching { disk.pruneImages { name -> name.substringBeforeLast('.') in kept } }
+        }
     }
 
     /** Questions whose images this run fetched or is fetching (#1382). */
