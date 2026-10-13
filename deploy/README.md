@@ -37,7 +37,7 @@ ghcr.io and rolls them out (`deploy/host/apply.sh`). The previous release stays 
 `deploy.yml` builds those images once per deployed commit, for amd64 and arm64, and pushes them as
 `ghcr.io/t0msilver/starbridge-server:<commit>` and `starbridge-web:<commit>`; the box never builds
 them. So only commits that `deploy.yml` deployed can be deployed again. The box keeps the newest 5
-releases' images. Caddy's and the demo server's images are still built on the box.
+releases' images. Caddy's image is still built on the box.
 
 ## Rollback
 
@@ -48,7 +48,7 @@ deploy/rollback.sh <commit>      # back to that one
 ```
 
 It shows both releases and asks, then deploys the older commit's whole tree with `deploy.sh`, so
-its compose file, Caddyfile and demo server come back too. A rollback past a release that migrated
+its compose file and Caddyfile come back too. A rollback past a release that migrated
 the database stops before anything changes (see Restore). The next merge to main deploys main's
 head again, so revert the bad commit first. Rolling back the apps, npm and Homebrew is a
 checklist in `spec/releases.md`.
@@ -66,7 +66,7 @@ image is tagged by a hash of that file and built only when no image has the tag.
 `https://staging.starbridge.run` runs on sb-staging, an Oracle ARM VM, from every deploy of
 main: the same images as prod, prod's compose file with `staging/compose.yaml` laid over it, and
 prod's Caddyfile under staging's host name with `X-Robots-Tag: noindex`. It has its own secrets
-and no Umami, backups or demo server. `deploy.yml`'s staging key runs only
+and no Umami or backups; the Play demo server runs beside it (below). `deploy.yml`'s staging key runs only
 `starbridge-staging-deploy <commit>` (`staging/deploy-rev.sh`), which fetches main over HTTPS,
 runs `staging/apply.sh`, then one round trip on staging's test account through the outside
 check's staging instance on the VM (`sb-check-now /var/lib/sb-check-staging`). Prod's deploy
@@ -160,11 +160,10 @@ and start `umami`.
 
 `https://demo.starbridge.run` lets Play reviewers try the app (`spec/hosted.md`): the server with
 `DEMO=1` and the demo program (`demo/`) in one container, Compose project `starbridge-demo`, on
-`127.0.0.1:8090`, with no volume, so each restart is a fresh account. Prod's Caddy serves it.
-Every prod deploy rebuilds it from the same checkout (`deploy/host/demo.sh`), and restarts it only
-when its image changed, so it never falls behind prod and a reviewer's account survives deploys
-that leave it alone. A failed demo deploy fails the deploy run, with prod already live.
-`deploy/demo/setup.sh` gives it its owner token from `~/.config/starbridge/secrets/demo-owner-token`,
-once or to change it; it never touches prod's project or data.
-`sudo docker compose -p starbridge-demo -f /opt/starbridge/deploy/demo/compose.yaml logs`
+sb-staging's `127.0.0.1:8090`, behind staging's Caddy (`demo/demo.caddy`), with no volume, so each
+restart is a fresh account. Each staging deploy whose round trip passed rebuilds it from that
+checkout (`deploy/host/demo.sh`), and restarts it only when its image changed; a failed demo
+deploy is printed but blocks nothing. `deploy/demo/setup.sh` gives it its owner token from
+`~/.config/starbridge/secrets/demo-owner-token`, and starts it. Logs:
+`ssh sb-staging sudo docker compose -p starbridge-demo -f /opt/starbridge-staging/deploy/demo/compose.yaml logs`
 shows each join it approved.

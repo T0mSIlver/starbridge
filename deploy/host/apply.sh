@@ -151,6 +151,11 @@ healthy http://127.0.0.1:3001/api/heartbeat umami 120
 # Cleanup last, and never a reason to fail a deploy that is already serving. Each build leaves
 # about 0.9 GB of cache; unpruned, a day of deploys left 27 GB of it on the 38 GB disk (#301).
 # The newest 3 GB keep the next build fast.
+# The demo server moved to sb-staging (#1557): the copy this box ran goes, with its owner token.
+old=$(docker ps -aq --filter label=com.docker.compose.project=starbridge-demo)
+[ -z "$old" ] || docker rm -f $old >/dev/null || true
+docker image rm starbridge-demo:latest >/dev/null 2>&1 || true
+rm -rf /etc/starbridge-demo
 docker image prune -f >/dev/null || true
 # The newest 5 releases' images stay, for a rollback that needs no download; Docker refuses to
 # remove the ones in use.
