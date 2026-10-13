@@ -12,7 +12,8 @@ install -m 644 host/starbridge-backup.service host/starbridge-backup.timer host/
   host/starbridge-docker-prune.service host/starbridge-docker-prune.timer /etc/systemd/system/
 systemctl daemon-reload
 # The offsite backup's tools, on a host set up before it (#1482).
-command -v age >/dev/null || DEBIAN_FRONTEND=noninteractive apt-get install -yq age zstd rsync
+command -v age >/dev/null && command -v zstd >/dev/null && command -v rsync >/dev/null ||
+  DEBIAN_FRONTEND=noninteractive apt-get install -yq age zstd rsync
 systemctl enable --now starbridge-backup.timer starbridge-umami-trim.timer starbridge-docker-prune.timer
 install -m 755 host/deploy-rev.sh /usr/local/sbin/starbridge-deploy
 
