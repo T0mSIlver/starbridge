@@ -48,10 +48,10 @@
   Android app uploads its signed App Bundle to Play's internal testing track (`internal.yml`), which
   only the owner joins; its versionCode, 2 000 000 000 plus the run number, sits above every
   release's, since consecutive rcs leave no code between them. So Play serves the owner main's
-  builds and never an rc while the owner is on that track; leaving it means reinstalling from Alpha. The
-  iPhone app follows to TestFlight's internal testers once Apple's export compliance code arrives
-  (`IOS_MAIN_TESTFLIGHT`); the desktop app stays on rcs. The dev box's CLI, agent, plugin and mod
-  follow the server its machine is paired with.
+  builds and never an rc while the owner is on that track; leaving it means reinstalling from Alpha.
+  The iPhone app follows to TestFlight's internal testers once Apple's export compliance code
+  arrives (`IOS_MAIN_TESTFLIGHT`); the desktop app stays on rcs. The dev box's CLI, agent, plugin
+  and mod follow the server its machine is paired with.
 - **Play's Alpha track from CI** (#1024). Testers fell behind while each App Bundle went to Play
   Console by hand. Once the release is published, the `play` job uploads the tag's AAB to Alpha
   through the Play Developer API (`cli/scripts/play.ts`), status `completed`, with the GitHub
