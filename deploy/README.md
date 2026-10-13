@@ -58,6 +58,24 @@ through its admin API on `127.0.0.1:2019`. Caddy's container is recreated, which
 open connection, only when its definition in `compose.yaml` or `caddy.Dockerfile` changes: its
 image is tagged by a hash of that file and built only when no image has the tag.
 
+## Staging
+
+`https://staging.starbridge.run` runs on sb-staging, an Oracle ARM VM, from every deploy of
+main: the same images as prod, prod's compose file with `staging/compose.yaml` laid over it, and
+prod's Caddyfile under staging's host name with `X-Robots-Tag: noindex`. It has its own secrets
+and no Umami, backups or demo server. `deploy.yml`'s staging key runs only
+`starbridge-staging-deploy <commit>` (`staging/deploy-rev.sh`), which fetches main over HTTPS,
+runs `staging/apply.sh`, then one round trip on staging's test account through the outside
+check's staging instance on the VM (`sb-check-now /var/lib/sb-check-staging`). Prod's deploy
+waits for that job and runs only when it passed.
+
+| What | How |
+|---|---|
+| Set up | The VM comes with Docker, git, curl and its firewall from the homelab. `deploy/staging/setup.sh` installs the deploy command and the Actions key; `deploy/staging/push-secrets.sh` copies the secrets in `~/.config/starbridge/secrets/staging` (`github-oauth-client-id`, `github-oauth-client-secret` of the "Starbridge staging" OAuth app, `vapid-public-key`, `vapid-private-key`, `signup-github-ids`) |
+| Who can sign in | Only the GitHub ids in `signup-github-ids` can make an account (`SIGNUP_GITHUB_IDS`) |
+| Data | Synthetic only: `deploy/staging/seed.sh 200` makes 200 users through the real sign-in and pairing flows (`evals/load/setup.ts`), with staging's server stopped meanwhile. Nothing is backed up: the seed is the backup |
+| Compose project | `sudo docker compose -p starbridge-staging -f /opt/starbridge-staging/deploy/compose.yaml -f /opt/starbridge-staging/deploy/staging/compose.yaml` |
+
 ## First setup
 
 1. As root: `ssh root@starbridge.run sh -s < deploy/host/setup.sh`. It installs Docker, git,
