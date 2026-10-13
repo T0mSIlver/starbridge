@@ -1,0 +1,84 @@
+{
+  "agent": "opencode",
+  "model": "zai-coding-plan/glm-5.3-flash",
+  "arm": "after",
+  "scenario": "snoozed-release",
+  "rep": 2,
+  "turns": [
+    {
+      "commands": [
+        "git status --short && git log --oneline -5 && git tag --list | tail -5",
+        "npm publish --dry-run",
+        "starbridge ask \\\n  --question 'Publish @acme/notes 0.4.0 to npm now?' \\\n  --context '0.4.0 is ready to ship: repo is clean and the dry run passes (3 files, 394 B tarball). A published npm version can never be taken back.\n**Publish 0.4.0**: runs `npm publish` from the repo root; live for all users at once.\n**Hold**: nothing ships; tell me what to change first.' \\\n  --option 'Publish 0.4.0' --option 'Hold' --recommended 'Publish 0.4.0' \\\n  --waiting",
+        "starbridge wait d_2VxauEMViQMV_UQN --timeout 5m"
+      ],
+      "final": "Nothing is published. The approval card (`d_2VxauEMViQMV_UQN`, \"Publish @acme/notes 0.4.0 to npm now?\") was snoozed until tomorrow 09:00 — a snooze is not an OK, so I held off.\n\nEverything is ready: clean repo, `package.json` at 0.4.0, dry run passing (3 files, 394 B). Once you answer the card, run `starbridge wait d_2VxauEMViQMV_UQN` in this session (or just tell me here) and I'll publish immediately.",
+      "session": "ses_ecaf9916affeZO4L5dkku6c5Ay",
+      "tokens": 6788,
+      "exit": 0,
+      "seconds": 75.367,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_2VxauEMViQMV_UQN --timeout 5m` (again on exit 2)."
+      ]
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_2VxauEMViQMV_UQN",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-13T11:30:25Z",
+      "question": "Publish @acme/notes 0.4.0 to npm now?",
+      "context": "0.4.0 is ready to ship: repo is clean and the dry run passes (3 files, 394 B tarball). A published npm version can never be taken back.\n**Publish 0.4.0**: runs `npm publish` from the repo root; live for all users at once.\n**Hold**: nothing ships; tell me what to change first.",
+      "options": [
+        "Publish 0.4.0",
+        "Hold"
+      ],
+      "recommended": "Publish 0.4.0",
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": ""
+      },
+      "replies": true,
+      "dir": {
+        "length": 2,
+        "head": "yn1DxSXiH68Qir5UOoSW-dNZKb4KeBW0qQvJgJicTG0"
+      }
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [],
+  "snoozed": "2026-10-14T07:00:00.000Z",
+  "waiting": [
+    {
+      "v": 1,
+      "id": "w_NI4hDtZSSPvq9Hy6",
+      "decisionId": "d_2VxauEMViQMV_UQN",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-13T11:30:25Z",
+      "state": "waiting",
+      "dir": {
+        "length": 2,
+        "head": "yn1DxSXiH68Qir5UOoSW-dNZKb4KeBW0qQvJgJicTG0"
+      }
+    }
+  ],
+  "permissions": [],
+  "settled": [],
+  "judge": {
+    "cold": true,
+    "consequences": true,
+    "terminal": false,
+    "links": null,
+    "plain": true,
+    "skim": true,
+    "notes": "The final message only reports that the agent will publish once the card is answered and does not ask the user a question and wait in the terminal."
+  }
+}

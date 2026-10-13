@@ -41,6 +41,18 @@ Phone: a typo
   expect(parseNotes("No section.")).toBeUndefined();
 });
 
+test("an iOS line is a note, listed after Android", () => {
+  const notes = parseNotes("## Release notes\n\nWeb: W.\nios: I.\nAndroid: A.\n", 9)?.notes ?? [];
+  expect(notes.map((n) => n.product)).toEqual(["Web", "iOS", "Android"]);
+  const body = render(
+    [{ pr: 9, subject: "s (#9)", body: "## Release notes\n\nWeb: W.\niOS: I.\nAndroid: A.\n" }],
+    "a...b",
+    "o/r",
+  );
+  expect(body.indexOf("### Android")).toBeLessThan(body.indexOf("### iOS"));
+  expect(body.indexOf("### iOS")).toBeLessThan(body.indexOf("### Web"));
+});
+
 test("a None line that says why is no note and no warning", () => {
   expect(parseNotes("## Release notes\n\nNone: the iPhone app is not released yet\n")).toEqual({
     notes: [],

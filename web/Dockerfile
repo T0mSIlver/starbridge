@@ -30,6 +30,11 @@ WORKDIR /app
 COPY --from=build /src/web/.next/standalone ./
 COPY --from=build /src/web/.next/static web/.next/static
 COPY --from=build /src/web/public web/public
+# As in server/Dockerfile: Debian's fixes, never from the build cache. npm and corepack go: the
+# server runs on node alone, and their dependencies' vulnerabilities would fail scan.yml.
+ARG REVISION=unknown
+RUN apt-get update && apt-get -y upgrade && rm -rf /var/lib/apt/lists/* \
+  && rm -rf /usr/local/lib/node_modules /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack
 USER node
 ENV PORT=3000 HOSTNAME=0.0.0.0 NODE_ENV=production NEXT_TELEMETRY_DISABLED=1
 EXPOSE 3000

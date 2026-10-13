@@ -1,0 +1,154 @@
+name: scan
+
+# Known vulnerabilities in what we ship (#1542). Trivy scans the server and web images that
+# starbridge.run and staging serve, after every deploy run and weekly, since new advisories come
+# out after a build. osv-scanner reads the lockfiles weekly. Each keeps
+# one issue open while it finds something, and closes it once a run finds nothing.
+on:
+  workflow_run:
+    workflows: [deploy]
+    types: [completed]
+    branches: [main]
+  schedule:
+    - cron: "41 5 * * 1"
+  workflow_dispatch:
+    inputs:
+      revision:
+        description: Commit whose images to scan (default the ones starbridge.run and staging serve)
+        required: false
+
+concurrency:
+  group: scan-${{ github.event_name }}
+  cancel-in-progress: false
+
+permissions: {}
+
+env:
+  TRIVY: aquasec/trivy:0.74.0@sha256:62b1e65e8869bc4b4c6aa4fa2b21595256c7c2f6018a9d9ad61caf87187c1969
+  OSV_SCANNER: ghcr.io/google/osv-scanner:v2.6.0@sha256:afd838850ac1a0fcc15ff4a041dc9ba11123c3f0d2666217a5f0fcf9222b55fa
+
+jobs:
+  # Fails on a high or critical vulnerability that has a fixed version; lists the rest in the
+  # run's summary. A finding without a fix has nothing to act on yet.
+  images:
+    # Docker and gh, which some self-hosted boxes lack.
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      issues: write
+      packages: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          sparse-checkout: .github
+      # The commits starbridge.run and staging serve, as their /healthz names them: a deploy run's
+      # own commit can be newer than the one it deployed, and a dispatched deploy has none (#1542).
+      - id: rev
+        env:
+          REV: ${{ inputs.revision }}
+        run: |
+          served() {
+            curl -fsS --retry 5 --retry-delay 3 --retry-all-errors -D - -o /dev/null "$1/healthz" | tr -d '\r' |
+              awk -F': ' 'tolower($1) == "x-starbridge-revision" { print $2 }'
+          }
+          if [ -n "$REV" ]; then
+            revs="$REV:dispatched"
+          else
+            revs="$(served https://starbridge.run || true):prod $(served https://staging.starbridge.run || true):staging"
+          fi
+          token=$(curl -fsS "https://ghcr.io/token?scope=repository:t0msilver/starbridge-server:pull" | jq -r .token)
+          scan='' named=''
+          for pair in $revs; do
+            rev=${pair%%:*} where=${pair#*:}
+            case $rev in *[!0-9a-f]* | "") echo "::warning::$where names no commit id"; continue ;; esac
+            [ ${#rev} -eq 40 ] || { echo "::warning::$where names no commit id"; continue; }
+            named=1
+            case " $scan " in *" $rev:"*) continue ;; esac
+            # A commit with no images: deploy.yml built none for it.
+            if curl -fsS -o /dev/null -H "Authorization: Bearer $token" \
+              -H 'Accept: application/vnd.oci.image.index.v1+json, application/vnd.docker.distribution.manifest.list.v2+json' \
+              "https://ghcr.io/v2/t0msilver/starbridge-server/manifests/$rev"; then
+              scan="$scan $rev:$where"
+            else
+              echo "::notice::No images for $rev ($where)."
+            fi
+          done
+          # Neither site answered: a green run would hide that nothing was scanned.
+          [ -n "$named" ] || { echo "::error::no site named a commit to scan"; exit 1; }
+          echo "revs=${scan# }" >> "$GITHUB_OUTPUT"
+      - id: scan
+        if: steps.rev.outputs.revs
+        env:
+          REVS: ${{ steps.rev.outputs.revs }}
+          TRIVY_USERNAME: ${{ github.actor }}
+          TRIVY_PASSWORD: ${{ github.token }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/trivy"
+          : > "$RUNNER_TEMP/blocking.md"
+          for pair in $REVS; do
+            rev=${pair%%:*} where=${pair#*:}
+            for image in server web; do
+              # amd64, what starbridge.run runs; arm64 holds the same packages.
+              docker run --rm -e TRIVY_USERNAME -e TRIVY_PASSWORD -v "$RUNNER_TEMP/trivy:/root/.cache" "$TRIVY" \
+                image --quiet --platform linux/amd64 --scanners vuln --format json \
+                "ghcr.io/t0msilver/starbridge-$image:$rev" > "$RUNNER_TEMP/$image.json"
+              name="$image at ${rev:0:8} ($where)"
+              .github/scan-report.sh trivy "$name" < "$RUNNER_TEMP/$image.json" >> "$GITHUB_STEP_SUMMARY"
+              .github/scan-report.sh trivy-blocking "$name" < "$RUNNER_TEMP/$image.json" >> "$RUNNER_TEMP/blocking.md"
+            done
+          done
+          {
+            echo "blocking<<EOF"
+            cat "$RUNNER_TEMP/blocking.md"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+      - name: Open, update or close the issue
+        if: ${{ !cancelled() && steps.rev.outputs.revs }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          OUTCOME: ${{ steps.scan.outcome }}
+          FOUND: ${{ steps.scan.outputs.blocking }}
+        run: |
+          [ "$OUTCOME" = success ] || FOUND="The scan itself failed; see the run."
+          .github/scan-issue.sh image-scan "Image scan: fixable high or critical vulnerabilities" \
+            "Trivy found these in the images starbridge.run and staging serve. Rebuilding the image picks up Debian's fixes; a package's fix needs a dependency update." "$FOUND" fail
+
+  # Weekly, and by hand. Reports every finding: a lockfile entry with a fix is a dependency
+  # update to make, one without is to watch. Dependabot's alerts cover the Gradle catalog, which
+  # osv-scanner cannot read without a Gradle lockfile.
+  lockfiles:
+    if: github.event_name != 'workflow_run'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - id: scan
+        run: |
+          # Exit 1 means it found something, 128 that it found no lockfile.
+          code=0
+          docker run --rm -v "$PWD:/src:ro" "$OSV_SCANNER" scan source -r --format json /src \
+            > "$RUNNER_TEMP/osv.json" || code=$?
+          [ "$code" -le 1 ] || exit "$code"
+          .github/scan-report.sh osv < "$RUNNER_TEMP/osv.json" > "$RUNNER_TEMP/osv.md"
+          cat "$RUNNER_TEMP/osv.md" >> "$GITHUB_STEP_SUMMARY"
+          {
+            echo "found<<EOF"
+            cat "$RUNNER_TEMP/osv.md"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+      - name: Open, update or close the issue
+        if: ${{ !cancelled() }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          OUTCOME: ${{ steps.scan.outcome }}
+          FOUND: ${{ steps.scan.outputs.found }}
+        run: |
+          [ "$OUTCOME" = success ] || FOUND="The scan itself failed; see the run."
+          .github/scan-issue.sh dependency-scan "Lockfile scan: known vulnerabilities" \
+            "osv-scanner found these in the lockfiles at $GITHUB_SHA." "$FOUND"

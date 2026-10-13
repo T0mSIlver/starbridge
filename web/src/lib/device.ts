@@ -58,6 +58,7 @@ import {
   revokeEntryAsync,
   type SealedItem,
   type Settled,
+  type ShownImage,
   type SignedEnvelope,
   type Snooze,
   sealAsync,
@@ -70,6 +71,7 @@ import {
 import { ApiError, api, backoff, type Stored } from "./api";
 import { generateDeviceKeys, sealOpener, signer } from "./crypto/keys";
 import { desktop } from "./desktop";
+import { type Kept, merge } from "./kept";
 import { otherServer } from "./otherServer";
 import * as store from "./store";
 import type {
@@ -163,9 +165,12 @@ class Unanchored extends Error {}
  * a genesis this browser's device signed anchors the chain (a first device cut off before it
  * pinned): any other the server could have made, listing keys it relayed (#354).
  */
-async function trusted(account: string): Promise<{ dir: Directory; entries: SignedEnvelope[] }> {
+async function trusted(
+  account: string,
+  read?: SignedEnvelope[],
+): Promise<{ dir: Directory; entries: SignedEnvelope[] }> {
   for (let attempt = 0; ; attempt++) {
-    const entries = await api.directory();
+    const entries = (attempt === 0 && read) || (await api.directory());
     const pin = await store.get("pin", account);
     if (!pin && !signedGenesis(account, entries[0], await store.get("device", account)))
       throw new Unanchored("no pin anchors this directory");
@@ -250,7 +255,7 @@ export async function boot(): Promise<Boot> {
   }
   let verified: { dir: Directory; entries: SignedEnvelope[] };
   try {
-    verified = await trusted(account);
+    verified = await trusted(account, entries);
   } catch (e) {
     // A join or recovery cut off before it pinned starts over (#354).
     if (e instanceof Unanchored) {
@@ -285,7 +290,7 @@ export async function boot(): Promise<Boot> {
     // wipe does. The pin stays, so the server still cannot roll the chain back.
     const reg = await registration();
     await (await reg?.pushManager.getSubscription())?.unsubscribe().catch(() => {});
-    for (const kind of ["device", "answers", "promptAnswers"] as const)
+    for (const kind of ["device", "answers", "promptAnswers", "kept"] as const)
       await store.del(kind, account);
     await closeNotifications();
     return { state: "revoked", account, name: device.name, by: removedBy(verified, device.id) };
@@ -1255,12 +1260,21 @@ async function openDecision(
     notice && notice.outcome !== "device" && closing.at === s.answeredAt
       ? notice.outcome
       : undefined;
+  // Listed without its blobs (#1382): the images wait, at their size, until they are shown.
+  const pending = !!body.images?.length && !s.item.blobs;
   return {
     // Each image opens from its blob, sealed once for every device (#685).
     decision: {
       ...body,
-      ...(body.images ? { images: openImages(s.item, body.images) } : {}),
+      ...(body.images
+        ? {
+            images: pending
+              ? body.images.map(({ key: _, hash: __, ...image }) => ({ ...image, data: "" }))
+              : openImages(s.item, body.images),
+          }
+        : {}),
     } as ShownDecision,
+    ...(pending ? { imagesPending: true as const } : {}),
     machine,
     ...(s.answeredAt ? { answeredAt: s.answeredAt } : {}),
     ...(settled ? { settled } : {}),
@@ -1315,8 +1329,41 @@ export async function reverify(ctx: Ctx): Promise<Ctx | undefined> {
   return self?.active ? fresh : undefined;
 }
 
-/** Reads decisions after `inbox.cursor` and merges them in: answered ones come back answered. */
-export async function loadInbox(ctx: Ctx, inbox: Inbox = { items: [], rejected: [] }) {
+/**
+ * Reads decisions after `inbox.cursor` and merges them in: answered ones come back answered.
+ * With `keep`, what the server lists is kept sealed in this browser, and a read with no cursor
+ * starts from what is kept rather than from the first item (#1380).
+ */
+export async function loadInbox(
+  ctx: Ctx,
+  inbox: Inbox = { items: [], rejected: [] },
+  opts: {
+    keep?: boolean;
+    /**
+     * Given the kept questions the server lists open, once they are opened and before the
+     * answered ones: a load shows what needs the owner first (#1458).
+     */
+    early?: (inbox: Inbox) => void;
+  } = {},
+): Promise<Inbox> {
+  // The kept items, and the decisions the server holds open now: those settle which kept
+  // questions it dropped, and whether what is kept still matches the server at all.
+  let kept: Kept | undefined;
+  let open: Set<string> | undefined;
+  if (opts.keep && inbox.cursor === undefined) {
+    const had = await store.get("kept", ctx.account);
+    if (had?.device === ctx.device.id) {
+      open = new Set();
+      let at: string | undefined;
+      for (;;) {
+        const page = await api.items("decision", at, { open: true });
+        for (const s of page.items) open.add(s.item.id);
+        at = page.cursor;
+        if (page.items.length < 100) break;
+      }
+      kept = had;
+    }
+  }
   const sent = (await store.get("answers", ctx.account)) ?? {};
   // Decisions opened before a machine was revoked no longer verify: drop them.
   const byId = new Map(
@@ -1375,13 +1422,75 @@ export async function loadInbox(ctx: Ctx, inbox: Inbox = { items: [], rejected: 
         rejected.push({ id: s.item.id, error: e instanceof Error ? e.message : String(e) });
     }
   };
+  // Only the machine that asked can say its agent waits on the question.
+  const shown = () =>
+    [...byId.values()].map((i) => {
+      const w = waits[`${i.machine.id}/${i.decision.id}`];
+      const z = snoozes[i.decision.id];
+      const { waitingSince: _, snoozedUntil: __, ...rest } = i;
+      return {
+        ...rest,
+        ...(w?.state === "waiting" ? { waitingSince: w.at } : {}),
+        // Back now ends at its own time, read before this browser's clock, which may run behind.
+        ...(z && Date.parse(z.until) > Date.parse(z.at) ? { snoozedUntil: z.until } : {}),
+      };
+    });
+  // What tells an open question's state first, then the questions, then the answered ones.
+  const first = (s: Stored) =>
+    s.item.kind === "waiting" ||
+    s.item.kind === "snooze" ||
+    (s.item.kind === "decision" && !s.answeredAt && !!open?.has(s.item.id));
+  const keptItems = kept?.items ?? [];
+  if (opts.early && open && open.size > 0) {
+    for (const s of keptItems) if (first(s)) await take(s, false);
+    if (byId.size > 0) {
+      // Never past a hold: while the server withholds entries, no machine's item shows (#362).
+      await hold(ctx);
+      opts.early({
+        items: shown(),
+        rejected: [...rejected],
+        waits: { ...waits },
+        snoozes: { ...snoozes },
+      });
+    }
+    for (const s of keptItems) if (!first(s)) await take(s, false);
+  } else for (const s of keptItems) await take(s, false);
   for (const s of inbox.retry ?? []) await take(s, true);
-  let cursor = inbox.cursor;
+  let cursor = inbox.cursor ?? kept?.cursor;
+  const read: Stored[] = [];
   for (;;) {
-    const page = await api.items("decision,settled,waiting,snooze", cursor);
+    const page = await api.items("decision,settled,waiting,snooze", cursor, {
+      openBlobs: opts.keep,
+    });
     for (const s of page.items) await take(s, false);
+    if (opts.keep) read.push(...page.items);
     cursor = page.cursor;
     if (page.items.length < 100) break;
+  }
+  const drop = new Set<string>();
+  if (kept && open) {
+    const listed = new Set(read.filter((s) => s.item.kind === "decision").map((s) => s.item.id));
+    const held = new Set(
+      kept.items.filter((s) => s.item.kind === "decision").map((s) => s.item.id),
+    );
+    // An open question neither kept nor listed after the cursor: the server is not the one
+    // these were kept from (restored, or reset). Read it all again.
+    if ([...open].some((id) => !held.has(id) && !listed.has(id))) {
+      await store.del("kept", ctx.account);
+      return loadInbox(ctx, inbox, opts);
+    }
+    // Kept open, not open on the server and not listed since, so not answered either: the
+    // server dropped it (PROTOCOL.md, Limits). One listed since came after the open list.
+    for (const s of kept.items)
+      if (
+        s.item.kind === "decision" &&
+        !s.answeredAt &&
+        !open.has(s.item.id) &&
+        !listed.has(s.item.id)
+      ) {
+        drop.add(s.item.id);
+        byId.delete(s.item.id);
+      }
   }
   // The machine names the winner after the answer, so its notice often lists without the
   // decision, which an earlier read already holds.
@@ -1391,24 +1500,51 @@ export async function loadInbox(ctx: Ctx, inbox: Inbox = { items: [], rejected: 
     if (item && answeredBy && !item.reply && key === `${item.machine.id}/${notice.itemId}`)
       byId.set(notice.itemId, { ...item, answeredBy });
   }
-  // Only the machine that asked can say its agent waits on the question.
-  const items = [...byId.values()].map((i) => {
-    const w = waits[`${i.machine.id}/${i.decision.id}`];
-    const z = snoozes[i.decision.id];
-    const { waitingSince: _, snoozedUntil: __, ...rest } = i;
-    return {
-      ...rest,
-      ...(w?.state === "waiting" ? { waitingSince: w.at } : {}),
-      // Back now ends at its own time, read before this browser's clock, which may run behind.
-      ...(z && Date.parse(z.until) > Date.parse(z.at) ? { snoozedUntil: z.until } : {}),
-    };
-  });
+  const items = shown();
   await noteSnoozes(
     ctx,
     Object.entries(snoozes).map(([decisionId, z]) => ({ decisionId, at: z.at })),
   );
   await hold(ctx);
+  if (opts.keep && (read.length > 0 || drop.size > 0) && cursor !== undefined) {
+    const at = cursor;
+    await store.update("kept", ctx.account, (had) => ({
+      device: ctx.device.id,
+      cursor: at,
+      items: merge(had?.device === ctx.device.id ? had.items : [], read, drop),
+    }));
+  }
   return { items, cursor, rejected, retry, waits, snoozes } satisfies Inbox;
+}
+
+/**
+ * The images of a decision listed without them (#1382), fetched with the item and checked
+ * against the hashes its signed body holds; kept with the item, so they download once.
+ */
+export async function loadImages(ctx: Ctx, id: string): Promise<ShownImage[]> {
+  // Each blob opens against the body this browser kept, from the same machine: never refs the
+  // server sends now under that id (#1472).
+  const kept = (await store.get("kept", ctx.account))?.items.find(
+    (k) => k.item.kind === "decision" && k.item.id === id,
+  );
+  if (!kept) throw new Error("this question is not kept here");
+  const was = await openMachine(ctx, kept.item, "decision");
+  const s = await api.item(id);
+  const { signer, body } = await openMachine(ctx, s.item, "decision");
+  if (body.id !== id || signer.id !== was.signer.id)
+    throw new Error("the server sent another question");
+  const images = openImages(s.item, (was.body as Decision).images);
+  const blobs = s.item.blobs;
+  // Kept for this device only; gone meanwhile, an empty record reads from the start next time.
+  if (blobs && (await store.get("kept", ctx.account))?.device === ctx.device.id)
+    await store.update("kept", ctx.account, (had) => ({
+      device: ctx.device.id,
+      cursor: had?.cursor ?? "",
+      items: (had?.items ?? []).map((k) =>
+        k.item.kind === "decision" && k.item.id === id ? { ...k, item: { ...k.item, blobs } } : k,
+      ),
+    }));
+  return images;
 }
 
 /** Signs the answer and seals it to the machine that asked, which must still be active. */
@@ -1542,10 +1678,23 @@ export async function openSettled(ctx: Ctx, item: SealedItem) {
   return { machine: signer.id, settled: body as Settled };
 }
 
-/** Settled notices after `cursor`, keyed by "machine/permission id". */
+/**
+ * Settled notices after `cursor`, keyed by "machine/permission id". Without one, the read starts
+ * at the kept inbox's cursor (#1380) rather than at the first notice the server holds: a notice
+ * before it closed a prompt the server no longer lists open, which the page never shows (#1455).
+ */
 export async function loadSettled(ctx: Ctx, cursor?: string) {
   const out = new Map<string, Settled>();
   let at = cursor;
+  if (at === undefined) {
+    const kept = await store.get("kept", ctx.account);
+    // A prompt open now that lists at or before that cursor: a reset or restored server, whose
+    // notices may sit below it too, or one open since before the kept read. Read them all.
+    const open =
+      kept?.device === ctx.device.id &&
+      (await api.items("permission", undefined, { open: true })).items;
+    if (open && !open.some((s) => Number(s.cursor) <= Number(kept.cursor))) at = kept.cursor;
+  }
   for (;;) {
     const page = await api.items("settled", at);
     for (const s of page.items) {

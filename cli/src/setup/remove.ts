@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, rmdirSync, rmSync } from "node:fs";
+import { existsSync, readdirSync, rmdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 /**
@@ -28,4 +28,33 @@ export function removedLine(dir: string, kept: string[]): string {
   return kept.length === 0
     ? `Removed ${dir}.`
     : `Removed Starbridge's files from ${dir}; kept ${kept.join(", ")}: setup did not write ${kept.length === 1 ? "it" : "them"}.`;
+}
+
+/**
+ * The settings with `rules` taken out of `permissions.allow`, and that list and `permissions`
+ * dropped when nothing else is left in them; undefined when none of `rules` was there.
+ */
+export function withoutAllow(
+  s: { permissions?: object },
+  rules: readonly string[],
+): Record<string, unknown> | undefined {
+  const { permissions, ...rest } = s as Record<string, unknown> & {
+    permissions?: Record<string, unknown>;
+  };
+  const allow = permissions?.allow;
+  if (!permissions || !Array.isArray(allow)) return undefined;
+  const kept = allow.filter((r) => !rules.includes(r as string));
+  if (kept.length === allow.length) return undefined;
+  const { allow: _, ...others } = permissions;
+  if (kept.length > 0) return { ...rest, permissions: { ...others, allow: kept } };
+  return Object.keys(others).length > 0 ? { ...rest, permissions: others } : rest;
+}
+
+/**
+ * Writes what uninstall leaves of a JSON file, or removes the file when nothing is left: setup
+ * created it, and an empty file and none mean the same (#1494).
+ */
+export function writeLeft(path: string, value: Record<string, unknown>): void {
+  if (Object.keys(value).length === 0) rmSync(path, { force: true });
+  else writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`);
 }

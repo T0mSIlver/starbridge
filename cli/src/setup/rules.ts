@@ -36,7 +36,7 @@ export function renderRule(template: string, agent: Agent): string {
   return template.replace(
     "{question tool}",
     tool
-      ? ` A quick question may use ${tool} instead, since it reaches my devices too. End its question with a sentence that asks, in 70 characters at most, which titles the card; the whole question starts the card's context.`
+      ? ` A quick question may use ${tool} instead, since it reaches my devices too. End its question with the question itself, in 70 characters at most: that sentence becomes the card's title, and the whole question starts its context.`
       : "",
   );
 }

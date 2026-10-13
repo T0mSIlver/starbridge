@@ -5,6 +5,7 @@ After=docker.service
 
 [Service]
 Type=oneshot
-# Images any container uses, running or stopped, are kept, and volumes are never touched.
-ExecStart=/usr/bin/docker image prune -af --filter until=168h
+# Images any container uses, running or stopped, are kept, and volumes are never touched. So are
+# the server and web images, whose newest 5 releases apply.sh keeps for a rollback.
+ExecStart=/usr/bin/docker image prune -af --filter until=168h --filter label!=org.opencontainers.image.source=https://github.com/T0mSIlver/starbridge
 ExecStart=/usr/bin/docker builder prune -af --filter until=168h

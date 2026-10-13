@@ -26,10 +26,13 @@ export interface Host {
   sleep(ms: number): Promise<void>;
   /**
    * Must not wait for the turn to start: a prompt submitted mid-turn waits for its own. A host
-   * that can tell the submit failed returns or resolves false, and the line stays unconfirmed for
-   * a later try.
+   * that can tell the submit failed, or holds the line back for now, returns or resolves false,
+   * and the line stays unconfirmed for a later try. `waiting`: the agent marked the decision
+   * waiting, so it needs the answer now (#1484).
    */
-  submit(text: string): unknown;
+  submit(text: string, waiting: boolean, ack: string): unknown;
+  /** True while a submitted prompt waits for its turn: `AgentHost.starting`. */
+  starting(): boolean;
   status(text: string | undefined): void;
   log(text: string): void;
 }
@@ -43,7 +46,10 @@ export interface Timing {
   recheckMs: number;
   /** How long a lease lasts past its last renewal. */
   leaseMs: number;
-  /** A poll that comes back sooner than this with nothing waits out the rest. */
+  /**
+   * A poll that comes back sooner than this with nothing waits out the rest; while a prompt waits
+   * for its turn, polls don't wait and this is the time between them.
+   */
   minCycleMs: number;
   /** First retry delay after an error, doubled each time up to `maxBackoffMs`. */
   backoffMs: number;
@@ -90,6 +96,8 @@ function firstLine(stderr: string): string {
 export class Poller {
   private stopped = false;
   private failures = 0;
+  /** Lines the host held back in the last `answers`. */
+  private held = 0;
   /** The state file's time when this session last read it; a /clear makes it unread again. */
   private seen: { session: string; mtime: number; at: number } | undefined;
   /** The session id this poller last held the lease under; a `/clear` changes the id. */
@@ -115,16 +123,28 @@ export class Poller {
     this.leasePath = `${dir}/mod-poller.json`;
     this.cliPath = `${dir}/cli-path`;
     this.statePath = `${dir}/state.json`;
-    this.done = this.loop();
+    // Nothing awaits a loop that ended before `stop`: a rejection would take the harness down (#1365).
+    this.done = this.loop().catch((e) => {
+      try {
+        this.host.log(`starbridge: the answer loop stopped: ${(e as Error).message}`);
+      } catch {}
+    });
   }
 
-  /** Ends the loop after the current step and gives up the lease at once, so another session polls. */
+  /**
+   * Ends the loop after the current step and gives up the lease at once, so another session polls.
+   * Never rejects: it runs after the session ended, when the host may throw (#1365).
+   */
   async stop(): Promise<void> {
     this.stopped = true;
-    const me = await this.host.sessionId();
-    const lease = await this.readLease();
-    if (lease && (lease.session === me || lease.session === this.leasedAs))
-      await this.host.write(this.leasePath, JSON.stringify({ ...lease, until: 0 }));
+    try {
+      const me = await this.host.sessionId();
+      const lease = await this.readLease();
+      if (lease && (lease.session === me || lease.session === this.leasedAs))
+        await this.host.write(this.leasePath, JSON.stringify({ ...lease, until: 0 }));
+    } catch {
+      // The lease runs out on its own.
+    }
   }
 
   private async cli(): Promise<string> {
@@ -155,7 +175,8 @@ export class Poller {
     }
     if (await this.lease(me, this.t.leaseMs)) {
       const started = await this.host.now();
-      const handed = await this.answers(me, ["--wait", String(this.t.waitSeconds)]);
+      const wait = this.host.starting() ? 0 : this.t.waitSeconds;
+      const handed = await this.answers(me, ["--wait", String(wait)]);
       if (handed === undefined) return;
       const left = started + this.t.minCycleMs - (await this.host.now());
       if (handed === 0 && left > 0) await this.host.sleep(left);
@@ -168,7 +189,41 @@ export class Poller {
       await this.host.sleep(this.t.checkMs);
       return;
     }
-    if ((await this.answers(me, [])) !== undefined) this.seen = { session: me, mtime, at: now };
+    if ((await this.answers(me, [])) === undefined) return;
+    // A line the host held back for the turn's end is read again at the next check (#1484).
+    if (this.held === 0) this.seen = { session: me, mtime, at: now };
+    else await this.host.sleep(this.t.checkMs);
+  }
+
+  /**
+   * Confirms the lines among `acks` that the CLI still hands this session, and returns those: a
+   * line a `wait` or `waiting` printed meanwhile is not handed over again (#1484).
+   */
+  async claim(acks: string[]): Promise<string[]> {
+    const me = await this.host.sessionId();
+    const base = [await this.cli(), "answers", "--session", me];
+    const timeoutMs = (this.t.waitSeconds + 30) * 1000;
+    const r = await this.host.run(base, timeoutMs);
+    if (r.exitCode !== 0) return [];
+    const pending = new Set<string>();
+    for (const text of r.stdout.split("\n")) {
+      try {
+        const l = JSON.parse(text) as { decisionId?: unknown; ack?: unknown };
+        const ack = typeof l.ack === "string" ? l.ack : l.decisionId;
+        if (typeof ack === "string") pending.add(ack);
+      } catch {}
+    }
+    const mine = acks.filter((a) => pending.has(a));
+    if (mine.length === 0) return [];
+    const ack = await this.host.run([...base, ...mine.flatMap((a) => ["--ack", a])], timeoutMs);
+    if (ack.exitCode !== 0) return [];
+    // What it confirmed now: not a line a `wait` or `waiting` took since the read. A CLI older
+    // than that prints nothing.
+    try {
+      const acked = (JSON.parse(ack.stdout) as { acked?: unknown }).acked;
+      if (Array.isArray(acked)) return acked.filter((a): a is string => typeof a === "string");
+    } catch {}
+    return mine;
   }
 
   /**
@@ -188,10 +243,11 @@ export class Poller {
     if (this.failures > 0) this.host.status(undefined);
     this.failures = 0;
     let handed = 0;
+    let held = 0;
     const done: string[] = [];
     for (const text of r.stdout.split("\n")) {
       if (!text.trim()) continue;
-      let parsed: { decisionId?: unknown; ack?: unknown; line?: unknown };
+      let parsed: { decisionId?: unknown; ack?: unknown; line?: unknown; waiting?: unknown };
       try {
         parsed = JSON.parse(text);
       } catch {
@@ -208,7 +264,10 @@ export class Poller {
         continue;
       }
       if (!this.unconfirmed.has(ack)) {
-        if ((await this.host.submit(line)) === false) continue;
+        if ((await this.host.submit(line, parsed.waiting === true, ack)) === false) {
+          held++;
+          continue;
+        }
         this.unconfirmed.add(ack);
         handed++;
       }
@@ -222,6 +281,7 @@ export class Poller {
       }
       for (const id of done) this.unconfirmed.delete(id);
     }
+    this.held = held;
     return handed;
   }
 

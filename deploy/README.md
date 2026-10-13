@@ -11,22 +11,47 @@ are off.
 
 ## Deploy
 
-Every push to main deploys once CI passes (`.github/workflows/deploy.yml`). Actions logs in as
+Every push to main goes to staging once CI passes (`.github/workflows/deploy.yml`, and "Staging"
+below). starbridge.run takes a commit by dispatch only: `release.yml` sends each rc tag's commit,
+and a hotfix is `gh workflow run deploy.yml -f sha=<commit>`; either way the commit must have
+passed on staging (its `staging` status). Actions logs in as
 `deploy` with its own key (secret `DEPLOY_SSH_KEY`), whose forced command runs
 `/usr/local/sbin/starbridge-deploy <commit>` (`host/deploy-rev.sh`) and nothing else. That script
 fetches main from GitHub with a read-only deploy key and deploys only main's head, or a commit on
 main that contains the deployed one, so the Actions key cannot roll back. It unpacks the commit
-and runs `host/apply.sh`. `deploy/setup-actions-deploy.sh` installs both keys
+and runs `host/apply.sh`. Once the box runs the commit, the workflow asks sb-oracle for one
+round trip on the outside check's test account (secrets `SMOKE_SSH_KEY`, `SMOKE_KNOWN_HOSTS`,
+`SMOKE_SSH_TARGET`; the key's forced command runs nothing else). `deploy/setup-actions-deploy.sh` installs both keys
 on the box; the private halves stay in `~/.config/starbridge/secrets`.
 
-To roll back, or to deploy a branch, from the operator's machine with any ref that is on GitHub:
+To deploy a commit by hand, from the operator's machine:
 
 ```bash
 deploy/deploy.sh                 # origin/main
 ```
 
-It unpacks the ref into `/opt/starbridge`, builds the server and web images on the box and rolls them
-out (`deploy/host/apply.sh`). The previous release stays in `/opt/starbridge.old`.
+It unpacks the ref into `/opt/starbridge`, pulls the server and web images for that commit from
+ghcr.io and rolls them out (`deploy/host/apply.sh`). The previous release stays in
+`/opt/starbridge.old`.
+
+`deploy.yml` builds those images once per deployed commit, for amd64 and arm64, and pushes them as
+`ghcr.io/t0msilver/starbridge-server:<commit>` and `starbridge-web:<commit>`; the box never builds
+them. So only commits that `deploy.yml` deployed can be deployed again. The box keeps the newest 5
+releases' images. Caddy's image is still built on the box.
+
+## Rollback
+
+```bash
+deploy/rollback.sh --list        # the releases whose images the box holds, newest first
+deploy/rollback.sh               # back to the one before the running release
+deploy/rollback.sh <commit>      # back to that one
+```
+
+It shows both releases and asks, then deploys the older commit's whole tree with `deploy.sh`, so
+its compose file and Caddyfile come back too. A rollback past a release that migrated
+the database stops before anything changes (see Restore). The next merge to main deploys main's
+head again, so revert the bad commit first. Rolling back the apps, npm and Homebrew is a
+checklist in `spec/releases.md`.
 
 No request fails during a deploy (`spec/releases.md`). The page runs as two copies, `web-a` (port
 3010) and `web-b` (3011): the deploy starts the idle one, waits for its health, then stops the
@@ -35,6 +60,24 @@ holds requests for up to 30 s meanwhile. Each deploy loads the Caddyfile into th
 through its admin API on `127.0.0.1:2019`. Caddy's container is recreated, which drops every
 open connection, only when its definition in `compose.yaml` or `caddy.Dockerfile` changes: its
 image is tagged by a hash of that file and built only when no image has the tag.
+
+## Staging
+
+`https://staging.starbridge.run` runs on sb-staging, an Oracle ARM VM, from every deploy of
+main: the same images as prod, prod's compose file with `staging/compose.yaml` laid over it, and
+prod's Caddyfile under staging's host name with `X-Robots-Tag: noindex`. It has its own secrets
+and no Umami or backups; the Play demo server runs beside it (below). `deploy.yml`'s staging key runs only
+`starbridge-staging-deploy <commit>` (`staging/deploy-rev.sh`), which fetches main over HTTPS,
+runs `staging/apply.sh`, then one round trip on staging's test account through the outside
+check's staging instance on the VM (`sb-check-now /var/lib/sb-check-staging`). Prod's deploy
+waits for that job and runs only when it passed.
+
+| What | How |
+|---|---|
+| Set up | The VM comes with Docker, git, curl and its firewall from the homelab. `deploy/staging/setup.sh` installs the deploy command and the Actions key; `deploy/staging/push-secrets.sh` copies the secrets in `~/.config/starbridge/secrets/staging` (`github-oauth-client-id`, `github-oauth-client-secret` of the "Starbridge staging" OAuth app, `vapid-public-key`, `vapid-private-key`, `signup-github-ids`) |
+| Who can sign in | Only the GitHub ids in `signup-github-ids` can make an account (`SIGNUP_GITHUB_IDS`) |
+| Data | Synthetic only: `deploy/staging/seed.sh 200` makes 200 users through the real sign-in and pairing flows (`evals/load/setup.ts`), with staging's server stopped meanwhile. Nothing is backed up: the seed is the backup |
+| Compose project | `sudo docker compose -p starbridge-staging -f /opt/starbridge-staging/deploy/compose.yaml -f /opt/starbridge-staging/deploy/staging/compose.yaml` |
 
 ## First setup
 
@@ -49,7 +92,9 @@ image is tagged by a hash of that file and built only when no image has the tag.
    app's APNs key is optional until it ships: `apns-key.p8` (the key Apple gives once) and
    `apns-key-id` (its 10-character id) become `APNS_PRIVATE_KEY` and `APNS_KEY_ID`, with the
    team id and bundle id set in `server-env.sh`. Without them, iPhone pushes go nowhere and their
-   subscriptions stay.
+   subscriptions stay. The Sign in with Apple key is optional too: `apple-signin-key.p8` and
+   `apple-signin-key-id` become `APPLE_PRIVATE_KEY` and `APPLE_KEY_ID`; without them the server
+   offers no Apple sign-in.
 4. `deploy/deploy.sh`.
 5. `deploy/setup-actions-deploy.sh` for deploys from Actions.
 
@@ -60,7 +105,8 @@ image is tagged by a hash of that file and built only when no image has the tag.
 | Compose project | `sudo docker compose -p starbridge -f /opt/starbridge/deploy/compose.yaml` |
 | Database | volume `starbridge_data`, `/data/starbridge.db` in the container |
 | Backups | `/var/backups/starbridge/starbridge-YYYYMMDD.db` and `umami-YYYYMMDD.dump`, nightly at 03:15 UTC, 7 days; `deploy-*.db`, the last 2 deploys that ran a migration; both are `VACUUM INTO` copies. Hetzner backups cover the rest |
-| Docker prune | `starbridge-docker-prune.timer`, Sundays at 04:30 UTC: images no container uses and build cache, older than 7 days |
+| Offsite backup | After each nightly backup, `starbridge-offsite.service` (`host/offsite.sh`) compresses the new copy, encrypts it with `age` to the owner's key, whose private half is on neither server, and pushes it over SSH to a host that only takes new files, which keeps 14 days (#1482). It needs `backup-age.pub`, `offsite-ssh-key`, `offsite-known-hosts` and `offsite-target` from `push-secrets.sh`; without them it does nothing |
+| Docker prune | `starbridge-docker-prune.timer`, Sundays at 04:30 UTC: images no container uses and build cache, older than 7 days, except the server and web images, of which each deploy keeps the newest 5 |
 | Analytics | Umami (`umami`, `umami-db`), volume `starbridge_umami-db`; secrets in `/etc/starbridge/umami.env` and `umami-db.env`, made on the first deploy |
 | Analytics limits | Caddy (built with the `rate_limit` module, `caddy.Dockerfile`) takes 30 events a minute per address and 300 in all, 8 KB each; `starbridge-umami-trim.timer` keeps each table to 180 days and a million rows, hourly |
 | Uptime | `.github/workflows/uptime.yml` checks `/healthz`, `/healthz/backup` (503 once the last backup is over 26 h old) and `/healthz/disk` (503 under 2 GB free) hourly and opens an `outage` issue on failure |
@@ -114,11 +160,10 @@ and start `umami`.
 
 `https://demo.starbridge.run` lets Play reviewers try the app (`spec/hosted.md`): the server with
 `DEMO=1` and the demo program (`demo/`) in one container, Compose project `starbridge-demo`, on
-`127.0.0.1:8090`, with no volume, so each restart is a fresh account. Prod's Caddy serves it.
-Every prod deploy rebuilds it from the same checkout (`deploy/host/demo.sh`), and restarts it only
-when its image changed, so it never falls behind prod and a reviewer's account survives deploys
-that leave it alone. A failed demo deploy fails the deploy run, with prod already live.
-`deploy/demo/setup.sh` gives it its owner token from `~/.config/starbridge/secrets/demo-owner-token`,
-once or to change it; it never touches prod's project or data.
-`sudo docker compose -p starbridge-demo -f /opt/starbridge/deploy/demo/compose.yaml logs`
+sb-staging's `127.0.0.1:8090`, behind staging's Caddy (`demo/demo.caddy`), with no volume, so each
+restart is a fresh account. Each staging deploy whose round trip passed rebuilds it from that
+checkout (`deploy/host/demo.sh`), and restarts it only when its image changed; a failed demo
+deploy is printed but blocks nothing. `deploy/demo/setup.sh` gives it its owner token from
+`~/.config/starbridge/secrets/demo-owner-token`, and starts it. Logs:
+`ssh sb-staging sudo docker compose -p starbridge-demo -f /opt/starbridge-staging/deploy/demo/compose.yaml logs`
 shows each join it approved.

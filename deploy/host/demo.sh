@@ -1,12 +1,14 @@
 #!/bin/sh
-# Run as root on starbridge-1 after each prod deploy, from the same checkout: the demo server for
-# Play reviewers (#423) follows prod (#1016). One left behind once rejected the apps' item kinds,
-# and reviewers saw an empty inbox. Compose recreates it only when its image changed, which the
+# Run as root on the host that serves the demo server for Play reviewers (#423), from the checkout
+# it deploys: sb-staging after each staging deploy whose round trip passed (#1557), so the demo
+# follows main, which serves every release from the minimum up. One left behind prod once
+# rejected the apps' item kinds, and reviewers saw an empty inbox (#1016). Compose recreates it only when its image changed, which the
 # build cache keeps from happening unless its code did: each start is a fresh account, and a
 # reviewer's would go with it. Does nothing until deploy/demo/setup.sh gave it its owner token.
 set -eu
 [ -f /etc/starbridge-demo/demo.env ] || exit 0
-demo="docker compose -p starbridge-demo -f /opt/starbridge/deploy/demo/compose.yaml"
+tree=$(cd "$(dirname "$0")/../.." && pwd)
+demo="docker compose -p starbridge-demo -f $tree/deploy/demo/compose.yaml"
 $demo build
 $demo up -d
 for _ in $(seq 30); do

@@ -14,6 +14,13 @@ class SignInTest {
         assertEquals(Redirect.Code("9f2c", "Xy_z"), SignIn.redirect("https://starbridge.run/v1/auth/github/callback/app?code=9f2c&state=Xy_z"))
         assertEquals(Redirect.Denied("Xy_z"), SignIn.redirect("https://starbridge.run/v1/auth/github/callback/app?error=access_denied&state=Xy_z"))
         assertEquals(Redirect.Denied("Xy_z"), SignIn.redirect("starbridge://auth?error=access_denied&state=Xy_z"))
+        // Apple's codes carry dots (#1411).
+        assertEquals(Redirect.Code("c1f.0.ab.Xy-z", "Xy_z"), SignIn.redirect("https://starbridge.run/app/auth?code=c1f.0.ab.Xy-z&state=Xy_z"))
+    }
+
+    @Test fun startsAppleWhereGitHubStarts() {
+        val challenge = SignIn.challenge("v")
+        assertEquals("https://starbridge.run/v1/auth/apple?app=1&challenge=$challenge", SignIn.url("https://starbridge.run", "v", "apple"))
     }
 
     @Test fun ignoresOtherLinks() {

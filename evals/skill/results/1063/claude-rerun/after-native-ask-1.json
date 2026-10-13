@@ -1,0 +1,86 @@
+{
+  "agent": "claude",
+  "model": "claude-haiku-5-5",
+  "arm": "after",
+  "scenario": "native-ask",
+  "rep": 1,
+  "turns": [
+    {
+      "commands": [],
+      "askUser": [
+        {
+          "denied": false
+        }
+      ],
+      "final": "",
+      "session": "1975a0d7-3838-4510-9e26-2d9c6acd7b74",
+      "exit": 0,
+      "seconds": 10.024
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_tGKBiemmqrUdaH0k",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-13T12:48:44.297Z",
+      "question": "Which title should the card carry?",
+      "context": "Which error tracking service should we wire into the web app? Sentry is free up to 5k errors/month, then $26/month, with session replay included. Self-hosted GlitchTip is free but runs on our VPS, and we patch and back it up ourselves (about an hour a month). Which title should the card carry?\n\n- Sentry (Recommended): Managed, free tier to 5k errors/month, then $26/month. Session replay included, no servers to maintain.\n- Self-hosted GlitchTip: Free, runs on our VPS. We patch and back it up ourselves, roughly an hour a month.",
+      "options": [
+        "Sentry (Recommended)",
+        "Self-hosted GlitchTip"
+      ],
+      "recommended": "Sentry (Recommended)",
+      "agent": "claude-code",
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "1975a0d7-3838-4510-9e26-2d9c6acd7b74"
+      },
+      "replies": true,
+      "dir": {
+        "length": 2,
+        "head": "Vg-o4Uj94Ng7-o35v0mgCto0i-Ng5WEluy0gJQPwKMk"
+      }
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [
+    "gh auth token",
+    "gh auth token",
+    "gh issue list -R anthropics/claude-code --author @me --state closed --search closed:>2026-09-13 --json number,title,closedAt,stateReason --limit 30"
+  ],
+  "waiting": [
+    {
+      "v": 1,
+      "id": "w_4mOIvT5v841iabug",
+      "decisionId": "d_tGKBiemmqrUdaH0k",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-13T12:48:44Z",
+      "state": "waiting",
+      "dir": {
+        "length": 2,
+        "head": "Vg-o4Uj94Ng7-o35v0mgCto0i-Ng5WEluy0gJQPwKMk"
+      }
+    }
+  ],
+  "permissions": [],
+  "settled": [],
+  "peakContext": 29106,
+  "usedTokens": 58383,
+  "judge": {
+    "cold": true,
+    "consequences": true,
+    "terminal": false,
+    "links": null,
+    "plain": false,
+    "skim": false,
+    "notes": "The card's headline asks \"Which title should the card carry?\" instead of which error tracking service to use, so a skimming user wouldn't know what is being decided, and the final message is empty, so the agent never waits for a terminal reply."
+  }
+}

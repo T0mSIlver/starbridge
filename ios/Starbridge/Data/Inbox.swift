@@ -60,6 +60,8 @@ struct SavedDecision: Codable, Equatable {
 
     var id: String { body.id }
     var isOpen: Bool { answeredAt == nil && answer == nil }
+    /** Listed answered, without its images: the detail fetches them when it shows (#1382). */
+    var imagesPending: Bool { images.isEmpty && !(body.images ?? []).isEmpty }
 
     /** Until when the owner put it off; none after Back now, whose time is its own (#571). */
     var snoozed: Date? {
@@ -165,8 +167,11 @@ struct SavedPrompt: Codable, Equatable {
         return visible(shown.isEmpty ? body.summary : shown)
     }
 
+    /** The longest input a card's line holds, in UTF-16 units as the web and Android count it. */
+    static let rowInputMax = 200
+
     /** Whether the whole input fits a card's line, so the card may carry Allow (#356). */
-    var fitsRow: Bool { let s = fullInput; return s.count <= 200 && !s.contains("\n") }
+    var fitsRow: Bool { let s = fullInput; return s.utf16.count <= Self.rowInputMax && !s.contains("\n") }
 
     /** Still answerable here: unanswered, and inside its answer window. */
     var isOpen: Bool {

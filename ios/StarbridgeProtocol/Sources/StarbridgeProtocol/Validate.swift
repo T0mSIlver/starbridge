@@ -109,27 +109,6 @@ func daysFromCivil(_ y0: Int, _ m: Int, _ d: Int) -> Int {
     return era * 146097 + doe - 719468
 }
 
-/** "YYYY-MM-DDTHH:MM:SSZ" for whole seconds since the epoch, as `toISOString` cut to seconds. */
-func isoSeconds(_ millis: Int64) -> String {
-    let secs = millis >= 0 ? millis / 1000 : (millis - 999) / 1000
-    let days = Int(secs >= 0 ? secs / 86400 : (secs - 86399) / 86400)
-    let rem = Int(secs - Int64(days) * 86400)
-    let z = days + 719468
-    let era = (z >= 0 ? z : z - 146096) / 146097
-    let doe = z - era * 146097
-    let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365
-    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100)
-    let mp = (5 * doy + 2) / 153
-    let d = doy - (153 * mp + 2) / 5 + 1
-    let m = mp < 10 ? mp + 3 : mp - 9
-    let y = yoe + era * 400 + (m <= 2 ? 1 : 0)
-    func pad(_ v: Int, _ n: Int) -> String {
-        let s = String(v)
-        return String(repeating: "0", count: max(0, n - s.count)) + s
-    }
-    return "\(pad(y, 4))-\(pad(m, 2))-\(pad(d, 2))T\(pad(rem / 3600, 2)):\(pad(rem / 60 % 60, 2)):\(pad(rem % 60, 2))Z"
-}
-
 /**
  * A JSON object's fields as zod reads them: a field `optional` in schemas.ts may be absent but
  * not null, a `nullable` one must be present and may be null, and keys the schema does not name

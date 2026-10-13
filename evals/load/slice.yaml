@@ -1,0 +1,13 @@
+# Every container of the stack in the systemd slice LOAD_SLICE names, laid over compose.yaml by
+# stack.sh when it is set: the slice's CPUQuota and MemoryMax then cap the stack and its clients
+# together, as on sb-staging, where the weekly run shares the VM with staging.
+x-slice: &slice
+  cgroup_parent: ${LOAD_SLICE}
+
+services:
+  server: *slice
+  web-a: *slice
+  web-b: *slice
+  umami: *slice
+  umami-db: *slice
+  caddy: *slice

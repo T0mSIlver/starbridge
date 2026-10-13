@@ -2,6 +2,8 @@
 Description=Back up the Starbridge SQLite file
 Requires=docker.service
 After=docker.service
+# The offsite copy follows a backup that worked (#1482).
+OnSuccess=starbridge-offsite.service
 
 [Service]
 Type=oneshot

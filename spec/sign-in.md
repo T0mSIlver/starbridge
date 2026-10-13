@@ -1,11 +1,36 @@
 # Sign-in
 
 - The hosted server signs in with GitHub; a self-hosted server with `OWNER_TOKEN`.
+- **Sign in with Apple** (#1411). App Store guideline 4.8 asks an app that signs in with GitHub
+  to offer a login that keeps the email private too; websites are not bound. GitHub stays the
+  main sign-in everywhere, and Apple shows only where it must: on the iPhone, GitHub's button
+  then Apple's at the same size (4.8 wants Apple's no less prominent); on the page, Android and
+  the desktop app, a small "Other ways to sign in" link under GitHub's button, so an account made
+  with Apple on the iPhone can add a browser or an Android phone. So that a new browser reaches
+  it, the landing page's header Sign in opens the sign-in screen; its hero button stays GitHub's.
+  A self-hosted server has no
+  Apple key, so its clients show only its own methods.
+  - Starbridge asks Apple for no name and no email, as it keeps no email from GitHub: the data
+    is end-to-end encrypted and an account is only a sign-in's stable id. So Hide My Email never
+    arises, and the privacy page stays as it is. The server keeps Apple's user id (`sub`) and the
+    refresh token of the account's last Apple sign-in, only to revoke it when the account is
+    deleted, which Apple asks of an app that deletes accounts.
+  - An Apple id no account holds makes a new account, as a new GitHub id does; accounts are not
+    linked. Each signs in with its own provider everywhere, so nothing needs linking, and a
+    GitHub user who taps Apple by mistake gets an empty account that Delete account removes.
+  - The iPhone signs in natively (AuthenticationServices), with a nonce Apple puts in the
+    identity token and an authorization code the server trades once, so a token caught on its
+    way is worthless (PROTOCOL.md, "Auth").
 - The owner can pause sign-ups (#784), for a launch-day flood or a box near its limits: a GitHub
   user with no account gets "not taking new accounts right now" on the page and in the app, while
   every existing account signs in as before. `bun server.js signups pause|resume` writes and
   removes a file beside the database, which the server reads on each new account, so it takes
   effect at once and survives restarts and deploys.
+- A server can list who may sign up (#1524): with `SIGNUP_GITHUB_IDS` set, only those GitHub
+  users can make an account (no Apple or owner account is made beside it), so the staging server
+  takes no strangers; a value that is not a list of ids stops the server. Others get the paused
+  sign-ups' 403 `signups-paused`, which every client already shows as "no new accounts here",
+  so no client changed.
 - The page shows only the sign-in methods its server offers (#670): `GET /v1/auth/methods` lists
   them, and without GitHub the landing page's and sign-in page's buttons open the owner token
   form. Until the server answers, the page shows GitHub, the hosted server's, so the landing
@@ -26,9 +51,13 @@
   redirect that no tap started; after a tap it does not. Self-hosted servers keep
   `starbridge://auth`, since the APK can bind only starbridge.run.
 - iPhone (#1105): the same PKCE sign-in through `ASWebAuthenticationSession`, which shares
-  Safari's GitHub sign-in and ends on `starbridge://auth`. On starbridge.run the browser therefore
-  stops on `/app/auth`, and the owner taps Open Starbridge once: catching the https callback
-  needs an associated domain, so a signed build (#1115).
+  Safari's GitHub sign-in. On starbridge.run from iOS 17.4 it ends on the https callback
+  `/v1/auth/github/callback/app`, as Android's App Link does, so the owner taps nothing after
+  GitHub (#1115): `/.well-known/apple-app-site-association` lists the app for that path
+  (applinks) and for webcredentials, which the https callback requires, and the app's Associated
+  Domains name starbridge.run. Older iOS and self-hosted servers, whose domain cannot list the
+  app, end on `starbridge://auth`, so on starbridge.run they stop on `/app/auth` and the owner
+  taps Open Starbridge once.
 - `assetlinks.json` lists only the release key, which Play App Signing also uses. A debug
   keystore's password is public, and an app signed with it would verify as the App Link handler
   (#569). Dogfood builds sign with the release key instead, opted into by a gitignored

@@ -3,6 +3,9 @@
 These rules apply to `README.md`, `docs/*.md`, `cli/README.md` and `server/README.md`. The site
 serves all but `README.md` under /docs (`DOCS` in `web/src/lib/docs.ts`).
 
+If you have the `docs-review` skill, read it before you edit any of them; these rules win where
+the two differ.
+
 ## Where things go
 
 - Each page answers one reader question. Overview (`index.md`): what Starbridge is, the terms,
@@ -23,8 +26,9 @@ serves all but `README.md` under /docs (`DOCS` in `web/src/lib/docs.ts`).
 - The background service is `starbridge agent`.
 - A question picker is a harness's own tool for asking a question with options.
 
-Keep one name per thing. When two harnesses behave the same, copy the sentence word for word:
-"Each question shows at the keyboard and on your devices at once, and the first answer wins."
+Keep one name per thing. When harnesses behave the same, say it once, beside the support table,
+and give each harness only what differs. A sentence that must repeat is copied word for word:
+"Your answer comes back as the session's next prompt."
 
 ## Writing
 

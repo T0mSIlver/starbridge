@@ -160,7 +160,9 @@ private struct Tile: View {
 private struct SignInStep: View {
     let store: Store
     @Environment(\.webAuthenticationSession) private var webAuthenticationSession
+    @Environment(\.colorScheme) private var colorScheme
     @State private var selfHosted = false
+    @State private var nonce = ""
     @State private var server = ""
     @State private var token = ""
 
@@ -188,6 +190,13 @@ private struct SignInStep: View {
                 Button { gitHub(Store.defaultServer) } label: { Label { Text("Sign in with GitHub") } icon: { Image("GitHub").resizable().frame(width: 20, height: 20) } }
                     .buttonStyle(Primary(busy: store.busy))
                     .disabled(store.busy)
+                // As tall and as wide as GitHub's: App Store guideline 4.8 wants Apple's no less
+                // prominent (spec/sign-in.md).
+                SignInWithAppleButton(.signIn, onRequest: appleRequest, onCompletion: appleDone)
+                    .signInWithAppleButtonStyle(colorScheme == .dark ? .white : .black)
+                    .frame(height: 56)
+                    .clipShape(Capsule())
+                    .disabled(store.busy)
                 LinkButton(text: "Use your own server") {
                     selfHosted = true
                     if server.isEmpty { server = store.saved.server == Store.defaultServer ? "" : store.saved.server }
@@ -204,9 +213,32 @@ private struct SignInStep: View {
         }
     }
 
+    /** Asks Apple for no name and no email: the account is Apple's user id alone (spec/sign-in.md). */
+    private func appleRequest(_ request: ASAuthorizationAppleIDRequest) {
+        nonce = SignIn.newNonce()
+        request.requestedScopes = []
+        request.nonce = SignIn.nonceHash(nonce)
+    }
+
+    private func appleDone(_ result: Result<ASAuthorization, Error>) {
+        switch result {
+        case let .success(auth):
+            guard let credential = auth.credential as? ASAuthorizationAppleIDCredential,
+                  let token = credential.identityToken.flatMap({ String(data: $0, encoding: .utf8) }),
+                  let code = credential.authorizationCode.flatMap({ String(data: $0, encoding: .utf8) }) else {
+                store.notice = "Apple sign-in didn't finish. Sign in again."
+                return
+            }
+            Task { await store.signInWithApple(identityToken: token, code: code, nonce: nonce) }
+        case let .failure(error):
+            if (error as? ASAuthorizationError)?.code != .canceled { store.notice = store.describe(error) }
+        }
+    }
+
     /**
-     * Opens GitHub's sign-in in the browser sheet, which shares Safari's GitHub sign-in, and
-     * ends when the server hands the code on to starbridge://auth.
+     * Opens GitHub's sign-in in the browser sheet, which shares Safari's GitHub sign-in. On
+     * starbridge.run from iOS 17.4 it ends on the https callback GitHub redirects to (#1115);
+     * elsewhere when the server hands the code on to starbridge://auth.
      */
     private func gitHub(_ server: String) {
         guard let url = store.gitHubSignInURL(server: server) else {
@@ -215,7 +247,14 @@ private struct SignInStep: View {
         }
         Task {
             do {
-                let link = try await webAuthenticationSession.authenticate(using: url, callbackURLScheme: "starbridge", preferredBrowserSession: .shared)
+                let link: URL
+                if #available(iOS 17.4, *), let https = SignIn.httpsCallback(server: store.saved.server) {
+                    link = try await webAuthenticationSession.authenticate(
+                        using: url, callback: .https(host: https.host, path: https.path),
+                        preferredBrowserSession: .shared, additionalHeaderFields: [:])
+                } else {
+                    link = try await webAuthenticationSession.authenticate(using: url, callbackURLScheme: "starbridge", preferredBrowserSession: .shared)
+                }
                 await store.receiveSignIn(link)
             } catch {
                 store.abandonSignIn()

@@ -17,8 +17,15 @@ export function PushBanner() {
   // Stops waiting for an answer the browser's prompt has yet to give (#1030).
   const waiting = useRef<() => void>(undefined);
   useEffect(() => {
-    import("@/lib/push").then((p) => p.pushState()).then(setState);
-    return () => waiting.current?.();
+    const check = () => import("@/lib/push").then((p) => p.pushState()).then(setState);
+    check();
+    // Read again on return, as from the system's settings, where the owner may have allowed them.
+    const shown = () => document.visibilityState === "visible" && check();
+    document.addEventListener("visibilitychange", shown);
+    return () => {
+      document.removeEventListener("visibilitychange", shown);
+      waiting.current?.();
+    };
   }, []);
   if (!ready || state === undefined || state === "on" || state === "unsupported") return null;
   if (off && state === "off") return null;
