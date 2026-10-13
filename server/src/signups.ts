@@ -23,3 +23,6 @@ export function setSignUps(config: Config, open: boolean): void {
 
 export const SIGNUPS_PAUSED =
   "Starbridge is not taking new accounts right now; accounts that exist still sign in. Try again in a few hours.";
+
+export const SIGNUPS_CLOSED =
+  "This server takes new accounts only from the GitHub users it lists; accounts that exist still sign in.";
