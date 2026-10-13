@@ -7,7 +7,7 @@ Code session that asked, as the line `starbridge wait` prints:
 Answer to d_Xk3… (Merge #12 now?): Merge
 ```
 
-It works in the terminal, the desktop app's Code tab and Remote Control.
+It works in the terminal, the desktop app's Code tab, IDEs and Remote Control.
 
 ## Install
 
@@ -24,10 +24,9 @@ To try a checkout in one session: `claude --plugin-dir mod`.
 
 ## How it works
 
-The mod runs in each session a person keeps open: the terminal, the desktop
-app's Code tab and IDEs, which run Claude Code through the SDK. It skips
-`claude -p` and Agent SDK scripts, told apart by `CLAUDE_CODE_ENTRYPOINT`
-(`sdk-cli`, `sdk-ts`, `sdk-py`), whose runs end with their last turn.
+The mod skips `claude -p` and Agent SDK scripts, whose runs end with their
+last turn, told apart by `CLAUDE_CODE_ENTRYPOINT` (`sdk-cli`, `sdk-ts`,
+`sdk-py`).
 
 The mod holds no keys. Each session picks one of two paths, and
 switches when the agent starts or stops.
@@ -102,8 +101,9 @@ pi install git:github.com/T0mSIlver/starbridge@v<version>
 ```
 
 In an interactive or RPC Pi session it submits each answer as a user message,
-which starts a turn when Pi is idle and runs after the current one when it is
-busy. It also adds its rule (`plugin/rules/pi.md`) to Pi's system
+which starts a turn when Pi is idle. When Pi is busy, an answer to a decision
+marked waiting enters the running turn at its next tool call (`deliverAs:
+"steer"`), and any other runs after the turn (`"followUp"`). It also adds its rule (`plugin/rules/pi.md`) to Pi's system
 prompt. `pi -p` gets no loop, so `starbridge ask` tells the agent there to
 `starbridge wait`.
 

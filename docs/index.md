@@ -1,8 +1,8 @@
 # Starbridge docs
 
 Starbridge lets you supervise your coding agents from your phone or a browser. When an agent
-needs a decision from you, you answer with one tap, and the answer goes back into the session
-that asked.
+needs a decision from you, you answer with one tap, and your answer comes back as the session's
+next prompt.
 
 You also see the [runs](#runs) that block you, answer
 [permission prompts](tell-your-agents.md#what-each-harness-supports) once you turn them on, and
@@ -38,7 +38,7 @@ starbridge.run, or [host your own](../server/README.md).
      Apple silicon or `x64` for Intel. It updates itself; turn on Settings → Updates → Release candidates
      to get each release candidate.
    - iOS 16.4 and later: open [starbridge.run](https://starbridge.run) in Safari and add it to the
-     Home Screen to get notifications. A native iPhone app is in progress.
+     Home Screen to get notifications. The native iPhone app is in TestFlight, for testers only.
    - Anywhere else: [starbridge.run](https://starbridge.run).
 
    The first device you sign in on creates your account's keys and shows your
@@ -65,8 +65,7 @@ starbridge.run, or [host your own](../server/README.md).
    Setup then installs Starbridge in each harness it finds, starts the background service, and
    offers CodexBar, which reads your AI plans' quotas
    ([what setup does](../cli/README.md#what-setup-does)). CodexBar is optional: setup asks before
-   installing it, `--no-quota` skips it, and questions, runs and permission prompts work without
-   it.
+   installing it, and everything but quotas works without it.
 
 4. **Answer the test question** that setup offers to send. If nothing arrives, run
    `starbridge status`. To send one again later:

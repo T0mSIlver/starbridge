@@ -34,10 +34,10 @@ so.
 
 ### Quiet other devices while you're at a screen
 
-With Settings → Notifications → Quiet other devices while you're at a screen, a question
-notifies only the device you are using: a Starbridge page or app you touched in the last minute.
-Your other devices notify after the hold time once you leave (30 s by default), if nobody
-answered.
+While you use a Starbridge page or app, touched in the last minute, a question notifies only that
+device. Your other devices notify once you have been away from it for the time picked in
+Settings → Notifications → Quiet other devices while you're at a screen, if nobody answered: 30 s
+by default. Off notifies every device at once.
 
 A computer counts too while it is unlocked and used in the last minute, once you run
 `starbridge config presence on` on it. It tells the server only yes or no, on macOS, Windows,
