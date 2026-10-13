@@ -1,6 +1,6 @@
 #!/bin/sh
 # From the dev box, once and again after a change: installs staging's deploy command on
-# homelab-arm and lets deploy.yml's staging key run it and nothing else. The VM itself (Docker,
+# sb-staging and lets deploy.yml's staging key run it and nothing else. The VM itself (Docker,
 # firewall, users) is the homelab's; this only adds to it.
 set -eu
 host=${STAGING_HOST:-sb-staging}
