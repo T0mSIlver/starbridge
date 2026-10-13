@@ -21,16 +21,16 @@ export class Handover {
    * The loops' submit. Submits `text` with `enter` while no turn runs. During one, returns false,
    * so the line stays unconfirmed and comes back in the next poll, and keeps a `waiting` line, and
    * the `ack` that confirms it, for the next tool call. A line a tool result already carried
-   * returns true without a second submit.
+   * returns true without a second submit. Otherwise returns what `enter` returns: false, or a
+   * promise of false, when it could not submit the line.
    */
-  submit(text: string, ack: string, waiting: boolean, enter: (text: string) => void): boolean {
+  submit(text: string, ack: string, waiting: boolean, enter: (text: string) => unknown): unknown {
     if (this.handed.delete(text)) return true;
     if (this.running) {
       if (waiting) this.next.set(text, ack);
       return false;
     }
-    enter(text);
-    return true;
+    return enter(text) ?? true;
   }
 
   /** The main agent's turn started. */
