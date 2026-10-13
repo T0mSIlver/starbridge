@@ -58,7 +58,8 @@
 - **Following every answer** (#629). `answers --all --follow` gives an orchestrator the owner's
   answers to every session's questions, so it no longer depends on each session relaying them or
   reads the state file. It is an observer: it marks no answer seen and no decision waiting, so
-  each answer still reaches its session. The machine keeps each decision's project and session
+  each answer still reaches its session. It lists an answer whose question was settled since,
+  which is still the owner's word (#1575). The machine keeps each decision's project and session
   title, like its question, after the answer drops its body. `decisions --open` lists the
   questions still open, so one question has one asker: the orchestrator checks it before
   asking, since the owner once got the same question from it and from a session.

@@ -123,7 +123,8 @@ their inbox until you take it back, before you act or in the same step as
 the repost: `starbridge settle <id> --outcome withdrawn --reason
 '…'`. The reason shows in their History: one short line, 120 characters at
 most, such as `'You answered in the terminal'` or `'Fixed it myself after
-rereading the logs'`.
+rereading the logs'`. When they had answered first, `settle` prints the
+answer instead: act on it.
 
 ## Answers in an artifact
 
