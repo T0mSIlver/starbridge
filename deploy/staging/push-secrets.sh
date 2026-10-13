@@ -1,6 +1,6 @@
 #!/bin/sh
 # Copies staging's secrets from ~/.config/starbridge/secrets/staging on this machine to
-# /etc/starbridge-staging/secrets (root, 0700) on homelab-arm: the ones named, or all of them.
+# /etc/starbridge-staging/secrets (root, 0700) on sb-staging: the ones named, or all of them.
 # None of prod's: staging has its own OAuth app and VAPID pair.
 set -eu
 host=${STAGING_HOST:-sb-staging}

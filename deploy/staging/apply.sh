@@ -1,5 +1,5 @@
 #!/bin/sh
-# Run as root on homelab-arm by starbridge-staging-deploy (deploy-rev.sh beside this file), once
+# Run as root on sb-staging by starbridge-staging-deploy (deploy-rev.sh beside this file), once
 # it unpacked a commit of main into /opt/starbridge-staging. Staging's part of host/apply.sh: the
 # same images and Caddy as prod, its own secrets (server-env.sh), and no Umami, backups or demo
 # server. The page runs as one copy, so a deploy may drop a request or two.

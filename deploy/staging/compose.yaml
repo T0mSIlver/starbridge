@@ -1,4 +1,4 @@
-# Staging (staging.starbridge.run, on homelab-arm), laid over prod's compose.yaml by apply.sh:
+# Staging (staging.starbridge.run, on sb-staging), laid over prod's compose.yaml by apply.sh:
 #   docker compose -p starbridge-staging -f /opt/starbridge-staging/deploy/compose.yaml \
 #     -f /opt/starbridge-staging/deploy/staging/compose.yaml
 # The same images and Caddy as prod, its own secrets, no Umami. Memory caps keep it to its share

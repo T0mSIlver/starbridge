@@ -1,5 +1,5 @@
 #!/bin/sh
-# Installed on homelab-arm as /usr/local/sbin/starbridge-staging-deploy (setup.sh) and run as root
+# Installed on sb-staging as /usr/local/sbin/starbridge-staging-deploy (setup.sh) and run as root
 # by the forced command of deploy.yml's staging key, with one argument, a commit id. Deploys that
 # commit if it is on main, which it fetches itself over HTTPS, the repository being public. As on
 # prod, a commit older than the deployed one is skipped unless it is main's head: CI on an older

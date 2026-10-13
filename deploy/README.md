@@ -44,7 +44,7 @@ image is tagged by a hash of that file and built only when no image has the tag.
 
 ## Staging
 
-`https://staging.starbridge.run` runs on homelab-arm, an Oracle ARM VM, from every deploy of
+`https://staging.starbridge.run` runs on sb-staging, an Oracle ARM VM, from every deploy of
 main: the same images as prod, prod's compose file with `staging/compose.yaml` laid over it, and
 prod's Caddyfile under staging's host name with `X-Robots-Tag: noindex`. It has its own secrets
 and no Umami, backups or demo server. `deploy.yml`'s staging key runs only

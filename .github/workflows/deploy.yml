@@ -141,9 +141,15 @@ jobs:
             }
           done
 
+<<<<<<< HEAD
   # Staging (staging.starbridge.run, on homelab-arm) runs the same images (deploy/staging/). Its
   # key's forced command deploys a commit of main and nothing else, the box fetching it itself,
   # then runs one round trip there. Until the VM and the key exist, the job passes with a notice.
+=======
+  # Staging (staging.starbridge.run, on sb-staging) runs the same images (deploy/staging/). Its
+  # key's forced command deploys a commit of main and nothing else; the box fetches it itself.
+  # Until the VM and the key exist, the job skips with a notice.
+>>>>>>> infra/staging
   staging:
     needs: [changed, images]
     concurrency:

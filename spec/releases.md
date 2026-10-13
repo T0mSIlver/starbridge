@@ -133,7 +133,7 @@
   reports that commit or a later one (`x-starbridge-revision`). That header, and
   `starbridge-deploy`'s argument, are refused unless they are 40 lowercase hex characters (#467),
   since the workflow puts the revision in a `gh api` path.
-- **Staging** (#1526). `staging.starbridge.run`, on homelab-arm, an Oracle ARM VM, takes every
+- **Staging** (#1526). `staging.starbridge.run`, on sb-staging, an Oracle ARM VM, takes every
   deploy of main before or beside prod, with the same images, compose file and Caddyfile, so a
   deploy that breaks shows there first. Its data is synthetic, made through the real flows by the
   load test's setup: a copy of prod's would be ciphertext plus GitHub ids and push endpoints on a

@@ -1,5 +1,5 @@
 #!/bin/sh
-# Run as root on homelab-arm by seed.sh: `seed-host.sh start` stops staging's server and starts a
+# Run as root on sb-staging by seed.sh: `seed-host.sh start` stops staging's server and starts a
 # second one on its database that signs in against the load test's fake GitHub and FCM
 # (evals/load/fake.ts), on 127.0.0.1:18080; `seed-host.sh stop` removes both and starts staging's
 # server again. The fake FCM key comes on stdin.
