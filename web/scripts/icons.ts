@@ -118,9 +118,12 @@ const CROP = { x: BOX.x0, y: BOX.y1 - W, size: W };
 // The same, with room for a halo or for pixels to round.
 const PAD = W * 0.06;
 const SMALL = { x: CROP.x - PAD, y: CROP.y - PAD, size: W + 2 * PAD };
-// The menu bar: as wide, with the arch centred top to bottom, as macOS centres the image in the bar
-// and the system icons in their own. On its feet, it sat 1.5 px below them at 1x (#1449).
-const TRAY = { ...SMALL, y: (BOX.y0 + BOX.y1) / 2 - SMALL.size / 2 };
+// The menu bar and the tab: as wide, with the arch centred top to bottom, as macOS centres the image
+// in the bar and the system icons in their own, and a browser centres a favicon in its 16 px box.
+// On its feet, the menu bar icon sat 1.5 px below the system icons at 1x (#1449), and the tab icon
+// as low (#1562).
+const CENTRED = { ...SMALL, y: (BOX.y0 + BOX.y1) / 2 - SMALL.size / 2 };
+const TRAY = CENTRED;
 const vb = (c: { x: number; y: number; size: number }) =>
   `${r(c.x)} ${r(c.y)} ${r(c.size)} ${r(c.size)}`;
 
@@ -237,7 +240,7 @@ writeFileSync(
 // scheme's `fg` so it stays legible on a tab strip that does not follow the system.
 writeFileSync(
   at("web/src/app/icon.svg"),
-  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${vb(SMALL)}">
+  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${vb(CENTRED)}">
   <title>Starbridge</title>
   <!-- ${GENERATED} -->
   <style>
@@ -280,7 +283,7 @@ const SHOWN = "18 18 72 72";
 const TILE = launcher("22 22 64 64", `<rect x="22" y="22" width="64" height="64" rx="14"/>`);
 // Transparent, for the favicon: light scheme colours with a light halo, legible on any tab strip.
 const FAVICON: Svg = {
-  viewBox: vb(SMALL),
+  viewBox: vb(CENTRED),
   body: `<g stroke="#f1f1f1" stroke-width="${r(W * 0.07)}" stroke-linejoin="round" paint-order="stroke">${shapes(LIGHT.fg, LIGHT.accent)}</g>`,
 };
 
