@@ -63,7 +63,7 @@ import java.io.File
 /** The vector files these tests read; [ProtocolVectorsTest.everyVectorFileIsRead] keeps it whole. */
 private val READ = setOf(
     "context.json", "directory.json", "envelopes.json", "heads.json", "images.json", "join.json",
-    "keys.json", "pairing.json", "quota-alerts.json", "schemas.json",
+    "keys.json", "links.json", "pairing.json", "quota-alerts.json", "schemas.json",
 )
 
 /** Vector files only the machine's code runs: the local agent computes pace and alerts (#1147). */
