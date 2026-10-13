@@ -43,6 +43,20 @@
   an rc or with Get Release Candidates on, the CLI's rcs to npm's `next` and finals to `latest` and
   Homebrew, the plugin marketplace on finals. The iPhone app follows Android once Apple's export
   compliance code arrives: rcs to TestFlight, finals to the App Store.
+- **Three rings: main, rc, final** (#1540). The owner runs main against staging, testers and
+  starbridge.run run rcs, everyone else finals, and a change never skips a ring: v0.1.3 broke every
+  tester's app before the owner had run it. The dev box's CLI, agent, plugin and mod follow the
+  server its machine is paired with, staging. The Android app's build of main goes to Play's
+  internal testing track every night at 03:00 UTC when the app changed since the last one
+  (`internal.yml`), not on each merge: Play updates a phone about once a day anyway, and Google
+  advises against publishing to a testing track more often. Play gives a phone the highest
+  versionCode it may install, so main's builds take slots 50 to 98 of the version under way (the
+  next patch after a final), between its rcs (1 to 49) and its final (99): the owner's phone takes
+  main over an rc and the final over both. A Google account in internal testing is no longer
+  eligible for closed testing, so the owner joins it with a second account and stays one of the 12
+  closed testers. The iPhone app follows to TestFlight's internal testers once Apple's export
+  compliance code arrives (`IOS_MAIN_TESTFLIGHT`); the Mac app stays on rcs, since a nightly
+  notarized build would cost a macOS runner a night for one user.
 - **Play's Alpha track from CI** (#1024). Testers fell behind while each App Bundle went to Play
   Console by hand. Once the release is published, the `play` job uploads the tag's AAB to Alpha
   through the Play Developer API (`cli/scripts/play.ts`), status `completed`, with the GitHub

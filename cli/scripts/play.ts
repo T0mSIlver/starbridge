@@ -1,7 +1,7 @@
 /**
- * Uploads a release's App Bundle to Google Play: Alpha, the testers' closed track (#1024), or
- * production, for a final once Play allows it (#1070):
- *   bun run scripts/play.ts <aab> <version> <notes.md> [--track alpha|production] [--validate]
+ * Uploads an App Bundle to Google Play: internal, the owner's builds of main (#1540), Alpha, the
+ * testers' closed track (#1024), or production, for a final once Play allows it (#1070):
+ *   bun run scripts/play.ts <aab> <version> <notes.md> [--track internal|alpha|production] [--url <link>] [--validate]
  * PLAY_ACCESS_TOKEN is an OAuth token for the androidpublisher scope; in CI, google-github-actions/auth
  * trades the job's OIDC token for one, so no key exists. --validate checks the edit
  * with Play and discards it, so nothing is published; a versionCode no higher than the track's
@@ -12,7 +12,7 @@ import { readFileSync } from "node:fs";
 import { parseArgs } from "node:util";
 
 export const PACKAGE = "dev.starbridge.app";
-export const TRACKS = ["alpha", "production"] as const;
+export const TRACKS = ["internal", "alpha", "production"] as const;
 export type Track = (typeof TRACKS)[number];
 // Play's limit on one language's release notes.
 const NOTES_MAX = 500;
@@ -137,22 +137,62 @@ export async function upload(opts: {
   }
 }
 
+/**
+ * What the internal track holds (#1540): its release's name, `main-<commit>` for a build of main,
+ * and its highest versionCode. The nightly build reads it to skip an unchanged app and to take the
+ * next code. Read in an edit that is then discarded.
+ */
+export async function internalTrack(
+  token: string,
+  api = "https://androidpublisher.googleapis.com",
+) {
+  const app = `${api}/androidpublisher/v3/applications/${PACKAGE}`;
+  const call = async (method: string, url: string) => {
+    const res = await fetch(url, { method, headers: { authorization: `Bearer ${token}` } });
+    const text = await res.text();
+    if (!res.ok) throw new PlayError(`Play ${method} ${url.split("?")[0]}: ${res.status} ${text}`);
+    return text ? JSON.parse(text) : {};
+  };
+  const edit = (await call("POST", `${app}/edits`)).id as string;
+  try {
+    const track = (await call("GET", `${app}/edits/${edit}/tracks/internal`)) as {
+      releases?: { name?: string; versionCodes?: string[] }[];
+    };
+    const releases = track.releases ?? [];
+    const codes = releases.flatMap((r) => (r.versionCodes ?? []).map(Number));
+    return { name: releases[0]?.name ?? "", maxCode: codes.length ? Math.max(...codes) : 0 };
+  } finally {
+    await call("DELETE", `${app}/edits/${edit}`).catch(() => {});
+  }
+}
+
 class PlayError extends Error {}
 
-if (import.meta.main) {
+if (import.meta.main && process.argv[2] === "internal-state") {
+  // `play.ts internal-state`: the internal track's release name and highest code, as JSON.
+  const token = process.env.PLAY_ACCESS_TOKEN;
+  if (!token) throw new Error("usage: PLAY_ACCESS_TOKEN=… play.ts internal-state");
+  console.log(JSON.stringify(await internalTrack(token, process.env.PLAY_API_URL)));
+} else if (import.meta.main) {
   const { values, positionals } = parseArgs({
     allowPositionals: true,
-    options: { validate: { type: "boolean" }, track: { type: "string", default: "alpha" } },
+    options: {
+      validate: { type: "boolean" },
+      track: { type: "string", default: "alpha" },
+      // Where the notes' "More" link goes: the release's page by default.
+      url: { type: "string" },
+    },
   });
   const [aab, version, notesPath] = positionals;
   const track = values.track as Track;
   const token = process.env.PLAY_ACCESS_TOKEN;
   if (!aab || !version || !notesPath || !token || !TRACKS.includes(track)) {
     throw new Error(
-      "usage: PLAY_ACCESS_TOKEN=… play.ts <aab> <version> <notes.md> [--track alpha|production] [--validate]",
+      "usage: PLAY_ACCESS_TOKEN=… play.ts <aab> <version> <notes.md> [--track internal|alpha|production] [--url <link>] [--validate]",
     );
   }
-  const releaseUrl = `https://github.com/T0mSIlver/starbridge/releases/tag/v${version}`;
+  const releaseUrl =
+    values.url ?? `https://github.com/T0mSIlver/starbridge/releases/tag/v${version}`;
   await upload({
     token,
     aab: readFileSync(aab),
