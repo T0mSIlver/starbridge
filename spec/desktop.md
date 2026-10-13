@@ -61,6 +61,12 @@ a browser; the app adds a menu bar light and notifications, so a web release nee
   ⌃⌥S shows the window from anywhere.
 - **The menu bar icon** centres the arch top to bottom in its 18 pt image, as the system icons
   are (#1449): standing on the image's bottom edge, as the other crops do, it sat 1.5 pt below them.
+- **The amber icon's arch follows the menu bar, not the theme** (#1514). macOS tints the bar by the
+  wallpaper, so a light-theme Mac can have a dark bar with white icons, and the plain mark (a
+  template image) follows it while the amber one, which carries its colours, did not. While
+  something needs the owner, a JXA probe (`osascript`, no install) reads a status item's
+  appearance and the icon switches between a light and a dark variant live; until it answers, or
+  if it can't run, the theme decides.
 - **Updates** (#1398) live in the window, not the menus, as in T3 Code: a menu item went unseen,
   so a downloaded update waited for a quit. At the foot of the rail, a button says "Update
   available" (a click downloads), "Downloading 42%", "Restart to update" (a click quits, after

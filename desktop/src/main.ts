@@ -20,6 +20,7 @@ import {
 } from "electron";
 import { Answers } from "./answers";
 import { type Answer, type Entry, parseAnswered, parseState } from "./bridge";
+import { MenuBar, trayImageName } from "./menubar";
 import { Notifier, type Shown } from "./notifier";
 import { linkPage, opensOutside, serverOrigin, staysInWindow } from "./origin";
 import { type Reading, SCREEN_CHECK_MS, Screen } from "./screen";
@@ -63,6 +64,7 @@ let origin: string;
 let win: BrowserWindow | null = null;
 let serverWin: BrowserWindow | null = null;
 let tray: Tray | null = null;
+const menuBar = new MenuBar(() => paintTray());
 /** Items in Needs you, which turn the menu bar's dot amber. */
 let needs = 0;
 let notifier: Notifier;
@@ -117,7 +119,10 @@ function start(): void {
   });
   // The app lives in the menu bar; closing the window keeps it there.
   app.on("window-all-closed", () => {});
-  app.on("will-quit", () => widgets.close());
+  app.on("will-quit", () => {
+    menuBar.stop();
+    widgets.close();
+  });
   app.on("web-contents-created", (_e, contents) => guard(contents));
   app.whenReady().then(ready);
 }
@@ -401,6 +406,7 @@ function applyPlace(): void {
   if (settings.place === "dock") {
     tray?.destroy();
     tray = null;
+    menuBar.stop();
   } else if (!tray) {
     tray = new Tray(trayIcon());
     paintTray();
@@ -415,22 +421,19 @@ function applyPlace(): void {
 /**
  * The mark in the menu bar: one colour, as macOS draws menu bar icons, until something needs the
  * owner; then its dot is amber, the one amber light, as on the phone. No count: the window
- * says what. The amber icon carries its own colours, so it follows the menu bar's appearance.
+ * says what. The amber icon carries its own colours, so its arch is picked by the menu bar's
+ * appearance, which the wallpaper can make differ from the theme (#1514).
  */
 function trayIcon(): Electron.NativeImage {
-  const name =
-    needs === 0
-      ? "trayTemplate"
-      : nativeTheme.shouldUseDarkColors
-        ? "trayWaitingDark"
-        : "trayWaitingLight";
-  const icon = nativeImage.createFromPath(join(ASSETS, `${name}.png`));
+  const dark = menuBar.dark ?? nativeTheme.shouldUseDarkColors;
+  const icon = nativeImage.createFromPath(join(ASSETS, `${trayImageName(needs, dark)}.png`));
   icon.setTemplateImage(needs === 0);
   return icon;
 }
 
 function paintTray(): void {
   if (!tray) return;
+  menuBar.watch(process.platform === "darwin" && needs > 0);
   tray.setImage(trayIcon());
   tray.setToolTip(
     needs === 0 ? "Starbridge" : `Starbridge: ${needs} need${needs === 1 ? "s" : ""} you`,
