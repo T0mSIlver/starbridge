@@ -1,10 +1,11 @@
 "use client";
 
+import { linkChip } from "@starbridge/protocol";
 import { type CSSProperties, type ReactNode, useEffect, useRef, useState } from "react";
-import { githubLink, imageSrc, linkLabel } from "@/lib/attachments";
+import { imageSrc } from "@/lib/attachments";
 import type { Decision } from "@/lib/types";
 import s from "./Attachments.module.css";
-import { Icon, Octicon } from "./icons";
+import { Icon, LinkGlyph } from "./icons";
 import { Viewer } from "./Viewer";
 
 type Image = NonNullable<Decision["images"]>[number];
@@ -106,8 +107,8 @@ export function ImageButton({
 
 /**
  * Pages the agent attached for the owner to see before answering, such as a Claude artifact it
- * built (spec/items.md, "Questions"), each opening a new tab. A GitHub link leads with its kind's
- * Octicon and reads as its reference, "#123" (#971).
+ * built (spec/items.md, "Links"), each opening a new tab. `linkChip` gives its icon and text: a
+ * GitHub link's Octicon and reference, "#123" (#971), a Claude artifact's window (#1577).
  */
 export function Links({ d }: { d: Decision }) {
   const links = d.links ?? [];
@@ -115,7 +116,7 @@ export function Links({ d }: { d: Decision }) {
   return (
     <nav className={s.links} aria-label="Links from the agent">
       {links.map((l) => {
-        const gh = githubLink(l.url);
+        const chip = linkChip(l, d.source.project);
         return (
           <a
             key={l.url}
@@ -125,8 +126,8 @@ export function Links({ d }: { d: Decision }) {
             rel="noopener noreferrer"
             title={l.title ?? l.url}
           >
-            {gh && <Octicon kind={gh.kind} />}
-            <span className="t-label">{linkLabel(l, d.source.project)}</span>
+            {chip.icon && <LinkGlyph icon={chip.icon} />}
+            <span className="t-label">{chip.label}</span>
             <Icon name="open" size={16} />
           </a>
         );

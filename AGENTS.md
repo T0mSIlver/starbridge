@@ -64,11 +64,11 @@ command and its local agent), `plugin` and
 
 A Linux job on the self-hosted boxes takes its `runs-on` from a repository
 variable, a JSON array of labels, with GitHub's runner as the fallback:
-`TRUSTED_RUNNER` for pushes to main, deploys and releases, `PR_LIGHT_RUNNER`,
-`PR_HEAVY_RUNNER` and `PR_DOCKER_RUNNER` for pull requests from this
-repository's branches. Never send a pull request job to `TRUSTED_RUNNER` or
-`ANDROID_RUNNER`, and never name a runner label in a workflow directly.
-Windows, macOS, KVM and Electron jobs stay on GitHub's runners. A job must not
+`TRUSTED_RUNNER` for pushes to main, deploys and releases, `PR_LIGHT_RUNNER`
+and `PR_DOCKER_RUNNER` for pull requests from this repository's branches.
+Never send a pull request job to `TRUSTED_RUNNER` or `ANDROID_RUNNER`, and
+never name a runner label in a workflow directly. Windows, macOS, KVM, e2e
+and Electron jobs stay on GitHub's runners. A job must not
 rely on an earlier one's files, and must run beside another on one box: no
 fixed host port, unique container, Compose project and image names.
 [docs/ci.md](docs/ci.md) has the boxes and how to debug them.
