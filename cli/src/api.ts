@@ -36,7 +36,7 @@ export class Unreachable extends Error {}
 /** Why a command Codex runs reaches no server, when that is the reason. */
 export function sandboxHint(env: Record<string, string | undefined>): string | undefined {
   return env.CODEX_SANDBOX_NETWORK_DISABLED === "1"
-    ? "Codex's sandbox has no network. `starbridge setup` adds the rule that lets starbridge ask, waiting, wait and settle out of it."
+    ? "Codex's sandbox has no network. `starbridge setup` adds the rule that lets starbridge ask, waiting, working and wait out of it."
     : undefined;
 }
 
