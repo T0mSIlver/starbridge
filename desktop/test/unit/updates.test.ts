@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import type { Channel } from "../../src/releases";
 import {
+  changeUpdateSettings,
   type Engine,
   parseUpdateAction,
   parseUpdateSettings,
@@ -254,4 +255,19 @@ test("moving from Tip to Release candidates cancels a tip download, not an rc's"
   expect(updates.status).toEqual({ state: "downloading", version: "0.2.0-rc.2", percent: 0 });
   await updates.check();
   expect(runs[1]?.cancelled).toBe(false);
+});
+
+test("only a tip build, or an app on Tip, can pick Tip; any app can leave it", () => {
+  const on = (channel: Channel) => ({ channel, autoDownload: true });
+  expect(changeUpdateSettings(on("rc"), { channel: "tip" }, "0.1.7-rc.3").channel).toBe("rc");
+  expect(changeUpdateSettings(on("stable"), { channel: "tip" }, "0.1.7").channel).toBe("stable");
+  expect(changeUpdateSettings(on("rc"), { channel: "tip" }, "0.1.7-tip.80").channel).toBe("tip");
+  expect(changeUpdateSettings(on("tip"), { channel: "rc" }, "0.1.7-tip.80").channel).toBe("rc");
+  // On Tip after a final passed the tip build: still Tip, and it can come back to it.
+  expect(changeUpdateSettings(on("tip"), { channel: "tip" }, "0.1.7").channel).toBe("tip");
+  // Refused, the rest of the change still counts.
+  expect(changeUpdateSettings(on("rc"), { channel: "tip", autoDownload: false }, "0.1.7")).toEqual({
+    channel: "rc",
+    autoDownload: false,
+  });
 });

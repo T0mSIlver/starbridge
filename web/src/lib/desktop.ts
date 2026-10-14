@@ -39,14 +39,16 @@ export type DesktopUpdateStatus =
 export type DesktopChannel = "stable" | "rc" | "tip";
 
 /**
- * `channel` and `ahead` (the installed version waits for the channel to pass it) are absent
- * before #1692, whose apps have the `releaseCandidates` switch only.
+ * `channel`, `ahead` (the installed version waits for the channel to pass it) and `tip` (whether
+ * Tip is offered: on a tip build, or while on Tip) are absent before #1692, whose apps have the
+ * `releaseCandidates` switch only.
  */
 export type DesktopUpdateSettings = {
   releaseCandidates: boolean;
   autoDownload: boolean;
   channel?: DesktopChannel;
   ahead?: boolean;
+  tip?: boolean;
 };
 
 export type DesktopBridge = {

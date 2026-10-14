@@ -24,7 +24,7 @@ import { type Answer, type Entry, parseAnswered, parseState } from "./bridge";
 import { MenuBar, trayImageName } from "./menubar";
 import { Notifier, type Shown } from "./notifier";
 import { opensOutside, serverOrigin, staysInWindow } from "./origin";
-import { ahead } from "./releases";
+import { ahead, tipOffered } from "./releases";
 import { type Reading, SCREEN_CHECK_MS, Screen } from "./screen";
 import {
   parseBackground,
@@ -36,6 +36,7 @@ import {
 import { browserSignIn, newSignIn, type SignIn, signInReturn, startsSignIn } from "./signin";
 import { mark, timing } from "./timing";
 import {
+  changeUpdateSettings,
   parseUpdateAction,
   parseUpdateSettings,
   type UpdateSettingsView,
@@ -199,7 +200,7 @@ async function ready(): Promise<void> {
   ipcMain.on("update-settings", (e, x) => {
     const change = fromPage(e) && parseUpdateSettings(x);
     if (!change) return;
-    settings = { ...settings, ...change };
+    settings = { ...settings, ...changeUpdateSettings(settings, change, app.getVersion()) };
     save();
     win?.webContents.send("update-settings", updateSettings());
     updates?.check();
@@ -296,6 +297,7 @@ function updateSettings(): UpdateSettingsView {
     releaseCandidates: channel !== "stable",
     // Not while the channel offers an update: it has passed the installed version.
     ahead: ahead(app.getVersion(), channel) && !(updates && "version" in updates.status),
+    tip: tipOffered(app.getVersion(), channel),
   };
 }
 

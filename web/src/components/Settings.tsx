@@ -896,15 +896,20 @@ function AppSection() {
 }
 
 /**
- * The desktop app's updates (#1398): where they come from (#1692), and whether they download by
- * themselves. Moving to a lower channel drops a release found or downloading; one downloaded still
+ * The desktop app's updates (#1398): where they come from (#1692), Tip only on a tip build, which
+ * only the owner installs, and whether they download by themselves. Moving to a lower channel drops a release found or downloading; one downloaded still
  * installs on quit (spec/releases.md). Apps before the channel have the Release candidates switch.
  */
 function UpdatesSection() {
   const updates = useDesktopUpdates();
   const set = desktop?.setUpdateSettings;
   if (!updates || !set) return null;
-  const { releaseCandidates, autoDownload, channel, ahead } = updates.settings;
+  const { releaseCandidates, autoDownload, channel, ahead, tip } = updates.settings;
+  const channels: [DesktopChannel, string][] = [
+    ["stable", "Stable"],
+    ["rc", "Release candidates"],
+  ];
+  if (tip) channels.push(["tip", "Tip"]);
   return (
     <Section title="Updates">
       {channel ? (
@@ -915,11 +920,7 @@ function UpdatesSection() {
           <Segmented<DesktopChannel>
             label="Update channel"
             value={channel}
-            options={[
-              ["stable", "Stable"],
-              ["rc", "Release candidates"],
-              ["tip", "Tip"],
-            ]}
+            options={channels}
             onChange={(c) => set({ channel: c })}
           />
         </Row>

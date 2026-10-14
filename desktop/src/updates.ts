@@ -1,4 +1,4 @@
-import { CHANNELS, type Channel, channelOf, newerVersion } from "./releases";
+import { CHANNELS, type Channel, channelOf, newerVersion, tipOffered } from "./releases";
 
 /**
  * Where an update stands, which the page shows at the foot of its rail (#1398): nothing while
@@ -37,6 +37,23 @@ export interface UpdateSettings {
 export interface UpdateSettingsView extends UpdateSettings {
   releaseCandidates: boolean;
   ahead: boolean;
+  /** Whether Tip is offered: on a tip build, or while on Tip (releases.ts, tipOffered). */
+  tip: boolean;
+}
+
+/**
+ * The settings after the page's change, for the running app's `version`: Tip only where it is
+ * offered, so only an app installed from a tip build gets there.
+ */
+export function changeUpdateSettings(
+  now: UpdateSettings,
+  change: Partial<UpdateSettings>,
+  version: string,
+): UpdateSettings {
+  const next = { ...now, ...change };
+  return next.channel === "tip" && !tipOffered(version, now.channel)
+    ? { ...next, channel: now.channel }
+    : next;
 }
 
 /**

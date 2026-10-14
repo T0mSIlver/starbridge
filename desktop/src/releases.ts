@@ -39,6 +39,13 @@ export function channelOf(version: string): Channel {
 export const ahead = (installed: string, channel: Channel): boolean =>
   CHANNELS.indexOf(channelOf(installed)) > CHANNELS.indexOf(channel);
 
+/**
+ * Whether Settings offers Tip (#1692): only to the owner, who gets there by installing a tip build
+ * once, and keeps it while on Tip, even when a final or rc passed his build.
+ */
+export const tipOffered = (installed: string, channel: Channel): boolean =>
+  channelOf(installed) === "tip" || channel === "tip";
+
 /** The release tags a GitHub releases Atom feed links to. */
 export function feedTags(atom: string): string[] {
   return [...atom.matchAll(/\/releases\/tag\/([^"<\s]+)/g)].map((m) =>

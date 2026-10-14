@@ -145,7 +145,8 @@
   follows the channel in Settings → Updates (#1692): Stable, GitHub's latest release; Release
   candidates, the newest rc when that is newer (#1071); Tip, also the tip build (below) when that is
   newer still, read from `T0mSIlver/starbridge-tip`. An app installed from an rc starts on Release
-  candidates, one from a tip build on Tip. electron-updater never downgrades, so a lower channel
+  candidates, one from a tip build on Tip, the only way to reach Tip: it is the owner's ring
+  (spec/desktop.md). electron-updater never downgrades, so a lower channel
   holds the installed version until it passes it, which Settings says under the choice. Moving
   down cancels a download the new channel does not offer; one already downloaded still installs
   on quit, since Squirrel holds it. Settings from before the channel keep their meaning, and the

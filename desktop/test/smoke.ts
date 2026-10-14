@@ -303,7 +303,17 @@ try {
     await page.evaluate(`window.starbridgeDesktop.updateSettings().autoDownload`),
     false,
   );
-  // On Tip, the tip repository's build replaces the downloaded release.
+  // Only a tip build can pick Tip, which then reads the tip repository, whose build replaces the
+  // downloaded release. This run's version is the package's, never a tip build's.
+  const settings = () => page.evaluate(`window.starbridgeDesktop.updateSettings()`);
+  await page.evaluate(`window.starbridgeDesktop.setUpdateSettings({ channel: "tip" })`);
+  await until(async () => (await settings()) && true, "the settings");
+  assert.equal(((await settings()) as { channel: string }).channel !== "tip", true);
+  assert.equal(((await settings()) as { tip: boolean }).tip, false);
+  // Electron's app.setVersion, which its types leave out, stands in for a tip build.
+  await app.evaluate(({ app }) =>
+    (app as unknown as { setVersion(v: string): void }).setVersion("9.9.9-tip.0"),
+  );
   await page.evaluate(`window.starbridgeDesktop.setUpdateSettings({ channel: "tip" })`);
   await until(
     async () => (await statuses()).at(-1)?.version === "9.9.10-tip.1",
@@ -314,6 +324,7 @@ try {
     autoDownload: false,
     releaseCandidates: true,
     ahead: false,
+    tip: true,
   });
 
   // The menu bar icon's menu holds what the closed window can't do (#1449); Settings… opens the

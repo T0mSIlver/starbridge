@@ -5,6 +5,7 @@ import {
   feedUrl,
   newerVersion,
   pickRelease,
+  tipOffered,
   ymlVersion,
 } from "../../src/releases";
 
@@ -67,4 +68,11 @@ test("the tip build's version is read from its latest-mac.yml", () => {
   expect(ymlVersion("version: 0.1.7-tip.80\nfiles:\n  - url: x.zip\n")).toBe("0.1.7-tip.80");
   expect(ymlVersion("files: []\nversion: '0.1.7-tip.81'\n")).toBe("0.1.7-tip.81");
   expect(ymlVersion("<html>")).toBeNull();
+});
+
+test("Tip is offered on a tip build, and while on Tip", () => {
+  expect(tipOffered("0.1.7-tip.80", "rc")).toBe(true);
+  expect(tipOffered("0.1.7", "tip")).toBe(true);
+  expect(tipOffered("0.1.7-rc.3", "rc")).toBe(false);
+  expect(tipOffered("0.1.7", "stable")).toBe(false);
 });

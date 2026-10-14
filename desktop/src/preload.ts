@@ -133,7 +133,7 @@ if (location.origin === arg("origin")) {
      * the app runs no updater.
      */
     updateStatus: () => updateStatus,
-    /** `{channel, autoDownload, releaseCandidates, ahead}` (src/updates.ts, UpdateSettingsView). */
+    /** `{channel, autoDownload, releaseCandidates, ahead, tip}` (src/updates.ts, UpdateSettingsView). */
     updateSettings: () => updateSettings,
     setUpdateSettings: (s: unknown) => ipcRenderer.send("update-settings", s),
     /** "check", "download", or "install", which restarts the app. */
