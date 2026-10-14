@@ -514,7 +514,13 @@ createdAt, expiresAt, version}`; `state` is `open`, `comparing`, `approved` or `
 | `GET /quota/senders` | device, machine | `{senders: [{id, receivedAt}]}`: each active machine with a quota item, and when its latest arrived; never the item |
 | `POST /quota/ask?wait=<s>` | device | ask every machine for a fresh quota snapshot → `{askedAt, behind}`; with `wait`, holds until each active machine that has a snapshot posted a newer one; `behind` counts those that have not |
 
-Item ids are random, chosen by the sender. A machine re-posts a run under its id as it changes;
+Item ids are random, chosen by the sender, and an `Id` (`[A-Za-z0-9_-]{1,64}`); no reader depends
+on more of their shape. A decision's id is `d_` and four words of the BIP-39 English list joined by
+hyphens (`d_amber-otter-lantern-quilt`, 44 bits, #1697), so a person or an agent can tell cards
+apart; one from before is `d_` and 16 base64url characters, and both stay valid. The id gates
+nothing: every read of an item takes a signed-in caller and its own box. The bits keep two
+decisions of one account from sharing an id, and a machine that gets 409 `duplicate-id` for a new
+decision mints another. A machine re-posts a run under its id as it changes;
 the server replaces the earlier post and moves it past every cursor. It also re-posts an open
 decision or permission under its id with `reseal: true`, re-signed to the active devices, when a
 device joined since it was posted; the server replaces it only while it holds it unanswered (404

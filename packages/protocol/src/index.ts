@@ -1,5 +1,6 @@
 export * from "./client";
 export * from "./context";
+export * from "./decisionId";
 export * from "./directory";
 export * from "./envelope";
 export * from "./heads";

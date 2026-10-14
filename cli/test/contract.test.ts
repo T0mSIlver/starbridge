@@ -1,5 +1,5 @@
 // Pins what agents and the plugins parse (cli/CONTRACT.md): stable from 0.1.0.
-import { afterEach, beforeEach, expect, test } from "bun:test";
+import { afterEach, beforeEach, expect, spyOn, test } from "bun:test";
 import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -15,7 +15,28 @@ beforeEach(async () => {
 });
 afterEach(() => server.stop());
 
-const ID = /^d_[A-Za-z0-9_-]{16}$/;
+const ID = /^d_[a-z]+(-[a-z]+){3}$/;
+
+test("an id the account already holds is minted again (#1697)", async () => {
+  const ctx = await paired(server);
+  const real = globalThis.crypto.getRandomValues.bind(globalThis.crypto);
+  let zeros = 0;
+  // An id draws 8 random bytes: the first three draws are zeros, so the second ask collides twice.
+  const spy = spyOn(globalThis.crypto, "getRandomValues").mockImplementation(((a: Uint8Array) => {
+    if (a.length === 8 && zeros++ < 3) return a.fill(0);
+    return real(a);
+  }) as never);
+  try {
+    expect(await run(["ask", "--question", "First?", "--session", "s"], ctx)).toBe(0);
+    expect(await run(["ask", "--question", "Second?", "--session", "s"], ctx)).toBe(0);
+  } finally {
+    spy.mockRestore();
+  }
+  const [first, second] = ctx.lines.filter((l) => ID.test(l));
+  expect(first).toBe("d_abandon-abandon-abandon-abandon");
+  expect(second).not.toBe(first);
+  expect(second).toMatch(ID);
+});
 
 test("ask --input reads the fields from a file; ask prints the id, then how the answer comes", async () => {
   const ctx = await paired(server);
