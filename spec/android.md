@@ -95,6 +95,15 @@
   again: a machine offline should not cost the choice. The owner chose one quota at 2×2 and two
   of one provider at 4×2 over a whole plan per widget; the side-by-side 4×2 follows CodexBar's
   combined macOS widget. Glance keeps the choice per widget and deletes it with the widget.
+- **A Quotas widget reads the server's quotas, and says when they are old** (#1686). Quota
+  snapshots push no notification, so with the app closed the widget redrew the phone's last
+  quotas for hours while the Quotas tab was fresh. Its launcher update (every 30 minutes, no
+  new polling) now fetches the quotas first, through a network-constrained one-off job; a push
+  redraws the widgets before it returns, and the first change to what they show redraws at once,
+  later ones within a second. A figure and the Quotas screen are the same number on the same
+  Used/Left scale; a reading an hour old or more says "Updated 3 h ago" in the Quotas screen's
+  words, in place of its pace at 2×2 (the pace is only as good as the reading), and beside the
+  provider at 4×2.
 - **Update screen** (#497): when the server answers 426 `client-too-old`, the app shows only
   "Update Starbridge", the server's minimum and this phone's release, and one button back to
   where the app came from: Google Play, Obtainium (its launch intent, else the release page), or

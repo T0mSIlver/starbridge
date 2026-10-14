@@ -879,6 +879,21 @@ class ServerStore(
         }
     }
 
+    /** The Quotas widget's own read, with the app closed: what the server holds, with no ask and no busy. False when it could not read them. */
+    suspend fun syncQuotasQuietly(): Boolean {
+        // Signed out: nothing to read, and nothing to retry.
+        var done = phase.value != Phase.Ready
+        locked(showBusy = false) {
+            if (phase.value != Phase.Ready) return@locked
+            // The directory first, as a full sync: a machine added since could not sign its snapshots otherwise.
+            syncDirectory()
+            if (phase.value != Phase.Ready) return@locked
+            syncQuotas()
+            done = true
+        }
+        return done
+    }
+
     private suspend fun sync() {
         if (phase.value != Phase.Ready) return
         syncDirectory()
