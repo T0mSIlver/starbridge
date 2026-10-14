@@ -146,9 +146,9 @@ function InboxSection() {
   const [rowAnswers, setRowAnswers] = usePref("rowAnswers");
   return (
     <Section title="Inbox">
-      <Row label="Answer buttons on narrow screens">
+      <Row label="Answer buttons on cards" sub="Under 1100 px wide">
         <Segmented<Prefs["rowAnswers"]>
-          label="Answer buttons on narrow screens"
+          label="Answer buttons on cards"
           value={rowAnswers}
           options={[
             ["always", "Always"],

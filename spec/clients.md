@@ -77,8 +77,9 @@
 - **Find** matches every word in the machine, repo, the agent's words, the session and a History
   item's answer. On the web it lists open matches, then History's; Android uses Material 3's
   search view.
-- **Answer buttons** (#138, #166): "Answer buttons on narrow screens", Always (default), When the agent
-  waits, or Never, applies under 1100 px. More than two options, or a label over 18 characters,
+- **Answer buttons** (#138, #166): "Answer buttons on cards", Always (default), When the agent
+  waits, or Never, applies under 1100 px; one name on every client (#1061), with "Under 1100 px
+  wide" under it on the web, since wider windows ignore it. More than two options, or a label over 18 characters,
   stack. An `answerIn` question gets its page's link and Done when its machine takes a Done
   (#539, #1148); a typed-only question has no buttons.
 - **Typed answers** (#562): Enter sends, Shift+Enter starts a new line, on the web and with an
