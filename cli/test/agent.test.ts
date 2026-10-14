@@ -210,6 +210,7 @@ test("several CLI clients at once: ask, wait, answers and quota push all go thro
     decisionId: ids[2],
     ack: ids[2],
     line: `Answer to ${ids[2]} (Merge #12 now?): Wait`,
+    question: "Merge #12 now?",
     waiting: false,
   });
   expect(await run(["answers", "--session", "s2", "--ack", ids[2] as string], mod)).toBe(0);

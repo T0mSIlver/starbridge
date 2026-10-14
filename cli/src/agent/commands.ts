@@ -198,7 +198,13 @@ export async function answersVia(
   for (const e of events) {
     // The mod built for `answers` takes these fields; it skips lines without a decision id.
     ctx.out(
-      JSON.stringify({ decisionId: e.decisionId, ack: e.ack, line: e.line, waiting: e.waiting }),
+      JSON.stringify({
+        decisionId: e.decisionId,
+        ack: e.ack,
+        line: e.line,
+        question: e.question,
+        waiting: e.waiting,
+      }),
     );
   }
   return 0;

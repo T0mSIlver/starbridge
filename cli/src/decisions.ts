@@ -693,9 +693,12 @@ async function settleOne(
     if (a && !answered) {
       a.settled = true;
       a.unposted = true;
-      a.settledAt = iso(ctx.now());
-      a.outcome = outcome;
-      if (reason !== undefined && outcome === "withdrawn") a.reason = reason;
+      // The first settle's word stands while its notice is in flight: a second one is refused.
+      if (!a.settledAt) {
+        a.settledAt = iso(ctx.now());
+        a.outcome = outcome;
+        if (reason !== undefined && outcome === "withdrawn") a.reason = reason;
+      }
       forget(a);
     }
   });
