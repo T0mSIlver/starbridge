@@ -69,7 +69,16 @@ test("a new account's steps reach Umami once each, as one visit that names no ac
   ]);
   expect(sent.at(-1)?.data).toEqual({ via: "android" });
   expect(new Set(sent.map((e) => e.id)).size).toBe(1);
-  expect(sent[0]?.id).not.toContain(acct.id);
+  // Random, not a hash anyone could compute from the account id (#1745).
+  const unsalted = new Bun.CryptoHasher("sha256").update(`funnel:${acct.id}`).digest("hex");
+  expect(sent[0]?.id).toMatch(/^[0-9a-f]{32}$/);
+  expect(sent[0]?.id).not.toBe(unsalted.slice(0, 32));
+  // Kept with the account, and gone with it.
+  const holder = () =>
+    s.deps.db.query("SELECT id FROM accounts WHERE funnel_id = ?").get(sent[0]?.id ?? "");
+  expect(holder()).toEqual({ id: acct.id });
+  expect((await s.call("DELETE", "/v1/account", { token: phone.token })).status).toBe(204);
+  expect(holder()).toBeNull();
 });
 
 test("Do Not Track, an account older than two days, or a server without Umami sends nothing", async () => {

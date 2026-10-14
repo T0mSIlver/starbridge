@@ -7,6 +7,10 @@ import type { LegalChange } from "@/lib/legalChanges";
  */
 export const privacyChanges: readonly LegalChange[] = [
   {
+    date: "2026-10-15",
+    text: "Sign-up steps in Umami carry a random id kept with your account, in place of a hash of the account id, and deleting your account deletes it.",
+  },
+  {
     date: "2026-10-14",
     text: "Each category now opens with a short summary: what we store, why, who receives it, how long we keep it, and your rights and contact. The details are in collapsed sections under it. No claim changed.",
   },
@@ -50,4 +54,4 @@ export const privacyChanges: readonly LegalChange[] = [
 ];
 
 /** SHA-256 of page.tsx with its whitespace collapsed (sourceHash); changes.test.ts recomputes it. */
-export const pageHash = "06ee290f989588c6bc1dc3e467cf5c07208fd220c84b0cc325837a0d58ac939d";
+export const pageHash = "ab894e98f390ddf17894aadeebea044c1954f137fb0d6e11e31493700bc329be";

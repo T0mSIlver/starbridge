@@ -138,8 +138,10 @@
   them, accounts made on Android or the desktop app, or behind a blocker, sent nothing, and 3 of 5
   accounts at launch were missing. The server posts them to Umami's collect endpoint, only during
   an account's first two days and not for a request that sends Do Not Track, with `/` as the page
-  and, as Umami's visitor id, a hash of the account id, so each account's steps of a day form one
-  visit; nothing else about the account goes with them (`server/src/funnel.ts`). These visits
+  and, as Umami's visitor id, a random id kept with the account, so each account's steps of a day
+  form one visit; nothing else about the account goes with them (`server/src/funnel.ts`). A hash
+  of the account id, as before, could be computed by anyone who knows the id; the random one
+  goes with the account, and the steps left in Umami name no one (#1745). These visits
   are not joined to the landing visit, so the funnel has two parts. Since the server knows when
   each account was created, the operator could match the first sign-in to the account; `/privacy`
   says so. For every signed-in user the page sends only which error screen showed and an install
