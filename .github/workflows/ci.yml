@@ -11,7 +11,7 @@ on:
 
 # A new push to a pull request cancels its older run. Main runs one at a time and never cancels
 # the running one; a newer merge replaces the one waiting, so only main's head waits. deploy.yml
-# deploys each run that passes, and the box refuses a revision older than the one it runs. Other
+# deploys each run that passes to staging, which refuses a commit older than the one it runs. Other
 # runs, pull requests' and dispatched ones, cancel older runs for the same ref.
 concurrency:
   group: ci-${{ github.event_name == 'push' && 'main' || github.ref }}
@@ -23,12 +23,14 @@ permissions:
 # Jobs run on GitHub-hosted runners unless a repository variable names a self-hosted pool, as a
 # JSON array of labels (docs/ci.md). A push to main runs the test job on TRUSTED_RUNNER. A pull
 # request from this repository's own branches, Dependabot's aside, runs the test job on
-# PR_LIGHT_RUNNER and the image builds on PR_DOCKER_RUNNER: the PR pool holds no secrets, and no pull request job reaches TRUSTED_RUNNER's pool or ANDROID_RUNNER's.
-# A fork's pull request and a dispatched run stay on GitHub's runners.
+# PR_LIGHT_RUNNER and the image builds on PR_DOCKER_RUNNER: the PR pool holds no secrets, and no
+# pull request job reaches TRUSTED_RUNNER's pool or ANDROID_RUNNER's. A fork's pull request and a
+# dispatched run stay on GitHub's runners.
 #
 # A run tests only what its files can affect: a pull request's files against its base, a push's
 # since the commit before it (the changes job). A job that cannot be affected is skipped, which
-# counts as passing; a skipped workflow would not. deploy.yml deploys once all of CI passes.
+# counts as passing; a skipped workflow would not. deploy.yml deploys to staging once all of CI
+# passes.
 jobs:
   # Which jobs a run's files can affect. A push compares github.event.before with the pushed
   # commit, so a merge that touches only the Android or desktop app or docs skips the rest. A
@@ -207,7 +209,6 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           NAME: e2e-passed-${{ matrix.shard }}-${{ github.event.head_commit.tree_id }}
-        # Not gh: some self-hosted runners lack it (dell2-2).
         run: |
           n=$(curl -fsS -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' \
             "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/actions/artifacts?name=$NAME&per_page=100" |

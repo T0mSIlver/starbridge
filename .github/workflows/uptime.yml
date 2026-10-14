@@ -4,8 +4,8 @@ name: uptime
 # GitHub emails to the repository's watchers, and closes it with a comment once checks pass.
 on:
   schedule:
-    # Hourly while the repository is private, where each run bills at least one Actions minute;
-    # switch to "*/5 * * * *" once it is public, where runs are free.
+    # Hourly: sb-oracle's outside check runs a round trip every 15 minutes (#1522); this one adds
+    # the backup's age and the free disk.
     - cron: "17 * * * *"
   workflow_dispatch:
 

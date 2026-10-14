@@ -52,8 +52,7 @@ jobs:
           if [ "$busy" != 0 ]; then
             echo "Another staging run has not finished: building."
           elif [ ${#got} -eq 40 ]; then
-            # Not gh: some self-hosted runners lack it (dell2-2). The compare lists at most 300
-            # files; a longer list builds.
+            # The compare lists at most 300 files; a longer list builds.
             # Only for a commit that follows staging's: an older one compares as empty, and must
             # not take a later commit's images.
             files=$(curl -fsS -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' \
@@ -301,7 +300,6 @@ jobs:
           [ -n "$got" ] || { echo "starbridge.run names no revision"; exit 1; }
           case $got in *[!0-9a-f]*) got= ;; esac
           [ ${#got} -eq 40 ] || { echo "starbridge.run names no commit id"; exit 1; }
-          # Not gh: some self-hosted runners lack it (dell2-2).
           status=$(curl -fsS -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' \
             "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/compare/$REV...$got?per_page=1" | jq -r .status)
           case $status in
