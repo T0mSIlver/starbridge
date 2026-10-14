@@ -115,8 +115,10 @@ signed app; an ad hoc signature is enough, as the owner's Mac Mini showed). The 
 both through `scripts/sign.sh` and the `desktop-release` environment, which only `main` and tags
 can use:
 
-- the `desktop` workflow's `signed build` job, on `main` or run by hand, once the repository
-  variable `DESKTOP_SIGNING` is `true`: a DMG to try;
+- the `desktop` workflow's `signed build` job, once the repository variable `DESKTOP_SIGNING` is
+  `true`: on a push to `main` that changes what signing reads (`electron-builder.yml`, the sign,
+  afterPack, afterSign and widget scripts, `package.json`, the lockfile, the workflow), or run by
+  hand from `main`;
 - the release, once `DESKTOP_RELEASE` is `true` (spec/releases.md, "The desktop app's release").
 
 The environment's secrets: `MAC_CERTIFICATE` (the Developer ID Application certificate and key,

@@ -140,6 +140,9 @@
   lookup keeps an app installed from an rc on rcs and never offers it a final, and GitHub's API
   allows 60 requests an hour per address. macOS
   installs an update only with the running app's Developer ID, so ad hoc builds never update.
+  Since no app updates from main, `desktop.yml` signs and notarizes on a push to main only when
+  what signing reads changes, to catch a break before the rc tag, and otherwise only by hand
+  (#1684): every desktop push cost 8 minutes of macOS for a DMG nobody installed.
 - **One version everywhere** (#471). `bun cli/scripts/version.ts <version>` stamps the version
   into `cli/package.json`, `web/package.json`, `desktop/package.json`, both `plugin.json`, the mod's `VERSION`, Android's
   default `versionName` and the marketplace's two `ref`s, in a PR; the merged commit is tagged,
