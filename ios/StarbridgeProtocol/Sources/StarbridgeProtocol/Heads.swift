@@ -6,8 +6,8 @@
 /**
  * The longest head each signer vouched for, keyed by the signer. Heads kept before #1627 may also
  * sit under "signer/by" or "signer/?", where machines before #794 put a device's head they passed
- * on: each counts as a head its signer vouched for, since only the signer signed it. Keys keep
- * insertion order.
+ * on: each counts as a head its signer vouched for, since only the signer signed it, and goes
+ * when either the signer's or the by's heads are forgotten (#1730). Keys keep insertion order.
  */
 public struct Heads: Equatable, Sendable, Sequence {
     public private(set) var keys: [String] = []
@@ -52,6 +52,12 @@ public struct Held: Equatable, Sendable {
 
 private func signerOf(_ key: String) -> String {
     String(key.split(separator: "/", maxSplits: 1, omittingEmptySubsequences: false).first ?? "")
+}
+
+/** The device whose head a machine before #794 passed on: a key kept before #1627, after its "/". */
+private func byOf(_ key: String) -> String? {
+    let parts = key.split(separator: "/", maxSplits: 1, omittingEmptySubsequences: false)
+    return parts.count > 1 ? String(parts[1]) : nil
 }
 
 /** An entry's envelope and its body's `op`, `id` and `at`, when the entry is a well-formed envelope. */
@@ -128,13 +134,14 @@ public enum HeadBook {
     }
 
     /**
-     * Drops every kept head member `id` signed, under any key: the owner's way out after revoking
-     * a member that signed a false long head. True when any went.
+     * Drops every kept head member `id` signed, and every head kept before #1627 that a machine
+     * passed on from `id` (#1730): the owner's way out after revoking a member that signed a false
+     * long head. True when any went.
      */
     @discardableResult
     public static func forget(_ heads: inout Heads, id: String) -> Bool {
         var changed = false
-        for (key, _) in heads where signerOf(key) == id {
+        for (key, _) in heads where signerOf(key) == id || byOf(key) == id {
             heads[key] = nil
             changed = true
         }

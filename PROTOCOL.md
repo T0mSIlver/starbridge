@@ -221,7 +221,8 @@ read now: it may lie on that device's fork, and in the machine's slot a replayed
 out the machine's own head that shows a gap. Devices kept those heads under `signer/by`, or
 `signer/?` for a `by` their chain did not list, and still read any they kept as a head that
 signer vouched for, the stricter reading, since only the signer signed it: it holds while the
-signer counts, and goes when the device forgets the signer's heads (#1627).
+signer counts, and goes when the device forgets the heads of the signer or of the device it
+names (#1627, #1730).
 
 So one machine that holds a withheld revocation exposes it to every device whose items from that
 machine the server delivers, and one that has only seen the head of the device that made it

@@ -506,11 +506,6 @@
           "head": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
           "by": "ghost"
         },
-        "laptop/devbox": {
-          "length": 9,
-          "head": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-          "by": "devbox"
-        },
         "phone2": {
           "length": 9,
           "head": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
@@ -518,11 +513,42 @@
       },
       "id": "devbox",
       "expect": {
-        "laptop/devbox": {
+        "phone2": {
           "length": 9,
           "head": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        }
+      }
+    },
+    {
+      "name": "drops a head kept before #1627 that a machine passed on from the member (#1730)",
+      "heads": {
+        "devbox": {
+          "length": 4,
+          "head": "DqW2HO3Vt_cPnrJrqXxbeyPchpXRn2bYiCLol2xRw9w"
         },
-        "phone2": {
+        "devbox/phone": {
+          "length": 4,
+          "head": "DqW2HO3Vt_cPnrJrqXxbeyPchpXRn2bYiCLol2xRw9w",
+          "by": "phone"
+        },
+        "devbox/?": {
+          "length": 9,
+          "head": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "by": "ghost"
+        },
+        "laptop/phone": {
+          "length": 9,
+          "head": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "by": "phone"
+        }
+      },
+      "id": "phone",
+      "expect": {
+        "devbox": {
+          "length": 4,
+          "head": "DqW2HO3Vt_cPnrJrqXxbeyPchpXRn2bYiCLol2xRw9w"
+        },
+        "devbox/?": {
           "length": 9,
           "head": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
         }

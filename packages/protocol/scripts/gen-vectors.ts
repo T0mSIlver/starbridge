@@ -3058,10 +3058,19 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
           devbox: H,
           "devbox/phone": passedOn,
           "devbox/?": unknownBy,
-          "laptop/devbox": { ...forged, by: "devbox" } as Heads[string],
           phone2: forged,
         },
         "devbox",
+      ),
+      forgetCase(
+        "drops a head kept before #1627 that a machine passed on from the member (#1730)",
+        {
+          devbox: H,
+          "devbox/phone": passedOn,
+          "devbox/?": unknownBy,
+          "laptop/phone": { ...forged, by: "phone" } as Heads[string],
+        },
+        "phone",
       ),
     ],
   };
