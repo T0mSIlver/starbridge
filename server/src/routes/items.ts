@@ -16,6 +16,11 @@ import { HELD_KINDS, holdFor } from "../presence";
 import { activeMember, wakeMachines } from "./directory";
 
 const PAGE = 100;
+/**
+ * Bytes of boxes and blobs one page carries, past its first item (#1735): a hundred questions
+ * with 2 MB of images each made a 200 MB response, held whole in the server's memory.
+ */
+const PAGE_BYTES = 4 * 1024 * 1024;
 
 type KindRule = {
   signer: "device" | "machine";
@@ -111,7 +116,7 @@ function list(
   from: number,
   openOnly = false,
   openBlobs = false,
-): Stored[] {
+): { items: Stored[]; more: boolean; bytes: number } {
   // Open: unanswered items of answerable kinds, before their answer window closes.
   const open = openOnly
     ? `AND i.answered_at IS NULL AND i.kind IN (SELECT value FROM json_each(?))
@@ -129,7 +134,7 @@ function list(
   const rows = db
     .query(
       `${select} WHERE i.account_id = ? AND b.to_id = ? AND i.seq > ?
-       AND i.kind IN (SELECT value FROM json_each(?)) ${open} ORDER BY i.seq LIMIT ${PAGE}`,
+       AND i.kind IN (SELECT value FROM json_each(?)) ${open} ORDER BY i.seq LIMIT ${PAGE + 1}`,
     )
     .all(
       account,
@@ -138,11 +143,33 @@ function list(
       JSON.stringify(kinds),
       ...(openOnly ? [JSON.stringify(ANSWERABLE), JSON.stringify(cutoffs)] : []),
     ) as Row[];
-  return rows.map(stored);
+  let bytes = 0;
+  let n = 0;
+  for (const r of rows.slice(0, PAGE)) {
+    const size = r.box.length + (r.blobs?.length ?? 0);
+    if (n > 0 && bytes + size > PAGE_BYTES) break;
+    bytes += size;
+    n += 1;
+  }
+  return { items: rows.slice(0, n).map(stored), more: rows.length > n, bytes };
 }
 
-function page(items: Stored[], from: number) {
-  return { items, cursor: items.at(-1)?.cursor ?? String(from) };
+/** A page of a list; `more` says whether items follow its cursor. */
+function page({ items, more }: { items: Stored[]; more: boolean }, from: number) {
+  return { items, cursor: items.at(-1)?.cursor ?? String(from), more };
+}
+
+/**
+ * The account's read window (#1735): a list or an item is refused once the account read
+ * `itemReads` bytes this window. Returns the charge for what the reply carries, once built.
+ */
+function readWindow(c: Context<Env>): (bytes: number) => void {
+  const key = `item-reads:${c.var.caller.account}`;
+  const window = c.var.config.limits.itemReads;
+  rateLimit(c, key, window, 1, true);
+  return (bytes) => {
+    c.var.limiter.retryAfter(key, ...window, bytes);
+  };
 }
 
 /** What a machine's answer long-poll watches besides answers. */
@@ -587,8 +614,10 @@ itemRoutes.get("/items", requireCaller("paired-device"), (c) => {
   const blobs = c.req.query("blobs");
   if (blobs !== undefined && blobs !== "open")
     fail(400, "bad-request", "blobs is open or left out");
-  const items = list(c.var.db, caller.account, memberOf(caller), kinds, from, open, !!blobs);
-  return c.json(page(items, from));
+  const charge = readWindow(c);
+  const listed = list(c.var.db, caller.account, memberOf(caller), kinds, from, open, !!blobs);
+  charge(listed.bytes);
+  return c.json(page(listed, from));
 });
 
 // A device drops a run it no longer wants to see (#827), for every device. Only runs: every other
@@ -609,10 +638,12 @@ itemRoutes.delete("/items/:id", requireCaller("paired-device"), (c) => {
 
 itemRoutes.get("/items/:id", requireCaller("paired"), (c) => {
   const caller = c.var.caller;
+  const charge = readWindow(c);
   const row = c.var.db
     .query(`${SELECT} WHERE i.account_id = ? AND i.id = ? AND b.to_id = ?`)
     .get(caller.account, c.req.param("id"), memberOf(caller)) as Row | null;
   if (!row) fail(404, "not-found");
+  charge(row.box.length + (row.blobs?.length ?? 0));
   return c.json(stored(row));
 });
 
@@ -665,9 +696,9 @@ itemRoutes.get("/answers", requireCaller("machine"), async (c) => {
       (now.quotaAsked !== undefined && now.quotaAsked !== c.req.query("quotaAsked"))
     );
   };
-  let items = fetch();
+  let listed = fetch();
   const seconds = waitSeconds(c);
-  if (items.length === 0 && !changed() && seconds > 0) {
+  if (listed.items.length === 0 && !changed() && seconds > 0) {
     if (c.var.answers.count(`${caller.account}/${me}`) >= c.var.config.limits.answerWaits)
       fail(
         429,
@@ -678,9 +709,9 @@ itemRoutes.get("/answers", requireCaller("machine"), async (c) => {
     // Nothing yields between the query above and this registration, so no answer slips by.
     const woken = await c.var.answers.wait(`${caller.account}/${me}`, seconds, c.req.raw.signal);
     recheck(c);
-    if (woken) items = fetch();
+    if (woken) listed = fetch();
   }
-  return c.json({ ...page(items, from), ...watched(c, caller.account) });
+  return c.json({ ...page(listed, from), ...watched(c, caller.account) });
 });
 
 itemRoutes.post("/quota/ask", requireCaller("paired-device"), async (c) => {

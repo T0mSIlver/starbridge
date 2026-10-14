@@ -309,7 +309,7 @@ extension Store {
                 byId[d.id] = settledBy(o.from).map { closed(d, by: $0) } ?? d
             }
             cursor = page.cursor
-            if page.items.count < 100 { break }
+            if page.last { break }
         }
         // An update may list before the decision it is about, so they apply once all are read.
         for (from, w) in waits { if let d = byId[w.decisionId], let u = waited(d, from: from, w) { byId[w.decisionId] = u } }
@@ -413,7 +413,7 @@ extension Store {
             let page = try await api().items("permission,settled", after: cursor)
             read += page.items
             cursor = page.cursor
-            if page.items.count < 100 { break }
+            if page.last { break }
         }
         if try await scan(read.map(\.item)) { return }
         let entries = entryJSON
@@ -483,7 +483,7 @@ extension Store {
                 if let o = open(listed.item, entries: entries), let r = try? SavedRun(from: o.from, text: o.text) { fresh.append(r) }
             }
             cursor = page.cursor
-            if page.items.count < 100 { break }
+            if page.last { break }
         }
         keepRuns(fresh)
     }

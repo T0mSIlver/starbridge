@@ -110,7 +110,7 @@ test("listing starts at the first item without a cursor and resumes after one", 
   const first = await s.call("GET", "/v1/items", { token: phone.token });
   expect(first.json.items).toHaveLength(2);
   const next = await s.call("GET", `/v1/items?after=${first.json.cursor}`, { token: phone.token });
-  expect(next.json).toEqual({ items: [], cursor: first.json.cursor });
+  expect(next.json).toEqual({ items: [], cursor: first.json.cursor, more: false });
   await post(devbox, decision());
   expect(
     (await s.call("GET", `/v1/items?after=${first.json.cursor}`, { token: phone.token })).json
@@ -388,4 +388,47 @@ test("blobs=open lists an answered decision without its images, which its id sti
   const one = await s.call("GET", `/v1/items/${done.id}`, { token: phone.token });
   expect(one.json.item.blobs).toEqual([blob]);
   expect((await s.call("GET", "/v1/items?blobs=1", { token: phone.token })).status).toBe(400);
+});
+
+test("a list pages by 4 MB of boxes and blobs, and says when more follows (#1735)", async () => {
+  // Three 480 KB blobs a question: two fit a page, a third would pass 4 MB.
+  const blob = "A".repeat(480_000);
+  const ids: string[] = [];
+  for (let i = 0; i < 5; i++) {
+    const d = { ...decision([phone]), blobs: [blob, blob, blob] };
+    expect((await post(devbox, d)).status).toBe(201);
+    ids.push(d.id);
+  }
+  const pages: [string[], boolean][] = [];
+  let cursor = "";
+  for (;;) {
+    const r = await s.call("GET", `/v1/items?kind=decision&after=${cursor}`, {
+      token: phone.token,
+    });
+    pages.push([r.json.items.map((x: { item: { id: string } }) => x.item.id), r.json.more]);
+    cursor = r.json.cursor;
+    if (!r.json.more) break;
+  }
+  expect(pages).toEqual([
+    [ids.slice(0, 2), true],
+    [ids.slice(2, 4), true],
+    [ids.slice(4), false],
+  ]);
+});
+
+test("an account's reads stop at itemReads bytes a minute, lists and single items alike (#1735)", async () => {
+  s = await makeServer({ limits: { ...DEFAULT_LIMITS, itemReads: [1_500_000, 60_000] } });
+  acct = await setupAccount(s);
+  phone = acct.device;
+  devbox = await pair(s, acct, "devbox", "machine");
+  const d = { ...decision([phone]), blobs: ["A".repeat(480_000), "A".repeat(480_000)] };
+  expect((await post(devbox, d)).status).toBe(201);
+  const read = () => s.call("GET", `/v1/items/${d.id}`, { token: phone.token });
+  expect((await read()).status).toBe(200);
+  expect((await read()).status).toBe(200);
+  // The second read passed 1.5 MB: refused until the minute ends, for the list too.
+  const over = await read();
+  expect(over.status).toBe(429);
+  expect(Number(over.headers.get("retry-after"))).toBeGreaterThan(0);
+  expect((await s.call("GET", "/v1/items", { token: phone.token })).status).toBe(429);
 });

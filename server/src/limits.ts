@@ -30,6 +30,13 @@ export const DEFAULT_LIMITS = {
   machineItems: [90, MINUTE] as RateWindow,
   /** Item posts per device (answers, settles), apart from the machines' window. */
   deviceItems: [60, MINUTE] as RateWindow,
+  /**
+   * Bytes of boxes and blobs an account's devices and machines may read a minute through
+   * `GET /items` and `GET /items/:id` (#1735). A new device reads a heavy account's week, about
+   * 80 MB, in one minute, and without it a script could have the server send 4 MB pages without
+   * pause. A read is refused once the window is spent and charged once built, so one may pass it.
+   */
+  itemReads: [128 * 1024 * 1024, MINUTE] as RateWindow,
   /** Stored decisions per account, open or answered. */
   decisions: 10_000,
   /**
