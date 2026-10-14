@@ -21,13 +21,15 @@
   random key and stored once; only its key and hash go in each device's box, with the text. Tom's
   first evening of dogfooding stored about 370 KB per question, mostly screenshots sealed once per
   device; one 110 KB screenshot to 3 devices went from 591 KB stored to 152 KB.
-- **Reads** (#1735). A list page holds 100 items and 4 MB of boxes and blobs at most, always at
-  least one item, and says whether more follows: a hundred questions with 2 MB of images made a
-  200 MB response, held whole in memory. Clients read on while the page says more, and treat a
-  page without the flag, from an older server, as the last when it holds under 100. An account
-  reads 128 MB a minute through `GET /items` and `/items/:id`, enough for a new device to read a
-  heavy account's week at once; `blobs=open` (#1382) already keeps answered questions' images
-  out of the clients' syncs.
+- **Reads** (#1735). A list page holds 100 items and 4 MB of boxes and blobs: a hundred questions
+  with 2 MB of images made a 200 MB response, held whole in memory. The server reads sizes first,
+  then only what fits. A question whose images do not fit lists without them, and the device
+  fetches them by id when it shows them, as for an answered question under `blobs=open` (#1382):
+  every client stops at a page under 100 items, and a short page would have ended an older one's
+  sync with questions missing. Only boxes past 4 MB, which no client makes, end a page early,
+  and the page says whether more follows. An account reads 128 MB a minute through `GET /items`
+  and `/items/:id`; a list's images fit what is left of it, so a sync always finishes, and only
+  fetching images waits for the window.
 - **Runs** are one item the machine re-posts under its id; the server keeps the latest, at most
   500 per account, for a day after the last update.
 - **Permission answers** are refused 10 minutes after the prompt arrived, since the server cannot

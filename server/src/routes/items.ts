@@ -108,14 +108,21 @@ function after(raw: string | undefined): number {
   return Number(raw);
 }
 
+/**
+ * A page of the caller's items of `kinds` after `from`. It reads their sizes first, and then only
+ * the rows that fit PAGE_BYTES of boxes and blobs, at least one, and only the blobs that fit
+ * `blobRoom` too: a question whose images do not fit lists without them, as an answered one under
+ * `blobs=open` does, and the device fetches them by id when it shows them (#1382). Clients that
+ * stop at a page under 100 items thus still get every item, and only boxes no real client makes
+ * end a page early (#1735).
+ */
 function list(
   db: Database,
   account: string,
   member: string,
   kinds: string[],
   from: number,
-  openOnly = false,
-  openBlobs = false,
+  { openOnly = false, openBlobs = false, blobRoom = PAGE_BYTES } = {},
 ): { items: Stored[]; more: boolean; bytes: number } {
   // Open: unanswered items of answerable kinds, before their answer window closes.
   const open = openOnly
@@ -128,12 +135,13 @@ function list(
     Object.entries(ANSWERABLE_FOR).map(([k, ms]) => [k, new Date(now - ms).toISOString()]),
   );
   // Blobs of answered decisions stay behind, for the device to fetch by id when it shows them.
-  const select = openBlobs
-    ? SELECT.replace("i.blobs", "CASE WHEN i.answered_at IS NULL THEN i.blobs END AS blobs")
-    : SELECT;
-  const rows = db
+  const blobs = openBlobs ? "CASE WHEN i.answered_at IS NULL THEN i.blobs END" : "i.blobs";
+  // octet_length reads a value's size without its content.
+  const sizes = db
     .query(
-      `${select} WHERE i.account_id = ? AND b.to_id = ? AND i.seq > ?
+      `SELECT i.seq, octet_length(b.box) AS box, COALESCE(octet_length(${blobs}), 0) AS blobs
+       FROM items i JOIN boxes b ON b.account_id = i.account_id AND b.item_id = i.id
+       WHERE i.account_id = ? AND b.to_id = ? AND i.seq > ?
        AND i.kind IN (SELECT value FROM json_each(?)) ${open} ORDER BY i.seq LIMIT ${PAGE + 1}`,
     )
     .all(
@@ -142,16 +150,27 @@ function list(
       from,
       JSON.stringify(kinds),
       ...(openOnly ? [JSON.stringify(ANSWERABLE), JSON.stringify(cutoffs)] : []),
-    ) as Row[];
+    ) as { seq: number; box: number; blobs: number }[];
   let bytes = 0;
-  let n = 0;
-  for (const r of rows.slice(0, PAGE)) {
-    const size = r.box.length + (r.blobs?.length ?? 0);
-    if (n > 0 && bytes + size > PAGE_BYTES) break;
-    bytes += size;
-    n += 1;
+  const seqs: number[] = [];
+  const withBlobs: number[] = [];
+  for (const r of sizes.slice(0, PAGE)) {
+    if (seqs.length > 0 && bytes + r.box > PAGE_BYTES) break;
+    bytes += r.box;
+    seqs.push(r.seq);
+    if (r.blobs > 0 && bytes + r.blobs <= Math.min(PAGE_BYTES, blobRoom)) {
+      bytes += r.blobs;
+      withBlobs.push(r.seq);
+    }
   }
-  return { items: rows.slice(0, n).map(stored), more: rows.length > n, bytes };
+  const rows = db
+    .query(
+      `${SELECT.replace("i.blobs", "CASE WHEN i.seq IN (SELECT value FROM json_each(?)) THEN i.blobs END AS blobs")}
+       WHERE i.account_id = ? AND b.to_id = ? AND i.seq IN (SELECT value FROM json_each(?))
+       ORDER BY i.seq`,
+    )
+    .all(JSON.stringify(withBlobs), account, member, JSON.stringify(seqs)) as Row[];
+  return { items: rows.map(stored), more: sizes.length > seqs.length, bytes };
 }
 
 /** A page of a list; `more` says whether items follow its cursor. */
@@ -160,15 +179,19 @@ function page({ items, more }: { items: Stored[]; more: boolean }, from: number)
 }
 
 /**
- * The account's read window (#1735): a list or an item is refused once the account read
- * `itemReads` bytes this window. Returns the charge for what the reply carries, once built.
+ * The account's read window (#1735): a read is refused once the account read `itemReads` bytes
+ * this window, or, for one item, when the item does not fit what is left. Returns what is left,
+ * which a list's blobs must fit, and the charge for what the reply carries once built.
  */
-function readWindow(c: Context<Env>): (bytes: number) => void {
+function readWindow(c: Context<Env>): { left: number; charge: (bytes: number) => void } {
   const key = `item-reads:${c.var.caller.account}`;
   const window = c.var.config.limits.itemReads;
   rateLimit(c, key, window, 1, true);
-  return (bytes) => {
-    c.var.limiter.retryAfter(key, ...window, bytes);
+  return {
+    left: c.var.limiter.left(key, ...window),
+    charge: (bytes) => {
+      c.var.limiter.retryAfter(key, ...window, bytes);
+    },
   };
 }
 
@@ -614,9 +637,13 @@ itemRoutes.get("/items", requireCaller("paired-device"), (c) => {
   const blobs = c.req.query("blobs");
   if (blobs !== undefined && blobs !== "open")
     fail(400, "bad-request", "blobs is open or left out");
-  const charge = readWindow(c);
-  const listed = list(c.var.db, caller.account, memberOf(caller), kinds, from, open, !!blobs);
-  charge(listed.bytes);
+  const reads = readWindow(c);
+  const listed = list(c.var.db, caller.account, memberOf(caller), kinds, from, {
+    openOnly: open,
+    openBlobs: !!blobs,
+    blobRoom: reads.left,
+  });
+  reads.charge(listed.bytes);
   return c.json(page(listed, from));
 });
 
@@ -638,12 +665,15 @@ itemRoutes.delete("/items/:id", requireCaller("paired-device"), (c) => {
 
 itemRoutes.get("/items/:id", requireCaller("paired"), (c) => {
   const caller = c.var.caller;
-  const charge = readWindow(c);
+  const reads = readWindow(c);
   const row = c.var.db
     .query(`${SELECT} WHERE i.account_id = ? AND i.id = ? AND b.to_id = ?`)
     .get(caller.account, c.req.param("id"), memberOf(caller)) as Row | null;
   if (!row) fail(404, "not-found");
-  charge(row.box.length + (row.blobs?.length ?? 0));
+  const size = row.box.length + (row.blobs?.length ?? 0);
+  // An item that does not fit what is left waits for the window: its images, fetched when shown.
+  rateLimit(c, `item-reads:${caller.account}`, c.var.config.limits.itemReads, size, true);
+  reads.charge(size);
   return c.json(stored(row));
 });
 

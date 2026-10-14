@@ -231,7 +231,7 @@ final class InboxTests: XCTestCase {
         XCTAssertNil(store.notice)
         XCTAssertTrue(store.openDecisions.contains { $0.id == "d_four" })
 
-        // --- Pages of large questions hold fewer than 100: the list goes on while the server says more (#1735) ---
+        // --- Past a page's 4 MB of images, questions list without theirs, fetched when shown (#1735) ---
         let big = Array(repeating: UInt8(7), count: 350_000)
         for id in ["d_big1", "d_big2", "d_big3"] {
             var blobs: [JSON] = []
@@ -250,7 +250,8 @@ final class InboxTests: XCTestCase {
             try await call(machineToken, "POST", "/items", .object(json))
         }
         await store.refresh()
-        XCTAssertNotNil(store.decision("d_big3"))
+        XCTAssertEqual(store.decision("d_big1")?.imagesPending, false)
+        XCTAssertEqual(store.decision("d_big3")?.imagesPending, true)
 
         // --- Answered before this iPhone read it: listed without its image, fetched once shown (#1463) ---
         let (blob5, ref5) = Images.seal(png)

@@ -390,13 +390,34 @@ test("blobs=open lists an answered decision without its images, which its id sti
   expect((await s.call("GET", "/v1/items?blobs=1", { token: phone.token })).status).toBe(400);
 });
 
-test("a list pages by 4 MB of boxes and blobs, and says when more follows (#1735)", async () => {
-  // Three 480 KB blobs a question: two fit a page, a third would pass 4 MB.
+test("a page carries 4 MB of blobs; questions past it list without theirs, which their id gives (#1735)", async () => {
+  // Three 480 KB blobs a question: two questions' fit.
   const blob = "A".repeat(480_000);
   const ids: string[] = [];
   for (let i = 0; i < 5; i++) {
     const d = { ...decision([phone]), blobs: [blob, blob, blob] };
     expect((await post(devbox, d)).status).toBe(201);
+    ids.push(d.id);
+  }
+  const r = await s.call("GET", "/v1/items?kind=decision", { token: phone.token });
+  expect(
+    r.json.items.map((x: { item: { id: string; blobs?: string[] } }) => [
+      x.item.id,
+      x.item.blobs?.length ?? 0,
+    ]),
+  ).toEqual(ids.map((id, i) => [id, i < 2 ? 3 : 0]));
+  expect(r.json.more).toBe(false);
+  const third = await s.call("GET", `/v1/items/${ids[2]}`, { token: phone.token });
+  expect(third.json.item.blobs).toHaveLength(3);
+});
+
+test("boxes past 4 MB end a page, which says more follows (#1735)", async () => {
+  // Boxes no client makes, but a machine can post: a page still holds at least one.
+  const ids: string[] = [];
+  for (let i = 0; i < 4; i++) {
+    const d = decision([phone]);
+    const big = { ...d, boxes: d.boxes.map((b) => ({ ...b, box: "A".repeat(1_500_000) })) };
+    expect((await post(devbox, big)).status).toBe(201);
     ids.push(d.id);
   }
   const pages: [string[], boolean][] = [];
@@ -411,24 +432,27 @@ test("a list pages by 4 MB of boxes and blobs, and says when more follows (#1735
   }
   expect(pages).toEqual([
     [ids.slice(0, 2), true],
-    [ids.slice(2, 4), true],
-    [ids.slice(4), false],
+    [ids.slice(2), false],
   ]);
 });
 
-test("an account's reads stop at itemReads bytes a minute, lists and single items alike (#1735)", async () => {
+test("an account reads itemReads bytes a minute; a list past it comes without blobs (#1735)", async () => {
   s = await makeServer({ limits: { ...DEFAULT_LIMITS, itemReads: [1_500_000, 60_000] } });
   acct = await setupAccount(s);
   phone = acct.device;
   devbox = await pair(s, acct, "devbox", "machine");
-  const d = { ...decision([phone]), blobs: ["A".repeat(480_000), "A".repeat(480_000)] };
-  expect((await post(devbox, d)).status).toBe(201);
-  const read = () => s.call("GET", `/v1/items/${d.id}`, { token: phone.token });
-  expect((await read()).status).toBe(200);
-  expect((await read()).status).toBe(200);
-  // The second read passed 1.5 MB: refused until the minute ends, for the list too.
-  const over = await read();
-  expect(over.status).toBe(429);
-  expect(Number(over.headers.get("retry-after"))).toBeGreaterThan(0);
-  expect((await s.call("GET", "/v1/items", { token: phone.token })).status).toBe(429);
+  const blob = "A".repeat(480_000);
+  const ds = [0, 1].map(() => ({ ...decision([phone]), blobs: [blob, blob, blob] }));
+  for (const d of ds) expect((await post(devbox, d)).status).toBe(201);
+  const blobsListed = async () =>
+    (await s.call("GET", "/v1/items?kind=decision", { token: phone.token })).json.items.map(
+      (x: { item: { blobs?: string[] } }) => x.item.blobs?.length ?? 0,
+    );
+  // The first question's images fit the window; the second's wait, as does fetching them.
+  expect(await blobsListed()).toEqual([3, 0]);
+  const fetch = await s.call("GET", `/v1/items/${ds[1]?.id}`, { token: phone.token });
+  expect(fetch.status).toBe(429);
+  expect(Number(fetch.headers.get("retry-after"))).toBeGreaterThan(0);
+  // The list still goes on, without images, until its boxes spend the window too.
+  expect(await blobsListed()).toEqual([0, 0]);
 });
