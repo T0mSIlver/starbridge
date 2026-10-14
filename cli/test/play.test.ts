@@ -172,6 +172,10 @@ test("a build of main takes the next of its version's slots 50 to 98 above the t
   // After the final, the next patch.
   expect(mainCode("0.1.7", 2_010_760)).toBe(2_010_850);
   expect(mainCode("0.1.7", 0)).toBe(2_010_850);
+  // An rc whose final is tagged (#1731): the next patch's slots, above the final.
+  expect(mainCode("0.1.7-rc.2", 2_010_797, true)).toBe(2_010_850);
+  expect(mainCode("0.1.7-rc.2", 0, true)).toBe(2_010_850);
+  expect(mainCode("0.1.7-rc.2", 2_010_850, true)).toBe(2_010_851);
   // A new version's rc has its own slots: the old version's top code does not use them up.
   expect(mainCode("0.2.0-rc.1", 2_010_798)).toBe(2_020_050);
 });
@@ -181,5 +185,7 @@ test("main's slots are spent after 98, for that version only (#1690)", () => {
   expect(mainCode("0.1.7-rc.2", 2_010_850)).toBeNull();
   expect(mainCode("0.1.7", 2_010_898)).toBeNull();
   expect(mainCode("0.1.7", 2_010_897)).toBe(2_010_898);
+  expect(mainCode("0.1.7-rc.2", 2_010_897, true)).toBe(2_010_898);
+  expect(mainCode("0.1.7-rc.2", 2_010_898, true)).toBeNull();
   expect(() => mainCode("main", 0)).toThrow("not a version");
 });
