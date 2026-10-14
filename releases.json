@@ -1,7 +1,21 @@
 {
  "schema": 1,
- "updated": "2026-10-14T05:35:01.164Z",
+ "updated": "2026-10-14T13:32:31.800Z",
  "releases": [
+  {
+   "version": "0.1.7",
+   "ring": "final",
+   "shipped": "2026-10-14T13:28:34Z",
+   "channels": {
+    "github": true,
+    "npm": true,
+    "homebrew": true,
+    "desktop": true,
+    "testflight": {
+     "build": "48.1"
+    }
+   }
+  },
   {
    "version": "0.1.7-rc.3",
    "ring": "rc",
