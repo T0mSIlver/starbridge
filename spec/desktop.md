@@ -9,12 +9,20 @@ a browser; the app adds a menu bar light and notifications, so a web release nee
   code or a URL to open: the page sends the Needs-you count and the items to notify; the app sends
   back a notification's answer and the item to open. Every field is checked on arrival, since the
   page comes from a server. Only the server's pages stay inside the window; any other link opens
-  in the browser, and new windows never open.
+  in the browser, and new windows never open. The browser opens only within 2 s of the owner's
+  click or key press in the window, and a frame inside the page never navigates, so a hostile
+  page cannot open tabs by itself (#1721, from an internal audit on 2026-10-14). A packaged app
+  reads no `STARBRIDGE_SERVER`, `STARBRIDGE_RELEASES` or `STARBRIDGE_TIP` from its environment,
+  and its `grantFileProtocolExtraPrivileges` fuse is off.
 - **Sign-in** goes through the owner's browser, as on Android: the browser is signed in to GitHub
   and holds the owner's passkeys, which the app's window cannot use (Electron sees only passkeys
   it made itself). Sign in with GitHub opens the browser with a PKCE challenge; the code comes back
   on `starbridge://auth`, and the app trades it with its verifier for the session, which becomes
-  the page's session cookie. Owner-token sign-in stays in the page.
+  the page's session cookie. The challenge shows in the browser's address, so the code must also have come
+  back to the browser that started the sign-in (#1721): the first start of a challenge gives
+  that browser a cookie, the server notes whether the callback brought it, and refuses the Mac
+  app's trade otherwise. Someone who read the challenge and signed in with their own GitHub
+  account cannot sign the app in to theirs. Owner-token sign-in stays in the page.
 - **Signed out**, the app opens on sign-in, never on the landing page: the app sets an
   `sb_desktop` cookie, which the server's landing and the page both read. Sign-in offers GitHub,
   and "Use your own server" opens the app's server window rather than the page's owner-token

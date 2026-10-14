@@ -374,11 +374,31 @@ try {
     "back on unlock",
   );
 
-  // Another origin stays out of the window and opens in the browser.
+  // Another origin stays out of the window, opens in the browser only from the owner's click, and
+  // never from a frame (#1721).
   await page.evaluate((u) => {
-    location.href = u;
+    const frame = document.createElement("iframe");
+    frame.src = u;
+    document.body.append(frame);
+    const a = document.createElement("a");
+    a.id = "outside";
+    a.href = u;
+    a.textContent = "Outside";
+    document.body.prepend(a);
   }, url(other));
+  await new Promise((done) => setTimeout(done, 500));
+  assert.equal(await main((g) => g.outside.length), 0, "no tab without a click");
+  const box = await page.locator("#outside").boundingBox();
+  assert.ok(box);
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
   await until(() => main((g) => g.outside.length === 1), "the link to open outside");
+  await page.evaluate((u) => {
+    setTimeout(() => {
+      location.href = u;
+    }, 2_500);
+  }, url(other));
+  await new Promise((done) => setTimeout(done, 3_000));
+  assert.equal(await main((g) => g.outside.length), 1, "no tab from a navigation without a click");
   assert.equal(new URL(page.url()).origin, url(server));
   // Quitting tells the page the owner left, and waits for it.
   await app.close();

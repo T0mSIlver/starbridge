@@ -326,6 +326,11 @@ try {
     await page.goto(ORIGIN);
     close = () => browser.close();
   } else {
+    // A packaged app ignores STARBRIDGE_SERVER (#1721): its server comes from its settings.
+    if (opts.app) {
+      mkdirSync(join(tmp, "app"), { recursive: true });
+      writeFileSync(join(tmp, "app", "settings.json"), JSON.stringify({ server: ORIGIN }));
+    }
     const app = await electron.launch({
       ...(opts.app
         ? { executablePath: opts.app, args: [`--user-data-dir=${join(tmp, "app")}`] }
