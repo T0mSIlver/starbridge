@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { DESKTOP_COOKIE, origin, SESSION_COOKIE } from "@/lib/landing";
+import { cacheOrigin, DESKTOP_COOKIE, SESSION_COOKIE } from "@/lib/landing";
 
 /**
  * The page's Content-Security-Policy, with a fresh nonce for each request. Next reads the nonce
@@ -55,7 +55,8 @@ function landing(request: NextRequest) {
   )
     return undefined;
   if (request.headers.has("rsc") || request.nextUrl.searchParams.has("_rsc")) return undefined;
-  const base = origin(request.headers);
+  const base = cacheOrigin(request.headers, process.env.PUBLIC_URL);
+  if (!base) return undefined;
   let page = landings.get(base);
   if (!page) {
     if (landings.size >= ORIGINS) return undefined;

@@ -23,10 +23,12 @@ public struct LinkChip: Equatable, Sendable {
  * its tag, a commit its short hash, each led by the repo when it isn't `project`, the session's;
  * the icon says what the number is, so the agent's title gives way. Any other link reads as its
  * title, else: a GitHub file its name, a run "Actions run", another GitHub page its path, a
- * Claude artifact "Claude artifact", anything else its host and path.
+ * Claude artifact "Claude artifact", anything else its host and path. A title on any other
+ * host than GitHub's and a Claude artifact's, whose icons name the site, is followed by the
+ * host, so an agent cannot dress another site as a GitHub reference (#1722); a link that can't be read shows as written, whatever its title.
  */
 public func linkChip(url: String, title: String?, project: String = "") -> LinkChip {
-    guard let parts = parseURL(url) else { return LinkChip(icon: nil, label: title ?? clip(url)) }
+    guard let parts = parseURL(url) else { return LinkChip(icon: nil, label: clip(url)) }
     let gh = gitHubHosts.contains(parts.host) ? gitHub(parts.path) : nil
     if let gh, let ref = gh.ref {
         let same = asciiLower(gh.repo) == asciiLower(project)
@@ -34,11 +36,29 @@ public func linkChip(url: String, title: String?, project: String = "") -> LinkC
         return LinkChip(icon: gh.icon, label: clip(same ? ref : gh.repo + sep + ref))
     }
     if let gh { return LinkChip(icon: gh.icon, label: title ?? clip(gh.text)) }
+    let host = parts.host.hasPrefix("www.") ? String(parts.host.dropFirst(4)) : parts.host
+    let titled = title.map { isHidden($0) ? "" : withHost($0, host) } ?? ""
     if parts.host == "claude.ai" && isArtifact(parts.path) {
         return LinkChip(icon: .artifact, label: title ?? "Claude artifact")
     }
-    let host = parts.host.hasPrefix("www.") ? String(parts.host.dropFirst(4)) : parts.host
-    return LinkChip(icon: nil, label: title ?? clip(host + (parts.path == "/" ? "" : parts.path)))
+    return LinkChip(
+        icon: nil, label: titled.isEmpty ? clip(host + (parts.path == "/" ? "" : parts.path)) : titled)
+}
+
+/**
+ * "Title · host" in 40 code points: the host keeps its end, which names the site, and at most 30
+ * points; the title takes the rest. An empty title gives "", and the chip falls back to its own
+ * text.
+ */
+private func withHost(_ title: String, _ host: String) -> String {
+    let points = Array(host.unicodeScalars)
+    let shown = points.count > 30 ? "…" + string(points.suffix(29)) : host
+    let room = 40 - 3 - shown.unicodeScalars.count
+    return title.isEmpty ? "" : clip(title, room) + " · " + shown
+}
+
+private func isHidden(_ text: String) -> Bool {
+    text.unicodeScalars.contains { s in hidden.contains { $0.contains(s.value) } }
 }
 
 private let gitHubHosts: Set<String> = ["github.com", "www.github.com"]
@@ -204,7 +224,7 @@ private func decode(_ segment: String) -> String {
 }
 
 /** At most 40 code points, the 40th an ellipsis when cut. */
-private func clip(_ text: String) -> String {
+private func clip(_ text: String, _ max: Int = 40) -> String {
     let scalars = Array(text.unicodeScalars)
-    return scalars.count > 40 ? string(scalars.prefix(39)) + "…" : text
+    return scalars.count > max ? string(scalars.prefix(max - 1)) + "…" : text
 }
