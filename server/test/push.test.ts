@@ -663,6 +663,9 @@ test("an account's Web Push subscriptions name at most pushHosts push services",
   // Another subscription on a host already named, and FCM, still pass.
   expect((await post(sub("b.example", 1))).status).toBe(201);
   expect((await post({ type: "fcm", endpoint: "tok-1" })).status).toBe(201);
+  // An FCM token shaped as a URL cannot become a third host by subscribing again as UnifiedPush.
+  expect((await post({ type: "fcm", endpoint: "https:c.example" })).status).toBe(201);
+  expect((await post({ type: "unifiedpush", endpoint: "https:c.example" })).status).toBe(409);
 });
 
 test("a device holds at most 10 push subscriptions, an account 30", async () => {

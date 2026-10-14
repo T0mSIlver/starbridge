@@ -477,40 +477,41 @@ export class Push {
       headers: Object.fromEntries(Object.entries(req.headers).map(([k, v]) => [k, String(v)])),
       body: req.body ? new Uint8Array(req.body) : null,
     };
+    const url = new URL(req.endpoint);
+    const own = allowedPrivate(url, this.config.privatePushHosts);
+    // A subscription stored before the port rule (#1738) is refused here too.
+    if (!own && !publicPort(url)) {
+      console.error(`push endpoint is not on port 443: ${url.host}`);
+      return "failed";
+    }
+    const host = pushHostKey(url.hostname);
+    const flying = this.hostFlights.get(host) ?? 0;
+    if (flying >= this.config.limits.pushesPerHost) {
+      console.error(`too many pushes in flight to ${host}; dropping one`);
+      return "failed";
+    }
+    this.hostFlights.set(host, flying + 1);
     let status: number;
-    if (allowedPrivate(new URL(req.endpoint), this.config.privatePushHosts)) {
-      const res = await this.fetchFn(req.endpoint, {
-        ...out,
-        redirect: "manual",
-        signal: this.timeout(),
-      });
-      status = res.status;
-    } else {
-      const url = new URL(req.endpoint);
-      // A subscription stored before the port rule (#1738) is refused here too.
-      if (!publicPort(url)) {
-        console.error(`push endpoint is not on port 443: ${url.host}`);
-        return "failed";
-      }
-      const host = pushHostKey(url.hostname);
-      const flying = this.hostFlights.get(host) ?? 0;
-      if (flying >= this.config.limits.pushesPerHost) {
-        console.error(`too many pushes in flight to ${host}; dropping one`);
-        return "failed";
-      }
-      this.hostFlights.set(host, flying + 1);
-      try {
+    try {
+      if (own) {
+        const res = await this.fetchFn(req.endpoint, {
+          ...out,
+          redirect: "manual",
+          signal: this.timeout(),
+        });
+        status = res.status;
+      } else {
         const address = await this.publicAddress(url);
         if (!address) {
           console.error(`push endpoint resolves to a private address: ${url.host}`);
           return "failed";
         }
         status = await this.pinned(url, address, out, this.config.pushTimeoutMs);
-      } finally {
-        const n = (this.hostFlights.get(host) ?? 1) - 1;
-        if (n) this.hostFlights.set(host, n);
-        else this.hostFlights.delete(host);
       }
+    } finally {
+      const n = (this.hostFlights.get(host) ?? 1) - 1;
+      if (n) this.hostFlights.set(host, n);
+      else this.hostFlights.delete(host);
     }
     if (status === 404 || status === 410) return "gone";
     // A push service refuses a VAPID signature whose key didn't make the subscription with 403
