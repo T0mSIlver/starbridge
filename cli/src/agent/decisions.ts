@@ -6,7 +6,14 @@
  */
 import { activeMembers, type Directory, ProtocolError } from "@starbridge/protocol";
 import { type AgyRoute, agyReachable, agySend } from "../antigravity";
-import { type CodexSession, codexNotice, codexQueue, codexReachable, codexSteer } from "../codex";
+import {
+  type CodexSession,
+  codexNotice,
+  codexQueue,
+  codexReachable,
+  codexSteer,
+  trustedCodex,
+} from "../codex";
 import { type Ctx, iso, session, UsageError } from "../context";
 import {
   type AskInput,
@@ -72,13 +79,16 @@ export class Decisions implements Feature {
         const input = (req.body as { input?: unknown } | undefined)?.input;
         if (typeof input !== "object" || input === null)
           throw new HttpError(400, "bad-request", "post {input: {question, ...}}");
-        const ask = input as AskInput;
+        // Only a hook that waits for its own answer holds a question or names a picker, and it
+        // posts without the agent: a client's word for either is dropped.
+        const { held: _held, picker: _picker, ...ask } = input as AskInput;
         // The asking process knows its directory; the agent's would name the wrong project.
         if (typeof ask.project !== "string")
           throw new HttpError(400, "bad-request", "input.project is required");
         const decision = await postDecision(this.ctx, session(this.ctx), ask);
-        const reachable = ask.codex
-          ? await codexReachable(ask.codex)
+        const codex = ask.codex && trustedCodex(this.ctx, ask.codex);
+        const reachable = codex
+          ? await codexReachable(codex)
           : ask.antigravity
             ? await agyReachable(ask.antigravity)
             : false;
@@ -285,8 +295,11 @@ export class Decisions implements Feature {
     if (steered.length > 0) done(steered, "steered");
     if (ids.length === 0) return;
     const st = fresh;
+    const codex = first.codex && trustedCodex(this.ctx, first.codex);
     const error = first.codex
-      ? await codexQueue(first.codex, session, codexNotice(ids))
+      ? codex
+        ? await codexQueue(codex, session, codexNotice(ids))
+        : "its CODEX_HOME is not the one setup recorded"
       : await agySend(
           first.antigravity as AgyRoute,
           session,
@@ -333,7 +346,8 @@ export class Decisions implements Feature {
       }
     });
     if (!route || claimed.length === 0) return [];
-    const steered = await codexSteer(route.codex, route.session, lines.join("\n"));
+    const codex = trustedCodex(this.ctx, route.codex);
+    const steered = !!codex && (await codexSteer(codex, route.session, lines.join("\n")));
     this.ctx.store.updateState((st) => {
       for (const id of claimed) {
         const a = st.answers[id];
