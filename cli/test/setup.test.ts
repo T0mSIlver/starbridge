@@ -1656,3 +1656,23 @@ test("setup replaces the allow entries of releases whose settle let --all throug
   expect(addCursorAllow(m.sys)).toBe(true);
   expect(JSON.parse(readFileSync(cursor, "utf8")).permissions.allow).toEqual(CURSOR_ALLOW);
 });
+
+test("an update's refresh replaces the old settle allow entries even when nothing else changed (#1761)", async () => {
+  const m = await machine();
+  writeFileSync(
+    m.settings,
+    JSON.stringify({ permissions: { allow: ["Bash(starbridge settle:*)"] } }),
+  );
+  const cursor = join(m.home, ".cursor/cli-config.json");
+  mkdirSync(dirname(cursor), { recursive: true });
+  writeFileSync(cursor, JSON.stringify({ permissions: { allow: ["Shell(starbridge settle)"] } }));
+  const agy = join(m.home, ".gemini/antigravity-cli/settings.json");
+  mkdirSync(dirname(agy), { recursive: true });
+  writeFileSync(agy, JSON.stringify({ permissions: { allow: ["command(starbridge settle)"] } }));
+  const done = await refresh(m.sys);
+  expect(done.join("\n")).toContain("Replaced the broad settle allow rule");
+  expect(readFileSync(m.settings, "utf8")).not.toContain("settle:*");
+  expect(readFileSync(m.settings, "utf8")).toContain("Bash(starbridge settle d_*)");
+  expect(readFileSync(cursor, "utf8")).not.toContain("settle");
+  expect(readFileSync(agy, "utf8")).not.toContain("settle");
+});

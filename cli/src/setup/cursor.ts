@@ -238,7 +238,7 @@ export const CURSOR_ALLOW = ["ask", "waiting", "working", "wait"].map(
 );
 
 /** Entries of earlier releases that setup removes: `settle` let `settle --all --yes` through. */
-const STALE_CURSOR_ALLOW = ["Shell(starbridge settle)"];
+export const STALE_CURSOR_ALLOW = ["Shell(starbridge settle)"];
 
 export function cursorConfigPath(sys: Home): string {
   return join(cursorConfigDir(sys), "cli-config.json");
@@ -289,6 +289,15 @@ export function addCursorAllow(sys: Home): boolean {
   };
   mkdirSync(dirname(cursorConfigPath(sys)), { recursive: true });
   writeFileSync(cursorConfigPath(sys), `${JSON.stringify(c, null, 2)}\n`);
+  return true;
+}
+
+/** Removes the entries of earlier releases only; whether it removed any. */
+export function removeStaleCursorAllow(sys: Home): boolean {
+  const c = readConfig(sys);
+  const left = c && withoutAllow(c, STALE_CURSOR_ALLOW);
+  if (!left) return false;
+  writeLeft(cursorConfigPath(sys), left);
   return true;
 }
 

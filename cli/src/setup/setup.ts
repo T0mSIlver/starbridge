@@ -27,6 +27,7 @@ import {
   found,
   installAgent,
   installed,
+  migrateAllowEntries,
   progressLine,
   removedAgents,
   setRemoved,
@@ -99,7 +100,7 @@ async function checkServer(server: string): Promise<void> {
  */
 export async function refresh(sys: Sys): Promise<string[]> {
   recordSelf(sys);
-  const done = refreshFiles(sys);
+  const done = [...refreshFiles(sys), ...migrateAllowEntries(sys)];
   const removed = removedAgents(sys.ctx);
   for (const id of AGENT_IDS) {
     if (removed.includes(id) || !found(sys, id)) continue;

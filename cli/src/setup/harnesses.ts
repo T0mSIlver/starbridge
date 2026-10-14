@@ -359,7 +359,7 @@ export const AGY_ALLOW = ["ask", "waiting", "working", "wait", "hello"].map(
 );
 
 /** Entries of earlier releases that setup removes: `settle` let `settle --all --yes` through. */
-const STALE_AGY_ALLOW = ["command(starbridge settle)"];
+export const STALE_AGY_ALLOW = ["command(starbridge settle)"];
 
 /** `agy`'s settings file. The app and the IDE keep their own, which setup does not know. */
 export function agySettingsPath(sys: Home): string {
@@ -403,6 +403,15 @@ export function addAgyAllow(sys: Home): boolean {
   };
   mkdirSync(dirname(agySettingsPath(sys)), { recursive: true });
   writeFileSync(agySettingsPath(sys), `${JSON.stringify(s, null, 2)}\n`);
+  return true;
+}
+
+/** Removes the entries of earlier releases only; whether it removed any. */
+export function removeStaleAgyAllow(sys: Home): boolean {
+  const s = readAgySettings(sys);
+  const left = s && withoutAllow(s, STALE_AGY_ALLOW);
+  if (!left) return false;
+  writeLeft(agySettingsPath(sys), left);
   return true;
 }
 

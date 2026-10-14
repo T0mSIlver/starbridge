@@ -243,7 +243,7 @@ export const ALLOW_RULES = [
 ];
 
 /** Entries of earlier releases that setup replaces: `settle:*` let `settle --all --yes` through. */
-const STALE_ALLOW_RULES = ["Bash(starbridge settle:*)"];
+export const STALE_ALLOW_RULES = ["Bash(starbridge settle:*)"];
 
 function allowList(s: Settings | undefined): string[] {
   const allow = s?.permissions?.allow;
