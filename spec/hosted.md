@@ -35,6 +35,11 @@
   (Caddy's hop to the server's published port), so about 5000 such users fit; CPU stays under
   one core. A new visitor to the landing page costs about 50 ms of CPU across Next and Caddy
   once Caddy compresses (#593), so the VPS serves 15 to 20 a second.
+- **Accounts full of large questions** (#1787). With 20 of 100 users holding about 8 open
+  questions of 2 MB of images each, their pages listing from cursor 0 every 20 s and fetching by
+  id each question listed without its images, the server's peak memory went from 55 to 163 MB and
+  the p99 of all requests from 5 to 26 ms (`load.ts --heavy 0.2 --backlog 8`, 2026-10-15, on the
+  dev box). The 4 MB page of #1735 holds one such question's images; the rest come by id.
 - **Load regressions** (#1548). The load test runs weekly for an hour and monthly for 24 hours
   on the staging VM, from staging's images, capped to 1.5 cores and 3 GB so staging keeps the
   rest, and its result is compared with a stored baseline; a regression is a card to the owner.
