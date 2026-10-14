@@ -106,6 +106,8 @@ final class Store {
         self.deviceName = deviceName
         self.http = http
         SavedImage.directory = disk.url.deletingLastPathComponent().appendingPathComponent("images")
+        // Folders from before the exclusion too.
+        SavedImage.excludeFromBackup()
         let loaded = disk.loadOrMoveAside()
         if case let .saved(found) = loaded { saved = found ?? Saved(server: Self.defaultServer) } else { saved = Saved(server: Self.defaultServer) }
         do {

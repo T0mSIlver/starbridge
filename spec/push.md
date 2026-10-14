@@ -62,6 +62,13 @@
   until the app opens. Only an alert would always run the extension, and an alert shows a
   notification; hiding it takes Apple's notification-filtering entitlement. iOS's Badges setting
   for the app decides whether it shows.
+- **The iPhone treats a push as a hint** (#1756). A payload whose `id`, `re` or `kind` is not
+  plain words (`[A-Za-z0-9_-]{1,64}`, `[a-z-]{1,32}`) is dropped, since the id joins a request
+  path. A notification's button acts only when its category is the question's own (`d.<id>`; a
+  prompt's Deny needs `permission`): the server names the category until the extension rewrites
+  it. The extension shows no button for an item the app's saved state says is answered, so a
+  replayed push cannot offer to answer it again, and it clears the badge the placeholder carried
+  when it keeps the placeholder.
 - Caps (#27, #36, #37): 10 subscriptions a device, 30 an account; 4 pushes in flight and 200
   waiting per account, 10 s each. A push connects to the exact address that passed the
   private-range check, and is sent only if its subscription and device are still active (#260).
