@@ -233,10 +233,11 @@
   binary and runs the whole CLI suite, which must pass: the launchd service and the screen readers
   run only on a Mac, so the real launchd starts and stops the agent there. A `ubuntu-24.04-arm` job (#1481), skipped the same way, does the same for the
   linux-arm64 binary. All three jobs run each test file alone and kill one that hangs (`cli/scripts/test-each.ts`, #862).
-- **CI runners** (#146, #1204, #1213). Self-hosted Linux runners in two pools that never share a
-  box: `trusted` runs main's tests, deploys, uptime checks and releases; `pr` runs the test, e2e
-  and image jobs of a pull request from this repository's own branches, so they start sooner than
-  on GitHub's runners. Each job names its pool through a repository variable holding a JSON array
+- **CI runners** (#146, #1204, #1213, #1638). Self-hosted Linux runners in two pools that never
+  share a box: `trusted` runs main's tests, deploys, uptime checks and releases; `pr` runs the
+  test and image jobs of a pull request from this repository's own branches, so they start sooner
+  than on GitHub's runners. The e2e stays on GitHub's runners: its three parts per run queued a
+  median 4 min, p90 22 min, behind the PR pool's two heavy slots. Each job names its pool through a repository variable holding a JSON array
   of labels, and falls back to GitHub's runner when it is unset (docs/ci.md). Dependabot's and
   forks' pull requests stay on GitHub's runners, and so do the desktop e2e (Electron's libraries),
   Windows and macOS. Android builds on main and in releases use their own runner,
