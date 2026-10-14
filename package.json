@@ -5,7 +5,8 @@
   "scripts": {
     "test": "pnpm -r --if-present test",
     "typecheck": "pnpm -r --if-present typecheck",
-    "lint": "pnpm -r --if-present lint"
+    "lint": "pnpm -r --if-present lint",
+    "prepare": "node -e \"process.env.CI || require('node:fs').existsSync('.githooks/install.mjs') && import('./.githooks/install.mjs')\""
   },
   "keywords": [
     "pi-package"

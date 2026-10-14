@@ -1,0 +1,39 @@
+#!/bin/sh
+# Formats each package's staged files with that package's Biome (`biome check --write`: format,
+# import order and safe fixes), stages the result, and refuses the commit when Biome still reports
+# an error, as CI's `pnpm lint` would (#1656). A file with unstaged changes is left alone, since
+# staging the rewrite would stage those changes too.
+set -eu
+IFS='
+'
+staged=$(git diff --cached --name-only --diff-filter=ACMR)
+[ -n "$staged" ] || exit 0
+unstaged=$(git diff --name-only)
+failed=
+for config in $(git ls-files '*/biome.json'); do
+  pkg=${config%/biome.json}
+  # evals/load and evals/migrate keep a config but are no workspace packages, and CI lints neither.
+  [ -f "$pkg/package.json" ] || continue
+  files=$(printf '%s\n' "$staged" | sed -n "s|^$pkg/||p")
+  [ -n "$files" ] || continue
+  if [ ! -x "$pkg/node_modules/.bin/biome" ]; then
+    echo "pre-commit: Biome is not installed in $pkg, so its files go unformatted. Run pnpm install to format before commit." >&2
+    continue
+  fi
+  rewrite=
+  for f in $files; do
+    if printf '%s\n' "$unstaged" | grep -qxF "$pkg/$f"; then
+      echo "pre-commit: $pkg/$f has unstaged changes, so it is not formatted." >&2
+    else
+      rewrite="$rewrite$f$IFS"
+    fi
+  done
+  [ -n "$rewrite" ] || continue
+  (cd "$pkg" && ./node_modules/.bin/biome check --write --no-errors-on-unmatched --files-ignore-unknown=true $rewrite) ||
+    failed=1
+  (cd "$pkg" && git add -- $rewrite)
+done
+if [ -n "$failed" ]; then
+  echo "pre-commit: Biome found the errors above; fix them and commit again." >&2
+  exit 1
+fi
