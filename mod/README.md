@@ -4,7 +4,7 @@ When the owner answers a decision, this mod submits the answer into the Claude
 Code session that asked, as the line `starbridge wait` prints:
 
 ```
-Answer to d_Xk3… (Merge #12 now?): Merge
+Answer to d_amber-otter-… (Merge #12 now?): Merge
 ```
 
 It works in the terminal, the desktop app's Code tab, IDEs and Remote Control.
