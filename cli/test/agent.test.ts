@@ -622,12 +622,14 @@ test.skipIf(WINDOWS)(
       const away = await post(elsewhere);
       expect(away.delivery).toBe("wait");
       expect(ctx.store.state().asked[away.id]?.held).toBeUndefined();
-      // The recorded home: the recorded codex runs, never the one the route names.
-      const home = await post(codex.env.CODEX_HOME);
+      // The recorded home, however spelled: the recorded codex runs for the recorded spelling,
+      // never the binary or the path the route names.
+      const home = await post(join(codex.env.CODEX_HOME, "x", ".."));
       await server.answer(away.id, { choice: "Wait" });
       await server.answer(home.id, { choice: "Merge" });
       const log = () => (existsSync(codex.log) ? readFileSync(codex.log, "utf8") : "");
       await until(() => log().includes(home.id), 15_000);
+      expect(log()).toStartWith(`${codex.env.CODEX_HOME} queue --thread t1`);
       expect(log()).not.toContain(away.id);
       expect(existsSync(ran)).toBe(false);
     } finally {

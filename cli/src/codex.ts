@@ -93,13 +93,17 @@ export function codexHome(env: Ctx["env"]): string | undefined {
  * and the answer then waits to be read.
  */
 export function trustedCodex(ctx: Ctx, s: CodexSession): CodexSession | undefined {
+  if (typeof s.home !== "string") return undefined;
   const recorded = ctx.store.agentConfig().codex;
-  const homes = [recorded?.home, codexHome(ctx.env)]
-    .filter((h): h is string => !!h)
-    .map((h) => resolve(h));
-  if (typeof s.home !== "string" || !homes.includes(resolve(s.home))) return undefined;
+  // Windows paths compare without case, as its file system does.
+  const key = (p: string) => (process.platform === "win32" ? resolve(p).toLowerCase() : resolve(p));
+  // The trusted spelling goes to `codex`, never the route's: `..` past a link reaches elsewhere.
+  const home = [recorded?.home, codexHome(ctx.env)].find(
+    (h): h is string => !!h && key(h) === key(s.home),
+  );
+  if (!home) return undefined;
   const bin = recorded?.bin ?? which(ctx.env, "codex");
-  return bin ? { home: s.home, bin } : undefined;
+  return bin ? { home: resolve(home), bin } : undefined;
 }
 
 /**
