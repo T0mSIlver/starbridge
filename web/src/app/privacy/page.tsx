@@ -255,9 +255,10 @@ export default function Privacy() {
         How long we keep it
       </h2>
       <p>
-        The server deletes your items automatically, within 1 to 30 days depending on the kind. Your
-        account, device list and push targets stay until you delete them, and Delete account in
-        Settings removes everything at once. Backups keep deleted data for about 2 weeks.
+        The server deletes your items automatically, 1 to 30 days after they arrive, are answered or
+        last change, depending on the kind. Your account, device list and push targets stay until
+        you delete them, and Delete account in Settings removes them with your items at once.
+        Backups keep deleted data for about 2 weeks, and sign-up steps in Umami stay for 180 days.
       </p>
       <details>
         <summary>Retention schedule</summary>
