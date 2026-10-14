@@ -471,11 +471,9 @@ async function racePicker(
 }
 
 /**
- * `starbridge hook ask-user`, on `PreToolUse` for `AskUserQuestion`, from plugins before #848:
- * prints nothing, so the picker opens and `hook permission` races it. Those plugins sent the
- * agent to `starbridge ask` instead; plugins since keep the entry one release, so an older CLI
- * under a newer plugin still does that rather than leave the picker to `hook permission`, which
- * took it for a permission prompt.
+ * `starbridge hook ask-user`, on `PreToolUse` for `AskUserQuestion`, from plugins before #1625:
+ * prints nothing, so the picker opens and `hook permission` races it. It stays while such plugins
+ * may run, since a plugin can lag its CLI and an unknown hook would show an error.
  */
 export function hookAskUser(): number {
   return 0;
