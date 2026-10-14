@@ -43,6 +43,7 @@ import dev.starbridge.app.ui.DecisionKey
 import dev.starbridge.app.ui.LocalClock24
 import dev.starbridge.app.ui.Main
 import dev.starbridge.app.ui.PairLinkKey
+import dev.starbridge.app.ui.setup.KeyClipboard
 import dev.starbridge.app.ui.QuotasKey
 import dev.starbridge.app.ui.PromptKey
 import dev.starbridge.app.ui.Setup
@@ -141,6 +142,17 @@ class MainActivity : ComponentActivity() {
     override fun onUserInteraction() {
         super.onUserInteraction()
         store.touched()
+    }
+
+    override fun onStart() {
+        super.onStart()
+        KeyClipboard.clearIfDue(this)
+    }
+
+    // The copied recovery key's timer may not have run while the app was behind (spec/android.md).
+    override fun onStop() {
+        super.onStop()
+        KeyClipboard.clearIfDue(this)
     }
 
     override fun onPause() {

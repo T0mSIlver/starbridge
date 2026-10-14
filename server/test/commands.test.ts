@@ -21,4 +21,5 @@ test("each server command prints and exits 0; an unknown one exits 2", () => {
   expect(top.code).toBe(0);
   expect(JSON.parse(top.out)).toMatchObject({ accounts: 0 });
   expect(command("nonsense").code).toBe(2);
+  expect(command("purge", "no-such-account").code).toBe(1);
 });

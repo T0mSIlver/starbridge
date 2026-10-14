@@ -1,10 +1,13 @@
 // A caching mirror of Google's Maven, Maven Central and the Gradle Plugin Portal, set per machine
 // as `starbridge.mavenMirror=http://host:port` in ~/.gradle/gradle.properties: the home one serves
 // the dev box and the self-hosted runners that reach it, and keeps Maven Central's rate limit off
-// them (docs/ci.md). It is plain HTTP on the LAN. The public repositories stay after it, for
-// anything it lacks and for every machine without the property.
+// them (docs/ci.md). It is plain HTTP on the LAN, so a build that signs with the release key
+// (STARBRIDGE_KEYSTORE set: release.yml, internal.yml) leaves it out and resolves over HTTPS
+// (#1716); gradle/verification-metadata.xml checks every artifact either way. The public
+// repositories stay after it, for anything it lacks and for every machine without the property.
 pluginManagement {
     val mirror = providers.gradleProperty("starbridge.mavenMirror").orNull?.trimEnd('/')
+        ?.takeUnless { it.startsWith("http:") && !System.getenv("STARBRIDGE_KEYSTORE").isNullOrEmpty() }
     repositories {
         if (mirror != null) {
             for (path in listOf("google", "maven-central", "gradle-plugins")) maven {
@@ -20,6 +23,7 @@ pluginManagement {
 dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
     val mirror = providers.gradleProperty("starbridge.mavenMirror").orNull?.trimEnd('/')
+        ?.takeUnless { it.startsWith("http:") && !System.getenv("STARBRIDGE_KEYSTORE").isNullOrEmpty() }
     repositories {
         if (mirror != null) {
             for (path in listOf("google", "maven-central")) maven {

@@ -16,5 +16,5 @@ for _ in $(seq 30); do
   sleep 1
 done
 echo "demo.sh: the demo server is not healthy after 30 s" >&2
-$demo logs --tail 50 >&2
+"$tree/deploy/host/keep-logs.sh" demo $demo logs --tail 50
 exit 1

@@ -522,7 +522,7 @@ export async function postWaiting(
   const asked = ctx.store.state().asked[id];
   if (!asked) throw new UsageError(`${id} is not a decision this machine asked`);
   if (ctx.store.state().answers[id] || asked.settled)
-    throw new UsageError(`${id} is already answered`);
+    throw new UsageError(staleLine(ctx.store.state(), id, ctx.now()));
   if ((asked.waiting?.state ?? "working") === state) return false;
   // The id is kept before the first post, so a lost reply or a second process reuses it.
   let waitingId = "";
@@ -549,7 +549,7 @@ export async function postWaiting(
     await s.api.postItem(item);
   } catch (e) {
     if (e instanceof ApiError && e.code === "already-answered")
-      throw new UsageError(`${id} is already answered`);
+      throw new UsageError(`${named(id, asked.question)} was already answered`);
     throw e;
   }
   ctx.store.updateState((st) => {
@@ -632,6 +632,11 @@ export async function settle(ctx: Ctx, opts: SettleOpts): Promise<number> {
       );
     if (!withdrawn && reason !== undefined)
       throw new UsageError("--reason is for --outcome withdrawn");
+    // Closed already, and told to the devices: it says how, and sends nothing (#1697).
+    if (asked.settled && !asked.unposted && !ctx.store.state().answers[id]) {
+      ctx.err(`starbridge: ${staleLine(ctx.store.state(), id, ctx.now())}`);
+      return 0;
+    }
     const s = session(ctx);
     const dir = await refreshDirectory(ctx, s, opts.deadline);
     // An answer that came before the settle closed the decision: its session may not have it
@@ -642,7 +647,12 @@ export async function settle(ctx: Ctx, opts: SettleOpts): Promise<number> {
     const settled = await settleOne(ctx, s, dir, id, outcome, false, reason, opts.deadline);
     // Not for one a removed device's answer closed: no answer is held, and `wait` says why.
     if (!settled && ctx.store.state().answers[id])
-      ctx.err(`starbridge: ${id} was answered first, so it stays answered`);
+      ctx.err(`starbridge: ${staleLine(ctx.store.state(), id, ctx.now())}; it stays answered`);
+    else if (settled) {
+      ctx.err(
+        `Settled ${named(id, asked.question)}: ${closedHow(ctx.store.state(), id, ctx.now())}`,
+      );
+    }
     return 0;
   }
   if (reason !== undefined && outcome !== "withdrawn")
@@ -742,6 +752,12 @@ async function settleOne(
     if (a && !answered) {
       a.settled = true;
       a.unposted = true;
+      // The first settle's word stands while its notice is in flight: a second one is refused.
+      if (!a.settledAt) {
+        a.settledAt = iso(ctx.now());
+        a.outcome = outcome;
+        if (reason !== undefined && outcome === "withdrawn") a.reason = reason;
+      }
       forget(a);
     }
   });
@@ -1526,7 +1542,9 @@ export async function wait(
     const left = deadline - ctx.now().getTime();
     if (ctx.signal?.aborted) return EXIT_INTERRUPTED;
     if (left <= 0) {
-      ctx.err(`No answer to ${target ?? "any decision"} yet.`);
+      ctx.err(
+        `No answer to ${target ? named(target, state.asked[target]?.question) : "any decision"} yet.`,
+      );
       return EXIT_TIMEOUT;
     }
     try {
@@ -1570,13 +1588,63 @@ export function printSnooze(
 
 /** Why no answer to decision `id` will come, for `wait`: settled, answered elsewhere, or revoked. */
 export function closedError(ctx: Ctx, id: string | undefined): UsageError | undefined {
-  const a = id === undefined ? undefined : ctx.store.state().asked[id];
-  if (a?.revoked)
+  const st = ctx.store.state();
+  const a = id === undefined ? undefined : st.asked[id];
+  if (!id || !a) return undefined;
+  if (a.revoked)
     return new UsageError(
-      `${id} was answered from a device removed since, so that answer does not count and no other will come: ask again if you still need it`,
+      `${named(id, a.question)} was answered from a device removed since, so that answer does not count and no other will come: ask again if you still need it`,
     );
-  if (a?.settled || (a?.answerIn && !a.done))
-    return new UsageError(`${id} is settled or answered on its own page: no answer will come`);
+  if (a.settled)
+    return new UsageError(
+      `${named(id, a.question)} was ${closedHow(st, id, ctx.now())}: no answer will come`,
+    );
+  if (a.answerIn && !a.done)
+    return new UsageError(
+      `${named(id, a.question)} takes its answer on its own page: no answer will come here`,
+    );
+}
+
+/** How a line names a decision: its id, and its question beside it, so a reader sees which card (#1697). */
+export function named(id: string, question: string | undefined): string {
+  return `${id}${question ? ` (${question})` : ""}`;
+}
+
+/** "13:02", "yesterday 13:02", "Mon 12 Oct 13:02": a time that has passed, in this machine's zone. */
+export function pastTime(at: Date, now: Date): string {
+  const time = at.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+  const day = (d: Date) => d.toDateString();
+  if (day(at) === day(now)) return time;
+  const yesterday = new Date(now);
+  yesterday.setDate(now.getDate() - 1);
+  if (day(at) === day(yesterday)) return `yesterday ${time}`;
+  return `${at.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" })} ${time}`;
+}
+
+/**
+ * How decision `id` closed, for what is said of a card that takes no answer: `answered at 13:02:
+ * Done`, `withdrawn at 13:02: <reason>`, `answered elsewhere at 13:02`. Undefined while it is open.
+ */
+export function closedHow(st: State, id: string, now: Date): string | undefined {
+  const at = (iso: string | undefined) => {
+    const d = iso ? new Date(iso) : undefined;
+    return d && !Number.isNaN(d.getTime()) ? ` at ${pastTime(d, now)}` : "";
+  };
+  const answer = st.answers[id]?.answer;
+  if (answer)
+    return `answered${at(answer.answeredAt)}: ${answer.choice ?? answer.text ?? DONE_LINE}`;
+  const a = st.asked[id];
+  if (!a?.settled) return undefined;
+  if (a.revoked) return "answered from a device removed since, so that answer does not count";
+  if (a.outcome === "withdrawn")
+    return `withdrawn${at(a.settledAt)}${a.reason ? `: ${a.reason}` : ""}`;
+  if (a.outcome === "elsewhere") return `answered elsewhere${at(a.settledAt)}`;
+  return "settled";
+}
+
+/** What `waiting`, `working` and `settle` say of a card that is closed already. */
+export function staleLine(st: State, id: string, now: Date): string {
+  return `${named(id, st.asked[id]?.question)} was already ${closedHow(st, id, now) ?? "closed"}`;
 }
 
 /** Marks a decision waiting on the way into a wait; a failure only costs the devices' label. */
@@ -1598,6 +1666,8 @@ export interface SessionLine {
   /** What confirms it: the decision id. */
   ack: string;
   line: string;
+  /** The decision's question, beside its id (#1697). */
+  question: string;
   /**
    * The decision is marked waiting: the agent needs the answer now, so the mod hands it over at
    * the agent's next tool call rather than after its turn (#1484).
@@ -1620,6 +1690,7 @@ export function sessionLines(st: State, session: string): SessionLine[] {
       decisionId: id,
       ack: id,
       line: answerLine(a.answer, asked.question),
+      question: asked.question,
       waiting: asked.waiting?.state === "waiting",
       ...(asked.subagent ? { subagent: asked.subagent } : {}),
     });
@@ -1650,6 +1721,7 @@ const printLine = (ctx: Ctx, l: SessionLine) =>
       decisionId: l.decisionId,
       ack: l.ack,
       line: l.line,
+      question: l.question,
       waiting: l.waiting,
       ...(l.subagent ? { subagent: l.subagent } : {}),
     }),

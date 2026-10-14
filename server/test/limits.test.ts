@@ -25,7 +25,7 @@ import {
 import { openDb } from "../src/db";
 import { DEFAULT_LIMITS, type Limits } from "../src/limits";
 import { RateLimiter } from "../src/ratelimit";
-import { sweepStorage } from "../src/retention";
+import { purgeAccount, sweepStorage } from "../src/retention";
 import {
   type Actor,
   append,
@@ -541,6 +541,40 @@ test("pairings bound their message size, their number and their long-polls", asy
   expect(r.status).toBe(400);
 });
 
+test("result long-polls without a session are capped in all and per address, past which they pause and get 204", async () => {
+  const s = await makeServer({
+    trustProxy: true,
+    limits: { ...DEFAULT_LIMITS, pairingResultWaits: 2, pairingResultWaitsPerClient: 1 },
+  });
+  const [p1, p2, p3] = [await request(s, "a"), await request(s, "b"), await request(s, "c")];
+  const poll = (p: typeof p1, ip: string, wait: number) =>
+    s.call("GET", `/v1/pairings/${p.rendezvous}/result?wait=${wait}`, {
+      headers: { "x-claim": p.claim, "x-forwarded-for": ip },
+    });
+  const held = (p: typeof p1) => s.deps.pairings.count(p.rendezvous);
+  const a = poll(p1, "203.0.113.1", 1);
+  const b = poll(p2, "2001:db8:1:3::1", 2);
+  await Bun.sleep(20);
+  expect([held(p1), held(p2)]).toEqual([1, 1]);
+  // Another wait from either address, an IPv6 one counting as its /48, is over its cap; from a
+  // third address, over the server's. Each pauses, holds no slot, and gets 204.
+  for (const ip of ["203.0.113.1", "2001:db8:1:2::9", "198.51.100.7"]) {
+    const t = Date.now();
+    const busy = poll(p3, ip, 0.2);
+    await Bun.sleep(20);
+    expect(held(p3)).toBe(0);
+    expect((await busy).status).toBe(204);
+    expect(Date.now() - t).toBeGreaterThanOrEqual(150);
+  }
+  // A wait that ends gives its slot back.
+  expect((await a).status).toBe(204);
+  const c = poll(p3, "198.51.100.7", 0.3);
+  await Bun.sleep(20);
+  expect(held(p3)).toBe(1);
+  expect((await c).status).toBe(204);
+  expect((await b).status).toBe(204);
+});
+
 test("a machine holds a bounded number of open answer waits", async () => {
   const { s, devbox } = await setup({ answerWaits: 1 });
   const waiting = s.call("GET", "/v1/answers?wait=1", { token: devbox.token });
@@ -643,4 +677,84 @@ test("forgetting a deleted account keeps another account's windows whose member 
   expect(limiter.allow("items:acct-1:m1", 1, 60_000)).toBe(true);
   expect(limiter.allow("items:acct-2:acct-1x", 1, 60_000)).toBe(false);
   expect(limiter.allow("bytes:acct-12", 1, 60_000)).toBe(false);
+});
+
+/** A database with `items` as [account, id, size, received days ago, answered days ago?]. */
+function stored(items: [string, string, number, number, number?][]) {
+  const db = openDb(":memory:");
+  const now = Date.now();
+  const iso = (days: number) => new Date(now - days * DAY).toISOString();
+  for (const a of new Set(items.map((i) => i[0])))
+    db.query("INSERT INTO accounts (id, created_at) VALUES (?, ?)").run(a, iso(0));
+  const add = db.query(
+    "INSERT INTO items (seq, account_id, id, kind, from_id, received_at, answered_at, size) VALUES (?, ?, ?, 'decision', 'm', ?, ?, ?)",
+  );
+  items.forEach(([a, id, size, received, answered], i) => {
+    add.run(i + 1, a, id, iso(received), answered === undefined ? null : iso(answered), size);
+  });
+  const ids = () =>
+    (db.query("SELECT id FROM items ORDER BY seq").all() as { id: string }[]).map((r) => r.id);
+  return { db, now, ids };
+}
+
+test("near serverBytes, the largest accounts keep unanswered decisions only a week, until under 90% (#1736)", async () => {
+  const { db, now, ids } = stored([
+    ["big", "big-old", 600, 8],
+    ["big", "big-new", 250, 1],
+    ["recent", "recent-new", 900, 1],
+    ["mid", "mid-old", 120, 8],
+    ["small", "small-old", 30, 8],
+  ]);
+  // 1900 of 1900 bytes: the largest account holds only recent questions, so the next one's old
+  // question goes, which is enough.
+  await sweepStorage(db, { ...DEFAULT_LIMITS, serverBytes: 1900 }, now);
+  expect(ids()).toEqual(["big-new", "recent-new", "mid-old", "small-old"]);
+  // Under 90% of a smaller cap only once the next largest goes too.
+  await sweepStorage(db, { ...DEFAULT_LIMITS, serverBytes: 1320 }, now);
+  expect(ids()).toEqual(["big-new", "recent-new", "small-old"]);
+});
+
+test("the sweep deletes in batches bounded by bytes, each at least one item (#1736)", async () => {
+  const { db, now, ids } = stored([
+    ["a", "q1", 10, 40],
+    ["a", "q2", 10, 40],
+    ["a", "q3", 25, 40],
+    ["a", "kept", 10, 1],
+  ]);
+  let deletes = 0;
+  const watched = new Proxy(db, {
+    get(target, key) {
+      const value = Reflect.get(target, key, target);
+      if (key !== "query") return typeof value === "function" ? value.bind(target) : value;
+      return (sql: string) => {
+        const q = target.query(sql);
+        if (!sql.startsWith("DELETE FROM items WHERE rowid IN")) return q;
+        return new Proxy(q, {
+          get(t, k) {
+            const v = Reflect.get(t, k, t);
+            if (k !== "run") return typeof v === "function" ? v.bind(t) : v;
+            return (...args: unknown[]) => {
+              deletes += 1;
+              return (v as (...a: unknown[]) => unknown).apply(t, args);
+            };
+          },
+        });
+      };
+    },
+  });
+  // 20 bytes a batch: q1 and q2 together, then q3 alone though it is larger.
+  await sweepStorage(watched, DEFAULT_LIMITS, now, 1000, 20);
+  expect(ids()).toEqual(["kept"]);
+  expect(deletes).toBe(2);
+});
+
+test("purging an account deletes its items and no one else's (#1736)", async () => {
+  const { db, ids } = stored([
+    ["a", "a1", 100, 1],
+    ["b", "b1", 50, 1],
+    ["a", "a2", 200, 1, 0],
+  ]);
+  expect(await purgeAccount(db, "a", { rows: 1, bytes: 1 })).toBe(300);
+  expect(ids()).toEqual(["b1"]);
+  expect(db.query("SELECT 1 FROM accounts WHERE id = 'a'").get()).not.toBeNull();
 });

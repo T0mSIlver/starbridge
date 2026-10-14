@@ -27,6 +27,12 @@ export class RateLimiter {
     return w.count <= limit ? 0 : Math.max(1, Math.ceil((w.start + windowMs - t) / 1000));
   }
 
+  /** What is left of `limit` in `key`'s current window. */
+  left(key: string, limit: number, windowMs: number): number {
+    const w = this.windows.get(key);
+    return !w || this.now() - w.start >= windowMs ? limit : Math.max(0, limit - w.count);
+  }
+
   /** What `retryAfter` would answer for `cost`, without counting it. */
   peek(key: string, limit: number, windowMs: number, cost = 1): number {
     const t = this.now();

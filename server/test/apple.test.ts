@@ -1,8 +1,9 @@
-import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
+import { afterAll, beforeAll, beforeEach, expect, setSystemTime, test } from "bun:test";
 import { createHash, generateKeyPairSync, sign, verify } from "node:crypto";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { Apple, AppleRefused } from "../src/apple";
 import { setSignUps } from "../src/signups";
 import { DEFAULT_LIMITS, makeServer, testConfig } from "../test-support/app";
 
@@ -237,4 +238,36 @@ test("an app's Apple sign-in spends Apple's budget, not GitHub's", async () => {
   const code = `code-b1.${codes++}.${s256(verifier)}`;
   const r = await s.call("POST", "/v1/auth/app/session", { body: { code, verifier } });
   expect(r.status).toBe(200);
+});
+
+test("Apple's keys are fetched at most once a minute, so made-up key ids cost no fetch", async () => {
+  let fetches = 0;
+  const counting = ((url: string, init?: RequestInit) => {
+    if (url.endsWith("/auth/keys")) fetches++;
+    return fetch(url, init);
+  }) as typeof fetch;
+  const a = new Apple(appleConfig().apple, counting);
+  const forged = (kid: string) =>
+    `${enc({ alg: "RS256", kid })}.${idToken("u9").split(".").slice(1).join(".")}`;
+  try {
+    const start = Date.now();
+    setSystemTime(start);
+    expect((await a.verify(idToken("u9"), [APP_ID])).sub).toBe("u9");
+    expect(fetches).toBe(1);
+    // Key ids unknown to keys fetched within the minute are refused without a fetch.
+    await Promise.all(
+      [1, 2, 3].map((n) =>
+        expect(a.verify(forged(`x${n}`), [APP_ID])).rejects.toThrow(AppleRefused),
+      ),
+    );
+    setSystemTime(start + 59_000);
+    await expect(a.verify(forged("x4"), [APP_ID])).rejects.toThrow(AppleRefused);
+    expect(fetches).toBe(1);
+    expect((await a.verify(idToken("u9"), [APP_ID])).sub).toBe("u9");
+    setSystemTime(start + 60_000);
+    await expect(a.verify(forged("x5"), [APP_ID])).rejects.toThrow(AppleRefused);
+    expect(fetches).toBe(2);
+  } finally {
+    setSystemTime();
+  }
 });

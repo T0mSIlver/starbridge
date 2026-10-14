@@ -70,7 +70,12 @@
   (`FLAG_SECURE`): a screenshot lands in the photo library and its cloud backup, where nobody
   looks for a secret. Copy puts the key on the clipboard marked sensitive, so keyboards and the
   clipboard preview hide it, and clears it after a minute if it still holds the key (or if the app,
-  in the background, can't tell). Save to password manager goes through Credential Manager, not
+  in the background, can't tell). The timer dies with a frozen or killed process, so the deadline
+  is also kept on disk, as a hash, and the app honours it when it starts or stops (#1755); leaving
+  the app never clears the key by itself, since the owner copies it to paste it elsewhere. The
+  same screens, the owner-token field, and every screen that shows a pairing QR code, code or
+  digits are `FLAG_SECURE` too (#1755), and a typed token or key is never `rememberSaveable`,
+  which Android may write to disk. Save to password manager goes through Credential Manager, not
   the share sheet: Google Password Manager takes no shared text and Bitwarden turns it into a
   Send, while a saved password reaches all three of Google's, Bitwarden and 1Password. Without
   either, owners had no way to save the key but typing it out. The web already had Copy.

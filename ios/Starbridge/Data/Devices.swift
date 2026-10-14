@@ -91,7 +91,7 @@ extension Store {
         let entry = try make(dir).json
         try await api().append(entry)
         let all = try saved.entries.map(JSON.parse) + [entry]
-        let after = try Directories.verify(all, account: saved.account, pin: saved.pin)
+        let after = try Directories.verify(all, account: saved.accountId, pin: saved.pin)
         directory = after
         var s = saved
         s.entries = all.map(\.text)

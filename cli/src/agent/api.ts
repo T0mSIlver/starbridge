@@ -106,6 +106,8 @@ export interface SessionEvent {
   /** The prompt the mod submits into the session. */
   line: string;
   decisionId?: string;
+  /** The decision's question, beside its id (#1697). */
+  question?: string;
   /** An answer whose decision is marked waiting, which the mod hands over mid-turn (#1484). */
   waiting?: boolean;
   /** The Claude Code subagent that asked, which the mod sends the answer to (#1702). */

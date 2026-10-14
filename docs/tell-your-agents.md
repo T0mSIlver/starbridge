@@ -127,9 +127,9 @@ Starbridge from one, until `starbridge setup --agent <name>`. A later setup, or
 
 | Harness | What | Where |
 |---|---|---|
-| Claude Code | The Starbridge plugin (rules, skill, hooks) and the Starbridge [mod](https://code.claude.com/docs/en/plugins/mods/overview), code that runs inside Claude Code and brings your answer back | Claude Code's plugins, at user scope |
+| Claude Code | The Starbridge plugin (rules, skill, hooks) and the Starbridge [mod](https://code.claude.com/docs/en/plugins/mods/overview), code that runs inside Claude Code and brings your answer back | Claude Code's plugins, at user scope, from the marketplace in `~/.claude/starbridge-marketplace` |
 | Codex | The skill, and the Starbridge Codex plugin (rules, permission prompts) from a local marketplace | `~/.codex/skills/starbridge` (or under `$CODEX_HOME`), `~/.codex/starbridge` |
-| Pi | The Starbridge Pi package (skill, rules, the extension that brings your answer back) | `pi install git:github.com/T0mSIlver/starbridge@v<version>` |
+| Pi | The Starbridge Pi package (skill, rules, the extension that brings your answer back) | Pi's packages, at the commit of the CLI's release |
 | opencode | The skill, and the Starbridge plugin (rules, answers, permission prompts) | `~/.config/opencode/skills/starbridge`, `~/.config/opencode/plugins/starbridge.ts`, `~/.config/opencode/starbridge/` |
 | Cursor | The skill, and hooks that bring the rules and your answer back, beside your own | `~/.cursor/skills/starbridge`, `~/.cursor/starbridge`, `~/.cursor/hooks.json` |
 | Antigravity | The Starbridge plugin (rules, skill), loaded by the app, the IDE and `agy` | `~/.gemini/config/plugins/starbridge` |

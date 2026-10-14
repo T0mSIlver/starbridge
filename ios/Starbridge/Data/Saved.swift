@@ -29,6 +29,8 @@ struct Saved: Codable, Equatable {
     var v = Saved.format
     var server: String
     var account: String?
+    /** The account to check a directory against: none verifies no directory (#1723). */
+    var accountId: String { account ?? "" }
     /** The account already has a device, which this iPhone joins through. */
     var accountExists = false
     var me: SavedMember?

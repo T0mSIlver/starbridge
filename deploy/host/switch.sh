@@ -10,6 +10,7 @@
 #   switch.sh log                    the switch log
 #   switch.sh signups|suspend|unsuspend|limits ...
 #                                    the server's own switches, `bun server.js <args>` (#784-#786)
+#   switch.sh purge ACCOUNT          delete every item of one account (#1736); no undo
 #
 # The denylist holds one address or range per line until it is unblocked; the privacy page
 # says so. An IPv6 address is blocked as its /64, as the rate limits count it.
@@ -19,7 +20,6 @@ dir=${DENYLIST_DIR:-/etc/starbridge/caddy}
 list=$dir/denylist
 log=${SWITCH_LOG:-/var/log/starbridge/switches.log}
 caddyfile=${CADDYFILE:-/opt/starbridge/deploy/Caddyfile}
-admin=${CADDY_ADMIN:-http://127.0.0.1:2019}
 compose="docker compose -p starbridge -f /opt/starbridge/deploy/compose.yaml"
 
 note() {
@@ -63,8 +63,7 @@ apply() {
   } > "$dir/denylist.caddy.tmp"
   mv "$dir/denylist.caddy.tmp" "$dir/denylist.caddy"
   [ "${1:-}" = "--no-load" ] && return 0
-  curl -fsS -X POST -H 'Content-Type: text/caddyfile' \
-    --data-binary "@$caddyfile" "$admin/load"
+  "$(dirname "$0")/caddy-load.sh" "$caddyfile"
 }
 
 # One change at a time, deploys' regeneration included: two unblocks from one copy of the list
@@ -120,8 +119,8 @@ log) cat "$log" 2>/dev/null || true ;;
   lock
   apply --no-load
   ;;
-"") sed -n '2,14p' "$0" >&2; exit 2 ;;
-signups | suspend | unsuspend | limits)
+"") sed -n '2,15p' "$0" >&2; exit 2 ;;
+signups | suspend | unsuspend | limits | purge)
   # Holds the lock for its log line, which an unblock's scrub of the log would otherwise lose.
   lock
   out=$($compose exec -T server bun server.js "$@")

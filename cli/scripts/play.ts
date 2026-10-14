@@ -8,6 +8,7 @@
  * (a dry run from main) is reported, not failed. Without it the edit is committed, which sends
  * it for review; with managed publishing on, it then waits in Play Console for Publish.
  */
+import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { parseArgs } from "node:util";
 
@@ -171,30 +172,44 @@ const VERSION_CODE_BASE = 2_000_000;
 /**
  * The versionCode of a build of main for the internal track (#1540, #1690): the first of the
  * version's slots 50 to 98 above `after`, the track's highest code, or null once they are spent.
- * `version` is the one under way: an rc's own, or the next patch after a final. Mirrors
- * mainVersionCodeOf in android/buildSrc/.../VersionCode.kt, which Gradle still enforces.
+ * The version under way is an rc's own, or the next patch once its final exists: `version` is a
+ * final, or `finalTagged` says refs/tags/v<base> exists (#1731). Mirrors mainVersionCodeOf in
+ * android/buildSrc/.../VersionCode.kt, which Gradle still enforces.
  */
-export function mainCode(version: string, after: number): number | null {
+export function mainCode(version: string, after: number, finalTagged = false): number | null {
   const m = /^(\d+)\.(\d+)\.(\d+)(-rc\.\d+)?$/.exec(version);
   if (!m) throw new Error(`not a version: ${version}`);
-  const patch = Number(m[3]) + (m[4] ? 0 : 1);
+  const patch = Number(m[3]) + (m[4] && !finalTagged ? 0 : 1);
   const slot0 = VERSION_CODE_BASE + Number(m[1]) * 1_000_000 + Number(m[2]) * 10_000 + patch * 100;
   const first = slot0 + 50;
   const code = Math.max(first, after + 1);
   return code <= slot0 + 98 ? code : null;
 }
 
+/** Whether the final of `version`'s base is tagged here, as desktop/scripts/tip.ts reads it. */
+export function finalTagged(version: string): boolean {
+  const base = version.replace(/-.*/, "");
+  return (
+    spawnSync("git", ["rev-parse", "-q", "--verify", `refs/tags/v${base}`], { stdio: "ignore" })
+      .status === 0
+  );
+}
+
 class PlayError extends Error {}
 
 if (import.meta.main && process.argv[2] === "internal-state") {
   // `play.ts internal-state [version]`: the internal track's release name and highest code, as
-  // JSON; with the version under way, also the code of the next build of main, null when spent.
+  // JSON; with the version in package.json, also whether its final is tagged and the code of the
+  // next build of main, null when spent.
   const token = process.env.PLAY_ACCESS_TOKEN;
   if (!token) throw new Error("usage: PLAY_ACCESS_TOKEN=… play.ts internal-state");
   const state = await internalTrack(token, process.env.PLAY_API_URL);
   const version = process.argv[3];
+  const tagged = version ? finalTagged(version) : false;
   console.log(
-    JSON.stringify(version ? { ...state, code: mainCode(version, state.maxCode) } : state),
+    JSON.stringify(
+      version ? { ...state, final: tagged, code: mainCode(version, state.maxCode, tagged) } : state,
+    ),
   );
 } else if (import.meta.main) {
   const { values, positionals } = parseArgs({

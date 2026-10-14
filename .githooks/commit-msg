@@ -1,4 +1,5 @@
 #!/bin/sh
+# starbridge-hook-version: 1
 # Refuses commits that credit an AI (Tom's rule: AI credits are hard to remove once pushed).
 # Human co-author trailers pass.
 if grep -Eiq '^co-authored-by:.*(claude|anthropic|codex|openai|chatgpt|gpt|glm|z\.ai|mistral|vibe|opencode|copilot|gemini|fable|sonnet|opus|haiku)|generated (with|by) .*(claude|codex|ai)|🤖' "$1"; then

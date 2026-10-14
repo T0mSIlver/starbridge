@@ -2,8 +2,9 @@
 # Installed as /usr/local/sbin/starbridge-deploy and run as root by the Actions deploy key's
 # forced command with one argument, a commit id. Deploys that commit only if it is GitHub's main,
 # which it fetches itself with a read-only deploy key, or a commit on main that contains the one
-# deployed now, so a leaked Actions key can neither deploy a branch nor roll back to an older,
-# weaker release. Rollbacks are the owner's, with deploy/deploy.sh.
+# deployed now, and only once staging passed it (below). So a leaked Actions key can neither
+# deploy a branch, roll back to an older, weaker release, nor skip staging. Rollbacks and
+# deploys around staging are the owner's, with deploy/deploy.sh.
 set -eu
 rev=${1:-}
 case $rev in
@@ -31,6 +32,39 @@ if [ "$rev" != "$(git -C $repo rev-parse main)" ] &&
   echo "$rev is older than the deployed ${current:-release} and is not main's head; not deployed"
   exit 0
 fi
+
+# Staging passed this commit (#1528, #1714). deploy.yml checks it before it calls this command;
+# the box checks again, so the Actions key alone cannot skip staging. Any workflow can post a
+# commit status, so the status only points at its run: that run must be main's deploy.yml, and
+# its staging job must have run the step named "Staging passed <this commit>", which only a pass
+# runs. GitHub's public API, without a token: the repository is public, so the box holds no GitHub
+# credential for it. No answer means no deploy.
+api=https://api.github.com/repos/T0mSIlver/starbridge
+# get PATH: the answer, or nothing when curl fails. Through a file: a retried transfer's partial
+# bytes would otherwise reach the parser ahead of the full answer.
+get() {
+  out=$(mktemp)
+  curl -fsS --retry 3 --retry-delay 5 --retry-all-errors --max-time 30 \
+    -H 'Accept: application/vnd.github+json' -o "$out" "$api/$1" && cat "$out" || true
+  rm -f "$out"
+}
+run=$(get "commits/$rev/statuses?per_page=100" |
+  jq -r '[.[] | select(.context == "staging")][0] | select(.state == "success") | .target_url' |
+  sed -n 's|^https://github\.com/T0mSIlver/starbridge/actions/runs/\([0-9][0-9]*\)$|\1|p') || run=
+[ -n "$run" ] || { echo "staging has not passed $rev; not deployed" >&2; exit 1; }
+get "actions/runs/$run" | jq -e '.path == ".github/workflows/deploy.yml" and .event == "workflow_run"
+  and .head_branch == "main" and .head_repository.full_name == "T0mSIlver/starbridge"' >/dev/null ||
+  { echo "the staging status of $rev names run $run, not main's deploy.yml; not deployed" >&2; exit 1; }
+# The step ran before the status was set, but the API can show it a few seconds late.
+passed=
+for _ in 1 2 3 4 5 6; do
+  get "actions/runs/$run/jobs?filter=latest&per_page=100" | jq -e --arg step "Staging passed $rev" \
+    'any(.jobs[] | select(.name == "staging") | .steps[]; .name == $step and .conclusion == "success")' \
+    >/dev/null && { passed=1; break; }
+  sleep 5
+done
+[ -n "$passed" ] || { echo "run $run did not pass $rev on staging; not deployed" >&2; exit 1; }
+echo "staging passed $rev (run $run)"
 
 rm -rf /opt/starbridge.new /opt/starbridge.old
 mkdir /opt/starbridge.new

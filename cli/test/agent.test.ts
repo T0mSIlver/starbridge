@@ -22,7 +22,7 @@ import { makeAgent } from "../src/agent/main";
 import type { Agent } from "../src/agent/server";
 import { hookStop } from "../src/antigravity";
 import { run } from "../src/cli";
-import { hookCursorSession } from "../src/hook";
+import { countFollowup, hookCursorSession, MAX_EMPTY_FOLLOWUPS } from "../src/hook";
 import {
   agentAddress,
   compiledFake,
@@ -146,6 +146,7 @@ test("two sessions each get only their own answers, held until they arrive, unti
       decisionId: d1,
       ack: d1,
       line: `Answer to ${d1} (Merge #12 now?): Wait`,
+      question: "Merge #12 now?",
       waiting: false,
     },
   ]);
@@ -209,6 +210,7 @@ test("several CLI clients at once: ask, wait, answers and quota push all go thro
     decisionId: ids[2],
     ack: ids[2],
     line: `Answer to ${ids[2]} (Merge #12 now?): Wait`,
+    question: "Merge #12 now?",
     waiting: false,
   });
   expect(await run(["answers", "--session", "s2", "--ack", ids[2] as string], mod)).toBe(0);
@@ -489,6 +491,14 @@ test("a call whose signal already aborted is interrupted without opening a reque
  * A Codex home whose daemon socket listens, and a `codex` that logs its arguments. Bun on
  * Windows cannot listen on a unix socket's path, so the tests that need one skip there.
  */
+/** Records a Codex home's `codex` and the home in the agent's config, as setup does. */
+function trustCodex(ctx: TestCtx, home: string) {
+  ctx.store.saveAgentConfig({
+    ...ctx.store.agentConfig(),
+    codex: { bin: join(home, "bin", "codex"), home },
+  });
+}
+
 async function codexHome(fail = false) {
   const home = mkdtempSync(join(tmpdir(), "starbridge-codex-"));
   mkdirSync(join(home, "app-server-control"));
@@ -518,8 +528,9 @@ async function codexHome(fail = false) {
 test.skipIf(WINDOWS)(
   "the agent queues a Codex session's answer into it, and ask says it will",
   async () => {
-    const { socket } = await machine();
+    const { ctx, socket } = await machine();
     const codex = await codexHome();
+    trustCodex(ctx, codex.env.CODEX_HOME);
     const c = testCtx({ STARBRIDGE_AGENT_SOCKET: socket, ...codex.env });
     try {
       const id = await ask(c, "--project", "p");
@@ -538,6 +549,91 @@ test.skipIf(WINDOWS)(
       expect(log()).toBe(queued);
       expect(await run(["wait", id, "--timeout", "10s"], c)).toBe(0);
       expect(c.lines.at(-1)).toBe(`Answer to ${id} (Merge #12 now?): Merge`);
+    } finally {
+      await codex.close();
+    }
+  },
+);
+
+test.skipIf(WINDOWS)(
+  "ask --input chooses neither the codex the agent runs nor what kind of session asks",
+  async () => {
+    const { ctx, socket } = await machine();
+    const codex = await codexHome();
+    trustCodex(ctx, codex.env.CODEX_HOME);
+    const ran = join(codex.env.CODEX_HOME, "other.ran");
+    const other = join(codex.env.CODEX_HOME, "other");
+    fakeCommand(other, `#!/bin/sh\ntouch "${ran}"\n`);
+    const file = join(codex.env.CODEX_HOME, "ask.json");
+    writeFileSync(
+      file,
+      JSON.stringify({
+        question: "Merge #12 now?",
+        options: ["Merge", "Wait"],
+        codex: { home: codex.env.CODEX_HOME, bin: other },
+        held: true,
+        picker: "t1",
+        extensionAnswers: true,
+      }),
+    );
+    const c = testCtx({ STARBRIDGE_AGENT_SOCKET: socket, ...codex.env });
+    try {
+      const id = await ask(c, "--input", file, "--project", "p");
+      const asked = ctx.store.state().asked[id];
+      expect([asked?.held, asked?.picker, asked?.extensionAnswers]).toEqual([
+        undefined,
+        undefined,
+        undefined,
+      ]);
+      expect(asked?.codex?.bin).toBe(join(codex.env.CODEX_HOME, "bin", "codex"));
+      await server.answer(id, { choice: "Merge" });
+      const log = () => (existsSync(codex.log) ? readFileSync(codex.log, "utf8") : "");
+      await until(() => log().includes(id), 15_000);
+      expect(existsSync(ran)).toBe(false);
+    } finally {
+      await codex.close();
+    }
+  },
+);
+
+test.skipIf(WINDOWS)(
+  "the agent runs only the codex setup recorded, for the CODEX_HOME setup recorded",
+  async () => {
+    const { ctx, socket } = await machine();
+    const codex = await codexHome();
+    trustCodex(ctx, codex.env.CODEX_HOME);
+    const elsewhere = mkdtempSync(join(tmpdir(), "starbridge-codex-"));
+    const ran = join(elsewhere, "other.ran");
+    const other = join(elsewhere, "other");
+    fakeCommand(other, `#!/bin/sh\ntouch "${ran}"\n`);
+    const http = new AgentClient(socket, "starbridge-cli/test");
+    const post = (home: string) =>
+      http.call<{ id: string; delivery: string }>("POST", "/v1/decisions", {
+        input: {
+          question: "Merge #12 now?",
+          options: ["Merge", "Wait"],
+          agent: "codex",
+          project: "p",
+          session: "t1",
+          codex: { home, bin: other },
+          held: true,
+        },
+      });
+    try {
+      // Another home: nothing runs, and the session is told to wait.
+      const away = await post(elsewhere);
+      expect(away.delivery).toBe("wait");
+      expect(ctx.store.state().asked[away.id]?.held).toBeUndefined();
+      // The recorded home, however spelled: the recorded codex runs for the recorded spelling,
+      // never the binary or the path the route names.
+      const home = await post(join(codex.env.CODEX_HOME, "x", ".."));
+      await server.answer(away.id, { choice: "Wait" });
+      await server.answer(home.id, { choice: "Merge" });
+      const log = () => (existsSync(codex.log) ? readFileSync(codex.log, "utf8") : "");
+      await until(() => log().includes(home.id), 15_000);
+      expect(log()).toStartWith(`${codex.env.CODEX_HOME} queue --thread t1`);
+      expect(log()).not.toContain(away.id);
+      expect(existsSync(ran)).toBe(false);
     } finally {
       await codex.close();
     }
@@ -575,8 +671,9 @@ for (const status of ["inProgress", "completed"] as const)
   test.skipIf(WINDOWS)(
     `an answer to a card not marked waiting ${status === "inProgress" ? "steers into a Codex session's running turn" : "queues when no Codex turn runs"} (#1486, #1584)`,
     async () => {
-      const { socket } = await machine();
+      const { ctx, socket } = await machine();
       const codex = await codexDaemon(status);
+      trustCodex(ctx, codex.env.CODEX_HOME);
       const c = testCtx({ STARBRIDGE_AGENT_SOCKET: socket, ...codex.env });
       try {
         const id = await ask(c, "--project", "p");
@@ -616,6 +713,7 @@ test.skipIf(WINDOWS)(
   async () => {
     const { ctx, socket, agent } = await machine();
     const codex = await codexDaemon("inProgress");
+    trustCodex(ctx, codex.env.CODEX_HOME);
     const c = testCtx({ STARBRIDGE_AGENT_SOCKET: socket, ...codex.env });
     try {
       const d1 = await ask(c, "--project", "p");
@@ -642,8 +740,9 @@ test.skipIf(WINDOWS)(
 test.skipIf(WINDOWS)(
   "a steer the daemon took but answers late is not queued too (#1486)",
   async () => {
-    const { socket } = await machine();
+    const { ctx, socket } = await machine();
     const codex = await codexDaemon("inProgress", 7_000);
+    trustCodex(ctx, codex.env.CODEX_HOME);
     const c = testCtx({ STARBRIDGE_AGENT_SOCKET: socket, ...codex.env });
     try {
       const id = await ask(c, "--project", "p", "--waiting");
@@ -794,8 +893,9 @@ test("the Stop hook leaves an answer the agent sends through the language server
 test.skipIf(WINDOWS)(
   "a Codex session the agent cannot reach is told to wait, and its wait gets the answer",
   async () => {
-    const { socket } = await machine();
+    const { ctx, socket } = await machine();
     const codex = await codexHome(true);
+    trustCodex(ctx, codex.env.CODEX_HOME);
     const c = testCtx({ STARBRIDGE_AGENT_SOCKET: socket, ...codex.env });
     try {
       const id = await ask(c, "--project", "p");
@@ -1263,3 +1363,30 @@ test.skipIf(WINDOWS)(
     }
   },
 );
+
+test("a session not heard from for a day drops out of the agent's list (#1763)", async () => {
+  const { ctx, socket } = await machine();
+  const http = new AgentClient(socket, "starbridge-mod/test");
+  await http.call("POST", "/v1/sessions/s-old/hello", { cwd: "/work/x", pid: 42 });
+  // A Cursor conversation's hooks greet it without a pid, and nothing else ever polls for it.
+  await http.call("POST", "/v1/sessions/conv-1/hello", { cwd: "/work/x" });
+  const ids = async () =>
+    (await http.call<{ sessions: { id: string }[] }>("GET", "/v1/status")).sessions.map(
+      (x) => x.id,
+    );
+  expect(await ids()).toEqual(["s-old", "conv-1"]);
+  const start = Date.now();
+  ctx.now = () => new Date(start + 25 * 3_600_000);
+  expect(await ids()).toEqual(["conv-1"]);
+});
+
+test("Cursor: follow-ups that bring no answer stop after three per conversation (#1763)", () => {
+  const ctx = testCtx();
+  for (let i = 0; i < MAX_EMPTY_FOLLOWUPS; i++)
+    expect(countFollowup(ctx, "conv-1", true)).toBe(true);
+  expect(countFollowup(ctx, "conv-1", true)).toBe(false);
+  // Another conversation has its own count, and an answer clears this one's.
+  expect(countFollowup(ctx, "conv-2", true)).toBe(true);
+  expect(countFollowup(ctx, "conv-1", false)).toBe(true);
+  expect(countFollowup(ctx, "conv-1", true)).toBe(true);
+});

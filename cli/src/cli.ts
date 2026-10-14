@@ -23,6 +23,7 @@ import {
   answersAll,
   ask,
   decisionsOpen,
+  named,
   resolveSource,
   settle,
   setWaiting,
@@ -292,6 +293,28 @@ function readJson(path: string): unknown {
   }
 }
 
+/**
+ * Fields `ask` takes only from the asking process's environment, never from `--input`: where an
+ * answer is delivered and what kind of session asks. The agent runs a Codex route's `codex` and
+ * sends to an Antigravity route, so a file an agent writes must not choose them.
+ */
+const SESSION_FIELDS = [
+  "codex",
+  "antigravity",
+  "extensionAnswers",
+  "headless",
+  "held",
+  "picker",
+  "subagent",
+] as const;
+
+/** `ask --input`'s JSON, without the fields only the environment gives. */
+function fromInputFile(json: unknown): AskInput & { default?: unknown } {
+  const input = { ...(json as Record<string, unknown>) };
+  for (const k of SESSION_FIELDS) delete input[k];
+  return input as AskInput & { default?: unknown };
+}
+
 /** A `wait` whose agent stopped and stayed away goes on at the server (#548). */
 async function orServer(ctx: Ctx, viaAgent: Promise<number>): Promise<number> {
   try {
@@ -374,7 +397,7 @@ async function dispatch(argv: string[], ctx: Ctx): Promise<number> {
           },
         });
         const fromJson: AskInput & { default?: unknown } = v.input
-          ? (readJson(v.input) as AskInput & { default?: unknown })
+          ? fromInputFile(readJson(v.input))
           : {};
         if (fromJson.default !== undefined)
           throw new UsageError("a decision has no default: agents never answer for the owner");
@@ -434,11 +457,17 @@ async function dispatch(argv: string[], ctx: Ctx): Promise<number> {
       case "working": {
         const { positionals } = parseArgs({ args: rest, allowPositionals: true, options: {} });
         const opts = { id: positionals[0], state: command };
-        return await withAgent(
+        const code = await withAgent(
           ctx,
           (agent) => waitingVia(agent, opts, ctx),
           () => setWaiting(ctx, opts),
         );
+        // Which card it was, unless the answer came instead (#1697).
+        const st = ctx.store.state();
+        const id = opts.id;
+        if (code === 0 && id && st.asked[id] && !st.answers[id])
+          ctx.err(`Marked ${named(id, st.asked[id]?.question)} ${command}.`);
+        return code;
       }
       case "config":
         return await configCommand(ctx, rest, process.stdin.isTTY ? terminalPrompt() : undefined);

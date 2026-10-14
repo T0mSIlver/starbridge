@@ -66,7 +66,8 @@
   cancelled, and of the runs waiting the newest wins. A commit the track already holds or is
   ahead of (a rebuild, an rc cut from a commit main has passed) takes no slot. Play gives a phone
   the highest versionCode it may install, so main's builds take slots 50 to 98 of the version
-  under way (the next patch after a final), each the next free one above the track's highest
+  under way (the next patch once its final is tagged, refs/tags/v<base>, as the Mac's tip reads it;
+  main keeps the rc version after promotion, #1731), each the next free one above the track's highest
   code, between its rcs (1 to 49) and its final (99): the owner's phone takes main over an rc and
   the final over both. When the 49 slots are spent the build is skipped, with a warning and a
   line in the job summary; the next rc or the final opens new slots, and the owner can run the
@@ -200,7 +201,10 @@
   cost is that a server fix waits for an rc or a hotfix dispatch. The server keeps serving every
   release from the minimum up (`spec/keys-and-trust.md`), so apps older than the page keep working.
   A deploy goes over SSH to a forced command that deploys only main's head or a commit on main
-  containing the deployed one; the box fetches it itself. Rollbacks are the owner's
+  containing the deployed one; the box fetches it itself. The box also checks the gate the
+  workflow checked, from GitHub's public API without a token (#1714): prod, that staging passed
+  the commit, staging, that CI passed it on main. So a stolen deploy key cannot skip either, and
+  the boxes get no GitHub credential. Rollbacks are the owner's
   (`deploy/rollback.sh`, `deploy/deploy.sh`). The server and web images are built once per commit of
   main in `deploy.yml`, for amd64 and arm64, each on a runner of its architecture, and pushed to
   ghcr.io, public, tagged by commit (#1518); a commit that changes nothing they are built from
@@ -249,8 +253,10 @@
   account (a card, its Web Push, an answer read back) and sets the commit's `staging` status; prod
   deploys only a commit whose status is success, waiting up to an hour for it, as an rc tag can
   follow its merge by minutes. A commit staging skipped, being older than the one it runs, never
-  passes. A release that cannot push stops on staging. `deploy/deploy.sh` stays the owner's way
-  around it.
+  passes. A release that cannot push stops on staging. Any workflow can post a status, so prod's
+  box trusts it only as a pointer: the run it names must be main's deploy.yml, whose staging job
+  ran a step named after the commit that only a pass runs (#1714). `deploy/deploy.sh` stays the
+  owner's way around it.
 - **The apps run against staging** (#1621). The round trip above has no app in it, so a server
   change the apps cannot take (a field, a header, a push that never arrives) reached an rc unseen,
   as v0.1.3's regex did for the Android build. Every night `staging-app.yml` runs main's apps on
@@ -278,7 +284,11 @@
   is tagged by a hash of that file, which pins every input, and built only when no image has the
   tag, since a rebuild after the build-cache prune yields a new image even from the same file.
 - **Pinning** (#361, #423, #426). Actions are pinned by commit SHA and images by digest, so a
-  dependency changes only in a Dependabot PR. A job's image goes in a Dockerfile, not `container:`,
+  dependency changes only in a Dependabot PR. Gradle checks every Android dependency against its
+  sha256 in `android/gradle/verification-metadata.xml` (#1716), since the Android runner resolves
+  through the home mirror over plain HTTP; builds that sign with the release key skip that mirror
+  too. A workflow writes the file into Dependabot's Gradle PRs: the job that runs Gradle on the new
+  artifacts has a read-only token, and the one that pushes runs no Gradle. A job's image goes in a Dockerfile, not `container:`,
   since Dependabot reads only Dockerfiles (#1172). A workflow writes `pnpm-lock.yaml` into
   Dependabot's security PRs, which update `package.json` alone, then dispatches CI, since a push
   with `GITHUB_TOKEN` starts no workflow; that run sets the PR's `CI` status, failed when any job
@@ -293,7 +303,10 @@
   run on its merge with the commit main then held (#878): a tree fixes every file, `ci.yml`
   included, so that run tested what main now holds. Each of the e2e's three parts uploads an
   artifact named after its part and tree when it passes (`e2e-passed-<part>-<tree>`, #1094), kept 7
-  days; when none is found or the lookup fails, it runs. A fork's runs do not count, since a fork's
+  days; when none is found or the lookup fails, it runs. Code in a pull request's jobs can upload any name, so an artifact
+  counts only when its CI run tested this commit or the merged pull request's head, that run's
+  job for the part passed, and the commit the artifact holds has the tree and is that head or
+  GitHub's merge of it (#1732). A fork's runs do not count, since a fork's
   pull request runs its own `ci.yml`. Tests point `TMPDIR` at one directory per run and remove it
   (`test-tmp.ts`, #313). A `windows-latest` job (#552) starts a built `.exe` and runs the whole CLI
   suite, which must pass (#884). A private repository skips it, since GitHub's Windows runners need
@@ -313,7 +326,9 @@
   `ANDROID_RUNNER`. Each Android push to main also builds on GitHub's runner, to save the Gradle
   cache that pull requests restore there (#1662). The PR pool holds no secrets, and no pull
   request job reaches the other two.
-  Each runner registers for one job, so every job starts clean. A fork's pull request runs its
+  Each runner registers for one job, and its slot wipes that job's folders before the next;
+  Docker, which makes a job root on its box, and what a job leaves outside its folders outlive it,
+  hence the separate boxes (#1718). A fork's pull request runs its
   own `ci.yml`, which could name any label, so a fork's run is never approved.
 - **Monitoring.** `uptime.yml` checks `/healthz`, `/healthz/backup` (fails when the last nightly
   backup is over 26 h old) and `/healthz/disk` (under 2 GB free), and opens one `outage` issue.

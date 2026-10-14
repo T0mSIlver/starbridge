@@ -58,7 +58,15 @@ asset=starbridge-$os-$arch
 proto='=https'
 case $RELEASES in
   https://*) ;;
-  http://127.0.0.1[:/]* | http://localhost[:/]*) proto='=https,http' ;;
+  http://127.0.0.1[:/]* | http://localhost[:/]*)
+    # The host is what sits before any `@`, so `http://localhost:80@evil.example` is not on this machine.
+    host=${RELEASES#http://}
+    host=${host%%/*}
+    case $host in
+      *@* | *\\*) fail "STARBRIDGE_RELEASES_URL must be an https URL: $RELEASES" ;;
+    esac
+    proto='=https,http'
+    ;;
   *) fail "STARBRIDGE_RELEASES_URL must be an https URL: $RELEASES" ;;
 esac
 

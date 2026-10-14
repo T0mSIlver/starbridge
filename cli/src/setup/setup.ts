@@ -28,6 +28,7 @@ import {
   installAgent,
   installed,
   progressLine,
+  recordCodex,
   removedAgents,
   setRemoved,
   UNDER,
@@ -46,6 +47,7 @@ import {
 import { installPiPackage, PI_PACKAGE, piPackage, refreshFiles } from "./harnesses";
 import { ours } from "./marker";
 import { pathStep, recordSelf } from "./path";
+import { PLUGINS, pluginState, pluginsStale } from "./plugins";
 import {
   enableLinger,
   installedService,
@@ -101,6 +103,8 @@ export async function refresh(sys: Sys): Promise<string[]> {
   recordSelf(sys);
   const done = refreshFiles(sys);
   const removed = removedAgents(sys.ctx);
+  // Codex installed before setup recorded its binary gets it here, as each update moves it.
+  if (!removed.includes("codex")) recordCodex(sys);
   for (const id of AGENT_IDS) {
     if (removed.includes(id) || !found(sys, id)) continue;
     // The Pi package is pinned to a release tag, so an installed one at another tag moves (#1417).
@@ -113,8 +117,11 @@ export async function refresh(sys: Sys): Promise<string[]> {
       }
       continue;
     }
-    // Codex installed before its plugin (#949), or with an older one, gets it here.
-    const stale = id === "codex" && ["missing", "outdated"].includes(codexPlugin(sys));
+    // Codex installed before its plugin (#949), or with an older one, gets it here; Claude Code's
+    // plugins move to this release's commit (#1768).
+    const stale =
+      (id === "codex" && ["missing", "outdated"].includes(codexPlugin(sys))) ||
+      (id === "claude" && (await claudeStale(sys)));
     if (!stale && (await installed(sys, id))) continue;
     const r = await installAgent(sys, id);
     done.push(
@@ -133,6 +140,17 @@ export async function refresh(sys: Sys): Promise<string[]> {
       done.push(`Could not restart the agent: ${(e as Error).message}`);
     }
   return done;
+}
+
+/** Whether Claude Code's plugins are ours but not at this release's commit. */
+async function claudeStale(sys: Sys): Promise<boolean> {
+  const state = await pluginState(sys);
+  return (
+    typeof state !== "string" &&
+    !state.foreign &&
+    PLUGINS.some((p) => state.plugins[p]) &&
+    pluginsStale(sys, state)
+  );
 }
 
 function trimServer(server: string): string {

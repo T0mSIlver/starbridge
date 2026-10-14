@@ -33,6 +33,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import dev.starbridge.app.data.Approval
+import dev.starbridge.app.ui.setup.SecureWindow
 import dev.starbridge.app.ui.theme.Sizes
 import dev.starbridge.app.ui.theme.Spacing
 import dev.starbridge.app.ui.theme.StarbridgeTheme
@@ -105,6 +106,7 @@ fun ColumnScope.QrWays(onScan: (String) -> Unit, onShow: () -> Unit) {
 /** This phone shows a pairing link as a QR code and waits for a new phone to scan it. */
 @Composable
 fun ShowingQr(state: Approval.Showing, onCancel: () -> Unit) {
+    SecureWindow()
     Column(verticalArrangement = Arrangement.spacedBy(Spacing.s3)) {
         Text("Scan with the new phone", style = StarbridgeTheme.type.heading, color = MaterialTheme.colorScheme.onSurface)
         Text("On the new phone, sign in to Starbridge and tap Scan a QR code. It expires in 10 minutes.", style = StarbridgeTheme.type.small, color = MaterialTheme.colorScheme.onSurfaceVariant)
