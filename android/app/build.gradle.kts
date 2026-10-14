@@ -32,10 +32,11 @@ android {
         versionName = providers.gradleProperty("mainCommit").orNull?.let { "$release+main.$it" } ?: release
         // buildSrc/src/main/kotlin/VersionCode.kt.
         // A build of main for Play's internal track passes the track's highest code and takes the
-        // next of its version's main slots (.github/workflows/internal.yml); every other build
+        // next of its version's main slots, the next patch's once the version's final is tagged
+        // (-PmainFinal=true; .github/workflows/internal.yml); every other build
         // takes the version's.
         versionCode = providers.gradleProperty("mainAfter").orNull
-            ?.let { mainVersionCodeOf(release, it.toInt()) } ?: versionCodeOf(release)
+            ?.let { mainVersionCodeOf(release, it.toInt(), providers.gradleProperty("mainFinal").orNull == "true") } ?: versionCodeOf(release)
         // The hosted server; self-hosters change it on the sign-in screen.
         buildConfigField("String", "DEFAULT_SERVER", "\"https://starbridge.run\"")
         firebaseResources()

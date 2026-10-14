@@ -66,7 +66,8 @@
   cancelled, and of the runs waiting the newest wins. A commit the track already holds or is
   ahead of (a rebuild, an rc cut from a commit main has passed) takes no slot. Play gives a phone
   the highest versionCode it may install, so main's builds take slots 50 to 98 of the version
-  under way (the next patch after a final), each the next free one above the track's highest
+  under way (the next patch once its final is tagged, refs/tags/v<base>, as the Mac's tip reads it;
+  main keeps the rc version after promotion, #1731), each the next free one above the track's highest
   code, between its rcs (1 to 49) and its final (99): the owner's phone takes main over an rc and
   the final over both. When the 49 slots are spent the build is skipped, with a warning and a
   line in the job summary; the next rc or the final opens new slots, and the owner can run the
