@@ -709,7 +709,7 @@ one edit; with `--play <dir>` it also writes the Play listing's icon and feature
 |---|---|
 | The mark in code | `web/src/components/mark.ts`, Android `ui/MarkShape.kt`, iOS `UI/MarkShape.swift` |
 | Android launcher | `res/mipmap-anydpi/ic_launcher*.xml`, layers in `res/drawable/ic_launcher_*.xml` |
-| Android notification | `res/drawable/ic_notification.xml` (white, 24 dp) |
+| Android notification | `res/drawable/ic_notification.xml` (white, 24 dp, the arch centred in its 20 dp live area) |
 | Web tab icon | `web/src/app/icon.svg` |
 | Web favicon and install icons | `web/src/app/favicon.ico` (16, 32, 48 px), `apple-icon.png` (180 px), `web/public/icon-*.png`, `manifest.ts` |
 | iOS app icon | `Assets.xcassets/AppIcon.appiconset`: default, dark and tinted |
