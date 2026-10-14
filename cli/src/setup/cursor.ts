@@ -233,9 +233,12 @@ export function removeCursorFiles(sys: Home): string[] {
  * `Shell(starbridge ask)` matches `starbridge ask` and what starts with `starbridge ask `; a
  * compound command runs without a prompt only when each of its commands is allowed.
  */
-export const CURSOR_ALLOW = ["ask", "waiting", "working", "wait", "settle"].map(
+export const CURSOR_ALLOW = ["ask", "waiting", "working", "wait"].map(
   (c) => `Shell(starbridge ${c})`,
 );
+
+/** Entries of earlier releases that setup removes: `settle` let `settle --all --yes` through. */
+const STALE_CURSOR_ALLOW = ["Shell(starbridge settle)"];
 
 export function cursorConfigPath(sys: Home): string {
   return join(cursorConfigDir(sys), "cli-config.json");
@@ -265,7 +268,10 @@ function allowOf(c: CliConfig): string[] {
 export function missingCursorAllow(sys: Home): string[] {
   const c = readConfig(sys);
   const have = new Set(c ? allowOf(c) : []);
-  return CURSOR_ALLOW.filter((r) => !have.has(r));
+  return [
+    ...CURSOR_ALLOW.filter((r) => !have.has(r)),
+    ...STALE_CURSOR_ALLOW.filter((r) => have.has(r)),
+  ];
 }
 
 /** Adds the rules; false, writing nothing, when the config does not parse. */
@@ -274,8 +280,13 @@ export function addCursorAllow(sys: Home): boolean {
   if (!c) return false;
   const missing = missingCursorAllow(sys);
   if (missing.length === 0) return true;
-  const allow = Array.isArray(c.permissions?.allow) ? (c.permissions.allow as unknown[]) : [];
-  c.permissions = { ...c.permissions, allow: [...allow, ...missing] };
+  const allow = (
+    Array.isArray(c.permissions?.allow) ? (c.permissions.allow as unknown[]) : []
+  ).filter((r) => !STALE_CURSOR_ALLOW.includes(r as string));
+  c.permissions = {
+    ...c.permissions,
+    allow: [...allow, ...missing.filter((r) => CURSOR_ALLOW.includes(r))],
+  };
   mkdirSync(dirname(cursorConfigPath(sys)), { recursive: true });
   writeFileSync(cursorConfigPath(sys), `${JSON.stringify(c, null, 2)}\n`);
   return true;
@@ -284,7 +295,7 @@ export function addCursorAllow(sys: Home): boolean {
 /** Removes the rules setup adds; whether it removed any. */
 export function removeCursorAllow(sys: Home): boolean {
   const c = readConfig(sys);
-  const left = c && withoutAllow(c, CURSOR_ALLOW);
+  const left = c && withoutAllow(c, [...CURSOR_ALLOW, ...STALE_CURSOR_ALLOW]);
   if (!left) return false;
   writeLeft(cursorConfigPath(sys), left);
   return true;

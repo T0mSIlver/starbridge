@@ -134,8 +134,8 @@ Starbridge from one, until `starbridge setup --agent <name>`. A later setup, or
 | Cursor | The skill, and hooks that bring the rules and your answer back, beside your own | `~/.cursor/skills/starbridge`, `~/.cursor/starbridge`, `~/.cursor/hooks.json` |
 | Antigravity | The Starbridge plugin (rules, skill), loaded by the app, the IDE and `agy` | `~/.gemini/config/plugins/starbridge` |
 
-Setup also adds allow rules so that `starbridge ask`, `waiting`, `working`, `wait` and `settle`
-run without a permission prompt; in Pi and `agy`, `hello` too. They go in:
+Setup also adds allow rules so that `starbridge ask`, `waiting`, `working` and `wait`
+run without a permission prompt; in Claude Code and Pi, `settle <id>` too, and in Pi and `agy`, `hello`. They go in:
 
 - Claude Code: the plugin.
 - Codex: `~/.codex/rules/starbridge.rules`, which also runs them outside the sandbox.

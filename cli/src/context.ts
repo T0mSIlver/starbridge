@@ -23,6 +23,8 @@ export interface Ctx {
   signal?: AbortSignal;
   /** Stderr is a terminal: a person runs the command, so it may say a new release is out. */
   terminal?: boolean;
+  /** Stdin is a terminal: a person can answer a question the command asks on it. */
+  interactive?: boolean;
 }
 
 /** `{machineKind}` for an item's source, when setup detected it or `config` set it. */
