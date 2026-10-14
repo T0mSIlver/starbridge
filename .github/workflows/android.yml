@@ -72,6 +72,29 @@ jobs:
           name: starbridge-apk
           path: android/app/build/outputs/apk/release/*.apk
 
+  # A dispatched run reports through the commit status `android`, since a dispatched run's checks
+  # never show on a pull request: dependabot-gradle.yml dispatches one after it pushes Gradle's
+  # checksums to a Dependabot branch, and set the status pending.
+  status:
+    name: status
+    needs: build
+    if: always() && github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      statuses: write
+    defaults:
+      run:
+        working-directory: .
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          RESULT: ${{ needs.build.result }}
+        run: |
+          gh api "repos/$GITHUB_REPOSITORY/statuses/$GITHUB_SHA" -f context=android \
+            -f state="$([ "$RESULT" = success ] && echo success || echo failure)" \
+            -f target_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" >/dev/null
+
   # Pull requests build on GitHub's runners, which start with an empty Gradle home unless main
   # saved one in GitHub's cache, and main's build above runs on ANDROID_RUNNER with the cache off.
   # This job runs the same build on GitHub's runner for each push to main and saves the Gradle home,

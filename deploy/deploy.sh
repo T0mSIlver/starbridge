@@ -1,6 +1,9 @@
 #!/bin/sh
 # Deploys a pushed git ref (default: origin/main) to starbridge-1: unpacks it in
 # /opt/starbridge, pulls the server and web images deploy.yml built for it and restarts the stack.
+# The owner's override: it logs in with the owner's own key and runs host/apply.sh itself, so it
+# skips every check of starbridge-deploy, the command Actions runs (host/deploy-rev.sh): a commit
+# staging never passed, or one older than the deployed one, deploys too. rollback.sh relies on it.
 set -eu
 ref=${1:-origin/main}
 host=${STARBRIDGE_HOST:-deploy@starbridge.run}
@@ -36,7 +39,8 @@ git archive --format=tar "$rev" | ssh -i "$key" "$host" "sudo sh -euc '
   tar -x -C /opt/starbridge.new
   if [ -d /opt/starbridge ]; then mv /opt/starbridge /opt/starbridge.old; fi
   mv /opt/starbridge.new /opt/starbridge
-  REVISION=$rev /opt/starbridge/deploy/host/apply.sh
+  # A failed service prints its logs here rather than to a file on the box (host/keep-logs.sh).
+  DEPLOY_LOGS=stderr REVISION=$rev /opt/starbridge/deploy/host/apply.sh
   # Only once it is up and healthy: starbridge-deploy refuses revisions older than this one.
   echo $rev > /opt/starbridge/REVISION
 '"

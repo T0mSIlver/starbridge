@@ -15,7 +15,11 @@
   longer of the fetched and saved chains, each required to extend the other's pin.
 - **The socket** is bound under a 077 umask (#95). There is no peer uid check, since neither Bun
   nor Node exposes `SO_PEERCRED`. The local agent runs only the CodexBar binary its own config names,
-  never a path a client sends.
+  never a path a client sends, and for a Codex session's answer only the `codex` setup recorded
+  with its `CODEX_HOME` (`starbridge update` records it again), for that home or the agent's own
+  (#1757). `ask --input` sets no delivery route or session kind (`codex`, `antigravity`,
+  `extensionAnswers`, `headless`, `held`, `picker`, `subagent`): those come from the asking
+  process's environment, since an agent writes the file.
 - **On Windows** (#552) the agent listens on loopback TCP with a per-start token in `agent.port`
   in the config directory (PROTOCOL.md, "Local agent API"). A named pipe was the other choice:
   libuv creates one with the default DACL, which lets other users open it for reading, and Bun's
@@ -121,11 +125,17 @@
   an issue when it breaks, so a release does not pin a broken one. A provider works when `usage
   --provider X` returns windows; CodexBar exits 1 with the reason in its JSON row, so setup reads
   the row. The unit runs the `starbridge` on the PATH when that is the running binary, since that
-  path survives brew upgrades. Setup turns on plugin auto-update through `extraKnownMarketplaces`,
-  installs the Claude Code plugins only from a marketplace whose source is this repository (#274),
-  and uninstall removes only that one, so a developer's own `starbridge` marketplace survives;
+  path survives brew upgrades. Setup installs the Claude Code plugins from a marketplace it writes
+  from the binary into `~/.claude/starbridge-marketplace`, each plugin pinned to the release's
+  commit, which the release workflow records in the binary, and the Pi package at that commit
+  (#1768): the binary is signed, but the repository's marketplace follows its default branch and
+  a tag can move, so both installed code the signature does not cover. A build from source pins
+  its version's tag. `starbridge update`'s refresh moves both to the new commit; it replaces the
+  repository's marketplace that earlier setups added, which also served only this repository
+  (#274). Setup turns on plugin auto-update through `extraKnownMarketplaces`, and uninstall
+  removes only its own marketplace, so a developer's own `starbridge` marketplace survives;
   both run `claude` from the home directory, so no repository's `.claude` settings are read or
-  edited (#762). Setup installs Codex's skill and rule, the Pi package, opencode's plugin and skill and the
+  edited (#762). Setup installs Codex's skill and rule, opencode's plugin and skill and the
   Antigravity plugin from copies the CLI carries so versions match. The local agent rewrites outdated copies when it starts.
 - **Setup asks little** (#750). Each question was one more Enter between a new user and their
   first answer, and nearly everyone said yes. Setup installs Starbridge in every agent it finds
@@ -191,10 +201,12 @@
   adds `command(starbridge ask)` and the other four, with `hello` (#962), to `permissions.allow` in
   `~/.gemini/antigravity-cli/settings.json`, since `agy` still prompts after a hook's `allow`. Such
   an entry also passes `LD_PRELOAD=… starbridge ask` and `env … starbridge ask`, so the
-  plugin's `PreToolUse` hook on `run_command` returns `force_ask` for a line an entry would pass
-  that the Pi check (`mod/hooks/own.ts`) rejects, and for one it accepts sets `BypassSandbox`:
+  plugin's `PreToolUse` hook on `run_command` returns `force_ask` for any line that names `starbridge`
+  once quotes and backslashes are removed and that the Pi check (`mod/hooks/own.ts`) rejects,
+  since `"starbridge" ask` and `star""bridge ask` may pass an entry too (internal audit
+  2026-10-14), and for one it accepts sets `BypassSandbox`:
   `--sandbox` hides the home folder and the network (#959). Every command passes that hook, so a
-  shell check starts the CLI only for one that names `starbridge`. Since only that hook narrows
+  shell check starts the CLI only for one that names `starbridge`, quotes and backslashes removed. Since only that hook narrows
   the entries, setup adds them only while the plugin there is Starbridge's and turned on, and takes
   them out otherwise. The app and the IDE keep their settings elsewhere; setup adds nothing there. `starbridge run` is left out,
   since the command it wraps is the agent's own. So Codex asks at the keyboard to run it outside
@@ -240,6 +252,15 @@
   running `.exe` but lets it be renamed, so `update` moves it aside to `starbridge.exe.old` and
   the next update removes that; `uninstall` deletes the binary from a detached cmd.exe two seconds
   after it exits (#552).
+- **Small bounds on local state** (#1763, internal audit 2026-10-14). A timestamp dated in the future
+  counts as stale for the update check and the last failed try. A run id belongs to the session
+  that started it, for a day after its last update. The agent forgets a mod's session, and the
+  Antigravity hook a conversation's marker, a day after the last sign of it; a Cursor
+  conversation, greeted only by its hooks, stays until its `sessionEnd`. Cursor's stop hook
+  prints at most 3 "No answer yet" follow-ups per conversation until an answer comes. Setup
+  replaces `~/.local/bin/codexbar` only when it links into Starbridge's tarball install or a
+  CodexBar app. The installers take `http://` only for a host that parses as this machine, never
+  `http://localhost:80@host`.
 - **Saying a release is out** (#1050). Before it, users learned of a new CLI only from the
   server's 426 once a release was forced. Homebrew and npm installs, and script installs with
   automatic updates off (below), get this nudge only. Once a day
@@ -284,3 +305,11 @@
   release other than the one before (`updatedAt` in `GET /releases`), so Devices says "Updated
   to 0.1.6 on Oct 11" under it, whatever installed it. `config update-check off` stops the read,
   and with it the updates.
+- **The CLI bounds what it reads from outside** (#1762, internal audit 2026-10-14). A picture is
+  refused by its header past 50 megapixels or 30 MB, before a decoder allocates it. A `[n/total]`
+  in run output counts only for safe integers and a total up to 10 000. A server's error text
+  goes through `visible()` and stops at 200 characters; a success body stops at 32 MB, an error
+  body at 64 KB, a `Retry-After` at 300 s, a page of answers at 1000 entries of 4 MB and a cursor
+  at 256 characters, and the `/answers` poll gives up 30 s after the wait it asked for. A CodexBar
+  run ends when its process exits, is killed with its process group on a timeout or past 1 MB of
+  output, and yields at most 20 providers with 20 extra windows each, without control characters.

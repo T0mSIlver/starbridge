@@ -3,9 +3,12 @@
  * asking, and prints one line per agent; `uninstall --agent <name>` removes it from one, and a
  * later setup or refresh leaves that agent alone until `setup --agent <name>` brings it back.
  */
+import { existsSync } from "node:fs";
+import { join, resolve } from "node:path";
 import type { Ctx } from "../context";
 import { permissionsEnabled } from "../permissions";
 import { piPermissionConfig, removePiEntries } from "../pi";
+import { which } from "../platform";
 import { offerPiAllow, offerPiChain } from "../settings";
 import {
   CODEX_PLUGIN,
@@ -73,6 +76,7 @@ import {
   missingAllowRules,
   PLUGINS,
   pluginState,
+  pluginsStale,
   removeAllowRules,
   removePlugins,
   settingsPath,
@@ -216,8 +220,7 @@ async function installClaude(sys: Sys): Promise<Outcome> {
   const foreign = foreignMarketplace(state);
   if (foreign)
     return { mark: "–", text: "skipped", notes: [...notes, `Not installed: ${foreign}.`] };
-  if (!state.marketplace || PLUGINS.some((p) => !state.plugins[p]))
-    await installPlugins(sys, state);
+  if (pluginsStale(sys, state)) await installPlugins(sys, state);
   if (autoUpdate(sys) === false && !enableAutoUpdate(sys))
     notes.push("Could not turn on the plugins' auto-update.");
   let allowed = missingAllowRules(sys).length === 0;
@@ -234,7 +237,29 @@ async function installClaude(sys: Sys): Promise<Outcome> {
   return { mark: "✓", text, notes };
 }
 
+/**
+ * Records the `codex` on the PATH and the `CODEX_HOME` setup runs with: the agent hands Codex
+ * sessions their answers with these, never with a binary or folder an `ask` names. Forgotten
+ * with `forget`, or when the recorded binary is gone; kept when only this PATH lacks it, as the
+ * agent's service PATH may when an automatic update refreshes.
+ */
+export function recordCodex(sys: Sys, forget = false): void {
+  const bin = forget ? undefined : which(sys.ctx.env, "codex");
+  const { codex: old, ...rest } = sys.ctx.store.agentConfig();
+  if (!bin) {
+    if (old && (forget || !existsSync(old.bin))) sys.ctx.store.saveAgentConfig(rest);
+    return;
+  }
+  const codex = {
+    bin: resolve(bin),
+    home: resolve(sys.ctx.env.CODEX_HOME || join(sys.home, ".codex")),
+  };
+  if (old?.bin !== codex.bin || old?.home !== codex.home)
+    sys.ctx.store.saveAgentConfig({ ...rest, codex });
+}
+
 async function installCodex(sys: Sys): Promise<Outcome> {
+  recordCodex(sys);
   const notes: string[] = [];
   const dir = codexSkillDir(sys);
   const skill = codexSkill(sys);
@@ -358,6 +383,7 @@ export async function removeAgent(sys: Sys, id: AgentId): Promise<string[]> {
       break;
     }
     case "codex":
+      recordCodex(sys, true);
       done.push(...[removeCodexSkill(sys)].filter((l) => l !== undefined));
       if (removeCodexRule(sys)) done.push(`Removed ${codexRulePath(sys)}.`);
       done.push(...(await removeCodexPlugin(sys)));

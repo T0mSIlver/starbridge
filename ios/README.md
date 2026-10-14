@@ -18,7 +18,9 @@ in the planning repo's `research/ios-app.md`).
 - **Joining** follows Android: scan the QR code that a device already in the account shows, or
   compare digits with it (PROTOCOL.md, "Joining by digits").
 - **Keys** and the session are one keychain item, readable after the first unlock and never
-  copied to another device; the rest of the state is a file in Application Support.
+  copied to another device; the rest of the state is `saved.json` in the app group's container
+  (Application Support only without the group), with a question's decrypted images in `images/`
+  beside it, both kept out of backups.
 - **The inbox** follows spec/clients.md: runs, then permission prompts, then questions whose agent
   waits, then the rest; Snoozed and History closed at the bottom. With no push yet, the app reads
   the server every 10 s while it is in front.
@@ -31,7 +33,8 @@ in the planning repo's `research/ios-app.md`).
   notification service extension (`Notifications/`) rewrites from the sealed box: the question,
   its machine and repo, up to 3 options with the agent's default first, and Reply. It reads the
   keys and the pinned directory from the app group `group.dev.starbridge.ios`, which is also the
-  keychain item's access group, and writes nothing. A button answers through the outbox in the
+  keychain item's access group, and writes no state: it only registers each question's buttons
+  and sets the notification's badge. A button answers through the outbox in the
   background; a prompt's Deny answers there, its Allow opens the prompt. The simulator skips
   service extensions for `simctl push`, so `NotificationServiceTests` drives the extension's work
   (`Notify.rewrite`) against the shared keychain and app group instead.
@@ -64,10 +67,10 @@ xcodebuild -project Starbridge.xcodeproj -scheme Starbridge -destination "platfo
 and `InboxTests` plays a machine whose question, prompt and run the app lists and answers, online
 and offline, then deletes the account.
 They run when the test process gets a self-hosted server with no device yet, started from the repository root with
-`PORT=18731 DB_PATH=/tmp/sb.db OWNER_TOKEN=test bun run server/src/main.ts`:
+`PORT=18731 DB_PATH=/tmp/sb.db OWNER_TOKEN=test-owner-token-16 bun run server/src/main.ts`:
 
 ```bash
-TEST_RUNNER_STARBRIDGE_TEST_SERVER=http://localhost:18731 TEST_RUNNER_STARBRIDGE_TEST_OWNER_TOKEN=test xcodebuild -project Starbridge.xcodeproj -scheme Starbridge -destination "platform=iOS Simulator,name=iPhone 16" test
+TEST_RUNNER_STARBRIDGE_TEST_SERVER=http://localhost:18731 TEST_RUNNER_STARBRIDGE_TEST_OWNER_TOKEN=test-owner-token-16 xcodebuild -project Starbridge.xcodeproj -scheme Starbridge -destination "platform=iOS Simulator,name=iPhone 16" test
 ```
 
 CI runs both, with the server, in `.github/workflows/ios.yml`. Each release tag uploads the app to

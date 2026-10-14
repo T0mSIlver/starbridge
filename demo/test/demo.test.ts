@@ -63,7 +63,7 @@ async function joinByDigits(url: string, phoneId = "pixel") {
       body: body === undefined ? undefined : JSON.stringify(body),
     });
     if (!res.ok) throw new Error(`${method} ${path}: ${res.status} ${await res.text()}`);
-    return res.json();
+    return res.status === 204 ? undefined : res.json();
   };
   const { session } = await call("POST", "/auth/owner", "", { token: TOKEN });
   const { account } = await call("GET", "/me", session);
@@ -144,6 +144,10 @@ async function joinByDigits(url: string, phoneId = "pixel") {
       );
       await call("POST", "/directory", session, { entry });
     },
+    /** Settings' Delete account, which a reviewer may tap. */
+    async deleteAccount() {
+      await call("DELETE", "/account", session);
+    },
   };
 }
 
@@ -216,3 +220,10 @@ for (const revoked of ["demo-owner", "machine"])
     await phone.revoke(revoked === "machine" ? (device.machine as string) : device.id);
     await expect(joins).rejects.toBeInstanceOf(Broken);
   }, 60_000);
+
+test("stops, for a fresh account, once a reviewer deletes the account", async () => {
+  const { url, joins } = await demo();
+  const phone = await joinByDigits(url);
+  await phone.deleteAccount();
+  await expect(joins).rejects.toThrow("the demo account was deleted");
+}, 60_000);

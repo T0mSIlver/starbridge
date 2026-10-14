@@ -470,6 +470,54 @@ test("a kept inbox reads only what came after it, and follows what the server dr
   }
 });
 
+test("the inbox reads on while the server says more follows, however short its pages (#1735)", async () => {
+  const at = "2026-10-06T12:00:00Z";
+  const { keys, member: machine } = asker as NonNullable<typeof asker>;
+  const fresh = (await device.deviceContext(ctx.account)) as device.Ctx;
+  const { id, name, boxPk, signPk } = fresh.device;
+  const recipient = [{ id, role: "device" as const, name, boxPk, signPk }];
+  const asked = (decisionId: string, cursor: string) => ({
+    item: seal(
+      "decision",
+      {
+        v: 1,
+        id: decisionId,
+        to: [id],
+        createdAt: at,
+        question: `${decisionId}?`,
+        context: "",
+        options: ["Yes", "No"],
+        recommended: "Yes",
+        source: { machine: "asks", project: "p", session: "s" },
+      },
+      { id: machine.id, signKey: keys.sign.privateKey },
+      recipient,
+    ),
+    cursor,
+    receivedAt: at,
+  });
+  const listed = [asked("d_1", "1"), asked("d_2", "2"), asked("d_3", "3")];
+  const served = globalThis.fetch;
+  // One item a page, as a page of large questions runs out of bytes.
+  globalThis.fetch = (async (input: string, init?: RequestInit) => {
+    if (!input.startsWith("/v1/items?kind=decision")) return served(input, init);
+    const after = Number(new URL(input, "http://x").searchParams.get("after") ?? 0);
+    const rest = listed.filter((s) => Number(s.cursor) > after);
+    const items = rest.slice(0, 1);
+    return Response.json({
+      items,
+      cursor: items.at(-1)?.cursor ?? String(after),
+      more: rest.length > 1,
+    });
+  }) as typeof fetch;
+  try {
+    const inbox = await device.loadInbox(fresh);
+    expect(inbox.items.map((i) => i.decision.id).sort()).toEqual(["d_1", "d_2", "d_3"]);
+  } finally {
+    globalThis.fetch = served;
+  }
+});
+
 test("the first read of settled notices starts at the kept inbox's cursor (#1455)", async () => {
   const fresh = (await device.deviceContext(ctx.account)) as device.Ctx;
   const asks: string[] = [];

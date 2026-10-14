@@ -5,7 +5,15 @@
  * `title:"Fix the build"`.
  */
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { basename, join } from "node:path";
 import { ownCommand } from "../../mod/hooks/own";
 import { type SessionEvent, socketPath } from "./agent/api";
@@ -83,16 +91,41 @@ export function agyHeadless(): boolean {
 
 const LS = "exa.language_server_pb.LanguageServerService";
 
+/** The most a language server's answer may be, in bytes: a fake server must not fill the daemon's memory. */
+export const MAX_LS_BYTES = 8 << 20;
+
+/** The body of `r` as text, or an error once it passes `max` bytes. */
+async function cappedText(r: Response, max: number): Promise<string> {
+  const reader = r.body?.getReader();
+  if (!reader) return "";
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.length;
+    if (size > max) {
+      await reader.cancel().catch(() => {});
+      throw new Error(`the answer is over ${max} bytes`);
+    }
+    chunks.push(value);
+  }
+  return Buffer.concat(chunks).toString("utf8");
+}
+
 export async function lsCall<T>(route: AgyRoute, method: string, body: unknown): Promise<T> {
   if (!onLoopback(route.address)) throw new Error(`${method}: ${route.address} is not on loopback`);
   const r = await fetch(`http://${route.address}/${LS}/${method}`, {
     method: "POST",
     headers: { "content-type": "application/json", "x-codeium-csrf-token": route.token },
     body: JSON.stringify(body),
+    // A redirect would send the token to wherever it points.
+    redirect: "error",
     signal: AbortSignal.timeout(10_000),
   });
-  if (!r.ok) throw new Error(`${method}: HTTP ${r.status} ${(await r.text()).slice(0, 200)}`);
-  return (await r.json()) as T;
+  const text = await cappedText(r, MAX_LS_BYTES);
+  if (!r.ok) throw new Error(`${method}: HTTP ${r.status} ${text.slice(0, 200)}`);
+  return JSON.parse(text) as T;
 }
 
 /**
@@ -123,8 +156,18 @@ function markConversation(ctx: Ctx, id: string) {
   if (!/^[\w-]+$/.test(id)) return;
   const dir = join(ctx.store.dir, "antigravity");
   mkdirSync(dir, { recursive: true, mode: 0o700 });
+  // A day on, a conversation is asked for its hello once more, and the folder stays small.
+  const now = ctx.now().getTime();
+  for (const f of readdirSync(dir))
+    try {
+      const age = now - statSync(join(dir, f)).mtimeMs;
+      if (!(age >= 0 && age < MARKER_KEEP_MS)) rmSync(join(dir, f), { force: true });
+    } catch {}
   writeFileSync(join(dir, id), "");
 }
+
+/** How long a conversation's marker stays. */
+const MARKER_KEEP_MS = 24 * 60 * 60_000;
 
 /**
  * Whether conversation `id` still has to run `starbridge hello` for its prompts to go out: prompts
@@ -188,6 +231,7 @@ export async function agyReachable(route: AgyRoute): Promise<boolean> {
   if (!onLoopback(route.address)) return false;
   try {
     const r = await fetch(`http://${route.address}/healthz`, {
+      redirect: "error",
       signal: AbortSignal.timeout(2_000),
     });
     return r.ok;
@@ -293,15 +337,21 @@ export interface PreToolInput {
   toolCall?: { name?: string; args?: Record<string, unknown> };
 }
 
-/** A starbridge command an AGY_ALLOW entry lets through, wherever it sits on the line. */
-const ALLOWED = /(^|[^\w-])starbridge\s+(ask|waiting|working|wait|settle|hello)(?![\w-])/;
+/**
+ * Whether a line names starbridge once the shell's quoting is gone: `"starbridge" ask` and
+ * `star""bridge ask` run it, and `agy`'s allow entries may match them as `starbridge ask`.
+ */
+function namesStarbridge(line: string): boolean {
+  return /starbridge/i.test(line.replace(/['"\\]/g, ""));
+}
 
 /**
  * `starbridge hook pre-tool --agent antigravity`, on the plugin's `PreToolUse` for
  * `run_command` (#959). The allow entries setup adds to `agy`'s settings skip the prompt; this
  * hook narrows them. A line that is one of those commands alone runs outside `--sandbox`, which
- * has no network and hides the home folder. A line they would pass but that runs more, such as
- * `LD_PRELOAD=… starbridge ask`, gets the prompt back (`force_ask`). `agy` ignores a hook's
+ * has no network and hides the home folder. Any other line that names starbridge, once quotes
+ * and backslashes are removed, such as `LD_PRELOAD=… starbridge ask` or `"starbridge" ask`, gets
+ * the prompt back (`force_ask`), since an allow entry may pass it. `agy` ignores a hook's
  * `allow` otherwise. Prints nothing for any other call.
  */
 export function hookPreTool(ctx: Ctx, text: string, opts: { agent?: string }): number {
@@ -322,7 +372,7 @@ export function hookPreTool(ctx: Ctx, text: string, opts: { agent?: string }): n
     ctx.out(JSON.stringify({ decision: "deny", reason: `${NUDGE} Then run this command again.` }));
   } else if (ownCommand(line))
     ctx.out(JSON.stringify({ decision: "allow", overwrite: { BypassSandbox: true } }));
-  else if (ALLOWED.test(line))
+  else if (namesStarbridge(line))
     ctx.out(
       JSON.stringify({
         decision: "force_ask",

@@ -4,7 +4,7 @@ When the owner answers a decision, this mod submits the answer into the Claude
 Code session that asked, as the line `starbridge wait` prints:
 
 ```
-Answer to d_Xk3… (Merge #12 now?): Merge
+Answer to d_amber-otter-… (Merge #12 now?): Merge
 ```
 
 It works in the terminal, the desktop app's Code tab, IDEs and Remote Control.
@@ -105,7 +105,7 @@ session, such as `claude --resume`, submits it again, once.
 
 `pi/starbridge.ts` is the same answer loop as a Pi extension. It ships in the
 repository's Pi package with the `starbridge` skill. `starbridge setup` installs it at the
-release tag of the CLI it runs, `v` and what `starbridge --version` prints:
+commit of the CLI's release. By hand, at a release tag, `v` and what `starbridge --version` prints:
 
 ```bash
 pi install git:github.com/T0mSIlver/starbridge@v<version>

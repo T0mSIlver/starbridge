@@ -6,6 +6,12 @@ export type AppleConfig = NonNullable<Config["apple"]>;
 const ISSUER = "https://appleid.apple.com";
 /** Apple rotates its keys rarely; a token signed by a key not cached yet refetches them. */
 const KEYS_TTL_MS = 3_600_000;
+/**
+ * Apple's keys are fetched at most once in this long, so tokens naming made-up key ids cannot
+ * make the server ask Apple on each sign-in attempt; one naming a key Apple just rotated in
+ * waits for the next fetch.
+ */
+const REFETCH_MS = 60_000;
 /** Apple takes a client secret for up to 6 months; one lasts the server's day. */
 const SECRET_LIFETIME_S = 86_400;
 /** Leeway for the clocks of Apple and this server. */
@@ -30,6 +36,9 @@ const sha256hex = (s: string) => createHash("sha256").update(s).digest("hex");
  */
 export class Apple {
   private keys?: { at: number; byKid: Map<string, JsonWebKey> };
+  /** When the keys were last asked for, answered or not, and the fetch still running. */
+  private fetchedAt = Number.NEGATIVE_INFINITY;
+  private fetching?: Promise<void>;
   private readonly revoking = new Set<Promise<void>>();
   private readonly secrets = new Map<string, { value: Promise<string>; madeAt: number }>();
 
@@ -140,18 +149,30 @@ export class Apple {
   }
 
   private async key(kid: string): Promise<JsonWebKey> {
-    const fresh = this.keys && Date.now() - this.keys.at < KEYS_TTL_MS;
-    let jwk = fresh ? this.keys?.byKid.get(kid) : undefined;
+    const fresh = () => this.keys && Date.now() - this.keys.at < KEYS_TTL_MS;
+    let jwk = fresh() ? this.keys?.byKid.get(kid) : undefined;
     if (jwk) return jwk;
+    if (this.fetching) await this.fetching;
+    else if (Date.now() - this.fetchedAt >= REFETCH_MS) {
+      this.fetchedAt = Date.now();
+      this.fetching = this.fetchKeys().finally(() => {
+        this.fetching = undefined;
+      });
+      await this.fetching;
+    }
+    if (!fresh()) throw new Error("Apple's keys could not be fetched; retry later");
+    jwk = this.keys?.byKid.get(kid);
+    if (!jwk) throw new AppleRefused("unknown key");
+    return jwk;
+  }
+
+  private async fetchKeys(): Promise<void> {
     const res = await this.fetchFn(`${this.config.url}/auth/keys`, {
       signal: AbortSignal.timeout(10_000),
     });
     if (!res.ok) throw new Error(`Apple keys answered ${res.status}`);
     const { keys = [] } = (await res.json()) as { keys?: (JsonWebKey & { kid?: string })[] };
     this.keys = { at: Date.now(), byKid: new Map(keys.map((k) => [k.kid ?? "", k])) };
-    jwk = this.keys.byKid.get(kid);
-    if (!jwk) throw new AppleRefused("unknown key");
-    return jwk;
   }
 
   /**

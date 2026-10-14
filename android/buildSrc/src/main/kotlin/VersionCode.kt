@@ -21,15 +21,16 @@ fun versionCodeOf(name: String): Int {
 
 /**
  * The versionCode of a build of main for Play's internal track (#1540): slots 50 to 98 of the
- * version under way, which is [name] for an rc and the next patch for a final. [after] is the
+ * version under way, which is [name] for an rc and the next patch for a final, or for an rc whose
+ * final is tagged ([finalTagged], #1731: promote.yml tags the final off main). [after] is the
  * highest code the track already holds: the build takes the next slot, so each build is above the
  * last, and fails once the version's 49 slots are spent, as an rc would then be due anyway.
  */
-fun mainVersionCodeOf(name: String, after: Int): Int {
+fun mainVersionCodeOf(name: String, after: Int, finalTagged: Boolean = false): Int {
     val m = Regex("""(\d+)\.(\d+)\.(\d+)(-rc\.\d+)?""").matchEntire(name)
         ?: error("versionName must be MAJOR.MINOR.PATCH or MAJOR.MINOR.PATCH-rc.N, got $name")
     val (major, minor, patch, rc) = m.destructured
-    val underWay = if (rc.isEmpty()) "$major.$minor.${patch.toInt() + 1}" else "$major.$minor.$patch"
+    val underWay = if (rc.isEmpty() || finalTagged) "$major.$minor.${patch.toInt() + 1}" else "$major.$minor.$patch"
     val first = versionCodeOf("$underWay-rc.1") - 1 + 50
     val code = maxOf(first, after + 1)
     require(code <= first + 48) { "no build of main left for $underWay: slots 50 to 98 are spent" }

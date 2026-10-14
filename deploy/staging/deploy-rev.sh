@@ -1,7 +1,8 @@
 #!/bin/sh
 # Installed on sb-staging as /usr/local/sbin/starbridge-staging-deploy (setup.sh) and run as root
 # by the forced command of deploy.yml's staging key, with one argument, a commit id. Deploys that
-# commit if it is on main, which it fetches itself over HTTPS, the repository being public. As on
+# commit if it is on main, which it fetches itself over HTTPS, the repository being public, and
+# only once CI passed it there (below). As on
 # prod, a commit older than the deployed one is skipped unless it is main's head: CI on an older
 # commit can finish after a newer one deployed, and its server would refuse a database the newer
 # one migrated.
@@ -26,6 +27,20 @@ if [ "$rev" != "$(git -C $repo rev-parse main)" ] &&
   echo "$rev is older than the deployed ${current:-release} and is not main's head; not deployed"
   exit 0
 fi
+# CI passed this commit on a push to main (#1714). deploy.yml deploys only such a commit; the box
+# checks again, so the staging key alone cannot ship one that failed. Only main's pushes make such
+# runs of ci.yml. GitHub's public API, without a token; no answer means no deploy.
+# Through a file, and only when curl succeeds: a retried transfer's partial bytes would otherwise
+# reach jq ahead of the full answer.
+runs=$(mktemp)
+curl -fsS --retry 3 --retry-delay 5 --retry-all-errors --max-time 30 -H 'Accept: application/vnd.github+json' -o "$runs" \
+  "https://api.github.com/repos/T0mSIlver/starbridge/actions/workflows/ci.yml/runs?head_sha=$rev&event=push&branch=main&status=success&per_page=10" &&
+  jq -e --arg rev "$rev" 'any(.workflow_runs[]; .path == ".github/workflows/ci.yml" and .event == "push"
+    and .head_branch == "main" and .head_sha == $rev and .conclusion == "success"
+    and .head_repository.full_name == "T0mSIlver/starbridge")' "$runs" >/dev/null ||
+  { rm -f "$runs"; echo "CI has not passed $rev on main; not deployed" >&2; exit 1; }
+rm -f "$runs"
+echo "CI passed $rev on main"
 # seed.sh's seeding server holds the database meanwhile (seed-host.sh).
 if [ -n "$(docker ps -q -f name='^sb-seed-server$')" ]; then
   echo "staging is being seeded; not deployed" >&2

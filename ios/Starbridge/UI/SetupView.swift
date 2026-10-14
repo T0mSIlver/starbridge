@@ -504,5 +504,6 @@ private struct WaitingStep: View {
             if let onMatch { Button("They match", action: onMatch).buttonStyle(Primary()) }
             Button("Cancel") { Task { await store.cancelJoin() } }.buttonStyle(Secondary())
         }
+        .privacyCover()
     }
 }

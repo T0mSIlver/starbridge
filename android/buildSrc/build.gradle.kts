@@ -4,8 +4,10 @@ plugins {
     `kotlin-dsl`
 }
 
-// The machine's Maven mirror first, when it has one (settings.gradle.kts).
+// The machine's Maven mirror first, when it has one, but never plain HTTP in a release-signed
+// build (settings.gradle.kts).
 val mirror = providers.gradleProperty("starbridge.mavenMirror").orNull?.trimEnd('/')
+    ?.takeUnless { it.startsWith("http:") && !System.getenv("STARBRIDGE_KEYSTORE").isNullOrEmpty() }
 repositories {
     if (mirror != null) maven {
         url = uri("$mirror/maven-central/")

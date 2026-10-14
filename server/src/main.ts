@@ -5,6 +5,7 @@ import { setSuspended } from "./auth";
 import { configFromEnv } from "./config";
 import { openDb, refuses, SCHEMA_VERSION } from "./db";
 import { describe, parseValue, readOverrides, writeOverrides } from "./overrides";
+import { purgeAccount } from "./retention";
 import { setSignUps, signUpsPaused } from "./signups";
 import { formatTop, top } from "./top";
 import { formatReport, report } from "./usage";
@@ -70,6 +71,21 @@ if (process.argv[2] === "suspend" || process.argv[2] === "unsuspend") {
     process.exit(1);
   }
   console.log(`${account} ${process.argv[2] === "suspend" ? "suspended" : "no longer suspended"}`);
+  process.exit(0);
+}
+// `purge ACCOUNT`: deletes every item of one account, a batch at a time beside the running server,
+// for an account that fills the server's storage (#1736). The account, its devices and machines
+// stay; `suspend` keeps its machines from posting again. deploy/host/switch.sh runs it.
+if (process.argv[2] === "purge") {
+  const account = process.argv[3];
+  if (!account) throw new Error("purge ACCOUNT");
+  const db = openDb(config.dbPath);
+  if (!db.query("SELECT 1 FROM accounts WHERE id = ?").get(account)) {
+    console.error(`no account ${account}`);
+    process.exit(1);
+  }
+  const freed = await purgeAccount(db, account);
+  console.log(`${account}: ${(freed / 1024 / 1024).toFixed(1)} MB of items deleted`);
   process.exit(0);
 }
 // `limits [show]`, `limits set KEY VALUE`, `limits unset KEY`, `limits reset`: the owner's

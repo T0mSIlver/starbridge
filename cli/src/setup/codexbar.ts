@@ -11,6 +11,7 @@ import {
   openSync,
   readdirSync,
   readFileSync,
+  readlinkSync,
   realpathSync,
   renameSync,
   rmSync,
@@ -18,7 +19,7 @@ import {
   unlinkSync,
   writeSync,
 } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve, sep } from "node:path";
 import { parseUsage, runCodexbar } from "../codexbar";
 import type { Ctx } from "../context";
 import PINNED from "./codexbar-pin.json" with { type: "json" };
@@ -113,13 +114,19 @@ function isMusl(): boolean {
   return !libs.some((d) => has(d, "libcurl.so.4"));
 }
 
-/** Links `~/.local/bin/codexbar` to `target`, unless something else already sits there. */
+/**
+ * Links `~/.local/bin/codexbar` to `target`, unless something else already sits there: a file, or
+ * a link that is not Starbridge's own, one into its tarball install or into a CodexBar app.
+ */
 export function linkIntoLocalBin(sys: Sys, target: string): string | undefined {
   const bin = join(sys.home, ".local/bin");
   const link = join(bin, "codexbar");
   mkdirSync(bin, { recursive: true });
   try {
     if (!lstatSync(link).isSymbolicLink()) return undefined;
+    const to = resolve(bin, readlinkSync(link));
+    const ours = to.startsWith(optDir(sys) + sep) || /[\\/]CodexBar\.app[\\/]/.test(to);
+    if (to !== resolve(target) && !ours) return undefined;
     unlinkSync(link);
   } catch {}
   symlinkSync(target, link);

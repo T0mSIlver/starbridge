@@ -228,10 +228,18 @@ writeFileSync(
   at(`${RES}/ic_launcher_monochrome.xml`),
   vector(108, CANVAS, androidPaths("#FFFFFF", "#FFFFFF")),
 );
-// The notification's small icon: a white silhouette the system tints.
+// The notification's small icon: a white silhouette the system tints. The arch is centred both
+// ways in the 24 dp square and fills its 20 dp live area, as the system's status bar icons do;
+// on its feet it sat 2 dp low beside them (#1712).
+const STATUS_SIZE = (W * 24) / 20;
+const STATUS = {
+  x: (BOX.x0 + BOX.x1) / 2 - STATUS_SIZE / 2,
+  y: (BOX.y0 + BOX.y1) / 2 - STATUS_SIZE / 2,
+  size: STATUS_SIZE,
+};
 writeFileSync(
   at(`${RES}/ic_notification.xml`),
-  vector(24, SMALL, androidPaths("#FFFFFF", "#FFFFFF")),
+  vector(24, STATUS, androidPaths("#FFFFFF", "#FFFFFF")),
 );
 
 // ---- SVG icons ----

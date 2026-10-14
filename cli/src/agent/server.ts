@@ -99,6 +99,9 @@ export interface Hub {
 
 const SESSION_ID = /^[A-Za-z0-9_.:-]{1,200}$/;
 const MAX_BODY = 1 << 20;
+/** How long a session stays listed after it was last heard from, and how many are kept. */
+const SESSION_KEEP_MS = 24 * 60 * 60_000;
+const MAX_SESSIONS = 5_000;
 
 /** Waits `ms`, or less when `signal` aborts. */
 export function pause(ms: number, signal: AbortSignal): Promise<void> {
@@ -400,6 +403,7 @@ export class Agent implements Hub {
 
   private status(): Status {
     const m = this.ctx.store.machine();
+    this.evictSessions();
     const out: Status = {
       version: VERSION,
       api: { min: MIN_API, max: API },
@@ -421,9 +425,29 @@ export class Agent implements Hub {
     return id;
   }
 
+  /**
+   * Forgets a mod's session a day after its last sign of life, or when dated in the future; a
+   * session with no `pid`, such as a Cursor conversation that only its hooks greet, stays until
+   * its `bye`. Past MAX_SESSIONS the least recently seen go first.
+   */
+  private evictSessions() {
+    const now = this.ctx.now().getTime();
+    for (const [id, s] of this.sessions) {
+      if (s.pid === undefined) continue;
+      const age = now - Date.parse(s.lastSeenAt);
+      if (!(age >= 0 && age < SESSION_KEEP_MS)) this.sessions.delete(id);
+    }
+    if (this.sessions.size <= MAX_SESSIONS) return;
+    const oldest = [...this.sessions.values()].sort((a, b) =>
+      a.lastSeenAt.localeCompare(b.lastSeenAt),
+    );
+    for (const s of oldest.slice(0, this.sessions.size - MAX_SESSIONS)) this.sessions.delete(s.id);
+  }
+
   /** Records that session `id` is alive, with what its client said about it. */
   private touch(id: string, req: Request, hello?: Partial<SessionInfo>): SessionInfo {
     const now = iso(this.ctx.now());
+    this.evictSessions();
     const info: SessionInfo = {
       ...(this.sessions.get(id) ?? { id }),
       ...hello,

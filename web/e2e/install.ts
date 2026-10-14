@@ -17,7 +17,7 @@ const WEB = join(ROOT, "web");
 const PORTS = { web: 3880, server: 3881 };
 const ORIGIN = `http://localhost:${PORTS.web}`;
 const OUT = join(WEB, "docs/install");
-const TOKEN = "install-check";
+const TOKEN = "install-check-owner-token";
 const tmp = mkdtempSync(join(tmpdir(), "starbridge-install-"));
 const children: ChildProcess[] = [];
 /** Browsers to close and the page to capture if a step fails. */

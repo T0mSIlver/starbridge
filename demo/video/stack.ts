@@ -16,7 +16,7 @@ import { DemoDevice } from "../src/device";
 
 export const ROOT = resolve(import.meta.dir, "../..");
 export const MACHINES = { workstation: "workstation", "build-server": "build server" } as const;
-export const OWNER_TOKEN = "demo-video";
+export const OWNER_TOKEN = "demo-video-owner-token";
 
 export function cli(dir: string, home: keyof typeof MACHINES, args: string[], cwd?: string) {
   const machineHome = join(dir, home);
