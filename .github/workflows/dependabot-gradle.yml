@@ -5,7 +5,8 @@ name: Dependabot Gradle checksums
 # writes it into Dependabot's Gradle branches, as dependabot-lockfile.yml writes pnpm-lock.yaml.
 # Two jobs: the build that downloads the new artifacts and runs their plugins gets a read-only
 # token, and the job that pushes runs no Gradle and checks that only the metadata changed. Its
-# push, made with GITHUB_TOKEN, starts no workflow, so it starts android.yml itself.
+# push, made with GITHUB_TOKEN, starts no workflow, so it starts android.yml and ci.yml itself,
+# which report to the pull request through the commit statuses android and CI.
 on:
   push:
     branches: ["dependabot/gradle/**"]
@@ -54,13 +55,14 @@ jobs:
     permissions:
       contents: write
       actions: write
+      statuses: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: verification-metadata
           path: ${{ runner.temp }}/metadata
-      - name: Push the checksums and start the Android build
+      - name: Push the checksums and start CI
         env:
           GH_TOKEN: ${{ github.token }}
           BRANCH: ${{ github.ref_name }}
@@ -74,4 +76,8 @@ jobs:
           git config user.email '41898599+github-actions[bot]@users.noreply.github.com'
           git commit -m 'Update Gradle verification metadata [dependabot skip]' android/gradle/verification-metadata.xml
           git push origin "HEAD:$BRANCH"
+          for context in android CI; do
+            gh api "repos/$GITHUB_REPOSITORY/statuses/$(git rev-parse HEAD)" -f context=$context -f state=pending >/dev/null
+          done
           gh workflow run android.yml --ref "$BRANCH"
+          gh workflow run ci.yml --ref "$BRANCH"
