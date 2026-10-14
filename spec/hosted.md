@@ -153,6 +153,8 @@
   `demo/` is its first device and machine. It approves every join by digits without comparing,
   so a reviewer walks the same screens as a real second phone. The server refuses `DEMO=1` beside
   a starbridge.run `PUBLIC_URL`, GitHub sign-in or relay mode. A restart is a fresh account.
+  A reviewer who deletes the account, or revokes the demo's device or machine, restarts it
+  (#1740).
   It runs on sb-staging, as a project of its own beside staging (#1557), so prod carries one service
   less and prod's releases never restart it. Each staging deploy whose round trip passed rebuilds it
   from that commit of main, which serves every release from the minimum up: deployed by hand, it
