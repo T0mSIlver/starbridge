@@ -45,6 +45,29 @@ if ! docker image inspect "$caddy" >/dev/null 2>&1; then
 fi
 docker tag "$caddy" starbridge-caddy:latest
 
+# up ARGS: `$compose up ARGS`, once more when Docker fails a recreate with "removal of container
+# <id> is already in progress" while it still removes the container compose just stopped. Nothing
+# else touched the container when that failed a staging deploy (#1663, #1674); a second `up` after
+# the removal succeeds.
+up() {
+  log=$(mktemp)
+  if $compose up "$@" 2>"$log"; then
+    cat "$log" >&2
+    rm -f "$log"
+    return 0
+  fi
+  cat "$log" >&2
+  removing=$(sed -n 's/.*removal of container \([0-9a-f]*\) is already in progress.*/\1/p' "$log" | head -n 1)
+  rm -f "$log"
+  [ -n "$removing" ] || return 1
+  echo "apply.sh: Docker is still removing container $removing; trying again once it is gone" >&2
+  for _ in $(seq 30); do
+    docker container inspect "$removing" >/dev/null 2>&1 || break
+    sleep 1
+  done
+  $compose up "$@"
+}
+
 # healthy URL SERVICE [SECONDS]
 healthy() {
   for _ in $(seq "${3:-30}"); do
@@ -97,7 +120,7 @@ if [ -n "$($compose ps -q --status running web-a)" ]; then
 else
   live=web-b next=web-a port=3010
 fi
-$compose up -d --no-deps --force-recreate $next
+up -d --no-deps --force-recreate $next
 # A copy that never turns healthy is stopped, so the live one stays the only one running and a
 # retried deploy replaces the failed copy, not the live one.
 healthy http://127.0.0.1:$port/ $next || { $compose stop $next; exit 1; }
@@ -105,7 +128,7 @@ healthy http://127.0.0.1:$port/ $next || { $compose stop $next; exit 1; }
 # Caddy takes the Caddyfile through its admin API on every deploy: a reload keeps open
 # connections, where recreating the container would drop them, and an unchanged one is a no-op.
 # Loading each time, rather than when the file changed, also heals a load that failed before.
-$compose up -d caddy
+up -d caddy
 curl -fsS --retry 10 --retry-connrefused --retry-delay 1 -X POST \
   -H 'Content-Type: text/caddyfile' --data-binary @Caddyfile http://127.0.0.1:2019/load
 # Caddy checks health every second: let it see the new copy before the old one goes. Requests
@@ -136,7 +159,7 @@ ls -t /var/backups/starbridge/deploy-*.db 2>/dev/null | tail -n +3 | xargs -r rm
 # The server stays one instance: it holds the long-polls and SQLite. On SIGTERM it ends its
 # long-polls and exits, and Caddy holds requests until the new one answers. --remove-orphans
 # drops the single `web` of releases before two copies.
-$compose up -d --remove-orphans server umami umami-db caddy
+up -d --remove-orphans server umami umami-db caddy
 
 healthy http://127.0.0.1:8080/healthz server
 # Umami migrates its database on its first start.
