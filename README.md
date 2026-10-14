@@ -1,128 +1,49 @@
-# Starbridge desktop
+# Starbridge
 
-The macOS app: the server's web page in a window, an amber light in the menu bar while something
-needs you, and a notification per question that you answer with its buttons or a typed reply. The
-page stays the device, as in a browser; the app adds what a browser cannot. spec/desktop.md has the rules.
+Know the moment your agent is stuck.
 
-## Develop
+When a coding agent stops for a question, Starbridge puts it on your phone and in your browser.
+You answer with one tap, and your answer comes back as the session's next prompt. Sessions of
+every harness your agents run in (Claude Code, Codex, Pi, opencode, Cursor and Antigravity), on
+every machine, reach you in one place.
 
-From the repository root, after `pnpm install`:
+Starbridge also shows the runs that affect you, such as a release or an eval on a rented GPU,
+answers permission prompts once you turn them on, and shows what's left on each AI plan.
+
+Your phone, browsers and machines encrypt everything they send each other, so the server stores your
+content only as ciphertext
+([what the server sees](https://starbridge.run/docs/faq#what-does-the-server-see)). Use the free
+server at [starbridge.run](https://starbridge.run), or host your own.
+
+![Claude Code asks which model to run a paid eval with; the question reaches the phone, one tap answers it, and the session carries on](docs/media/demo.gif)
+
+Launch week: [known issues](https://github.com/T0mSIlver/starbridge/issues?q=is%3Aissue%20label%3Aknown-issue).
+
+## Get started
+
+Get the app (Android, macOS, or any browser) and sign in, then install the CLI on each machine
+that runs your harnesses:
 
 ```bash
-pnpm --filter @starbridge/desktop exec install-electron
-pnpm --filter @starbridge/desktop start
+curl -fsSL https://starbridge.run/install.sh | sh
 ```
 
-`STARBRIDGE_SERVER=http://localhost:3000` points a run at a local server; otherwise the app uses
-the server set from sign-in's "Use your own server", starbridge.run by default.
-`STARBRIDGE_RELEASES` points the updater, which otherwise runs only in a packaged app, at another
-repository's GitHub page or a stand-in for it.
+[Start](https://starbridge.run/docs#start) has every app, the Windows, Homebrew and npm installs,
+and your agent's first question.
+[What each harness supports](https://starbridge.run/docs/tell-your-agents#what-each-harness-supports)
+lists what works in each harness.
 
-Tests: `pnpm test` (unit) and `pnpm e2e`, which launches the app on a stand-in page and checks the
-bridge, the menu bar icon, the notifications and an update from a stand-in release feed (`xvfb-run -a` on Linux). The `desktop` workflow
-runs both on GitHub's macOS runner and keeps the DMGs. `test/stack.ts` runs the app on the whole
-product (server, built web page, CLI, a stand-in GitHub): it signs in through the browser and
-pairs in the app's window, times the switch between tabs, and answers `starbridge ask --wait`
-from the notifications; CI's
-`desktop end to end` job runs it (`xvfb-run -a node desktop/test/stack.ts` after `pnpm build`).
+## Docs
 
-`pnpm dist` packages the app on a Mac (`release/`). `node scripts/icons.ts` renders the icons.
+[starbridge.run/docs](https://starbridge.run/docs): getting started, the CLI, agent instructions,
+notifications, self-hosting and the [FAQ](https://starbridge.run/docs/faq).
 
-## The bridge
+CI runs the CLI's tests on Linux (x64 and arm64), macOS and Windows on every change to the CLI. A release publishes nothing until its APK passes a smoke test on an Android emulator.
 
-The page finds `window.starbridgeDesktop` only on the configured server's origin:
+## Contributing
 
-- `version`: the app's version, which the page sends as `starbridge-client: desktop/<version>`.
-- `titleBar`: `"inset"` when the window has no title bar, and the page leaves room for its
-  buttons.
-- `update({count, waiting, account, entries})`: the Needs-you count, how many of them an agent
-  waits on, `"ready"`, `"signedOut"` or `"loading"`, and one entry per item to notify
-  (`src/bridge.ts`). Send it whenever any changes.
-- `onAnswer(f)`: `f({id, choice} | {id, text})` sends a notification's answer and rejects with
-  the reason it was not sent.
-- `onOpen(f)`: `f(id)` opens the item whose notification was clicked.
-- `place()` and `setPlace(p)`: where the app stays, `"menu"`, `"dock"` or `"both"` (from 0.1.3).
-- `screen()`: the Mac's reading, `{away, idleMs}`: away while locked, asleep or quitting, and the
-  milliseconds since its last input, null while asleep or quitting (`src/screen.ts`).
-  `onScreen(f)`: `f()` runs every 10 s and when it changes; the app waits for its promise before
-  it quits.
-- `shown()`: whether the window is on screen; `onShown(f)`: `f()` runs when it shows or hides.
-- `notificationsBlocked()`: whether macOS refused the last notification, as it does while it
-  blocks the app's; `onNotificationsBlocked(f)`: `f()` runs when that changes.
-  `openNotificationSettings()` opens System Settings → Notifications → Starbridge and forgets
-  the refusal until the next notification (#1069).
-  The page's `document.visibilityState` stays "visible" in the app, which never throttles it.
-- `updateStatus()`: where the update stands, `{state}` with `"idle"`, `"checking"`,
-  `"available"`, `"downloading"`, `"ready"` or `"error"`, and its `version`, `percent` or
-  `message` (`src/updates.ts`); null while the app runs no updater. `updateSettings()` and
-  `setUpdateSettings(s)`: `{channel, autoDownload}` (`channel` is `"stable"`, `"rc"` or `"tip"`), any
-  field; `updateSettings()` adds `ahead`, whether the installed version waits for the channel to
-  pass it, and `releaseCandidates`, the switch that pages from before the channel read and set (#1692). `updateAction(a)`:
-  `"check"`, `"download"`, or `"install"`, which restarts the app. `onUpdate(f)`: `f()` runs when
-  the status or the settings change (#1398).
+See [CONTRIBUTING.md](CONTRIBUTING.md). Report vulnerabilities privately: [SECURITY.md](SECURITY.md).
 
-The main process checks that each message comes from the window's top frame on that origin, and
-checks every field again.
+## Licence
 
-## The widget
-
-`widgets/` holds the Needs you widget (#1031), a Swift package: `NeedsYou`, the WidgetKit
-extension, and `Reload`, the helper the app runs to write `widgets.json` into the App Group
-container and ask WidgetKit to redraw (`src/widgets.ts`). `scripts/widgets.cjs`, electron-builder's
-afterPack hook, builds both with `widgets/build.sh` (`swift build`, Xcode's macOS SDK), copies them into the app
-and signs them with their own entitlements; `scripts/check-widgets.sh` checks a packaged app.
-The App Group needs the Team ID, so only a Developer ID build shows a count. A new widget build
-registers once the app sits in /Applications and has run; `pluginkit -m -p
-com.apple.widgetkit-extension -v` lists it.
-
-## Budgets
-
-`test/perf.ts` measures the packaged app on GitHub's macOS runner and fails the `desktop`
-workflow when one is blown. The window loads a stand-in page there, so the network is not in the
-numbers. The Mac Mini column is main 12df3fee on the owner's Mac Mini (2026-10-09), with the same
-script: a real Mac uses more memory than the runner, so its budget is 400 MB, while CI gates at
-350 MB (owner's call, keeping the updater's ~23 MB). The runner column spans 104 runs from
-2026-10-08 to 10-11; a job on a slow runner takes about twice as long throughout, so the time budgets
-sit just above the slowest run (#1119).
-
-| | Budget | Runner | Mac Mini M2 |
-|---|---|---|---|
-| Cold start: process start to the window's first painted frame (median of 13 launches after a first) | 1000 ms | 272–982 ms, median 452 | 258–260 ms |
-| Warm open: the hidden window to its next frame, as from the menu bar (median of 9) | 80 ms | 7–72 ms, median 29 | 15 ms |
-| Idle memory: every process's working set, page loaded | 350 MB on the runner, 400 MB on a Mac | 304–310 MB | 371–378 MB |
-| Download: the largest DMG | 140 MB | 133–134 MB | 134 MB |
-| Tab switch: click to the frame painting the new page, warm, with no request for the page (`test/stack.ts`) | 100 ms | 29–33 ms | 26–40 ms, behind a 55 ms round trip; 80–97 ms before (#1072) |
-
-What keeps them: the main process is one 15 KB file, the updater (most of the code) loads 5 s
-after start from its own file, the window shows at once on the page's background colour, and
-closing it only hides it. The tabs prefetch their pages and keep them an hour, so a switch never
-waits on the server, and a hidden window loads a new deploy of the page, which otherwise reloads in
-full on the next click (#1072). `node test/switch.ts` times the switch on the whole product behind
-starbridge.run's round trip (`--rtt 55`), in Chromium (`--client chrome`), in an app on another
-machine (`--cdp`), and across a deploy (`--deploy`).
-`STARBRIDGE_TIMING=1` prints the marks (`timing {...}`) from any build.
-
-## The keychain
-
-The page's cookies are encrypted with a key macOS keeps in the login keychain, "Starbridge Safe
-Storage" (the `enableCookieEncryption` fuse). Only the app that made the key may read it without
-asking. A Developer ID app stays that app through updates. Each ad hoc build is a stranger to it,
-so macOS asks for the login password once per new ad hoc build; "Always Allow" covers that build.
-
-## Signing
-
-Pull requests build ad hoc signed apps: they open after "Open Anyway" in System Settings, and
-their notifications show once allowed there (Electron 42 moved to `UNNotification`, which needs a
-signed app; an ad hoc signature is enough, as the owner's Mac Mini showed). The Developer ID signs and notarizes in two places,
-both through `scripts/sign.sh` and the `desktop-release` environment, which only `main` and tags
-can use:
-
-- the `desktop` workflow's `signed build` job, once the repository variable `DESKTOP_SIGNING` is
-  `true`: on a push to `main` that changes what signing reads (`electron-builder.yml`, the sign,
-  afterPack, afterSign and widget scripts, `package.json`, the lockfile, the workflow), or run by
-  hand from `main`;
-- the release, once `DESKTOP_RELEASE` is `true` (spec/releases.md, "The desktop app's release").
-
-The environment's secrets: `MAC_CERTIFICATE` (the Developer ID Application certificate and key,
-a base64 `.p12`), `MAC_CERTIFICATE_PASSWORD`, and an App Store Connect API key for notarization:
-`APPLE_API_KEY` (the base64 `.p8`), `APPLE_API_KEY_ID`, `APPLE_API_ISSUER`.
+[MIT](LICENSE)
