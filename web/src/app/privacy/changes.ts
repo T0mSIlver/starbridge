@@ -8,6 +8,10 @@ import type { LegalChange } from "@/lib/legalChanges";
 export const privacyChanges: readonly LegalChange[] = [
   {
     date: "2026-10-14",
+    text: "Names the iPhone and Mac apps and the CLI. Added Sign in with Apple, what Apple sees for the iPhone app, and the counts by app.",
+  },
+  {
+    date: "2026-10-14",
     text: "Oracle also receives the database's table definitions, which hold no data, and runs our test server, which holds made-up data. Cloudflare serves the status page.",
   },
   {
@@ -38,4 +42,4 @@ export const privacyChanges: readonly LegalChange[] = [
 ];
 
 /** SHA-256 of page.tsx with its whitespace collapsed (sourceHash); changes.test.ts recomputes it. */
-export const pageHash = "bf4ee7a5615df60b31eb82478e5b7e36e57f71d77242ffbdce81b0f3cadba123";
+export const pageHash = "017eada3e1eded1bc40269836c69ad220bce48492b0ea093ebbe0286e6a86f20";
