@@ -1,6 +1,6 @@
 // swift-tools-version:5.9
-// The Needs you widget and its helper. build.sh builds them for the app; CodeQL's Swift autobuild
-// finds this package and builds it the same way.
+// The Needs you widget and its helper. build.sh builds them for the app; codeql-swift.yml builds
+// this package the same way.
 import PackageDescription
 
 let package = Package(

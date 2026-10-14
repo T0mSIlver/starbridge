@@ -40,7 +40,7 @@ jobs:
           languages: swift
           build-mode: manual
       # The packages built by hand: the autobuilder spent ~6 min before building the widgets, the
-      # one package it found (#TBD).
+      # one package it found (#1650).
       - working-directory: desktop/widgets
         run: swift build
       - working-directory: ios/StarbridgeProtocol
