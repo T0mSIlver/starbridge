@@ -32,6 +32,8 @@ test("the nightly is the next 03:00 UTC, shown in Paris and UTC", () => {
   expect(next(facts())[0]).toContain("05:00 Paris, 03:00 UTC");
   expect(next(facts())[0]).toContain("will build (3 android/ commits since main-cccccccc)");
   expect(next(facts({ androidSince: 0 }))[0]).toContain("will skip");
+  expect(next(facts({ androidSince: 2, androidChanged: false }))[0]).toContain("will skip");
+  expect(next(facts({ openRegressions: undefined })).join("\n")).toContain("unknown");
 });
 
 test("promotion names its conditions", () => {

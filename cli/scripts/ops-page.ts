@@ -23,10 +23,13 @@ export type Facts = {
   nightly?: { sha: string; at: string };
   /** Commits that touch the Android app since the nightly's, and staging's not yet in the newest rc. */
   androidSince?: number;
+  /** Whether the paths differ, which is how internal.yml decides; a change and its revert count commits but build nothing. */
+  androidChanged?: boolean;
   stagingSinceRc?: number;
   /** Commit of each release's tag, by version. */
   commits: Record<string, string>;
-  openRegressions: number;
+  /** Undefined when GitHub did not answer. */
+  openRegressions?: number;
   iosMainOn: boolean;
 };
 
@@ -67,7 +70,7 @@ export function next(f: Facts): string[] {
   out.push(
     f.androidSince === undefined
       ? `Android nightly builds at ${both(nn)}.`
-      : `Android nightly builds at ${both(nn)}: ${f.androidSince > 0 ? `will build (${f.androidSince} android/ commits since main-${short(f.nightly?.sha)})` : "will skip (no android/ change)"}.`,
+      : `Android nightly builds at ${both(nn)}: ${(f.androidChanged ?? f.androidSince > 0) ? `will build (${f.androidSince} android/ commits since main-${short(f.nightly?.sha)})` : "will skip (the app is unchanged)"}.`,
   );
   out.push(
     f.iosMainOn
@@ -83,7 +86,7 @@ export function next(f: Facts): string[] {
     const age = f.now.getTime() - Date.parse(rc.shipped);
     const day = age >= 86_400_000 ? "done" : `${hours(86_400_000 - age)} left`;
     out.push(
-      `${rc.version} has been on testers for ${hours(age)}. Promotion needs a day on the rc (${day}), no open regression issue (${f.openRegressions} open) and your yes.`,
+      `${rc.version} has been on testers for ${hours(age)}. Promotion needs a day on the rc (${day}), no open regression issue (${f.openRegressions ?? "unknown, GitHub did not answer"} open) and your yes.`,
     );
   }
   out.push("Mac apps check for updates every 6 hours.");
@@ -240,18 +243,21 @@ export async function gather(): Promise<Facts> {
     revision("starbridge.run"),
     revision("staging.starbridge.run"),
   ]);
-  // The newest internal run whose play job built the app.
+  // The newest internal run whose play job built the app; unchanged nights skip it, so look through pages.
   let nightly: Facts["nightly"];
-  const runs = await api<{ workflow_runs: { id: number; head_sha: string; created_at: string }[] }>(
-    "actions/workflows/internal.yml/runs?status=completed&per_page=15",
-  );
-  for (const r of runs?.workflow_runs ?? []) {
-    const jobs = await api<{ jobs: { name: string; conclusion: string }[] }>(
-      `actions/runs/${r.id}/jobs`,
-    );
-    if (jobs?.jobs.some((j) => j.name === "play" && j.conclusion === "success")) {
-      nightly = { sha: r.head_sha, at: r.created_at };
-      break;
+  for (let page = 1; page <= 10 && !nightly; page++) {
+    const runs = await api<{
+      workflow_runs: { id: number; head_sha: string; created_at: string }[];
+    }>(`actions/workflows/internal.yml/runs?status=completed&per_page=30&page=${page}`);
+    if (!runs?.workflow_runs.length) break;
+    for (const r of runs.workflow_runs) {
+      const jobs = await api<{ jobs: { name: string; conclusion: string }[] }>(
+        `actions/runs/${r.id}/jobs`,
+      );
+      if (jobs?.jobs.some((j) => j.name === "play" && j.conclusion === "success")) {
+        nightly = { sha: r.head_sha, at: r.created_at };
+        break;
+      }
     }
   }
   const commits: Record<string, string> = {};
@@ -269,9 +275,20 @@ export async function gather(): Promise<Facts> {
     androidSince: nightly
       ? count(`${nightly.sha}..origin/main`, "android", "packages/protocol/vectors")
       : undefined,
+    androidChanged: nightly
+      ? spawnSync("git", [
+          "diff",
+          "--quiet",
+          nightly.sha,
+          "origin/main",
+          "--",
+          "android",
+          "packages/protocol/vectors",
+        ]).status !== 0
+      : undefined,
     stagingSinceRc: rc && staging ? count(`v${rc.version}..${staging}`) : undefined,
     commits,
-    openRegressions: (issues ?? []).filter((i) => !i.pull_request).length,
+    openRegressions: issues ? issues.filter((i) => !i.pull_request).length : undefined,
     iosMainOn: process.env.IOS_MAIN_TESTFLIGHT === "true",
   };
 }

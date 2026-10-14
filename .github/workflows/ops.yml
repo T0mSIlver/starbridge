@@ -41,17 +41,19 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           IOS_MAIN_TESTFLIGHT: ${{ vars.IOS_MAIN_TESTFLIGHT }}
         run: bun cli/scripts/ops-page.ts "$RUNNER_TEMP/ops"
-      # The page's text changes at most hourly, so the key is its hash: an unchanged page is not uploaded again.
+      # The page's text changes at most hourly. The cache holds the hash of the page last uploaded (the newest
+      # entry, whatever its run), so an unchanged page is not uploaded again, and one that returns to an
+      # older text is.
       - id: hash
-        run: echo "sum=$(cat "$RUNNER_TEMP/ops/index.html" | sha256sum | cut -c1-64)" >> "$GITHUB_OUTPUT"
-      - id: seen
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        run: echo "sum=$(sha256sum < "$RUNNER_TEMP/ops/index.html" | cut -c1-64)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          path: ${{ runner.temp }}/ops-uploaded
-          key: ops-${{ steps.hash.outputs.sum }}
+          path: ${{ runner.temp }}/ops-last
+          key: ops-last-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: ops-last-
       - name: Upload to Cloudflare Pages
-        if: steps.seen.outputs.cache-hit != 'true'
         env:
+          SUM: ${{ steps.hash.outputs.sum }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
@@ -59,6 +61,7 @@ jobs:
             echo "::notice::The ops-pages environment has no Cloudflare token yet; nothing uploaded."
             exit 0
           fi
+          [ "$(cat "$RUNNER_TEMP/ops-last" 2>/dev/null)" = "$SUM" ] && exit 0
           npx --yes wrangler@4.143.0 pages deploy "$RUNNER_TEMP/ops" --project-name starbridge-ops --branch main --commit-dirty=true >/dev/null
           # Only an upload that happened leaves the marker the cache saves.
-          echo "$GITHUB_RUN_ID" > "$RUNNER_TEMP/ops-uploaded"
+          echo "$SUM" > "$RUNNER_TEMP/ops-last"
