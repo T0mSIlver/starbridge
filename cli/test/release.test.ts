@@ -235,11 +235,12 @@ describe.skipIf(WINDOWS).each(verifiers)("install.sh checking with %s", (verifie
     expect(r.err).toContain('SHA256SUMS is signed for "starbridge v1.0.0", not starbridge v9.9.9');
     expect(existsSync(r.bin)).toBe(false);
   });
+});
 
-  test("refuses a plain-HTTP mirror off this machine", async () => {
-    const r = await run("http://releases.example/releases", "x");
-    expect(r.err).toContain("STARBRIDGE_RELEASES_URL must be an https URL");
-  });
+// The URL check comes before any verifier runs, so one run covers them all.
+test.skipIf(WINDOWS)("install.sh refuses a plain-HTTP mirror off this machine", async () => {
+  const r = await install("http://releases.example/releases", "x", "openssl");
+  expect(r.err).toContain("STARBRIDGE_RELEASES_URL must be an https URL");
 });
 
 /** The `n`th line of a signature file, changed by `f`. */

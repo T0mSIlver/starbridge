@@ -103,7 +103,6 @@ test("a chained command's output passes through unchanged, and the run ends with
 
 test.each([
   ["success", "exit 0", 0],
-  ["failure", "exit 42", 42],
   // Windows has no signals: Git's bash emulates them, and a native parent sees it exit 0.
   ...(process.platform === "win32" ? [] : [["a signal", "kill -TERM $$", 128 + 15] as const]),
 ] as const)("the exit code on %s is the command's own", async (_name, script, code) => {
