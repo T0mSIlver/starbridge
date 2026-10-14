@@ -10,6 +10,7 @@
 #   switch.sh log                    the switch log
 #   switch.sh signups|suspend|unsuspend|limits ...
 #                                    the server's own switches, `bun server.js <args>` (#784-#786)
+#   switch.sh purge ACCOUNT          delete every item of one account (#1736); no undo
 #
 # The denylist holds one address or range per line until it is unblocked; the privacy page
 # says so. An IPv6 address is blocked as its /64, as the rate limits count it.
@@ -118,8 +119,8 @@ log) cat "$log" 2>/dev/null || true ;;
   lock
   apply --no-load
   ;;
-"") sed -n '2,14p' "$0" >&2; exit 2 ;;
-signups | suspend | unsuspend | limits)
+"") sed -n '2,15p' "$0" >&2; exit 2 ;;
+signups | suspend | unsuspend | limits | purge)
   # Holds the lock for its log line, which an unblock's scrub of the log would otherwise lose.
   lock
   out=$($compose exec -T server bun server.js "$@")

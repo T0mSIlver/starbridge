@@ -207,14 +207,18 @@ authRoutes.get("/auth/github/callback", async (c) => {
 
 /**
  * The browser got the app's sign-in back: the app was not there to catch it, or is too old to.
- * GitHub's code is worthless without the app's verifier, so it goes on to the app as it came, and
- * so does GitHub's error, such as the owner turning it down.
+ * The server keeps the code's challenge, so the code is worthless without the app's verifier,
+ * and passes it on to the app as it came, as it does GitHub's error, such as the owner turning
+ * it down.
  */
 authRoutes.get("/auth/github/callback/app", (c) => {
   const { appRedirectUri } = c.var.config;
+  rateLimit(c, `github:${ipKey(c)}`, c.var.config.limits.githubCallbacks);
   const { code = "", error = "", state = "" } = c.req.query();
   const word = /^[A-Za-z0-9_-]{1,100}$/;
   if (!CHALLENGE.test(state) || !(word.test(code) || word.test(error)))
+    fail(400, "bad-state", "sign-in came from elsewhere; start again in the app");
+  if (word.test(code) && !c.var.appSignIns.passed(code, state))
     fail(400, "bad-state", "sign-in came from elsewhere; start again in the app");
   const sent = word.test(code) ? `code=${code}` : `error=${error}`;
   return c.redirect(`${appRedirectUri}?${sent}&state=${state}`);
@@ -248,7 +252,14 @@ authRoutes.post("/auth/app/session", async (c) => {
   } else {
     rateLimit(c, `github:${ipKey(c)}`, c.var.config.limits.githubCallbacks);
     if (code.length > 100) fail(400, "bad-code", "sign-in code unknown; sign in again");
+    // A code that came back through this server must be traded with its challenge's verifier,
+    // whatever GitHub checks: whoever caught the redirect after it has the code, not the verifier.
+    // A wrong guess leaves the code's challenge in place.
+    const challenge = c.var.appSignIns.challengeOf(code);
+    if (challenge !== undefined && !safeEqual(challenge, s256(verifier)))
+      fail(400, "bad-code", "sign-in code unknown, used, expired or not yours; sign in again");
     account = await gitHubAccount(c, code, verifier);
+    c.var.appSignIns.traded(code);
   }
   c.var.appSignIns.add(s256(verifier), account);
   return c.json({ session: createSession(c.var.db, account, c.var.config.limits.sessions) });

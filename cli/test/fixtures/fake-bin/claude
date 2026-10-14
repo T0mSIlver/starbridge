@@ -12,23 +12,32 @@ case " $* " in *" --json "*) [ -n "$FAKE_NO_JSON" ] && { echo "error: unknown op
 shift
 case "$1 $2" in
   "marketplace list")
-    if [ -f "$s/market" ]; then echo "[{\"name\":\"starbridge\",\"source\":\"github\",\"repo\":\"${FAKE_MARKET_REPO:-T0mSIlver/starbridge}\"}]"; else echo '[]'; fi ;;
+    # $s/market holds the source added: a folder, else (empty) the GitHub repository.
+    if [ ! -f "$s/market" ]; then echo '[]'
+    # A Windows path's backslashes, escaped for JSON.
+    elif [ -s "$s/market" ]; then printf '[{"name":"starbridge","source":"directory","path":"%s"}]\n' "$(sed 's/\\/\\\\/g' "$s/market")"
+    else echo "[{\"name\":\"starbridge\",\"source\":\"github\",\"repo\":\"${FAKE_MARKET_REPO:-T0mSIlver/starbridge}\"}]"; fi ;;
   "marketplace add")
     [ -n "$FAKE_FAIL_ADD" ] && { echo "git clone failed" >&2; exit 1; }
-    touch "$s/market"
+    printf '%s' "$3" >"$s/market"
     settings="$HOME/.claude/settings.json"
     mkdir -p "$HOME/.claude"
     [ -f "$settings" ] || echo '{}' >"$settings"
-    bun -e 'const f=process.argv.at(-1);const s=JSON.parse(require("fs").readFileSync(f,"utf8"));s.extraKnownMarketplaces={...s.extraKnownMarketplaces,starbridge:{source:{source:"github",repo:"T0mSIlver/starbridge"}}};require("fs").writeFileSync(f,JSON.stringify(s,null,2))' "$settings" ;;
-  "marketplace remove") rm -f "$s/market" ;;
+    bun -e 'const f=process.argv.at(-1);const s=JSON.parse(require("fs").readFileSync(f,"utf8"));s.extraKnownMarketplaces={...s.extraKnownMarketplaces,starbridge:{source:{source:"directory",path:process.argv.at(-2)}}};require("fs").writeFileSync(f,JSON.stringify(s,null,2))' "$3" "$settings" ;;
+  "marketplace update") [ -f "$s/market" ] ;;
+  # Removing a marketplace uninstalls its plugins, as Claude Code 2.1.300 does.
+  "marketplace remove") rm -f "$s/market" "$s"/plugin-* "$s"/disabled-* ;;
   "list --json")
     printf '['; sep=''
     for f in "$s"/plugin-*; do
       [ -f "$f" ] || continue
-      printf '%s{"id":"%s","scope":"user","enabled":true,"version":"0.2.0"}' "$sep" "${f##*/plugin-}"; sep=','
+      id=${f##*/plugin-}; enabled=true; [ -f "$s/disabled-$id" ] && enabled=false
+      printf '%s{"id":"%s","scope":"user","enabled":%s,"version":"0.2.0"}' "$sep" "$id" "$enabled"; sep=','
     done
     echo ']' ;;
   "install "*) touch "$s/plugin-$2" ;;
+  "update "*) [ -n "$FAKE_FAIL_UPDATE" ] && { echo "update failed" >&2; exit 1; }; [ -f "$s/plugin-$2" ] ;;
+  "disable "*) [ -f "$s/plugin-$2" ] && touch "$s/disabled-$2" ;;
   "uninstall "*) rm -f "$s/plugin-$2" ;;
   *) exit 1 ;;
 esac

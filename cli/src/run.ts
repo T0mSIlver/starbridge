@@ -123,6 +123,8 @@ const PROGRESS_RE =
   /\x1b\]9;4;([0-4])(?:;(\d{1,3}))?(?:\x07|\x1b\\)|\[\s*(\d+)\s*\/\s*(\d+)\s*\]|(?<![\d.])(\d{1,3}(?:\.\d+)?)\s?%/g;
 /** Kept from the end of a chunk so a sequence split across two chunks still matches. */
 const CARRY = 64;
+/** The most steps a `[n/total]` may name. */
+const MAX_STEPS = 10_000;
 
 /**
  * Reads progress out of one output stream. `feed` takes raw chunks and returns what the last
@@ -158,7 +160,10 @@ function progressOf(m: RegExpMatchArray): RunProgress | null | undefined {
   if (done !== undefined && total !== undefined) {
     const d = Number(done);
     const t = Number(total);
-    return t >= 1 && d <= t ? { done: d, total: t, unit: "step" } : undefined;
+    // `[1/99999999999999999999]` reads as a float, and a run is not 10 000 steps long.
+    return Number.isSafeInteger(d) && Number.isSafeInteger(t) && t >= 1 && t <= MAX_STEPS && d <= t
+      ? { done: d, total: t, unit: "step" }
+      : undefined;
   }
   const v = Math.floor(Number(percent));
   return v >= 0 && v <= 100 ? { done: v, total: 100, unit: "percent" } : undefined;

@@ -68,7 +68,7 @@ import {
   type Waiting,
   withheldBy,
 } from "@starbridge/protocol";
-import { ApiError, api, backoff, type Stored } from "./api";
+import { ApiError, api, backoff, lastPage, type Stored } from "./api";
 import { generateDeviceKeys, sealOpener, signer } from "./crypto/keys";
 import { desktop } from "./desktop";
 import { type Kept, merge } from "./kept";
@@ -1355,7 +1355,7 @@ export async function loadInbox(
         const page = await api.items("decision", at, { open: true });
         for (const s of page.items) open.add(s.item.id);
         at = page.cursor;
-        if (page.items.length < 100) break;
+        if (lastPage(page)) break;
       }
       kept = had;
     }
@@ -1461,7 +1461,7 @@ export async function loadInbox(
     for (const s of page.items) await take(s, false);
     if (opts.keep) read.push(...page.items);
     cursor = page.cursor;
-    if (page.items.length < 100) break;
+    if (lastPage(page)) break;
   }
   const drop = new Set<string>();
   if (kept && open) {
@@ -1700,7 +1700,7 @@ export async function loadSettled(ctx: Ctx, cursor?: string) {
       } catch {}
     }
     at = page.cursor;
-    if (page.items.length < 100) {
+    if (lastPage(page)) {
       await hold(ctx);
       return { settled: out, cursor: at };
     }
@@ -1725,7 +1725,7 @@ async function readAll<T>(
       }
     }
     cursor = page.cursor;
-    if (page.items.length < 100) return out;
+    if (lastPage(page)) return out;
   }
 }
 
@@ -1879,7 +1879,7 @@ export async function loadRuns(ctx: Ctx): Promise<Runs> {
       }
     }
     cursor = page.cursor;
-    if (page.items.length < 100) break;
+    if (lastPage(page)) break;
   }
   await hold(ctx);
   return out;

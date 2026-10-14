@@ -62,7 +62,7 @@ final class ProtocolVectorsTests: XCTestCase {
 
     /** directory.json's first chain: phone, devbox, browser. */
     func firstDirectory() throws -> Directory {
-        try Directories.verify(directory["cases"]!.items[0]["entries"]!.items)
+        try verified(directory["cases"]!.items[0]["entries"]!.items)
     }
 
     func testEveryVectorFileIsRead() throws {
@@ -75,7 +75,7 @@ final class ProtocolVectorsTests: XCTestCase {
             let name = c.str("name")
             let o = c.opt("options")
             let pin = o?.opt("pin").map { Pin(length: Int($0["length"]!.number!), head: $0.str("head")) }
-            let run = { try Directories.verify(c["entries"]!.items, account: o?.opt("account")?.string, pin: pin, recoveryPk: o?.opt("recoveryPk")?.string) }
+            let run = { try verified(c["entries"]!.items, account: o?.opt("account")?.string, pin: pin, recoveryPk: o?.opt("recoveryPk")?.string) }
             let expect = c["expect"]!
             if let error = expect.opt("error") {
                 XCTAssertEqual(code { _ = try run() }, error.string!, name)
@@ -105,7 +105,7 @@ final class ProtocolVectorsTests: XCTestCase {
         }
         for c in v["withheld"]!.items {
             let entries = chains[c.str("chain")]!.items
-            let held = HeadBook.withheld(try heads(c["heads"]!), dir: try Directories.verify(entries), entries: entries)
+            let held = HeadBook.withheld(try heads(c["heads"]!), dir: try verified(entries), entries: entries)
             let got: JSON = held.map { h in
                 var o: JSONObject = ["id": .string(h.id)]
                 o["head"] = h.head.json
@@ -393,11 +393,11 @@ final class ProtocolVectorsTests: XCTestCase {
         let recovery = RecoveryKeys.keyPair(SecretKey(try fromB64(keys["recovery"]!.str("seed"))))
         let at = "2026-10-04T10:00:00Z"
         let genesis = Directories.genesisEntry(account: "acct_1", device: phone, signKey: phoneSk, recovery: recovery, at: at)
-        var dir = try Directories.verify([genesis.json], account: "acct_1", recoveryPk: toB64(recovery.publicKey))
+        var dir = try verified([genesis.json], account: "acct_1", recoveryPk: toB64(recovery.publicKey))
         let add = Directories.addEntry(dir, signer: phone.id, signKey: phoneSk, member: devbox, at: at)
-        dir = try Directories.verify([genesis.json, add.json])
+        dir = try verified([genesis.json, add.json])
         let revoke = Directories.revokeEntry(dir, signer: phone.id, signKey: phoneSk, id: devbox.id, at: at)
-        dir = try Directories.verify([genesis.json, add.json, revoke.json], pin: Pin(length: dir.length, head: dir.head))
+        dir = try verified([genesis.json, add.json, revoke.json], pin: Pin(length: dir.length, head: dir.head))
         XCTAssertEqual(dir.active(.device).map(\.id), ["phone"])
         XCTAssertEqual(dir.active(.machine), [])
 
@@ -405,16 +405,16 @@ final class ProtocolVectorsTests: XCTestCase {
         let next = Sodium.signKeyPair()
         let propose = Directories.recoveryEntry(dir, signer: phone.id, signKey: phoneSk, recovery: next, at: at)
         let chain = [genesis.json, add.json, revoke.json, propose.json]
-        dir = try Directories.verify(chain)
+        dir = try verified(chain)
         let confirm = try Directories.recoveryConfirmEntry(dir, recoveryKey: recovery.secretKey, recoveryPk: toB64(next.publicKey), at: at)
-        dir = try Directories.verify(chain + [confirm.json])
+        dir = try verified(chain + [confirm.json])
         XCTAssertEqual(dir.recoveryPk, toB64(next.publicKey))
         // The retired key signs nothing more: a recover under it fails.
         let browser = try m("browser")
         let stale = Directories.recoverEntry(dir, recoveryKey: recovery.secretKey, member: browser, at: at)
-        XCTAssertEqual(code { _ = try Directories.verify(chain + [confirm.json, stale.json]) }, "bad-signature")
+        XCTAssertEqual(code { _ = try verified(chain + [confirm.json, stale.json]) }, "bad-signature")
         let recover = Directories.recoverEntry(dir, recoveryKey: next.secretKey, member: browser, at: at)
-        XCTAssertEqual(try Directories.verify(chain + [confirm.json, recover.json]).active(.device).map(\.id), ["browser"])
+        XCTAssertEqual(try verified(chain + [confirm.json, recover.json]).active(.device).map(\.id), ["browser"])
     }
 
     /** An answer this client seals opens for the machine that asked, and only names it. */
@@ -434,4 +434,13 @@ final class ProtocolVectorsTests: XCTestCase {
         let again = try Envelopes.seal(kind: .answer, body: body, signer: "phone", secretKey: signKey("phone"), recipients: [machine])
         XCTAssertNotEqual(item.boxes[0].box, again.boxes[0].box)
     }
+}
+
+/**
+ * Directories.verify with the chain's own account when a case names none: the vectors check the
+ * other rules, and only the cases with an `account` option check that one.
+ */
+func verified(_ entries: [JSON], account: String? = nil, pin: Pin? = nil, recoveryPk: String? = nil) throws -> Directory {
+    let own = entries.first.flatMap { try? SignedEnvelope(json: $0) }.flatMap { try? JSON.parse($0.body) }?.opt("account")?.string
+    return try Directories.verify(entries, account: account ?? own ?? "", pin: pin, recoveryPk: recoveryPk)
 }

@@ -111,3 +111,24 @@
     margin-top: var(--s6);
   }
 }
+
+/* A category's field-level detail, collapsed under its summary. */
+.page details {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  padding: 0 var(--s4);
+}
+
+.page details[open] {
+  padding-bottom: var(--s3);
+}
+
+.page summary {
+  padding: var(--s3) 0;
+  color: var(--fg);
+  cursor: pointer;
+}
+
+.page details > :not(summary) + :not(summary) {
+  margin-top: var(--s3);
+}

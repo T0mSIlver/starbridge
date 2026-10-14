@@ -137,7 +137,9 @@ final class Store {
         // The saved chain, checked against the pin, as Android's store does at launch: Devices and the
         // inbox's empty state read it before the first sync, and offline (#1370).
         if !saved.entries.isEmpty, saved.pin != nil {
-            directory = try? Directories.verify(saved.entries.compactMap { try? JSON.parse($0) }, account: saved.account, pin: saved.pin)
+            directory = try? Directories.verify(saved.entries.compactMap { try? JSON.parse($0) }, account: saved.accountId, pin: saved.pin)
+            // A saved chain that fails its checks hides every machine's items: the inbox says why (#1723).
+            if directory == nil { withheldWhy = withheld() }
         }
         if saved.joining != nil { waitForApproval() }
         if saved.digitJoin != nil { waitForDigitJoin() }
@@ -366,7 +368,7 @@ final class Store {
                 } catch let e as ApiError where e.status == 404 {
                     // No such active device, or a server without binding: the chain decides.
                     let entries = try await fresh.directory(from: 0)
-                    let dir = try Directories.verify(entries, account: saved.account, pin: saved.pin)
+                    let dir = try Directories.verify(entries, account: saved.accountId, pin: saved.pin)
                     if dir.members[mine.id]?.active == true { throw Notice(message: "This server cannot bind a new session to this iPhone. Update the server.") }
                     wipe()
                     throw Notice(message: "This iPhone was removed from your devices. Set it up again.")
@@ -434,7 +436,7 @@ final class Store {
         guard account == saved.account else { throw ProtocolError(.wrongAccount, account) }
         guard let me = saved.me else { throw Notice(message: "This iPhone lost its keys. Start again.") }
         let entries = try await api().directory(from: 0)
-        let dir = try Directories.verify(entries, account: saved.account, pin: pin)
+        let dir = try Directories.verify(entries, account: saved.accountId, pin: pin)
         try Pairings.checkJoined(dir, id: me.id, role: .device, boxPk: me.boxPk, signPk: me.signPk)
         directory = dir
         var s = saved
@@ -680,7 +682,7 @@ final class Store {
             let nonce = try await api().challenge()
             try await api().bind(member: me.id, sig: toB64(Sodium.sign(Pairings.bindMessage(account: saved.account ?? "", member: me.id, nonce: nonce), secretKey: try signKey)))
         }
-        let dir = try Directories.verify([genesis], account: saved.account)
+        let dir = try Directories.verify([genesis], account: saved.accountId)
         directory = dir
         var s = saved
         s.entries = [text]
@@ -707,7 +709,7 @@ final class Store {
             let entries = try await api().directory(from: 0)
             // The chain's current recovery key must be this one, whose own signature a server cannot
             // fake; an iPhone that was a device before keeps the server from serving a shorter chain.
-            let dir = try Directories.verify(entries, account: saved.account, pin: saved.pin, recoveryPk: toB64(recovery.publicKey))
+            let dir = try Directories.verify(entries, account: saved.accountId, pin: saved.pin, recoveryPk: toB64(recovery.publicKey))
             // The keys made for an earlier attempt stay until the chain holds them: when its reply
             // was lost, the server bound the session to that member, and a retry finds it there
             // (#274). Only while those keys are still this iPhone's, and the chain either lacks the
@@ -733,7 +735,7 @@ final class Store {
                 try await api().append(entry)
                 all.append(entry)
             }
-            let after = try Directories.verify(all, account: saved.account, pin: Pin(length: dir.length, head: dir.head))
+            let after = try Directories.verify(all, account: saved.accountId, pin: Pin(length: dir.length, head: dir.head))
             directory = after
             var s = saved
             s.me = member
@@ -817,7 +819,7 @@ final class Store {
             do {
                 let fetched = try await api().directory(from: saved.entries.count)
                 let entries = try saved.entries.map(JSON.parse) + fetched
-                let dir = try Directories.verify(entries, account: saved.account, pin: saved.pin)
+                let dir = try Directories.verify(entries, account: saved.accountId, pin: saved.pin)
                 // The last device stays: removing it would leave only the recovery key.
                 if dir.active(.device).count > 1 {
                     try await api().append(Directories.revokeEntry(dir, signer: me.id, signKey: signKey, id: me.id, at: now()).json)

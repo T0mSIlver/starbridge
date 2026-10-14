@@ -171,8 +171,9 @@ jobs:
       - name: Build the binaries
         env:
           VERSION: ${{ needs.version.outputs.version }}
+        # The binary carries its commit: setup installs the Claude Code plugins and the Pi package at it.
         run: |
-          npm pkg set version="$VERSION"
+          npm pkg set version="$VERSION" gitHead="$(git rev-parse HEAD)"
           bun run build:bin
           cp install.sh install.ps1 dist/
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -626,7 +627,7 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
-      - run: npm pkg set version="${{ needs.version.outputs.version }}"
+      - run: npm pkg set version="${{ needs.version.outputs.version }}" gitHead="$(git rev-parse HEAD)"
       - if: ${{ !startsWith(github.ref, 'refs/tags/v') && !inputs.npm_only }}
         run: pnpm publish --dry-run --no-git-checks --access public
       # npm's own CLI, at a version that trades the OIDC token for a publish token: pnpm's exchange got

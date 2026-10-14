@@ -11,7 +11,7 @@ import { dirname, join } from "node:path";
 import agyRule from "../../../plugin/rules/antigravity.md" with { type: "text" };
 import opencodeRule from "../../../plugin/rules/opencode.md" with { type: "text" };
 import skill from "../../../plugin/skills/starbridge/SKILL.md" with { type: "text" };
-import { VERSION } from "../version";
+import { COMMIT, VERSION } from "../version";
 import agyFiles from "./antigravity-files.js";
 import { codexPluginDir, refreshCodexPluginFiles } from "./codex-plugin";
 import { cursorHooksPath, cursorSkillDir, cursorState, installCursorFiles } from "./cursor";
@@ -105,11 +105,13 @@ export function removeCodexRule(sys: Home): boolean {
 }
 
 /**
- * The Starbridge Pi package, the repository's root `package.json`, at this CLI's release tag so
- * its extension calls the commands this CLI has. Pi keeps a tag pinned through `pi update`.
+ * The Starbridge Pi package, the repository's root `package.json`, at this CLI's release commit
+ * (its tag in a build from source), so its extension calls the commands this CLI has and is the
+ * code the release's signature covers: a tag can move. Pi keeps the ref pinned through `pi update`.
  */
-export const piSource = (version: string) => `git:github.com/T0mSIlver/starbridge@v${version}`;
-export const PI_PACKAGE = piSource(VERSION);
+export const piSource = (version: string, commit?: string) =>
+  `git:github.com/T0mSIlver/starbridge@${commit ?? `v${version}`}`;
+export const PI_PACKAGE = piSource(VERSION, COMMIT);
 
 export function hasPi(sys: Sys): boolean {
   return which(sys.ctx.env, "pi") !== undefined;

@@ -11,7 +11,7 @@ refuses cross-origin writes. Next proxies `/v1` to `STARBRIDGE_SERVER`, so the s
 `PUBLIC_URL` is the page's origin.
 
 ```bash
-PUBLIC_URL=http://localhost:3000 OWNER_TOKEN=change-me PORT=8080 bun run server/src/main.ts
+PUBLIC_URL=http://localhost:3000 OWNER_TOKEN=change-me-to-a-long-random-token PORT=8080 bun run server/src/main.ts
 ```
 
 ```bash

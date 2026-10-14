@@ -18,7 +18,9 @@ passed on staging (its `staging` status). Actions logs in as
 `deploy` with its own key (secret `DEPLOY_SSH_KEY`), whose forced command runs
 `/usr/local/sbin/starbridge-deploy <commit>` (`host/deploy-rev.sh`) and nothing else. That script
 fetches main from GitHub with a read-only deploy key and deploys only main's head, or a commit on
-main that contains the deployed one, so the Actions key cannot roll back. It unpacks the commit
+main that contains the deployed one, so the Actions key cannot roll back, and only once staging
+passed it: it reads the commit's `staging` status and the deploy.yml run behind it from GitHub's
+public API, without a token, so the Actions key cannot skip staging either. It unpacks the commit
 and runs `host/apply.sh`. Once the box runs the commit, the workflow asks sb-oracle for one
 round trip on the outside check's test account (secrets `SMOKE_SSH_KEY`, `SMOKE_KNOWN_HOSTS`,
 `SMOKE_SSH_TARGET`; the key's forced command runs nothing else). `deploy/setup-actions-deploy.sh` installs both keys
@@ -31,7 +33,8 @@ deploy/deploy.sh                 # origin/main
 ```
 
 It unpacks the ref into `/opt/starbridge`, pulls the server and web images for that commit from
-ghcr.io and rolls them out (`deploy/host/apply.sh`). The previous release stays in
+ghcr.io and rolls them out (`deploy/host/apply.sh`). It is the owner's way around the checks
+above: any pushed commit with images deploys, staging or not. The previous release stays in
 `/opt/starbridge.old`.
 
 `deploy.yml` builds those images once per deployed commit, for amd64 and arm64, and pushes them as
@@ -69,13 +72,13 @@ main: the same images as prod, prod's compose file with `staging/compose.yaml` l
 prod's Caddyfile under staging's host name with `X-Robots-Tag: noindex`. It has its own secrets
 and no Umami or backups; the Play demo server runs beside it (below). `deploy.yml`'s staging key runs only
 `starbridge-staging-deploy <commit>` (`staging/deploy-rev.sh`), which fetches main over HTTPS,
-runs `staging/apply.sh`, then one round trip on staging's test account through the outside
+checks from GitHub's public API that CI passed the commit on main, runs `staging/apply.sh`, then one round trip on staging's test account through the outside
 check's staging instance on the VM (`sb-check-now /var/lib/sb-check-staging`). Prod's deploy
 waits for that job and runs only when it passed.
 
 | What | How |
 |---|---|
-| Set up | The VM comes with Docker, git, curl and its firewall from the homelab. `deploy/staging/setup.sh` installs the deploy command and the Actions key; `deploy/staging/push-secrets.sh` copies the secrets in `~/.config/starbridge/secrets/staging` (`github-oauth-client-id`, `github-oauth-client-secret` of the "Starbridge staging" OAuth app, `vapid-public-key`, `vapid-private-key`, `signup-github-ids`, `owner-token`) |
+| Set up | The VM comes with Docker, git, curl, jq and its firewall from the homelab. `deploy/staging/setup.sh` installs the deploy command and the Actions key; `deploy/staging/push-secrets.sh` copies the secrets in `~/.config/starbridge/secrets/staging` (`github-oauth-client-id`, `github-oauth-client-secret` of the "Starbridge staging" OAuth app, `vapid-public-key`, `vapid-private-key`, `signup-github-ids`, `owner-token`) |
 | Who can sign in | Only the GitHub ids in `signup-github-ids` can make an account (`SIGNUP_GITHUB_IDS`), and the holder of `owner-token` (`OWNER_TOKEN`) the owner account, which only the app check uses (`staging-app.yml`) |
 | Data | Synthetic only: `deploy/staging/seed.sh 200` makes 200 users through the real sign-in and pairing flows (`evals/load/setup.ts`), with staging's server stopped meanwhile. Nothing is backed up: the seed is the backup |
 | Compose project | `sudo docker compose -p starbridge-staging -f /opt/starbridge-staging/deploy/compose.yaml -f /opt/starbridge-staging/deploy/staging/compose.yaml` |
@@ -117,6 +120,7 @@ waits for that job and runs only when it passed.
 | Response switches | `deploy/switch.sh` from the operator's machine runs `host/switch.sh` on the box; each change is a line in `/var/log/starbridge/switches.log`. `deploy/switch.sh block 198.51.100.7` (or a CIDR; an IPv6 address counts as its /64) adds it to `/etc/starbridge/caddy/denylist` and reloads Caddy, which answers it 403 on every host but stats; `unblock` takes it out; `blocked` lists them. No restart, so no connection drops |
 | Sign-ups | `deploy/switch.sh signups pause`, `resume` or `status` (#784): while paused, GitHub users with no account are refused with a message; existing accounts sign in as before |
 | Suspend an account | `deploy/switch.sh suspend ACCOUNT` and `unsuspend ACCOUNT` (#785): its machines' writes get 403 `account-suspended`; its phones and browsers work as before. Account ids come from `bun server.js top` |
+| Empty an account | `deploy/switch.sh purge ACCOUNT` (#1736): deletes every item it stores, a batch at a time while the server runs, and frees the server's storage; the account and its devices stay. Suspend it first if its machines would post again |
 | Limits at runtime | `deploy/switch.sh limits set items 60/60` (calls per seconds for a rate window, a whole number for a cap, `maxMachines` for the machine cap), `limits unset items`, `limits reset`, `limits show` (#786). The server applies a change within a minute; the names are those in `server/src/limits.ts`, retention periods excepted |
 | Usage counts | `sudo docker compose -p starbridge -f /opt/starbridge/deploy/compose.yaml exec server bun server.js usage 14` prints the last 14 days (`server/src/usage.ts`) |
 

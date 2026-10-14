@@ -16,7 +16,9 @@
   landing page from the server, with its own title, description and link preview
   (`public/og.png`), so link previews and crawlers see it and a first visit is never blank. The
   proxy renders it once per origin and serves that copy with a fresh nonce: Next's one thread
-  filled near 18 visitors a second (#593), and a copy costs less than a render. With the cookie,
+  filled near 18 visitors a second (#593), and a copy costs less than a render. The copy is kept
+  only for `PUBLIC_URL`'s origin, else only when X-Forwarded-Host is the request's own Host, so
+  forged hosts from behind a proxy that passes the header on cannot fill its slots (#1722). With the cookie,
   `/` is the app as before; the page swaps to sign-in when the browser holds a device, after a
   failed sign-in, or on "Use your own server".
 - **Landing: devices, then machines** (#1232). "Get the app" comes before the install box: a new

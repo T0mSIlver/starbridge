@@ -3,6 +3,7 @@ import {
   clientHeader,
   type MachineRelease,
   type SealedItem,
+  visible,
 } from "@starbridge/protocol";
 import { VERSION } from "./version";
 
@@ -32,6 +33,49 @@ const FULL: Record<string, string> = {
 
 /** The server did not answer at all: down, or this machine is offline. */
 export class Unreachable extends Error {}
+
+/** The most a server's answer may be: a page of items, a directory. */
+export const MAX_RESPONSE_BYTES = 32 << 20;
+/** The most of an error's body that is read: only its three short fields matter. */
+const MAX_ERROR_BYTES = 64 << 10;
+/** The longest wait a Retry-After may ask for, in seconds. */
+export const MAX_RETRY_AFTER = 300;
+/** The most characters of a server's text that reach the terminal. */
+const MAX_SERVER_TEXT = 200;
+/** The most items one page of answers may hold, and the longest cursor. */
+const MAX_PAGE_ITEMS = 1000;
+const MAX_CURSOR = 256;
+const MAX_ENTRY_CHARS = 4 << 20;
+/** How long past its own `wait` an answers poll may take before the client gives up. */
+const POLL_GRACE_MS = 30_000;
+
+/**
+ * A server's text, as the terminal may show it: control and bidi characters as escapes, cut to
+ * MAX_SERVER_TEXT. Anything that is not a string is dropped.
+ */
+export function serverText(text: unknown): string | undefined {
+  return typeof text === "string" ? visible(text).slice(0, MAX_SERVER_TEXT) : undefined;
+}
+
+/** The body of `res` as text, up to `max` bytes: the rest is cut off, or refused with `strict`. */
+async function bodyText(res: Response, max: number, strict: boolean): Promise<string> {
+  const reader = res.body?.getReader();
+  if (!reader) return "";
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.length;
+    if (size > max) {
+      await reader.cancel().catch(() => {});
+      if (strict) throw new Unreachable(`the server's answer is over ${max} bytes`);
+      break;
+    }
+    chunks.push(value);
+  }
+  return Buffer.concat(chunks).toString("utf8");
+}
 
 /** Why a command Codex runs reaches no server, when that is the reason. */
 export function sandboxHint(env: Record<string, string | undefined>): string | undefined {
@@ -75,7 +119,11 @@ export class Api {
         `cannot reach ${base}${typeof code === "string" ? ` (${code})` : `: ${(e as Error).message}`}`,
       );
     }
-    const text = await res.text();
+    const text = await bodyText(
+      res,
+      res.status >= 400 ? MAX_ERROR_BYTES : MAX_RESPONSE_BYTES,
+      res.status < 400,
+    );
     let json: unknown;
     try {
       json = text ? JSON.parse(text) : undefined;
@@ -83,7 +131,12 @@ export class Api {
       json = undefined;
     }
     if (res.status >= 400) {
-      const e = (json ?? {}) as { error?: string; detail?: string; minimum?: string };
+      const raw = (json && typeof json === "object" ? json : {}) as Record<string, unknown>;
+      const e = {
+        error: serverText(raw.error),
+        detail: serverText(raw.detail),
+        minimum: serverText(raw.minimum),
+      };
       if (res.status === 426)
         throw new ApiError(
           426,
@@ -93,15 +146,17 @@ export class Api {
         );
       // The server drops a machine's token when the directory revokes the machine.
       if (res.status === 401 && this.token)
-        throw new ApiError(401, e.error ?? res.statusText, e.detail, REMOVED);
+        throw new ApiError(401, e.error ?? serverText(res.statusText) ?? "", e.detail, REMOVED);
       const err = new ApiError(
         res.status,
-        e.error ?? res.statusText,
+        e.error ?? serverText(res.statusText) ?? "",
         e.detail,
-        ...(e.error && e.error in FULL ? [`${FULL[e.error]} (${e.detail ?? e.error})`] : []),
+        ...(e.error && Object.hasOwn(FULL, e.error)
+          ? [`${FULL[e.error]} (${e.detail ?? e.error})`]
+          : []),
       );
       const wait = Number(res.headers.get("retry-after"));
-      if (res.status === 429 && wait > 0) err.retryAfter = wait;
+      if (res.status === 429 && wait > 0) err.retryAfter = Math.min(wait, MAX_RETRY_AFTER);
       throw err;
     }
     return { status: res.status, json };
@@ -165,14 +220,45 @@ export class Api {
     if (after !== undefined) q.set("after", after);
     if (known) q.set("directory", String(known.directory));
     if (known?.quotaAsked !== undefined) q.set("quotaAsked", known.quotaAsked);
-    const r = await this.call("GET", `/answers?${q}`, { signal });
+    // The server answers within `wait`; a connection that goes quiet must not hold the poll.
+    const deadline = AbortSignal.timeout(wait * 1000 + POLL_GRACE_MS);
+    const r = await this.call("GET", `/answers?${q}`, {
+      signal: signal ? AbortSignal.any([signal, deadline]) : deadline,
+    }).catch((e) => {
+      if (deadline.aborted && !signal?.aborted)
+        throw new Unreachable(
+          `the server did not answer the poll within ${wait + POLL_GRACE_MS / 1000} s`,
+        );
+      throw e;
+    });
     // Each entry is `{item, cursor, receivedAt}` (PROTOCOL.md, Items); the CLI checks the item.
-    const page = r.json as {
-      items: { item?: unknown }[];
-      cursor?: string;
-      directory?: number;
-      quotaAsked?: string;
+    const page = r.json as
+      | {
+          items?: unknown;
+          cursor?: unknown;
+          directory?: unknown;
+          quotaAsked?: unknown;
+        }
+      | undefined;
+    if (
+      !page ||
+      !Array.isArray(page.items) ||
+      page.items.length > MAX_PAGE_ITEMS ||
+      (page.cursor !== undefined &&
+        (typeof page.cursor !== "string" || page.cursor.length > MAX_CURSOR)) ||
+      (page.quotaAsked !== undefined &&
+        (typeof page.quotaAsked !== "string" || page.quotaAsked.length > MAX_CURSOR)) ||
+      (page.directory !== undefined && !Number.isSafeInteger(page.directory))
+    )
+      throw new Unreachable("the server sent a page of answers this client cannot read");
+    return {
+      // An entry over what the server accepts for an item cannot be genuine: it is skipped.
+      items: (page.items as { item?: unknown }[])
+        .filter((e) => JSON.stringify(e?.item ?? null).length <= MAX_ENTRY_CHARS)
+        .map((e) => e?.item),
+      ...(page.cursor !== undefined ? { cursor: page.cursor as string } : {}),
+      ...(page.directory !== undefined ? { directory: page.directory as number } : {}),
+      ...(page.quotaAsked !== undefined ? { quotaAsked: page.quotaAsked as string } : {}),
     };
-    return { ...page, items: page.items.map((e) => e.item) };
   }
 }

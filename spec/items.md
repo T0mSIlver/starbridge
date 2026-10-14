@@ -45,7 +45,11 @@
   three URL parsers disagree at the edges. It reads the URL by hand and matches only an exact host
   (`github.com`, `www.github.com`, `claude.ai`) with no user, port or backslash, and a path with
   no `.` or `..` segment, which would open another page than the chip names; anything else keeps
-  the plain chip, its title else its host and path. A decoded name with a control, bidi or other
+  the plain chip, its title else its host and path. A title on any host but GitHub's and a Claude
+  artifact's, whose icons already name the site, is followed by the host, in at most 30 points
+  that keep its end, so an agent cannot dress another site as a GitHub reference. A title with an
+  invisible character gives way to host and path, and a link the rule can't read shows the URL as
+  written, whatever its title (#1722, from an internal audit on 2026-10-14). A decoded name with a control, bidi or other
   invisible character stays encoded. No client fetches a link: nothing a page could learn or
   break.
 - **`answerIn`** names a page (a Claude artifact whose button messages the agent) where the
@@ -115,7 +119,10 @@
 - **Redaction** (#358, #359). The summary and description are cut from the input after
   redaction. A private key's lines go also when they carry a diff's `+`, `-` or space (#489).
   `inputHash` is keyed under the machine's signing key, so a device holding the redacted input
-  cannot test guesses for a short redacted value.
+  cannot test guesses for a short redacted value. A shell command is redacted as a command line:
+  never a command word, and a value never across a line break, since Allow runs the command the
+  owner reads; a command that redaction would still change that way, or that does not fit whole,
+  stays at the keyboard (#1724).
 - **Title and command** (#805). A prompt's title is what the agent says the call does (Claude
   Code's `description`), else the tool, on every surface; the command shows under it in a dark
   terminal block. Allow covers the command, never the description: the agent writes the
