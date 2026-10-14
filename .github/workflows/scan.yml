@@ -30,18 +30,23 @@ env:
 jobs:
   # Fails on a high or critical vulnerability that has a fixed version; lists the rest in the
   # run's summary. A finding without a fix has nothing to act on yet.
+  # Trivy gets the job's token to pull the images, so this job's token cannot write issues; the
+  # report job below does that.
   images:
-    # Docker and gh, which some self-hosted boxes lack.
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
       contents: read
-      issues: write
       packages: read
+    outputs:
+      revs: ${{ steps.rev.outputs.revs }}
+      outcome: ${{ steps.scan.outcome }}
+      blocking: ${{ steps.scan.outputs.blocking }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           sparse-checkout: .github
+          persist-credentials: false
       # The commits starbridge.run and staging serve, as their /healthz names them: a deploy run's
       # own commit can be newer than the one it deployed, and a dispatched deploy has none (#1542).
       - id: rev
@@ -103,13 +108,25 @@ jobs:
             cat "$RUNNER_TEMP/blocking.md"
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
+
+  images-report:
+    needs: images
+    if: ${{ !cancelled() && needs.images.outputs.revs }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          sparse-checkout: .github
       - name: Open, update or close the issue
-        if: ${{ !cancelled() && steps.rev.outputs.revs }}
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-          OUTCOME: ${{ steps.scan.outcome }}
-          FOUND: ${{ steps.scan.outputs.blocking }}
+          OUTCOME: ${{ needs.images.outputs.outcome }}
+          FOUND: ${{ needs.images.outputs.blocking }}
         run: |
           [ "$OUTCOME" = success ] || FOUND="The scan itself failed; see the run."
           .github/scan-issue.sh image-scan "Image scan: fixable high or critical vulnerabilities" \
@@ -126,7 +143,10 @@ jobs:
       contents: read
       issues: write
     steps:
+      # No token in .git/config: the scanner's container reads the checkout.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - id: scan
         run: |
           # Exit 1 means it found something, 128 that it found no lockfile.

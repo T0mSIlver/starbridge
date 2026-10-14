@@ -17,10 +17,8 @@ concurrency:
   group: ci-${{ github.event_name == 'push' && 'main' || github.ref }}
   cancel-in-progress: ${{ github.event_name != 'push' }}
 
-# pull-requests: the changed-files step reads a pull request's files from the API.
 permissions:
   contents: read
-  pull-requests: read
 
 # Jobs run on GitHub-hosted runners unless a repository variable names a self-hosted pool, as a
 # JSON array of labels (docs/ci.md). A push to main runs the test job on TRUSTED_RUNNER. A pull
@@ -41,6 +39,10 @@ jobs:
     name: changes
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    # pull-requests: paths-filter reads a pull request's files from the API.
+    permissions:
+      contents: read
+      pull-requests: read
     outputs:
       checks: ${{ steps.open.outputs.all == 'true' || steps.filter.outputs.checks == 'true' || steps.filter.outputs.android_read == 'true' }}
       e2e: ${{ steps.open.outputs.all == 'true' || steps.filter.outputs.e2e == 'true' || steps.filter.outputs.pages == 'true' || steps.filter.outputs.e2e_read == 'true' }}
