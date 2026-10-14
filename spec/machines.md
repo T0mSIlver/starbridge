@@ -296,3 +296,11 @@
   release other than the one before (`updatedAt` in `GET /releases`), so Devices says "Updated
   to 0.1.6 on Oct 11" under it, whatever installed it. `config update-check off` stops the read,
   and with it the updates.
+- **The CLI bounds what it reads from outside** (#1762, internal audit 2026-10-14). A picture is
+  refused by its header past 50 megapixels or 30 MB, before a decoder allocates it. A `[n/total]`
+  in run output counts only for safe integers and a total up to 10 000. A server's error text
+  goes through `visible()` and stops at 200 characters; a success body stops at 32 MB, an error
+  body at 64 KB, a `Retry-After` at 300 s, a page of answers at 1000 entries of 4 MB and a cursor
+  at 256 characters, and the `/answers` poll gives up 30 s after the wait it asked for. A CodexBar
+  run ends when its process exits, is killed with its process group on a timeout or past 1 MB of
+  output, and yields at most 20 providers with 20 extra windows each, without control characters.

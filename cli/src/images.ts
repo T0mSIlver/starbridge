@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
 import { type DecisionImage, sealImage } from "@starbridge/protocol";
 import jpeg from "jpeg-js";
 import { PNG } from "pngjs";
@@ -23,6 +23,33 @@ const MAX_EDGE = 3000;
 /** Below this an image is no use; the decision is refused instead. */
 const MIN_EDGE = 240;
 const QUALITIES = [80, 60] as const;
+/** The largest file read, and the most pixels decoded (RGBA: 4 bytes each, and a copy to turn it). */
+export const MAX_FILE_BYTES = 30 << 20;
+export const MAX_PIXELS = 50_000_000;
+
+/** A PNG's or JPEG's width and height from its headers, without decoding; undefined if unreadable. */
+export function imageSize(b: Uint8Array): { width: number; height: number } | undefined {
+  const u16 = (o: number) => ((b[o] as number) << 8) | (b[o + 1] as number);
+  if (typeOf(b) === "image/png") {
+    if (b.length < 24) return undefined;
+    const u32 = (o: number) => u16(o) * 65536 + u16(o + 2);
+    return { width: u32(16), height: u32(20) };
+  }
+  let i = 2;
+  while (i + 4 <= b.length && b[i] === 0xff) {
+    const marker = b[i + 1] as number;
+    if (marker === 0xff) {
+      i++;
+      continue;
+    }
+    // A start-of-frame marker holds the size; DHT (c4), JPG (c8) and DAC (cc) are not one.
+    if (marker >= 0xc0 && marker <= 0xcf && ![0xc4, 0xc8, 0xcc].includes(marker))
+      return i + 9 <= b.length ? { width: u16(i + 7), height: u16(i + 5) } : undefined;
+    if (marker === 0xda || marker === 0xd9) return undefined;
+    i += 2 + u16(i + 2);
+  }
+  return undefined;
+}
 
 function typeOf(bytes: Uint8Array): DecisionImage["type"] | undefined {
   if (bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47)
@@ -102,17 +129,24 @@ function upright(
 export function loadPicture(path: string, alt?: string): Picture {
   let bytes: Uint8Array;
   try {
+    if (statSync(path).size > MAX_FILE_BYTES) throw new Error(`over ${MAX_FILE_BYTES >> 20} MB`);
     bytes = readFileSync(path);
   } catch (e) {
     throw new UsageError(`cannot read ${path}: ${(e as Error).message}`);
   }
   const type = typeOf(bytes);
   if (!type) throw new UsageError(`--image takes PNG or JPEG files: ${path}`);
+  // The headers say the size before a decoder allocates it.
+  const size = imageSize(bytes);
+  if (!size || size.width < 1 || size.height < 1 || size.width * size.height > MAX_PIXELS)
+    throw new UsageError(
+      `${path} is ${size ? `${size.width}x${size.height}` : "of a size that cannot be read"}: images take at most ${MAX_PIXELS / 1e6} megapixels`,
+    );
   try {
     const img =
       type === "image/png"
         ? PNG.sync.read(Buffer.from(bytes))
-        : jpeg.decode(bytes, { useTArray: true, formatAsRGBA: true, maxMemoryUsageInMB: 1024 });
+        : jpeg.decode(bytes, { useTArray: true, formatAsRGBA: true, maxMemoryUsageInMB: 512 });
     const orientation = type === "image/jpeg" ? exifOrientation(bytes) : 1;
     const turned = upright(new Uint8Array(img.data), img.width, img.height, orientation);
     return {
