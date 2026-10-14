@@ -59,6 +59,12 @@
   second account and stays one of the 12 closed testers. The iPhone app follows to TestFlight's
   internal testers once Apple's export compliance code arrives (`IOS_MAIN_TESTFLIGHT`); the Mac app
   stays on rcs, since a nightly notarized build would cost a macOS runner a night for one user.
+- **A record of what shipped** (#1618). The last job of `release.yml` writes the version, the
+  release's date and which channels its jobs reached (GitHub, npm, Homebrew, the desktop app, Play's
+  track and versionCode, TestFlight's build) to `releases.json` on the `releases-data` branch, only
+  for a job that succeeded, so a re-run of a failed job fills in the rest. It stores no commit,
+  rollout or CI state, because the public releases page (`spec/hosted.md`) reads it. promote.yml
+  needs no step of its own: it runs release.yml on the final's tag.
 - **Play's Alpha track from CI** (#1024). Testers fell behind while each App Bundle went to Play
   Console by hand. Once the release is published, the `play` job uploads the tag's AAB to Alpha
   through the Play Developer API (`cli/scripts/play.ts`), status `completed`, with the GitHub
