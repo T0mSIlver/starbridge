@@ -1,0 +1,77 @@
+name: Dependabot Gradle checksums
+
+# Gradle checks every dependency against android/gradle/verification-metadata.xml and fails on one
+# it does not list (#1716). Dependabot updates the version catalog but not that file, so this
+# writes it into Dependabot's Gradle branches, as dependabot-lockfile.yml writes pnpm-lock.yaml.
+# Two jobs: the build that downloads the new artifacts and runs their plugins gets a read-only
+# token, and the job that pushes runs no Gradle and checks that only the metadata changed. Its
+# push, made with GITHUB_TOKEN, starts no workflow, so it starts android.yml itself.
+on:
+  push:
+    branches: ["dependabot/gradle/**"]
+
+permissions: {}
+
+concurrency:
+  group: dependabot-gradle-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checksums:
+    # Dependabot's own pushes: someone else's push to its branch is theirs to finish.
+    if: github.actor == 'dependabot[bot]'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    permissions:
+      contents: read
+    env:
+      STARBRIDGE_KEYSTORE: ""
+    defaults:
+      run:
+        working-directory: android
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: 21
+      # An empty Gradle home: a warm one skips files a fresh build reads, which the file must list.
+      - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+        with:
+          cache-disabled: true
+      # The tasks CI, release.yml and internal.yml run, so every artifact they resolve is listed.
+      - run: ./gradlew --no-daemon --console=plain -Pkotlin.compiler.execution.strategy=in-process --write-verification-metadata sha256 assembleRelease bundleRelease lintDebug verifyRoborazziDebug
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: verification-metadata
+          path: android/gradle/verification-metadata.xml
+          retention-days: 1
+
+  push:
+    needs: checksums
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+      actions: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: verification-metadata
+          path: ${{ runner.temp }}/metadata
+      - name: Push the checksums and start the Android build
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BRANCH: ${{ github.ref_name }}
+        # [dependabot skip] lets Dependabot rebase over this commit; it otherwise stops rebasing a
+        # pull request someone else pushed to.
+        run: |
+          cp "$RUNNER_TEMP/metadata/verification-metadata.xml" android/gradle/verification-metadata.xml
+          git diff --quiet && exit 0
+          [ "$(git diff --name-only)" = android/gradle/verification-metadata.xml ] || { echo "changed more than the metadata"; exit 1; }
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898599+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'Update Gradle verification metadata [dependabot skip]' android/gradle/verification-metadata.xml
+          git push origin "HEAD:$BRANCH"
+          gh workflow run android.yml --ref "$BRANCH"

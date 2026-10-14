@@ -278,7 +278,11 @@
   is tagged by a hash of that file, which pins every input, and built only when no image has the
   tag, since a rebuild after the build-cache prune yields a new image even from the same file.
 - **Pinning** (#361, #423, #426). Actions are pinned by commit SHA and images by digest, so a
-  dependency changes only in a Dependabot PR. A job's image goes in a Dockerfile, not `container:`,
+  dependency changes only in a Dependabot PR. Gradle checks every Android dependency against its
+  sha256 in `android/gradle/verification-metadata.xml` (#1716), since the Android runner resolves
+  through the home mirror over plain HTTP; builds that sign with the release key skip that mirror
+  too. A workflow writes the file into Dependabot's Gradle PRs: the job that runs Gradle on the new
+  artifacts has a read-only token, and the one that pushes runs no Gradle. A job's image goes in a Dockerfile, not `container:`,
   since Dependabot reads only Dockerfiles (#1172). A workflow writes `pnpm-lock.yaml` into
   Dependabot's security PRs, which update `package.json` alone, then dispatches CI, since a push
   with `GITHUB_TOKEN` starts no workflow; that run sets the PR's `CI` status, failed when any job

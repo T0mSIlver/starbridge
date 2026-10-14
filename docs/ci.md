@@ -56,7 +56,9 @@ limit off the shared address. Gradle uses it when the machine's `~/.gradle/gradl
 public repositories stay after it, so a machine without the property, GitHub's runners included,
 resolves as before. The dev box and the Android runner (`ci-1`, in `/home/dev/.gradle`) set it.
 Gradle stops on a mirror that does not answer rather than moving on, so while the mirror is
-down, take the line out.
+down, take the line out. The mirror is plain HTTP, so a build that signs with the release key
+(`STARBRIDGE_KEYSTORE` set: `release.yml`, `internal.yml`) leaves it out and resolves over HTTPS,
+and every build checks each dependency against `android/gradle/verification-metadata.xml`.
 
 ## How a runner works
 
