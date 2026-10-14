@@ -9,10 +9,10 @@
 import assert from "node:assert/strict";
 import { type ChildProcess, spawn, spawnSync } from "node:child_process";
 import { cpSync, mkdtempSync, readFileSync } from "node:fs";
-import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { _electron as electron } from "playwright";
+import { freePorts } from "./ports.ts";
 
 const ROOT = resolve(import.meta.dirname, "../..");
 const DESKTOP = join(ROOT, "desktop");
@@ -21,14 +21,7 @@ const VERSION = JSON.parse(readFileSync(join(DESKTOP, "package.json"), "utf8")).
 const tmp = mkdtempSync(join(tmpdir(), "starbridge-desktop-stack-"));
 const children: ChildProcess[] = [];
 
-const port = (): Promise<number> =>
-  new Promise((done) => {
-    const s = createServer().listen(0, () => {
-      const p = (s.address() as { port: number }).port;
-      s.close(() => done(p));
-    });
-  });
-const PORTS = { web: await port(), server: await port(), github: await port(), push: await port() };
+const PORTS = await freePorts(["web", "server", "github", "push"]);
 const ORIGIN = `http://localhost:${PORTS.web}`;
 const SERVER = `http://localhost:${PORTS.server}`;
 
