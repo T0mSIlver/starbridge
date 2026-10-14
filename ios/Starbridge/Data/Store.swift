@@ -136,6 +136,8 @@ final class Store {
         // inbox's empty state read it before the first sync, and offline (#1370).
         if !saved.entries.isEmpty, saved.pin != nil {
             directory = try? Directories.verify(saved.entries.compactMap { try? JSON.parse($0) }, account: saved.accountId, pin: saved.pin)
+            // A saved chain that fails its checks hides every machine's items: the inbox says why (#1723).
+            if directory == nil { withheldWhy = withheld() }
         }
         if saved.joining != nil { waitForApproval() }
         if saved.digitJoin != nil { waitForDigitJoin() }
