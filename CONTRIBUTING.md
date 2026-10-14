@@ -20,7 +20,9 @@ pnpm lint
 
 `pnpm install` also copies `.githooks/` into the repository's hooks, which every worktree shares:
 before a commit, Biome formats the staged files; a push that would drop commits from a branch is
-refused; a commit message that credits an AI is refused.
+refused; a commit message that credits an AI is refused. An install replaces an installed hook only
+with a newer one, by the `starbridge-hook-version` line each hook carries: raise it when you change
+a hook.
 
 For Android, in `android/`:
 

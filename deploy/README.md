@@ -57,7 +57,8 @@ No request fails during a deploy (`spec/releases.md`). The page runs as two copi
 3010) and `web-b` (3011): the deploy starts the idle one, waits for its health, then stops the
 other, and Caddy sends requests to the first healthy copy. The server restarts in place; Caddy
 holds requests for up to 30 s meanwhile. Each deploy loads the Caddyfile into the running Caddy
-through its admin API on `127.0.0.1:2019`. Caddy's container is recreated, which drops every
+through its admin API (`host/caddy-load.sh`), on a socket only root can open,
+`/run/starbridge-caddy/admin.sock`. Caddy's container is recreated, which drops every
 open connection, only when its definition in `compose.yaml` or `caddy.Dockerfile` changes: its
 image is tagged by a hash of that file and built only when no image has the tag.
 
@@ -82,11 +83,12 @@ waits for that job and runs only when it passed.
 ## First setup
 
 1. As root: `ssh root@starbridge.run sh -s < deploy/host/setup.sh`. It installs Docker, git,
-   sqlite3 and unattended-upgrades (with reboots at 04:00), adds `deploy`, and turns password
-   login off.
-2. From a second terminal, check that `ssh deploy@starbridge.run sudo true` works, then
-   `ssh deploy@starbridge.run sudo sh -s < deploy/host/lock-root.sh` turns root login off.
-3. `deploy/push-secrets.sh` copies the secrets from `~/.config/starbridge/secrets` to
+   sqlite3 and unattended-upgrades (with reboots at 04:00), adds `deploy` with root's SSH keys,
+   and turns password login off. Once it has checked that `deploy` can log in and use sudo, it
+   turns root login off too. Keep that session open until `ssh deploy@starbridge.run sudo true`
+   works from a second terminal; if `deploy` breaks, Hetzner's rescue system still reaches the box. Run it again later
+   as `ssh deploy@starbridge.run sudo sh -s < deploy/host/setup.sh`.
+2. `deploy/push-secrets.sh` copies the secrets from `~/.config/starbridge/secrets` to
    `/etc/starbridge/secrets` (root, 0700); given names, only those. `deploy/host/server-env.sh`
    and `caddy-auth.sh` turn them into what the containers read on every deploy. The iPhone
    app's APNs key is optional until it ships: `apns-key.p8` (the key Apple gives once) and
@@ -95,8 +97,8 @@ waits for that job and runs only when it passed.
    subscriptions stay. The Sign in with Apple key is optional too: `apple-signin-key.p8` and
    `apple-signin-key-id` become `APPLE_PRIVATE_KEY` and `APPLE_KEY_ID`; without them the server
    offers no Apple sign-in.
-4. `deploy/deploy.sh`.
-5. `deploy/setup-actions-deploy.sh` for deploys from Actions.
+3. `deploy/deploy.sh`.
+4. `deploy/setup-actions-deploy.sh` for deploys from Actions.
 
 ## On the box
 

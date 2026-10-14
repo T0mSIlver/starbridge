@@ -29,6 +29,9 @@ beforeEach(async () => {
 });
 afterEach(() => server.stop());
 
+/** A line with its times as `HH:MM`, which the clock decides. */
+const clock = (line: string | undefined) => line?.replace(/\d\d:\d\d/g, "HH:MM");
+
 const ASK = [
   "ask",
   "--question",
@@ -344,6 +347,7 @@ test("ask warns of a --session no Claude Code session has, and keeps the asking 
       decisionId: own,
       ack: own,
       line: `Answer to ${own} (Merge #12 now?): Merge`,
+      question: "Merge #12 now?",
       waiting: false,
       subagent: "a1fdba894e743a195",
     },
@@ -487,6 +491,49 @@ test("ask --answer-in posts a pointer decision, and settle closes it", async () 
   expect(await run(["settle", "d_unknown"], ctx)).toBe(1);
 });
 
+test("every command names the card's question, and a closed card says how and when it closed (#1697)", async () => {
+  const ctx = await paired(server);
+  expect(await run([...ASK, "--session", "s1"], ctx)).toBe(0);
+  const id = ctx.lines.at(-1) as string;
+  const card = `${id} (Merge #12 now?)`;
+  expect(await run(["waiting", id], ctx)).toBe(0);
+  expect(clock(ctx.errors.at(-1))).toBe(`Marked ${card} waiting.`);
+  expect(await run(["working", id], ctx)).toBe(0);
+  expect(clock(ctx.errors.at(-1))).toBe(`Marked ${card} working.`);
+  expect(await run(["wait", id, "--timeout", "1s"], ctx)).toBe(2);
+  expect(clock(ctx.errors.at(-1))).toBe(`No answer to ${card} yet.`);
+
+  expect(await run(["settle", id, "--reason", "Merged it by hand"], ctx)).toBe(0);
+  expect(clock(ctx.errors.at(-1))).toBe(`Settled ${card}: withdrawn at HH:MM: Merged it by hand`);
+  // A second settle, wait, waiting and working all say how it closed.
+  const closed = `${card} was already withdrawn at HH:MM: Merged it by hand`;
+  expect(await run(["settle", id, "--reason", "Again"], ctx)).toBe(0);
+  expect(clock(ctx.errors.at(-1))).toBe(`starbridge: ${closed}`);
+  expect(await run(["waiting", id], ctx)).toBe(1);
+  expect(clock(ctx.errors.at(-1))).toBe(`starbridge: ${closed}`);
+  expect(await run(["wait", id, "--timeout", "1s"], ctx)).toBe(1);
+  expect(clock(ctx.errors.at(-1))).toBe(
+    `starbridge: ${card} was withdrawn at HH:MM: Merged it by hand: no answer will come`,
+  );
+
+  // An answer the session has not taken: `answers` lists the question beside the id.
+  expect(await run([...ASK, "--session", "s1"], ctx)).toBe(0);
+  const second = ctx.lines.at(-1) as string;
+  await server.answer(second, { choice: "Wait" });
+  await poll(ctx, session(ctx), { seconds: 0, shared: true });
+  ctx.lines.length = 0;
+  expect(await run(["answers", "--session", "s1"], ctx)).toBe(0);
+  expect(JSON.parse(ctx.lines[0] as string)).toMatchObject({
+    decisionId: second,
+    question: "Merge #12 now?",
+  });
+  expect(await run(["wait", second, "--timeout", "5s"], ctx)).toBe(0);
+  expect(await run(["working", second], ctx)).toBe(1);
+  expect(clock(ctx.errors.at(-1))).toBe(
+    `starbridge: ${second} (Merge #12 now?) was already answered at HH:MM: Wait`,
+  );
+});
+
 test("settle --session and --all close a flood at the server's pace (#584)", async () => {
   server.stop();
   // Two posts per half second: the settles meet 429s and wait them out.
@@ -622,7 +669,9 @@ test("settle after an answer its session has not taken prints it, and withdraws 
   ctx.lines.length = 0;
   expect(await run(["settle", id, "--reason", "Reposted as a review"], ctx)).toBe(0);
   expect(ctx.lines).toEqual([`Answer to ${id} (Merge #12 now?): Make it dreamier`]);
-  expect(ctx.errors.at(-1)).toContain("answered first");
+  expect(ctx.errors.at(-1)).toMatch(
+    /already answered at \d\d:\d\d: Make it dreamier; it stays answered/,
+  );
   expect((await server.opened("settled")).map((n) => n.outcome)).not.toContain("withdrawn");
   // Handed over once: the session's loop gets nothing more.
   ctx.lines.length = 0;
@@ -682,7 +731,9 @@ test("waiting and working flip a decision's state, and each flip pushes", async 
   await server.answer(id, { choice: "Merge" });
   await run(["wait", id], ctx);
   expect(await run(["working", id], ctx)).toBe(1);
-  expect(ctx.errors.at(-1)).toContain("already answered");
+  expect(ctx.errors.at(-1)).toMatch(
+    /d_\S+ \(Merge #12 now\?\) was already answered at \d\d:\d\d: Merge/,
+  );
 });
 
 for (const via of ["the CLI", "the local agent"])
@@ -1453,6 +1504,7 @@ test("answers hands each session only its own answers, until it confirms them", 
     decisionId: mine,
     ack: mine,
     line: `Answer to ${mine} (Merge #12 now?): Wait`,
+    question: "Merge #12 now?",
     waiting: false,
   };
   expect(ctx.lines.map((l) => JSON.parse(l))).toEqual([handed]);

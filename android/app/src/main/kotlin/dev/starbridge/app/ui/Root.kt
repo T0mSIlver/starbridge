@@ -60,6 +60,7 @@ import dev.starbridge.app.ui.settings.AlertsScreen
 import dev.starbridge.app.ui.settings.SettingsScreen
 import dev.starbridge.app.ui.settings.SettingsActions
 import dev.starbridge.app.ui.devices.AddDeviceScreen
+import dev.starbridge.app.ui.devices.PairLinkScreen
 import dev.starbridge.app.ui.devices.DevicesViewModel
 import dev.starbridge.app.ui.devices.RecoveryKeyScreen
 import dev.starbridge.app.ui.inbox.DecisionActions
@@ -460,7 +461,7 @@ fun Main(decisions: List<Decision>, notice: StateFlow<String?>, dismiss: () -> U
                         val approval by vm.approval.collectAsStateWithLifecycle()
                         var looked by rememberSaveable { mutableStateOf(false) }
                         LaunchedEffect(Unit) { if (!looked) { looked = true; vm.actions.lookUp(key.link) } }
-                        AddDeviceScreen(approval, vm.actions, onBack = { backStack.removeAt(backStack.lastIndex) })
+                        PairLinkScreen(approval, vm.actions, onBack = { backStack.removeAt(backStack.lastIndex) })
                     }
                 },
             )

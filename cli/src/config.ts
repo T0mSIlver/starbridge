@@ -93,6 +93,10 @@ export interface State {
       settled?: boolean;
       /** Settled here, but its settled notice has not reached the server yet (#584). */
       unposted?: boolean;
+      /** When `settle` closed it, and how (#1697): for what a later `wait` or `settle` says of it. */
+      settledAt?: string;
+      outcome?: "elsewhere" | "withdrawn";
+      reason?: string;
       /**
        * Answered by a device the chain revoked since: the machine dropped that answer, and the
        * server takes no other (#515).

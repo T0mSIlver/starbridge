@@ -90,6 +90,8 @@ private struct JoinSheet: View {
         .padding(Tokens.Spacing.s5)
         .padding(.top, Tokens.Spacing.s4)
         .foregroundStyle(Tokens.Colors.fg.color)
+        // The digits stay out of the app switcher's snapshot.
+        .privacyCover()
     }
 }
 

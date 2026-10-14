@@ -1,4 +1,5 @@
 #!/bin/sh
+# starbridge-hook-version: 1
 # Refuses a push that would drop commits from a remote branch, which only a force-push does: the
 # owner's rule is never to force-push, and to restack by merging instead (#1656).
 set -eu

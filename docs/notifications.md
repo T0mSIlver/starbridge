@@ -32,6 +32,12 @@ Starbridge. macOS plays them at System Settings → Sound → Alert volume, on t
 sound effects through, which may not be your headphones. If macOS blocks Starbridge's notifications, the app's Settings → Notifications says
 so.
 
+### App icon badge
+
+The Mac app's Dock icon, while it shows, and the iPhone app's icon carry the number of questions
+and permission prompts that need you. Snoozed ones don't count until they return. Turn the badge
+off in the app's notification settings in System Settings on the Mac, or Settings on the iPhone.
+
 ### Quiet other devices while you're at a screen
 
 While you use a Starbridge page or app, touched in the last minute, a question notifies only that
