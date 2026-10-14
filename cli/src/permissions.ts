@@ -201,6 +201,7 @@ const KEYWORDS = new Set([
   "while",
   "until",
   "time",
+  "coproc",
 ]);
 
 /**
@@ -242,6 +243,10 @@ const WRAPPERS = new Set([
   "parallel",
 ]);
 
+/** A redirection word: `>out`, `2>>log`, `<in`, `>&2`, or a bare operator. */
+const REDIRECTION = /^[0-9]*(?:>>?|<<?<?|>&|<&|>\||<>)/;
+const BARE_REDIRECTION = /^[0-9]*(?:>>?|<<?<?|>&|<&|>\||<>)$/;
+
 /** `NAME=value` before a command: the shell assigns it, and the command word comes after. */
 const SHELL_ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*\+?=/;
 
@@ -265,6 +270,8 @@ export function commandWords(text: string, offset = 0): CommandWord[] {
   let i = 0;
   let start = true;
   let wrapped = false;
+  /** The next word is a redirection's target. */
+  let target = false;
   const separator = (c: string | undefined) =>
     c === ";" ||
     c === "|" ||
@@ -275,11 +282,17 @@ export function commandWords(text: string, offset = 0): CommandWord[] {
     c === "\n" ||
     c === "\r";
   /** The end of the `$(…)` whose `(` is at `open`, nesting counted. */
+  /** The end of the `$(…)` whose `(` is at `open`, nesting counted and quotes skipped. */
   const closing = (open: number) => {
     let depth = 0;
     for (let j = open; j < n; j++) {
-      if (text[j] === "(") depth++;
-      else if (text[j] === ")" && --depth === 0) return j;
+      const ch = text[j];
+      if (ch === "\\") j++;
+      else if (ch === "'") j = text.indexOf("'", j + 1) < 0 ? n : text.indexOf("'", j + 1);
+      else if (ch === '"') {
+        for (j++; j < n && text[j] !== '"'; j++) if (text[j] === "\\") j++;
+      } else if (ch === "(") depth++;
+      else if (ch === ")" && --depth === 0) return j;
     }
     return n;
   };
@@ -299,6 +312,7 @@ export function commandWords(text: string, offset = 0): CommandWord[] {
         out.push({ word: c, start: offset + i, end: offset + i + 1 });
       start = true;
       wrapped = false;
+      target = false;
       i += c === "$" ? 2 : 1;
       continue;
     }
@@ -336,6 +350,16 @@ export function commandWords(text: string, offset = 0): CommandWord[] {
     i = Math.min(i, n);
     const word = text.slice(s, i);
     if (start && SHELL_ASSIGNMENT.test(word)) continue;
+    // A redirection before the command (`2>err cmd`, `> out cmd`) leaves the command word after it;
+    // a bare operator takes the next word as its target.
+    if (start && REDIRECTION.test(word)) {
+      if (BARE_REDIRECTION.test(word)) target = true;
+      continue;
+    }
+    if (target) {
+      target = false;
+      continue;
+    }
     if (start || wrapped) {
       out.push({ word, start: offset + s, end: offset + i });
       if (WRAPPERS.has(word.replace(/^.*\//, ""))) wrapped = true;

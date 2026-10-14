@@ -667,6 +667,11 @@ test("redaction never hides a command word; a command it would hide stays at the
     ['echo "$(X_TOKEN:abc)"', "X_TOKEN:abc"],
     ["echo `X_TOKEN:abc`", "X_TOKEN:abc"],
     ["(X_TOKEN:abc)", "X_TOKEN:abc"],
+    [`echo "$(echo ')'; X_TOKEN:abc -rf ~)"`, "X_TOKEN:abc"],
+    ["2>err X_TOKEN:abc -rf ~", "X_TOKEN:abc"],
+    ["> out X_TOKEN:abc -rf ~", "X_TOKEN:abc"],
+    ["X=1 >out X_TOKEN:abc", "X_TOKEN:abc"],
+    ["cat <(X_TOKEN:abc)", "X_TOKEN:abc"],
   ]) {
     expect(redactText(command as string, true)).toContain(word as string);
     expect(JSON.parse(build("Bash", { command }).input).command).toContain(word as string);
