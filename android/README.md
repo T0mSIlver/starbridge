@@ -32,6 +32,18 @@ otherwise. A release build never looks for the key on disk; debug builds use the
 only for the maintainer's dogfood APKs (CONTRIBUTING.md, "Release"). `-PversionName=1.2.3` sets the version; the release workflow
 passes the tag's.
 
+Gradle checks every dependency against its sha256 in `gradle/verification-metadata.xml` and fails
+on a mismatch or on one the file does not list. After changing a dependency, write the new
+checksums from an empty Gradle home, since a warm one skips files a fresh build reads:
+
+```bash
+GRADLE_USER_HOME=$(mktemp -d) ./gradlew --write-verification-metadata sha256 assembleRelease bundleRelease lintDebug verifyRoborazziDebug
+```
+
+Dependabot's Gradle updates get theirs from `.github/workflows/dependabot-gradle.yml`. aapt2 ships
+per system and only the building one's is written, so add the others' by hand from Google's Maven
+when the Android Gradle plugin changes.
+
 Screenshots render on the JVM through Roborazzi: `./gradlew
 recordRoborazziDebug` writes `app/screenshots/`, light and dark, and
 `verifyRoborazziDebug` fails when a screen drifts from them.

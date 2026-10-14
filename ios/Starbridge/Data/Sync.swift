@@ -31,7 +31,11 @@ struct OpenedItem {
 extension Store {
     // --- What the inbox shows -------------------------------------------------------
 
-    private func active(_ member: String) -> Bool { directory?.members[member]?.active != false }
+    /** A member still in the directory; while a paired iPhone's directory fails to verify, none (#1723). */
+    private func active(_ member: String) -> Bool {
+        guard let dir = directory else { return saved.entries.isEmpty }
+        return dir.members[member]?.active != false
+    }
 
     /** Unsent answers by decision id: tapped, or waiting in the outbox. */
     var unsent: [String: String] {
@@ -161,7 +165,15 @@ extension Store {
         guard let me = saved.me else { return }
         let fresh = try await api().directory(from: saved.entries.count)
         let all = try saved.entries.map(JSON.parse) + fresh
-        let dir = try Directories.verify(all, account: saved.account, pin: saved.pin)
+        let dir: Directory
+        do {
+            dir = try Directories.verify(all, account: saved.accountId, pin: saved.pin)
+        } catch {
+            // Nothing from a machine shows while the chain fails its checks: the inbox says why (#1723).
+            directory = nil
+            withheldWhy = withheld()
+            throw error
+        }
         directory = dir
         if dir.members[me.id]?.active != true {
             wipe()
@@ -211,7 +223,9 @@ extension Store {
      * member a `revoke` names says who revoked it: only the owner can tell whether they did (#813).
      */
     func withheld(_ entries: [JSON]? = nil) -> String? {
-        guard let dir = directory else { return nil }
+        guard let dir = directory else {
+            return saved.entries.isEmpty ? nil : "Your devices list from the server did not pass its checks. Nothing from your machines shows until it does; if this does not clear, the server may be tampering with it."
+        }
         let entries = entries ?? entryJSON
         guard let held = HeadBook.withheld(heads, dir: dir, entries: entries) else { return nil }
         let machine = memberName(held.id)
@@ -309,7 +323,7 @@ extension Store {
                 byId[d.id] = settledBy(o.from).map { closed(d, by: $0) } ?? d
             }
             cursor = page.cursor
-            if page.items.count < 100 { break }
+            if page.last { break }
         }
         // An update may list before the decision it is about, so they apply once all are read.
         for (from, w) in waits { if let d = byId[w.decisionId], let u = waited(d, from: from, w) { byId[w.decisionId] = u } }
@@ -413,7 +427,7 @@ extension Store {
             let page = try await api().items("permission,settled", after: cursor)
             read += page.items
             cursor = page.cursor
-            if page.items.count < 100 { break }
+            if page.last { break }
         }
         if try await scan(read.map(\.item)) { return }
         let entries = entryJSON
@@ -483,7 +497,7 @@ extension Store {
                 if let o = open(listed.item, entries: entries), let r = try? SavedRun(from: o.from, text: o.text) { fresh.append(r) }
             }
             cursor = page.cursor
-            if page.items.count < 100 { break }
+            if page.last { break }
         }
         keepRuns(fresh)
     }

@@ -93,6 +93,10 @@ export interface State {
       settled?: boolean;
       /** Settled here, but its settled notice has not reached the server yet (#584). */
       unposted?: boolean;
+      /** When `settle` closed it, and how (#1697): for what a later `wait` or `settle` says of it. */
+      settledAt?: string;
+      outcome?: "elsewhere" | "withdrawn";
+      reason?: string;
       /**
        * Answered by a device the chain revoked since: the machine dropped that answer, and the
        * server takes no other (#515).
@@ -231,6 +235,11 @@ export interface AgentConfig {
    * `starbridge config updates off`.
    */
   updates?: { auto?: boolean };
+  /**
+   * The `codex` binary and `CODEX_HOME` setup found, the only ones the agent runs to hand a Codex
+   * session its answer: a route an `ask` sends never names the binary it runs.
+   */
+  codex?: { bin: string; home: string };
   quota?: {
     /** The CodexBar providers to upload; none means no timer. */
     providers?: string[];

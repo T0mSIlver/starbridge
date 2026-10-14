@@ -39,8 +39,40 @@ enum Notify {
     /** The `p` beside `aps`, as JSON. */
     static func payload(_ userInfo: [AnyHashable: Any]) -> JSON? {
         guard let p = userInfo["p"], JSONSerialization.isValidJSONObject(p),
-              let data = try? JSONSerialization.data(withJSONObject: p) else { return nil }
-        return try? JSON.parse(String(decoding: data, as: UTF8.self))
+              let data = try? JSONSerialization.data(withJSONObject: p),
+              let json = try? JSON.parse(String(decoding: data, as: UTF8.self)) else { return nil }
+        // An id joins a request path and a kind picks a branch: neither may carry anything else.
+        if let kind = json["kind"], kind != .null, !(kind.string.map(isKind) ?? false) { return nil }
+        for key in ["id", "re"] {
+            if let id = json[key], id != .null, !(id.string.map(isItemId) ?? false) { return nil }
+        }
+        return json
+    }
+
+    /** An item id: 1 to 64 ASCII letters, digits, `_` or `-` (`Id` in schemas.ts). */
+    static func isItemId(_ s: String) -> Bool {
+        let n = s.unicodeScalars.count
+        return n >= 1 && n <= 64 && s.unicodeScalars.allSatisfy { ("a"..."z").contains($0) || ("A"..."Z").contains($0) || ("0"..."9").contains($0) || $0 == "_" || $0 == "-" }
+    }
+
+    /** A push kind: 1 to 32 lowercase ASCII letters or `-`. */
+    static func isKind(_ s: String) -> Bool {
+        let n = s.unicodeScalars.count
+        return n >= 1 && n <= 32 && s.unicodeScalars.allSatisfy { ("a"..."z").contains($0) || $0 == "-" }
+    }
+
+    /**
+     * Whether a notification's button may act on item `id` with the category the notification
+     * carries: an answer needs the question's own (`d.<id>`), Deny the prompt's. A push's category
+     * is the server's to name until the extension rewrites it, so a tap never answers a question the
+     * notification does not belong to. A plain tap and Allow only open the item.
+     */
+    static func accepts(_ action: String, category: String, item id: String) -> Bool {
+        switch action {
+        case "reply", "page", _ where action.hasPrefix(optionPrefix): category.unicodeScalars.elementsEqual(Notify.category(id).unicodeScalars)
+        case "deny": category == "permission"
+        default: true
+        }
     }
 
     /** The decision or permission a payload is about: its own id, or the one its `re` names. */
@@ -128,6 +160,8 @@ enum Notify {
      */
     static func unread(_ placeholder: UNMutableNotificationContent) {
         if placeholder.categoryIdentifier != "permission" { placeholder.categoryIdentifier = "" }
+        // The count the server put on the placeholder is its own guess: the app counts what needs the owner.
+        placeholder.badge = nil
     }
 
     /**
@@ -141,11 +175,14 @@ enum Notify {
               let me = saved.me, let pk = secrets.boxPk.flatMap({ try? fromB64($0) }), let sk = secrets.boxSk.flatMap({ try? fromB64($0) }) else { return nil }
         let keys = KeyPair(publicKey: pk, secretKey: SecretKey(sk))
         let entries = saved.entries.compactMap { try? JSON.parse($0) }
-        guard let dir = try? Directories.verify(entries, account: saved.account, pin: saved.pin) else { return nil }
+        guard let dir = try? Directories.verify(entries, account: saved.accountId, pin: saved.pin) else { return nil }
         var heads = Heads(saved: saved.heads)
         func open(_ item: SealedItem) -> Opened? {
             guard let opened = try? Envelopes.open(item, me: me.id, keys: keys, directory: dir) else { return nil }
-            _ = HeadBook.note(&heads, signer: item.from, head: opened.body.dir, entries: entries)
+            // Machines' heads only, as the app keeps them: a device's snooze vouches for nothing (#571, #1723).
+            if item.kind.signer == .machine {
+                _ = HeadBook.note(&heads, signer: item.from, head: opened.body.dir, entries: entries)
+            }
             return HeadBook.withheld(heads, dir: dir, entries: entries) == nil ? opened : nil
         }
         var item: SealedItem?
@@ -166,12 +203,14 @@ enum Notify {
             guard let saved = try? SavedPrompt(from: item.from, text: opened.bodyText, answeredAt: nil) else { return nil }
             return permission(saved)
         case let w as Waiting:
-            guard let fetched = try? await fetch(w.decisionId), let d = open(fetched)?.body as? Decision, fetched.from == item.from else { return nil }
+            // The decision the notice names, not one the server put in its place (#1723).
+            guard let fetched = try? await fetch(w.decisionId), fetched.id == w.decisionId, let d = open(fetched)?.body as? Decision,
+                  fetched.from == item.from else { return nil }
             var shown = decision(d, prefix: w.state == "waiting" ? "Waiting for you" : nil)
             shown.quiet = w.state != "waiting"
             return shown
         case let z as Snooze:
-            guard let fetched = try? await fetch(z.decisionId), let d = open(fetched)?.body as? Decision else { return nil }
+            guard let fetched = try? await fetch(z.decisionId), fetched.id == z.decisionId, let d = open(fetched)?.body as? Decision else { return nil }
             // Only the latest snooze this iPhone knows brings the question back (PROTOCOL.md,
             // "Snoozing"). An extension can't drop an alert, so an older one's return says the
             // newer time, quietly, and the app's next sync closes it.
@@ -208,11 +247,28 @@ enum Notify {
         }
         let api = Api(server: saved.server, session: secrets.session)
         var shown = await shown(p, saved: saved, secrets: secrets) { id in try await api.item(id).item }
+        if let item = shown { shown = closed(item, saved: saved) }
         if let item = shown { shown?.badge = badge(item, saved: saved) }
         if let shown, !shown.actions.isEmpty { await register(shown.category, shown.actions) }
         await followPreviews()
         log.info("\(p["kind"]?.string ?? "?", privacy: .public) \(shown == nil ? "kept the placeholder" : "shown", privacy: .public) in \(Int(Date().timeIntervalSince(start) * 1000)) ms, \(footprint() / 1_048_576) MB")
         return shown
+    }
+
+    /**
+     * `shown` without buttons, and quiet, when the app's saved state says its item is no longer open: a
+     * replayed `decision` or `permission` push must not offer to answer what was answered.
+     */
+    static func closed(_ shown: Shown, saved: Saved) -> Shown {
+        let open = shown.category == "permission"
+            ? saved.prompts.first { $0.id == shown.item }?.isOpen
+            : saved.decisions.first { $0.id == shown.item }?.isOpen
+        guard open == false else { return shown }
+        var s = shown
+        s.actions = []
+        s.category = ""
+        s.quiet = true
+        return s
     }
 
     /**

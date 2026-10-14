@@ -4,7 +4,9 @@
   client addresses. Caddy keeps connections to the server open (`keepalive 25s`, below the
   server's 30 s idle close) so TIME-WAIT sockets don't use up ports (#376). A client has 10 s for
   its TLS handshake and its HTTP/1.1 request headers, since every open connection costs Caddy
-  memory, the VPS's first limit (#587). Caddy compresses every
+  memory, the VPS's first limit (#587). A whole request has 2 minutes (#1737): a machine's 3 MB question
+  needs 25 KB/s, and phones post only small answers; long-polls are responses, which it does not
+  bound. Caddy compresses every
   response and the web app none: Next's gzip ran on its one thread and filled it near 18 landing
   page visitors a second (#593). Nightly SQLite backups, kept 7 days (#586), and an offsite copy of each, kept 14 days
   on another provider's VM (#1482): encrypted on the VPS to a key that is on neither server, and
@@ -60,13 +62,16 @@
 - **Blocking an address** (#783). The owner can refuse an address or range at Caddy, by a reload
   that keeps open connections (`deploy/host/switch.sh`), with a 403 that names abuse@. An IPv6
   address is blocked as its /64, as the rate limits count it, and nothing wider than a /8 (IPv4)
-  or /32 (IPv6) is accepted. The block list is the one place an address is written to disk, until
-  it is unblocked; `/privacy` says so.
+  or /32 (IPv6) is accepted. The block list and the switch log hold an address until it is
+  unblocked, which scrubs both (Caddy's error log can hold others); `/privacy` says so (#1744).
 - **Suspending an account** (#785). The owner can suspend one account whose machines flood the
   server (a looping agent, or abuse) without deleting it: its machines' writes get 403
   `account-suspended`, which the CLI prints with its reason, while they still read and wait, and
   its phones and browsers work as before, so its owner can still answer, settle and revoke.
   `bun server.js suspend|unsuspend ACCOUNT`, stored as `accounts.suspended_at` (migration 2).
+- **Emptying an account** (#1736). `bun server.js purge ACCOUNT` deletes every item one account
+  stores, in the sweep's batches beside the running server, when its items fill the server's
+  2 GB; the account and its devices stay, and `suspend` keeps its machines from refilling it.
 - **Limits at runtime** (#786). The owner can tighten or loosen a rate window or a cap without a
   deploy (`bun server.js limits set items 60/60`, `set maxMachines 4`, `unset`, `reset`): the
   overrides sit in `limits.json` beside the database, which the server reads every minute, so they
@@ -117,7 +122,7 @@
 - **Privacy and terms** (`/privacy`, `/terms`). Each claim follows the code: stored columns in
   `server/src/db.ts`, retention in `server/src/limits.ts`, logs and backups in `deploy/`. A change
   to what is stored changes the page, and the Play data-safety form. Contact is
-  privacy@starbridge.run; abuse@ appears only in `/terms`. Both pages promise that changes are posted
+  privacy@starbridge.run; abuse@ appears only in `/terms`. `/privacy` leads each category (what we store, why, who receives it, how long we keep it, rights and contact) with 1 to 3 plain sentences, and keeps the field-level detail in collapsed sections under it, so a visitor reads the gist and an auditor still finds every field (#1789). Both pages promise that changes are posted
   with a new date, so each edit to one adds a dated entry to its Changes list (`changes.ts` beside
   the page), which also sets "Last updated"; a test fails until the entry and the page's hash are
   in (#1620, #1639).
@@ -148,6 +153,8 @@
   `demo/` is its first device and machine. It approves every join by digits without comparing,
   so a reviewer walks the same screens as a real second phone. The server refuses `DEMO=1` beside
   a starbridge.run `PUBLIC_URL`, GitHub sign-in or relay mode. A restart is a fresh account.
+  A reviewer who deletes the account, or revokes the demo's device or machine, restarts it
+  (#1740).
   It runs on sb-staging, as a project of its own beside staging (#1557), so prod carries one service
   less and prod's releases never restart it. Each staging deploy whose round trip passed rebuilds it
   from that commit of main, which serves every release from the minimum up: deployed by hand, it

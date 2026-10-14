@@ -27,7 +27,7 @@ them. Its routes are in `PROTOCOL.md`.
 
    ```
    PUBLIC_URL=https://starbridge.example
-   OWNER_TOKEN=change-me
+   OWNER_TOKEN=change-me-to-a-long-random-token
    RELAY_URL=https://starbridge.run
    ```
 
@@ -115,7 +115,7 @@ each browser's own push service still carries them, encrypted, such as Google's 
    VAPID_PRIVATE_KEY=...
    ```
 
-   If your ntfy is on a private address or plain HTTP, add its host, such as
+   If your ntfy is on a private address, plain HTTP or a port other than 443, add its host, such as
    `ALLOW_PRIVATE_PUSH_ENDPOINTS=ntfy.lan` or `ALLOW_PRIVATE_PUSH_ENDPOINTS=192.168.1.20`. Then
    restart: `docker compose -f server/compose.yaml up -d`. A browser that turned notifications on
    through the relay subscribes again with your key the next time it opens the page.
@@ -170,7 +170,7 @@ release, restore the copy you made before upgrading.
 
 <dl>
 <dt><code>OWNER_TOKEN</code></dt>
-<dd>Signs you in to the server's one owner account. Set it, GitHub sign-in, or both. Unset by default.</dd>
+<dd>Signs you in to the server's one owner account. At least 16 characters, or the server does not start. Set it, GitHub sign-in, or both. Unset by default.</dd>
 <dt><code>GITHUB_CLIENT_ID</code>, <code>GITHUB_CLIENT_SECRET</code></dt>
 <dd>GitHub sign-in, where each GitHub user gets their own account, from a GitHub OAuth app. Set both. Register two callback URLs in the OAuth app: <code>$PUBLIC_URL/v1/auth/github/callback</code> for the web and <code>$PUBLIC_URL/v1/auth/github/callback/app</code> for the Android app. GitHub refuses the app's sign-in when only the first is listed. Unset by default.</dd>
 <dt><code>SIGNUP_GITHUB_IDS</code></dt>
@@ -216,7 +216,7 @@ pnpm install
 ```
 
 ```bash
-OWNER_TOKEN=change-me PORT=8080 bun run server/src/main.ts
+OWNER_TOKEN=change-me-to-a-long-random-token PORT=8080 bun run server/src/main.ts
 ```
 
 ```bash

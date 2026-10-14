@@ -192,28 +192,57 @@ jobs:
         shard: [inbox, snooze, devices]
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    # actions: the tested step lists artifacts.
+    # actions: the tested step reads artifacts and runs; pull-requests: it finds the merged one.
     permissions:
       contents: read
       actions: read
+      pull-requests: read
     steps:
       # A merge to main skips a part when a run of this workflow already passed it on the same tree
       # (#878): most often the pull request's own last run, on its merge with the main commit it
       # was then merged onto, since a squash merge of an unchanged base yields the same tree. A
       # tree holds every file, ci.yml included, so the run that passed tested exactly what main
-      # now holds, with the same steps. Each passing part uploads an artifact named after its tree.
-      # Only this repository's branches count: a fork's pull request runs its own ci.yml and could
-      # upload any name. Anything else, an expired artifact or a failed API call, runs it again.
+      # now holds, with the same steps. Each passing part uploads an artifact named after its tree,
+      # holding the commit it tested.
+      # Code in a pull request's jobs can upload an artifact under any name, so the name alone
+      # proves nothing (#1732). An artifact counts only when its run is this workflow's, on this
+      # commit or on the head of the pull request merged as it, that run's job for this part
+      # passed, and the commit in it has this tree and is that head or GitHub's merge of it. A
+      # fork's runs never count. Anything else, an expired artifact or a failed API call, runs it.
       - id: tested
         if: github.event_name == 'push'
         env:
           GH_TOKEN: ${{ github.token }}
+          TREE: ${{ github.event.head_commit.tree_id }}
           NAME: e2e-passed-${{ matrix.shard }}-${{ github.event.head_commit.tree_id }}
+          JOB: end to end (${{ matrix.shard }})
         run: |
-          n=$(curl -fsS -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' \
-            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/actions/artifacts?name=$NAME&per_page=100" |
-            jq '[.artifacts[] | select((.expired | not) and .workflow_run.head_repository_id == .workflow_run.repository_id)] | length') || n=0
-          echo "passed=$([ "${n:-0}" -gt 0 ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          passed=false
+          heads="$GITHUB_SHA $(gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/pulls" --jq '.[] | select(.merged_at) | .head.sha')" ||
+            heads=$GITHUB_SHA
+          rows=$(gh api "repos/$GITHUB_REPOSITORY/actions/artifacts?name=$NAME&per_page=100" \
+            --jq '.artifacts[] | select((.expired | not) and .workflow_run.head_repository_id == .workflow_run.repository_id) | "\(.id) \(.workflow_run.id) \(.workflow_run.head_sha)"') ||
+            rows=
+          while read -r artifact run head; do
+            [ -n "$artifact" ] || continue
+            case " $heads " in *" $head "*) ;; *) echo "artifact $artifact: run $run tested $head, neither this commit nor its pull request's head"; continue ;; esac
+            [ "$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run" --jq .path)" = .github/workflows/ci.yml ] ||
+              { echo "artifact $artifact: run $run is not CI"; continue; }
+            [ "$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run/jobs?filter=latest&per_page=100" \
+              --jq '.jobs[] | select(.name == env.JOB) | .conclusion')" = success ] ||
+              { echo "artifact $artifact: $JOB did not pass in run $run"; continue; }
+            tested=$(gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$artifact/zip" | funzip 2>/dev/null | tr -d '\n') || tested=
+            case $tested in *[!0-9a-f]* | "") echo "artifact $artifact: no commit in it"; continue ;; esac
+            line=$(gh api "repos/$GITHUB_REPOSITORY/git/commits/$tested" --jq '"\(.tree.sha) \(.sha) \([.parents[].sha] | join(" "))"') ||
+              continue
+            set -- $line
+            [ "$1" = "$TREE" ] || { echo "artifact $artifact: $tested has another tree"; continue; }
+            case " $2 $3 ${4:-} " in *" $head "*) passed=true; break ;; esac
+            echo "artifact $artifact: $tested is neither $head nor a merge of it"
+          done <<ROWS
+          $rows
+          ROWS
+          echo "passed=$passed" >> "$GITHUB_OUTPUT"
       - id: scope
         run: echo "run=${{ steps.tested.outputs.passed != 'true' }}" >> "$GITHUB_OUTPUT"
       - if: steps.scope.outputs.run == 'true'

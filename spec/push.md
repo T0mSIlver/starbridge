@@ -62,6 +62,13 @@
   until the app opens. Only an alert would always run the extension, and an alert shows a
   notification; hiding it takes Apple's notification-filtering entitlement. iOS's Badges setting
   for the app decides whether it shows.
+- **The iPhone treats a push as a hint** (#1756). A payload whose `id`, `re` or `kind` is not
+  plain words (`[A-Za-z0-9_-]{1,64}`, `[a-z-]{1,32}`) is dropped, since the id joins a request
+  path. A notification's button acts only when its category is the question's own (`d.<id>`; a
+  prompt's Deny needs `permission`): the server names the category until the extension rewrites
+  it. The extension shows no button for an item the app's saved state says is answered, so a
+  replayed push cannot offer to answer it again, and it clears the badge the placeholder carried
+  when it keeps the placeholder.
 - Caps (#27, #36, #37): 10 subscriptions a device, 30 an account; 4 pushes in flight and 200
   waiting per account, 10 s each. A push connects to the exact address that passed the
   private-range check, and is sent only if its subscription and device are still active (#260).
@@ -74,6 +81,11 @@
   any account on the server could otherwise make it call into the owner's network. Relay mode
   refuses any listed host. `1`, from when it was a yes/no flag, still allows every private host, with a
   warning at startup.
+- A Web Push or UnifiedPush endpoint on a public host must use port 443, where every push service
+  listens, and an account's subscriptions may name at most 8 push service hosts; the server has
+  at most 32 pushes in flight to one host, its own and relayed ones together (#1738). Otherwise a
+  subscription could make the server probe any port of any host, or hold many requests open on
+  one. A self-hoster's distributor on another port goes in `ALLOW_PRIVATE_PUSH_ENDPOINTS`.
 - A server's VAPID key can change, as when a self-hoster leaves the relay for their own keys
   (#567). Each page boot compares the browser's subscription key with the server's and subscribes
   again when they differ. The server drops a Web Push subscription its push service refuses with

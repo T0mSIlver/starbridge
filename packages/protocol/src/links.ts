@@ -1,6 +1,7 @@
 // What a link chip shows: its icon and its text (spec/items.md, "Links"). Every client draws it
 // from this rule, which vectors/links.json keeps in step. A link that matches no rule exactly
-// keeps the plain chip: no icon, its title, else its host and path. Nothing here fetches the URL.
+// keeps the plain chip: no icon, its title then its host, else its host and path. Nothing here
+// fetches the URL.
 
 /** A chip's icon: GitHub's Octicons for GitHub's kinds (#971), a window for a Claude artifact. */
 export type LinkIcon =
@@ -21,11 +22,13 @@ export type LinkChip = { icon?: LinkIcon; label: string };
  * its tag, a commit its short hash, each led by the repo when it isn't `project`, the session's;
  * the icon says what the number is, so the agent's title gives way. Any other link reads as its
  * title, else: a GitHub file its name, a run "Actions run", another GitHub page its path, a
- * Claude artifact "Claude artifact", anything else its host and path.
+ * Claude artifact "Claude artifact", anything else its host and path. A title on any other
+ * host than GitHub's and a Claude artifact's, whose icons name the site, is followed by the
+ * host, so an agent cannot dress another site as a GitHub reference (#1722); a link that can't be read shows as written, whatever its title.
  */
 export function linkChip(link: { url: string; title?: string }, project = ""): LinkChip {
   const url = parseUrl(link.url);
-  if (!url) return { label: link.title ?? clip(link.url) };
+  if (!url) return { label: clip(link.url) };
   const gh = GITHUB_HOSTS.has(url.host) ? github(url.path) : undefined;
   if (gh?.ref) {
     const same = asciiLower(gh.repo) === asciiLower(project);
@@ -33,12 +36,23 @@ export function linkChip(link: { url: string; title?: string }, project = ""): L
     return { icon: gh.icon, label: clip(same ? gh.ref : `${gh.repo}${sep}${gh.ref}`) };
   }
   if (gh) return { icon: gh.icon, label: link.title ?? clip(gh.text) };
+  const host = url.host.replace(/^www\./, "");
+  const titled = link.title !== undefined && !hidden(link.title) ? withHost(link.title, host) : "";
   if (url.host === "claude.ai" && ARTIFACT.test(url.path))
     return { icon: "artifact", label: link.title ?? "Claude artifact" };
-  return {
-    label:
-      link.title ?? clip(`${url.host.replace(/^www\./, "")}${url.path === "/" ? "" : url.path}`),
-  };
+  return { label: titled || clip(`${host}${url.path === "/" ? "" : url.path}`) };
+}
+
+/**
+ * "Title · host" in 40 code points: the host keeps its end, which names the site, and at most 30
+ * points; the title takes the rest. A title with hidden or reordering characters, or none, gives
+ * "", and the chip falls back to its own text.
+ */
+function withHost(title: string, host: string): string {
+  const points = Array.from(host);
+  const shown = points.length > 30 ? `…${points.slice(-29).join("")}` : host;
+  const room = 40 - 3 - Array.from(shown).length;
+  return title ? `${clip(title, room)} · ${shown}` : "";
 }
 
 const GITHUB_HOSTS = new Set(["github.com", "www.github.com"]);
@@ -142,8 +156,8 @@ function decode(segment: string): string {
   return hidden(text) ? segment : text;
 }
 
-/** At most 40 code points, the 40th an ellipsis when cut; never half a surrogate pair. */
-function clip(text: string): string {
+/** At most `max` code points, the last an ellipsis when cut; never half a surrogate pair. */
+function clip(text: string, max = 40): string {
   const points = Array.from(text);
-  return points.length > 40 ? `${points.slice(0, 39).join("")}…` : text;
+  return points.length > max ? `${points.slice(0, max - 1).join("")}…` : text;
 }

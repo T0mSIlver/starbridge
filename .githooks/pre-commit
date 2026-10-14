@@ -1,4 +1,5 @@
 #!/bin/sh
+# starbridge-hook-version: 2
 # Formats each package's staged files with that package's Biome (`biome check --write`: format,
 # import order and safe fixes), stages the result, and refuses the commit when Biome still reports
 # an error, as CI's `pnpm lint` would (#1656). A file with unstaged changes is left alone, since

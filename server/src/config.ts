@@ -253,10 +253,27 @@ export function configFromEnv(env: Env = process.env): Config {
     config.maxMachines = DEMO_MACHINES;
     config.limits = { ...config.limits, pendingPairings: DEMO_PAIRINGS };
   }
+  if (config.ownerToken) checkOwnerToken(config);
   for (const [name, minimum] of Object.entries(config.minimumReleases))
     if (!isMinimumRelease(minimum))
       throw new Error(`minimum ${name} release: not MAJOR.MINOR.PATCH`);
   return config;
+}
+
+/** The shortest OWNER_TOKEN a server takes (#1720). */
+export const OWNER_TOKEN_MIN = 16;
+
+/**
+ * The owner token signs in to the owner account, and `/v1/auth/owner` allows a few tries a
+ * minute per address, so a short one could be guessed. The hosted server signs in with GitHub
+ * and Apple only: an owner token there would be one more way into one account (#1720).
+ */
+export function checkOwnerToken(config: Config): void {
+  const token = config.ownerToken ?? "";
+  if ([...token].length < OWNER_TOKEN_MIN)
+    throw new Error(`OWNER_TOKEN must be at least ${OWNER_TOKEN_MIN} characters`);
+  if (new URL(config.publicUrl).hostname === "starbridge.run")
+    throw new Error(`OWNER_TOKEN is refused with PUBLIC_URL ${config.publicUrl}`);
 }
 
 /**

@@ -75,7 +75,8 @@ public enum Directories {
      *   current recovery key; from then on only the new key counts;
      * - ids and public keys are never reused, and revoked members stay revoked.
      */
-    public static func verify(_ entries: [JSON], account: String? = nil, pin: Pin? = nil, recoveryPk: String? = nil) throws -> Directory {
+    /// `account` is the account this client signed in to: a chain made for another is refused (#1723).
+    public static func verify(_ entries: [JSON], account: String, pin: Pin? = nil, recoveryPk: String? = nil) throws -> Directory {
         if entries.isEmpty { throw ProtocolError(.badGenesis, "empty chain") }
         var dir: Directory?
         for (i, raw) in entries.enumerated() {
@@ -106,7 +107,7 @@ public enum Directories {
         return e
     }
 
-    private static func genesis(_ env: SignedEnvelope, account: String?) throws -> Directory {
+    private static func genesis(_ env: SignedEnvelope, account: String) throws -> Directory {
         // The first entry carries its own key, so it is parsed before its signature is checked;
         // nothing in it is trusted until the check passes.
         let body = try directoryBody(env.body)
@@ -120,7 +121,7 @@ public enum Directories {
         try Envelopes.verify(env, signPk: member.signPk)
         guard let recoverySig = env.recoverySig else { throw ProtocolError(.badGenesis, "missing recoverySig") }
         try Envelopes.verify(asRecovery(env, recoverySig), signPk: recoveryPk)
-        if let account, body.account != account { throw ProtocolError(.wrongAccount, body.account) }
+        if body.account != account { throw ProtocolError(.wrongAccount, body.account) }
         return Directory(
             account: body.account,
             recoveryPk: recoveryPk,

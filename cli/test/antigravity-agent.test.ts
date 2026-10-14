@@ -1,9 +1,9 @@
 import { afterEach, expect, test } from "bun:test";
 import { tmpdir } from "node:os";
 import { pathToFileURL } from "node:url";
-import { Antigravity, type RunHook } from "../src/agent/antigravity";
+import { Antigravity, MAX_OPEN_PER_ROUTE, type RunHook } from "../src/agent/antigravity";
 import type { Hub } from "../src/agent/server";
-import { agyReachable, lsCall } from "../src/antigravity";
+import { agyReachable, lsCall, MAX_LS_BYTES } from "../src/antigravity";
 import { testCtx, until } from "./helpers";
 
 /** The conversation's workspace, a real path on every platform. */
@@ -210,4 +210,105 @@ test("the agent takes and calls Antigravity routes on loopback only", async () =
   const away = { address: "10.0.0.5:4242", token: "tok" };
   expect(await agyReachable(away)).toBe(false);
   await expect(lsCall(away, "GetCascadeTrajectory", {})).rejects.toThrow("loopback");
+});
+
+test("a language server's redirect and oversized answer are refused", async () => {
+  const target = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch: () => new Response("ok") });
+  const server = Bun.serve({
+    hostname: "127.0.0.1",
+    port: 0,
+    fetch(req) {
+      if (new URL(req.url).pathname === "/healthz")
+        return Response.redirect(`http://127.0.0.1:${target.port}/healthz`, 302);
+      return new Response("x".repeat(MAX_LS_BYTES + 1));
+    },
+  });
+  stops.push(
+    () => server.stop(true),
+    () => target.stop(true),
+  );
+  const route = { address: `127.0.0.1:${server.port}`, token: "tok" };
+  expect(await agyReachable(route)).toBe(false);
+  await expect(lsCall(route, "Big", {})).rejects.toThrow("bytes");
+});
+
+test("one server's open prompts are capped", async () => {
+  const hooks: AbortSignal[] = [];
+  const asks = { permission: { resource: { action: "command", target: "ls" } } };
+  const steps = Array.from({ length: 3 }, () => ({
+    status: "CORTEX_STEP_STATUS_WAITING",
+    requestedInteraction: asks,
+  }));
+  const server = Bun.serve({
+    hostname: "127.0.0.1",
+    port: 0,
+    async fetch(req) {
+      const method = new URL(req.url).pathname.split("/").at(-1);
+      if (method === "GetAllCascadeTrajectories")
+        return Response.json({
+          trajectorySummaries: Object.fromEntries(
+            Array.from({ length: 30 }, (_, i) => [
+              `c-${i}`,
+              { status: "CASCADE_RUN_STATUS_RUNNING", stepCount: 3, trajectoryId: "t" },
+            ]),
+          ),
+        });
+      return Response.json({ steps });
+    },
+  });
+  stops.push(() => server.stop(true));
+  const agy = watcher(
+    (_args, _input, signal) =>
+      new Promise((resolve) => {
+        hooks.push(signal);
+        signal.addEventListener("abort", () => resolve(""));
+      }),
+  );
+  agy.add({ address: `127.0.0.1:${server.port}`, token: "tok" });
+  await agy.tick();
+  expect(hooks.length).toBe(MAX_OPEN_PER_ROUTE);
+  await agy.tick();
+  expect(hooks.length).toBe(MAX_OPEN_PER_ROUTE);
+});
+
+test("a running conversation behind many idle ones is still read", async () => {
+  const hooks: string[] = [];
+  const server = Bun.serve({
+    hostname: "127.0.0.1",
+    port: 0,
+    async fetch(req) {
+      const method = new URL(req.url).pathname.split("/").at(-1);
+      if (method === "GetAllCascadeTrajectories")
+        return Response.json({
+          trajectorySummaries: {
+            ...Object.fromEntries(
+              Array.from({ length: 80 }, (_, i) => [
+                `idle-${i}`,
+                { status: "CASCADE_RUN_STATUS_IDLE" },
+              ]),
+            ),
+            live: { status: "CASCADE_RUN_STATUS_RUNNING", stepCount: 1, trajectoryId: "t" },
+          },
+        });
+      return Response.json({
+        steps: [
+          {
+            status: "CORTEX_STEP_STATUS_WAITING",
+            requestedInteraction: { permission: { resource: { action: "command", target: "ls" } } },
+          },
+        ],
+      });
+    },
+  });
+  stops.push(() => server.stop(true));
+  const agy = watcher(
+    (_args, _input, signal) =>
+      new Promise((resolve) => {
+        hooks.push("live");
+        signal.addEventListener("abort", () => resolve(""));
+      }),
+  );
+  agy.add({ address: `127.0.0.1:${server.port}`, token: "tok" });
+  await agy.tick();
+  expect(hooks).toEqual(["live"]);
 });

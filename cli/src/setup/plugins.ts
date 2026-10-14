@@ -1,13 +1,63 @@
 /** Setup's Claude Code step: the Starbridge marketplace and its two plugins, at user scope. */
-import { existsSync, mkdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, mkdirSync, readFileSync, rmdirSync, rmSync, writeFileSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
+import market from "../../../.claude-plugin/marketplace.json" with { type: "json" };
 import { replaceFile } from "../replace";
+import { COMMIT, VERSION } from "../version";
 import { withoutAllow, writeLeft } from "./remove";
 import { failure, run, type Sys, which } from "./sys";
 
 export const MARKETPLACE = "starbridge";
+/** The repository's own marketplace, which setup before #1768 added and now replaces. */
 export const MARKETPLACE_SOURCE = "T0mSIlver/starbridge";
 export const PLUGINS = [`starbridge@${MARKETPLACE}`, `starbridge-mod@${MARKETPLACE}`];
+
+/**
+ * The folder setup writes the marketplace into, from this binary: Claude Code installs the plugins
+ * from it, never from the repository's default branch, which a push changes for every machine.
+ */
+export function marketplaceDir(sys: Sys): string {
+  return join(claudeDir(sys), "starbridge-marketplace");
+}
+
+const marketplaceFile = (sys: Sys) =>
+  join(marketplaceDir(sys), ".claude-plugin", "marketplace.json");
+
+/**
+ * The marketplace this binary installs from: the repository's, with each plugin at this release's
+ * commit, which the signed binary carries, so the plugins are the code the signature covers; a tag
+ * can move. A build from source has no commit and takes its version's tag.
+ */
+export function marketplaceText(version = VERSION, commit = COMMIT): string {
+  const plugins = market.plugins.map((p) => ({
+    ...p,
+    source: { ...p.source, ref: `v${version}`, ...(commit ? { sha: commit } : {}) },
+  }));
+  return `${JSON.stringify({ ...market, plugins }, null, 2)}\n`;
+}
+
+/** Whether the marketplace folder holds this binary's marketplace. */
+function marketplaceCurrent(sys: Sys): boolean {
+  try {
+    return readFileSync(marketplaceFile(sys), "utf8") === marketplaceText();
+  } catch {
+    return false;
+  }
+}
+
+function writeMarketplace(sys: Sys) {
+  mkdirSync(dirname(marketplaceFile(sys)), { recursive: true });
+  writeFileSync(marketplaceFile(sys), marketplaceText());
+}
+
+/** Removes the marketplace file setup wrote, then its folders when left empty. */
+function removeMarketplaceFiles(sys: Sys) {
+  rmSync(marketplaceFile(sys), { force: true });
+  for (const dir of [dirname(marketplaceFile(sys)), marketplaceDir(sys)])
+    try {
+      rmdirSync(dir);
+    } catch {}
+}
 
 export function hasClaude(sys: Sys): boolean {
   return which(sys.ctx.env, "claude") !== undefined;
@@ -70,7 +120,12 @@ export async function claudeTooOld(sys: Sys, unknown = false): Promise<string | 
 
 export interface PluginState {
   marketplace: boolean;
-  /** Where a marketplace named `starbridge` comes from, when it is not this repository. */
+  /** The marketplace is the folder setup writes, so the plugins are at the release's commit. */
+  pinned?: boolean;
+  /**
+   * Where a marketplace named `starbridge` comes from, when it is neither that folder nor this
+   * repository.
+   */
   foreign?: string;
   /** Installed at user scope, with whether each is enabled. */
   plugins: Record<string, { enabled: boolean; version?: string } | undefined>;
@@ -98,9 +153,14 @@ export async function pluginState(sys: Sys): Promise<PluginState | string> {
   }
   const ours = markets.find((m) => m.name === MARKETPLACE);
   const from = ours && marketSource(ours);
+  const pinned =
+    ours?.source === "directory" &&
+    !!ours.path &&
+    resolve(ours.path) === resolve(marketplaceDir(sys));
   return {
     marketplace: ours !== undefined,
-    ...(ours && from !== MARKETPLACE_SOURCE.toLowerCase()
+    ...(pinned ? { pinned } : {}),
+    ...(ours && !pinned && from !== MARKETPLACE_SOURCE.toLowerCase()
       ? { foreign: from ?? JSON.stringify(ours) }
       : {}),
     plugins,
@@ -133,30 +193,63 @@ export function foreignMarketplace(state: PluginState): string | undefined {
     : undefined;
 }
 
-/** Adds the marketplace and installs what is missing. Returns one line per thing done. */
+/** Whether the plugins need `installPlugins`: one is missing, or not at this release's commit. */
+export function pluginsStale(sys: Sys, state: PluginState): boolean {
+  return !state.pinned || !marketplaceCurrent(sys) || PLUGINS.some((p) => !state.plugins[p]);
+}
+
+/**
+ * Writes this binary's marketplace, adds it, and installs or updates the plugins from it. The
+ * repository's marketplace that earlier setups added goes first, with its plugins. Returns one
+ * line per thing done.
+ */
 export async function installPlugins(sys: Sys, state: PluginState): Promise<string[]> {
   const foreign = foreignMarketplace(state);
   if (foreign) throw new Error(foreign);
+  const changed = !marketplaceCurrent(sys);
+  writeMarketplace(sys);
+  try {
+    return await fromMarketplace(sys, state, changed);
+  } catch (e) {
+    // Not current until every step went through, so the next setup or refresh tries again.
+    if (changed) rmSync(marketplaceFile(sys), { force: true });
+    throw e;
+  }
+}
+
+async function fromMarketplace(sys: Sys, state: PluginState, changed: boolean): Promise<string[]> {
   const done: string[] = [];
-  if (!state.marketplace) {
-    const r = await claude(
-      sys,
-      "plugin",
-      "marketplace",
-      "add",
-      MARKETPLACE_SOURCE,
-      "--scope",
-      "user",
-    );
+  let plugins = state.plugins;
+  // What the owner turned off stays off once the plugins come back from the new marketplace.
+  const disabled = state.pinned ? [] : PLUGINS.filter((id) => plugins[id]?.enabled === false);
+  if (state.marketplace && !state.pinned) {
+    // Removing a marketplace uninstalls its plugins.
+    const r = await claude(sys, "plugin", "marketplace", "remove", MARKETPLACE);
     if (r?.code !== 0)
-      throw new Error(`claude plugin marketplace add ${MARKETPLACE_SOURCE}: ${failure(r)}`);
+      throw new Error(`claude plugin marketplace remove ${MARKETPLACE}: ${failure(r)}`);
+    plugins = {};
+  }
+  const dir = marketplaceDir(sys);
+  if (!state.pinned) {
+    const r = await claude(sys, "plugin", "marketplace", "add", dir, "--scope", "user");
+    if (r?.code !== 0) throw new Error(`claude plugin marketplace add ${dir}: ${failure(r)}`);
     done.push(`Added the ${MARKETPLACE} marketplace.`);
+  } else if (changed) {
+    const r = await claude(sys, "plugin", "marketplace", "update", MARKETPLACE);
+    if (r?.code !== 0)
+      throw new Error(`claude plugin marketplace update ${MARKETPLACE}: ${failure(r)}`);
   }
   for (const id of PLUGINS) {
-    if (state.plugins[id]) continue;
-    const r = await claude(sys, "plugin", "install", id, "--scope", "user");
-    if (r?.code !== 0) throw new Error(`claude plugin install ${id}: ${failure(r)}`);
-    done.push(`Installed the ${id} plugin.`);
+    const update = !!plugins[id];
+    if (update && !changed) continue;
+    const r = await claude(sys, "plugin", update ? "update" : "install", id, "--scope", "user");
+    if (r?.code !== 0)
+      throw new Error(`claude plugin ${update ? "update" : "install"} ${id}: ${failure(r)}`);
+    done.push(`${update ? "Updated" : "Installed"} the ${id} plugin.`);
+  }
+  for (const id of disabled) {
+    const r = await claude(sys, "plugin", "disable", id, "--scope", "user");
+    if (r?.code !== 0) throw new Error(`claude plugin disable ${id}: ${failure(r)}`);
   }
   return done;
 }
@@ -186,6 +279,7 @@ export async function removePlugins(sys: Sys, state: PluginState): Promise<strin
         : `Could not remove the marketplace: ${failure(r)}`,
     );
   }
+  removeMarketplaceFiles(sys);
   return done;
 }
 

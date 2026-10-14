@@ -54,7 +54,11 @@
   $arch = switch ($os) { { $_ -in 'X64', 'AMD64' } { 'x64' } 'Arm64' { 'arm64' } default { Fail "no build for $os; try npm i -g starbridge" } }
   $asset = "starbridge-windows-$arch.exe"
   # HTTPS only, but for a mirror on this machine, such as a test's.
-  if ($Releases -cnotmatch '^(https://|http://(127\.0\.0\.1|localhost)([:/]|$))') { Fail "STARBRIDGE_RELEASES_URL must be an https URL: $Releases" }
+  # Parsed, not matched: `http://localhost:80@evil.example/` starts like a local mirror but names evil.example.
+  $mirror = $null
+  $local = [Uri]::TryCreate($Releases, [UriKind]::Absolute, [ref]$mirror) -and -not $mirror.UserInfo -and $mirror.Scheme -ceq 'http' -and $mirror.Host -cin @('127.0.0.1', 'localhost')
+  $secure = $mirror -and -not $mirror.UserInfo -and $mirror.Scheme -ceq 'https'
+  if (-not ($local -or $secure)) { Fail "STARBRIDGE_RELEASES_URL must be an https URL: $Releases" }
 
   # Windows PowerShell 5.1 may not offer TLS 1.2 by default, which GitHub requires.
   [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12

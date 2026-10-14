@@ -34,7 +34,7 @@ const free = (port: number) => new Promise((done) => held.get(port)?.close(done)
 const PORTS = { web: await hold(), server: await hold() };
 const ORIGIN = `http://localhost:${PORTS.web}`;
 const SERVER = `http://localhost:${PORTS.server}`;
-const TOKEN = "narrow-check";
+const TOKEN = "narrow-check-owner-token";
 const QUESTION =
   "Commit the docs (handoff-protocol.md, ACTIVATION.md, no push)? And the 136 MB test folder " +
   "left by the first run (drafts/handoffs/20261011T190312Z-codex-opencode-skills-test.runtime/), " +

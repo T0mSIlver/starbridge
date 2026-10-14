@@ -124,6 +124,30 @@ final class NotifyTests: XCTestCase {
         XCTAssertTrue(stale?.body.hasPrefix("Snoozed until ") == true, stale?.body ?? "")
     }
 
+    /** A waiting flip or a snooze shows only the decision it names, whatever the server sends (#1723). */
+    func testAFetchedDecisionMustBeTheOneTheNoticeNames() async throws {
+        let f = try NotifyFixture()
+        let other = try f.decision("d_other")
+        let flip = try f.seal(.waiting, ["v": 1, "id": "w_1", "decisionId": "d_wait", "to": [.string(f.phone.id)], "at": .string(Dates.format(Date())), "state": "waiting"])
+        let waiting = await Notify.shown(f.payload(flip), saved: f.saved, secrets: f.secrets) { _ in other }
+        XCTAssertNil(waiting)
+        let phoneSign = SecretKey(try fromB64(f.secrets.signSk!))
+        let snooze = try f.seal(.snooze, ["v": 1, "id": "z_1", "decisionId": "d_z", "to": [.string(f.phone.id)], "until": .string(Dates.format(Date())), "at": .string(Dates.format(Date()))], by: f.phone, key: phoneSign)
+        let back = await Notify.shown(f.payload(snooze), saved: f.saved, secrets: f.secrets) { _ in other }
+        XCTAssertNil(back)
+    }
+
+    /** A device's snooze vouches for no directory head: only machines' heads hold items back (#1723). */
+    func testADevicesSnoozeNotesNoHead() async throws {
+        let f = try NotifyFixture()
+        let question = try f.decision("d_z")
+        let phoneSign = SecretKey(try fromB64(f.secrets.signSk!))
+        let ahead: JSON = ["length": 99, "head": .string(toB64(Sodium.randomBytes(32)))]
+        let snooze = try f.seal(.snooze, ["v": 1, "id": "z_1", "decisionId": "d_z", "to": [.string(f.phone.id)], "until": .string(Dates.format(Date())), "at": .string(Dates.format(Date())), "dir": ahead], by: f.phone, key: phoneSign)
+        let back = await Notify.shown(f.payload(snooze), saved: f.saved, secrets: f.secrets) { _ in question }
+        XCTAssertEqual(back?.body, "Back from snooze · Tests pass. CI is green.")
+    }
+
     func testAPromptOpensTheAppToAllow() async throws {
         let f = try NotifyFixture()
         let at = Date()

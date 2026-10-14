@@ -8,6 +8,14 @@ import type { LegalChange } from "@/lib/legalChanges";
 export const privacyChanges: readonly LegalChange[] = [
   {
     date: "2026-10-14",
+    text: "Each category now opens with a short summary: what we store, why, who receives it, how long we keep it, and your rights and contact. The details are in collapsed sections under it. No claim changed.",
+  },
+  {
+    date: "2026-10-14",
+    text: "Added what each device and machine record, the fields of a push, Cloudflare as DNS host, GitHub update checks, Google's code scanner and password manager, operator views, Umami and Postgres logs, and what stays after a revoke or deletion. Backups age out in about 2 weeks. Apple revoke is tried once.",
+  },
+  {
+    date: "2026-10-14",
     text: "Names the iPhone and Mac apps and the CLI. Added Sign in with Apple, what Apple sees for the iPhone app, and the counts by app.",
   },
   {
@@ -42,4 +50,4 @@ export const privacyChanges: readonly LegalChange[] = [
 ];
 
 /** SHA-256 of page.tsx with its whitespace collapsed (sourceHash); changes.test.ts recomputes it. */
-export const pageHash = "017eada3e1eded1bc40269836c69ad220bce48492b0ea093ebbe0286e6a86f20";
+export const pageHash = "06ee290f989588c6bc1dc3e467cf5c07208fd220c84b0cc325837a0d58ac939d";

@@ -75,7 +75,7 @@ starbridge ask \
 Quote text in single quotes, since double quotes expand `$` and backticks,
 and write apostrophes as ’. Break lines inside the quotes with real line
 breaks, as above, never `\n`: bash and zsh pass it on as typed. Other flags: `--image` (up to 4 PNG or JPEG),
-`--link` (up to 4 HTTPS URLs), `--waiting` (only the answer unblocks you), `--answer-in`. `ask` prints the decision id (`d_Xk3…`) and how the
+`--link` (up to 4 HTTPS URLs), `--waiting` (only the answer unblocks you), `--answer-in`. `ask` prints the decision id (`d_amber-otter-…`) and how the
 answer comes back.
 
 ## After you post
@@ -91,7 +91,7 @@ last line says:
   it tells them you are blocked, and prints the answer if it is already in.
   Then end your turn, saying what waits on the card. If the card stops
   blocking you, `starbridge working <id>`.
-  The answer reads `Answer to d_Xk3… (Run the orders migration…?): Now`, or
+  The answer reads `Answer to d_amber-otter-… (Run the orders migration…?): Now`, or
   names the command that prints it.
 - **"Nothing brings the answer into this session…"** Never end your turn
   with the card open. When only the answer is left, run
@@ -102,7 +102,7 @@ last line says:
   No answer is never a yes: don't withdraw the card or do what it asks.
 
 The owner may snooze a card: `waiting` or `wait` then prints
-`Snoozed d_Xk3… (…?) until 18:00: no answer before then.` and `wait` exits 3.
+`Snoozed d_amber-otter-… (…?) until 18:00: no answer before then.` and `wait` exits 3.
 A snooze is not an answer: never act on the question or take your default.
 Stop waiting for it: no answer comes before that time, so don't run `wait`
 on it again. Do the work that does not depend on it, then end your turn

@@ -245,6 +245,19 @@ export interface Stored {
   answeredAt?: string;
 }
 
+/**
+ * A page of items. `more` says whether items follow its cursor; a server from before it (#1735)
+ * sends none, and its pages end with one under 100 items.
+ */
+export interface ItemsPage {
+  items: Stored[];
+  cursor: string;
+  more?: boolean;
+}
+
+/** Whether `page` is the last of its list. */
+export const lastPage = (page: ItemsPage) => !(page.more ?? page.items.length >= 100);
+
 export const api = {
   me: () => call<Me>("GET", "/me"),
   signInMethods: async () => (await call<{ methods: string[] }>("GET", "/auth/methods")).methods,
@@ -315,7 +328,7 @@ export const api = {
   deleteItem: (id: string) => call<void>("DELETE", `/items/${encodeURIComponent(id)}`),
   /** `openBlobs`: answered decisions come without their images (#1382). */
   items: (kind: string, after?: string, opts: { open?: boolean; openBlobs?: boolean } = {}) =>
-    call<{ items: Stored[]; cursor: string }>(
+    call<ItemsPage>(
       "GET",
       `/items?kind=${kind}${after ? `&after=${encodeURIComponent(after)}` : ""}${opts.open ? "&open=1" : ""}${opts.openBlobs ? "&blobs=open" : ""}`,
     ),

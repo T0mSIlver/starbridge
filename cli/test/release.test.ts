@@ -284,6 +284,23 @@ test.skipIf(WINDOWS)("install.sh refuses a plain-HTTP mirror off this machine", 
   expect(r.err).toContain("STARBRIDGE_RELEASES_URL must be an https URL");
 });
 
+test.skipIf(WINDOWS)(
+  "install.sh does not take a remote host for a mirror on this machine",
+  async () => {
+    for (const url of [
+      "http://localhost:80@releases.example/releases",
+      "http://127.0.0.1:8@releases.example/releases",
+      "http://localhost:80\\@releases.example/releases",
+    ]) {
+      const r = await install(url, "x", "openssl");
+      expect([url, r.err.includes("STARBRIDGE_RELEASES_URL must be an https URL")]).toEqual([
+        url,
+        true,
+      ]);
+    }
+  },
+);
+
 /** The `n`th line of a signature file, changed by `f`. */
 const line = (n: number, f: (l: string) => string) => (sig: string) =>
   sig
@@ -552,6 +569,11 @@ describe.skipIf(!pwsh || !(hasMinisign || WINDOWS))("install.ps1", () => {
 
   test("refuses a plain-HTTP mirror off this machine", async () => {
     const r = await installPs("http://releases.example/releases", "x");
+    expect(r.out).toContain("STARBRIDGE_RELEASES_URL must be an https URL");
+  });
+
+  test("does not take a remote host for a mirror on this machine", async () => {
+    const r = await installPs("http://localhost:80@releases.example/releases", "x");
     expect(r.out).toContain("STARBRIDGE_RELEASES_URL must be an https URL");
   });
 });

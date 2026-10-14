@@ -1,6 +1,10 @@
 # Sign-in
 
-- The hosted server signs in with GitHub; a self-hosted server with `OWNER_TOKEN`.
+- The hosted server signs in with GitHub; a self-hosted server with `OWNER_TOKEN`. A server
+  refuses to start with an owner token under 16 characters, since sign-in allows a few tries a
+  minute and the token is the whole owner account, and with one at all while `PUBLIC_URL` is
+  starbridge.run, where it would be one more way into an account (#1720, from an internal
+  audit on 2026-10-14).
 - **Sign in with Apple** (#1411). App Store guideline 4.8 asks an app that signs in with GitHub
   to offer a login that keeps the email private too; websites are not bound. GitHub stays the
   main sign-in everywhere, and Apple shows only where it must: on the iPhone, GitHub's button
@@ -21,6 +25,9 @@
   - The iPhone signs in natively (AuthenticationServices), with a nonce Apple puts in the
     identity token and an authorization code the server trades once, so a token caught on its
     way is worthless (PROTOCOL.md, "Auth").
+  - The server fetches Apple's keys at most once a minute, and refuses a key id the last fetch
+    lacked until then, so tokens naming made-up keys cannot make it call Apple on every attempt
+    (#1739).
 - The owner can pause sign-ups (#784), for a launch-day flood or a box near its limits: a GitHub
   user with no account gets "not taking new accounts right now" on the page and in the app, while
   every existing account signs in as before. `bun server.js signups pause|resume` writes and
@@ -38,7 +45,11 @@
   page's HTML keeps its buttons.
 - Android (#34, #527): the app signs in with PKCE, and GitHub binds its code to the app's
   challenge, so only the app holding the verifier can trade the code, whoever catches the
-  redirect. Known gap: a hostile app can start its own sign-in, and if GitHub skips the consent
+  redirect. The server does not rely on GitHub alone (#1719, from an internal audit on
+  2026-10-14): a code that comes back through its callback is kept with the challenge it came
+  with, and the trade refuses any other verifier, so a code caught after the server passed it on
+  is worthless. A code a verified App Link caught never reaches the server, and only GitHub
+  checks it. Known gap: a hostile app can start its own sign-in, and if GitHub skips the consent
   screen it gets a session.
 - On starbridge.run, GitHub redirects the app's sign-in to `/v1/auth/github/callback/app`, an
   App Link the app catches (#527). The installed web app's scope is the whole origin, so Chrome
