@@ -49,7 +49,8 @@ export const DEFAULT_LIMITS = {
   /**
    * Stored bytes of every account together, past which machines' items get 503 `storage-full`
    * while answers still pass. The hosted disk holds the live database and 9 backup copies of
-   * it (deploy/host), so this keeps all 10 under the disk alert (#586).
+   * it (deploy/host), so this keeps all 10 under the disk alert (#586). Past 90% of it, the
+   * hourly sweep keeps the largest accounts' unanswered decisions only floodRetention (#1736).
    */
   serverBytes: 2048 * 1024 * 1024,
   /**

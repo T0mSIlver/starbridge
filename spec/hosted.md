@@ -67,6 +67,9 @@
   `account-suspended`, which the CLI prints with its reason, while they still read and wait, and
   its phones and browsers work as before, so its owner can still answer, settle and revoke.
   `bun server.js suspend|unsuspend ACCOUNT`, stored as `accounts.suspended_at` (migration 2).
+- **Emptying an account** (#1736). `bun server.js purge ACCOUNT` deletes every item one account
+  stores, in the sweep's batches beside the running server, when its items fill the server's
+  2 GB; the account and its devices stay, and `suspend` keeps its machines from refilling it.
 - **Limits at runtime** (#786). The owner can tighten or loosen a rate window or a cap without a
   deploy (`bun server.js limits set items 60/60`, `set maxMachines 4`, `unset`, `reset`): the
   overrides sit in `limits.json` beside the database, which the server reads every minute, so they

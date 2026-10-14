@@ -90,7 +90,16 @@
   live database plus 7 nightly and 2 per-deploy copies, 10 in all. Copies are `VACUUM INTO`, so
   free pages stay out: 10 × 2 GB, plus SQLite's overhead, is about 21 GB of the 26 GB above the
   alert, the rest for a week of Docker builds between weekly prunes. Eight accounts at their
-  256 MB fill it, a risk taken over buying disk before launch.
+  256 MB fill it, a risk taken over buying disk before launch. So past 90% of the cap the hourly
+  sweep keeps the unanswered questions of the accounts holding the most, the largest first, only
+  7 days, as a flooded account's (#1736), and the owner can empty one account with `bun
+  server.js purge ACCOUNT`: a full server lasts at most a week, not the month unanswered
+  questions are kept. The per-account cap stays 256 MB: 64 MB would refuse the heavy user above,
+  who stores 80 MB a week, and only raise the number of accounts a filler needs from 8 to 32,
+  which sign-ups at 30 an hour per address do not stop.
+- **Sweep batches** (#585, #1736). The sweep deletes at most 1000 items or 32 MB at a time, at
+  least one item, and answers requests between: a thousand 2 MB questions in one transaction
+  would hold the write lock and grow the WAL by 2 GB.
 - **Full disk** (#301). Writes get 503 `storage-full` with `Retry-After`; usage counts and
   housekeeping skip, so a stored item still gets its push.
 - **Usage counts** (#140). `server/src/usage.ts` counts requests the server handles anyway. During
