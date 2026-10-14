@@ -7,7 +7,7 @@ name: internal
 # versionCode takes the next of slots 50 to 98 of the version under way, between its rcs and its
 # final (VersionCode.kt), or of the next patch once the version's final is tagged (#1731); once they are spent a build is skipped and the job summary says so. A
 # commit the track already holds, or one older than its last build, takes no slot. Run by hand,
-# it builds the ref it is run on under the same rules, to replace a failed build.
+# it builds main (the plan job stops other refs) under the same rules, to replace a failed build.
 # The iPhone app follows to TestFlight's internal testers once the repository variable
 # IOS_MAIN_TESTFLIGHT is true, which waits on Apple's export compliance code: nightly at 03:00 UTC
 # and by hand, apart from the Android builds. The desktop app stays on rcs.
