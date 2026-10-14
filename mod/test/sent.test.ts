@@ -479,3 +479,22 @@ test("a subagent that finishes: what it read goes, what came after its last roun
   // Nothing left for it: nothing more to do.
   expect(await a.sent.finished("a1", undefined)).toBe(false);
 });
+
+test("a subagent that finishes while its answer is being recorded is resumed with it: nothing goes to the parent (#1729)", async () => {
+  const m = machine();
+  const a = m.process("s1", "proc-a");
+  let delivered = 0;
+  const r = await a.sent.toAgent(
+    "a1",
+    [{ text: LINE, ack: "d_1" }],
+    async () => {
+      delivered++;
+      return { isDelivered: true };
+    },
+    async () => false,
+  );
+  expect(r.isDelivered).toBe(true);
+  expect(delivered).toBe(1);
+  expect(lines(m)).toEqual([]);
+  expect(await a.sent.finished("a1", undefined)).toBe(false);
+});

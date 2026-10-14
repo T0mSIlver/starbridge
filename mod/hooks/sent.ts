@@ -143,12 +143,16 @@ export class Sent {
    * Records `batch` for subagent `agent`, as the prompt the parent gets should the process exit
    * before the subagent reads it (#1702), then runs `deliver`, the send. A send that fails leaves
    * no record. Claude Code keeps a message for a running subagent in memory until its next tool
-   * round, so `read` drops the record only once the subagent has moved on.
+   * round, so `read` drops the record only once the subagent has moved on. `running` is asked
+   * again once the record is saved, right before the send: a subagent that finished meanwhile is
+   * resumed with the message, which needs no record, and `finished` must not hand it to the parent
+   * too (#1729).
    */
   toAgent(
     agent: string,
     batch: { text: string; ack: string }[],
     deliver: () => Promise<{ isDelivered: boolean; reason?: string }>,
+    running: () => Promise<boolean> = async () => true,
   ): Promise<{ isDelivered: boolean; reason?: string }> {
     // Without a token a reload could not be told from a new process: nothing to recover by.
     if (this.process === undefined) return deliver();
@@ -180,6 +184,10 @@ export class Sent {
         ));
       // Sent without a record, an answer the subagent never read would be lost with the process.
       if (!saved) return { isDelivered: false, reason: "could not record it" };
+      if (!(await running())) {
+        await this.save(me, rest).catch(() => undefined);
+        return deliver();
+      }
       let r: { isDelivered: boolean; reason?: string };
       try {
         r = await deliver();

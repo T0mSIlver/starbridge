@@ -157,6 +157,7 @@ export const register: Register = (on) => {
             agentId,
             group.map((l) => forParent(l, agentId)),
             send,
+            () => running(agentId),
           );
         },
         log,
