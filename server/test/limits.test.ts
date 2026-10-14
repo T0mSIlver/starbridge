@@ -667,15 +667,17 @@ test("near serverBytes, the largest accounts keep unanswered decisions only a we
   const { db, now, ids } = stored([
     ["big", "big-old", 600, 8],
     ["big", "big-new", 250, 1],
+    ["recent", "recent-new", 900, 1],
     ["mid", "mid-old", 120, 8],
     ["small", "small-old", 30, 8],
   ]);
-  // 1000 of 1000 bytes: the biggest account's old question goes, which is enough.
-  await sweepStorage(db, { ...DEFAULT_LIMITS, serverBytes: 1000 }, now);
-  expect(ids()).toEqual(["big-new", "mid-old", "small-old"]);
+  // 1900 of 1900 bytes: the largest account holds only recent questions, so the next one's old
+  // question goes, which is enough.
+  await sweepStorage(db, { ...DEFAULT_LIMITS, serverBytes: 1900 }, now);
+  expect(ids()).toEqual(["big-new", "recent-new", "mid-old", "small-old"]);
   // Under 90% of a smaller cap only once the next largest goes too.
-  await sweepStorage(db, { ...DEFAULT_LIMITS, serverBytes: 400 }, now);
-  expect(ids()).toEqual(["big-new", "small-old"]);
+  await sweepStorage(db, { ...DEFAULT_LIMITS, serverBytes: 1320 }, now);
+  expect(ids()).toEqual(["big-new", "recent-new", "small-old"]);
 });
 
 test("the sweep deletes in batches bounded by bytes, each at least one item (#1736)", async () => {

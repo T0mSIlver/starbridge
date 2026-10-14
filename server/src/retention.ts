@@ -158,12 +158,16 @@ export async function sweepStorage(
   // last the 30 days unanswered decisions are kept.
   const roomy = limits.serverBytes * 0.9;
   if (serverBytes(db) > roomy) {
+    // Only accounts with such decisions to drop, so the largest holders of recent ones never
+    // stand in the way of those further down.
     const holders = db
       .query(
-        `SELECT account_id AS a FROM item_totals GROUP BY account_id
-         ORDER BY SUM(bytes) DESC LIMIT 100`,
+        `SELECT t.account_id AS a FROM item_totals t
+         WHERE EXISTS (SELECT 1 FROM items i WHERE i.account_id = t.account_id
+           AND i.kind = 'decision' AND i.answered_at IS NULL AND i.received_at < ?)
+         GROUP BY t.account_id ORDER BY SUM(t.bytes) DESC`,
       )
-      .all() as { a: string }[];
+      .all(floodBefore) as { a: string }[];
     for (const { a } of holders) {
       if (serverBytes(db) <= roomy) break;
       await shorten(a);
