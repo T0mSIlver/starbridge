@@ -48,6 +48,17 @@ command and its local agent), `plugin` and
   `flakes.yml` lists them each night on the issue labelled `flaky`.
 - Before a PR is ready, run the checks in
   [CONTRIBUTING.md, "Develop"](CONTRIBUTING.md#develop).
+- Before review, check your change for the bugs reviews keep finding:
+  - Reread or compare state you read before an `await` before you write it, since another tab,
+    process or write in flight may have changed it.
+  - Honour a new off, held, snoozed, revoked or signed-out state on every send, notify and poll
+    path, and list those paths in the PR body.
+  - Treat a read that fails as an error, never an empty value. Refuse malformed input instead of
+    crashing, and let setup change only entries Starbridge wrote.
+  - Search `spec/`, `docs/`, skills and comments for each behaviour you changed, and fix what no
+    longer matches the code.
+  - Make a rule the clients share read the same in TS, Kotlin and Swift, and give a new accept or
+    reject rule a case in `packages/protocol/vectors/`.
 - A Settings row you add or rename follows DESIGN.md's rule on Settings
   copy: a title that stands alone, a subtitle only when it must.
 - Docs (`README.md`, `docs/`, `cli/README.md`, `server/README.md`) follow [docs/AGENTS.md](docs/AGENTS.md).
