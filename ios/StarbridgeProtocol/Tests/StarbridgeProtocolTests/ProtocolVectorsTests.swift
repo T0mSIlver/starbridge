@@ -99,7 +99,10 @@ final class ProtocolVectorsTests: XCTestCase {
             for (k, head) in j.object! { h[k] = try DirectoryHead(json: head) }
             return h
         }
-        func json(_ h: Heads) -> JSON { .object(JSONObject(h.map { ($0, $1.json) })) }
+        // Expected heads leave out the `by` of a head kept before #1627.
+        func json(_ h: Heads) -> JSON {
+            .object(JSONObject(h.map { ($0, DirectoryHead(length: $1.length, head: $1.head).json) }))
+        }
         for c in v["withheld"]!.items {
             let entries = chains[c.str("chain")]!.items
             let held = HeadBook.withheld(try heads(c["heads"]!), dir: try Directories.verify(entries), entries: entries)

@@ -91,11 +91,14 @@ public enum HeadBook {
 
     /**
      * Records the head `signer` signed into an item. A shorter head never replaces a longer one
-     * the chain `entries` lacks, so replaying an older item cannot lift a hold. True when it changed.
+     * the chain `entries` lacks, so replaying an older item cannot lift a hold. A head that names a
+     * `by`, which a machine before #794 passed on from a device, is not kept: it may lie on that
+     * device's fork, and could push out the signer's own head that shows a gap (#1627). True when
+     * it changed.
      */
     @discardableResult
     public static func note(_ heads: inout Heads, signer: String, head: DirectoryHead?, entries: [JSON]) -> Bool {
-        guard let head else { return false }
+        guard let head, head.by == nil else { return false }
         let replace = heads[signer].map { known in
             head.length > known.length
                 || (Directories.holds(entries, known.pin) && !Directories.holds(entries, head.pin))
@@ -117,8 +120,9 @@ public enum HeadBook {
             if dir.members[id] == nil || removed(dir, entries, id) { continue }
             if Directories.holds(entries, head.pin) { continue }
             let revoked = dir.members[id]?.active == true ? nil : revocation(of: id, in: entries)
-            guard let revoked else { return Held(id: id, head: head, revoked: nil) }
-            if fork == nil { fork = Held(id: id, head: head, revoked: revoked) }
+            let own = DirectoryHead(length: head.length, head: head.head)
+            guard let revoked else { return Held(id: id, head: own, revoked: nil) }
+            if fork == nil { fork = Held(id: id, head: own, revoked: revoked) }
         }
         return fork
     }

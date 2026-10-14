@@ -2169,9 +2169,14 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
       valid: false,
     },
     {
-      name: "with the by of a machine before #794, which readers ignore",
-      body: { ...body, dir: { length: 4, head: "A".repeat(43), by: "a phone" } },
+      name: "with a device's directory head",
+      body: { ...body, dir: { length: 4, head: "A".repeat(43), by: "phone" } },
       valid: true,
+    },
+    {
+      name: "with a directory head by a bad id",
+      body: { ...body, dir: { length: 4, head: "A".repeat(43), by: "a phone" } },
+      valid: false,
     },
   ];
   const schemas = {
@@ -2924,7 +2929,7 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
   const passedOn = { ...H, by: "phone" } as Heads[string];
   const unknownBy = { ...forged, by: "ghost" } as Heads[string];
   const heads = {
-    note: 'withheldBy(heads, verifyDirectory(chains[chain]), chains[chain]); noteHead(heads, signer, head, chains[chain]); forgetHeads(heads, id). A `revoke` ends no hold (#813); a `recover` does. Heads kept before #1627 under "signer/by" or "signer/?" count as their signer\'s; a `by` in a head is ignored, and expected heads leave it out.',
+    note: 'withheldBy(heads, verifyDirectory(chains[chain]), chains[chain]); noteHead(heads, signer, head, chains[chain]); forgetHeads(heads, id). A `revoke` ends no hold (#813); a `recover` does. Heads kept before #1627 under "signer/by" or "signer/?" count as their signer\'s, and expected heads leave out their `by`; noteHead keeps no head that names a `by`.',
     chains,
     withheld: [
       withheldCase("a machine's head the chain lacks holds", { devbox: H }, "stale"),
@@ -2980,11 +2985,18 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
         "stale",
       ),
       noteCase(
-        "a head that names a by is kept as its signer's own",
+        "a head that names a by is not kept",
         {},
         "devbox",
         { ...H, by: "phone" },
         "forkRevokesBy",
+      ),
+      noteCase(
+        "a longer head that names a by does not replace the signer's own the chain lacks",
+        { devbox: H },
+        "devbox",
+        unknownBy,
+        "stale",
       ),
       noteCase(
         "heads kept before #1627 stay beside the signer's",

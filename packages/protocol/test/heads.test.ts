@@ -61,7 +61,7 @@ beforeAll(async () => {
 
 const head = (d: Directory) => ({ length: d.length, head: d.head });
 
-function decisionBy(machine: "m" | "m2", dir?: { length: number; head: string }) {
+function decisionBy(machine: "m" | "m2", dir?: { length: number; head: string; by?: string }) {
   return seal(
     "decision",
     {
@@ -149,14 +149,16 @@ test("a revoked device cannot lift a device's hold by revoking, on a fork, the m
   });
 });
 
-test("a head a machine before #794 passed on, naming a by, counts as the machine's own", () => {
+test("a head a machine before #794 passed on, naming a by, is not kept", () => {
   const mine = verifyDirectory(seenByA);
   const passedOn = { ...head(verifyDirectory(truth)), by: "b" };
+  // The machine's own head shows a gap; a replayed older item with a longer passed-on head, which
+  // may lie on b's fork, must not push it out (#1627).
+  const own = { length: mine.length, head: "B".repeat(43) };
+  const heads: Heads = { m2: own };
   const opened = open(decisionBy("m2", passedOn), { id: "a", box: keys.a.box }, mine);
-  expect(opened.body.dir).toEqual(head(verifyDirectory(truth)));
-  const heads: Heads = {};
-  noteHead(heads, "m2", opened.body.dir, seenByA);
-  expect(Object.keys(heads)).toEqual(["m2"]);
+  expect(noteHead(heads, "m2", opened.body.dir, seenByA)).toBe(false);
+  expect(heads).toEqual({ m2: own });
   // Heads kept before #1627 under "signer/by" or "signer/?" count as their signer's, and go with it.
   const kept: Heads = { "m2/b": passedOn, "m2/?": { ...passedOn, by: "ghost" } } as Heads;
   expect(withheldBy(kept, mine, seenByA)).toEqual({ id: "m2", head: head(verifyDirectory(truth)) });

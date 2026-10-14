@@ -1,5 +1,5 @@
 {
-  "note": "withheldBy(heads, verifyDirectory(chains[chain]), chains[chain]); noteHead(heads, signer, head, chains[chain]); forgetHeads(heads, id). A `revoke` ends no hold (#813); a `recover` does. Heads kept before #1627 under \"signer/by\" or \"signer/?\" count as their signer's; a `by` in a head is ignored, and expected heads leave it out.",
+  "note": "withheldBy(heads, verifyDirectory(chains[chain]), chains[chain]); noteHead(heads, signer, head, chains[chain]); forgetHeads(heads, id). A `revoke` ends no hold (#813); a `recover` does. Heads kept before #1627 under \"signer/by\" or \"signer/?\" count as their signer's, and expected heads leave out their `by`; noteHead keeps no head that names a `by`.",
   "chains": {
     "stale": [
       {
@@ -410,7 +410,7 @@
       }
     },
     {
-      "name": "a head that names a by is kept as its signer's own",
+      "name": "a head that names a by is not kept",
       "heads": {},
       "signer": "devbox",
       "head": {
@@ -420,7 +420,27 @@
       },
       "chain": "forkRevokesBy",
       "expect": {
-        "changed": true,
+        "changed": false,
+        "heads": {}
+      }
+    },
+    {
+      "name": "a longer head that names a by does not replace the signer's own the chain lacks",
+      "heads": {
+        "devbox": {
+          "length": 4,
+          "head": "DqW2HO3Vt_cPnrJrqXxbeyPchpXRn2bYiCLol2xRw9w"
+        }
+      },
+      "signer": "devbox",
+      "head": {
+        "length": 9,
+        "head": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+        "by": "ghost"
+      },
+      "chain": "stale",
+      "expect": {
+        "changed": false,
         "heads": {
           "devbox": {
             "length": 4,

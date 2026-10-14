@@ -85,7 +85,37 @@
       "valid": false
     },
     {
-      "name": "with the by of a machine before #794, which readers ignore",
+      "name": "with a device's directory head",
+      "body": {
+        "v": 1,
+        "id": "dec_1",
+        "to": [
+          "phone",
+          "phone2"
+        ],
+        "createdAt": "2026-10-04T10:00:00Z",
+        "question": "Run inference on the Mac while you are away?",
+        "context": "The bench needs the GPU for about 40 minutes. No: it waits for tonight.",
+        "options": [
+          "Yes",
+          "No"
+        ],
+        "recommended": "Yes",
+        "source": {
+          "machine": "dev box",
+          "project": "localvoxtral",
+          "session": "s_42"
+        },
+        "dir": {
+          "length": 4,
+          "head": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "by": "phone"
+        }
+      },
+      "valid": true
+    },
+    {
+      "name": "with a directory head by a bad id",
       "body": {
         "v": 1,
         "id": "dec_1",
@@ -112,7 +142,7 @@
           "by": "a phone"
         }
       },
-      "valid": true
+      "valid": false
     },
     {
       "name": "with agent and machine kind",
@@ -1352,7 +1382,24 @@
       "valid": false
     },
     {
-      "name": "with the by of a machine before #794, which readers ignore",
+      "name": "with a device's directory head",
+      "body": {
+        "v": 1,
+        "id": "ans_1",
+        "decisionId": "dec_1",
+        "to": "devbox",
+        "answeredAt": "2026-10-04T10:03:00Z",
+        "choice": "Yes",
+        "dir": {
+          "length": 4,
+          "head": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "by": "phone"
+        }
+      },
+      "valid": true
+    },
+    {
+      "name": "with a directory head by a bad id",
       "body": {
         "v": 1,
         "id": "ans_1",
@@ -1366,7 +1413,7 @@
           "by": "a phone"
         }
       },
-      "valid": true
+      "valid": false
     }
   ],
   "permission": [
@@ -1490,7 +1537,49 @@
       "valid": false
     },
     {
-      "name": "with the by of a machine before #794, which readers ignore",
+      "name": "with a device's directory head",
+      "body": {
+        "v": 1,
+        "id": "perm_1",
+        "to": [
+          "phone",
+          "phone2"
+        ],
+        "createdAt": "2026-10-04T10:00:00Z",
+        "agent": "claude-code",
+        "tool": "Bash",
+        "summary": "git push origin main",
+        "description": "Push the fix",
+        "input": "{\"command\":\"git push origin main\",\"description\":\"Push the fix\"}",
+        "inputHash": "vn1Rs4EDE--zdLaXkXyePSRJAmUegmDW02WYLSW_EIE",
+        "suggestions": [
+          {
+            "label": "Allow git push for this session",
+            "rule": "Bash(git push:*)",
+            "scope": "session"
+          },
+          {
+            "label": "Always allow git push in localvoxtral",
+            "rule": "Bash(git push:*)",
+            "scope": "project"
+          }
+        ],
+        "expiresAt": "2026-10-04T10:09:00Z",
+        "source": {
+          "machine": "dev box",
+          "project": "localvoxtral",
+          "session": "s_42"
+        },
+        "dir": {
+          "length": 4,
+          "head": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "by": "phone"
+        }
+      },
+      "valid": true
+    },
+    {
+      "name": "with a directory head by a bad id",
       "body": {
         "v": 1,
         "id": "perm_1",
@@ -1529,7 +1618,7 @@
           "by": "a phone"
         }
       },
-      "valid": true
+      "valid": false
     },
     {
       "name": "no suggestions, no description",
@@ -2094,7 +2183,26 @@
       "valid": false
     },
     {
-      "name": "with the by of a machine before #794, which readers ignore",
+      "name": "with a device's directory head",
+      "body": {
+        "v": 1,
+        "id": "pans_1",
+        "permissionId": "perm_1",
+        "to": "devbox",
+        "answeredAt": "2026-10-04T10:01:00Z",
+        "behavior": "allow",
+        "scope": "session",
+        "inputHash": "vn1Rs4EDE--zdLaXkXyePSRJAmUegmDW02WYLSW_EIE",
+        "dir": {
+          "length": 4,
+          "head": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "by": "phone"
+        }
+      },
+      "valid": true
+    },
+    {
+      "name": "with a directory head by a bad id",
       "body": {
         "v": 1,
         "id": "pans_1",
@@ -2110,7 +2218,7 @@
           "by": "a phone"
         }
       },
-      "valid": true
+      "valid": false
     }
   ],
   "settled": [
@@ -2171,7 +2279,28 @@
       "valid": false
     },
     {
-      "name": "with the by of a machine before #794, which readers ignore",
+      "name": "with a device's directory head",
+      "body": {
+        "v": 1,
+        "id": "set_1",
+        "itemId": "perm_1",
+        "to": [
+          "phone",
+          "phone2"
+        ],
+        "outcome": "device",
+        "device": "phone",
+        "at": "2026-10-04T10:01:00Z",
+        "dir": {
+          "length": 4,
+          "head": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "by": "phone"
+        }
+      },
+      "valid": true
+    },
+    {
+      "name": "with a directory head by a bad id",
       "body": {
         "v": 1,
         "id": "set_1",
@@ -2189,7 +2318,7 @@
           "by": "a phone"
         }
       },
-      "valid": true
+      "valid": false
     },
     {
       "name": "a device's deny on a permission",
@@ -2519,7 +2648,38 @@
       "valid": false
     },
     {
-      "name": "with the by of a machine before #794, which readers ignore",
+      "name": "with a device's directory head",
+      "body": {
+        "v": 1,
+        "id": "run_1",
+        "to": [
+          "phone",
+          "phone2"
+        ],
+        "title": "Mac e2e",
+        "reason": "uses your session and keyboard",
+        "source": {
+          "machine": "dev box",
+          "project": "localvoxtral",
+          "session": "s_42"
+        },
+        "startedAt": "2026-10-04T10:00:00Z",
+        "at": "2026-10-04T10:02:00Z",
+        "progress": {
+          "done": 3,
+          "total": 7,
+          "unit": "step"
+        },
+        "dir": {
+          "length": 4,
+          "head": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "by": "phone"
+        }
+      },
+      "valid": true
+    },
+    {
+      "name": "with a directory head by a bad id",
       "body": {
         "v": 1,
         "id": "run_1",
@@ -2547,7 +2707,7 @@
           "by": "a phone"
         }
       },
-      "valid": true
+      "valid": false
     },
     {
       "name": "running, no progress",
@@ -2930,7 +3090,27 @@
       "valid": false
     },
     {
-      "name": "with the by of a machine before #794, which readers ignore",
+      "name": "with a device's directory head",
+      "body": {
+        "v": 1,
+        "id": "wait_1",
+        "decisionId": "dec_1",
+        "to": [
+          "phone",
+          "phone2"
+        ],
+        "at": "2026-10-04T10:20:00Z",
+        "state": "waiting",
+        "dir": {
+          "length": 4,
+          "head": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "by": "phone"
+        }
+      },
+      "valid": true
+    },
+    {
+      "name": "with a directory head by a bad id",
       "body": {
         "v": 1,
         "id": "wait_1",
@@ -2947,7 +3127,7 @@
           "by": "a phone"
         }
       },
-      "valid": true
+      "valid": false
     },
     {
       "name": "working",
@@ -3097,7 +3277,28 @@
       "valid": false
     },
     {
-      "name": "with the by of a machine before #794, which readers ignore",
+      "name": "with a device's directory head",
+      "body": {
+        "v": 1,
+        "id": "snz_1",
+        "decisionId": "dec_1",
+        "to": [
+          "devbox",
+          "phone",
+          "phone2"
+        ],
+        "until": "2026-10-04T18:00:00Z",
+        "at": "2026-10-04T10:25:00Z",
+        "dir": {
+          "length": 4,
+          "head": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "by": "phone"
+        }
+      },
+      "valid": true
+    },
+    {
+      "name": "with a directory head by a bad id",
       "body": {
         "v": 1,
         "id": "snz_1",
@@ -3115,7 +3316,7 @@
           "by": "a phone"
         }
       },
-      "valid": true
+      "valid": false
     },
     {
       "name": "back now",

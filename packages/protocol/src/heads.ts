@@ -58,7 +58,10 @@ function removed(dir: Directory, entries: unknown[], id: string): boolean {
 
 /**
  * Records the head `signer` signed into an item. A shorter head never replaces a longer one the
- * chain `entries` lacks, so replaying an older item cannot lift a hold. True when it changed.
+ * chain `entries` lacks, so replaying an older item cannot lift a hold. A head that names a `by`,
+ * which a machine before #794 passed on from a device, is not kept: it may lie on that device's
+ * fork, and in the signer's slot it could push out the signer's own head that shows a gap (#1627).
+ * True when it changed.
  */
 export function noteHead(
   heads: Heads,
@@ -66,7 +69,7 @@ export function noteHead(
   head: DirectoryHead | undefined,
   entries: unknown[],
 ): boolean {
-  if (!head) return false;
+  if (!head || head.by !== undefined) return false;
   const known = heads[signer];
   const replace =
     !known ||

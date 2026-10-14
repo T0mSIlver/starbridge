@@ -52,11 +52,13 @@ class Heads(private val directories: Directories) {
 
     /**
      * Records the head [signer] signed into an item. A shorter head never replaces a longer one
-     * [entries] lack, so replaying an older item cannot lift a hold (heads.ts `noteHead`). True
-     * when it changed.
+     * [entries] lack, so replaying an older item cannot lift a hold. A head that names a `by`,
+     * which a machine before #794 passed on from a device, is not kept: it may lie on that
+     * device's fork, and could push out the signer's own head that shows a gap (heads.ts
+     * `noteHead`, #1627). True when it changed.
      */
     fun note(heads: MutableMap<String, DirectoryHead>, signer: String, head: DirectoryHead?, entries: List<JsonElement>): Boolean {
-        if (head == null) return false
+        if (head == null || head.by != null) return false
         val known = heads[signer]
         val replace = known == null || head.length > known.length || (holds(entries, known) && !holds(entries, head))
         if (replace) heads[signer] = head
@@ -75,8 +77,9 @@ class Heads(private val directories: Directories) {
             if (!dir.members.containsKey(id) || removed(dir, entries, id)) continue
             if (holds(entries, head)) continue
             val revoked = if (dir.members[id]?.active == true) null else revocationOf(entries, id)
-            if (revoked == null) return Withheld(id, head)
-            if (fork == null) fork = Withheld(id, head, revoked)
+            val own = DirectoryHead(head.length, head.head)
+            if (revoked == null) return Withheld(id, own)
+            if (fork == null) fork = Withheld(id, own, revoked)
         }
         return fork
     }

@@ -49,7 +49,7 @@ final class SyncTests: XCTestCase {
         try disk.save(saved)
         var heads = Heads(saved: try XCTUnwrap(disk.load()).heads)
         XCTAssertEqual(heads.keys, ["devbox", "devbox/phone", "devbox/?"])
-        XCTAssertEqual(heads["devbox/phone"], DirectoryHead(length: 5, head: a))
+        XCTAssertEqual(heads["devbox/phone"], DirectoryHead(length: 5, head: a, by: "phone"))
         XCTAssertTrue(HeadBook.forget(&heads, id: "devbox"))
         XCTAssertTrue(heads.isEmpty)
     }

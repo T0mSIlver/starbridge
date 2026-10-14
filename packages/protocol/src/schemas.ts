@@ -347,6 +347,11 @@ export type DecisionLink = z.infer<typeof DecisionLink>;
 export const DirectoryHead = z.object({
   length: z.number().int().min(1).max(100_000),
   head: Bytes32,
+  /**
+   * The device a machine before #794 passed this head on from. No reader keeps such a head
+   * (`noteHead`, #1627): the machine never vouched for it as its own.
+   */
+  by: Id.optional(),
 });
 export type DirectoryHead = z.infer<typeof DirectoryHead>;
 

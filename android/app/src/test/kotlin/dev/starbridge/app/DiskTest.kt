@@ -63,6 +63,6 @@ class DiskTest {
                 """"devbox/phone":{"length":5,"head":"$head","by":"phone"},"devbox/?":{"length":6,"head":"$head","by":"ghost"}}}""",
         )
         val heads = Disk(dir, identity).load().first!!.heads
-        assertEquals(mapOf("devbox" to DirectoryHead(4, head), "devbox/phone" to DirectoryHead(5, head), "devbox/?" to DirectoryHead(6, head)), heads)
+        assertEquals(mapOf("devbox" to DirectoryHead(4, head), "devbox/phone" to DirectoryHead(5, head, "phone"), "devbox/?" to DirectoryHead(6, head, "ghost")), heads)
     }
 }

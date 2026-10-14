@@ -98,9 +98,10 @@
   while a machine has signed a head its chain lacks. The hold names the machine. Settings and
   revoking keep working. A machine that knows of a longer head posts nothing (#794). Closing the
   gap fully needs a channel the server does not carry. Machines before #794 passed on heads they
-  got from devices, naming the device as `by`; since #1627 a reader ignores `by`, and a device
-  reads a head it kept that way as its signer's, the stricter reading, since only the signer
-  signed it, rather than move or drop it (#1627).
+  got from devices, naming the device as `by`. Since #1627 a device keeps no such head it reads,
+  since a replayed one could push the machine's own head out of its slot, and it reads a head it
+  kept that way before as its signer's, the stricter reading, since only the signer signed it,
+  rather than move or drop it (#1627).
 - **A revocation ends no hold** (#794, #813). A member signs no head past its own revocation, so
   a chain that revokes the member whose head shows the gap is a fork: a revoked device whose
   revocation the server hides can make one. A head therefore keeps counting while a `revoke`

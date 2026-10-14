@@ -216,11 +216,12 @@ server serves those entries, or once the owner stops waiting. Reading the direct
 keep working meanwhile. The device names the machine.
 
 Machines before #794 could instead sign a longer head a device had signed into an answer, naming
-that device as `by`; no machine the server serves since #1624 does. A reader ignores `by`, so such
-a head reads as the machine's own. Devices kept those heads under `signer/by`, or `signer/?` for
-a `by` their chain did not list, and still read any they kept as a head that signer vouched for,
-the stricter reading, since only the signer signed it: it holds while the signer counts, and goes
-when the device forgets the signer's heads (#1627).
+that device as `by`; no machine the server serves since #1624 does. A device keeps no such head
+read now: it may lie on that device's fork, and in the machine's slot a replayed one could push
+out the machine's own head that shows a gap. Devices kept those heads under `signer/by`, or
+`signer/?` for a `by` their chain did not list, and still read any they kept as a head that
+signer vouched for, the stricter reading, since only the signer signed it: it holds while the
+signer counts, and goes when the device forgets the signer's heads (#1627).
 
 So one machine that holds a withheld revocation exposes it to every device whose items from that
 machine the server delivers, and one that has only seen the head of the device that made it

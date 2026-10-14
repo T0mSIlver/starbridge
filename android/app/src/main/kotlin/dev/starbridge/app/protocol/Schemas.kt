@@ -190,10 +190,16 @@ val KINDS = setOf("directory") + ITEM_KINDS
  * missing from their chain.
  */
 @Serializable
-data class DirectoryHead(val length: Int, val head: String) {
+data class DirectoryHead(
+    val length: Int,
+    val head: String,
+    /** The device a machine before #794 passed this head on from: no reader keeps such a head (#1627). */
+    val by: String? = null,
+) {
     fun check() {
         schema(length in 1..100_000, "dir.length")
         bytes32(head, "dir.head")
+        by?.let { id(it, "dir.by") }
     }
 }
 

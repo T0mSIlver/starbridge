@@ -408,10 +408,13 @@ public struct DecisionLink: Equatable, Sendable {
 public struct DirectoryHead: Equatable, Sendable {
     public let length: Int
     public let head: String
+    /** The device a machine before #794 passed this head on from: no reader keeps such a head (#1627). */
+    public let by: String?
 
-    public init(length: Int, head: String) {
+    public init(length: Int, head: String, by: String? = nil) {
         self.length = length
         self.head = head
+        self.by = by
     }
 
     public init(json: JSON) throws { try self.init(Fields(json, "dir")) }
@@ -420,9 +423,14 @@ public struct DirectoryHead: Equatable, Sendable {
         length = try f.int("length")
         try schema((1...100_000).contains(length), "dir.length")
         head = try f.bytes32("head")
+        by = try f.optId("by")
     }
 
-    public var json: JSON { .object(["length": JSON(length), "head": .string(head)]) }
+    public var json: JSON {
+        var o: JSONObject = ["length": JSON(length), "head": .string(head)]
+        o.put("by", by.map(JSON.string))
+        return .object(o)
+    }
 
     var pin: Pin { Pin(length: length, head: head) }
 }
