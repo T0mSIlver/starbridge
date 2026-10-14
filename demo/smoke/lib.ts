@@ -41,6 +41,23 @@ export async function until<T>(what: string, seconds: number, probe: () => Promi
   }
 }
 
+/**
+ * Runs `fn` again after a failure, up to `tries` times. Staging restarts its one server on each
+ * deploy (60 to 120 a day), which fails a request for a few seconds; a check that long must not
+ * fail on that.
+ */
+export async function retry<T>(what: string, fn: () => Promise<T>, tries = 4, seconds = 10) {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await fn();
+    } catch (e) {
+      if (attempt >= tries) throw e;
+      step(`${what} failed (${(e as Error).message.split("\n")[0]}); retrying in ${seconds} s`);
+      await Bun.sleep(seconds * 1000);
+    }
+  }
+}
+
 /** The emulator `adb` reaches (ANDROID_SERIAL picks one), and what `out` collects from it. */
 export function emulator(adbPath: string, out: string) {
   async function adb(...args: string[]): Promise<string> {
@@ -202,7 +219,11 @@ export async function pair(dir: string, server: string, device: DemoDevice) {
 }
 
 /** The machine asks a question with context and options; returns its id. */
-export async function ask(dir: string, question: string, context: string): Promise<string> {
+export function ask(dir: string, question: string, context: string): Promise<string> {
+  return retry("ask", () => askOnce(dir, question, context));
+}
+
+async function askOnce(dir: string, question: string, context: string): Promise<string> {
   const p = cli(dir, "workstation", [
     "ask",
     "--question",

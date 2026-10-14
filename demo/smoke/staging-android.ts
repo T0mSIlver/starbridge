@@ -19,7 +19,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { DemoDevice } from "../src/device";
 import { cli } from "../video/stack";
-import { ask, Crash, emulator, pair, step, until } from "./lib";
+import { ask, Crash, emulator, pair, retry, step, until } from "./lib";
 import { clearLeftover } from "./staging-clear";
 
 const CONTEXT = [
@@ -60,10 +60,13 @@ const stop = new AbortController();
 let failed = false;
 try {
   step(`staging account and machine on ${server}`);
-  await clearLeftover(server, ownerToken, step);
-  await device.createAccount();
-  created = true;
-  await pair(dir, server, device);
+  // A deploy restarting staging meanwhile fails a call: start over, from an empty account.
+  await retry("account and machine", async () => {
+    await clearLeftover(server, ownerToken, step);
+    created = true;
+    await device.createAccount();
+    await pair(dir, server, device);
+  });
   void device.approveJoins(stop.signal).catch((e) => {
     if (!stop.signal.aborted) step(`approving joins stopped: ${e.message}`);
   });
@@ -118,8 +121,14 @@ try {
   await tap(CHOICE);
 
   step("the machine reads the answer");
-  const wait = cli(dir, "workstation", ["wait", pushed.id, "--json", "--timeout", "60s"]);
-  const [text, code] = await Promise.all([new Response(wait.stdout).text(), wait.exited]);
+  let text = "";
+  let code = 1;
+  // Exit 1 is a failed call (a deploy restarting staging); 2 is no answer in time.
+  for (let attempt = 1; attempt <= 3 && code === 1; attempt++) {
+    const wait = cli(dir, "workstation", ["wait", pushed.id, "--json", "--timeout", "60s"]);
+    [text, code] = await Promise.all([new Response(wait.stdout).text(), wait.exited]);
+    if (code === 1) await Bun.sleep(10_000);
+  }
   const answer = code === 0 ? (JSON.parse(text) as { choice?: string }) : undefined;
   if (answer?.choice !== CHOICE)
     throw new Error(`the machine did not read "${CHOICE}": exit ${code}, ${text.trim()}`);
@@ -138,7 +147,7 @@ try {
     .then((log) => writeFileSync(join(out, "logcat.txt"), log))
     .catch(() => {});
   if (created)
-    await device.deleteAccount().catch((e) => {
+    await retry("delete the account", () => device.deleteAccount()).catch((e) => {
       failed = true;
       console.error(`[smoke] the account was not deleted: ${(e as Error).message}`);
     });
