@@ -52,7 +52,9 @@ function startApp(c: Context<Env>, challenge: string): void {
  * whether this browser started that sign-in, for the trade to check.
  */
 function passApp(c: Context<Env>, code: string, state: string): void {
-  c.var.appSignIns.passed(code, state, safeEqual(getCookie(c, APP_COOKIE) ?? "", state));
+  const bound = safeEqual(getCookie(c, APP_COOKIE) ?? "", state);
+  if (!c.var.appSignIns.passed(code, state, bound))
+    fail(400, "bad-state", "sign-in came from elsewhere; start again in the app");
 }
 
 function newAccountId(): string {
@@ -242,6 +244,7 @@ authRoutes.get("/auth/github/callback", async (c) => {
  */
 authRoutes.get("/auth/github/callback/app", (c) => {
   const { appRedirectUri } = c.var.config;
+  rateLimit(c, `github:${ipKey(c)}`, c.var.config.limits.githubCallbacks);
   const { code = "", error = "", state = "" } = c.req.query();
   const word = /^[A-Za-z0-9_-]{1,100}$/;
   if (!CHALLENGE.test(state) || !(word.test(code) || word.test(error)))
@@ -266,9 +269,10 @@ authRoutes.post("/auth/app/session", async (c) => {
   );
   // A code that came back through this server must be traded with its challenge's verifier,
   // whatever the provider checks: whoever caught the redirect after it has the code, not the
-  // verifier. The Mac app's must also have come back to the browser that started its sign-in,
-  // since its challenge shows in that browser's address and its code always passes through here.
-  const passed = c.var.appSignIns.take(code);
+  // verifier, and a wrong guess leaves the code's challenge in place. The Mac app's must also
+  // have come back to the browser that started its sign-in, since its challenge shows in that
+  // browser's address and its code always passes through here.
+  const passed = c.var.appSignIns.challengeOf(code);
   if (passed && !safeEqual(passed.challenge, s256(verifier)))
     fail(400, "bad-code", "sign-in code unknown, used, expired or not yours; sign in again");
   if (c.var.client?.name === "desktop" && !passed?.bound)
@@ -290,6 +294,7 @@ authRoutes.post("/auth/app/session", async (c) => {
     if (code.length > 100) fail(400, "bad-code", "sign-in code unknown; sign in again");
     account = await gitHubAccount(c, code, verifier);
   }
+  c.var.appSignIns.traded(code);
   c.var.appSignIns.add(s256(verifier), account);
   return c.json({ session: createSession(c.var.db, account, c.var.config.limits.sessions) });
 });
