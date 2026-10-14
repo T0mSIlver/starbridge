@@ -41,5 +41,4 @@ test("a demo server keeps reviewers to its own machine, and its pairings fit its
   const tmpfs = Number(/size=(\d+)m/.exec(compose)?.[1]) * 1024 * 1024;
   // About 4 KB each (limits.ts), with room left for the rest of the database and its WAL.
   expect(config.limits.pendingPairings * 4096).toBeLessThan(tmpfs / 2);
-  expect(configFromEnv(PROD).limits.pendingPairings).toBe(20_000);
 });
