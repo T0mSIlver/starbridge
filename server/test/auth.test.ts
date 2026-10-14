@@ -312,6 +312,19 @@ test("owner sign-in is off without OWNER_TOKEN", async () => {
   expect((await s.call("POST", "/v1/auth/owner", { body: { token: "" } })).status).toBe(404);
 });
 
+test("a server refuses a short OWNER_TOKEN, and any on starbridge.run (#1720)", () => {
+  const local = { PUBLIC_URL: "http://localhost:8080" };
+  expect(() => configFromEnv({ ...local, OWNER_TOKEN: "x".repeat(15) })).toThrow("at least 16");
+  expect(configFromEnv({ ...local, OWNER_TOKEN: "x".repeat(16) }).ownerToken).toBe("x".repeat(16));
+  expect(() =>
+    configFromEnv({ PUBLIC_URL: "https://starbridge.run", OWNER_TOKEN: "x".repeat(32) }),
+  ).toThrow("OWNER_TOKEN is refused");
+  expect(
+    configFromEnv({ PUBLIC_URL: "https://staging.starbridge.run", OWNER_TOKEN: "x".repeat(32) })
+      .ownerToken,
+  ).toBeDefined();
+});
+
 test("/me refuses missing and unknown tokens", async () => {
   const s = await makeServer();
   expect((await s.call("GET", "/v1/me")).status).toBe(401);

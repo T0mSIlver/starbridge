@@ -64,10 +64,10 @@ xcodebuild -project Starbridge.xcodeproj -scheme Starbridge -destination "platfo
 and `InboxTests` plays a machine whose question, prompt and run the app lists and answers, online
 and offline, then deletes the account.
 They run when the test process gets a self-hosted server with no device yet, started from the repository root with
-`PORT=18731 DB_PATH=/tmp/sb.db OWNER_TOKEN=test bun run server/src/main.ts`:
+`PORT=18731 DB_PATH=/tmp/sb.db OWNER_TOKEN=test-owner-token-16 bun run server/src/main.ts`:
 
 ```bash
-TEST_RUNNER_STARBRIDGE_TEST_SERVER=http://localhost:18731 TEST_RUNNER_STARBRIDGE_TEST_OWNER_TOKEN=test xcodebuild -project Starbridge.xcodeproj -scheme Starbridge -destination "platform=iOS Simulator,name=iPhone 16" test
+TEST_RUNNER_STARBRIDGE_TEST_SERVER=http://localhost:18731 TEST_RUNNER_STARBRIDGE_TEST_OWNER_TOKEN=test-owner-token-16 xcodebuild -project Starbridge.xcodeproj -scheme Starbridge -destination "platform=iOS Simulator,name=iPhone 16" test
 ```
 
 CI runs both, with the server, in `.github/workflows/ios.yml`. Each release tag uploads the app to
