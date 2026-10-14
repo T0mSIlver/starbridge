@@ -20,6 +20,8 @@ else
 fi
 for f in $files; do
   case " $all " in *" $f "*) ;; *) echo "not a secret to push: $f" >&2; exit 1 ;; esac
+  # tar would skip a missing one and the pipe would still succeed.
+  [ -s "$src/$f" ] || { echo "missing: $src/$f" >&2; exit 1; }
 done
 # One SSH connection carries the secrets as a tar stream; root unpacks it into a folder only root
 # can read, beside the secrets, and removes it on any exit (#1734). A dropped connection leaves
