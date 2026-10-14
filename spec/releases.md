@@ -240,7 +240,9 @@
   of labels, and falls back to GitHub's runner when it is unset (docs/ci.md). Dependabot's and
   forks' pull requests stay on GitHub's runners, and so do the desktop e2e (Electron's libraries),
   Windows and macOS. Android builds on main and in releases use their own runner,
-  `ANDROID_RUNNER`. The PR pool holds no secrets, and no pull request job reaches the other two.
+  `ANDROID_RUNNER`. Each Android push to main also builds on GitHub's runner, to save the Gradle
+  cache that pull requests restore there (#1662). The PR pool holds no secrets, and no pull
+  request job reaches the other two.
   Each runner registers for one job, so every job starts clean. A fork's pull request runs its
   own `ci.yml`, which could name any label, so a fork's run is never approved.
 - **Monitoring.** `uptime.yml` checks `/healthz`, `/healthz/backup` (fails when the last nightly
