@@ -1,5 +1,6 @@
 package dev.starbridge.app.widget
 
+import android.appwidget.AppWidgetManager
 import android.content.Context
 import android.content.Intent
 import android.graphics.Paint
@@ -53,6 +54,13 @@ import androidx.glance.text.Text
 import androidx.glance.text.TextAlign
 import androidx.glance.text.TextStyle
 import androidx.glance.unit.ColorProvider
+import androidx.work.Constraints
+import androidx.work.CoroutineWorker
+import androidx.work.ExistingWorkPolicy
+import androidx.work.NetworkType
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.WorkManager
+import androidx.work.WorkerParameters
 import dev.starbridge.app.MainActivity
 import dev.starbridge.app.data.Clock
 import dev.starbridge.app.data.Colours
@@ -64,6 +72,7 @@ import dev.starbridge.app.data.QuotaSettings
 import dev.starbridge.app.data.QuotaWindow
 import dev.starbridge.app.data.Store
 import dev.starbridge.app.di.app
+import dev.starbridge.app.ui.ago
 import dev.starbridge.app.ui.clock
 import dev.starbridge.app.ui.day
 import dev.starbridge.app.ui.inbox.snoozed
@@ -78,10 +87,13 @@ import dev.starbridge.app.ui.theme.LightProviders
 import dev.starbridge.app.ui.theme.StarbridgeColors
 import dev.starbridge.app.ui.weekday
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.launch
+import java.time.Duration
 import java.time.Instant
 import java.time.ZoneId
 import java.time.temporal.ChronoUnit
@@ -278,11 +290,19 @@ internal class QuotaRow(
     val mood: Mood,
     val word: String,
     val words: List<String>,
+    /**
+     * Once the uploader's reading is older than [STALE]: "Updated 3 h ago", then "3 h ago", the
+     * Quotas screen's own words. Empty while it is fresh.
+     */
+    val updated: List<String> = emptyList(),
 ) {
     /** The figure and the fill: a window that ran out reads 100% used, as on the Quotas screen. */
     val percent: Int get() = if (course == Course.RanOut && bar.word == "used") 100 else bar.percent.coerceIn(0, 100)
 
     companion object {
+        /** A launcher redraws a widget every 30 minutes, so an hour old is a reading it missed. */
+        val STALE: Duration = Duration.ofHours(1)
+
         /**
          * The windows as the Quotas screen orders them, under the owner's quota settings; with a
          * [plan], only its windows, shown even when the Quotas screen hides its provider.
@@ -294,7 +314,8 @@ internal class QuotaRow(
                 val (mood, word) = w.state(now, settings.absoluteResets, h24)
                 val course = w.course(now)
                 val at = (w.pace as? Pace.RunsOut)?.at
-                QuotaRow(w, settings.bar(w, now), course, mood, word, if (course == Course.Steady || at == null) listOf(word) else outWords(at, now, h24))
+                val updated = w.takenAt?.takeIf { Duration.between(it, now) >= STALE }?.let { listOf("Updated ${ago(now, it)}", ago(now, it)) }.orEmpty()
+                QuotaRow(w, settings.bar(w, now), course, mood, word, if (course == Course.Steady || at == null) listOf(word) else outWords(at, now, h24), updated)
             }
         }
     }
@@ -444,9 +465,9 @@ internal fun QuotasWidget(rows: List<QuotaRow>?, p: Palette, choice: Choice? = n
             }
             return@Card
         }
-        val name = 64.dp
+        val nameWidth = 64.dp
         val figure = 44.dp
-        val meter = inner - name - figure - 12.dp
+        val meter = inner - nameWidth - figure - 12.dp
         // Whole providers and rows while they fit: a heading 20 dp, a row 22 dp, 6 dp between providers.
         var room = size.height - 36.dp
         val groups = shown.groupBy { it.window.provider to it.window.machine }.values.mapNotNull { group ->
@@ -460,10 +481,21 @@ internal fun QuotasWidget(rows: List<QuotaRow>?, p: Palette, choice: Choice? = n
         groups.take(5).forEachIndexed { i, group ->
             if (i > 0) Spacer(GlanceModifier.height(6.dp))
             Column(GlanceModifier.fillMaxWidth()) {
-                Text(Plan.of(group.first().window).name, style = style(14.sp, p.fg, medium = true), maxLines = 1)
+                val name = Plan.of(group.first().window).name
+                val updated = group.first().updated
+                if (updated.isEmpty()) Text(name, style = style(14.sp, p.fg, medium = true), maxLines = 1)
+                else {
+                    val context = LocalContext.current
+                    val room = inner - context.textWidth(name, 14.sp, true) - 8.dp
+                    val (late, lateSize) = context.fitting(updated, room.coerceAtLeast(1.dp), 13.sp, false)
+                    Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Text(name, style = style(14.sp, p.fg, medium = true), maxLines = 1, modifier = GlanceModifier.defaultWeight())
+                        Text(late, style = style(lateSize, p.fg2), maxLines = 1)
+                    }
+                }
                 group.take(9).forEach { row ->
                     Row(GlanceModifier.fillMaxWidth().height(22.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Text(row.window.window, style = style(13.sp, p.fg2), maxLines = 1, modifier = GlanceModifier.width(name))
+                        Text(row.window.window, style = style(13.sp, p.fg2), maxLines = 1, modifier = GlanceModifier.width(nameWidth))
                         Meter(row, meter, p)
                         Spacer(GlanceModifier.width(12.dp))
                         Text(
@@ -489,9 +521,11 @@ private fun Figure(row: QuotaRow, width: Dp, p: Palette, figure: TextUnit = 45.s
     Spacer(GlanceModifier.height(gap))
     Meter(row, width, p)
     Spacer(GlanceModifier.height(gap))
-    val medium = row.mood == Mood.Bad
-    val (words, size) = context.fitting(row.words, width, 13.sp, medium)
-    Text(words, style = style(size, row.mood.color(p), medium = medium), maxLines = 1)
+    // A reading that old says so in place of its pace, which is only as good as the reading.
+    val stale = row.updated.isNotEmpty()
+    val medium = !stale && row.mood == Mood.Bad
+    val (words, size) = context.fitting(if (stale) row.updated else row.words, width, 13.sp, medium)
+    Text(words, style = style(size, if (stale) p.fg2 else row.mood.color(p), medium = medium), maxLines = 1)
 }
 
 class QuotasWidget : GlanceAppWidget() {
@@ -520,39 +554,81 @@ class QuotasWidget : GlanceAppWidget() {
     }
 }
 
-class QuotasWidgetReceiver : GlanceAppWidgetReceiver() {
-    override val glanceAppWidget: GlanceAppWidget = QuotasWidget()
-}
-
 @Composable
 private fun Live(content: @Composable (Store, Prefs) -> Unit) {
     val app = LocalContext.current.app()
     content(app.store(), app.prefs())
 }
 
+/** Draws both widgets again, each on its own: one that fails must not keep the other from its update. */
+suspend fun redrawWidgets(context: Context) {
+    runCatching { QuestionsWidget().updateAll(context) }.onFailure { if (it is CancellationException) throw it }
+    runCatching { QuotasWidget().updateAll(context) }.onFailure { if (it is CancellationException) throw it }
+}
+
 /**
  * Redraws the widgets whenever what they show changes: questions, quota windows, the phase, or a
- * setting they follow. Launchers redraw them every 30 minutes too, for relative times and snoozes
- * that end. On Android 15 and later it also sets the picker's previews, which show the owner's own.
+ * setting they follow. The first change redraws at once and the rest within a second after it, so
+ * a push that wakes the app only to sync gets its redraw in before the process is frozen. Launchers
+ * redraw them every 30 minutes too, for relative times and snoozes that end, and a Quotas widget's
+ * redraw then fetches the quotas first ([QuotasSyncWorker]). On Android 15 and later it also sets
+ * the picker's previews, which show the owner's own.
  */
-@OptIn(FlowPreview::class)
 fun watchWidgets(context: Context, store: Store, prefs: Prefs, scope: CoroutineScope) {
+    var previewed = false
+    watchWidgets(listOf(store.phase, store.decisions, store.windows, prefs.colours, prefs.quota, prefs.clock), scope) {
+        redrawWidgets(context)
+        // The system rate-limits previews: a refused one is tried again on the next change.
+        if (!previewed && Build.VERSION.SDK_INT >= Build.VERSION_CODES.VANILLA_ICE_CREAM) runCatching {
+            val manager = GlanceAppWidgetManager(context)
+            val ok = GlanceAppWidgetManager.SET_WIDGET_PREVIEWS_RESULT_SUCCESS
+            previewed = manager.setWidgetPreviews(QuestionsWidgetReceiver::class) == ok &&
+                manager.setWidgetPreviews(QuotasWidgetReceiver::class) == ok
+        }
+    }
+}
+
+/** Runs [redraw] when any of [sources] changes: at once, then at most once a second. */
+internal fun watchWidgets(sources: List<Flow<*>>, scope: CoroutineScope, redraw: suspend () -> Unit) {
     scope.launch {
-        var previewed = false
-        combine(listOf(store.phase, store.decisions, store.windows, prefs.colours, prefs.quota, prefs.clock)) { it.toList() }
-            .debounce(1_000)
+        combine(sources) { it.toList() }
+            .conflate()
             .collect {
-                runCatching {
-                    QuestionsWidget().updateAll(context)
-                    QuotasWidget().updateAll(context)
-                    // The system rate-limits previews: a refused one is tried again on the next change.
-                    if (!previewed && Build.VERSION.SDK_INT >= Build.VERSION_CODES.VANILLA_ICE_CREAM) {
-                        val manager = GlanceAppWidgetManager(context)
-                        val ok = GlanceAppWidgetManager.SET_WIDGET_PREVIEWS_RESULT_SUCCESS
-                        previewed = manager.setWidgetPreviews(QuestionsWidgetReceiver::class) == ok &&
-                            manager.setWidgetPreviews(QuotasWidgetReceiver::class) == ok
-                    }
-                }
+                redraw()
+                delay(1_000)
             }
+    }
+}
+
+/**
+ * A Quotas widget's periodic update (every 30 minutes, the launcher's own) reads the server's
+ * quotas first: quota snapshots push no notification, so with the app closed nothing else would
+ * bring them, and the widget would redraw the phone's old ones.
+ */
+class QuotasWidgetReceiver : GlanceAppWidgetReceiver() {
+    override val glanceAppWidget: GlanceAppWidget = QuotasWidget()
+
+    override fun onUpdate(context: Context, appWidgetManager: AppWidgetManager, appWidgetIds: IntArray) {
+        super.onUpdate(context, appWidgetManager, appWidgetIds)
+        QuotasSyncWorker.schedule(context)
+    }
+}
+
+/** Fetches the quotas the server holds, then redraws the widgets, with the app closed or not. */
+class QuotasSyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
+    override suspend fun doWork(): Result {
+        applicationContext.app().store().syncQuotasQuietly()
+        redrawWidgets(applicationContext)
+        return Result.success()
+    }
+
+    companion object {
+        /** Waits for a network, and runs once however many updates ask. */
+        fun schedule(context: Context) {
+            val request = OneTimeWorkRequestBuilder<QuotasSyncWorker>()
+                .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
+                .build()
+            WorkManager.getInstance(context).enqueueUniqueWork("quotas-widget", ExistingWorkPolicy.KEEP, request)
+        }
     }
 }

@@ -879,6 +879,9 @@ class ServerStore(
         }
     }
 
+    /** The Quotas widget's own read, with the app closed: what the server holds, with no ask and no busy. */
+    suspend fun syncQuotasQuietly() = locked(showBusy = false) { if (phase.value == Phase.Ready) syncQuotas() }
+
     private suspend fun sync() {
         if (phase.value != Phase.Ready) return
         syncDirectory()
