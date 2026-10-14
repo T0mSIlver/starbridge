@@ -46,6 +46,8 @@ The page finds `window.starbridgeDesktop` only on the configured server's origin
   milliseconds since its last input, null while asleep or quitting (`src/screen.ts`).
   `onScreen(f)`: `f()` runs every 10 s and when it changes; the app waits for its promise before
   it quits.
+- `clock()`: `"12"` or `"24"`, the Mac's own choice (System Settings → General → Date & Time →
+  24-hour time, else its region's), read again at each window focus (`src/clock.ts`).
 - `shown()`: whether the window is on screen; `onShown(f)`: `f()` runs when it shows or hides.
 - `notificationsBlocked()`: whether macOS refused the last notification, as it does while it
   blocks the app's; `onNotificationsBlocked(f)`: `f()` runs when that changes.

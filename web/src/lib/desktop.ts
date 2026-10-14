@@ -85,6 +85,8 @@ export type DesktopBridge = {
   updateAction?(a: "check" | "download" | "install"): void;
   /** Called when the status or the settings change. */
   onUpdate?(f: (() => void) | null): void;
+  /** "12" or "24": the Mac's own choice (#1705); null off macOS, absent in older apps. */
+  clock?(): unknown;
   /** Whether macOS opens the app at login; absent before #1449, whose app kept it in its menu. */
   login?(): boolean;
   setLogin?(login: boolean): void;
@@ -99,3 +101,9 @@ export type DesktopBridge = {
 
 // globalThis, not window: the service worker reads this module too, and has none.
 export const desktop = (globalThis as { starbridgeDesktop?: DesktopBridge }).starbridgeDesktop;
+
+/** The Mac's 12- or 24-hour choice, read when asked since the app asks again at each focus. */
+export function desktopClock(): "12" | "24" | undefined {
+  const c = (globalThis as { starbridgeDesktop?: DesktopBridge }).starbridgeDesktop?.clock?.();
+  return c === "12" || c === "24" ? c : undefined;
+}

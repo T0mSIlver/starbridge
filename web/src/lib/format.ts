@@ -1,4 +1,5 @@
 import { CHECK_CONFIRM_MS } from "@starbridge/protocol";
+import { desktopClock } from "./desktop";
 import { getPref, type Prefs } from "./prefs";
 
 /** "4 min ago", "in 2 h 30 min", "in 3 days". */
@@ -38,12 +39,16 @@ export function origin(source: {
   return sessionName(source) || source.project;
 }
 
-/** "14:30" or "02:30 PM": the Clock setting, else the browser's language. */
+/**
+ * "14:30" or "02:30 PM": the Clock setting. Its default, stored as "system", follows the Mac's
+ * choice in the desktop app and the browser's language elsewhere (#1705).
+ */
 export function clockTime(d: Date, clock: Prefs["clock"] = getPref("clock")): string {
+  const hours = clock === "system" ? desktopClock() : clock;
   return d.toLocaleTimeString(undefined, {
     hour: "2-digit",
     minute: "2-digit",
-    ...(clock === "system" ? {} : { hour12: clock === "12" }),
+    ...(hours ? { hour12: hours === "12" } : {}),
   });
 }
 
