@@ -32,6 +32,7 @@ jobs:
   build:
     name: build, unit tests, screenshots
     runs-on: ${{ github.event_name == 'push' && vars.ANDROID_RUNNER || 'ubuntu-24.04' }}
+    timeout-minutes: 40
     # Builds of pull requests never sign with the release key, even on a runner whose environment sets it.
     env:
       STARBRIDGE_KEYSTORE: ""
@@ -79,6 +80,7 @@ jobs:
     name: Gradle cache for pull requests
     if: github.event_name == 'push'
     runs-on: ubuntu-24.04
+    timeout-minutes: 40
     env:
       STARBRIDGE_KEYSTORE: ""
     steps:

@@ -31,6 +31,8 @@ permissions:
 jobs:
   version:
     runs-on: ${{ vars.TRUSTED_RUNNER && fromJSON(vars.TRUSTED_RUNNER) || 'ubuntu-latest' }}
+    # The wait for starbridge.run below is limited to 120 minutes.
+    timeout-minutes: 130
     # An rc dispatches deploy.yml.
     permissions:
       actions: write
@@ -77,7 +79,6 @@ jobs:
         name: Deploy the rc to starbridge.run
         env:
           GH_TOKEN: ${{ github.token }}
-        # Not gh: some self-hosted runners lack it.
         run: |
           curl -fsS -X POST -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' \
             "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/actions/workflows/deploy.yml/dispatches" \
@@ -99,7 +100,6 @@ jobs:
               tr -d '\r' | awk -F': ' 'tolower($1) == "x-starbridge-revision" { print $2 }') || got=
             case $got in *[!0-9a-f]*) got= ;; esac
             if [ ${#got} -eq 40 ]; then
-              # Not gh: some self-hosted runners lack it (dell2-2).
               status=$(curl -fsS -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' \
                 "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/compare/$want...$got?per_page=1" | jq -r .status) || status=
               case $status in identical | ahead) echo "starbridge.run runs $got"; break ;; esac
@@ -112,6 +112,7 @@ jobs:
     needs: version
     if: ${{ !inputs.npm_only && !inputs.testflight_only }}
     runs-on: ${{ vars.ANDROID_RUNNER || 'ubuntu-24.04' }}
+    timeout-minutes: 40
     environment: release
     defaults:
       run:
@@ -155,6 +156,7 @@ jobs:
     needs: version
     if: ${{ !inputs.npm_only && !inputs.testflight_only }}
     runs-on: ${{ vars.TRUSTED_RUNNER && fromJSON(vars.TRUSTED_RUNNER) || 'ubuntu-latest' }}
+    timeout-minutes: 20
     defaults:
       run:
         working-directory: cli
@@ -189,6 +191,7 @@ jobs:
     needs: version
     if: ${{ !inputs.npm_only && !inputs.testflight_only && vars.DESKTOP_RELEASE == 'true' && (startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main') }}
     runs-on: macos-15
+    timeout-minutes: 45
     environment: desktop-release
     defaults:
       run:
@@ -273,6 +276,7 @@ jobs:
     # The desktop job is skipped until it is turned on; a failed one stops the release.
     if: ${{ !cancelled() && needs.android.result == 'success' && needs.smoke.result == 'success' && needs.cli.result == 'success' && contains(fromJSON('["success", "skipped"]'), needs.desktop.result) }}
     runs-on: ${{ vars.TRUSTED_RUNNER && fromJSON(vars.TRUSTED_RUNNER) || 'ubuntu-latest' }}
+    timeout-minutes: 15
     environment: release
     permissions:
       contents: write
@@ -360,6 +364,7 @@ jobs:
       cancel-in-progress: false
     if: ${{ !cancelled() && needs.release.result == 'success' && (startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main') }}
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     environment: play-release
     # What the upload sent, for releases.json.
     outputs:
@@ -568,6 +573,7 @@ jobs:
     # The release's result, not success(): a skipped desktop job upstream would skip this too.
     if: ${{ !cancelled() && needs.release.result == 'success' && startsWith(github.ref, 'refs/tags/v') && !contains(github.ref_name, '-rc.') }}
     runs-on: ${{ vars.TRUSTED_RUNNER && fromJSON(vars.TRUSTED_RUNNER) || 'ubuntu-latest' }}
+    timeout-minutes: 10
     environment: release
     steps:
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
@@ -599,6 +605,7 @@ jobs:
     needs: [version, release]
     if: ${{ always() && needs.version.result == 'success' && (needs.release.result == 'success' || inputs.npm_only) }}
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       contents: read
       id-token: write
@@ -637,6 +644,7 @@ jobs:
     needs: [version, release, play, testflight, homebrew, npm, desktop]
     if: ${{ always() && needs.version.result == 'success' && (startsWith(github.ref, 'refs/tags/v') || inputs.npm_only) && (needs.release.result == 'success' || inputs.npm_only) && !inputs.testflight_only }}
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: write
     steps:
