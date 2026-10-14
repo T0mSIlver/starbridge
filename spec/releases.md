@@ -200,7 +200,10 @@
   cost is that a server fix waits for an rc or a hotfix dispatch. The server keeps serving every
   release from the minimum up (`spec/keys-and-trust.md`), so apps older than the page keep working.
   A deploy goes over SSH to a forced command that deploys only main's head or a commit on main
-  containing the deployed one; the box fetches it itself. Rollbacks are the owner's
+  containing the deployed one; the box fetches it itself. The box also checks the gate the
+  workflow checked, from GitHub's public API without a token (#1714): prod, that staging passed
+  the commit, staging, that CI passed it on main. So a stolen deploy key cannot skip either, and
+  the boxes get no GitHub credential. Rollbacks are the owner's
   (`deploy/rollback.sh`, `deploy/deploy.sh`). The server and web images are built once per commit of
   main in `deploy.yml`, for amd64 and arm64, each on a runner of its architecture, and pushed to
   ghcr.io, public, tagged by commit (#1518); a commit that changes nothing they are built from
@@ -249,8 +252,10 @@
   account (a card, its Web Push, an answer read back) and sets the commit's `staging` status; prod
   deploys only a commit whose status is success, waiting up to an hour for it, as an rc tag can
   follow its merge by minutes. A commit staging skipped, being older than the one it runs, never
-  passes. A release that cannot push stops on staging. `deploy/deploy.sh` stays the owner's way
-  around it.
+  passes. A release that cannot push stops on staging. Any workflow can post a status, so prod's
+  box trusts it only as a pointer: the run it names must be main's deploy.yml, whose staging job
+  ran a step named after the commit that only a pass runs (#1714). `deploy/deploy.sh` stays the
+  owner's way around it.
 - **The apps run against staging** (#1621). The round trip above has no app in it, so a server
   change the apps cannot take (a field, a header, a push that never arrives) reached an rc unseen,
   as v0.1.3's regex did for the Android build. Every night `staging-app.yml` runs main's apps on

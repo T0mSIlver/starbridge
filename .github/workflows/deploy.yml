@@ -4,8 +4,8 @@ name: deploy
 # the images are built, staging deploys them and runs a round trip, and the commit gets the status
 # `staging`. starbridge.run takes a commit only by dispatch, `gh workflow run deploy.yml -f
 # sha=<commit>`: release.yml dispatches each rc tag's commit, and the owner a hotfix. Either way it
-# deploys only a commit whose `staging` status is success. deploy/deploy.sh and deploy/rollback.sh
-# stay the owner's way around it.
+# deploys only a commit whose `staging` status is success, which the boxes check again
+# (deploy/*/deploy-rev.sh). deploy/deploy.sh and deploy/rollback.sh stay the owner's way around it.
 on:
   workflow_run:
     workflows: [CI]
@@ -195,6 +195,7 @@ jobs:
       GH_TOKEN: ${{ github.token }}
     steps:
       - name: Deploy and run the round trip
+        id: deploy
         env:
           STAGING_KEY: ${{ secrets.STAGING_SSH_KEY }}
           STAGING_KNOWN_HOSTS: ${{ secrets.STAGING_KNOWN_HOSTS }}
@@ -236,7 +237,21 @@ jobs:
             echo "staging runs ${got:-no named revision}, not $REV"
             exit 1
           fi
-          status success "Deployed to staging; round trip passed"
+          echo "passed=true" >> "$GITHUB_OUTPUT"
+      # starbridge.run's box reads this step from GitHub's API before it deploys the commit
+      # (deploy/host/deploy-rev.sh). Its name holds the commit, and only main's deploy.yml runs it,
+      # so a status that some other run posted cannot stand in for it. It runs before the status
+      # turns success, so whoever reads the status finds it done.
+      - name: Staging passed ${{ github.event.workflow_run.head_sha }}
+        if: steps.deploy.outputs.passed == 'true'
+        run: echo "staging passed $REV"
+      - name: Set the staging status
+        if: steps.deploy.outputs.passed == 'true'
+        run: |
+          curl -fsS --retry 5 --retry-delay 3 --retry-all-errors -X POST -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' \
+            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/statuses/$REV" \
+            -d "$(jq -n --arg u "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
+              '{context: "staging", state: "success", description: "Deployed to staging; round trip passed", target_url: $u}')" >/dev/null
 
   # starbridge.run, by dispatch only: release.yml for each rc tag, the owner for a hotfix. It waits
   # for the commit's `staging` status, up to an hour, as an rc tag can follow its merge by minutes,
@@ -279,7 +294,8 @@ jobs:
           echo "staging never passed $REV within an hour"
           exit 1
       # The key's forced command on the box runs starbridge-deploy with this commit id and nothing
-      # else (deploy/setup-actions-deploy.sh); it refuses a commit older than the one deployed.
+      # else (deploy/setup-actions-deploy.sh); it refuses a commit older than the one deployed, and
+      # checks the staging pass again from GitHub's API.
       - name: Deploy
         env:
           DEPLOY_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
