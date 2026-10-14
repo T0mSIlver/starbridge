@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { LiveServer } from "@starbridge/server/test-support";
 import { run } from "../../cli/src/cli";
 import { paired, type TestCtx, until } from "../../cli/test/helpers";
-import { joinLines } from "../hooks/agent.ts";
+import { joinLines, type Line } from "../hooks/agent.ts";
 import { type Host, Poller, type Timing } from "../hooks/poller.ts";
 
 const FAST: Timing = {
@@ -38,6 +38,8 @@ function session(id: string, opts: { gated?: boolean; timing?: Timing } = {}) {
   const s = {
     id,
     submitted: [] as string[],
+    /** Each line submitted, with the subagent it goes to. */
+    lines: [] as Line[],
     /** What the host's `starting` answers. */
     starting: false,
     runs: [] as string[][],
@@ -85,6 +87,7 @@ function session(id: string, opts: { gated?: boolean; timing?: Timing } = {}) {
     sleep: (ms) => Bun.sleep(ms),
     submit: (lines) => {
       s.submitted.push(joinLines(lines));
+      s.lines.push(...lines);
       return lines.map((l) => l.ack);
     },
     starting: () => s.starting,
@@ -357,4 +360,19 @@ test("a session that does not poll rereads a held answer every check, not back t
   expect(host.submitted).toEqual([]);
   held = false;
   await until(() => host.submitted.length === 1);
+});
+
+test("the poller hands on which subagent asked (#1702)", async () => {
+  const a = session("s-a");
+  Object.assign(cli.env, {
+    CLAUDECODE: "1",
+    CLAUDE_CODE_SESSION_ID: "s-a",
+    STARBRIDGE_CLAUDE_AGENT: "a1",
+  });
+  const id = await ask("Which suffix?");
+  await server.answer(id, { choice: "Yes" });
+  await until(() => a.get().lines.length > 0);
+  expect(a.get().lines).toEqual([
+    { text: `Answer to ${id} (Which suffix?): Yes`, ack: id, subagent: "a1" },
+  ]);
 });

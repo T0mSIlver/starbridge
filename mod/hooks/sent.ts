@@ -45,6 +45,11 @@ interface Line {
   at: number;
   /** Submits a hook refused or the engine rejected; a process exiting is not one. */
   refused: number;
+  /**
+   * Sent to this subagent, which has not read it yet (#1702); `line` is then what the parent gets
+   * if the process exits first.
+   */
+  agent?: string;
 }
 
 /** Refused submits after which a line is dropped, with a log line. */
@@ -131,6 +136,76 @@ export class Sent {
       }
       this.enter(me, entries);
       return [...out, ...entries.map((l) => l.ack)];
+    });
+  }
+
+  /**
+   * Records `batch` for subagent `agent`, as the prompt the parent gets should the process exit
+   * before the subagent reads it (#1702), then runs `deliver`, the send. A send that fails leaves
+   * no record. Claude Code keeps a message for a running subagent in memory until its next tool
+   * round, so `read` drops the record only once the subagent has moved on.
+   */
+  toAgent(
+    agent: string,
+    batch: { text: string; ack: string }[],
+    deliver: () => Promise<{ isDelivered: boolean; reason?: string }>,
+  ): Promise<{ isDelivered: boolean; reason?: string }> {
+    // Without a token a reload could not be told from a new process: nothing to recover by.
+    if (this.process === undefined) return deliver();
+    const process = this.process;
+    return this.alone(async () => {
+      const me = await this.host.sessionId();
+      const at = await this.host.now();
+      const acks = batch.map((l) => l.ack);
+      const lines = await this.loaded(me);
+      const entries = batch.map((l) => ({
+        ack: l.ack,
+        line: l.text,
+        process,
+        at,
+        refused: 0,
+        agent,
+      }));
+      const rest = lines?.filter((l) => !acks.includes(l.ack));
+      const saved =
+        rest !== undefined &&
+        (await this.save(me, [...rest, ...entries]).then(
+          () => true,
+          (e) => {
+            this.host.log(
+              `starbridge: could not record the answers ${acks.join(", ")}: ${(e as Error).message}`,
+            );
+            return false;
+          },
+        ));
+      // Sent without a record, an answer the subagent never read would be lost with the process.
+      if (!saved) return { isDelivered: false, reason: "could not record it" };
+      let r: { isDelivered: boolean; reason?: string };
+      try {
+        r = await deliver();
+      } catch (e) {
+        await this.save(me, rest).catch(() => undefined);
+        throw e;
+      }
+      if (!r.isDelivered) await this.save(me, rest).catch(() => undefined);
+      return r;
+    });
+  }
+
+  /**
+   * Subagent `agent` read what was sent to it up to `before`, the end of a tool round of its own:
+   * Claude Code hands a subagent its messages after each round. Those records go.
+   */
+  read(agent: string, before: number): Promise<void> {
+    return this.alone(async () => {
+      // After a hot reload the current session is the one its records are under.
+      await this.load(await this.host.sessionId()).catch(() => undefined);
+      for (const session of this.sessions) {
+        const lines = await this.load(session).catch(() => undefined);
+        if (!lines) continue;
+        const keep = lines.filter((l) => l.agent !== agent || l.at > before);
+        if (keep.length < lines.length) await this.save(session, keep).catch(() => undefined);
+      }
     });
   }
 
@@ -288,7 +363,8 @@ function isLine(l: unknown): l is Line {
     typeof x.line === "string" &&
     typeof x.process === "string" &&
     typeof x.at === "number" &&
-    typeof x.refused === "number"
+    typeof x.refused === "number" &&
+    (x.agent === undefined || typeof x.agent === "string")
   );
 }
 

@@ -13,6 +13,7 @@ import {
 import { Handover } from "./handover.ts";
 import { configDir, Poller } from "./poller.ts";
 import { Sent, sessionElsewhere } from "./sent.ts";
+import { forParent, tagAsk, toSubagents, untagAsk } from "./subagent.ts";
 import { Switch, wantsLoop } from "./switch.ts";
 
 /**
@@ -36,6 +37,10 @@ export const register: Register = (on) => {
   };
   const handover = new Handover();
   let sent: Sent | undefined;
+  /** Answers a subagent could not take: they go to the parent from then on (#1702). */
+  const failed = new Set<string>();
+  /** When each subagent's last tool call ended: a message sent before then, it has read. */
+  const roundEnded = new Map<string, number>();
 
   on("session.start", async ($, e, next) => {
     handover.ended();
@@ -129,7 +134,40 @@ export const register: Register = (on) => {
       token,
     );
     sent = records;
-    const submit = (lines: Line[]) => handover.submit(lines, (rest) => records.send(rest));
+    /** Whether subagent `agentId` runs now; when unsure, it does. */
+    const running = async (agentId: string) => {
+      try {
+        const status = (await $.agent.list()).find((a) => a.id === agentId)?.status;
+        return status === undefined || ["pending", "running", "waiting"].includes(status);
+      } catch {
+        return true;
+      }
+    };
+    // A subagent's answers go to it, whatever the main agent does (#1702).
+    const submit = async (lines: Line[]) => {
+      const me = await sessionId();
+      const { taken, rest } = await toSubagents(
+        lines,
+        async (agentId, group, text) => {
+          const send = () => $.session.send({ to: { agentId }, text });
+          // A subagent that ended is resumed with the message as its prompt, which its transcript
+          // keeps; one that runs holds it in memory until its next tool round.
+          if (!(await running(agentId))) return send();
+          return records.toAgent(
+            agentId,
+            group.map((l) => forParent(l, agentId)),
+            send,
+          );
+        },
+        log,
+        failed,
+      );
+      // A /clear or /resume during the sends: the rest waits, unconfirmed, for session `me`.
+      if (rest.length > 0 && (await sessionId()) !== me) return taken;
+      const parent =
+        rest.length > 0 ? await handover.submit(rest, (left) => records.send(left)) : [];
+      return [...taken, ...parent];
+    };
     const starting = () => waiting > 0;
     loop = new Switch(
       {
@@ -191,7 +229,11 @@ export const register: Register = (on) => {
 
   on("turn.complete", async (_$, e, next) => {
     const r = await next(e);
-    if (e.agentId === undefined) {
+    if (e.agentId !== undefined) {
+      // Its end alone proves nothing: a message that came after its last round waits for a run.
+      const ended = roundEnded.get(e.agentId);
+      if (ended !== undefined) void sent?.read(e.agentId, ended).catch(() => undefined);
+    } else {
       handover.ended();
       // After a `/resume`, or a submit that failed.
       void sent?.recover().catch(() => undefined);
@@ -200,14 +242,39 @@ export const register: Register = (on) => {
   });
 
   on("tool.call", async ($, e, next) => {
+    if (e.agentId !== undefined) {
+      const agent = e.agentId;
+      // A new round: the subagent read every message sent before its last one ended.
+      const ended = roundEnded.get(agent);
+      if (ended !== undefined) void sent?.read(agent, ended).catch(() => undefined);
+      // The CLI keeps which subagent asked, so its answer goes back there (#1702).
+      const command =
+        e.tool === "Bash" && typeof e.command === "string" ? tagAsk(e.command, agent) : undefined;
+      const r = await next(command !== undefined && command !== e.command ? { ...e, command } : e);
+      roundEnded.set(agent, await $.clock.now());
+      return r;
+    }
     const r = await next(e);
-    if (e.agentId !== undefined || r.deny !== undefined) return r;
+    if (r.deny !== undefined) return r;
     const lines = await handover.take((acks) => loop?.claim(acks) ?? Promise.resolve([]));
     if (lines.length === 0) return r;
     $.ui.log(`starbridge: handed ${lines.length} answer(s) with the ${e.tool} result`, {
       to: "debug",
     });
     return { ...r, context: [...(r.context ?? []), ...lines] };
+  });
+
+  // The tag `tool.call` adds is not the subagent's, so the rules judge the command it wrote: where
+  // they would ask about the tagged one, the verdict on the untagged one stands (#1702).
+  on("tool.check", async ($, e, next) => {
+    const verdict = await next(e);
+    const input = e.input as { command?: unknown } | undefined;
+    if (verdict.decision !== "ask" || verdict.hook !== undefined) return verdict;
+    if (e.tool !== "Bash" || typeof input?.command !== "string") return verdict;
+    const command = untagAsk(input.command);
+    if (command === input.command) return verdict;
+    const plain = await $.tool.check({ tool: "Bash", input: { ...input, command } });
+    return plain.decision === "ask" ? verdict : plain;
   });
 
   // After a /clear or a /resume the process goes on under another session id, with no

@@ -77,6 +77,11 @@ function sessionRecord(
   return found ? { base, found } : undefined;
 }
 
+/** Whether Claude Code keeps a record of session `sessionId` on this machine. */
+export function knownClaudeSession(env: ClaudeEnv, sessionId: string): boolean {
+  return sessionRecord(env, sessionId) !== undefined;
+}
+
 /** The session `sessionId`'s title and links, or undefined when Claude Code has no record of it. */
 export function claudeSession(env: ClaudeEnv, sessionId: string): ClaudeSession | undefined {
   const r = sessionRecord(env, sessionId);

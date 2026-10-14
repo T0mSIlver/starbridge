@@ -242,7 +242,7 @@ export class Poller {
     const lines: Line[] = [];
     for (const text of r.stdout.split("\n")) {
       if (!text.trim()) continue;
-      let parsed: { decisionId?: unknown; ack?: unknown; line?: unknown };
+      let parsed: { decisionId?: unknown; ack?: unknown; line?: unknown; subagent?: unknown };
       try {
         parsed = JSON.parse(text);
       } catch {
@@ -251,7 +251,11 @@ export class Poller {
       }
       const { decisionId: id, line } = parsed;
       if (typeof id !== "string" || typeof line !== "string") continue;
-      lines.push({ text: line, ack: typeof parsed.ack === "string" ? parsed.ack : id });
+      lines.push({
+        text: line,
+        ack: typeof parsed.ack === "string" ? parsed.ack : id,
+        ...(typeof parsed.subagent === "string" ? { subagent: parsed.subagent } : {}),
+      });
     }
     // A /clear during the call made another session current: the answers wait, unconfirmed,
     // until session `me` is resumed.
