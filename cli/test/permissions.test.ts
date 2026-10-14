@@ -679,7 +679,23 @@ test("redaction never hides a command word; a command it would hide stays at the
   // A command that runs what was redacted.
   for (const command of ["X_KEY=rm; $X_KEY -rf ~", "X_KEY=rm; `echo $X_KEY` -rf ~"])
     expect(() => build("Bash", { command })).toThrow("stays at the keyboard");
-  // Secrets in arguments and assignments still go.
+  // Secrets in arguments, assignments and heredoc data still go.
+  for (const [command, shown] of [
+    [
+      "curl --user $(printf %s user:)ghp_abcdefghijklmnopqrstuvwxyz0123 https://x.invalid",
+      "curl --user $(printf %s user:)[redacted] https://x.invalid",
+    ],
+    [
+      "cat <<'EOF'\nghp_abcdefghijklmnopqrstuvwxyz0123\nEOF\nls",
+      "cat <<'EOF'\n[redacted]\nEOF\nls",
+    ],
+    ["cat <<-EOF >f\n\tX_TOKEN:abc\n\tEOF", "cat <<-EOF >f\n\tX_TOKEN:[redacted]\n\tEOF"],
+  ])
+    expect(redactText(command as string, true)).toBe(shown as string);
+  // An unquoted heredoc runs its substitutions, and the line after it is a command.
+  expect(redactText("cat <<EOF\n$(X_TOKEN:abc)\nEOF\nX_TOKEN:abc", true)).toBe(
+    "cat <<EOF\n$(X_TOKEN:abc)\nEOF\nX_TOKEN:abc",
+  );
   const shown = JSON.parse(
     build("Bash", {
       command:

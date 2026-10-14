@@ -259,10 +259,12 @@ export interface CommandWord {
 
 /**
  * The command words of a shell command line: the first word of each command, after line starts,
- * `;`, `|`, `&`, `(`, `)`, backticks and `$(`, past `NAME=value` assignments and keywords, and
- * every word of a command a wrapper (`sudo`, `sh`, `xargs`) starts; also inside double quotes'
- * `$(…)` and backticks. It reads as the shell does as far as hiding a command goes; where it
- * cannot tell, it takes a word for a command word, which only keeps the word in view.
+ * `;`, `|`, `&`, `(` and `)`, past `NAME=value` assignments, redirections and keywords, and every
+ * word of a command a wrapper (`sudo`, `sh`, `xargs`) starts; also those of the commands in
+ * `$(…)`, `<(…)`, `>(…)` and backticks, quoted or not, and in an unquoted heredoc's
+ * substitutions. A word holding a substitution stays one word, as the shell joins it. A heredoc's
+ * other lines are data. It reads as the shell does as far as hiding a command goes; where it cannot
+ * tell, it takes a word for a command word, which only keeps the word in view.
  */
 export function commandWords(text: string, offset = 0): CommandWord[] {
   const out: CommandWord[] = [];
@@ -272,30 +274,65 @@ export function commandWords(text: string, offset = 0): CommandWord[] {
   let wrapped = false;
   /** The next word is a redirection's target. */
   let target = false;
+  /** The heredocs whose bodies start on the next line, in order. */
+  let heredocs: { delimiter: string; strip: boolean; expands: boolean }[] = [];
+  /** A bare `<<` or `<<-` was read: the next word is its delimiter. */
+  let delimiterNext: { strip: boolean } | undefined;
   const separator = (c: string | undefined) =>
-    c === ";" ||
-    c === "|" ||
-    c === "&" ||
-    c === "(" ||
-    c === ")" ||
-    c === "`" ||
-    c === "\n" ||
-    c === "\r";
-  /** The end of the `$(…)` whose `(` is at `open`, nesting counted. */
-  /** The end of the `$(…)` whose `(` is at `open`, nesting counted and quotes skipped. */
+    c === ";" || c === "|" || c === "&" || c === "(" || c === ")" || c === "\n" || c === "\r";
+  /** The `)` that closes the `(` at `open`, nesting counted and quotes skipped. */
   const closing = (open: number) => {
     let depth = 0;
     for (let j = open; j < n; j++) {
       const ch = text[j];
       if (ch === "\\") j++;
-      else if (ch === "'") j = text.indexOf("'", j + 1) < 0 ? n : text.indexOf("'", j + 1);
-      else if (ch === '"') {
+      else if (ch === "'") {
+        const k = text.indexOf("'", j + 1);
+        j = k < 0 ? n : k;
+      } else if (ch === '"') {
         for (j++; j < n && text[j] !== '"'; j++) if (text[j] === "\\") j++;
       } else if (ch === "(") depth++;
       else if (ch === ")" && --depth === 0) return j;
     }
     return n;
   };
+  /**
+   * The commands of the substitution that opens at `at`, a backtick or the `(` of `$(`, `<(` or
+   * `>(`, which run wherever the word holding it stands. Returns where the word goes on.
+   */
+  const substitution = (at: number): number => {
+    const end = text[at] === "`" ? text.indexOf("`", at + 1) : closing(at);
+    const close = end < 0 ? n : end;
+    out.push(...commandWords(text.slice(at + 1, close), offset + at + 1));
+    return close + 1;
+  };
+  /** The heredoc bodies from `from`, the line after their command; returns where they end. */
+  const bodies = (from: number): number => {
+    let p = from;
+    for (const h of heredocs)
+      while (p < n) {
+        const eol = text.indexOf("\n", p) < 0 ? n : text.indexOf("\n", p);
+        let line = text.slice(p, eol).replace(/\r$/, "");
+        if (h.strip) line = line.replace(/^\t+/, "");
+        if (line === h.delimiter) {
+          p = eol + 1;
+          break;
+        }
+        // An unquoted delimiter's body expands: its substitutions run.
+        if (h.expands)
+          for (let j = p; j < eol; ) {
+            if (text[j] === "\\") j += 2;
+            else if (text[j] === "$" && text[j + 1] === "(") j = substitution(j + 1);
+            else if (text[j] === "`") j = substitution(j);
+            else j++;
+          }
+        p = eol + 1;
+      }
+    heredocs = [];
+    return p;
+  };
+  const heredoc = (raw: string, strip: boolean) =>
+    heredocs.push({ delimiter: raw.replace(/['"\\]/g, ""), strip, expands: !/['"\\]/.test(raw) });
   while (i < n) {
     const c = text[i] as string;
     if (c === " " || c === "\t") {
@@ -306,14 +343,12 @@ export function commandWords(text: string, offset = 0): CommandWord[] {
       i += 2;
       continue;
     }
-    if (separator(c) || (c === "$" && text[i + 1] === "(")) {
-      // A substitution where a command starts runs its output as the command.
-      if (start && (c === "`" || c === "$"))
-        out.push({ word: c, start: offset + i, end: offset + i + 1 });
+    if (separator(c)) {
       start = true;
       wrapped = false;
       target = false;
-      i += c === "$" ? 2 : 1;
+      i++;
+      if (c === "\n" && heredocs.length > 0) i = bodies(i);
       continue;
     }
     if (c === "#") {
@@ -323,6 +358,7 @@ export function commandWords(text: string, offset = 0): CommandWord[] {
     const s = i;
     while (i < n) {
       const ch = text[i] as string;
+      const next = text[i + 1];
       if (ch === "\\") i += 2;
       else if (ch === "'") {
         const j = text.indexOf("'", i + 1);
@@ -331,29 +367,34 @@ export function commandWords(text: string, offset = 0): CommandWord[] {
         i++;
         while (i < n && text[i] !== '"') {
           if (text[i] === "\\") i += 2;
-          else if (text[i] === "$" && text[i + 1] === "(") {
-            const end = closing(i + 1);
-            out.push(...commandWords(text.slice(i + 2, end), offset + i + 2));
-            i = end + 1;
-          } else if (text[i] === "`") {
-            const j = text.indexOf("`", i + 1);
-            const end = j < 0 ? n : j;
-            out.push(...commandWords(text.slice(i + 1, end), offset + i + 1));
-            i = end + 1;
-          } else i++;
+          else if (text[i] === "$" && text[i + 1] === "(") i = substitution(i + 1);
+          else if (text[i] === "`") i = substitution(i);
+          else i++;
         }
         i++;
-      } else if (ch === " " || ch === "\t" || separator(ch) || (ch === "$" && text[i + 1] === "("))
-        break;
+      } else if ((ch === "$" || ch === "<" || ch === ">") && next === "(") i = substitution(i + 1);
+      else if (ch === "`") i = substitution(i);
+      else if (ch === " " || ch === "\t" || separator(ch)) break;
       else i++;
     }
     i = Math.min(i, n);
     const word = text.slice(s, i);
+    if (delimiterNext) {
+      heredoc(word, delimiterNext.strip);
+      delimiterNext = undefined;
+      target = false;
+      continue;
+    }
+    const here = /^[0-9]*<<(-?)([^<]*)$/s.exec(word);
+    if (here) {
+      if (here[2]) heredoc(here[2], here[1] === "-");
+      else delimiterNext = { strip: here[1] === "-" };
+    }
     if (start && SHELL_ASSIGNMENT.test(word)) continue;
     // A redirection before the command (`2>err cmd`, `> out cmd`) leaves the command word after it;
     // a bare operator takes the next word as its target.
     if (start && REDIRECTION.test(word)) {
-      if (BARE_REDIRECTION.test(word)) target = true;
+      if (BARE_REDIRECTION.test(word) && !delimiterNext) target = true;
       continue;
     }
     if (target) {
