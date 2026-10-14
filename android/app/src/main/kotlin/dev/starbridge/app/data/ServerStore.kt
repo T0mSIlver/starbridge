@@ -1747,7 +1747,17 @@ class ServerStore(
                 // was answered is read from the server's signed items on the next sync.
                 val prompt = saved.prompts.find { it.body.id == id }
                 if (prompt != null) alerts.cancelPrompt(toUi(prompt)) else alerts.cancel(id)
-                if (inFront) sync()
+                if (inFront) {
+                    try {
+                        sync()
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        // Unreachable now: the foreground poll, which a working push stops, reads it later.
+                        pushed = false
+                        throw e
+                    }
+                }
             }
             "decision" -> {
                 if (saved.decisions.any { it.body.id == id }) return@withLock
