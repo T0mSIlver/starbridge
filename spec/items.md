@@ -36,15 +36,18 @@
   gives way to it. A run reads as its title, else "Actions run"; a file (`/blob/…`) as its title,
   else its name; other GitHub pages as their title, else their path. No chip says "Open": the
   arrow does, and the word cost room on every chip.
-- **Link chips everywhere** (#1577). A Claude artifact leads with a window glyph, since Claude's
-  mark isn't licensed to us, and reads "Claude artifact". Only these kinds and GitHub's: in the
-  owner's transcripts GitHub and Claude artifacts are 89% of links, and every other host 2% or less.
-  One rule, `linkChip` in `packages/protocol` with `vectors/links.json`, gives every client the same
-  icon and text, because three URL parsers disagree at the edges. It reads the URL by hand and
-  matches only an exact host (`github.com`, `www.github.com`, `claude.ai`) with no user, port or
-  backslash; anything else keeps the plain chip, its title else its host and path. A decoded name
-  with a control, bidi or zero-width character stays encoded. No client fetches a link: no favicons,
-  nothing a page could learn or break.
+- **Link chips everywhere** (#1577). A Claude artifact leads with a window glyph and reads "Claude
+  artifact". No site logos beyond GitHub's Octicons (MIT) and no favicons (owner's pick): an icon
+  names the kind of page, and a favicon is a site's logo fetched rather than bundled. Which sites
+  get an icon later: #1617. Only these kinds and GitHub's: in the owner's transcripts GitHub and
+  Claude artifacts are 89% of links, and every other host 2% or less. One rule, `linkChip` in
+  `packages/protocol` with `vectors/links.json`, gives every client the same icon and text, because
+  three URL parsers disagree at the edges. It reads the URL by hand and matches only an exact host
+  (`github.com`, `www.github.com`, `claude.ai`) with no user, port or backslash, and a path with
+  no `.` or `..` segment, which would open another page than the chip names; anything else keeps
+  the plain chip, its title else its host and path. A decoded name with a control, bidi or other
+  invisible character stays encoded. No client fetches a link: nothing a page could learn or
+  break.
 - **`answerIn`** names a page (a Claude artifact whose button messages the agent) where the
   question is answered. It has no options; the schema refuses both. It closes when the agent runs
   `starbridge settle`, or when the owner taps Done beside the page's link (#539): an agent that
@@ -55,10 +58,12 @@
 - **Waiting state** (#122, #191, #202). A `waiting` item says whether the agent is blocked on the
   question. A flip either way pushes, so the phone moves the notification between channels. `ask
   --waiting` posts the question quietly and lets its `waiting` item push, so the first
-  notification already says waiting. It also says when the answer reaches a busy agent: a waiting one at its next
-  tool call, any other once its turn ends (#1484, `spec/harnesses.md`).
+  notification already says waiting. It does not say when the answer reaches a busy agent: every
+  answer enters its running turn at the next tool call (#1584, `spec/harnesses.md`).
 - **Settling** (#62, #405). `settle` closes a question as `elsewhere` or `withdrawn`. It never
-  withdraws one whose answer reached the agent, since devices would hold both. `settle --session`
+  withdraws one whose answer this machine accepted, since devices would hold both. When the
+  session has not taken that answer yet, such as one held for the end of the turn that settles,
+  `settle` prints it, or the answer was lost (#1575). `settle --session`
   and `settle --all` close every open question of a session or of the machine (#584), so a
   flood has a way out; `--all` asks first, with the count. Each is one settled notice, posted at
   the pace the machine's rate limit allows, waiting out each 429: the server needs no bulk

@@ -54,6 +54,14 @@ export interface Scenario {
   card?: { question: string; options: string[] };
   /** Seconds the owner takes to answer the first card (default 15). */
   answerAfter?: number;
+  /** The owner types this reply to the first card instead of picking. */
+  reply?: string;
+  /**
+   * What the project's `files` hold once the run ends: each matches `right` and none `wrong`
+   * when the agent acted on the answer (#1584). `inTurn`: the answer comes with work left, so
+   * the running turn should take it.
+   */
+  outcome?: { files: string[]; right: RegExp; wrong: RegExp; inTurn?: boolean };
   /** The owner taps Done on an `--answer-in` card instead of picking (#539). */
   done?: boolean;
   /**
@@ -132,6 +140,38 @@ const mergeOrder: Scenario = {
       });
     },
 };
+
+const changeMidTurn: Scenario = {
+    name: "change-mid-turn",
+    what: "a typed answer to a card that blocks nothing changes the work the turn is doing",
+    prompt:
+      "Add a header comment to every file in src/, one file at a time, running `node scripts/lint.js` after each. The comment names the team that owns the code: ask me on a card whether that is Core or Platform. It does not block you: write Core meanwhile and I'll answer.",
+    expect: "ask",
+    blocks: false,
+    live: { mod: true },
+    agents: ["claude"],
+    reply: "Platform, not Core. Fix the files you already did.",
+    outcome: {
+      files: ["src/upload.js", "src/sync.js", "src/trash.js", "src/search.js", "src/share.js"],
+      right: /Platform/,
+      wrong: /\bCore\b/,
+      inTurn: true,
+    },
+    build(dir) {
+      write(dir, {
+        "AGENTS.md": "# acme notes\n\n- Every source file starts with a comment naming the team that owns it.\n",
+        // Slow, so the answer comes while the agent still works.
+        "scripts/lint.js":
+          'import { readdirSync, readFileSync } from "node:fs";\nawait new Promise((r) => setTimeout(r, 8000));\nlet bad = 0;\nfor (const f of readdirSync("src")) {\n  if (!/^\\/\\/|^\\/\\*/.test(readFileSync(`src/${f}`, "utf8"))) { console.log(`src/${f}: no header comment`); bad++; }\n}\nprocess.exit(bad ? 1 : 0);\n',
+        "package.json": '{ "name": "notes", "type": "module" }\n',
+        "src/upload.js": "export function upload(file) {\n  return Math.ceil(file.length / 1024);\n}\n",
+        "src/sync.js": "export function sync(notes) {\n  return notes.filter((n) => n.dirty).length;\n}\n",
+        "src/trash.js": "export function purge(trash, now) {\n  return trash.filter((t) => t.deletedAt > now - 30 * 86400000);\n}\n",
+        "src/search.js": "export function search(notes, q) {\n  return notes.filter((n) => n.text.includes(q));\n}\n",
+        "src/share.js": "export function share(note, to) {\n  return { id: note.id, to };\n}\n",
+      });
+    },
+  };
 
 export const scenarios: Scenario[] = [
   mergeOrder,
@@ -426,6 +466,14 @@ export const scenarios: Scenario[] = [
         "src/log.js": "// TODO: the owner picks the default level.\nexport const LEVEL = \"TODO\";\n",
       });
     },
+  },
+  changeMidTurn,
+  {
+    ...changeMidTurn,
+    name: "change-late",
+    what: "the same typed answer, near the end of the work: the turn has little left to take it",
+    answerAfter: 60,
+    outcome: { ...(changeMidTurn.outcome as NonNullable<Scenario["outcome"]>), inTurn: false },
   },
   {
     name: "oc-question",

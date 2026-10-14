@@ -24,7 +24,7 @@ fun linkChip(url: String, title: String?, project: String = ""): LinkChip {
     val parts = parseUrl(url) ?: return LinkChip(null, title ?: clip(url))
     val gh = if (parts.host in GITHUB_HOSTS) github(parts.path) else null
     if (gh?.ref != null) {
-        val same = gh.repo.equals(project, ignoreCase = true)
+        val same = asciiLower(gh.repo) == asciiLower(project)
         val sep = if (gh.ref.startsWith("#")) "" else " "
         return LinkChip(gh.icon, clip(if (same) gh.ref else gh.repo + sep + gh.ref))
     }
@@ -53,8 +53,16 @@ private fun parseUrl(url: String): Parts? {
     if (!HOST.matches(host)) return null
     val tail = if (end < 0) "" else rest.substring(end)
     val path = tail.split('?', '#').first()
-    return Parts(host.lowercase(), path.ifEmpty { "/" })
+    // A "." or ".." segment, even percent-encoded, makes the browser open another page than the
+    // path reads: show the URL as written.
+    if (path.split('/').any { DOTS.matches(it) }) return null
+    return Parts(asciiLower(host), path.ifEmpty { "/" })
 }
+
+private val DOTS = Regex("(\\.|%2[eE]){1,2}")
+
+/** ASCII letters lowercased, the same in every port; GitHub's names are ASCII. */
+private fun asciiLower(text: String) = buildString { text.forEach { append(if (it in 'A'..'Z') it + 32 else it) } }
 
 private class GitHub(val icon: LinkIcon, val repo: String, val ref: String?, val text: String)
 
@@ -75,7 +83,7 @@ private fun github(path: String): GitHub {
         section == "discussions" -> number(LinkIcon.Discussion)
         section == "actions" && a == "runs" && DIGITS.matches(b) -> GitHub(LinkIcon.Run, repo, null, "Actions run")
         section == "releases" && a == "tag" && b.isNotEmpty() -> GitHub(LinkIcon.Release, repo, decode(b), other.text)
-        section == "commit" && SHA.matches(a) -> GitHub(LinkIcon.Commit, repo, a.take(7).lowercase(), other.text)
+        section == "commit" && SHA.matches(a) -> GitHub(LinkIcon.Commit, repo, asciiLower(a.take(7)), other.text)
         // /blob/<ref>/<path>: a branch may hold slashes, but the last segment is always the file.
         section == "blob" && a.isNotEmpty() && segments.size > 5 && file.isNotEmpty() -> GitHub(LinkIcon.File, repo, null, decode(file))
         else -> other
@@ -85,9 +93,12 @@ private fun github(path: String): GitHub {
 private val DIGITS = Regex("[0-9]{1,20}")
 private val SHA = Regex("[0-9a-fA-F]{7,40}")
 
-// Characters that would hide or reorder what a chip says: controls, bidi and zero-width marks.
+// Characters that would hide or reorder what a chip says: controls, bidi marks and the rest of
+// Unicode's default-ignorable code points (soft hyphen, zero-width, variation selectors, tags).
 private val HIDDEN = listOf(
-    0x0..0x1f, 0x7f..0x9f, 0x61c..0x61c, 0x200b..0x200f, 0x202a..0x202e, 0x2060..0x2069, 0xfeff..0xfeff,
+    0x0..0x1f, 0x7f..0x9f, 0xad..0xad, 0x34f..0x34f, 0x61c..0x61c, 0x115f..0x1160, 0x17b4..0x17b5, 0x180b..0x180f,
+    0x200b..0x200f, 0x202a..0x202e, 0x2060..0x206f, 0x3164..0x3164, 0xfe00..0xfe0f, 0xfeff..0xfeff, 0xffa0..0xffa0,
+    0xfff0..0xfffb, 0x1bca0..0x1bca3, 0x1d173..0x1d17a, 0xe0000..0xe0fff,
 )
 
 private fun hidden(text: String) = text.codePoints().anyMatch { p -> HIDDEN.any { p in it } }

@@ -173,7 +173,7 @@ struct SettingsView: View {
             Button("Sign out", role: .destructive) { Task { await store.signOut() } }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("This iPhone forgets its keys and leaves your devices. If it is your only device, you need the recovery key to set up another.")
+            Text("This iPhone deletes its keys and is removed from your devices. Your other devices and machines keep working. If it's your only device, you'll need your recovery key to sign in again.")
         }
         .deleteAccount(store: store, isPresented: $deleting, text: DeleteAccount.paired)
     }

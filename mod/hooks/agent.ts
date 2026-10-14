@@ -18,6 +18,15 @@ const CLIENT = `starbridge-mod/${VERSION}`;
 /** Event types this mod submits; others are skipped and left unconfirmed, as the API asks. */
 const KNOWN = new Set(["answer"]);
 
+/** An answer's line, and what confirms it. */
+export interface Line {
+  text: string;
+  ack: string;
+}
+
+/** Several answers as one message: one line each, in the order they came. */
+export const joinLines = (lines: Line[]) => lines.map((l) => l.text).join("\n");
+
 export interface Reply {
   status: number;
   text: string;
@@ -32,12 +41,12 @@ export interface AgentHost {
   now(): Promise<number>;
   sleep(ms: number): Promise<void>;
   /**
-   * Must not wait for the turn to start: a prompt submitted mid-turn waits for its own. A host
-   * that can tell the submit failed, or holds the line back for now, returns or resolves false,
-   * and the line stays unconfirmed for a later try. `waiting`: the agent marked the decision
-   * waiting, so it needs the answer now (#1484).
+   * Submits `lines`, every answer one poll brought, as one message (#1597), and returns the acks
+   * of those it submitted; a line it could not submit, or holds back for now, stays unconfirmed
+   * for a later try. Must not wait for the turn to start: a prompt submitted mid-turn waits for
+   * its own.
    */
-  submit(text: string, waiting: boolean, ack: string): unknown;
+  submit(lines: Line[]): string[] | Promise<string[]>;
   /**
    * True while a submitted prompt waits for its turn. Claude Code starts a plugin's queued prompt
    * only once the mod's open `fetch` or `run` returns, so the loop then holds no long call (#1446).
@@ -178,7 +187,6 @@ interface Event {
   ack?: unknown;
   line?: unknown;
   decisionId?: unknown;
-  waiting?: unknown;
 }
 
 /** Why `AgentLoop.run` returned: `stop`, or the agent cannot serve this mod. */
@@ -262,25 +270,27 @@ export class AgentLoop {
     const wait = this.host.starting() ? 0 : this.t.waitSeconds;
     const r = await this.host.fetch("GET", `${path(me)}/events?wait=${wait}`);
     if (!(await this.ok(r))) return;
-    const events = parse<{ events?: Event[] }>(r.text)?.events ?? [];
-    let handed = 0;
-    const done: string[] = [];
-    for (const e of events) {
-      if (typeof e.type !== "string" || !KNOWN.has(e.type)) continue;
-      if (typeof e.ack !== "string" || typeof e.line !== "string") continue;
-      // A /clear during the call made another session current: the event waits, unconfirmed,
-      // until session `me` is resumed.
-      if ((await this.host.sessionId()) !== me) {
-        this.host.log(`starbridge: held back ${e.type} ${e.ack}: its session ${me} ended`);
-        continue;
-      }
-      if (!this.unconfirmed.has(e.ack)) {
-        if ((await this.host.submit(e.line, e.waiting === true, e.ack)) === false) continue;
-        this.unconfirmed.add(e.ack);
-        handed++;
-      }
-      done.push(e.ack);
+    const events = (parse<{ events?: Event[] }>(r.text)?.events ?? []).filter(
+      (e): e is Event & { ack: string; line: string } =>
+        typeof e.type === "string" &&
+        KNOWN.has(e.type) &&
+        typeof e.ack === "string" &&
+        typeof e.line === "string",
+    );
+    // A /clear during the call made another session current: the events wait, unconfirmed,
+    // until session `me` is resumed.
+    if (events.length > 0 && (await this.host.sessionId()) !== me) {
+      this.host.log(
+        `starbridge: held back the answers ${events.map((l) => l.ack).join(", ")}: their session ${me} ended`,
+      );
+      return;
     }
+    const due = events.filter((e) => !this.unconfirmed.has(e.ack));
+    const taken =
+      due.length > 0 ? await this.host.submit(due.map((e) => ({ text: e.line, ack: e.ack }))) : [];
+    for (const a of taken) this.unconfirmed.add(a);
+    const handed = taken.length;
+    const done = events.filter((e) => this.unconfirmed.has(e.ack)).map((e) => e.ack);
     if (done.length > 0) {
       const ack = await this.host.fetch("POST", `${path(me)}/ack`, { acks: done });
       if (!(await this.ok(ack))) return;

@@ -1946,6 +1946,65 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
       url: "http://github.com/o/r/pull/1",
       expect: { label: "http://github.com/o/r/pull/1" },
     },
+    {
+      name: "a soft hyphen in a file name stays encoded",
+      url: `${gh}/blob/main/pay%C2%ADload.exe`,
+      expect: { icon: "file", label: "pay%C2%ADload.exe" },
+    },
+    {
+      name: "a combining grapheme joiner stays encoded",
+      url: `${gh}/blob/main/a%CD%8Fb.md`,
+      expect: { icon: "file", label: "a%CD%8Fb.md" },
+    },
+    {
+      name: "a Mongolian vowel separator stays encoded",
+      url: `${gh}/blob/main/a%E1%A0%8Eb.md`,
+      expect: { icon: "file", label: "a%E1%A0%8Eb.md" },
+    },
+    {
+      name: "a variation selector in a tag stays encoded",
+      url: `${gh}/releases/tag/v1%EF%B8%8F`,
+      project: "starbridge",
+      expect: { icon: "release", label: "v1%EF%B8%8F" },
+    },
+    {
+      name: "a tag character stays encoded",
+      url: `${gh}/blob/main/a%F3%A0%80%81b.md`,
+      expect: { icon: "file", label: "a%F3%A0%80%81b.md" },
+    },
+    {
+      name: "dot segments: as written",
+      url: `${gh}/pull/123/../../issues/999`,
+      project: "starbridge",
+      expect: { label: "https://github.com/T0mSIlver/starbridge…" },
+    },
+    {
+      name: "encoded dot segments: as written",
+      url: "https://github.com/o/r/pull/1/%2e%2E/%2e./issues/2",
+      expect: { label: "https://github.com/o/r/pull/1/%2e%2E/%2…" },
+    },
+    {
+      name: "a single dot segment: as written",
+      url: "https://claude.ai/./artifact/abc",
+      expect: { label: "https://claude.ai/./artifact/abc" },
+    },
+    {
+      name: "dots inside a name are no dot segment",
+      url: `${gh}/blob/main/a..b`,
+      expect: { icon: "file", label: "a..b" },
+    },
+    {
+      name: "the project matches the repo by ASCII case only (Kelvin sign)",
+      url: "https://github.com/o/k/pull/1",
+      project: "\u212A",
+      expect: { icon: "pull", label: "k#1" },
+    },
+    {
+      name: "the project matches the repo by ASCII case only (dotless i)",
+      url: "https://github.com/o/i/pull/1",
+      project: "\u0131",
+      expect: { icon: "pull", label: "i#1" },
+    },
     { name: "empty host: as written", url: "https://%", expect: { label: "https://%" } },
     {
       name: "a very long URL is clipped",

@@ -253,6 +253,18 @@ jobs:
           TMPDIR: ${{ runner.temp }}
           E2E_SHARD: ${{ matrix.shard }}
           PLAYWRIGHT_BROWSERS_PATH: ${{ runner.tool_cache }}/ms-playwright
+      # The narrow-window rules (web/e2e/narrow.ts, #1608) in WebKit, once, beside the devices part.
+      - if: steps.scope.outputs.run == 'true' && matrix.shard == 'devices'
+        run: pnpm --filter @starbridge/web exec playwright install ${{ runner.environment == 'github-hosted' && '--with-deps' || '' }} webkit
+        timeout-minutes: 5
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: ${{ runner.tool_cache }}/ms-playwright
+      - if: steps.scope.outputs.run == 'true' && matrix.shard == 'devices'
+        run: .github/watchdog.sh 300 node web/e2e/narrow.ts
+        timeout-minutes: 6
+        env:
+          TMPDIR: ${{ runner.temp }}
+          PLAYWRIGHT_BROWSERS_PATH: ${{ runner.tool_cache }}/ms-playwright
       # What a later merge of the same tree looks up (the tested step above). It holds the commit
       # that passed; overwrite, since a re-run attempt uploads it again.
       - id: tree
@@ -271,7 +283,9 @@ jobs:
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: e2e-failure-${{ matrix.shard }}
-          path: ${{ runner.temp }}/starbridge-e2e-failure.png
+          path: |
+            ${{ runner.temp }}/starbridge-e2e-failure.png
+            ${{ runner.temp }}/starbridge-narrow-failure.png
           if-no-files-found: ignore
 
   # The desktop app on the whole product (desktop/test/stack.ts): signs in and pairs in the app's

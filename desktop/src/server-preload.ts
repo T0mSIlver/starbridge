@@ -5,6 +5,7 @@ if (location.protocol === "file:") {
   const prefix = "--starbridge-server=";
   contextBridge.exposeInMainWorld("starbridgeServer", {
     current: process.argv.find((a) => a.startsWith(prefix))?.slice(prefix.length),
+    fit: (height: number) => ipcRenderer.send("server-fit", height),
     save: (url: string) => ipcRenderer.send("server", url),
     onError: (f: (message: string) => void) =>
       ipcRenderer.on("server-error", (_e, message: string) => f(message)),

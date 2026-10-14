@@ -73,8 +73,8 @@ xvfb-run -a -s "-screen 0 1280x860x24" node web/e2e/install.ts
 ## iPhone width check
 
 `e2e/narrow.ts` opens a question with a long unbroken path in WebKit at 390 px, the width of an
-iPhone, and fails when its card in the list or its detail runs past the window (#1254). It also settles and answers the last open card and expects the empty list back (#1583). Ports
-3890 and 3891 on localhost; it needs WebKit, installed as above.
+iPhone, and fails when its card in the list or its detail runs past the window (#1254). It also settles and answers the last open card and expects the empty list back (#1583). Free
+ports on localhost; it needs WebKit, installed as above. CI runs it in the devices part (#1608).
 
 ```bash
 node web/e2e/narrow.ts
