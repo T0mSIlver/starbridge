@@ -15,25 +15,31 @@ export class AppSignIns {
 
   /**
    * Keeps the challenge a code came back with from GitHub, so the trade can check the verifier
-   * itself rather than rely on GitHub binding the code to it.
+   * itself rather than rely on GitHub binding the code to it. The first challenge a code came
+   * with stays: false when it came with another, or when the map is full, since dropping a
+   * live entry would let a flood of made-up codes free a caught one.
    */
-  passed(code: string, challenge: string, now = Date.now()): void {
+  passed(code: string, challenge: string, now = Date.now()): boolean {
+    const s = this.challengeOf(code, now);
+    if (s !== undefined) return s === challenge;
     this.challengeByCode.delete(code);
+    if (this.challengeByCode.size >= MAX) return false;
     this.challengeByCode.set(code, { challenge, at: now });
-    if (this.challengeByCode.size > MAX) {
-      const oldest = this.challengeByCode.keys().next().value;
-      if (oldest !== undefined) this.challengeByCode.delete(oldest);
-    }
+    return true;
   }
 
   /**
-   * The challenge a code came back with, once: undefined for a code that never passed through
-   * this server (a verified App Link caught it) or that came back over 10 minutes ago.
+   * The challenge a code came back with: undefined for a code that never passed through this
+   * server (a verified App Link caught it) or that came back over 10 minutes ago.
    */
-  takeChallenge(code: string, now = Date.now()): string | undefined {
+  challengeOf(code: string, now = Date.now()): string | undefined {
     const s = this.challengeByCode.get(code);
-    this.challengeByCode.delete(code);
     return s !== undefined && now - s.at < APP_SIGN_IN_MS ? s.challenge : undefined;
+  }
+
+  /** Forgets a code once traded: GitHub's work once. */
+  traded(code: string): void {
+    this.challengeByCode.delete(code);
   }
 
   add(challenge: string, account: string, now = Date.now()): void {

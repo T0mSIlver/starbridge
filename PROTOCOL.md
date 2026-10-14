@@ -412,8 +412,9 @@ request without the header, or with one the server cannot read, is served.
   base64url(SHA-256(verifier)), which the server passes to GitHub as `code_challenge` and as the
   state. GitHub binds its code to the challenge, and the app trades code and verifier for the
   session over HTTPS. A code that came back through the server's callback is also kept with the
-  state it came with, its challenge, for 10 minutes, and the trade refuses a verifier whose S256
-  is not that challenge, whatever GitHub checks; the app ignores a redirect whose state is not
+  state it came with, its challenge, for 10 minutes (the first challenge stays; the callback
+  refuses the code with another), and the trade refuses a verifier whose S256 is not that
+  challenge, whatever GitHub checks; the app ignores a redirect whose state is not
   its challenge, or with none. GitHub
   redirects to `/v1/auth/github/callback/app`, which the Android app claims as an App Link on
   starbridge.run (`/.well-known/assetlinks.json` binds it to the app's signing keys), and the
@@ -679,7 +680,7 @@ server whose disk is full answers writes 503 `storage-full` with `Retry-After`; 
 | `POST /directory` | 30 an hour per account |
 | Directory entries | from entry 200 on, a device's `add`: 409 `directory-full`; revocations and confirmations always pass, the recovery key may add 20 more devices, and devices may propose 20 more recovery keys; 8 KB per entry: 413 `too-large` |
 | Sessions | 50 per account; signing in past that ends the oldest, unpaired ones first |
-| `GET /auth/github/callback` and `POST /auth/app/session` with GitHub's code | 60 a minute per address, together |
+| `GET /auth/github/callback`, `GET /auth/github/callback/app` and `POST /auth/app/session` with GitHub's code | 60 a minute per address, together |
 | Apple sign-ins: `GET /auth/apple` and its app callback, together; `GET /auth/apple/callback`, `POST /auth/apple/session` and `POST /auth/app/session` with Apple's code, together | 60 a minute per address each |
 | `POST /auth/app/session`, either provider's code, counted before the body is read | 60 a minute per address |
 | New accounts | 30 an hour per address, an IPv6 client counting as its /64: the page goes to `/?signin=limited`, the app gets 429 `rate-limited`; sign-ins of existing accounts don't count |

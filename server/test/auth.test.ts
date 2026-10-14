@@ -164,7 +164,14 @@ test("a code that came back through the server needs its challenge's verifier, w
   });
   expect(caught.status).toBe(400);
   expect(caught.json.error).toBe("bad-code");
-  await s.app.request(back);
+  // A wrong guess, or the code brought back with another challenge, frees nothing.
+  const again = await s.call("POST", "/v1/auth/app/session", {
+    body: { code: "code-42", verifier: pkce().verifier },
+  });
+  expect(again.status).toBe(400);
+  const rebound = `/v1/auth/github/callback/app?code=code-42&state=${pkce().challenge}`;
+  expect((await s.app.request(rebound)).status).toBe(400);
+  expect((await s.app.request(back)).status).toBe(302);
   const own = await s.call("POST", "/v1/auth/app/session", { body: { code: "code-42", verifier } });
   expect(own.status).toBe(200);
 });
