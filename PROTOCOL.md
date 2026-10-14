@@ -683,6 +683,7 @@ server whose disk is full answers writes 503 `storage-full` with `Retry-After`; 
 | `GET /auth/github/callback`, `GET /auth/github/callback/app` and `POST /auth/app/session` with GitHub's code | 60 a minute per address, together |
 | Apple sign-ins: `GET /auth/apple` and its app callback, together; `GET /auth/apple/callback`, `POST /auth/apple/session` and `POST /auth/app/session` with Apple's code, together | 60 a minute per address each |
 | `POST /auth/app/session`, either provider's code, counted before the body is read | 60 a minute per address |
+| An app's start, `GET /auth/github?app=1` or `GET /auth/apple?app=1` | 60 a minute per address, together |
 | New accounts | 30 an hour per address, an IPv6 client counting as its /64: the page goes to `/?signin=limited`, the app gets 429 `rate-limited`; sign-ins of existing accounts don't count |
 | `DELETE /account` | 3 an hour per address, an IPv6 client counting as its /64: 429 `rate-limited` |
 | `POST /auth/owner` | 10 a minute per address |

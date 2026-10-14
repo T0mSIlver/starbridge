@@ -37,6 +37,8 @@ const s256 = (verifier: string) => createHash("sha256").update(verifier).digest(
  * the cookie, and someone who read it from that browser's address later gets none.
  */
 function startApp(c: Context<Env>, challenge: string): void {
+  // Counted, as a flood of starts would fill the starts kept and refuse the next ones a cookie.
+  rateLimit(c, `app-start:${ipKey(c)}`, c.var.config.limits.githubCallbacks);
   if (!c.var.appSignIns.start(challenge)) return;
   setCookie(c, APP_COOKIE, challenge, {
     httpOnly: true,
