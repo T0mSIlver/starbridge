@@ -45,7 +45,11 @@
   three URL parsers disagree at the edges. It reads the URL by hand and matches only an exact host
   (`github.com`, `www.github.com`, `claude.ai`) with no user, port or backslash, and a path with
   no `.` or `..` segment, which would open another page than the chip names; anything else keeps
-  the plain chip, its title else its host and path. A decoded name with a control, bidi or other
+  the plain chip, its title else its host and path. A title on any host but GitHub's and a Claude
+  artifact's, whose icons already name the site, is followed by the host, in at most 30 points
+  that keep its end, so an agent cannot dress another site as a GitHub reference. A title with an
+  invisible character gives way to host and path, and a link the rule can't read shows the URL as
+  written, whatever its title (#1722, from an internal audit on 2026-10-14). A decoded name with a control, bidi or other
   invisible character stays encoded. No client fetches a link: nothing a page could learn or
   break.
 - **`answerIn`** names a page (a Claude artifact whose button messages the agent) where the

@@ -1876,7 +1876,7 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
       name: "another host with a title",
       url: "https://play.google.com/console/u/1/developers/1/app/2/publishing",
       title: "Play Console",
-      expect: { label: "Play Console" },
+      expect: { label: "Play Console · play.google.com" },
     },
     {
       name: "a long path is clipped",
@@ -1998,6 +1998,37 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
       expect: { icon: "pull", label: "i#1" },
     },
     { name: "empty host: as written", url: "https://%", expect: { label: "https://%" } },
+    // A title on another host than GitHub's is followed by the host (#1722).
+    {
+      name: "a GitHub reference as the title of another host",
+      url: "https://evil.example/pull/123",
+      title: "starbridge#123",
+      expect: { label: "starbridge#123 · evil.example" },
+    },
+    {
+      name: "a long title gives way to the host",
+      url: "https://docs.example.com/guide",
+      title: "A very long title that would push the host out of the chip",
+      expect: { label: "A very long title th… · docs.example.com" },
+    },
+    {
+      name: "a long host keeps its end",
+      url: "https://github.com.a-very-long-subdomain-chain.evil.example/x",
+      title: "Docs",
+      expect: { label: "Docs · …-subdomain-chain.evil.example" },
+    },
+    {
+      name: "a title with a bidi override gives way to host and path",
+      url: "https://evil.example/x",
+      title: "Release notes\u202e",
+      expect: { label: "evil.example/x" },
+    },
+    {
+      name: "a link that can't be read shows as written, whatever its title",
+      url: "http://evil.example/x",
+      title: "T0mSIlver/starbridge#123",
+      expect: { label: "http://evil.example/x" },
+    },
     {
       name: "a very long URL is clipped",
       url: `https://github.com.example/${"x/".repeat(1000)}`,
