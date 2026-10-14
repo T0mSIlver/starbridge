@@ -541,6 +541,40 @@ test("pairings bound their message size, their number and their long-polls", asy
   expect(r.status).toBe(400);
 });
 
+test("result long-polls without a session are capped in all and per address, past which they pause and get 204", async () => {
+  const s = await makeServer({
+    trustProxy: true,
+    limits: { ...DEFAULT_LIMITS, pairingResultWaits: 2, pairingResultWaitsPerClient: 1 },
+  });
+  const [p1, p2, p3] = [await request(s, "a"), await request(s, "b"), await request(s, "c")];
+  const poll = (p: typeof p1, ip: string, wait: number) =>
+    s.call("GET", `/v1/pairings/${p.rendezvous}/result?wait=${wait}`, {
+      headers: { "x-claim": p.claim, "x-forwarded-for": ip },
+    });
+  const held = (p: typeof p1) => s.deps.pairings.count(p.rendezvous);
+  const a = poll(p1, "203.0.113.1", 1);
+  const b = poll(p2, "2001:db8:1:3::1", 2);
+  await Bun.sleep(20);
+  expect([held(p1), held(p2)]).toEqual([1, 1]);
+  // Another wait from either address, an IPv6 one counting as its /48, is over its cap; from a
+  // third address, over the server's. Each pauses, holds no slot, and gets 204.
+  for (const ip of ["203.0.113.1", "2001:db8:1:2::9", "198.51.100.7"]) {
+    const t = Date.now();
+    const busy = poll(p3, ip, 0.2);
+    await Bun.sleep(20);
+    expect(held(p3)).toBe(0);
+    expect((await busy).status).toBe(204);
+    expect(Date.now() - t).toBeGreaterThanOrEqual(150);
+  }
+  // A wait that ends gives its slot back.
+  expect((await a).status).toBe(204);
+  const c = poll(p3, "198.51.100.7", 0.3);
+  await Bun.sleep(20);
+  expect(held(p3)).toBe(1);
+  expect((await c).status).toBe(204);
+  expect((await b).status).toBe(204);
+});
+
 test("a machine holds a bounded number of open answer waits", async () => {
   const { s, devbox } = await setup({ answerWaits: 1 });
   const waiting = s.call("GET", "/v1/answers?wait=1", { token: devbox.token });
