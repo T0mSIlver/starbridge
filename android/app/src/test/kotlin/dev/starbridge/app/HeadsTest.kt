@@ -53,26 +53,13 @@ class HeadsTest {
         assertTrue(heads.forget(revoked, "m"))
         assertNull(heads.withheldBy(revoked, full, truth))
 
-        // A forged head an honest machine passed on from device b holds past b's revocation, until forgotten.
-        val relayed = mutableMapOf<String, DirectoryHead>()
-        heads.note(relayed, "m2", DirectoryHead(99, "A".repeat(43), by = "b"), seenByA)
-        assertEquals("b", heads.withheldBy(relayed, mine, seenByA)?.by)
-        val withoutB = seenByA + envelopeJson(directories.revokeEntry(mine, "a", sign.getValue("a").secret, "b", at))
-        assertEquals("b", heads.withheldBy(relayed, directories.verify(withoutB), withoutB)?.revoked?.id)
-        heads.forget(relayed, "b")
-        assertNull(heads.withheldBy(relayed, directories.verify(withoutB), withoutB))
-
-        // A head passed on from a device this chain does not list yet counts, in one slot per machine.
-        val unknown = mutableMapOf<String, DirectoryHead>()
-        heads.note(unknown, "m2", DirectoryHead(99, "A".repeat(43), by = "c"), seenByA, mine)
-        heads.note(unknown, "m2", DirectoryHead(98, "B".repeat(43), by = "d"), seenByA, mine)
-        assertEquals(setOf("m2/?"), unknown.keys)
-        assertEquals("c", heads.withheldBy(unknown, mine, seenByA)?.by)
-        // Once a revoke names the device a kept head names, it still holds; a shorter head does not take its slot.
-        val withD = seenByA + envelopeJson(directories.addEntry(mine, "a", sign.getValue("a").secret, Member("c", "device", "c", toB64(sodium.boxKeyPair().public), toB64(sodium.signKeyPair().public)), at))
-        val revokedC = withD + envelopeJson(directories.revokeEntry(directories.verify(withD), "a", sign.getValue("a").secret, "c", at))
-        val afterC = directories.verify(revokedC)
-        assertFalse(heads.note(unknown, "m2", DirectoryHead(7, "C".repeat(43), by = "e"), revokedC, afterC))
-        assertEquals("c", heads.withheldBy(unknown, afterC, revokedC)?.revoked?.id)
+        // A head a machine before #794 passed on is not kept, so it cannot push out m2's own (#1627).
+        assertFalse(heads.note(known, "m2", DirectoryHead(99, "A".repeat(43), by = "b"), seenByA))
+        // Heads kept before #1627 under "signer/by" or "signer/?" count as their signer's, and go with it.
+        val kept = mutableMapOf("m2/b" to fullHead, "m2/?" to DirectoryHead(99, "A".repeat(43)))
+        assertEquals("m2", heads.withheldBy(kept, mine, seenByA)?.id)
+        assertFalse(heads.forget(kept, "b"))
+        assertTrue(heads.forget(kept, "m2"))
+        assertTrue(kept.isEmpty())
     }
 }

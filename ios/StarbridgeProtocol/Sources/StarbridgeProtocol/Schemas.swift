@@ -408,7 +408,7 @@ public struct DecisionLink: Equatable, Sendable {
 public struct DirectoryHead: Equatable, Sendable {
     public let length: Int
     public let head: String
-    /** A machine passing on a device's longer head names that device. */
+    /** The device a machine before #794 passed this head on from: no reader keeps such a head (#1627). */
     public let by: String?
 
     public init(length: Int, head: String, by: String? = nil) {

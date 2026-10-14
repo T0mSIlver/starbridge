@@ -95,16 +95,17 @@
   hold into each answer (`dir`); a machine refuses every device answer while an active device has
   signed a head its chain lacks. Machines sign `dir` into every item; a device re-reads the
   directory, then holds every machine's items (shows none, notifies nothing, sends no answer)
-  while a machine has signed a head its chain lacks. Machines before #794 also passed on heads
-  they got from devices; such a head counts even when the chain doesn't list that device yet.
-  The hold names the machine and the device and says to revoke the machine first, since a
-  compromised machine can name the owner's own phone. Settings and revoking keep working. A
-  machine that knows of a longer head posts nothing (#794). Closing the gap fully needs a
-  channel the server does not carry.
+  while a machine has signed a head its chain lacks. The hold names the machine. Settings and
+  revoking keep working. A machine that knows of a longer head posts nothing (#794). Closing the
+  gap fully needs a channel the server does not carry. Machines before #794 passed on heads they
+  got from devices, naming the device as `by`. Since #1627 a device keeps no such head it reads,
+  since a replayed one could push the machine's own head out of its slot, and it reads a head it
+  kept that way before as its signer's, the stricter reading, since only the signer signed it,
+  rather than move or drop it (#1627).
 - **A revocation ends no hold** (#794, #813). A member signs no head past its own revocation, so
   a chain that revokes the member whose head shows the gap is a fork: a revoked device whose
   revocation the server hides can make one. A head therefore keeps counting while a `revoke`
-  names its signer or its `by`; only a `recover` ends it. The way out after revoking a member
+  names its signer; only a `recover` ends it. The way out after revoking a member
   that forged a long head: `starbridge pair --force` on a machine; on a device, revoking from it
   forgets that member's heads, since that device knows its own revocation is real, and any other
   device's hold names who revoked the member and offers "I revoked it: stop waiting". Only the

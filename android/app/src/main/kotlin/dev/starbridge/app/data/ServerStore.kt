@@ -937,25 +937,22 @@ class ServerStore(
 
     private fun keepHead(machine: String, head: DirectoryHead?) {
         val heads = saved.heads.toMutableMap()
-        if (headBook.note(heads, machine, head, saved.entries, directory)) persist(saved.copy(heads = heads))
+        if (headBook.note(heads, machine, head, saved.entries)) persist(saved.copy(heads = heads))
     }
 
     /**
      * Why no machine's item counts: the server holds back entries a machine has seen. It names the
-     * machine and, for a head it passed on, the device; a compromised machine can name any device,
-     * the owner's own phone included, so the machine is the one to revoke first. A head whose
-     * member a `revoke` names says who revoked it: only the owner can tell whether they did, or a
-     * revoked device forged it on a fork (#813).
+     * machine. A head whose member a `revoke` names says who revoked it: only the owner can tell
+     * whether they did, or a revoked device forged it on a fork (#813).
      */
     private fun withheld(): String? {
         val dir = directory ?: return null
         val held = headBook.withheldBy(saved.heads, dir, saved.entries) ?: return null
         fun name(id: String) = dir.members[id]?.member?.name ?: id
         val machine = name(held.id)
-        val seen = held.by?.let { "$machine says ${name(it)} has seen changes to your devices that the server is holding back." }
-            ?: "The server is holding back changes to your devices that $machine has seen."
+        val seen = "The server is holding back changes to your devices that $machine has seen."
         val revoked = held.revoked
-            ?: return "$seen Nothing from your machines shows until it sends them. If this does not clear, revoke $machine first."
+            ?: return "$seen Nothing from your machines shows until it sends them. If this does not clear, revoke $machine."
         return "$seen ${name(revoked.by)} revoked ${name(revoked.id)} on ${revoked.at.take(10)}. If you did not, the server may be hiding that ${name(revoked.by)} was revoked. Nothing from your machines shows until this clears; if you did, tap Stop waiting."
     }
 

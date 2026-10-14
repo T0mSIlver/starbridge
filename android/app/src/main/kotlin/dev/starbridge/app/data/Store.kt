@@ -139,7 +139,7 @@ interface Store {
     /** Deletes the account on the server (#1104), then forgets it here as [signOut] does. */
     fun deleteAccount()
     fun dismissNotice()
-    /** The owner says they revoked [memberId]: the heads it signed or is named in go (#813). */
+    /** The owner says they revoked [memberId]: the heads it signed go (#813). */
     fun stopWaiting(memberId: String) {}
 }
 
