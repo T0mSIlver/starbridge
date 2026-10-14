@@ -5,6 +5,7 @@ import com.goterl.lazysodium.SodiumJava
 import dev.starbridge.app.data.Alerts
 import dev.starbridge.app.data.Decision
 import dev.starbridge.app.data.Disk
+import dev.starbridge.app.data.Phase
 import dev.starbridge.app.data.Prompt
 import dev.starbridge.app.data.Run
 import dev.starbridge.app.data.Saved
@@ -223,7 +224,14 @@ class WithheldTest {
     @Test
     fun aHeadKeptBeforeTheBySlotsWentHoldsAsItsMachines() = forkScenario(kept = true)
 
-    private fun forkScenario(kept: Boolean = false) {
+    /**
+     * The same fork revokes the phone itself (#1779): the machine's head shows it cut short, so the
+     * phone holds with its keys rather than wipe. A revocation the head does not contradict wipes.
+     */
+    @Test
+    fun aForkThatRevokesThePhoneHoldsRatherThanWipes() = forkScenario(revokePhone = true)
+
+    private fun forkScenario(kept: Boolean = false, revokePhone: Boolean = false) {
         val account = "acct"
         val at = "2026-10-08T12:00:00Z"
         val signKeys = sodium.signKeyPair()
@@ -238,8 +246,9 @@ class WithheldTest {
         val entries = mutableListOf<JsonElement>(envelopeJson(directories.genesisEntry(account, phone, signKeys.secret, sodium.signKeyPair(), at)))
         for (m in listOf(thief, tablet, machine)) entries += envelopeJson(directories.addEntry(directories.verify(entries, account, null), "phone", signKeys.secret, m, at))
         val known = directories.verify(entries, account, null)
-        val truth = directories.verify(entries + envelopeJson(directories.revokeEntry(known, "tablet", tabletSign.secret, thief.id, at)), account, null)
-        val target = machine
+        val truthEntries = entries + envelopeJson(directories.revokeEntry(known, "tablet", tabletSign.secret, thief.id, at))
+        val truth = directories.verify(truthEntries, account, null)
+        val target = if (revokePhone) phone else machine
         val fork = entries + envelopeJson(directories.revokeEntry(known, thief.id, thiefSign.secret, target.id, at))
         val item = envelopes.seal("decision", buildJsonObject {
             put("v", 1); put("id", "d_box"); putJsonArray("to") { add("phone") }; put("createdAt", at)
@@ -295,6 +304,22 @@ class WithheldTest {
         until { store.notice.value != null }
         assertTrue(store.notice.value!!.contains("devbox"))
         assertEquals(null, store.heldRevoked.value)
+        if (revokePhone) {
+            // The stolen phone revokes this one on a fork: the phone holds, keeping its keys.
+            store.dismissNotice()
+            served = fork
+            store.refresh()
+            until { store.notice.value?.contains("says this phone was removed, but devbox has seen") == true }
+            assertEquals(Phase.Ready, store.phase.value)
+            assertEquals(null, store.heldRevoked.value)
+            assertTrue(store.decisions.value.isEmpty())
+            // The tablet revokes it on the real chain, which the head does not contradict: it wipes.
+            served = truthEntries + envelopeJson(directories.revokeEntry(truth, "tablet", tabletSign.secret, phone.id, at))
+            store.refresh()
+            until { store.phase.value != Phase.Ready }
+            assertEquals("This phone was removed from your devices.", store.notice.value)
+            return
+        }
         // The stolen phone revokes the machine, or the tablet, on a fork of the phone's chain: the hold stands.
         store.dismissNotice()
         served = fork

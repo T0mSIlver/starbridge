@@ -13,6 +13,7 @@ import dev.starbridge.app.protocol.Envelopes
 import dev.starbridge.app.protocol.DirectoryHead
 import dev.starbridge.app.protocol.DecisionLink
 import dev.starbridge.app.protocol.Heads
+import dev.starbridge.app.protocol.Withheld
 import dev.starbridge.app.protocol.ItemBody
 import dev.starbridge.app.protocol.JoinApprovalBody
 import dev.starbridge.app.protocol.JoinKeys
@@ -221,6 +222,11 @@ class ServerStore(
     override val heldRevoked = MutableStateFlow<HeldRevoked?>(null)
     /** The hold notice last shown, so it goes once the hold ends. */
     @Volatile private var shownHold: String? = null
+    /**
+     * Why this phone keeps its keys on a chain that drops it: a machine's head shows the chain cut
+     * short (#1779). The chain is not kept; the next directory read decides again.
+     */
+    @Volatile private var removalHold: String? = null
     override val recovery = MutableStateFlow<RecoveryUi?>(null)
     override val replacing = MutableStateFlow<Replacing>(Replacing.Idle)
     /** While a new recovery key is on screen: its key pair, and the current one. */
@@ -411,6 +417,7 @@ class ServerStore(
         machineReleases.value = emptyMap()
         // The next account's hold shows once its own read succeeds, as on the web (#1192).
         pushHold.value = null
+        removalHold = null
         wipes++
         joinJob?.cancel()
         showJob?.cancel()
@@ -498,8 +505,11 @@ class ServerStore(
             } catch (e: ApiException) {
                 if (e.status != 404) throw e
                 // 404 means no such active device, or a server without binding: the chain decides.
-                val dir = directories.verify(saved.entries + fresh.directory(saved.entries.size), saved.account, saved.pin)
+                val all = saved.entries + fresh.directory(saved.entries.size)
+                val dir = directories.verify(all, saved.account, saved.pin)
                 if (dir.members[mine.id]?.active == true) throw IllegalStateException("This server cannot bind a new session to this phone. Update the server.")
+                // A chain the server cut short can drop this phone too: a machine's head shows it (#1779).
+                headBook.withheldBy(saved.heads, dir, all)?.let { throw IllegalStateException(removalText(dir, it)) }
                 wipe("This phone was removed from your devices. Set it up again.")
             }
         } else if (saved.pendingGenesis != null && me.account == saved.account) {
@@ -917,11 +927,25 @@ class ServerStore(
         if (fresh.isEmpty() && directory?.members?.get(me.id)?.active == true) return
         val all = saved.entries + fresh
         val dir = directories.verify(all, saved.account, saved.pin)
-        directory = dir
         if (dir.members[me.id]?.active != true) {
+            // A chain the server cut short can drop this phone too: a machine's head shows it, and
+            // the phone holds as it does for items, keeping its chain and keys (#1779).
+            val held = headBook.withheldBy(saved.heads, dir, all)
+            if (held != null) {
+                val why = removalText(dir, held)
+                removalHold = why
+                heldRevoked.value = held.revoked?.let { HeldRevoked(held.id, why) }
+                notice.value = why
+                shownHold = why
+                alerts.clearAll()
+                return
+            }
+            directory = dir
             wipe("This phone was removed from your devices.")
             return
         }
+        removalHold = null
+        directory = dir
         closeRevoked(dir)
         persist(saved.copy(entries = all, pin = Pin(dir.length, dir.head)))
     }
@@ -963,6 +987,7 @@ class ServerStore(
      * whether they did, or a revoked device forged it on a fork (#813).
      */
     private fun withheld(): String? {
+        removalHold?.let { return it }
         val dir = directory ?: return null
         val held = headBook.withheldBy(saved.heads, dir, saved.entries) ?: return null
         fun name(id: String) = dir.members[id]?.member?.name ?: id
@@ -971,6 +996,15 @@ class ServerStore(
         val revoked = held.revoked
             ?: return "$seen Nothing from your machines shows until it sends them. If this does not clear, revoke $machine."
         return "$seen ${name(revoked.by)} revoked ${name(revoked.id)} on ${revoked.at.take(10)}. If you did not, the server may be hiding that ${name(revoked.by)} was revoked. Nothing from your machines shows until this clears; if you did, tap Stop waiting."
+    }
+
+    /** Why this phone keeps its keys on chain [dir], which drops it while [held] shows it cut short (#1779). */
+    private fun removalText(dir: Directory, held: Withheld): String {
+        fun name(id: String) = dir.members[id]?.member?.name ?: id
+        val machine = name(held.id)
+        val why = "The server's list of your devices says this phone was removed, but $machine has seen changes to it that the server is holding back. This phone keeps its keys until the server sends them."
+        val revoked = held.revoked ?: return why
+        return "$why ${name(revoked.by)} revoked $machine on ${revoked.at.take(10)}: if you did, tap Stop waiting."
     }
 
     override fun stopWaiting(memberId: String) = run {
@@ -995,7 +1029,8 @@ class ServerStore(
         // Removed from the devices: the wipe said why, and nothing more opens.
         if (phase.value != Phase.Ready) return true
         val why = withheld() ?: return false
-        heldRevoked.value = directory?.let { headBook.withheldBy(saved.heads, it, saved.entries) }?.revoked?.let { HeldRevoked(it.id, why) }
+        // A removal on hold set its own (#1779).
+        if (removalHold == null) heldRevoked.value = directory?.let { headBook.withheldBy(saved.heads, it, saved.entries) }?.revoked?.let { HeldRevoked(it.id, why) }
         notice.value = why
         shownHold = why
         alerts.clearAll()
