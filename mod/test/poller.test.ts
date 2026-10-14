@@ -1,11 +1,12 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { LiveServer } from "@starbridge/server/test-support";
 import { run } from "../../cli/src/cli";
 import { paired, type TestCtx, until } from "../../cli/test/helpers";
 import { joinLines, type Line } from "../hooks/agent.ts";
+import { ownedFile, cli as recordedCli } from "../hooks/node.ts";
 import { type Host, Poller, type Timing } from "../hooks/poller.ts";
 
 const FAST: Timing = {
@@ -83,6 +84,7 @@ function session(id: string, opts: { gated?: boolean; timing?: Timing } = {}) {
       }
       return s.lastMtime;
     },
+    owned: async (path) => ownedFile(path),
     now: async () => Date.now(),
     sleep: (ms) => Bun.sleep(ms),
     submit: (lines) => {
@@ -304,8 +306,8 @@ test("a session that does not poll also keeps an answer through a /clear", async
 test("the poller starts the CLI setup recorded, and `starbridge` once that binary is gone (#612)", async () => {
   const dir = mkdtempSync(join(tmpdir(), "starbridge-mod-cli-"));
   const binary = join(dir, "starbridge");
-  writeFileSync(binary, "");
-  writeFileSync(join(dir, "cli-path"), `${binary}\n`);
+  writeFileSync(binary, "", { mode: 0o755 });
+  writeFileSync(join(dir, "cli-path"), `${binary}\n`, { mode: 0o600 });
   const runs: string[][] = [];
   const host: Host = {
     sessionId: async () => "s1",
@@ -322,6 +324,7 @@ test("the poller starts the CLI setup recorded, and `starbridge` once that binar
         return undefined;
       }
     },
+    owned: async (path) => ownedFile(path),
     now: async () => Date.now(),
     sleep: (ms) => Bun.sleep(ms),
     submit: () => [],
@@ -338,6 +341,27 @@ test("the poller starts the CLI setup recorded, and `starbridge` once that binar
   await until(() => runs.length > seen);
   expect(runs.at(-1)?.[0]).toBe("starbridge");
 });
+
+test.skipIf(process.platform === "win32")(
+  "a CLI path that is relative, or that another user may write, counts for nothing",
+  () => {
+    const dir = mkdtempSync(join(tmpdir(), "starbridge-mod-cli-"));
+    const binary = join(dir, "starbridge");
+    const record = join(dir, "cli-path");
+    writeFileSync(binary, "", { mode: 0o755 });
+    writeFileSync(record, `${binary}\n`, { mode: 0o600 });
+    const env = { STARBRIDGE_CONFIG_DIR: dir };
+    expect(recordedCli(env)).toBe(binary);
+    chmodSync(binary, 0o775);
+    expect(recordedCli(env)).toBe("starbridge");
+    chmodSync(binary, 0o755);
+    chmodSync(record, 0o606);
+    expect(recordedCli(env)).toBe("starbridge");
+    chmodSync(record, 0o600);
+    writeFileSync(record, "starbridge-mod-cli/starbridge\n");
+    expect(recordedCli(env)).toBe("starbridge");
+  },
+);
 
 test("a session that does not poll rereads a held answer every check, not back to back (#1484)", async () => {
   const lead = session("s-lead");

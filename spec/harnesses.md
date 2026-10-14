@@ -84,8 +84,9 @@ line, the safe side: at worst a prompt repeats an answer the agent already read.
   it to the parent, as for a queued prompt. A finished subagent needs no record: the message is
   the prompt it resumes with, which its transcript keeps. Claude Code runs no mod hook on the
   tool calls of a subagent a mod resumed, so a question that subagent asks again goes to the
-  parent, as before #1702. `ask` warns when `--session` names neither its own session
-  nor any Claude Code session on this machine, since no mod takes that answer.
+  parent, as before #1702. In an agent's session, `ask --session` takes only an id the
+  environment carries, its own or a parent's (#1748): any other went into a session that never
+  asked, or nowhere for a made-up one, so `ask` asks as its own session instead and says so.
 - **Answers that come in together** (#1597). The answers one session has waiting when it is
   handed them go as one message, one `Answer to …` line each, in the order they came, so five
   answers queued behind a turn start one turn rather than five, each on part of the picture.

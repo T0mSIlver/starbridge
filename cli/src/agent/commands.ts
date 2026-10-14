@@ -9,6 +9,7 @@ import {
   answerInLine,
   answerLine,
   askLines,
+  bindSession,
   closedError,
   type Delivery,
   deliveryLine,
@@ -18,7 +19,6 @@ import {
   type ObservedAnswer,
   printSnooze,
   resolveSource,
-  sessionWarning,
   snoozeLine,
   waitSeconds,
 } from "../decisions";
@@ -48,8 +48,9 @@ export async function askVia(
   input: AskInput,
   opts: { wait?: boolean; timeout?: string; json?: boolean },
 ): Promise<number> {
+  const { input: bound, warning } = bindSession(input, ctx.env);
   const resolved = resolveSource(
-    { ...input, waiting: input.waiting || opts.wait },
+    { ...bound, waiting: bound.waiting || opts.wait },
     ctx.env,
     process.cwd(),
   );
@@ -60,7 +61,6 @@ export async function askVia(
   );
   ctx.out(id);
   // After the post: when no agent takes it, `ask` posts it and warns instead.
-  const warning = sessionWarning(input, ctx.env);
   if (warning) ctx.err(warning);
   if (!opts.wait) {
     ctx.err(deliveryLine(id, d));

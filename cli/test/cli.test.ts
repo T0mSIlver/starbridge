@@ -269,7 +269,10 @@ test("ask names the session and links to it from Claude Code's record, unless fl
   ctx.env.CLAUDE_CODE_SESSION_ID = "s1";
 
   expect(await run(ASK, ctx)).toBe(0);
+  // Outside an agent's session, such as from a script, --session names any session (#1748).
+  delete ctx.env.CLAUDE_CODE_SESSION_ID;
   expect(await run([...ASK, "--session", "s2"], ctx)).toBe(0);
+  ctx.env.CLAUDE_CODE_SESSION_ID = "s1";
   const flags = [
     "--session-title",
     "Mine",
@@ -301,7 +304,7 @@ test("ask names the session and links to it from Claude Code's record, unless fl
   expect(await server.opened("decision")).toHaveLength(3);
 });
 
-test("ask warns of a --session no Claude Code session has, and keeps the asking subagent (#1702)", async () => {
+test("ask asks as its own session when --session names another, and keeps the asking subagent (#1702, #1748)", async () => {
   const ctx = await paired(server);
   const dir = mkdtempSync(join(tmpdir(), "starbridge-claude-"));
   mkdirSync(join(dir, "sessions"));
@@ -312,28 +315,32 @@ test("ask warns of a --session no Claude Code session has, and keeps the asking 
     CLAUDE_CODE_SESSION_ID: "s1",
     STARBRIDGE_CLAUDE_AGENT: "a1fdba894e743a195",
   });
-  const warned = () => ctx.errors.filter((l) => l.includes("names no Claude Code session"));
+  const warned = () => ctx.errors.filter((l) => l.startsWith("starbridge: --session"));
 
+  // A made-up id, or another session of this machine's: the answer comes back here.
   expect(await run([...ASK, "--session", "sb-1697"], ctx)).toBe(0);
-  expect(warned()).toEqual([
-    "starbridge: --session sb-1697 names no Claude Code session on this machine, so no session gets the answer as a prompt. Leave out --session to ask as this session (s1).",
-  ]);
   const madeUp = ctx.lines.at(-1) as string;
-  // Another session of this machine's, or its own: no warning.
   expect(await run([...ASK, "--session", "s2"], ctx)).toBe(0);
   const other = ctx.lines.at(-1) as string;
+  expect(warned()).toEqual([
+    "starbridge: --session sb-1697 names no Claude Code session on this machine, so it asks as this session (s1).",
+    "starbridge: --session s2 is not this session, and an answer goes only to the session that asked, so it asks as this session (s1).",
+  ]);
   ctx.errors.length = 0;
-  expect(await run(ASK, ctx)).toBe(0);
+  // Its own id, which a subagent's parent shares: no warning.
+  expect(await run([...ASK, "--session", "s1"], ctx)).toBe(0);
   const own = ctx.lines.at(-1) as string;
   expect(warned()).toEqual([]);
   // Only the mod names a subagent, so the answer comes back.
   expect(ctx.errors).toContain("The answer will come back into this session as a new prompt.");
 
   const asked = ctx.store.state().asked;
-  expect(asked[own]?.subagent).toBe("a1fdba894e743a195");
-  // A subagent of s1 is no agent of another session.
-  expect(asked[other]?.subagent).toBeUndefined();
-  expect(asked[madeUp]?.subagent).toBeUndefined();
+  for (const id of [own, other, madeUp]) {
+    expect(asked[id]?.session).toBe("s1");
+    expect(asked[id]?.subagent).toBe("a1fdba894e743a195");
+  }
+  const sources = (await server.opened("decision")).map((d) => d.source.session);
+  expect(sources).toEqual(["s1", "s1", "s1"]);
 
   await server.answer(own, { choice: "Merge" });
   await poll(ctx, session(ctx), { seconds: 0, shared: true });

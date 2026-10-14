@@ -129,21 +129,7 @@ export function resolveSource(
   cwd: string,
 ): AskInput & { project: string; session: string; sessionLinks: SessionLink[] } {
   const agent = agentOf(input, env).agent;
-  // The id of the agent that asks: an agent started from another one's shell inherits its id too.
-  const session =
-    input.session ??
-    (agent === "codex"
-      ? codexAsker(env)
-      : agent === "pi"
-        ? env.PI_SESSION_ID
-        : agent === "opencode"
-          ? env[OPENCODE_SESSION]
-          : agent === "antigravity"
-            ? env[ANTIGRAVITY_CONVERSATION]
-            : agent === "cursor"
-              ? env[CURSOR_CONVERSATION]
-              : env.CLAUDE_CODE_SESSION_ID) ??
-    "";
+  const session = input.session ?? ownSession(agent, env) ?? "";
   const codex = agent === "codex" ? (input.codex ?? codexSession(env)) : undefined;
   const agy = agent === "antigravity" ? (input.antigravity ?? agyRoute(env)) : undefined;
   const answersEnv = agent === "pi" ? PI_ANSWERS : agent === "opencode" ? OPENCODE_ANSWERS : "";
@@ -289,21 +275,53 @@ function subagentOf(env: Ctx["env"]): string | undefined {
   return id && AGENT_ID.test(id) ? id : undefined;
 }
 
+/** The id of the agent that asks: an agent started from another one's shell inherits its id too. */
+function ownSession(agent: Agent | undefined, env: Ctx["env"]): string | undefined {
+  return agent === "codex"
+    ? codexAsker(env)
+    : agent === "pi"
+      ? env.PI_SESSION_ID
+      : agent === "opencode"
+        ? env[OPENCODE_SESSION]
+        : agent === "antigravity"
+          ? env[ANTIGRAVITY_CONVERSATION]
+          : agent === "cursor"
+            ? env[CURSOR_CONVERSATION]
+            : env.CLAUDE_CODE_SESSION_ID;
+}
+
 /**
- * The warning `ask` prints when `--session` names neither the Claude Code session that runs it
- * nor any other Claude Code session on this machine, such as a name a subagent made up (#1702):
- * no session's mod then takes the answer.
+ * `ask`'s `--session`, held to the asker (#1748): in an agent's session it may name only a session
+ * id the environment carries, the asker's own or, for a subagent or an agent started from another
+ * one's shell, the parent's (#1702), since the answer goes into the session it names. Outside every
+ * agent's session, as in a script, it names any. Another id is dropped, so the decision is asked as
+ * the asker's session, and `warning` says so; for a Claude Code id this machine does not know, it
+ * keeps the words of #1702's warning.
  */
-export function sessionWarning(
-  input: Pick<AskInput, "session" | "agent">,
+export function bindSession(
+  input: AskInput,
   env: Ctx["env"],
-): string | undefined {
-  const own = env.CLAUDE_CODE_SESSION_ID;
+): { input: AskInput; warning?: string } {
   const named = input.session;
-  if (!named || !own || named === own || agentOf(input, env).agent !== "claude-code")
-    return undefined;
-  if (knownClaudeSession(env, named)) return undefined;
-  return `starbridge: --session ${named} names no Claude Code session on this machine, so no session gets the answer as a prompt. Leave out --session to ask as this session (${own}).`;
+  const carried = [
+    env.CLAUDE_CODE_SESSION_ID,
+    env.CODEX_THREAD_ID,
+    codexAsker(env),
+    env.PI_SESSION_ID,
+    env[OPENCODE_SESSION],
+    env[ANTIGRAVITY_CONVERSATION],
+    env[CURSOR_CONVERSATION],
+  ].filter((id): id is string => !!id);
+  if (named === undefined || carried.length === 0 || carried.includes(named)) return { input };
+  const { session: _, ...rest } = input;
+  const agent = agentOf(rest, env).agent;
+  const own = ownSession(agent, env);
+  const as = own ? `this session (${own})` : "no session";
+  const why =
+    agent === "claude-code" && !knownClaudeSession(env, named)
+      ? "names no Claude Code session on this machine"
+      : "is not this session, and an answer goes only to the session that asked";
+  return { input: rest, warning: `starbridge: --session ${named} ${why}, so it asks as ${as}.` };
 }
 
 function checked(decision: unknown): Decision {
@@ -469,14 +487,14 @@ export async function postDecision(ctx: Ctx, s: Session, input: AskInput): Promi
 /** Posts a decision and prints its id; with `wait`, then waits for its answer. */
 export async function ask(
   ctx: Ctx,
-  input: AskInput,
+  asked: AskInput,
   opts: { wait?: boolean; timeout?: string; json?: boolean },
 ): Promise<number> {
   const s = session(ctx);
+  const { input, warning } = bindSession(asked, ctx.env);
   const resolved = resolveSource(input, ctx.env, process.cwd());
   const decision = await postDecision(ctx, s, { ...resolved, waiting: input.waiting || opts.wait });
   ctx.out(decision.id);
-  const warning = sessionWarning(input, ctx.env);
   if (warning) ctx.err(warning);
   // With no agent, nothing tells which sessions run a mod: the poller's lease says only that one
   // does (#537).

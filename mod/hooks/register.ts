@@ -24,6 +24,13 @@ import { Switch, wantsLoop } from "./switch.ts";
  * An answer submitted as a prompt stays on record until its turn starts, so a process that exits
  * first does not lose it (sent.ts).
  */
+/**
+ * Exits 0 when "$1" is a file owned by this user or root that neither its group nor others may
+ * write: what `ownedFile` (node.ts) checks, for a host that reads no owner or mode.
+ */
+const OWNED =
+  '[ -n "$(find -L "$1" -prune -type f \\( -user "$(id -u)" -o -user 0 \\) ! -perm -020 ! -perm -002 2>/dev/null)" ]';
+
 export const register: Register = (on) => {
   let loop: Switch | undefined;
   /** Prompts submitted whose turn has not started. */
@@ -197,6 +204,13 @@ export const register: Register = (on) => {
               read: (path) => $.fs.read(path),
               write: (path, text) => $.fs.write(path, text),
               mtime: async (path) => (await $.fs.stat(path).catch(() => undefined))?.mtimeMs,
+              // The mod's host reads no owner or mode: find does, as plugin/hooks/cli.sh.
+              owned: async (path) =>
+                (
+                  await $.process
+                    .run(["sh", "-c", OWNED, "sh", path], { timeoutMs: 10_000 })
+                    .catch(() => undefined)
+                )?.exitCode === 0,
               now,
               sleep,
               submit,

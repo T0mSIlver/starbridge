@@ -13,6 +13,7 @@
 # check of its own, so it downloads minisign's official Windows build, pinned by its hash.
 #
 # STARBRIDGE_VERSION=1.2.3      a version other than the latest release
+# STARBRIDGE_DOWNGRADE=1        allow a version older than the installed one
 # STARBRIDGE_INSTALL_DIR=<dir>  instead of ~\.local\bin
 # STARBRIDGE_NO_SETUP=1         install only
 # STARBRIDGE_RELEASES_URL=<url> a mirror of https://github.com/T0mSIlver/starbridge/releases
@@ -75,6 +76,27 @@
   if ($version -cnotmatch '^[0-9A-Za-z.-]+$') { Fail "not a release version: $version" }
   $base = "$Releases/download/v$version"
 
+  # 1.2.3 or 1.2.3-rc.4 as four numbers, a release after its release candidates; else $null.
+  function Get-VersionKey($v) {
+    if ("$v" -cmatch '^v?(\d+)\.(\d+)\.(\d+)(?:-rc\.(\d+))?$') {
+      $rc = if ($Matches[4]) { [long]$Matches[4] } else { [long]::MaxValue }
+      return @([long]$Matches[1], [long]$Matches[2], [long]$Matches[3], $rc)
+    }
+    return $null
+  }
+  # A served "latest" older than the installed copy would roll it back to a release with fixed bugs.
+  $exe = Join-Path $Dir 'starbridge.exe'
+  if (-not $env:STARBRIDGE_DOWNGRADE -and (Test-Path -LiteralPath $exe)) {
+    $installed = try { "$(& $exe --version 2>$null)".Trim() -replace '^starbridge ', '' } catch { '' }
+    $new = Get-VersionKey $version
+    $old = Get-VersionKey $installed
+    if ($new -and $old) {
+      $cmp = 0
+      for ($i = 0; $i -lt 4 -and $cmp -eq 0; $i++) { $cmp = $new[$i].CompareTo($old[$i]) }
+      if ($cmp -lt 0) { Fail "v$version is older than the installed starbridge $installed; set STARBRIDGE_DOWNGRADE=1 to install it anyway" }
+    }
+  }
+
   $tmp = Join-Path ([IO.Path]::GetTempPath()) "starbridge-$([guid]::NewGuid())"
   New-Item -ItemType Directory -Path $tmp | Out-Null
   try {
@@ -115,7 +137,6 @@
     if ((Get-Sha256 (Join-Path $tmp $asset)) -ne $want) { Fail "$asset does not match its hash in SHA256SUMS" }
 
     New-Item -ItemType Directory -Force -Path $Dir | Out-Null
-    $exe = Join-Path $Dir 'starbridge.exe'
     $next = Join-Path $Dir '.starbridge.new'
     Move-Item -Force -LiteralPath (Join-Path $tmp $asset) -Destination $next
     # Windows replaces no running .exe, such as the agent's, but lets it be renamed. A copy set
