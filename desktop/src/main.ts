@@ -24,6 +24,7 @@ import { type Answer, type Entry, parseAnswered, parseState } from "./bridge";
 import { MenuBar, trayImageName } from "./menubar";
 import { Notifier, type Shown } from "./notifier";
 import { opensOutside, serverOrigin, staysInWindow } from "./origin";
+import { ahead } from "./releases";
 import { type Reading, SCREEN_CHECK_MS, Screen } from "./screen";
 import {
   parseBackground,
@@ -37,7 +38,7 @@ import { mark, timing } from "./timing";
 import {
   parseUpdateAction,
   parseUpdateSettings,
-  type UpdateSettings,
+  type UpdateSettingsView,
   type UpdateStatus,
   type Updates,
 } from "./updates";
@@ -86,6 +87,8 @@ let signIn: SignIn | null = null;
 let updates: Updates | null = null;
 /** GitHub's page for the releases; the end-to-end test sets a stand-in (test/smoke.ts). */
 const RELEASES = process.env.STARBRIDGE_RELEASES ?? "https://github.com/T0mSIlver/starbridge";
+/** The tip builds' repository (#1692), whose one release `tip` holds the newest build of main. */
+const TIP = process.env.STARBRIDGE_TIP ?? "https://github.com/T0mSIlver/starbridge-tip";
 /** Whether the window's last page failed to load, which leaves its URL on the server. */
 let failed = false;
 /** Links that arrived before the window existed. */
@@ -285,8 +288,14 @@ async function ready(): Promise<void> {
   checkForUpdates();
 }
 
-function updateSettings(): UpdateSettings {
-  return { releaseCandidates: settings.releaseCandidates, autoDownload: settings.autoDownload };
+function updateSettings(): UpdateSettingsView {
+  const { channel, autoDownload } = settings;
+  return {
+    channel,
+    autoDownload,
+    releaseCandidates: channel !== "stable",
+    ahead: ahead(app.getVersion(), channel),
+  };
 }
 
 function checkForUpdates(): void {
@@ -298,7 +307,7 @@ function checkForUpdates(): void {
     const { startUpdates } = require(
       join(ROOT, "dist", "updater.js"),
     ) as typeof import("./updater");
-    updates = startUpdates(RELEASES, updateSettings, tellUpdate);
+    updates = startUpdates(RELEASES, TIP, updateSettings, tellUpdate);
   }, 5_000);
 }
 

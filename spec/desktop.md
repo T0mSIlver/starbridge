@@ -74,8 +74,9 @@ a browser; the app adds a menu bar light and notifications, so a web release nee
   and third with a dot in `fg`, never amber, which means an agent needs the owner. It shows
   nothing while idle or checking, and a failed check only logs: it may be the network, and the
   next one comes. Checks go on while an update is offered or downloaded, and a newer release
-  replaces it, so one click installs the newest (#1444). Settings → Updates holds "Release candidates" (the menu's former "Get Release
-  Candidates", same default) and "Download updates automatically" (on). The bridge carries the
+  replaces it, so one click installs the newest (#1444). Settings → Updates holds "Update channel", Stable, Release candidates or Tip
+  (#1692, which replaced the "Release candidates" switch, the menu's former "Get Release
+  Candidates"; spec/releases.md), and "Download updates automatically" (on). The bridge carries the
   updater's state and three actions, check, download and restart, so the page decides nothing
   about versions. A browser sees none of it, the one place the app's page differs from the
   browser's besides "Keep Starbridge in". Under 600 px the rail gives way to the bottom bar, and

@@ -55,7 +55,9 @@ The page finds `window.starbridgeDesktop` only on the configured server's origin
 - `updateStatus()`: where the update stands, `{state}` with `"idle"`, `"checking"`,
   `"available"`, `"downloading"`, `"ready"` or `"error"`, and its `version`, `percent` or
   `message` (`src/updates.ts`); null while the app runs no updater. `updateSettings()` and
-  `setUpdateSettings(s)`: `{releaseCandidates, autoDownload}`, either field. `updateAction(a)`:
+  `setUpdateSettings(s)`: `{channel, autoDownload}` (`channel` is `"stable"`, `"rc"` or `"tip"`), any
+  field; `updateSettings()` adds `ahead`, whether the installed version waits for the channel to
+  pass it, and `releaseCandidates`, the switch that pages from before the channel read and set (#1692). `updateAction(a)`:
   `"check"`, `"download"`, or `"install"`, which restarts the app. `onUpdate(f)`: `f()` runs when
   the status or the settings change (#1398).
 

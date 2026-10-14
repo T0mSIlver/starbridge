@@ -35,7 +35,19 @@ export type DesktopUpdateStatus =
   | { state: "ready"; version: string }
   | { state: "error"; message: string };
 
-export type DesktopUpdateSettings = { releaseCandidates: boolean; autoDownload: boolean };
+/** Where the app's updates come from (desktop/src/releases.ts, #1692). */
+export type DesktopChannel = "stable" | "rc" | "tip";
+
+/**
+ * `channel` and `ahead` (the installed version waits for the channel to pass it) are absent
+ * before #1692, whose apps have the `releaseCandidates` switch only.
+ */
+export type DesktopUpdateSettings = {
+  releaseCandidates: boolean;
+  autoDownload: boolean;
+  channel?: DesktopChannel;
+  ahead?: boolean;
+};
 
 export type DesktopBridge = {
   version: string;

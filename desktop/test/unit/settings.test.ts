@@ -22,10 +22,19 @@ test("an app that already notified is not asked about notifications again", () =
   expect(read({ notified: ["q_1"], notificationsAsked: false }).notificationsAsked).toBe(false);
 });
 
-test("an app installed from a release candidate follows them until the owner says otherwise", () => {
-  expect(read({}, "1.2.0").releaseCandidates).toBe(false);
-  expect(read({}, "1.2.0-rc.3").releaseCandidates).toBe(true);
-  expect(read({ releaseCandidates: false }, "1.2.0-rc.3").releaseCandidates).toBe(false);
+test("an app installed from an rc or a tip build starts on its channel", () => {
+  expect(read({}, "1.2.0").channel).toBe("stable");
+  expect(read({}, "1.2.0-rc.3").channel).toBe("rc");
+  expect(read({}, "1.2.0-tip.80").channel).toBe("tip");
+  expect(read({ channel: "stable" }, "1.2.0-tip.80").channel).toBe("stable");
+  expect(read({ channel: "nightly" }, "1.2.0").channel).toBe("stable");
+});
+
+test("the switch from before the channel still counts, but for a tip build", () => {
+  expect(read({ releaseCandidates: false }, "1.2.0-rc.3").channel).toBe("stable");
+  expect(read({ releaseCandidates: true }, "1.2.0").channel).toBe("rc");
+  // Saved by a tip build from before the channel, which could not pick Tip.
+  expect(read({ releaseCandidates: false }, "1.2.0-tip.80").channel).toBe("tip");
 });
 
 test("updates download by themselves until the owner turns that off", () => {

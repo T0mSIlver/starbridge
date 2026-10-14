@@ -39,8 +39,8 @@
 - **Cadence** (#1538). An rc whenever a batch of merges lands, about daily, since it is also what
   puts server changes on starbridge.run; the owner promotes it once they have used it a day.
   Channels stay: Android rcs and finals to Play's Alpha track and GitHub (production once Play's
-  12-tester test is passed), the desktop app's finals for everyone and rcs for apps installed from
-  an rc or with Get Release Candidates on, the CLI's rcs to npm's `next` and finals to `latest` and
+  12-tester test is passed), the desktop app's finals for everyone, rcs for apps on Release candidates
+  and main's builds for apps on Tip, the CLI's rcs to npm's `next` and finals to `latest` and
   Homebrew, the plugin marketplace on finals. The iPhone app follows Android once Apple's export
   compliance code arrives: rcs to TestFlight, finals to the App Store.
 - **Three rings: main, rc, final** (#1540). The owner runs main against staging, testers and
@@ -142,9 +142,14 @@
   `latest-mac.yml` to the Release. Every 6 hours and at start, the app reads that file from the
   release it follows, downloads the zip (or waits for the rail's Update available, with Settings' "Download updates
   automatically" off), and installs it on quit or from the rail's Restart to update (#1398). It
-  follows GitHub's latest release, or with Settings' "Release candidates" on, the newest
-  rc when that is newer (#1071); an app installed from an rc starts with it on. Turning it off cancels
-  an rc download under way; one already downloaded still installs on quit, since Squirrel holds it. The app picks the
+  follows the channel in Settings → Updates (#1692): Stable, GitHub's latest release; Release
+  candidates, the newest rc when that is newer (#1071); Tip, also the tip build (below) when that is
+  newer still, read from `T0mSIlver/starbridge-tip`. An app installed from an rc starts on Release
+  candidates, one from a tip build on Tip. electron-updater never downgrades, so a lower channel
+  holds the installed version until it passes it, which Settings says under the choice. Moving
+  down cancels a download the new channel does not offer; one already downloaded still installs
+  on quit, since Squirrel holds it. Settings from before the channel keep their meaning, and the
+  bridge still reads and takes the old switch, since starbridge.run's page moves only with an rc. The app picks the
   release from the `releases/latest` redirect and the releases feed: electron-updater's own GitHub
   lookup keeps an app installed from an rc on rcs and never offers it a final, and GitHub's API
   allows 60 requests an hour per address. macOS
