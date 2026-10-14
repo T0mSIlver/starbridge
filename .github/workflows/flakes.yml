@@ -1,0 +1,41 @@
+name: flakes
+
+# Each night, the jobs that failed on a run's first attempt and passed on a rerun, with their failing
+# tests, go to the open issue labelled `flaky` (cli/scripts/flakes.ts), so a flaky test is counted
+# and filed instead of rerun silently (#1657).
+on:
+  schedule:
+    - cron: "23 5 * * *"
+  workflow_dispatch:
+    inputs:
+      hours:
+        description: Runs that finished in the last this many hours
+        default: "24"
+
+concurrency:
+  group: flakes
+  cancel-in-progress: false
+
+permissions: {}
+
+jobs:
+  record:
+    runs-on: ${{ vars.TRUSTED_RUNNER && fromJSON(vars.TRUSTED_RUNNER) || 'ubuntu-latest' }}
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          sparse-checkout: cli/scripts/flakes.ts
+          sparse-checkout-cone-mode: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.2
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          HOURS: ${{ inputs.hours || '24' }}
+          FLAKES_ISSUE: "1"
+        run: bun cli/scripts/flakes.ts "$HOURS" | tee -a "$GITHUB_STEP_SUMMARY"

@@ -44,6 +44,8 @@ command and its local agent), `plugin` and
   (Android, iOS, Web, Desktop, CLI, Server, Docs), or `None`. The release groups them by product.
 - Merge `main` into your branch only when it conflicts or you need a fix from `main`. Every
   push reruns the whole CI, and a PR merges without being up to date.
+- A test that fails and then passes on a rerun gets an issue the first time, never a silent rerun.
+  `flakes.yml` lists them each night on the issue labelled `flaky`.
 - Before a PR is ready, run the checks in
   [CONTRIBUTING.md, "Develop"](CONTRIBUTING.md#develop).
 - A Settings row you add or rename follows DESIGN.md's rule on Settings
