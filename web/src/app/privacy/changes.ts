@@ -42,4 +42,4 @@ export const privacyChanges: readonly LegalChange[] = [
 ];
 
 /** SHA-256 of page.tsx with its whitespace collapsed (sourceHash); changes.test.ts recomputes it. */
-export const pageHash = "27a1c937ea065d32807208c766b48c0f07e5cee8a0e782694bd36f0f2bd7e9d4";
+export const pageHash = "017eada3e1eded1bc40269836c69ad220bce48492b0ea093ebbe0286e6a86f20";

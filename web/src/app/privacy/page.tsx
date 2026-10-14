@@ -125,9 +125,7 @@ export default function Privacy() {
           for pushes relayed for self-hosted servers;
         </li>
         <li>push targets by push service;</li>
-        <li>
-          which releases of the apps, the web page, the CLI and the Claude Code mod were in use.
-        </li>
+        <li>which releases of the apps, the web page and the CLI were in use.</li>
       </ul>
 
       <h2 className="t-heading">Who else sees what</h2>
