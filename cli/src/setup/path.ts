@@ -12,6 +12,8 @@ import {
 import { delimiter, dirname, join } from "node:path";
 import { CLI_PATH } from "../config";
 import { pathFor } from "../platform";
+import { replaceFile } from "../replace";
+import { fishQuote, shellQuote } from "./quote";
 import type { Sys } from "./sys";
 
 /**
@@ -62,6 +64,27 @@ function missingDir(sys: Sys): string | undefined {
 
 const PATH_MARK = "# Added by starbridge setup";
 
+/** A folder that goes in a startup line as it is: what setup wrote before quoting (#1749). */
+const PLAIN = /^[\w./+@~:-]+$/;
+
+/**
+ * The lines that put `dir` on the PATH, for sh and for fish, `$HOME` spelled out for a folder in
+ * it. A folder with other characters, such as a space, a quote or a `$`, goes in single quotes,
+ * since in the double quotes setup used before it ended the word or ran a command (#1749).
+ */
+function pathLines(dir: string, home: string): { sh: string; fish: string } {
+  const rest = dir.startsWith(`${home}/`) ? dir.slice(home.length) : undefined;
+  if (PLAIN.test(dir))
+    return {
+      sh: `export PATH="${rest ? `$HOME${rest}` : dir}:$PATH"`,
+      fish: `fish_add_path ${dir}`,
+    };
+  return {
+    sh: `export PATH=${rest ? `"$HOME"${shellQuote(rest)}` : shellQuote(dir)}:"$PATH"`,
+    fish: `fish_add_path ${fishQuote(dir)}`,
+  };
+}
+
 /**
  * Takes the marker and the line `pathStep` wrote for `dir` out of each shell's startup file, with
  * the blank line before, while the line is exactly as setup wrote it; removes a file left empty
@@ -76,10 +99,8 @@ export function removePathLines(sys: Sys, dir: string): string[] {
     ...[".bashrc", ".bash_profile", ".bash_login", ".profile"].map((f) => join(home, f)),
     join(home, ".config", "fish", "config.fish"),
   ]);
-  const shown = dir.startsWith(`${home}/`) ? `$HOME${dir.slice(home.length)}` : dir;
-  const blocks = [`export PATH="${shown}:$PATH"`, `fish_add_path ${dir}`].map(
-    (line) => `${PATH_MARK}\n${line}\n`,
-  );
+  const { sh, fish } = pathLines(dir, home);
+  const blocks = [sh, fish].map((line) => `${PATH_MARK}\n${line}\n`);
   const done: string[] = [];
   for (const file of files) {
     const text = existsSync(file) ? readFileSync(file, "utf8") : "";
@@ -90,7 +111,7 @@ export function removePathLines(sys: Sys, dir: string): string[] {
     }
     if (left === text) continue;
     if (left.trim() === "") rmSync(file, { force: true });
-    else writeFileSync(file, left);
+    else replaceFile(file, left);
     done.push(file);
   }
   return done;
@@ -100,10 +121,9 @@ export function removePathLines(sys: Sys, dir: string): string[] {
 export function shellProfile(sys: Sys, dir: string): { file: string; line: string } {
   const { basename, join } = pathFor(sys.platform);
   const shell = basename(sys.ctx.env.SHELL ?? "");
-  const shown = dir.startsWith(`${sys.home}/`) ? `$HOME${dir.slice(sys.home.length)}` : dir;
-  const exported = `export PATH="${shown}:$PATH"`;
+  const { sh: exported, fish } = pathLines(dir, sys.home);
   if (shell === "fish")
-    return { file: join(sys.home, ".config", "fish", "config.fish"), line: `fish_add_path ${dir}` };
+    return { file: join(sys.home, ".config", "fish", "config.fish"), line: fish };
   if (shell === "zsh")
     return { file: join(sys.ctx.env.ZDOTDIR || sys.home, ".zshrc"), line: exported };
   if (shell === "bash") {
@@ -156,6 +176,6 @@ export async function pathStep(sys: Sys): Promise<string[]> {
   }
   return [
     "One more step: `starbridge` is not on this terminal's PATH yet. Open a new terminal, or run:",
-    `  ${line.startsWith("fish_add_path") ? line : `export PATH="${dir}:$PATH"`}`,
+    `  ${line.startsWith("fish_add_path") ? line : PLAIN.test(dir) ? `export PATH="${dir}:$PATH"` : `export PATH=${shellQuote(dir)}:"$PATH"`}`,
   ];
 }

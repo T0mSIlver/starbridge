@@ -78,10 +78,23 @@ export function compareVersions(a: string, b: string): number {
   return 0;
 }
 
-async function get(url: string, init?: RequestInit): Promise<Response> {
+/** How long a small file, or the latest release's tag, may take to arrive. */
+const SMALL_MS = 30_000;
+/** How long a binary may take, at about 100 KB/s for today's 80 MB (#1749). */
+const ASSET_MS = 15 * 60_000;
+/** The most a small file may hold: SHA256SUMS lists a dozen assets. */
+const SMALL_BYTES = 1 << 20;
+/** The most a binary may hold, three times today's. */
+const ASSET_BYTES = 256 << 20;
+
+/**
+ * Fetches `url` within `ms`, body included, so a server that stops sending cannot hold an update
+ * for ever (#1749).
+ */
+export async function fetchWithin(url: string, ms: number, init?: RequestInit): Promise<Response> {
   let res: Response;
   try {
-    res = await fetch(url, init);
+    res = await fetch(url, { ...init, signal: AbortSignal.timeout(ms) });
   } catch (e) {
     // Bun's own words name no URL (#617).
     throw new DownloadError(`cannot reach ${url} (${(e as Error).message})`);
@@ -91,9 +104,39 @@ async function get(url: string, init?: RequestInit): Promise<Response> {
   return res;
 }
 
+/** The body of `res`, refused once it passes `max` bytes rather than read to the end. */
+export async function capped(res: Response, max: number, url: string): Promise<Uint8Array> {
+  const tooBig = () => new DownloadError(`${url} is larger than ${max} bytes`);
+  if (Number(res.headers.get("content-length")) > max) {
+    await res.body?.cancel();
+    throw tooBig();
+  }
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  try {
+    for await (const chunk of res.body ?? []) {
+      size += chunk.byteLength;
+      if (size > max) throw tooBig();
+      chunks.push(chunk);
+    }
+  } catch (e) {
+    await res.body?.cancel().catch(() => {});
+    if (e instanceof DownloadError) throw e;
+    throw new DownloadError(`cannot download ${url} (${(e as Error).message})`);
+  }
+  const bytes = new Uint8Array(size);
+  let at = 0;
+  for (const c of chunks) {
+    bytes.set(c, at);
+    at += c.byteLength;
+  }
+  return bytes;
+}
+
 /** The latest release's version, from where GitHub redirects `releases/latest`. */
 export async function latestVersion(releases = RELEASES_URL): Promise<string> {
-  const res = await get(`${releases}/latest`, { redirect: "manual" });
+  const res = await fetchWithin(`${releases}/latest`, SMALL_MS, { redirect: "manual" });
+  await res.body?.cancel();
   const m = /\/tag\/v([^/]+)$/.exec(res.headers.get("location") ?? "");
   if (!m) throw new DownloadError(`no latest release at ${releases} (${res.status})`);
   return m[1] as string;
@@ -109,15 +152,18 @@ export async function downloadVerified(
   opts: { releases?: string; pubkey?: string } = {},
 ): Promise<Uint8Array> {
   const base = `${opts.releases ?? RELEASES_URL}/download/v${version}`;
-  const sums = new Uint8Array(await (await get(`${base}/SHA256SUMS`)).arrayBuffer());
-  const minisig = await (await get(`${base}/SHA256SUMS.minisig`)).text();
+  const small = async (name: string) =>
+    capped(await fetchWithin(`${base}/${name}`, SMALL_MS), SMALL_BYTES, `${base}/${name}`);
+  const sums = await small("SHA256SUMS");
+  const minisig = new TextDecoder().decode(await small("SHA256SUMS.minisig"));
   // The signature covers the version in its trusted comment, not the tag it was served under.
   const signed = verifyMinisign(sums, minisig, opts.pubkey);
   if (signed !== `starbridge v${version}`)
     throw new ReleaseError(`SHA256SUMS is signed for "${signed}", not starbridge v${version}`);
   const want = parseSums(new TextDecoder().decode(sums)).get(asset);
   if (!want) throw new ReleaseError(`SHA256SUMS lists no ${asset}`);
-  const bytes = new Uint8Array(await (await get(`${base}/${asset}`)).arrayBuffer());
+  const url = `${base}/${asset}`;
+  const bytes = await capped(await fetchWithin(url, ASSET_MS), ASSET_BYTES, url);
   if (createHash("sha256").update(bytes).digest("hex") !== want)
     throw new ReleaseError(`${asset} does not match its hash in SHA256SUMS`);
   return bytes;

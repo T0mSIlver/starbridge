@@ -1,6 +1,7 @@
 /** Setup's Claude Code step: the Starbridge marketplace and its two plugins, at user scope. */
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { replaceFile } from "../replace";
 import { withoutAllow, writeLeft } from "./remove";
 import { failure, run, type Sys, which } from "./sys";
 
@@ -209,7 +210,7 @@ function readSettings(sys: Sys): Settings | undefined {
 }
 
 function writeSettings(sys: Sys, s: Settings) {
-  writeFileSync(settingsPath(sys), `${JSON.stringify(s, null, 2)}\n`);
+  replaceFile(settingsPath(sys), `${JSON.stringify(s, null, 2)}\n`);
 }
 
 /** Whether background auto-update is on for the marketplace; undefined when it is not declared. */

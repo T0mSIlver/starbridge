@@ -1,8 +1,11 @@
 import { expect, test } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { codexPluginDir, installCodexPlugin, removeCodexPlugin } from "../src/setup/codex-plugin";
 import {
+  cursorHooksPath,
   cursorScriptsDir,
   cursorSkillDir,
   installCursorFiles,
@@ -23,8 +26,9 @@ import {
 import { defaults, type Sys } from "../src/setup/sys";
 import { testCtx } from "./helpers";
 
-function home(): Sys {
-  const dir = mkdtempSync(join(tmpdir(), "starbridge-home-"));
+function home(name = ""): Sys {
+  const dir = join(mkdtempSync(join(tmpdir(), "starbridge-home-")), name);
+  mkdirSync(dir, { recursive: true });
   return {
     ctx: testCtx({ HOME: dir }),
     home: dir,
@@ -113,3 +117,47 @@ test("an Antigravity plugin that lost its rule is still Starbridge's, so setup r
     rmSync(sys.home, { recursive: true, force: true });
   }
 });
+
+test("removing the Codex plugin keeps a file the owner put in its folder (#1749)", async () => {
+  const sys = home();
+  try {
+    // No codex here: the files are written, and adding them to Codex fails.
+    await installCodexPlugin(sys).catch(() => {});
+    const kept = mine(join(codexPluginDir(sys), "notes.md"));
+    const done = await removeCodexPlugin(sys);
+    expect(existsSync(kept)).toBe(true);
+    expect(done).toContain(
+      `Removed Starbridge's files from ${codexPluginDir(sys)}; kept ${kept}: setup did not write it.`,
+    );
+  } finally {
+    rmSync(sys.home, { recursive: true, force: true });
+  }
+});
+
+test.skipIf(process.platform === "win32")(
+  "Cursor's hook commands quote a home folder with quotes or a $, and replace the double-quoted ones of before (#1749)",
+  () => {
+    const sys = home('a "b" $HOME');
+    try {
+      const dir = cursorScriptsDir(sys);
+      const legacy = {
+        version: 1,
+        hooks: {
+          sessionEnd: [{ command: `sh "${dir}/cli.sh" hook session --agent cursor`, timeout: 10 }],
+        },
+      };
+      mkdirSync(join(dir, ".."), { recursive: true });
+      writeFileSync(cursorHooksPath(sys), JSON.stringify(legacy));
+      installCursorFiles(sys);
+      const hooks = JSON.parse(readFileSync(cursorHooksPath(sys), "utf8")).hooks;
+      expect(hooks.sessionEnd).toEqual([
+        { command: `sh '${dir}/cli.sh' hook session --agent cursor`, timeout: 10 },
+      ]);
+      const start = spawnSync("sh", ["-c", hooks.sessionStart[0].command], { encoding: "utf8" });
+      expect(start.status).toBe(0);
+      expect(start.stdout).not.toBe("");
+    } finally {
+      rmSync(join(sys.home, ".."), { recursive: true, force: true });
+    }
+  },
+);

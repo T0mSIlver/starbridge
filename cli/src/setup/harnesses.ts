@@ -11,6 +11,7 @@ import { dirname, join } from "node:path";
 import agyRule from "../../../plugin/rules/antigravity.md" with { type: "text" };
 import opencodeRule from "../../../plugin/rules/opencode.md" with { type: "text" };
 import skill from "../../../plugin/skills/starbridge/SKILL.md" with { type: "text" };
+import { replaceFile } from "../replace";
 import { VERSION } from "../version";
 import agyFiles from "./antigravity-files.js";
 import { codexPluginDir, refreshCodexPluginFiles } from "./codex-plugin";
@@ -399,7 +400,7 @@ export function addAgyAllow(sys: Home): boolean {
     allow: [...allow, ...AGY_ALLOW.filter((r) => !allow.includes(r))],
   };
   mkdirSync(dirname(agySettingsPath(sys)), { recursive: true });
-  writeFileSync(agySettingsPath(sys), `${JSON.stringify(s, null, 2)}\n`);
+  replaceFile(agySettingsPath(sys), `${JSON.stringify(s, null, 2)}\n`);
   return true;
 }
 

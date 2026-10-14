@@ -11,8 +11,10 @@ import cli from "../../../plugin/hooks/cli.sh" with { type: "text" };
 import sessionStart from "../../../plugin/hooks/session-start.sh" with { type: "text" };
 import rule from "../../../plugin/rules/cursor.md" with { type: "text" };
 import { CURSOR_HOLD_MS } from "../hook";
+import { replaceFile } from "../replace";
 import { type FileState, SKILL } from "./harnesses";
 import { marker, ours } from "./marker";
+import { shellQuote } from "./quote";
 import { removedLine, removeWritten, withoutAllow, writeLeft } from "./remove";
 import { type Sys, which } from "./sys";
 
@@ -56,13 +58,15 @@ function cursorFiles(sys: Home): Record<string, string> {
 }
 
 /** Starbridge's entries in `~/.cursor/hooks.json`, by event. */
-function hookEntries(sys: Home): Record<string, Record<string, unknown>[]> {
+function hookEntries(sys: Home, legacy = false): Record<string, Record<string, unknown>[]> {
   const dir = cursorScriptsDir(sys);
-  const session = `sh "${join(dir, "cli.sh")}" hook session --agent cursor`;
+  // Before #1749, in double quotes, which a `$` or `"` in the home folder's path broke out of.
+  const q = legacy ? (s: string) => `"${s}"` : shellQuote;
+  const session = `sh ${q(join(dir, "cli.sh"))} hook session --agent cursor`;
   return {
     // The rule, as the Claude Code plugin's SessionStart adds it (#954).
     sessionStart: [
-      { command: `sh "${join(dir, "session-start.sh")}" cursor`, timeout: 5 },
+      { command: `sh ${q(join(dir, "session-start.sh"))} cursor`, timeout: 5 },
       { command: session, timeout: 10 },
     ],
     // Holds for the answers to the conversation's open questions (#956), with no cap on how
@@ -107,7 +111,9 @@ function oursEntry(sys: Home, entry: unknown): boolean {
   const command = (entry as { command?: unknown } | null)?.command;
   return (
     typeof command === "string" &&
-    Object.values(hookEntries(sys)).some((list) => list.some((e) => e.command === command))
+    [hookEntries(sys), hookEntries(sys, true)].some((entries) =>
+      Object.values(entries).some((list) => list.some((e) => e.command === command)),
+    )
   );
 }
 
@@ -158,7 +164,7 @@ function installHooks(sys: Home): boolean {
   const next = withEntries(sys, file, hookEntries(sys));
   if (JSON.stringify(next) !== JSON.stringify(file)) {
     mkdirSync(dirname(cursorHooksPath(sys)), { recursive: true });
-    writeFileSync(cursorHooksPath(sys), `${JSON.stringify(next, null, 2)}\n`);
+    replaceFile(cursorHooksPath(sys), `${JSON.stringify(next, null, 2)}\n`);
   }
   return true;
 }
@@ -277,7 +283,7 @@ export function addCursorAllow(sys: Home): boolean {
   const allow = Array.isArray(c.permissions?.allow) ? (c.permissions.allow as unknown[]) : [];
   c.permissions = { ...c.permissions, allow: [...allow, ...missing] };
   mkdirSync(dirname(cursorConfigPath(sys)), { recursive: true });
-  writeFileSync(cursorConfigPath(sys), `${JSON.stringify(c, null, 2)}\n`);
+  replaceFile(cursorConfigPath(sys), `${JSON.stringify(c, null, 2)}\n`);
   return true;
 }
 

@@ -1,5 +1,6 @@
-import { existsSync, readdirSync, rmdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, readdirSync, rmdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
+import { replaceFile } from "../replace";
 
 /**
  * Removes `files`, paths inside `dir` that setup writes, then each folder they leave empty, `dir`
@@ -56,5 +57,5 @@ export function withoutAllow(
  */
 export function writeLeft(path: string, value: Record<string, unknown>): void {
   if (Object.keys(value).length === 0) rmSync(path, { force: true });
-  else writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`);
+  else replaceFile(path, `${JSON.stringify(value, null, 2)}\n`);
 }

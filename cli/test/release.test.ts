@@ -12,7 +12,14 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
-import { compareVersions, platformAsset, RELEASE_KEY, verifyMinisign } from "../src/release";
+import {
+  capped,
+  compareVersions,
+  fetchWithin,
+  platformAsset,
+  RELEASE_KEY,
+  verifyMinisign,
+} from "../src/release";
 import { update } from "../src/update";
 import { VERSION } from "../src/version";
 import { compiledFake, testCtx } from "./helpers";
@@ -70,6 +77,40 @@ describe("verifyMinisign", () => {
     const forged = sig.replace("starbridge v1.2.3", "starbridge v9.9.9");
     expect(() => verifyMinisign(file, forged, FIXTURE_KEY)).toThrow("trusted comment");
   });
+});
+
+test("a download stops at its size cap, and a server that stops sending at the time limit (#1749)", async () => {
+  const body = new Uint8Array(64);
+  expect(await capped(new Response(body), 64, "u")).toEqual(body);
+  // Said up front, or found while reading.
+  const said = new Response(body, { headers: { "content-length": "64" } });
+  await expect(capped(said, 63, "u")).rejects.toThrow("u is larger than 63 bytes");
+  const stream = new ReadableStream({
+    pull(c) {
+      c.enqueue(new Uint8Array(40));
+    },
+  });
+  await expect(capped(new Response(stream), 100, "u")).rejects.toThrow(
+    "u is larger than 100 bytes",
+  );
+  const stalled = Bun.serve({
+    port: 0,
+    fetch: () =>
+      new Response(
+        new ReadableStream({
+          start(c) {
+            c.enqueue(new Uint8Array(8));
+          },
+        }),
+      ),
+  });
+  try {
+    const url = `http://127.0.0.1:${stalled.port}/x`;
+    const res = await fetchWithin(url, 300);
+    await expect(capped(res, 100, url)).rejects.toThrow(`cannot download ${url}`);
+  } finally {
+    stalled.stop(true);
+  }
 });
 
 test("compareVersions sorts release candidates before their release", () => {
