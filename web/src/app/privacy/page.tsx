@@ -41,8 +41,8 @@ export default function Privacy() {
           </li>
           <li>
             If you sign in with Apple, Apple&apos;s user id for you in place of a GitHub id, and the
-            refresh token of your last Apple sign-in, which the server keeps only to try to revoke
-            it when you delete your account. Starbridge asks Apple for no name or email.
+            refresh token of each Apple sign-in, which the server keeps only to revoke it when you
+            delete your account. Starbridge asks Apple for no name or email.
           </li>
           <li>
             The public keys of your devices and machines, and the names you give them, in a list
@@ -299,9 +299,10 @@ export default function Privacy() {
           stays up to a year, and its notification setting, app and CLI release stay until the
           account goes. To delete your whole account, use Delete account in Settings, on the web
           page or in the app: the server deletes the account, its device list, devices, machines,
-          items and push targets at once, tries once to revoke the refresh token of your last Apple
-          sign-in, and signs out every device and machine. Backups age out within about 2 weeks
-          after. The sign-up steps in Umami stay for their 180 days.
+          items and push targets at once, asks Apple to revoke the refresh token of each Apple
+          sign-in, retrying for about 3 days while Apple fails, and signs out every device and
+          machine. Backups age out within about 2 weeks after. The sign-up steps in Umami stay for
+          their 180 days.
         </p>
       </details>
 

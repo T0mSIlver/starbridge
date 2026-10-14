@@ -3,7 +3,7 @@ import { createHash, generateKeyPairSync, sign, verify } from "node:crypto";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Apple, AppleRefused } from "../src/apple";
+import { Apple, AppleRefused, REVOKE_ATTEMPTS, revokeWait } from "../src/apple";
 import { setSignUps } from "../src/signups";
 import { DEFAULT_LIMITS, makeServer, testConfig } from "../test-support/app";
 
@@ -16,6 +16,8 @@ let server: ReturnType<typeof Bun.serve>;
 /** Codes work once, as Apple's do. */
 const used = new Set<string>();
 let revoked: { client_id: string; token: string }[] = [];
+/** Revocations Apple refuses before it takes them again. */
+let revokeFailures = 0;
 
 const enc = (o: object) => Buffer.from(JSON.stringify(o)).toString("base64url");
 const sha256hex = (s: string) => createHash("sha256").update(s).digest("hex");
@@ -64,16 +66,17 @@ beforeAll(() => {
       if (url.pathname === "/auth/token") {
         const code = form.get("code") ?? "";
         // code-<sub>.<n>, each sign-in its own, and .<nonce> when the authorize request had one.
-        const [, sub, nonce] = /^code-([^.]+)\.\d+(?:\.(.+))?$/.exec(code) ?? [];
+        const [, sub, n, nonce] = /^code-([^.]+)\.(\d+)(?:\.(.+))?$/.exec(code) ?? [];
         if (!sub || used.has(code))
           return Response.json({ error: "invalid_grant" }, { status: 400 });
         used.add(code);
         return Response.json({
           id_token: idToken(sub, client, nonce ? { nonce } : {}),
-          refresh_token: `rt-${sub}`,
+          refresh_token: `rt-${sub}.${n}`,
         });
       }
       if (url.pathname === "/auth/revoke") {
+        if (revokeFailures > 0 && revokeFailures--) return new Response(null, { status: 503 });
         revoked.push({ client_id: client, token: form.get("token") ?? "" });
         return new Response(null, { status: 200 });
       }
@@ -84,6 +87,7 @@ beforeAll(() => {
 afterAll(() => server.stop());
 beforeEach(() => {
   revoked = [];
+  revokeFailures = 0;
 });
 
 function appleConfig() {
@@ -148,13 +152,64 @@ test("Apple sign-in is off without the team's key", async () => {
   expect(r.status).toBe(404);
 });
 
-test("deleting an account revokes its Apple token (App Store 5.1.1(v))", async () => {
+test("deleting an account revokes the token of each Apple sign-in (App Store 5.1.1(v), #1746)", async () => {
   const s = await makeServer(appleConfig());
+  const first = await s.call("POST", "/v1/auth/apple/session", { body: signInBody("u7") });
   const { json } = await s.call("POST", "/v1/auth/apple/session", { body: signInBody("u7") });
+  expect(json.session).not.toBe(first.json.session);
   expect((await s.call("DELETE", "/v1/account", { token: json.session })).status).toBe(204);
   // A shutdown waits for it, as for queued pushes.
   await s.deps.apple?.idle();
-  expect(revoked).toEqual([{ client_id: APP_ID, token: "rt-u7" }]);
+  expect(revoked.map((r) => r.client_id)).toEqual([APP_ID, APP_ID]);
+  expect(new Set(revoked.map((r) => r.token)).size).toBe(2);
+  expect(s.deps.db.query("SELECT * FROM apple_tokens").all()).toEqual([]);
+});
+
+test("a revocation Apple refuses is tried again later, and dropped after the last try (#1746)", async () => {
+  const s = await makeServer(appleConfig());
+  const { json } = await s.call("POST", "/v1/auth/apple/session", { body: signInBody("u12") });
+  revokeFailures = 1;
+  await s.call("DELETE", "/v1/account", { token: json.session });
+  await s.deps.apple?.idle();
+  const left = () =>
+    s.deps.db.query("SELECT account_id, attempts, due_at FROM apple_tokens").all() as {
+      account_id: string | null;
+      attempts: number;
+      due_at: number;
+    }[];
+  const [row] = left();
+  expect(row).toMatchObject({ account_id: null, attempts: 1 });
+  // Not before its time, then once Apple takes it again.
+  s.deps.apple?.revokeDue(s.deps.db);
+  await s.deps.apple?.idle();
+  expect(revoked).toEqual([]);
+  s.deps.apple?.revokeDue(s.deps.db, Date.now() + revokeWait(1));
+  await s.deps.apple?.idle();
+  expect(revoked.map((r) => r.token)).toEqual([expect.stringMatching(/^rt-u12\./)]);
+  expect(left()).toEqual([]);
+
+  // The last try that fails forgets the token.
+  const again = await s.call("POST", "/v1/auth/apple/session", { body: signInBody("u13") });
+  revokeFailures = 2;
+  await s.call("DELETE", "/v1/account", { token: again.json.session });
+  await s.deps.apple?.idle();
+  s.deps.db.query("UPDATE apple_tokens SET attempts = ?").run(REVOKE_ATTEMPTS - 1);
+  s.deps.apple?.revokeDue(s.deps.db, Date.now() + revokeWait(REVOKE_ATTEMPTS));
+  await s.deps.apple?.idle();
+  expect(left()).toEqual([]);
+});
+
+test("deleting an account from before #1746 revokes the token it holds itself", async () => {
+  const s = await makeServer(appleConfig());
+  const { json } = await s.call("POST", "/v1/auth/apple/session", { body: signInBody("u14") });
+  const account = (await s.call("GET", "/v1/me", { token: json.session })).json.account;
+  s.deps.db.query("DELETE FROM apple_tokens").run();
+  s.deps.db
+    .query("UPDATE accounts SET apple_client = ?, apple_refresh_token = ? WHERE id = ?")
+    .run(APP_ID, "rt-legacy", account);
+  await s.call("DELETE", "/v1/account", { token: json.session });
+  await s.deps.apple?.idle();
+  expect(revoked).toEqual([{ client_id: APP_ID, token: "rt-legacy" }]);
 });
 
 test("paused sign-ups refuse a new Apple user and let an existing one in", async () => {

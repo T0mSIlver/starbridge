@@ -37,25 +37,27 @@ export function deleteAccount(
   joins: string[];
   rendezvous: string[];
   sessions: string[];
-  /** The Apple refresh token to revoke, and the client id Apple issued it to. */
-  apple?: { client: string; token: string };
 } | null {
   return db.transaction(() => {
-    const row = db
-      .query("SELECT apple_client, apple_refresh_token FROM accounts WHERE id = ?")
-      .get(account) as { apple_client: string | null; apple_refresh_token: string | null } | null;
-    if (!row) return null;
+    if (!db.query("SELECT 1 FROM accounts WHERE id = ?").get(account)) return null;
     const ids = (sql: string) => (db.query(sql).all(account) as { id: string }[]).map((r) => r.id);
     const waits = {
       members: ids("SELECT id FROM members WHERE account_id = ?"),
       joins: ids("SELECT id FROM joins WHERE account_id = ?"),
       rendezvous: ids("SELECT rendezvous AS id FROM pairings WHERE account_id = ?"),
       sessions: ids("SELECT token_hash AS id FROM sessions WHERE account_id = ?"),
-      ...(row.apple_client &&
-        row.apple_refresh_token && {
-          apple: { client: row.apple_client, token: row.apple_refresh_token },
-        }),
     };
+    // Its Apple refresh tokens, and the one an account from before #1746 holds itself, stay under
+    // no account until Apple confirms each revoked.
+    db.query(
+      `INSERT OR IGNORE INTO apple_tokens (token, client, account_id)
+       SELECT apple_refresh_token, apple_client, id FROM accounts
+       WHERE id = ? AND apple_refresh_token IS NOT NULL AND apple_client IS NOT NULL`,
+    ).run(account);
+    db.query("UPDATE apple_tokens SET account_id = NULL, due_at = ? WHERE account_id = ?").run(
+      Date.now(),
+      account,
+    );
     for (const table of ACCOUNT_TABLES)
       db.query(`DELETE FROM ${table} WHERE account_id = ?`).run(account);
     // A subject is the account id, or the account id, a slash and a member id. Each distinct one
@@ -93,7 +95,7 @@ function forgetAccount(
   for (const r of waits.rendezvous) deps.pairings.wake(r);
   // Apple asks an app that deletes an account to revoke its Sign in with Apple tokens, which
   // takes Starbridge off the user's Apple ID. The account is gone either way.
-  if (waits.apple) deps.apple?.revoke(waits.apple.client, waits.apple.token);
+  deps.apple?.revokeDue(deps.db);
 }
 
 export const accountRoutes = new Hono<Env>();
