@@ -124,7 +124,7 @@ starbridge ask --question "Merge #12 now?" --option Merge --option Wait
 | `starbridge wait <id> [--timeout 5m]` | Prints the answer; exits 2 when the time runs out, 3 when you snoozed the question. `--no-mark` doesn't show "Waiting for you". |
 | `starbridge waiting <id>` | Shows "Waiting for you" on every device and notifies you once more. Prints the answer if it came in already. |
 | `starbridge working <id>` | Clears "Waiting for you"; the question stays open. |
-| `starbridge settle <id>` | Closes a question that no longer needs an answer. |
+| `starbridge settle <id>` | Closes a question that no longer needs an answer. Commands that take an id print the question beside it, and say when the question already closed. |
 | `starbridge answers --all --follow` | Prints each answer to this machine's questions as a JSON line, for an orchestrator. `--since 2h` skips older ones. |
 | `starbridge decisions --open` | Prints the questions still open, in the same form. |
 
