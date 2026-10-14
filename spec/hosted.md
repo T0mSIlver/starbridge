@@ -58,7 +58,9 @@
   only when it holds over 200 connections or is being rate-limited (the owner's rule): at
   Caddy's cap of 3000 `/v1` requests a minute (2900 seen by the server, since Caddy logs no
   refusal), or refused with 429 by the server: an HTTP/2 client can flood over few connections, and every
-  other visitor's address would end up in the on-call session's transcript.
+  other visitor's address would end up in the on-call session's transcript. Caddy's error log
+  records a failed request's path without its query, and without its Authorization, Cookie,
+  X-Claim and Referer headers (#1788): a query can carry an OAuth code.
 - **Blocking an address** (#783). The owner can refuse an address or range at Caddy, by a reload
   that keeps open connections (`deploy/host/switch.sh`), with a 403 that names abuse@. An IPv6
   address is blocked as its /64, as the rate limits count it, and nothing wider than a /8 (IPv4)
