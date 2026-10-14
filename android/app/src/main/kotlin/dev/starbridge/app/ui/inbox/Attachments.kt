@@ -44,10 +44,9 @@ import androidx.compose.ui.unit.DpSize
 import dev.starbridge.app.R
 import dev.starbridge.app.data.Link
 import dev.starbridge.app.data.bitmap
-import dev.starbridge.app.data.GitHubKind
-import dev.starbridge.app.data.githubLink
-import dev.starbridge.app.data.label
 import dev.starbridge.app.data.openLink
+import dev.starbridge.app.protocol.LinkIcon
+import dev.starbridge.app.protocol.linkChip
 import dev.starbridge.app.ui.Sym
 import dev.starbridge.app.ui.Symbol
 import dev.starbridge.app.ui.theme.Radius
@@ -167,8 +166,8 @@ private fun ImageBox(image: Attached, size: DpSize, crop: Boolean, onOpen: () ->
 
 /**
  * Pages the agent wants the owner to see before answering, such as a Claude artifact, as chips
- * (#171): the page's label, and an arrow out. A GitHub link leads with its kind's Octicon and
- * reads as its reference, "#123" (#971).
+ * (#171): the page's label, and an arrow out. [linkChip] gives the icon and text every client
+ * shows: a GitHub link's Octicon and reference, "#123" (#971), a Claude artifact's window (#1577).
  */
 @Composable
 fun Links(links: List<Link>, project: String, modifier: Modifier = Modifier) {
@@ -177,11 +176,12 @@ fun Links(links: List<Link>, project: String, modifier: Modifier = Modifier) {
     val scheme = MaterialTheme.colorScheme
     FlowRow(modifier, horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
         links.forEach { link ->
+            val chip = linkChip(link.url, link.title, project)
             AssistChip(
                 onClick = { openLink(context, link.url) },
-                label = { Text(link.label(project), style = StarbridgeTheme.type.label, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                leadingIcon = githubLink(link.url)?.let { gh ->
-                    { Icon(painterResource(octicon(gh.kind)), contentDescription = null, Modifier.size(AssistChipDefaults.IconSize), tint = scheme.onSurfaceVariant) }
+                label = { Text(chip.label, style = StarbridgeTheme.type.label, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                leadingIcon = chip.icon?.let { icon ->
+                    { Icon(painterResource(octicon(icon)), contentDescription = null, Modifier.size(AssistChipDefaults.IconSize), tint = scheme.onSurfaceVariant) }
                 },
                 trailingIcon = { Symbol(Sym.Open, size = AssistChipDefaults.IconSize, tint = scheme.onSurfaceVariant) },
                 colors = AssistChipDefaults.assistChipColors(labelColor = scheme.onSurface),
@@ -191,12 +191,14 @@ fun Links(links: List<Link>, project: String, modifier: Modifier = Modifier) {
     }
 }
 
-private fun octicon(kind: GitHubKind) = when (kind) {
-    GitHubKind.Pull -> R.drawable.ic_octicon_pull
-    GitHubKind.Issue -> R.drawable.ic_octicon_issue
-    GitHubKind.Discussion -> R.drawable.ic_octicon_discussion
-    GitHubKind.Run -> R.drawable.ic_octicon_run
-    GitHubKind.Release -> R.drawable.ic_octicon_release
-    GitHubKind.Commit -> R.drawable.ic_octicon_commit
-    GitHubKind.Other -> R.drawable.ic_octicon_github
+private fun octicon(icon: LinkIcon) = when (icon) {
+    LinkIcon.Pull -> R.drawable.ic_octicon_pull
+    LinkIcon.Issue -> R.drawable.ic_octicon_issue
+    LinkIcon.Discussion -> R.drawable.ic_octicon_discussion
+    LinkIcon.Run -> R.drawable.ic_octicon_run
+    LinkIcon.Release -> R.drawable.ic_octicon_release
+    LinkIcon.Commit -> R.drawable.ic_octicon_commit
+    LinkIcon.File -> R.drawable.ic_octicon_file
+    LinkIcon.GitHub -> R.drawable.ic_octicon_github
+    LinkIcon.Artifact -> R.drawable.ic_octicon_browser
 }

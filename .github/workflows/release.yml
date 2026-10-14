@@ -361,6 +361,10 @@ jobs:
     if: ${{ !cancelled() && needs.release.result == 'success' && (startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main') }}
     runs-on: ubuntu-latest
     environment: play-release
+    # What the upload sent, for releases.json.
+    outputs:
+      track: ${{ steps.upload.outputs.track }}
+      code: ${{ steps.upload.outputs.code }}
     permissions:
       contents: read
       id-token: write
@@ -398,6 +402,7 @@ jobs:
           create_credentials_file: false
           export_environment_variables: false
       - if: steps.setup.outputs.set
+        id: upload
         name: Upload to Play
         env:
           PLAY_ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
@@ -410,7 +415,10 @@ jobs:
           case $VERSION in *-rc.*) ;; *) [ "$PRODUCTION" = true ] && track=production ;; esac
           if [ "$TAG" = true ]; then
             gh release view "v$VERSION" --repo "$GITHUB_REPOSITORY" --json body --jq .body > notes.md
-            bun cli/scripts/play.ts "out/starbridge-$VERSION.aab" "$VERSION" notes.md --track "$track"
+            set -o pipefail
+            bun cli/scripts/play.ts "out/starbridge-$VERSION.aab" "$VERSION" notes.md --track "$track" | tee play.log
+            echo "track=$track" >> "$GITHUB_OUTPUT"
+            echo "code=$(sed -n 's/^Uploaded .* (versionCode \([0-9]*\)) to .*/\1/p' play.log)" >> "$GITHUB_OUTPUT"
           else
             bun cli/scripts/play.ts "out/starbridge-$VERSION.aab" "$VERSION" dry-run/notes.md --track "$track" --validate
           fi
@@ -431,6 +439,8 @@ jobs:
     runs-on: macos-15
     timeout-minutes: 45
     environment: ios-release
+    outputs:
+      build: ${{ steps.upload.outputs.build }}
     # A run without the stored certificate holds one of its own until its end, and Apple allows a few at once.
     concurrency: testflight
     defaults:
@@ -529,12 +539,15 @@ jobs:
           xcodebuild -exportArchive -archivePath "$RUNNER_TEMP/Starbridge.xcarchive" \
             -exportOptionsPlist "$RUNNER_TEMP/asc/signing/ExportOptions.plist" -exportPath "$RUNNER_TEMP/export"
       - if: steps.setup.outputs.set && (startsWith(github.ref, 'refs/tags/v') || inputs.testflight_only)
+        id: upload
         name: Upload to TestFlight
         working-directory: ${{ runner.temp }}/asc
         env:
           ASC_KEY_ID: ${{ vars.ASC_KEY_ID }}
           ASC_ISSUER_ID: ${{ vars.ASC_ISSUER_ID }}
-        run: xcrun altool --upload-app -t ios -f "$RUNNER_TEMP/export/Starbridge.ipa" --apiKey "$ASC_KEY_ID" --apiIssuer "$ASC_ISSUER_ID"
+        run: |
+          xcrun altool --upload-app -t ios -f "$RUNNER_TEMP/export/Starbridge.ipa" --apiKey "$ASC_KEY_ID" --apiIssuer "$ASC_ISSUER_ID"
+          echo "build=${{ github.run_number }}.${{ github.run_attempt }}" >> "$GITHUB_OUTPUT"
       - if: always()
         name: Delete the profiles, revoke a certificate this run made, remove the keys
         working-directory: .
@@ -616,3 +629,60 @@ jobs:
           npm publish --provenance --access public $(case $VERSION in *-rc.*) echo --tag next ;; esac)
         env:
           VERSION: ${{ needs.version.outputs.version }}
+
+  # What this run published, for status.starbridge.run/releases (#1618): releases.json on the releases-data
+  # branch, which sb-status fetches. It records a job only when it succeeded, so a re-run of a failed job
+  # fills in what was missing, and holds no commit, rollout, CI state or tester list.
+  record:
+    needs: [version, release, play, testflight, homebrew, npm, desktop]
+    if: ${{ always() && needs.version.result == 'success' && (startsWith(github.ref, 'refs/tags/v') || inputs.npm_only) && (needs.release.result == 'success' || inputs.npm_only) && !inputs.testflight_only }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.2
+      - name: Record the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.version.outputs.version }}
+          RELEASE: ${{ needs.release.result }}
+          DESKTOP: ${{ needs.desktop.result }}
+          HOMEBREW: ${{ needs.homebrew.result }}
+          NPM: ${{ needs.npm.result }}
+          PLAY: ${{ needs.play.result }}
+          PLAY_TRACK: ${{ needs.play.outputs.track }}
+          PLAY_CODE: ${{ needs.play.outputs.code }}
+          TESTFLIGHT: ${{ needs.testflight.result }}
+          TESTFLIGHT_BUILD: ${{ needs.testflight.outputs.build }}
+        run: |
+          channels=$(jq -n \
+            --arg release "$RELEASE" --arg desktop "$DESKTOP" --arg homebrew "$HOMEBREW" --arg npm "$NPM" \
+            --arg play "$PLAY" --arg track "$PLAY_TRACK" --arg code "$PLAY_CODE" \
+            --arg tf "$TESTFLIGHT" --arg build "$TESTFLIGHT_BUILD" '
+            def ok(r): r == "success";
+            {github: ok($release), desktop: ok($desktop), homebrew: ok($homebrew), npm: ok($npm)}
+            | with_entries(select(.value))
+            + (if ok($play) and $code != "" then {play: {track: $track, versionCode: ($code | tonumber)}} else {} end)
+            + (if ok($tf) and $build != "" then {testflight: {build: $build}} else {} end)')
+          shipped=$(gh release view "v$VERSION" --repo "$GITHUB_REPOSITORY" --json publishedAt --jq .publishedAt 2>/dev/null || date -u +%FT%TZ)
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # The branch holds releases.json alone; two runs may push at once, so a rejected push is retried.
+          for attempt in 1 2 3 4 5; do
+            rm -rf data
+            git worktree prune
+            if git fetch -q origin releases-data 2>/dev/null; then
+              git worktree add -q -B releases-data data origin/releases-data
+            else
+              git worktree add -q --orphan -b releases-data data
+            fi
+            bun cli/scripts/releases.ts record data/releases.json "$VERSION" "$channels" "$shipped"
+            git -C data add releases.json
+            git -C data commit -qm "Release $VERSION"
+            git -C data push -q origin releases-data && exit 0
+          done
+          echo "::error::Could not push releases-data"
+          exit 1

@@ -1,12 +1,11 @@
-import type { DecisionLink } from "@starbridge/protocol";
-import { linkLabel } from "./attachments";
+import { type DecisionLink, linkChip } from "@starbridge/protocol";
 import type { Decision, InboxItem, PromptItem, Reply } from "./types";
 
 /** Where the owner answers a decision with `answerIn`: "the artifact" for a Claude one. */
 export function answerPlace(link: DecisionLink): string {
   if (link.title) return link.title;
-  const label = linkLabel(link);
-  return label === "Claude artifact" ? "the artifact" : label;
+  const chip = linkChip(link);
+  return chip.icon === "artifact" ? "the artifact" : chip.label;
 }
 
 /** When the decision stopped waiting for the owner: answered, or settled by its agent. */

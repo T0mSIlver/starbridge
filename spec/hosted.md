@@ -88,6 +88,20 @@
   publishes booleans and numbers only, never a check's error text, which can hold addresses. A Safari run on a Mac each night loads the landing page, the
   docs and the app's sign-in screen, and registers the service worker, since Safari breaks in ways
   the Firefox and Chromium checks do not see.
+- **Releases page** (#1618). `status.starbridge.run/releases` lists, per product (hosted server and
+  web page, Android, iPhone, Mac app, CLI, Claude Code plugin) and per public ring (release candidate,
+  final), the version, the day it shipped and where it is, each version linking to its GitHub release
+  notes. It says the cadence in words and gives no date, since only the Android nightly has a fixed
+  one and that is not a public ring; a final waits on the owner's yes, which a date would promise. It
+  never shows main's or staging's commit (it would reveal unreleased work and unfixed bugs before a
+  patch), the Android nightly or internal track, rollout percentages, CI state, tester lists or
+  unreleased features. Every fact on it is already public on GitHub, npm, Homebrew, Play and
+  TestFlight; the rest has one reader, the owner, and lives on cards and in CI. Pages of this kind
+  show state, not process, and every version table comes from data (research:
+  `research/release-tracking-2026-10`, starbridge-planning). The data is `releases.json` on the
+  `releases-data` branch, written by `release.yml`'s last job from the jobs that succeeded; sb-status
+  fetches it over HTTPS, so the page holds no credentials and queries no store. It lives on the
+  status site rather than the web app so it stays up when the VPS is down and needs no deploy.
 - **Privacy and terms** (`/privacy`, `/terms`). Each claim follows the code: stored columns in
   `server/src/db.ts`, retention in `server/src/limits.ts`, logs and backups in `deploy/`. A change
   to what is stored changes the page, and the Play data-safety form. Contact is
