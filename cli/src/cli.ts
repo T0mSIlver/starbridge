@@ -23,6 +23,7 @@ import {
   answersAll,
   ask,
   decisionsOpen,
+  named,
   resolveSource,
   settle,
   setWaiting,
@@ -433,11 +434,17 @@ async function dispatch(argv: string[], ctx: Ctx): Promise<number> {
       case "working": {
         const { positionals } = parseArgs({ args: rest, allowPositionals: true, options: {} });
         const opts = { id: positionals[0], state: command };
-        return await withAgent(
+        const code = await withAgent(
           ctx,
           (agent) => waitingVia(agent, opts, ctx),
           () => setWaiting(ctx, opts),
         );
+        // Which card it was, unless the answer came instead (#1697).
+        const st = ctx.store.state();
+        const id = opts.id;
+        if (code === 0 && id && st.asked[id] && !st.answers[id])
+          ctx.err(`Marked ${named(id, st.asked[id]?.question)} ${command}.`);
+        return code;
       }
       case "config":
         return await configCommand(ctx, rest, process.stdin.isTTY ? terminalPrompt() : undefined);

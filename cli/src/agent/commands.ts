@@ -15,6 +15,7 @@ import {
   EXIT_SNOOZED,
   EXIT_TIMEOUT,
   markWaiting,
+  named,
   type ObservedAnswer,
   printSnooze,
   resolveSource,
@@ -165,7 +166,9 @@ export async function waitVia(
     if (ctx.signal?.aborted) return EXIT_INTERRUPTED;
     const left = deadline - ctx.now().getTime();
     if (left <= 0) {
-      ctx.err(`No answer to ${opts.id ?? "any decision"} yet.`);
+      ctx.err(
+        `No answer to ${opts.id ? named(opts.id, ctx.store.state().asked[opts.id]?.question) : "any decision"} yet.`,
+      );
       return EXIT_TIMEOUT;
     }
     r = await next(Math.max(1, Math.min(MAX_HOLD_SECONDS, Math.ceil(left / 1000))));
@@ -203,6 +206,7 @@ export async function answersVia(
         decisionId: e.decisionId,
         ack: e.ack,
         line: e.line,
+        question: e.question,
         waiting: e.waiting,
         ...(e.subagent ? { subagent: e.subagent } : {}),
       }),
