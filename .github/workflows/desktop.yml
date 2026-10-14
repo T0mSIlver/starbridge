@@ -118,6 +118,8 @@ jobs:
               - 'desktop/scripts/after-pack.cjs'
               - 'desktop/scripts/after-sign.cjs'
               - 'desktop/scripts/widgets.cjs'
+              # widgets.cjs reads its App Group, which the entitlements name.
+              - 'desktop/src/widgets.ts'
               - 'desktop/widgets/Info.plist'
               - 'desktop/widgets/build.sh'
               - 'pnpm-lock.yaml'
