@@ -1,5 +1,13 @@
 import { afterEach, expect, test } from "bun:test";
-import { internalTrack, PACKAGE, playNotes, TRACKS, type Track, upload } from "../scripts/play";
+import {
+  internalTrack,
+  mainCode,
+  PACKAGE,
+  playNotes,
+  TRACKS,
+  type Track,
+  upload,
+} from "../scripts/play";
 
 const URL_ = "https://github.com/T0mSIlver/starbridge/releases/tag/v1.2.3";
 
@@ -154,4 +162,24 @@ test("the internal track's release name and highest code are read in an edit tha
     maxCode: 2010751,
   });
   expect(seen.at(-1)).toBe(`DELETE ${app}/edits/e2`);
+});
+
+test("a build of main takes the next of its version's slots 50 to 98 above the track's highest code (#1690)", () => {
+  // Same vectors as android/app/src/test/kotlin/VersionCodeTest.kt.
+  expect(mainCode("0.1.7-rc.2", 0)).toBe(2_010_750);
+  expect(mainCode("0.1.7-rc.3", 2_010_755)).toBe(2_010_756);
+  expect(mainCode("0.1.7-rc.2", 2_010_797)).toBe(2_010_798);
+  // After the final, the next patch.
+  expect(mainCode("0.1.7", 2_010_760)).toBe(2_010_850);
+  expect(mainCode("0.1.7", 0)).toBe(2_010_850);
+  // A new version's rc has its own slots: the old version's top code does not use them up.
+  expect(mainCode("0.2.0-rc.1", 2_010_798)).toBe(2_020_050);
+});
+
+test("main's slots are spent after 98, for that version only (#1690)", () => {
+  expect(mainCode("0.1.7-rc.2", 2_010_798)).toBeNull();
+  expect(mainCode("0.1.7-rc.2", 2_010_850)).toBeNull();
+  expect(mainCode("0.1.7", 2_010_898)).toBeNull();
+  expect(mainCode("0.1.7", 2_010_897)).toBe(2_010_898);
+  expect(() => mainCode("main", 0)).toThrow("not a version");
 });

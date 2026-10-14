@@ -139,7 +139,7 @@ export async function upload(opts: {
 
 /**
  * What the internal track holds (#1540): its release's name, `main-<commit>` for a build of main,
- * and its highest versionCode. The nightly build reads it to skip an unchanged app and to take the
+ * and its highest versionCode. internal.yml reads it to skip a commit the track has and to take the
  * next code. Read in an edit that is then discarded.
  */
 export async function internalTrack(
@@ -166,13 +166,36 @@ export async function internalTrack(
   }
 }
 
+const VERSION_CODE_BASE = 2_000_000;
+
+/**
+ * The versionCode of a build of main for the internal track (#1540, #1690): the first of the
+ * version's slots 50 to 98 above `after`, the track's highest code, or null once they are spent.
+ * `version` is the one under way: an rc's own, or the next patch after a final. Mirrors
+ * mainVersionCodeOf in android/buildSrc/.../VersionCode.kt, which Gradle still enforces.
+ */
+export function mainCode(version: string, after: number): number | null {
+  const m = /^(\d+)\.(\d+)\.(\d+)(-rc\.\d+)?$/.exec(version);
+  if (!m) throw new Error(`not a version: ${version}`);
+  const patch = Number(m[3]) + (m[4] ? 0 : 1);
+  const slot0 = VERSION_CODE_BASE + Number(m[1]) * 1_000_000 + Number(m[2]) * 10_000 + patch * 100;
+  const first = slot0 + 50;
+  const code = Math.max(first, after + 1);
+  return code <= slot0 + 98 ? code : null;
+}
+
 class PlayError extends Error {}
 
 if (import.meta.main && process.argv[2] === "internal-state") {
-  // `play.ts internal-state`: the internal track's release name and highest code, as JSON.
+  // `play.ts internal-state [version]`: the internal track's release name and highest code, as
+  // JSON; with the version under way, also the code of the next build of main, null when spent.
   const token = process.env.PLAY_ACCESS_TOKEN;
   if (!token) throw new Error("usage: PLAY_ACCESS_TOKEN=… play.ts internal-state");
-  console.log(JSON.stringify(await internalTrack(token, process.env.PLAY_API_URL)));
+  const state = await internalTrack(token, process.env.PLAY_API_URL);
+  const version = process.argv[3];
+  console.log(
+    JSON.stringify(version ? { ...state, code: mainCode(version, state.maxCode) } : state),
+  );
 } else if (import.meta.main) {
   const { values, positionals } = parseArgs({
     allowPositionals: true,

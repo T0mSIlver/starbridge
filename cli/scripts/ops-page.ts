@@ -20,10 +20,10 @@ export type Facts = {
   prod?: string;
   staging?: string;
   /** The last internal run that built the Android app: its commit and time. */
-  nightly?: { sha: string; at: string };
-  /** Commits that touch the Android app since the nightly's, and staging's not yet in the newest rc. */
+  internalBuild?: { sha: string; at: string };
+  /** Commits that touch the Android app since that build, and staging's not yet in the newest rc. */
   androidSince?: number;
-  /** Whether the paths differ, which is how internal.yml decides; a change and its revert count commits but build nothing. */
+  /** Whether the paths differ, which is how a build differs from the track's; a change and its revert count commits but build nothing. */
   androidChanged?: boolean;
   stagingSinceRc?: number;
   /** Commit of each release's tag, by version. */
@@ -78,10 +78,10 @@ export function next(f: Facts): string[] {
   const nn = nextNightly(f.now);
   out.push(
     f.androidSince === undefined
-      ? `Android nightly ${both(nn)}`
-      : `Android nightly ${both(nn)}: ${(f.androidChanged ?? f.androidSince > 0) ? `builds, ${f.androidSince} commits since main-${short(f.nightly?.sha)}` : "skips, app unchanged"}`,
+      ? "Android main: builds on each merge that touches the app and each rc tag"
+      : `Android main: builds on each merge that touches the app and each rc tag; ${(f.androidChanged ?? f.androidSince > 0) ? `${f.androidSince} commits not built since main-${short(f.internalBuild?.sha)}` : "none waiting"}`,
   );
-  out.push(f.iosMainOn ? "iPhone main: with the nightly" : "iPhone main: off, awaiting Apple");
+  out.push(f.iosMainOn ? `iPhone main: nightly, ${both(nn)}` : "iPhone main: off, awaiting Apple");
   out.push(`Next rc: ${f.stagingSinceRc ?? "unknown"} commits on staging`);
   out.push("Mac apps check every 6 h");
   out.push("Play Alpha: after Play's review");
@@ -184,11 +184,11 @@ function main(f: Facts, p: (typeof PRODUCTS)[number]): string {
     case "Server and web":
       return `<span class="ver">${commit(f.staging)}</span><p class="where">Staging · prod ${commit(f.prod)}</p>`;
     case "Android":
-      return f.nightly
-        ? `<span class="ver">main-${short(f.nightly.sha)}</span><p class="meta">${commit(f.nightly.sha)} · ${both(new Date(f.nightly.at))}</p><p class="where">Play internal</p>`
+      return f.internalBuild
+        ? `<span class="ver">main-${short(f.internalBuild.sha)}</span><p class="meta">${commit(f.internalBuild.sha)} · ${both(new Date(f.internalBuild.at))}</p><p class="where">Play internal</p>`
         : none("None yet");
     case "iPhone":
-      return none(f.iosMainOn ? "With the nightly" : "Off");
+      return none(f.iosMainOn ? "Nightly" : "Off");
     default:
       return none("None");
   }
@@ -320,9 +320,9 @@ export async function gather(): Promise<Facts> {
     revision("starbridge.run"),
     revision("staging.starbridge.run"),
   ]);
-  // The newest internal run whose play job built the app; unchanged nights skip it, so look through pages.
-  let nightly: Facts["nightly"];
-  for (let page = 1; page <= 10 && !nightly; page++) {
+  // The newest internal run whose play job built the app; runs that skip the upload do not count, so look through pages.
+  let internalBuild: Facts["internalBuild"];
+  for (let page = 1; page <= 10 && !internalBuild; page++) {
     const runs = await api<{
       workflow_runs: { id: number; head_sha: string; created_at: string }[];
     }>(`actions/workflows/internal.yml/runs?status=completed&per_page=30&page=${page}`);
@@ -332,7 +332,7 @@ export async function gather(): Promise<Facts> {
         `actions/runs/${r.id}/jobs`,
       );
       if (jobs?.jobs.some((j) => j.name === "play" && j.conclusion === "success")) {
-        nightly = { sha: r.head_sha, at: r.created_at };
+        internalBuild = { sha: r.head_sha, at: r.created_at };
         break;
       }
     }
@@ -348,15 +348,15 @@ export async function gather(): Promise<Facts> {
     releases: data,
     prod,
     staging,
-    nightly,
-    androidSince: nightly
-      ? count(`${nightly.sha}..origin/main`, "android", "packages/protocol/vectors")
+    internalBuild,
+    androidSince: internalBuild
+      ? count(`${internalBuild.sha}..origin/main`, "android", "packages/protocol/vectors")
       : undefined,
-    androidChanged: nightly
+    androidChanged: internalBuild
       ? spawnSync("git", [
           "diff",
           "--quiet",
-          nightly.sha,
+          internalBuild.sha,
           "origin/main",
           "--",
           "android",

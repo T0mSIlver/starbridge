@@ -1,19 +1,35 @@
 name: internal
 
-# The owner runs main (#1540): every night at 03:00 UTC, when the app changed since the last
-# build, main's Android build goes to Play's internal testing track, which only the owner joins;
-# Alpha keeps the rcs. Its versionCode takes the next of slots 50 to 98 of the version under way,
-# between its rcs and its final (VersionCode.kt). The iPhone app follows to TestFlight's internal
-# testers once the repository variable IOS_MAIN_TESTFLIGHT is true, which waits on Apple's export
-# compliance code. The desktop app stays on rcs. Run by hand, it builds even when nothing changed,
-# to replace a broken night.
+# The owner runs main (#1540): main's Android build goes to Play's internal testing track, which
+# only the owner joins; Alpha keeps the rcs. It builds on every push to main that touches what the
+# app is built from, and on each rc tag, so the phone never holds older code than an rc (#1690).
+# An rc tag builds as a main build: the tagged commit, with main's versionCode scheme. Its
+# versionCode takes the next of slots 50 to 98 of the version under way, between its rcs and its
+# final (VersionCode.kt); once they are spent a build is skipped and the job summary says so. A
+# commit the track already holds, or one older than its last build, takes no slot. Run by hand,
+# it builds the ref it is run on under the same rules, to replace a failed build.
+# The iPhone app follows to TestFlight's internal testers once the repository variable
+# IOS_MAIN_TESTFLIGHT is true, which waits on Apple's export compliance code: nightly at 03:00 UTC
+# and by hand, apart from the Android builds. The desktop app stays on rcs.
 on:
+  push:
+    branches: [main]
+    # The paths of ci.yml's Android filter and android.yml.
+    paths:
+      - "android/**"
+      - "packages/protocol/vectors/**"
+      - ".github/workflows/internal.yml"
+    tags: ["v*-rc.*"]
   schedule:
     - cron: "0 3 * * *"
   workflow_dispatch:
 
+# One upload at a time. A run waits for the one running, which is never cancelled (a Play edit
+# cut off mid-way leaves the track as it was, but the build is wasted); when several wait, GitHub
+# keeps the newest and cancels the older ones, so the newest commit wins. The nightly iPhone run
+# has its own group, so it never replaces a waiting Android build.
 concurrency:
-  group: internal
+  group: ${{ github.event_name == 'schedule' && 'internal-ios' || 'internal' }}
   cancel-in-progress: false
 
 permissions:
@@ -22,6 +38,7 @@ permissions:
 jobs:
   # What the internal track holds: the commit of its last build, and its highest code.
   plan:
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     environment: play-release
     # Play keeps one open edit per account: a second one, here or in release.yml, voids the first.
@@ -35,6 +52,7 @@ jobs:
     outputs:
       build: ${{ steps.plan.outputs.build }}
       after: ${{ steps.plan.outputs.after }}
+      last: ${{ steps.plan.outputs.last }}
     steps:
       - id: setup
         env:
@@ -65,20 +83,29 @@ jobs:
         id: plan
         env:
           PLAY_ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
-          BY_HAND: ${{ github.event_name == 'workflow_dispatch' }}
         run: |
-          state=$(bun cli/scripts/play.ts internal-state)
+          version=$(jq -r .version cli/package.json)
+          state=$(bun cli/scripts/play.ts internal-state "$version")
           echo "internal track: $state"
           after=$(printf '%s' "$state" | jq -r .maxCode)
+          code=$(printf '%s' "$state" | jq -r '.code // ""')
           last=$(printf '%s' "$state" | jq -r '.name | capture("^main-(?<c>[0-9a-f]{8,40})$").c // ""')
           build=true
-          if [ "$BY_HAND" != true ] && [ -n "$last" ] && git cat-file -e "$last^{commit}" 2>/dev/null &&
-            git diff --quiet "$last" HEAD -- android packages/protocol/vectors; then
+          if [ -n "$last" ] && git cat-file -e "$last^{commit}" 2>/dev/null &&
+            git merge-base --is-ancestor "$GITHUB_SHA" "$last"; then
             build=false
-            echo "The app is unchanged since main-$last: no build tonight."
+            msg="The internal track already holds main-$last, which contains ${GITHUB_SHA::8}: nothing to upload."
+            echo "$msg"
+            echo "$msg" >> "$GITHUB_STEP_SUMMARY"
+          elif [ -z "$code" ]; then
+            build=false
+            msg="No build of main left for $version: its versionCode slots 50 to 98 are spent (the track is at $after). ${GITHUB_SHA::8} was not uploaded; cut the next rc or the final, then the next merge builds."
+            echo "::warning::$msg"
+            echo "$msg" >> "$GITHUB_STEP_SUMMARY"
           fi
           echo "build=$build" >> "$GITHUB_OUTPUT"
           echo "after=$after" >> "$GITHUB_OUTPUT"
+          echo "last=$last" >> "$GITHUB_OUTPUT"
 
   # Signed with the upload key, as release.yml's Android job.
   android:
@@ -124,7 +151,7 @@ jobs:
           retention-days: 3
 
   play:
-    needs: android
+    needs: [plan, android]
     runs-on: ubuntu-latest
     environment: play-release
     # Play keeps one open edit per account: a second one, here or in release.yml, voids the first.
@@ -156,20 +183,23 @@ jobs:
           access_token_scopes: https://www.googleapis.com/auth/androidpublisher
           create_credentials_file: false
           export_environment_variables: false
-      # Named after the commit, which the next night compares with; the notes list the day's
-      # merges that touched the app.
+      # Named after the commit, which the next build compares with; the notes list the Android
+      # changes since the last build.
       - name: Upload to the internal track
         env:
           PLAY_ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
+          LAST: ${{ needs.plan.outputs.last }}
         run: |
-          { echo "### Android"; git log --since="25 hours ago" --format='- %s' -- android packages/protocol/vectors; } > notes.md
+          range=HEAD~5..HEAD
+          if [ -n "$LAST" ] && git cat-file -e "$LAST^{commit}" 2>/dev/null; then range="$LAST..HEAD"; fi
+          { echo "### Android"; git log "$range" --no-merges -n 20 --format='- %s' -- android packages/protocol/vectors; } > notes.md
           bun cli/scripts/play.ts out/starbridge-main.aab "main-${GITHUB_SHA::12}" notes.md --track internal \
             --url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/commits/$GITHUB_SHA"
 
   # release.yml's TestFlight job, from main, numbered by its run; TestFlight's internal testers get
-  # every build. Nightly too, when the iPhone app changed in the last day.
+  # every build. Nightly, when the iPhone app changed in the last day, and by hand.
   ios:
-    if: vars.IOS_MAIN_TESTFLIGHT == 'true'
+    if: vars.IOS_MAIN_TESTFLIGHT == 'true' && github.event_name != 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:

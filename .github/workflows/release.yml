@@ -359,7 +359,7 @@ jobs:
   # tags. Without the PLAY_WIF_PROVIDER and PLAY_SERVICE_ACCOUNT variables the job skips.
   play:
     needs: [version, release]
-    # Play keeps one open edit per account: internal.yml's nightly opens its own.
+    # Play keeps one open edit per account: internal.yml opens its own.
     concurrency:
       group: play-edit
       cancel-in-progress: false

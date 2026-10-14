@@ -47,18 +47,25 @@
   starbridge.run run rcs, everyone else finals, and a change never skips a ring: v0.1.3 broke every
   tester's app before the owner had run it. The dev box's CLI, agent, plugin and mod follow the
   server its machine is paired with, staging. The Android app's build of main goes to Play's
-  internal testing track every night at 03:00 UTC when the app changed since the last one
-  (`internal.yml`), not on each merge: Play updates a phone about once a day anyway, and Google
-  advises against publishing to a testing track more often. Play gives a phone the highest
-  versionCode it may install, so main's builds take slots 50 to 98 of the version under way (the
-  next patch after a final), between its rcs (1 to 49) and its final (99): the owner's phone takes
-  main over an rc and the final over both. Its versionName names its commit,
+  internal testing track (`internal.yml`) on every merge that touches what the app is built from
+  (`android/`, the protocol's test vectors) and on each rc tag, so the owner's phone holds the
+  newest code within minutes and updates from Play, and never older code than an rc (#1690; it was
+  nightly, #1540, until rcs were cut on demand). An rc tag builds as a main build: the tagged
+  commit, with main's versionCode scheme. Builds queue one at a time: a running upload is never
+  cancelled, and of the runs waiting the newest wins. A commit the track already holds or is
+  ahead of (a rebuild, an rc cut from a commit main has passed) takes no slot. Play gives a phone
+  the highest versionCode it may install, so main's builds take slots 50 to 98 of the version
+  under way (the next patch after a final), each the next free one above the track's highest
+  code, between its rcs (1 to 49) and its final (99): the owner's phone takes main over an rc and
+  the final over both. When the 49 slots are spent the build is skipped, with a warning and a
+  line in the job summary; the next rc or the final opens new slots, and the owner can run the
+  workflow by hand then. The nightly run remains only for the iPhone app. Its versionName names its commit,
   `0.1.7-rc.2+main.7e56e958`, which Play's About this app shows (#1610); the app's
   `starbridge-client` header leaves that part out, so servers read the version as the rc's. A Google
   account in internal testing is no longer eligible for closed testing, so the owner joins it with a
   second account and stays one of the 12 closed testers. The iPhone app follows to TestFlight's
   internal testers once Apple's export compliance code arrives (`IOS_MAIN_TESTFLIGHT`); the Mac app
-  stays on rcs, since a nightly notarized build would cost a macOS runner a night for one user.
+  stays on rcs, since a notarized build per merge would cost a macOS runner for one user.
 - **A record of what shipped** (#1618). The last job of `release.yml` writes the version, the
   release's date and which channels its jobs reached (GitHub, npm, Homebrew, the desktop app, Play's
   track and versionCode, TestFlight's build) to `releases.json` on the `releases-data` branch, only
