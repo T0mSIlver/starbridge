@@ -1,3 +1,4 @@
+import { safeEqual } from "./auth";
 /** How long the page that passed an app's sign-in on may ask whether it finished (#943). */
 export const APP_SIGN_IN_MS = 10 * 60_000;
 /** Sign-ins kept at once; past it the oldest go, so a flood costs memory only up to here. */
@@ -36,10 +37,17 @@ export class AppSignIns {
     return true;
   }
 
-  /** The token the browser that started this challenge's sign-in got, while it is fresh. */
-  startToken(challenge: string, now = Date.now()): string | undefined {
+  /**
+   * Whether `cookie` is the token the browser that started this challenge's sign-in got, once:
+   * the first code that comes back with it takes it, so a link to the callback with another
+   * code, opened in that browser later, binds nothing. A wrong cookie takes nothing.
+   */
+  takeStartToken(challenge: string, cookie: string, now = Date.now()): boolean {
     const s = this.started.get(challenge);
-    return s !== undefined && now - s.at < APP_SIGN_IN_MS ? s.token : undefined;
+    if (s === undefined || now - s.at >= APP_SIGN_IN_MS || !s.token) return false;
+    if (!safeEqual(s.token, cookie)) return false;
+    s.token = "";
+    return true;
   }
 
   /**

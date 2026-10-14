@@ -212,6 +212,16 @@ test("the Mac app's code must come back to the browser that started its sign-in 
     headers: desktop,
   });
   expect(own.status).toBe(200);
+  // A link to the callback with their code, opened in the owner's browser after its own came
+  // back, binds nothing: the first code took the cookie's token.
+  await s.app.request(`/v1/auth/github/callback/app?code=code-9-${challenge}&state=${challenge}`, {
+    headers: { cookie },
+  });
+  const phished = await s.call("POST", "/v1/auth/app/session", {
+    body: { code: `code-9-${challenge}`, verifier },
+    headers: desktop,
+  });
+  expect(phished.status).toBe(400);
 });
 
 test("the browser passes the app's sign-in on to the app, untouched", async () => {
