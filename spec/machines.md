@@ -191,10 +191,12 @@
   adds `command(starbridge ask)` and the other four, with `hello` (#962), to `permissions.allow` in
   `~/.gemini/antigravity-cli/settings.json`, since `agy` still prompts after a hook's `allow`. Such
   an entry also passes `LD_PRELOAD=… starbridge ask` and `env … starbridge ask`, so the
-  plugin's `PreToolUse` hook on `run_command` returns `force_ask` for a line an entry would pass
-  that the Pi check (`mod/hooks/own.ts`) rejects, and for one it accepts sets `BypassSandbox`:
+  plugin's `PreToolUse` hook on `run_command` returns `force_ask` for any line that names `starbridge`
+  once quotes and backslashes are removed and that the Pi check (`mod/hooks/own.ts`) rejects,
+  since `"starbridge" ask` and `star""bridge ask` may pass an entry too (internal audit
+  2026-10-14), and for one it accepts sets `BypassSandbox`:
   `--sandbox` hides the home folder and the network (#959). Every command passes that hook, so a
-  shell check starts the CLI only for one that names `starbridge`. Since only that hook narrows
+  shell check starts the CLI only for one that names `starbridge`, quotes and backslashes removed. Since only that hook narrows
   the entries, setup adds them only while the plugin there is Starbridge's and turned on, and takes
   them out otherwise. The app and the IDE keep their settings elsewhere; setup adds nothing there. `starbridge run` is left out,
   since the command it wraps is the agent's own. So Codex asks at the keyboard to run it outside

