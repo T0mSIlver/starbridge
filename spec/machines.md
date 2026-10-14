@@ -192,7 +192,7 @@
   longer matched the CLI (v0.1.1's crashed Pi, #1365). A failed move prints why and does not fail
   the refresh (#1417).
 - **Allow rules** (#245, #322, #443, #488). So a new user's first question needs no prompt and no
-  sandbox flag, setup allows `starbridge ask`, `waiting`, `working`, `wait` and `settle`: Claude
+  sandbox flag, setup allows `starbridge ask`, `waiting`, `working` and `wait`, and `settle <id>` where a rule can name the id (Claude Code's `settle d_*`, Pi's link), never `settle --all` or `--session`, which close many cards (internal audit 2026-10-14, #1761): Claude
   Code allow rules, a Codex execpolicy file (`~/.codex/rules/starbridge.rules`) that runs them
   outside the sandbox, and for Pi the Starbridge link in pi-permission-system's `authorizerChain`
   plus its `skill` and `read` gates for the Starbridge skill, after the owner's own patterns since
@@ -200,7 +200,7 @@
   allows a bash ask itself when the whole typed line, from the ask's "full command" evidence, is
   one of those commands with only words, flags, quoted strings and line-joining backslashes; an ask
   without evidence, or from a shell tool under another name, goes to the owner. For `agy`, setup
-  adds `command(starbridge ask)` and the other four, with `hello` (#962), to `permissions.allow` in
+  adds `command(starbridge ask)`, `waiting`, `working` and `wait`, with `hello` (#962), to `permissions.allow` in
   `~/.gemini/antigravity-cli/settings.json`, since `agy` still prompts after a hook's `allow`. Such
   an entry also passes `LD_PRELOAD=… starbridge ask` and `env … starbridge ask`, so the
   plugin's `PreToolUse` hook on `run_command` returns `force_ask` for any line that names `starbridge`

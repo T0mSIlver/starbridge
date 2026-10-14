@@ -31,6 +31,8 @@ import {
   missingCursorAllow,
   removeCursorAllow,
   removeCursorFiles,
+  removeStaleCursorAllow,
+  STALE_CURSOR_ALLOW,
 } from "./cursor";
 import {
   AGY_ALLOW,
@@ -63,6 +65,8 @@ import {
   removeCodexSkill,
   removeOpencode,
   removePiPackage,
+  removeStaleAgyAllow,
+  STALE_AGY_ALLOW,
 } from "./harnesses";
 import {
   ALLOW_RULES,
@@ -79,6 +83,7 @@ import {
   pluginsStale,
   removeAllowRules,
   removePlugins,
+  STALE_ALLOW_RULES,
   settingsPath,
 } from "./plugins";
 import { defaults, type Sys } from "./sys";
@@ -209,6 +214,24 @@ export async function installAgent(sys: Sys, id: AgentId): Promise<Outcome> {
 
 function oneLine(text: string): string {
   return text.split("\n")[0]?.trim() ?? "";
+}
+
+/**
+ * Replaces the allow entries of earlier releases that let `settle --all` through (#1761), in
+ * settings that already hold them: an update must not leave them, whatever else it skips.
+ */
+export function migrateAllowEntries(sys: Sys): string[] {
+  const done: string[] = [];
+  if (missingAllowRules(sys).some((r) => STALE_ALLOW_RULES.includes(r)) && addAllowRules(sys))
+    done.push(`Replaced the broad settle allow rule in ${settingsPath(sys)}.`);
+  if (
+    missingCursorAllow(sys).some((r) => STALE_CURSOR_ALLOW.includes(r)) &&
+    removeStaleCursorAllow(sys)
+  )
+    done.push(`Removed the broad settle allow entry from ${cursorConfigPath(sys)}.`);
+  if (missingAgyAllow(sys).some((r) => STALE_AGY_ALLOW.includes(r)) && removeStaleAgyAllow(sys))
+    done.push(`Removed the broad settle allow entry from ${agySettingsPath(sys)}.`);
+  return done;
 }
 
 async function installClaude(sys: Sys): Promise<Outcome> {

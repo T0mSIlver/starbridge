@@ -79,7 +79,7 @@ export function removeCodexSkill(sys: Sys): string | undefined {
  */
 export const CODEX_RULE = `${marker("#")}
 # Questions to your devices need the network.
-prefix_rule(pattern = ["starbridge", ["ask", "waiting", "working", "wait", "settle"]], decision = "allow")
+prefix_rule(pattern = ["starbridge", ["ask", "waiting", "working", "wait"]], decision = "allow")
 `;
 
 export function codexRulePath(sys: Home): string {
@@ -356,9 +356,12 @@ export function installAntigravity(sys: Home) {
  * passes the command behind a variable assignment or `env`, so the plugin's hook makes such a
  * line ask again (`hook pre-tool`).
  */
-export const AGY_ALLOW = ["ask", "waiting", "working", "wait", "settle", "hello"].map(
+export const AGY_ALLOW = ["ask", "waiting", "working", "wait", "hello"].map(
   (c) => `command(starbridge ${c})`,
 );
+
+/** Entries of earlier releases that setup removes: `settle` let `settle --all --yes` through. */
+export const STALE_AGY_ALLOW = ["command(starbridge settle)"];
 
 /** `agy`'s settings file. The app and the IDE keep their own, which setup does not know. */
 export function agySettingsPath(sys: Home): string {
@@ -387,7 +390,7 @@ const agyAllowList = (s: AgySettings | undefined): string[] => {
 /** The entries of AGY_ALLOW missing from `agy`'s settings. */
 export function missingAgyAllow(sys: Home): string[] {
   const have = new Set(agyAllowList(readAgySettings(sys)));
-  return AGY_ALLOW.filter((r) => !have.has(r));
+  return [...AGY_ALLOW.filter((r) => !have.has(r)), ...STALE_AGY_ALLOW.filter((r) => have.has(r))];
 }
 
 /** Adds AGY_ALLOW to `agy`'s settings. False, writing nothing, when the file does not parse. */
@@ -395,7 +398,7 @@ export function addAgyAllow(sys: Home): boolean {
   const read = readAgySettings(sys);
   if (!read && existsSync(agySettingsPath(sys))) return false;
   const s: AgySettings = read ?? {};
-  const allow = agyAllowList(s);
+  const allow = agyAllowList(s).filter((r) => !STALE_AGY_ALLOW.includes(r));
   s.permissions = {
     ...s.permissions,
     allow: [...allow, ...AGY_ALLOW.filter((r) => !allow.includes(r))],
@@ -405,10 +408,19 @@ export function addAgyAllow(sys: Home): boolean {
   return true;
 }
 
+/** Removes the entries of earlier releases only; whether it removed any. */
+export function removeStaleAgyAllow(sys: Home): boolean {
+  const s = readAgySettings(sys);
+  const left = s && withoutAllow(s, STALE_AGY_ALLOW);
+  if (!left) return false;
+  writeLeft(agySettingsPath(sys), left);
+  return true;
+}
+
 /** Removes AGY_ALLOW from `agy`'s settings. False when none was there. */
 export function removeAgyAllow(sys: Home): boolean {
   const s = readAgySettings(sys);
-  const left = s && withoutAllow(s, AGY_ALLOW);
+  const left = s && withoutAllow(s, [...AGY_ALLOW, ...STALE_AGY_ALLOW]);
   if (!left) return false;
   writeLeft(agySettingsPath(sys), left);
   return true;

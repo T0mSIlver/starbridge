@@ -576,9 +576,13 @@ test("settle --session and --all close a flood at the server's pace (#584)", asy
   expect((await open()).sort()).toEqual([...(ids.s2 as string[])].sort());
   for (const id of rest) expect(ctx.store.state().asked[id]?.settled).toBe(true);
 
-  // Without a terminal, --all needs --yes.
+  // Without a terminal, --all is refused, --yes or not (#1761).
   expect(await run(["settle", "--all"], ctx)).toBe(1);
-  expect(ctx.errors.at(-1)).toContain("--yes");
+  expect(ctx.errors.at(-1)).toContain("needs a terminal");
+  expect(await run(["settle", "--all", "--yes"], ctx)).toBe(1);
+  expect(ctx.errors.at(-1)).toContain("needs a terminal");
+  expect(await open()).toHaveLength(2);
+  ctx.interactive = true;
   expect(await run(["settle", "--all", "--session", "s2"], ctx)).toBe(1);
   expect(await run(["settle", "--all", "--yes"], ctx)).toBe(0);
   expect(ctx.lines.at(-1)).toBe("Settled 2 decisions.");
