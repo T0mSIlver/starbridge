@@ -56,6 +56,12 @@ if (location.origin === arg("origin")) {
     onUpdate?.();
   });
   let login = ipcRenderer.sendSync("login?") === true;
+  // The Mac's 12- or 24-hour switch (#1705), asked again whenever the window gets the focus,
+  // which is when the owner comes back from changing it.
+  let clock: unknown = ipcRenderer.sendSync("clock?");
+  addEventListener("focus", () => {
+    clock = ipcRenderer.sendSync("clock?");
+  });
   let onLogin: (() => void) | null = null;
   ipcRenderer.on("login", (_e, l: unknown) => {
     login = l === true;
@@ -142,6 +148,8 @@ if (location.origin === arg("origin")) {
     onUpdate: (f: (() => void) | null) => {
       onUpdate = f;
     },
+    /** "12" or "24": the Mac's own choice, which the page's Time format "System" follows. */
+    clock: () => clock,
     /** Whether macOS opens the app at login. */
     login: () => login,
     setLogin: (l: unknown) => ipcRenderer.send("login", l),

@@ -14,7 +14,7 @@ import {
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
-import { type DesktopChannel, type DesktopPlace, desktop } from "@/lib/desktop";
+import { type DesktopChannel, type DesktopPlace, desktop, desktopClock } from "@/lib/desktop";
 import type { RecoveryState } from "@/lib/device";
 import { addedLabels, checkUntil, dayAndTime, releaseLabel, shownCheck } from "@/lib/format";
 import { AGENTS_GUIDE } from "@/lib/links";
@@ -969,7 +969,8 @@ function LookSection() {
           label="Time format"
           value={clock}
           options={[
-            ["system", "System"],
+            // "system" is what older versions stored: it stays the key for the default.
+            ["system", desktopClock() ? "System" : "Browser"],
             ["12", "12-hour"],
             ["24", "24-hour"],
           ]}

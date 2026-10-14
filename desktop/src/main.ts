@@ -15,12 +15,14 @@ import {
   powerMonitor,
   session,
   shell,
+  systemPreferences,
   Tray,
   type WebContents,
 } from "electron";
 import { Answers } from "./answers";
 import { badgeText } from "./badge";
 import { type Answer, type Entry, parseAnswered, parseState } from "./bridge";
+import { macHours } from "./clock";
 import { MenuBar, trayImageName } from "./menubar";
 import { Notifier, type Shown } from "./notifier";
 import { opensOutside, serverOrigin, staysInWindow } from "./origin";
@@ -236,6 +238,13 @@ async function ready(): Promise<void> {
     if (!fromPage(e) || typeof x !== "boolean") return;
     app.setLoginItemSettings({ openAtLogin: x });
     win?.webContents.send("login", app.getLoginItemSettings().openAtLogin);
+  });
+  // The page's Time format "System" follows the Mac's 12- or 24-hour switch (#1705).
+  ipcMain.on("clock?", (e) => {
+    e.returnValue =
+      e.sender === win?.webContents && process.platform === "darwin"
+        ? macHours((k) => systemPreferences.getUserDefault(k, "string"), app.getSystemLocale())
+        : null;
   });
   ipcMain.on("open-server", (e) => {
     if (fromPage(e)) showServer();
