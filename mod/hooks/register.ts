@@ -164,6 +164,7 @@ export const register: Register = (on) => {
             agentId,
             group.map((l) => forParent(l, agentId)),
             send,
+            () => running(agentId),
           );
         },
         log,
@@ -244,12 +245,20 @@ export const register: Register = (on) => {
     return next(e);
   });
 
-  on("turn.complete", async (_$, e, next) => {
+  on("turn.complete", async ($, e, next) => {
     const r = await next(e);
     if (e.agentId !== undefined) {
-      // Its end alone proves nothing: a message that came after its last round waits for a run.
-      const ended = roundEnded.get(e.agentId);
-      if (ended !== undefined) void sent?.read(e.agentId, ended).catch(() => undefined);
+      const agent = e.agentId;
+      const ended = roundEnded.get(agent);
+      if (ended !== undefined) void sent?.read(agent, ended).catch(() => undefined);
+      // A message that came after its last round waits for another one, which a subagent that
+      // finished never runs: the parent gets it instead (#1729).
+      void (async () => {
+        const list = () => $.agent.list();
+        if (!sent || !(await finished(list, (ms) => $.clock.sleep(ms), agent))) return;
+        roundEnded.delete(agent);
+        if (await sent.finished(agent, ended)) await sent.recover();
+      })().catch(() => undefined);
     } else {
       handover.ended();
       // After a `/resume`, or a submit that failed.
@@ -305,3 +314,26 @@ export const register: Register = (on) => {
     return next(e);
   });
 };
+
+/** A subagent's statuses once it runs no more rounds. */
+const DONE = ["completed", "failed", "killed"];
+
+/**
+ * Whether subagent `agentId`, whose turn just completed, runs no more rounds: done, or no longer
+ * listed. The engine may mark it a moment after its `turn.complete`, so it looks twice. An idle
+ * teammate wakes for a message, so it has not; nor, when the list cannot be read, has any.
+ */
+export async function finished(
+  list: () => Promise<{ id: string; status: string }[]>,
+  sleep: (ms: number) => Promise<void>,
+  agentId: string,
+): Promise<boolean> {
+  for (let i = 0; i < 2; i++) {
+    if (i > 0) await sleep(2000);
+    const agents = await list().catch(() => undefined);
+    if (!agents) return false;
+    const status = agents.find((a) => a.id === agentId)?.status;
+    if (status === undefined || DONE.includes(status)) return true;
+  }
+  return false;
+}
