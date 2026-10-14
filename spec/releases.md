@@ -216,7 +216,7 @@
   services (no token is injected), the app shows it, opens the card and answers, and the machine
   reads the answer. A simulator gets no push from APNs, so the iPhone run covers sign-in, sync,
   answering and the machine's read, not the push. Nightly, not per deploy: main deploys 60 to 120
-  times a day, a run takes about 25 minutes, and both apps share the one owner account. It sets
+  times a day, a run takes about 20 minutes, and both apps share the one owner account. It sets
   the `staging-app` status on the commit staging runs and keeps one `staging-app` issue open
   while it fails. Prod's deploy does not read it yet: a new check that flakes would stop
   hotfixes, so it gets a fortnight of nightly results first; to gate, `deploy.yml` reads the
