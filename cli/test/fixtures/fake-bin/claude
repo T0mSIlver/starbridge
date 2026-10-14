@@ -26,16 +26,18 @@ case "$1 $2" in
     bun -e 'const f=process.argv.at(-1);const s=JSON.parse(require("fs").readFileSync(f,"utf8"));s.extraKnownMarketplaces={...s.extraKnownMarketplaces,starbridge:{source:{source:"directory",path:process.argv.at(-2)}}};require("fs").writeFileSync(f,JSON.stringify(s,null,2))' "$3" "$settings" ;;
   "marketplace update") [ -f "$s/market" ] ;;
   # Removing a marketplace uninstalls its plugins, as Claude Code 2.1.300 does.
-  "marketplace remove") rm -f "$s/market" "$s"/plugin-* ;;
+  "marketplace remove") rm -f "$s/market" "$s"/plugin-* "$s"/disabled-* ;;
   "list --json")
     printf '['; sep=''
     for f in "$s"/plugin-*; do
       [ -f "$f" ] || continue
-      printf '%s{"id":"%s","scope":"user","enabled":true,"version":"0.2.0"}' "$sep" "${f##*/plugin-}"; sep=','
+      id=${f##*/plugin-}; enabled=true; [ -f "$s/disabled-$id" ] && enabled=false
+      printf '%s{"id":"%s","scope":"user","enabled":%s,"version":"0.2.0"}' "$sep" "$id" "$enabled"; sep=','
     done
     echo ']' ;;
   "install "*) touch "$s/plugin-$2" ;;
-  "update "*) [ -f "$s/plugin-$2" ] ;;
+  "update "*) [ -n "$FAKE_FAIL_UPDATE" ] && { echo "update failed" >&2; exit 1; }; [ -f "$s/plugin-$2" ] ;;
+  "disable "*) [ -f "$s/plugin-$2" ] && touch "$s/disabled-$2" ;;
   "uninstall "*) rm -f "$s/plugin-$2" ;;
   *) exit 1 ;;
 esac

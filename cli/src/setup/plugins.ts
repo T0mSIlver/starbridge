@@ -205,10 +205,22 @@ export function pluginsStale(sys: Sys, state: PluginState): boolean {
 export async function installPlugins(sys: Sys, state: PluginState): Promise<string[]> {
   const foreign = foreignMarketplace(state);
   if (foreign) throw new Error(foreign);
-  const done: string[] = [];
   const changed = !marketplaceCurrent(sys);
   writeMarketplace(sys);
+  try {
+    return await fromMarketplace(sys, state, changed);
+  } catch (e) {
+    // Not current until every step went through, so the next setup or refresh tries again.
+    if (changed) rmSync(marketplaceFile(sys), { force: true });
+    throw e;
+  }
+}
+
+async function fromMarketplace(sys: Sys, state: PluginState, changed: boolean): Promise<string[]> {
+  const done: string[] = [];
   let plugins = state.plugins;
+  // What the owner turned off stays off once the plugins come back from the new marketplace.
+  const disabled = state.pinned ? [] : PLUGINS.filter((id) => plugins[id]?.enabled === false);
   if (state.marketplace && !state.pinned) {
     // Removing a marketplace uninstalls its plugins.
     const r = await claude(sys, "plugin", "marketplace", "remove", MARKETPLACE);
@@ -233,6 +245,10 @@ export async function installPlugins(sys: Sys, state: PluginState): Promise<stri
     if (r?.code !== 0)
       throw new Error(`claude plugin ${update ? "update" : "install"} ${id}: ${failure(r)}`);
     done.push(`${update ? "Updated" : "Installed"} the ${id} plugin.`);
+  }
+  for (const id of disabled) {
+    const r = await claude(sys, "plugin", "disable", id, "--scope", "user");
+    if (r?.code !== 0) throw new Error(`claude plugin disable ${id}: ${failure(r)}`);
   }
   return done;
 }

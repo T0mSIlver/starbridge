@@ -1281,10 +1281,11 @@ test("refresh replaces the repository's marketplace with the pinned one, and mov
   const m = await machine();
   const state = m.ctx.env.FAKE_STATE as string;
   mkdirSync(state, { recursive: true });
-  // What setup before #1768 left: the GitHub marketplace and its plugins.
+  // What setup before #1768 left: the GitHub marketplace and its plugins, the mod turned off.
   writeFileSync(join(state, "market"), "");
   for (const p of ["starbridge@starbridge", "starbridge-mod@starbridge"])
     writeFileSync(join(state, `plugin-${p}`), "");
+  writeFileSync(join(state, "disabled-starbridge-mod@starbridge"), "");
   await refresh(m.sys);
   const marketDir = join(m.home, ".claude/starbridge-marketplace");
   expect(
@@ -1297,6 +1298,8 @@ test("refresh replaces the repository's marketplace with the pinned one, and mov
     "claude plugin install starbridge@starbridge --scope user",
     "claude plugin install starbridge-mod@starbridge --scope user",
   ]);
+  expect(m.calls()).toContain("claude plugin disable starbridge-mod@starbridge --scope user");
+  expect(existsSync(join(state, "disabled-starbridge@starbridge"))).toBe(false);
   // Current: nothing to do.
   let before = m.calls().length;
   await refresh(m.sys);
@@ -1306,8 +1309,11 @@ test("refresh replaces the repository's marketplace with the pinned one, and mov
       .slice(before)
       .filter((c) => /^claude plugin (marketplace (add|remove|update)|install|update)/.test(c)),
   ).toEqual([]);
-  // Another release's marketplace: updated in place.
+  // Another release's marketplace: updated in place; a failed update is tried again.
   writeFileSync(join(marketDir, ".claude-plugin/marketplace.json"), "{}\n");
+  m.ctx.env.FAKE_FAIL_UPDATE = "1";
+  await refresh(m.sys);
+  delete m.ctx.env.FAKE_FAIL_UPDATE;
   before = m.calls().length;
   await refresh(m.sys);
   expect(
