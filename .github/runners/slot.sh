@@ -7,8 +7,8 @@ n=$1
 dir=/home/runner/slots/$n
 q=/run/gh-runner
 
-# Everything a job leaves goes except the tool cache, _work/_tool: Node, Bun, pnpm's store and
-# Firefox, which jobs look up by version or hash. A container can leave root's files behind, which
+# Everything a job leaves goes except the tool cache, _work/_tool: Node, Bun and pnpm's store,
+# which jobs look up by version or hash. A container can leave root's files behind, which
 # only a container can delete.
 wipe() {
   local keep=_tool
