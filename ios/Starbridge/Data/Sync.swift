@@ -75,7 +75,7 @@ extension Store {
 
     var shownRuns: [SavedRun] {
         if withheldWhy != nil { return [] }
-        return saved.runs.filter { active($0.from) }
+        return SavedRun.shown(saved.runs.filter { active($0.from) }, now: Date())
     }
 
     func decision(_ id: String) -> SavedDecision? { saved.decisions.first { $0.id == id } }
@@ -324,7 +324,8 @@ extension Store {
         for (from, n) in wins { if let d = byId[n.itemId], let u = won(d, from: from, n) { byId[n.itemId] = u } }
         var s = saved
         s.cursor = cursor
-        s.decisions = Array(byId.values.sorted { $0.body.createdAt < $1.body.createdAt }.suffix(500))
+        // As instants: whole-second and millisecond stamps sort differently as text (#1079).
+        s.decisions = Array(Dates.byInstant(Array(byId.values)) { $0.body.createdAt }.suffix(500))
         persist(s)
         SavedImage.prune(keeping: s.decisions)
     }
@@ -454,7 +455,7 @@ extension Store {
         let weekAgo = Date().addingTimeInterval(-7 * 86_400)
         var s = saved
         s.promptCursor = cursor
-        s.prompts = byId.values.filter { Dates.parse($0.body.createdAt).map { $0 > weekAgo } ?? true }.sorted { $0.body.createdAt < $1.body.createdAt }
+        s.prompts = Dates.byInstant(byId.values.filter { Dates.parse($0.body.createdAt).map { $0 > weekAgo } ?? true }) { $0.body.createdAt }
         persist(s)
     }
 
