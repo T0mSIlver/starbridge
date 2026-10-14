@@ -147,7 +147,7 @@ export const DEFAULT_LIMITS = {
   /**
    * Pairing result long-polls open on the whole server, and per address (an IPv6 client as its
    * /48), which anyone may hold without a session (#1737). Past either, a poll answers 204 after
-   * 2 s, holding no slot, and pairingResults counts it like any other. Each costs memory in Caddy and the
+   * 10 s, holding no slot, and pairingResults counts it like any other. Each costs memory in Caddy and the
    * server (spec/hosted.md, "Capacity"); a person pairs a few machines and pages at a time, and an
    * address waits on at most pairingsPerClient pairings.
    */

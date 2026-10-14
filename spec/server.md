@@ -31,8 +31,9 @@
   server. The server counts them in memory, as every per-address limit, so no address reaches
   the database, and a restart resets the counts (#575).
   Result long-polls need no session, so the server holds at most 1000, 50 per address (#1737);
-  past either a poll gets 204 after 2 s, not at once, since every client polls again straight
-  away and would reach the 150 a minute whose 429 ends pairing.
+  past either a poll gets 204 after 10 s, not at once, since every client polls again straight
+  away and would reach the 150 a minute whose 429 ends pairing; at 6 a minute, 25 pairings behind
+  one address still fit.
 - **Per-address sign-up limits** (#619). An office or carrier NAT puts many people behind one
   IPv4 address, so the pairing limits above and the 60 GitHub sign-ins a minute leave room for a
   launch-day crowd behind it; at one a second they stay far below the 10 sign-ups and visitors a

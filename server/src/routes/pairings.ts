@@ -17,8 +17,12 @@ import { ipKey, rateLimit } from "../limits";
 import { activeMember } from "./directory";
 
 const LIFETIME_MS = 10 * 60_000;
-/** How long a result poll past the wait caps pauses before its 204. */
-const BUSY_PAUSE_S = 2;
+/**
+ * How long a result poll past the wait caps pauses before its 204. Clients poll again at once,
+ * so it sets their pace: 6 a minute, which lets 25 of them share an address's 150 a minute in
+ * pairingResults, and that 150 bounds the pauses an address holds open to 25.
+ */
+const BUSY_PAUSE_S = 10;
 /** A pairing message's JSON, in bytes, so waiting pairings and joins cannot fill the disk. */
 export const MESSAGE_BYTES = 4 * 1024;
 const RENDEZVOUS = /^[0-9A-HJKMNP-TV-Z]{8}$/;
@@ -293,7 +297,7 @@ pairingRoutes.get("/pairings/:rendezvous/result", async (c) => {
       if (c.var.pairings.count(rendezvous) >= limits.pairingWaits)
         fail(429, "too-many-waits", "this pairing already has its long-polls open");
       // Anyone may wait here without a session, so the waits are capped in all and per address
-      // (#1737). Past either, the poll answers "not yet" after a short pause rather than at once:
+      // (#1737). Past either, the poll answers "not yet" after a pause rather than at once:
       // every client polls again straight away, and a burst of instant answers would reach
       // pairingResults' 429, which ends pairing in the CLI and the apps.
       const client = ipKey(c, 48);
