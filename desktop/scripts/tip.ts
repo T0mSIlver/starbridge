@@ -3,13 +3,12 @@
 // which Macs on the Tip channel read (spec/releases.md). Run by .github/workflows/desktop.yml:
 //
 //   bun desktop/scripts/tip.ts plan     before the build: build, version, last
-//   bun desktop/scripts/tip.ts check    before publishing: publish
+//   bun desktop/scripts/tip.ts check    before publishing: publish, previous (the tip's version)
 import { appendFileSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 export const TIP_REPO = "T0mSIlver/starbridge-tip";
-/** What the tip release holds, besides the app's files: its version and commit. */
-export const TIP_STATE = `https://github.com/${TIP_REPO}/releases/download/tip/tip.json`;
+const API = `https://api.github.com/repos/${TIP_REPO}/releases`;
 
 const VERSION = /^(\d+)\.(\d+)\.(\d+)(?:-(rc|tip)\.(\d+))?$/;
 
@@ -31,19 +30,33 @@ export function tipVersion(pkg: string, finalOut: boolean, n: number): string {
   return `${m[1]}.${m[2]}.${m[4] && !finalOut ? patch : patch + 1}-tip.${n}`;
 }
 
-/** What the tip release holds; null before its first build. */
-export async function tipState(): Promise<{ version: string; commit: string } | null> {
-  const res = await fetch(TIP_STATE);
-  // A failed read must stop the run: publishing over a newer build would take Macs back.
-  if (res.status === 404) return null;
-  if (!res.ok) throw new Error(`${TIP_STATE} answered ${res.status}`);
+type Tip = { version: string; commit: string };
+
+/**
+ * What the tip release holds, from its `tip.json`; null before its first build. Read through the
+ * API with `GH_TOKEN`: the download URL answers from a cache that kept a 404 for minutes after
+ * the file existed.
+ */
+export async function tipState(): Promise<Tip | null> {
+  const headers: Record<string, string> = { "x-github-api-version": "2022-11-28" };
+  if (process.env.GH_TOKEN) headers.authorization = `Bearer ${process.env.GH_TOKEN}`;
+  const release = await fetch(`${API}/tags/tip`, { headers });
+  if (release.status === 404) return null;
+  if (!release.ok) throw new Error(`the tip release answered ${release.status}`);
+  const { assets } = (await release.json()) as { assets: { name: string; url: string }[] };
+  const asset = assets.find((a) => a.name === "tip.json");
+  if (!asset) return null;
+  const res = await fetch(asset.url, {
+    headers: { ...headers, accept: "application/octet-stream" },
+  });
+  if (!res.ok) throw new Error(`the tip release's tip.json answered ${res.status}`);
   const s = (await res.json()) as { version?: unknown; commit?: unknown };
   if (
     typeof s.version !== "string" ||
     typeof s.commit !== "string" ||
     !/^[0-9a-f]{40}$/.test(s.commit)
   )
-    throw new Error(`${TIP_STATE} holds no version and commit`);
+    throw new Error("the tip release's tip.json holds no version and commit");
   return { version: s.version, commit: s.commit };
 }
 
@@ -55,7 +68,7 @@ const git = (...args: string[]) =>
  * Whether the tip already holds this commit or a newer one: a rebuild, or a run that waited
  * behind a newer one, which neither builds nor publishes.
  */
-function held(sha: string, tip: { version: string; commit: string } | null): boolean {
+function held(sha: string, tip: Tip | null): boolean {
   if (!tip) return false;
   const holds =
     git("cat-file", "-e", `${tip.commit}^{commit}`).success &&
@@ -72,10 +85,18 @@ function held(sha: string, tip: { version: string; commit: string } | null): boo
 /** `plan`: build, version and last (the tip's commit). `check`: publish. */
 async function main(mode: string): Promise<void> {
   const sha = process.env.GITHUB_SHA ?? git("rev-parse", "HEAD").stdout.toString().trim();
-  const tip = await tipState();
   const out: Record<string, string> = {};
-  if (mode === "check") out.publish = String(!held(sha, tip));
-  else {
+  if (mode === "check") {
+    // Publishing over a newer build would take Macs back, so a failed read stops the publish.
+    const tip = await tipState();
+    out.publish = String(!held(sha, tip));
+    out.previous = tip?.version ?? "";
+  } else {
+    // Here the read only spares a build the tip already holds: on failure, build.
+    const tip = await tipState().catch((e) => {
+      console.log(`::warning::Could not read the tip release, building anyway: ${e.message}`);
+      return null;
+    });
     out.last = tip?.commit ?? "";
     out.build = String(!held(sha, tip));
     if (out.build === "true") {

@@ -82,7 +82,8 @@
   holding a fine-grained token that writes that repository only (`TIP_RELEASE_TOKEN`, in
   `desktop-release`), so the token never shares a job with the build's third-party packages; one
   publish runs at a time, and one whose commit the tip already contains is dropped, so the tip never
-  goes back. The cost is a macOS runner for about 15 minutes per desktop merge, which #1684 had cut
+  goes back. CI reads what the tip holds (`tip.json`) through the API: the download URL kept
+  answering 404 from a cache for minutes after the file existed. The cost is a macOS runner for about 15 minutes per desktop merge, which #1684 had cut
   while no app updated from main.
 - **A record of what shipped** (#1618). The last job of `release.yml` writes the version, the
   release's date and which channels its jobs reached (GitHub, npm, Homebrew, the desktop app, Play's
