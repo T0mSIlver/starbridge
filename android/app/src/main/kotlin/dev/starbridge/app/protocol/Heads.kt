@@ -9,7 +9,8 @@ import kotlinx.serialization.json.jsonPrimitive
  * Detecting a withheld directory entry from the heads machines sign into their items (heads.ts,
  * PROTOCOL.md "Directory"). Heads are kept by signer. Heads kept before #1627 may also sit under
  * "signer/by" or "signer/?", where machines before #794 put a device's head they passed on: each
- * counts as a head its signer vouched for, since only the signer signed it.
+ * counts as a head its signer vouched for, since only the signer signed it, and goes when either
+ * the signer's or the by's heads are forgotten (#1730).
  */
 class Heads(private val directories: Directories) {
     /** Whether [entries] hold the chain [head] names: as long at least, and the same entry there. */
@@ -84,9 +85,12 @@ class Heads(private val directories: Directories) {
         return fork
     }
 
-    /** Drops every kept head member [id] signed, under any key (heads.ts `forgetHeads`). True when any went. */
+    /**
+     * Drops every kept head member [id] signed, and every head kept before #1627 that a machine
+     * passed on from [id] (heads.ts `forgetHeads`, #1730). True when any went.
+     */
     fun forget(heads: MutableMap<String, DirectoryHead>, id: String): Boolean =
-        heads.keys.removeIf { it.substringBefore("/") == id }
+        heads.keys.removeIf { it.substringBefore("/") == id || (it.contains("/") && it.substringAfter("/") == id) }
 }
 
 /** A machine [id] signed [head] and the chain lacks it; [revoked] names a `revoke` of it. */
