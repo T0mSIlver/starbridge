@@ -1,10 +1,12 @@
 import { expect, test } from "bun:test";
 import {
   chmodSync,
+  mkdirSync,
   mkdtempSync,
   readdirSync,
   readFileSync,
   readlinkSync,
+  rmSync,
   statSync,
   symlinkSync,
   writeFileSync,
@@ -40,6 +42,20 @@ test("an owner's config is replaced whole, keeping its mode, and through a link 
   replaceFile(dangling, "made");
   expect(readlinkSync(dangling)).toBe(join(dir, "target.json"));
   expect(readFileSync(join(dir, "target.json"), "utf8")).toBe("made");
+  // A link through a linked folder and `..` lands where the file system says, not where the
+  // path's words do.
+  const elsewhere = join(dir, "dotfiles");
+  mkdirSync(join(elsewhere, "sub"), { recursive: true });
+  symlinkSync(join(elsewhere, "sub"), join(dir, "alias"));
+  writeFileSync(join(elsewhere, "real.json"), "old");
+  const up = join(dir, "up.json");
+  symlinkSync("alias/../real.json", up);
+  replaceFile(up, "via");
+  expect(readFileSync(join(elsewhere, "real.json"), "utf8")).toBe("via");
+  rmSync(join(elsewhere, "real.json"));
+  replaceFile(up, "made again");
+  expect(readFileSync(join(elsewhere, "real.json"), "utf8")).toBe("made again");
+  expect(readlinkSync(up)).toBe("alias/../real.json");
   // A file this user may not write stays, as a write in place would have left it.
   if (process.getuid?.() === 0) return;
   chmodSync(file, 0o444);

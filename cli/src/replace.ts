@@ -4,15 +4,39 @@ import {
   constants,
   lstatSync,
   readlinkSync,
+  realpathSync,
   renameSync,
   rmSync,
   statSync,
   writeFileSync,
 } from "node:fs";
-import { basename, dirname, join, resolve } from "node:path";
+import { basename, dirname, isAbsolute, join, parse } from "node:path";
 
-/** Where `path` leads through its symbolic links, followed even to a file not there yet. */
+/** `rel` from the real folder `from`, each step through the file system, as the OS walks a path. */
+function walk(from: string, rel: string): string {
+  let at = isAbsolute(rel) ? parse(rel).root : from;
+  for (const step of rel.split(/[\\/]+/)) {
+    if (step === "" || step === ".") continue;
+    // `at` is real, so its parent is the folder above it.
+    if (step === "..") at = dirname(at);
+    else {
+      at = join(at, step);
+      try {
+        at = realpathSync(at);
+      } catch {}
+    }
+  }
+  return at;
+}
+
+/**
+ * Where `path` leads through its symbolic links, followed even to a file not there yet; `..` after
+ * a linked folder goes above the link's target, as the OS reads it.
+ */
 function linked(path: string): string {
+  try {
+    return realpathSync(path);
+  } catch {}
   let p = path;
   for (let i = 0; i < 40; i++) {
     let link: boolean;
@@ -22,7 +46,13 @@ function linked(path: string): string {
       return p;
     }
     if (!link) return p;
-    p = resolve(dirname(p), readlinkSync(p));
+    let from: string;
+    try {
+      from = realpathSync(dirname(p));
+    } catch {
+      return p;
+    }
+    p = walk(from, readlinkSync(p));
   }
   throw new Error(`${path}: too many symbolic links`);
 }
