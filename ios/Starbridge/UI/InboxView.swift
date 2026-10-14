@@ -89,7 +89,7 @@ struct InboxView: View {
                             }
                         }
                         if !history.isEmpty {
-                            Collapsible(title: "History", count: "", symbol: "clock.arrow.circlepath", open: $historyOpen) {
+                            Collapsible(title: "History", count: HistoryHead.today(history), symbol: "clock.arrow.circlepath", open: $historyOpen) {
                                 ForEach(history.prefix(100), id: \.id) { d in HistoryRow(decision: d, store: store) { opened = .decision(d.id) } }
                             }
                         }
@@ -360,6 +360,14 @@ private struct Collapsible<Content: View>: View {
     }
 }
 
+/** History's head: "3 answered today", as on the web and Android; nothing until one is. */
+enum HistoryHead {
+    static func today(_ history: [SavedDecision]) -> String {
+        let n = history.filter { $0.answeredAt.flatMap(Dates.parse).map(Calendar.current.isDateInToday) ?? false }.count
+        return n > 0 ? "\(n) answered today" : ""
+    }
+}
+
 /** What the Runs head says besides its title: how many, and the failed ones in red, then the lost (#835). */
 enum RunsHead {
     static func count(_ runs: [SavedRun]) -> String { "\(runs.count)" }
@@ -480,7 +488,8 @@ private struct PromptCard: View {
                     .lineLimit(prompt.fitsRow ? nil : 3)
                     .padding(Tokens.Spacing.s3)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(RoundedRectangle(cornerRadius: Tokens.Radius.md).fill(Tokens.Colors.surface.color))
+                    .foregroundStyle(Tokens.Colors.onTerminal.color)
+                    .background(RoundedRectangle(cornerRadius: Tokens.Radius.md).fill(Tokens.Colors.terminal.color))
                 HStack(spacing: Tokens.Spacing.s2) {
                     OptionButton(label: "Deny", strong: false, amber: true, height: 40) { Task { await store.answerPrompt(prompt.id, allow: false) } }
                     OptionButton(label: "Allow", strong: true, amber: true, height: 40) {

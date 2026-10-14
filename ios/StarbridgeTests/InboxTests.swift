@@ -184,7 +184,7 @@ final class InboxTests: XCTestCase {
         // Queued: the typed reply has done its work (#1169).
         XCTAssertNil(store.drafts["d_two"])
         XCTAssertTrue(store.openDecisions.isEmpty)
-        XCTAssertEqual(HistoryText.how(try XCTUnwrap(store.decision("d_two")), store), "You: Not yet · not sent yet")
+        XCTAssertEqual(HistoryText.how(try XCTUnwrap(store.decision("d_two")), store), "Not yet · not sent yet")
         Offline.offline = false
         store.notice = nil
         await store.refresh()

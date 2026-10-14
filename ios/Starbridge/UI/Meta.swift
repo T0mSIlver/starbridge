@@ -116,13 +116,38 @@ struct SessionLine: View {
     let agent: String?
 
     var body: some View {
-        let name = source.sessionTitle?.trimmingCharacters(in: .whitespaces) ?? ""
-        let link = source.links?.first { $0.kind != .desktop }.flatMap { URL(string: $0.url) }
-        let app = agentName(agent, source)
-        let text = !name.isEmpty ? name : (link != nil && app != nil ? "Open in \(app!)" : "")
-        if !text.isEmpty {
+        if SessionLink.shows(source, agent) {
             HStack {
                 Spacer()
+                SessionLink(source: source, agent: agent)
+            }
+            .type(Tokens.Typography.small)
+            .frame(minHeight: Tokens.Sizes.tap)
+        }
+    }
+}
+
+/** The session's name, as the link that opens it in its app, else "Open in Claude" (#970). */
+struct SessionLink: View {
+    let source: Source
+    let agent: String?
+
+    static func shows(_ source: Source, _ agent: String?) -> Bool { !text(source, agent).isEmpty }
+
+    private static func url(_ source: Source) -> URL? { source.links?.first { $0.kind != .desktop }.flatMap { URL(string: $0.url) } }
+
+    private static func text(_ source: Source, _ agent: String?) -> String {
+        let name = source.sessionTitle?.trimmingCharacters(in: .whitespaces) ?? ""
+        let app = agentName(agent, source)
+        return !name.isEmpty ? name : (url(source) != nil && app != nil ? "Open in \(app!)" : "")
+    }
+
+    var body: some View {
+        let link = Self.url(source)
+        let app = agentName(agent, source)
+        let text = Self.text(source, agent)
+        if !text.isEmpty {
+            Group {
                 if let link, app != nil {
                     Link(destination: link) {
                         HStack(spacing: Tokens.Spacing.s1) {
@@ -136,8 +161,6 @@ struct SessionLine: View {
                     Text(text).lineLimit(1).truncationMode(.middle).foregroundStyle(Tokens.Colors.fg2.color)
                 }
             }
-            .type(Tokens.Typography.small)
-            .frame(minHeight: Tokens.Sizes.tap)
         }
     }
 }

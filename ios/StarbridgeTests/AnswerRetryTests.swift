@@ -88,7 +88,7 @@ final class AnswerRetryTests: XCTestCase {
         try await until { store.notice != nil }
         XCTAssertEqual(store.notice, "Merge isn't sent yet. Retrying.")
         XCTAssertEqual(store.saved.outbox.map(\.decisionId), ["d_one"])
-        XCTAssertEqual(HistoryText.how(try XCTUnwrap(store.decision("d_one")), store), "You: Merge · not sent yet")
+        XCTAssertEqual(HistoryText.how(try XCTUnwrap(store.decision("d_one")), store), "Merge · not sent yet")
 
         // Nothing is posted during the hold: a post would fail at once.
         try await Task.sleep(for: .milliseconds(500))
@@ -101,7 +101,7 @@ final class AnswerRetryTests: XCTestCase {
         XCTAssertTrue(store.saved.outbox.isEmpty)
         XCTAssertEqual(AnswerServer.posted, 2)
         XCTAssertEqual(store.decision("d_one")?.answer, "Merge")
-        XCTAssertEqual(HistoryText.how(try XCTUnwrap(store.decision("d_one")), store), "You: Merge")
+        XCTAssertEqual(HistoryText.how(try XCTUnwrap(store.decision("d_one")), store), "Merge · on this iPhone")
     }
 
     func testASyncSendsTheOutboxBeforeReadsThatFail() async throws {
