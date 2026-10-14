@@ -28,6 +28,7 @@ import {
   installAgent,
   installed,
   progressLine,
+  recordCodex,
   removedAgents,
   setRemoved,
   UNDER,
@@ -101,6 +102,8 @@ export async function refresh(sys: Sys): Promise<string[]> {
   recordSelf(sys);
   const done = refreshFiles(sys);
   const removed = removedAgents(sys.ctx);
+  // Codex installed before setup recorded its binary gets it here, as each update moves it.
+  if (!removed.includes("codex")) recordCodex(sys);
   for (const id of AGENT_IDS) {
     if (removed.includes(id) || !found(sys, id)) continue;
     // The Pi package is pinned to a release tag, so an installed one at another tag moves (#1417).

@@ -24,6 +24,7 @@ import { REMOVED } from "../src/api";
 import { run } from "../src/cli";
 import { session } from "../src/context";
 import { poll } from "../src/decisions";
+import { which } from "../src/platform";
 import { pushOnce } from "../src/quota";
 import { setRemoved } from "../src/setup/agents";
 import { codexPlugin } from "../src/setup/codex-plugin";
@@ -197,6 +198,11 @@ test("setup --yes installs the agent, the plugins and the skills, and uploads a 
   const market = join(m.home, ".codex/starbridge");
   expect(m.calls()).toContain(`codex plugin marketplace add ${market}`);
   expect(m.calls()).toContain("codex plugin add starbridge@starbridge-cli");
+  // The only codex the agent runs for a Codex session's answer, and the home it runs it for.
+  expect(m.ctx.store.agentConfig().codex).toEqual({
+    bin: which(m.ctx.env, "codex") as string,
+    home: join(m.home, ".codex"),
+  });
   const hooks = readFileSync(
     join(m.home, ".codex/plugins/cache/starbridge-cli/starbridge/1.2.0/hooks/hooks.json"),
     "utf8",

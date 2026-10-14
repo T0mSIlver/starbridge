@@ -231,6 +231,11 @@ export interface AgentConfig {
    * `starbridge config updates off`.
    */
   updates?: { auto?: boolean };
+  /**
+   * The `codex` binary and `CODEX_HOME` setup found, the only ones the agent runs to hand a Codex
+   * session its answer: a route an `ask` sends never names the binary it runs.
+   */
+  codex?: { bin: string; home: string };
   quota?: {
     /** The CodexBar providers to upload; none means no timer. */
     providers?: string[];

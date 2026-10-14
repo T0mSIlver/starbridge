@@ -15,7 +15,11 @@
   longer of the fetched and saved chains, each required to extend the other's pin.
 - **The socket** is bound under a 077 umask (#95). There is no peer uid check, since neither Bun
   nor Node exposes `SO_PEERCRED`. The local agent runs only the CodexBar binary its own config names,
-  never a path a client sends.
+  never a path a client sends, and for a Codex session's answer only the `codex` setup recorded
+  with its `CODEX_HOME` (`starbridge update` records it again), for that home or the agent's own
+  (#1757). `ask --input` sets no delivery route or session kind (`codex`, `antigravity`,
+  `extensionAnswers`, `headless`, `held`, `picker`, `subagent`): those come from the asking
+  process's environment, since an agent writes the file.
 - **On Windows** (#552) the agent listens on loopback TCP with a per-start token in `agent.port`
   in the config directory (PROTOCOL.md, "Local agent API"). A named pipe was the other choice:
   libuv creates one with the default DACL, which lets other users open it for reading, and Bun's
