@@ -36,6 +36,7 @@ curl -fsS --retry 3 --retry-delay 5 --retry-all-errors --max-time 30 -H 'Accept:
     and .head_branch == "main" and .head_sha == $rev and .conclusion == "success"
     and .head_repository.full_name == "T0mSIlver/starbridge")' >/dev/null ||
   { echo "CI has not passed $rev on main; not deployed" >&2; exit 1; }
+echo "CI passed $rev on main"
 # seed.sh's seeding server holds the database meanwhile (seed-host.sh).
 if [ -n "$(docker ps -q -f name='^sb-seed-server$')" ]; then
   echo "staging is being seeded; not deployed" >&2
