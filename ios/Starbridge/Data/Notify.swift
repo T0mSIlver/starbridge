@@ -141,11 +141,14 @@ enum Notify {
               let me = saved.me, let pk = secrets.boxPk.flatMap({ try? fromB64($0) }), let sk = secrets.boxSk.flatMap({ try? fromB64($0) }) else { return nil }
         let keys = KeyPair(publicKey: pk, secretKey: SecretKey(sk))
         let entries = saved.entries.compactMap { try? JSON.parse($0) }
-        guard let dir = try? Directories.verify(entries, account: saved.account, pin: saved.pin) else { return nil }
+        guard let dir = try? Directories.verify(entries, account: saved.accountId, pin: saved.pin) else { return nil }
         var heads = Heads(saved: saved.heads)
         func open(_ item: SealedItem) -> Opened? {
             guard let opened = try? Envelopes.open(item, me: me.id, keys: keys, directory: dir) else { return nil }
-            _ = HeadBook.note(&heads, signer: item.from, head: opened.body.dir, entries: entries)
+            // Machines' heads only, as the app keeps them: a device's snooze vouches for nothing (#571, #1723).
+            if item.kind.signer == .machine {
+                _ = HeadBook.note(&heads, signer: item.from, head: opened.body.dir, entries: entries)
+            }
             return HeadBook.withheld(heads, dir: dir, entries: entries) == nil ? opened : nil
         }
         var item: SealedItem?
@@ -166,12 +169,14 @@ enum Notify {
             guard let saved = try? SavedPrompt(from: item.from, text: opened.bodyText, answeredAt: nil) else { return nil }
             return permission(saved)
         case let w as Waiting:
-            guard let fetched = try? await fetch(w.decisionId), let d = open(fetched)?.body as? Decision, fetched.from == item.from else { return nil }
+            // The decision the notice names, not one the server put in its place (#1723).
+            guard let fetched = try? await fetch(w.decisionId), fetched.id == w.decisionId, let d = open(fetched)?.body as? Decision,
+                  fetched.from == item.from else { return nil }
             var shown = decision(d, prefix: w.state == "waiting" ? "Waiting for you" : nil)
             shown.quiet = w.state != "waiting"
             return shown
         case let z as Snooze:
-            guard let fetched = try? await fetch(z.decisionId), let d = open(fetched)?.body as? Decision else { return nil }
+            guard let fetched = try? await fetch(z.decisionId), fetched.id == z.decisionId, let d = open(fetched)?.body as? Decision else { return nil }
             // Only the latest snooze this iPhone knows brings the question back (PROTOCOL.md,
             // "Snoozing"). An extension can't drop an alert, so an older one's return says the
             // newer time, quietly, and the app's next sync closes it.
