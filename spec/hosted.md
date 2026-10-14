@@ -102,6 +102,18 @@
   `releases-data` branch, written by `release.yml`'s last job from the jobs that succeeded; sb-status
   fetches it over HTTPS, so the page holds no credentials and queries no store. It lives on the
   status site rather than the web app so it stays up when the VPS is down and needs no deploy.
+- **Ops page** (#1630). `ops.starbridge.run` is the owner's private page for learning how work flows:
+  per product, the version, commit and time of main (staging's and starbridge.run's commits from
+  `/healthz`, the Android nightly), the newest release candidate and the newest final, and what
+  happens next, in Europe/Paris and UTC: whether tonight's Android nightly builds, how many commits
+  staging holds beyond the newest rc, and what promotion still waits on. Unlike the public releases
+  page it shows commits, since one person reads it. `ops.yml` builds it from the GitHub API, the
+  tags and `releases.json` every 30 minutes and after each deploy, release, nightly and promotion,
+  and uploads it to the Pages project `starbridge-ops`, only when its text changed (times round to
+  the hour). A GitHub Actions job rather than a VM, so no secret reaches the VMs. Cloudflare Access
+  (Zero Trust free plan, one-time PIN to the owner's email) guards the custom domain and the
+  `*.pages.dev` addresses, since a Pages project is public until then. The upload token is a secret of
+  the `ops-pages` environment, open to main only.
 - **Privacy and terms** (`/privacy`, `/terms`). Each claim follows the code: stored columns in
   `server/src/db.ts`, retention in `server/src/limits.ts`, logs and backups in `deploy/`. A change
   to what is stored changes the page, and the Play data-safety form. Contact is
