@@ -1,4 +1,8 @@
 {
+	# The admin API, which deploys load the Caddyfile through, on a socket only root can open
+	# (#1717), not on 127.0.0.1:2019, where any process on the host could reach it. The host sees
+	# it as /run/starbridge-caddy/admin.sock (compose.yaml).
+	admin unix//run/caddy-admin/admin.sock|0600
 	servers {
 		# The Hetzner firewall lets in TCP only, so don't advertise HTTP/3.
 		protocols h1 h2

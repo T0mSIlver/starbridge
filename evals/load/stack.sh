@@ -83,7 +83,7 @@ console.log(JSON.stringify({ publicKey: pub, privateKey: d }));' > "$LOAD_DIR/va
   # clients send for each user: Caddy trusts it from the compose network as prod trusts
   # CF-Connecting-IP from Cloudflare (#799), and without it the address is the connection's.
   sed -e 's/^starbridge\.run {/http:\/\/:18000 {/' -e 's/^stats\.starbridge\.run {/http:\/\/:18001 {/' \
-    -e '/^demo\.starbridge\.run {/,/^}/d' -e 's/^\tservers {/\tadmin 0.0.0.0:2019\n\tservers {/' \
+    -e '/^demo\.starbridge\.run {/,/^}/d' -e 's|^\tadmin .*|\tadmin 0.0.0.0:2019|' \
     -e 's/127\.0\.0\.1:8080/server:8080/; s/127\.0\.0\.1:3001/umami:3000/' \
     -e 's/127\.0\.0\.1:3010/web-a:3000/; s/127\.0\.0\.1:3011/web-b:3000/' \
     -e 's/trusted_proxies static .*/trusted_proxies static private_ranges/' \

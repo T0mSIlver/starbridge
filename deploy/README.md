@@ -57,7 +57,8 @@ No request fails during a deploy (`spec/releases.md`). The page runs as two copi
 3010) and `web-b` (3011): the deploy starts the idle one, waits for its health, then stops the
 other, and Caddy sends requests to the first healthy copy. The server restarts in place; Caddy
 holds requests for up to 30 s meanwhile. Each deploy loads the Caddyfile into the running Caddy
-through its admin API on `127.0.0.1:2019`. Caddy's container is recreated, which drops every
+through its admin API (`host/caddy-load.sh`), on a socket only root can open,
+`/run/starbridge-caddy/admin.sock`. Caddy's container is recreated, which drops every
 open connection, only when its definition in `compose.yaml` or `caddy.Dockerfile` changes: its
 image is tagged by a hash of that file and built only when no image has the tag.
 

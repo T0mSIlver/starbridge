@@ -19,7 +19,6 @@ dir=${DENYLIST_DIR:-/etc/starbridge/caddy}
 list=$dir/denylist
 log=${SWITCH_LOG:-/var/log/starbridge/switches.log}
 caddyfile=${CADDYFILE:-/opt/starbridge/deploy/Caddyfile}
-admin=${CADDY_ADMIN:-http://127.0.0.1:2019}
 compose="docker compose -p starbridge -f /opt/starbridge/deploy/compose.yaml"
 
 note() {
@@ -63,8 +62,7 @@ apply() {
   } > "$dir/denylist.caddy.tmp"
   mv "$dir/denylist.caddy.tmp" "$dir/denylist.caddy"
   [ "${1:-}" = "--no-load" ] && return 0
-  curl -fsS -X POST -H 'Content-Type: text/caddyfile' \
-    --data-binary "@$caddyfile" "$admin/load"
+  "$(dirname "$0")/caddy-load.sh" "$caddyfile"
 }
 
 # One change at a time, deploys' regeneration included: two unblocks from one copy of the list
