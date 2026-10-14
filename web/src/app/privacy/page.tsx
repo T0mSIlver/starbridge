@@ -11,8 +11,9 @@ export default function Privacy() {
   return (
     <LegalPage title="Privacy">
       <p>
-        This covers the hosted service at starbridge.run and the Starbridge Android app. A server
-        you host yourself keeps its data on your own machine. Last updated:{" "}
+        This covers the hosted service at starbridge.run and its clients: the web page, the
+        Starbridge apps for Android, iPhone and Mac, and the starbridge command. A server you host
+        yourself keeps its data on your own machine. Last updated:{" "}
         {longDate(privacyChanges[0].date)}.
       </p>
       <p>
@@ -27,6 +28,11 @@ export default function Privacy() {
           Your GitHub account&apos;s numeric id, which identifies you at sign-in. The server does
           not store your login, name or email. Sign-in asks GitHub for no permissions; the server
           uses GitHub&apos;s token once to read the id, then drops it.
+        </li>
+        <li>
+          If you sign in with Apple, Apple&apos;s user id for you in place of a GitHub id, and the
+          refresh token of your last Apple sign-in, which the server keeps only to revoke it when
+          you delete your account. Starbridge asks Apple for no name or email.
         </li>
         <li>
           The public keys of your devices and machines, and the names you give them, in a list they
@@ -103,7 +109,7 @@ export default function Privacy() {
       <ul>
         <li>
           accounts, devices and machines that used the server that day, with devices split into the
-          web page and the Android app;
+          web page and the Android, iPhone and Mac apps;
         </li>
         <li>accounts, devices and machines in total, and new accounts;</li>
         <li>
@@ -111,15 +117,17 @@ export default function Privacy() {
           a prompt or decision is over, quota snapshots, run updates and waiting states;
         </li>
         <li>
-          answers by client (web page or Android app), and how long decisions and permission prompts
-          waited for their answer, as the median and the 90th percentile;
+          answers by client (web page or Android, iPhone or Mac app), and how long decisions and
+          permission prompts waited for their answer, as the median and the 90th percentile;
         </li>
         <li>
           pushes by push service and outcome (sent, failed, gone, no route, dropped), and the same
           for pushes relayed for self-hosted servers;
         </li>
         <li>push targets by push service;</li>
-        <li>which releases of the Android app, the web page and the CLI were in use.</li>
+        <li>
+          which releases of the apps, the web page, the CLI and the Claude Code mod were in use.
+        </li>
       </ul>
 
       <h2 className="t-heading">Who else sees what</h2>
@@ -131,6 +139,12 @@ export default function Privacy() {
           <strong>Google Firebase Cloud Messaging</strong>, for the Android app: your phone&apos;s
           push token and each push, which holds the item&apos;s kind and ids and either its
           encrypted content or nothing more. Google cannot read the encrypted content.
+        </li>
+        <li>
+          <strong>Apple</strong>, for the iPhone app: your phone&apos;s push token and each push,
+          which holds the item&apos;s kind and ids and either its encrypted content or nothing more.
+          Apple cannot read the encrypted content. If you sign in with Apple, Apple also knows that
+          your Apple account uses Starbridge.
         </li>
         <li>
           <strong>Your browser&apos;s push service</strong> (Google for Chrome, Mozilla for Firefox,
@@ -164,24 +178,24 @@ export default function Privacy() {
       <h2 className="t-heading">Page analytics</h2>
       <p>
         The landing page, the docs, this page and the terms count visits with Umami, which runs on
-        the same server; the Android app does not. For each view Umami records the page, its title,
-        the referring site, your browser, operating system, device type, screen size and language,
-        and the country, region and city it looks up from your IP address. On the landing page,
-        clicking a sign-in button, a docs link or a way to get the app, or copying an install
-        command, records which one. The signed-in app counts no views. It records which error screen
-        it showed, if any, and when it is installed as an app. For an account made in the last two
-        days, the server also records, once each, these steps: the first sign-in and the app it came
-        from, the recovery key saved, the first machine paired, a second device added and the first
-        answer sent, with the app that sent it. It sends them with a hash of the account id, so
-        Umami can tell one account's steps apart from another's; nothing else about the account, its
-        machines or its content goes with them. A request that sends Do Not Track records no step.
-        Since the server knows when each account was created, the operator could match that first
-        sign-in to your account. Umami sets no cookie, stores nothing in your browser and does not
-        store your IP address: it tells visitors apart by a hash of the IP address, the browser and
-        a salt that changes every day, so a visit to the public pages cannot be traced back to you
-        or linked to your visits on other days. A browser that sends Do Not Track is not counted.
-        Umami keeps its records for 180 days at most, and the nightly backups keep them for up to 2
-        weeks more.
+        the same server; the Android, iPhone and Mac apps do not. For each view Umami records the
+        page, its title, the referring site, your browser, operating system, device type, screen
+        size and language, and the country, region and city it looks up from your IP address. On the
+        landing page, clicking a sign-in button, a docs link or a way to get the app, or copying an
+        install command, records which one. The signed-in app counts no views. It records which
+        error screen it showed, if any, and when it is installed as an app. For an account made in
+        the last two days, the server also records, once each, these steps: the first sign-in and
+        the app it came from, the recovery key saved, the first machine paired, a second device
+        added and the first answer sent, with the app that sent it. It sends them with a hash of the
+        account id, so Umami can tell one account's steps apart from another's; nothing else about
+        the account, its machines or its content goes with them. A request that sends Do Not Track
+        records no step. Since the server knows when each account was created, the operator could
+        match that first sign-in to your account. Umami sets no cookie, stores nothing in your
+        browser and does not store your IP address: it tells visitors apart by a hash of the IP
+        address, the browser and a salt that changes every day, so a visit to the public pages
+        cannot be traced back to you or linked to your visits on other days. A browser that sends Do
+        Not Track is not counted. Umami keeps its records for 180 days at most, and the nightly
+        backups keep them for up to 2 weeks more.
       </p>
 
       <h2 className="t-heading">Deletion</h2>
@@ -191,8 +205,8 @@ export default function Privacy() {
         stay in your account&apos;s signed device list, which nothing rewrites, and the items
         encrypted for it stay until the schedule above deletes them. To delete your whole account,
         use Delete account in Settings, on the web page or in the app: the server deletes the
-        account, its device list, devices, machines, items and push targets at once, and signs out
-        every device and machine. Backups age out within 2 weeks after.
+        account, its device list, devices, machines, items and push targets at once, revokes any
+        Apple sign-in, and signs out every device and machine. Backups age out within 2 weeks after.
       </p>
 
       <h2 className="t-heading">Your rights</h2>
