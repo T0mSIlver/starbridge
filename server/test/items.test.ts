@@ -391,11 +391,11 @@ test("blobs=open lists an answered decision without its images, which its id sti
 });
 
 test("a page carries 4 MB of blobs; questions past it list without theirs, which their id gives (#1735)", async () => {
-  // Three 480 KB blobs a question: two questions' fit.
-  const blob = "A".repeat(480_000);
+  // Four 512 KB blobs a question, the most it may carry: one question's fit, and every box.
+  const blob = "A".repeat(524_000);
   const ids: string[] = [];
   for (let i = 0; i < 5; i++) {
-    const d = { ...decision([phone]), blobs: [blob, blob, blob] };
+    const d = { ...decision([phone]), blobs: [blob, blob, blob, blob] };
     expect((await post(devbox, d)).status).toBe(201);
     ids.push(d.id);
   }
@@ -405,10 +405,10 @@ test("a page carries 4 MB of blobs; questions past it list without theirs, which
       x.item.id,
       x.item.blobs?.length ?? 0,
     ]),
-  ).toEqual(ids.map((id, i) => [id, i < 2 ? 3 : 0]));
+  ).toEqual(ids.map((id, i) => [id, i < 1 ? 4 : 0]));
   expect(r.json.more).toBe(false);
   const third = await s.call("GET", `/v1/items/${ids[2]}`, { token: phone.token });
-  expect(third.json.item.blobs).toHaveLength(3);
+  expect(third.json.item.blobs).toHaveLength(4);
 });
 
 test("boxes past 4 MB end a page, which says more follows (#1735)", async () => {

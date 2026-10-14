@@ -151,18 +151,21 @@ function list(
       JSON.stringify(kinds),
       ...(openOnly ? [JSON.stringify(ANSWERABLE), JSON.stringify(cutoffs)] : []),
     ) as { seq: number; box: number; blobs: number }[];
+  // The boxes first, so blobs never push a box off the page; then the blobs that fit what is left.
   let bytes = 0;
-  const seqs: number[] = [];
-  const withBlobs: number[] = [];
+  const kept: typeof sizes = [];
   for (const r of sizes.slice(0, PAGE)) {
-    if (seqs.length > 0 && bytes + r.box > PAGE_BYTES) break;
+    if (kept.length > 0 && bytes + r.box > PAGE_BYTES) break;
     bytes += r.box;
-    seqs.push(r.seq);
+    kept.push(r);
+  }
+  const seqs = kept.map((r) => r.seq);
+  const withBlobs: number[] = [];
+  for (const r of kept)
     if (r.blobs > 0 && bytes + r.blobs <= Math.min(PAGE_BYTES, blobRoom)) {
       bytes += r.blobs;
       withBlobs.push(r.seq);
     }
-  }
   const rows = db
     .query(
       `${SELECT.replace("i.blobs", "CASE WHEN i.seq IN (SELECT value FROM json_each(?)) THEN i.blobs END AS blobs")}
