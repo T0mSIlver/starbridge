@@ -14,11 +14,11 @@ case "$1 $2" in
   "marketplace list")
     # $s/market holds the source added: a folder, else (empty) the GitHub repository.
     if [ ! -f "$s/market" ]; then echo '[]'
-    elif [ -s "$s/market" ]; then echo "[{\"name\":\"starbridge\",\"source\":\"directory\",\"path\":\"$(cat "$s/market")\"}]"
+    # A Windows path's backslashes, escaped for JSON.
+    elif [ -s "$s/market" ]; then printf '[{"name":"starbridge","source":"directory","path":"%s"}]\n' "$(sed 's/\\/\\\\/g' "$s/market")"
     else echo "[{\"name\":\"starbridge\",\"source\":\"github\",\"repo\":\"${FAKE_MARKET_REPO:-T0mSIlver/starbridge}\"}]"; fi ;;
   "marketplace add")
     [ -n "$FAKE_FAIL_ADD" ] && { echo "git clone failed" >&2; exit 1; }
-    [ -f "$3/.claude-plugin/marketplace.json" ] || { echo "no marketplace.json in $3" >&2; exit 1; }
     printf '%s' "$3" >"$s/market"
     settings="$HOME/.claude/settings.json"
     mkdir -p "$HOME/.claude"
