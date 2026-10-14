@@ -20,8 +20,9 @@ import { SIGNUPS_CLOSED, SIGNUPS_PAUSED, signUpsPaused } from "../signups";
 
 const STATE_COOKIE = "sb_oauth";
 /**
- * The challenge of the app sign-in this browser started (#1721): its return is bound to this
- * browser only when the cookie comes back with it.
+ * A random token the browser that started an app sign-in gets, which the server keeps with the
+ * challenge (#1721): its return is bound to this browser only when the cookie comes back with it.
+ * Not the challenge itself, which anyone who read it could send as a cookie.
  */
 const APP_COOKIE = "sb_app";
 /** The page's `signin` when this server has no GitHub sign-in. */
@@ -39,8 +40,9 @@ const s256 = (verifier: string) => createHash("sha256").update(verifier).digest(
 function startApp(c: Context<Env>, challenge: string): void {
   // Counted, as a flood of starts would fill the starts kept and refuse the next ones a cookie.
   rateLimit(c, `app-start:${ipKey(c)}`, c.var.config.limits.githubCallbacks);
-  if (!c.var.appSignIns.start(challenge)) return;
-  setCookie(c, APP_COOKIE, challenge, {
+  const token = randomToken("");
+  if (!c.var.appSignIns.start(challenge, token)) return;
+  setCookie(c, APP_COOKIE, token, {
     httpOnly: true,
     secure: c.var.config.secureCookies,
     sameSite: "Lax",
@@ -54,7 +56,8 @@ function startApp(c: Context<Env>, challenge: string): void {
  * whether this browser started that sign-in, for the trade to check.
  */
 function passApp(c: Context<Env>, code: string, state: string): void {
-  const bound = safeEqual(getCookie(c, APP_COOKIE) ?? "", state);
+  const token = c.var.appSignIns.startToken(state);
+  const bound = token !== undefined && safeEqual(getCookie(c, APP_COOKIE) ?? "", token);
   if (!c.var.appSignIns.passed(code, state, bound))
     fail(400, "bad-state", "sign-in came from elsewhere; start again in the app");
 }

@@ -182,12 +182,16 @@ test("the Mac app's code must come back to the browser that started its sign-in 
   const { verifier, challenge } = pkce();
   const start = await s.app.request(`/v1/auth/github?app=1&challenge=${challenge}`);
   const cookie = (start.headers.get("set-cookie") ?? "").split(";")[0] ?? "";
-  expect(cookie).toBe(`sb_app=${challenge}`);
+  expect(cookie).toMatch(/^sb_app=.{20,}$/);
+  expect(cookie).not.toContain(challenge);
   // Someone who read the challenge starts a sign-in of their own with it: no cookie.
   const again = await s.app.request(`/v1/auth/github?app=1&challenge=${challenge}`);
   expect(again.headers.get("set-cookie") ?? "").not.toContain("sb_app");
-  // Their code comes back to their browser, without the owner's cookie.
-  await s.app.request(`/v1/auth/github/callback/app?code=code-7-${challenge}&state=${challenge}`);
+  // Their code comes back to their browser, without the owner's cookie, or with the challenge
+  // sent as one.
+  await s.app.request(`/v1/auth/github/callback/app?code=code-7-${challenge}&state=${challenge}`, {
+    headers: { cookie: `sb_app=${challenge}` },
+  });
   const theirs = await s.call("POST", "/v1/auth/app/session", {
     body: { code: `code-7-${challenge}`, verifier },
     headers: desktop,

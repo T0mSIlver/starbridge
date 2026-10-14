@@ -15,8 +15,11 @@ export class AppSignIns {
    * whether the browser it came back to started that sign-in (#1721).
    */
   private challengeByCode = new Map<string, { challenge: string; bound: boolean; at: number }>();
-  /** Challenges an app sign-in started with, which start once (#1721). */
-  private started = new Map<string, { at: number }>();
+  /**
+   * Challenges an app sign-in started with, which start once (#1721), each with the random token
+   * its browser got as a cookie.
+   */
+  private started = new Map<string, { token: string; at: number }>();
 
   /**
    * Whether this challenge starts an app sign-in for the first time in 10 minutes: only that
@@ -24,13 +27,19 @@ export class AppSignIns {
    * challenge from its address cannot start one of their own with it. False too when the map is
    * full, rather than forget a live start.
    */
-  start(challenge: string, now = Date.now()): boolean {
+  start(challenge: string, token: string, now = Date.now()): boolean {
     const s = this.started.get(challenge);
     if (s !== undefined && now - s.at < APP_SIGN_IN_MS) return false;
     this.started.delete(challenge);
     if (this.started.size >= MAX) return false;
-    this.started.set(challenge, { at: now });
+    this.started.set(challenge, { token, at: now });
     return true;
+  }
+
+  /** The token the browser that started this challenge's sign-in got, while it is fresh. */
+  startToken(challenge: string, now = Date.now()): string | undefined {
+    const s = this.started.get(challenge);
+    return s !== undefined && now - s.at < APP_SIGN_IN_MS ? s.token : undefined;
   }
 
   /**

@@ -20,7 +20,7 @@ a browser; the app adds a menu bar light and notifications, so a web release nee
   on `starbridge://auth`, and the app trades it with its verifier for the session, which becomes
   the page's session cookie. The challenge shows in the browser's address, so the code must also have come
   back to the browser that started the sign-in (#1721): the first start of a challenge gives
-  that browser a cookie, the server notes whether the callback brought it, and refuses the Mac
+  that browser a cookie holding a random token the server keeps with it, the server notes whether the callback brought it, and refuses the Mac
   app's trade otherwise. Someone who read the challenge and signed in with their own GitHub
   account cannot sign the app in to theirs. Owner-token sign-in stays in the page.
 - **Signed out**, the app opens on sign-in, never on the landing page: the app sets an
