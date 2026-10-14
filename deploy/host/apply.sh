@@ -75,7 +75,7 @@ healthy() {
     sleep 1
   done
   echo "$2 not healthy after ${3:-30} s" >&2
-  $compose logs --tail 50 "$2" >&2
+  host/keep-logs.sh "$2" $compose logs --tail 50 "$2"
   return 1
 }
 
