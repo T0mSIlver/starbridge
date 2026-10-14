@@ -51,11 +51,16 @@ struct DecisionDetail: View {
                             }
                         }
                         Answering(store: store, decision: d, amber: waiting, options: !picks) { close() }
-                        SnoozeControls(store: store, id: id, until: until) { close() }
+                        // Done for a page's answer (#539) and putting it off (#571), on the session's line (#970).
+                        let page = d.body.answerIn != nil && d.body.done == true
+                        SnoozeControls(store: store, id: id, until: until, session: d.body.source, agent: d.body.agent, markDone: page ? {
+                            store.answer(id, choice: nil, text: nil)
+                            close()
+                        } : nil) { close() }
                     } else {
                         Text(HistoryText.how(d, store)).type(Tokens.Typography.body).foregroundStyle(Tokens.Colors.fg2.color).textSelection(.enabled)
+                        SessionLine(source: d.body.source, agent: d.body.agent)
                     }
-                    SessionLine(source: d.body.source, agent: d.body.agent)
                 }
                 .padding(Tokens.Spacing.s5)
             }
@@ -69,24 +74,35 @@ struct DecisionDetail: View {
     }
 }
 
-/** What History says of an answered question, shared by its row and its detail. */
+/**
+ * What History says of an answered question, shared by its row and its detail: the answer, then
+ * who closed it, as on the web and Android ("Hold · on Pixel", "Answered · at the keyboard").
+ */
 enum HistoryText {
     @MainActor static func how(_ d: SavedDecision, _ store: Store) -> String {
-        if let unsent = store.unsent[d.id] { return "You: \(unsent) · not sent yet" }
-        if let mine = d.answer { return "You: \(mine)" }
-        if let theirs = d.theirAnswer, let by = d.answeredBy { return "\(store.memberName(by)): \(theirs)" }
-        switch d.settled {
-        case "withdrawn": return d.reason.map { "Withdrawn · \($0)" } ?? "Withdrawn"
+        let unsent = store.unsent[d.id]
+        let withdrawn = d.settled == "withdrawn"
+        let answer = unsent ?? d.answer ?? d.theirAnswer ?? (withdrawn ? "Withdrawn" : d.body.answerIn.map(Store.doneText) ?? "Answered")
+        return "\(answer) · \(by(d, store, sending: unsent != nil))"
+    }
+
+    /**
+     * Who closed it: "not sent yet", "on this iPhone", "on Pixel", "at the keyboard" (the agent's
+     * own picker, #865), the agent's reason for a withdrawal (#1008), "by the agent" (withdrawn
+     * without one, or for another page), "on another device".
+     */
+    @MainActor private static func by(_ d: SavedDecision, _ store: Store, sending: Bool) -> String {
+        if sending { return "not sent yet" }
+        if d.answer != nil { return "on this iPhone" }
+        if let by = d.answeredBy { return "on \(store.memberName(by))" }
         // Only a question without a page was answered in the agent's own picker (#865, #1157).
-        case "elsewhere" where d.body.answerIn == nil: return "Answered at the keyboard"
-        default: break
-        }
-        if let page = d.body.answerIn { return Store.doneText(page) }
-        return "Answered"
+        if d.settled == "elsewhere", d.body.answerIn == nil { return "at the keyboard" }
+        if d.settled == "withdrawn", let reason = d.reason { return reason }
+        return d.settled != nil || d.body.answerIn != nil ? "by the agent" : "on another device"
     }
 }
 
-/** The ways to answer an open question: its page and Done, its options, and the reply field. */
+/** The ways to answer an open question: its page, its options, and the reply field. */
 private struct Answering: View {
     let store: Store
     let decision: SavedDecision
@@ -100,15 +116,14 @@ private struct Answering: View {
             if let page = body.answerIn, let url = URL(string: page.url) {
                 // Answered on its page, never here; Done says the owner did (#539).
                 Link(destination: url) {
-                    Text("Answer in \(page.title ?? url.host() ?? page.url)")
-                        .type(Tokens.Typography.action)
-                        .lineLimit(1)
-                        .frame(maxWidth: .infinity, minHeight: 48)
-                        .foregroundStyle(Tokens.Colors.bg.color)
-                        .background(Capsule().fill(Tokens.Colors.fg.color))
-                }
-                if body.done == true {
-                    OptionButton(label: "Done", strong: false, amber: amber, height: 48) { send(nil, nil) }
+                    HStack(spacing: Tokens.Spacing.s2) {
+                        Image(systemName: "arrow.up.right").accessibilityHidden(true)
+                        Text("Answer in \(page.place)").lineLimit(1)
+                    }
+                    .type(Tokens.Typography.action)
+                    .frame(maxWidth: .infinity, minHeight: 48)
+                    .foregroundStyle(Tokens.Colors.onAccent.color)
+                    .background(Capsule().fill(Tokens.Colors.accent.color))
                 }
             } else {
                 if options, !body.options.isEmpty {
@@ -116,7 +131,7 @@ private struct Answering: View {
                 }
                 // A question with options takes a typed reply only when it says so (#201).
                 if body.options.isEmpty || body.replies == true {
-                    ReplyField(store: store, id: decision.id, placeholder: body.options.isEmpty ? "Your answer" : "Reply") { send(nil, $0) }
+                    ReplyField(store: store, id: decision.id, placeholder: "Your answer") { send(nil, $0) }
                 }
             }
         }
@@ -131,21 +146,32 @@ private struct Answering: View {
 /**
  * Snooze, under the reply field (#571): it opens the times in place: 1 hour and This evening, the
  * days as chips, a time, and "Snooze until 15:00". A snoozed question offers Snooze again and Back now.
+ * In a question's detail the row is the session's line: Done and Snooze left, the session right (#970).
  */
 struct SnoozeControls: View {
     let store: Store
     let id: String
     let until: Date?
+    var session: Source?
+    var agent: String?
+    /** Done for a question answered on its page (#539). */
+    var markDone: (() -> Void)?
     let done: () -> Void
     @State private var open: Bool
     @State private var day: Date
     @State private var time: Date
 
     /** `open`: the times show at once, as over the inbox after a swipe (#692). */
-    init(store: Store, id: String, until: Date?, open: Bool = false, done: @escaping () -> Void) {
+    init(
+        store: Store, id: String, until: Date?, open: Bool = false,
+        session: Source? = nil, agent: String? = nil, markDone: (() -> Void)? = nil, done: @escaping () -> Void
+    ) {
         self.store = store
         self.id = id
         self.until = until
+        self.session = session
+        self.agent = agent
+        self.markDone = markDone
         self.done = done
         let now = Date()
         let today = Calendar.current.startOfDay(for: now)
@@ -158,12 +184,17 @@ struct SnoozeControls: View {
         let now = Date()
         VStack(alignment: .leading, spacing: Tokens.Spacing.s3) {
             HStack(spacing: Tokens.Spacing.s6) {
+                if let markDone { quiet("Done", markDone) }
                 quiet(until == nil ? "Snooze" : "Snooze again") {
                     withAnimation { open.toggle() }
                     day = Calendar.current.startOfDay(for: now)
                     time = SnoozeTimes.start(day, now)
                 }
                 if until != nil { quiet("Back now") { snooze(Date()) } }
+                if let session {
+                    Spacer(minLength: Tokens.Spacing.s2)
+                    SessionLink(source: session, agent: agent).type(Tokens.Typography.small)
+                }
             }
             if open {
                 ForEach(SnoozeTimes.presets(now), id: \.0) { name, at in
@@ -285,7 +316,8 @@ struct PromptDetail: View {
                         .textSelection(.enabled)
                         .padding(Tokens.Spacing.s4)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(RoundedRectangle(cornerRadius: Tokens.Radius.lg).fill(Tokens.Colors.surface2.color))
+                        .foregroundStyle(Tokens.Colors.onTerminal.color)
+                        .background(RoundedRectangle(cornerRadius: Tokens.Radius.lg).fill(Tokens.Colors.terminal.color))
                     Color.clear.frame(height: 1).background(
                         GeometryReader { g in
                             Color.clear.onChange(of: g.frame(in: .global).minY, initial: true) { _, y in

@@ -387,7 +387,7 @@ extension Store {
     }
 
     /** "Answered in" the page a question names, for a Done (#539). */
-    static func doneText(_ page: DecisionLink) -> String { "Answered in \(page.title ?? URL(string: page.url)?.host() ?? page.url)" }
+    static func doneText(_ page: DecisionLink) -> String { "Answered in \(page.place)" }
 
     /**
      * `d` answered with the other device's answer the asking machine's notice names, or nil when

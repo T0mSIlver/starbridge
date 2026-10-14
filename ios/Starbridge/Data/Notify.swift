@@ -85,7 +85,7 @@ enum Notify {
         let words = contextText(d.context).replacingOccurrences(of: "\n", with: " ")
         var actions: [NotificationAction] = []
         if let page = d.answerIn {
-            actions.append(NotificationAction(id: "page", title: "Answer in \(page.title ?? URL(string: page.url)?.host() ?? page.url)", foreground: true))
+            actions.append(NotificationAction(id: "page", title: "Answer in \(page.place)", foreground: true))
         } else {
             actions += d.ordered.prefix(3).map { NotificationAction(id: optionPrefix + $0, title: $0) }
             if d.options.isEmpty || d.replies == true {

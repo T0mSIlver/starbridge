@@ -21,8 +21,8 @@ final class HistoryTests: XCTestCase {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         addTeardownBlock { try? FileManager.default.removeItem(at: dir) }
         let store = Store(vault: MemoryVault(), disk: Disk(url: dir.appendingPathComponent("saved.json")), deviceName: "Test iPhone")
-        XCTAssertEqual(HistoryText.how(try settledElsewhere([:]), store), "Answered at the keyboard")
+        XCTAssertEqual(HistoryText.how(try settledElsewhere([:]), store), "Answered · at the keyboard")
         let paged = try settledElsewhere(["answerIn": ["url": "https://example.test/review", "title": "the review page"]])
-        XCTAssertEqual(HistoryText.how(paged, store), "Answered in the review page")
+        XCTAssertEqual(HistoryText.how(paged, store), "Answered in the review page · by the agent")
     }
 }

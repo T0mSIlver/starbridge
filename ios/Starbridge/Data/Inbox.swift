@@ -291,3 +291,13 @@ extension Decision {
 
 /** The same option, by code points, as the schema compares them. */
 func sameOption(_ a: String, _ b: String?) -> Bool { b.map { Array(a.unicodeScalars) == Array($0.unicodeScalars) } ?? false }
+
+extension DecisionLink {
+    /** Where a question with `answerIn` is answered: its title, "the artifact" for a Claude one, else its host, as on the web. */
+    var place: String {
+        if let title { return title }
+        guard let link = URL(string: url), let host = link.host() else { return url }
+        if host == "claude.ai", link.path().range(of: "/artifacts?/", options: .regularExpression) != nil { return "the artifact" }
+        return host
+    }
+}
