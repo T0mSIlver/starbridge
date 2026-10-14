@@ -51,7 +51,7 @@ run=$(get "commits/$rev/statuses?per_page=100" |
 get "actions/runs/$run" | jq -e '.path == ".github/workflows/deploy.yml" and .event == "workflow_run"
   and .head_branch == "main" and .head_repository.full_name == "T0mSIlver/starbridge"' >/dev/null ||
   { echo "the staging status of $rev names run $run, not main's deploy.yml; not deployed" >&2; exit 1; }
-# The step ends a second or two after the status is set: wait for it a little.
+# The step ran before the status was set, but the API can show it a few seconds late.
 passed=
 for _ in 1 2 3 4 5 6; do
   get "actions/runs/$run/jobs?filter=latest&per_page=100" | jq -e --arg step "Staging passed $rev" \
