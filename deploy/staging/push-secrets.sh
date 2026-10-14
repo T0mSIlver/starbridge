@@ -5,7 +5,7 @@
 set -eu
 host=${STAGING_HOST:-sb-staging}
 src=$HOME/.config/starbridge/secrets/staging
-all="github-oauth-client-id github-oauth-client-secret vapid-public-key vapid-private-key signup-github-ids"
+all="github-oauth-client-id github-oauth-client-secret vapid-public-key vapid-private-key signup-github-ids owner-token"
 files=${*:-$all}
 for f in $files; do
   case " $all " in *" $f "*) ;; *) echo "not a staging secret: $f" >&2; exit 1 ;; esac

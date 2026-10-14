@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { dialogAnswers, hookQuestions, questionnaires } from "../pi/questions.ts";
+import { dialogAnswers, questionnaires } from "../pi/questions.ts";
 
 /** A questionnaire as rpiv-ask-user-question 2.12.0's `rpiv:ask-user:prompt` carries it. */
 const DB = {
@@ -70,7 +70,24 @@ test("a device's answer closes the package's dialog as a keyboard submit does", 
   expect(JSON.parse(h.sent[0]?.stdin ?? "")).toEqual({
     session_id: "s1",
     cwd: "/work/shop",
-    questions: hookQuestions([DB, CHECKS]),
+    // An empty description is left out.
+    questions: [
+      {
+        question: DB.question,
+        header: "Cache",
+        options: [
+          { label: "Redis (Recommended)", description: "Already deployed" },
+          { label: "Postgres", description: "One less service" },
+        ],
+        multiple: false,
+      },
+      {
+        question: CHECKS.question,
+        header: "Checks",
+        options: [{ label: "Lint" }, { label: "Tests" }],
+        multiple: true,
+      },
+    ],
   });
   h.release();
   await done;

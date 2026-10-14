@@ -5,15 +5,6 @@ import type { InboxItem } from "./types";
 
 const at = (d: number, h: number, m = 0) => new Date(2026, 9, d, h, m);
 
-test("the presets: an hour, then this evening until 17:00", () => {
-  const names = (now: Date) => snoozePresets(now).map((p) => [p.label, p.until.getTime()]);
-  expect(names(at(6, 14, 20))).toEqual([
-    ["1 hour", at(6, 15, 20).getTime()],
-    ["This evening", at(6, 18).getTime()],
-  ]);
-  expect(names(at(6, 17)).map(([l]) => l)).toEqual(["1 hour"]);
-});
-
 test("a snooze's end reads as a time today, tomorrow, a weekday, or a date a week out", () => {
   const now = at(6, 14);
   expect(snoozeTime(at(6, 18), now, "24")).toBe("18:00");

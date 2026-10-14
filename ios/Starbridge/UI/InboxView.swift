@@ -89,7 +89,7 @@ struct InboxView: View {
                             }
                         }
                         if !history.isEmpty {
-                            Collapsible(title: "History", count: "", symbol: "clock.arrow.circlepath", open: $historyOpen) {
+                            Collapsible(title: "History", count: HistoryHead.today(history), symbol: "clock.arrow.circlepath", open: $historyOpen) {
                                 ForEach(history.prefix(100), id: \.id) { d in HistoryRow(decision: d, store: store) { opened = .decision(d.id) } }
                             }
                         }
@@ -360,6 +360,14 @@ private struct Collapsible<Content: View>: View {
     }
 }
 
+/** History's head: "3 answered today", as on the web and Android; nothing until one is. */
+enum HistoryHead {
+    static func today(_ history: [SavedDecision]) -> String {
+        let n = history.filter { $0.answeredAt.flatMap(Dates.parse).map(Calendar.current.isDateInToday) ?? false }.count
+        return n > 0 ? "\(n) answered today" : ""
+    }
+}
+
 /** What the Runs head says besides its title: how many, and the failed ones in red, then the lost (#835). */
 enum RunsHead {
     static func count(_ runs: [SavedRun]) -> String { "\(runs.count)" }
@@ -480,7 +488,8 @@ private struct PromptCard: View {
                     .lineLimit(prompt.fitsRow ? nil : 3)
                     .padding(Tokens.Spacing.s3)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(RoundedRectangle(cornerRadius: Tokens.Radius.md).fill(Tokens.Colors.surface.color))
+                    .foregroundStyle(Tokens.Colors.onTerminal.color)
+                    .background(RoundedRectangle(cornerRadius: Tokens.Radius.md).fill(Tokens.Colors.terminal.color))
                 HStack(spacing: Tokens.Spacing.s2) {
                     OptionButton(label: "Deny", strong: false, amber: true, height: 40) { Task { await store.answerPrompt(prompt.id, allow: false) } }
                     OptionButton(label: "Allow", strong: true, amber: true, height: 40) {
@@ -514,7 +523,8 @@ private struct RunCard: View {
                 ("Running, \(Times.elapsed(started, now))", Tokens.Colors.fg2.color)
             }
             Card(amber: false) {
-                MetaRow(source: run.body.source, time: Times.since(started, now))
+                // A lost run's last news may predate most of its life, so it shows no time (#249).
+                MetaRow(source: run.body.source, time: run.lost ? "" : Times.since(started, now))
                 HStack(alignment: .top, spacing: Tokens.Spacing.s2) {
                     Image(systemName: "terminal").foregroundStyle(Tokens.Colors.fg2.color).accessibilityHidden(true)
                     Text(run.body.title).type(Tokens.Typography.subtitle).fontWeight(.regular)
@@ -524,6 +534,9 @@ private struct RunCard: View {
                     ProgressView(value: Double(p.done), total: Double(p.total))
                         .tint(Tokens.Colors.fg.color)
                         .accessibilityValue(p.unit == "percent" ? "\(p.done) percent" : "\(p.done) of \(p.total)")
+                } else if run.running {
+                    // No progress yet: an indeterminate bar, as on the web and Android.
+                    ProgressView().progressViewStyle(.linear).tint(Tokens.Colors.fg.color)
                 }
                 HStack {
                     Text(state.0).type(Tokens.Typography.small).foregroundStyle(state.1)

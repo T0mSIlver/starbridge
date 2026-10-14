@@ -11,9 +11,7 @@ says where.
 
 When Claude Code opens its `AskUserQuestion` picker, a `PermissionRequest` hook
 posts the question to your devices too: each question shows at the keyboard and
-on your devices at once, and the first answer wins. The `PreToolUse`
-hook on `AskUserQuestion` is kept for CLIs before that, which send the agent
-to `starbridge ask` instead.
+on your devices at once, and the first answer wins.
 
 It also sends this machine's permission prompts to your devices, once you turn
 that on with `starbridge config permissions on` (off by default): `PermissionRequest` runs

@@ -231,10 +231,9 @@ line, the safe side: at worst a prompt repeats an answer the agent already read.
   `PostToolUse` on `AskUserQuestion` settles the cards; Esc sends SIGTERM, as does Claude Code's
   hook timeout, so the hook has its own entry with a day's timeout and withdraws its cards 10
   minutes before it, when no answer could reach the picker any more. The generic
-  `PermissionRequest` entry excludes `AskUserQuestion` by its matcher. The `PreToolUse` entry
-  stays one release and the new CLI's `hook ask-user` prints nothing, so a newer plugin over an
-  older CLI still redirects, and a newer CLI under an older plugin races through the generic
-  entry, withdrawing its cards after 570 s.
+  `PermissionRequest` entry excludes `AskUserQuestion` by its matcher. The plugin dropped its `PreToolUse` entry
+  once the server refused CLIs before 0.1.1 (#1625); the CLI's `hook ask-user` still prints
+  nothing for plugins before that.
 - opencode (#345): each `question` call becomes one Starbridge question per question, already
   waiting, and the answers go back into the call through `POST /question/{id}/reply`. The first
   answer, on a device or at the keyboard, wins; the other side is settled `elsewhere`. A question

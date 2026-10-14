@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import { LegalPage } from "@/components/Legal";
+import { longDate } from "@/lib/legalChanges";
+import { termsChanges } from "./changes";
 
 export const metadata: Metadata = { title: "Terms" };
 
@@ -8,7 +10,7 @@ export default function Terms() {
     <LegalPage title="Terms">
       <p>
         These terms cover the hosted service at starbridge.run and the Starbridge Android app. Last
-        updated: 7 October 2026.
+        updated: {longDate(termsChanges[0].date)}.
       </p>
       <p>
         Operator: Tom Vaucourt, an individual in France, running Starbridge as a non-professional.
@@ -64,6 +66,13 @@ export default function Terms() {
 
       <h2 className="t-heading">Changes</h2>
       <p>Changes to these terms are posted here with a new date.</p>
+      <ul>
+        {termsChanges.map((c) => (
+          <li key={`${c.date}-${c.text}`}>
+            {longDate(c.date)}: {c.text}
+          </li>
+        ))}
+      </ul>
     </LegalPage>
   );
 }

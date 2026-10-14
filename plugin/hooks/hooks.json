@@ -87,18 +87,6 @@
           }
         ]
       }
-    ],
-    "PreToolUse": [
-      {
-        "matcher": "AskUserQuestion",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/hooks/cli.sh\" hook ask-user",
-            "timeout": 10
-          }
-        ]
-      }
     ]
   }
 }

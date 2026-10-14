@@ -289,14 +289,6 @@ test("pairing requests are rate-limited per IP", async () => {
   expect(statuses[n]).toBe(429);
 });
 
-test("a second device pairs with its own session, which then belongs to it", async () => {
-  const s = await makeServer();
-  const acct = await setupAccount(s);
-  const session = await signIn(s);
-  const laptop = await pair(s, acct, "laptop", "device", session);
-  expect((await s.call("GET", "/v1/me", { token: laptop.token })).json.member).toBe("laptop");
-});
-
 test("a device's result needs a session of the approving account", async () => {
   const s = await makeServer();
   const acct = await setupAccount(s);

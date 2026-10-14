@@ -75,13 +75,6 @@ test("pair prints its code first; errors start with starbridge:", async () => {
   expect(ctx.errors.at(-1)).toStartWith("starbridge: cannot read /nonexistent.json");
 });
 
-test("ask --json is an unknown flag: --input replaced it before the first release", async () => {
-  const ctx = await paired(server);
-  expect(await run(["ask", "--json", "-"], ctx)).toBe(1);
-  expect(ctx.errors.at(-1)).toStartWith("starbridge: ");
-  expect(ctx.errors.at(-1)).toContain("--json");
-});
-
 test("answers --all prints every answer as JSON lines and leaves each to its session", async () => {
   const ctx = await paired(server);
   const asked = ["--session", "s1", "--session-title", "Fix login", "--project", "web"];

@@ -4,7 +4,9 @@
 # its own GitHub OAuth app ("Starbridge staging") and VAPID pair, and no FCM or APNs key: phones
 # get its pushes through starbridge.run's relay, as from any self-hosted server (#1540), and
 # browsers get its own Web Push. It is no relay itself, so nobody reaches prod's relay through it.
-# Only the GitHub users in signup-github-ids can make an account.
+# Only the GitHub users in signup-github-ids can make an account, and the holder of owner-token
+# (staging-app.yml's app check, #1621: a fresh owner account per run, deleted after it). Without
+# that file the server has no owner sign-in.
 set -eu
 s=/etc/starbridge-staging/secrets
 umask 077
@@ -20,5 +22,6 @@ tmp=$(mktemp /etc/starbridge-staging/server.env.XXXXXX)
   printf '%s\n' "VAPID_PUBLIC_KEY='$(tr -d '\n' < $s/vapid-public-key)'"
   printf '%s\n' "VAPID_PRIVATE_KEY='$(tr -d '\n' < $s/vapid-private-key)'"
   printf '%s\n' "VAPID_SUBJECT='https://staging.starbridge.run'"
+  [ ! -s $s/owner-token ] || printf '%s\n' "OWNER_TOKEN='$(tr -d ' \n' < $s/owner-token)'"
 } > "$tmp"
 mv "$tmp" /etc/starbridge-staging/server.env

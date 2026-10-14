@@ -27,9 +27,10 @@
   removes a file beside the database, which the server reads on each new account, so it takes
   effect at once and survives restarts and deploys.
 - A server can list who may sign up (#1524): with `SIGNUP_GITHUB_IDS` set, only those GitHub
-  users can make an account (no Apple or owner account is made beside it), so the staging server
-  takes no strangers; a value that is not a list of ids stops the server. Others get the paused
-  sign-ups' 403 `signups-paused`, which every client already shows as "no new accounts here",
+  users can make an account (no Apple account is made beside it), so the staging server takes no
+  strangers; `OWNER_TOKEN`, a secret its operator sets, still makes the owner account (#1621),
+  which staging's app check uses (`spec/releases.md`). A value that is not a list of ids stops the
+  server. Others get the paused sign-ups' 403 `signups-paused`, which every client already shows as "no new accounts here",
   so no client changed.
 - The page shows only the sign-in methods its server offers (#670): `GET /v1/auth/methods` lists
   them, and without GitHub the landing page's and sign-in page's buttons open the owner token

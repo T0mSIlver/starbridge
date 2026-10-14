@@ -10,10 +10,11 @@ import type { Env } from "./env";
 
 /**
  * The oldest release of each client the server serves; an older one gets 426 `client-too-old`.
- * Empty at launch. Raising one is how a compatibility branch marked `// until min cli >= 1.2`
- * gets deleted.
+ * Raising one is how a compatibility branch marked `// until min cli >= 1.2` gets deleted. CLI
+ * 0.1.1 (#1624): the CLIs before it printed `starbridge://pair` links, ran `hook ask-user` as
+ * the agent's redirect, and some signed `by` heads.
  */
-export const MINIMUM_RELEASES: Partial<Record<ClientName, string>> = {};
+export const MINIMUM_RELEASES: Partial<Record<ClientName, string>> = { cli: "0.1.1" };
 
 /** Reads `starbridge-client` into `c.var.client`, and refuses a release below its minimum. */
 export const clientVersion: MiddlewareHandler<Env> = async (c, next) => {

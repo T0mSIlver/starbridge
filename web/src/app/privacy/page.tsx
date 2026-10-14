@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import { LegalPage } from "@/components/Legal";
+import { longDate } from "@/lib/legalChanges";
+import { privacyChanges } from "./changes";
 
 export const metadata: Metadata = { title: "Privacy" };
 
@@ -10,7 +12,8 @@ export default function Privacy() {
     <LegalPage title="Privacy">
       <p>
         This covers the hosted service at starbridge.run and the Starbridge Android app. A server
-        you host yourself keeps its data on your own machine. Last updated: 13 October 2026.
+        you host yourself keeps its data on your own machine. Last updated:{" "}
+        {longDate(privacyChanges[0].date)}.
       </p>
       <p>
         Operator: Tom Vaucourt, an individual in France, running Starbridge as a non-professional.
@@ -142,8 +145,14 @@ export default function Privacy() {
           <strong>Hetzner</strong> hosts the server in Helsinki, Finland, and stores its backups.
         </li>
         <li>
-          <strong>Oracle</strong> stores an encrypted copy of the nightly backup in Frankfurt,
-          Germany. The key that decrypts it is not on Oracle&apos;s server or ours.
+          <strong>Oracle</strong> stores an encrypted copy of each nightly backup in Frankfurt,
+          Germany. The key that decrypts it is not on Oracle&apos;s server or ours. Oracle also gets
+          the database&apos;s table definitions, which hold no data, and runs our test server, which
+          holds made-up data and none of yours.
+        </li>
+        <li>
+          <strong>Cloudflare</strong> serves the status page at status.starbridge.run, and sees each
+          visit&apos;s IP address. The page runs no script and sets no cookie.
         </li>
       </ul>
       <p>
@@ -198,6 +207,13 @@ export default function Privacy() {
 
       <h2 className="t-heading">Changes</h2>
       <p>Changes to this page are posted here with a new date.</p>
+      <ul>
+        {privacyChanges.map((c) => (
+          <li key={`${c.date}-${c.text}`}>
+            {longDate(c.date)}: {c.text}
+          </li>
+        ))}
+      </ul>
     </LegalPage>
   );
 }

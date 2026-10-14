@@ -52,7 +52,7 @@ export function promptQuestions(data: unknown): RpivQuestion[] | undefined {
 }
 
 /** The questions as `hook question` reads them, in opencode's shape. */
-export function hookQuestions(qs: RpivQuestion[]) {
+function hookQuestions(qs: RpivQuestion[]) {
   return qs.map((q) => ({
     question: q.question,
     ...(q.header ? { header: q.header } : {}),
