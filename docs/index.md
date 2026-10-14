@@ -35,8 +35,8 @@ starbridge.run, or [host your own](../server/README.md).
      it in place.
    - macOS: the desktop app's DMG from
      [GitHub Releases](https://github.com/T0mSIlver/starbridge/releases/latest), `arm64` for
-     Apple silicon or `x64` for Intel. It updates itself; turn on Settings → Updates → Release candidates
-     to get each release candidate.
+     Apple silicon or `x64` for Intel. It updates itself; set Settings → Updates → Update channel to
+     Release candidates to get each release candidate.
    - iOS 16.4 and later: open [starbridge.run](https://starbridge.run) in Safari and add it to the
      Home Screen to get notifications. The native iPhone app is in TestFlight, for testers only.
    - Anywhere else: [starbridge.run](https://starbridge.run).

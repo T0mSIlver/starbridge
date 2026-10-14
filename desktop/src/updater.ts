@@ -1,6 +1,9 @@
 import { autoUpdater, type CancellationToken } from "electron-updater";
-import { feedTags, pickRelease } from "./releases";
+import { feedTags, feedUrl, pickRelease, ymlVersion } from "./releases";
 import { type UpdateSettings, type UpdateStatus, Updates } from "./updates";
+
+/** The file electron-updater reads from a release: the version and the zip. */
+const CHANNEL_FILE = process.platform === "darwin" ? "latest-mac.yml" : "latest-linux.yml";
 
 /** How often the app looks for a release; it also looks once at start. */
 const UPDATE_MS = 6 * 3_600_000;
@@ -11,11 +14,13 @@ const UPDATE_MS = 6 * 3_600_000;
  * shows: electron-updater is most of the app's code, and nothing at start needs it. macOS installs
  * an update only when it carries the same Developer ID as the running app, so an ad hoc build
  * downloads updates and never installs them: Squirrel's refusal comes after the download, and is
- * logged. `releases` is the repository's page,
- * https://github.com/T0mSIlver/starbridge but in the end-to-end test (test/smoke.ts).
+ * logged. `releases` is the repository's page, https://github.com/T0mSIlver/starbridge, and `tip`
+ * the one whose release `tip` holds the newest build of main (#1692),
+ * https://github.com/T0mSIlver/starbridge-tip, but in the end-to-end test (test/smoke.ts).
  */
 export function startUpdates(
   releases: string,
+  tip: string,
   settings: () => UpdateSettings,
   tell: (s: UpdateStatus) => void,
 ): Updates {
@@ -28,22 +33,29 @@ export function startUpdates(
   let token: CancellationToken | null = null;
   const updates = new Updates(
     {
-      async find(rcs) {
+      async find(channel) {
         // Not the API, whose 60 requests an hour are shared by every machine behind an address.
-        const [latest, feed] = await Promise.all([
+        const [latest, feed, build] = await Promise.all([
           fetch(`${releases}/releases/latest`, { redirect: "manual" }),
-          rcs ? fetch(`${releases}/releases.atom`) : null,
+          channel !== "stable" ? fetch(`${releases}/releases.atom`) : null,
+          channel === "tip" ? fetch(`${tip}/releases/download/tip/${CHANNEL_FILE}`) : null,
         ]);
         const final = /\/releases\/tag\/([^/?#]+)$/.exec(latest.headers.get("location") ?? "")?.[1];
         if (feed && !feed.ok) throw new Error(`GitHub's feed answered ${feed.status}`);
-        const tag = pickRelease(final ?? null, feed ? feedTags(await feed.text()) : [], rcs);
+        // No tip release yet is no tip build, not a failure.
+        if (build && !build.ok && build.status !== 404)
+          throw new Error(`The tip release answered ${build.status}`);
+        const tipVersion = build?.ok ? ymlVersion(await build.text()) : null;
+        const tag = pickRelease(
+          final ?? null,
+          feed ? feedTags(await feed.text()) : [],
+          channel,
+          tipVersion,
+        );
         if (!tag) return null;
-        // Each check points the updater at the tag it picked, so a download fetches the release
-        // the last check offered, even after an older one was downloaded (#1444).
-        autoUpdater.setFeedURL({
-          provider: "generic",
-          url: `${releases}/releases/download/${tag}/`,
-        });
+        // Each check points the updater at the release it picked, so a download fetches the
+        // release the last check offered, even after an older one was downloaded (#1444).
+        autoUpdater.setFeedURL({ provider: "generic", url: feedUrl(tag, releases, tip) });
         const result = await autoUpdater.checkForUpdates();
         if (!result?.isUpdateAvailable || !result.cancellationToken) return null;
         token = result.cancellationToken;

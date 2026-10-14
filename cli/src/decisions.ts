@@ -8,6 +8,7 @@ import {
   type DecisionLink,
   type Directory,
   noteHead as keepHead,
+  newDecisionId,
   open,
   openBox,
   ProtocolError,
@@ -238,7 +239,7 @@ export function buildDecision(input: AskInput, ctx: Ctx, machine: string, to: st
     );
   const decision = {
     v: 1 as const,
-    id: `d_${randomBytes(12).toString("base64url")}`,
+    id: newDecisionId(),
     to,
     // `--input` JSON can carry no Date: only the hooks set it.
     createdAt: input.askedAt instanceof Date ? input.askedAt.toISOString() : iso(ctx.now()),
@@ -391,72 +392,78 @@ export async function postDecision(ctx: Ctx, s: Session, input: AskInput): Promi
     typeof i === "string" ? loadPicture(i) : loadPicture(i.path, i.alt),
   );
   const to = devices(ctx, dir);
-  const base = {
-    ...buildDecision(
-      input,
-      ctx,
-      s.machine.name,
-      to.map((d) => d.id),
-    ),
-    dir: signedHead(dir),
-  };
-  const { decision, item } = sealWithPictures(
-    base,
-    pictures,
-    { id: s.machine.id, signKey: s.keys.sign.privateKey },
-    to,
-  );
-  // A wait for this decision starts at the cursor known now, so it never misses its answer.
-  const cursor = ctx.store.state().cursor;
-  // Asked already waiting, its waiting state pushes instead, so the notification says so.
-  const record = () =>
-    ctx.store.updateState((st) => {
-      st.asked[decision.id] = {
-        question: decision.question,
-        options: decision.options,
-        askedAt: decision.createdAt,
-        to: decision.to,
-        body: decision,
-        ...(cursor !== undefined ? { cursor } : {}),
-        ...(decision.source.session && !input.held ? { session: decision.source.session } : {}),
-        ...(decision.source.sessionTitle ? { sessionTitle: decision.source.sessionTitle } : {}),
-        project: decision.source.project,
-        ...(decision.answerIn ? { answerIn: true } : {}),
-        ...(decision.done ? { done: true } : {}),
-        ...(input.codex && decision.source.session ? { codex: input.codex } : {}),
-        ...(input.antigravity && decision.source.session ? { antigravity: input.antigravity } : {}),
-        ...(input.extensionAnswers && decision.source.session ? { extensionAnswers: true } : {}),
-        ...(input.held ? { held: true } : {}),
-        ...(input.picker ? { picker: input.picker } : {}),
-        ...(input.subagent && decision.source.session && !input.held
-          ? { subagent: input.subagent }
-          : {}),
-      };
-    });
-  try {
-    await s.api.postItem(input.waiting ? { ...item, quiet: true } : item, signal);
-  } catch (e) {
-    // Refused: the server stored nothing. Otherwise it may have stored the decision before the
-    // reply was lost (#1289): withdrawn, or its card stays open on the devices and its answer
-    // finds no decision here. A server that never got it refuses this, which changes nothing.
-    if (!(e instanceof ApiError) || e.status >= 500) {
-      record();
-      await settleOne(
-        { ...ctx, signal: undefined },
-        s,
-        dir,
-        decision.id,
-        "withdrawn",
-        false,
-        undefined,
-        AbortSignal.timeout(WITHDRAW_MS),
-      ).catch(() => {});
+  // A new id that an earlier decision of the account already holds is refused (409); mint again.
+  for (let tries = 1; ; tries++) {
+    const base = {
+      ...buildDecision(
+        input,
+        ctx,
+        s.machine.name,
+        to.map((d) => d.id),
+      ),
+      dir: signedHead(dir),
+    };
+    const { decision, item } = sealWithPictures(
+      base,
+      pictures,
+      { id: s.machine.id, signKey: s.keys.sign.privateKey },
+      to,
+    );
+    // A wait for this decision starts at the cursor known now, so it never misses its answer.
+    const cursor = ctx.store.state().cursor;
+    // Asked already waiting, its waiting state pushes instead, so the notification says so.
+    const record = () =>
+      ctx.store.updateState((st) => {
+        st.asked[decision.id] = {
+          question: decision.question,
+          options: decision.options,
+          askedAt: decision.createdAt,
+          to: decision.to,
+          body: decision,
+          ...(cursor !== undefined ? { cursor } : {}),
+          ...(decision.source.session && !input.held ? { session: decision.source.session } : {}),
+          ...(decision.source.sessionTitle ? { sessionTitle: decision.source.sessionTitle } : {}),
+          project: decision.source.project,
+          ...(decision.answerIn ? { answerIn: true } : {}),
+          ...(decision.done ? { done: true } : {}),
+          ...(input.codex && decision.source.session ? { codex: input.codex } : {}),
+          ...(input.antigravity && decision.source.session
+            ? { antigravity: input.antigravity }
+            : {}),
+          ...(input.extensionAnswers && decision.source.session ? { extensionAnswers: true } : {}),
+          ...(input.held ? { held: true } : {}),
+          ...(input.picker ? { picker: input.picker } : {}),
+          ...(input.subagent && decision.source.session && !input.held
+            ? { subagent: input.subagent }
+            : {}),
+        };
+      });
+    try {
+      await s.api.postItem(input.waiting ? { ...item, quiet: true } : item, signal);
+    } catch (e) {
+      // Refused: the server stored nothing. Otherwise it may have stored the decision before the
+      // reply was lost (#1289): withdrawn, or its card stays open on the devices and its answer
+      // finds no decision here. A server that never got it refuses this, which changes nothing.
+      if (e instanceof ApiError && e.code === "duplicate-id" && tries < 4) continue;
+      if (!(e instanceof ApiError) || e.status >= 500) {
+        record();
+        await settleOne(
+          { ...ctx, signal: undefined },
+          s,
+          dir,
+          decision.id,
+          "withdrawn",
+          false,
+          undefined,
+          AbortSignal.timeout(WITHDRAW_MS),
+        ).catch(() => {});
+      }
+      throw cut(e);
     }
-    throw cut(e);
+    record();
+    if (input.waiting) await markWaiting(ctx, () => postWaiting(ctx, s, decision.id, "waiting"));
+    return decision;
   }
-  record();
-  if (input.waiting) await markWaiting(ctx, () => postWaiting(ctx, s, decision.id, "waiting"));
-  return decision;
 }
 
 /** Posts a decision and prints its id; with `wait`, then waits for its answer. */

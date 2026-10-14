@@ -2,7 +2,7 @@
 // the page, the page's count turns the menu bar's dot amber, a question notifies with its options, a button
 // and a typed reply answer through the page, the notification closes once the question leaves,
 // the window refuses another origin, a hidden window still notifies, and the Mac's lock and quitting
-// reach the page as away, and an update from a stand-in release feed downloads with its progress. Notifications and the tray are watched in the main
+// reach the page as away, and an update from a stand-in release feed downloads with its progress, then gives way to a tip build. Notifications and the tray are watched in the main
 // process, so no OS notification is needed (GitHub's macOS runners cannot grant the permission).
 //
 //   pnpm --filter @starbridge/desktop e2e     (on Linux: xvfb-run -a …)
@@ -94,6 +94,11 @@ const releases = createServer(async (req, res) => {
     return res.writeHead(302, { location: `${url(releases)}/releases/tag/v9.9.9` }).end();
   // The version under test may be an rc, which follows the feed too; it lists none newer.
   if (path === "/releases.atom") return res.end("<feed></feed>");
+  // The tip repository's one release (#1692), whose build is newer still.
+  if (/^\/tip\/releases\/download\/tip\/latest-(mac|linux)\.yml$/.test(path))
+    return res
+      .setHeader("content-type", "text/yaml")
+      .end(updateYml.replaceAll("9.9.9", "9.9.10-tip.1"));
   if (/^\/releases\/download\/v9\.9\.9\/latest-(mac|linux)\.yml$/.test(path))
     return res.setHeader("content-type", "text/yaml").end(updateYml);
   if (path === `/releases/download/v9.9.9/${updateFile}`) {
@@ -125,6 +130,7 @@ const app = await electron.launch({
     ...process.env,
     STARBRIDGE_SERVER: url(server),
     STARBRIDGE_RELEASES: url(releases),
+    STARBRIDGE_TIP: `${url(releases)}/tip`,
     APPIMAGE: appImage,
   },
 });
@@ -297,6 +303,29 @@ try {
     await page.evaluate(`window.starbridgeDesktop.updateSettings().autoDownload`),
     false,
   );
+  // Only a tip build can pick Tip, which then reads the tip repository, whose build replaces the
+  // downloaded release. This run's version is the package's, never a tip build's.
+  const settings = () => page.evaluate(`window.starbridgeDesktop.updateSettings()`);
+  await page.evaluate(`window.starbridgeDesktop.setUpdateSettings({ channel: "tip" })`);
+  await until(async () => (await settings()) && true, "the settings");
+  assert.equal(((await settings()) as { channel: string }).channel !== "tip", true);
+  assert.equal(((await settings()) as { tip: boolean }).tip, false);
+  // Electron's app.setVersion, which its types leave out, stands in for a tip build.
+  await app.evaluate(({ app }) =>
+    (app as unknown as { setVersion(v: string): void }).setVersion("9.9.9-tip.0"),
+  );
+  await page.evaluate(`window.starbridgeDesktop.setUpdateSettings({ channel: "tip" })`);
+  await until(
+    async () => (await statuses()).at(-1)?.version === "9.9.10-tip.1",
+    "the tip build found",
+  );
+  assert.deepEqual(await page.evaluate(`window.starbridgeDesktop.updateSettings()`), {
+    channel: "tip",
+    autoDownload: false,
+    releaseCandidates: true,
+    ahead: false,
+    tip: true,
+  });
 
   // The menu bar icon's menu holds what the closed window can't do (#1449); Settings… opens the
   // page's Settings, where the page reads Open at login over the bridge.
