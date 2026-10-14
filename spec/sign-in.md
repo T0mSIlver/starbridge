@@ -25,6 +25,9 @@
   - The iPhone signs in natively (AuthenticationServices), with a nonce Apple puts in the
     identity token and an authorization code the server trades once, so a token caught on its
     way is worthless (PROTOCOL.md, "Auth").
+  - The server fetches Apple's keys at most once a minute, and refuses a key id the last fetch
+    lacked until then, so tokens naming made-up keys cannot make it call Apple on every attempt
+    (#1739).
 - The owner can pause sign-ups (#784), for a launch-day flood or a box near its limits: a GitHub
   user with no account gets "not taking new accounts right now" on the page and in the app, while
   every existing account signs in as before. `bun server.js signups pause|resume` writes and
