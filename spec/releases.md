@@ -313,7 +313,9 @@
   `ANDROID_RUNNER`. Each Android push to main also builds on GitHub's runner, to save the Gradle
   cache that pull requests restore there (#1662). The PR pool holds no secrets, and no pull
   request job reaches the other two.
-  Each runner registers for one job, so every job starts clean. A fork's pull request runs its
+  Each runner registers for one job and starts it in emptied folders, but the box is not reset:
+  Docker gives any job root on its box, so a job can leave something for the next one on that box
+  (#1718). That is why the pools never share a box and the PR pool holds no secrets. A fork's pull request runs its
   own `ci.yml`, which could name any label, so a fork's run is never approved.
 - **Monitoring.** `uptime.yml` checks `/healthz`, `/healthz/backup` (fails when the last nightly
   backup is over 26 h old) and `/healthz/disk` (under 2 GB free), and opens one `outage` issue.

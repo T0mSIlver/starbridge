@@ -6,8 +6,11 @@ and Android builds on main and in releases run on their own runner, `ANDROID_RUN
 
 ## Pools and labels
 
-Each box is a Debian 13 LXC container with Docker. Its runners take one job each and start the
-next one from a clean slate.
+Each box is a Debian 13 LXC container with Docker. Its runners take one job each. Between jobs a
+runner deletes the last job's folders (below), not the box: Docker's daemon, images, volumes and
+build cache, the tool cache, and anything a job wrote elsewhere outlive it. Any job can reach root
+on its box through Docker, so a job can leave something for the next job on that box. That is
+why the pools never share a box, and why the `pr` pool holds no secrets.
 
 | Box (SSH host) | Runners | Labels besides `self-hosted, linux, x64, starbridge, docker` |
 |---|---|---|
@@ -19,8 +22,8 @@ next one from a clean slate.
   and nothing else.
 - `pr` runs pull requests from this repository's own branches, except Dependabot's. Forks'
   pull requests, Dependabot's and dispatched CI runs stay on GitHub's runners.
-- No pull request job reaches a `trusted` runner or `ANDROID_RUNNER`. Docker's daemon and cache
-  outlive a job, so the two pools never share a box.
+- No pull request job reaches a `trusted` runner or `ANDROID_RUNNER`, and the two pools never
+  share a box.
 
 A workflow picks a pool from a repository variable holding a JSON array of labels, and falls back
 to GitHub's runner when the variable is unset:
@@ -67,9 +70,10 @@ down, take the line out.
 - The boxes hold no GitHub credential. `feed.sh` runs every 15 s from a user timer on the machine
   where `gh` is logged in as the repository's owner. It makes a registration for every runner
   slot that has none, hands it over SSH, and deletes offline registrations no slot holds.
-- Before each job, `slot.sh` deletes everything the last one left except the tool cache
-  (`_work/_tool`: Node, Bun and pnpm's store), and gives the job its own home and temp
-  folder. It drops the tool cache too when the disk is 80% full.
+- Before each job, `slot.sh` deletes what the last one left in the runner's folders except the
+  tool cache (`_work/_tool`: Node, Bun and pnpm's store), and gives the job its own home and temp
+  folder. It drops the tool cache too when the disk is 80% full. Nothing outside those folders is
+  reset.
 - Every night `gh-runner-cleanup.timer` prunes Docker images, containers and build cache unused
   for three days, and all unused ones when the disk is 80% full.
 
