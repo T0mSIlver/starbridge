@@ -293,7 +293,10 @@
   run on its merge with the commit main then held (#878): a tree fixes every file, `ci.yml`
   included, so that run tested what main now holds. Each of the e2e's three parts uploads an
   artifact named after its part and tree when it passes (`e2e-passed-<part>-<tree>`, #1094), kept 7
-  days; when none is found or the lookup fails, it runs. A fork's runs do not count, since a fork's
+  days; when none is found or the lookup fails, it runs. Code in a pull request's jobs can upload any name, so an artifact
+  counts only when its CI run tested this commit or the merged pull request's head, that run's
+  job for the part passed, and the commit the artifact holds has the tree and is that head or
+  GitHub's merge of it (#1732). A fork's runs do not count, since a fork's
   pull request runs its own `ci.yml`. Tests point `TMPDIR` at one directory per run and remove it
   (`test-tmp.ts`, #313). A `windows-latest` job (#552) starts a built `.exe` and runs the whole CLI
   suite, which must pass (#884). A private repository skips it, since GitHub's Windows runners need
