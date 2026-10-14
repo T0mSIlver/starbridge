@@ -7,12 +7,20 @@ compose="docker compose -p starbridge -f compose.yaml"
 # none and writes REVISION before this runs.
 export REVISION=${REVISION:-$(cat /opt/starbridge/REVISION 2>/dev/null || echo unknown)}
 # The server and web images are deploy.yml's, tagged by this commit (#1518). A commit that has
-# none, from before them or never deployed from main, stops at their pull, before any container
-# is replaced.
+# none, from before them or never deployed from main, stops at their pull below, before any
+# container is replaced.
 case $REVISION in *[!0-9a-f]*) REVISION= ;; esac
 [ ${#REVISION} -eq 40 ] || { echo "apply.sh: REVISION is not a commit id" >&2; exit 1; }
-# Compose reads the tag from here, so every script on the box that runs it names this release.
-echo "REVISION=$REVISION" > .env
+# The server and web images by digest (host/images.sh): staging's, from starbridge-deploy, or
+# the tag's. Compose reads them from here, so every script on the box that runs it names this
+# release.
+images=$(host/images.sh)
+{
+  echo "REVISION=$REVISION"
+  printf '%s\n' "$images" | while read -r image digest; do
+    echo "$(echo "$image" | tr a-z A-Z)_IMAGE=ghcr.io/t0msilver/starbridge-$image:$REVISION@$digest"
+  done
+} > .env
 
 install -m 644 host/starbridge-backup.service host/starbridge-backup.timer host/starbridge-offsite.service \
   host/starbridge-umami-trim.service host/starbridge-umami-trim.timer \
@@ -29,11 +37,6 @@ host/umami-env.sh
 host/caddy-auth.sh
 # The denylist's snippet, which the Caddyfile imports (host/switch.sh).
 host/switch.sh --regenerate
-# Tagged by commit, they never change: one the box holds (a rollback's) needs no registry.
-for image in server web; do
-  docker image inspect "ghcr.io/t0msilver/starbridge-$image:$REVISION" >/dev/null 2>&1 ||
-    docker pull -q "ghcr.io/t0msilver/starbridge-$image:$REVISION" >/dev/null
-done
 # Caddy's image changes only when caddy.Dockerfile does: a new image recreates the container,
 # which drops every open connection. Its build is not reproducible (xcaddy fetches and compiles
 # afresh once the build cache is pruned), so it is tagged by a hash of the Dockerfile, which pins

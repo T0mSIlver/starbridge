@@ -11,7 +11,16 @@ etc=/etc/starbridge-staging
 case ${REVISION:-} in *[!0-9a-f]*) REVISION= ;; esac
 [ ${#REVISION} -eq 40 ] || { echo "staging/apply.sh: REVISION is not a commit id" >&2; exit 1; }
 export REVISION
-echo "REVISION=$REVISION" > .env
+# Pinned by digest as on prod (host/images.sh). deploy.yml reads the `image` lines and names the
+# digests in the run, and prod deploys those (#1715).
+images=$(host/images.sh)
+{
+  echo "REVISION=$REVISION"
+  printf '%s\n' "$images" | while read -r image digest; do
+    echo "$(echo "$image" | tr a-z A-Z)_IMAGE=ghcr.io/t0msilver/starbridge-$image:$REVISION@$digest"
+  done
+} > .env
+printf '%s\n' "$images" | sed 's/^/image /'
 # As prod's apply.sh does: the next deploy runs this commit's deploy command.
 install -m 755 staging/deploy-rev.sh /usr/local/sbin/starbridge-staging-deploy
 
@@ -28,11 +37,6 @@ chmod 644 $etc/Caddyfile
 # Its stats host stays shut: no password is pushed here.
 host/caddy-auth.sh $etc/caddy
 
-# Images are tagged by commit and never change: one already here needs no download.
-for image in server web; do
-  docker image inspect "ghcr.io/t0msilver/starbridge-$image:$REVISION" >/dev/null 2>&1 ||
-    docker pull -q "ghcr.io/t0msilver/starbridge-$image:$REVISION" >/dev/null
-done
 # As on prod: built only when no image has the tag of its Dockerfile's hash.
 caddy=starbridge-caddy:$(sha256sum caddy.Dockerfile | cut -c1-16)
 if ! docker image inspect "$caddy" >/dev/null 2>&1; then
