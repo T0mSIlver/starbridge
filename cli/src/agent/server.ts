@@ -99,6 +99,9 @@ export interface Hub {
 
 const SESSION_ID = /^[A-Za-z0-9_.:-]{1,200}$/;
 const MAX_BODY = 1 << 20;
+/** How long a session stays listed after it was last heard from, and how many are kept. */
+const SESSION_KEEP_MS = 24 * 60 * 60_000;
+const MAX_SESSIONS = 5_000;
 
 /** Waits `ms`, or less when `signal` aborts. */
 export function pause(ms: number, signal: AbortSignal): Promise<void> {
@@ -400,6 +403,7 @@ export class Agent implements Hub {
 
   private status(): Status {
     const m = this.ctx.store.machine();
+    this.evictSessions();
     const out: Status = {
       version: VERSION,
       api: { min: MIN_API, max: API },
@@ -421,9 +425,23 @@ export class Agent implements Hub {
     return id;
   }
 
+  /** Forgets sessions not heard from in SESSION_KEEP_MS (or dated in the future), and the oldest past MAX_SESSIONS. */
+  private evictSessions() {
+    const now = this.ctx.now().getTime();
+    for (const [id, s] of this.sessions) {
+      const age = now - Date.parse(s.lastSeenAt);
+      if (!(age >= 0 && age < SESSION_KEEP_MS)) this.sessions.delete(id);
+    }
+    for (const id of this.sessions.keys()) {
+      if (this.sessions.size <= MAX_SESSIONS) break;
+      this.sessions.delete(id);
+    }
+  }
+
   /** Records that session `id` is alive, with what its client said about it. */
   private touch(id: string, req: Request, hello?: Partial<SessionInfo>): SessionInfo {
     const now = iso(this.ctx.now());
+    this.evictSessions();
     const info: SessionInfo = {
       ...(this.sessions.get(id) ?? { id }),
       ...hello,

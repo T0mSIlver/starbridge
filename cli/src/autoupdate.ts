@@ -46,7 +46,8 @@ export function decide(o: {
 }): Decision {
   if (!o.latest || compareVersions(o.latest, o.current) <= 0) return { none: true };
   const tried = o.record.tried ? Date.parse(o.record.tried.at) : Number.NaN;
-  if (tried + RETRY_MS > o.now.getTime())
+  // A try dated in the future (a wrong clock, an edited file) is stale: it must not hold updates.
+  if (tried <= o.now.getTime() && tried + RETRY_MS > o.now.getTime())
     return { wait: "tried in the last day", until: new Date(tried + RETRY_MS) };
   const due = o.seenAt.getTime() + o.jitterMs;
   if (due > o.now.getTime()) return { wait: "waiting its turn", until: new Date(due) };

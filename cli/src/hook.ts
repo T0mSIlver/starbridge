@@ -11,7 +11,16 @@
  * Code's and opencode's: they race the picker (#848).
  */
 import { createHash } from "node:crypto";
-import { closeSync, mkdirSync, openSync, readdirSync, rmSync, statSync } from "node:fs";
+import {
+  closeSync,
+  mkdirSync,
+  openSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { join } from "node:path";
 import { type Answer, type Permission, ProtocolError } from "@starbridge/protocol";
 import type { SessionEvent } from "./agent/api";
@@ -709,6 +718,30 @@ export function claimStop(ctx: Ctx, hook: CursorHook): boolean {
   }
 }
 
+/** How many follow-ups that bring no answer one conversation gets before its stop hook lets go. */
+export const MAX_EMPTY_FOLLOWUPS = 3;
+
+/**
+ * Counts a follow-up the stop hook is about to print, in a file beside `claimStop`'s that the same
+ * day-old sweep removes. An answer resets the count; false when `empty` ones would pass the cap.
+ */
+export function countFollowup(ctx: Ctx, id: string, empty: boolean): boolean {
+  const dir = join(ctx.store.dir, "cursor-stops");
+  mkdirSync(dir, { recursive: true, mode: 0o700 });
+  const file = join(dir, `empty-${createHash("sha256").update(id).digest("hex").slice(0, 32)}`);
+  if (!empty) {
+    rmSync(file, { force: true });
+    return true;
+  }
+  let n = 0;
+  try {
+    n = Number(readFileSync(file, "utf8")) || 0;
+  } catch {}
+  if (n >= MAX_EMPTY_FOLLOWUPS) return false;
+  writeFileSync(file, String(n + 1));
+  return true;
+}
+
 /** The questions conversation `id` asked that wait for an answer it has not taken. */
 export function openQuestions(st: State, id: string): string[] {
   return Object.entries(st.asked)
@@ -746,6 +779,8 @@ export async function hookCursorSession(outer: Ctx, stdin: string): Promise<numb
     if (!claimStop(ctx, hook)) return 0;
     const held = await hold(ctx, id);
     if (!held) return 0;
+    // "No answer yet" restarts the turn and the hold: a conversation gets a few, not a loop.
+    if (!countFollowup(ctx, id, held.empty === true)) return 0;
     // Printed before it is confirmed: at worst a later stop hands the same answer again.
     ctx.out(JSON.stringify({ followup_message: held.message }));
     await held
@@ -827,7 +862,7 @@ async function cycle(ctx: Ctx, id: string, seconds: number): Promise<Taken | und
 async function hold(
   ctx: Ctx,
   id: string,
-): Promise<{ message: string; ack: () => Promise<unknown> } | undefined> {
+): Promise<{ message: string; ack: () => Promise<unknown>; empty?: true } | undefined> {
   const deadline = ctx.now().getTime() + CURSOR_HOLD_MS;
   const left = () => deadline - ctx.now().getTime();
   while (left() > 0) {
@@ -853,5 +888,5 @@ async function hold(
       (d) => `No answer yet to ${d} (${st.asked[d]?.question ?? ""}). ${deliveryLine(d, "wait")}`,
     )
     .join("\n\n");
-  return { message, ack: async () => {} };
+  return { message, ack: async () => {}, empty: true };
 }

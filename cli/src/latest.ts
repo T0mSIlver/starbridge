@@ -40,7 +40,9 @@ export async function checkLatest(
       if (!(e instanceof StateFileError)) throw e;
       ctx.store.setLatestAside(now);
     }
-    if (saved && now.getTime() - Date.parse(saved.checkedAt) < CHECK_EVERY_MS) return saved;
+    // A check dated in the future, by a wrong clock or a edited file, is stale, not fresh forever.
+    const age = saved ? now.getTime() - Date.parse(saved.checkedAt) : Number.NaN;
+    if (saved && age >= 0 && age < CHECK_EVERY_MS) return saved;
     const res = await fetch(ctx.env.STARBRIDGE_LATEST_URL ?? LATEST_URL, {
       headers: {
         accept: "application/vnd.github+json",

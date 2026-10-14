@@ -5,7 +5,15 @@
  * `title:"Fix the build"`.
  */
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { basename, join } from "node:path";
 import { ownCommand } from "../../mod/hooks/own";
 import { type SessionEvent, socketPath } from "./agent/api";
@@ -123,8 +131,18 @@ function markConversation(ctx: Ctx, id: string) {
   if (!/^[\w-]+$/.test(id)) return;
   const dir = join(ctx.store.dir, "antigravity");
   mkdirSync(dir, { recursive: true, mode: 0o700 });
+  // A day on, a conversation is asked for its hello once more, and the folder stays small.
+  const now = ctx.now().getTime();
+  for (const f of readdirSync(dir))
+    try {
+      const age = now - statSync(join(dir, f)).mtimeMs;
+      if (!(age >= 0 && age < MARKER_KEEP_MS)) rmSync(join(dir, f), { force: true });
+    } catch {}
   writeFileSync(join(dir, id), "");
 }
+
+/** How long a conversation's marker stays. */
+const MARKER_KEEP_MS = 24 * 60 * 60_000;
 
 /**
  * Whether conversation `id` still has to run `starbridge hello` for its prompts to go out: prompts

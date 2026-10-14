@@ -240,6 +240,14 @@
   running `.exe` but lets it be renamed, so `update` moves it aside to `starbridge.exe.old` and
   the next update removes that; `uninstall` deletes the binary from a detached cmd.exe two seconds
   after it exits (#552).
+- **Small bounds on local state** (#1763, internal audit 2026-10-14). A timestamp dated in the future
+  counts as stale for the update check and the last failed try. A run id belongs to the session
+  that started it, for a day after its last update. The agent forgets a session, and the
+  Antigravity hook a conversation's marker, a day after the last sign of it. Cursor's stop hook
+  prints at most 3 "No answer yet" follow-ups per conversation until an answer comes. Setup
+  replaces `~/.local/bin/codexbar` only when it links into Starbridge's tarball install or a
+  CodexBar app. The installers take `http://` only for a host that parses as this machine, never
+  `http://localhost:80@host`.
 - **Saying a release is out** (#1050). Before it, users learned of a new CLI only from the
   server's 426 once a release was forced. Homebrew and npm installs, and script installs with
   automatic updates off (below), get this nudge only. Once a day
