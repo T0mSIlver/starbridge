@@ -21,7 +21,11 @@ fi
 for f in $files; do
   case " $all " in *" $f "*) ;; *) echo "not a secret to push: $f" >&2; exit 1 ;; esac
 done
-staging=$(ssh -i "$key" "$host" 'umask 077; mktemp -d')
-trap 'ssh -i "$key" "$host" "rm -rf $staging"' EXIT
-(cd "$src" && scp -q -i "$key" $files "$host:$staging/")
-ssh -i "$key" "$host" "sudo install -m 600 -o root -g root $staging/* /etc/starbridge/secrets/"
+# One SSH connection carries the secrets as a tar stream; root unpacks it into a folder only root
+# can read, beside the secrets, and removes it on any exit (#1734). A dropped connection leaves
+# nothing behind, where a temp folder in /tmp, owned by the login user, once stayed.
+remote='set -eu; umask 077; install -d -m 700 /etc/starbridge/secrets; d=$(mktemp -d /etc/starbridge/secrets/.push.XXXXXX)
+trap "rm -rf \"\$d\"" EXIT; trap "exit 1" HUP INT TERM
+tar -xf - -C "$d" --no-same-owner
+for f in "$d"/*; do install -m 600 -o root -g root "$f" /etc/starbridge/secrets/; done'
+tar -C "$src" -cf - $files | ssh -i "$key" "$host" "sudo sh -c '$remote'"
