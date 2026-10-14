@@ -50,9 +50,9 @@
   an rc or with Get Release Candidates on, the CLI's rcs to npm's `next` and finals to `latest` and
   Homebrew, the plugin marketplace on finals. The iPhone app follows Android once Apple's export
   compliance code arrives: rcs to TestFlight, finals to the App Store.
-- **Three rings: main, rc, final** (#1540). The owner's devices run the tip ring, every
-  change on main (Android's internal track per Android merge and rc tag, #1691; a Mac tip channel,
-  in progress, #1692; the dev box through staging); testers and
+- **Three rings: tip, rc, final** (#1540). The owner's devices run the tip ring, every
+  change on main (Android's internal track per Android merge and rc tag, #1691; the Mac's Tip
+  channel, #1692; the dev box through staging); testers and
   starbridge.run run rcs, everyone else finals, and a change never skips a ring: v0.1.3 broke every
   tester's app before the owner had run it. The dev box's CLI, agent, plugin and mod follow the
   server its machine is paired with, staging. The Android app's build of main goes to Play's
@@ -75,8 +75,25 @@
   `starbridge-client` header leaves that part out, so servers read the version as the rc's. A Google
   account in internal testing is no longer eligible for closed testing, so the owner joins it with a
   second account and stays one of the 12 closed testers. The iPhone app follows to TestFlight's
-  internal testers once Apple's export compliance code arrives (`IOS_MAIN_TESTFLIGHT`); the Mac app
-  stays on rcs, since a notarized build per merge would cost a macOS runner for one user.
+  internal testers once Apple's export compliance code arrives (`IOS_MAIN_TESTFLIGHT`).
+- **The Mac app's tip** (#1692). The owner's Mac follows main as his phone does, by Android's rules:
+  every push to main that touches what the app is built from (desktop.yml's paths: `desktop/`, the
+  lockfile, the workflow; the app embeds no other package) builds it, one at a time, a running
+  build never cancelled and the newest waiting run winning, and a commit the tip already contains
+  takes no build. The build is signed and notarized like a release's, and its files replace those
+  of the one release `tip` of the public repository `T0mSIlver/starbridge-tip`, as Ghostty's tip
+  does; the previous build's stay, so an app that read the last `latest-mac.yml` can still
+  download its zip. Never a release in this repository: Obtainium users with prereleases on would
+  get every merge. Its version is `<version under way>-tip.<n>`, the version under way as for
+  Android's builds of main and `n` the number of commits on main that changed the app's paths,
+  which grows with every build and reads no state: semver puts `0.1.7-tip.80` above `0.1.7-rc.3`
+  ("tip" sorts after "rc") and below `0.1.7`, so the final passes it. A separate Linux job publishes,
+  holding a fine-grained token that writes that repository only (`TIP_RELEASE_TOKEN`, in
+  `desktop-release`), so the token never shares a job with the build's third-party packages; one
+  publish runs at a time, and one whose commit the tip already contains is dropped, so the tip never
+  goes back. CI reads what the tip holds (`tip.json`) through the API: the download URL kept
+  answering 404 from a cache for minutes after the file existed. The cost is a macOS runner for about 15 minutes per desktop merge, which #1684 had cut
+  while no app updated from main.
 - **A record of what shipped** (#1618). The last job of `release.yml` writes the version, the
   release's date and which channels its jobs reached (GitHub, npm, Homebrew, the desktop app, Play's
   track and versionCode, TestFlight's build) to `releases.json` on the `releases-data` branch, only
@@ -158,9 +175,7 @@
   lookup keeps an app installed from an rc on rcs and never offers it a final, and GitHub's API
   allows 60 requests an hour per address. macOS
   installs an update only with the running app's Developer ID, so ad hoc builds never update.
-  Since no app updates from main, `desktop.yml` signs and notarizes on a push to main only when
-  what signing reads changes, to catch a break before the rc tag, and otherwise only by hand
-  (#1684): every desktop push cost 8 minutes of macOS for a DMG nobody installed.
+  The tip build (above) also catches a signing or notarization break before the rc tag.
 - **One version everywhere** (#471). `bun cli/scripts/version.ts <version>` stamps the version
   into `cli/package.json`, `web/package.json`, `desktop/package.json`, both `plugin.json`, the mod's `VERSION`, Android's
   default `versionName` and the marketplace's two `ref`s, in a PR; the merged commit is tagged,
