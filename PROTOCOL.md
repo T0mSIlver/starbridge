@@ -535,7 +535,12 @@ answered, so every device moves it out of the open inbox: an answer its decision
 answer its permission, a settled notice the permission or decision it closes. A `waiting` item
 and a `snooze` are the exceptions: they describe their decision and close nothing.
 
-Lists return `{items: [{item, cursor, receivedAt, answeredAt?}], cursor}`, 100 at a time, where
+Lists return `{items: [{item, cursor, receivedAt, answeredAt?}], cursor, more}`, 100 at a time
+and 4 MB of boxes and blobs (#1735). A question whose blobs do not fit what is left of the page,
+or of the account's read window, lists without them, as an answered one under `blobs=open` does,
+and `GET /items/:id` gives them. Boxes past 4 MB, which no client makes, end a page early, at
+least one item in. `more` says whether items follow `cursor`, and a client reads on while it is
+true; a server from before it sends none, and its lists end with a page under 100 items. In each,
 `item` holds only the caller's box and its routing hints as posted, `wakeAt` included, and `answeredAt` is set on answered decisions and permissions.
 Marking an item answered moves it past every cursor, so devices listing after their cursor see it
 again, answered.
@@ -669,6 +674,7 @@ server whose disk is full answers writes 503 `storage-full` with `Retry-After`; 
 
 | What | Limit |
 |---|---|
+| `GET /items`, `GET /items/:id` | 128 MB of boxes and blobs a minute per account: a list refused once it is spent, its blobs only within what is left; an item refused when it does not fit; 429 `rate-limited` |
 | `POST /items` | from machines: 90 a minute per machine and 120 per account, and 16 MB of machines' boxes a minute per account, items that replace earlier ones included, a post that does not fit what is left refused; from devices: 60 a minute per device |
 | Stored decisions, open or answered | 10000 per account: 409 `too-many-items` |
 | Unanswered decisions kept 30 days | 1000 per account: past that, they are dropped 7 days after they arrived |

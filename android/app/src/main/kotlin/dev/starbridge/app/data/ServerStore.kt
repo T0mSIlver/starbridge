@@ -1071,7 +1071,7 @@ class ServerStore(
                 byId[listed.item.id] = saved(listed.item, settledBy(from)?.let { closedBy(decision, it) } ?: decision)
             }
             cursor = page.cursor
-            if (page.items.size < 100) break
+            if (page.last) break
         }
         // An update may list before the decision it is about, so they apply once all are read.
         for ((from, w) in waits) byId[w.decisionId]?.let { d -> wait(d, from, w)?.let { byId[w.decisionId] = it } }
@@ -1213,7 +1213,7 @@ class ServerStore(
             val page = api().items("permission,settled", cursor)
             read += page.items
             cursor = page.cursor
-            if (page.items.size < 100) break
+            if (page.last) break
         }
         if (scan(read.map { it.item })) return
         // A settled prompt comes back after its notice, so prompts go first: a notice whose
@@ -1404,7 +1404,7 @@ class ServerStore(
             if (scan(page.items.map { it.item })) return
             for (listed in page.items) open(listed.item)?.let { fresh += SavedRun(it.from, it.text) }
             cursor = page.cursor
-            if (page.items.size < 100) break
+            if (page.last) break
         }
         keepRuns(fresh, fromSync = true)
     }

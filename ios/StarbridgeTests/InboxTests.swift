@@ -231,6 +231,28 @@ final class InboxTests: XCTestCase {
         XCTAssertNil(store.notice)
         XCTAssertTrue(store.openDecisions.contains { $0.id == "d_four" })
 
+        // --- Past a page's 4 MB of images, questions list without theirs, fetched when shown (#1735) ---
+        let big = Array(repeating: UInt8(7), count: 350_000)
+        for id in ["d_big1", "d_big2", "d_big3"] {
+            var blobs: [JSON] = []
+            var images: [JSON] = []
+            for _ in 0..<3 {
+                let (b, r) = Images.seal(big)
+                blobs.append(.string(b))
+                images.append(["key": .string(r.key), "hash": .string(r.hash), "type": "image/png", "width": 20, "height": 10])
+            }
+            let sealed = try Envelopes.seal(kind: .decision, body: .object([
+                "v": 1, "id": .string(id), "to": [.string(phone.id)], "createdAt": .string(now()), "question": "Big?", "context": "",
+                "options": [], "source": source, "images": .array(images),
+            ]), signer: machine.id, secretKey: keys.sign.secretKey, recipients: [phone])
+            var json = try XCTUnwrap(sealed.json.object)
+            json["blobs"] = .array(blobs)
+            try await call(machineToken, "POST", "/items", .object(json))
+        }
+        await store.refresh()
+        XCTAssertEqual(store.decision("d_big1")?.imagesPending, false)
+        XCTAssertEqual(store.decision("d_big3")?.imagesPending, true)
+
         // --- Answered before this iPhone read it: listed without its image, fetched once shown (#1463) ---
         let (blob5, ref5) = Images.seal(png)
         let pictured5 = try Envelopes.seal(kind: .decision, body: .object([
