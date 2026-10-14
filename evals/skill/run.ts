@@ -683,7 +683,7 @@ async function liveRun(
           if (e.type !== "assistant") {
             const text = JSON.stringify(e);
             // A real id: the skill's own example (`d_amber-otter-…`), loaded as a user entry, is no answer.
-            const answer = /Answer to d_(?:[a-z]+(?:-[a-z]+){3}|[\w-]{16})(?![\w-])/.test(text);
+            const answer = /Answer to d_(?:[a-z]+(?:-[a-z]+){2}|[\w-]{16})(?![\w-])/.test(text);
             // A hook's context rides in an attachment beside the tool result it came with.
             if (answer && e.type === "attachment" && /hook/.test(String(e.attachment?.type))) rec.steered = true;
             else if (answer && !/tool_result|toolUseResult/.test(text)) rec.prompted = true;

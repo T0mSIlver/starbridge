@@ -27,10 +27,10 @@
       "valid": true
     },
     {
-      "name": "an id of four words",
+      "name": "an id of three words",
       "body": {
         "v": 1,
-        "id": "d_amber-otter-lantern-quilt",
+        "id": "d_amber-otter-lantern",
         "to": [
           "phone",
           "phone2"

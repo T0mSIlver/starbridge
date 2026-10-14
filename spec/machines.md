@@ -63,9 +63,9 @@
   title, like its question, after the answer drops its body. `decisions --open` lists the
   questions still open, so one question has one asker: the orchestrator checks it before
   asking, since the owner once got the same question from it and from a session.
-- **A decision id is four words** (#1697): `d_amber-otter-lantern-quilt`. The random id gave nobody
-  a cue that a card was stale, and an orchestrator pointed Tom at one already answered. Four BIP-39
-  words are 44 bits, enough because the id gates nothing: every read takes a signed-in device or
+- **A decision id is three words** (#1697): `d_amber-otter-lantern`. The random id gave nobody
+  a cue that a card was stale, and an orchestrator pointed Tom at one already answered. Three BIP-39
+  words are 33 bits, enough because the id gates nothing: every read takes a signed-in device or
   machine and its own box (PROTOCOL.md, "Item ids"). `ask` mints again on a 409 `duplicate-id`.
   Old ids keep working.
 - **Pairing a machine.** `pair` uses starbridge.run unless `--server` or `STARBRIDGE_SERVER` says

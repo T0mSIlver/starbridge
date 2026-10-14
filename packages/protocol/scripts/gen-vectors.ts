@@ -2175,10 +2175,10 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
     note: "Bodies that must pass or fail schema validation. `read`, when set, is part of what a client reads: a value it only displays and does not know reads as the neutral case (null: absent), and an alert of an unknown kind is left out. `text` holds bodies as JSON text, for what a vector file cannot hold.",
     decision: [
       { name: "valid", body: decisionBody, valid: true },
-      // Ids read the same whatever their shape (#1697): four words, or the random one before.
+      // Ids read the same whatever their shape (#1697): three words, or the random one before.
       {
-        name: "an id of four words",
-        body: { ...decisionBody, id: "d_amber-otter-lantern-quilt" },
+        name: "an id of three words",
+        body: { ...decisionBody, id: "d_amber-otter-lantern" },
         valid: true,
       },
       {

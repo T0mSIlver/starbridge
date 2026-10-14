@@ -15,15 +15,15 @@ beforeEach(async () => {
 });
 afterEach(() => server.stop());
 
-const ID = /^d_[a-z]+(-[a-z]+){3}$/;
+const ID = /^d_[a-z]+(-[a-z]+){2}$/;
 
 test("an id the account already holds is minted again (#1697)", async () => {
   const ctx = await paired(server);
   const real = globalThis.crypto.getRandomValues.bind(globalThis.crypto);
   let zeros = 0;
-  // An id draws 8 random bytes: the first three draws are zeros, so the second ask collides twice.
+  // An id draws 6 random bytes: the first three draws are zeros, so the second ask collides twice.
   const spy = spyOn(globalThis.crypto, "getRandomValues").mockImplementation(((a: Uint8Array) => {
-    if (a.length === 8 && zeros++ < 3) return a.fill(0);
+    if (a.length === 6 && zeros++ < 3) return a.fill(0);
     return real(a);
   }) as never);
   try {
@@ -33,7 +33,7 @@ test("an id the account already holds is minted again (#1697)", async () => {
     spy.mockRestore();
   }
   const [first, second] = ctx.lines.filter((l) => ID.test(l));
-  expect(first).toBe("d_abandon-abandon-abandon-abandon");
+  expect(first).toBe("d_abandon-abandon-abandon");
   expect(second).not.toBe(first);
   expect(second).toMatch(ID);
 });
