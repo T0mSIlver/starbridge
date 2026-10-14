@@ -1,5 +1,12 @@
 import { expect, test } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, join as hostJoin, posix } from "node:path";
 import { CLI_PATH } from "../src/config";
@@ -90,13 +97,26 @@ test("the plugin's hooks start the CLI setup recorded, else the one on the PATH,
     return { code: r.exitCode, out: r.stdout.toString().trim(), err: r.stderr.toString().trim() };
   };
   expect(run(onPath)).toEqual({ code: 0, out: "path hook settle", err: "" });
-  writeFileSync(join(cfg, CLI_PATH), `${join(recorded, "starbridge")}\n`);
+  writeFileSync(join(cfg, CLI_PATH), `${join(recorded, "starbridge")}\n`, { mode: 0o600 });
   expect(run().out).toBe("recorded hook settle");
   writeFileSync(join(cfg, CLI_PATH), `${join(dir, "gone", "starbridge")}\n`);
   expect(run(onPath).out).toBe("path hook settle");
   const none = run();
   expect([none.code, none.out]).toEqual([1, ""]);
   expect(none.err).toContain("run `starbridge setup`");
+
+  // A relative path, a binary others may write, or a cli-path others may write counts for nothing.
+  writeFileSync(join(cfg, CLI_PATH), "recorded/starbridge\n");
+  expect(run(onPath).out).toBe("path hook settle");
+  if (process.platform === "win32") return;
+  writeFileSync(join(cfg, CLI_PATH), `${join(recorded, "starbridge")}\n`);
+  chmodSync(join(recorded, "starbridge"), 0o775);
+  expect(run(onPath).out).toBe("path hook settle");
+  chmodSync(join(recorded, "starbridge"), 0o755);
+  chmodSync(join(cfg, CLI_PATH), 0o606);
+  expect(run(onPath).out).toBe("path hook settle");
+  chmodSync(join(cfg, CLI_PATH), 0o600);
+  expect(run(onPath).out).toBe("recorded hook settle");
 });
 
 test("on macOS, bash's line goes where its login shell reads it, and a $HOME spelling counts as there (#612)", async () => {

@@ -164,7 +164,9 @@
   from the Dock has no shell profile. So setup and `update` record the binary's absolute path in
   the config folder (`cli-path`); the Claude Code hooks (`plugin/hooks/cli.sh`), the mod, and the
   Pi and opencode plugins start that one, else `starbridge` on the PATH, and `cli.sh` then tries
-  the installers' folders. When the binary's folder is not on the PATH, setup offers to add it to
+  the installers' folders. They take the recorded path only when it is absolute and both it and
+  `cli-path` belong to the user or root and are writable by no one else (#1748), since whoever
+  can write either picks what the hooks run; setup writes `cli-path` 0600. When the binary's folder is not on the PATH, setup offers to add it to
   the shell's startup file (`--yes` adds it), and its last lines say to open a new terminal or what to add, since
   install.sh's own hint scrolls away under setup. Windows gets the folder on the PATH from
   install.ps1. Uninstall, when it deletes the binary, takes that line and its marker comment out
@@ -246,7 +248,9 @@
   has no Ed25519 check, and no minisign, but always a Python for dnf. With none of them it stops
   and prints the command that installs minisign on that distribution; no flag skips the check.
   The signature's trusted comment must name the version it installs: `STARBRIDGE_VERSION`, else the
-  tag `releases/latest` redirects to. Downloads go over HTTPS only, but from a mirror on the
+  tag `releases/latest` redirects to. A version older than the installed copy is refused unless
+  `STARBRIDGE_DOWNGRADE=1` (#1748), since a served `latest` could otherwise roll a machine back to
+  a signed release with known bugs; `update` already installs only a newer one. Downloads go over HTTPS only, but from a mirror on the
   machine itself. `starbridge update` replaces script installs
   and points Homebrew and npm installs at their manager. Windows refuses to replace or delete a
   running `.exe` but lets it be renamed, so `update` moves it aside to `starbridge.exe.old` and

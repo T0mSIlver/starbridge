@@ -13,6 +13,7 @@
 # minisign when installed, else OpenSSL 3, else Python 3 (RHEL 8 keeps one for dnf).
 #
 # STARBRIDGE_VERSION=1.2.3      a version other than the latest release
+# STARBRIDGE_DOWNGRADE=1        allow a version older than the installed one
 # STARBRIDGE_INSTALL_DIR=<dir>  instead of ~/.local/bin
 # STARBRIDGE_NO_SETUP=1         install only
 # STARBRIDGE_RELEASES_URL=<url> a mirror of https://github.com/T0mSIlver/starbridge/releases
@@ -94,6 +95,29 @@ case $version in
   "" | *[!0-9A-Za-z.-]*) fail "not a release version: $version" ;;
 esac
 base=$RELEASES/download/v$version
+
+# Exits 0 when version $1 is older than $2; a release sorts after its release candidates, and a
+# version neither reads as 1.2.3 nor 1.2.3-rc.4 orders before nothing.
+older() {
+  awk -v a="$1" -v b="$2" '
+    function key(v, p, n) {
+      sub(/^v/, "", v)
+      n = split(v, p, /[.-]/)
+      if (n == 3) p[5] = 999999999
+      else if (n != 5 || p[4] != "rc" || p[5] !~ /^[0-9]+$/) exit 2
+      if (p[1] !~ /^[0-9]+$/ || p[2] !~ /^[0-9]+$/ || p[3] !~ /^[0-9]+$/) exit 2
+      return sprintf("%09d%09d%09d%09d", p[1], p[2], p[3], p[5])
+    }
+    BEGIN { exit !(key(a) < key(b)) }'
+}
+# A served "latest" older than the installed copy would roll it back to a release with fixed bugs.
+if [ -x "$DIR/starbridge" ] && [ -z "${STARBRIDGE_DOWNGRADE:-}" ]; then
+  installed=$("$DIR/starbridge" --version 2>/dev/null) || installed=
+  installed=${installed#starbridge }
+  if [ -n "$installed" ] && older "$version" "$installed"; then
+    fail "v$version is older than the installed starbridge $installed; set STARBRIDGE_DOWNGRADE=1 to install it anyway"
+  fi
+fi
 
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT

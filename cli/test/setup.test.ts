@@ -1694,7 +1694,7 @@ test.skipIf(WINDOWS)(
       cli,
       `#!/bin/sh\nexec "${process.execPath}" "${join(import.meta.dir, "../src/main.ts")}" "$@"\n`,
     );
-    writeFileSync(join(config, "cli-path"), cli);
+    writeFileSync(join(config, "cli-path"), cli, { mode: 0o600 });
     const hook = (line: string) =>
       spawnSync("sh", ["./pre-tool.sh"], {
         cwd: dir,

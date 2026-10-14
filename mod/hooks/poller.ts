@@ -24,6 +24,11 @@ export interface Host {
   write(path: string, text: string): Promise<void>;
   /** Undefined when the file is missing. */
   mtime(path: string): Promise<number | undefined>;
+  /**
+   * Whether `path` is a file owned by this user or root that no one else may write (`ownedFile`,
+   * node.ts), so another user cannot pick the CLI that starts.
+   */
+  owned(path: string): Promise<boolean>;
   now(): Promise<number>;
   sleep(ms: number): Promise<void>;
   /** `AgentHost.submit`: one message for the lines one read brought, returning the acks it took. */
@@ -73,6 +78,9 @@ interface Lease {
  * the CLI; on Windows (`OS=Windows_NT`) home is `USERPROFILE`, as the CLI reads it, whatever
  * `HOME` a Git Bash set.
  */
+/** Whether `path` is absolute, on Windows too: a relative one would depend on the agent's folder. */
+export const absolute = (path: string) => /^(\/|[A-Za-z]:[\\/])/.test(path);
+
 export function configDir(env: {
   STARBRIDGE_CONFIG_DIR?: string;
   XDG_CONFIG_HOME?: string;
@@ -147,9 +155,10 @@ export class Poller {
   private async cli(): Promise<string> {
     if (this.command) return this.command;
     try {
+      if (!(await this.host.owned(this.cliPath))) return "starbridge";
       const recorded = (await this.host.read(this.cliPath)).trim();
       // A binary removed since setup recorded it: the PATH may still hold another.
-      if (recorded && (await this.host.mtime(recorded)) !== undefined) return recorded;
+      if (absolute(recorded) && (await this.host.owned(recorded))) return recorded;
     } catch {}
     return "starbridge";
   }

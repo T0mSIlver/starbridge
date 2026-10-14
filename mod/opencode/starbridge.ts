@@ -46,6 +46,7 @@ import { AgentLoop, joinLines, type Line, socketPath } from "../hooks/agent.ts";
 import {
   answersOf,
   hookCommand,
+  ownedFile,
   permissionHook,
   runCommand,
   sleep,
@@ -405,6 +406,7 @@ async function server({ client, directory }: Input) {
               read: (path) => readFile(path, "utf8"),
               write: (path, t) => writeFile(path, t),
               mtime: async (path) => (await stat(path).catch(() => undefined))?.mtimeMs,
+              owned: async (path) => ownedFile(path),
               now,
               sleep,
               submit,

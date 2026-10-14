@@ -150,7 +150,7 @@ test("deleting a session stops its permission prompts on the devices (#1225)", a
       `#!/bin/sh\ntouch ${home}/started\ntrap 'touch ${home}/stopped; exit 0' TERM\nwhile :; do sleep 0.1; done\n`,
     );
     chmodSync(cli, 0o755);
-    writeFileSync(join(home, "cli-path"), cli);
+    writeFileSync(join(home, "cli-path"), cli, { mode: 0o600 });
     Object.assign(process.env, {
       HOME: home,
       STARBRIDGE_CONFIG_DIR: home,
