@@ -115,12 +115,13 @@ signed app; an ad hoc signature is enough, as the owner's Mac Mini showed). The 
 both through `scripts/sign.sh` and the `desktop-release` environment, which only `main` and tags
 can use:
 
-- the `desktop` workflow's `signed build` job, once the repository variable `DESKTOP_SIGNING` is
-  `true`: on a push to `main` that changes what signing reads (`electron-builder.yml`, the sign,
-  afterPack, afterSign and widget scripts, `package.json`, the lockfile, the workflow), or run by
-  hand from `main`;
+- the `desktop` workflow's `tip build` job, once the repository variable `DESKTOP_SIGNING` is
+  `true`: on every push to `main` that touches the app, or run by hand from `main`. Its build is
+  published to [starbridge-tip](https://github.com/T0mSIlver/starbridge-tip) (spec/releases.md,
+  "Three rings"), with a fine-grained token that writes that repository only,
+  `TIP_RELEASE_TOKEN`; without it the build is signed and kept as an artifact, not published;
 - the release, once `DESKTOP_RELEASE` is `true` (spec/releases.md, "The desktop app's release").
 
 The environment's secrets: `MAC_CERTIFICATE` (the Developer ID Application certificate and key,
 a base64 `.p12`), `MAC_CERTIFICATE_PASSWORD`, and an App Store Connect API key for notarization:
-`APPLE_API_KEY` (the base64 `.p8`), `APPLE_API_KEY_ID`, `APPLE_API_ISSUER`.
+`APPLE_API_KEY` (the base64 `.p8`), `APPLE_API_KEY_ID`, `APPLE_API_ISSUER`; and `TIP_RELEASE_TOKEN`.
