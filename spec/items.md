@@ -115,7 +115,10 @@
 - **Redaction** (#358, #359). The summary and description are cut from the input after
   redaction. A private key's lines go also when they carry a diff's `+`, `-` or space (#489).
   `inputHash` is keyed under the machine's signing key, so a device holding the redacted input
-  cannot test guesses for a short redacted value.
+  cannot test guesses for a short redacted value. A shell command is redacted as a command line:
+  never a command word, and a value never across a line break, since Allow runs the command the
+  owner reads; a command that redaction would still change that way, or that does not fit whole,
+  stays at the keyboard (#1724).
 - **Title and command** (#805). A prompt's title is what the agent says the call does (Claude
   Code's `description`), else the tool, on every surface; the command shows under it in a dark
   terminal block. Allow covers the command, never the description: the agent writes the

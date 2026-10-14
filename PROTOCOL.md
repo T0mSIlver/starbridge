@@ -862,8 +862,11 @@ Answering a permission from a phone is a trust decision, so:
 - **The input is redacted on the machine before sealing**, because it shows on lock screens and
   in notification history. Redaction hides only single tokens: a value holding spaces, quotes,
   `$`, backticks or shell operators stays visible, so it cannot hide code the owner allows. A
-  Bash command holding a private key stays at the keyboard. A wider scope is offered only when
-  its rule shows in full, with no redaction.
+  name and its value are separated by spaces and tabs only, and in a shell command no command
+  word is redacted (#1724). A shell command stays at the keyboard when it holds a private key,
+  when redaction would still change a command word or hide what a variable or substitution in
+  command position runs, or when it does not fit in `input` whole. A wider scope is offered
+  only when its rule shows in full, with no redaction.
 - **The hook never allows anything by itself.** When it errors, times out or loses the network,
   it answers nothing and the agent's own dialog decides.
 - **Opt-in per machine.** Nothing is routed until `starbridge config permissions on` (setup
