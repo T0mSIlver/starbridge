@@ -1,7 +1,7 @@
 # CI runners
 
 Most CI jobs run on GitHub's runners. Some run on three self-hosted Linux boxes, which start them
-sooner. Windows, macOS, Linux ARM64, the desktop app's e2e and anything that needs KVM stay on GitHub's runners,
+sooner. Windows, macOS, Linux ARM64, the e2e and anything that needs KVM stay on GitHub's runners,
 and Android builds on main and in releases run on their own runner, `ANDROID_RUNNER`.
 
 ## Pools and labels
@@ -31,14 +31,13 @@ runs-on: ${{ vars.TRUSTED_RUNNER && fromJSON(vars.TRUSTED_RUNNER) || 'ubuntu-lat
 | Variable | Value | Used by |
 |---|---|---|
 | `TRUSTED_RUNNER` | `["self-hosted","starbridge","trusted","heavy"]` | main's test job, deploy, uptime, release |
-| `PR_LIGHT_RUNNER` | `["self-hosted","starbridge","pr","light"]` | a pull request's test, typecheck and lint job |
-| `PR_HEAVY_RUNNER` | `["self-hosted","starbridge","pr","heavy"]` | a pull request's e2e parts |
+| `PR_LIGHT_RUNNER` | `["self-hosted","starbridge","pr"]` | a pull request's test, typecheck and lint job |
 | `PR_DOCKER_RUNNER` | `["self-hosted","starbridge","pr","docker","heavy"]` | a pull request's image builds |
 | `ANDROID_RUNNER` | `starbridge-android` | Android builds on main and in releases |
 
 A pull request job also checks that its pull request comes from this repository and not from
 Dependabot before it reads a `PR_` variable (`ci.yml`). To move every job of a pool to GitHub's
-runners, delete its variable: `gh variable delete PR_HEAVY_RUNNER`.
+runners, delete its variable: `gh variable delete PR_LIGHT_RUNNER`.
 
 A job on these boxes must not rely on what an earlier job left, and must be safe with another job
 beside it on the same box: no fixed host port, and a unique name for any container, Compose
@@ -68,7 +67,7 @@ down, take the line out.
   where `gh` is logged in as the repository's owner. It makes a registration for every runner
   slot that has none, hands it over SSH, and deletes offline registrations no slot holds.
 - Before each job, `slot.sh` deletes everything the last one left except the tool cache
-  (`_work/_tool`: Node, Bun, pnpm's store and Firefox), and gives the job its own home and temp
+  (`_work/_tool`: Node, Bun and pnpm's store), and gives the job its own home and temp
   folder. It drops the tool cache too when the disk is 80% full.
 - Every night `gh-runner-cleanup.timer` prunes Docker images, containers and build cache unused
   for three days, and all unused ones when the disk is 80% full.

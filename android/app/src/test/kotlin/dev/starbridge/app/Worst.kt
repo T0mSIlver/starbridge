@@ -59,7 +59,10 @@ class Worst(private val now: Instant) {
             agent = if (i % 2 == 0) "claude-code" else "codex",
             waiting = i < 4,
             waitingSince = if (i < 4) ago(60L * 26 + i) else null,
-            links = listOf(Link("https://claude.ai/artifact/Xq7pLm2VnR4tBz9KcW1sYdXq7pLm2VnR4tBz9KcW1sYd", "the full migration plan for every package in the monorepo")),
+            links = listOf(
+                Link("https://claude.ai/artifact/Xq7pLm2VnR4tBz9KcW1sYdXq7pLm2VnR4tBz9KcW1sYd", "the full migration plan for every package in the monorepo"),
+                Link("https://github.com/T0mSIlver/starbridge/blob/t/1577-a-branch/spec/a-file-name-long-enough-to-be-clipped-at-forty.md#L12"),
+            ),
             replies = true,
             images = if (i == 4) fake.decisions.first { it.id == "d3" }.images else emptyList(),
         )

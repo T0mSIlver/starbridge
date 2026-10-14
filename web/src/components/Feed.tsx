@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { imageSrc } from "@/lib/attachments";
-import { ago, type Entry, type MachineKind, type Past, timer } from "@/lib/feed";
+import { ago, type Entry, type MachineKind, type Past, timer, waitingLabel } from "@/lib/feed";
 import { useFind } from "@/lib/find";
 import { clockTime } from "@/lib/format";
 import { fitsRow, fullInput } from "@/lib/permissionInput";
@@ -238,7 +238,7 @@ export function NeedRow({
   const waited = back
     ? `Snoozed ${back.toLowerCase()}. `
     : since
-      ? `Waiting for you, ${duration(now - Date.parse(since))}. `
+      ? `${waitingLabel(now - Date.parse(since))}. `
       : "";
   return (
     <div

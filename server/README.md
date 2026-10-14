@@ -174,7 +174,7 @@ release, restore the copy you made before upgrading.
 <dt><code>GITHUB_CLIENT_ID</code>, <code>GITHUB_CLIENT_SECRET</code></dt>
 <dd>GitHub sign-in, where each GitHub user gets their own account, from a GitHub OAuth app. Set both. Register two callback URLs in the OAuth app: <code>$PUBLIC_URL/v1/auth/github/callback</code> for the web and <code>$PUBLIC_URL/v1/auth/github/callback/app</code> for the Android app. GitHub refuses the app's sign-in when only the first is listed. Unset by default.</dd>
 <dt><code>SIGNUP_GITHUB_IDS</code></dt>
-<dd>Comma-separated numeric GitHub user ids. When set, only these users can make an account, and neither Sign in with Apple nor <code>OWNER_TOKEN</code> makes one; accounts that exist sign in as before. A value that is empty or not a list of ids stops the server at start. Unset by default: anyone can sign up.</dd>
+<dd>Comma-separated numeric GitHub user ids. When set, only these users can make an account, and Sign in with Apple makes none; <code>OWNER_TOKEN</code>, a secret you set, still makes the owner account; accounts that exist sign in as before. A value that is empty or not a list of ids stops the server at start. Unset by default: anyone can sign up.</dd>
 <dt><code>APP_REDIRECT_URI</code></dt>
 <dd>Where GitHub sign-in sends the Android app. Only starbridge.run can vouch for the app, so its server sets <code>https://starbridge.run/app/auth</code>. Default: <code>starbridge://auth</code>.</dd>
 </dl>

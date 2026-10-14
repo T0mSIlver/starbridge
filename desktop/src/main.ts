@@ -556,7 +556,7 @@ function notify(entry: Entry): Shown {
     body: entry.body,
     actions: entry.options.map((text) => ({ type: "button" as const, text })),
     hasReply: entry.reply,
-    replyPlaceholder: "Reply",
+    replyPlaceholder: "Your answer",
   });
   n.on("click", () => open(entry.id));
   n.on("action", (d) => {

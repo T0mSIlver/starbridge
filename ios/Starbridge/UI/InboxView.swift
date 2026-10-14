@@ -523,7 +523,8 @@ private struct RunCard: View {
                 ("Running, \(Times.elapsed(started, now))", Tokens.Colors.fg2.color)
             }
             Card(amber: false) {
-                MetaRow(source: run.body.source, time: Times.since(started, now))
+                // A lost run's last news may predate most of its life, so it shows no time (#249).
+                MetaRow(source: run.body.source, time: run.lost ? "" : Times.since(started, now))
                 HStack(alignment: .top, spacing: Tokens.Spacing.s2) {
                     Image(systemName: "terminal").foregroundStyle(Tokens.Colors.fg2.color).accessibilityHidden(true)
                     Text(run.body.title).type(Tokens.Typography.subtitle).fontWeight(.regular)
@@ -533,6 +534,9 @@ private struct RunCard: View {
                     ProgressView(value: Double(p.done), total: Double(p.total))
                         .tint(Tokens.Colors.fg.color)
                         .accessibilityValue(p.unit == "percent" ? "\(p.done) percent" : "\(p.done) of \(p.total)")
+                } else if run.running {
+                    // No progress yet: an indeterminate bar, as on the web and Android.
+                    ProgressView().progressViewStyle(.linear).tint(Tokens.Colors.fg.color)
                 }
                 HStack {
                     Text(state.0).type(Tokens.Typography.small).foregroundStyle(state.1)

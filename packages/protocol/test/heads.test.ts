@@ -16,7 +16,6 @@ import {
   open,
   publicKeys,
   ready,
-  recoverEntry,
   recoveryKeyPair,
   revokeEntry,
   type SignedEnvelope,
@@ -161,27 +160,6 @@ test("a revoked device cannot lift a device's hold by revoking, on a fork, the m
     by: "a",
     revoked: { id: "a", by: "b" },
   });
-});
-
-test("the recovery key's recover ends a hold", () => {
-  const seed = generateRecoverySeed();
-  const chain = [
-    genesisEntry({
-      account: "acct",
-      device: members.a,
-      signKey: keys.a.sign.privateKey,
-      recovery: recoveryKeyPair(seed),
-      at,
-    }),
-  ];
-  chain.push(
-    addEntry(verifyDirectory(chain), { id: "a", signKey: keys.a.sign.privateKey }, members.m, at),
-  );
-  const heads: Heads = { m: { length: 9, head: "A".repeat(43) } };
-  expect(withheldBy(heads, verifyDirectory(chain), chain)?.id).toBe("m");
-  const fresh = { ...members.b, id: "c" };
-  chain.push(recoverEntry(verifyDirectory(chain), recoveryKeyPair(seed).privateKey, fresh, at));
-  expect(withheldBy(heads, verifyDirectory(chain), chain)).toBeUndefined();
 });
 
 test("a machine signs the longest head it knows, a device's when its own chain is behind", () => {

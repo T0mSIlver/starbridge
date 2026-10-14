@@ -539,8 +539,6 @@ async function dispatch(argv: string[], ctx: Ctx): Promise<number> {
             "no-quota": { type: "boolean" },
             "no-service": { type: "boolean" },
             "no-agents": { type: "boolean" },
-            // The name before #750, kept for scripts.
-            "no-plugin": { type: "boolean" },
             agent: { type: "string" },
             refresh: { type: "boolean" },
           },
@@ -567,7 +565,7 @@ async function dispatch(argv: string[], ctx: Ctx): Promise<number> {
             : {}),
           ...(v["no-quota"] ? { noQuota: true } : {}),
           ...(v["no-service"] ? { noService: true } : {}),
-          ...(v["no-agents"] || v["no-plugin"] ? { noAgents: true } : {}),
+          ...(v["no-agents"] ? { noAgents: true } : {}),
         });
       }
       case "hello":

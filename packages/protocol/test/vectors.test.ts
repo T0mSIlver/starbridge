@@ -21,6 +21,7 @@ import {
   joinCommitment,
   joinerKeys,
   joinRequest,
+  linkChip,
   migrateQuotaAlerts,
   noteHead,
   open,
@@ -75,6 +76,7 @@ const V = {
   join: await load("join.json"),
   pace: await load("pace.json"),
   context: await load("context.json"),
+  links: await load("links.json"),
   quotaAlerts: await load("quota-alerts.json"),
   schemas: await load("schemas.json"),
 };
@@ -322,6 +324,13 @@ describe("context.json", () => {
       expect(parseContext(c.text)).toEqual(c.blocks);
       expect(contextText(c.text)).toBe(c.plain);
     });
+});
+
+describe("links.json", () => {
+  for (const c of V.links.cases)
+    test(c.name, () =>
+      expect(linkChip({ url: c.url, title: c.title }, c.project)).toEqual(c.expect),
+    );
 });
 
 describe("quota-alerts.json", () => {

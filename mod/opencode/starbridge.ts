@@ -29,7 +29,17 @@
  */
 import { createHash, randomBytes } from "node:crypto";
 import { readFileSync } from "node:fs";
-import { link, mkdir, readdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
+import {
+  link,
+  mkdir,
+  open,
+  readdir,
+  readFile,
+  rename,
+  rm,
+  stat,
+  writeFile,
+} from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { AgentLoop, joinLines, type Line, socketPath } from "../hooks/agent.ts";
@@ -236,12 +246,10 @@ export async function claim(
   };
   await mkdir(join(dir, "opencode-claims"), { recursive: true }).catch(() => {});
   if (await take()) return { state: "mine", token };
-  const [text, info] = await Promise.all([
-    readFile(file, "utf8").catch(() => undefined),
-    stat(file).catch(() => undefined),
-  ]);
-  if (text === SENT) return { state: "sent" };
-  if (!info || now - info.mtimeMs < STALE_MS) return { state: "held" };
+  const seen = await readClaim(file);
+  if (seen?.text === SENT) return { state: "sent" };
+  if (!seen || now - seen.mtimeMs < STALE_MS) return { state: "held" };
+  const { text } = seen;
   const aside = `${file}.${token}`;
   if (
     !(await rename(file, aside).then(
@@ -259,6 +267,24 @@ export async function claim(
   }
   await rm(aside, { force: true }).catch(() => {});
   return (await take()) ? { state: "mine", token } : { state: "held" };
+}
+
+/**
+ * A claim's text and age, from one open file. Read apart, another process's takeover between the
+ * two reads could pair its fresh claim's text with the stale claim's age, and both would submit
+ * (#1649).
+ */
+async function readClaim(file: string): Promise<{ text: string; mtimeMs: number } | undefined> {
+  const handle = await open(file, "r").catch(() => undefined);
+  if (!handle) return undefined;
+  try {
+    const { mtimeMs } = await handle.stat();
+    return { text: await handle.readFile("utf8"), mtimeMs };
+  } catch {
+    return undefined;
+  } finally {
+    await handle.close().catch(() => {});
+  }
 }
 
 /** Marks a claimed answer submitted: any process showing the session may then confirm it. */

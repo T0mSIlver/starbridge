@@ -32,11 +32,7 @@ struct DecisionDetail: View {
                     let picks = open && d.images.count >= 2 && d.images.count == d.body.options.count
                     if !d.images.isEmpty, !picks { ImageRows(images: d.images) { viewer = ViewerStart(index: $0) } }
                     if d.imagesPending { PendingImages(images: d.body.images ?? []) }
-                    ForEach(d.body.links ?? [], id: \.url) { link in
-                        if let url = URL(string: link.url) {
-                            Link(link.title ?? link.url, destination: url).type(Tokens.Typography.small).underline()
-                        }
-                    }
+                    if let links = d.body.links, !links.isEmpty { LinkChips(links: links, project: d.body.source.project) }
                     if let until {
                         Text("Snoozed until \(Times.clock(until, Date()))").type(Tokens.Typography.small).foregroundStyle(Tokens.Colors.fg2.color)
                     }
@@ -118,7 +114,7 @@ private struct Answering: View {
                 Link(destination: url) {
                     HStack(spacing: Tokens.Spacing.s2) {
                         Image(systemName: "arrow.up.right").accessibilityHidden(true)
-                        Text("Answer in \(page.place)").lineLimit(1)
+                        Text("Answer in \(Notify.place(page))").lineLimit(1)
                     }
                     .type(Tokens.Typography.action)
                     .frame(maxWidth: .infinity, minHeight: 48)

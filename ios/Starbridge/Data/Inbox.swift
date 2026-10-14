@@ -227,6 +227,24 @@ struct SavedRun: Codable, Equatable {
     /** When its machine last said anything about it. */
     var lastNews: Date { Dates.parse(body.at) ?? .distantPast }
 
+    /** When the last news came: the exit, else the last update. */
+    var news: Date { body.exit.flatMap { Dates.parse($0.at) } ?? lastNews }
+
+    var started: Date { Dates.instant(body.startedAt) }
+
+    /** Neither ended nor lost. */
+    var running: Bool { body.exit == nil && !lost }
+
+    /** A finished or lost run stays on the screen this long, so its result is seen (#827). */
+    static let shownAfter: TimeInterval = 30 * 60
+
+    /** Running runs, newest first, then the others that ended or went lost in the last 30 minutes, latest news first. */
+    static func shown(_ runs: [SavedRun], now: Date) -> [SavedRun] {
+        let running = runs.filter(\.running).sorted { $0.started > $1.started }
+        let ended = runs.filter { !$0.running && now.timeIntervalSince($0.news) <= shownAfter }.sorted { $0.news > $1.news }
+        return running + ended
+    }
+
     /** Ended with a non-zero exit code. */
     var failed: Bool { (body.exit?.code ?? 0) != 0 }
 
@@ -271,6 +289,14 @@ enum Dates {
         return f.date(from: text)
     }
 
+    /** A stamp as an instant; one that doesn't parse sorts first. */
+    static func instant(_ text: String) -> Date { parse(text) ?? .distantPast }
+
+    /** Oldest first, comparing stamps as instants (#1079), each parsed once. */
+    static func byInstant<T>(_ items: [T], _ stamp: (T) -> String) -> [T] {
+        items.map { (instant(stamp($0)), $0) }.sorted { $0.0 < $1.0 }.map(\.1)
+    }
+
     static func format(_ date: Date) -> String {
         let f = ISO8601DateFormatter()
         f.formatOptions = [.withInternetDateTime]
@@ -291,13 +317,3 @@ extension Decision {
 
 /** The same option, by code points, as the schema compares them. */
 func sameOption(_ a: String, _ b: String?) -> Bool { b.map { Array(a.unicodeScalars) == Array($0.unicodeScalars) } ?? false }
-
-extension DecisionLink {
-    /** Where a question with `answerIn` is answered: its title, "the artifact" for a Claude one, else its host, as on the web. */
-    var place: String {
-        if let title { return title }
-        guard let link = URL(string: url), let host = link.host() else { return url }
-        if host == "claude.ai", link.path().range(of: "/artifacts?/", options: .regularExpression) != nil { return "the artifact" }
-        return host
-    }
-}

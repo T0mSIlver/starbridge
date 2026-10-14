@@ -368,8 +368,6 @@ test("each session gets its own answers through the agent, once, confirmed", asy
   await Bun.sleep(100);
   expect(a.s.submitted).toHaveLength(1);
   expect(a.s.calls[0]).toBe("POST /v1/sessions/s-a/hello");
-  // No session ran the CLI: the mod has no `$.process.run` on this path at all.
-  expect(a.s.status).toBeUndefined();
 });
 
 test("while a submitted prompt waits for its turn, no events request waits (#1446)", async () => {

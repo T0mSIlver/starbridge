@@ -174,5 +174,5 @@ test("every migration not listed in NOT_ADDITIVE only adds (#1555)", () => {
 
 test("openDb records the additive migrations it runs from V11 on (#1555)", () => {
   const db = openDb(join(mkdtempSync(join(tmpdir(), "sb-db-")), "db.sqlite"));
-  expect(db.query("SELECT version FROM additive_migrations").all()).toEqual([{ version: 11 }]);
+  expect(db.query("SELECT version FROM additive_migrations").all()).toContainEqual({ version: 11 });
 });

@@ -30,11 +30,24 @@
   is signed in; the Claude app shows artifacts only in its in-app browser.
 - **GitHub links** (#971). Agents send PRs, issues, Actions runs and releases, and only PRs and
   issues were recognised. Now a GitHub link leads with GitHub's Octicon for its kind (pull
-  request, issue, discussion, Actions run, release, commit, else the GitHub mark) and reads as its
-  reference: `#123`, a release's tag, a commit's short hash, led by the repo only when it isn't
-  the session's (`CodexBar#412`). The icon says what the number is, so the agent's title gives
-  way to it. A run reads as its title, else "Actions run"; other GitHub pages as their title, else
-  their path. No chip says "Open": the arrow does, and the word cost room on every chip.
+  request, issue, discussion, Actions run, release, commit, file, else the GitHub mark) and reads
+  as its reference: `#123`, a release's tag, a commit's short hash, led by the repo only when it
+  isn't the session's (`CodexBar#412`). The icon says what the number is, so the agent's title
+  gives way to it. A run reads as its title, else "Actions run"; a file (`/blob/…`) as its title,
+  else its name; other GitHub pages as their title, else their path. No chip says "Open": the
+  arrow does, and the word cost room on every chip.
+- **Link chips everywhere** (#1577). A Claude artifact leads with a window glyph and reads "Claude
+  artifact". No site logos beyond GitHub's Octicons (MIT) and no favicons (owner's pick): an icon
+  names the kind of page, and a favicon is a site's logo fetched rather than bundled. Which sites
+  get an icon later: #1617. Only these kinds and GitHub's: in the owner's transcripts GitHub and
+  Claude artifacts are 89% of links, and every other host 2% or less. One rule, `linkChip` in
+  `packages/protocol` with `vectors/links.json`, gives every client the same icon and text, because
+  three URL parsers disagree at the edges. It reads the URL by hand and matches only an exact host
+  (`github.com`, `www.github.com`, `claude.ai`) with no user, port or backslash, and a path with
+  no `.` or `..` segment, which would open another page than the chip names; anything else keeps
+  the plain chip, its title else its host and path. A decoded name with a control, bidi or other
+  invisible character stays encoded. No client fetches a link: nothing a page could learn or
+  break.
 - **`answerIn`** names a page (a Claude artifact whose button messages the agent) where the
   question is answered. It has no options; the schema refuses both. It closes when the agent runs
   `starbridge settle`, or when the owner taps Done beside the page's link (#539): an agent that
