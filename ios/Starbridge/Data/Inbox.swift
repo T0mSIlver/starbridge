@@ -96,10 +96,19 @@ struct SavedImage: Codable, Equatable {
         file = "\(decision).\(index)"
         do {
             try FileManager.default.createDirectory(at: Self.directory, withIntermediateDirectories: true)
+            Self.excludeFromBackup()
             try Data(image.data).write(to: Self.directory.appendingPathComponent(file), options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
         } catch {
             return nil
         }
+    }
+
+    /** Keeps the folder out of backups, as the saved state is: its images are decrypted questions. */
+    static func excludeFromBackup() {
+        var values = URLResourceValues()
+        values.isExcludedFromBackup = true
+        var folder = directory
+        try? folder.setResourceValues(values)
     }
 
     var bytes: Data { (try? Data(contentsOf: Self.directory.appendingPathComponent(file))) ?? Data() }
