@@ -1,17 +1,19 @@
 name: CodeQL Swift
 
-# Code scanning for the Swift of the iOS app and the desktop widgets, on GitHub's macOS runner: only
-# when they change, and weekly on main for queries that changed meanwhile. The other languages are in codeql.yml.
+# Code scanning for the Swift of ios/StarbridgeProtocol and the desktop widgets, on GitHub's macOS
+# runner: only when they change, and weekly on main for queries that changed meanwhile. The iOS app
+# itself is not scanned: it needs XcodeGen and a simulator build (#1650). The other languages are in
+# codeql.yml.
 on:
   push:
     branches: [main]
     paths:
-      - "ios/**"
+      - "ios/StarbridgeProtocol/**"
       - "desktop/widgets/**"
       - ".github/workflows/codeql-swift.yml"
   pull_request:
     paths:
-      - "ios/**"
+      - "ios/StarbridgeProtocol/**"
       - "desktop/widgets/**"
       - ".github/workflows/codeql-swift.yml"
   schedule:
@@ -38,9 +40,13 @@ jobs:
       - uses: github/codeql-action/init@24c54180a607b1449ed407dd24f251e4e9147c8d # v4.38.3
         with:
           languages: swift
-          build-mode: autobuild
-      # As default setup did: CodeQL's Swift autobuilder finds the packages and projects to build.
-      - uses: github/codeql-action/autobuild@24c54180a607b1449ed407dd24f251e4e9147c8d # v4.38.3
+          build-mode: manual
+      # CodeQL reads what these builds compile. Its autobuilder took 10 to 14 minutes and built only
+      # the widgets (#1650).
+      - run: swift build
+        working-directory: desktop/widgets
+      - run: swift build
+        working-directory: ios/StarbridgeProtocol
       - uses: github/codeql-action/analyze@24c54180a607b1449ed407dd24f251e4e9147c8d # v4.38.3
         with:
           category: /language:swift
