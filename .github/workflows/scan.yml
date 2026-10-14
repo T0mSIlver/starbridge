@@ -1,7 +1,7 @@
 name: scan
 
 # Known vulnerabilities in what we ship (#1542). Trivy scans the server and web images that
-# starbridge.run and staging serve, after every deploy run and weekly, since new advisories come
+# starbridge.run and staging serve, after every deploy run that was not skipped and weekly, since new advisories come
 # out after a build. osv-scanner reads the lockfiles weekly. Each keeps
 # one issue open while it finds something, and closes it once a run finds nothing.
 on:
@@ -17,8 +17,10 @@ on:
         description: Commit whose images to scan (default the ones starbridge.run and staging serve)
         required: false
 
+# A run after a skipped deploy scans nothing, so it waits in its own group: in the shared one it
+# would replace a pending run that does.
 concurrency:
-  group: scan-${{ github.event_name }}
+  group: scan-${{ github.event_name }}${{ github.event.workflow_run.conclusion == 'skipped' && '-skipped' || '' }}
   cancel-in-progress: false
 
 permissions: {}
@@ -35,6 +37,8 @@ jobs:
   images:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    # A deploy run skipped because CI did not pass deployed nothing new.
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion != 'skipped'
     permissions:
       contents: read
       packages: read
