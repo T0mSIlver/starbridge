@@ -270,3 +270,45 @@ test("one server's open prompts are capped", async () => {
   await agy.tick();
   expect(hooks.length).toBe(MAX_OPEN_PER_ROUTE);
 });
+
+test("a running conversation behind many idle ones is still read", async () => {
+  const hooks: string[] = [];
+  const server = Bun.serve({
+    hostname: "127.0.0.1",
+    port: 0,
+    async fetch(req) {
+      const method = new URL(req.url).pathname.split("/").at(-1);
+      if (method === "GetAllCascadeTrajectories")
+        return Response.json({
+          trajectorySummaries: {
+            ...Object.fromEntries(
+              Array.from({ length: 80 }, (_, i) => [
+                `idle-${i}`,
+                { status: "CASCADE_RUN_STATUS_IDLE" },
+              ]),
+            ),
+            live: { status: "CASCADE_RUN_STATUS_RUNNING", stepCount: 1, trajectoryId: "t" },
+          },
+        });
+      return Response.json({
+        steps: [
+          {
+            status: "CORTEX_STEP_STATUS_WAITING",
+            requestedInteraction: { permission: { resource: { action: "command", target: "ls" } } },
+          },
+        ],
+      });
+    },
+  });
+  stops.push(() => server.stop(true));
+  const agy = watcher(
+    (_args, _input, signal) =>
+      new Promise((resolve) => {
+        hooks.push("live");
+        signal.addEventListener("abort", () => resolve(""));
+      }),
+  );
+  agy.add({ address: `127.0.0.1:${server.port}`, token: "tok" });
+  await agy.tick();
+  expect(hooks).toEqual(["live"]);
+});

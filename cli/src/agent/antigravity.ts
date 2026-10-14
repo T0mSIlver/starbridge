@@ -180,8 +180,15 @@ export class Antigravity implements Feature {
         this.hub.log(`stopped watching Antigravity at ${address}: ${(e as Error).message}`);
         continue;
       }
-      for (const [conversation, s] of Object.entries(summaries).slice(0, MAX_CONVERSATIONS)) {
-        if (s.status !== "CASCADE_RUN_STATUS_RUNNING" || !s.trajectoryId) continue;
+      const running = Object.entries(summaries).filter(
+        ([, s]) => s.status === "CASCADE_RUN_STATUS_RUNNING" && s.trajectoryId,
+      );
+      // Past the cap, a conversation is not read, but its open prompts stay open.
+      for (const [conversation] of running.slice(MAX_CONVERSATIONS))
+        for (const key of this.open.keys())
+          if (key.startsWith(`${address} ${conversation} `)) waiting.add(key);
+      for (const [conversation, s] of running.slice(0, MAX_CONVERSATIONS)) {
+        if (!s.trajectoryId) continue;
         const offset = Math.max(0, (s.stepCount ?? 0) - TAIL);
         let steps: Step[];
         try {
