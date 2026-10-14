@@ -347,6 +347,7 @@ test("ask warns of a --session no Claude Code session has, and keeps the asking 
       decisionId: own,
       ack: own,
       line: `Answer to ${own} (Merge #12 now?): Merge`,
+      question: "Merge #12 now?",
       waiting: false,
       subagent: "a1fdba894e743a195",
     },
