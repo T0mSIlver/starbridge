@@ -81,7 +81,9 @@ line, the safe side: at worst a prompt repeats an answer the agent already read.
   Code holds a running subagent's message in memory until its next tool round, so the mod keeps
   each answer it sent to a running subagent in `mod-sent` until a tool round of the subagent
   ends after the send, and sends nothing it could not record; a process that exits first leaves
-  it to the parent, as for a queued prompt. A finished subagent needs no record: the message is
+  it to the parent, as for a queued prompt. A subagent that finishes without another tool round
+  never reads it, so its end hands the parent what came after its last round, and drops the
+  rest (#1729). A finished subagent needs no record: the message is
   the prompt it resumes with, which its transcript keeps. Claude Code runs no mod hook on the
   tool calls of a subagent a mod resumed, so a question that subagent asks again goes to the
   parent, as before #1702. `ask` warns when `--session` names neither its own session

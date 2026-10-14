@@ -210,6 +210,34 @@ export class Sent {
   }
 
   /**
+   * Subagent `agent` finished, its last tool round ending at `before` (undefined when this module
+   * saw none): what was sent to it after then, it never read (#1729). Those records become lines
+   * for the parent, which the next `recover` submits; the rest go. Returns whether any are left
+   * for the parent.
+   */
+  finished(agent: string, before: number | undefined): Promise<boolean> {
+    return this.alone(async () => {
+      await this.load(await this.host.sessionId()).catch(() => undefined);
+      let left = false;
+      for (const session of this.sessions) {
+        const lines = await this.load(session).catch(() => undefined);
+        if (!lines?.some((l) => l.agent === agent)) continue;
+        const keep: Line[] = [];
+        for (const l of lines) {
+          if (l.agent !== agent) keep.push(l);
+          else if (before === undefined || l.at > before) {
+            const { agent: _, ...line } = l;
+            keep.push({ ...line, process: "" });
+            left = true;
+          }
+        }
+        await this.save(session, keep).catch(() => undefined);
+      }
+      return left;
+    });
+  }
+
+  /**
    * A turn started with `text`: each line it carries reached the model. Checks every session read
    * so far, since a `/clear` may come between the submit and the turn.
    */

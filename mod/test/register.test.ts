@@ -265,3 +265,88 @@ test("a subagent's question is tagged with its id, and its answer goes to it, ev
   expect(submitted).toEqual([]);
   await handlers.get("session.end")?.($, { reason: "other" }, async () => undefined);
 });
+
+test("an answer a subagent got after its last tool round goes to the parent once the subagent finishes (#1729)", async () => {
+  const { register } = (await import(REGISTER)) as {
+    register: (on: (event: string, h: Handler) => void) => void;
+  };
+  const handlers = new Map<string, Handler>();
+  register((event, h) => handlers.set(event, h));
+  const line = "Answer to d_1 (Which suffix?): beta";
+  let acked = false;
+  let status = "running";
+  const files = new Map<string, string>();
+  const sent: unknown[] = [];
+  const submitted: string[] = [];
+  const env: Record<string, string> = { STARBRIDGE_AGENT_SOCKET: "/sb/agent.sock", HOME: "/sb" };
+  const state = new Map<string, string>();
+  const $ = {
+    env: { get: async (name: string) => env[name] },
+    fs: {
+      exists: async (path: string) => files.has(path),
+      read: async (path: string) => files.get(path) ?? "",
+      write: async (path: string, text: string) => void files.set(path, text),
+      stat: async () => undefined,
+      list: async () => [],
+    },
+    state: {
+      get: async ({ key }: { key: string }) => ({ value: state.get(key) }),
+      set: async ({ key }: { key: string }, value: string) => void state.set(key, value),
+    },
+    agent: { list: async () => [{ id: "a1", status }] },
+    process: { run: async () => ({ exitCode: 0, stdout: "", stderr: "" }) },
+    http: {
+      fetch: async (url: string) => {
+        if (url.endsWith("/ack")) acked = true;
+        const events =
+          url.includes("/events") && !acked
+            ? [{ type: "answer", ack: "d_1", line, waiting: false, subagent: "a1" }]
+            : [];
+        return { status: 200, headers: {}, text: JSON.stringify({ events }) };
+      },
+    },
+    ui: { log: () => {}, status: () => {} },
+    clock: { now: () => Date.now(), sleep: (ms: number) => Bun.sleep(Math.min(ms, 5)) },
+    prompt: {
+      submit: async ({ text }: { text: string }) => {
+        submitted.push(text);
+      },
+    },
+    session: {
+      id: async () => "s1",
+      cwd: async () => "/work",
+      send: async (args: unknown) => {
+        sent.push(args);
+        return { isDelivered: true };
+      },
+    },
+    tool: { check: async () => ({ decision: "allow" }) },
+  };
+
+  // The subagent's last tool round asks; the answer comes while its final reply is written.
+  await handlers.get("tool.call")?.(
+    $,
+    { tool: "Bash", agentId: "a1", command: "starbridge ask --question Q" },
+    async (e) => ({ ...(e as object), result: "ok" }),
+  );
+  await Bun.sleep(5);
+  await handlers.get("session.start")?.($, { isInteractive: true }, async () => undefined);
+  const by = Date.now() + 5000;
+  while (!acked && Date.now() < by) await Bun.sleep(20);
+  expect(sent).toEqual([{ to: { agentId: "a1" }, text: line }]);
+
+  // A subagent that runs on reads it at its next round: its turn's end hands nothing over.
+  await handlers.get("turn.complete")?.($, { turnId: "t1", agentId: "a1" }, async () => undefined);
+  await Bun.sleep(50);
+  expect(submitted).toEqual([]);
+
+  // It finished without another round: the parent gets the answer, once.
+  status = "completed";
+  await handlers.get("turn.complete")?.($, { turnId: "t2", agentId: "a1" }, async () => undefined);
+  const until = Date.now() + 5000;
+  while (submitted.length === 0 && Date.now() < until) await Bun.sleep(20);
+  expect(submitted).toEqual([
+    `${line}\nYour subagent a1 asked this and could not take the answer: act on it, or pass it on.`,
+  ]);
+  await handlers.get("session.end")?.($, { reason: "other" }, async () => undefined);
+});
