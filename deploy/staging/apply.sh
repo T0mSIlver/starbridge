@@ -41,7 +41,26 @@ if ! docker image inspect "$caddy" >/dev/null 2>&1; then
 fi
 docker tag "$caddy" starbridge-caddy:latest
 
-$compose up -d --remove-orphans server web-a caddy
+# Docker sometimes fails a recreate with "removal of container <id> is already in progress", with
+# nothing else on the box touching that container: it is still removing the old one compose just
+# stopped (#1663). The new one is up by then, but the deploy failed. Once that removal ends, a
+# second `up` succeeds.
+up() { $compose up -d --remove-orphans server web-a caddy; }
+log=$(mktemp)
+if up 2>"$log"; then
+  cat "$log" >&2
+else
+  cat "$log" >&2
+  old=$(sed -n 's/.*removal of container \([0-9a-f]*\) is already in progress.*/\1/p' "$log" | head -n 1)
+  [ -n "$old" ] || { rm -f "$log"; exit 1; }
+  echo "staging/apply.sh: Docker is still removing container $old; trying again once it is gone" >&2
+  for _ in $(seq 30); do
+    docker container inspect "$old" >/dev/null 2>&1 || break
+    sleep 1
+  done
+  up
+fi
+rm -f "$log"
 healthy() {
   for _ in $(seq 60); do
     curl -fsS "$1" >/dev/null 2>&1 && return 0
