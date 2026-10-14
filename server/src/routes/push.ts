@@ -1,6 +1,7 @@
 import { type Context, Hono } from "hono";
 import { z } from "zod";
 import { fail, memberOf, randomToken, recheck, requireCaller } from "../auth";
+import { pushHostKey } from "../config";
 import type { Env } from "../env";
 import { json } from "../http";
 import { ipKey, rateLimit } from "../limits";
@@ -35,6 +36,26 @@ pushRoutes.post("/push/subscriptions", requireCaller("paired-device"), async (c)
       .get(member, caller.account) as { mine: number; total: number };
     if (mine >= DEVICE_SUBSCRIPTIONS || total >= ACCOUNT_SUBSCRIPTIONS)
       fail(409, "too-many-subscriptions", "delete an old subscription first");
+    if (target.type === "webpush" || target.type === "unifiedpush") {
+      const host = (endpoint: string) => pushHostKey(new URL(endpoint).hostname);
+      const hosts = new Set(
+        (
+          db
+            .query(
+              `SELECT endpoint FROM push_subscriptions
+               WHERE account_id = ? AND type IN ('webpush', 'unifiedpush')`,
+            )
+            .all(caller.account) as { endpoint: string }[]
+        ).map((r) => host(r.endpoint)),
+      );
+      const most = c.var.config.limits.pushHosts;
+      if (!hosts.has(host(target.endpoint)) && hosts.size >= most)
+        fail(
+          409,
+          "too-many-subscriptions",
+          `an account's subscriptions use at most ${most} push services; delete an old one first`,
+        );
+    }
   }
   // Subscribing the same endpoint again keeps its id and takes the new keys.
   const row = db

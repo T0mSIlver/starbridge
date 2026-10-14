@@ -74,6 +74,11 @@
   any account on the server could otherwise make it call into the owner's network. Relay mode
   refuses any listed host. `1`, from when it was a yes/no flag, still allows every private host, with a
   warning at startup.
+- A Web Push or UnifiedPush endpoint on a public host must use port 443, where every push service
+  listens, and an account's subscriptions may name at most 8 push service hosts; the server has
+  at most 32 pushes in flight to one host, its own and relayed ones together (#1738). Otherwise a
+  subscription could make the server probe any port of any host, or hold many requests open on
+  one. A self-hoster's distributor on another port goes in `ALLOW_PRIVATE_PUSH_ENDPOINTS`.
 - A server's VAPID key can change, as when a self-hoster leaves the relay for their own keys
   (#567). Each page boot compares the browser's subscription key with the server's and subscribes
   again when they differ. The server drops a Web Push subscription its push service refuses with

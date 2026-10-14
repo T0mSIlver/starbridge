@@ -573,7 +573,7 @@ options. For permission answers, see below.
 
 | Route | Who | What |
 |---|---|---|
-| `POST /push/subscriptions` | device | `{type: "fcm" \| "webpush" \| "unifiedpush" \| "apns", endpoint, keys?, environment?}` → `{id}`; URL endpoints must be public HTTPS; an `apns` endpoint is the device token in hex, and `environment` (`production` unless set, or `sandbox`) names its APNs environment; 409 `too-many-subscriptions` past 10 per device or 30 per account (re-subscribing a known endpoint always works) |
+| `POST /push/subscriptions` | device | `{type: "fcm" \| "webpush" \| "unifiedpush" \| "apns", endpoint, keys?, environment?}` → `{id}`; URL endpoints must be public HTTPS on port 443; an `apns` endpoint is the device token in hex, and `environment` (`production` unless set, or `sandbox`) names its APNs environment; 409 `too-many-subscriptions` past 10 per device, 30 per account or 8 Web Push and UnifiedPush hosts per account (re-subscribing a known endpoint always works) |
 | `DELETE /push/subscriptions/:id` | device | stop pushing there |
 | `GET /push/vapid` | anyone | `{publicKey}`: the VAPID key a browser subscribes with (the relay's when this server forwards Web Push) |
 | `POST /relay` | another server | relay mode only: `{type: "fcm" \| "webpush" \| "apns", endpoint, keys?, environment?, payload, thread?}` → `{result: "ok" \| "gone" \| "failed" \| "no-route"}`; rate-limited per IP; 503 `busy` with `Retry-After` while the server has 64 relayed Web Pushes in flight, the address 4, its IPv6 /48 8, or the push service's host 16 |

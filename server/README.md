@@ -115,7 +115,7 @@ each browser's own push service still carries them, encrypted, such as Google's 
    VAPID_PRIVATE_KEY=...
    ```
 
-   If your ntfy is on a private address or plain HTTP, add its host, such as
+   If your ntfy is on a private address, plain HTTP or a port other than 443, add its host, such as
    `ALLOW_PRIVATE_PUSH_ENDPOINTS=ntfy.lan` or `ALLOW_PRIVATE_PUSH_ENDPOINTS=192.168.1.20`. Then
    restart: `docker compose -f server/compose.yaml up -d`. A browser that turned notifications on
    through the relay subscribes again with your key the next time it opens the page.

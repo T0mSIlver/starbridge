@@ -223,8 +223,11 @@ test("subscriptions to private or plain-HTTP addresses are refused unless allowe
     "https://[fd00::1]/x",
     "https://[fe80::1]/x",
     "https://box.internal/x",
+    "https://push.example:8443/x",
+    "https://push.example:22/x",
   ])
     expect(checkTarget(wp(e), [])).toBeString();
+  expect(checkTarget(wp("https://push.example:443/x"), [])).toBeUndefined();
   for (const e of [
     "https://fcm.googleapis.com/fcm/send/abc",
     "https://[2606:4700::1111]/x",
@@ -567,13 +570,17 @@ test("a relay without credentials of its own does not forward onward", async () 
   expect(r.json).toEqual({ result: "no-route" });
 });
 
-async function pinnedPush(dns: (host: string) => string[]) {
+async function pinnedPush(
+  dns: (host: string) => string[],
+  send: (url: URL) => Promise<number> = async () => 201,
+  limits: Partial<typeof DEFAULT_LIMITS> = {},
+) {
   const { openDb } = await import("../src/db");
   const { Push } = await import("../src/push");
   const connects: string[] = [];
   const lookups: string[] = [];
   const push = new Push(
-    testConfig({ privatePushHosts: [] }),
+    testConfig({ privatePushHosts: [], limits: { ...DEFAULT_LIMITS, ...limits } }),
     openDb(":memory:"),
     (() => {
       throw new Error("pushes to subscription URLs must go through the pinned connection");
@@ -584,7 +591,7 @@ async function pinnedPush(dns: (host: string) => string[]) {
     },
     async (url, address) => {
       connects.push(`${url.host} via ${address}`);
-      return 201;
+      return send(url);
     },
   );
   return { push, connects, lookups };
@@ -613,6 +620,49 @@ test("a push connects to the address it checked, so a rebinding DNS answer canno
   expect(await push.send(up("rebind.example"), "{}")).toBe("ok");
   expect(lookups).toEqual(["rebind.example"]);
   expect(connects).toEqual(["rebind.example via 93.184.216.34"]);
+});
+
+test("a push service host holds at most pushesPerHost pushes in flight; one on another port is refused", async () => {
+  let release = () => {};
+  const held = new Promise<number>((r) => {
+    release = () => r(201);
+  });
+  const { push, connects } = await pinnedPush(
+    () => ["93.184.216.34"],
+    (url) => (url.hostname === "slow.example" ? held : Promise.resolve(201)),
+    { pushesPerHost: 2 },
+  );
+  const stuck = [push.send(up("slow.example"), "{}"), push.send(up("slow.example"), "{}")];
+  expect(await push.send(up("slow.example"), "{}")).toBe("failed");
+  expect(await push.send(up("other.example"), "{}")).toBe("ok");
+  release();
+  expect(await Promise.all(stuck)).toEqual(["ok", "ok"]);
+  expect(await push.send(up("slow.example"), "{}")).toBe("ok");
+  // A subscription stored before the port rule is not sent to.
+  expect(await push.send(up("other.example:8443"), "{}")).toBe("failed");
+  expect(connects.filter((c) => c.includes("8443"))).toEqual([]);
+});
+
+test("an account's Web Push subscriptions name at most pushHosts push services", async () => {
+  const { s, acct } = await setup({
+    privatePushHosts: [],
+    limits: { ...DEFAULT_LIMITS, pushHosts: 2 },
+  });
+  const sub = (host: string, n = 0) => ({
+    type: "webpush",
+    endpoint: `https://${host}/x${n}`,
+    keys: { p256dh: "x", auth: "y" },
+  });
+  const post = async (body: object) =>
+    s.call("POST", "/v1/push/subscriptions", { token: acct.device.token, body });
+  expect((await post(sub("a.example"))).status).toBe(201);
+  expect((await post(sub("B.example."))).status).toBe(201);
+  const over = await post(sub("c.example"));
+  expect(over.status).toBe(409);
+  expect(over.json.error).toBe("too-many-subscriptions");
+  // Another subscription on a host already named, and FCM, still pass.
+  expect((await post(sub("b.example", 1))).status).toBe(201);
+  expect((await post({ type: "fcm", endpoint: "tok-1" })).status).toBe(201);
 });
 
 test("a device holds at most 10 push subscriptions, an account 30", async () => {
