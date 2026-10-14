@@ -59,6 +59,13 @@ a browser; the app adds a menu bar light and notifications, so a web release nee
   server window instead while the page can't load, so a wrong server can still be fixed. Closing the
   window keeps the app in the menu bar and drops its Dock icon, which shows again with the window.
   ⌃⌥S shows the window from anywhere.
+- **Time format follows macOS** (#1705). The page's default Time format reads the 12- or 24-hour
+  choice from the Mac itself through the bridge's `clock()`: System Settings → General → Date &
+  Time → 24-hour time (`AppleICUForce24HourTime`, `AppleICUForce12HourTime`), else the Language
+  & Region setting's format by Intl, `en-US@rg=frzzzz` reading France's 24 hours. The browser's
+  language would not do: with languages en-US then fr-FR, it says PM in France. The row keeps
+  "System" here, since it then follows the system; the web's says "Browser". The app reads it
+  again at each window focus, so the change shows once the owner comes back.
 - **The menu bar icon** centres the arch top to bottom in its 18 pt image, as the system icons
   are (#1449): standing on the image's bottom edge, as the other crops do, it sat 1.5 pt below them.
 - **The amber icon's arch follows the menu bar, not the theme** (#1514). macOS tints the bar by the
@@ -74,8 +81,13 @@ a browser; the app adds a menu bar light and notifications, so a web release nee
   and third with a dot in `fg`, never amber, which means an agent needs the owner. It shows
   nothing while idle or checking, and a failed check only logs: it may be the network, and the
   next one comes. Checks go on while an update is offered or downloaded, and a newer release
-  replaces it, so one click installs the newest (#1444). Settings → Updates holds "Release candidates" (the menu's former "Get Release
-  Candidates", same default) and "Download updates automatically" (on). The bridge carries the
+  replaces it, so one click installs the newest (#1444). Settings → Updates holds "Update channel", Stable or Release candidates
+  (#1692, which replaced the "Release candidates" switch, the menu's former "Get Release
+  Candidates"; spec/releases.md), and "Download updates automatically" (on). Tip, main's builds,
+  is reached only by installing a tip build from `T0mSIlver/starbridge-tip`, which starts on it: the
+  choice shows only on a tip build or while on Tip, and the app refuses it otherwise, since tip
+  builds are the owner's (owner's call). Leaving it is allowed, and the app stays on its build
+  until the chosen channel passes it. The bridge carries the
   updater's state and three actions, check, download and restart, so the page decides nothing
   about versions. A browser sees none of it, the one place the app's page differs from the
   browser's besides "Keep Starbridge in". Under 600 px the rail gives way to the bottom bar, and

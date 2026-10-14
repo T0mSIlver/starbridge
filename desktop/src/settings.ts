@@ -1,6 +1,7 @@
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { DEFAULT_SERVER, serverOrigin } from "./origin";
+import { CHANNELS, type Channel, channelOf } from "./releases";
 
 /**
  * Where the app stays: the menu bar, with a Dock icon only while the window is open (the
@@ -23,8 +24,8 @@ export interface Settings {
   place: Place;
   /** Whether macOS was asked to allow notifications, which happens once, after sign-in. */
   notificationsAsked: boolean;
-  /** Whether updates include release candidates, not only finals (#1071). */
-  releaseCandidates: boolean;
+  /** Where updates come from: finals, rcs too (#1071), or every build of main too (#1692). */
+  channel: Channel;
   /** Whether a release found downloads at once (#1398). */
   autoDownload: boolean;
   /** The page's last background colour, which the window shows until the page paints. */
@@ -37,9 +38,13 @@ export const parseBackground = (x: unknown): string | null =>
 
 export const DEFAULT_SHORTCUT = "Control+Alt+S";
 
-/** `version` is the running app's: one installed from a release candidate follows them at first. */
+/**
+ * `version` is the running app's: one installed from an rc starts on "rc", one from a tip build on
+ * "tip". Before the channel, the setting was `releaseCandidates`, which still counts, but for a
+ * tip build: no app could pick Tip then.
+ */
 export function readSettings(file: string, version = ""): Settings {
-  let saved: Partial<Settings> = {};
+  let saved: Partial<Settings> & { releaseCandidates?: unknown } = {};
   try {
     saved = JSON.parse(readFileSync(file, "utf8"));
   } catch {}
@@ -56,10 +61,13 @@ export function readSettings(file: string, version = ""): Settings {
       typeof saved.notificationsAsked === "boolean"
         ? saved.notificationsAsked
         : notified.length > 0,
-    releaseCandidates:
-      typeof saved.releaseCandidates === "boolean"
+    channel: CHANNELS.includes(saved.channel as Channel)
+      ? (saved.channel as Channel)
+      : typeof saved.releaseCandidates === "boolean" && channelOf(version) !== "tip"
         ? saved.releaseCandidates
-        : version.includes("-rc."),
+          ? "rc"
+          : "stable"
+        : channelOf(version),
     autoDownload: typeof saved.autoDownload === "boolean" ? saved.autoDownload : true,
     background: parseBackground(saved.background) ?? undefined,
   };

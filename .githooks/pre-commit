@@ -31,7 +31,9 @@ for config in $(git ls-files '*/biome.json'); do
   [ -n "$rewrite" ] || continue
   (cd "$pkg" && ./node_modules/.bin/biome check --write --no-errors-on-unmatched --files-ignore-unknown=true $rewrite) ||
     failed=1
-  (cd "$pkg" && git add -- $rewrite)
+  # Stage from the repo root with full paths: a hook runs with GIT_DIR set, so git run from inside
+  # $pkg would treat it as the worktree top and stage the files a second time at the root (#1670).
+  for f in $rewrite; do git add -- "$pkg/$f"; done
 done
 if [ -n "$failed" ]; then
   echo "pre-commit: Biome found the errors above; fix them and commit again." >&2

@@ -185,3 +185,83 @@ test("an answer queued behind a typed prompt when the process exits comes back o
   expect(JSON.parse(files.get("/sb/.config/starbridge/mod-sent/s1.json") ?? "")).toEqual([]);
   for (const p of [first, resumed, again, reloaded]) await p.on("session.end", { reason: "other" });
 });
+
+test("a subagent's question is tagged with its id, and its answer goes to it, even mid-turn (#1702)", async () => {
+  const { register } = (await import(REGISTER)) as {
+    register: (on: (event: string, h: Handler) => void) => void;
+  };
+  const handlers = new Map<string, Handler>();
+  register((event, h) => handlers.set(event, h));
+  const line = "Answer to d_1 (Which suffix?): beta";
+  let acked = false;
+  const sent: unknown[] = [];
+  const submitted: string[] = [];
+  const env: Record<string, string> = { STARBRIDGE_AGENT_SOCKET: "/sb/agent.sock", HOME: "/sb" };
+  const $ = {
+    env: { get: async (name: string) => env[name] },
+    fs: { read: async () => "", write: async () => {}, stat: async () => undefined },
+    process: { run: async () => ({ exitCode: 0, stdout: "", stderr: "" }) },
+    http: {
+      fetch: async (url: string) => {
+        if (url.endsWith("/ack")) acked = true;
+        const events =
+          url.includes("/events") && !acked
+            ? [{ type: "answer", ack: "d_1", line, waiting: false, subagent: "a1" }]
+            : [];
+        return { status: 200, headers: {}, text: JSON.stringify({ events }) };
+      },
+    },
+    ui: { log: () => {}, status: () => {} },
+    clock: { now: () => Date.now(), sleep: (ms: number) => Bun.sleep(Math.min(ms, 5)) },
+    prompt: {
+      submit: async ({ text }: { text: string }) => {
+        submitted.push(text);
+      },
+    },
+    session: {
+      id: async () => "s1",
+      cwd: async () => "/work",
+      send: async (args: unknown) => {
+        sent.push(args);
+        return { isDelivered: true };
+      },
+    },
+    tool: {
+      check: async ({ input }: { input: { command: string } }) => ({
+        decision: input.command.startsWith("starbridge ask") ? "allow" : "ask",
+      }),
+    },
+  };
+
+  // The subagent's `starbridge ask` runs with its id; the rules judge the command as written.
+  let ran: { command?: string } = {};
+  await handlers.get("tool.call")?.(
+    $,
+    { tool: "Bash", agentId: "a1", command: "starbridge ask --question Q" },
+    async (e) => {
+      ran = e as { command?: string };
+      return { result: "ok" };
+    },
+  );
+  expect(ran.command).toBe("export STARBRIDGE_CLAUDE_AGENT=a1\nstarbridge ask --question Q");
+  const check = (command: string) =>
+    handlers.get("tool.check")?.(
+      $,
+      { tool: "Bash", input: { command }, agentId: "a1" },
+      async () => ({
+        decision: "ask",
+      }),
+    ) as Promise<{ decision: string }>;
+  expect((await check(ran.command as string)).decision).toBe("allow");
+  expect((await check("export STARBRIDGE_CLAUDE_AGENT=a1\nrm -rf /")).decision).toBe("ask");
+
+  await handlers.get("session.start")?.($, { isInteractive: true }, async () => undefined);
+  // The main agent's turn runs: a subagent's answer does not wait for its next tool call.
+  await handlers.get("turn.start")?.($, { text: "go", turnId: "t1" }, async () => undefined);
+  const by = Date.now() + 5000;
+  while (!acked && Date.now() < by) await Bun.sleep(20);
+  expect(acked).toBe(true);
+  expect(sent).toEqual([{ to: { agentId: "a1" }, text: line }]);
+  expect(submitted).toEqual([]);
+  await handlers.get("session.end")?.($, { reason: "other" }, async () => undefined);
+});

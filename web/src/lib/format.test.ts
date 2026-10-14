@@ -16,6 +16,28 @@ test("clockTime: the Clock setting overrides the browser's 12- or 24-hour choice
   expect(clockTime(evening, "12")).toMatch(/^10:05\s?PM$/i);
 });
 
+test("clockTime: the default follows the Mac's choice in the desktop app, the browser's language elsewhere (#1705)", () => {
+  const evening = new Date(2026, 9, 5, 22, 5);
+  const bridge = globalThis as { starbridgeDesktop?: unknown };
+  try {
+    bridge.starbridgeDesktop = { clock: () => "24" };
+    expect(clockTime(evening, "system")).toBe("22:05");
+    bridge.starbridgeDesktop = { clock: () => "12" };
+    expect(clockTime(evening, "system")).toMatch(/^10:05\s?PM$/i);
+    // An explicit choice beats the Mac's.
+    expect(clockTime(evening, "24")).toBe("22:05");
+    // An app that cannot say (older, or off macOS) leaves the browser's language.
+    for (const clock of [() => null, () => "13", undefined]) {
+      bridge.starbridgeDesktop = { clock };
+      expect(clockTime(evening, "system")).toBe(
+        evening.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" }),
+      );
+    }
+  } finally {
+    bridge.starbridgeDesktop = undefined;
+  }
+});
+
 test("rows that share a name show the time they were added, so a machine paired again reads apart (#287)", () => {
   const at = (h: number) => new Date(2026, 9, 6, h, 32).toISOString();
   const labels = addedLabels(

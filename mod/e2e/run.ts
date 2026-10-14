@@ -283,7 +283,124 @@ const TASK =
   'Question: "{q}". After posting, create `progress-{n}.txt` containing the word started, ' +
   "then end your turn. When the answer arrives, create the chosen file with the line chosen.";
 
+interface SubTranscript {
+  agent: string;
+  entries: Entry[];
+}
+
+/** The transcripts of `c`'s subagents, by agent id. */
+function subagents(c: Claude): SubTranscript[] {
+  const dir = join(c.projectDir, c.sessionId, "subagents");
+  if (!existsSync(dir)) return [];
+  return readdirSync(dir)
+    .filter((f) => /^agent-.*\.jsonl$/.test(f))
+    .map((f) => ({
+      agent: f.slice("agent-".length, -".jsonl".length),
+      entries: readFileSync(join(dir, f), "utf8")
+        .split("\n")
+        .filter((l) => l.trim())
+        .flatMap((l) => {
+          try {
+            return [JSON.parse(l) as Entry];
+          } catch {
+            return [];
+          }
+        }),
+    }));
+}
+
+/** Whether a transcript mentions `needle` anywhere. */
+const mentions = (entries: Entry[], needle: string) =>
+  entries.some((e) => JSON.stringify(e).includes(needle));
+
+/** True once a subagent handed its report back, or its last entry is its final reply. */
+const finished = (t: SubTranscript) => {
+  const last = t.entries.filter((e) => e.type === "assistant").at(-1);
+  if (last?.message?.stop_reason === "end_turn") return true;
+  const blocks = Array.isArray(last?.message?.content)
+    ? (last.message.content as { name?: string }[])
+    : [];
+  return blocks.some((b) => b.name === "SubagentHandback");
+};
+
+/**
+ * A background subagent asks with `starbridge ask` and the answer goes to it, not to the parent
+ * (#1702): `running` answers while it still works, otherwise once it finished.
+ */
+async function subagentCase(running: boolean): Promise<Row> {
+  const tag = running ? "sub-running" : "sub-finished";
+  const a = claude(tag);
+  await a.start();
+  const q = `Which suffix (${tag} ${Date.now() % 10000})?`;
+  const busy = `python3 -c "import time; time.sleep(10)"`;
+  const work = running
+    ? `Then run exactly \`${busy}\` with Bash in the foreground six times, one call after another. Then, if a message has brought the answer to your question, create the file \`${tag}-<answer>.txt\` in the current directory; otherwise create \`${tag}-none.txt\`. Then reply done.`
+    : `Then reply with the word asked and stop. If a message later brings the answer to your question, create the file \`${tag}-<answer>.txt\` in the current directory, then reply done.`;
+  const task = `Run with Bash, exactly: starbridge ask --question "${q}" --option alpha --option beta --context "A test of Starbridge." ${work}`;
+  await a.send(
+    `Spawn one subagent with the Agent tool, subagent_type general-purpose, run_in_background true, description "${tag}", and this prompt: ${JSON.stringify(task)} After spawning it, reply with the word spawned and end your turn. Do not act on its question or its answer yourself.`,
+  );
+  const id = await until("the decision", () => askedBy(a.sessionId, `(${tag}`), 180_000);
+  const asked = (state().asked as Record<string, { subagent?: string }>)[id];
+  say(`${tag}: ${id} asked by subagent ${asked?.subagent ?? "(none recorded)"}`);
+  const sub = await until(
+    "the subagent's transcript",
+    () => subagents(a).find((t) => mentions(t.entries, id)),
+    60_000,
+  );
+  if (running) await Bun.sleep(5_000);
+  else {
+    await until(
+      "the subagent's end",
+      () => subagents(a).find((t) => t.agent === sub.agent && finished(t)),
+      180_000,
+    );
+    await a.idle();
+    await Bun.sleep(5_000);
+  }
+  const wasRunning = !finished(subagents(a).find((t) => t.agent === sub.agent) as SubTranscript);
+  const posted = Date.now();
+  await owner.answer(id, "beta");
+  const file = join(proj, `${tag}-beta.txt`);
+  const got = await until("the subagent's file", () => existsSync(file) || undefined, 240_000).then(
+    () => Date.now(),
+    () => undefined,
+  );
+  await a.idle().catch(() => undefined);
+  // When the answer entered the subagent's transcript.
+  const entry = subagents(a)
+    .find((t) => t.agent === sub.agent)
+    ?.entries.find((e) => JSON.stringify(e).includes(`Answer to ${id}`));
+  const reached = entry ? Date.parse(entry.timestamp ?? "") : undefined;
+  const toParent = a.prompt(`Answer to ${id}`) ?? a.context(`Answer to ${id}`);
+  await a.stop();
+  return {
+    name: running ? "subagent, answered while it runs" : "subagent, answered after it finished",
+    result: asked?.subagent === sub.agent && reached && got && !toParent ? "pass" : "FAIL",
+    timing: `post → subagent read it ${reached ? secs(reached - posted) : "never"}; → its file ${got ? secs(got - posted) : "never"}`,
+    note: [
+      asked?.subagent === sub.agent
+        ? "the card names the subagent"
+        : `the card names ${asked?.subagent ?? "no subagent"}`,
+      wasRunning ? "answered while it ran" : "answered after it finished",
+      reached ? "the subagent got the answer" : "the subagent never got it",
+      toParent ? "the parent got it too" : "the parent did not",
+      got ? "it acted" : "no file",
+    ].join("; "),
+  };
+}
+
 const cases: Record<string, () => Promise<Row>> = {
+  /** A background subagent asks; the answer reaches it while it runs (#1702). */
+  subrunning() {
+    return subagentCase(true);
+  },
+
+  /** A background subagent asks and finishes; the answer resumes it (#1702). */
+  subfinished() {
+    return subagentCase(false);
+  },
+
   /** An agent asks through the skill, keeps working, ends its turn; the answer comes while idle. */
   async idle() {
     const a = claude("idle");

@@ -33,17 +33,26 @@
   ships code starbridge.run already runs and deploys nothing. A final is promoted, not cut: `promote.yml` stamps the newest rc's
   commit on a commit of its own, tags it and runs the release on that tag, so main never stops
   merging between an rc and its final, then pushes a branch that points main's marketplace at the
-  final. The owner approves each promotion, after the rc has run on the maintainer's phone and no issue
-  labelled `regression` is open, which the workflow also checks. Waiting N days instead was
-  rejected: with five testers, no report is weak evidence, and v0.1.3 shipped broken without one.
-- **Cadence** (#1538). An rc whenever a batch of merges lands, about daily, since it is also what
-  puts server changes on starbridge.run; the owner promotes it once they have used it a day.
+  final. The owner approves each promotion (see Cadence), and the workflow also checks that no
+  issue labelled `regression` is open. Waiting N days instead was rejected: with five testers, no
+  report is weak evidence, and v0.1.3 shipped broken without one.
+- **Cadence** (#1538, #1698). An rc is cut on demand, when a batch of merges lands or the owner
+  asks, and at least one a day while main has changes since the last rc. An rc is also what puts
+  server changes on starbridge.run. About 4 hours after an rc is cut, if no issue labelled
+  `regression` is open, the orchestrator sends the owner a card to promote it, and the owner's yes
+  runs `promote.yml`. The owner's devices run the tip ring (below), which already holds the rc's
+  code, so 4 hours covers their own use; testers' silence is weak evidence. While a promotion
+  card is open, no new rc is cut except a fix to that rc, since a new rc restarts the 4 hours. A
+  final is always the newest rc: promoting an older one would move testers on a newer rc back to
+  older code.
   Channels stay: Android rcs and finals to Play's Alpha track and GitHub (production once Play's
-  12-tester test is passed), the desktop app's finals for everyone and rcs for apps installed from
-  an rc or with Get Release Candidates on, the CLI's rcs to npm's `next` and finals to `latest` and
+  12-tester test is passed), the desktop app's finals for everyone, rcs for apps on Release candidates
+  and main's builds for apps on Tip, the CLI's rcs to npm's `next` and finals to `latest` and
   Homebrew, the plugin marketplace on finals. The iPhone app follows Android once Apple's export
   compliance code arrives: rcs to TestFlight, finals to the App Store.
-- **Three rings: main, rc, final** (#1540). The owner runs main against staging, testers and
+- **Three rings: tip, rc, final** (#1540). The owner's devices run the tip ring, every
+  change on main (Android's internal track per Android merge and rc tag, #1691; the Mac's Tip
+  channel, #1692; the dev box through staging); testers and
   starbridge.run run rcs, everyone else finals, and a change never skips a ring: v0.1.3 broke every
   tester's app before the owner had run it. The dev box's CLI, agent, plugin and mod follow the
   server its machine is paired with, staging. The Android app's build of main goes to Play's
@@ -66,8 +75,25 @@
   `starbridge-client` header leaves that part out, so servers read the version as the rc's. A Google
   account in internal testing is no longer eligible for closed testing, so the owner joins it with a
   second account and stays one of the 12 closed testers. The iPhone app follows to TestFlight's
-  internal testers once Apple's export compliance code arrives (`IOS_MAIN_TESTFLIGHT`); the Mac app
-  stays on rcs, since a notarized build per merge would cost a macOS runner for one user.
+  internal testers once Apple's export compliance code arrives (`IOS_MAIN_TESTFLIGHT`).
+- **The Mac app's tip** (#1692). The owner's Mac follows main as his phone does, by Android's rules:
+  every push to main that touches what the app is built from (desktop.yml's paths: `desktop/`, the
+  lockfile, the workflow; the app embeds no other package) builds it, one at a time, a running
+  build never cancelled and the newest waiting run winning, and a commit the tip already contains
+  takes no build. The build is signed and notarized like a release's, and its files replace those
+  of the one release `tip` of the public repository `T0mSIlver/starbridge-tip`, as Ghostty's tip
+  does; the previous build's stay, so an app that read the last `latest-mac.yml` can still
+  download its zip. Never a release in this repository: Obtainium users with prereleases on would
+  get every merge. Its version is `<version under way>-tip.<n>`, the version under way as for
+  Android's builds of main and `n` the number of commits on main that changed the app's paths,
+  which grows with every build and reads no state: semver puts `0.1.7-tip.80` above `0.1.7-rc.3`
+  ("tip" sorts after "rc") and below `0.1.7`, so the final passes it. A separate Linux job publishes,
+  holding a fine-grained token that writes that repository only (`TIP_RELEASE_TOKEN`, in
+  `desktop-release`), so the token never shares a job with the build's third-party packages; one
+  publish runs at a time, and one whose commit the tip already contains is dropped, so the tip never
+  goes back. CI reads what the tip holds (`tip.json`) through the API: the download URL kept
+  answering 404 from a cache for minutes after the file existed. The cost is a macOS runner for about 15 minutes per desktop merge, which #1684 had cut
+  while no app updated from main.
 - **A record of what shipped** (#1618). The last job of `release.yml` writes the version, the
   release's date and which channels its jobs reached (GitHub, npm, Homebrew, the desktop app, Play's
   track and versionCode, TestFlight's build) to `releases.json` on the `releases-data` branch, only
@@ -142,16 +168,20 @@
   `latest-mac.yml` to the Release. Every 6 hours and at start, the app reads that file from the
   release it follows, downloads the zip (or waits for the rail's Update available, with Settings' "Download updates
   automatically" off), and installs it on quit or from the rail's Restart to update (#1398). It
-  follows GitHub's latest release, or with Settings' "Release candidates" on, the newest
-  rc when that is newer (#1071); an app installed from an rc starts with it on. Turning it off cancels
-  an rc download under way; one already downloaded still installs on quit, since Squirrel holds it. The app picks the
+  follows the channel in Settings → Updates (#1692): Stable, GitHub's latest release; Release
+  candidates, the newest rc when that is newer (#1071); Tip, also the tip build (below) when that is
+  newer still, read from `T0mSIlver/starbridge-tip`. An app installed from an rc starts on Release
+  candidates, one from a tip build on Tip, the only way to reach Tip: it is the owner's ring
+  (spec/desktop.md). electron-updater never downgrades, so a lower channel
+  holds the installed version until it passes it, which Settings says under the choice. Moving
+  down cancels a download the new channel does not offer; one already downloaded still installs
+  on quit, since Squirrel holds it. Settings from before the channel keep their meaning, and the
+  bridge still reads and takes the old switch, since starbridge.run's page moves only with an rc. The app picks the
   release from the `releases/latest` redirect and the releases feed: electron-updater's own GitHub
   lookup keeps an app installed from an rc on rcs and never offers it a final, and GitHub's API
   allows 60 requests an hour per address. macOS
   installs an update only with the running app's Developer ID, so ad hoc builds never update.
-  Since no app updates from main, `desktop.yml` signs and notarizes on a push to main only when
-  what signing reads changes, to catch a break before the rc tag, and otherwise only by hand
-  (#1684): every desktop push cost 8 minutes of macOS for a DMG nobody installed.
+  The tip build (above) also catches a signing or notarization break before the rc tag.
 - **One version everywhere** (#471). `bun cli/scripts/version.ts <version>` stamps the version
   into `cli/package.json`, `web/package.json`, `desktop/package.json`, both `plugin.json`, the mod's `VERSION`, Android's
   default `versionName` and the marketplace's two `ref`s, in a PR; the merged commit is tagged,

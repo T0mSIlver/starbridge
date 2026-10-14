@@ -14,7 +14,7 @@ import {
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
-import { type DesktopPlace, desktop } from "@/lib/desktop";
+import { type DesktopChannel, type DesktopPlace, desktop, desktopClock } from "@/lib/desktop";
 import type { RecoveryState } from "@/lib/device";
 import { addedLabels, checkUntil, dayAndTime, releaseLabel, shownCheck } from "@/lib/format";
 import { AGENTS_GUIDE } from "@/lib/links";
@@ -896,23 +896,43 @@ function AppSection() {
 }
 
 /**
- * The desktop app's updates (#1398), which a browser has none of. Turning release candidates off
- * drops one found or downloading; one downloaded still installs on quit (spec/releases.md).
+ * The desktop app's updates (#1398): where they come from (#1692), Tip only on a tip build, which
+ * only the owner installs, and whether they download by themselves. Moving to a lower channel drops a release found or downloading; one downloaded still
+ * installs on quit (spec/releases.md). Apps before the channel have the Release candidates switch.
  */
 function UpdatesSection() {
   const updates = useDesktopUpdates();
   const set = desktop?.setUpdateSettings;
   if (!updates || !set) return null;
-  const { releaseCandidates, autoDownload } = updates.settings;
+  const { releaseCandidates, autoDownload, channel, ahead, tip } = updates.settings;
+  const channels: [DesktopChannel, string][] = [
+    ["stable", "Stable"],
+    ["rc", "Release candidates"],
+  ];
+  if (tip) channels.push(["tip", "Tip"]);
   return (
     <Section title="Updates">
-      <Row label="Release candidates">
-        <Switch
-          label="Release candidates"
-          checked={releaseCandidates}
-          onChange={(v) => set({ releaseCandidates: v })}
-        />
-      </Row>
+      {channel ? (
+        <Row
+          label="Update channel"
+          sub={ahead ? `Stays on ${desktop?.version} until this channel passes it` : undefined}
+        >
+          <Segmented<DesktopChannel>
+            label="Update channel"
+            value={channel}
+            options={channels}
+            onChange={(c) => set({ channel: c })}
+          />
+        </Row>
+      ) : (
+        <Row label="Release candidates">
+          <Switch
+            label="Release candidates"
+            checked={releaseCandidates}
+            onChange={(v) => set({ releaseCandidates: v })}
+          />
+        </Row>
+      )}
       <Row label="Download updates automatically">
         <Switch
           label="Download updates automatically"
@@ -949,7 +969,8 @@ function LookSection() {
           label="Time format"
           value={clock}
           options={[
-            ["system", "System"],
+            // "system" is what older versions stored: it stays the key for the default.
+            ["system", desktopClock() ? "System" : "Browser"],
             ["12", "12-hour"],
             ["24", "24-hour"],
           ]}

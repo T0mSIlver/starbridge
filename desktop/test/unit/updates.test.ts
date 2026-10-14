@@ -1,5 +1,7 @@
 import { expect, test } from "bun:test";
+import type { Channel } from "../../src/releases";
 import {
+  changeUpdateSettings,
   type Engine,
   parseUpdateAction,
   parseUpdateSettings,
@@ -46,7 +48,7 @@ const tick = () => new Promise((r) => setTimeout(r, 0));
 
 test("found, downloaded with its progress, then ready to restart", async () => {
   const { updates, told, runs, installs } = setup("0.2.0", {
-    releaseCandidates: false,
+    channel: "stable" as Channel,
     autoDownload: true,
   });
   updates.act("install");
@@ -70,7 +72,7 @@ test("found, downloaded with its progress, then ready to restart", async () => {
 });
 
 test("with automatic downloads off, the owner's click downloads", async () => {
-  const { updates, runs } = setup("0.2.0", { releaseCandidates: false, autoDownload: false });
+  const { updates, runs } = setup("0.2.0", { channel: "stable" as Channel, autoDownload: false });
   await updates.check();
   expect(updates.status).toEqual({ state: "available", version: "0.2.0" });
   expect(runs).toHaveLength(0);
@@ -79,7 +81,7 @@ test("with automatic downloads off, the owner's click downloads", async () => {
 });
 
 test("a failed download says why, and the next check starts over", async () => {
-  const { updates, runs } = setup("0.2.0", { releaseCandidates: false, autoDownload: true });
+  const { updates, runs } = setup("0.2.0", { channel: "stable" as Channel, autoDownload: true });
   await updates.check();
   runs[0]?.finish(new Error("Could not get code signature"));
   await tick();
@@ -89,10 +91,10 @@ test("a failed download says why, and the next check starts over", async () => {
 });
 
 test("nothing newer, or a check that fails, leaves the button hidden", async () => {
-  const none = setup(null, { releaseCandidates: false, autoDownload: true });
+  const none = setup(null, { channel: "stable" as Channel, autoDownload: true });
   await none.updates.check();
   expect(none.updates.status).toEqual({ state: "idle" });
-  const offline = setup(null, { releaseCandidates: false, autoDownload: true });
+  const offline = setup(null, { channel: "stable" as Channel, autoDownload: true });
   offline.engine.find = async () => {
     throw new Error("offline");
   };
@@ -101,29 +103,29 @@ test("nothing newer, or a check that fails, leaves the button hidden", async () 
 });
 
 test("turning release candidates off cancels an rc download, not a downloaded one", async () => {
-  const settings = { releaseCandidates: true, autoDownload: true };
+  const settings = { channel: "rc" as Channel, autoDownload: true };
   const { updates, engine, runs } = setup("0.2.0-rc.1", settings);
   await updates.check();
-  settings.releaseCandidates = false;
+  settings.channel = "stable";
   engine.find = async () => null;
   await updates.check();
   expect(runs[0]?.cancelled).toBe(true);
   await tick();
   expect(updates.status).toEqual({ state: "idle" });
 
-  settings.releaseCandidates = true;
+  settings.channel = "rc";
   engine.find = async () => "0.2.0-rc.1";
   await updates.check();
   runs[1]?.finish();
   await tick();
-  settings.releaseCandidates = false;
+  settings.channel = "stable";
   await updates.check();
   expect(updates.status).toEqual({ state: "ready", version: "0.2.0-rc.1" });
 });
 
 test("a newer release found after a download replaces it; the same one changes nothing", async () => {
   const { updates, engine, told, runs } = setup("0.1.6-rc.1", {
-    releaseCandidates: true,
+    channel: "rc" as Channel,
     autoDownload: true,
   });
   await updates.check();
@@ -149,7 +151,7 @@ test("a newer release found after a download replaces it; the same one changes n
 
 test("an offered release gives way to a newer one, and a click during the check gets the newer", async () => {
   const { updates, engine, runs } = setup("0.1.6-rc.1", {
-    releaseCandidates: true,
+    channel: "rc" as Channel,
     autoDownload: false,
   });
   await updates.check();
@@ -167,7 +169,7 @@ test("an offered release gives way to a newer one, and a click during the check 
 });
 
 test("turning automatic downloads on downloads the release offered", async () => {
-  const settings = { releaseCandidates: false, autoDownload: false };
+  const settings = { channel: "stable" as Channel, autoDownload: false };
   const { updates, runs } = setup("0.2.0", settings);
   await updates.check();
   settings.autoDownload = true;
@@ -177,15 +179,15 @@ test("turning automatic downloads on downloads the release offered", async () =>
 });
 
 test("release candidates turned off and on during a check keep the rc offered", async () => {
-  const settings = { releaseCandidates: true, autoDownload: false };
+  const settings = { channel: "rc" as Channel, autoDownload: false };
   const { updates, engine } = setup("0.2.0-rc.1", settings);
   await updates.check();
   let found!: (v: string) => void;
   engine.find = () => new Promise((r) => (found = r));
   const checking = updates.check();
-  settings.releaseCandidates = false;
+  settings.channel = "stable";
   await updates.check();
-  settings.releaseCandidates = true;
+  settings.channel = "rc";
   await updates.check();
   found("0.2.0-rc.1");
   await checking;
@@ -194,7 +196,7 @@ test("release candidates turned off and on during a check keep the rc offered", 
 
 test("a downloaded update stays when a check finds nothing newer or fails", async () => {
   const { updates, engine, runs } = setup("0.1.6-rc.2", {
-    releaseCandidates: true,
+    channel: "rc" as Channel,
     autoDownload: true,
   });
   await updates.check();
@@ -217,24 +219,55 @@ test("the page's requests are read strictly", () => {
   expect(parseUpdateAction("download")).toBe("download");
   expect(parseUpdateAction("quit")).toBeNull();
   expect(parseUpdateSettings({ autoDownload: false })).toEqual({ autoDownload: false });
-  expect(parseUpdateSettings({ releaseCandidates: true, server: "x" })).toEqual({
-    releaseCandidates: true,
-  });
+  expect(parseUpdateSettings({ channel: "tip", server: "x" })).toEqual({ channel: "tip" });
+  expect(parseUpdateSettings({ channel: "nightly" })).toBeNull();
+  // Pages from before the channel send the switch.
+  expect(parseUpdateSettings({ releaseCandidates: true })).toEqual({ channel: "rc" });
+  expect(parseUpdateSettings({ releaseCandidates: false })).toEqual({ channel: "stable" });
   expect(parseUpdateSettings({ autoDownload: "no" })).toBeNull();
   expect(parseUpdateSettings({})).toBeNull();
   expect(parseUpdateSettings(null)).toBeNull();
 });
 
 test("settings changed during a check count for its answer", async () => {
-  const settings = { releaseCandidates: true, autoDownload: true };
+  const settings = { channel: "rc" as Channel, autoDownload: true };
   const { updates, engine, runs } = setup(null, settings);
-  engine.find = async (rcs) => {
+  engine.find = async (channel) => {
     // The owner turns both off while the first lookup runs.
-    settings.releaseCandidates = false;
+    settings.channel = "stable";
     settings.autoDownload = false;
-    return rcs ? "0.2.0-rc.1" : "0.1.9";
+    return channel === "rc" ? "0.2.0-rc.1" : "0.1.9";
   };
   await updates.check();
   expect(updates.status).toEqual({ state: "available", version: "0.1.9" });
   expect(runs).toHaveLength(0);
+});
+
+test("moving from Tip to Release candidates cancels a tip download, not an rc's", async () => {
+  const settings = { channel: "tip" as Channel, autoDownload: true };
+  const { updates, engine, runs } = setup("0.2.0-tip.80", settings);
+  await updates.check();
+  settings.channel = "rc";
+  engine.find = async () => "0.2.0-rc.2";
+  await updates.check();
+  expect(runs[0]?.cancelled).toBe(true);
+  await tick();
+  expect(updates.status).toEqual({ state: "downloading", version: "0.2.0-rc.2", percent: 0 });
+  await updates.check();
+  expect(runs[1]?.cancelled).toBe(false);
+});
+
+test("only a tip build, or an app on Tip, can pick Tip; any app can leave it", () => {
+  const on = (channel: Channel) => ({ channel, autoDownload: true });
+  expect(changeUpdateSettings(on("rc"), { channel: "tip" }, "0.1.7-rc.3").channel).toBe("rc");
+  expect(changeUpdateSettings(on("stable"), { channel: "tip" }, "0.1.7").channel).toBe("stable");
+  expect(changeUpdateSettings(on("rc"), { channel: "tip" }, "0.1.7-tip.80").channel).toBe("tip");
+  expect(changeUpdateSettings(on("tip"), { channel: "rc" }, "0.1.7-tip.80").channel).toBe("rc");
+  // On Tip after a final passed the tip build: still Tip, and it can come back to it.
+  expect(changeUpdateSettings(on("tip"), { channel: "tip" }, "0.1.7").channel).toBe("tip");
+  // Refused, the rest of the change still counts.
+  expect(changeUpdateSettings(on("rc"), { channel: "tip", autoDownload: false }, "0.1.7")).toEqual({
+    channel: "rc",
+    autoDownload: false,
+  });
 });

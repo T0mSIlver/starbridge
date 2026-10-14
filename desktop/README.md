@@ -46,6 +46,8 @@ The page finds `window.starbridgeDesktop` only on the configured server's origin
   milliseconds since its last input, null while asleep or quitting (`src/screen.ts`).
   `onScreen(f)`: `f()` runs every 10 s and when it changes; the app waits for its promise before
   it quits.
+- `clock()`: `"12"` or `"24"`, the Mac's own choice (System Settings → General → Date & Time →
+  24-hour time, else its region's), read again at each window focus (`src/clock.ts`).
 - `shown()`: whether the window is on screen; `onShown(f)`: `f()` runs when it shows or hides.
 - `notificationsBlocked()`: whether macOS refused the last notification, as it does while it
   blocks the app's; `onNotificationsBlocked(f)`: `f()` runs when that changes.
@@ -55,7 +57,9 @@ The page finds `window.starbridgeDesktop` only on the configured server's origin
 - `updateStatus()`: where the update stands, `{state}` with `"idle"`, `"checking"`,
   `"available"`, `"downloading"`, `"ready"` or `"error"`, and its `version`, `percent` or
   `message` (`src/updates.ts`); null while the app runs no updater. `updateSettings()` and
-  `setUpdateSettings(s)`: `{releaseCandidates, autoDownload}`, either field. `updateAction(a)`:
+  `setUpdateSettings(s)`: `{channel, autoDownload}` (`channel` is `"stable"`, `"rc"` or `"tip"`), any
+  field; `updateSettings()` adds `ahead`, whether the installed version waits for the channel to
+  pass it, `tip`, whether Tip is offered (on a tip build or while on Tip; the app refuses it otherwise), and `releaseCandidates`, the switch that pages from before the channel read and set (#1692). `updateAction(a)`:
   `"check"`, `"download"`, or `"install"`, which restarts the app. `onUpdate(f)`: `f()` runs when
   the status or the settings change (#1398).
 
@@ -115,12 +119,13 @@ signed app; an ad hoc signature is enough, as the owner's Mac Mini showed). The 
 both through `scripts/sign.sh` and the `desktop-release` environment, which only `main` and tags
 can use:
 
-- the `desktop` workflow's `signed build` job, once the repository variable `DESKTOP_SIGNING` is
-  `true`: on a push to `main` that changes what signing reads (`electron-builder.yml`, the sign,
-  afterPack, afterSign and widget scripts, `package.json`, the lockfile, the workflow), or run by
-  hand from `main`;
+- the `desktop` workflow's `tip build` job, once the repository variable `DESKTOP_SIGNING` is
+  `true`: on every push to `main` that touches the app, or run by hand from `main`. Its build is
+  published to [starbridge-tip](https://github.com/T0mSIlver/starbridge-tip) (spec/releases.md,
+  "Three rings"), with a fine-grained token that writes that repository only,
+  `TIP_RELEASE_TOKEN`; without it the build is signed and kept as an artifact, not published;
 - the release, once `DESKTOP_RELEASE` is `true` (spec/releases.md, "The desktop app's release").
 
 The environment's secrets: `MAC_CERTIFICATE` (the Developer ID Application certificate and key,
 a base64 `.p12`), `MAC_CERTIFICATE_PASSWORD`, and an App Store Connect API key for notarization:
-`APPLE_API_KEY` (the base64 `.p8`), `APPLE_API_KEY_ID`, `APPLE_API_ISSUER`.
+`APPLE_API_KEY` (the base64 `.p8`), `APPLE_API_KEY_ID`, `APPLE_API_ISSUER`; and `TIP_RELEASE_TOKEN`.

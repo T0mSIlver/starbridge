@@ -48,6 +48,8 @@ command and its local agent), `plugin` and
   `flakes.yml` lists them each night on the issue labelled `flaky`.
 - Before a PR is ready, run the checks in
   [CONTRIBUTING.md, "Develop"](CONTRIBUTING.md#develop).
+- Before a PR is ready, diff it against `main` (`git diff --name-only origin/main...`) for files
+  outside the packages it is meant to touch, such as a copy of a package path at the repo root.
 - Before review, check your change for the bugs reviews keep finding:
   - Reread or compare state you read before an `await` before you write it, since another tab,
     process or write in flight may have changed it.

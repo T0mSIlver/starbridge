@@ -12,7 +12,7 @@ import { configDir } from "./poller.ts";
 
 /** The agent API revision this mod speaks, sent in the `starbridge-api` header. */
 export const API = 1;
-export const VERSION = "0.1.7-rc.3";
+export const VERSION = "0.1.8-rc.1";
 const CLIENT = `starbridge-mod/${VERSION}`;
 
 /** Event types this mod submits; others are skipped and left unconfirmed, as the API asks. */
@@ -22,6 +22,8 @@ const KNOWN = new Set(["answer"]);
 export interface Line {
   text: string;
   ack: string;
+  /** The Claude Code subagent that asked, which gets the line instead of the session (#1702). */
+  subagent?: string;
 }
 
 /** Several answers as one message: one line each, in the order they came. */
@@ -187,6 +189,7 @@ interface Event {
   ack?: unknown;
   line?: unknown;
   decisionId?: unknown;
+  subagent?: unknown;
 }
 
 /** Why `AgentLoop.run` returned: `stop`, or the agent cannot serve this mod. */
@@ -287,7 +290,15 @@ export class AgentLoop {
     }
     const due = events.filter((e) => !this.unconfirmed.has(e.ack));
     const taken =
-      due.length > 0 ? await this.host.submit(due.map((e) => ({ text: e.line, ack: e.ack }))) : [];
+      due.length > 0
+        ? await this.host.submit(
+            due.map((e) => ({
+              text: e.line,
+              ack: e.ack,
+              ...(typeof e.subagent === "string" ? { subagent: e.subagent } : {}),
+            })),
+          )
+        : [];
     for (const a of taken) this.unconfirmed.add(a);
     const handed = taken.length;
     const done = events.filter((e) => this.unconfirmed.has(e.ack)).map((e) => e.ack);

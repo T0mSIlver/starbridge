@@ -14,8 +14,10 @@ on:
       - ".github/workflows/desktop.yml"
   workflow_dispatch:
 
+# A pull request's new push cancels its run. Runs on main never cancel each other: the tip job
+# queues on its own.
 concurrency:
-  group: desktop-${{ github.ref }}
+  group: desktop-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
   cancel-in-progress: true
 
 permissions:
@@ -91,78 +93,157 @@ jobs:
           path: ${{ runner.temp }}/starbridge-desktop-failure.png
           if-no-files-found: ignore
 
-  # Whether a push to main changed what signing and notarization read, which only release.yml
-  # otherwise exercises, at the rc tag.
-  signing:
-    name: signing inputs
-    if: github.event_name == 'push'
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    outputs:
-      changed: ${{ steps.filter.outcome != 'success' || steps.filter.outputs.signing == 'true' }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 2
-          filter: blob:none
-      - id: filter
-        continue-on-error: true
-        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
-        with:
-          base: ${{ github.event.before }}
-          filters: |
-            signing:
-              - 'desktop/electron-builder.yml'
-              - 'desktop/package.json'
-              - 'desktop/scripts/sign.sh'
-              - 'desktop/scripts/after-pack.cjs'
-              - 'desktop/scripts/after-sign.cjs'
-              - 'desktop/scripts/widgets.cjs'
-              # widgets.cjs reads its App Group, which the entitlements name.
-              - 'desktop/src/widgets.ts'
-              - 'desktop/widgets/Info.plist'
-              - 'desktop/widgets/build.sh'
-              - 'pnpm-lock.yaml'
-              - '.github/workflows/desktop.yml'
-
-  # A signed and notarized build, to catch a signing or notarization break before the rc tag: on a
-  # push to main that changed the signing inputs above, or by hand from main. Installed apps update
-  # from releases only (spec/releases.md), so no other push needs one (#1684). The Developer ID
-  # lives in the desktop-release environment, which only main and tags can use; the job checks the
-  # ref too, so a run by hand from a branch never reaches it.
-  signed:
-    name: signed build
+  # The tip build (#1692): every push to main that touches the app builds it signed with the
+  # Developer ID and notarized, as `<version under way>-tip.<n>` (scripts/tip.ts), for the
+  # publish job below. It also catches a signing or notarization break before the rc tag (#1684).
+  # One build at a time: a running one is never cancelled, and of the runs waiting the newest wins.
+  # It needs no other job, so runs reach that queue in the order they were pushed, and it runs the
+  # tests itself. The Developer ID lives in the desktop-release environment, which only main and
+  # tags can use; the job checks the ref too, so a run by hand from a branch never reaches it. Run
+  # by hand on main, it builds main under the same rules, to replace a failed build.
+  tip:
+    name: tip build
     if: >-
-      ${{ !cancelled() && needs.mac.result == 'success' && vars.DESKTOP_SIGNING == 'true' &&
-      (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')) &&
-      (github.event_name == 'workflow_dispatch' || needs.signing.outputs.changed == 'true') }}
-    needs: [mac, signing]
+      ${{ vars.DESKTOP_SIGNING == 'true' && github.ref == 'refs/heads/main' &&
+      github.event_name != 'pull_request' }}
     runs-on: macos-15
-    timeout-minutes: 30
+    # Apple's notarization of each architecture can take up to an hour.
+    timeout-minutes: 150
     environment: desktop-release
+    concurrency:
+      group: desktop-tip
+      cancel-in-progress: false
+    outputs:
+      build: ${{ steps.plan.outputs.build }}
+      version: ${{ steps.plan.outputs.version }}
+      last: ${{ steps.plan.outputs.last }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          fetch-depth: 0
+          filter: blob:none
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version: 1.4.2
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+      - id: plan
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bun desktop/scripts/tip.ts plan
+      - if: steps.plan.outputs.build == 'true'
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - if: steps.plan.outputs.build == 'true'
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
-      - run: pnpm install --frozen-lockfile --filter @starbridge/desktop
-      - working-directory: desktop
+      - if: steps.plan.outputs.build == 'true'
+        run: pnpm install --frozen-lockfile --filter @starbridge/desktop
+      - if: steps.plan.outputs.build == 'true'
+        working-directory: desktop
+        run: |
+          pnpm exec install-electron
+          pnpm test
+          pnpm e2e
+      - if: steps.plan.outputs.build == 'true'
+        name: Build, sign and notarize
+        working-directory: desktop
         env:
+          VERSION: ${{ steps.plan.outputs.version }}
           MAC_CERTIFICATE: ${{ secrets.MAC_CERTIFICATE }}
           MAC_CERTIFICATE_PASSWORD: ${{ secrets.MAC_CERTIFICATE_PASSWORD }}
           APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
           APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
           APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
         run: |
-          pnpm exec install-electron
+          npm pkg set version="$VERSION"
           pnpm run build
           scripts/sign.sh
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+      - if: steps.plan.outputs.build == 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: Starbridge-mac-signed
-          path: desktop/release/*.dmg
+          name: Starbridge-mac-tip
+          path: |
+            desktop/release/*.dmg
+            desktop/release/*.zip
+            desktop/release/*.blockmap
+            desktop/release/latest-mac.yml
           retention-days: 14
+
+  # Publishes the tip build as the one release `tip` of T0mSIlver/starbridge-tip, which Macs on
+  # the Tip channel update from (spec/releases.md); never a release here, which Obtainium users
+  # with prereleases on would get. Its own job on Linux, so the token that writes that repository
+  # never shares a job with third-party code (the build's packages). The token is a fine-grained
+  # one that can write starbridge-tip's contents only; GITHUB_TOKEN reaches no other repository.
+  # Publishes run one at a time, and one whose commit the tip already contains is dropped, so the
+  # tip never goes back.
+  tip-publish:
+    name: tip publish
+    needs: tip
+    if: needs.tip.outputs.build == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: desktop-release
+    concurrency:
+      group: desktop-tip-publish
+      cancel-in-progress: false
+    env:
+      TIP_REPO: T0mSIlver/starbridge-tip
+      VERSION: ${{ needs.tip.outputs.version }}
+    steps:
+      - id: token
+        env:
+          SET: ${{ secrets.TIP_RELEASE_TOKEN != '' }}
+        run: |
+          if [ "$SET" = true ]; then echo "set=true" >> "$GITHUB_OUTPUT"
+          else echo "::notice::TIP_RELEASE_TOKEN is not set: $VERSION was built and signed, not published."; fi
+      - if: steps.token.outputs.set
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          filter: blob:none
+      - if: steps.token.outputs.set
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.2
+      - if: steps.token.outputs.set
+        id: check
+        env:
+          GH_TOKEN: ${{ secrets.TIP_RELEASE_TOKEN }}
+        run: bun desktop/scripts/tip.ts check
+      - if: steps.check.outputs.publish == 'true'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: Starbridge-mac-tip
+          path: out
+      # The new files go up before latest-mac.yml names them, and the previous build's stay, so an
+      # app that read the last latest-mac.yml can still download its zip.
+      - if: steps.check.outputs.publish == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.TIP_RELEASE_TOKEN }}
+          LAST: ${{ needs.tip.outputs.last }}
+          PREVIOUS: ${{ steps.check.outputs.previous }}
+        run: |
+          printf '{"version":"%s","commit":"%s"}\n' "$VERSION" "$GITHUB_SHA" > out/tip.json
+          range=HEAD~5..HEAD
+          if [ -n "$LAST" ] && git cat-file -e "$LAST^{commit}" 2>/dev/null; then range="$LAST..HEAD"; fi
+          {
+            echo "Starbridge for Mac $VERSION, built from [${GITHUB_SHA::8}]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/commit/$GITHUB_SHA) on main. Untested beyond CI."
+            echo
+            echo "### Desktop changes since the last tip"
+            git log "$range" --no-merges -n 20 --format='- %s' -- desktop
+          } > notes.md
+          if ! gh release view tip -R "$TIP_REPO" > /dev/null 2>&1; then
+            gh release create tip -R "$TIP_REPO" --title "Starbridge for Mac, tip" --notes-file notes.md --latest
+          fi
+          gh release upload tip -R "$TIP_REPO" --clobber out/*.zip out/*.dmg out/*.blockmap
+          # tip.json last: it marks the build published, which a rerun would then skip.
+          gh release upload tip -R "$TIP_REPO" --clobber out/latest-mac.yml
+          gh release upload tip -R "$TIP_REPO" --clobber out/tip.json
+          gh release edit tip -R "$TIP_REPO" --notes-file notes.md
+          gh release view tip -R "$TIP_REPO" --json assets -q '.assets[].name' | while read -r name; do
+            case "$name" in
+              latest-mac.yml | tip.json | "Starbridge-$VERSION-"*) ;;
+              "Starbridge-$PREVIOUS-"*) ;;
+              *) gh release delete-asset tip "$name" -R "$TIP_REPO" -y ;;
+            esac
+          done
+          echo "Published $VERSION to https://github.com/$TIP_REPO/releases/tag/tip" | tee -a "$GITHUB_STEP_SUMMARY"

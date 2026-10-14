@@ -304,6 +304,55 @@ test("ask names the session and links to it from Claude Code's record, unless fl
   expect(await server.opened("decision")).toHaveLength(3);
 });
 
+test("ask warns of a --session no Claude Code session has, and keeps the asking subagent (#1702)", async () => {
+  const ctx = await paired(server);
+  const dir = mkdtempSync(join(tmpdir(), "starbridge-claude-"));
+  mkdirSync(join(dir, "sessions"));
+  writeFileSync(join(dir, "sessions", "1.json"), JSON.stringify({ pid: 1, sessionId: "s2" }));
+  Object.assign(ctx.env, {
+    CLAUDECODE: "1",
+    CLAUDE_CONFIG_DIR: dir,
+    CLAUDE_CODE_SESSION_ID: "s1",
+    STARBRIDGE_CLAUDE_AGENT: "a1fdba894e743a195",
+  });
+  const warned = () => ctx.errors.filter((l) => l.includes("names no Claude Code session"));
+
+  expect(await run([...ASK, "--session", "sb-1697"], ctx)).toBe(0);
+  expect(warned()).toEqual([
+    "starbridge: --session sb-1697 names no Claude Code session on this machine, so no session gets the answer as a prompt. Leave out --session to ask as this session (s1).",
+  ]);
+  const madeUp = ctx.lines.at(-1) as string;
+  // Another session of this machine's, or its own: no warning.
+  expect(await run([...ASK, "--session", "s2"], ctx)).toBe(0);
+  const other = ctx.lines.at(-1) as string;
+  ctx.errors.length = 0;
+  expect(await run(ASK, ctx)).toBe(0);
+  const own = ctx.lines.at(-1) as string;
+  expect(warned()).toEqual([]);
+  // Only the mod names a subagent, so the answer comes back.
+  expect(ctx.errors).toContain("The answer will come back into this session as a new prompt.");
+
+  const asked = ctx.store.state().asked;
+  expect(asked[own]?.subagent).toBe("a1fdba894e743a195");
+  // A subagent of s1 is no agent of another session.
+  expect(asked[other]?.subagent).toBeUndefined();
+  expect(asked[madeUp]?.subagent).toBeUndefined();
+
+  await server.answer(own, { choice: "Merge" });
+  await poll(ctx, session(ctx), { seconds: 0, shared: true });
+  ctx.lines.length = 0;
+  expect(await run(["answers", "--session", "s1"], ctx)).toBe(0);
+  expect(ctx.lines.map((l) => JSON.parse(l))).toEqual([
+    {
+      decisionId: own,
+      ack: own,
+      line: `Answer to ${own} (Merge #12 now?): Merge`,
+      waiting: false,
+      subagent: "a1fdba894e743a195",
+    },
+  ]);
+});
+
 /** A PNG of noise, the worst case for compression, so only scaling it down makes it fit. */
 function noisyPng(width: number, height: number): string {
   const png = new PNG({ width, height });

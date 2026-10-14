@@ -113,7 +113,12 @@
   `--context-file` or `--input`. Fenced code needs real line breaks, so none is touched. The
   cost: a Windows path written outside a code span, `C:\new`, breaks after `C:`.
 - **Revoked machines.** Their items leave the Inbox and their notifications close (#344).
-- **Clock** (#161): System, 12-hour or 24-hour, per device. UI words stay English.
+- **Clock** (#161): the default, 12-hour or 24-hour, per device. UI words stay English. The
+  default follows the device's own choice: the phone's 12/24-hour switch on Android and iOS, and
+  on the web the browser's language, so a browser in en-US read in France shows PM; the row
+  says "Browser" there, though the stored value stays `system` so no one's choice resets (#1705).
+  The desktop app follows macOS's "24-hour time" switch instead and the row keeps "System"
+  (`spec/desktop.md`).
 - **Images** open a full-screen viewer (zoom, pan, swipe or arrow keys between images) and carry
   an expand badge, since nothing else tells a touch screen they open (#170).
 - **Image rows** (#536). A question's images go two to a row, both at one height and each as wide

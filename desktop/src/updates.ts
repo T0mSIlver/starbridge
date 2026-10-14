@@ -1,4 +1,4 @@
-import { newerVersion } from "./releases";
+import { CHANNELS, type Channel, channelOf, newerVersion, tipOffered } from "./releases";
 
 /**
  * Where an update stands, which the page shows at the foot of its rail (#1398): nothing while
@@ -23,21 +23,57 @@ export const parseUpdateAction = (x: unknown): UpdateAction | null =>
 
 /** The owner's update settings, in Settings → Updates. */
 export interface UpdateSettings {
-  /** Whether updates include release candidates, not only finals (#1071). */
-  releaseCandidates: boolean;
+  /** Finals only, rcs too (#1071), or every build of main too (#1692). */
+  channel: Channel;
   /** Whether a release found downloads at once; off, the rail's button downloads it. */
   autoDownload: boolean;
 }
 
-/** A change to them from the page: either field, booleans only. */
+/**
+ * What the page reads: the settings; `releaseCandidates`, the switch of pages from before the
+ * channel, on for "rc" and "tip"; and `ahead`, whether the installed version waits for the
+ * channel to pass it, which an update found or downloaded says it has.
+ */
+export interface UpdateSettingsView extends UpdateSettings {
+  releaseCandidates: boolean;
+  ahead: boolean;
+  /** Whether Tip is offered: on a tip build, or while on Tip (releases.ts, tipOffered). */
+  tip: boolean;
+}
+
+/**
+ * The settings after the page's change, for the running app's `version`: Tip only where it is
+ * offered, so only an app installed from a tip build gets there.
+ */
+export function changeUpdateSettings(
+  now: UpdateSettings,
+  change: Partial<UpdateSettings>,
+  version: string,
+): UpdateSettings {
+  const next = { ...now, ...change };
+  return next.channel === "tip" && !tipOffered(version, now.channel)
+    ? { ...next, channel: now.channel }
+    : next;
+}
+
+/**
+ * A change to them from the page: `channel` or `autoDownload`, or from a page before the channel,
+ * `releaseCandidates`, which on means "rc" and off "stable".
+ */
 export function parseUpdateSettings(x: unknown): Partial<UpdateSettings> | null {
   if (typeof x !== "object" || x === null || Array.isArray(x)) return null;
+  const { channel, releaseCandidates, autoDownload } = x as Record<string, unknown>;
   const out: Partial<UpdateSettings> = {};
-  for (const key of ["releaseCandidates", "autoDownload"] as const) {
-    const v = (x as Record<string, unknown>)[key];
-    if (v === undefined) continue;
-    if (typeof v !== "boolean") return null;
-    out[key] = v;
+  if (channel !== undefined) {
+    if (!CHANNELS.includes(channel as Channel)) return null;
+    out.channel = channel as Channel;
+  } else if (releaseCandidates !== undefined) {
+    if (typeof releaseCandidates !== "boolean") return null;
+    out.channel = releaseCandidates ? "rc" : "stable";
+  }
+  if (autoDownload !== undefined) {
+    if (typeof autoDownload !== "boolean") return null;
+    out.autoDownload = autoDownload;
   }
   return Object.keys(out).length > 0 ? out : null;
 }
@@ -45,7 +81,7 @@ export function parseUpdateSettings(x: unknown): Partial<UpdateSettings> | null 
 /** What the flow needs of electron-updater (src/updater.ts). */
 export interface Engine {
   /** The newer version the followed release offers, or null. */
-  find(rcs: boolean): Promise<string | null>;
+  find(channel: Channel): Promise<string | null>;
   /** Downloads what `find` found; resolves once it can install, rejects on failure or cancel. */
   download(progress: (percent: number) => void): { done: Promise<void>; cancel(): void };
   /** Quits and installs. */
@@ -77,16 +113,15 @@ export class Updates {
   }
 
   async check(): Promise<void> {
-    const { releaseCandidates: rcs } = this.settings();
+    const { channel } = this.settings();
     const s = this.status;
-    // Turning release candidates off drops an rc found or downloading. One downloaded stays:
-    // Squirrel has taken it, and installs it on quit. A check under way drops it itself, once it
-    // sees the new settings.
+    // Moving to a lower channel drops a release it does not offer, found or downloading. One
+    // downloaded stays: Squirrel has taken it, and installs it on quit. A check under way drops
+    // it itself, once it sees the new settings.
     if (
       !this.looking &&
       (s.state === "available" || s.state === "downloading") &&
-      rc(s.version) &&
-      !rcs
+      CHANNELS.indexOf(channelOf(s.version)) > CHANNELS.indexOf(channel)
     ) {
       this.cancel?.();
       this.cancel = null;
@@ -100,7 +135,7 @@ export class Updates {
     this.looking = true;
     let version: string | null;
     try {
-      version = await this.engine.find(rcs);
+      version = await this.engine.find(channel);
     } catch (e) {
       console.warn("update:", e instanceof Error ? e.message : e);
       this.looking = false;
@@ -111,7 +146,7 @@ export class Updates {
     // The owner changed the settings while it looked: their check returned at once, so this
     // one answers with what they say now.
     const now = this.settings();
-    if (now.releaseCandidates !== rcs) {
+    if (now.channel !== channel) {
       this.status = before;
       return this.check();
     }
@@ -173,5 +208,3 @@ export class Updates {
     this.tell(s);
   }
 }
-
-const rc = (version: string) => version.includes("-rc.");
