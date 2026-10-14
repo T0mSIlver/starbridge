@@ -67,7 +67,7 @@ healthy() {
     sleep 1
   done
   echo "$2 not healthy after 60 s" >&2
-  $compose logs --tail 50 "$2" >&2
+  host/keep-logs.sh "$2" $compose logs --tail 50 "$2"
   return 1
 }
 healthy http://127.0.0.1:8080/healthz server
