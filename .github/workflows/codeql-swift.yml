@@ -38,9 +38,13 @@ jobs:
       - uses: github/codeql-action/init@24c54180a607b1449ed407dd24f251e4e9147c8d # v4.38.3
         with:
           languages: swift
-          build-mode: autobuild
-      # As default setup did: CodeQL's Swift autobuilder finds the packages and projects to build.
-      - uses: github/codeql-action/autobuild@24c54180a607b1449ed407dd24f251e4e9147c8d # v4.38.3
+          build-mode: manual
+      # The packages built by hand: the autobuilder spent ~6 min before building the widgets, the
+      # one package it found (#TBD).
+      - working-directory: desktop/widgets
+        run: swift build
+      - working-directory: ios/StarbridgeProtocol
+        run: swift build
       - uses: github/codeql-action/analyze@24c54180a607b1449ed407dd24f251e4e9147c8d # v4.38.3
         with:
           category: /language:swift
