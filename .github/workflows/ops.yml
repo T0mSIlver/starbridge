@@ -40,7 +40,6 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           IOS_MAIN_TESTFLIGHT: ${{ vars.IOS_MAIN_TESTFLIGHT }}
-          PLAY_PRODUCTION: ${{ vars.PLAY_PRODUCTION }}
         run: bun cli/scripts/ops-page.ts "$RUNNER_TEMP/ops"
       # The page's text changes at most hourly, so the key is its hash: an unchanged page is not uploaded again.
       - id: hash

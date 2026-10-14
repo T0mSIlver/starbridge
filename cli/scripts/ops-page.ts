@@ -28,7 +28,6 @@ export type Facts = {
   commits: Record<string, string>;
   openRegressions: number;
   iosMainOn: boolean;
-  playProduction: boolean;
 };
 
 const short = (s?: string) => (s ? s.slice(0, 8) : "unknown");
@@ -274,7 +273,6 @@ export async function gather(): Promise<Facts> {
     commits,
     openRegressions: (issues ?? []).filter((i) => !i.pull_request).length,
     iosMainOn: process.env.IOS_MAIN_TESTFLIGHT === "true",
-    playProduction: process.env.PLAY_PRODUCTION === "true",
   };
 }
 

@@ -19,7 +19,6 @@ const facts = (over: Partial<Facts> = {}): Facts => ({
   commits: { "0.1.6": "d".repeat(40), "0.1.7-rc.2": "e".repeat(40) },
   openRegressions: 0,
   iosMainOn: false,
-  playProduction: false,
   ...over,
 });
 
