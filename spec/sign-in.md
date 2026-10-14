@@ -38,7 +38,11 @@
   page's HTML keeps its buttons.
 - Android (#34, #527): the app signs in with PKCE, and GitHub binds its code to the app's
   challenge, so only the app holding the verifier can trade the code, whoever catches the
-  redirect. Known gap: a hostile app can start its own sign-in, and if GitHub skips the consent
+  redirect. The server does not rely on GitHub alone (#1719, from an internal audit on
+  2026-10-14): a code that comes back through its callback is kept with the challenge it came
+  with, and the trade refuses any other verifier, so a code caught after the server passed it on
+  is worthless. A code a verified App Link caught never reaches the server, and only GitHub
+  checks it. Known gap: a hostile app can start its own sign-in, and if GitHub skips the consent
   screen it gets a session.
 - On starbridge.run, GitHub redirects the app's sign-in to `/v1/auth/github/callback/app`, an
   App Link the app catches (#527). The installed web app's scope is the whole origin, so Chrome
