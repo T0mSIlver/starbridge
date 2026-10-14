@@ -36,32 +36,45 @@ export function untagAsk(command: string): string {
   return command.replace(TAG, "");
 }
 
+/** One message for subagent `agentId`: the lines, and the text `Line.text` joins them into. */
 export type Send = (
   agentId: string,
+  lines: Line[],
   text: string,
 ) => Promise<{ isDelivered: boolean; reason?: string }>;
+
+/** What the parent gets for a line its subagent `agent` could not take. */
+export function forParent(l: Line, agent: string): Line {
+  return {
+    text: `${l.text}\nYour subagent ${agent} asked this and could not take the answer: act on it, or pass it on.`,
+    ack: l.ack,
+  };
+}
 
 /**
  * Sends each subagent its answers, one message per subagent in the order they came. Returns the
  * acks it delivered, and the lines left for the parent: those no subagent asked, then those a
- * subagent could not take, which say so.
+ * subagent could not take, which say so. A line in `failed`, which a send already failed, goes to
+ * the parent without another try: retried while the parent's turn holds it, it could reach both.
  */
 export async function toSubagents(
   lines: Line[],
   send: Send,
   log: (text: string) => void,
+  failed: Set<string> = new Set(),
 ): Promise<{ taken: string[]; rest: Line[] }> {
   const byAgent = new Map<string, Line[]>();
   const rest: Line[] = [];
   for (const l of lines) {
     if (l.subagent === undefined) rest.push(l);
+    else if (failed.has(l.ack)) rest.push(forParent(l, l.subagent));
     else byAgent.set(l.subagent, [...(byAgent.get(l.subagent) ?? []), l]);
   }
   const taken: string[] = [];
   for (const [agent, group] of byAgent) {
     let why: string | undefined;
     try {
-      const r = await send(agent, joinLines(group));
+      const r = await send(agent, group, joinLines(group));
       if (r.isDelivered) {
         taken.push(...group.map((l) => l.ack));
         continue;
@@ -73,11 +86,10 @@ export async function toSubagents(
     log(
       `starbridge: subagent ${agent} could not take ${group.map((l) => l.ack).join(", ")}: ${why}`,
     );
-    for (const l of group)
-      rest.push({
-        text: `${l.text}\nYour subagent ${agent} asked this and could not take the answer: act on it, or pass it on.`,
-        ack: l.ack,
-      });
+    for (const l of group) {
+      failed.add(l.ack);
+      rest.push(forParent(l, agent));
+    }
   }
   return { taken, rest };
 }

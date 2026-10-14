@@ -32,7 +32,7 @@ test("each subagent gets its answers in one message; one that cannot take them l
       { text: "Answer to d_4 (D?): w", ack: "d_4", subagent: "gone" },
       { text: "Answer to d_5 (E?): v", ack: "d_5", subagent: "broken" },
     ],
-    async (agent, text) => {
+    async (agent, _lines, text) => {
       if (agent === "broken") throw new Error("transcript expired");
       sent.push([agent, text]);
       return agent === "gone"
@@ -54,4 +54,19 @@ test("each subagent gets its answers in one message; one that cannot take them l
     { text: `Answer to d_5 (E?): v\n${note("broken")}`, ack: "d_5" },
   ]);
   expect(logged).toHaveLength(2);
+});
+
+test("an answer whose send failed goes to the parent from then on, never to both (#1702)", async () => {
+  const failed = new Set<string>();
+  const line = { text: "Answer to d_1 (A?): x", ack: "d_1", subagent: "a1" };
+  const sends: string[] = [];
+  const send = async (agent: string) => {
+    sends.push(agent);
+    return { isDelivered: sends.length > 1 };
+  };
+  await toSubagents([line], send, () => {}, failed);
+  const again = await toSubagents([line], send, () => {}, failed);
+  expect(sends).toEqual(["a1"]);
+  expect(again.taken).toEqual([]);
+  expect(again.rest.map((l) => l.ack)).toEqual(["d_1"]);
 });

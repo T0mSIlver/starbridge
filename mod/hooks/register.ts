@@ -13,7 +13,7 @@ import {
 import { Handover } from "./handover.ts";
 import { configDir, Poller } from "./poller.ts";
 import { Sent, sessionElsewhere } from "./sent.ts";
-import { tagAsk, toSubagents, untagAsk } from "./subagent.ts";
+import { forParent, tagAsk, toSubagents, untagAsk } from "./subagent.ts";
 import { Switch, wantsLoop } from "./switch.ts";
 
 /**
@@ -37,6 +37,10 @@ export const register: Register = (on) => {
   };
   const handover = new Handover();
   let sent: Sent | undefined;
+  /** Answers a subagent could not take: they go to the parent from then on (#1702). */
+  const failed = new Set<string>();
+  /** When each subagent's last tool call ended: a message sent before then, it has read. */
+  const roundEnded = new Map<string, number>();
 
   on("session.start", async ($, e, next) => {
     handover.ended();
@@ -132,11 +136,20 @@ export const register: Register = (on) => {
     sent = records;
     // A subagent's answers go to it, whatever the main agent does (#1702).
     const submit = async (lines: Line[]) => {
+      const me = await sessionId();
       const { taken, rest } = await toSubagents(
         lines,
-        (agentId, text) => $.session.send({ to: { agentId }, text }),
+        (agentId, group, text) =>
+          records.toAgent(
+            agentId,
+            group.map((l) => forParent(l, agentId)),
+            () => $.session.send({ to: { agentId }, text }),
+          ),
         log,
+        failed,
       );
+      // A /clear or /resume during the sends: the rest waits, unconfirmed, for session `me`.
+      if (rest.length > 0 && (await sessionId()) !== me) return taken;
       const parent =
         rest.length > 0 ? await handover.submit(rest, (left) => records.send(left)) : [];
       return [...taken, ...parent];
@@ -200,9 +213,12 @@ export const register: Register = (on) => {
     return next(e);
   });
 
-  on("turn.complete", async (_$, e, next) => {
+  on("turn.complete", async ($, e, next) => {
     const r = await next(e);
-    if (e.agentId === undefined) {
+    if (e.agentId !== undefined) {
+      const now = await $.clock.now();
+      void sent?.read(e.agentId, now).catch(() => undefined);
+    } else {
       handover.ended();
       // After a `/resume`, or a submit that failed.
       void sent?.recover().catch(() => undefined);
@@ -212,12 +228,16 @@ export const register: Register = (on) => {
 
   on("tool.call", async ($, e, next) => {
     if (e.agentId !== undefined) {
+      const agent = e.agentId;
+      // A new round: the subagent read every message sent before its last one ended.
+      const ended = roundEnded.get(agent);
+      if (ended !== undefined) void sent?.read(agent, ended).catch(() => undefined);
       // The CLI keeps which subagent asked, so its answer goes back there (#1702).
-      if (e.tool === "Bash") {
-        const command = tagAsk(e.command, e.agentId);
-        if (command !== e.command) return next({ ...e, command });
-      }
-      return next(e);
+      const command =
+        e.tool === "Bash" && typeof e.command === "string" ? tagAsk(e.command, agent) : undefined;
+      const r = await next(command !== undefined && command !== e.command ? { ...e, command } : e);
+      roundEnded.set(agent, await $.clock.now());
+      return r;
     }
     const r = await next(e);
     if (r.deny !== undefined) return r;

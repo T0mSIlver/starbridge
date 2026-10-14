@@ -414,3 +414,32 @@ test("a batch that cannot be recorded still confirms the line another live proce
   ).toEqual(["d_1"]);
   expect(second.submitted).toEqual([]);
 });
+
+test("an answer sent to a subagent stays on record until it reads it; a process that exits first leaves it to the parent (#1702)", async () => {
+  const m = machine();
+  const a = m.process("s1", "proc-a");
+  const note = `${LINE}\nYour subagent a1 asked this and could not take the answer: act on it, or pass it on.`;
+  const batch = [{ text: note, ack: "d_1" }];
+  // A send that fails leaves nothing behind.
+  expect(
+    (await a.sent.toAgent("a1", batch, async () => ({ isDelivered: false }))).isDelivered,
+  ).toBe(false);
+  expect(lines(m)).toEqual([]);
+  await a.sent.toAgent("a1", batch, async () => ({ isDelivered: true }));
+  expect(lines(m).map((l) => l.ack)).toEqual(["d_1"]);
+  // The same process's turn ends: the subagent may still read it, so nothing goes out again.
+  await a.sent.recover();
+  expect(a.submitted).toEqual([]);
+
+  // The process exits before the subagent's next round: the next one on the session hands the
+  // answer to the parent.
+  const b = m.process("s1", "proc-b");
+  await b.sent.recover();
+  expect(b.submitted).toEqual([note]);
+
+  // Read before the process exits: the record goes.
+  const c = m.process("s2", "proc-c");
+  await c.sent.toAgent("a2", [{ text: note, ack: "d_2" }], async () => ({ isDelivered: true }));
+  await c.sent.read("a2", Date.now());
+  expect(lines(m, "s2")).toEqual([]);
+});

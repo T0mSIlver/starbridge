@@ -77,7 +77,10 @@ line, the safe side: at worst a prompt repeats an answer the agent already read.
   lines one poll brings, whether or not the main agent's turn runs: a running subagent reads it
   at its next tool call, and a finished one is resumed with it (`mod/e2e`, cases `subrunning`
   and `subfinished`). When the send fails, the subagent gone, the answer goes to the parent as
-  a prompt that names the subagent. `ask` warns when `--session` names neither its own session
+  a prompt that names the subagent, and keeps going there, so a retry never reaches both. Claude
+  Code holds a running subagent's message in memory until its next tool round, so the mod keeps
+  each answer it sent in `mod-sent` until the subagent's next tool call or its end; a process
+  that exits first leaves it to the parent, as for a queued prompt. `ask` warns when `--session` names neither its own session
   nor any Claude Code session on this machine, since no mod takes that answer.
 - **Answers that come in together** (#1597). The answers one session has waiting when it is
   handed them go as one message, one `Answer to …` line each, in the order they came, so five
