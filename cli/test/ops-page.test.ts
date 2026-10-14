@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
+import { type Facts, next, nextNightly, render } from "../scripts/ops-page";
 import { record } from "../scripts/releases";
-import { type Facts, nextNightly, next, render } from "../scripts/ops-page";
 
 const releases = record(
   record(undefined, "0.1.6", { github: true, npm: true }, "2026-10-13T14:33:03Z"),
@@ -24,8 +24,12 @@ const facts = (over: Partial<Facts> = {}): Facts => ({
 });
 
 test("the nightly is the next 03:00 UTC, shown in Paris and UTC", () => {
-  expect(nextNightly(new Date("2026-10-14T00:00:00Z")).toISOString()).toBe("2026-10-14T03:00:00.000Z");
-  expect(nextNightly(new Date("2026-10-14T03:00:00Z")).toISOString()).toBe("2026-10-15T03:00:00.000Z");
+  expect(nextNightly(new Date("2026-10-14T00:00:00Z")).toISOString()).toBe(
+    "2026-10-14T03:00:00.000Z",
+  );
+  expect(nextNightly(new Date("2026-10-14T03:00:00Z")).toISOString()).toBe(
+    "2026-10-15T03:00:00.000Z",
+  );
   expect(next(facts())[0]).toContain("05:00 Paris, 03:00 UTC");
   expect(next(facts())[0]).toContain("will build (3 android/ commits since main-cccccccc)");
   expect(next(facts({ androidSince: 0 }))[0]).toContain("will skip");

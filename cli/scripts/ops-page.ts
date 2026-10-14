@@ -44,9 +44,12 @@ const zone = (d: Date, tz: string) =>
     hour12: false,
   }).format(d);
 /** A time in Europe/Paris and UTC. */
-export const both = (d: Date) => `${zone(d, "Europe/Paris")} Paris, ${zone(d, "UTC").split(", ")[1]} UTC`;
+export const both = (d: Date) =>
+  `${zone(d, "Europe/Paris")} Paris, ${zone(d, "UTC").split(", ")[1]} UTC`;
 const commit = (sha?: string) =>
-  sha ? `<a href="https://github.com/${REPO}/commit/${esc(sha)}"><code>${short(sha)}</code></a>` : "unknown";
+  sha
+    ? `<a href="https://github.com/${REPO}/commit/${esc(sha)}"><code>${short(sha)}</code></a>`
+    : "unknown";
 
 /** The next 03:00 UTC after `now`. */
 export function nextNightly(now: Date): Date {
@@ -79,7 +82,7 @@ export function next(f: Facts): string[] {
   const fin = newest(f.releases, "final");
   if (rc && (!fin || rc.version.split("-")[0] !== fin.version)) {
     const age = f.now.getTime() - Date.parse(rc.shipped);
-    const day = age >= 86_400_000 ? "a day has passed" : `a day is not yet up (${hours(86_400_000 - age)} left)`;
+    const day = age >= 86_400_000 ? "done" : `${hours(86_400_000 - age)} left`;
     out.push(
       `${rc.version} has been on testers for ${hours(age)}. Promotion needs a day on the rc (${day}), no open regression issue (${f.openRegressions} open) and your yes.`,
     );
@@ -90,10 +93,19 @@ export function next(f: Facts): string[] {
 }
 
 export function newest(r: Releases, ring: "rc" | "final") {
-  return r.releases.filter((e) => e.ring === ring).sort((a, b) => b.shipped.localeCompare(a.shipped))[0];
+  return r.releases
+    .filter((e) => e.ring === ring)
+    .sort((a, b) => b.shipped.localeCompare(a.shipped))[0];
 }
 
-const PRODUCTS = ["Hosted server and web page", "Android", "iPhone", "Mac app", "CLI", "Claude Code plugin"] as const;
+const PRODUCTS = [
+  "Hosted server and web page",
+  "Android",
+  "iPhone",
+  "Mac app",
+  "CLI",
+  "Claude Code plugin",
+] as const;
 
 function where(p: (typeof PRODUCTS)[number], e: Releases["releases"][number], f: Facts): string {
   const c = e.channels;
@@ -111,7 +123,8 @@ function where(p: (typeof PRODUCTS)[number], e: Releases["releases"][number], f:
     if (c.homebrew) l.push("Homebrew");
     if (c.github) l.push(gh);
   }
-  if (p === "Claude Code plugin") l.push(e.ring === "final" ? "marketplace once its pull request merges" : "ships with finals");
+  if (p === "Claude Code plugin")
+    l.push(e.ring === "final" ? "marketplace once its pull request merges" : "ships with finals");
   void f;
   return l.join(" · ") || "not published";
 }
@@ -132,8 +145,14 @@ function main(f: Facts, p: (typeof PRODUCTS)[number]): string {
   }
 }
 
-function cell(label: string, e: Releases["releases"][number] | undefined, p: (typeof PRODUCTS)[number], f: Facts) {
-  if (!e) return `<div class="ring"><p class="label">${label}</p><span class="ver none">None yet</span></div>`;
+function cell(
+  label: string,
+  e: Releases["releases"][number] | undefined,
+  p: (typeof PRODUCTS)[number],
+  f: Facts,
+) {
+  if (!e)
+    return `<div class="ring"><p class="label">${label}</p><span class="ver none">None yet</span></div>`;
   return `<div class="ring"><p class="label">${label}</p><a class="ver" href="https://github.com/${REPO}/releases/tag/v${e.version}">${e.version}</a><p class="meta">${commit(f.commits[e.version])} · ${both(new Date(e.shipped))}</p><p class="where">${esc(where(p, e, f))}</p></div>`;
 }
 
@@ -191,7 +210,10 @@ function sh(cmd: string, ...args: string[]): string {
   return r.status === 0 ? r.stdout.trim() : "";
 }
 
-async function api<T>(path: string, accept = "application/vnd.github+json"): Promise<T | undefined> {
+async function api<T>(
+  path: string,
+  accept = "application/vnd.github+json",
+): Promise<T | undefined> {
   const res = await fetch(`https://api.github.com/repos/${REPO}/${path}`, {
     headers: { authorization: `Bearer ${process.env.GH_TOKEN}`, accept },
   }).catch(() => undefined);
@@ -210,18 +232,24 @@ const count = (range: string, ...paths: string[]) => {
 };
 
 export async function gather(): Promise<Facts> {
-  const releases = (await api<{ content: string }>("contents/releases.json?ref=releases-data"))?.content;
+  const releases = (await api<{ content: string }>("contents/releases.json?ref=releases-data"))
+    ?.content;
   const data: Releases = releases
     ? JSON.parse(Buffer.from(releases, "base64").toString())
     : { schema: 1, updated: "", releases: [] };
-  const [prod, staging] = await Promise.all([revision("starbridge.run"), revision("staging.starbridge.run")]);
+  const [prod, staging] = await Promise.all([
+    revision("starbridge.run"),
+    revision("staging.starbridge.run"),
+  ]);
   // The newest internal run whose play job built the app.
   let nightly: Facts["nightly"];
   const runs = await api<{ workflow_runs: { id: number; head_sha: string; created_at: string }[] }>(
     "actions/workflows/internal.yml/runs?status=completed&per_page=15",
   );
   for (const r of runs?.workflow_runs ?? []) {
-    const jobs = await api<{ jobs: { name: string; conclusion: string }[] }>(`actions/runs/${r.id}/jobs`);
+    const jobs = await api<{ jobs: { name: string; conclusion: string }[] }>(
+      `actions/runs/${r.id}/jobs`,
+    );
     if (jobs?.jobs.some((j) => j.name === "play" && j.conclusion === "success")) {
       nightly = { sha: r.head_sha, at: r.created_at };
       break;
@@ -230,7 +258,9 @@ export async function gather(): Promise<Facts> {
   const commits: Record<string, string> = {};
   for (const e of data.releases) commits[e.version] = sh("git", "rev-list", "-n1", `v${e.version}`);
   const rc = newest(data, "rc");
-  const issues = await api<{ pull_request?: unknown }[]>("issues?labels=regression&state=open&per_page=100");
+  const issues = await api<{ pull_request?: unknown }[]>(
+    "issues?labels=regression&state=open&per_page=100",
+  );
   return {
     now: new Date(),
     releases: data,
@@ -256,6 +286,9 @@ if (import.meta.main) {
   f.now = new Date(Math.floor(f.now.getTime() / 3_600_000) * 3_600_000);
   mkdirSync(join(out, "fonts"), { recursive: true });
   writeFileSync(join(out, "index.html"), render(f));
-  copyFileSync("web/src/fonts/google-sans-flex-latin-wght-normal.woff2", join(out, "fonts/google-sans-flex.woff2"));
+  copyFileSync(
+    "web/src/fonts/google-sans-flex-latin-wght-normal.woff2",
+    join(out, "fonts/google-sans-flex.woff2"),
+  );
   copyFileSync("web/src/app/favicon.ico", join(out, "favicon.ico"));
 }
