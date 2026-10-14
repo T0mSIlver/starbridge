@@ -93,6 +93,7 @@ export function next(f: Facts): string[] {
     );
   }
   out.push("Mac apps check every 6 h");
+  out.push("Play Alpha: after Play's review");
   return out;
 }
 
@@ -106,7 +107,7 @@ const PRODUCTS = ["Server and web", "Android", "iPhone", "Mac app", "CLI", "Plug
 
 function where(p: (typeof PRODUCTS)[number], e: Releases["releases"][number], f: Facts): string {
   const c = e.channels;
-  const gh = "GitHub";
+  const gh = e.ring === "rc" ? "GitHub rc" : "GitHub latest";
   const l: string[] = [];
   if (p === "Server and web") l.push("starbridge.run");
   if (p === "Android") {
@@ -166,7 +167,7 @@ export function render(f: Facts): string {
 <title>Ops · Starbridge</title><link rel="icon" href="favicon.ico" sizes="48x48"><link rel="preload" href="fonts/google-sans-flex.woff2" as="font" type="font/woff2" crossorigin>
 <style>${CSS}</style></head><body><main>
 <header><span class="brand">${MARK}Starbridge ops</span></header>
-<div class="card intro"><h1>Rings</h1><p>Main: staging, your phone.<br>rc: testers, starbridge.run.<br>Final: everyone, after a day and your yes.</p><p><a href="https://github.com/${REPO}/blob/main/spec/releases.md">spec/releases.md</a> · <a href="${POLICY}">Policy</a></p></div>
+<div class="card intro"><h1>Rings</h1><p>Main: staging, your phone.<br>rc: testers, starbridge.run.<br>Final: everyone.</p><p><a href="https://github.com/${REPO}/blob/main/spec/releases.md">spec/releases.md</a> · <a href="${POLICY}">Policy</a></p></div>
 <section><h2>Now</h2><div class="card prods">${rows}</div></section>
 <section><h2>Next</h2><div class="card next"><ul>${nextRows}</ul></div></section>
 <footer><p>As of ${both(f.now)}</p></footer></main></body></html>`;
