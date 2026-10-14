@@ -52,6 +52,7 @@ import dev.starbridge.app.ui.Section
 import dev.starbridge.app.ui.rowShape
 import dev.starbridge.app.ui.theme.Spacing
 import dev.starbridge.app.ui.theme.StarbridgeTheme
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import java.time.Instant
 
@@ -174,10 +175,18 @@ class QuotasWidgetSetup : ComponentActivity() {
         val prefs = app.prefs()
         val self = this
         lifecycleScope.launch {
-            val glanceId = GlanceAppWidgetManager(self).getGlanceIdBy(widgetId)
-            val chosen = Choice.read(getAppWidgetState(self, PreferencesGlanceStateDefinition, glanceId))
-            // A new widget draws once now: the system sends no update while its setup is open.
-            QuotasWidget().update(self, glanceId)
+            // A widget removed while its setup was open has no Glance id: nothing to pick for.
+            val (glanceId, chosen) = try {
+                val glanceId = GlanceAppWidgetManager(self).getGlanceIdBy(widgetId)
+                val chosen = Choice.read(getAppWidgetState(self, PreferencesGlanceStateDefinition, glanceId))
+                // A new widget draws once now: the system sends no update while its setup is open.
+                QuotasWidget().update(self, glanceId)
+                glanceId to chosen
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                return@launch finish()
+            }
             setContent {
                 val colours by prefs.colours.collectAsStateWithLifecycle()
                 val clock by prefs.clock.collectAsStateWithLifecycle()

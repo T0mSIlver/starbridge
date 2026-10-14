@@ -18,6 +18,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.window.SecureFlagPolicy
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -78,8 +80,10 @@ fun JoinPrompt(asks: List<JoinAsk>, comparison: Comparison, actions: JoinActions
             confirmButton = {},
             dismissButton = { TextButton(onClick = { actions.refuse(comparison.ask.id) }) { Text("Refuse", color = colors.bad) } },
         )
+        // A dialog is a window of its own: the activity's FLAG_SECURE does not cover it.
         is Comparison.Digits -> AlertDialog(
             onDismissRequest = {},
+            properties = DialogProperties(securePolicy = SecureFlagPolicy.SecureOn),
             title = { Text("Same digits on ${comparison.ask.name}?") },
             text = {
                 // Scrolls when a long name and a large font leave the digits no room.
