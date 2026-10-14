@@ -79,8 +79,9 @@ and opens its card. To run it locally, start a rootable emulator (a `google_apis
 `version.ts` also pins CodexBar's latest release, the one setup and `starbridge update` install,
 in `cli/src/setup/codexbar-pin.json`. If an open `codexbar` issue says that release fails the daily
 check, pin the last good one with `bun cli/scripts/codexbar-pin.ts <version>`. The
-marketplace installs both plugins from the final tag, and setup installs the Pi package at the tag of
-the CLI it runs.
+repository's marketplace installs both plugins from the final tag, for manual installs; setup installs
+them, and the Pi package, at the commit of the CLI it runs, which the release workflow records in the
+binary as `gitHead`.
 
 `bun run build:bin`, in `cli/`, builds the standalone binaries (Linux, macOS and Windows, x64 and
 arm64). A `v*` tag runs `.github/workflows/release.yml`, which attaches them, the signed APK and

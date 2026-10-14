@@ -125,11 +125,17 @@
   an issue when it breaks, so a release does not pin a broken one. A provider works when `usage
   --provider X` returns windows; CodexBar exits 1 with the reason in its JSON row, so setup reads
   the row. The unit runs the `starbridge` on the PATH when that is the running binary, since that
-  path survives brew upgrades. Setup turns on plugin auto-update through `extraKnownMarketplaces`,
-  installs the Claude Code plugins only from a marketplace whose source is this repository (#274),
-  and uninstall removes only that one, so a developer's own `starbridge` marketplace survives;
+  path survives brew upgrades. Setup installs the Claude Code plugins from a marketplace it writes
+  from the binary into `~/.claude/starbridge-marketplace`, each plugin pinned to the release's
+  commit, which the release workflow records in the binary, and the Pi package at that commit
+  (#1768): the binary is signed, but the repository's marketplace follows its default branch and
+  a tag can move, so both installed code the signature does not cover. A build from source pins
+  its version's tag. `starbridge update`'s refresh moves both to the new commit; it replaces the
+  repository's marketplace that earlier setups added, which also served only this repository
+  (#274). Setup turns on plugin auto-update through `extraKnownMarketplaces`, and uninstall
+  removes only its own marketplace, so a developer's own `starbridge` marketplace survives;
   both run `claude` from the home directory, so no repository's `.claude` settings are read or
-  edited (#762). Setup installs Codex's skill and rule, the Pi package, opencode's plugin and skill and the
+  edited (#762). Setup installs Codex's skill and rule, opencode's plugin and skill and the
   Antigravity plugin from copies the CLI carries so versions match. The local agent rewrites outdated copies when it starts.
 - **Setup asks little** (#750). Each question was one more Enter between a new user and their
   first answer, and nearly everyone said yes. Setup installs Starbridge in every agent it finds

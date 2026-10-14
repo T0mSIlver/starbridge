@@ -46,10 +46,12 @@ import {
   opencodeState,
   PI_PACKAGE,
   piPackage,
+  piSource,
   removeOpencode,
 } from "../src/setup/harnesses";
 import { markedSkill } from "../src/setup/marker";
 import opencodeFiles from "../src/setup/opencode-files.js";
+import { marketplaceText } from "../src/setup/plugins";
 import {
   installService,
   removeService,
@@ -171,8 +173,12 @@ test("setup --yes installs the agent, the plugins and the skills, and uploads a 
   const sd = m.calls().filter((c) => c.startsWith("systemctl"));
   expect(sd).toContain("systemctl --user enable starbridge-agent.service");
 
-  // Plugins from the marketplace, auto-updated, with the allow rules.
-  expect(m.calls()).toContain("claude plugin marketplace add T0mSIlver/starbridge --scope user");
+  // Plugins from the marketplace this binary writes, auto-updated, with the allow rules.
+  const marketDir = join(m.home, ".claude/starbridge-marketplace");
+  expect(m.calls()).toContain(`claude plugin marketplace add ${marketDir} --scope user`);
+  expect(readFileSync(join(marketDir, ".claude-plugin/marketplace.json"), "utf8")).toBe(
+    marketplaceText(),
+  );
   expect(m.calls()).toContain("claude plugin install starbridge@starbridge --scope user");
   expect(m.calls()).toContain("claude plugin install starbridge-mod@starbridge --scope user");
   const settings = JSON.parse(readFileSync(m.settings, "utf8"));
@@ -1259,6 +1265,83 @@ test("a failed command reports the reason from stderr, not the progress on stdou
     "✘ Failed to add marketplace: Fetching the marketplace from GitHub failed on both attempts.",
   );
   expect(failure({ code: 3, stdout: "a\nlast\n", stderr: "" })).toBe("last");
+});
+
+test("the plugins and the Pi package are pinned to the release's commit (#1768)", () => {
+  const commit = "0123456789abcdef0123456789abcdef01234567";
+  const market = JSON.parse(marketplaceText("1.2.3", commit));
+  expect(market.name).toBe("starbridge");
+  for (const p of market.plugins)
+    expect([p.source.url, p.source.ref, p.source.sha]).toEqual([
+      "https://github.com/T0mSIlver/starbridge.git",
+      "v1.2.3",
+      commit,
+    ]);
+  expect(market.plugins.map((p: { source: { path: string } }) => p.source.path)).toEqual([
+    "plugin",
+    "mod",
+  ]);
+  // A build from source has no commit: its tag.
+  expect(JSON.parse(marketplaceText("1.2.3", undefined)).plugins[0].source.sha).toBeUndefined();
+  expect(piSource("1.2.3", commit)).toBe(`git:github.com/T0mSIlver/starbridge@${commit}`);
+  expect(piSource("1.2.3")).toBe("git:github.com/T0mSIlver/starbridge@v1.2.3");
+});
+
+test("refresh replaces the repository's marketplace with the pinned one, and moves it (#1768)", async () => {
+  const m = await machine();
+  const state = m.ctx.env.FAKE_STATE as string;
+  mkdirSync(state, { recursive: true });
+  // What setup before #1768 left: the GitHub marketplace and its plugins, the mod turned off.
+  writeFileSync(join(state, "market"), "");
+  for (const p of ["starbridge@starbridge", "starbridge-mod@starbridge"])
+    writeFileSync(join(state, `plugin-${p}`), "");
+  writeFileSync(join(state, "disabled-starbridge-mod@starbridge"), "");
+  await refresh(m.sys);
+  const marketDir = join(m.home, ".claude/starbridge-marketplace");
+  expect(
+    m
+      .calls()
+      .filter((c) => /^claude plugin (marketplace (add|remove|update)|install|update)/.test(c)),
+  ).toEqual([
+    "claude plugin marketplace remove starbridge",
+    `claude plugin marketplace add ${marketDir} --scope user`,
+    "claude plugin install starbridge@starbridge --scope user",
+    "claude plugin install starbridge-mod@starbridge --scope user",
+  ]);
+  expect(m.calls()).toContain("claude plugin disable starbridge-mod@starbridge --scope user");
+  expect(existsSync(join(state, "disabled-starbridge@starbridge"))).toBe(false);
+  // Current: nothing to do.
+  let before = m.calls().length;
+  await refresh(m.sys);
+  expect(
+    m
+      .calls()
+      .slice(before)
+      .filter((c) => /^claude plugin (marketplace (add|remove|update)|install|update)/.test(c)),
+  ).toEqual([]);
+  // Another release's marketplace: updated in place; a failed update is tried again.
+  writeFileSync(join(marketDir, ".claude-plugin/marketplace.json"), "{}\n");
+  m.ctx.env.FAKE_FAIL_UPDATE = "1";
+  await refresh(m.sys);
+  delete m.ctx.env.FAKE_FAIL_UPDATE;
+  before = m.calls().length;
+  await refresh(m.sys);
+  expect(
+    m
+      .calls()
+      .slice(before)
+      .filter((c) => /^claude plugin (marketplace (add|remove|update)|install|update)/.test(c)),
+  ).toEqual([
+    "claude plugin marketplace update starbridge",
+    "claude plugin update starbridge@starbridge --scope user",
+    "claude plugin update starbridge-mod@starbridge --scope user",
+  ]);
+  expect(readFileSync(join(marketDir, ".claude-plugin/marketplace.json"), "utf8")).toBe(
+    marketplaceText(),
+  );
+  // Uninstall takes the folder with the marketplace.
+  expect(await uninstall(m.sys, {})).toBe(0);
+  expect(existsSync(marketDir)).toBe(false);
 });
 
 test("setup installs no plugin from a marketplace named starbridge that is not this repository", async () => {

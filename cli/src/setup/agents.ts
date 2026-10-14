@@ -76,6 +76,7 @@ import {
   missingAllowRules,
   PLUGINS,
   pluginState,
+  pluginsStale,
   removeAllowRules,
   removePlugins,
   settingsPath,
@@ -219,8 +220,7 @@ async function installClaude(sys: Sys): Promise<Outcome> {
   const foreign = foreignMarketplace(state);
   if (foreign)
     return { mark: "–", text: "skipped", notes: [...notes, `Not installed: ${foreign}.`] };
-  if (!state.marketplace || PLUGINS.some((p) => !state.plugins[p]))
-    await installPlugins(sys, state);
+  if (pluginsStale(sys, state)) await installPlugins(sys, state);
   if (autoUpdate(sys) === false && !enableAutoUpdate(sys))
     notes.push("Could not turn on the plugins' auto-update.");
   let allowed = missingAllowRules(sys).length === 0;
