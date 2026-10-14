@@ -33,17 +33,26 @@
   ships code starbridge.run already runs and deploys nothing. A final is promoted, not cut: `promote.yml` stamps the newest rc's
   commit on a commit of its own, tags it and runs the release on that tag, so main never stops
   merging between an rc and its final, then pushes a branch that points main's marketplace at the
-  final. The owner approves each promotion, after the rc has run on the maintainer's phone and no issue
-  labelled `regression` is open, which the workflow also checks. Waiting N days instead was
-  rejected: with five testers, no report is weak evidence, and v0.1.3 shipped broken without one.
-- **Cadence** (#1538). An rc whenever a batch of merges lands, about daily, since it is also what
-  puts server changes on starbridge.run; the owner promotes it once they have used it a day.
+  final. The owner approves each promotion (see Cadence), and the workflow also checks that no
+  issue labelled `regression` is open. Waiting N days instead was rejected: with five testers, no
+  report is weak evidence, and v0.1.3 shipped broken without one.
+- **Cadence** (#1538, #1698). An rc is cut on demand, when a batch of merges lands or the owner
+  asks, and at least one a day while main has changes since the last rc. An rc is also what puts
+  server changes on starbridge.run. About 4 hours after an rc is cut, if no issue labelled
+  `regression` is open, the orchestrator sends the owner a card to promote it, and the owner's yes
+  runs `promote.yml`. The owner's devices run the tip ring (below), which already holds the rc's
+  code, so 4 hours covers their own use; testers' silence is weak evidence. While a promotion
+  card is open, no new rc is cut except a fix to that rc, since a new rc restarts the 4 hours. A
+  final is always the newest rc: promoting an older one would move testers on a newer rc back to
+  older code.
   Channels stay: Android rcs and finals to Play's Alpha track and GitHub (production once Play's
   12-tester test is passed), the desktop app's finals for everyone and rcs for apps installed from
   an rc or with Get Release Candidates on, the CLI's rcs to npm's `next` and finals to `latest` and
   Homebrew, the plugin marketplace on finals. The iPhone app follows Android once Apple's export
   compliance code arrives: rcs to TestFlight, finals to the App Store.
-- **Three rings: tip, rc, final** (#1540). The owner runs tip, the builds of main, against staging, testers and
+- **Three rings: tip, rc, final** (#1540). The owner's devices run the tip ring, every
+  change on main (Android's internal track per Android merge and rc tag, #1691; the Mac's Tip
+  channel, #1692; the dev box through staging); testers and
   starbridge.run run rcs, everyone else finals, and a change never skips a ring: v0.1.3 broke every
   tester's app before the owner had run it. The dev box's CLI, agent, plugin and mod follow the
   server its machine is paired with, staging. The Android app's build of main goes to Play's

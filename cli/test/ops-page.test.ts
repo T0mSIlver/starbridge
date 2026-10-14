@@ -39,26 +39,34 @@ test("Android main builds on each app merge and rc tag, and says what is not bui
   expect(next(facts({ androidSince: 2, androidChanged: false }))[0]).toContain("none waiting");
 });
 
-test("promotion is the newest rc's time plus a day, in Paris and UTC", () => {
+test("promotion is the newest rc's time plus 4 hours, in Paris and UTC", () => {
   const p = promotion(facts());
-  expect(p.earliest?.toISOString()).toBe("2026-10-14T21:21:15.000Z");
+  expect(p.earliest?.toISOString()).toBe("2026-10-14T01:21:15.000Z");
   expect(p.becomes).toBe("0.1.7");
   expect(p.nextRc).toBe("0.1.8-rc.1");
-  expect(p.verdict).toBe("Waiting: 21 h left on the clock");
-  expect(render(facts())).toContain("Wed 14 Oct, 23:21 Paris, 21:21 UTC");
+  expect(p.verdict).toBe("Waiting: 1 h left on the clock");
+  expect(render(facts())).toContain("Wed 14 Oct, 03:21 Paris, 01:21 UTC");
   expect(next(facts()).join("\n")).not.toContain("needs a day");
 });
 
 test("a newer rc restarts the clock", () => {
   const newer = record(releases, "0.1.7-rc.3", { github: true }, "2026-10-14T09:00:00Z");
-  const p = promotion(facts({ releases: newer, now: new Date("2026-10-14T22:00:00Z") }));
+  const p = promotion(facts({ releases: newer, now: new Date("2026-10-14T10:00:00Z") }));
   expect(p.candidate?.version).toBe("0.1.7-rc.3");
-  expect(p.earliest?.toISOString()).toBe("2026-10-15T09:00:00.000Z");
-  expect(p.verdict).toBe("Waiting: 11 h left on the clock");
+  expect(p.earliest?.toISOString()).toBe("2026-10-14T13:00:00.000Z");
+  expect(p.verdict).toBe("Waiting: 3 h left on the clock");
   // With rc.2 alone the clock would have run out.
-  expect(promotion(facts({ now: new Date("2026-10-14T22:00:00Z") })).verdict).toBe(
+  expect(promotion(facts({ now: new Date("2026-10-14T10:00:00Z") })).verdict).toBe(
     "Ready for your yes",
   );
+});
+
+test("a promotion waiting for the owner's yes holds new rcs", () => {
+  const ready = facts({ now: new Date("2026-10-14T10:00:00Z") });
+  expect(promotion(ready).holdsNewRc).toBe(true);
+  expect(render(ready)).toContain("No new rc while this waits for your yes");
+  expect(render(facts())).not.toContain("No new rc while");
+  expect(render({ ...ready, openRegressions: 1 })).not.toContain("No new rc while");
 });
 
 test("an open regression blocks promotion; no candidate once the rc is a final", () => {

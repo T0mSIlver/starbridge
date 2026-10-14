@@ -94,8 +94,8 @@ export function newest(r: Releases, ring: "rc" | "final") {
     .sort((a, b) => b.shipped.localeCompare(a.shipped))[0];
 }
 
-/** An rc is promoted after a day on testers. */
-const CLOCK_MS = 86_400_000;
+/** A promotion card goes out this long after an rc is cut (spec/releases.md, "Cadence"). */
+const CLOCK_MS = 4 * 3_600_000;
 
 export type Promotion = {
   final?: string;
@@ -104,9 +104,11 @@ export type Promotion = {
   /** The final it would become, and the rc that new work then goes to. */
   becomes?: string;
   nextRc?: string;
-  /** The newest rc's time plus a day: a newer rc moves it. */
+  /** The newest rc's time plus 4 hours: a newer rc moves it. */
   earliest?: Date;
   clockLeftMs?: number;
+  /** The card is open, so no rc is cut except a fix to this one. */
+  holdsNewRc?: boolean;
   regressions?: number;
   verdict: string;
 };
@@ -136,6 +138,7 @@ export function promotion(f: Facts): Promotion {
     nextRc: `${a}.${b}.${c + 1}-rc.1`,
     earliest,
     clockLeftMs,
+    holdsNewRc: !reg && clockLeftMs === 0 && reg !== undefined,
     regressions: reg,
     verdict,
   };
@@ -216,7 +219,7 @@ function promotionHtml(f: Facts): string {
     `Candidate: ${p.candidate.version} (testers), out ${hours(f.now.getTime() - p.candidate.shipped.getTime())}, ${p.regressions === undefined ? "regressions unknown" : `${p.regressions} regression${p.regressions === 1 ? "" : "s"} open`}.`,
   );
   const checks = [
-    `A day since the newest rc: ${p.clockLeftMs > 0 ? `${hours(p.clockLeftMs)} left` : "done"}.`,
+    `4 hours since the newest rc: ${p.clockLeftMs > 0 ? `${hours(p.clockLeftMs)} left` : "done"}.`,
     `No open regression issue: ${p.regressions ?? "unknown"} open.`,
     "Your yes on a card.",
   ];
@@ -225,7 +228,7 @@ function promotionHtml(f: Facts): string {
       `<div class="chg"><p class="name">${esc(name)}</p><p><span class="label">Now, rc</span><br>${esc(now)}</p><p><span class="label">After promotion</span><br>${esc(then)}</p></div>`,
   ).join("");
   return `<div class="card promo"><p class="verdict">${esc(p.verdict)}</p>${lines.map((l) => `<p>${esc(l)}</p>`).join("")}
-<p class="label">Earliest</p><p>${esc(both(p.earliest))}. A newer rc restarts the clock.</p>
+<p class="label">Earliest</p><p>${esc(both(p.earliest))}. A newer rc restarts the clock.</p>${p.holdsNewRc ? `<p>No new rc while this waits for your yes</p>` : ""}
 <p class="label">Needs</p><ul>${checks.map((c) => `<li>${esc(c)}</li>`).join("")}</ul>
 <p class="label">What it is</p><p>Promotion republishes ${esc(p.candidate.version)}'s code as ${esc(p.becomes)}, with no rebuild. New work then goes to ${esc(p.nextRc ?? "")}.</p>
 <div class="chgs">${rows}</div></div>`;
