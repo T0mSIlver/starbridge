@@ -78,28 +78,21 @@ export function next(f: Facts): string[] {
   const nn = nextNightly(f.now);
   out.push(
     f.androidSince === undefined
-      ? `Android nightly builds at ${both(nn)}.`
-      : `Android nightly builds at ${both(nn)}: ${(f.androidChanged ?? f.androidSince > 0) ? `will build (${f.androidSince} android/ commits since main-${short(f.nightly?.sha)})` : "will skip (the app is unchanged)"}.`,
+      ? `Android nightly ${both(nn)}`
+      : `Android nightly ${both(nn)}: ${(f.androidChanged ?? f.androidSince > 0) ? `builds, ${f.androidSince} commits since main-${short(f.nightly?.sha)}` : "skips, app unchanged"}`,
   );
-  out.push(
-    f.iosMainOn
-      ? "iPhone main builds go to TestFlight with the nightly."
-      : "iPhone main builds are off until Apple's export compliance code arrives.",
-  );
-  out.push(
-    `Next rc: cut by the orchestrator when a batch lands; ${f.stagingSinceRc ?? "an unknown number of"} commits on staging are not yet in an rc.`,
-  );
+  out.push(f.iosMainOn ? "iPhone main: with the nightly" : "iPhone main: off, awaiting Apple");
+  out.push(`Next rc: ${f.stagingSinceRc ?? "unknown"} commits on staging`);
   const rc = newest(f.releases, "rc");
   const fin = newest(f.releases, "final");
   if (rc && (!fin || rc.version.split("-")[0] !== fin.version)) {
     const age = f.now.getTime() - Date.parse(rc.shipped);
     const day = age >= 86_400_000 ? "done" : `${hours(86_400_000 - age)} left`;
     out.push(
-      `${rc.version} has been on testers for ${hours(age)}. Promotion needs a day on the rc (${day}), no open regression issue (${f.openRegressions ?? "unknown, GitHub did not answer"} open) and your yes.`,
+      `${rc.version} needs a day on testers (${day}), no open regression (${f.openRegressions ?? "unknown"} open), your yes`,
     );
   }
-  out.push("Mac apps check for updates every 6 hours.");
-  out.push("Play Alpha waits on Play's review after an upload.");
+  out.push("Mac apps check every 6 h");
   return out;
 }
 
@@ -109,33 +102,25 @@ export function newest(r: Releases, ring: "rc" | "final") {
     .sort((a, b) => b.shipped.localeCompare(a.shipped))[0];
 }
 
-const PRODUCTS = [
-  "Hosted server and web page",
-  "Android",
-  "iPhone",
-  "Mac app",
-  "CLI",
-  "Claude Code plugin",
-] as const;
+const PRODUCTS = ["Server and web", "Android", "iPhone", "Mac app", "CLI", "Plugin"] as const;
 
 function where(p: (typeof PRODUCTS)[number], e: Releases["releases"][number], f: Facts): string {
   const c = e.channels;
-  const gh = e.ring === "rc" ? "GitHub prerelease" : "GitHub latest";
+  const gh = "GitHub";
   const l: string[] = [];
-  if (p === "Hosted server and web page") l.push("starbridge.run");
+  if (p === "Server and web") l.push("starbridge.run");
   if (p === "Android") {
-    if (c.play) l.push(c.play.track === "alpha" ? "Play Alpha" : "Play production");
+    if (c.play) l.push(c.play.track === "alpha" ? "Play Alpha" : "Play");
     if (c.github) l.push(gh);
   }
-  if (p === "iPhone" && c.testflight) l.push(`TestFlight build ${c.testflight.build}`);
+  if (p === "iPhone" && c.testflight) l.push(`TestFlight ${c.testflight.build}`);
   if (p === "Mac app" && c.desktop) l.push(gh);
   if (p === "CLI") {
-    if (c.npm) l.push(e.ring === "rc" ? "npm next" : "npm latest");
+    if (c.npm) l.push(e.ring === "rc" ? "npm next" : "npm");
     if (c.homebrew) l.push("Homebrew");
     if (c.github) l.push(gh);
   }
-  if (p === "Claude Code plugin")
-    l.push(e.ring === "final" ? "marketplace once its pull request merges" : "ships with finals");
+  if (p === "Plugin") l.push(e.ring === "final" ? "Marketplace after its PR" : "Finals only");
   void f;
   return l.join(" · ") || "not published";
 }
@@ -143,16 +128,16 @@ function where(p: (typeof PRODUCTS)[number], e: Releases["releases"][number], f:
 function main(f: Facts, p: (typeof PRODUCTS)[number]): string {
   const none = (t: string) => `<span class="ver none">${t}</span>`;
   switch (p) {
-    case "Hosted server and web page":
-      return `<span class="ver">staging ${commit(f.staging)}</span><p class="meta">starbridge.run runs ${commit(f.prod)}</p>`;
+    case "Server and web":
+      return `<span class="ver">${commit(f.staging)}</span><p class="where">Staging · prod ${commit(f.prod)}</p>`;
     case "Android":
       return f.nightly
-        ? `<span class="ver">main-${short(f.nightly.sha)}</span><p class="meta">${commit(f.nightly.sha)} · ${both(new Date(f.nightly.at))}</p><p class="where">Play internal track</p>`
-        : none("No nightly yet");
+        ? `<span class="ver">main-${short(f.nightly.sha)}</span><p class="meta">${commit(f.nightly.sha)} · ${both(new Date(f.nightly.at))}</p><p class="where">Play internal</p>`
+        : none("None yet");
     case "iPhone":
       return none(f.iosMainOn ? "With the nightly" : "Off");
     default:
-      return none("No main build");
+      return none("None");
   }
 }
 
@@ -172,7 +157,7 @@ export function render(f: Facts): string {
   const fin = newest(f.releases, "final");
   const rows = PRODUCTS.map(
     (p) =>
-      `<div class="prod"><p class="name">${p}</p><div class="rings"><div class="ring"><p class="label">Main</p>${main(f, p)}</div>${cell("Release candidate", rc, p, f)}${cell("Final", fin, p, f)}</div></div>`,
+      `<div class="prod"><p class="name">${p}</p><div class="rings"><div class="ring"><p class="label">Main</p>${main(f, p)}</div>${cell("rc", rc, p, f)}${cell("Final", fin, p, f)}</div></div>`,
   ).join("");
   const nextRows = next(f)
     .map((t) => `<li>${esc(t)}</li>`)
@@ -181,10 +166,10 @@ export function render(f: Facts): string {
 <title>Ops · Starbridge</title><link rel="icon" href="favicon.ico" sizes="48x48"><link rel="preload" href="fonts/google-sans-flex.woff2" as="font" type="font/woff2" crossorigin>
 <style>${CSS}</style></head><body><main>
 <header><span class="brand">${MARK}Starbridge ops</span></header>
-<div class="card intro"><h1>How the rings work</h1><p>Every merge to main goes to staging. A release candidate (rc) is cut from main about daily, goes to testers on Play Alpha, TestFlight, npm next and the Mac apps that follow rcs, and deploys to starbridge.run. A final is its newest rc plus the version stamp, promoted after a day with no open regression and your yes: it reaches everyone. The Android nightly is main on Play's internal track. <a href="https://github.com/${REPO}/blob/main/spec/releases.md">spec/releases.md</a> · <a href="${POLICY}">The policy</a></p></div>
-<section><h2>Each ring now</h2><div class="card prods">${rows}</div></section>
-<section><h2>What happens next</h2><div class="card next"><ul>${nextRows}</ul></div></section>
-<footer><p>As of ${both(f.now)}, to the hour. Private: Cloudflare Access lets in the owner only.</p></footer></main></body></html>`;
+<div class="card intro"><h1>Rings</h1><p>Main: staging, your phone.<br>rc: testers, starbridge.run.<br>Final: everyone, after a day and your yes.</p><p><a href="https://github.com/${REPO}/blob/main/spec/releases.md">spec/releases.md</a> · <a href="${POLICY}">Policy</a></p></div>
+<section><h2>Now</h2><div class="card prods">${rows}</div></section>
+<section><h2>Next</h2><div class="card next"><ul>${nextRows}</ul></div></section>
+<footer><p>As of ${both(f.now)}</p></footer></main></body></html>`;
 }
 
 const MARK = `<svg class="mark" width="20" height="20" viewBox="29.25 24.75 49.5 49.5" aria-hidden="true"><path class="fg" d="M29.25,72.75 V58.5 A24.75,24.75 0 0 1 78.75,58.5 V72.75 A1.5,1.5 0 0 1 77.25,74.25 H71.25 A1.5,1.5 0 0 1 69.75,72.75 V58.5 A9.25,9.25 0 0 0 51.25,58.5 V72.75 A1.5,1.5 0 0 1 49.75,74.25 H30.75 A1.5,1.5 0 0 1 29.25,72.75 Z"/><circle class="dot" cx="60.5" cy="68.75" r="5.5"/></svg>`;

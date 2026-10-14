@@ -30,14 +30,14 @@ test("the nightly is the next 03:00 UTC, shown in Paris and UTC", () => {
     "2026-10-15T03:00:00.000Z",
   );
   expect(next(facts())[0]).toContain("05:00 Paris, 03:00 UTC");
-  expect(next(facts())[0]).toContain("will build (3 android/ commits since main-cccccccc)");
-  expect(next(facts({ androidSince: 0 }))[0]).toContain("will skip");
-  expect(next(facts({ androidSince: 2, androidChanged: false }))[0]).toContain("will skip");
+  expect(next(facts())[0]).toContain("builds, 3 commits since main-cccccccc");
+  expect(next(facts({ androidSince: 0 }))[0]).toContain("skips");
+  expect(next(facts({ androidSince: 2, androidChanged: false }))[0]).toContain("skips");
   expect(next(facts({ openRegressions: undefined })).join("\n")).toContain("unknown");
 });
 
 test("promotion names its conditions", () => {
-  expect(next(facts()).join("\n")).toContain("0.1.7-rc.2 has been on testers for 2 h");
+  expect(next(facts()).join("\n")).toContain("0.1.7-rc.2 needs a day on testers (21 h left)");
   expect(next(facts({ openRegressions: 2 })).join("\n")).toContain("(2 open)");
 });
 
