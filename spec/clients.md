@@ -1,7 +1,7 @@
 # Clients
 
-- **Inbox order.** Runs first, then permission prompts, then questions whose agent waits, then the
-  rest, each oldest first. The view offers one feed, "Group by machine" or "Group by waiting"
+- **Inbox order.** Runs first, running ones newest first, then the ended ones latest news first;
+  then permission prompts, then questions whose agent waits, then the rest, each oldest first. The view offers one feed, "Group by machine" or "Group by waiting"
   ("Waiting on you", "When you can"), remembered per device.
 - **One card system** (#248). Every item is a filled card; what blocks an agent differs by one
   thing, the amber fill. A waiting item's title is weight 500 and its time slot a clock ticking
