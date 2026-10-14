@@ -617,9 +617,10 @@ class QuotasWidgetReceiver : GlanceAppWidgetReceiver() {
 /** Fetches the quotas the server holds, then redraws the widgets, with the app closed or not. */
 class QuotasSyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result {
-        applicationContext.app().store().syncQuotasQuietly()
+        val read = applicationContext.app().store().syncQuotasQuietly()
         redrawWidgets(applicationContext)
-        return Result.success()
+        // Offline or held back: tried again when WorkManager's backoff and the network allow.
+        return if (read) Result.success() else Result.retry()
     }
 
     companion object {
