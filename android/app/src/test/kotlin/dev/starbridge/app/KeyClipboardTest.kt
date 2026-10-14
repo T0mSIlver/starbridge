@@ -39,4 +39,21 @@ class KeyClipboardTest {
         shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(KeyClipboard.CLEAR_AFTER_MS))
         assertEquals("something else", clipboard.primaryClip!!.getItemAt(0).text)
     }
+
+    // The timer dies with a frozen or killed process: the deadline, kept on disk, clears the key on the next start.
+    @Test fun clearsAKeyWhoseTimerNeverRan() {
+        var now = 1_000_000L
+        KeyClipboard.wallClock = { now }
+        try {
+            KeyClipboard.copy(context, key)
+            now += KeyClipboard.CLEAR_AFTER_MS - 1000
+            KeyClipboard.clearIfDue(context)
+            assertEquals(key, clipboard.primaryClip!!.getItemAt(0).text)
+            now += 1000
+            KeyClipboard.clearIfDue(context)
+            assertFalse(clipboard.hasPrimaryClip() && clipboard.primaryClip!!.getItemAt(0).text == key)
+        } finally {
+            KeyClipboard.wallClock = System::currentTimeMillis
+        }
+    }
 }

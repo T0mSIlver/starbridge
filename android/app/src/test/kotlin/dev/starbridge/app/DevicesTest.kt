@@ -4,7 +4,11 @@ import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.performClick
+import dev.starbridge.app.data.Approval
 import dev.starbridge.app.data.Kind
+import dev.starbridge.app.ui.devices.PairLinkScreen
 import dev.starbridge.app.data.Member
 import dev.starbridge.app.protocol.CHECK_CONFIRM_MS
 import dev.starbridge.app.ui.devices.DeviceActions
@@ -15,6 +19,7 @@ import dev.starbridge.app.ui.theme.StarbridgeTheme
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -51,5 +56,23 @@ class DevicesTest {
         compose.onNodeWithText("Same code as on the machine? HYB9-MDSM-H3N5-PVAX").assertExists()
         now = added.plusMillis(CHECK_CONFIRM_MS)
         compose.onAllNodesWithText("HYB9-MDSM-H3N5-PVAX", substring = true).assertCountEquals(0)
+    }
+
+    // A pairing link comes from anyone: Approve asks once more, naming the device (internal audit 2026-10-14).
+    @Test fun aPairingLinkAsksBeforeItApproves() {
+        var approved = 0
+        compose.setContent {
+            StarbridgeTheme {
+                PairLinkScreen(Approval.Found("sandbox", Kind.Machine, "ABCD-EFGH"), DeviceActions({}, { approved++ }, {}, {}, {}))
+            }
+        }
+        compose.onNodeWithText("Approve", useUnmergedTree = true).performClick()
+        compose.onNodeWithText("Approve sandbox from this link?").assertIsDisplayed()
+        assertEquals(0, approved)
+        compose.onAllNodesWithText("Cancel", useUnmergedTree = true).get(1).performClick()
+        assertEquals(0, approved)
+        compose.onNodeWithText("Approve", useUnmergedTree = true).performClick()
+        compose.onAllNodesWithText("Approve", useUnmergedTree = true).get(1).performClick()
+        assertEquals(1, approved)
     }
 }
