@@ -36,7 +36,7 @@ struct PendingPairing {
 func otherServer(_ text: String, server: String) -> String? {
     let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
     var link = URLComponents(string: trimmed)
-    if link?.scheme == "starbridge" || (link?.scheme == nil && link?.path == "starbridge-pair") {
+    if link?.scheme == nil && link?.path == "starbridge-pair" {
         guard let named = link?.queryItems?.first(where: { $0.name == "server" })?.value else { return nil }
         link = URLComponents(string: named)
     }
@@ -159,11 +159,4 @@ extension Store {
             if let self, !Task.isCancelled { approval = .failed("The code expired. Show a new one.") }
         }
     }
-
-    /**
-     * A machine's `starbridge://pair` link opened the app: Add a device looks its code up, once
-     * this iPhone is in the account, as on Android. It is never a code to join with: the machine
-     * already posted under it.
-     */
-    func openPairLink(_ url: URL) { pairLink = url.absoluteString }
 }

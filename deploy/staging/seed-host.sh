@@ -39,6 +39,10 @@ start)
   exit 1
   ;;
 stop)
+  # Holds the deploy's lock too: a deploy that saw no seeding server would recreate the server
+  # beside this `up`, and the two collide (#1663).
+  exec 9>/run/starbridge-staging-deploy.lock
+  flock 9
   docker rm -f sb-seed-server sb-seed-fake >/dev/null 2>&1 || true
   $compose up -d server
   ;;

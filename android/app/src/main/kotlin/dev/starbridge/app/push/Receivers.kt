@@ -10,9 +10,11 @@ import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
 import dev.starbridge.app.data.ApiException
 import dev.starbridge.app.di.app
+import dev.starbridge.app.widget.redrawWidgets
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 import org.unifiedpush.android.connector.FailedReason
 import org.unifiedpush.android.connector.PushService
 import org.unifiedpush.android.connector.data.PushEndpoint
@@ -112,7 +114,11 @@ class FcmService : FirebaseMessagingService() {
         val p = message.data["p"] ?: return
         // This runs on FCM's own worker thread, which allows about 20 seconds; onPush returns
         // within them.
-        runBlocking { app().store().onPush(p) }
+        runBlocking {
+            app().store().onPush(p)
+            // Within these seconds: the app's own watcher may be frozen with the process before it redraws.
+            withTimeoutOrNull(5_000) { redrawWidgets(this@FcmService) }
+        }
     }
 
     override fun onNewToken(token: String) {
@@ -136,7 +142,10 @@ class UnifiedPushService : PushService() {
         if (!message.decrypted) return
         val app = app()
         val p = message.content.decodeToString()
-        app.scope().launch { app.store().onPush(p) }
+        app.scope().launch {
+            app.store().onPush(p)
+            redrawWidgets(this@UnifiedPushService)
+        }
     }
 
     override fun onRegistrationFailed(reason: FailedReason, instance: String) {

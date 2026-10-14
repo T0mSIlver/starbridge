@@ -17,6 +17,7 @@ import {
   forgetHeads,
   formatPairingCode,
   fromB64,
+  type Heads,
   type ItemKind,
   joinCommitment,
   joinerKeys,
@@ -103,6 +104,9 @@ describe("directory.json", () => {
 
 describe("heads.json", () => {
   const { chains } = V.heads;
+  // A `by` kept before #1627 is ignored, so the expected heads leave it out.
+  const plain = (h: Heads): Heads =>
+    Object.fromEntries(Object.entries(h).map(([k, v]) => [k, { length: v.length, head: v.head }]));
   const at = (c: string) => [chains[c], verifyDirectory(chains[c])] as const;
   for (const c of V.heads.withheld)
     test(`withheldBy: ${c.name}`, () => {
@@ -111,16 +115,16 @@ describe("heads.json", () => {
     });
   for (const c of V.heads.noteHead)
     test(`noteHead: ${c.name}`, () => {
-      const [entries, dir] = at(c.chain);
+      const [entries] = at(c.chain);
       const heads = structuredClone(c.heads);
-      expect(noteHead(heads, c.signer, c.head, entries, dir)).toBe(c.expect.changed);
-      expect(heads).toEqual(c.expect.heads);
+      expect(noteHead(heads, c.signer, c.head, entries)).toBe(c.expect.changed);
+      expect(plain(heads)).toEqual(c.expect.heads);
     });
   for (const c of V.heads.forgetHeads)
     test(`forgetHeads: ${c.name}`, () => {
       const heads = structuredClone(c.heads);
       forgetHeads(heads, c.id);
-      expect(heads).toEqual(c.expect);
+      expect(plain(heads)).toEqual(c.expect);
     });
 });
 
@@ -222,14 +226,7 @@ describe("pairing.json: links", () => {
 });
 
 describe("pairing.json: app links", () => {
-  const [made, qr, ...rest] = V.pairing.keyLinks;
-  test("appPairingLink", () => {
-    expect(made.link).toBe(
-      `starbridge://pair?server=https%3A%2F%2Fstarbridge.example%3A8443&k=${made.key}#${V.pairing.code}`,
-    );
-    expect(checkKeyFromLink(made.link)).toBe(made.expect);
-    expect(formatPairingCode(codeFromLink(made.link))).toBe(V.pairing.code);
-  });
+  const [qr, ...rest] = V.pairing.keyLinks;
   test("machineQrText", () => {
     expect(qr.link).toBe(
       `starbridge-pair?server=https%3A%2F%2Fstarbridge.example%3A8443&k=${qr.key}#${V.pairing.code}`,

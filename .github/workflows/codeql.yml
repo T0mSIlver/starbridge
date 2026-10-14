@@ -1,8 +1,8 @@
 name: CodeQL
 
 # Code scanning for every language but Swift, on every pull request and push to main and weekly.
-# Swift is in codeql-swift.yml: it needs a macOS runner, the scarcest, so it runs only when the
-# iOS app changes. These two replace CodeQL's default setup, which cannot run beside them (#1264).
+# Swift is in codeql-swift.yml: it needs a macOS runner, the scarcest, so it runs only when
+# ios/StarbridgeProtocol or desktop/widgets changes. These two replace CodeQL's default setup, which cannot run beside them (#1264).
 on:
   push:
     branches: [main]

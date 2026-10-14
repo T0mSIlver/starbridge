@@ -955,7 +955,7 @@ export async function approvePairing(ctx: Ctx, req: PairingRequest): Promise<Ctx
 }
 
 /**
- * Revokes member `id`, and forgets the directory heads it signed or is named in: this browser
+ * Revokes member `id`, and forgets the directory heads it signed: this browser
  * signed the revocation, so it knows it is no fork, and a head the member forged ends with it.
  */
 export async function revoke(ctx: Ctx, id: string): Promise<Ctx> {
@@ -1165,7 +1165,7 @@ export class Withheld extends Error {
 }
 
 /**
- * Forgets the directory heads member `id` signed or is named in, on the owner's word that they
+ * Forgets the directory heads member `id` signed, on the owner's word that they
  * revoked it, and keeps none of them again: no revocation ends a hold by itself, since a revoked
  * device can forge one on a fork (#813). Ids are never reused, so the list only grows by the
  * members the owner revokes.
@@ -1183,8 +1183,7 @@ export async function stopWaiting(ctx: Ctx, id: string): Promise<void> {
 }
 
 /**
- * Opens a machine's item and keeps the directory head it signed, the longest per machine and per
- * device it names as `by` (one slot per machine for a `by` this browser's chain does not list).
+ * Opens a machine's item and keeps the directory head it signed, the longest per machine.
  */
 async function openMachine<K extends SealedItem["kind"]>(
   ctx: Ctx,
@@ -1198,8 +1197,8 @@ async function openMachine<K extends SealedItem["kind"]>(
   if (head)
     await store.updateWith("heads", ctx.account, "forgotten", (old, forgotten = []) => {
       const heads = { ...old };
-      if (!forgotten.includes(opened.signer.id) && !(head.by && forgotten.includes(head.by)))
-        noteHead(heads, opened.signer.id, head, ctx.entries, ctx.dir);
+      if (!forgotten.includes(opened.signer.id))
+        noteHead(heads, opened.signer.id, head, ctx.entries);
       return heads;
     });
   return opened;
@@ -1222,22 +1221,19 @@ async function hold(ctx: Ctx): Promise<void> {
 }
 
 /**
- * Names the machine and, for a head it passed on, the device: a compromised machine can name any
- * device, the owner's own phone included, so the machine is the one to revoke first. A head whose
- * member a `revoke` entry names says who revoked it, since the owner alone can tell whether they
- * did or a revoked device forged it on a fork (#813).
+ * Names the machine whose head shows the gap. A head whose member a `revoke` entry names says who
+ * revoked it, since the owner alone can tell whether they did or a revoked device forged it on a
+ * fork (#813).
  */
 export function heldText(dir: Directory, held: Held): string {
   const name = (id: string) => dir.members.get(id)?.member.name ?? id;
   const machine = name(held.id);
-  const seen = held.by
-    ? `${machine} says ${name(held.by)} has seen changes to your devices that the server is holding back.`
-    : `The server is holding back changes to your devices that ${machine} has seen.`;
+  const seen = `The server is holding back changes to your devices that ${machine} has seen.`;
   if (held.revoked) {
     const { id, by, at } = held.revoked;
     return `${seen} ${name(by)} revoked ${name(id)} on ${at.slice(0, 10)}. If you did not, the server may be hiding that ${name(by)} was revoked. Nothing from your machines shows until this clears.`;
   }
-  return `${seen} Nothing from your machines shows until it sends them. If this does not clear, revoke ${machine} first.`;
+  return `${seen} Nothing from your machines shows until it sends them. If this does not clear, revoke ${machine}.`;
 }
 
 /** How each item a settled notice closed was closed, by item id, with the time it closed. */

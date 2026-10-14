@@ -940,16 +940,7 @@ test("permissions on after installing pi-permission-system lets Starbridge's own
   expect(piAllow(ctx.env).state).toBe("allowed");
 });
 
-test("ask --wait prints the answer the phone sends", async () => {
-  const ctx = await paired(server);
-  const done = run([...ASK, "--wait"], ctx);
-  await until(() => ctx.lines.length === 1);
-  await server.answer(ctx.lines[0] as string, { choice: "Wait" });
-  expect(await done).toBe(0);
-  expect(ctx.lines[1]).toBe(`Answer to ${ctx.lines[0]} (Merge #12 now?): Wait`);
-});
-
-test("a typed reply answers a question with options", async () => {
+test("ask --wait prints a typed reply to a question with options", async () => {
   const ctx = await paired(server);
   const done = run([...ASK, "--wait"], ctx);
   await until(() => ctx.lines.length === 1);

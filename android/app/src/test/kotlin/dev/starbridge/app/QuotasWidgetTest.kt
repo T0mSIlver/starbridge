@@ -47,7 +47,13 @@ import dev.starbridge.app.widget.fitting
 import dev.starbridge.app.widget.outWords
 import dev.starbridge.app.widget.pickerPlans
 import dev.starbridge.app.widget.textWidth
+import dev.starbridge.app.widget.watchWidgets
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.runCurrent
+import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -154,6 +160,42 @@ class QuotasWidgetTest {
         assertEquals("Runs out Oct 16 06:44", words("2026-10-16T06:44:00Z").first())
         assertEquals(listOf("Ran out today 13:40", "Ran out 13:40", "Ran out today", "Ran out"), words("2026-10-09T13:40:00Z"))
         assertEquals(listOf("Ran out yesterday 22:00", "Ran out Thu 22:00", "Ran out yesterday", "Ran out Thu", "Ran out"), words("2026-10-08T22:00:00Z"))
+    }
+
+    @Test fun aReadingAnHourOldOrMoreSaysHowOldItIs() {
+        fun updated(taken: Duration?) = rows(null, windows.map { it.copy(takenAt = taken?.let(now::minus)) }).first().updated
+        assertEquals(emptyList<String>(), updated(null))
+        assertEquals(emptyList<String>(), updated(Duration.ofMinutes(59)))
+        // The Quotas screen's own words.
+        assertEquals(listOf("Updated 1 h ago", "1 h ago"), updated(Duration.ofHours(1)))
+        assertEquals(listOf("Updated 3 h 30 min ago", "3 h 30 min ago"), updated(Duration.ofMinutes(210)))
+    }
+
+    @Test fun theWidgetsRedrawAtOnceWhenQuotasChangeAndOnceMoreForChangesSoonAfter() = runTest {
+        val windows = MutableStateFlow(listOf(this@QuotasWidgetTest.windows[0]))
+        val colours = MutableStateFlow(Colours.Starbridge)
+        val drawn = mutableListOf<List<QuotaWindow>>()
+        // What the app does with its store: the quotas the widget draws are read at redraw time.
+        watchWidgets(listOf(windows, colours), backgroundScope) { drawn += windows.value }
+        runCurrent()
+        assertEquals(1, drawn.size)
+        // The first change after a quiet second draws at once.
+        advanceTimeBy(1_001)
+        val fresh = this@QuotasWidgetTest.windows[0].copy(usedPercent = 10)
+        windows.value = listOf(fresh)
+        runCurrent()
+        assertEquals(2, drawn.size)
+        assertEquals(fresh, drawn.last().single())
+        // Changes inside the second that follows are drawn once, with the last of them.
+        windows.value = listOf(fresh.copy(usedPercent = 11))
+        colours.value = Colours.Wallpaper
+        windows.value = listOf(fresh.copy(usedPercent = 12))
+        runCurrent()
+        assertEquals(2, drawn.size)
+        advanceTimeBy(1_001)
+        runCurrent()
+        assertEquals(3, drawn.size)
+        assertEquals(12, drawn.last().single().usedPercent)
     }
 
     private fun scaled(scale: Float, dark: Boolean = false): Context {
@@ -310,6 +352,23 @@ class QuotasWidgetTest {
         compose.onRoot().captureRoboImage("screenshots/widgets/$name.png")
     }
 
+    /** Readings 3 h old (#1686): a 2×2 says so for its pace, a 4×2 beside the provider; Codex's are fresh. */
+    private fun stale(dark: Boolean) {
+        val old = windows.map { if (it.provider == "Claude") it.copy(takenAt = now.minus(Duration.ofHours(3))) else it.copy(takenAt = now.minus(Duration.ofSeconds(30))) }
+        val weekly = Choice(claude, listOf("Weekly", "Opus"))
+        shoot(
+            "stale-${if (dark) "dark" else "light"}",
+            dark,
+            listOf(
+                listOf(widget(Choice(claude, listOf("Weekly")), old) to small, widget(Choice(codex, listOf("Weekly")), old) to small),
+                listOf(widget(weekly, old) to wide),
+                listOf(widget(null, old) to wide),
+            ),
+        )
+    }
+
+    @Test fun staleLight() = stale(dark = false)
+    @Test fun staleDark() = stale(dark = true)
     @Test fun widgetsLight() = widgets(dark = false)
     @Test fun widgetsDark() = widgets(dark = true)
     @Test fun runningOutLight() = runningOut(dark = false)

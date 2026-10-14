@@ -153,27 +153,15 @@ test("a prompt reaches a device that joins while it waits, which can answer it",
   expect(decision(ctx).hookSpecificOutput.decision).toEqual({ behavior: "allow" });
 });
 
-test("a deny carries its message to the agent", async () => {
+test.each([
+  ["carries its message to the agent", "Push to a branch instead", "Push to a branch instead"],
+  ["without a message tells the agent the owner denied it", undefined, DENIED],
+])("a deny %s", async (_, message, told) => {
   const ctx = await machine();
   const { out, permission } = await ask(ctx);
-  await server.answerPermission(permission.id, {
-    behavior: "deny",
-    scope: "once",
-    message: "Push to a branch instead",
-  });
+  await server.answerPermission(permission.id, { behavior: "deny", scope: "once", message });
   await out;
-  expect(decision(ctx).hookSpecificOutput.decision).toEqual({
-    behavior: "deny",
-    message: "Push to a branch instead",
-  });
-});
-
-test("a deny without a message tells the agent the owner denied it", async () => {
-  const ctx = await machine();
-  const { out, permission } = await ask(ctx);
-  await server.answerPermission(permission.id, { behavior: "deny", scope: "once" });
-  await out;
-  expect(decision(ctx).hookSpecificOutput.decision).toEqual({ behavior: "deny", message: DENIED });
+  expect(decision(ctx).hookSpecificOutput.decision).toEqual({ behavior: "deny", message: told });
 });
 
 test("wider scopes return Claude Code's own rules with the scope's destination; mode changes are never offered", async () => {
@@ -232,20 +220,6 @@ test("an answer for another input, a scope not offered, or from a revoked device
   expect(ctx.lines).toEqual([]);
   expect(ctx.errors.join("\n")).toContain("ignored an answer");
   await until(async () => (await server.opened("settled"))[0]?.outcome === "timeout");
-});
-
-test("wider scopes are offered only when their rules show in full", async () => {
-  const long = {
-    ...RULES,
-    rules: Array.from({ length: 30 }, (_, i) => ({
-      toolName: "Bash",
-      ruleContent: `make t${i}:*`,
-    })),
-  };
-  const ctx = await machine();
-  const { out, permission } = await ask(ctx, request(PUSH, [RULES, long]), "1s");
-  expect(permission.suggestions).toEqual([]);
-  await out;
 });
 
 test("without an agent, SIGTERM or the deadline during the settled report still ends the hook with no answer", async () => {
@@ -528,10 +502,10 @@ test("the Claude Code plugin's hooks step aside when cursor-agent runs them (#95
 test("while disabled the hooks post nothing and print nothing", async () => {
   const ctx = await machine();
   expect(await run(["config", "permissions", "off"], ctx)).toBe(0);
-  expect(await hookPermission(ctx, request(), { agent: "claude-code" })).toBe(0);
-  // The config listing only: the hook printed nothing.
-  expect(ctx.lines).toHaveLength(5);
   expect(ctx.lines[0]).toBe("permissions   off");
+  const listed = [...ctx.lines];
+  expect(await hookPermission(ctx, request(), { agent: "claude-code" })).toBe(0);
+  expect(ctx.lines).toEqual(listed);
   expect(await server.opened("permission")).toEqual([]);
   const status = await new AgentClient(agentAddress(ctx.store.dir)).call<Status>(
     "GET",
@@ -658,6 +632,17 @@ test("redaction never hides code the owner approves", () => {
     ]).suggestions;
   expect(rule("make:*")).toHaveLength(2);
   expect(rule("X_TOKEN=abc123 make:*")).toEqual([]);
+  // ...and only when the whole list fits.
+  const rules = Array.from({ length: 30 }, (_, i) => ({
+    toolName: "Bash",
+    ruleContent: `make t${i}:*`,
+  }));
+  expect(
+    build("Bash", { command: "x" }, [
+      { type: "addRules", behavior: "allow", rules: [{ toolName: "Bash", ruleContent: "make:*" }] },
+      { type: "addRules", behavior: "allow", rules },
+    ]).suggestions,
+  ).toEqual([]);
 });
 
 test("an unreachable server, bad input or another agent never blocks the hook", async () => {

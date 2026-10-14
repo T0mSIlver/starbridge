@@ -142,13 +142,10 @@ enum Notify {
         let keys = KeyPair(publicKey: pk, secretKey: SecretKey(sk))
         let entries = saved.entries.compactMap { try? JSON.parse($0) }
         guard let dir = try? Directories.verify(entries, account: saved.account, pin: saved.pin) else { return nil }
-        var heads = Heads()
-        for h in saved.heads {
-            if let json = try? JSON.parse(h.head), let head = try? DirectoryHead(json: json) { heads[h.id] = head }
-        }
+        var heads = Heads(saved: saved.heads)
         func open(_ item: SealedItem) -> Opened? {
             guard let opened = try? Envelopes.open(item, me: me.id, keys: keys, directory: dir) else { return nil }
-            _ = HeadBook.note(&heads, signer: item.from, head: opened.body.dir, entries: entries, dir: dir)
+            _ = HeadBook.note(&heads, signer: item.from, head: opened.body.dir, entries: entries)
             return HeadBook.withheld(heads, dir: dir, entries: entries) == nil ? opened : nil
         }
         var item: SealedItem?

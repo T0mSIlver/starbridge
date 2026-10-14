@@ -74,8 +74,8 @@ waits for that job and runs only when it passed.
 
 | What | How |
 |---|---|
-| Set up | The VM comes with Docker, git, curl and its firewall from the homelab. `deploy/staging/setup.sh` installs the deploy command and the Actions key; `deploy/staging/push-secrets.sh` copies the secrets in `~/.config/starbridge/secrets/staging` (`github-oauth-client-id`, `github-oauth-client-secret` of the "Starbridge staging" OAuth app, `vapid-public-key`, `vapid-private-key`, `signup-github-ids`) |
-| Who can sign in | Only the GitHub ids in `signup-github-ids` can make an account (`SIGNUP_GITHUB_IDS`) |
+| Set up | The VM comes with Docker, git, curl and its firewall from the homelab. `deploy/staging/setup.sh` installs the deploy command and the Actions key; `deploy/staging/push-secrets.sh` copies the secrets in `~/.config/starbridge/secrets/staging` (`github-oauth-client-id`, `github-oauth-client-secret` of the "Starbridge staging" OAuth app, `vapid-public-key`, `vapid-private-key`, `signup-github-ids`, `owner-token`) |
+| Who can sign in | Only the GitHub ids in `signup-github-ids` can make an account (`SIGNUP_GITHUB_IDS`), and the holder of `owner-token` (`OWNER_TOKEN`) the owner account, which only the app check uses (`staging-app.yml`) |
 | Data | Synthetic only: `deploy/staging/seed.sh 200` makes 200 users through the real sign-in and pairing flows (`evals/load/setup.ts`), with staging's server stopped meanwhile. Nothing is backed up: the seed is the backup |
 | Compose project | `sudo docker compose -p starbridge-staging -f /opt/starbridge-staging/deploy/compose.yaml -f /opt/starbridge-staging/deploy/staging/compose.yaml` |
 

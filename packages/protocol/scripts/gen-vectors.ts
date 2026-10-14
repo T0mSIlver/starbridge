@@ -6,7 +6,6 @@
 import {
   addEntry,
   alertsFor,
-  appPairingLink,
   approverKeys,
   bindMessage,
   checkCode,
@@ -1285,23 +1284,16 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
     ],
     keyLinks: [
       {
-        note: "appPairingLink(server, code, key): the server and check key in the query, the code after #; checkKeyFromLink reads the key back",
-        server: "https://starbridge.example:8443/",
-        key: CHECK_KEY,
-        link: appPairingLink("https://starbridge.example:8443/", code, CHECK_KEY),
-        expect: CHECK_KEY,
-      },
-      {
-        note: "machineQrText(server, code, key): the same query and code with no scheme, which only the app's scanner reads",
+        note: "machineQrText(server, code, key): the server and check key in the query, the code after #, with no scheme, which only the app's scanner reads; checkKeyFromLink reads the key back",
         server: "https://starbridge.example:8443/",
         key: CHECK_KEY,
         link: machineQrText("https://starbridge.example:8443/", code, CHECK_KEY),
         expect: CHECK_KEY,
       },
-      { input: `starbridge://pair?x=1&k=${CHECK_KEY.toLowerCase()}#ABCD`, expect: CHECK_KEY },
-      { input: `starbridge://pair#k=${CHECK_KEY}`, expect: null },
-      { input: "starbridge://pair?k=0123#ABCD", expect: null },
-      { input: "starbridge://pair?k=0123456789ABCDEU#ABCD", expect: null },
+      { input: `starbridge-pair?x=1&k=${CHECK_KEY.toLowerCase()}#ABCD`, expect: CHECK_KEY },
+      { input: `starbridge-pair#k=${CHECK_KEY}`, expect: null },
+      { input: "starbridge-pair?k=0123#ABCD", expect: null },
+      { input: "starbridge-pair?k=0123456789ABCDEU#ABCD", expect: null },
       { input: pairingLink("https://starbridge.run", code), expect: null },
     ],
     bind: (() => {
@@ -2904,18 +2896,32 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
     chain: c,
     expect: withheldBy(heads, dirOf(c), chains[c]) ?? null,
   });
+  // A head kept before #1627 may carry `by`, which readers ignore: expectations list only what
+  // each head says, so every client compares the same thing.
+  const plain = (h: Heads): Heads =>
+    Object.fromEntries(Object.entries(h).map(([k, v]) => [k, { length: v.length, head: v.head }]));
   const noteCase = (name: string, heads: Heads, signerId: string, head: object, c: ChainName) => {
     const after = structuredClone(heads);
-    const changed = noteHead(after, signerId, head as never, chains[c], dirOf(c));
-    return { name, heads, signer: signerId, head, chain: c, expect: { changed, heads: after } };
+    const changed = noteHead(after, signerId, head as never, chains[c]);
+    return {
+      name,
+      heads,
+      signer: signerId,
+      head,
+      chain: c,
+      expect: { changed, heads: plain(after) },
+    };
   };
   const forgetCase = (name: string, heads: Heads, id: string) => {
     const after = structuredClone(heads);
     forgetHeads(after, id);
-    return { name, heads, id, expect: after };
+    return { name, heads, id, expect: plain(after) };
   };
+  // How heads were kept before #1627: under "signer/by", or "signer/?" for a by the chain did not list.
+  const passedOn = { ...H, by: "phone" } as Heads[string];
+  const unknownBy = { ...forged, by: "ghost" } as Heads[string];
   const heads = {
-    note: "withheldBy(heads, verifyDirectory(chains[chain]), chains[chain]); noteHead(heads, signer, head, chains[chain], verifyDirectory(chains[chain])); forgetHeads(heads, id). A `revoke` ends no hold (#813); a `recover` does.",
+    note: 'withheldBy(heads, verifyDirectory(chains[chain]), chains[chain]); noteHead(heads, signer, head, chains[chain]); forgetHeads(heads, id). A `revoke` ends no hold (#813); a `recover` does. Heads kept before #1627 under "signer/by" or "signer/?" count as their signer\'s, and expected heads leave out their `by`; noteHead keeps no head that names a `by`.',
     chains,
     withheld: [
       withheldCase("a machine's head the chain lacks holds", { devbox: H }, "stale"),
@@ -2925,31 +2931,37 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
         { devbox: H },
         "forkRevokesMachine",
       ),
-      withheldCase(
-        "a fork that revokes the device a head names as by still holds",
-        { "devbox/phone": { ...H, by: "phone" } },
-        "forkRevokesBy",
-      ),
-      withheldCase(
-        "a recover ends it",
-        { devbox: H, "devbox/phone": { ...H, by: "phone" } },
-        "recovered",
-      ),
+      withheldCase("a recover ends it", { devbox: H }, "recovered"),
       withheldCase(
         "a recover ends it for a member revoked before it",
         { devbox: forged },
         "revokedThenRecovered",
-      ),
-      withheldCase(
-        "a by the chain does not list holds",
-        { "devbox/?": { ...forged, by: "ghost" } },
-        "stale",
       ),
       withheldCase("a signer the chain does not list counts not", { ghost: H }, "stale"),
       withheldCase(
         "a head no revoke names comes first",
         { devbox: H, phone2: forged },
         "forkRevokesMachine",
+      ),
+      withheldCase(
+        "a head kept under signer/by before #1627 holds as its signer's",
+        { "devbox/phone": passedOn },
+        "stale",
+      ),
+      withheldCase(
+        "a head kept under signer/? before #1627 holds as its signer's",
+        { "devbox/?": unknownBy },
+        "stale",
+      ),
+      withheldCase(
+        "a fork that revokes the by of a head kept before #1627 names no revocation",
+        { "devbox/phone": passedOn },
+        "forkRevokesBy",
+      ),
+      withheldCase(
+        "a recover ends a head kept before #1627",
+        { "devbox/phone": passedOn, "devbox/?": unknownBy },
+        "recovered",
       ),
     ],
     noteHead: [
@@ -2965,41 +2977,35 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
         "stale",
       ),
       noteCase(
-        "a by the chain does not list goes in the signer's one unknown slot",
-        { "devbox/?": { ...forged, by: "ghost" } },
-        "devbox",
-        { ...H, by: "nobody" },
-        "stale",
-      ),
-      noteCase(
-        "a head passed on from a by the chain lists as revoked is not kept",
+        "a head that names a by is not kept",
         {},
         "devbox",
         { ...H, by: "phone" },
         "forkRevokesBy",
       ),
       noteCase(
-        "an unknown slot whose by a recover removed takes any head",
-        { "devbox/?": { ...forged, by: "phone" } },
+        "a longer head that names a by does not replace the signer's own the chain lacks",
+        { devbox: H },
         "devbox",
-        { ...H, by: "ghost" },
-        "recovered",
+        unknownBy,
+        "stale",
       ),
       noteCase(
-        "an unknown slot whose by a revoke names keeps its longer head",
-        { "devbox/?": { ...forged, by: "phone" } },
+        "heads kept before #1627 stay beside the signer's",
+        { "devbox/phone": passedOn, "devbox/?": unknownBy },
         "devbox",
-        { ...H, by: "ghost" },
-        "forkRevokesBy",
+        H,
+        "stale",
       ),
     ],
     forgetHeads: [
       forgetCase(
-        "drops what the member signed and what names it as by",
+        "drops every head the member signed, under any key",
         {
           devbox: H,
-          "devbox/phone": { ...H, by: "phone" },
-          "laptop/devbox": { ...forged, by: "devbox" },
+          "devbox/phone": passedOn,
+          "devbox/?": unknownBy,
+          "laptop/devbox": { ...forged, by: "devbox" } as Heads[string],
           phone2: forged,
         },
         "devbox",

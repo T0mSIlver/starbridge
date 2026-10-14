@@ -15,7 +15,8 @@ next one from a clean slate.
 | `sb-dell3` | 2 | `pr, heavy` |
 | `sb-hp` | 2 | `pr, light` |
 
-- `trusted` runs pushes to main, deploys, uptime checks and releases, and nothing else.
+- `trusted` runs pushes to main, deploys, uptime checks, releases and the nightly flaky-test count,
+  and nothing else.
 - `pr` runs pull requests from this repository's own branches, except Dependabot's. Forks'
   pull requests, Dependabot's and dispatched CI runs stay on GitHub's runners.
 - No pull request job reaches a `trusted` runner or `ANDROID_RUNNER`. Docker's daemon and cache
@@ -30,7 +31,7 @@ runs-on: ${{ vars.TRUSTED_RUNNER && fromJSON(vars.TRUSTED_RUNNER) || 'ubuntu-lat
 
 | Variable | Value | Used by |
 |---|---|---|
-| `TRUSTED_RUNNER` | `["self-hosted","starbridge","trusted","heavy"]` | main's test job, deploy, uptime, release |
+| `TRUSTED_RUNNER` | `["self-hosted","starbridge","trusted","heavy"]` | main's test job, deploy, uptime, release, flakes |
 | `PR_LIGHT_RUNNER` | `["self-hosted","starbridge","pr"]` | a pull request's test, typecheck and lint job |
 | `PR_DOCKER_RUNNER` | `["self-hosted","starbridge","pr","docker","heavy"]` | a pull request's image builds |
 | `ANDROID_RUNNER` | `starbridge-android` | Android builds on main and in releases |

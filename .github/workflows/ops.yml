@@ -1,0 +1,67 @@
+name: ops
+
+# The owner's private ops page (#1630): the rings including main, and what happens next. Built every 30
+# minutes and after each deploy, release, nightly and promotion, then uploaded to the Cloudflare Pages
+# project starbridge-ops, which Cloudflare Access closes to the owner (spec/hosted.md says how it is set up). Its Cloudflare token is a secret of the `ops-pages`
+# environment, open to main only; without it the run builds the page and uploads nothing. The page has
+# commits and times, so it is never a workflow artifact or a log line.
+on:
+  schedule:
+    - cron: "7,37 * * * *"
+  workflow_run:
+    workflows: [deploy, release, internal, promote]
+    types: [completed]
+  workflow_dispatch:
+
+concurrency:
+  group: ops
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  actions: read
+  issues: read
+
+jobs:
+  page:
+    # A run of this repository's own workflows only.
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.head_repository.full_name == github.repository }}
+    runs-on: ubuntu-latest
+    environment: ops-pages
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.2
+      - name: Build the page
+        env:
+          GH_TOKEN: ${{ github.token }}
+          IOS_MAIN_TESTFLIGHT: ${{ vars.IOS_MAIN_TESTFLIGHT }}
+        run: bun cli/scripts/ops-page.ts "$RUNNER_TEMP/ops"
+      # The page's text changes at most hourly. The cache holds the hash of the page last uploaded (the newest
+      # entry, whatever its run), so an unchanged page is not uploaded again, and one that returns to an
+      # older text is.
+      - id: hash
+        run: echo "sum=$(sha256sum < "$RUNNER_TEMP/ops/index.html" | cut -c1-64)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/ops-last
+          key: ops-last-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: ops-last-
+      - name: Upload to Cloudflare Pages
+        env:
+          SUM: ${{ steps.hash.outputs.sum }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo "::notice::The ops-pages environment has no Cloudflare token yet; nothing uploaded."
+            exit 0
+          fi
+          [ "$(cat "$RUNNER_TEMP/ops-last" 2>/dev/null)" = "$SUM" ] && exit 0
+          npx --yes wrangler@4.143.0 pages deploy "$RUNNER_TEMP/ops" --project-name starbridge-ops --branch main --commit-dirty=true >/dev/null
+          # Only an upload that happened leaves the marker the cache saves.
+          echo "$SUM" > "$RUNNER_TEMP/ops-last"

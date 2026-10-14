@@ -39,7 +39,7 @@ type Records = {
   heads: Heads;
   /**
    * Members whose directory heads the owner told this browser to forget (#813): heads they
-   * signed or are named in are never kept again, even from a read that started before.
+   * signed are never kept again, even from a read that started before.
    */
   forgotten: string[];
   /**

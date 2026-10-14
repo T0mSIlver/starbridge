@@ -20,7 +20,7 @@ final class PairingTests: XCTestCase {
         XCTAssertNil(otherServer("https://STARBRIDGE.run:443/pair#ABCD", server: here))
         XCTAssertEqual(otherServer("https://sb.example.com/pair#ABCD", server: here), "sb.example.com")
         XCTAssertEqual(otherServer("starbridge-pair?server=https%3A%2F%2Fsb.example.com%3A8443&k=K#ABCD", server: here), "sb.example.com:8443")
-        XCTAssertEqual(otherServer("starbridge://pair?server=http%3A%2F%2Flocalhost%3A18731#ABCD", server: here), "localhost:18731")
+        XCTAssertEqual(otherServer("starbridge-pair?server=http%3A%2F%2Flocalhost%3A18731#ABCD", server: here), "localhost:18731")
         XCTAssertNil(otherServer("starbridge-pair?server=https%3A%2F%2Fstarbridge.run&k=K#ABCD", server: here))
     }
 

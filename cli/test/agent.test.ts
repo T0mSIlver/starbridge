@@ -383,6 +383,11 @@ test("the agent refuses bad requests with the CLI's own messages", async () => {
   expect(
     await rejection(new AgentClient(socket).call("GET", "/v1/sessions/a%20b/events")),
   ).toBeInstanceOf(AgentError);
+  // A path that does not decode gets 400, and the agent keeps serving.
+  expect(
+    await rejection(new AgentClient(socket).call("GET", "/v1/sessions/%zz/events")),
+  ).toMatchObject({ status: 400, body: { error: "bad-path" } });
+  expect((await new AgentClient(socket).call<Status>("GET", "/v1/status")).version).toBeDefined();
   expect(await server.opened("decision")).toEqual([]);
 });
 
@@ -424,14 +429,6 @@ test.skipIf(WINDOWS)(
     expect(after?.id).not.toBe(before?.id);
   },
 );
-
-test("a malformed path gets 400 and the agent keeps serving", async () => {
-  const { socket } = await machine();
-  expect(
-    await rejection(new AgentClient(socket).call("GET", "/v1/sessions/%zz/events")),
-  ).toMatchObject({ status: 400, body: { error: "bad-path" } });
-  expect((await new AgentClient(socket).call<Status>("GET", "/v1/status")).version).toBeDefined();
-});
 
 test("Ctrl-C cuts a wait held at the agent at once", async () => {
   const { socket } = await machine();
@@ -1166,7 +1163,7 @@ test("answers --all through the agent follows every session's answers and takes 
 });
 
 test("ask promises a prompt only once the agent has seen this session's mod (#537)", async () => {
-  const { socket } = await machine();
+  const { socket, ctx } = await machine();
   const c = client(socket);
   c.env.CLAUDECODE = "1";
   const prompt = "The answer will come back into this session as a new prompt.";
@@ -1193,12 +1190,8 @@ test("ask promises a prompt only once the agent has seen this session's mod (#53
   await s.bye();
   await ask(c, "--session", "s-mod");
   expect(c.errors.at(-1)).toContain("run `starbridge wait");
-});
 
-test("a mod silent for longer than one events cycle no longer counts (#537)", async () => {
-  const { socket, ctx } = await machine();
-  const c = client(socket);
-  c.env.CLAUDECODE = "1";
+  // A mod silent for longer than one events cycle no longer counts.
   await session(socket, "s-quiet").events();
   const start = Date.now();
   ctx.now = () => new Date(start + 46_000);

@@ -99,13 +99,15 @@ final class ProtocolVectorsTests: XCTestCase {
             for (k, head) in j.object! { h[k] = try DirectoryHead(json: head) }
             return h
         }
-        func json(_ h: Heads) -> JSON { .object(JSONObject(h.map { ($0, $1.json) })) }
+        // Expected heads leave out the `by` of a head kept before #1627.
+        func json(_ h: Heads) -> JSON {
+            .object(JSONObject(h.map { ($0, DirectoryHead(length: $1.length, head: $1.head).json) }))
+        }
         for c in v["withheld"]!.items {
             let entries = chains[c.str("chain")]!.items
             let held = HeadBook.withheld(try heads(c["heads"]!), dir: try Directories.verify(entries), entries: entries)
             let got: JSON = held.map { h in
                 var o: JSONObject = ["id": .string(h.id)]
-                o.put("by", h.by.map(JSON.string))
                 o["head"] = h.head.json
                 o.put("revoked", h.revoked.map { ["id": .string($0.id), "by": .string($0.by), "at": .string($0.at)] })
                 return .object(o)
@@ -115,7 +117,7 @@ final class ProtocolVectorsTests: XCTestCase {
         for c in v["noteHead"]!.items {
             let entries = chains[c.str("chain")]!.items
             var h = try heads(c["heads"]!)
-            let changed = HeadBook.note(&h, signer: c.str("signer"), head: try DirectoryHead(json: c["head"]!), entries: entries, dir: try Directories.verify(entries))
+            let changed = HeadBook.note(&h, signer: c.str("signer"), head: try DirectoryHead(json: c["head"]!), entries: entries)
             XCTAssertEqual(changed, c["expect"]!["changed"]!.bool!, c.str("name"))
             XCTAssertEqual(json(h), c["expect"]!["heads"]!, c.str("name"))
         }
@@ -212,9 +214,7 @@ final class ProtocolVectorsTests: XCTestCase {
             XCTAssertEqual(got, c.str("expect"), c.str("input"))
         }
         let keyLinks = v["keyLinks"]!.items
-        let made = keyLinks[0]
-        XCTAssertEqual(Pairings.appLink(server: made.str("server"), code: pcode, checkKey: made.str("key")), made.str("link"))
-        XCTAssertEqual(try PairingCode.fromLink(made.str("link")).formatted, v.str("code"))
+        XCTAssertEqual(try PairingCode.fromLink(keyLinks[0].str("link")).formatted, v.str("code"))
         for c in keyLinks {
             let input = c.opt("link")?.string ?? c.str("input")
             XCTAssertEqual(Pairings.checkKey(fromLink: input), c.opt("expect")?.string, input)

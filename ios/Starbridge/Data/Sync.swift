@@ -75,7 +75,7 @@ extension Store {
 
     var shownRuns: [SavedRun] {
         if withheldWhy != nil { return [] }
-        return saved.runs.filter { active($0.from) }
+        return SavedRun.shown(saved.runs.filter { active($0.from) }, now: Date())
     }
 
     func decision(_ id: String) -> SavedDecision? { saved.decisions.first { $0.id == id } }
@@ -181,13 +181,7 @@ extension Store {
 
     private var entryJSON: [JSON] { saved.entries.compactMap { try? JSON.parse($0) } }
 
-    private var heads: Heads {
-        var h = Heads()
-        for e in saved.heads {
-            if let json = try? JSON.parse(e.head), let head = try? DirectoryHead(json: json) { h[e.id] = head }
-        }
-        return h
-    }
+    private var heads: Heads { Heads(saved: saved.heads) }
 
     private func keep(_ heads: Heads) {
         var s = saved
@@ -206,7 +200,7 @@ extension Store {
         // Machines' heads only: a device's snooze vouches for nothing here (#571).
         if item.kind.signer == .machine {
             var h = heads
-            if HeadBook.note(&h, signer: item.from, head: opened.body.dir, entries: entries, dir: dir) { keep(h) }
+            if HeadBook.note(&h, signer: item.from, head: opened.body.dir, entries: entries) { keep(h) }
         }
         if withheld(entries) != nil { return nil }
         return OpenedItem(from: item.from, body: opened.body, text: opened.bodyText)
@@ -221,10 +215,9 @@ extension Store {
         let entries = entries ?? entryJSON
         guard let held = HeadBook.withheld(heads, dir: dir, entries: entries) else { return nil }
         let machine = memberName(held.id)
-        let seen = held.by.map { "\(machine) says \(memberName($0)) has seen changes to your devices that the server is holding back." }
-            ?? "The server is holding back changes to your devices that \(machine) has seen."
+        let seen = "The server is holding back changes to your devices that \(machine) has seen."
         guard let revoked = held.revoked else {
-            return "\(seen) Nothing from your machines shows until it sends them. If this does not clear, revoke \(machine) first."
+            return "\(seen) Nothing from your machines shows until it sends them. If this does not clear, revoke \(machine)."
         }
         let by = memberName(revoked.by)
         return "\(seen) \(by) revoked \(memberName(revoked.id)) on \(revoked.at.prefix(10)). If you did not, the server may be hiding that \(by) was revoked. Nothing from your machines shows until this clears; if you did, tap Stop waiting."
@@ -236,14 +229,14 @@ extension Store {
         return HeadBook.withheld(heads, dir: dir, entries: entryJSON)?.revoked?.id
     }
 
-    /** The owner revoked that member themselves: forget the heads that name it, and read again. */
+    /** The owner revoked that member themselves: forget the heads it signed, and read again. */
     func stopWaiting() async {
         guard let id = heldRevoked else { return }
         forgetHeads(of: id)
         await refresh()
     }
 
-    /** Forgets the heads that name `id`, a member this iPhone knows the owner revoked. */
+    /** Forgets the heads `id` signed, a member this iPhone knows the owner revoked. */
     func forgetHeads(of id: String) {
         var h = heads
         if HeadBook.forget(&h, id: id) { keep(h) }
@@ -324,7 +317,8 @@ extension Store {
         for (from, n) in wins { if let d = byId[n.itemId], let u = won(d, from: from, n) { byId[n.itemId] = u } }
         var s = saved
         s.cursor = cursor
-        s.decisions = Array(byId.values.sorted { $0.body.createdAt < $1.body.createdAt }.suffix(500))
+        // As instants: whole-second and millisecond stamps sort differently as text (#1079).
+        s.decisions = Array(Dates.byInstant(Array(byId.values)) { $0.body.createdAt }.suffix(500))
         persist(s)
         SavedImage.prune(keeping: s.decisions)
     }
@@ -454,7 +448,7 @@ extension Store {
         let weekAgo = Date().addingTimeInterval(-7 * 86_400)
         var s = saved
         s.promptCursor = cursor
-        s.prompts = byId.values.filter { Dates.parse($0.body.createdAt).map { $0 > weekAgo } ?? true }.sorted { $0.body.createdAt < $1.body.createdAt }
+        s.prompts = Dates.byInstant(byId.values.filter { Dates.parse($0.body.createdAt).map { $0 > weekAgo } ?? true }) { $0.body.createdAt }
         persist(s)
     }
 

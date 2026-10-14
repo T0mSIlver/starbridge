@@ -11,26 +11,26 @@ on:
 
 # A new push to a pull request cancels its older run. Main runs one at a time and never cancels
 # the running one; a newer merge replaces the one waiting, so only main's head waits. deploy.yml
-# deploys each run that passes, and the box refuses a revision older than the one it runs. Other
+# deploys each run that passes to staging, which refuses a commit older than the one it runs. Other
 # runs, pull requests' and dispatched ones, cancel older runs for the same ref.
 concurrency:
   group: ci-${{ github.event_name == 'push' && 'main' || github.ref }}
   cancel-in-progress: ${{ github.event_name != 'push' }}
 
-# pull-requests: the changed-files step reads a pull request's files from the API.
 permissions:
   contents: read
-  pull-requests: read
 
 # Jobs run on GitHub-hosted runners unless a repository variable names a self-hosted pool, as a
 # JSON array of labels (docs/ci.md). A push to main runs the test job on TRUSTED_RUNNER. A pull
 # request from this repository's own branches, Dependabot's aside, runs the test job on
-# PR_LIGHT_RUNNER and the image builds on PR_DOCKER_RUNNER: the PR pool holds no secrets, and no pull request job reaches TRUSTED_RUNNER's pool or ANDROID_RUNNER's.
-# A fork's pull request and a dispatched run stay on GitHub's runners.
+# PR_LIGHT_RUNNER and the image builds on PR_DOCKER_RUNNER: the PR pool holds no secrets, and no
+# pull request job reaches TRUSTED_RUNNER's pool or ANDROID_RUNNER's. A fork's pull request and a
+# dispatched run stay on GitHub's runners.
 #
 # A run tests only what its files can affect: a pull request's files against its base, a push's
 # since the commit before it (the changes job). A job that cannot be affected is skipped, which
-# counts as passing; a skipped workflow would not. deploy.yml deploys once all of CI passes.
+# counts as passing; a skipped workflow would not. deploy.yml deploys to staging once all of CI
+# passes.
 jobs:
   # Which jobs a run's files can affect. A push compares github.event.before with the pushed
   # commit, so a merge that touches only the Android or desktop app or docs skips the rest. A
@@ -41,6 +41,10 @@ jobs:
     name: changes
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    # pull-requests: paths-filter reads a pull request's files from the API.
+    permissions:
+      contents: read
+      pull-requests: read
     outputs:
       checks: ${{ steps.open.outputs.all == 'true' || steps.filter.outputs.checks == 'true' || steps.filter.outputs.android_read == 'true' }}
       e2e: ${{ steps.open.outputs.all == 'true' || steps.filter.outputs.e2e == 'true' || steps.filter.outputs.pages == 'true' || steps.filter.outputs.e2e_read == 'true' }}
@@ -205,7 +209,6 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           NAME: e2e-passed-${{ matrix.shard }}-${{ github.event.head_commit.tree_id }}
-        # Not gh: some self-hosted runners lack it (dell2-2).
         run: |
           n=$(curl -fsS -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' \
             "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/actions/artifacts?name=$NAME&per_page=100" |
@@ -321,7 +324,7 @@ jobs:
   images:
     name: images
     needs: changes
-    if: github.event_name != 'push' && needs.changes.outputs.images == 'true'
+    if: ${{ !cancelled() && github.event_name != 'push' && (needs.changes.result != 'success' || needs.changes.outputs.images == 'true') }}
     runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]' && vars.PR_DOCKER_RUNNER && fromJSON(vars.PR_DOCKER_RUNNER) || 'ubuntu-latest' }}
     timeout-minutes: 30
     env:
@@ -356,15 +359,32 @@ jobs:
           docker run --rm -v "$PWD/deploy/Caddyfile:/etc/caddy/Caddyfile:ro" -v "$RUNNER_TEMP/caddy:/etc/caddy/secrets:ro" \
             "$(cat "$RUNNER_TEMP/caddy.iid")" caddy validate --adapter caddyfile --config /etc/caddy/Caddyfile
 
-  # The CLI on Windows (#552): a built binary and the whole suite must pass (#884). Bun on Windows
-  # can wedge in a test past its own timeout, so each file runs alone and a hung one is killed and
-  # named (#834). GitHub's Windows runners need a public repository or paid minutes, so a private
-  # repository skips the job.
-  windows:
-    name: CLI on Windows
+  # The CLI on Windows (#552), macOS (#877) and Linux ARM64 (#1481): a built binary and the whole
+  # suite must pass (#884). macOS runs the launchd service and the screen readers; the release ships
+  # a linux-arm64 binary. Each test file runs alone and a hung one is killed and named (#834), since
+  # Bun on Windows can wedge in a test past its own timeout. GitHub's Windows, macOS and ARM runners
+  # need a public repository or paid minutes, so a private repository skips the job.
+  cli:
+    name: CLI on ${{ matrix.os }}
     needs: changes
     if: ${{ !cancelled() && !github.event.repository.private && (needs.changes.result != 'success' || needs.changes.outputs.cli == 'true') }}
-    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: Windows
+            runner: windows-latest
+            target: bun-windows-x64
+            bin: dist/starbridge.exe
+          - os: macOS
+            runner: macos-latest
+            target: bun-darwin-arm64
+            bin: dist/starbridge
+          - os: Linux ARM64
+            runner: ubuntu-24.04-arm
+            target: bun-linux-arm64
+            bin: dist/starbridge
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 20
     defaults:
       run:
@@ -377,77 +397,25 @@ jobs:
           bun-version: 1.4.2
       - run: pnpm install --frozen-lockfile
       - name: Build and start the binary
+        shell: bash
+        env:
+          TARGET: ${{ matrix.target }}
+          BIN: ${{ matrix.bin }}
         run: |
-          bun build src/main.ts --compile --target=bun-windows-x64 --outfile dist/starbridge.exe
-          ./dist/starbridge.exe --version
-          ./dist/starbridge.exe --help
-      - name: The whole CLI suite
-        timeout-minutes: 12
-        run: bun scripts/test-each.ts
-
-  # The CLI on macOS (#877): the launchd service and the screen readers run only there. Unlike
-  # Windows, the whole suite must pass. Each test file runs alone and is killed when it hangs, so
-  # a hang names its file well before the job limit.
-  macos:
-    name: CLI on macOS
-    needs: changes
-    if: ${{ !cancelled() && !github.event.repository.private && (needs.changes.result != 'success' || needs.changes.outputs.cli == 'true') }}
-    runs-on: macos-latest
-    timeout-minutes: 20
-    defaults:
-      run:
-        working-directory: cli
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
-        with:
-          bun-version: 1.4.2
-      - run: pnpm install --frozen-lockfile
-      - name: Build and start the binary
-        run: |
-          bun build src/main.ts --compile --target=bun-darwin-arm64 --outfile dist/starbridge
-          ./dist/starbridge --version
-          ./dist/starbridge --help
-      - name: The whole CLI suite
-        timeout-minutes: 12
-        run: bun scripts/test-each.ts
-
-  # The CLI on Linux ARM64 (#1481): the release ships a linux-arm64 binary, so a built one and the
-  # whole suite must pass on ARM too. GitHub's ARM runners need a public repository, so a private
-  # repository skips the job.
-  linux-arm64:
-    name: CLI on Linux ARM64
-    needs: changes
-    if: ${{ !cancelled() && !github.event.repository.private && (needs.changes.result != 'success' || needs.changes.outputs.cli == 'true') }}
-    runs-on: ubuntu-24.04-arm
-    timeout-minutes: 20
-    defaults:
-      run:
-        working-directory: cli
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
-        with:
-          bun-version: 1.4.2
-      - run: pnpm install --frozen-lockfile
-      - name: Build and start the binary
-        run: |
-          bun build src/main.ts --compile --target=bun-linux-arm64 --outfile dist/starbridge
-          ./dist/starbridge --version
-          ./dist/starbridge --help
+          bun build src/main.ts --compile --target="$TARGET" --outfile "$BIN"
+          "./$BIN" --version
+          "./$BIN" --help
       - name: The whole CLI suite
         timeout-minutes: 12
         run: bun scripts/test-each.ts
 
   # A pull request lists only the checks of runs its own events started, so a dispatched run's
   # checks never show on it; a commit status does. dependabot-lockfile.yml set it to pending. A
-  # dispatched run runs every job, so a skipped one fails the status, except Windows, macOS and Linux ARM64,
-  # which a private repository skips.
+  # dispatched run runs every job, so a skipped one fails the status, except the CLI on Windows,
+  # macOS and Linux ARM64, which a private repository skips.
   status:
     name: status
-    needs: [changes, checks, e2e, desktop-e2e, images, windows, macos, linux-arm64]
+    needs: [changes, checks, e2e, desktop-e2e, images, cli]
     if: always() && github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -461,7 +429,7 @@ jobs:
         run: |
           state=$(jq -r --argjson private "$PRIVATE" '
             [to_entries[] | select(.value.result != "success")
-              | select((.value.result == "skipped" and $private and (.key == "windows" or .key == "macos" or .key == "linux-arm64")) | not)]
+              | select((.value.result == "skipped" and $private and .key == "cli") | not)]
             | if length == 0 then "success" else "failure" end' <<<"$NEEDS")
           gh api "repos/$GITHUB_REPOSITORY/statuses/$GITHUB_SHA" -f context=CI -f state="$state" \
             -f target_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"

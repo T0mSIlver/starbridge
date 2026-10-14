@@ -24,7 +24,7 @@ if [ ! -f /etc/apt/sources.list.d/docker.sources ]; then
 fi
 apt-get update -q
 apt-get install -yq docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin \
-  git jq curl xvfb xauth unzip zstd
+  git gh jq curl xvfb xauth unzip zstd
 
 # Node for the steps that run the box's own.
 if [ "$(/usr/local/bin/node -v 2>/dev/null)" != "v$NODE_VERSION" ]; then

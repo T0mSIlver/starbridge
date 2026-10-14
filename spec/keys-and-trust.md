@@ -95,16 +95,17 @@
   hold into each answer (`dir`); a machine refuses every device answer while an active device has
   signed a head its chain lacks. Machines sign `dir` into every item; a device re-reads the
   directory, then holds every machine's items (shows none, notifies nothing, sends no answer)
-  while a machine has signed a head its chain lacks. Machines before #794 also passed on heads
-  they got from devices; such a head counts even when the chain doesn't list that device yet.
-  The hold names the machine and the device and says to revoke the machine first, since a
-  compromised machine can name the owner's own phone. Settings and revoking keep working. A
-  machine that knows of a longer head posts nothing (#794). Closing the gap fully needs a
-  channel the server does not carry.
+  while a machine has signed a head its chain lacks. The hold names the machine. Settings and
+  revoking keep working. A machine that knows of a longer head posts nothing (#794). Closing the
+  gap fully needs a channel the server does not carry. Machines before #794 passed on heads they
+  got from devices, naming the device as `by`. Since #1627 a device keeps no such head it reads,
+  since a replayed one could push the machine's own head out of its slot, and it reads a head it
+  kept that way before as its signer's, the stricter reading, since only the signer signed it,
+  rather than move or drop it (#1627).
 - **A revocation ends no hold** (#794, #813). A member signs no head past its own revocation, so
   a chain that revokes the member whose head shows the gap is a fork: a revoked device whose
   revocation the server hides can make one. A head therefore keeps counting while a `revoke`
-  names its signer or its `by`; only a `recover` ends it. The way out after revoking a member
+  names its signer; only a `recover` ends it. The way out after revoking a member
   that forged a long head: `starbridge pair --force` on a machine; on a device, revoking from it
   forgets that member's heads, since that device knows its own revocation is real, and any other
   device's hold names who revoked the member and offers "I revoked it: stop waiting". Only the
@@ -135,7 +136,10 @@
   before launch, is the compatibility floor, so nothing carries code for a database, stored
   setting, client or server before it: the schema starts at one migration, `ask` refuses
   `--default` and `--default-at` rather than ignoring them, and clients, setup and the CLI dropped
-  what served earlier releases. One exception: a CLI state file without `v` still reads as format
+  what served earlier releases. Past the floor, Starbridge promises no minimum compatibility
+  (Tom, 2026-10-14, #1624): a path kept for old releases goes once it is heavy or blocks a change,
+  by raising the client's minimum (below) rather than keeping the path, and stored state still
+  gets a migration or a clear refusal. One exception: a CLI state file without `v` still reads as format
   1, since the owner's machines keep such files through the reset. Later compatibility branches
   name the minimum client release that retires them (`// until min cli >= 1.2`). An algorithm
   changes only with a new protocol version (`v: 2`, `starbridge/v2/...`, `/v2` routes) and members
@@ -174,12 +178,13 @@
   version is the records' format, and sign-out removes every record kind of the account.
 - **Old clients** (#468). Every client names its release in `starbridge-client:
   <name>/<version>` (`cli`, `android`, `web`, `mod`, `desktop`, `ios`; MAJOR.MINOR.PATCH). The server refuses
-  releases below `MINIMUM_RELEASES` in `server/src/clients.ts` (empty at launch; a pre-release
+  releases below `MINIMUM_RELEASES` in `server/src/clients.ts` (CLI 0.1.1; a pre-release
   counts below its release) with 426 `client-too-old`, and serves a request without the header,
   so curl and scripts keep working. The CLI then says to run `starbridge update` and exits 1; the
   web shows one "Starbridge was updated" screen with Reload; Android shows an error that names
   Google Play. The server and page deploy with each rc, ahead of its apps (#1538), so they serve
-  every release from the minimum up and changes the protocol only by adding to it; a minimum rises only to a
-  final that has been the latest release for 14 days, once the update nudge has reached machines
-  and Play testers have moved past its rcs (#1070). Usage counts each member's first release of the day once
+  every release from the minimum up and changes the protocol only by adding to it. A minimum rises to a final
+  that has been the latest release for 14 days, once the update nudge has reached machines and
+  Play testers have moved past its rcs (#1070), or sooner to retire a heavy or blocking path, as
+  CLI 0.1.1 did five days after it shipped (#1624). Usage counts each member's first release of the day once
   (`active.clients.<name>.<major>.<minor>`), so made-up versions add one row a day.

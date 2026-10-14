@@ -403,7 +403,12 @@ export function Inbox() {
         // A snoozed row stays quiet, with no amber default: the owner opens it to answer.
         actions={
           comfy && !until ? (
-            <RowActions entry={e} onPrompt={answerOne} onQuestion={answerQuestion} />
+            <RowActions
+              entry={e}
+              onPrompt={answerOne}
+              onQuestion={answerQuestion}
+              onOpen={() => (wide ? setPicked(e.id) : openItem(e.id))}
+            />
           ) : undefined
         }
       />
@@ -865,8 +870,11 @@ function RowActions({
   entry,
   onPrompt,
   onQuestion,
+  onOpen,
 }: {
   entry: Entry;
+  /** Opens the item: Allow does, for a prompt whose input the row can't show whole. */
+  onOpen: () => void;
   onPrompt: (
     p: PromptItem,
     r: Parameters<ReturnType<typeof useApp>["answerPrompt"]>[1],
@@ -890,19 +898,21 @@ function RowActions({
   };
   if (entry.type === "prompt") {
     if (!promptOpen(entry.item, Date.now())) return null;
-    // Allow only where the row shows the whole input (#274); otherwise the detail has it.
+    // Allow answers only where the row shows the whole input (#274); otherwise it opens the
+    // prompt, whose detail shows it all, as Android's and the iPhone's cards do.
+    const fits = fitsRow(entry.item.permission);
     return (
       <>
-        {fitsRow(entry.item.permission) && (
-          <button
-            type="button"
-            className={`t-label ${ui.btn} ${ui.rec}`}
-            disabled={busy}
-            onClick={run(() => onPrompt(entry.item, { behavior: "allow", scope: "once" }))}
-          >
-            Allow
-          </button>
-        )}
+        <button
+          type="button"
+          className={`t-label ${ui.btn} ${ui.rec}`}
+          disabled={busy}
+          onClick={
+            fits ? run(() => onPrompt(entry.item, { behavior: "allow", scope: "once" })) : onOpen
+          }
+        >
+          Allow
+        </button>
         <button
           type="button"
           className={`t-label ${ui.btn}`}

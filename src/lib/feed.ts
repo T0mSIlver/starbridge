@@ -1,0 +1,173 @@
+// The inbox as one feed (DESIGN.md, "Rules"): runs, then what needs the owner, then History.
+// Pure, so the order has tests.
+import { closedAt, closedByPhrase, outcomeText } from "./outcome";
+import { shownRuns } from "./runs";
+import { isSnoozed } from "./snooze";
+import type { InboxItem, PromptItem, RunItem, Source } from "./types";
+
+/** What a machine is, for its icon; `source` has none until the machine recorded one. */
+export type MachineKind = "server" | "desktop" | "laptop" | "cloud";
+
+type Base = { id: string; machine: string; kind?: MachineKind; repo: string };
+export type Entry =
+  | (Base & { type: "prompt"; at: string; item: PromptItem })
+  | (Base & { type: "question"; at: string; item: InboxItem })
+  | (Base & { type: "run"; at: string; item: RunItem });
+
+const facts = (source: Source & { machineKind?: MachineKind }) => ({
+  machine: source.machine,
+  kind: source.machineKind,
+  repo: source.project,
+});
+
+export const promptEntry = (p: PromptItem): Entry => ({
+  type: "prompt",
+  id: p.permission.id,
+  at: p.permission.createdAt,
+  item: p,
+  ...facts(p.permission.source),
+});
+
+export const questionEntry = (i: InboxItem): Entry => ({
+  type: "question",
+  id: i.decision.id,
+  at: i.decision.createdAt,
+  item: i,
+  ...facts(i.decision.source),
+});
+
+const runEntry = (r: RunItem): Entry => ({
+  type: "run",
+  id: r.run.id,
+  at: r.run.startedAt,
+  item: r,
+  ...facts(r.run.source),
+  // The run's signer, which the page names as the directory does.
+  machine: r.machine,
+});
+
+/** A prompt waiting for an answer: not answered, not settled, not expired. */
+export const promptOpen = (p: PromptItem, now: number) =>
+  p.closedAt === undefined && !p.answeredAt && Date.parse(p.permission.expiresAt) > now;
+
+/**
+ * What holds an agent up comes first: prompts, then questions their agent waits on, then
+ * questions it works around. Within each, the one waiting longest leads. Snoozed questions
+ * are left out: they list under Snoozed (#571).
+ */
+export function needsYou(inbox: InboxItem[], prompts: PromptItem[], now: number): Entry[] {
+  const rank = (e: Entry) =>
+    e.type === "prompt" ? 0 : e.type === "question" && e.item.waitingSince ? 1 : 2;
+  return [
+    ...prompts.filter((p) => promptOpen(p, now)).map(promptEntry),
+    ...inbox.filter((i) => !closedAt(i) && !isSnoozed(i, now)).map(questionEntry),
+  ].sort((a, b) => rank(a) - rank(b) || Date.parse(a.at) - Date.parse(b.at));
+}
+
+/** Open questions the owner put off, the soonest back first. */
+export const snoozedEntries = (inbox: InboxItem[], now: number): Entry[] =>
+  inbox
+    .filter((i) => !closedAt(i) && isSnoozed(i, now))
+    .sort((a, b) => (a.snoozedUntil as string).localeCompare(b.snoozedUntil as string))
+    .map(questionEntry);
+
+export const running = (runs: RunItem[], now: number): Entry[] =>
+  shownRuns(runs, now).map(runEntry);
+
+export type Group = { machine: string; kind?: MachineKind; entries: Entry[] };
+
+/**
+ * "Group by machine": one group per machine, in the order of its most pressing need. Runs keep
+ * their own section above (#835).
+ */
+export function byMachine(needs: Entry[]): Group[] {
+  const groups = new Map<string, Group>();
+  for (const e of needs) {
+    const g = groups.get(e.machine) ?? { machine: e.machine, kind: e.kind, entries: [] };
+    g.kind ??= e.kind;
+    g.entries.push(e);
+    groups.set(e.machine, g);
+  }
+  return [...groups.values()];
+}
+
+/** An answered item, as History lists it. */
+/** A History row; `by` says where it was answered ("on this browser"), empty when nobody did. */
+export type Past = { entry: Entry; closed: string; text: string; outcome: string; by: string };
+
+/**
+ * Answered questions, and prompts the page saw answered or loaded from the last 7 days,
+ * latest first.
+ */
+export function history(
+  inbox: InboxItem[],
+  prompts: PromptItem[],
+  promptOutcome: (p: PromptItem) => { outcome: string; by: string },
+  now: number,
+): Past[] {
+  const questions = inbox.flatMap((i): Past[] => {
+    const closed = closedAt(i);
+    return closed
+      ? [
+          {
+            entry: questionEntry(i),
+            closed,
+            text: i.decision.question,
+            outcome: outcomeText(i),
+            by: closedByPhrase(i),
+          },
+        ]
+      : [];
+  });
+  const answered = prompts.flatMap((p): Past[] =>
+    promptOpen(p, now)
+      ? []
+      : [
+          {
+            entry: promptEntry(p),
+            closed: p.answeredAt ?? p.permission.expiresAt,
+            text: p.permission.summary,
+            ...promptOutcome(p),
+          },
+        ],
+  );
+  return [...questions, ...answered].sort((a, b) => b.closed.localeCompare(a.closed));
+}
+
+const sameDay = (a: Date, b: Date) => a.toDateString() === b.toDateString();
+
+/** How many of `past` closed today, in the device's zone. */
+/** History lists the last 7 days, the server's own; older rows, kept in this browser, wait. */
+export const RECENT_DAYS = 7;
+export const isRecent = (p: Past, now: number) =>
+  now - Date.parse(p.closed) < RECENT_DAYS * 86_400_000;
+
+export const closedToday = (past: Past[], now: number) =>
+  past.filter((p) => sameDay(new Date(p.closed), new Date(now))).length;
+
+/** "now", "12 min", "3 h", "2 d": how long ago, for the meta row. */
+export function ago(iso: string, now: number): string {
+  const min = Math.floor((now - Date.parse(iso)) / 60_000);
+  if (min < 1) return "now";
+  if (min < 60) return `${min} min`;
+  if (min < 24 * 60) return `${Math.floor(min / 60)} h`;
+  return `${Math.floor(min / (24 * 60))} d`;
+}
+
+/**
+ * What a screen reader hears first on an item that blocks an agent, as no text on it says so:
+ * "Waiting for you, 2 minutes" (#248), as on Android and the iPhone.
+ */
+export function waitingLabel(ms: number): string {
+  const m = Math.max(0, Math.floor(ms / 60_000));
+  return `Waiting for you, ${m === 0 ? "under a minute" : m === 1 ? "1 minute" : `${m} minutes`}`;
+}
+
+/** "1:12", "1:04:09": a timer since `iso`. */
+export function timer(iso: string, now: number): string {
+  const s = Math.max(0, Math.floor((now - Date.parse(iso)) / 1000));
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  return h ? `${h}:${pad(m)}:${pad(s % 60)}` : `${m}:${pad(s % 60)}`;
+}

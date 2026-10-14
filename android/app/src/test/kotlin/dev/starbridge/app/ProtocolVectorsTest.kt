@@ -139,7 +139,7 @@ class ProtocolVectorsTest {
         fun entries(name: String) = chains.getValue(name).jsonArray.toList()
         fun headsOf(o: JsonElement) = o.jsonObject.mapValues { ProtocolJson.decodeFromJsonElement(DirectoryHead.serializer(), it.value) }.toMutableMap()
         fun json(h: DirectoryHead) = buildJsonObject {
-            put("length", h.length); put("head", h.head); h.by?.let { put("by", it) }
+            put("length", h.length); put("head", h.head)
         }
         fun json(heads: Map<String, DirectoryHead>) = JsonObject(heads.mapValues { json(it.value) })
         for (case in v.getValue("withheld").jsonArray.map { it.jsonObject }) {
@@ -147,7 +147,7 @@ class ProtocolVectorsTest {
             val held = book.withheldBy(headsOf(case.getValue("heads")), directories.verify(chain), chain)
             val got = held?.let {
                 buildJsonObject {
-                    put("id", it.id); it.by?.let { by -> put("by", by) }; put("head", json(it.head))
+                    put("id", it.id); put("head", json(it.head))
                     it.revoked?.let { r -> put("revoked", buildJsonObject { put("id", r.id); put("by", r.by); put("at", r.at) }) }
                 }
             } ?: JsonNull
@@ -157,7 +157,7 @@ class ProtocolVectorsTest {
             val chain = entries(case.str("chain"))
             val heads = headsOf(case.getValue("heads"))
             val head = ProtocolJson.decodeFromJsonElement(DirectoryHead.serializer(), case.getValue("head"))
-            val changed = book.note(heads, case.str("signer"), head, chain, directories.verify(chain))
+            val changed = book.note(heads, case.str("signer"), head, chain)
             val expect = case.getValue("expect").jsonObject
             assertEquals(case.str("name"), expect.getValue("changed").jsonPrimitive.boolean, changed)
             assertEquals(case.str("name"), expect.getValue("heads"), json(heads))

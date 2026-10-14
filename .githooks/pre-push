@@ -1,0 +1,18 @@
+#!/bin/sh
+# Refuses a push that would drop commits from a remote branch, which only a force-push does: the
+# owner's rule is never to force-push, and to restack by merging instead (#1656).
+set -eu
+while read -r local_ref local_sha remote_ref remote_sha; do
+  # A deleted branch, a new branch, or a tag.
+  case $local_sha in *[!0]*) ;; *) continue ;; esac
+  case $remote_sha in *[!0]*) ;; *) continue ;; esac
+  case $remote_ref in refs/heads/*) ;; *) continue ;; esac
+  if ! git cat-file -e "$remote_sha^{commit}" 2>/dev/null; then
+    echo "pre-push: ${remote_ref#refs/heads/} has commits you have not fetched. Fetch and merge them, then push." >&2
+    exit 1
+  fi
+  if ! git merge-base --is-ancestor "$remote_sha" "$local_sha"; then
+    echo "pre-push: pushing $local_ref would drop commits from ${remote_ref#refs/heads/}, which only a force-push does. Merge instead; never force-push." >&2
+    exit 1
+  fi
+done
