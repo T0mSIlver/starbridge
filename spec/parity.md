@@ -53,4 +53,4 @@ Android's and iOS's tests read, so a change to one fails the others until they f
 | Sign in with Apple (no name or email asked) | yes (#1411: under Other ways to sign in) | yes (#1411: under Other ways to sign in) | yes (as web, in the browser) | yes (#1411: under GitHub's, the same size) |
 | Delete account (Settings and the join screen, its recovery-key view included, typed confirmation) | yes (#1104, #1117) | yes (#1104, #1117, #1166) | yes (as web) | yes (#1141, #1195, #1233: Settings and the join screen, its recovery-key view included) |
 
-Only on desktop: the menu bar light, Settings → App (the Dock or menu bar choice, Open Starbridge at login; #1449), ⌃⌥S, notifications while no browser runs, and the app's updates (the rail's button and Settings → Updates, #1398).
+Only on desktop: the menu bar light, Settings → App (the Dock or menu bar choice, Open Starbridge at login; #1449), ⌃⌥S, notifications while no browser runs, and the app's updates (the rail's button and Settings → Updates, #1398, with its channel, #1692; Tip only on a tip build, which the owner installs).

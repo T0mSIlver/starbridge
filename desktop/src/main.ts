@@ -24,6 +24,7 @@ import { type Answer, type Entry, parseAnswered, parseState } from "./bridge";
 import { MenuBar, trayImageName } from "./menubar";
 import { Notifier, type Shown } from "./notifier";
 import { opensOutside, serverOrigin, staysInWindow } from "./origin";
+import { ahead, tipOffered } from "./releases";
 import { type Reading, SCREEN_CHECK_MS, Screen } from "./screen";
 import {
   parseBackground,
@@ -35,9 +36,10 @@ import {
 import { browserSignIn, newSignIn, type SignIn, signInReturn, startsSignIn } from "./signin";
 import { mark, timing } from "./timing";
 import {
+  changeUpdateSettings,
   parseUpdateAction,
   parseUpdateSettings,
-  type UpdateSettings,
+  type UpdateSettingsView,
   type UpdateStatus,
   type Updates,
 } from "./updates";
@@ -86,6 +88,8 @@ let signIn: SignIn | null = null;
 let updates: Updates | null = null;
 /** GitHub's page for the releases; the end-to-end test sets a stand-in (test/smoke.ts). */
 const RELEASES = process.env.STARBRIDGE_RELEASES ?? "https://github.com/T0mSIlver/starbridge";
+/** The tip builds' repository (#1692), whose one release `tip` holds the newest build of main. */
+const TIP = process.env.STARBRIDGE_TIP ?? "https://github.com/T0mSIlver/starbridge-tip";
 /** Whether the window's last page failed to load, which leaves its URL on the server. */
 let failed = false;
 /** Links that arrived before the window existed. */
@@ -196,7 +200,7 @@ async function ready(): Promise<void> {
   ipcMain.on("update-settings", (e, x) => {
     const change = fromPage(e) && parseUpdateSettings(x);
     if (!change) return;
-    settings = { ...settings, ...change };
+    settings = { ...settings, ...changeUpdateSettings(settings, change, app.getVersion()) };
     save();
     win?.webContents.send("update-settings", updateSettings());
     updates?.check();
@@ -285,8 +289,16 @@ async function ready(): Promise<void> {
   checkForUpdates();
 }
 
-function updateSettings(): UpdateSettings {
-  return { releaseCandidates: settings.releaseCandidates, autoDownload: settings.autoDownload };
+function updateSettings(): UpdateSettingsView {
+  const { channel, autoDownload } = settings;
+  return {
+    channel,
+    autoDownload,
+    releaseCandidates: channel !== "stable",
+    // Not while the channel offers an update: it has passed the installed version.
+    ahead: ahead(app.getVersion(), channel) && !(updates && "version" in updates.status),
+    tip: tipOffered(app.getVersion(), channel),
+  };
 }
 
 function checkForUpdates(): void {
@@ -298,7 +310,7 @@ function checkForUpdates(): void {
     const { startUpdates } = require(
       join(ROOT, "dist", "updater.js"),
     ) as typeof import("./updater");
-    updates = startUpdates(RELEASES, updateSettings, tellUpdate);
+    updates = startUpdates(RELEASES, TIP, updateSettings, tellUpdate);
   }, 5_000);
 }
 
@@ -486,7 +498,10 @@ function showSettings(): void {
 }
 
 function tellUpdate(s: UpdateStatus): void {
-  if (win && fromServer(win.webContents.getURL())) win.webContents.send("update-status", s);
+  if (!win || !fromServer(win.webContents.getURL())) return;
+  // `ahead` follows the status, so the settings go first and the status's change shows both.
+  win.webContents.send("update-settings", updateSettings());
+  win.webContents.send("update-status", s);
 }
 
 /** Quits for the update: the window must close, not hide, or the install never starts. */
