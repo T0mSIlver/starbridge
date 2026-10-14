@@ -22,7 +22,7 @@ import { makeAgent } from "../src/agent/main";
 import type { Agent } from "../src/agent/server";
 import { hookStop } from "../src/antigravity";
 import { run } from "../src/cli";
-import { hookCursorSession } from "../src/hook";
+import { countFollowup, hookCursorSession, MAX_EMPTY_FOLLOWUPS } from "../src/hook";
 import {
   agentAddress,
   compiledFake,
@@ -1363,3 +1363,30 @@ test.skipIf(WINDOWS)(
     }
   },
 );
+
+test("a session not heard from for a day drops out of the agent's list (#1763)", async () => {
+  const { ctx, socket } = await machine();
+  const http = new AgentClient(socket, "starbridge-mod/test");
+  await http.call("POST", "/v1/sessions/s-old/hello", { cwd: "/work/x", pid: 42 });
+  // A Cursor conversation's hooks greet it without a pid, and nothing else ever polls for it.
+  await http.call("POST", "/v1/sessions/conv-1/hello", { cwd: "/work/x" });
+  const ids = async () =>
+    (await http.call<{ sessions: { id: string }[] }>("GET", "/v1/status")).sessions.map(
+      (x) => x.id,
+    );
+  expect(await ids()).toEqual(["s-old", "conv-1"]);
+  const start = Date.now();
+  ctx.now = () => new Date(start + 25 * 3_600_000);
+  expect(await ids()).toEqual(["conv-1"]);
+});
+
+test("Cursor: follow-ups that bring no answer stop after three per conversation (#1763)", () => {
+  const ctx = testCtx();
+  for (let i = 0; i < MAX_EMPTY_FOLLOWUPS; i++)
+    expect(countFollowup(ctx, "conv-1", true)).toBe(true);
+  expect(countFollowup(ctx, "conv-1", true)).toBe(false);
+  // Another conversation has its own count, and an answer clears this one's.
+  expect(countFollowup(ctx, "conv-2", true)).toBe(true);
+  expect(countFollowup(ctx, "conv-1", false)).toBe(true);
+  expect(countFollowup(ctx, "conv-1", true)).toBe(true);
+});
