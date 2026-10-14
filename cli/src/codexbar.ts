@@ -14,6 +14,24 @@ export type ProviderQuota = QuotaSnapshot["providers"][number];
  * `claude` 12 s, then 60 s, each followed by up to 8 s for `claude /usage` (#397).
  */
 const RUN_TIMEOUT_MS = 120_000;
+/** What one run may print before it is stopped, and what is read of its stderr. */
+export const MAX_STDOUT_BYTES = 1 << 20;
+const MAX_STDERR_BYTES = 64 << 10;
+/** How long after the process exits its pipes may stay open, held by a child it left behind. */
+const EXIT_GRACE_MS = 500;
+/** The most providers, and the most extra windows of one, taken from CodexBar. */
+export const MAX_PROVIDERS = 20;
+const MAX_EXTRA_WINDOWS = 20;
+
+/** Kills the process and everything it started: its own group on Unix, its tree on Windows. */
+function killGroup(child: ReturnType<typeof spawn>) {
+  if (process.platform !== "win32" && child.pid !== undefined) {
+    try {
+      return void process.kill(-child.pid, "SIGKILL");
+    } catch {}
+  }
+  killTree(child);
+}
 
 export interface RunResult {
   code: number | null;
@@ -38,32 +56,47 @@ export function runCodexbar(
     const child = spawn(start.file, start.args, {
       windowsVerbatimArguments: start.windowsVerbatimArguments,
       windowsHide: true,
+      // Its own process group on Unix, so a timeout reaches what CodexBar started too.
+      detached: process.platform !== "win32",
       stdio: ["ignore", "pipe", "pipe"],
     });
     let stdout = "";
     let stderr = "";
-    child.stdout.on("data", (d) => {
+    let size = 0;
+    let done = false;
+    const finish = (r: RunResult) => {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      resolve(r);
+    };
+    child.stdout.on("data", (d: Buffer) => {
+      size += d.length;
+      if (size > MAX_STDOUT_BYTES) {
+        killGroup(child);
+        return finish({ code: null, stdout: "", stderr: `output over ${MAX_STDOUT_BYTES} bytes` });
+      }
       stdout += d;
     });
-    child.stderr.on("data", (d) => {
-      stderr += d;
+    child.stderr.on("data", (d: Buffer) => {
+      if (stderr.length < MAX_STDERR_BYTES) stderr += d;
     });
-    const timer = setTimeout(() => killTree(child), timeoutMs);
-    child.on("error", (e) => {
-      clearTimeout(timer);
-      resolve({ code: null, stdout, stderr: e.message });
+    const timer = setTimeout(() => killGroup(child), timeoutMs);
+    child.on("error", (e) => finish({ code: null, stdout, stderr: e.message }));
+    // `close` waits for every pipe, which a child CodexBar left running holds open.
+    child.on("exit", (code) => {
+      killGroup(child);
+      setTimeout(() => finish({ code, stdout, stderr }), EXIT_GRACE_MS).unref();
     });
-    child.on("close", (code) => {
-      clearTimeout(timer);
-      resolve({ code, stdout, stderr });
-    });
+    child.on("close", (code) => finish({ code, stdout, stderr }));
   });
 }
 
 type Obj = Record<string, unknown>;
 const isObj = (x: unknown): x is Obj => typeof x === "object" && x !== null && !Array.isArray(x);
 const str = (x: unknown) => (typeof x === "string" && x.length > 0 ? x : undefined);
-const clip = (s: string, n: number) => (s.length > n ? s.slice(0, n) : s);
+/** `s` cut to `n` characters, control and format characters (escape sequences, bidi) dropped. */
+const clip = (s: string, n: number) => s.replace(/[\p{Cc}\p{Cf}\u2028\u2029]/gu, "").slice(0, n);
 
 function isoOrNull(x: unknown): string | null {
   if (typeof x !== "string") return null;
@@ -106,7 +139,8 @@ export function parseRow(row: Obj, now: Date): ProviderQuota {
   const usage = isObj(row.usage) ? row.usage : {};
   const labels = isObj(row.rateWindowLabels) ? row.rateWindowLabels : {};
   const extras: QuotaWindow[] = [];
-  for (const x of Array.isArray(usage.extraRateWindows) ? usage.extraRateWindows : []) {
+  const extraRows = Array.isArray(usage.extraRateWindows) ? usage.extraRateWindows : [];
+  for (const x of extraRows.slice(0, MAX_EXTRA_WINDOWS)) {
     if (!isObj(x) || !str(x.id)) continue;
     const w = window(x.id as string, str(x.title) ?? (x.id as string), x.window, now);
     if (w) extras.push(w);
@@ -149,7 +183,7 @@ export function parseUsage(stdout: string, provider: string | undefined, now: Da
   const json: unknown = JSON.parse(stdout || "[]");
   if (!Array.isArray(json)) throw new Error("codexbar output is not a JSON array");
   const rows = json.filter(isObj).map((r) => parseRow(r, now));
-  return provider ? rows.filter((r) => r.provider === provider) : rows;
+  return (provider ? rows.filter((r) => r.provider === provider) : rows).slice(0, MAX_PROVIDERS);
 }
 
 function tryParse(stdout: string, provider: string | undefined, now: Date): ProviderQuota[] {
@@ -198,7 +232,8 @@ export async function collect(
     }
     return out;
   };
-  const out = (await Promise.all((providers.length > 0 ? providers : [undefined]).map(one))).flat();
+  const asked = providers.length > 0 ? providers.slice(0, MAX_PROVIDERS) : [undefined];
+  const out = (await Promise.all(asked.map(one))).flat();
   // The log above keeps each error whole; devices get it in words for the owner.
   return out.map((r) => (r.error ? { ...r, error: shortError(r.error) } : r));
 }

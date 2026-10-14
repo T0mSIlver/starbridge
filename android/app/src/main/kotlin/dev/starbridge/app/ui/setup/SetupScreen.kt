@@ -210,7 +210,9 @@ private fun Tile(sym: Sym) {
 private fun SignIn(server: String, busy: Boolean, actions: SetupActions, openUrl: (String) -> Unit, modifier: Modifier, keepsKeys: Boolean) {
     var selfHosted by rememberSaveable { mutableStateOf(server != BuildConfig.DEFAULT_SERVER) }
     var url by rememberSaveable { mutableStateOf(server) }
-    var token by rememberSaveable { mutableStateOf("") }
+    // Not saveable: the token would reach the saved instance state, which Android may keep on disk.
+    var token by remember { mutableStateOf("") }
+    if (selfHosted) SecureWindow()
     var others by rememberSaveable { mutableStateOf(false) }
     Step(
         modifier,
@@ -379,7 +381,8 @@ private fun FirstDevice(busy: Boolean, actions: SetupActions, modifier: Modifier
 
 @Composable
 private fun Recover(busy: Boolean, actions: SetupActions, modifier: Modifier, onDelete: () -> Unit, onBack: () -> Unit) {
-    var typedKey by rememberSaveable { mutableStateOf("") }
+    // Not saveable: a typed key would reach the saved instance state, which Android may keep on disk.
+    var typedKey by remember { mutableStateOf("") }
     var shown by rememberSaveable { mutableStateOf(false) }
     val reading = RecoveryKeys.read(typedKey)
     SecureWindow()
@@ -431,6 +434,8 @@ private fun Recover(busy: Boolean, actions: SetupActions, modifier: Modifier, on
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun Waiting(title: String, text: String, digits: String?, onCancel: () -> Unit, modifier: Modifier, onMatch: (() -> Unit)? = null) {
+    // The digits, or the code this phone shows to be typed on another device.
+    SecureWindow()
     Step(
         modifier,
         top = {
@@ -537,12 +542,19 @@ private fun KeyCopies(key: String) {
     }
 }
 
+/** How many [SecureWindow]s hold each window secure: one leaving mid-animation must not unsecure another. */
+private val secured = java.util.WeakHashMap<android.view.Window, Int>()
+
 /** While shown, the window stays out of screenshots, screen sharing and the recents screen. */
 @Composable
 internal fun SecureWindow() {
     val window = LocalActivity.current?.window ?: return
     DisposableEffect(window) {
+        secured[window] = (secured[window] ?: 0) + 1
         window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
-        onDispose { window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE) }
+        onDispose {
+            val left = (secured[window] ?: 1) - 1
+            if (left > 0) secured[window] = left else { secured.remove(window); window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE) }
+        }
     }
 }

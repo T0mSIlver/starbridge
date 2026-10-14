@@ -4,6 +4,8 @@ import android.util.Log
 import dev.starbridge.app.protocol.Images
 import dev.starbridge.app.protocol.RecoveryKeys
 import dev.starbridge.app.protocol.recoverySignSeed
+import dev.starbridge.app.protocol.isItemId
+import dev.starbridge.app.protocol.isPushKind
 import dev.starbridge.app.protocol.Directories
 import dev.starbridge.app.protocol.Directory
 import dev.starbridge.app.protocol.DirectoryEntry
@@ -1069,7 +1071,7 @@ class ServerStore(
                 byId[listed.item.id] = saved(listed.item, settledBy(from)?.let { closedBy(decision, it) } ?: decision)
             }
             cursor = page.cursor
-            if (page.items.size < 100) break
+            if (page.last) break
         }
         // An update may list before the decision it is about, so they apply once all are read.
         for ((from, w) in waits) byId[w.decisionId]?.let { d -> wait(d, from, w)?.let { byId[w.decisionId] = it } }
@@ -1211,7 +1213,7 @@ class ServerStore(
             val page = api().items("permission,settled", cursor)
             read += page.items
             cursor = page.cursor
-            if (page.items.size < 100) break
+            if (page.last) break
         }
         if (scan(read.map { it.item })) return
         // A settled prompt comes back after its notice, so prompts go first: a notice whose
@@ -1402,7 +1404,7 @@ class ServerStore(
             if (scan(page.items.map { it.item })) return
             for (listed in page.items) open(listed.item)?.let { fresh += SavedRun(it.from, it.text) }
             cursor = page.cursor
-            if (page.items.size < 100) break
+            if (page.last) break
         }
         keepRuns(fresh, fromSync = true)
     }
@@ -1737,16 +1739,25 @@ class ServerStore(
         val p = ProtocolJson.parseToJsonElement(payload).jsonObject
         val kind = p["kind"]?.jsonPrimitive?.content
         val id = p["id"]?.jsonPrimitive?.content ?: return@withLock
+        // An id goes into /items/$id, a kind into the branch below: neither may carry anything else.
+        if (!isItemId(id) || kind?.let(::isPushKind) == false) return@withLock
         when (kind) {
             "answered" -> {
-                saved.prompts.find { it.body.id == id }?.let { p ->
-                    alerts.cancelPrompt(toUi(p))
-                    if (p.answeredAt == null) persist(saved.copy(prompts = saved.prompts.map { if (it === p) it.copy(answeredAt = now()) else it }))
-                    return@withLock
+                // Nothing in this push is verified, so it only takes the notification down; what
+                // was answered is read from the server's signed items on the next sync.
+                val prompt = saved.prompts.find { it.body.id == id }
+                if (prompt != null) alerts.cancelPrompt(toUi(prompt)) else alerts.cancel(id)
+                if (inFront) {
+                    try {
+                        sync()
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        // Unreachable now: the foreground poll, which a working push stops, reads it later.
+                        pushed = false
+                        throw e
+                    }
                 }
-                alerts.cancel(id)
-                val d = saved.decisions.find { it.body.id == id }
-                if (d != null && d.answeredAt == null) persist(saved.copy(decisions = saved.decisions.map { if (it === d) it.copy(answeredAt = now()) else it }))
             }
             "decision" -> {
                 if (saved.decisions.any { it.body.id == id }) return@withLock

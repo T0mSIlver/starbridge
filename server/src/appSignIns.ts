@@ -10,6 +10,37 @@ const MAX = 10_000;
  */
 export class AppSignIns {
   private byChallenge = new Map<string, { account: string; at: number }>();
+  /** The challenge each GitHub code came back with, for codes that passed through this server. */
+  private challengeByCode = new Map<string, { challenge: string; at: number }>();
+
+  /**
+   * Keeps the challenge a code came back with from GitHub, so the trade can check the verifier
+   * itself rather than rely on GitHub binding the code to it. The first challenge a code came
+   * with stays: false when it came with another, or when the map is full, since dropping a
+   * live entry would let a flood of made-up codes free a caught one.
+   */
+  passed(code: string, challenge: string, now = Date.now()): boolean {
+    const s = this.challengeOf(code, now);
+    if (s !== undefined) return s === challenge;
+    this.challengeByCode.delete(code);
+    if (this.challengeByCode.size >= MAX) return false;
+    this.challengeByCode.set(code, { challenge, at: now });
+    return true;
+  }
+
+  /**
+   * The challenge a code came back with: undefined for a code that never passed through this
+   * server (a verified App Link caught it) or that came back over 10 minutes ago.
+   */
+  challengeOf(code: string, now = Date.now()): string | undefined {
+    const s = this.challengeByCode.get(code);
+    return s !== undefined && now - s.at < APP_SIGN_IN_MS ? s.challenge : undefined;
+  }
+
+  /** Forgets a code once traded: GitHub's work once. */
+  traded(code: string): void {
+    this.challengeByCode.delete(code);
+  }
 
   add(challenge: string, account: string, now = Date.now()): void {
     this.byChallenge.delete(challenge);
@@ -32,9 +63,10 @@ export class AppSignIns {
   }
 
   sweep(now = Date.now()): void {
-    for (const [k, s] of this.byChallenge) {
-      if (now - s.at < APP_SIGN_IN_MS) break;
-      this.byChallenge.delete(k);
-    }
+    for (const map of [this.byChallenge, this.challengeByCode])
+      for (const [k, s] of map) {
+        if (now - s.at < APP_SIGN_IN_MS) break;
+        map.delete(k);
+      }
   }
 }

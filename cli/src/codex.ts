@@ -8,7 +8,7 @@
 import { spawn } from "node:child_process";
 import { closeSync, fstatSync, openSync, readdirSync, readSync } from "node:fs";
 import { createConnection } from "node:net";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { CodexApp } from "./codex-app";
 import type { Ctx } from "./context";
 import { killTree, spawnable, which } from "./platform";
@@ -82,8 +82,28 @@ export function codexTitle(env: Ctx["env"], id: string): string | undefined {
   return undefined;
 }
 
-function codexHome(env: Ctx["env"]): string | undefined {
+export function codexHome(env: Ctx["env"]): string | undefined {
   return env.CODEX_HOME || (env.HOME ? join(env.HOME, ".codex") : undefined);
+}
+
+/**
+ * The Codex route the agent may use for `s`, a route a client sent or the state holds: the
+ * `codex` setup recorded, never the one the route names, and only for the `CODEX_HOME` setup
+ * recorded or the agent's own, since `codex` reads its configuration there. Undefined otherwise,
+ * and the answer then waits to be read.
+ */
+export function trustedCodex(ctx: Ctx, s: CodexSession): CodexSession | undefined {
+  if (typeof s.home !== "string") return undefined;
+  const recorded = ctx.store.agentConfig().codex;
+  // Windows paths compare without case, as its file system does.
+  const key = (p: string) => (process.platform === "win32" ? resolve(p).toLowerCase() : resolve(p));
+  // The trusted spelling goes to `codex`, never the route's: `..` past a link reaches elsewhere.
+  const home = [recorded?.home, codexHome(ctx.env)].find(
+    (h): h is string => !!h && key(h) === key(s.home),
+  );
+  if (!home) return undefined;
+  const bin = recorded?.bin ?? which(ctx.env, "codex");
+  return bin ? { home: resolve(home), bin } : undefined;
 }
 
 /**

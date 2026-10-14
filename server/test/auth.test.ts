@@ -153,6 +153,29 @@ test("whoever catches the app's redirect cannot trade GitHub's code without the 
   expect(r.json.error).toBe("bad-code");
 });
 
+test("a code that came back through the server needs its challenge's verifier, whatever GitHub checks", async () => {
+  const s = await makeServer(githubConfig());
+  const { verifier, challenge } = pkce();
+  // `code-42` is bound to no challenge: the stand-in GitHub takes any verifier for it.
+  const back = `/v1/auth/github/callback/app?code=code-42&state=${challenge}`;
+  expect((await s.app.request(back)).status).toBe(302);
+  const caught = await s.call("POST", "/v1/auth/app/session", {
+    body: { code: "code-42", verifier: pkce().verifier },
+  });
+  expect(caught.status).toBe(400);
+  expect(caught.json.error).toBe("bad-code");
+  // A wrong guess, or the code brought back with another challenge, frees nothing.
+  const again = await s.call("POST", "/v1/auth/app/session", {
+    body: { code: "code-42", verifier: pkce().verifier },
+  });
+  expect(again.status).toBe(400);
+  const rebound = `/v1/auth/github/callback/app?code=code-42&state=${pkce().challenge}`;
+  expect((await s.app.request(rebound)).status).toBe(400);
+  expect((await s.app.request(back)).status).toBe(302);
+  const own = await s.call("POST", "/v1/auth/app/session", { body: { code: "code-42", verifier } });
+  expect(own.status).toBe(200);
+});
+
 test("the browser passes the app's sign-in on to the app, untouched", async () => {
   const s = await makeServer(githubConfig());
   const { challenge } = pkce();
@@ -310,6 +333,19 @@ test("owner sign-in always lands on the one owner account", async () => {
 test("owner sign-in is off without OWNER_TOKEN", async () => {
   const s = await makeServer({ ownerToken: undefined });
   expect((await s.call("POST", "/v1/auth/owner", { body: { token: "" } })).status).toBe(404);
+});
+
+test("a server refuses a short OWNER_TOKEN, and any on starbridge.run (#1720)", () => {
+  const local = { PUBLIC_URL: "http://localhost:8080" };
+  expect(() => configFromEnv({ ...local, OWNER_TOKEN: "x".repeat(15) })).toThrow("at least 16");
+  expect(configFromEnv({ ...local, OWNER_TOKEN: "x".repeat(16) }).ownerToken).toBe("x".repeat(16));
+  expect(() =>
+    configFromEnv({ PUBLIC_URL: "https://starbridge.run", OWNER_TOKEN: "x".repeat(32) }),
+  ).toThrow("OWNER_TOKEN is refused");
+  expect(
+    configFromEnv({ PUBLIC_URL: "https://staging.starbridge.run", OWNER_TOKEN: "x".repeat(32) })
+      .ownerToken,
+  ).toBeDefined();
 });
 
 test("/me refuses missing and unknown tokens", async () => {

@@ -30,6 +30,13 @@ export const DEFAULT_LIMITS = {
   machineItems: [90, MINUTE] as RateWindow,
   /** Item posts per device (answers, settles), apart from the machines' window. */
   deviceItems: [60, MINUTE] as RateWindow,
+  /**
+   * Bytes of boxes and blobs an account's devices and machines may read a minute through
+   * `GET /items` and `GET /items/:id` (#1735). A new device reads a heavy account's week, about
+   * 80 MB, in one minute, and without it a script could have the server send 4 MB pages without
+   * pause. A read is refused once the window is spent and charged once built, so one may pass it.
+   */
+  itemReads: [128 * 1024 * 1024, MINUTE] as RateWindow,
   /** Stored decisions per account, open or answered. */
   decisions: 10_000,
   /**
@@ -42,7 +49,8 @@ export const DEFAULT_LIMITS = {
   /**
    * Stored bytes of every account together, past which machines' items get 503 `storage-full`
    * while answers still pass. The hosted disk holds the live database and 9 backup copies of
-   * it (deploy/host), so this keeps all 10 under the disk alert (#586).
+   * it (deploy/host), so this keeps all 10 under the disk alert (#586). Past 90% of it, the
+   * hourly sweep keeps the largest accounts' unanswered decisions only floodRetention (#1736).
    */
   serverBytes: 2048 * 1024 * 1024,
   /**
@@ -145,6 +153,16 @@ export const DEFAULT_LIMITS = {
   pairingResults: [150, MINUTE] as RateWindow,
 
   /**
+   * Pairing result long-polls open on the whole server, and per address (an IPv6 client as its
+   * /48), which anyone may hold without a session (#1737). Past either, a poll answers 204 after
+   * 10 s, holding no slot, and pairingResults counts it like any other. Each costs memory in Caddy and the
+   * server (spec/hosted.md, "Capacity"); a person pairs a few machines and pages at a time, and an
+   * address waits on at most pairingsPerClient pairings.
+   */
+  pairingResultWaits: 1_000,
+  pairingResultWaitsPerClient: 50,
+
+  /**
    * Pairings stored on the whole server, about 4 KB each: the disk bound. Filling it takes 400
    * addresses at pairingsPerClient.
    */
@@ -166,6 +184,18 @@ export const DEFAULT_LIMITS = {
   relaySendsPerClient: 4,
   relaySendsPerNetwork: 8,
   relaySendsPerHost: 16,
+  /**
+   * Web Pushes in flight from this server to one push service host, its own and relayed ones
+   * together (#1738): a push may take pushTimeoutMs, so a host that holds them open cannot pile
+   * up requests; past it a push fails. FCM's Web Push host, the busiest, sees a few at a time.
+   */
+  pushesPerHost: 32,
+  /**
+   * Push service hosts an account's Web Push and UnifiedPush subscriptions may name (#1738), so
+   * an account cannot aim the server's pushes at many hosts. Chrome, Firefox, Safari, Edge and a
+   * UnifiedPush distributor use five.
+   */
+  pushHosts: 8,
 
   /** Push subscription writes per account. */
   pushSubscribes: [30, MINUTE] as RateWindow,

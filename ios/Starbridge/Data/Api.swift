@@ -48,6 +48,11 @@ struct Listed {
 struct ItemsPage {
     let items: [Listed]
     let cursor: String
+    /**
+     * Whether this is the last page of its list: the server's `more` says so (#1735); a server from
+     * before it ends its lists with a page under 100 items.
+     */
+    var last = true
 }
 
 /** The server's /v1 routes this app calls so far. */
@@ -284,7 +289,7 @@ struct Api {
     }
 
     /**
-     * A page of items of `kinds` after `cursor`, 100 at most (PROTOCOL.md, "Items"). With
+     * A page of items of `kinds` after `cursor`, 100 or 4 MB at most (PROTOCOL.md, "Items"). With
      * `openBlobs`, an answered decision lists without its images, which `item(_:)` gives (#1382).
      */
     func items(_ kinds: String, after cursor: String, openBlobs: Bool = false) async throws -> ItemsPage {
@@ -294,7 +299,11 @@ struct Api {
         let body = try await call("GET", "/items?" + (q.percentEncodedQuery ?? "")).1
         guard let list = try field(body, "items").array else { throw ProtocolError(.badSchema, "items is not a list") }
         // One item this app cannot read never hides the rest.
-        return ItemsPage(items: list.compactMap { try? listed($0) }, cursor: try string(body, "cursor"))
+        return ItemsPage(
+            items: list.compactMap { try? listed($0) },
+            cursor: try string(body, "cursor"),
+            last: !(body?["more"]?.bool ?? (list.count >= 100))
+        )
     }
 
     func item(_ id: String) async throws -> Listed { try listed(try await call("GET", "/items/\(id)").1 ?? .null) }

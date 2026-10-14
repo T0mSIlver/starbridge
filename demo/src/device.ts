@@ -40,7 +40,10 @@ export class HttpError extends Error {
   }
 }
 
-/** The demo is broken past repair: its device or machine was revoked, or the directory is full. */
+/**
+ * The demo is broken past repair: its account was deleted, its device or machine revoked, or the
+ * directory is full.
+ */
 export class Broken extends Error {}
 
 interface JoinView {
@@ -116,6 +119,10 @@ export class DemoDevice {
 
   private async signInAgain(): Promise<void> {
     await this.signIn();
+    // A reviewer who deletes the account ends every session; the owner token then signs in to
+    // a new, empty account, and the demo starts over in a fresh container.
+    const { account } = await this.call<{ account: string }>("GET", "/me", undefined, false);
+    if (account !== this.account) throw new Broken("the demo account was deleted");
     const { nonce } = await this.call<{ nonce: string }>("GET", "/auth/challenge");
     const sig = sodium.crypto_sign_detached(
       bindMessage(this.account, this.id, nonce),

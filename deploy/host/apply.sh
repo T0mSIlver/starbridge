@@ -78,7 +78,7 @@ healthy() {
     sleep 1
   done
   echo "$2 not healthy after ${3:-30} s" >&2
-  $compose logs --tail 50 "$2" >&2
+  host/keep-logs.sh "$2" $compose logs --tail 50 "$2"
   return 1
 }
 
@@ -132,8 +132,7 @@ healthy http://127.0.0.1:$port/ $next || { $compose stop $next; exit 1; }
 # connections, where recreating the container would drop them, and an unchanged one is a no-op.
 # Loading each time, rather than when the file changed, also heals a load that failed before.
 up -d caddy
-curl -fsS --retry 10 --retry-connrefused --retry-delay 1 -X POST \
-  -H 'Content-Type: text/caddyfile' --data-binary @Caddyfile http://127.0.0.1:2019/load
+host/caddy-load.sh Caddyfile
 # Caddy checks health every second: let it see the new copy before the old one goes. Requests
 # in flight at the stop are GETs, which Caddy retries on the new copy.
 sleep 2

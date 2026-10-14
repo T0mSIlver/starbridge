@@ -37,6 +37,7 @@ import kotlinx.coroutines.delay
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
+import dev.starbridge.app.ui.setup.SecureWindow
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -202,6 +203,28 @@ fun AddDeviceScreen(
     }
 }
 
+/**
+ * Add a device, opened by a pairing link (#611). A link comes from outside the app, from anyone,
+ * so Approve first asks "Approve <name> from this link?"; the code to type and the QR code to scan
+ * have no such step, since the owner handled them.
+ */
+@Composable
+fun PairLinkScreen(approval: Approval, actions: DeviceActions, modifier: Modifier = Modifier, onBack: () -> Unit = {}) {
+    var confirming by rememberSaveable { mutableStateOf(false) }
+    val found = approval as? Approval.Found
+    val linked = DeviceActions(actions.lookUp, { confirming = true }, { confirming = false; actions.close() }, actions.revoke, actions.showCode)
+    AddDeviceScreen(approval, linked, modifier, onBack)
+    if (confirming && found != null) {
+        AlertDialog(
+            onDismissRequest = { confirming = false },
+            title = { Text("Approve ${found.name} from this link?") },
+            text = { Text("You opened a link; nothing here shows it came from ${found.name}. Approve only if you just asked ${found.name} to join.", style = StarbridgeTheme.type.body) },
+            confirmButton = { TextButton(onClick = { confirming = false; actions.approve() }) { Text("Approve") } },
+            dismissButton = { TextButton(onClick = { confirming = false }) { Text("Cancel") } },
+        )
+    }
+}
+
 /** A destructive action's dialog; with [typed], the owner types that word before it works. */
 @Composable
 fun Confirm(title: String, text: String, action: String, onConfirm: () -> Unit, onDismiss: () -> Unit, typed: String? = null) {
@@ -250,6 +273,8 @@ fun PairCard(approval: Approval, actions: DeviceActions, otherWays: @Composable 
             Column(verticalArrangement = Arrangement.spacedBy(Spacing.s3)) {
                 when (state) {
                     is Approval.Found, is Approval.Approving -> {
+                        // The code shown here is the pairing's secret.
+                        SecureWindow()
                         val f = state as? Approval.Found ?: (state as Approval.Approving).found
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Beacon()

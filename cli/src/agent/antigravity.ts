@@ -19,6 +19,11 @@ import { type Feature, HttpError, type Hub, pause } from "./server";
 export const WATCH_MS = 1_000;
 /** How many of a conversation's newest steps are read each time. */
 const TAIL = 3;
+/** The most prompts open at once for one server: a fake one must not start hooks without end. */
+export const MAX_OPEN_PER_ROUTE = 20;
+/** The most servers watched, and the most running conversations read per server and tick. */
+const MAX_SERVERS = 32;
+const MAX_CONVERSATIONS = 50;
 
 interface Question {
   question?: string;
@@ -139,6 +144,7 @@ export class Antigravity implements Feature {
 
   add(route: AgyRoute) {
     if (this.servers.get(route.address) === route.token) return;
+    if (!this.servers.has(route.address) && this.servers.size >= MAX_SERVERS) return;
     this.dead.delete(`${route.address} ${route.token}`);
     this.servers.set(route.address, route.token);
     this.hub.log(`watching Antigravity at ${route.address}`);
@@ -174,8 +180,15 @@ export class Antigravity implements Feature {
         this.hub.log(`stopped watching Antigravity at ${address}: ${(e as Error).message}`);
         continue;
       }
-      for (const [conversation, s] of Object.entries(summaries)) {
-        if (s.status !== "CASCADE_RUN_STATUS_RUNNING" || !s.trajectoryId) continue;
+      const running = Object.entries(summaries).filter(
+        ([, s]) => s.status === "CASCADE_RUN_STATUS_RUNNING" && s.trajectoryId,
+      );
+      // Past the cap, a conversation is not read, but its open prompts stay open.
+      for (const [conversation] of running.slice(MAX_CONVERSATIONS))
+        for (const key of this.open.keys())
+          if (key.startsWith(`${address} ${conversation} `)) waiting.add(key);
+      for (const [conversation, s] of running.slice(0, MAX_CONVERSATIONS)) {
+        if (!s.trajectoryId) continue;
         const offset = Math.max(0, (s.stepCount ?? 0) - TAIL);
         let steps: Step[];
         try {
@@ -196,7 +209,7 @@ export class Antigravity implements Feature {
           if (step.status !== "CORTEX_STEP_STATUS_WAITING" || !step.requestedInteraction) return;
           const key = `${address} ${conversation} ${s.trajectoryId} ${offset + i}`;
           waiting.add(key);
-          if (!this.open.has(key))
+          if (!this.open.has(key) && this.openFor(address) < MAX_OPEN_PER_ROUTE)
             this.start(key, route, conversation, s, offset + i, step.requestedInteraction);
         });
       }
@@ -207,6 +220,12 @@ export class Antigravity implements Feature {
         stop.abort();
         this.open.delete(key);
       }
+  }
+
+  private openFor(address: string): number {
+    let n = 0;
+    for (const key of this.open.keys()) if (key.startsWith(`${address} `)) n++;
+    return n;
   }
 
   private start(

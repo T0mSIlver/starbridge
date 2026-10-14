@@ -22,6 +22,8 @@ struct AddDeviceView: View {
             .animation(.default, value: store.approval)
         }
         .background(Tokens.Colors.bg.color.ignoresSafeArea())
+        // The pairing code and its QR code stay out of the app switcher's snapshot.
+        .privacyCover()
         .navigationTitle("Add a device")
         .task {
             if let lookUp { await store.lookUpPairing(lookUp) }

@@ -71,13 +71,12 @@ healthy() {
     sleep 1
   done
   echo "$2 not healthy after 60 s" >&2
-  $compose logs --tail 50 "$2" >&2
+  host/keep-logs.sh "$2" $compose logs --tail 50 "$2"
   return 1
 }
 healthy http://127.0.0.1:8080/healthz server
 healthy http://127.0.0.1:3010/ web-a
-curl -fsS --retry 10 --retry-connrefused --retry-delay 1 -X POST \
-  -H 'Content-Type: text/caddyfile' --data-binary @$etc/Caddyfile http://127.0.0.1:2019/load
+host/caddy-load.sh $etc/Caddyfile
 
 # The newest 5 releases' images stay, as on prod.
 for image in server web; do

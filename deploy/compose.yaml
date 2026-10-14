@@ -30,6 +30,11 @@ services:
       UMAMI_WEBSITE_ID: f3741d82-c450-47d3-8845-646cddbe392f
     volumes:
       - data:/data
+    # It writes only to /data (#1717): no capabilities, no setuid gains, the rest read-only.
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
     networks: [default, stats]
     # Only Caddy reaches the server.
     ports:
@@ -121,6 +126,8 @@ services:
       - /etc/starbridge/caddy:/etc/caddy/secrets:ro
       - caddy-data:/data
       - caddy-config:/config
+      # The admin API's socket (the Caddyfile's `admin`), which only root on the host can open.
+      - /run/starbridge-caddy:/run/caddy-admin
     logging: *logging
 
 volumes:

@@ -21,6 +21,15 @@
   random key and stored once; only its key and hash go in each device's box, with the text. Tom's
   first evening of dogfooding stored about 370 KB per question, mostly screenshots sealed once per
   device; one 110 KB screenshot to 3 devices went from 591 KB stored to 152 KB.
+- **Reads** (#1735). A list page holds 100 items and 4 MB of boxes and blobs: a hundred questions
+  with 2 MB of images made a 200 MB response, held whole in memory. The server reads sizes first,
+  then only what fits. A question whose images do not fit lists without them, and the device
+  fetches them by id when it shows them, as for an answered question under `blobs=open` (#1382):
+  every client stops at a page under 100 items, and a short page would have ended an older one's
+  sync with questions missing. Only boxes past 4 MB, which no client makes, end a page early,
+  and the page says whether more follows. An account reads 128 MB a minute through `GET /items`
+  and `/items/:id`; a list's images fit what is left of it, so a sync always finishes, and only
+  fetching images waits for the window.
 - **Runs** are one item the machine re-posts under its id; the server keeps the latest, at most
   500 per account, for a day after the last update.
 - **Permission answers** are refused 10 minutes after the prompt arrived, since the server cannot
@@ -30,6 +39,10 @@
   carriers that hand out /64s from one /48 share 50, a smaller blast radius than the whole
   server. The server counts them in memory, as every per-address limit, so no address reaches
   the database, and a restart resets the counts (#575).
+  Result long-polls need no session, so the server holds at most 1000, 50 per address (#1737);
+  past either a poll gets 204 after 10 s, not at once, since every client polls again straight
+  away and would reach the 150 a minute whose 429 ends pairing; at 6 a minute, 25 pairings behind
+  one address still fit.
 - **Per-address sign-up limits** (#619). An office or carrier NAT puts many people behind one
   IPv4 address, so the pairing limits above and the 60 GitHub sign-ins a minute leave room for a
   launch-day crowd behind it; at one a second they stay far below the 10 sign-ups and visitors a
@@ -81,7 +94,16 @@
   live database plus 7 nightly and 2 per-deploy copies, 10 in all. Copies are `VACUUM INTO`, so
   free pages stay out: 10 × 2 GB, plus SQLite's overhead, is about 21 GB of the 26 GB above the
   alert, the rest for a week of Docker builds between weekly prunes. Eight accounts at their
-  256 MB fill it, a risk taken over buying disk before launch.
+  256 MB fill it, a risk taken over buying disk before launch. So past 90% of the cap the hourly
+  sweep keeps the unanswered questions of the accounts holding the most, the largest first, only
+  7 days, as a flooded account's (#1736), and the owner can empty one account with `bun
+  server.js purge ACCOUNT`: a full server lasts at most a week, not the month unanswered
+  questions are kept. The per-account cap stays 256 MB: 64 MB would refuse the heavy user above,
+  who stores 80 MB a week, and only raise the number of accounts a filler needs from 8 to 32,
+  which sign-ups at 30 an hour per address do not stop.
+- **Sweep batches** (#585, #1736). The sweep deletes at most 1000 items or 32 MB at a time, at
+  least one item, and answers requests between: a thousand 2 MB questions in one transaction
+  would hold the write lock and grow the WAL by 2 GB.
 - **Full disk** (#301). Writes get 503 `storage-full` with `Retry-After`; usage counts and
   housekeeping skip, so a stored item still gets its push.
 - **Usage counts** (#140). `server/src/usage.ts` counts requests the server handles anyway. During

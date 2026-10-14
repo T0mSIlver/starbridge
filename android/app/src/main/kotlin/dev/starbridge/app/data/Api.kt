@@ -20,6 +20,7 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.boolean
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
 import java.time.Instant
 import kotlinx.serialization.json.int
@@ -52,8 +53,15 @@ data class Me(val account: String, val member: String?, val role: String)
 @Serializable
 data class Listed(val item: SealedItem, val cursor: String, val receivedAt: String, val answeredAt: String? = null)
 
+/**
+ * A page of items. [more] says whether items follow its cursor; a server from before it (#1735)
+ * sends none, and its pages end with one under 100 items.
+ */
 @Serializable
-data class ItemPage(val items: List<Listed>, val cursor: String = "")
+data class ItemPage(val items: List<Listed>, val cursor: String = "", val more: Boolean? = null) {
+    /** Whether this is the last page of its list. */
+    val last: Boolean get() = !(more ?: (items.size >= 100))
+}
 
 @Serializable
 data class Appended(val length: Int, val head: String)
@@ -276,7 +284,11 @@ class Api(private val http: OkHttpClient, private val server: String, private va
     /** With [openBlobs], an answered decision lists without its images, which [item] gives (#1382). */
     suspend fun items(kind: String, after: String, openBlobs: Boolean = false): ItemPage {
         val page = call("GET", "/items?kind=$kind&after=$after" + if (openBlobs) "&blobs=open" else "").second!!.jsonObject
-        return ItemPage(listedItems(page.getValue("items")), page["cursor"]?.jsonPrimitive?.content ?: "")
+        return ItemPage(
+            listedItems(page.getValue("items")),
+            page["cursor"]?.jsonPrimitive?.content ?: "",
+            page["more"]?.jsonPrimitive?.booleanOrNull,
+        )
     }
 
     suspend fun item(id: String): Listed = listed(call("GET", "/items/$id").second!!)

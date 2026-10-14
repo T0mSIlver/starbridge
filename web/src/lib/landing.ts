@@ -21,6 +21,27 @@ export function origin(headers: Headers): string {
   return `${first("x-forwarded-proto") ?? "http"}://${first("x-forwarded-host") ?? first("host")}`;
 }
 
+/**
+ * The origin the landing page's cache keys on (#1722), else undefined, and the request renders
+ * without it. With PUBLIC_URL set, only that origin; without, a forwarded host must be the
+ * request's own Host, which the reverse proxy routes on, since a proxy in front of it (Cloudflare)
+ * passes X-Forwarded-Host on as the client sent it. Forged hosts would otherwise fill the cache's
+ * few slots, and every later visitor's page would render in full.
+ */
+export function cacheOrigin(headers: Headers, publicUrl?: string): string | undefined {
+  const base = origin(headers);
+  if (publicUrl) {
+    try {
+      const fixed = new URL(publicUrl).origin;
+      return base === fixed ? fixed : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+  const forwarded = headers.get("x-forwarded-host")?.split(",")[0]?.trim();
+  return forwarded === undefined || forwarded === headers.get("host") ? base : undefined;
+}
+
 /** The landing page's title, description and link preview, at `/` for a visitor (#694). */
 export function landingMetadata(base: string): Metadata {
   const title = "Starbridge · Answer your coding agents from your phone";

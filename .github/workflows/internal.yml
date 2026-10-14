@@ -5,9 +5,9 @@ name: internal
 # app is built from, and on each rc tag, so the phone never holds older code than an rc (#1690).
 # An rc tag builds as a main build: the tagged commit, with main's versionCode scheme. Its
 # versionCode takes the next of slots 50 to 98 of the version under way, between its rcs and its
-# final (VersionCode.kt); once they are spent a build is skipped and the job summary says so. A
+# final (VersionCode.kt), or of the next patch once the version's final is tagged (#1731); once they are spent a build is skipped and the job summary says so. A
 # commit the track already holds, or one older than its last build, takes no slot. Run by hand,
-# it builds the ref it is run on under the same rules, to replace a failed build.
+# it builds main (the plan job stops other refs) under the same rules, to replace a failed build.
 # The iPhone app follows to TestFlight's internal testers once the repository variable
 # IOS_MAIN_TESTFLIGHT is true, which waits on Apple's export compliance code: nightly at 03:00 UTC
 # and by hand, apart from the Android builds. The desktop app stays on rcs.
@@ -38,7 +38,8 @@ permissions:
 jobs:
   # What the internal track holds: the commit of its last build, and its highest code.
   plan:
-    if: github.event_name != 'schedule'
+    # Only main and rc tags reach the Play environment; a run by hand on a branch stops here.
+    if: github.event_name != 'schedule' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
     runs-on: ubuntu-latest
     environment: play-release
     # Play keeps one open edit per account: a second one, here or in release.yml, voids the first.
@@ -53,6 +54,7 @@ jobs:
       build: ${{ steps.plan.outputs.build }}
       after: ${{ steps.plan.outputs.after }}
       last: ${{ steps.plan.outputs.last }}
+      final: ${{ steps.plan.outputs.final }}
     steps:
       - id: setup
         env:
@@ -88,6 +90,7 @@ jobs:
           state=$(bun cli/scripts/play.ts internal-state "$version")
           echo "internal track: $state"
           after=$(printf '%s' "$state" | jq -r .maxCode)
+          final=$(printf '%s' "$state" | jq -r .final)
           code=$(printf '%s' "$state" | jq -r '.code // ""')
           last=$(printf '%s' "$state" | jq -r '.name | capture("^main-(?<c>[0-9a-f]{8,40})$").c // ""')
           build=true
@@ -106,6 +109,7 @@ jobs:
           echo "build=$build" >> "$GITHUB_OUTPUT"
           echo "after=$after" >> "$GITHUB_OUTPUT"
           echo "last=$last" >> "$GITHUB_OUTPUT"
+          echo "final=$final" >> "$GITHUB_OUTPUT"
 
   # Signed with the upload key, as release.yml's Android job.
   android:
@@ -135,13 +139,14 @@ jobs:
           STARBRIDGE_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           STARBRIDGE_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           AFTER: ${{ needs.plan.outputs.after }}
+          FINAL: ${{ needs.plan.outputs.final }}
         run: |
           umask 077
           export STARBRIDGE_KEYSTORE="$RUNNER_TEMP/release.jks"
           echo "$KEYSTORE_BASE64" | base64 -d > "$STARBRIDGE_KEYSTORE"
           printf '%s' "$GOOGLE_SERVICES_JSON" > app/google-services.json
           ./gradlew --no-daemon --console=plain -Pkotlin.compiler.execution.strategy=in-process bundleRelease \
-            -PmainAfter="$AFTER" -PmainCommit="${GITHUB_SHA::8}"
+            -PmainAfter="$AFTER" -PmainFinal="$FINAL" -PmainCommit="${GITHUB_SHA::8}"
           mkdir -p ../out
           cp app/build/outputs/bundle/release/app-release.aab ../out/starbridge-main.aab
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

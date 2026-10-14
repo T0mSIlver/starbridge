@@ -39,7 +39,8 @@ git archive --format=tar "$rev" | ssh -i "$key" "$host" "sudo sh -euc '
   tar -x -C /opt/starbridge.new
   if [ -d /opt/starbridge ]; then mv /opt/starbridge /opt/starbridge.old; fi
   mv /opt/starbridge.new /opt/starbridge
-  REVISION=$rev /opt/starbridge/deploy/host/apply.sh
+  # A failed service prints its logs here rather than to a file on the box (host/keep-logs.sh).
+  DEPLOY_LOGS=stderr REVISION=$rev /opt/starbridge/deploy/host/apply.sh
   # Only once it is up and healthy: starbridge-deploy refuses revisions older than this one.
   echo $rev > /opt/starbridge/REVISION
 '"

@@ -411,8 +411,11 @@ request without the header, or with one the server cannot read, is served.
   scheme. The app keeps a random verifier and sends only its challenge,
   base64url(SHA-256(verifier)), which the server passes to GitHub as `code_challenge` and as the
   state. GitHub binds its code to the challenge, and the app trades code and verifier for the
-  session over HTTPS; the app ignores a redirect whose state is not its challenge, or with none.
-  GitHub
+  session over HTTPS. A code that came back through the server's callback is also kept with the
+  state it came with, its challenge, for 10 minutes (the first challenge stays; the callback
+  refuses the code with another), and the trade refuses a verifier whose S256 is not that
+  challenge, whatever GitHub checks; the app ignores a redirect whose state is not
+  its challenge, or with none. GitHub
   redirects to `/v1/auth/github/callback/app`, which the Android app claims as an App Link on
   starbridge.run (`/.well-known/assetlinks.json` binds it to the app's signing keys), and the
   iPhone app's browser sheet catches there from iOS 17.4
@@ -457,7 +460,7 @@ request without the header, or with one the server cannot read, is served.
 | `GET /auth/apple/callback` | anyone | finish the page's, as `/auth/github/callback`, with the same `signin` failures |
 | `GET /auth/apple/callback/app` | anyone | an app's: redirect to `<APP_REDIRECT_URI>?code=<code>&state=<state>`, or Apple's `error` instead of the code; 400 `bad-state` without them |
 | `GET /auth/github/callback/app` | anyone | the browser got the app's sign-in: redirect to `<APP_REDIRECT_URI>?code=<code>&state=<state>`, or GitHub's `error` instead of the code; 400 `bad-state` without them |
-| `POST /auth/app/session` | the app | `{code, verifier}`: GitHub's code, or Apple's (with dots) whose identity token's nonce is the verifier's challenge → `{session}`; 400 `bad-code` when GitHub refuses the code: unknown, used, expired or not this verifier's; 403 `signups-paused` while sign-ups are paused, or the server lists who may sign up and omits this GitHub user, and the user has no account |
+| `POST /auth/app/session` | the app | `{code, verifier}`: GitHub's code, or Apple's (with dots) whose identity token's nonce is the verifier's challenge → `{session}`; 400 `bad-code` when GitHub refuses the code (unknown, used, expired or not this verifier's), or when the code came back through `/auth/github/callback/app` with a state that is not the verifier's challenge; 403 `signups-paused` while sign-ups are paused, or the server lists who may sign up and omits this GitHub user, and the user has no account |
 | `GET /auth/app/signed-in?state=<challenge>` | device | `{signedIn}`: true once the app whose challenge this is traded its code for a session of the caller's account (#943); the server keeps each challenge's account 10 minutes, in memory |
 | `POST /auth/apple/session` | the iPhone app | `{identityToken, code, nonce}` → `{session}`; 400 `bad-code` when Apple refuses the token or the code (another app's, expired, replayed, the nonce not the token's); 403 `signups-paused` as GitHub's; 404 `not-configured` without the team's key; 502 `apple` when Apple can't be reached |
 | `POST /auth/owner` | anyone | self-hosted: `{token}` against `OWNER_TOKEN`; sets the session and returns `{session}` |
@@ -484,7 +487,7 @@ never rely on that check.
 | `POST /pairings` | new member | `{request, claimHash}`: the request message and BLAKE2b-256 of a random claim secret's text (`claimHash`); 409 if the rendezvous id is taken; 429 `too-many-pairings` when the caller's address holds 50 unapproved pairings, 429 `busy` when the server holds 20000 pairings |
 | `GET /pairings/:rendezvous?wait=<s>` | device | `{request}`; with `wait`, holds until the new member posts and answers 204 if `wait` passes first |
 | `POST /pairings/:rendezvous/approve` | device | `{approval}`; the directory must already hold the new member's entry; 409 `already-paired` when that member already holds a session or token |
-| `GET /pairings/:rendezvous/result?wait=<s>` | new member, with `X-Claim: <secret>` | long-poll: `{approval, token?}` once approved, `token` for machines only; 204 when `wait` passes; 403 `machine-cap` once the server refused the new machine's directory entry for the machine limit |
+| `GET /pairings/:rendezvous/result?wait=<s>` | new member, with `X-Claim: <secret>` | long-poll: `{approval, token?}` once approved, `token` for machines only; 204 when `wait` passes, or after 10 s when the server holds its most result waits; 403 `machine-cap` once the server refused the new machine's directory entry for the machine limit |
 
 ### Joins
 
@@ -532,7 +535,12 @@ answered, so every device moves it out of the open inbox: an answer its decision
 answer its permission, a settled notice the permission or decision it closes. A `waiting` item
 and a `snooze` are the exceptions: they describe their decision and close nothing.
 
-Lists return `{items: [{item, cursor, receivedAt, answeredAt?}], cursor}`, 100 at a time, where
+Lists return `{items: [{item, cursor, receivedAt, answeredAt?}], cursor, more}`, 100 at a time
+and 4 MB of boxes and blobs (#1735). A question whose blobs do not fit what is left of the page,
+or of the account's read window, lists without them, as an answered one under `blobs=open` does,
+and `GET /items/:id` gives them. Boxes past 4 MB, which no client makes, end a page early, at
+least one item in. `more` says whether items follow `cursor`, and a client reads on while it is
+true; a server from before it sends none, and its lists end with a page under 100 items. In each,
 `item` holds only the caller's box and its routing hints as posted, `wakeAt` included, and `answeredAt` is set on answered decisions and permissions.
 Marking an item answered moves it past every cursor, so devices listing after their cursor see it
 again, answered.
@@ -573,7 +581,7 @@ options. For permission answers, see below.
 
 | Route | Who | What |
 |---|---|---|
-| `POST /push/subscriptions` | device | `{type: "fcm" \| "webpush" \| "unifiedpush" \| "apns", endpoint, keys?, environment?}` → `{id}`; URL endpoints must be public HTTPS; an `apns` endpoint is the device token in hex, and `environment` (`production` unless set, or `sandbox`) names its APNs environment; 409 `too-many-subscriptions` past 10 per device or 30 per account (re-subscribing a known endpoint always works) |
+| `POST /push/subscriptions` | device | `{type: "fcm" \| "webpush" \| "unifiedpush" \| "apns", endpoint, keys?, environment?}` → `{id}`; URL endpoints must be public HTTPS on port 443; an `apns` endpoint is the device token in hex, and `environment` (`production` unless set, or `sandbox`) names its APNs environment; 409 `too-many-subscriptions` past 10 per device, 30 per account or 8 Web Push and UnifiedPush hosts per account (re-subscribing a known endpoint always works) |
 | `DELETE /push/subscriptions/:id` | device | stop pushing there |
 | `GET /push/vapid` | anyone | `{publicKey}`: the VAPID key a browser subscribes with (the relay's when this server forwards Web Push) |
 | `POST /relay` | another server | relay mode only: `{type: "fcm" \| "webpush" \| "apns", endpoint, keys?, environment?, payload, thread?}` → `{result: "ok" \| "gone" \| "failed" \| "no-route"}`; rate-limited per IP; 503 `busy` with `Retry-After` while the server has 64 relayed Web Pushes in flight, the address 4, its IPv6 /48 8, or the push service's host 16 |
@@ -666,6 +674,7 @@ server whose disk is full answers writes 503 `storage-full` with `Retry-After`; 
 
 | What | Limit |
 |---|---|
+| `GET /items`, `GET /items/:id` | 128 MB of boxes and blobs a minute per account: a list refused once it is spent, its blobs only within what is left; an item refused when it does not fit; 429 `rate-limited` |
 | `POST /items` | from machines: 90 a minute per machine and 120 per account, and 16 MB of machines' boxes a minute per account, items that replace earlier ones included, a post that does not fit what is left refused; from devices: 60 a minute per device |
 | Stored decisions, open or answered | 10000 per account: 409 `too-many-items` |
 | Unanswered decisions kept 30 days | 1000 per account: past that, they are dropped 7 days after they arrived |
@@ -677,7 +686,7 @@ server whose disk is full answers writes 503 `storage-full` with `Retry-After`; 
 | `POST /directory` | 30 an hour per account |
 | Directory entries | from entry 200 on, a device's `add`: 409 `directory-full`; revocations and confirmations always pass, the recovery key may add 20 more devices, and devices may propose 20 more recovery keys; 8 KB per entry: 413 `too-large` |
 | Sessions | 50 per account; signing in past that ends the oldest, unpaired ones first |
-| `GET /auth/github/callback` and `POST /auth/app/session` with GitHub's code | 60 a minute per address, together |
+| `GET /auth/github/callback`, `GET /auth/github/callback/app` and `POST /auth/app/session` with GitHub's code | 60 a minute per address, together |
 | Apple sign-ins: `GET /auth/apple` and its app callback, together; `GET /auth/apple/callback`, `POST /auth/apple/session` and `POST /auth/app/session` with Apple's code, together | 60 a minute per address each |
 | `POST /auth/app/session`, either provider's code, counted before the body is read | 60 a minute per address |
 | New accounts | 30 an hour per address, an IPv6 client counting as its /64: the page goes to `/?signin=limited`, the app gets 429 `rate-limited`; sign-ins of existing accounts don't count |
@@ -689,6 +698,7 @@ server whose disk is full answers writes 503 `storage-full` with `Retry-After`; 
 | `GET /pairings/:rendezvous/result` | 150 a minute per address: 50 waiting pairings polling every 25 s |
 | Pairing and join messages | 4 KB each: 400 `bad-schema` |
 | `GET /pairings/:rendezvous/result` and `GET /pairings/:rendezvous?wait=` waiting | 4 per pairing: 429 `too-many-waits` |
+| `GET /pairings/:rendezvous/result` waiting | 1000 on the server and 50 per address (IPv6 per /48): past either, 204 after 10 s |
 | `POST /joins` | 10 a minute per account; request text 4 KB: 400 `bad-schema` |
 | `GET /joins` waiting | 16 per account; `GET /joins/:id` waiting: 4 per join: 429 `too-many-waits` |
 | `GET /answers` waiting | 32 per machine: 429 `too-many-waits` |
@@ -862,8 +872,11 @@ Answering a permission from a phone is a trust decision, so:
 - **The input is redacted on the machine before sealing**, because it shows on lock screens and
   in notification history. Redaction hides only single tokens: a value holding spaces, quotes,
   `$`, backticks or shell operators stays visible, so it cannot hide code the owner allows. A
-  Bash command holding a private key stays at the keyboard. A wider scope is offered only when
-  its rule shows in full, with no redaction.
+  name and its value are separated by spaces and tabs only, and in a shell command no command
+  word is redacted (#1724). A shell command stays at the keyboard when it holds a private key,
+  when redaction would still change a command word or hide what a variable or substitution in
+  command position runs, or when it does not fit in `input` whole. A wider scope is offered
+  only when its rule shows in full, with no redaction.
 - **The hook never allows anything by itself.** When it errors, times out or loses the network,
   it answers nothing and the agent's own dialog decides.
 - **Opt-in per machine.** Nothing is routed until `starbridge config permissions on` (setup
@@ -940,7 +953,7 @@ for an unknown route or decision, 502 when the server refused or failed (`detail
 | Route | What |
 |---|---|
 | `GET /status` | `{version, api, pid, startedAt, socket, machine?, server: {reachable, lastOkAt?, lastError?}, quota: {providers, intervalSeconds, lastPostAt?, lastError?}, sessions}` |
-| `POST /decisions` | `{input}` with `ask`'s fields (`question`, `options`, `waiting`, `agent`, `project`, `session`, …); the client fills `project`, `session`, title and links from its own process, for Codex `codex` (`{home, bin}`: its `CODEX_HOME` and `codex` binary), for Pi and opencode `extensionAnswers: true` while the Starbridge Pi or opencode extension runs in the session, for `claude -p` `headless: true`, for a Claude Code subagent `subagent` (its agent id, which the mod gives the asking command, #1702) → `{id, delivery}`: `prompt` when the answer will come back into the session as a prompt (Claude Code's mod, when that session's mod called the agent within 45 s, which `claude -p` never does, or named the asking subagent; the Pi and opencode extensions; Codex, which the agent reaches with `codex queue` while the session's app-server daemon listens; that message names the decision and `starbridge wait <id>`, never its text, since process arguments are readable by other local users; an answer goes into a running turn with the daemon's `turn/steer` instead, answer and all), else `wait` |
+| `POST /decisions` | `{input}` with `ask`'s fields (`question`, `options`, `waiting`, `agent`, `project`, `session`, …); the client fills `project`, `session`, title and links from its own process, for Codex `codex` (`{home, bin}`: its `CODEX_HOME` and `codex` binary; the agent runs the `codex` setup recorded, never `bin`, and only for the `CODEX_HOME` setup recorded or its own, #1757), for Pi and opencode `extensionAnswers: true` while the Starbridge Pi or opencode extension runs in the session, for `claude -p` `headless: true`, for a Claude Code subagent `subagent` (its agent id, which the mod gives the asking command, #1702); the agent drops `held` and `picker`, which only hooks set, posting without it → `{id, delivery}`: `prompt` when the answer will come back into the session as a prompt (Claude Code's mod, when that session's mod called the agent within 45 s, which `claude -p` never does, or named the asking subagent; the Pi and opencode extensions; Codex, which the agent reaches with `codex queue` while the session's app-server daemon listens; that message names the decision and `starbridge wait <id>`, never its text, since process arguments are readable by other local users; an answer goes into a running turn with the daemon's `turn/steer` instead, answer and all), else `wait` |
 | `POST /decisions/:id/waiting` | `{state: "working" \| "waiting"}` → `{posted, snoozedUntil?}`: post the decision's waiting state, `posted: false` when it already had it; `snoozedUntil` while the owner has snoozed it; 404 `unknown-decision`, 400 when it is answered. `waiting` on an answer the session has not had yet returns it instead, `{posted: false, answer, question?}`, marked printed (#1484). `starbridge waiting`, `working` |
 | `POST /answers/next` | `{id?, session?, wait?}`: the answer to decision `id`, or the first answer no `wait` printed to a decision session `session` asked, marked printed → `{answer?, question?, snoozedUntil?}`; with `id` and no answer, `snoozedUntil` once per snooze while the owner has snoozed it; 404 `unknown-decision`. `starbridge wait` |
 | `POST /answers/all` | `{since?, known?, wait?}`: every accepted answer the asking sessions may have, answered from `since` (ms since the epoch) on, leaving out the decision ids in `known`, held up to `wait` while there is none; marks nothing seen → `{answers: [{decisionId, question, choice? \| text? \| done?, answeredAt, session?, sessionTitle?, project?}]}`. `starbridge answers --all` |
@@ -948,7 +961,7 @@ for an unknown route or decision, 502 when the server refused or failed (`detail
 | `POST /runs` | `{run}`: seal one update of a `starbridge run` to every device and post it; `run` is `{id, title, reason, startedAt, at, progress?, exit?, project, session, sessionTitle?, links?}` → `{id}` |
 | `POST /sessions/:id/hello` | `{pid?, cwd?, title?, replaces?}`: a session starts → `{version}`; `replaces` names the id it had before a `/clear`, which the agent no longer counts as having a mod (#537) |
 | `POST /sessions/:id/bye` | the session ended; its session-scoped state goes |
-| `GET /sessions/:id/events?wait=<s>` | `{events: [{type, ack, line, decisionId?, waiting?, subagent?}]}`: what the session has not confirmed, held up to `wait` while there is nothing; `waiting` is true for an answer to a decision marked waiting (#1484); the mod hands every answer to a running turn alike (#1584); `subagent` names the Claude Code subagent that asked, which the mod sends it to (#1702) |
+| `GET /sessions/:id/events?wait=<s>` | `{events: [{type, ack, line, decisionId?, question?, waiting?, subagent?}]}`: what the session has not confirmed, held up to `wait` while there is nothing; `waiting` is true for an answer to a decision marked waiting (#1484), and `question` is the decision's question (#1697); the mod hands every answer to a running turn alike (#1584); `subagent` names the Claude Code subagent that asked, which the mod sends it to (#1702) |
 | `POST /sessions/:id/ack` | `{acks}` → `{acked}`: confirm events by their `ack`; others' tokens do nothing; `acked` names those confirmed now, not ones a `wait` or `waiting` took first (#1484) |
 | `POST /permissions` | `{hook, agent, source: {project, session, sessionTitle?, links?}, waitMs, handOver?}`: post a permission prompt from the hook's input → `{id}`; with `handOver` (Codex), `{present: true}` and nothing posted while presence reads the owner at this machine; 403 `disabled` until `starbridge config permissions on` |
 | `POST /permissions/:id/wait` | `{wait, handOver?}`: `{output}` once an accepted answer is in, the hook's stdout, handed out once; `{settled}` when the prompt ended another way, `keyboard` with `handOver` once the owner sits at this machine; `{}` when `wait` passed; a hook that hangs up mid-hold and holds no more within 5 s is gone, and the prompt settles as `keyboard` |

@@ -23,6 +23,7 @@ const val RECOVERY = "recovery"
 
 private val B64_RE = Regex("^[A-Za-z0-9_-]+$")
 private val ID_RE = Regex("^[A-Za-z0-9_-]{1,64}$")
+private val PUSH_KIND_RE = Regex("^[a-z][a-z-]{0,31}$")
 // zod's iso.datetime({ offset: true }); epochMillis checks the ranges.
 private val TIME_RE = Regex("""^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d+))?(?:Z|([+-])(\d{2}):(\d{2}))$""")
 
@@ -36,6 +37,10 @@ internal fun bytes32(s: String, what: String) = schema(s.length == 43 && B64_RE.
 /** 64 bytes as base64url: an Ed25519 signature (Bytes64 in schemas.ts). */
 internal fun bytes64(s: String, what: String) = schema(s.length == 86 && B64_RE.matches(s), what)
 internal fun id(s: String, what: String) = schema(ID_RE.matches(s), what)
+/** Whether [s] is an item id: what a push's `id` must be before it joins a path. */
+fun isItemId(s: String) = ID_RE.matches(s)
+/** Whether [s] is a push's `kind`: lowercase words, so nothing odd reaches a `when` or a notification. */
+fun isPushKind(s: String) = PUSH_KIND_RE.matches(s)
 internal fun time(s: String, what: String) = schema(epochMillis(s) != null, what)
 // zod counts a string's length in code points, not UTF-16 units (#1082).
 internal fun len(s: String, min: Int, max: Int, what: String) = schema(s.codePointCount(0, s.length) in min..max, what)

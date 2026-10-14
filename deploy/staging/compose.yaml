@@ -33,3 +33,4 @@ services:
       - /etc/starbridge-staging/caddy:/etc/caddy/secrets:ro
       - caddy-data:/data
       - caddy-config:/config
+      - /run/starbridge-caddy:/run/caddy-admin

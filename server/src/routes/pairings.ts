@@ -17,6 +17,12 @@ import { ipKey, rateLimit } from "../limits";
 import { activeMember } from "./directory";
 
 const LIFETIME_MS = 10 * 60_000;
+/**
+ * How long a result poll past the wait caps pauses before its 204. Clients poll again at once,
+ * so it sets their pace: 6 a minute, which lets 25 of them share an address's 150 a minute in
+ * pairingResults, and that 150 bounds the pauses an address holds open to 25.
+ */
+const BUSY_PAUSE_S = 10;
 /** A pairing message's JSON, in bytes, so waiting pairings and joins cannot fill the disk. */
 export const MESSAGE_BYTES = 4 * 1024;
 const RENDEZVOUS = /^[0-9A-HJKMNP-TV-Z]{8}$/;
@@ -77,6 +83,29 @@ export class PairingClients {
     for (const [rendezvous, p] of this.posted)
       if (p.client === client && now - p.at <= LIFETIME_MS) ids.push(rendezvous);
     return ids;
+  }
+
+  /** Open result long-polls in all, and per address as `add` keys it (#1737). */
+  private waits = 0;
+  private readonly waitsBy = new Map<string, number>();
+
+  /**
+   * Takes a slot for one result long-poll from `client`, or false when the server or the address
+   * holds its most. `release` gives it back.
+   */
+  holdWait(client: string, most: number, mostPerClient: number): boolean {
+    const mine = this.waitsBy.get(client) ?? 0;
+    if (this.waits >= most || mine >= mostPerClient) return false;
+    this.waits += 1;
+    this.waitsBy.set(client, mine + 1);
+    return true;
+  }
+
+  release(client: string): void {
+    this.waits -= 1;
+    const n = (this.waitsBy.get(client) ?? 1) - 1;
+    if (n > 0) this.waitsBy.set(client, n);
+    else this.waitsBy.delete(client);
   }
 
   /** Forgets the pairings past their lifetime, which the database has swept too. */
@@ -264,10 +293,30 @@ pairingRoutes.get("/pairings/:rendezvous/result", async (c) => {
   if (!p.approval) {
     const seconds = waitSeconds(c);
     if (seconds > 0) {
-      if (c.var.pairings.count(rendezvous) >= c.var.config.limits.pairingWaits)
+      const { limits } = c.var.config;
+      if (c.var.pairings.count(rendezvous) >= limits.pairingWaits)
         fail(429, "too-many-waits", "this pairing already has its long-polls open");
-      holdOpen(c);
-      await c.var.pairings.wait(rendezvous, seconds, c.req.raw.signal);
+      // Anyone may wait here without a session, so the waits are capped in all and per address
+      // (#1737). Past either, the poll answers "not yet" after a pause rather than at once:
+      // every client polls again straight away, and a burst of instant answers would reach
+      // pairingResults' 429, which ends pairing in the CLI and the apps.
+      const client = ipKey(c, 48);
+      if (
+        !c.var.pairingClients.holdWait(
+          client,
+          limits.pairingResultWaits,
+          limits.pairingResultWaitsPerClient,
+        )
+      ) {
+        await new Promise((r) => setTimeout(r, Math.min(seconds, BUSY_PAUSE_S) * 1000));
+        return c.body(null, 204);
+      }
+      try {
+        holdOpen(c);
+        await c.var.pairings.wait(rendezvous, seconds, c.req.raw.signal);
+      } finally {
+        c.var.pairingClients.release(client);
+      }
       const again = load(c, rendezvous);
       // The pairing may have expired and its rendezvous id been reused while this request waited.
       if (again.created_at !== p.created_at || !safeEqual(claimHash(claim), again.claim_hash))
