@@ -122,7 +122,7 @@
 - **Privacy and terms** (`/privacy`, `/terms`). Each claim follows the code: stored columns in
   `server/src/db.ts`, retention in `server/src/limits.ts`, logs and backups in `deploy/`. A change
   to what is stored changes the page, and the Play data-safety form. Contact is
-  privacy@starbridge.run; abuse@ appears only in `/terms`. Both pages promise that changes are posted
+  privacy@starbridge.run; abuse@ appears only in `/terms`. `/privacy` leads each category (what we store, why, who receives it, how long we keep it, rights and contact) with 1 to 3 plain sentences, and keeps the field-level detail in collapsed sections under it, so a visitor reads the gist and an auditor still finds every field (#1789). Both pages promise that changes are posted
   with a new date, so each edit to one adds a dated entry to its Changes list (`changes.ts` beside
   the page), which also sets "Last updated"; a test fails until the entry and the page's hash are
   in (#1620, #1639).
