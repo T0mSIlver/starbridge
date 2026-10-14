@@ -17,8 +17,10 @@ on:
         description: Commit whose images to scan (default the ones starbridge.run and staging serve)
         required: false
 
+# A run after a skipped deploy scans nothing, so it waits in its own group: in the shared one it
+# would replace a pending run that does.
 concurrency:
-  group: scan-${{ github.event_name }}
+  group: scan-${{ github.event_name }}${{ github.event.workflow_run.conclusion == 'skipped' && '-skipped' || '' }}
   cancel-in-progress: false
 
 permissions: {}
