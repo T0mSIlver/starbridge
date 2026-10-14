@@ -32,7 +32,7 @@ export interface UpdateSettings {
 /**
  * What the page reads: the settings; `releaseCandidates`, the switch of pages from before the
  * channel, on for "rc" and "tip"; and `ahead`, whether the installed version waits for the
- * channel to pass it.
+ * channel to pass it, which an update found or downloaded says it has.
  */
 export interface UpdateSettingsView extends UpdateSettings {
   releaseCandidates: boolean;

@@ -294,7 +294,8 @@ function updateSettings(): UpdateSettingsView {
     channel,
     autoDownload,
     releaseCandidates: channel !== "stable",
-    ahead: ahead(app.getVersion(), channel),
+    // Not while the channel offers an update: it has passed the installed version.
+    ahead: ahead(app.getVersion(), channel) && !(updates && "version" in updates.status),
   };
 }
 
@@ -495,7 +496,10 @@ function showSettings(): void {
 }
 
 function tellUpdate(s: UpdateStatus): void {
-  if (win && fromServer(win.webContents.getURL())) win.webContents.send("update-status", s);
+  if (!win || !fromServer(win.webContents.getURL())) return;
+  // `ahead` follows the status, so the settings go first and the status's change shows both.
+  win.webContents.send("update-settings", updateSettings());
+  win.webContents.send("update-status", s);
 }
 
 /** Quits for the update: the window must close, not hide, or the install never starts. */
