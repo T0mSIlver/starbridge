@@ -167,6 +167,11 @@ test.skipIf(process.platform === "win32")(
       expect(removePathLines(s, dir)).toEqual([file]);
       expect(existsSync(file)).toBe(false);
     }
+    // A line an earlier release wrote, unquoted, still comes out.
+    const old = sys({ SHELL: "/bin/bash", PATH: "/usr/bin" }, []);
+    const profile = join(old.home, ".profile");
+    writeFileSync(profile, '\n# Added by starbridge setup\nexport PATH="$HOME/my tools:$PATH"\n');
+    expect(removePathLines(old, join(old.home, "my tools"))).toEqual([profile]);
     // In the home folder, $HOME stays a variable, quoted.
     const s = sys({ SHELL: "/bin/bash", PATH: "/usr/bin" }, []);
     await pathStep({ ...s, self: [join(s.home, "my tools/starbridge")] });

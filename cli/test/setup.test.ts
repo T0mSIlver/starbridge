@@ -54,6 +54,7 @@ import {
   removeService,
   sdQuote,
   serviceState,
+  unitText,
   withInstalledPlaces,
 } from "../src/setup/service";
 import { probeLines, refresh, setup } from "../src/setup/setup";
@@ -585,6 +586,9 @@ test("a unit's values keep %, $ and line breaks as systemd reads them back (#174
   expect(sdQuote("/home/a%h/bin/starbridge", true)).toBe("/home/a%%h/bin/starbridge");
   expect(sdQuote("/srv/$USER/starbridge", true)).toBe("/srv/$$USER/starbridge");
   expect(sdQuote("X=$USER")).toBe("X=$USER");
+  // systemd expands variables in ExecStart's arguments, not in the executable's path.
+  const unit = unitText({ ...linuxSys(testCtx({}), "/h"), self: ["/srv/$a/node", "/srv/$a/x.js"] });
+  expect(unit).toContain("ExecStart=/srv/$a/node /srv/$$a/x.js agent");
   const broken = "STARBRIDGE_CONFIG_DIR=/srv/a\nb %h";
   const line = `Environment=${sdQuote(broken)}`;
   expect(line).toBe('Environment="STARBRIDGE_CONFIG_DIR=/srv/a\\nb %%h"');

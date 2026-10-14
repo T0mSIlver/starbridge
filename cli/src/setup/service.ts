@@ -114,7 +114,8 @@ const C_ESCAPES: Record<string, string> = { "\n": "\\n", "\r": "\\r", "\t": "\\t
 
 /**
  * One word of a unit's line, as systemd reads it back (#1749): `%` doubled, since it expands
- * specifiers in every value, and `$` too in `ExecStart` (`exec`), which expands variables. A word
+ * specifiers in every value, and `$` too in an argument of `ExecStart` (`exec`), which expands
+ * variables there but not in the executable's path. A word
  * with a space, a quote, a backslash or a line break goes in double quotes, the break as `\n`,
  * which would otherwise end the line and start another.
  */
@@ -139,7 +140,7 @@ After=network-online.target
 Wants=network-online.target
 
 [Service]
-ExecStart=${[...sys.self, "agent"].map((w) => sdQuote(w, true)).join(" ")}
+ExecStart=${[...sys.self, "agent"].map((w, i) => sdQuote(w, i > 0)).join(" ")}
 ${env}
 Restart=on-failure
 RestartSec=10

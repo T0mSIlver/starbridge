@@ -34,4 +34,15 @@ test("an owner's config is replaced whole, keeping its mode, and through a link 
   replaceFile(link, "through");
   expect(readlinkSync(link)).toBe(file);
   expect(readFileSync(file, "utf8")).toBe("through");
+  // A link to a file not there yet creates it.
+  const dangling = join(dir, "dangling.json");
+  symlinkSync(join(dir, "target.json"), dangling);
+  replaceFile(dangling, "made");
+  expect(readlinkSync(dangling)).toBe(join(dir, "target.json"));
+  expect(readFileSync(join(dir, "target.json"), "utf8")).toBe("made");
+  // A file this user may not write stays, as a write in place would have left it.
+  if (process.getuid?.() === 0) return;
+  chmodSync(file, 0o444);
+  expect(() => replaceFile(file, "over")).toThrow();
+  expect(readFileSync(file, "utf8")).toBe("through");
 });

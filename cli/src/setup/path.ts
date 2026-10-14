@@ -100,7 +100,10 @@ export function removePathLines(sys: Sys, dir: string): string[] {
     join(home, ".config", "fish", "config.fish"),
   ]);
   const { sh, fish } = pathLines(dir, home);
-  const blocks = [sh, fish].map((line) => `${PATH_MARK}\n${line}\n`);
+  // And the lines of releases before #1749, which quoted no folder.
+  const shown = dir.startsWith(`${home}/`) ? `$HOME${dir.slice(home.length)}` : dir;
+  const lines = new Set([sh, fish, `export PATH="${shown}:$PATH"`, `fish_add_path ${dir}`]);
+  const blocks = [...lines].map((line) => `${PATH_MARK}\n${line}\n`);
   const done: string[] = [];
   for (const file of files) {
     const text = existsSync(file) ? readFileSync(file, "utf8") : "";

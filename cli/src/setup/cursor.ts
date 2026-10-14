@@ -91,7 +91,8 @@ const isObject = (v: unknown): v is Record<string, unknown> =>
  */
 function readHooks(sys: Home): HooksFile | undefined {
   const text = readText(cursorHooksPath(sys));
-  if (text === undefined) return { version: 1 };
+  // A file this user cannot read is the owner's to fix, as one that does not parse (#1749).
+  if (text === undefined) return existsSync(cursorHooksPath(sys)) ? undefined : { version: 1 };
   try {
     const v = JSON.parse(text) as unknown;
     return isObject(v) && (v.hooks === undefined || isObject(v.hooks))
