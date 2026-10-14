@@ -23,7 +23,7 @@ import { badgeText } from "./badge";
 import { type Answer, type Entry, parseAnswered, parseState } from "./bridge";
 import { MenuBar, trayImageName } from "./menubar";
 import { Notifier, type Shown } from "./notifier";
-import { linkPage, opensOutside, serverOrigin, staysInWindow } from "./origin";
+import { opensOutside, serverOrigin, staysInWindow } from "./origin";
 import { type Reading, SCREEN_CHECK_MS, Screen } from "./screen";
 import {
   parseBackground,
@@ -728,16 +728,7 @@ function openLink(link: string): void {
     const { verifier } = signIn;
     signIn = null;
     finishSignIn(back, verifier);
-    return;
   }
-  const page = linkPage(link, origin);
-  if (!page) return;
-  if ("refused" in page) {
-    dialog.showMessageBox({ type: "warning", message: "Link not opened", detail: page.refused });
-    return;
-  }
-  win.loadURL(page.url);
-  showWindow();
 }
 
 /**

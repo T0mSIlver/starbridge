@@ -212,9 +212,7 @@ final class ProtocolVectorsTests: XCTestCase {
             XCTAssertEqual(got, c.str("expect"), c.str("input"))
         }
         let keyLinks = v["keyLinks"]!.items
-        let made = keyLinks[0]
-        XCTAssertEqual(Pairings.appLink(server: made.str("server"), code: pcode, checkKey: made.str("key")), made.str("link"))
-        XCTAssertEqual(try PairingCode.fromLink(made.str("link")).formatted, v.str("code"))
+        XCTAssertEqual(try PairingCode.fromLink(keyLinks[0].str("link")).formatted, v.str("code"))
         for c in keyLinks {
             let input = c.opt("link")?.string ?? c.str("input")
             XCTAssertEqual(Pairings.checkKey(fromLink: input), c.opt("expect")?.string, input)

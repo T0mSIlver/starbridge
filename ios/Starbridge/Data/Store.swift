@@ -63,8 +63,6 @@ final class Store {
     var deviceInfo = DeviceInfo()
     /** Where adding a machine or device stands. */
     var approval = Approval.idle
-    /** A pairing link that opened the app, for Add a device to look up (#611). */
-    var pairLink: String?
     /** Where replacing the recovery key stands (#348). */
     var replacing = Replacing.idle
     /** The open joins by digits, while the app is in front. */
@@ -782,7 +780,6 @@ final class Store {
         showTask?.cancel()
         pairing = nil
         approval = .idle
-        pairLink = nil
         replacement = nil
         replacing = .idle
         watchTask?.cancel()
