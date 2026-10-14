@@ -1,6 +1,10 @@
 # Sign-in
 
-- The hosted server signs in with GitHub; a self-hosted server with `OWNER_TOKEN`.
+- The hosted server signs in with GitHub; a self-hosted server with `OWNER_TOKEN`. A server
+  refuses to start with an owner token under 16 characters, since sign-in allows a few tries a
+  minute and the token is the whole owner account, and with one at all while `PUBLIC_URL` is
+  starbridge.run, where it would be one more way into an account (#1720, from an internal
+  audit on 2026-10-14).
 - **Sign in with Apple** (#1411). App Store guideline 4.8 asks an app that signs in with GitHub
   to offer a login that keeps the email private too; websites are not bound. GitHub stays the
   main sign-in everywhere, and Apple shows only where it must: on the iPhone, GitHub's button

@@ -15,7 +15,11 @@ const PROD = Object.fromEntries(
     ),
   ].map(([, k, v]) => [k as string, v || "secret"]),
 );
-const DEMO = { PUBLIC_URL: "https://demo.starbridge.run", OWNER_TOKEN: "t", DEMO: "1" };
+const DEMO = {
+  PUBLIC_URL: "https://demo.starbridge.run",
+  OWNER_TOKEN: "demo-owner-token-16",
+  DEMO: "1",
+};
 
 test("DEMO=1 is refused with anything the hosted server sets", () => {
   expect(() => configFromEnv({ ...PROD, DEMO: "1" })).toThrow("DEMO=1 is refused");
