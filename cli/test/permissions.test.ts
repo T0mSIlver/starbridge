@@ -692,6 +692,14 @@ test("redaction never hides a command word; a command it would hide stays at the
     ["cat <<-EOF >f\n\tX_TOKEN:abc\n\tEOF", "cat <<-EOF >f\n\tX_TOKEN:[redacted]\n\tEOF"],
   ])
     expect(redactText(command as string, true)).toBe(shown as string);
+  // Where a heredoc's end is not plain, its lines read as commands.
+  for (const command of [
+    "cat <<EOF>/dev/null\ndata\nEOF\nX_TOKEN:abc",
+    `cat <<"E'OF"\ndata\nE'OF\nX_TOKEN:abc`,
+    "cat <<EOF\nEO\\\nF\nX_TOKEN:abc",
+    "((1 << 2))\nX_TOKEN:abc",
+  ])
+    expect(redactText(command, true)).toContain("\nX_TOKEN:abc");
   // An unquoted heredoc runs its substitutions, and the line after it is a command.
   expect(redactText("cat <<EOF\n$(X_TOKEN:abc)\nEOF\nX_TOKEN:abc", true)).toBe(
     "cat <<EOF\n$(X_TOKEN:abc)\nEOF\nX_TOKEN:abc",

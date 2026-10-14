@@ -309,6 +309,13 @@ export function commandWords(text: string, offset = 0): CommandWord[] {
   /** The heredoc bodies from `from`, the line after their command; returns where they end. */
   const bodies = (from: number): number => {
     let p = from;
+    // A line-joining backslash in a body that expands could form the delimiter: read the lines as
+    // commands instead, which only keeps more in view.
+    const rest = text.slice(from);
+    if (heredocs.some((h) => h.expands) && /\\\r?\n/.test(rest)) {
+      heredocs = [];
+      return from;
+    }
     for (const h of heredocs)
       while (p < n) {
         const eol = text.indexOf("\n", p) < 0 ? n : text.indexOf("\n", p);
@@ -331,8 +338,14 @@ export function commandWords(text: string, offset = 0): CommandWord[] {
     heredocs = [];
     return p;
   };
-  const heredoc = (raw: string, strip: boolean) =>
-    heredocs.push({ delimiter: raw.replace(/['"\\]/g, ""), strip, expands: !/['"\\]/.test(raw) });
+  /**
+   * Takes `raw` as a heredoc's delimiter only when it is a plain word, whole or wholly quoted:
+   * for any other, the body's lines read as commands, which only keeps more in view.
+   */
+  const heredoc = (raw: string, strip: boolean) => {
+    const d = /^(?:'(\w+)'|"(\w+)"|(\w+))$/.exec(raw);
+    if (d) heredocs.push({ delimiter: (d[1] ?? d[2] ?? d[3]) as string, strip, expands: !!d[3] });
+  };
   while (i < n) {
     const c = text[i] as string;
     if (c === " " || c === "\t") {
@@ -341,6 +354,14 @@ export function commandWords(text: string, offset = 0): CommandWord[] {
     }
     if (c === "\\" && (text[i + 1] === "\n" || text[i + 1] === "\r")) {
       i += 2;
+      continue;
+    }
+    // An arithmetic command, `((…))`: its `<<` is a shift. It stays in view whole.
+    if (c === "(" && text[i + 1] === "(" && start) {
+      const end = Math.min(closing(i), n - 1);
+      out.push({ word: text.slice(i, end + 1), start: offset + i, end: offset + end + 1 });
+      i = end + 1;
+      start = false;
       continue;
     }
     if (separator(c)) {
