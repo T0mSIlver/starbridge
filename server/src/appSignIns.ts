@@ -10,6 +10,31 @@ const MAX = 10_000;
  */
 export class AppSignIns {
   private byChallenge = new Map<string, { account: string; at: number }>();
+  /** The challenge each GitHub code came back with, for codes that passed through this server. */
+  private challengeByCode = new Map<string, { challenge: string; at: number }>();
+
+  /**
+   * Keeps the challenge a code came back with from GitHub, so the trade can check the verifier
+   * itself rather than rely on GitHub binding the code to it.
+   */
+  passed(code: string, challenge: string, now = Date.now()): void {
+    this.challengeByCode.delete(code);
+    this.challengeByCode.set(code, { challenge, at: now });
+    if (this.challengeByCode.size > MAX) {
+      const oldest = this.challengeByCode.keys().next().value;
+      if (oldest !== undefined) this.challengeByCode.delete(oldest);
+    }
+  }
+
+  /**
+   * The challenge a code came back with, once: undefined for a code that never passed through
+   * this server (a verified App Link caught it) or that came back over 10 minutes ago.
+   */
+  takeChallenge(code: string, now = Date.now()): string | undefined {
+    const s = this.challengeByCode.get(code);
+    this.challengeByCode.delete(code);
+    return s !== undefined && now - s.at < APP_SIGN_IN_MS ? s.challenge : undefined;
+  }
 
   add(challenge: string, account: string, now = Date.now()): void {
     this.byChallenge.delete(challenge);
@@ -32,9 +57,10 @@ export class AppSignIns {
   }
 
   sweep(now = Date.now()): void {
-    for (const [k, s] of this.byChallenge) {
-      if (now - s.at < APP_SIGN_IN_MS) break;
-      this.byChallenge.delete(k);
-    }
+    for (const map of [this.byChallenge, this.challengeByCode])
+      for (const [k, s] of map) {
+        if (now - s.at < APP_SIGN_IN_MS) break;
+        map.delete(k);
+      }
   }
 }

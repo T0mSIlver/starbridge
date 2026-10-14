@@ -411,8 +411,10 @@ request without the header, or with one the server cannot read, is served.
   scheme. The app keeps a random verifier and sends only its challenge,
   base64url(SHA-256(verifier)), which the server passes to GitHub as `code_challenge` and as the
   state. GitHub binds its code to the challenge, and the app trades code and verifier for the
-  session over HTTPS; the app ignores a redirect whose state is not its challenge, or with none.
-  GitHub
+  session over HTTPS. A code that came back through the server's callback is also kept with the
+  state it came with, its challenge, for 10 minutes, and the trade refuses a verifier whose S256
+  is not that challenge, whatever GitHub checks; the app ignores a redirect whose state is not
+  its challenge, or with none. GitHub
   redirects to `/v1/auth/github/callback/app`, which the Android app claims as an App Link on
   starbridge.run (`/.well-known/assetlinks.json` binds it to the app's signing keys), and the
   iPhone app's browser sheet catches there from iOS 17.4
@@ -457,7 +459,7 @@ request without the header, or with one the server cannot read, is served.
 | `GET /auth/apple/callback` | anyone | finish the page's, as `/auth/github/callback`, with the same `signin` failures |
 | `GET /auth/apple/callback/app` | anyone | an app's: redirect to `<APP_REDIRECT_URI>?code=<code>&state=<state>`, or Apple's `error` instead of the code; 400 `bad-state` without them |
 | `GET /auth/github/callback/app` | anyone | the browser got the app's sign-in: redirect to `<APP_REDIRECT_URI>?code=<code>&state=<state>`, or GitHub's `error` instead of the code; 400 `bad-state` without them |
-| `POST /auth/app/session` | the app | `{code, verifier}`: GitHub's code, or Apple's (with dots) whose identity token's nonce is the verifier's challenge → `{session}`; 400 `bad-code` when GitHub refuses the code: unknown, used, expired or not this verifier's; 403 `signups-paused` while sign-ups are paused, or the server lists who may sign up and omits this GitHub user, and the user has no account |
+| `POST /auth/app/session` | the app | `{code, verifier}`: GitHub's code, or Apple's (with dots) whose identity token's nonce is the verifier's challenge → `{session}`; 400 `bad-code` when GitHub refuses the code (unknown, used, expired or not this verifier's), or when the code came back through `/auth/github/callback/app` with a state that is not the verifier's challenge; 403 `signups-paused` while sign-ups are paused, or the server lists who may sign up and omits this GitHub user, and the user has no account |
 | `GET /auth/app/signed-in?state=<challenge>` | device | `{signedIn}`: true once the app whose challenge this is traded its code for a session of the caller's account (#943); the server keeps each challenge's account 10 minutes, in memory |
 | `POST /auth/apple/session` | the iPhone app | `{identityToken, code, nonce}` → `{session}`; 400 `bad-code` when Apple refuses the token or the code (another app's, expired, replayed, the nonce not the token's); 403 `signups-paused` as GitHub's; 404 `not-configured` without the team's key; 502 `apple` when Apple can't be reached |
 | `POST /auth/owner` | anyone | self-hosted: `{token}` against `OWNER_TOKEN`; sets the session and returns `{session}` |
