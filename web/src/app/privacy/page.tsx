@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { LegalPage } from "@/components/Legal";
-import { longDate, privacyChanges } from "./changes";
+import { longDate } from "@/lib/legalChanges";
+import { privacyChanges } from "./changes";
 
 export const metadata: Metadata = { title: "Privacy" };
 

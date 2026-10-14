@@ -105,10 +105,10 @@
 - **Privacy and terms** (`/privacy`, `/terms`). Each claim follows the code: stored columns in
   `server/src/db.ts`, retention in `server/src/limits.ts`, logs and backups in `deploy/`. A change
   to what is stored changes the page, and the Play data-safety form. Contact is
-  privacy@starbridge.run; abuse@ appears only in `/terms`. The page promises that changes are posted
-  with a new date, so each edit to `/privacy` adds a dated entry to its Changes list
-  (`web/src/app/privacy/changes.ts`), which also sets "Last updated"; a test fails until the entry
-  and the page's hash are in (#1620).
+  privacy@starbridge.run; abuse@ appears only in `/terms`. Both pages promise that changes are posted
+  with a new date, so each edit to one adds a dated entry to its Changes list (`changes.ts` beside
+  the page), which also sets "Last updated"; a test fails until the entry and the page's hash are
+  in (#1620, #1639).
 - **Analytics** (#141). Umami, self-hosted, on the landing page, the docs, `/privacy` and `/terms`
   only. No cookie, no stored IP, a daily salt, Do Not Track honoured, so no consent banner. The
   Android app sends none (Play data safety form); the server sends a new account's launch funnel
