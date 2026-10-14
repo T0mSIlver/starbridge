@@ -191,7 +191,8 @@ jobs:
     needs: version
     if: ${{ !inputs.npm_only && !inputs.testflight_only && vars.DESKTOP_RELEASE == 'true' && (startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main') }}
     runs-on: macos-15
-    timeout-minutes: 45
+    # Apple's notarization of each architecture can take up to an hour.
+    timeout-minutes: 150
     environment: desktop-release
     defaults:
       run:
