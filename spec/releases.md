@@ -51,7 +51,9 @@
   (`android/`, the protocol's test vectors) and on each rc tag, so the owner's phone holds the
   newest code within minutes and updates from Play, and never older code than an rc (#1690; it was
   nightly, #1540, until rcs were cut on demand). An rc tag builds as a main build: the tagged
-  commit, with main's versionCode scheme. Builds queue one at a time: a running upload is never
+  commit, with main's versionCode scheme. Since the rc's commit can
+  be older than main's, or replace a waiting main build in the queue, a tag run ends by starting
+  a run on main when main's app differs from the tag's. Builds queue one at a time: a running upload is never
   cancelled, and of the runs waiting the newest wins. A commit the track already holds or is
   ahead of (a rebuild, an rc cut from a commit main has passed) takes no slot. Play gives a phone
   the highest versionCode it may install, so main's builds take slots 50 to 98 of the version

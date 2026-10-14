@@ -196,6 +196,33 @@ jobs:
           bun cli/scripts/play.ts out/starbridge-main.aab "main-${GITHUB_SHA::12}" notes.md --track internal \
             --url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/commits/$GITHUB_SHA"
 
+  # An rc tag shares the queue with main's pushes, so it can replace a waiting main build, and its
+  # commit can be older than main's. Either way the track would be behind main when the run ends:
+  # start a run on main when this one is done (#1690).
+  catch-up:
+    needs: [plan, play]
+    if: ${{ !cancelled() && github.ref_type == 'tag' && !contains(needs.*.result, 'failure') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: write
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          filter: blob:none
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git fetch -q origin main
+          if git diff --quiet HEAD origin/main -- android packages/protocol/vectors; then
+            echo "main's app is the tag's: nothing to catch up."
+            exit 0
+          fi
+          echo "main's app differs from ${GITHUB_REF_NAME}'s: building main next." | tee -a "$GITHUB_STEP_SUMMARY"
+          gh workflow run internal.yml --repo "$GITHUB_REPOSITORY" --ref main
+
   # release.yml's TestFlight job, from main, numbered by its run; TestFlight's internal testers get
   # every build. Nightly, when the iPhone app changed in the last day, and by hand.
   ios:
