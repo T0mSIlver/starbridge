@@ -83,15 +83,6 @@ export function next(f: Facts): string[] {
   );
   out.push(f.iosMainOn ? "iPhone main: with the nightly" : "iPhone main: off, awaiting Apple");
   out.push(`Next rc: ${f.stagingSinceRc ?? "unknown"} commits on staging`);
-  const rc = newest(f.releases, "rc");
-  const fin = newest(f.releases, "final");
-  if (rc && (!fin || rc.version.split("-")[0] !== fin.version)) {
-    const age = f.now.getTime() - Date.parse(rc.shipped);
-    const day = age >= 86_400_000 ? "done" : `${hours(86_400_000 - age)} left`;
-    out.push(
-      `${rc.version} needs a day on testers (${day}), no open regression (${f.openRegressions ?? "unknown"} open), your yes`,
-    );
-  }
   out.push("Mac apps check every 6 h");
   out.push("Play Alpha: after Play's review");
   return out;
@@ -102,6 +93,67 @@ export function newest(r: Releases, ring: "rc" | "final") {
     .filter((e) => e.ring === ring)
     .sort((a, b) => b.shipped.localeCompare(a.shipped))[0];
 }
+
+/** An rc is promoted after a day on testers. */
+const CLOCK_MS = 86_400_000;
+
+export type Promotion = {
+  final?: string;
+  /** The newest rc, unless its version is already out as a final. */
+  candidate?: { version: string; shipped: Date };
+  /** The final it would become, and the rc that new work then goes to. */
+  becomes?: string;
+  nextRc?: string;
+  /** The newest rc's time plus a day: a newer rc moves it. */
+  earliest?: Date;
+  clockLeftMs?: number;
+  regressions?: number;
+  verdict: string;
+};
+
+export function promotion(f: Facts): Promotion {
+  const rc = newest(f.releases, "rc");
+  const fin = newest(f.releases, "final");
+  const base = rc?.version.split("-")[0];
+  if (!rc || !base || base === fin?.version)
+    return { final: fin?.version, regressions: f.openRegressions, verdict: "Nothing to promote" };
+  const shipped = new Date(rc.shipped);
+  const earliest = new Date(shipped.getTime() + CLOCK_MS);
+  const clockLeftMs = Math.max(0, earliest.getTime() - f.now.getTime());
+  const [a, b, c] = base.split(".").map(Number) as [number, number, number];
+  const reg = f.openRegressions;
+  const verdict = reg
+    ? `Blocked: ${reg} open regression${reg === 1 ? "" : "s"}`
+    : clockLeftMs > 0
+      ? `Waiting: ${hours(clockLeftMs)} left on the clock`
+      : reg === undefined
+        ? "Regressions unknown: check before you say yes"
+        : "Ready for your yes";
+  return {
+    final: fin?.version,
+    candidate: { version: rc.version, shipped },
+    becomes: base,
+    nextRc: `${a}.${b}.${c + 1}-rc.1`,
+    earliest,
+    clockLeftMs,
+    regressions: reg,
+    verdict,
+  };
+}
+
+// What promotion changes for each app (spec/releases.md, "rcs for testers, finals for everyone").
+const WHAT_CHANGES: [string, string, string][] = [
+  ["Server and web", "Runs the rc", "Nothing new"],
+  [
+    "Android",
+    "Play Alpha, GitHub prerelease",
+    "GitHub latest (Obtainium), Play production once open",
+  ],
+  ["iPhone", "TestFlight", "App Store once approved"],
+  ["Mac app", "Apps with Release candidates on", "Every Mac app"],
+  ["CLI", "npm next", "npm latest, Homebrew, starbridge update, install.sh"],
+  ["Claude Code plugin", "Nobody", "Marketplace"],
+];
 
 const PRODUCTS = ["Server and web", "Android", "iPhone", "Mac app", "CLI", "Plugin"] as const;
 
@@ -153,6 +205,32 @@ function cell(
   return `<div class="ring"><p class="label">${label}</p><a class="ver" href="https://github.com/${REPO}/releases/tag/v${e.version}">${e.version}</a><p class="meta">${commit(f.commits[e.version])} · ${both(new Date(e.shipped))}</p><p class="where">${esc(where(p, e, f))}</p></div>`;
 }
 
+function promotionHtml(f: Facts): string {
+  const p = promotion(f);
+  const lines = [`Final: ${p.final ?? "none yet"} (everyone).`];
+  if (!p.candidate || !p.earliest || p.clockLeftMs === undefined || !p.becomes) {
+    lines.push("Candidate: none. The newest rc is already out as a final.");
+    return `<div class="card promo"><p class="verdict">${esc(p.verdict)}</p>${lines.map((l) => `<p>${esc(l)}</p>`).join("")}</div>`;
+  }
+  lines.push(
+    `Candidate: ${p.candidate.version} (testers), out ${hours(f.now.getTime() - p.candidate.shipped.getTime())}, ${p.regressions === undefined ? "regressions unknown" : `${p.regressions} regression${p.regressions === 1 ? "" : "s"} open`}.`,
+  );
+  const checks = [
+    `A day since the newest rc: ${p.clockLeftMs > 0 ? `${hours(p.clockLeftMs)} left` : "done"}.`,
+    `No open regression issue: ${p.regressions ?? "unknown"} open.`,
+    "Your yes on a card.",
+  ];
+  const rows = WHAT_CHANGES.map(
+    ([name, now, then]) =>
+      `<div class="chg"><p class="name">${esc(name)}</p><p><span class="label">Now, rc</span><br>${esc(now)}</p><p><span class="label">After promotion</span><br>${esc(then)}</p></div>`,
+  ).join("");
+  return `<div class="card promo"><p class="verdict">${esc(p.verdict)}</p>${lines.map((l) => `<p>${esc(l)}</p>`).join("")}
+<p class="label">Earliest</p><p>${esc(both(p.earliest))}. A newer rc restarts the clock.</p>
+<p class="label">Needs</p><ul>${checks.map((c) => `<li>${esc(c)}</li>`).join("")}</ul>
+<p class="label">What it is</p><p>Promotion republishes ${esc(p.candidate.version)}'s code as ${esc(p.becomes)}, with no rebuild. New work then goes to ${esc(p.nextRc ?? "")}.</p>
+<div class="chgs">${rows}</div></div>`;
+}
+
 export function render(f: Facts): string {
   const rc = newest(f.releases, "rc");
   const fin = newest(f.releases, "final");
@@ -168,6 +246,7 @@ export function render(f: Facts): string {
 <style>${CSS}</style></head><body><main>
 <header><span class="brand">${MARK}Starbridge ops</span></header>
 <div class="card intro"><h1>Rings</h1><p>Main: staging, your phone.<br>rc: testers, starbridge.run.<br>Final: everyone.</p><p><a href="https://github.com/${REPO}/blob/main/spec/releases.md">spec/releases.md</a> · <a href="${POLICY}">Policy</a></p></div>
+<section><h2>Promotion</h2>${promotionHtml(f)}</section>
 <section><h2>Now</h2><div class="card prods">${rows}</div></section>
 <section><h2>Next</h2><div class="card next"><ul>${nextRows}</ul></div></section>
 <footer><p>As of ${both(f.now)}</p></footer></main></body></html>`;
@@ -198,9 +277,12 @@ section{margin:0 0 40px}
 .ring .label{margin:0 0 2px}.ring p{margin:2px 0 0}
 .ver{display:block;font:500 18px/24px var(--sans);font-variant-numeric:tabular-nums}.ver.none{color:var(--fg3);font-weight:400}
 .where{font:400 14px/20px var(--sans)}
+.promo{padding:16px 24px 8px}.promo p{margin:0 0 8px}.promo .label{margin:16px 0 4px}.promo ul{margin:0 0 8px;padding-left:20px}.promo li{padding:2px 0}
+.verdict{font:500 18px/24px var(--sans)}
+.chgs{display:grid;grid-template-columns:repeat(3,1fr);gap:0 16px;margin-top:8px}.chg{padding:12px 0;border-top:1px solid var(--line);grid-column:1/-1;display:grid;grid-template-columns:subgrid}.chg p{margin:0}.chg .name{font:500 16px/24px var(--sans)}.chg .label{font-size:13px}
 .next{padding:16px 24px}.next ul{margin:0;padding-left:20px}.next li{padding:4px 0}
 footer{color:var(--fg2);font:400 13px/20px var(--sans)}
-@media (max-width:700px){main{padding:24px 16px 48px}.intro{padding:20px;margin:24px 0 32px}.prods,.next{padding-left:16px;padding-right:16px}.rings{grid-template-columns:1fr;gap:12px}}`;
+@media (max-width:700px){main{padding:24px 16px 48px}.intro{padding:20px;margin:24px 0 32px}.prods,.next,.promo{padding-left:16px;padding-right:16px}.chgs{grid-template-columns:1fr}.chg{grid-template-columns:1fr;gap:6px}.rings{grid-template-columns:1fr;gap:12px}}`;
 
 function sh(cmd: string, ...args: string[]): string {
   const r = spawnSync(cmd, args, { encoding: "utf8" });
