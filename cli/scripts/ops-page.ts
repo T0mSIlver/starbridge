@@ -35,19 +35,28 @@ export type Facts = {
 
 const short = (s?: string) => (s ? s.slice(0, 8) : "unknown");
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
-const zone = (d: Date, tz: string) =>
-  new Intl.DateTimeFormat("en-GB", {
-    timeZone: tz,
-    weekday: "short",
-    day: "numeric",
-    month: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  }).format(d);
+/** "Wed 14 Oct, 05:00" in a zone, built from parts so every ICU build prints the same. */
+const zone = (d: Date, tz: string) => {
+  const p = Object.fromEntries(
+    new Intl.DateTimeFormat("en-GB", {
+      timeZone: tz,
+      weekday: "short",
+      day: "numeric",
+      month: "short",
+      hour: "2-digit",
+      minute: "2-digit",
+      hourCycle: "h23",
+    })
+      .formatToParts(d)
+      .map((x) => [x.type, x.value]),
+  );
+  return { day: `${p.weekday} ${p.day} ${p.month}`, time: `${p.hour}:${p.minute}` };
+};
 /** A time in Europe/Paris and UTC. */
-export const both = (d: Date) =>
-  `${zone(d, "Europe/Paris")} Paris, ${zone(d, "UTC").split(", ")[1]} UTC`;
+export const both = (d: Date) => {
+  const paris = zone(d, "Europe/Paris");
+  return `${paris.day}, ${paris.time} Paris, ${zone(d, "UTC").time} UTC`;
+};
 const commit = (sha?: string) =>
   sha
     ? `<a href="https://github.com/${REPO}/commit/${esc(sha)}"><code>${short(sha)}</code></a>`
