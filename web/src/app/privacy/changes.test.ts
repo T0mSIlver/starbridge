@@ -1,15 +1,9 @@
 import { expect, test } from "bun:test";
-import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { sourceHash } from "@/lib/legalChanges";
 import { pageHash, privacyChanges } from "./changes";
 
-const pageText = () =>
-  readFileSync(new URL("./page.tsx", import.meta.url), "utf8")
-    .replace(/\s+/g, " ")
-    .trim();
-
 test("an edit to /privacy comes with a dated entry in its Changes list", () => {
-  const hash = createHash("sha256").update(pageText()).digest("hex");
+  const hash = sourceHash(new URL("./page.tsx", import.meta.url));
   expect(
     hash,
     `page.tsx changed: add an entry to privacyChanges in changes.ts dated today, saying what changed, then set pageHash to "${hash}"`,

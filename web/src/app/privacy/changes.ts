@@ -1,9 +1,11 @@
+import type { LegalChange } from "@/lib/legalChanges";
+
 /**
  * What /privacy promises under "Changes": each change is posted with a new date. Newest first.
  * Add an entry here for every edit to page.tsx, dated that day: the page's "Last updated" line is
  * the first entry's date, and changes.test.ts fails while `pageHash` doesn't match page.tsx.
  */
-export const privacyChanges: readonly { date: string; text: string }[] = [
+export const privacyChanges: readonly LegalChange[] = [
   {
     date: "2026-10-14",
     text: "Oracle also receives the database's table definitions, which hold no data, and runs our test server, which holds made-up data. Cloudflare serves the status page.",
@@ -35,26 +37,5 @@ export const privacyChanges: readonly { date: string; text: string }[] = [
   { date: "2026-10-05", text: "First published." },
 ];
 
-/** SHA-256 of page.tsx with its whitespace collapsed; changes.test.ts recomputes it. */
-export const pageHash = "ca54a211d2366937f689bd5d3917d6ed14cee646b794411fffc2569de1b2635a";
-
-const MONTHS = [
-  "January",
-  "February",
-  "March",
-  "April",
-  "May",
-  "June",
-  "July",
-  "August",
-  "September",
-  "October",
-  "November",
-  "December",
-];
-
-/** "2026-10-14" as "14 October 2026". */
-export function longDate(iso: string): string {
-  const [y, m, d] = iso.split("-").map(Number);
-  return `${d} ${MONTHS[(m ?? 1) - 1]} ${y}`;
-}
+/** SHA-256 of page.tsx with its whitespace collapsed (sourceHash); changes.test.ts recomputes it. */
+export const pageHash = "bf4ee7a5615df60b31eb82478e5b7e36e57f71d77242ffbdce81b0f3cadba123";
