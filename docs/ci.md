@@ -6,8 +6,8 @@ and Android builds on main and in releases run on their own runner, `ANDROID_RUN
 
 ## Pools and labels
 
-Each box is a Debian 13 LXC container with Docker. Its runners take one job each and start the
-next one from a clean slate.
+Each box is a Debian 13 LXC container with Docker. Each runner takes one job; before the next, its slot
+wipes that job's folders, and only those (below).
 
 | Box (SSH host) | Runners | Labels besides `self-hosted, linux, x64, starbridge, docker` |
 |---|---|---|
@@ -19,8 +19,9 @@ next one from a clean slate.
   and nothing else.
 - `pr` runs pull requests from this repository's own branches, except Dependabot's. Forks'
   pull requests, Dependabot's and dispatched CI runs stay on GitHub's runners.
-- No pull request job reaches a `trusted` runner or `ANDROID_RUNNER`. Docker's daemon and cache
-  outlive a job, so the two pools never share a box.
+- No pull request job reaches a `trusted` runner or `ANDROID_RUNNER`. A job can use Docker, which
+  makes it root on its box (below), and Docker's daemon and cache outlive it, so the two pools
+  never share a box.
 
 A workflow picks a pool from a repository variable holding a JSON array of labels, and falls back
 to GitHub's runner when the variable is unset:
@@ -62,14 +63,19 @@ down, take the line out.
 
 - The setup files are in [`.github/runners`](../.github/runners). Each box runs one systemd unit
   per runner, `gh-runner@<n>`, as the user `runner`, who is in the `docker` group and has no sudo.
+  The `docker` group is root in all but name: a job can mount the box's whole filesystem into a
+  container. So a pull request job can change its box for the jobs after it and read the other
+  slots' next registrations. The PR pool's boxes run nothing else, which keeps that among pull
+  requests.
 - A runner registers with a just-in-time config: a single-use registration whose labels GitHub
   fixes when it is made. The runner takes one job, then GitHub removes it.
 - The boxes hold no GitHub credential. `feed.sh` runs every 15 s from a user timer on the machine
   where `gh` is logged in as the repository's owner. It makes a registration for every runner
   slot that has none, hands it over SSH, and deletes offline registrations no slot holds.
-- Before each job, `slot.sh` deletes everything the last one left except the tool cache
-  (`_work/_tool`: Node, Bun and pnpm's store), and gives the job its own home and temp
-  folder. It drops the tool cache too when the disk is 80% full.
+- Before each job, `slot.sh` deletes the last job's folders: its `_work` except the tool cache
+  (`_work/_tool`: Node, Bun and pnpm's store), and its home and temp folder. It drops the tool
+  cache too when the disk is 80% full. Docker's containers, images and volumes, and anything a job
+  wrote elsewhere on the box, stay.
 - Every night `gh-runner-cleanup.timer` prunes Docker images, containers and build cache unused
   for three days, and all unused ones when the disk is 80% full.
 
