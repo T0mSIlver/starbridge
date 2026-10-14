@@ -10,19 +10,47 @@ const PERIODS = {
 
 /** Rows each delete takes at once; the server answers requests between batches (#585). */
 const BATCH = 1000;
+/**
+ * Stored bytes each delete takes at once, at least one item: a thousand 2 MB questions would
+ * otherwise go in one transaction, holding the write lock and growing the WAL by 2 GB (#1736).
+ */
+const BATCH_BYTES = 32 * 1024 * 1024;
+
+/** Batch limits: rows and stored bytes. */
+type Batch = { rows: number; bytes: number };
+
+/** The leading rows of `rows` whose sizes fit `bytes`, at least one. */
+function fitting<T extends { size: number }>(rows: T[], bytes: number): T[] {
+  let total = 0;
+  let n = 0;
+  for (const r of rows) {
+    total += r.size;
+    if (n > 0 && total > bytes) break;
+    n += 1;
+  }
+  return rows.slice(0, n);
+}
+
+const pause = () => new Promise((r) => setImmediate(r));
 
 /** Runs `DELETE FROM items WHERE <where>` a batch at a time, yielding to requests between. */
 async function deleteItems(
   db: Database,
   where: string,
   params: string[],
-  batch: number,
+  batch: Batch,
 ): Promise<void> {
+  const next = db.query(`SELECT rowid AS r, size FROM items WHERE ${where} LIMIT ${batch.rows}`);
   const del = db.query(
-    `DELETE FROM items WHERE rowid IN (SELECT rowid FROM items WHERE ${where} LIMIT ${batch})`,
+    `DELETE FROM items WHERE rowid IN (SELECT value FROM json_each(?)) AND (${where})`,
   );
-  // Until a batch finds nothing: `changes` counts the boxes each item takes with it too.
-  while (del.run(...params).changes > 0) await new Promise((r) => setImmediate(r));
+  // Until a batch finds nothing.
+  for (;;) {
+    const rows = fitting(next.all(...params) as { r: number; size: number }[], batch.bytes);
+    if (rows.length === 0) return;
+    del.run(JSON.stringify(rows.map((x) => x.r)), ...params);
+    await pause();
+  }
 }
 
 /**
@@ -35,22 +63,46 @@ async function deleteOrphans(
   db: Database,
   where: string,
   params: string[],
-  batch: number,
+  batch: Batch,
 ): Promise<void> {
   const next = db.query(
-    `SELECT rowid AS r FROM items WHERE rowid > ? AND ${where} ORDER BY rowid LIMIT ${batch}`,
+    `SELECT rowid AS r, size FROM items WHERE rowid > ? AND (${where}) ORDER BY rowid LIMIT ${batch.rows}`,
   );
   // Checks `where` again, so a row that changed since `next` read it stays.
-  const del = db.query(`DELETE FROM items WHERE rowid > ? AND rowid <= ? AND ${where}`);
+  const del = db.query(`DELETE FROM items WHERE rowid > ? AND rowid <= ? AND (${where})`);
   for (let after = 0; ; ) {
-    const rows = next.all(after, ...params) as { r: number }[];
+    const found = next.all(after, ...params) as { r: number; size: number }[];
+    const rows = fitting(found, batch.bytes);
     const last = rows.at(-1)?.r;
     if (last === undefined) return;
     del.run(after, last, ...params);
-    if (rows.length < batch) return;
+    if (found.length < batch.rows && rows.length === found.length) return;
     after = last;
-    await new Promise((r) => setImmediate(r));
+    await pause();
   }
+}
+
+/** Stored bytes of every account's items together, as the server-wide cap counts them. */
+function serverBytes(db: Database): number {
+  return (
+    db.query("SELECT COALESCE(SUM(bytes), 0) AS bytes FROM item_totals").get() as {
+      bytes: number;
+    }
+  ).bytes;
+}
+
+/**
+ * Deletes every item of `account`, a batch at a time, for `bun server.js purge` (#1736); the
+ * account, its devices and machines stay. Returns the stored bytes freed.
+ */
+export async function purgeAccount(
+  db: Database,
+  account: string,
+  batch: Batch = { rows: BATCH, bytes: BATCH_BYTES },
+): Promise<number> {
+  const before = serverBytes(db);
+  await deleteItems(db, "account_id = ?", [account], batch);
+  return before - serverBytes(db);
 }
 
 /**
@@ -61,8 +113,10 @@ export async function sweepStorage(
   db: Database,
   limits: Limits,
   now = Date.now(),
-  batch = BATCH,
+  rows = BATCH,
+  bytes = BATCH_BYTES,
 ): Promise<void> {
+  const batch = { rows, bytes };
   const before = (period: RetentionPeriod) => new Date(now - limits[PERIODS[period]]).toISOString();
   const aged: string[] = [];
   const params: string[] = [];
@@ -90,13 +144,31 @@ export async function sweepStorage(
     )
     .all(limits.floodUnanswered) as { a: string }[];
   const floodBefore = new Date(now - limits.floodRetention).toISOString();
-  for (const { a } of flooded)
-    await deleteItems(
+  const shorten = (account: string) =>
+    deleteItems(
       db,
       "kind = 'decision' AND answered_at IS NULL AND received_at < ? AND account_id = ?",
-      [floodBefore, a],
+      [floodBefore, account],
       batch,
     );
+  for (const { a } of flooded) await shorten(a);
+  // A server near its serverBytes refuses every machine's items (#1736). The accounts holding the
+  // most keep their unanswered decisions only floodRetention too, the largest first, until the
+  // server is back under 90% of it: a few accounts at their cap fill it, which would otherwise
+  // last the 30 days unanswered decisions are kept.
+  const roomy = limits.serverBytes * 0.9;
+  if (serverBytes(db) > roomy) {
+    const holders = db
+      .query(
+        `SELECT account_id AS a FROM item_totals GROUP BY account_id
+         ORDER BY SUM(bytes) DESC LIMIT 100`,
+      )
+      .all() as { a: string }[];
+    for (const { a } of holders) {
+      if (serverBytes(db) <= roomy) break;
+      await shorten(a);
+    }
+  }
   await deleteOrphans(
     db,
     `+kind IN (${marks(fromActive)}) AND NOT EXISTS (SELECT 1 FROM members m

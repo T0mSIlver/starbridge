@@ -25,7 +25,7 @@ import {
 import { openDb } from "../src/db";
 import { DEFAULT_LIMITS, type Limits } from "../src/limits";
 import { RateLimiter } from "../src/ratelimit";
-import { sweepStorage } from "../src/retention";
+import { purgeAccount, sweepStorage } from "../src/retention";
 import {
   type Actor,
   append,
@@ -643,4 +643,82 @@ test("forgetting a deleted account keeps another account's windows whose member 
   expect(limiter.allow("items:acct-1:m1", 1, 60_000)).toBe(true);
   expect(limiter.allow("items:acct-2:acct-1x", 1, 60_000)).toBe(false);
   expect(limiter.allow("bytes:acct-12", 1, 60_000)).toBe(false);
+});
+
+/** A database with `items` as [account, id, size, received days ago, answered days ago?]. */
+function stored(items: [string, string, number, number, number?][]) {
+  const db = openDb(":memory:");
+  const now = Date.now();
+  const iso = (days: number) => new Date(now - days * DAY).toISOString();
+  for (const a of new Set(items.map((i) => i[0])))
+    db.query("INSERT INTO accounts (id, created_at) VALUES (?, ?)").run(a, iso(0));
+  const add = db.query(
+    "INSERT INTO items (seq, account_id, id, kind, from_id, received_at, answered_at, size) VALUES (?, ?, ?, 'decision', 'm', ?, ?, ?)",
+  );
+  items.forEach(([a, id, size, received, answered], i) => {
+    add.run(i + 1, a, id, iso(received), answered === undefined ? null : iso(answered), size);
+  });
+  const ids = () =>
+    (db.query("SELECT id FROM items ORDER BY seq").all() as { id: string }[]).map((r) => r.id);
+  return { db, now, ids };
+}
+
+test("near serverBytes, the largest accounts keep unanswered decisions only a week, until under 90% (#1736)", async () => {
+  const { db, now, ids } = stored([
+    ["big", "big-old", 600, 8],
+    ["big", "big-new", 250, 1],
+    ["mid", "mid-old", 120, 8],
+    ["small", "small-old", 30, 8],
+  ]);
+  // 1000 of 1000 bytes: the biggest account's old question goes, which is enough.
+  await sweepStorage(db, { ...DEFAULT_LIMITS, serverBytes: 1000 }, now);
+  expect(ids()).toEqual(["big-new", "mid-old", "small-old"]);
+  // Under 90% of a smaller cap only once the next largest goes too.
+  await sweepStorage(db, { ...DEFAULT_LIMITS, serverBytes: 400 }, now);
+  expect(ids()).toEqual(["big-new", "small-old"]);
+});
+
+test("the sweep deletes in batches bounded by bytes, each at least one item (#1736)", async () => {
+  const { db, now, ids } = stored([
+    ["a", "q1", 10, 40],
+    ["a", "q2", 10, 40],
+    ["a", "q3", 25, 40],
+    ["a", "kept", 10, 1],
+  ]);
+  let deletes = 0;
+  const watched = new Proxy(db, {
+    get(target, key) {
+      const value = Reflect.get(target, key, target);
+      if (key !== "query") return typeof value === "function" ? value.bind(target) : value;
+      return (sql: string) => {
+        const q = target.query(sql);
+        if (!sql.startsWith("DELETE FROM items WHERE rowid IN")) return q;
+        return new Proxy(q, {
+          get(t, k) {
+            const v = Reflect.get(t, k, t);
+            if (k !== "run") return typeof v === "function" ? v.bind(t) : v;
+            return (...args: unknown[]) => {
+              deletes += 1;
+              return (v as (...a: unknown[]) => unknown).apply(t, args);
+            };
+          },
+        });
+      };
+    },
+  });
+  // 20 bytes a batch: q1 and q2 together, then q3 alone though it is larger.
+  await sweepStorage(watched, DEFAULT_LIMITS, now, 1000, 20);
+  expect(ids()).toEqual(["kept"]);
+  expect(deletes).toBe(2);
+});
+
+test("purging an account deletes its items and no one else's (#1736)", async () => {
+  const { db, ids } = stored([
+    ["a", "a1", 100, 1],
+    ["b", "b1", 50, 1],
+    ["a", "a2", 200, 1, 0],
+  ]);
+  expect(await purgeAccount(db, "a", { rows: 1, bytes: 1 })).toBe(300);
+  expect(ids()).toEqual(["b1"]);
+  expect(db.query("SELECT 1 FROM accounts WHERE id = 'a'").get()).not.toBeNull();
 });
