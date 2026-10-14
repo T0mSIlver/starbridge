@@ -184,6 +184,18 @@ export const DEFAULT_LIMITS = {
   relaySendsPerClient: 4,
   relaySendsPerNetwork: 8,
   relaySendsPerHost: 16,
+  /**
+   * Web Pushes in flight from this server to one push service host, its own and relayed ones
+   * together (#1738): a push may take pushTimeoutMs, so a host that holds them open cannot pile
+   * up requests; past it a push fails. FCM's Web Push host, the busiest, sees a few at a time.
+   */
+  pushesPerHost: 32,
+  /**
+   * Push service hosts an account's Web Push and UnifiedPush subscriptions may name (#1738), so
+   * an account cannot aim the server's pushes at many hosts. Chrome, Firefox, Safari, Edge and a
+   * UnifiedPush distributor use five.
+   */
+  pushHosts: 8,
 
   /** Push subscription writes per account. */
   pushSubscribes: [30, MINUTE] as RateWindow,
