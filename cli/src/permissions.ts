@@ -117,24 +117,29 @@ const SECRET_NAME = /^[A-Za-z0-9_-]*(?:KEY|TOKEN|SECRET|PASSWORD|PASSWD)[A-Za-z0
 /**
  * `FOO_KEY=…`, `GITHUB_TOKEN: …`, `API_KEY = '…'`, `--password=…`: the value goes when it is one
  * token, quoted or not. An `=` takes no space after it unless it has one before, since
- * `X_KEY= cmd` runs `cmd`. A single-quoted value ends at the next quote, as in the shell.
+ * `X_KEY= cmd` runs `cmd`. A single-quoted value ends at the next quote, as in the shell. The
+ * separator spans spaces and tabs only: across a line break the value is the next line's command.
  */
 const ASSIGNMENT = new RegExp(
-  `\\b([A-Za-z0-9_]*(?:KEY|TOKEN|SECRET|PASSWORD|PASSWD)[A-Za-z0-9_]*)(\\s*:\\s*|\\s+=\\s*|=)("${TOKEN}*"|'${TOKEN}*'|${TOKEN}+)`,
+  `\\b([A-Za-z0-9_]*(?:KEY|TOKEN|SECRET|PASSWORD|PASSWD)[A-Za-z0-9_]*)([ \\t]*:[ \\t]*|[ \\t]+=[ \\t]*|=)("${TOKEN}*"|'${TOKEN}*'|${TOKEN}+)`,
   "gi",
 );
 
 /** `Authorization: <scheme> …` and its proxy twin: the credential goes, the scheme stays. */
 const AUTH_HEADER = new RegExp(
-  `\\b((?:Proxy-)?Authorization\\s*:\\s*(?:[A-Za-z-]+\\s+)?)${TOKEN}+`,
+  `\\b((?:Proxy-)?Authorization[ \\t]*:[ \\t]*(?:[A-Za-z-]+[ \\t]+)?)${TOKEN}+`,
   "gi",
 );
 
 /** The password in a URL's userinfo, `https://user:pass@host`. */
 const URL_PASSWORD = /\b([a-z][a-z0-9+.-]*:\/\/[A-Za-z0-9_.~%!*+-]*:)[A-Za-z0-9_.~%!*+=,-]+@/gi;
 
-/** Removes secrets from one string. */
-export function redactText(text: string): string {
+/**
+ * Removes secrets from one string. With `shell`, the string is a shell command and no command
+ * word is redacted: a device's Allow runs what it shows, so `[redacted] -rf ~` must not hide
+ * what runs.
+ */
+export function redactText(text: string, shell = false): string {
   let out = text.replace(PEM_BODY, (all: string, begin: string, body: string) => {
     const headers = (body.match(PEM_HEADER) ?? []).join("");
     // A BEGIN line with no base64 after it is only text about a key.
@@ -142,11 +147,214 @@ export function redactText(text: string): string {
       ? `${begin}${headers}\n${REDACTED}`
       : all;
   });
-  for (const p of SECRET_PATTERNS) out = out.replace(p, REDACTED);
-  return out
-    .replace(AUTH_HEADER, (_, head: string) => `${head}${REDACTED}`)
-    .replace(URL_PASSWORD, (_, head: string) => `${head}${REDACTED}@`)
-    .replace(ASSIGNMENT, (_, name: string, sep: string) => `${name}${sep}${REDACTED}`);
+  // Replaces each match of `re` whose secret, from `skip` characters into the match, is no
+  // command word of the text as it stands.
+  const pass = (re: RegExp, skip: (m: string[]) => number, to: (m: string[]) => string) => {
+    const words = shell ? commandWords(out) : [];
+    out = out.replace(re, (...args: unknown[]) => {
+      // The arguments are the match, its groups, then its offset and the whole text.
+      const m = args.slice(0, -2) as string[];
+      const at = args[args.length - 2] as number;
+      const from = at + skip(m);
+      const end = at + (m[0] as string).length;
+      return words.some((w) => w.start < end && from < w.end) ? (m[0] as string) : to(m);
+    });
+  };
+  for (const p of SECRET_PATTERNS)
+    pass(
+      p,
+      () => 0,
+      () => REDACTED,
+    );
+  pass(
+    AUTH_HEADER,
+    (m) => (m[1] as string).length,
+    (m) => `${m[1]}${REDACTED}`,
+  );
+  pass(
+    URL_PASSWORD,
+    () => 0,
+    (m) => `${m[1]}${REDACTED}@`,
+  );
+  pass(
+    ASSIGNMENT,
+    (m) => (m[1] as string).length + (m[2] as string).length,
+    (m) => `${m[1]}${m[2]}${REDACTED}`,
+  );
+  return out;
+}
+
+// --- Command words ------------------------------------------------------------
+
+/** Words after which a command still starts: `! cmd`, `then cmd`, `{ cmd`. */
+const KEYWORDS = new Set([
+  "!",
+  "{",
+  "}",
+  "if",
+  "then",
+  "else",
+  "elif",
+  "fi",
+  "do",
+  "done",
+  "while",
+  "until",
+  "time",
+]);
+
+/**
+ * Commands that run their arguments, or a command named in them: every word after one counts as
+ * a command word, since `sudo -u root <cmd>` runs `<cmd>`.
+ */
+const WRAPPERS = new Set([
+  "sudo",
+  "doas",
+  "su",
+  "env",
+  "exec",
+  "command",
+  "builtin",
+  "eval",
+  "nohup",
+  "nice",
+  "ionice",
+  "timeout",
+  "xargs",
+  "stdbuf",
+  "setsid",
+  "taskset",
+  "chrt",
+  "flock",
+  "watch",
+  "strace",
+  "ltrace",
+  "unbuffer",
+  "time",
+  "sh",
+  "bash",
+  "zsh",
+  "dash",
+  "ksh",
+  "fish",
+  "ssh",
+  "find",
+  "parallel",
+]);
+
+/** `NAME=value` before a command: the shell assigns it, and the command word comes after. */
+const SHELL_ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*\+?=/;
+
+/** A word the shell runs as a command, or one a wrapper names, with where it sits in the text. */
+export interface CommandWord {
+  word: string;
+  start: number;
+  end: number;
+}
+
+/**
+ * The command words of a shell command line: the first word of each command, after line starts,
+ * `;`, `|`, `&`, `(`, `)`, backticks and `$(`, past `NAME=value` assignments and keywords, and
+ * every word of a command a wrapper (`sudo`, `sh`, `xargs`) starts; also inside double quotes'
+ * `$(…)` and backticks. It reads as the shell does as far as hiding a command goes; where it
+ * cannot tell, it takes a word for a command word, which only keeps the word in view.
+ */
+export function commandWords(text: string, offset = 0): CommandWord[] {
+  const out: CommandWord[] = [];
+  const n = text.length;
+  let i = 0;
+  let start = true;
+  let wrapped = false;
+  const separator = (c: string | undefined) =>
+    c === ";" ||
+    c === "|" ||
+    c === "&" ||
+    c === "(" ||
+    c === ")" ||
+    c === "`" ||
+    c === "\n" ||
+    c === "\r";
+  /** The end of the `$(…)` whose `(` is at `open`, nesting counted. */
+  const closing = (open: number) => {
+    let depth = 0;
+    for (let j = open; j < n; j++) {
+      if (text[j] === "(") depth++;
+      else if (text[j] === ")" && --depth === 0) return j;
+    }
+    return n;
+  };
+  while (i < n) {
+    const c = text[i] as string;
+    if (c === " " || c === "\t") {
+      i++;
+      continue;
+    }
+    if (c === "\\" && (text[i + 1] === "\n" || text[i + 1] === "\r")) {
+      i += 2;
+      continue;
+    }
+    if (separator(c) || (c === "$" && text[i + 1] === "(")) {
+      // A substitution where a command starts runs its output as the command.
+      if (start && (c === "`" || c === "$"))
+        out.push({ word: c, start: offset + i, end: offset + i + 1 });
+      start = true;
+      wrapped = false;
+      i += c === "$" ? 2 : 1;
+      continue;
+    }
+    if (c === "#") {
+      while (i < n && text[i] !== "\n") i++;
+      continue;
+    }
+    const s = i;
+    while (i < n) {
+      const ch = text[i] as string;
+      if (ch === "\\") i += 2;
+      else if (ch === "'") {
+        const j = text.indexOf("'", i + 1);
+        i = j < 0 ? n : j + 1;
+      } else if (ch === '"') {
+        i++;
+        while (i < n && text[i] !== '"') {
+          if (text[i] === "\\") i += 2;
+          else if (text[i] === "$" && text[i + 1] === "(") {
+            const end = closing(i + 1);
+            out.push(...commandWords(text.slice(i + 2, end), offset + i + 2));
+            i = end + 1;
+          } else if (text[i] === "`") {
+            const j = text.indexOf("`", i + 1);
+            const end = j < 0 ? n : j;
+            out.push(...commandWords(text.slice(i + 1, end), offset + i + 1));
+            i = end + 1;
+          } else i++;
+        }
+        i++;
+      } else if (ch === " " || ch === "\t" || separator(ch) || (ch === "$" && text[i + 1] === "("))
+        break;
+      else i++;
+    }
+    i = Math.min(i, n);
+    const word = text.slice(s, i);
+    if (start && SHELL_ASSIGNMENT.test(word)) continue;
+    if (start || wrapped) {
+      out.push({ word, start: offset + s, end: offset + i });
+      if (WRAPPERS.has(word.replace(/^.*\//, ""))) wrapped = true;
+      if (!KEYWORDS.has(word)) start = false;
+    }
+  }
+  return out;
+}
+
+/**
+ * Whether redacting `command` into `shown` changed what a device would read as the commands it
+ * runs: a command word differs, or one runs a variable or substitution while something was
+ * redacted (`X_KEY=rm; $X_KEY -rf ~`). Such a command stays at the keyboard.
+ */
+export function hidesCommand(command: string, shown: string): boolean {
+  if (command === shown) return false;
+  const a = commandWords(command).map((w) => w.word);
+  const b = commandWords(shown).map((w) => w.word);
+  return a.length !== b.length || a.some((w, i) => w !== b[i]) || b.some((w) => /[$`]/.test(w));
 }
 
 /**
@@ -318,6 +526,31 @@ export function inputHashOf(keys: MemberKeys, input: unknown): string {
   return hashInput(JSON.stringify(input), keys.sign.privateKey);
 }
 
+/**
+ * The command a shell tool runs, which the devices show as a command line: Claude Code's, Codex's,
+ * Pi's and Antigravity's shell, and an opencode `external_directory` ask from its shell.
+ */
+function shellCommand(tool: string, input: unknown): string | undefined {
+  if (!isShell(tool) && tool !== "external_directory") return undefined;
+  const command = (input as { command?: unknown } | null)?.command;
+  return typeof command === "string" ? command : undefined;
+}
+
+/**
+ * `input` with its secrets redacted. A command's are redacted as a command line, never in a
+ * command word; a command whose redaction still changes what a device reads as its commands
+ * stays at the keyboard.
+ */
+function redactInput(tool: string, input: unknown): unknown {
+  const safe = redactValue(input);
+  const command = shellCommand(tool, input);
+  if (command === undefined) return safe;
+  const shown = redactText(command, true);
+  if (hidesCommand(command, shown))
+    throw new UsageError("redacting the command would hide what it runs: it stays at the keyboard");
+  return { ...(safe as Record<string, unknown>), command: shown };
+}
+
 export function buildPermission(
   hook: PermissionHookInput,
   opts: {
@@ -342,7 +575,7 @@ export function buildPermission(
   const project = opts.source.project;
   // The summary and description come from the redacted input too: key-name redaction is
   // `redactValue`'s alone.
-  const safe = redactValue(raw);
+  const safe = redactInput(tool, raw);
   const description = (safe as { description?: unknown }).description;
   const ttl = Math.min(PERMISSION_TTL_MS, Math.max(1000, opts.waitMs));
   const permission = {
@@ -378,6 +611,10 @@ export function buildPermission(
       ...(opts.source.links?.length ? { links: opts.source.links } : {}),
     },
   };
+  // A device's Allow runs the whole command, so it must show whole, not cut to fit.
+  const command = shellCommand(tool, safe);
+  if (command !== undefined && JSON.parse(permission.input).command !== visible(command))
+    throw new UsageError("the command is too long to show whole: it stays at the keyboard");
   try {
     // Agents' text, cut to length, can hold a lone surrogate, which the protocol refuses (#1090).
     return { permission: parseWith(PermissionSchema, toWellFormed(permission)), updates };

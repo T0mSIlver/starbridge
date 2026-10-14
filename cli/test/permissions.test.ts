@@ -645,6 +645,61 @@ test("redaction never hides code the owner approves", () => {
   ).toEqual([]);
 });
 
+test("redaction never hides a command word; a command it would hide stays at the keyboard", () => {
+  // A secret's name before a line break or a space no longer takes the next command as its value.
+  for (const command of [
+    "echo X_TOKEN:\nrm -rf ~",
+    "echo X_TOKEN: \n rm -rf ~",
+    "echo Authorization:\nrm -rf ~",
+    "echo Authorization: Bearer\nrm -rf ~",
+    "echo API_KEY =\nrm -rf ~",
+  ]) {
+    const permission = build("Bash", { command });
+    expect(JSON.parse(permission.input).command).toContain("rm -rf ~");
+    expect(permission.summary).toContain("rm -rf ~");
+  }
+  // A secret's shape in command position stays in view.
+  for (const [command, word] of [
+    ["X_TOKEN:abc -rf ~", "X_TOKEN:abc"],
+    ["true; ./X_TOKEN:abc -rf ~", "./X_TOKEN:abc"],
+    ["echo a && ghp_abcdefghijklmnopqrstuvwxyz0123 -rf ~", "ghp_abcdefghijklmnopqrstuvwxyz0123"],
+    ["sudo -u root ./X_TOKEN:abc", "./X_TOKEN:abc"],
+    ['echo "$(X_TOKEN:abc)"', "X_TOKEN:abc"],
+    ["echo `X_TOKEN:abc`", "X_TOKEN:abc"],
+    ["(X_TOKEN:abc)", "X_TOKEN:abc"],
+  ]) {
+    expect(redactText(command as string, true)).toContain(word as string);
+    expect(JSON.parse(build("Bash", { command }).input).command).toContain(word as string);
+  }
+  // A command that runs what was redacted.
+  for (const command of ["X_KEY=rm; $X_KEY -rf ~", "X_KEY=rm; `echo $X_KEY` -rf ~"])
+    expect(() => build("Bash", { command })).toThrow("stays at the keyboard");
+  // Secrets in arguments and assignments still go.
+  const shown = JSON.parse(
+    build("Bash", {
+      command:
+        "GITHUB_TOKEN=ghp_abcdefghijklmnopqrstuvwxyz0123 gh api -H 'Authorization: Bearer abc'",
+    }).input,
+  ).command;
+  expect(shown).toBe("GITHUB_TOKEN=[redacted] gh api -H 'Authorization: Bearer [redacted]'");
+  expect(redactText("printf 'X_TOKEN: abc\n'", true)).toBe("printf 'X_TOKEN: [redacted]\n'");
+  // An opencode ask from its shell holds a command too.
+  expect(() => build("external_directory", { path: "/x", command: "X_KEY=rm; $X_KEY /x" })).toThrow(
+    "stays at the keyboard",
+  );
+  // Outside a command, a line break still ends the value: the next line is not a secret.
+  expect(redactText("X_TOKEN:\nnext line")).toBe("X_TOKEN:\nnext line");
+});
+
+test("a command too long to show whole stays at the keyboard", () => {
+  expect(() => build("Bash", { command: `echo ${"a".repeat(9000)}; rm -rf ~` })).toThrow(
+    "stays at the keyboard",
+  );
+  expect(
+    JSON.parse(build("Bash", { command: `echo ${"a".repeat(5000)}` }).input).command,
+  ).toHaveLength(5005);
+});
+
 test("an unreachable server, bad input or another agent never blocks the hook", async () => {
   const ctx = await machine(false);
   const m = ctx.store.machine();
