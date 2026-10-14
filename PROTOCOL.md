@@ -487,7 +487,7 @@ never rely on that check.
 | `POST /pairings` | new member | `{request, claimHash}`: the request message and BLAKE2b-256 of a random claim secret's text (`claimHash`); 409 if the rendezvous id is taken; 429 `too-many-pairings` when the caller's address holds 50 unapproved pairings, 429 `busy` when the server holds 20000 pairings |
 | `GET /pairings/:rendezvous?wait=<s>` | device | `{request}`; with `wait`, holds until the new member posts and answers 204 if `wait` passes first |
 | `POST /pairings/:rendezvous/approve` | device | `{approval}`; the directory must already hold the new member's entry; 409 `already-paired` when that member already holds a session or token |
-| `GET /pairings/:rendezvous/result?wait=<s>` | new member, with `X-Claim: <secret>` | long-poll: `{approval, token?}` once approved, `token` for machines only; 204 when `wait` passes; 403 `machine-cap` once the server refused the new machine's directory entry for the machine limit |
+| `GET /pairings/:rendezvous/result?wait=<s>` | new member, with `X-Claim: <secret>` | long-poll: `{approval, token?}` once approved, `token` for machines only; 204 when `wait` passes, or after 10 s when the server holds its most result waits; 403 `machine-cap` once the server refused the new machine's directory entry for the machine limit |
 
 ### Joins
 
@@ -698,6 +698,7 @@ server whose disk is full answers writes 503 `storage-full` with `Retry-After`; 
 | `GET /pairings/:rendezvous/result` | 150 a minute per address: 50 waiting pairings polling every 25 s |
 | Pairing and join messages | 4 KB each: 400 `bad-schema` |
 | `GET /pairings/:rendezvous/result` and `GET /pairings/:rendezvous?wait=` waiting | 4 per pairing: 429 `too-many-waits` |
+| `GET /pairings/:rendezvous/result` waiting | 1000 on the server and 50 per address (IPv6 per /48): past either, 204 after 10 s |
 | `POST /joins` | 10 a minute per account; request text 4 KB: 400 `bad-schema` |
 | `GET /joins` waiting | 16 per account; `GET /joins/:id` waiting: 4 per join: 429 `too-many-waits` |
 | `GET /answers` waiting | 32 per machine: 429 `too-many-waits` |

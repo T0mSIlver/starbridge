@@ -4,7 +4,9 @@
   client addresses. Caddy keeps connections to the server open (`keepalive 25s`, below the
   server's 30 s idle close) so TIME-WAIT sockets don't use up ports (#376). A client has 10 s for
   its TLS handshake and its HTTP/1.1 request headers, since every open connection costs Caddy
-  memory, the VPS's first limit (#587). Caddy compresses every
+  memory, the VPS's first limit (#587). A whole request has 2 minutes (#1737): a machine's 3 MB question
+  needs 25 KB/s, and phones post only small answers; long-polls are responses, which it does not
+  bound. Caddy compresses every
   response and the web app none: Next's gzip ran on its one thread and filled it near 18 landing
   page visitors a second (#593). Nightly SQLite backups, kept 7 days (#586), and an offsite copy of each, kept 14 days
   on another provider's VM (#1482): encrypted on the VPS to a key that is on neither server, and
