@@ -91,9 +91,10 @@ main agent's turn or not (#1702). For a subagent's Bash command that runs
 first, which the CLI keeps with the decision; the permission check judges the
 command without it. A subagent that is running reads the answer at its next tool
 call, and a finished one is resumed with it. When the send fails, the answer
-goes to the parent as a prompt that names the subagent. The answer stays in
-`mod-sent` until the subagent's next tool call or its end, so a later process
-on the session hands an unread one to the parent.
+goes to the parent as a prompt that names the subagent. An answer sent to a
+running subagent stays in `mod-sent` until a tool round of the subagent ends
+after the send, so a later process on the session hands an unread one to the
+parent.
 
 An answer submitted as a prompt stays in
 `~/.config/starbridge/mod-sent/<session>.json` until its turn starts. Claude

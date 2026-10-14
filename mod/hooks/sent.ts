@@ -62,8 +62,6 @@ export class Sent {
   private readonly sessions = new Set<string>();
   /** Sessions whose lines from other processes went out again. */
   private readonly recovered = new Set<string>();
-  /** Subagents with lines sent that they have not read yet. */
-  private readonly pending = new Set<string>();
   /** Every operation runs alone, from its read to its submit. */
   private queue: Promise<unknown> = Promise.resolve();
 
@@ -147,11 +145,11 @@ export class Sent {
    * no record. Claude Code keeps a message for a running subagent in memory until its next tool
    * round, so `read` drops the record only once the subagent has moved on.
    */
-  toAgent<T extends { isDelivered: boolean }>(
+  toAgent(
     agent: string,
     batch: { text: string; ack: string }[],
-    deliver: () => Promise<T>,
-  ): Promise<T> {
+    deliver: () => Promise<{ isDelivered: boolean; reason?: string }>,
+  ): Promise<{ isDelivered: boolean; reason?: string }> {
     // Without a token a reload could not be told from a new process: nothing to recover by.
     if (this.process === undefined) return deliver();
     const process = this.process;
@@ -180,32 +178,34 @@ export class Sent {
             return false;
           },
         ));
-      let r: T;
+      // Sent without a record, an answer the subagent never read would be lost with the process.
+      if (!saved) return { isDelivered: false, reason: "could not record it" };
+      let r: { isDelivered: boolean; reason?: string };
       try {
         r = await deliver();
       } catch (e) {
-        if (saved) await this.save(me, rest).catch(() => undefined);
+        await this.save(me, rest).catch(() => undefined);
         throw e;
       }
-      if (saved && !r.isDelivered) await this.save(me, rest).catch(() => undefined);
-      if (saved && r.isDelivered) this.pending.add(agent);
+      if (!r.isDelivered) await this.save(me, rest).catch(() => undefined);
       return r;
     });
   }
 
-  /** Subagent `agent` read what was sent to it up to `before`: its records go. */
+  /**
+   * Subagent `agent` read what was sent to it up to `before`, the end of a tool round of its own:
+   * Claude Code hands a subagent its messages after each round. Those records go.
+   */
   read(agent: string, before: number): Promise<void> {
-    if (!this.pending.has(agent)) return Promise.resolve();
     return this.alone(async () => {
-      let left = false;
+      // After a hot reload the current session is the one its records are under.
+      await this.load(await this.host.sessionId()).catch(() => undefined);
       for (const session of this.sessions) {
         const lines = await this.load(session).catch(() => undefined);
         if (!lines) continue;
         const keep = lines.filter((l) => l.agent !== agent || l.at > before);
-        if (keep.some((l) => l.agent === agent)) left = true;
         if (keep.length < lines.length) await this.save(session, keep).catch(() => undefined);
       }
-      if (!left) this.pending.delete(agent);
     });
   }
 

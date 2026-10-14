@@ -443,3 +443,16 @@ test("an answer sent to a subagent stays on record until it reads it; a process 
   await c.sent.read("a2", Date.now());
   expect(lines(m, "s2")).toEqual([]);
 });
+
+test("an answer that cannot be recorded is not sent to the subagent (#1702)", async () => {
+  const m = machine();
+  const a = m.process("s1", "proc-a");
+  m.disk.full = true;
+  let sent = false;
+  const r = await a.sent.toAgent("a1", [{ text: LINE, ack: "d_1" }], async () => {
+    sent = true;
+    return { isDelivered: true };
+  });
+  expect(r.isDelivered).toBe(false);
+  expect(sent).toBe(false);
+});

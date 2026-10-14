@@ -134,17 +134,31 @@ export const register: Register = (on) => {
       token,
     );
     sent = records;
+    /** Whether subagent `agentId` runs now; when unsure, it does. */
+    const running = async (agentId: string) => {
+      try {
+        const status = (await $.agent.list()).find((a) => a.id === agentId)?.status;
+        return status === undefined || ["pending", "running", "waiting"].includes(status);
+      } catch {
+        return true;
+      }
+    };
     // A subagent's answers go to it, whatever the main agent does (#1702).
     const submit = async (lines: Line[]) => {
       const me = await sessionId();
       const { taken, rest } = await toSubagents(
         lines,
-        (agentId, group, text) =>
-          records.toAgent(
+        async (agentId, group, text) => {
+          const send = () => $.session.send({ to: { agentId }, text });
+          // A subagent that ended is resumed with the message as its prompt, which its transcript
+          // keeps; one that runs holds it in memory until its next tool round.
+          if (!(await running(agentId))) return send();
+          return records.toAgent(
             agentId,
             group.map((l) => forParent(l, agentId)),
-            () => $.session.send({ to: { agentId }, text }),
-          ),
+            send,
+          );
+        },
         log,
         failed,
       );
@@ -213,11 +227,12 @@ export const register: Register = (on) => {
     return next(e);
   });
 
-  on("turn.complete", async ($, e, next) => {
+  on("turn.complete", async (_$, e, next) => {
     const r = await next(e);
     if (e.agentId !== undefined) {
-      const now = await $.clock.now();
-      void sent?.read(e.agentId, now).catch(() => undefined);
+      // Its end alone proves nothing: a message that came after its last round waits for a run.
+      const ended = roundEnded.get(e.agentId);
+      if (ended !== undefined) void sent?.read(e.agentId, ended).catch(() => undefined);
     } else {
       handover.ended();
       // After a `/resume`, or a submit that failed.
