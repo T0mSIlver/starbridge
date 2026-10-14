@@ -177,7 +177,12 @@ jobs:
           failed=''
           [ "$ANDROID" = success ] || failed="$failed- Android app on an emulator: $ANDROID"$'\n'
           [ "$IOS" = success ] || failed="$failed- iPhone app on the simulator: $IOS"$'\n'
-          if [ -n "$REVISION" ]; then
+          # A deploy since the check began means the apps may have met another server: no status.
+          now=$(curl -fsS --retry 5 --retry-delay 3 --retry-all-errors -D - -o /dev/null "$STAGING_URL/healthz" | tr -d '\r' |
+            awk -F': ' 'tolower($1) == "x-starbridge-revision" { print $2 }') || now=''
+          if [ -n "$REVISION" ] && [ "$now" != "$REVISION" ]; then
+            echo "::notice::Staging runs ${now:-no named commit} now, not ${REVISION:0:8}: no status set."
+          elif [ -n "$REVISION" ]; then
             if [ -z "$failed" ]; then state=success desc="Android and iPhone apps pass on staging"
             else state=failure desc="An app fails on staging"; fi
             gh api "repos/$GITHUB_REPOSITORY/statuses/$REVISION" -f state="$state" -f context=staging-app \

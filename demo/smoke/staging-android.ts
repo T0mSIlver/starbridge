@@ -91,7 +91,7 @@ try {
   const asked: { id: string; question: string }[] = [];
   const pushed = await (async () => {
     for (let attempt = 1; attempt <= ATTEMPTS; attempt++) {
-      const question = `Ship the invoice migration tonight, or wait? (${crypto.randomUUID().slice(0, 4)})`;
+      const question = `[${crypto.randomUUID().slice(0, 4)}] Ship the invoice migration tonight, or wait?`;
       asked.push({ id: await ask(dir, question, CONTEXT), question });
       step(`asked ${asked.at(-1)?.id}, attempt ${attempt}`);
       const hit = await until("a notification for a question", WAIT_PER_ATTEMPT, async () => {
