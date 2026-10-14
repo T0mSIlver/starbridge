@@ -10,7 +10,6 @@ here=$(dirname "$(readlink -f "$0")")
 RUNNER_VERSION=2.337.0
 RUNNER_SHA256=70920811a4f8ad4328818682bca5c6469c1c942fab52448868071d0063816613
 NODE_VERSION=24.18.0
-PLAYWRIGHT_VERSION=1.63.0
 export DEBIAN_FRONTEND=noninteractive
 
 # Docker from Docker's own repository.
@@ -27,12 +26,11 @@ apt-get update -q
 apt-get install -yq docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin \
   git jq curl xvfb xauth unzip zstd
 
-# Node for the steps that run the box's own, and Firefox's system libraries for the e2e job.
+# Node for the steps that run the box's own.
 if [ "$(/usr/local/bin/node -v 2>/dev/null)" != "v$NODE_VERSION" ]; then
   curl -fsSL "https://nodejs.org/dist/v$NODE_VERSION/node-v$NODE_VERSION-linux-x64.tar.xz" |
     tar xJ -C /usr/local --strip-components=1 --exclude=CHANGELOG.md --exclude=LICENSE --exclude=README.md
 fi
-/usr/local/bin/npx -y "playwright@$PLAYWRIGHT_VERSION" install-deps firefox
 
 # The jobs' user: in the docker group, no sudo.
 id runner >/dev/null 2>&1 || useradd -m -s /bin/bash runner

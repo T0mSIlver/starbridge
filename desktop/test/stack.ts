@@ -76,8 +76,12 @@ function step(text: string) {
   console.log(`\n== ${text}`);
 }
 
-/** A warm switch between tabs, from the click to the frame that paints the new page. */
+/**
+ * A warm switch between tabs, from the click to the frame that paints the new page: the median of
+ * WARM_SWITCHES per tab, since one switch on a busy shared runner can stall (432 ms, #1581).
+ */
 const SWITCH_MS = 100;
+const WARM_SWITCHES = 5;
 
 /**
  * Clicks a tab of the rail, in the page, and resolves with the time to the frame painting the
@@ -270,7 +274,9 @@ try {
     assert.equal(await pair.exited, 0, "pair failed");
     await page.getByRole("link", { name: /^Inbox/ }).click();
 
-    step("switching tabs waits on nothing: no request for the page, painted within 100 ms");
+    step(
+      "switching tabs waits on nothing: no request for the page, the median switch painted within 100 ms",
+    );
     // The tabs prefetch their pages once they show (web: Shell.tsx); Quotas shows with quotas.
     const prefetched = page.waitForResponse((r) => /\/quotas\?_rsc=/.test(r.url()));
     const quota = cli(
@@ -282,12 +288,16 @@ try {
     const rail = page.getByRole("navigation", { name: "Main" }).first();
     await rail.getByRole("link", { name: "Quotas" }).waitFor();
     await prefetched;
-    for (const round of ["cold", "warm"]) {
-      for (const [tab, heading] of [
-        ["Quotas", "Quotas"],
-        ["Settings", "Settings"],
-        ["Inbox", "Inbox"],
-      ] as const) {
+    // The first round is cold and only logged. In every warm one, no switch may fetch its page:
+    // that is what makes it instant. Timing is checked on each tab's median switch.
+    const tabs = [
+      ["Quotas", "Quotas"],
+      ["Settings", "Settings"],
+      ["Inbox", "Inbox"],
+    ] as const;
+    const times = new Map<string, number[]>(tabs.map(([tab]) => [tab, []]));
+    for (let round = 0; round <= WARM_SWITCHES; round++) {
+      for (const [tab, heading] of tabs) {
         const fetched: string[] = [];
         const onRequest = (r: { url(): string }) => {
           if (!r.url().includes("/v1/")) fetched.push(r.url());
@@ -295,11 +305,18 @@ try {
         page.on("request", onRequest);
         const ms = await page.evaluate(switchTab, [tab, heading] as const);
         page.off("request", onRequest);
-        console.log(`${round} ${tab}: ${Math.round(ms)} ms ${fetched.join(" ")}`);
-        if (round === "cold") continue;
+        console.log(`${round ? "warm" : "cold"} ${tab}: ${Math.round(ms)} ms ${fetched.join(" ")}`);
+        if (!round) continue;
         assert.deepEqual(fetched, [], `switching to ${tab} fetched the page`);
-        assert.ok(ms < SWITCH_MS, `switching to ${tab} took ${Math.round(ms)} ms`);
+        times.get(tab)?.push(ms);
       }
+    }
+    for (const [tab, ms] of times) {
+      const median = [...ms].sort((a, b) => a - b)[Math.floor(ms.length / 2)] ?? Infinity;
+      assert.ok(
+        median < SWITCH_MS,
+        `switching to ${tab} took ${Math.round(median)} ms (median of ${ms.map(Math.round).join(", ")})`,
+      );
     }
 
     step("a question notifies with its options; a button answers it");

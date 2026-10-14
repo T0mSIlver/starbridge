@@ -43,6 +43,22 @@
   an rc or with Get Release Candidates on, the CLI's rcs to npm's `next` and finals to `latest` and
   Homebrew, the plugin marketplace on finals. The iPhone app follows Android once Apple's export
   compliance code arrives: rcs to TestFlight, finals to the App Store.
+- **Three rings: main, rc, final** (#1540). The owner runs main against staging, testers and
+  starbridge.run run rcs, everyone else finals, and a change never skips a ring: v0.1.3 broke every
+  tester's app before the owner had run it. The dev box's CLI, agent, plugin and mod follow the
+  server its machine is paired with, staging. The Android app's build of main goes to Play's
+  internal testing track every night at 03:00 UTC when the app changed since the last one
+  (`internal.yml`), not on each merge: Play updates a phone about once a day anyway, and Google
+  advises against publishing to a testing track more often. Play gives a phone the highest
+  versionCode it may install, so main's builds take slots 50 to 98 of the version under way (the
+  next patch after a final), between its rcs (1 to 49) and its final (99): the owner's phone takes
+  main over an rc and the final over both. Its versionName names its commit,
+  `0.1.7-rc.2+main.7e56e958`, which Play's About this app shows (#1610); the app's
+  `starbridge-client` header leaves that part out, so servers read the version as the rc's. A Google
+  account in internal testing is no longer eligible for closed testing, so the owner joins it with a
+  second account and stays one of the 12 closed testers. The iPhone app follows to TestFlight's
+  internal testers once Apple's export compliance code arrives (`IOS_MAIN_TESTFLIGHT`); the Mac app
+  stays on rcs, since a nightly notarized build would cost a macOS runner a night for one user.
 - **Play's Alpha track from CI** (#1024). Testers fell behind while each App Bundle went to Play
   Console by hand. Once the release is published, the `play` job uploads the tag's AAB to Alpha
   through the Play Developer API (`cli/scripts/play.ts`), status `completed`, with the GitHub
@@ -217,10 +233,11 @@
   binary and runs the whole CLI suite, which must pass: the launchd service and the screen readers
   run only on a Mac, so the real launchd starts and stops the agent there. A `ubuntu-24.04-arm` job (#1481), skipped the same way, does the same for the
   linux-arm64 binary. All three jobs run each test file alone and kill one that hangs (`cli/scripts/test-each.ts`, #862).
-- **CI runners** (#146, #1204, #1213). Self-hosted Linux runners in two pools that never share a
-  box: `trusted` runs main's tests, deploys, uptime checks and releases; `pr` runs the test, e2e
-  and image jobs of a pull request from this repository's own branches, so they start sooner than
-  on GitHub's runners. Each job names its pool through a repository variable holding a JSON array
+- **CI runners** (#146, #1204, #1213, #1638). Self-hosted Linux runners in two pools that never
+  share a box: `trusted` runs main's tests, deploys, uptime checks and releases; `pr` runs the
+  test and image jobs of a pull request from this repository's own branches, so they start sooner
+  than on GitHub's runners. The e2e stays on GitHub's runners: its three parts per run queued a
+  median 4 min, p90 22 min, behind the PR pool's two heavy slots. Each job names its pool through a repository variable holding a JSON array
   of labels, and falls back to GitHub's runner when it is unset (docs/ci.md). Dependabot's and
   forks' pull requests stay on GitHub's runners, and so do the desktop e2e (Electron's libraries),
   Windows and macOS. Android builds on main and in releases use their own runner,

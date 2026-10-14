@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { joinLines } from "../hooks/agent.ts";
 import { type Host, Poller, type Timing } from "../hooks/poller.ts";
 import { Switch, wantsLoop } from "../hooks/switch.ts";
 
@@ -52,8 +53,9 @@ test("a loop that replaces another mid-confirm does not submit its answer again 
     mtime: async () => undefined,
     now: async () => Date.now(),
     sleep: (ms) => Bun.sleep(Math.min(ms, 20)),
-    submit: (text) => {
-      submitted.push(text);
+    submit: (lines) => {
+      submitted.push(joinLines(lines));
+      return lines.map((l) => l.ack);
     },
     starting: () => false,
     status: () => {},
@@ -108,7 +110,7 @@ test("a host that throws once its session is gone does not reject the loop (#136
       mtime: async () => undefined,
       now: async () => Date.now(),
       sleep: (ms) => Bun.sleep(Math.min(ms, 20)),
-      submit: () => live(undefined),
+      submit: () => live([]),
       starting: () => false,
       status: () => live(undefined),
       log: () => {},

@@ -56,8 +56,11 @@ test("ask --input reads the fields from a file; ask prints the id, then how the 
     expect(await run(["ask", "--question", "Ship?"], ctx)).toBe(0);
     expect(ctx.errors.at(-1)).toBe(prompt);
   }
-  expect(codexNotice(id)).toBe(
+  expect(codexNotice([id])).toBe(
     `Starbridge has the owner's answer to ${id}: run \`starbridge wait ${id}\` to read it.`,
+  );
+  expect(codexNotice([id, "d_2"])).toBe(
+    `Starbridge has the owner's answers to ${id}, d_2: run \`starbridge wait <id>\` for each, in this order, to read them.`,
   );
 });
 

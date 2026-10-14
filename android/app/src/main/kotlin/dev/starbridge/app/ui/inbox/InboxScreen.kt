@@ -681,13 +681,21 @@ fun Options(decision: Decision, height: Dp, other: Color, answer: (String?, Stri
 /**
  * A question's sheet over the inbox. An answer, or a snooze that puts it off, closes the sheet at
  * the tap, as on a card (#895, #927): it slides away still showing the question, onto an inbox without
- * it. A refused answer brings the question back to the inbox, not to this sheet.
+ * it. A refused answer brings the question back to the inbox, not to this sheet. Settled or put off
+ * elsewhere while it shows, it stays and says how it closed; unless it was the [last] item that
+ * needed the owner, then it closes onto the empty inbox, as on web (#1586).
  */
 @Composable
-fun QuestionSheet(decision: Decision, now: Instant, onAnswer: (String, String?, String?) -> Unit, replies: Replies, onSnooze: (Instant) -> Unit) {
+fun QuestionSheet(decision: Decision, now: Instant, onAnswer: (String, String?, String?) -> Unit, replies: Replies, onSnooze: (Instant) -> Unit, last: Boolean = false) {
     val close = LocalSheetClose.current
     var held by remember(decision.id) { mutableStateOf<Decision?>(null) }
     val shown = held ?: decision
+    val listed = decision.isOpen && !decision.snoozed(now)
+    var seen by remember(decision.id) { mutableStateOf(false) }
+    LaunchedEffect(listed, last) {
+        if (listed) seen = true
+        else if (seen && last && held == null) close()
+    }
     DecisionSheet(
         shown,
         now,

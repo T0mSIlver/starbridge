@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { LiveServer } from "@starbridge/server/test-support";
 import { run } from "../../cli/src/cli";
 import { paired, type TestCtx, until } from "../../cli/test/helpers";
+import { joinLines } from "../hooks/agent.ts";
 import { type Host, Poller, type Timing } from "../hooks/poller.ts";
 
 const FAST: Timing = {
@@ -82,8 +83,9 @@ function session(id: string, opts: { gated?: boolean; timing?: Timing } = {}) {
     },
     now: async () => Date.now(),
     sleep: (ms) => Bun.sleep(ms),
-    submit: (text) => {
-      s.submitted.push(text);
+    submit: (lines) => {
+      s.submitted.push(joinLines(lines));
+      return lines.map((l) => l.ack);
     },
     starting: () => s.starting,
     status: (text) => {
@@ -319,7 +321,7 @@ test("the poller starts the CLI setup recorded, and `starbridge` once that binar
     },
     now: async () => Date.now(),
     sleep: (ms) => Bun.sleep(ms),
-    submit: () => {},
+    submit: () => [],
     starting: () => false,
     status: () => {},
     log: () => {},
@@ -342,9 +344,10 @@ test("a session that does not poll rereads a held answer every check, not back t
   const host = a.get();
   const d = await ask("Merge #12 now?", "s-a");
   // The turn runs: the host holds the line back.
-  (a.poller as unknown as { host: Host }).host.submit = (text) => {
-    if (held) return false;
-    host.submitted.push(text);
+  (a.poller as unknown as { host: Host }).host.submit = (lines) => {
+    if (held) return [];
+    host.submitted.push(joinLines(lines));
+    return lines.map((l) => l.ack);
   };
   await server.answer(d, { choice: "Yes" });
   await until(() => host.runs.some((r) => !r.includes("--wait")));

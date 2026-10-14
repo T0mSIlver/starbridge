@@ -19,6 +19,8 @@ struct Shown: Equatable, Sendable {
     var quiet = false
     /** Buttons for a question: its options (at most 3), Reply, or its page. */
     var actions: [NotificationAction] = []
+    /** The app icon's count with this item in it (#1603); nil leaves the badge as it is. */
+    var badge: Int?
 }
 
 /** A notification button, as the category registers it. */
@@ -208,11 +210,31 @@ enum Notify {
             return nil
         }
         let api = Api(server: saved.server, session: secrets.session)
-        let shown = await shown(p, saved: saved, secrets: secrets) { id in try await api.item(id).item }
+        var shown = await shown(p, saved: saved, secrets: secrets) { id in try await api.item(id).item }
+        if let item = shown { shown?.badge = badge(item, saved: saved) }
         if let shown, !shown.actions.isEmpty { await register(shown.category, shown.actions) }
         await followPreviews()
         log.info("\(p["kind"]?.string ?? "?", privacy: .public) \(shown == nil ? "kept the placeholder" : "shown", privacy: .public) in \(Int(Date().timeIntervalSince(start) * 1000)) ms, \(footprint() / 1_048_576) MB")
         return shown
+    }
+
+    /**
+     * The app icon's count while the app is closed (#1603): what needs the owner in the inbox the
+     * app saved, with the item this notification brings back or brings in. A quiet one (a newer
+     * snooze, a flip back to working) adds nothing. Revoked machines' items still count here, until
+     * the app's next sync.
+     */
+    static func badge(_ shown: Shown, saved: Saved) -> Int {
+        let all: (String) -> Bool = { _ in true }
+        var open = Set(saved.openDecisions(sending: Set(saved.outbox.map(\.decisionId)), active: all).map(\.id))
+        open.formUnion(saved.openPrompts(active: all).map(\.id))
+        if !shown.quiet { open.insert(shown.item) }
+        return open.count
+    }
+
+    /** Sets the app icon's count; 0 clears it. */
+    static func setBadge(_ count: Int) async {
+        try? await UNUserNotificationCenter.current().setBadgeCount(count)
     }
 
     /** The process's memory as iOS counts it against an extension's limit. */
@@ -268,6 +290,7 @@ enum Notify {
         content.subtitle = shown.subtitle
         content.body = shown.body
         content.categoryIdentifier = shown.category
+        if let badge = shown.badge { content.badge = NSNumber(value: badge) }
         if shown.quiet {
             content.sound = nil
             content.interruptionLevel = .passive

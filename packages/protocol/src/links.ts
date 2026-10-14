@@ -28,7 +28,7 @@ export function linkChip(link: { url: string; title?: string }, project = ""): L
   if (!url) return { label: link.title ?? clip(link.url) };
   const gh = GITHUB_HOSTS.has(url.host) ? github(url.path) : undefined;
   if (gh?.ref) {
-    const same = gh.repo.toLowerCase() === project.toLowerCase();
+    const same = asciiLower(gh.repo) === asciiLower(project);
     const sep = gh.ref.startsWith("#") ? "" : " ";
     return { icon: gh.icon, label: clip(same ? gh.ref : `${gh.repo}${sep}${gh.ref}`) };
   }
@@ -58,8 +58,15 @@ function parseUrl(url: string): { host: string; path: string } | undefined {
   if (!/^[A-Za-z0-9.-]+$/.test(host)) return undefined;
   const tail = end < 0 ? "" : rest.slice(end);
   const path = tail.split(/[?#]/)[0] ?? "";
-  return { host: host.toLowerCase(), path: path || "/" };
+  // A "." or ".." segment, even percent-encoded, makes the browser open another page than the
+  // path reads: show the URL as written.
+  if (path.split("/").some((s) => DOTS.test(s))) return undefined;
+  return { host: asciiLower(host), path: path || "/" };
 }
+
+const DOTS = /^(\.|%2e){1,2}$/i;
+/** ASCII letters lowercased, the same in every port; GitHub's names are ASCII. */
+const asciiLower = (text: string) => text.replace(/[A-Z]/g, (c) => c.toLowerCase());
 
 type GitHub = { icon: LinkIcon; repo: string; ref?: string; text: string };
 
@@ -84,7 +91,7 @@ function github(path: string): GitHub {
   if (section === "releases" && a === "tag" && b)
     return { icon: "release", repo, ref: decode(b), text: other.text };
   if (section === "commit" && SHA.test(a))
-    return { icon: "commit", repo, ref: a.slice(0, 7).toLowerCase(), text: other.text };
+    return { icon: "commit", repo, ref: asciiLower(a.slice(0, 7)), text: other.text };
   // /blob/<ref>/<path>: a branch may hold slashes, but the last segment is always the file.
   const file = segments[segments.length - 1] ?? "";
   if (section === "blob" && a && segments.length > 5 && file)
@@ -94,15 +101,28 @@ function github(path: string): GitHub {
 
 const DIGITS = /^[0-9]{1,20}$/;
 const SHA = /^[0-9a-fA-F]{7,40}$/;
-// Characters that would hide or reorder what a chip says: controls, bidi and zero-width marks.
+// Characters that would hide or reorder what a chip says: controls, bidi marks and the rest of
+// Unicode's default-ignorable code points (soft hyphen, zero-width, variation selectors, tags).
 const HIDDEN: [number, number][] = [
   [0x0, 0x1f],
   [0x7f, 0x9f],
+  [0xad, 0xad],
+  [0x34f, 0x34f],
   [0x61c, 0x61c],
+  [0x115f, 0x1160],
+  [0x17b4, 0x17b5],
+  [0x180b, 0x180f],
   [0x200b, 0x200f],
   [0x202a, 0x202e],
-  [0x2060, 0x2069],
+  [0x2060, 0x206f],
+  [0x3164, 0x3164],
+  [0xfe00, 0xfe0f],
   [0xfeff, 0xfeff],
+  [0xffa0, 0xffa0],
+  [0xfff0, 0xfffb],
+  [0x1bca0, 0x1bca3],
+  [0x1d173, 0x1d17a],
+  [0xe0000, 0xe0fff],
 ];
 const hidden = (text: string) =>
   Array.from(text).some((c) => {

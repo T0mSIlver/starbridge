@@ -77,6 +77,9 @@ export function beyondStamp(
 
 export function stamp(version: string, root = ROOT, only?: "marketplace") {
   if (!NUMBER.test(version)) throw new Error(`not a version: ${version}`);
+  // rcs take versionCode slots 1 to 49; main's builds for Play's internal track take 50 to 98 (#1540).
+  if (Number(version.split("-rc.")[1] ?? 1) > 49)
+    throw new Error(`rc numbers stop at 49: ${version}; cut the final or a new version`);
   for (const { file, pattern, tag } of PLACES) {
     if (tag ? isRc(version) : only === "marketplace") continue;
     const path = join(root, file);

@@ -140,7 +140,8 @@ class Api(private val http: OkHttpClient, private val server: String, private va
                 // OkHttp refuses a POST without a body; a bodiless ask sends an empty one (#253).
                 .method(method, body?.toString()?.toRequestBody(json) ?: if (method == "GET" || method == "DELETE") null else ByteArray(0).toRequestBody())
                 .apply {
-                    header("starbridge-client", "android/${BuildConfig.VERSION_NAME}")
+                    // Without a build of main's "+main.<commit>": servers read the version alone (#1610).
+                    header("starbridge-client", "android/${BuildConfig.VERSION_NAME.substringBefore('+')}")
                     session?.let { header("Authorization", "Bearer $it") }
                     headers.forEach { (k, v) -> header(k, v) }
                 }

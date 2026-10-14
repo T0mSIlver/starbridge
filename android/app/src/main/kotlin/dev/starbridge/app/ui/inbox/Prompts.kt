@@ -103,6 +103,10 @@ fun openQuestions(decisions: List<Decision>): List<Decision> = decisions
     .filter { it.isOpen }
     .sortedWith(compareByDescending<Decision> { it.waiting }.thenBy { it.createdAt })
 
+/** Nothing but question [id] needs the owner: no other open question in the list, no prompt waiting. */
+fun onlyNeed(id: String, decisions: List<Decision>, prompts: List<Prompt>, now: Instant) =
+    decisions.none { it.id != id && it.isOpen && !it.snoozed(now) } && prompts.none { it.waiting(now) }
+
 private val pretty = Json { prettyPrint = true }
 
 private fun prettyInput(input: String) = visible(runCatching { pretty.encodeToString(JsonElement.serializer(), Json.parseToJsonElement(input)) }.getOrDefault(input))

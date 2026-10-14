@@ -14,6 +14,7 @@ that are yours, and wraps the commands that block you in `starbridge run`. Anyth
 | Question picker raced on your devices | ✓ | ✓ | With add-on | ✓ | No | ✓ |
 | Answer comes back without polling¹ | ✓ | ✓ | ✓ | ✓ | CLI only | ✓ |
 | Answer reaches a running turn² | ✓ | ✓ | ✓ | ✓ | No | No |
+| Answers that come in together arrive as one message⁴ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | Permission prompts on your devices³ | Opt-in | Opt-in | Opt-in | Opt-in | No | Opt-in |
 | Runs | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | "Waiting for you" | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
@@ -26,12 +27,15 @@ agent doesn't wait for it with `starbridge wait`. A headless run (`claude -p`, `
 `pi -p`, `opencode run`, `cursor-agent -p`, `agy -p`) has no next prompt, so there the agent
 waits with `starbridge wait` before it ends its turn.
 
-² While the agent works, the answer to a question it marked "Waiting for you" reaches it at its
-next tool call. Any other answer comes once the turn ends. In opencode, every answer reaches it
-at its next step.
+² While the agent works, your answer reaches it at its next tool call. In Antigravity and Cursor,
+it comes once the turn ends.
 
 ³ Off until you run `starbridge config permissions on` on the machine. Your devices can then
 allow a call once or deny it.
+
+⁴ One line per answer, in the order you answered, rather than one prompt per answer, each starting
+a turn. In Codex, a queued message names the questions and the agent reads each answer with
+`starbridge wait`.
 
 ### Claude Code
 

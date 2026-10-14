@@ -80,6 +80,11 @@ a browser; the app adds a menu bar light and notifications, so a web release nee
   about versions. A browser sees none of it, the one place the app's page differs from the
   browser's besides "Keep Starbridge in". Under 600 px the rail gives way to the bottom bar, and
   the button with it: an update still installs on quit.
+- **The Dock badge** (#1602). While the Dock icon shows, it carries the Needs-you count as a number
+  (macOS's own, as in WhatsApp or Discord), cleared at 0 and on sign-out. It is the widget's count
+  (#1031): open questions and permission prompts, snoozed ones out until they return. The menu bar
+  icon stays a light with no count, since the Dock is where a number is expected. No Settings
+  row: macOS's Notifications → Badges for the app turns it off.
 - **Menu bar or Dock** (#936). Settings' "Keep Starbridge in" picks the menu bar (the default
   above), the Dock (always, with no menu bar icon), or both, applied at once. One choice of three
   rather than two switches, so no combination leaves the app nowhere and nothing has to be

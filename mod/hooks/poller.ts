@@ -1,3 +1,5 @@
+import type { Line } from "./agent.ts";
+
 /**
  * The answer loop, apart from the engine's `$` so plain tests can drive it.
  *
@@ -24,13 +26,8 @@ export interface Host {
   mtime(path: string): Promise<number | undefined>;
   now(): Promise<number>;
   sleep(ms: number): Promise<void>;
-  /**
-   * Must not wait for the turn to start: a prompt submitted mid-turn waits for its own. A host
-   * that can tell the submit failed, or holds the line back for now, returns or resolves false,
-   * and the line stays unconfirmed for a later try. `waiting`: the agent marked the decision
-   * waiting, so it needs the answer now (#1484).
-   */
-  submit(text: string, waiting: boolean, ack: string): unknown;
+  /** `AgentHost.submit`: one message for the lines one read brought, returning the acks it took. */
+  submit(lines: Line[]): string[] | Promise<string[]>;
   /** True while a submitted prompt waits for its turn: `AgentHost.starting`. */
   starting(): boolean;
   status(text: string | undefined): void;
@@ -242,12 +239,10 @@ export class Poller {
     for (const line of r.stderr.split("\n")) if (line.trim()) this.host.log(line);
     if (this.failures > 0) this.host.status(undefined);
     this.failures = 0;
-    let handed = 0;
-    let held = 0;
-    const done: string[] = [];
+    const lines: Line[] = [];
     for (const text of r.stdout.split("\n")) {
       if (!text.trim()) continue;
-      let parsed: { decisionId?: unknown; ack?: unknown; line?: unknown; waiting?: unknown };
+      let parsed: { decisionId?: unknown; ack?: unknown; line?: unknown };
       try {
         parsed = JSON.parse(text);
       } catch {
@@ -256,23 +251,23 @@ export class Poller {
       }
       const { decisionId: id, line } = parsed;
       if (typeof id !== "string" || typeof line !== "string") continue;
-      const ack = typeof parsed.ack === "string" ? parsed.ack : id;
-      // A /clear during the call made another session current: the answer waits, unconfirmed,
-      // until session `me` is resumed.
-      if ((await this.host.sessionId()) !== me) {
-        this.host.log(`starbridge: held back the answer to ${id}: its session ${me} ended`);
-        continue;
-      }
-      if (!this.unconfirmed.has(ack)) {
-        if ((await this.host.submit(line, parsed.waiting === true, ack)) === false) {
-          held++;
-          continue;
-        }
-        this.unconfirmed.add(ack);
-        handed++;
-      }
-      done.push(ack);
+      lines.push({ text: line, ack: typeof parsed.ack === "string" ? parsed.ack : id });
     }
+    // A /clear during the call made another session current: the answers wait, unconfirmed,
+    // until session `me` is resumed.
+    if (lines.length > 0 && (await this.host.sessionId()) !== me) {
+      this.host.log(
+        `starbridge: held back the answers ${lines.map((l) => l.ack).join(", ")}: their session ${me} ended`,
+      );
+      this.held = 0;
+      return 0;
+    }
+    const due = lines.filter((l) => !this.unconfirmed.has(l.ack));
+    const taken = due.length > 0 ? await this.host.submit(due) : [];
+    for (const a of taken) this.unconfirmed.add(a);
+    const handed = taken.length;
+    const held = due.length - handed;
+    const done = lines.filter((l) => this.unconfirmed.has(l.ack)).map((l) => l.ack);
     if (done.length > 0) {
       const ack = await this.host.run([...base, ...done.flatMap((id) => ["--ack", id])], timeoutMs);
       if (ack.exitCode !== 0) {

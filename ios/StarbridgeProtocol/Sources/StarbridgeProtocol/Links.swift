@@ -72,7 +72,21 @@ private func parseURL(_ url: String) -> (host: String, path: String)? {
     let tail = rest[end...]
     let pathEnd = tail.firstIndex { $0 == "?" || $0 == "#" } ?? tail.endIndex
     let path = string(tail[tail.startIndex..<pathEnd])
+    // A "." or ".." segment, even percent-encoded, makes the browser open another page than the
+    // path reads: show the URL as written.
+    if path.split(separator: "/", omittingEmptySubsequences: false).contains(where: { isDots(String($0)) }) { return nil }
     return (asciiLower(string(host)), path.isEmpty ? "/" : path)
+}
+
+/** ".", "..", or either with a dot written "%2e". */
+private func isDots(_ segment: String) -> Bool {
+    var rest = Substring(asciiLower(segment))
+    var dots = 0
+    while !rest.isEmpty {
+        if rest.hasPrefix(".") { rest = rest.dropFirst() } else if rest.hasPrefix("%2e") { rest = rest.dropFirst(3) } else { return false }
+        dots += 1
+    }
+    return (1...2).contains(dots)
 }
 
 private struct GitHub {
@@ -144,9 +158,14 @@ private func string<S: Sequence>(_ scalars: S) -> String where S.Element == Unic
     return String(view)
 }
 
-/** Characters that would hide or reorder what a chip says: controls, bidi and zero-width marks. */
+/**
+ * Characters that would hide or reorder what a chip says: controls, bidi marks and the rest of
+ * Unicode's default-ignorable code points (soft hyphen, zero-width, variation selectors, tags).
+ */
 private let hidden: [ClosedRange<UInt32>] = [
-    0x0...0x1F, 0x7F...0x9F, 0x61C...0x61C, 0x200B...0x200F, 0x202A...0x202E, 0x2060...0x2069, 0xFEFF...0xFEFF,
+    0x0...0x1F, 0x7F...0x9F, 0xAD...0xAD, 0x34F...0x34F, 0x61C...0x61C, 0x115F...0x1160, 0x17B4...0x17B5, 0x180B...0x180F,
+    0x200B...0x200F, 0x202A...0x202E, 0x2060...0x206F, 0x3164...0x3164, 0xFE00...0xFE0F, 0xFEFF...0xFEFF, 0xFFA0...0xFFA0,
+    0xFFF0...0xFFFB, 0x1BCA0...0x1BCA3, 0x1D173...0x1D17A, 0xE0000...0xE0FFF,
 ]
 
 /**
