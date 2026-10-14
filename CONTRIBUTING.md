@@ -15,6 +15,10 @@ pnpm typecheck
 pnpm lint
 ```
 
+`pnpm install` also copies `.githooks/` into the repository's hooks, which every worktree shares:
+before a commit, Biome formats the staged files; a push that would drop commits from a branch is
+refused; a commit message that credits an AI is refused.
+
 For Android, in `android/`:
 
 ```bash
