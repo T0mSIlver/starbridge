@@ -1450,6 +1450,7 @@ test("answers hands each session only its own answers, until it confirms them", 
     decisionId: mine,
     ack: mine,
     line: `Answer to ${mine} (Merge #12 now?): Wait`,
+    question: "Merge #12 now?",
     waiting: false,
   };
   expect(ctx.lines.map((l) => JSON.parse(l))).toEqual([handed]);

@@ -146,6 +146,7 @@ test("two sessions each get only their own answers, held until they arrive, unti
       decisionId: d1,
       ack: d1,
       line: `Answer to ${d1} (Merge #12 now?): Wait`,
+      question: "Merge #12 now?",
       waiting: false,
     },
   ]);
