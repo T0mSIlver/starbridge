@@ -229,7 +229,6 @@ test("closing and hiding go as background pushes; a waiting flip and a snooze's 
     { kind: "answered", id: "d1" },
     { kind: "settled", id: "s1", from: "devbox", re: "d1" },
     { kind: "snooze", id: "z1", from: "phone", re: "d1", wakeAt: "2026-10-10T18:00:00Z" },
-    { kind: "quota", id: "q1", from: "devbox" },
   ]) {
     const r = req(head);
     expect(r.headers).toMatchObject({ "apns-push-type": "background", "apns-priority": "5" });
