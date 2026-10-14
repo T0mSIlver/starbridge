@@ -924,7 +924,8 @@ class ServerStore(
     private suspend fun syncDirectory() {
         val fresh = api().directory(saved.entries.size)
         // Nothing new: the chain verified at start, or when it last grew, still holds (#1469).
-        if (fresh.isEmpty() && directory?.members?.get(me.id)?.active == true) return
+        // A removal on hold is decided again at each read: its heads may have gone since (#1779).
+        if (fresh.isEmpty() && removalHold == null && directory?.members?.get(me.id)?.active == true) return
         val all = saved.entries + fresh
         val dir = directories.verify(all, saved.account, saved.pin)
         if (dir.members[me.id]?.active != true) {
