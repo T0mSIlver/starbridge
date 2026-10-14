@@ -154,6 +154,15 @@ export function ago(iso: string, now: number): string {
   return `${Math.floor(min / (24 * 60))} d`;
 }
 
+/**
+ * What a screen reader hears first on an item that blocks an agent, as no text on it says so:
+ * "Waiting for you, 2 minutes" (#248), as on Android and the iPhone.
+ */
+export function waitingLabel(ms: number): string {
+  const m = Math.max(0, Math.floor(ms / 60_000));
+  return `Waiting for you, ${m === 0 ? "under a minute" : m === 1 ? "1 minute" : `${m} minutes`}`;
+}
+
 /** "1:12", "1:04:09": a timer since `iso`. */
 export function timer(iso: string, now: number): string {
   const s = Math.max(0, Math.floor((now - Date.parse(iso)) / 1000));
