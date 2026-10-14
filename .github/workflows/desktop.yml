@@ -235,7 +235,9 @@ jobs:
             gh release create tip -R "$TIP_REPO" --title "Starbridge for Mac, tip" --notes-file notes.md --latest
           fi
           gh release upload tip -R "$TIP_REPO" --clobber out/*.zip out/*.dmg out/*.blockmap
-          gh release upload tip -R "$TIP_REPO" --clobber out/latest-mac.yml out/tip.json
+          # tip.json last: it marks the build published, which a rerun would then skip.
+          gh release upload tip -R "$TIP_REPO" --clobber out/latest-mac.yml
+          gh release upload tip -R "$TIP_REPO" --clobber out/tip.json
           gh release edit tip -R "$TIP_REPO" --notes-file notes.md
           gh release view tip -R "$TIP_REPO" --json assets -q '.assets[].name' | while read -r name; do
             case "$name" in

@@ -45,6 +45,13 @@ export async function tipState(): Promise<Tip | null> {
   if (!release.ok) throw new Error(`the tip release answered ${release.status}`);
   const { assets } = (await release.json()) as { assets: { name: string; url: string }[] };
   const asset = assets.find((a) => a.name === "tip.json");
+  // A release with a build but no tip.json lost it mid-publish (an upload replaces a file by
+  // deleting it first): reading that as no build would let an older commit publish over a newer one.
+  if (!asset && assets.some((a) => a.name.endsWith(".zip"))) {
+    throw new Error(
+      `the tip release has no tip.json: upload it by hand ({"version", "commit"} of its build) or delete the release`,
+    );
+  }
   if (!asset) return null;
   const res = await fetch(asset.url, {
     headers: { ...headers, accept: "application/octet-stream" },
