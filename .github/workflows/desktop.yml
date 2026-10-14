@@ -91,15 +91,50 @@ jobs:
           path: ${{ runner.temp }}/starbridge-desktop-failure.png
           if-no-files-found: ignore
 
-  # A signed and notarized build to try, from main or by hand, never from a pull request: the
-  # Developer ID lives in the desktop-release environment, which only main and tags can use; the
-  # job checks the ref too, so a run by hand from a branch never reaches it.
+  # Whether a push to main changed what signing and notarization read, which only release.yml
+  # otherwise exercises, at the rc tag.
+  signing:
+    name: signing inputs
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      changed: ${{ steps.filter.outcome != 'success' || steps.filter.outputs.signing == 'true' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 2
+          filter: blob:none
+      - id: filter
+        continue-on-error: true
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        with:
+          base: ${{ github.event.before }}
+          filters: |
+            signing:
+              - 'desktop/electron-builder.yml'
+              - 'desktop/package.json'
+              - 'desktop/scripts/sign.sh'
+              - 'desktop/scripts/after-pack.cjs'
+              - 'desktop/scripts/after-sign.cjs'
+              - 'desktop/scripts/widgets.cjs'
+              - 'desktop/widgets/Info.plist'
+              - 'desktop/widgets/build.sh'
+              - 'pnpm-lock.yaml'
+              - '.github/workflows/desktop.yml'
+
+  # A signed and notarized build, to catch a signing or notarization break before the rc tag: on a
+  # push to main that changed the signing inputs above, or by hand from main. Installed apps update
+  # from releases only (spec/releases.md), so no other push needs one (#1684). The Developer ID
+  # lives in the desktop-release environment, which only main and tags can use; the job checks the
+  # ref too, so a run by hand from a branch never reaches it.
   signed:
     name: signed build
     if: >-
-      github.event_name != 'pull_request' && vars.DESKTOP_SIGNING == 'true' &&
-      (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/'))
-    needs: mac
+      ${{ !cancelled() && needs.mac.result == 'success' && vars.DESKTOP_SIGNING == 'true' &&
+      (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')) &&
+      (github.event_name == 'workflow_dispatch' || needs.signing.outputs.changed == 'true') }}
+    needs: [mac, signing]
     runs-on: macos-15
     timeout-minutes: 30
     environment: desktop-release
