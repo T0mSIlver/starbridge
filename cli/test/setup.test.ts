@@ -26,7 +26,7 @@ import { session } from "../src/context";
 import { poll } from "../src/decisions";
 import { which } from "../src/platform";
 import { pushOnce } from "../src/quota";
-import { setRemoved } from "../src/setup/agents";
+import { recordCodex, setRemoved } from "../src/setup/agents";
 import { codexPlugin } from "../src/setup/codex-plugin";
 import {
   compareCodexbar,
@@ -203,6 +203,10 @@ test("setup --yes installs the agent, the plugins and the skills, and uploads a 
     bin: which(m.ctx.env, "codex") as string,
     home: join(m.home, ".codex"),
   });
+  // A refresh whose PATH lacks codex, such as the agent's service PATH, keeps the record.
+  const recorded = m.ctx.store.agentConfig().codex;
+  recordCodex({ ...m.sys, ctx: { ...m.ctx, env: { ...m.ctx.env, PATH: "" } } });
+  expect(m.ctx.store.agentConfig().codex).toEqual(recorded);
   const hooks = readFileSync(
     join(m.home, ".codex/plugins/cache/starbridge-cli/starbridge/1.2.0/hooks/hooks.json"),
     "utf8",

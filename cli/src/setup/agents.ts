@@ -3,6 +3,7 @@
  * asking, and prints one line per agent; `uninstall --agent <name>` removes it from one, and a
  * later setup or refresh leaves that agent alone until `setup --agent <name>` brings it back.
  */
+import { existsSync } from "node:fs";
 import { join, resolve } from "node:path";
 import type { Ctx } from "../context";
 import { permissionsEnabled } from "../permissions";
@@ -239,13 +240,14 @@ async function installClaude(sys: Sys): Promise<Outcome> {
 /**
  * Records the `codex` on the PATH and the `CODEX_HOME` setup runs with: the agent hands Codex
  * sessions their answers with these, never with a binary or folder an `ask` names. Forgotten
- * with `forget`, or when Codex is gone.
+ * with `forget`, or when the recorded binary is gone; kept when only this PATH lacks it, as the
+ * agent's service PATH may when an automatic update refreshes.
  */
 export function recordCodex(sys: Sys, forget = false): void {
   const bin = forget ? undefined : which(sys.ctx.env, "codex");
   const { codex: old, ...rest } = sys.ctx.store.agentConfig();
   if (!bin) {
-    if (old) sys.ctx.store.saveAgentConfig(rest);
+    if (old && (forget || !existsSync(old.bin))) sys.ctx.store.saveAgentConfig(rest);
     return;
   }
   const codex = {
