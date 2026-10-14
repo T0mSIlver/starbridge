@@ -204,13 +204,16 @@ export const register: Register = (on) => {
               read: (path) => $.fs.read(path),
               write: (path, text) => $.fs.write(path, text),
               mtime: async (path) => (await $.fs.stat(path).catch(() => undefined))?.mtimeMs,
-              // The mod's host reads no owner or mode: find does, as plugin/hooks/cli.sh.
+              // The mod's host reads no owner or mode: find does, as plugin/hooks/cli.sh. Windows
+              // has no `sh`, and keeps owners in ACLs: there, as `ownedFile`, a file.
               owned: async (path) =>
-                (
-                  await $.process
-                    .run(["sh", "-c", OWNED, "sh", path], { timeoutMs: 10_000 })
-                    .catch(() => undefined)
-                )?.exitCode === 0,
+                env.OS === "Windows_NT"
+                  ? (await $.fs.stat(path).catch(() => undefined))?.kind === "file"
+                  : (
+                      await $.process
+                        .run(["sh", "-c", OWNED, "sh", path], { timeoutMs: 10_000 })
+                        .catch(() => undefined)
+                    )?.exitCode === 0,
               now,
               sleep,
               submit,
