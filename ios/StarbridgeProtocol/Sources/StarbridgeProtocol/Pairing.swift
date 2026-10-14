@@ -221,11 +221,6 @@ public enum Pairings {
         "\(trimSlashes(server))/pair#\(code.formatted)"
     }
 
-    /** `starbridge://pair?server=<server>&k=<check key>#<code>`, a machine's QR for the apps alone. */
-    public static func appLink(server: String, code: PairingCode, checkKey: String) -> String {
-        "starbridge://pair?server=\(encodeURIComponent(trimSlashes(server)))&k=\(checkKey)#\(code.formatted)"
-    }
-
     /** A machine's check key: 16 Crockford base32 characters, 80 bits, carried only by its QR code. */
     public static func newCheckKey() -> String { Crockford.encode(Sodium.randomBytes(10)) }
 

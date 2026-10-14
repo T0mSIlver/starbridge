@@ -124,6 +124,3 @@ a browser; the app adds a menu bar light and notifications, so a web release nee
   Team ID because from macOS 15 that is what lets an app outside the App Store open it without
   asking, so ad hoc builds (pull requests) show "Starbridge is closed": macOS refuses them the
   group.
-- **`starbridge://pair` links** open `/pair` on the configured server, as the https link does. The
-  link's check key stays out of the page, which the server writes; a link for another server is
-  refused, with both servers named.

@@ -29,31 +29,6 @@ export function opensOutside(url: string): boolean {
   return p === "https:" || p === "http:" || p === "mailto:";
 }
 
-/**
- * The server page a `starbridge://` link opens, or why not. `starbridge://pair?server=…#<code>`
- * opens `/pair#<code>` on the configured server. The check key (`k`) stays out of the page: it
- * proves the machine to the Android app without the server, and the page comes from the server.
- */
-export function linkPage(
-  link: string,
-  origin: string,
-): { url: string } | { refused: string } | null {
-  let url: URL;
-  try {
-    url = new URL(link);
-  } catch {
-    return null;
-  }
-  if (url.protocol !== "starbridge:" || url.hostname !== "pair") return null;
-  const code = url.hash.slice(1);
-  if (!/^[0-9A-Za-z-]{1,64}$/.test(code)) return null;
-  const server = url.searchParams.get("server");
-  const target = server === null ? origin : serverOrigin(server);
-  if (target !== origin)
-    return { refused: `This pairing link is for ${server}, and Starbridge uses ${origin}.` };
-  return { url: `${origin}/pair#${code}` };
-}
-
 function originOf(url: string): string | null {
   try {
     return new URL(url).origin;

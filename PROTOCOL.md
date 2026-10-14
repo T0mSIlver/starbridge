@@ -273,8 +273,8 @@ The machine's QR code carries a check key, 80 bits as 16 Crockford base32 charac
 with no scheme: `starbridge-pair?server=<server>&k=<key>#<code>` (`machineQrText`, `newCheckKey`,
 `checkKeyFromLink`). A phone's camera shows it as text rather than handing it to an app, so the
 key reaches only the apps' own scanners, never a page the server writes or another app that
-claims a link. The printed link and code leave it out. CLIs before it put the same query and code
-in a `starbridge://pair` link (`appPairingLink`), which the app still reads. An Android or iPhone app that read the key adds `check` to its approval:
+claims a link. The printed link and code leave it out. An Android or iPhone app that read the key
+adds `check` to its approval:
 `crypto_auth` over the same bytes `checkCode` hashes, keyed by
 `BLAKE2b-256("starbridge/v1/check-key" NUL key)` (`checkProof`). The machine then, after it
 verified the chain:
