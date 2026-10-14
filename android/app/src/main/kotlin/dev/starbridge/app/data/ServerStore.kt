@@ -939,6 +939,8 @@ class ServerStore(
                 notice.value = why
                 shownHold = why
                 alerts.clearAll()
+                // The lists empty now, as an item hold's persist empties them.
+                publish()
                 return
             }
             directory = dir
