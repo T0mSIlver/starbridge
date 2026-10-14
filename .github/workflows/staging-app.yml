@@ -32,7 +32,6 @@ env:
 
 jobs:
   android:
-    if: false
     name: Android app on an emulator
     # Not the self-hosted boxes: an emulator needs KVM, and the PR pool holds no secrets.
     runs-on: ubuntu-24.04
@@ -158,7 +157,7 @@ jobs:
   # branch tests that branch's workflow and sets nothing.
   report:
     needs: [android, ios]
-    if: ${{ false && !cancelled() && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/ci/1621-staging-app') }}
+    if: ${{ !cancelled() && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/ci/1621-staging-app') }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
