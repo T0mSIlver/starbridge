@@ -31,8 +31,8 @@ export default function Privacy() {
         </li>
         <li>
           If you sign in with Apple, Apple&apos;s user id for you in place of a GitHub id, and the
-          refresh token of your last Apple sign-in, which the server keeps only to revoke it when
-          you delete your account. Starbridge asks Apple for no name or email.
+          refresh token of your last Apple sign-in, which the server keeps only to try to revoke it
+          when you delete your account. Starbridge asks Apple for no name or email.
         </li>
         <li>
           The public keys of your devices and machines, and the names you give them, in a list they
@@ -44,9 +44,11 @@ export default function Privacy() {
           a reply lost on the way can be sent again; a backup taken in that time keeps it too.
         </li>
         <li>
-          For each device that gets notifications: the push service, its token or endpoint URL, and
-          the keys that encrypt pushes to it.
+          For each device, whether it notifies (on, off or blocked) and which app it is. For each
+          device that gets notifications: the push service, its token or endpoint URL, and the keys
+          that encrypt pushes to it.
         </li>
+        <li>For each machine, the CLI release it runs and when that changed.</li>
         <li>How long notifications wait while you are at a screen, if you change it.</li>
         <li>
           Your decisions, answers, quota snapshots, permission prompts and their answers, runs, and
@@ -55,13 +57,19 @@ export default function Privacy() {
           kind of each one, its id, who sent it, which devices it went to, which item it answers or
           closes, its size, when it arrived, was updated or was answered, until when a decision is
           snoozed, whether an item asked for a notification, and until when its notification waits
-          while you are at a screen.
+          while you are at a screen and which devices it waited for.
         </li>
       </ul>
-      <p>The server deletes them on this schedule:</p>
+      <p>
+        The server checks every hour and deletes them on this schedule, so each period can run up to
+        an hour longer:
+      </p>
       <ul>
         <li>answered decisions and their answers, 7 days after the answer;</li>
         <li>permission prompts, their answers and settled notices, 7 days after they arrive;</li>
+        <li>
+          notices that an agent is waiting or a decision is snoozed, when their decision is deleted;
+        </li>
         <li>runs, 1 day after their last update;</li>
         <li>
           unanswered decisions and quota snapshots, 30 days after they arrive, or unanswered
@@ -74,7 +82,7 @@ export default function Privacy() {
         Your account, device list and push targets stay until you delete them (see Deletion). A
         nightly copy of the database is kept on the server for 7 days, and Hetzner keeps its own
         backups of the server, with those copies, for 7 more. Each nightly copy is also encrypted
-        and kept on a server at Oracle for 14 days. Deleted data can remain in backups for up to 2
+        and kept on a server at Oracle for 14 days. Deleted data can remain in backups for about 2
         weeks.
       </p>
 
@@ -84,7 +92,8 @@ export default function Privacy() {
         this on has had keyboard or mouse input in the last minute, it tells the server so every 30
         seconds: yes or no, never what you did. The server uses it to hold notifications for a few
         seconds while you are at a screen. It keeps the last answer from each device or machine in
-        memory for 75 seconds, never writes it to disk, and a restart clears it.
+        memory for 75 seconds, and for each account when its last screen went away, for up to 5
+        minutes. It never writes either to disk, and a restart clears them.
       </p>
 
       <h2 className="t-heading">Logs</h2>
@@ -92,19 +101,29 @@ export default function Privacy() {
         The web server (Caddy) keeps no access log. The server, Caddy and the web page log startup,
         errors and failed pushes; these lines can include an account id or a push endpoint, but not
         IP addresses or your content. Caddy&apos;s error log is the exception: for a request that
-        failed at the proxy, it can hold the request&apos;s IP address, path and headers. Each keeps
-        five files of 10 MB, so how long a log covers depends on traffic. To enforce rate limits,
-        the server counts requests per IP address in memory; it never writes them to disk, and a
-        restart clears them. Addresses blocked for abuse are kept in a block list until unblocked.
+        failed at the proxy, it can hold the request&apos;s IP address, path and headers; so can a
+        connection that timed out in its TLS handshake or its request headers. Each keeps five files
+        of 10 MB, so how long a log covers depends on traffic. Umami and its Postgres database keep
+        the same; Postgres logs a failed statement with its values. To enforce rate limits, the
+        server counts requests per IP address in memory; it never writes them to disk, and a restart
+        clears them. Addresses blocked for abuse are kept in a block list, and in a log of blocks
+        with the date and the operator, until they are unblocked, which removes them from both;
+        Hetzner&apos;s backups of the server keep them for up to 7 days after.
+      </p>
+
+      <p>
+        The operator can list accounts by id with their item counts and sizes, posts in the last
+        hour, device and machine counts and creation time. A watcher sends the operator an alert
+        that can name an address making too many requests.
       </p>
 
       <h2 className="t-heading">Usage counts</h2>
       <p>
         To learn how Starbridge is used, the server counts what it already handles, per day. During
-        the day it keeps one row per event; the rows that count active accounts, devices and
-        machines hold their ids, so each counts once. When the day ends, the server keeps only the
-        day&apos;s totals and deletes those rows. The totals hold no ids, and only the operator can
-        read them, on the server. The daily totals are:
+        the day it keeps one row per event; the rows that count active accounts, devices, machines
+        and releases hold their ids, so each counts once. When the day ends, the server keeps only
+        the day&apos;s totals and deletes those rows. The totals hold no ids, and only the operator
+        can read them, on the server. The daily totals are:
       </p>
       <ul>
         <li>
@@ -114,7 +133,7 @@ export default function Privacy() {
         <li>accounts, devices and machines in total, and new accounts;</li>
         <li>
           items posted, by kind: decisions, answers, permission prompts, their answers, notices that
-          a prompt or decision is over, quota snapshots, run updates and waiting states;
+          a prompt or decision is over, snoozes, quota snapshots, run updates and waiting states;
         </li>
         <li>
           answers by client (web page or Android, iPhone or Mac app), and how long decisions and
@@ -131,18 +150,18 @@ export default function Privacy() {
       <h2 className="t-heading">Who else sees what</h2>
       <ul>
         <li>
-          <strong>GitHub</strong>, when you sign in: that your GitHub account uses Starbridge.
+          <strong>GitHub</strong>, when you sign in: that your GitHub account uses Starbridge. It
+          also sees the IP address, version and time of an update check by the starbridge command or
+          the Mac app, and of the command&apos;s CodexBar download.
         </li>
         <li>
           <strong>Google Firebase Cloud Messaging</strong>, for the Android app: your phone&apos;s
-          push token and each push, which holds the item&apos;s kind and ids and either its
-          encrypted content or nothing more. Google cannot read the encrypted content.
+          push token and each push, with the fields below. Google cannot read the encrypted content.
         </li>
         <li>
           <strong>Apple</strong>, for the iPhone app: your phone&apos;s push token and each push,
-          which holds the item&apos;s kind and ids and either its encrypted content or nothing more.
-          Apple cannot read the encrypted content. If you sign in with Apple, Apple also knows that
-          your Apple account uses Starbridge.
+          with the fields below. Apple cannot read the encrypted content. If you sign in with Apple,
+          Apple also knows that your Apple account uses Starbridge.
         </li>
         <li>
           <strong>Your browser&apos;s push service</strong> (Google for Chrome, Mozilla for Firefox,
@@ -152,6 +171,12 @@ export default function Privacy() {
         <li>
           <strong>Your UnifiedPush distributor</strong>, if you use one instead of Firebase, sees
           the same as Firebase would.
+        </li>
+        <li>
+          <strong>Google</strong>, in the Android app: the pairing code scanner is a module from
+          Google Play services, which Google serves and which scans on the phone. If you accept when
+          the app offers to save your recovery key, it goes to your password manager, which may be
+          Google&apos;s.
         </li>
         <li>
           <strong>Hetzner</strong> hosts the server in Helsinki, Finland, and stores its backups.
@@ -164,47 +189,59 @@ export default function Privacy() {
         </li>
         <li>
           <strong>Cloudflare</strong> serves the status page at status.starbridge.run, and sees each
-          visit&apos;s IP address. The page runs no script and sets no cookie.
+          visit&apos;s IP address. The page runs no script and sets no cookie. Cloudflare also hosts
+          the DNS for starbridge.run, so it sees the lookups. Its proxy is off. If the operator
+          turns it on to stop an attack, Cloudflare would see each request&apos;s IP address, path
+          and headers; your content stays encrypted by your devices.
         </li>
       </ul>
       <p>
         Self-hosted servers without their own push credentials send pushes through starbridge.run,
-        which passes them to these services. Those pushes carry only encrypted content or ids. There
-        are no ads, and no analytics beyond the usage counts above and the page analytics below.
+        which passes them to these services and keeps none. Each push holds the item&apos;s kind and
+        id, the sender&apos;s machine or device id, the id of the item it answers, a snooze&apos;s
+        wake time and whether it is due, and either the item&apos;s encrypted content or nothing
+        more; an iPhone push also holds a fixed title and a thread id. The relay forwards any text
+        of up to 4000 characters it is given, so a modified server could send more; the Starbridge
+        server sends only these fields. There are no ads, and no analytics beyond the usage counts
+        above and the page analytics below.
       </p>
 
       <h2 className="t-heading">Page analytics</h2>
       <p>
         The landing page, the docs, this page and the terms count visits with Umami, which runs on
         the same server; the Android, iPhone and Mac apps do not. For each view Umami records the
-        page, its title, the referring site, your browser, operating system, device type, screen
-        size and language, and the country, region and city it looks up from your IP address. On the
-        landing page, clicking a sign-in button, a docs link or a way to get the app, or copying an
-        install command, records which one. The signed-in app counts no views. It records which
-        error screen it showed, if any, and when it is installed as an app. For an account made in
-        the last two days, the server also records, once each, these steps: the first sign-in and
-        the app it came from, the recovery key saved, the first machine paired, a second device
-        added and the first answer sent, with the app that sent it. It sends them with a hash of the
-        account id, so Umami can tell one account's steps apart from another's; nothing else about
-        the account, its machines or its content goes with them. A request that sends Do Not Track
-        records no step. Since the server knows when each account was created, the operator could
-        match that first sign-in to your account. Umami sets no cookie, stores nothing in your
-        browser and does not store your IP address: it tells visitors apart by a hash of the IP
-        address, the browser and a salt that changes every day, so a visit to the public pages
-        cannot be traced back to you or linked to your visits on other days. A browser that sends Do
-        Not Track is not counted. Umami keeps its records for 180 days at most, and the nightly
-        backups keep them for up to 2 weeks more.
+        page, its title, the referring page&apos;s address, your browser, operating system, device
+        type, screen size and language, and the country, region and city it looks up from your IP
+        address. On the landing page, clicking a sign-in button, a docs link or a way to get the
+        app, or copying an install command, records which one. The signed-in app counts no views. It
+        records which error screen it showed, if any, and when it is installed as an app, with the
+        same visitor fields as a page view. For an account made in the last two days, the server
+        also records, once each, these steps: the first sign-in and the app it came from, the
+        recovery key saved, the first machine paired, a second device added and the first answer
+        sent, with the app that sent it. It sends them with a hash of the account id, so Umami can
+        tell one account's steps apart from another's; nothing else about the account, its machines
+        or its content goes with them. The hash has no secret in it, so anyone who knows your
+        account id can compute it. A request that sends Do Not Track records no step. Since the
+        server knows when each account was created, the operator could match that first sign-in to
+        your account. Umami sets no cookie, stores nothing in your browser and does not store your
+        IP address: it tells visitors apart by a hash of the IP address, the browser and a salt that
+        changes every day, so a visit to the public pages cannot be traced back to you or linked to
+        your visits on other days. A browser that sends Do Not Track is not counted. Umami keeps its
+        records for 180 days at most, and the nightly backups keep them for about 2 weeks more.
       </p>
 
       <h2 className="t-heading">Deletion</h2>
       <p>
         Removing a device or machine from your account ends its sign-in and deletes its push
         targets; a push target the push service reports as gone is deleted too. Its name and keys
-        stay in your account&apos;s signed device list, which nothing rewrites, and the items
-        encrypted for it stay until the schedule above deletes them. To delete your whole account,
-        use Delete account in Settings, on the web page or in the app: the server deletes the
-        account, its device list, devices, machines, items and push targets at once, revokes any
-        Apple sign-in, and signs out every device and machine. Backups age out within 2 weeks after.
+        stay in your account&apos;s signed device list, which nothing rewrites. The items encrypted
+        for it stay until the schedule above deletes them, a hash of its sign-in session stays up to
+        a year, and its notification setting, app and CLI release stay until the account goes. To
+        delete your whole account, use Delete account in Settings, on the web page or in the app:
+        the server deletes the account, its device list, devices, machines, items and push targets
+        at once, tries once to revoke the refresh token of your last Apple sign-in, and signs out
+        every device and machine. Backups age out within about 2 weeks after. The sign-up steps in
+        Umami stay for their 180 days.
       </p>
 
       <h2 className="t-heading">Your rights</h2>

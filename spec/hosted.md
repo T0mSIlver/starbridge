@@ -62,8 +62,8 @@
 - **Blocking an address** (#783). The owner can refuse an address or range at Caddy, by a reload
   that keeps open connections (`deploy/host/switch.sh`), with a 403 that names abuse@. An IPv6
   address is blocked as its /64, as the rate limits count it, and nothing wider than a /8 (IPv4)
-  or /32 (IPv6) is accepted. The block list is the one place an address is written to disk, until
-  it is unblocked; `/privacy` says so.
+  or /32 (IPv6) is accepted. The block list and the switch log hold an address until it is
+  unblocked, which scrubs both (Caddy's error log can hold others); `/privacy` says so (#1744).
 - **Suspending an account** (#785). The owner can suspend one account whose machines flood the
   server (a looping agent, or abuse) without deleting it: its machines' writes get 403
   `account-suspended`, which the CLI prints with its reason, while they still read and wait, and
