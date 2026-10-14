@@ -183,8 +183,3 @@ export function openJoinApproval(msg: unknown, keys: JoinKeys, join: string): Jo
   if (body.join !== join) throw new ProtocolError("id-mismatch", "join");
   return body;
 }
-
-/** "123 456": the digits as both screens show them. */
-export function formatDigits(digits: string): string {
-  return `${digits.slice(0, 3)} ${digits.slice(3)}`;
-}

@@ -5,6 +5,7 @@ import dev.starbridge.app.data.Saved
 import dev.starbridge.app.data.SavedDecision
 import dev.starbridge.app.data.Secrets
 import dev.starbridge.app.data.Vault
+import dev.starbridge.app.protocol.DirectoryHead
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -49,5 +50,19 @@ class DiskTest {
         val kept = Disk(dir, identity).load().first!!.decisions.single()
         assertEquals(text, kept.text)
         assertEquals("Ship?", kept.body.question)
+    }
+
+    @Test
+    fun readsHeadsKeptUnderTheSlotsOfMachinesBefore794() {
+        // As this app kept them before #1627: a head a machine passed on, under "signer/by" or
+        // "signer/?" and naming `by`. Each loads, keyed as it was, for Heads to read as its signer's.
+        val head = "A".repeat(43)
+        val dir = Files.createTempDirectory("starbridge").toFile()
+        File(dir, "state.bin").writeText(
+            """{"v":1,"server":"https://starbridge.run","heads":{"devbox":{"length":4,"head":"$head"},""" +
+                """"devbox/phone":{"length":5,"head":"$head","by":"phone"},"devbox/?":{"length":6,"head":"$head","by":"ghost"}}}""",
+        )
+        val heads = Disk(dir, identity).load().first!!.heads
+        assertEquals(mapOf("devbox" to DirectoryHead(4, head), "devbox/phone" to DirectoryHead(5, head), "devbox/?" to DirectoryHead(6, head)), heads)
     }
 }

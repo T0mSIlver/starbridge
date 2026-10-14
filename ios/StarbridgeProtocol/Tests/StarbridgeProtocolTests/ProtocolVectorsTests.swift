@@ -105,7 +105,6 @@ final class ProtocolVectorsTests: XCTestCase {
             let held = HeadBook.withheld(try heads(c["heads"]!), dir: try Directories.verify(entries), entries: entries)
             let got: JSON = held.map { h in
                 var o: JSONObject = ["id": .string(h.id)]
-                o.put("by", h.by.map(JSON.string))
                 o["head"] = h.head.json
                 o.put("revoked", h.revoked.map { ["id": .string($0.id), "by": .string($0.by), "at": .string($0.at)] })
                 return .object(o)
@@ -115,7 +114,7 @@ final class ProtocolVectorsTests: XCTestCase {
         for c in v["noteHead"]!.items {
             let entries = chains[c.str("chain")]!.items
             var h = try heads(c["heads"]!)
-            let changed = HeadBook.note(&h, signer: c.str("signer"), head: try DirectoryHead(json: c["head"]!), entries: entries, dir: try Directories.verify(entries))
+            let changed = HeadBook.note(&h, signer: c.str("signer"), head: try DirectoryHead(json: c["head"]!), entries: entries)
             XCTAssertEqual(changed, c["expect"]!["changed"]!.bool!, c.str("name"))
             XCTAssertEqual(json(h), c["expect"]!["heads"]!, c.str("name"))
         }

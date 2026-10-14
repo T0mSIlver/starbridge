@@ -26,4 +26,31 @@ final class SyncTests: XCTestCase {
         let store = Store(vault: MemoryVault(), disk: disk, deviceName: "Test iPhone")
         XCTAssertEqual(store.closedItems, ["d_later"])
     }
+
+    /**
+     * Heads this app kept before #1627: a head a machine before #794 passed on, under
+     * "signer/by" or "signer/?" and naming `by`. Each loads under its key, which HeadBook reads as
+     * its signer's, and goes with that signer.
+     */
+    func testHeadsKeptUnderTheSlotsOfMachinesBefore794Load() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        addTeardownBlock { try? FileManager.default.removeItem(at: dir) }
+        let a = String(repeating: "A", count: 43)
+        func head(_ length: Int, by: String? = nil) -> String {
+            #"{"length":\#(length),"head":"\#(a)""# + (by.map { #","by":"\#($0)""# } ?? "") + "}"
+        }
+        var saved = Saved(server: Store.defaultServer)
+        saved.heads = [
+            SavedHead(id: "devbox", head: head(4)),
+            SavedHead(id: "devbox/phone", head: head(5, by: "phone")),
+            SavedHead(id: "devbox/?", head: head(6, by: "ghost")),
+        ]
+        let disk = Disk(url: dir.appendingPathComponent("saved.json"))
+        try disk.save(saved)
+        var heads = Heads(saved: try XCTUnwrap(disk.load()).heads)
+        XCTAssertEqual(heads.keys, ["devbox", "devbox/phone", "devbox/?"])
+        XCTAssertEqual(heads["devbox/phone"], DirectoryHead(length: 5, head: a))
+        XCTAssertTrue(HeadBook.forget(&heads, id: "devbox"))
+        XCTAssertTrue(heads.isEmpty)
+    }
 }

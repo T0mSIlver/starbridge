@@ -280,6 +280,16 @@ struct SavedHead: Codable, Equatable {
     let head: String
 }
 
+extension Heads {
+    /** The heads `saved` keeps, each under its key; one this app cannot read is left out. */
+    init(saved: [SavedHead]) {
+        self.init()
+        for h in saved {
+            if let json = try? JSON.parse(h.head), let head = try? DirectoryHead(json: json) { self[h.id] = head }
+        }
+    }
+}
+
 enum Dates {
     static func parse(_ text: String) -> Date? {
         let f = ISO8601DateFormatter()

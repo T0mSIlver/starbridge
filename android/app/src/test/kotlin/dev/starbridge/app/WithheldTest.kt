@@ -28,10 +28,12 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.add
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.encodeToJsonElement
+import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
@@ -47,6 +49,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import java.io.File
 import java.nio.file.Files
 
 /**
@@ -210,17 +213,17 @@ class WithheldTest {
      * hold stands, names that revocation, and only the owner's Stop waiting ends it.
      */
     @Test
-    fun aForkThatRevokesTheMachineDoesNotLiftTheHold() = forkScenario(passedOn = false)
+    fun aForkThatRevokesTheMachineDoesNotLiftTheHold() = forkScenario()
 
     /**
-     * The same with a head an older machine passed on from the tablet that revoked the stolen
-     * phone, and a fork that revokes the tablet: after Stop waiting, the machine's item, read
-     * again, does not bring the head back, and its question shows.
+     * The same with the head kept the way this app kept it before #1627: a head an older machine
+     * passed on from the tablet, under "m_box/tablet" and naming `by`. It holds as the machine's,
+     * and Stop waiting on the machine forgets it.
      */
     @Test
-    fun aForkThatRevokesTheDeviceAHeadNamesDoesNotLiftTheHold() = forkScenario(passedOn = true)
+    fun aHeadKeptBeforeTheBySlotsWentHoldsAsItsMachines() = forkScenario(kept = true)
 
-    private fun forkScenario(passedOn: Boolean) {
+    private fun forkScenario(kept: Boolean = false) {
         val account = "acct"
         val at = "2026-10-08T12:00:00Z"
         val signKeys = sodium.signKeyPair()
@@ -236,13 +239,13 @@ class WithheldTest {
         for (m in listOf(thief, tablet, machine)) entries += envelopeJson(directories.addEntry(directories.verify(entries, account, null), "phone", signKeys.secret, m, at))
         val known = directories.verify(entries, account, null)
         val truth = directories.verify(entries + envelopeJson(directories.revokeEntry(known, "tablet", tabletSign.secret, thief.id, at)), account, null)
-        val target = if (passedOn) tablet else machine
+        val target = machine
         val fork = entries + envelopeJson(directories.revokeEntry(known, thief.id, thiefSign.secret, target.id, at))
         val item = envelopes.seal("decision", buildJsonObject {
             put("v", 1); put("id", "d_box"); putJsonArray("to") { add("phone") }; put("createdAt", at)
             put("question", "Deploy?"); put("context", ""); putJsonArray("options") { add("Yes"); add("No") }; put("recommended", "Yes")
             putJsonObject("source") { put("machine", "devbox"); put("project", "p"); put("session", "s") }
-            putJsonObject("dir") { put("length", truth.length); put("head", truth.head); if (passedOn) put("by", tablet.id) }
+            if (!kept) putJsonObject("dir") { put("length", truth.length); put("head", truth.head) }
         }, machine.id, machineSign.secret, listOf(phone))
         val page = buildJsonObject {
             put("items", buildJsonArray { add(buildJsonObject { put("item", ProtocolJson.encodeToJsonElement(item)); put("cursor", "1"); put("receivedAt", at) }) })
@@ -265,9 +268,17 @@ class WithheldTest {
             override fun wrap(plain: ByteArray) = plain
             override fun unwrap(wrapped: ByteArray) = wrapped
         }
-        val disk = Disk(Files.createTempDirectory("starbridge").toFile(), identity)
+        val dir = Files.createTempDirectory("starbridge").toFile()
+        val disk = Disk(dir, identity)
         val server = http.url("/").toString().trimEnd('/')
         disk.save(Saved(server, account = account, accountExists = true, me = phone, pin = Pin(known.length, known.head), entries = entries.toList()))
+        if (kept) {
+            val state = File(dir, "state.bin")
+            val stored = ProtocolJson.parseToJsonElement(state.readText()).jsonObject
+            state.writeText(JsonObject(stored + ("heads" to buildJsonObject {
+                putJsonObject("m_box/tablet") { put("length", truth.length); put("head", truth.head); put("by", tablet.id) }
+            })).toString())
+        }
         disk.save(Secrets(session = "s", boxPk = toB64(boxKeys.public), boxSk = toB64(boxKeys.secret), signPk = toB64(signKeys.public), signSk = toB64(signKeys.secret)))
         val alerts = object : Alerts {
             override fun decision(decision: Decision, silent: Boolean) {}
@@ -295,7 +306,7 @@ class WithheldTest {
         assertTrue(store.decisions.value.isEmpty())
         // Only the owner's word ends it, and reading the machine's item again does not bring it back.
         store.stopWaiting(target.id)
-        until { store.heldRevoked.value == null && store.notice.value == null && (!passedOn || store.decisions.value.isNotEmpty()) }
+        until { store.heldRevoked.value == null && store.notice.value == null }
         store.refresh()
         Thread.sleep(300)
         assertEquals(null, store.heldRevoked.value)

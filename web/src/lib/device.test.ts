@@ -9,6 +9,7 @@ import {
   generateMemberKeys,
   generateRecoverySeed,
   genesisEntry,
+  type Heads,
   joinApproval,
   joinCommitment,
   joinerKeys,
@@ -918,63 +919,32 @@ test("a revoked device cannot lift the hold by revoking, on a fork, the machine 
   }
 });
 
-test("after stopping waiting for a device a head named, reading that machine's item again does not hold again (#813)", async () => {
+test("a head kept under signer/by before #1627 holds as its machine's, until the owner stops waiting (#1627)", async () => {
   const at = "2026-10-08T12:00:00Z";
   const phone = { id: "phone", signKey: live.owner.device.keys.sign.privateKey };
-  const thiefKeys = generateMemberKeys();
-  const thief = {
-    id: "thief2",
-    role: "device" as const,
-    name: "Stolen phone",
-    ...publicKeys(thiefKeys),
+  const m = {
+    id: "m_old",
+    role: "machine" as const,
+    name: "old box",
+    ...publicKeys(generateMemberKeys()),
   };
-  const mKeys = generateMemberKeys();
-  const m = { id: "m_old", role: "machine" as const, name: "old box", ...publicKeys(mKeys) };
-  for (const member of [thief, m])
-    await postEntry(addEntry(await live.directory(), phone, member, at));
+  await postEntry(addEntry(await live.directory(), phone, m, at));
   const mine = (await device.deviceContext(ctx.account)) as device.Ctx;
-  const pin = await store.get("pin", ctx.account);
-  // The phone revokes the stolen phone; an older machine passes on the phone's head as `by`.
-  await postEntry(revokeEntry(await live.directory(), phone, "thief2", at));
-  const truth = await live.directory();
-  const stale = mine.entries;
-  // The fork revokes the phone instead.
-  const fork = [
-    ...stale,
-    revokeEntry(
-      verifyDirectory(stale),
-      { id: "thief2", signKey: thiefKeys.sign.privateKey },
-      "phone",
-      at,
-    ),
-  ];
-  let served = stale;
-  const items = [
-    machineDecision({ member: m, keys: mKeys }, mine, {
-      length: truth.length,
-      head: truth.head,
-      by: "phone",
-    } as never),
-  ];
-  const real = globalThis.fetch;
-  globalThis.fetch = (async (input: string, init?: RequestInit) => {
-    if (input.startsWith("/v1/items?kind=decision")) return Response.json({ items, cursor: "1" });
-    if (input === "/v1/directory") return Response.json({ entries: served });
-    return real(input, init);
-  }) as typeof fetch;
+  // How this browser kept a head that a machine before #794 passed on from the phone.
+  const passedOn = { length: mine.dir.length + 1, head: "A".repeat(43), by: "phone" };
+  await store.put(
+    "heads",
+    { "m_old/phone": passedOn, "m_old/?": { ...passedOn, by: "ghost" } } as Heads,
+    ctx.account,
+  );
   try {
-    await expect(device.loadInbox(mine)).rejects.toThrow("has seen changes");
-    served = fork;
-    const forked = (await device.deviceContext(ctx.account)) as device.Ctx;
-    const held = await device.loadInbox(forked).catch((e) => e);
-    expect(held.revoked).toBe("phone");
-    await device.stopWaiting(forked, "phone");
-    // The same item, read again from the start: its question shows, and nothing holds.
-    const inbox = await device.loadInbox(forked);
-    expect(inbox.items.map((i) => i.decision.id)).toContain("d_m_old");
+    const held = await device.loadInbox(mine).catch((e) => e);
+    expect(held).toBeInstanceOf(device.Withheld);
+    expect(held.message).toContain("that old box has seen");
+    await device.stopWaiting(mine, "m_old");
+    expect(await store.get("heads", ctx.account)).toEqual({});
+    await expect(device.loadInbox(mine)).resolves.toBeDefined();
   } finally {
-    globalThis.fetch = real;
-    await store.put("pin", pin as NonNullable<typeof pin>, ctx.account);
     await store.del("heads", ctx.account);
     await store.del("forgotten", ctx.account);
     await postEntry(revokeEntry(await live.directory(), phone, "m_old", at));

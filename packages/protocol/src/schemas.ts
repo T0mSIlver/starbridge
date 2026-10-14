@@ -347,8 +347,6 @@ export type DecisionLink = z.infer<typeof DecisionLink>;
 export const DirectoryHead = z.object({
   length: z.number().int().min(1).max(100_000),
   head: Bytes32,
-  /** A machine passing on a device's longer head names that device. */
-  by: Id.optional(),
 });
 export type DirectoryHead = z.infer<typeof DirectoryHead>;
 

@@ -9,7 +9,6 @@ import {
   generateRecoverySeed,
   genesisEntry,
   type Heads,
-  headToSign,
   type Member,
   type MemberKeys,
   noteHead,
@@ -89,7 +88,7 @@ test("a machine that holds the revocation exposes it to a device the server with
   const heads: Heads = {};
   // M2 reads the full chain and signs its head; the signed body keeps it.
   const opened = open(
-    decisionBy("m2", headToSign({}, verifyDirectory(truth), truth)),
+    decisionBy("m2", head(verifyDirectory(truth))),
     { id: "a", box: keys.a.box },
     mine,
   );
@@ -135,7 +134,7 @@ test("a revoked device cannot lift a device's hold by revoking, on a fork, the m
     revokeEntry(mine, { id: "a", signKey: keys.a.sign.privateKey }, "b", at),
   ];
   const heads: Heads = {};
-  noteHead(heads, "m2", head(verifyDirectory(real)), seenByA, mine);
+  noteHead(heads, "m2", head(verifyDirectory(real)), seenByA);
   expect(withheldBy(heads, mine, seenByA)).toEqual({ id: "m2", head: head(verifyDirectory(real)) });
   // With B's keys, the server extends A's stale chain with B's revocation of M2. It verifies and
   // extends A's pin, but no machine signs a head past its own revocation: it is a fork.
@@ -148,105 +147,20 @@ test("a revoked device cannot lift a device's hold by revoking, on a fork, the m
     id: "m2",
     revoked: { id: "m2", by: "b" },
   });
-  // A head M2 passed on from device A, which the fork revokes, holds too.
-  const relayed: Heads = {};
-  noteHead(relayed, "m2", { ...head(verifyDirectory(real)), by: "a" }, seenByA, mine);
-  const forkA = [
-    ...seenByA,
-    revokeEntry(mine, { id: "b", signKey: keys.b.sign.privateKey }, "a", at),
-  ];
-  expect(withheldBy(relayed, verifyDirectory(forkA), forkA)).toMatchObject({
-    id: "m2",
-    by: "a",
-    revoked: { id: "a", by: "b" },
-  });
 });
 
-test("a machine signs the longest head it knows, a device's when its own chain is behind", () => {
+test("a head a machine before #794 passed on, naming a by, counts as the machine's own", () => {
   const mine = verifyDirectory(seenByA);
-  const deviceHead = head(verifyDirectory(truth));
-  expect(headToSign({}, mine, seenByA)).toEqual(head(mine));
-  expect(headToSign({ b: deviceHead }, mine, seenByA)).toEqual({ ...deviceHead, by: "b" });
-  // Not a head a member its chain revoked signed.
-  const inflated = { length: 99, head: "A".repeat(43) };
-  expect(headToSign({ m: inflated }, verifyDirectory(truth), truth)).toEqual(deviceHead);
-  // Not a fork's head of the same length, and not a head its chain holds.
-  expect(headToSign({ b: { ...head(mine), head: "A".repeat(43) } }, mine, seenByA)).toEqual(
-    head(mine),
-  );
-  expect(headToSign({ b: deviceHead }, verifyDirectory(truth), truth)).toEqual(deviceHead);
-});
-
-test("a forged head a machine passed on holds past its forger's revocation, until the owner forgets it", () => {
-  // Device B, compromised, signs an inflated head into an answer; honest M2 passes it on.
-  const mine = verifyDirectory(seenByA);
-  const forged = { length: 99, head: "A".repeat(43) };
-  const relayed = headToSign({ b: forged }, mine, seenByA);
-  expect(relayed).toEqual({ ...forged, by: "b" });
+  const passedOn = { ...head(verifyDirectory(truth)), by: "b" };
+  const opened = open(decisionBy("m2", passedOn), { id: "a", box: keys.a.box }, mine);
+  expect(opened.body.dir).toEqual(head(verifyDirectory(truth)));
   const heads: Heads = {};
-  noteHead(heads, "m2", relayed, seenByA);
-  expect(withheldBy(heads, mine, seenByA)).toMatchObject({ id: "m2", by: "b" });
-  // The owner revokes B: a revocation alone cannot tell this from a fork, so the head still holds.
-  const chain = [
-    ...seenByA,
-    revokeEntry(mine, { id: "a", signKey: keys.a.sign.privateKey }, "b", at),
-  ];
-  const after = verifyDirectory(chain);
-  expect(withheldBy(heads, after, chain)).toMatchObject({ by: "b", revoked: { id: "b", by: "a" } });
-  // A shorter head does not take its slot either.
-  expect(noteHead(heads, "m2", { ...head(after), by: "b" }, chain, after)).toBe(false);
-  // The owner, who made that revocation, forgets B's heads; M2's own head holds the chain.
-  forgetHeads(heads, "b");
-  // M2's item, read again, does not bring B's head back.
-  expect(noteHead(heads, "m2", relayed, chain, after)).toBe(false);
-  noteHead(heads, "m2", head(after), chain);
-  expect(withheldBy(heads, after, chain)).toBeUndefined();
-});
-
-test("a head passed on from a device the chain does not list yet counts, in one slot per machine", () => {
-  // The server stops serving A at M2's add; the owner adds phone C, which revokes M. M2 is served
-  // C's add, not the revocation, and passes on the head C signed into an answer.
-  const chain = seenByA;
-  const c = { id: "c", role: "device" as const, name: "c", ...publicKeys(generateMemberKeys()) };
-  const withC = [
-    ...chain,
-    addEntry(verifyDirectory(chain), { id: "a", signKey: keys.a.sign.privateKey }, c, at),
-  ];
-  const truthC = [
-    ...withC,
-    revokeEntry(verifyDirectory(withC), { id: "b", signKey: keys.b.sign.privateKey }, "m", at),
-  ];
-  const relayed = headToSign({ c: head(verifyDirectory(truthC)) }, verifyDirectory(withC), withC);
-  expect(relayed.by).toBe("c");
-  const mine = verifyDirectory(chain);
-  const heads: Heads = {};
-  noteHead(heads, "m2", relayed, chain, mine);
-  expect(Object.keys(heads)).toEqual(["m2/?"]);
-  expect(withheldBy(heads, mine, chain)).toMatchObject({ id: "m2", by: "c" });
-  // Another unknown id takes the same slot, so a machine cannot fill storage with invented ones.
-  noteHead(heads, "m2", { length: 99, head: "A".repeat(43), by: "nobody" }, chain, mine);
-  expect(Object.keys(heads)).toEqual(["m2/?"]);
-  // Revoking the forger does not end its head, which still holds.
-  const forger = [
-    ...chain,
-    addEntry(mine, { id: "a", signKey: keys.a.sign.privateKey }, { ...c, id: "nobody" }, at),
-  ];
-  const revoked = [
-    ...forger,
-    revokeEntry(
-      verifyDirectory(forger),
-      { id: "a", signKey: keys.a.sign.privateKey },
-      "nobody",
-      at,
-    ),
-  ];
-  expect(withheldBy(heads, verifyDirectory(revoked), revoked)).toMatchObject({
-    by: "nobody",
-    revoked: { id: "nobody" },
-  });
-  // The owner forgets it, and C's real head, passed on again, takes the slot back: the hold stands.
-  forgetHeads(heads, "nobody");
-  expect(withheldBy(heads, verifyDirectory(revoked), revoked)).toBeUndefined();
-  noteHead(heads, "m2", relayed, revoked, verifyDirectory(revoked));
-  expect(withheldBy(heads, verifyDirectory(revoked), revoked)).toMatchObject({ id: "m2", by: "c" });
+  noteHead(heads, "m2", opened.body.dir, seenByA);
+  expect(Object.keys(heads)).toEqual(["m2"]);
+  // Heads kept before #1627 under "signer/by" or "signer/?" count as their signer's, and go with it.
+  const kept: Heads = { "m2/b": passedOn, "m2/?": { ...passedOn, by: "ghost" } } as Heads;
+  expect(withheldBy(kept, mine, seenByA)).toEqual({ id: "m2", head: head(verifyDirectory(truth)) });
+  expect(forgetHeads(kept, "b")).toBe(false);
+  expect(forgetHeads(kept, "m2")).toBe(true);
+  expect(kept).toEqual({});
 });
