@@ -8,6 +8,9 @@ straight to a pull request.
 You need Bun 1.4 and pnpm 11, plus Node 24 for the web end-to-end runs. For Android, JDK 21
 and an Android SDK with platform 37.
 
+In a new worktree, `scripts/worktree-setup.sh` installs the dependencies when they don't match
+the lockfile, and does nothing otherwise; Claude Code runs it when a session starts.
+
 ```bash
 pnpm install
 pnpm test
