@@ -515,8 +515,8 @@ createdAt, expiresAt, version}`; `state` is `open`, `comparing`, `approved` or `
 | `POST /quota/ask?wait=<s>` | device | ask every machine for a fresh quota snapshot → `{askedAt, behind}`; with `wait`, holds until each active machine that has a snapshot posted a newer one; `behind` counts those that have not |
 
 Item ids are random, chosen by the sender, and an `Id` (`[A-Za-z0-9_-]{1,64}`); no reader depends
-on more of their shape. A decision's id is `d_` and four words of the BIP-39 English list joined by
-hyphens (`d_amber-otter-lantern-quilt`, 44 bits, #1697), so a person or an agent can tell cards
+on more of their shape. A decision's id is `d_` and three words of the BIP-39 English list joined by
+hyphens (`d_amber-otter-lantern`, 33 bits, #1697), so a person or an agent can tell cards
 apart; one from before is `d_` and 16 base64url characters, and both stay valid. The id gates
 nothing: every read of an item takes a signed-in caller and its own box. The bits keep two
 decisions of one account from sharing an id, and a machine that gets 409 `duplicate-id` for a new
