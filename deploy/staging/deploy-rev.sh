@@ -30,12 +30,16 @@ fi
 # CI passed this commit on a push to main (#1714). deploy.yml deploys only such a commit; the box
 # checks again, so the staging key alone cannot ship one that failed. Only main's pushes make such
 # runs of ci.yml. GitHub's public API, without a token; no answer means no deploy.
-curl -fsS --retry 3 --retry-delay 5 --retry-all-errors --max-time 30 -H 'Accept: application/vnd.github+json' \
-  "https://api.github.com/repos/T0mSIlver/starbridge/actions/workflows/ci.yml/runs?head_sha=$rev&event=push&branch=main&status=success&per_page=10" |
+# Through a file, and only when curl succeeds: a retried transfer's partial bytes would otherwise
+# reach jq ahead of the full answer.
+runs=$(mktemp)
+curl -fsS --retry 3 --retry-delay 5 --retry-all-errors --max-time 30 -H 'Accept: application/vnd.github+json' -o "$runs" \
+  "https://api.github.com/repos/T0mSIlver/starbridge/actions/workflows/ci.yml/runs?head_sha=$rev&event=push&branch=main&status=success&per_page=10" &&
   jq -e --arg rev "$rev" 'any(.workflow_runs[]; .path == ".github/workflows/ci.yml" and .event == "push"
     and .head_branch == "main" and .head_sha == $rev and .conclusion == "success"
-    and .head_repository.full_name == "T0mSIlver/starbridge")' >/dev/null ||
-  { echo "CI has not passed $rev on main; not deployed" >&2; exit 1; }
+    and .head_repository.full_name == "T0mSIlver/starbridge")' "$runs" >/dev/null ||
+  { rm -f "$runs"; echo "CI has not passed $rev on main; not deployed" >&2; exit 1; }
+rm -f "$runs"
 echo "CI passed $rev on main"
 # seed.sh's seeding server holds the database meanwhile (seed-host.sh).
 if [ -n "$(docker ps -q -f name='^sb-seed-server$')" ]; then

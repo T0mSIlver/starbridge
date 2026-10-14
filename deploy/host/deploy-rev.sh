@@ -40,9 +40,13 @@ fi
 # runs. GitHub's public API, without a token: the repository is public, so the box holds no GitHub
 # credential for it. No answer means no deploy.
 api=https://api.github.com/repos/T0mSIlver/starbridge
+# get PATH: the answer, or nothing when curl fails. Through a file: a retried transfer's partial
+# bytes would otherwise reach the parser ahead of the full answer.
 get() {
+  out=$(mktemp)
   curl -fsS --retry 3 --retry-delay 5 --retry-all-errors --max-time 30 \
-    -H 'Accept: application/vnd.github+json' "$api/$1"
+    -H 'Accept: application/vnd.github+json' -o "$out" "$api/$1" && cat "$out" || true
+  rm -f "$out"
 }
 run=$(get "commits/$rev/statuses?per_page=100" |
   jq -r '[.[] | select(.context == "staging")][0] | select(.state == "success") | .target_url' |
