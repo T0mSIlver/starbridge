@@ -1267,15 +1267,17 @@ test.skipIf(WINDOWS)(
 test("a session not heard from for a day drops out of the agent's list (#1763)", async () => {
   const { ctx, socket } = await machine();
   const http = new AgentClient(socket, "starbridge-mod/test");
-  await http.call("POST", "/v1/sessions/s-old/hello", { cwd: "/work/x" });
+  await http.call("POST", "/v1/sessions/s-old/hello", { cwd: "/work/x", pid: 42 });
+  // A Cursor conversation's hooks greet it without a pid, and nothing else ever polls for it.
+  await http.call("POST", "/v1/sessions/conv-1/hello", { cwd: "/work/x" });
   const ids = async () =>
     (await http.call<{ sessions: { id: string }[] }>("GET", "/v1/status")).sessions.map(
       (x) => x.id,
     );
-  expect(await ids()).toEqual(["s-old"]);
+  expect(await ids()).toEqual(["s-old", "conv-1"]);
   const start = Date.now();
   ctx.now = () => new Date(start + 25 * 3_600_000);
-  expect(await ids()).toEqual([]);
+  expect(await ids()).toEqual(["conv-1"]);
 });
 
 test("Cursor: follow-ups that bring no answer stop after three per conversation (#1763)", () => {

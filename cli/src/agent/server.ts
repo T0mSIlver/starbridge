@@ -425,17 +425,23 @@ export class Agent implements Hub {
     return id;
   }
 
-  /** Forgets sessions not heard from in SESSION_KEEP_MS (or dated in the future), and the oldest past MAX_SESSIONS. */
+  /**
+   * Forgets a mod's session a day after its last sign of life, or when dated in the future; a
+   * session with no `pid`, such as a Cursor conversation that only its hooks greet, stays until
+   * its `bye`. Past MAX_SESSIONS the least recently seen go first.
+   */
   private evictSessions() {
     const now = this.ctx.now().getTime();
     for (const [id, s] of this.sessions) {
+      if (s.pid === undefined) continue;
       const age = now - Date.parse(s.lastSeenAt);
       if (!(age >= 0 && age < SESSION_KEEP_MS)) this.sessions.delete(id);
     }
-    for (const id of this.sessions.keys()) {
-      if (this.sessions.size <= MAX_SESSIONS) break;
-      this.sessions.delete(id);
-    }
+    if (this.sessions.size <= MAX_SESSIONS) return;
+    const oldest = [...this.sessions.values()].sort((a, b) =>
+      a.lastSeenAt.localeCompare(b.lastSeenAt),
+    );
+    for (const s of oldest.slice(0, this.sessions.size - MAX_SESSIONS)) this.sessions.delete(s.id);
   }
 
   /** Records that session `id` is alive, with what its client said about it. */

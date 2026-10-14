@@ -242,8 +242,9 @@
   after it exits (#552).
 - **Small bounds on local state** (#1763, internal audit 2026-10-14). A timestamp dated in the future
   counts as stale for the update check and the last failed try. A run id belongs to the session
-  that started it, for a day after its last update. The agent forgets a session, and the
-  Antigravity hook a conversation's marker, a day after the last sign of it. Cursor's stop hook
+  that started it, for a day after its last update. The agent forgets a mod's session, and the
+  Antigravity hook a conversation's marker, a day after the last sign of it; a Cursor
+  conversation, greeted only by its hooks, stays until its `sessionEnd`. Cursor's stop hook
   prints at most 3 "No answer yet" follow-ups per conversation until an answer comes. Setup
   replaces `~/.local/bin/codexbar` only when it links into Starbridge's tarball install or a
   CodexBar app. The installers take `http://` only for a host that parses as this machine, never
