@@ -200,7 +200,8 @@
   FCM or APNs key: phones get its pushes through starbridge.run's relay, as from a self-hosted
   server, so the owner's real app works against it and the self-host push path gets used (#1540);
   it relays for nobody. Only listed GitHub users can make an account
-  (`SIGNUP_GITHUB_IDS`, #1524), and nothing is indexed. Its key's forced command deploys only
+  (`SIGNUP_GITHUB_IDS`, #1524) and the owner token makes the owner account the app check uses
+  (#1621), and nothing is indexed. Its key's forced command deploys only
   a commit of main. ARM staging beside amd64 prod leaves architecture bugs to prod's smoke.
 - **Prod waits for staging** (#1528). After each deploy, staging runs one round trip on its own test
   account (a card, its Web Push, an answer read back) and sets the commit's `staging` status; prod
@@ -208,6 +209,25 @@
   follow its merge by minutes. A commit staging skipped, being older than the one it runs, never
   passes. A release that cannot push stops on staging. `deploy/deploy.sh` stays the owner's way
   around it.
+- **The apps run against staging** (#1621). The round trip above has no app in it, so a server
+  change the apps cannot take (a field, a header, a push that never arrives) reached an rc unseen,
+  as v0.1.3's regex did for the Android build. Every night `staging-app.yml` runs main's apps on
+  staging: the release APK on an emulator, built with Firebase's config, and the iPhone app's
+  `InboxTests` on a simulator, one after the other. Each signs in with the staging
+  environment's owner token (`OWNER_TOKEN`, which a server with `SIGNUP_GITHUB_IDS` accepts for the
+  owner account, `spec/sign-in.md`), so a run needs no GitHub login, which an emailed code guards,
+  and no key outlives it: it starts from an empty owner account, deleting a failed run's, and deletes
+  the account at the end. The Android run is the real path: a machine asks a question with
+  context, staging pushes it through starbridge.run's relay and FCM to the emulator's Play
+  services (no token is injected), the app shows it, opens the card and answers, and the machine
+  reads the answer. A simulator gets no push from APNs, so the iPhone run covers sign-in, sync,
+  answering and the machine's read, not the push. Nightly, not per deploy: main deploys 60 to 120
+  times a day, a run takes about 20 minutes, and both apps share the one owner account. It sets
+  the `staging-app` status on the commit staging runs and keeps one `staging-app` issue open
+  while it fails. Prod's deploy does not read it yet: a new check that flakes would stop
+  hotfixes, so it gets a fortnight of nightly results first; to gate, `deploy.yml` reads the
+  status as it reads `staging`. The apps' own tests run against a server started in CI; this is the
+  only check of the deployed one.
 - **No downtime** (#150, #508). The page runs as two copies; a deploy starts the idle one, waits
   for its health, then stops the other, and Caddy sends every request to the first healthy copy.
   The server stays one instance, since it holds the long-polls and SQLite; Caddy holds requests up

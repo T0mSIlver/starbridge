@@ -71,6 +71,8 @@ export class DemoDevice {
     readonly server: string,
     private readonly ownerToken: string,
     private readonly log: (line: string) => void = console.log,
+    /** False for a server that is not a demo server, such as staging's app check (#1621). */
+    private readonly demo = true,
   ) {}
 
   private async call<T>(method: string, path: string, body?: unknown, retry = true): Promise<T> {
@@ -126,7 +128,7 @@ export class DemoDevice {
   async createAccount(): Promise<void> {
     await ready;
     this.keys = generateMemberKeys();
-    await this.checkDemo();
+    if (this.demo) await this.checkDemo();
     await this.signIn();
     // An owner-token session is never bound to a member, so /me can't tell whether the account
     // has keys: its directory can (#1218).
@@ -144,6 +146,11 @@ export class DemoDevice {
     });
     seed.fill(0);
     await this.call("POST", "/directory", { entry });
+  }
+
+  /** Deletes the account with every device, machine and session, as Settings' Delete account. */
+  async deleteAccount(): Promise<void> {
+    await this.call("DELETE", "/account");
   }
 
   private member(): Member {

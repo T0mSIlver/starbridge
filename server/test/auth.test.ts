@@ -221,15 +221,20 @@ test("a sign-up list lets only its GitHub users make accounts (#1524)", async ()
   // Made before the list: still signs in.
   expect((await githubSignIn(listed, 7)).headers.get("location")).toBe("/");
   expect((await githubSignIn(listed, 8)).headers.get("location")).toBe("/?signin=paused");
-  // Nor an owner account beside the list.
+});
+
+test("the owner token makes the owner account beside a sign-up list (#1621)", async () => {
+  const dbPath = join(mkdtempSync(join(tmpdir(), "sb-signups-")), "sb.db");
   const owner = await makeServer({
     dbPath,
     ownerToken: "owner-secret",
     signUpGitHubIds: new Set([42]),
   });
+  const wrong = await owner.call("POST", "/v1/auth/owner", { body: { token: "other" } });
+  expect(wrong.status).toBe(401);
   const r = await owner.call("POST", "/v1/auth/owner", { body: { token: "owner-secret" } });
-  expect(r.status).toBe(403);
-  expect(r.json.error).toBe("signups-paused");
+  expect(r.status).toBe(200);
+  expect(r.json.session).toBeString();
 });
 
 test("a sign-up list that is empty or not ids stops the server (#1524)", () => {
