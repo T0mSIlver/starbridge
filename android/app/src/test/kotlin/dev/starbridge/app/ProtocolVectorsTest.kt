@@ -3,6 +3,9 @@ package dev.starbridge.app
 import com.goterl.lazysodium.LazySodiumJava
 import com.goterl.lazysodium.SodiumJava
 import dev.starbridge.app.protocol.Images
+import dev.starbridge.app.protocol.LinkChip
+import dev.starbridge.app.protocol.LinkIcon
+import dev.starbridge.app.protocol.linkChip
 import dev.starbridge.app.protocol.Directories
 import dev.starbridge.app.protocol.DirectoryHead
 import dev.starbridge.app.protocol.Heads
@@ -60,7 +63,7 @@ import java.io.File
 /** The vector files these tests read; [ProtocolVectorsTest.everyVectorFileIsRead] keeps it whole. */
 private val READ = setOf(
     "context.json", "directory.json", "envelopes.json", "heads.json", "images.json", "join.json",
-    "keys.json", "pairing.json", "quota-alerts.json", "schemas.json",
+    "keys.json", "links.json", "pairing.json", "quota-alerts.json", "schemas.json",
 )
 
 /** Vector files only the machine's code runs: the local agent computes pace and alerts (#1147). */
@@ -411,6 +414,16 @@ class ProtocolVectorsTest {
         val browser = dir.members.getValue("browser").member
         org.junit.Assert.assertThrows(IllegalArgumentException::class.java) {
             envelopes.seal("answer", body, "phone", key("phone", "signSk"), listOf(machine, browser))
+        }
+    }
+
+    // links.json (#1577): a link chip's icon and text in every client.
+    @Test fun links() {
+        for (c in load("links.json").getValue("cases").jsonArray.map { it.jsonObject }) {
+            val expect = c.getValue("expect").jsonObject
+            val icon = expect.opt("icon")?.str?.let { name -> LinkIcon.entries.single { it.name.equals(name, ignoreCase = true) } }
+            val project = c.opt("project")?.str ?: ""
+            assertEquals(c.str("name"), LinkChip(icon, expect.str("label")), linkChip(c.str("url"), c.opt("title")?.str, project))
         }
     }
 
