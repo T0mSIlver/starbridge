@@ -21,6 +21,8 @@ export interface CodexMessage {
 const CONNECT_MS = 5_000;
 /** The daemon advertises 16 MB; nothing Starbridge reads comes near it. */
 const MAX_FRAME = 16 << 20;
+/** The most one message may be across its fragments. */
+const MAX_MESSAGE = 32 << 20;
 
 export function codexControlSocket(home: string): string {
   return join(home, "app-server-control", "app-server-control.sock");
@@ -55,6 +57,7 @@ export class CodexApp {
   >();
   private buf = Buffer.alloc(0);
   private text: Buffer[] = [];
+  private textSize = 0;
   private closed = false;
   /** Resolves once the socket closed, for whatever reason. */
   readonly done: Promise<void>;
@@ -183,10 +186,13 @@ export class CodexApp {
         continue;
       }
       if (op !== 0 && op !== 1) continue;
+      this.textSize += payload.length;
+      if (this.textSize > MAX_MESSAGE) return this.close();
       this.text.push(Buffer.from(payload));
       if (!(b0 & 0x80)) continue;
       const text = Buffer.concat(this.text).toString("utf8");
       this.text = [];
+      this.textSize = 0;
       let m: CodexMessage;
       try {
         m = JSON.parse(text) as CodexMessage;
