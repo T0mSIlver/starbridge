@@ -215,18 +215,27 @@ try {
     await page.getByText("Opens your browser.").waitFor();
 
     step("sign in with GitHub (stub) through the browser, and set up the app as the first device");
-    // Clicked in the page: Playwright's click would wait for a navigation the app cancels.
-    await page
+    // Clicked with the mouse, which the app requires to open the browser (#1721): Playwright's
+    // click would wait for a navigation the app cancels.
+    const box = await page
       .getByRole("link", { name: /^(Sign in|Continue) with GitHub$/ })
-      .evaluate((a: HTMLElement) => a.click());
+      .boundingBox();
+    assert.ok(box);
+    await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
     // The app sends the sign-in to the browser; this run plays the browser, following redirects
     // through GitHub and the server until the starbridge://auth link the browser would open.
     let next = await until(
       async () => (await main((g) => g.outside)).find((u) => u.includes("/v1/auth/github?app=1")),
       "the sign-in sent to the browser",
     );
+    // The browser keeps the server's cookie from the start to the callback, which binds the
+    // sign-in's return to it.
+    const jar = new Map<string, string>();
     while (!next.startsWith("starbridge:")) {
-      const res = await fetch(next, { redirect: "manual" });
+      const at = new URL(next).origin;
+      const res = await fetch(next, { redirect: "manual", headers: { cookie: jar.get(at) ?? "" } });
+      const set = res.headers.get("set-cookie");
+      if (set) jar.set(at, set.split(";")[0] ?? "");
       const location = res.headers.get("location");
       assert.ok(location, `${next} answered ${res.status} without a redirect`);
       next = new URL(location, next).toString();

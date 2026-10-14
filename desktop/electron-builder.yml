@@ -57,5 +57,7 @@ electronFuses:
   enableEmbeddedAsarIntegrityValidation: true
   onlyLoadAppFromAsar: true
   enableCookieEncryption: true
+  # No file: page needs more than a web page's privileges (#1721).
+  grantFileProtocolExtraPrivileges: false
 linux:
   executableName: starbridge

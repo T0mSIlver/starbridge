@@ -16,7 +16,9 @@ pnpm --filter @starbridge/desktop start
 `STARBRIDGE_SERVER=http://localhost:3000` points a run at a local server; otherwise the app uses
 the server set from sign-in's "Use your own server", starbridge.run by default.
 `STARBRIDGE_RELEASES` points the updater, which otherwise runs only in a packaged app, at another
-repository's GitHub page or a stand-in for it.
+repository's GitHub page or a stand-in for it. A packaged app reads neither, nor `STARBRIDGE_TIP`, so
+another process cannot repoint it; `test/perf.ts` and `test/switch.ts` write the server into a
+packaged run's `settings.json` instead.
 
 Tests: `pnpm test` (unit) and `pnpm e2e`, which launches the app on a stand-in page and checks the
 bridge, the menu bar icon, the notifications and an update from a stand-in release feed (`xvfb-run -a` on Linux). The `desktop` workflow
