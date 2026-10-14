@@ -1,7 +1,7 @@
 name: ops
 
 # The owner's private ops page (#1630): the rings including main, and what happens next. Built every 30
-# minutes and after each deploy, release, nightly and promotion, then uploaded to the Cloudflare Pages
+# minutes and after each deploy, release, internal build and promotion, then uploaded to the Cloudflare Pages
 # project starbridge-ops, which Cloudflare Access closes to the owner (spec/hosted.md says how it is set up). Its Cloudflare token is a secret of the `ops-pages`
 # environment, open to main only; without it the run builds the page and uploads nothing. The page has
 # commits and times, so it is never a workflow artifact or a log line.

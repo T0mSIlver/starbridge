@@ -13,7 +13,7 @@ const facts = (over: Partial<Facts> = {}): Facts => ({
   releases,
   staging: "a".repeat(40),
   prod: "b".repeat(40),
-  nightly: { sha: "c".repeat(40), at: "2026-10-13T21:55:57Z" },
+  internalBuild: { sha: "c".repeat(40), at: "2026-10-13T21:55:57Z" },
   androidSince: 3,
   stagingSinceRc: 5,
   commits: { "0.1.6": "d".repeat(40), "0.1.7-rc.2": "e".repeat(40) },
@@ -22,17 +22,21 @@ const facts = (over: Partial<Facts> = {}): Facts => ({
   ...over,
 });
 
-test("the nightly is the next 03:00 UTC, shown in Paris and UTC", () => {
+test("the iPhone nightly is the next 03:00 UTC, shown in Paris and UTC", () => {
   expect(nextNightly(new Date("2026-10-14T00:00:00Z")).toISOString()).toBe(
     "2026-10-14T03:00:00.000Z",
   );
   expect(nextNightly(new Date("2026-10-14T03:00:00Z")).toISOString()).toBe(
     "2026-10-15T03:00:00.000Z",
   );
-  expect(next(facts())[0]).toContain("05:00 Paris, 03:00 UTC");
-  expect(next(facts())[0]).toContain("builds, 3 commits since main-cccccccc");
-  expect(next(facts({ androidSince: 0 }))[0]).toContain("skips");
-  expect(next(facts({ androidSince: 2, androidChanged: false }))[0]).toContain("skips");
+  expect(next(facts({ iosMainOn: true }))[1]).toContain("05:00 Paris, 03:00 UTC");
+});
+
+test("Android main builds on each app merge and rc tag, and says what is not built yet (#1690)", () => {
+  expect(next(facts())[0]).toContain("each merge that touches the app and each rc tag");
+  expect(next(facts())[0]).toContain("3 commits not built since main-cccccccc");
+  expect(next(facts({ androidSince: 0 }))[0]).toContain("none waiting");
+  expect(next(facts({ androidSince: 2, androidChanged: false }))[0]).toContain("none waiting");
 });
 
 test("promotion is the newest rc's time plus a day, in Paris and UTC", () => {

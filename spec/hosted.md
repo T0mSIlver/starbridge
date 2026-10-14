@@ -91,10 +91,10 @@
 - **Releases page** (#1618). `status.starbridge.run/releases` lists, per product (hosted server and
   web page, Android, iPhone, Mac app, CLI, Claude Code plugin) and per public ring (release candidate,
   final), the version, the day it shipped and where it is, each version linking to its GitHub release
-  notes. It says the cadence in words and gives no date, since only the Android nightly has a fixed
-  one and that is not a public ring; a final waits on the owner's yes, which a date would promise. It
+  notes. It says the cadence in words and gives no date, since only main's builds come on a fixed rhythm
+  and that is not a public ring; a final waits on the owner's yes, which a date would promise. It
   never shows main's or staging's commit (it would reveal unreleased work and unfixed bugs before a
-  patch), the Android nightly or internal track, rollout percentages, CI state, tester lists or
+  patch), Android's internal track, rollout percentages, CI state, tester lists or
   unreleased features. Every fact on it is already public on GitHub, npm, Homebrew, Play and
   TestFlight; the rest has one reader, the owner, and lives on cards and in CI. Pages of this kind
   show state, not process, and every version table comes from data (research:
@@ -104,11 +104,11 @@
   status site rather than the web app so it stays up when the VPS is down and needs no deploy.
 - **Ops page** (#1630). `ops.starbridge.run` is the owner's private page for learning how work flows:
   per product, the version, commit and time of main (staging's and starbridge.run's commits from
-  `/healthz`, the Android nightly), the newest release candidate and the newest final, and what
-  happens next, in Europe/Paris and UTC: whether tonight's Android nightly builds, how many commits
+  `/healthz`, the Android internal build), the newest release candidate and the newest final, and what
+  happens next, in Europe/Paris and UTC: how many Android commits wait for a build, how many commits
   staging holds beyond the newest rc, and what promotion still waits on. Unlike the public releases
   page it shows commits, since one person reads it. `ops.yml` builds it from the GitHub API, the
-  tags and `releases.json` every 30 minutes and after each deploy, release, nightly and promotion,
+  tags and `releases.json` every 30 minutes and after each deploy, release, internal build and promotion,
   and uploads it to the Pages project `starbridge-ops`, only when its text changed (times round to
   the hour). A GitHub Actions job rather than a VM, so no secret reaches the VMs. Cloudflare Access
   (Zero Trust free plan, one-time PIN to the owner's email) guards the custom domain and the
