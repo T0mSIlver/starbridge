@@ -100,7 +100,12 @@ export class Claude {
     const env = Object.entries({ ...base, TERM: "xterm-256color", ...this.env }).map(
       ([k, v]) => `${k}=${v}`,
     );
-    const cmd = ["env", "-i", ...env, "claude", "--session-id", this.sessionId, ...this.args];
+    // `STARBRIDGE_E2E_CLAUDE_ENV`: a file of `KEY=value` lines the sessions read, such as a
+    // `CLAUDE_CODE_OAUTH_TOKEN` from `claude setup-token`, kept out of every command line.
+    const file = process.env.STARBRIDGE_E2E_CLAUDE_ENV;
+    const login = file ? ["sh", "-c", 'set -a; . "$0"; set +a; exec "$@"', file] : [];
+    const claude = ["claude", "--session-id", this.sessionId, ...this.args];
+    const cmd = ["env", "-i", ...env, ...login, ...claude];
     await $`tmux new-session -d -s ${this.tmux} -x 200 -y 50 -c ${this.cwd} ${cmd}`;
     // The folder-trust question on a first start in a new folder.
     await until(

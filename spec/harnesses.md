@@ -8,7 +8,8 @@ ending its turn. `ask` prints which of the two applies (#203). `wait <id>` marks
 waiting, which notifies the owner once more; `wait --no-mark` collects the answer to a question
 that blocks nothing yet, such as one for tomorrow, without that (#603). A `wait` without an id, run in an
 agent's session, takes only that session's answers (#324). `ask` promises a prompt in Claude Code
-only when that session's mod called the local agent within the last 45 s (#537); after `/clear` the mod's
+only when that session's mod called the local agent within the last 45 s (#537), or when the mod
+named the subagent that asks (#1702); after `/clear` the mod's
 hello under the new id names the old one (`replaces`), which then no longer counts. An installed plugin is no proof,
 since a session started before it, or one whose mod failed to load, has none; without an agent,
 the poller's lease says only that some session runs a mod. When unsure, `ask` prints the `wait`
@@ -22,7 +23,8 @@ line, the safe side: at worst a prompt repeats an answer the agent already read.
 | `codex exec` | `wait`: nothing runs a queued message once exec returns. The thread's rollout tells exec apart (#245) |
 | Pi TUI and RPC | The Pi extension (`mod/pi`) calls `pi.sendUserMessage(text, { deliverAs: "steer" })`: a busy session takes it after its current tool calls (#232, #1584) |
 | opencode TUI and `serve` | The opencode plugin (`mod/opencode`) calls `client.session.promptAsync`, one loop per session (#300); a busy session takes it at its next step (#1484) |
-| `pi -p`, `opencode run`, subagents | `wait` |
+| Claude Code subagents | The mod sends the answer to the subagent that asked with `$.session.send` (#1702) |
+| `pi -p`, `opencode run`, other harnesses' subagents | `wait` |
 | Antigravity, interactive | The local agent sends the answer to the conversation's language server, at the address and token `ask` saw, with `SendUserCascadeMessage` run when idle. Retried each minute, 30 times (#961) |
 | `agy -p` | `wait`: its language server ends with the run |
 | `cursor-agent` | Setup's `stop` hook holds up to 10 minutes while the conversation has a question open and returns the answer as `followup_message`, Cursor's next user message (#956) |
@@ -54,7 +56,8 @@ line, the safe side: at worst a prompt repeats an answer the agent already read.
   context, since it runs a submitted prompt only after the turn; an answer that comes after the
   turn's last tool call goes as a prompt once it ends. It goes out one way only: the mod's own
   `prompt.submit` hook never sees its own prompts, so it could not drop a second copy. A
-  subagent's tool results carry none: the answer is for the agent that asked. Pi steers with
+  subagent's tool results carry none: the answer is for the agent that asked, which gets it as
+  below. Pi steers with
   `deliverAs: "steer"`; opencode takes it at its next step. Codex steers with its daemon's
   `turn/steer` over the control socket, which sits in a folder only the owner opens, so the
   steer carries the answer rather than a pointer to it, and queues when no turn runs (#1486).
@@ -62,6 +65,20 @@ line, the safe side: at worst a prompt repeats an answer the agent already read.
   still tells the owner the agent is blocked, and `starbridge waiting <id>` prints an answer
   already in. The skill forbids waiting in a background task or with a monitor, which costs a
   process per card and can deliver an answer twice.
+- **A Claude Code subagent's question** (#1702). A subagent's Bash runs under its parent's
+  session id and no id of its own, and the subagent-guard mod refuses `starbridge wait` there, so
+  before #1702 its answer went to the parent, or nowhere when it made up a `--session`. The mod's
+  `tool.call` hook sees the subagent's `agentId`: on a command that runs `starbridge ask` it
+  exports `STARBRIDGE_CLAUDE_AGENT` first, and the CLI keeps the id with the decision when the
+  question is the session's own. The permission check judges the command as the subagent wrote
+  it, so the export never asks anyone. An environment variable, because `ask`'s output, the
+  other way to learn the id, is hidden by a command such as `id=$(starbridge ask …)`. The mod
+  sends the answer with `$.session.send({ to: { agentId } })`, one message per subagent for the
+  lines one poll brings, whether or not the main agent's turn runs: a running subagent reads it
+  at its next tool call, and a finished one is resumed with it (`mod/e2e`, cases `subrunning`
+  and `subfinished`). When the send fails, the subagent gone, the answer goes to the parent as
+  a prompt that names the subagent. `ask` warns when `--session` names neither its own session
+  nor any Claude Code session on this machine, since no mod takes that answer.
 - **Answers that come in together** (#1597). The answers one session has waiting when it is
   handed them go as one message, one `Answer to …` line each, in the order they came, so five
   answers queued behind a turn start one turn rather than five, each on part of the picture.

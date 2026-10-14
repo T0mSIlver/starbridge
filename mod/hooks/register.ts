@@ -13,6 +13,7 @@ import {
 import { Handover } from "./handover.ts";
 import { configDir, Poller } from "./poller.ts";
 import { Sent, sessionElsewhere } from "./sent.ts";
+import { tagAsk, toSubagents, untagAsk } from "./subagent.ts";
 import { Switch, wantsLoop } from "./switch.ts";
 
 /**
@@ -129,7 +130,17 @@ export const register: Register = (on) => {
       token,
     );
     sent = records;
-    const submit = (lines: Line[]) => handover.submit(lines, (rest) => records.send(rest));
+    // A subagent's answers go to it, whatever the main agent does (#1702).
+    const submit = async (lines: Line[]) => {
+      const { taken, rest } = await toSubagents(
+        lines,
+        (agentId, text) => $.session.send({ to: { agentId }, text }),
+        log,
+      );
+      const parent =
+        rest.length > 0 ? await handover.submit(rest, (left) => records.send(left)) : [];
+      return [...taken, ...parent];
+    };
     const starting = () => waiting > 0;
     loop = new Switch(
       {
@@ -200,14 +211,35 @@ export const register: Register = (on) => {
   });
 
   on("tool.call", async ($, e, next) => {
+    if (e.agentId !== undefined) {
+      // The CLI keeps which subagent asked, so its answer goes back there (#1702).
+      if (e.tool === "Bash") {
+        const command = tagAsk(e.command, e.agentId);
+        if (command !== e.command) return next({ ...e, command });
+      }
+      return next(e);
+    }
     const r = await next(e);
-    if (e.agentId !== undefined || r.deny !== undefined) return r;
+    if (r.deny !== undefined) return r;
     const lines = await handover.take((acks) => loop?.claim(acks) ?? Promise.resolve([]));
     if (lines.length === 0) return r;
     $.ui.log(`starbridge: handed ${lines.length} answer(s) with the ${e.tool} result`, {
       to: "debug",
     });
     return { ...r, context: [...(r.context ?? []), ...lines] };
+  });
+
+  // The tag `tool.call` adds is not the subagent's, so the rules judge the command it wrote: where
+  // they would ask about the tagged one, the verdict on the untagged one stands (#1702).
+  on("tool.check", async ($, e, next) => {
+    const verdict = await next(e);
+    const input = e.input as { command?: unknown } | undefined;
+    if (verdict.decision !== "ask" || verdict.hook !== undefined) return verdict;
+    if (e.tool !== "Bash" || typeof input?.command !== "string") return verdict;
+    const command = untagAsk(input.command);
+    if (command === input.command) return verdict;
+    const plain = await $.tool.check({ tool: "Bash", input: { ...input, command } });
+    return plain.decision === "ask" ? verdict : plain;
   });
 
   // After a /clear or a /resume the process goes on under another session id, with no

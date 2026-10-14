@@ -115,6 +115,8 @@ export interface State {
       cursor?: string;
       /** The Claude Code session that asked; the mod delivers the answer there only. */
       session?: string;
+      /** The subagent of that session that asked, which the mod sends the answer to (#1702). */
+      subagent?: string;
       /** The asking session's title and project, for `answers --all` once `body` is gone. */
       sessionTitle?: string;
       project?: string;

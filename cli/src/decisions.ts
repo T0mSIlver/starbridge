@@ -25,7 +25,7 @@ import {
 import { Interrupted } from "./agent/client";
 import { type AgyRoute, ANTIGRAVITY_CONVERSATION, agyRoute, antigravityTitle } from "./antigravity";
 import { ApiError, Unreachable } from "./api";
-import { claudeSession, type HooklessCopy, hooklessCopies } from "./claude";
+import { claudeSession, type HooklessCopy, hooklessCopies, knownClaudeSession } from "./claude";
 import { type CodexSession, codexAsker, codexSession, codexTitle } from "./codex";
 import type { State } from "./config";
 import {
@@ -70,6 +70,11 @@ export interface AskInput {
   held?: boolean;
   /** Asked for Claude Code's open `AskUserQuestion` picker in this session (#848). */
   picker?: string;
+  /**
+   * The Claude Code subagent that asks, from `STARBRIDGE_CLAUDE_AGENT`, which the mod sets for a
+   * subagent's `starbridge ask` (#1702): the mod sends the answer to that subagent.
+   */
+  subagent?: string;
   /**
    * When one of several questions from one tool call was asked: the call's time plus its index in
    * milliseconds, so every inbox lists them together in the call's order (#1079).
@@ -168,9 +173,15 @@ export function resolveSource(
             : undefined) ??
     claude?.title;
   const at = (path: string) => resolve(cwd, path);
+  // Only for the session the subagent runs in: another session's mod knows no such agent.
+  const subagent =
+    agent === "claude-code" && !input.held && session && session === env.CLAUDE_CODE_SESSION_ID
+      ? (input.subagent ?? subagentOf(env))
+      : undefined;
   return {
     ...input,
     ...(agent ? { agent } : {}),
+    ...(subagent ? { subagent } : {}),
     ...(codex ? { codex } : {}),
     ...(agy ? { antigravity: agy } : {}),
     ...(extensionAnswers ? { extensionAnswers } : {}),
@@ -267,6 +278,31 @@ function agentOf(input: AskInput, env: Ctx["env"]): { agent?: Agent } {
   if (env[ANTIGRAVITY_CONVERSATION]) return { agent: "antigravity" };
   if (env.CURSOR_AGENT === "1") return { agent: "cursor" };
   return claude ? { agent: "claude-code" } : {};
+}
+
+/** Characters a Claude Code agent id or teammate address takes; the mod sets nothing else. */
+const AGENT_ID = /^[A-Za-z0-9_.@-]{1,200}$/;
+
+function subagentOf(env: Ctx["env"]): string | undefined {
+  const id = env.STARBRIDGE_CLAUDE_AGENT;
+  return id && AGENT_ID.test(id) ? id : undefined;
+}
+
+/**
+ * The warning `ask` prints when `--session` names neither the Claude Code session that runs it
+ * nor any other Claude Code session on this machine, such as a name a subagent made up (#1702):
+ * no session's mod then takes the answer.
+ */
+export function sessionWarning(
+  input: Pick<AskInput, "session" | "agent">,
+  env: Ctx["env"],
+): string | undefined {
+  const own = env.CLAUDE_CODE_SESSION_ID;
+  const named = input.session;
+  if (!named || !own || named === own || agentOf(input, env).agent !== "claude-code")
+    return undefined;
+  if (knownClaudeSession(env, named)) return undefined;
+  return `starbridge: --session ${named} names no Claude Code session on this machine, so no session gets the answer as a prompt. Leave out --session to ask as this session (${own}).`;
 }
 
 function checked(decision: unknown): Decision {
@@ -392,6 +428,9 @@ export async function postDecision(ctx: Ctx, s: Session, input: AskInput): Promi
         ...(input.extensionAnswers && decision.source.session ? { extensionAnswers: true } : {}),
         ...(input.held ? { held: true } : {}),
         ...(input.picker ? { picker: input.picker } : {}),
+        ...(input.subagent && decision.source.session && !input.held
+          ? { subagent: input.subagent }
+          : {}),
       };
     });
   try {
@@ -430,6 +469,8 @@ export async function ask(
   const resolved = resolveSource(input, ctx.env, process.cwd());
   const decision = await postDecision(ctx, s, { ...resolved, waiting: input.waiting || opts.wait });
   ctx.out(decision.id);
+  const warning = sessionWarning(input, ctx.env);
+  if (warning) ctx.err(warning);
   // With no agent, nothing tells which sessions run a mod: the poller's lease says only that one
   // does (#537).
   if (!opts.wait) {
@@ -888,13 +929,14 @@ export type Delivery = "prompt" | "wait";
  * nothing back.
  */
 export function delivery(
-  input: Pick<AskInput, "agent" | "extensionAnswers" | "headless" | "antigravity">,
+  input: Pick<AskInput, "agent" | "extensionAnswers" | "headless" | "antigravity" | "subagent">,
   reachable: boolean,
   modSeen: boolean,
 ): Delivery {
   if (input.agent === "antigravity") return input.antigravity && reachable ? "prompt" : "wait";
+  // Only the mod names a subagent, so one runs in this session (#1702).
   if (input.agent === "claude-code" || input.agent === "cursor")
-    return !input.headless && modSeen ? "prompt" : "wait";
+    return !input.headless && (modSeen || !!input.subagent) ? "prompt" : "wait";
   if (input.agent === "pi" || input.agent === "opencode")
     return input.extensionAnswers ? "prompt" : "wait";
   return input.agent === "codex" && reachable ? "prompt" : "wait";
@@ -1536,6 +1578,8 @@ export interface SessionLine {
    * the agent's next tool call rather than after its turn (#1484).
    */
   waiting: boolean;
+  /** The Claude Code subagent that asked, which the mod sends the answer to (#1702). */
+  subagent?: string;
 }
 
 /** The answers to decisions session `session` asked that no `wait` printed nor the mod confirmed. */
@@ -1552,6 +1596,7 @@ export function sessionLines(st: State, session: string): SessionLine[] {
       ack: id,
       line: answerLine(a.answer, asked.question),
       waiting: asked.waiting?.state === "waiting",
+      ...(asked.subagent ? { subagent: asked.subagent } : {}),
     });
   }
   return lines;
@@ -1576,7 +1621,13 @@ export function ackLines(st: State, session: string, tokens: string[]): string[]
 /** What `answers` prints for each line, as the mod reads it. */
 const printLine = (ctx: Ctx, l: SessionLine) =>
   ctx.out(
-    JSON.stringify({ decisionId: l.decisionId, ack: l.ack, line: l.line, waiting: l.waiting }),
+    JSON.stringify({
+      decisionId: l.decisionId,
+      ack: l.ack,
+      line: l.line,
+      waiting: l.waiting,
+      ...(l.subagent ? { subagent: l.subagent } : {}),
+    }),
   );
 
 /**

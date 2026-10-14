@@ -85,6 +85,14 @@ the agent works, an answer goes with its next tool result, which it reads at
 once; one that comes after the turn's last tool call is submitted when the
 turn ends. The answers one poll brings go as one prompt, a line each (#1597).
 
+A subagent's answer goes to that subagent with `$.session.send`, during the
+main agent's turn or not (#1702). For a subagent's Bash command that runs
+`starbridge ask`, the mod exports `STARBRIDGE_CLAUDE_AGENT=<its agent id>`
+first, which the CLI keeps with the decision; the permission check judges the
+command without it. A subagent that is running reads the answer at its next tool
+call, and a finished one is resumed with it. When the send fails, the answer
+goes to the parent as a prompt that names the subagent.
+
 An answer submitted as a prompt stays in
 `~/.config/starbridge/mod-sent/<session>.json` until its turn starts. Claude
 Code loses a queued prompt when its process exits, so a later process on that
@@ -167,13 +175,16 @@ pnpm --filter @starbridge/mod test
 ```
 
 `e2e/run.ts` drives real Claude Code sessions in tmux through each case:
-idle, mid-turn, `/clear` and `/resume`, a hot reload, a server outage, and two
-sessions at once. It runs against the server app on a
+idle, mid-turn, `/clear` and `/resume`, a hot reload, a server outage, two
+sessions at once, and a background subagent that asks, answered while it runs
+and after it finished. It runs against the server app on a
 random port (`--local`), or against a real server with a test device
 (`e2e/device.ts`) and this machine's CLI config. It needs `claude`, `tmux` and
 `starbridge` on `PATH`, and prints one row of timings per case. With
 `--agent` it runs `starbridge agent` for the whole run, and a last row checks
-that every session answered through it.
+that every session answered through it. `STARBRIDGE_E2E_CLAUDE_ENV` names a
+file of `KEY=value` lines the sessions read, such as a `CLAUDE_CODE_OAUTH_TOKEN`
+from `claude setup-token`, so the login stays out of every command line.
 
 The tests run both paths against the CLI, a real agent and the real server,
 which `@starbridge/server/test-support` starts on a random port.
