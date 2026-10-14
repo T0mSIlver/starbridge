@@ -199,6 +199,17 @@ test("a revocation Apple refuses is tried again later, and dropped after the las
   expect(left()).toEqual([]);
 });
 
+test("tokens of an account deleted by a server before #1746 are revoked all the same", async () => {
+  const s = await makeServer(appleConfig());
+  const { json } = await s.call("POST", "/v1/auth/apple/session", { body: signInBody("u15") });
+  const account = (await s.call("GET", "/v1/me", { token: json.session })).json.account;
+  s.deps.db.query("DELETE FROM sessions WHERE account_id = ?").run(account);
+  s.deps.db.query("DELETE FROM accounts WHERE id = ?").run(account);
+  s.deps.apple?.revokeDue(s.deps.db);
+  await s.deps.apple?.idle();
+  expect(revoked.map((r) => r.token)).toEqual([expect.stringMatching(/^rt-u15\./)]);
+});
+
 test("deleting an account from before #1746 revokes the token it holds itself", async () => {
   const s = await makeServer(appleConfig());
   const { json } = await s.call("POST", "/v1/auth/apple/session", { body: signInBody("u14") });

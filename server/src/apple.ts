@@ -131,6 +131,11 @@ export class Apple {
    * deleted after REVOKE_ATTEMPTS. [idle] lets a shutdown wait for the revocations under way.
    */
   revokeDue(db: Database, now = Date.now()): void {
+    // A server one release behind deletes an account without queueing its tokens (#1746).
+    db.query(
+      `UPDATE apple_tokens SET account_id = NULL, due_at = ?
+       WHERE account_id IS NOT NULL AND account_id NOT IN (SELECT id FROM accounts)`,
+    ).run(now);
     const due = db
       .query(
         "SELECT token, client, attempts FROM apple_tokens WHERE account_id IS NULL AND due_at <= ?",

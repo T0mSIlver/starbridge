@@ -431,8 +431,9 @@ request without the header, or with one the server cannot read, is served.
   nonce's hash in its `nonce` claim. It then trades the code, which works once, at Apple's token
   endpoint with a client secret signed by the team's Sign in with Apple key, and the identity
   token that comes back must name the same user. The account is Apple's stable user id (`sub`);
-  the server keeps the refresh token of the account's last Apple sign-in only to revoke it at
-  `https://appleid.apple.com/auth/revoke` when the account is deleted. The page and the other
+  the server keeps the refresh token of each Apple sign-in only to revoke it at
+  `https://appleid.apple.com/auth/revoke` when the account is deleted, retrying for about 3 days
+  while Apple fails (#1746). The page and the other
   apps use Apple's web sign-in with the Services ID instead, as GitHub's, with no scope and
   `response_mode=query`. For an app's sign-in the server sends the app's challenge to Apple as
   the `nonce` too, which Apple signs into the identity token: the server's callback hands the code
