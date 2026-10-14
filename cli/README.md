@@ -65,6 +65,8 @@ failed update keeps the old version and tries again the next day. Otherwise `set
 `config` and `--version` print a line saying it is out. Your devices show "Update available"
 under a machine that is behind, else when it last updated and to what.
 
+The server refuses a CLI before 0.1.1. Its commands say to run `starbridge update`.
+
 | Command | Effect |
 |---|---|
 | `starbridge update` | Installs the latest release over a script install, then runs `setup --refresh` and updates the Claude Code plugins. Homebrew and npm installs update through their manager; then run `setup --refresh`. |
