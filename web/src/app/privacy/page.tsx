@@ -198,12 +198,12 @@ export default function Privacy() {
       <p>
         Self-hosted servers without their own push credentials send pushes through starbridge.run,
         which passes them to these services and keeps none. Each push holds the item&apos;s kind and
-        id, the sender&apos;s machine id, the id of the item it answers, a snooze&apos;s wake time
-        and whether it is due, and either the item&apos;s encrypted content or nothing more; an
-        iPhone push also holds a fixed title and a thread id. The relay forwards any text of up to
-        4000 characters it is given, so a modified server could send more; the Starbridge server
-        sends only these fields. There are no ads, and no analytics beyond the usage counts above
-        and the page analytics below.
+        id, the sender&apos;s machine or device id, the id of the item it answers, a snooze&apos;s
+        wake time and whether it is due, and either the item&apos;s encrypted content or nothing
+        more; an iPhone push also holds a fixed title and a thread id. The relay forwards any text
+        of up to 4000 characters it is given, so a modified server could send more; the Starbridge
+        server sends only these fields. There are no ads, and no analytics beyond the usage counts
+        above and the page analytics below.
       </p>
 
       <h2 className="t-heading">Page analytics</h2>
