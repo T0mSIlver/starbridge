@@ -1,231 +1,49 @@
-# Self-host
+# Starbridge
 
-Run your own Starbridge server instead of starbridge.run. The server is one Bun process and a
-SQLite file. It stores encrypted items and relays notifications; it holds no key that opens
-them. Its routes are in `PROTOCOL.md`.
+Know the moment your agent is stuck.
 
-## What you run
+When a coding agent stops for a question, Starbridge puts it on your phone and in your browser.
+You answer with one tap, and your answer comes back as the session's next prompt. Sessions of
+every harness your agents run in (Claude Code, Codex, Pi, opencode, Cursor and Antigravity), on
+every machine, reach you in one place.
 
-- The server, which answers `/v1/*` and `/healthz`.
-- The web app, which serves every other path.
-- A reverse proxy in front of both, on one origin, such as `https://starbridge.example`. The
-  session cookie and the server's cross-site check need the API and the web app on the same
-  origin.
+Starbridge also shows the runs that affect you, such as a release or an eval on a rented GPU,
+answers permission prompts once you turn them on, and shows what's left on each AI plan.
 
-## Set it up
+Your phone, browsers and machines encrypt everything they send each other, so the server stores your
+content only as ciphertext
+([what the server sees](https://starbridge.run/docs/faq#what-does-the-server-see)). Use the free
+server at [starbridge.run](https://starbridge.run), or host your own.
 
-1. With Docker installed, clone the
-   [latest release](https://github.com/T0mSIlver/starbridge/releases/latest), here `v0.1.6`:
+![Claude Code asks which model to run a paid eval with; the question reaches the phone, one tap answers it, and the session carries on](docs/media/demo.gif)
 
-   ```bash
-   git clone --branch v0.1.6 https://github.com/T0mSIlver/starbridge
-   cd starbridge
-   ```
+Launch week: [known issues](https://github.com/T0mSIlver/starbridge/issues?q=is%3Aissue%20label%3Aknown-issue).
 
-2. Write the server's settings in `server/.env`. The owner token signs you in to the server's
-   one account; make it long and random, for example with `openssl rand -hex 32`.
+## Get started
 
-   ```
-   PUBLIC_URL=https://starbridge.example
-   OWNER_TOKEN=change-me
-   RELAY_URL=https://starbridge.run
-   ```
-
-   `RELAY_URL` sends Android and browser notifications through starbridge.run, which sees what
-   [Notifications](#notifications) lists. To keep every notification on your own servers, leave
-   it out and follow [Without the relay](#without-the-relay). [Environment](#environment) lists the other settings.
-
-3. Build and start the server, on `127.0.0.1:8080`, and the web app, on `127.0.0.1:3000`:
-
-   ```bash
-   docker compose -f server/compose.yaml up -d --build
-   ```
-
-4. Route both through your reverse proxy. The web app sends its pages and scripts uncompressed,
-   so have the proxy compress them. With Caddy, which also gets the TLS certificate:
-
-   ```caddyfile
-   starbridge.example {
-     # The web image leaves compression to the proxy.
-     encode zstd gzip
-     # The web image sets the page's Content-Security-Policy; the proxy sets the rest.
-     header {
-       Strict-Transport-Security "max-age=31536000"
-       X-Content-Type-Options nosniff
-       Referrer-Policy same-origin
-       defer
-     }
-     @server path /v1/* /healthz /healthz/*
-     handle @server {
-       reverse_proxy localhost:8080
-     }
-     handle {
-       reverse_proxy localhost:3000
-     }
-   }
-   ```
-
-5. Sign in. On the web, open your origin, pick "Sign in" and enter the owner token. In the
-   Android app, pick "Use your own server", enter your origin, then the owner token. With
-   [GitHub sign-in](#sign-in) set up, both can use it on your server too, and the web page
-   shows "Continue with GitHub" first, with the owner token behind "Use your own server".
-
-6. Install the CLI on each machine that runs your harnesses. Its install script carries
-   its `PUBLIC_URL`, so setup pairs the machine with your server:
-
-   ```bash
-   curl -fsSL https://starbridge.example/install.sh | sh
-   ```
-
-   On Windows: `irm https://starbridge.example/install.ps1 | iex`. Your landing page shows the
-   same commands. A CLI installed another way pairs with
-   `starbridge setup --server https://starbridge.example`, or with `STARBRIDGE_SERVER` set.
-   Setup ends with a test question: close the app first to check that notifications reach the
-   phone.
-
-## Notifications
-
-Android notifications go through Firebase, whose credentials belong to the app's project. With
-`RELAY_URL`, your server sends them through starbridge.run's relay; Web Push goes through it too,
-unless you set your own VAPID keys. So a self-hosted server still sends its pushes through
-starbridge.run unless it uses UnifiedPush for Android and its own VAPID keys for browsers.
-
-For each push, the relay sees the phone's FCM token or the browser's push endpoint and the
-payload: the item's kind, its id, the sender's id, the id of the item it answers, when a snoozed
-question comes back, and the item sealed to that device, which it cannot open. That is the same
-activity timeline your server sees, tied to a push address. It stores none of it, and counts
-relayed pushes only by type and result.
-
-Without the relay, browsers get notifications only with your own VAPID keys, and the Android app
-only through UnifiedPush. Without UnifiedPush, the Android app checks for new items every 10
-seconds while it is open, and nothing reaches the phone while it is closed. The web page still
-updates on its own.
-
-### Without the relay
-
-UnifiedPush delivers to the Android app through your own ntfy, with nothing through Google's
-Firebase or starbridge.run. Your VAPID keys send browser notifications without starbridge.run;
-each browser's own push service still carries them, encrypted, such as Google's for Chrome.
-
-1. In `server/.env`, remove `RELAY_URL` and add Web Push keys. Make them with
-   `bunx web-push generate-vapid-keys`:
-
-   ```
-   VAPID_PUBLIC_KEY=...
-   VAPID_PRIVATE_KEY=...
-   ```
-
-   If your ntfy is on a private address or plain HTTP, add its host, such as
-   `ALLOW_PRIVATE_PUSH_ENDPOINTS=ntfy.lan` or `ALLOW_PRIVATE_PUSH_ENDPOINTS=192.168.1.20`. Then
-   restart: `docker compose -f server/compose.yaml up -d`. A browser that turned notifications on
-   through the relay subscribes again with your key the next time it opens the page.
-
-2. On an ntfy server with access control, let anyone publish to UnifiedPush topics, which the
-   ntfy app names `up` and a random id, and sign the ntfy app in as a user who can read them:
-
-   ```bash
-   ntfy access everyone 'up*' write-only
-   ```
-
-3. On the phone, install the ntfy app and set its default server to yours. In Starbridge, pick
-   UnifiedPush under Settings → Notifications → Delivered through.
-
-The phone must reach your ntfy, and your Starbridge server must reach it too.
-
-## Upgrade
-
-A new server brings its database's schema up to date when it starts. Copy the database first,
-with the server running:
+Get the app (Android, macOS, or any browser) and sign in, then install the CLI on each machine
+that runs your harnesses:
 
 ```bash
-sudo sqlite3 "$(docker volume inspect -f '{{.Mountpoint}}' starbridge_data)/starbridge.db" ".backup 'starbridge-before.db'"
+curl -fsSL https://starbridge.run/install.sh | sh
 ```
 
-Then check out the new release's tag, such as `v0.1.6`, and rebuild:
+[Start](https://starbridge.run/docs#start) has every app, the Windows, Homebrew and npm installs,
+and your agent's first question.
+[What each harness supports](https://starbridge.run/docs/tell-your-agents#what-each-harness-supports)
+lists what works in each harness.
 
-```bash
-git fetch --tags && git checkout v0.1.6
-docker compose -f server/compose.yaml up -d --build
-```
+## Docs
 
-A server refuses a database a newer release has already upgraded, so to go back to an older
-release, restore the copy you made before upgrading.
+[starbridge.run/docs](https://starbridge.run/docs): getting started, the CLI, agent instructions,
+notifications, self-hosting and the [FAQ](https://starbridge.run/docs/faq).
 
-## Environment
+CI runs the CLI's tests on Linux (x64 and arm64), macOS and Windows on every change to the CLI. A release publishes nothing until its APK passes a smoke test on an Android emulator.
 
-### Basics
+## Contributing
 
-<dl>
-<dt><code>PUBLIC_URL</code></dt>
-<dd>The origin people open, such as <code>https://starbridge.example</code>. The server uses it for sign-in redirects and the cross-site check, and an <code>https://</code> origin makes the session cookie Secure. Default: <code>http://localhost:$PORT</code>.</dd>
-<dt><code>PORT</code></dt>
-<dd>Default: 8080.</dd>
-<dt><code>DB_PATH</code></dt>
-<dd>The SQLite file. Default: <code>./data/starbridge.db</code>, or <code>/data/starbridge.db</code> in the image.</dd>
-<dt><code>TRUST_PROXY</code></dt>
-<dd>Read the client's IP from the last <code>X-Forwarded-For</code> hop. Turn it on behind a reverse proxy. Default: off.</dd>
-</dl>
+See [CONTRIBUTING.md](CONTRIBUTING.md). Report vulnerabilities privately: [SECURITY.md](SECURITY.md).
 
-### Sign-in
+## Licence
 
-<dl>
-<dt><code>OWNER_TOKEN</code></dt>
-<dd>Signs you in to the server's one owner account. Set it, GitHub sign-in, or both. Unset by default.</dd>
-<dt><code>GITHUB_CLIENT_ID</code>, <code>GITHUB_CLIENT_SECRET</code></dt>
-<dd>GitHub sign-in, where each GitHub user gets their own account, from a GitHub OAuth app. Set both. Register two callback URLs in the OAuth app: <code>$PUBLIC_URL/v1/auth/github/callback</code> for the web and <code>$PUBLIC_URL/v1/auth/github/callback/app</code> for the Android app. GitHub refuses the app's sign-in when only the first is listed. Unset by default.</dd>
-<dt><code>SIGNUP_GITHUB_IDS</code></dt>
-<dd>Comma-separated numeric GitHub user ids. When set, only these users can make an account, and Sign in with Apple makes none; <code>OWNER_TOKEN</code>, a secret you set, still makes the owner account; accounts that exist sign in as before. A value that is empty or not a list of ids stops the server at start. Unset by default: anyone can sign up.</dd>
-<dt><code>APP_REDIRECT_URI</code></dt>
-<dd>Where GitHub sign-in sends the Android app. Only starbridge.run can vouch for the app, so its server sets <code>https://starbridge.run/app/auth</code>. Default: <code>starbridge://auth</code>.</dd>
-</dl>
-
-### Notifications
-
-<dl>
-<dt><code>RELAY_URL</code></dt>
-<dd>The relay's origin, such as <code>https://starbridge.run</code>. <a href="#notifications">Notifications</a> says what goes out without it. Unset by default.</dd>
-<dt><code>FCM_*</code>, <code>APNS_*</code>, <code>APPLE_*</code></dt>
-<dd>Keys of the apps' own Firebase project and Apple team, for Android and iPhone pushes and Sign in with Apple. Only starbridge.run holds them; a self-hosted server uses the relay or UnifiedPush instead. The names are in <code>server/src/config.ts</code>. Unset by default.</dd>
-<dt><code>VAPID_PUBLIC_KEY</code>, <code>VAPID_PRIVATE_KEY</code>, <code>VAPID_SUBJECT</code></dt>
-<dd>Web Push keys, to send browser notifications without the relay. Make them with <code>bunx web-push generate-vapid-keys</code>. Unset by default.</dd>
-<dt><code>ALLOW_PRIVATE_PUSH_ENDPOINTS</code></dt>
-<dd>Hosts on your own network that push endpoints may name, over plain HTTP too, such as an ntfy: comma-separated names or addresses, without ports. Any account on the server can point its pushes at them. <code>1</code> still allows every private host, but the server warns at startup: every account could make it call any host on your network. Default: none.</dd>
-<dt><code>RELAY_MODE</code></dt>
-<dd>Serve <code>POST /v1/relay</code> for other servers, as starbridge.run does. The server refuses it with <code>ALLOW_PRIVATE_PUSH_ENDPOINTS</code>, since the relay pushes for anyone who asks. Default: off.</dd>
-<dt><code>PUSH_TIMEOUT_MS</code></dt>
-<dd>How long one request to a push service may take. Default: 10000.</dd>
-<dt><code>PUSH_INLINE_LIMIT</code></dt>
-<dd>The largest push payload that carries the encrypted item itself; larger ones carry only its id. Default: 3072 bytes.</dd>
-</dl>
-
-### Limits
-
-<dl>
-<dt><code>MAX_MACHINES</code></dt>
-<dd>Machines per account; phones and browsers don't count. Default: 5. starbridge.run sets 3.</dd>
-<dt><code>MAX_WAIT_SECONDS</code></dt>
-<dd>The longest an answer or pairing long-poll waits. Default: 300.</dd>
-</dl>
-
-## Run from source
-
-The server alone, for development; `web/README.md` adds the web app.
-
-```bash
-pnpm install
-```
-
-```bash
-OWNER_TOKEN=change-me PORT=8080 bun run server/src/main.ts
-```
-
-```bash
-pnpm --filter @starbridge/server test
-```
-
-`usage [days]` prints the daily usage counts from `DB_PATH` and exits; the image runs it as
-`bun server.js usage`. What it counts: `src/usage.ts` and `/privacy`.
-
-```bash
-DB_PATH=./data/starbridge.db bun run server/src/main.ts usage 14
-```
+[MIT](LICENSE)
