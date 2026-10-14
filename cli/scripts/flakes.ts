@@ -43,7 +43,11 @@ export function failingTests(log: string): string[] {
   return [...tests].slice(0, 6);
 }
 
-const headers = { Authorization: `Bearer ${token}`, Accept: "application/vnd.github+json" };
+const headers = {
+  Authorization: `Bearer ${token}`,
+  Accept: "application/vnd.github+json",
+  "Content-Type": "application/json",
+};
 
 async function json<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${api}${path}`, { ...init, headers });
@@ -61,7 +65,9 @@ type Job = {
 };
 
 export async function flakes(hours: number): Promise<Flake[]> {
-  const since = Date.now() - hours * 3_600_000;
+  // Whole hours, so nightly runs started minutes apart cover adjoining windows and count no run twice.
+  const end = Math.floor(Date.now() / 3_600_000) * 3_600_000;
+  const since = end - hours * 3_600_000;
   // A rerun can come days after the first attempt; the API lists by creation, up to 1,000 runs.
   const created = new Date(since - 3 * 86_400_000).toISOString().slice(0, 10);
   const runs: Run[] = [];
@@ -70,7 +76,10 @@ export async function flakes(hours: number): Promise<Flake[]> {
       `/repos/${repo}/actions/runs?status=success&created=%3E%3D${created}&per_page=100&page=${page}`,
     );
     runs.push(
-      ...workflow_runs.filter((r) => r.run_attempt > 1 && Date.parse(r.updated_at) >= since),
+      ...workflow_runs.filter(
+        (r) =>
+          r.run_attempt > 1 && Date.parse(r.updated_at) >= since && Date.parse(r.updated_at) < end,
+      ),
     );
     if (workflow_runs.length < 100) break;
   }
@@ -162,7 +171,7 @@ async function record(found: Flake[]): Promise<void> {
   await json(`/repos/${repo}/issues/${issue.number}/comments`, {
     method: "POST",
     body: JSON.stringify({
-      body: `${found.length} first-attempt failures passed on a rerun ([run](${run})):\n\n${table(found)}`,
+      body: `First-attempt failures that passed on a rerun: ${found.length} ([run](${run})).\n\n${table(found)}`,
     }),
   });
 }

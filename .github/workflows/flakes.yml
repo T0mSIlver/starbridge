@@ -38,4 +38,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           HOURS: ${{ inputs.hours || '24' }}
           FLAKES_ISSUE: "1"
-        run: bun cli/scripts/flakes.ts "$HOURS" | tee -a "$GITHUB_STEP_SUMMARY"
+        run: |
+          set -o pipefail
+          bun cli/scripts/flakes.ts "$HOURS" | tee -a "$GITHUB_STEP_SUMMARY"
