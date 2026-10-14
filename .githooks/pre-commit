@@ -12,6 +12,8 @@ unstaged=$(git diff --name-only)
 failed=
 for config in $(git ls-files '*/biome.json'); do
   pkg=${config%/biome.json}
+  # evals/load and evals/migrate keep a config but are no workspace packages, and CI lints neither.
+  [ -f "$pkg/package.json" ] || continue
   files=$(printf '%s\n' "$staged" | sed -n "s|^$pkg/||p")
   [ -n "$files" ] || continue
   if [ ! -x "$pkg/node_modules/.bin/biome" ]; then
