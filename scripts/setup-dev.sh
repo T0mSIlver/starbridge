@@ -20,7 +20,7 @@ for arg in "$@"; do
     --android) android=1 ;;
     --no-browser) browser=0 ;;
     --dry-run) dry=1 ;;
-    -h | --help) sed -n '2,8p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h | --help) echo "usage: setup-dev.sh [--android] [--no-browser] [--dry-run]"; exit 0 ;;
     *) echo "setup-dev: unknown option $arg" >&2; exit 2 ;;
   esac
 done
