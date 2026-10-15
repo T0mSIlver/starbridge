@@ -67,7 +67,9 @@ A pull request that changes `.github/` or `deploy/` needs the owner's yes before
 (`spec/releases.md`, "Owner review"). `owner-review.yml` labels it `owner-review` and sets the
 commit status `owner review`, required on main, to failure until the pull request also carries
 `owner-ok`; a push removes `owner-ok`. The orchestrator adds `owner-ok` once the owner answered
-yes on his card for the commit the pull request holds:
+yes on his card, only while the pull request still holds the commit the card named, and checks
+the head again afterwards: the label names no commit, so a push that lands as it is added would
+get the yes too.
 
 ```bash
 gh api repos/T0mSIlver/starbridge/issues/<n>/labels -f 'labels[]=owner-ok'

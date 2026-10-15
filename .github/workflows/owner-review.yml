@@ -13,7 +13,8 @@ name: owner review
 # Labels set with this job's token start no workflow, so its own labelling does not rerun it.
 on:
   pull_request_target:
-    types: [opened, synchronize, reopened, labeled, unlabeled]
+    # edited: a new base changes which files the pull request changes.
+    types: [opened, synchronize, reopened, edited, labeled, unlabeled]
 
 permissions: {}
 
@@ -33,12 +34,18 @@ jobs:
           # The commit the event saw: a yes covers it, not a later push.
           HEAD: ${{ github.event.pull_request.head.sha }}
           ACTION: ${{ github.event.action }}
+          CHANGED: ${{ github.event.pull_request.changed_files }}
           RUN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           status() {
             gh api "repos/$REPO/statuses/$HEAD" -f context='owner review' -f state="$1" -f description="$2" \
               -f target_url="$RUN" >/dev/null
           }
+          # GitHub lists at most 3000 files: past that, a change in these folders could hide.
+          if [ "$CHANGED" -ge 3000 ]; then
+            status failure "Over 3000 files, too many to check: split it"
+            exit 0
+          fi
           # Old and new names, so moving a file out of these folders counts too.
           files=$(gh api --paginate "repos/$REPO/pulls/$PR/files" --jq '.[] | .filename, (.previous_filename // empty)')
           if ! grep -Eq '^(\.github|deploy)/' <<<"$files"; then
@@ -50,7 +57,8 @@ jobs:
           # The labels now, not the event's: another run may have removed owner-ok since.
           labels=$(gh api "repos/$REPO/issues/$PR/labels" --jq '.[].name')
           if [ "$ACTION" = synchronize ] && grep -qx owner-ok <<<"$labels"; then
-            gh api -X DELETE "repos/$REPO/issues/$PR/labels/owner-ok" >/dev/null
+            # A concurrent run may have removed it already.
+            gh api -X DELETE "repos/$REPO/issues/$PR/labels/owner-ok" >/dev/null || true
             labels=$(grep -vx owner-ok <<<"$labels" || true)
             echo "A new push: owner-ok removed."
           fi
