@@ -14,6 +14,8 @@ const facts = (over: Partial<Facts> = {}): Facts => ({
   staging: "a".repeat(40),
   prod: "b".repeat(40),
   internalBuild: { sha: "c".repeat(40), at: "2026-10-13T21:55:57Z" },
+  tipBuild: { version: "0.1.8-tip.85", sha: "f".repeat(40), at: "2026-10-15T02:52:37Z" },
+  macSince: 2,
   androidSince: 3,
   stagingSinceRc: 5,
   commits: { "0.1.6": "d".repeat(40), "0.1.7-rc.2": "e".repeat(40) },
@@ -86,4 +88,18 @@ test("the page shows main, rc and final and links the policy", () => {
   expect(html).toContain("0.1.7-rc.2");
   expect(html).toContain("claude.ai/artifact/8HEhZtHRWRS5nECZB51MNk");
   expect(html).toContain("aaaaaaaa");
+});
+
+test("the Mac app's main is the newest tip build, and says what is not built yet (#1802)", () => {
+  const html = render(facts());
+  expect(html).toContain("0.1.8-tip.85");
+  expect(html).toContain("ffffffff");
+  expect(html).toContain("Thu 15 Oct, 04:52 Paris, 02:52 UTC");
+  expect(next(facts()).join("\n")).toContain("2 commits not built since 0.1.8-tip.85");
+  expect(next(facts({ macSince: 0 })).join("\n")).toContain(
+    "Mac main: builds on each merge that touches the app; none waiting",
+  );
+  expect(next(facts({ macSince: 2, macChanged: false })).join("\n")).toContain("none waiting");
+  expect(next(facts({ macSince: undefined })).join("\n")).not.toContain("since 0.1.8");
+  expect(render(facts({ tipBuild: undefined }))).toContain("None yet");
 });
