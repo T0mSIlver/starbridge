@@ -321,6 +321,37 @@ try {
       );
     }
 
+    step("a page load on Settings shows every tab from its first frame, as after a deploy");
+    // A window open across a deploy loads in full on its next switch that reaches the server; the
+    // Quotas tab hid until the quotas arrived (#1805).
+    await page.addInitScript(() => {
+      const frames: string[] = [];
+      Object.assign(window, { navFrames: frames });
+      const t0 = performance.now();
+      const record = () => {
+        const nav = document.querySelector('nav[aria-label="Main"]');
+        if (nav)
+          frames.push(
+            [...nav.querySelectorAll("ul a")].map((a) => a.textContent?.match(/^\D+/)?.[0]).join(),
+          );
+        if (performance.now() - t0 < 3000) requestAnimationFrame(record);
+      };
+      requestAnimationFrame(record);
+    });
+    await page.goto(`${ORIGIN}/settings`);
+    await page.getByRole("heading", { name: "Notifications" }).waitFor();
+    await new Promise((r) => setTimeout(r, 3000));
+    const frames = await page.evaluate(
+      () => (window as unknown as { navFrames: string[] }).navFrames,
+    );
+    assert.ok(frames.length > 0, "no frame showed the tabs");
+    assert.deepEqual(
+      [...new Set(frames)],
+      ["Inbox,Quotas,Settings"],
+      "a frame of the load missed a tab",
+    );
+    await page.getByRole("link", { name: /^Inbox/ }).click();
+
     step("a question notifies with its options; a button answers it");
     const ask = (question: string, ...extra: string[]) =>
       cli("ask", ["ask", "--question", question, "--wait", ...extra], machine);
