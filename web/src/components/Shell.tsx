@@ -8,7 +8,7 @@ import { drafts } from "@/lib/drafts";
 import { needsYou } from "@/lib/feed";
 import { setFind, useFind } from "@/lib/find";
 import { useFreshBuild } from "@/lib/freshBuild";
-import { holdsQuotas } from "@/lib/quotaSettings";
+import { heldQuotas, holdsQuotas } from "@/lib/quotaSettings";
 import { sending } from "@/lib/unsent";
 import { type Store, useApp } from "./AppProvider";
 import { Icon, type IconName, Mark } from "./icons";
@@ -69,8 +69,11 @@ export function Shell({ children }: { children: React.ReactNode }) {
   // /sample mirrors the app in development (app/sample).
   const at = path.replace(/^\/sample(?=\/|$)/, "") || "/";
   const home = /^\/sample(?=\/|$)/.test(path) ? "/sample" : "/";
-  // Quotas shows once a machine of the account sends them, or while open (#914).
-  const quotas = holdsQuotas(app.quotas) || at.startsWith("/quotas");
+  // Quotas shows once a machine of the account sends them, or while open (#914). Until this load
+  // reads them, as they were last read here (#1805).
+  const account = app.boot.state === "ready" ? app.boot.ctx.account : undefined;
+  const quotas =
+    (app.quotas ? holdsQuotas(app.quotas) : heldQuotas(account)) || at.startsWith("/quotas");
   const tabs = TABS.filter(({ href }) => quotas || href !== "/quotas").map(
     ({ href, label, icon }) => {
       const active = href === "/" ? at === "/" : at.startsWith(href);

@@ -88,6 +88,29 @@ export const holdsQuotas = (
   q: { cards: unknown[]; errors: unknown[]; rejected: unknown[] } | undefined,
 ) => !!q && q.cards.length + q.errors.length + q.rejected.length > 0;
 
+const SENDS = "starbridge:quota-account";
+
+/**
+ * Whether `account` held quotas when this browser last read them, so a page load shows the Quotas
+ * tab from its first frame rather than once they arrive (#1805).
+ */
+export function heldQuotas(account: string | undefined): boolean {
+  if (!account) return false;
+  try {
+    return readStored(SENDS, localStorage.getItem(SENDS))?.account === account;
+  } catch {
+    return false;
+  }
+}
+
+export function keepHeldQuotas(account: string, held: boolean): void {
+  try {
+    if (!writable(localStorage.getItem(SENDS))) return;
+    if (held) localStorage.setItem(SENDS, stored({ account }));
+    else if (heldQuotas(account)) localStorage.removeItem(SENDS);
+  } catch {}
+}
+
 /** Every provider the cards name, in the settings' order. */
 export function providerOrder(cards: QuotaCardData[], s: QuotaSettings): string[] {
   const seen = [...new Set(cards.map((c) => c.provider))];

@@ -156,7 +156,9 @@
   agents. A device that just joined sees the tab at once, since the snapshot it cannot open yet
   still counts. The tab appears as soon as a machine's first snapshot arrives: the server pushes
   that one even when it is quiet, since a phone whose pushes work does not poll and would
-  otherwise learn of it only at its next start or pull (#1010).
+  otherwise learn of it only at its next start or pull (#1010). A page load on the web shows the tab
+  if the account held quotas at this browser's last read, rather than once they load: after a
+  deploy, the Mac app's window loads in full on a tab switch, and the tab blinked out (#1805).
 - **Devices.** Each device shows whether it notifies, as it last said (#943), and an icon for the app it said it from (#1019): a phone for the Android and iPhone apps, a globe for a browser, a laptop for the desktop app, a server for a machine (the owner's pick of two sets). The server knows the app from how the device signs in (a bearer token, the session cookie, the desktop and iPhone apps' client header), so devices paired before show theirs without pairing again; one that has not said yet shows a plain device. Rows that share a name show when each was added (#287). A Recovery key row says
   when and on which device the key was set, with Replace; other devices show a replacement once
   (#348).

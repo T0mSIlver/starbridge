@@ -24,6 +24,8 @@ import { Beacon, PRESENCE_CHANNEL, PRESENCE_CHECK_MS, PRESENCE_EVENTS } from "@/
 import {
   alertsOn,
   DEFAULT_SETTINGS,
+  holdsQuotas,
+  keepHeldQuotas,
   loadSettings,
   notifyAlerts,
   type QuotaSettings,
@@ -490,6 +492,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const next = await holding(() => d.loadQuotas(fresh));
     if (!next) return;
     setQuotas(next);
+    keepHeldQuotas(fresh.account, holdsQuotas(next));
     await notifyAlerts(next.cards, settingsRef.current);
     return next;
   }, [current, holding]);
