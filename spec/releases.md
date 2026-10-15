@@ -154,7 +154,9 @@
   name it. The deploy key and starbridge.run's host key are secrets of the `starbridge.run`
   environment, open to main only. As repository secrets, a workflow run on any branch could read
   them. The cost: a `release.yml` run dispatched from a branch fails its Android job, so dry runs
-  go from main.
+  go from main. The jobs that read them run on GitHub's runners (#1825, CI runners below), so
+  staging's and prod's SSH take connections from any address, key only: a firewall that limited
+  port 22 to the home network would stop every deploy.
 - **Release notes by product** (#1057). A list of PR titles told users little. Each PR body has
   a "Release notes" section, one `Product: line` per product a user sees change (Android, iOS since TestFlight takes every tag (#1451), Web,
   Desktop, CLI, Server, Docs) or `None`, optionally `None: why`, written by whoever knows the change; it can be edited
@@ -317,15 +319,18 @@
   run only on a Mac, so the real launchd starts and stops the agent there. A `ubuntu-24.04-arm` job (#1481), skipped the same way, does the same for the
   linux-arm64 binary. All three jobs run each test file alone and kill one that hangs (`cli/scripts/test-each.ts`, #862).
 - **CI runners** (#146, #1204, #1213, #1638). Self-hosted Linux runners in two pools that never
-  share a box: `trusted` runs main's tests, deploys, uptime checks, releases and the nightly
-  flaky-test count (#1657); `pr` runs the
+  share a box: `trusted` runs main's tests, the image builds, uptime checks, the release's version
+  check and the nightly flaky-test count (#1657); `pr` runs the
   test and image jobs of a pull request from this repository's own branches, so they start sooner
   than on GitHub's runners. The e2e stays on GitHub's runners: its three parts per run queued a
   median 4 min, p90 22 min, behind the PR pool's two heavy slots. Each job names its pool through a repository variable holding a JSON array
   of labels, and falls back to GitHub's runner when it is unset (docs/ci.md). Dependabot's and
   forks' pull requests stay on GitHub's runners, and so do the desktop e2e (Electron's libraries),
-  Windows and macOS. Android builds on main and in releases use their own runner,
-  `ANDROID_RUNNER`. Each Android push to main also builds on GitHub's runner, to save the Gradle
+  Windows and macOS. Main's unsigned Android build uses its own runner, `ANDROID_RUNNER`.
+  Every job that reads a signing or deploy key, or builds a file a release signs (the APK and App
+  Bundle, the CLI binaries, the minisign signature, the Homebrew formula, the internal track's
+  build, staging's and prod's deploys), runs on GitHub's runners (#1825), so a compromised box
+  on the home network reaches neither a key nor the bytes a key vouches for. Each Android push to main also builds on GitHub's runner, to save the Gradle
   cache that pull requests restore there (#1662). The PR pool holds no secrets, and no pull
   request job reaches the other two.
   Each runner registers for one job, and its slot wipes that job's folders before the next;

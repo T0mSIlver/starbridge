@@ -6,7 +6,8 @@ name: release
 # TestFlight. Run by hand on main, it builds the same files as workflow artifacts and releases nothing, unless
 # testflight_only asks for the iPhone app alone, uploaded; promote.yml runs it on a final's tag.
 # The signing keys are the `release` environment's secrets, which only main and v* tags can read, so a manual run
-# from another branch fails its Android job.
+# from another branch fails its Android job. Every job that reads a key or builds a file the release signs runs on
+# GitHub's runners, never on a self-hosted box (#1825).
 # CONTRIBUTING.md, "Release", says how to cut one: an rc first, then its promotion to the final.
 on:
   push:
@@ -111,7 +112,7 @@ jobs:
   android:
     needs: version
     if: ${{ !inputs.npm_only && !inputs.testflight_only }}
-    runs-on: ${{ vars.ANDROID_RUNNER || 'ubuntu-24.04' }}
+    runs-on: ubuntu-24.04
     timeout-minutes: 40
     environment: release
     defaults:
@@ -123,12 +124,9 @@ jobs:
         with:
           distribution: temurin
           java-version: 21
-      # As in android.yml: self-hosted runners on one machine share one Gradle home, so no cache
-      # restore there.
       - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
         with:
           cache-read-only: true
-          cache-disabled: ${{ runner.environment == 'self-hosted' }}
       # Google Play takes only the App Bundle. Play App Signing re-signs it with the same key, so
       # Play builds and the release's APK share one signature.
       - name: Build the signed APK and App Bundle
@@ -155,7 +153,7 @@ jobs:
   cli:
     needs: version
     if: ${{ !inputs.npm_only && !inputs.testflight_only }}
-    runs-on: ${{ vars.TRUSTED_RUNNER && fromJSON(vars.TRUSTED_RUNNER) || 'ubuntu-latest' }}
+    runs-on: ubuntu-latest
     timeout-minutes: 20
     defaults:
       run:
@@ -277,7 +275,7 @@ jobs:
     needs: [version, android, smoke, cli, desktop]
     # The desktop job is skipped until it is turned on; a failed one stops the release.
     if: ${{ !cancelled() && needs.android.result == 'success' && needs.smoke.result == 'success' && needs.cli.result == 'success' && contains(fromJSON('["success", "skipped"]'), needs.desktop.result) }}
-    runs-on: ${{ vars.TRUSTED_RUNNER && fromJSON(vars.TRUSTED_RUNNER) || 'ubuntu-latest' }}
+    runs-on: ubuntu-latest
     timeout-minutes: 15
     environment: release
     permissions:
@@ -574,7 +572,7 @@ jobs:
     needs: [version, release]
     # The release's result, not success(): a skipped desktop job upstream would skip this too.
     if: ${{ !cancelled() && needs.release.result == 'success' && startsWith(github.ref, 'refs/tags/v') && !contains(github.ref_name, '-rc.') }}
-    runs-on: ${{ vars.TRUSTED_RUNNER && fromJSON(vars.TRUSTED_RUNNER) || 'ubuntu-latest' }}
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     environment: release
     steps:
