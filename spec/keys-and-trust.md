@@ -117,6 +117,13 @@
   device's hold names who revoked the member and offers "I revoked it: stop waiting". Only the
   owner can tell their revocation from a forged one. Tom chose this over a button on every
   device, or none, on 2026-10-08 (#813).
+- **A chain that drops this device holds too** (#1779). Before wiping its keys on a chain that
+  revokes it, at a sync or when a new session cannot bind, a device checks that chain against the
+  heads its machines signed. One that lacks a kept head holds instead: the server, with a device
+  revoked in entries it hides, could fork the chain and revoke this one there to force a re-pair.
+  The device keeps its keys and its pin, so the full chain still extends it, shows the hold naming
+  the machine, and reads the directory again at each sync; Stop waiting works as above, and a chain the heads agree with
+  wipes. The web shows the hold as a page of its own, since it has no inbox to show it over.
 - **Browser keys** (#8, #116, #274, #283, #354). Non-extractable WebCrypto keys in IndexedDB,
   with raw libsodium keys where storage doesn't return them (WebKit reads an X25519 `CryptoKey`
   back as null). The check writes and reads back a throwaway pair, so a page closed midway

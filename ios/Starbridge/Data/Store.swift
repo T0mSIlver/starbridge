@@ -45,6 +45,13 @@ final class Store {
     var tooOld: String?
     /** Why nothing from the machines shows: the server holds back entries a machine has seen (#362). */
     var withheldWhy: String?
+    /**
+     * Why this iPhone keeps its keys on a chain that drops it: a machine's head shows the chain cut
+     * short (#1779). The chain is not kept; the next directory read decides again.
+     */
+    var removalHold: String?
+    /** The member whose heads Stop waiting forgets during that hold, when one revoked it (#813). */
+    var removalHeldRevoked: String?
     /** What a tapped notification opens over the inbox. */
     var openRequest: Sheet?
     /** Replies typed and not sent, by decision id, while the app runs (#992). */
@@ -370,6 +377,8 @@ final class Store {
                     let entries = try await fresh.directory(from: 0)
                     let dir = try Directories.verify(entries, account: saved.accountId, pin: saved.pin)
                     if dir.members[mine.id]?.active == true { throw Notice(message: "This server cannot bind a new session to this iPhone. Update the server.") }
+                    // A chain the server cut short can drop this iPhone too: a machine's head shows it (#1779).
+                    if let why = removalHeld(dir, entries: entries)?.why { throw Notice(message: why) }
                     wipe()
                     throw Notice(message: "This iPhone was removed from your devices. Set it up again.")
                 }
@@ -793,6 +802,8 @@ final class Store {
         joinAsks = []
         comparison = .idle
         withheldWhy = nil
+        removalHold = nil
+        removalHeldRevoked = nil
         quotasListed = false
         persist(Saved(server: saved.server), Secrets())
         try? FileManager.default.removeItem(at: SavedImage.directory)

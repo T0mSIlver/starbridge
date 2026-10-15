@@ -112,6 +112,11 @@ export type Boot =
   | { state: "revoked"; account: string; name: string; by: string }
   /** The directory failed verification: the server, or someone holding it, broke the chain. */
   | { state: "broken"; account: string; error: string }
+  /**
+   * The chain drops this browser, but a machine's head shows entries it lacks: the keys stay
+   * (#1779). `revoked`: the member whose heads the owner can tell this browser to forget (#813).
+   */
+  | { state: "held"; account: string; text: string; revoked?: { id: string; name: string } }
   | { state: "ready"; ctx: Ctx };
 
 const now = () => new Date().toISOString();
@@ -175,6 +180,12 @@ async function trusted(
     if (!pin && !signedGenesis(account, entries[0], await store.get("device", account)))
       throw new Unanchored("no pin anchors this directory");
     const dir = verifyDirectory(entries, { account, ...(pin ? { pin } : {}) });
+    // A chain that drops this browser while a machine's head shows it cut short holds, and is not
+    // pinned: the full chain need not extend it (#1779).
+    const mine = await store.get("device", account);
+    const entry = mine && dir.members.get(mine.id);
+    if (entry && !entry.active && (await heldRemoval(account, { dir, entries })))
+      return { dir, entries };
     try {
       await pinTo(account, entries, dir);
       return { dir, entries };
@@ -286,6 +297,17 @@ export async function boot(): Promise<Boot> {
     return { state: "join", account, stale: false };
   }
   if (!entry.active) {
+    // A chain the server cut short can drop this browser too: a machine's head shows it (#1779).
+    const held = await heldRemoval(account, verified);
+    if (held)
+      return {
+        state: "held",
+        account,
+        text: removalText(verified.dir, held),
+        ...(held.revoked
+          ? { revoked: { id: held.id, name: memberName(verified.dir, held.id) } }
+          : {}),
+      };
     // The chain says so, unlike a 401: this browser's keys and what it answered go, as Android's
     // wipe does. The pin stays, so the server still cannot roll the chain back.
     const reg = await registration();
@@ -301,6 +323,24 @@ export async function boot(): Promise<Boot> {
     return { state: "join", account, stale: true };
   }
   return { state: "ready", ctx: { account, device, ...verified } };
+}
+
+/** A head a machine signed that the chain dropping this browser lacks (#1779). */
+async function heldRemoval(
+  account: string,
+  chain: { dir: Directory; entries: SignedEnvelope[] },
+): Promise<Held | undefined> {
+  return withheldBy((await store.get("heads", account)) ?? {}, chain.dir, chain.entries);
+}
+
+const memberName = (dir: Directory, id: string) => dir.members.get(id)?.member.name ?? id;
+
+/** Why this browser keeps its keys on a chain that drops it: names the machine that saw more. */
+export function removalText(dir: Directory, held: Held): string {
+  const machine = memberName(dir, held.id);
+  const text = `The server's list of your devices says this browser was removed, but ${machine} has seen changes to it that the server is holding back. This browser keeps its keys until the server sends them.`;
+  if (!held.revoked) return text;
+  return `${text} ${memberName(dir, held.revoked.by)} revoked ${machine} on ${held.revoked.at.slice(0, 10)}: if you did, stop waiting.`;
 }
 
 /** Who removed member `id`: the device that signed its revocation, or the recovery key. */
@@ -1062,8 +1102,12 @@ export async function prepareRecoveryKey(ctx: Ctx, currentKey: string): Promise<
       if (e instanceof ApiError && e.code === "revoked") throw removed();
       throw e;
     }
-    // A recovery or a revocation dropped this browser, and its proposal with it.
-    if (!latest.dir.members.get(ctx.device.id)?.active) throw removed();
+    // A recovery or a revocation dropped this browser, and its proposal with it; or the server
+    // cut the chain short, which a machine's head shows (#1779).
+    if (!latest.dir.members.get(ctx.device.id)?.active) {
+      const held = await heldRemoval(ctx.account, latest);
+      throw held ? new Error(removalText(latest.dir, held)) : removed();
+    }
     // Another device replaced the key since it was typed: the confirmation could never verify.
     if (latest.dir.recoveryPk !== nextPk && latest.dir.recoveryPk !== toB64(current.publicKey))
       throw new Error("Another device replaced the recovery key meanwhile. Start again.");
@@ -1170,7 +1214,7 @@ export class Withheld extends Error {
  * device can forge one on a fork (#813). Ids are never reused, so the list only grows by the
  * members the owner revokes.
  */
-export async function stopWaiting(ctx: Ctx, id: string): Promise<void> {
+export async function stopWaiting(ctx: Pick<Ctx, "account">, id: string): Promise<void> {
   // First, so a read noting heads meanwhile either sees it or has its head deleted below.
   await store.update("forgotten", ctx.account, (old = []) =>
     old.includes(id) ? old : [...old, id],

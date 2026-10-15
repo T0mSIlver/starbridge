@@ -1027,6 +1027,68 @@ test("revoking a machine that forged a long head ends the hold on the browser th
   }
 });
 
+test("a chain that drops this browser while a machine's head shows it cut short holds, and the keys stay (#1779)", async () => {
+  const at = "2026-10-14T12:00:00Z";
+  const phone = { id: "phone", signKey: live.owner.device.keys.sign.privateKey };
+  const thiefKeys = generateMemberKeys();
+  const thief = {
+    id: "thief2",
+    role: "device" as const,
+    name: "Stolen tablet",
+    ...publicKeys(thiefKeys),
+  };
+  const mKeys = generateMemberKeys();
+  const m = { id: "m_seen", role: "machine" as const, name: "buildbox", ...publicKeys(mKeys) };
+  await postEntry(addEntry(await live.directory(), phone, thief, at));
+  await postEntry(addEntry(await live.directory(), phone, m, at));
+  await api.ownerSignIn("owner-secret");
+  expect((await device.boot()).state).toBe("ready");
+  const mine = (await device.deviceContext(ctx.account)) as device.Ctx;
+  const pin = await store.get("pin", ctx.account);
+  const keys = await store.get("device", ctx.account);
+  // The owner revokes the stolen tablet; the server hides that from this browser.
+  await postEntry(revokeEntry(await live.directory(), phone, "thief2", at));
+  const truth = await live.directory();
+  const stale = mine.entries;
+  // On the stale chain, the stolen tablet revokes this browser.
+  const fork = [
+    ...stale,
+    revokeEntry(
+      verifyDirectory(stale),
+      { id: "thief2", signKey: thiefKeys.sign.privateKey },
+      mine.device.id,
+      at,
+    ),
+  ];
+  let served = stale;
+  const items = [
+    machineDecision({ member: m, keys: mKeys }, mine, { length: truth.length, head: truth.head }),
+  ];
+  const real = globalThis.fetch;
+  globalThis.fetch = (async (input: string, init?: RequestInit) => {
+    if (input.startsWith("/v1/items?kind=decision")) return Response.json({ items, cursor: "1" });
+    if (input === "/v1/directory") return Response.json({ entries: served });
+    return real(input, init);
+  }) as typeof fetch;
+  try {
+    // The machine has seen the tablet's revocation: this browser keeps its head.
+    await expect(device.loadInbox(mine)).rejects.toThrow("holding back");
+    served = fork;
+    expect(await device.boot()).toMatchObject({
+      state: "held",
+      text: expect.stringContaining("buildbox has seen changes to it"),
+    });
+    expect(await store.get("device", ctx.account)).toEqual(keys as store.DeviceRecord);
+    expect(await store.get("pin", ctx.account)).toEqual(pin as NonNullable<typeof pin>);
+  } finally {
+    globalThis.fetch = real;
+    await store.put("pin", pin as NonNullable<typeof pin>, ctx.account);
+    await store.del("heads", ctx.account);
+    await postEntry(revokeEntry(await live.directory(), phone, "m_seen", at));
+  }
+  expect((await device.boot()).state).toBe("ready");
+});
+
 // Last: a recovery revokes every other member, the owner's phone included (#363).
 test("a recovery whose directory append fails leaves the device's keys alone (#283)", async () => {
   const before = await store.get("device", ctx.account);

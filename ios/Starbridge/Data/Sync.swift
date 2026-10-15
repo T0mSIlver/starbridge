@@ -174,12 +174,23 @@ extension Store {
             withheldWhy = withheld()
             throw error
         }
-        directory = dir
         if dir.members[me.id]?.active != true {
+            // A chain the server cut short can drop this iPhone too: a machine's head shows it, and
+            // the iPhone holds as it does for items, keeping its chain and keys (#1779).
+            if let held = removalHeld(dir, entries: all) {
+                removalHold = held.why
+                removalHeldRevoked = held.revoked
+                withheldWhy = held.why
+                return
+            }
+            directory = dir
             wipe()
             notice = "This iPhone was removed from your devices."
             return
         }
+        removalHold = nil
+        removalHeldRevoked = nil
+        directory = dir
         var s = saved
         s.entries = all.map(\.text)
         s.pin = Pin(length: dir.length, head: dir.head)
@@ -223,6 +234,7 @@ extension Store {
      * member a `revoke` names says who revoked it: only the owner can tell whether they did (#813).
      */
     func withheld(_ entries: [JSON]? = nil) -> String? {
+        if let removalHold { return removalHold }
         guard let dir = directory else {
             return saved.entries.isEmpty ? nil : "Your devices list from the server did not pass its checks. Nothing from your machines shows until it does; if this does not clear, the server may be tampering with it."
         }
@@ -237,8 +249,22 @@ extension Store {
         return "\(seen) \(by) revoked \(memberName(revoked.id)) on \(revoked.at.prefix(10)). If you did not, the server may be hiding that \(by) was revoked. Nothing from your machines shows until this clears; if you did, tap Stop waiting."
     }
 
+    /**
+     * Why this iPhone keeps its keys on chain `dir`, which drops it while a machine's kept head shows
+     * it cut short (#1779), and the member Stop waiting would forget; nil when no head does.
+     */
+    func removalHeld(_ dir: Directory, entries: [JSON]) -> (why: String, revoked: String?)? {
+        guard let held = HeadBook.withheld(heads, dir: dir, entries: entries) else { return nil }
+        func name(_ id: String) -> String { dir.members[id]?.member.name ?? id }
+        let machine = name(held.id)
+        let why = "The server's list of your devices says this iPhone was removed, but \(machine) has seen changes to it that the server is holding back. This iPhone keeps its keys until the server sends them."
+        guard let revoked = held.revoked else { return (why, nil) }
+        return ("\(why) \(name(revoked.by)) revoked \(machine) on \(revoked.at.prefix(10)): if you did, tap Stop waiting.", held.id)
+    }
+
     /** The member a hold names, when the owner can end it with Stop waiting: one they revoked. */
     var heldRevoked: String? {
+        if removalHold != nil { return removalHeldRevoked }
         guard let dir = directory else { return nil }
         return HeadBook.withheld(heads, dir: dir, entries: entryJSON)?.revoked?.id
     }
