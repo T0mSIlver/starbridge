@@ -1,16 +1,27 @@
 #!/bin/sh
-# Installed as /usr/local/sbin/starbridge-deploy and run as root by the Actions deploy key's
-# forced command with one argument, a commit id. Deploys that commit only if it is GitHub's main,
-# which it fetches itself with a read-only deploy key, or a commit on main that contains the one
-# deployed now, and only once staging passed it (below). So a leaked Actions key can neither
-# deploy a branch, roll back to an older, weaker release, nor skip staging. Rollbacks and
-# deploys around staging are the owner's, with deploy/deploy.sh.
+# Installed as /usr/local/sbin/starbridge-deploy and run as root by the forced commands of two
+# Actions keys, with a commit id (deploy/setup-actions-deploy.sh, setup-actions-rollback.sh).
+#   starbridge-deploy <commit>              the deploy key: main's head, or a commit on main that
+#                                           contains the one deployed now
+#   starbridge-deploy --rollback <commit>   the rollback key: a commit this box ran before (#1828),
+#                                           listed in $deployed below
+# Either way only a commit on main, which it fetches itself with a read-only deploy key, and only
+# once staging passed it (below). So a leaked deploy key can neither deploy a branch, roll back to
+# an older, weaker release, nor skip staging, and a leaked rollback key can only go back to a
+# release that ran here. Deploys around these checks are the owner's, with deploy/deploy.sh.
 set -eu
-rev=${1:-}
-case $rev in
-  *[!0-9a-f]* | "") echo "usage: starbridge-deploy <40-hex commit id>" >&2; exit 2 ;;
-esac
-[ ${#rev} -eq 40 ] || { echo "usage: starbridge-deploy <40-hex commit id>" >&2; exit 2; }
+usage() { echo "usage: starbridge-deploy [--rollback] <40-hex commit id>" >&2; exit 2; }
+# The forced commands pass what the client sent as one argument, so the deploy key's client cannot
+# add --rollback.
+rollback=
+if [ $# -eq 2 ] && [ "$1" = --rollback ]; then
+  rollback=1
+  shift
+fi
+[ $# -eq 1 ] || usage
+rev=$1
+case $rev in *[!0-9a-f]* | "") usage ;; esac
+[ ${#rev} -eq 40 ] || usage
 
 exec 9>/run/starbridge-deploy.lock
 flock 9
@@ -25,9 +36,19 @@ export GIT_SSH_COMMAND="ssh -i /etc/starbridge/github-deploy-key -o IdentitiesOn
 [ -d $repo ] || git init -q --bare $repo
 git -C $repo fetch -q git@github.com:T0mSIlver/starbridge.git +main:main
 git -C $repo merge-base --is-ancestor "$rev" main || { echo "$rev is not on main" >&2; exit 1; }
-# CI on an older commit of main can finish after a newer one deployed: that run deploys nothing.
 current=$(cat /opt/starbridge/REVISION 2>/dev/null || true)
-if [ "$rev" != "$(git -C $repo rev-parse main)" ] &&
+# Every commit this box ran, one per line: what --rollback may go back to.
+deployed=/var/lib/starbridge/deployed
+record() {
+  case $1 in *[!0-9a-f]* | "") return 0 ;; esac
+  [ ${#1} -eq 40 ] || return 0
+  grep -qxF "$1" $deployed 2>/dev/null || echo "$1" >> $deployed
+}
+if [ -n "$rollback" ]; then
+  grep -qxF "$rev" $deployed 2>/dev/null || { echo "starbridge.run never ran $rev; not rolled back" >&2; exit 1; }
+  [ "$rev" != "$current" ] || { echo "starbridge.run already runs $rev"; exit 0; }
+# CI on an older commit of main can finish after a newer one deployed: that run deploys nothing.
+elif [ "$rev" != "$(git -C $repo rev-parse main)" ] &&
   ! git -C $repo merge-base --is-ancestor "$current" "$rev" 2>/dev/null; then
   echo "$rev is older than the deployed ${current:-release} and is not main's head; not deployed"
   exit 0
@@ -75,12 +96,26 @@ web=$(printf '%s\n' "$digests" | sed -n 's/^web //p')
   { echo "run $run did not pass $rev on staging, or names no image digests; not deployed" >&2; exit 1; }
 echo "staging passed $rev (run $run) with server@$server web@$web"
 
+# The running commit goes on the record first, so the first deploy by this script makes the
+# release before it one to go back to. One the owner deployed around these checks is recorded too;
+# --rollback still checks it as above.
+record "$current"
+# apply.sh installs its own tree's deploy-rev.sh as this command, and an older tree's may not
+# know --rollback: after a rollback, failed or not, this command comes back, so the next rollback
+# still works and the command never goes back to older checks.
+if [ -n "$rollback" ]; then
+  self=$(mktemp)
+  cp /usr/local/sbin/starbridge-deploy "$self"
+  trap 'install -m 755 -o root -g root "$self" /usr/local/sbin/starbridge-deploy; rm -f "$self"' EXIT
+fi
+
 rm -rf /opt/starbridge.new /opt/starbridge.old
 mkdir /opt/starbridge.new
 git -C $repo archive --format=tar "$rev" | tar -x -C /opt/starbridge.new
 if [ -d /opt/starbridge ]; then mv /opt/starbridge /opt/starbridge.old; fi
 mv /opt/starbridge.new /opt/starbridge
 REVISION=$rev SERVER_DIGEST=$server WEB_DIGEST=$web /opt/starbridge/deploy/host/apply.sh
-# Only once it is up and healthy: a failed deploy leaves no REVISION, so only main's head deploys
-# next, and the check above never trusts a release that never ran.
+# Only once it is up and healthy: a failed deploy leaves no REVISION, so only main's head or a
+# rollback deploys next, and neither check above trusts a release that never ran.
 echo "$rev" > /opt/starbridge/REVISION
+record "$rev"

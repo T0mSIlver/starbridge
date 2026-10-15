@@ -751,8 +751,8 @@ function ms(name: "--t-fast" | "--t-state"): number {
 
 /** A node and its neighbours, to put it back where it was. */
 type Spot = { node: Element; prev: Element | null; next: Element | null };
-/** A row, and its group when it sits in one (Group by machine). */
-type Placed = { row: HTMLElement; own: Spot; group?: Spot };
+/** A row, and the nodes above it up to the list's child (its group, a section's wrapper). */
+type Placed = { row: HTMLElement; own: Spot; above: Spot[] };
 
 const spot = (node: Element): Spot => ({
   node,
@@ -789,10 +789,9 @@ function useRowMotion(list: React.RefObject<HTMLElement | null>, ids: string[], 
         tops: new Map(rows.map((r) => [r.dataset.row as string, r.offsetTop])),
         rows: new Map<string, Placed>(
           rows.map((r): [string, Placed] => {
-            let group = r.parentElement;
-            while (group && group.parentElement !== el) group = group.parentElement;
-            const placed = { row: r, own: spot(r), group: group ? spot(group) : undefined };
-            return [r.dataset.row as string, placed];
+            const above: Spot[] = [];
+            for (let n = r.parentElement; n && n !== el; n = n.parentElement) above.push(spot(n));
+            return [r.dataset.row as string, { row: r, own: spot(r), above }];
           }),
         ),
       };
@@ -827,9 +826,11 @@ function useRowMotion(list: React.RefObject<HTMLElement | null>, ids: string[], 
     // Answered or gone: put the row back where it was, with its group if that left too, inert;
     // fade it out, then close up.
     const back = new Set<Element>();
-    for (const [id, { row, own, group }] of was.rows) {
+    for (const [id, { row, own, above }] of was.rows) {
       if (now.tops.has(id) || ids.includes(id) || row.isConnected) continue;
-      const at = row.parentElement && !row.parentElement.isConnected ? group : own;
+      // The highest node that left: the row, or the group or section body it was in. A node
+      // still in the page, such as a section's head, stays where React put it.
+      const at = [own, ...above].filter((x) => !x.node.isConnected).pop();
       if (!at || back.has(at.node)) continue;
       const { node, prev, next } = at;
       if (prev?.parentElement && el.contains(prev)) prev.after(node);

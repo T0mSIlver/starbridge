@@ -354,6 +354,34 @@ async function capture(target: Page | Locator, path: string, fullPage = false) {
   await target.screenshot({ path, fullPage });
 }
 
+/**
+ * Closing a section leaves its head, still open to reopen (#1824). The rows fade out for a
+ * moment first, and the head used to go with them, so this waits that out, with motion on.
+ */
+async function foldKeepsHead(page: Page, head: Locator) {
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  if ((await head.getAttribute("aria-expanded")) !== "true") await head.click();
+  await head.click();
+  await page.waitForTimeout(800);
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  if ((await head.count()) !== 1 || (await head.getAttribute("aria-expanded")) !== "false")
+    throw new Error(`a closed section lost its head: ${head}`);
+  // Toggled again before the rows finish fading, React must still find its nodes (insertBefore
+  // threw "not a child of this node" and the page fell to "Something went wrong").
+  try {
+    for (let i = 0; i < 6; i++) {
+      await head.click({ timeout: 3000 });
+      await page.waitForTimeout(60 + 40 * (i % 3));
+    }
+  } catch {
+    throw new Error(`toggling a section took its head: ${head}`);
+  }
+  await page.waitForTimeout(800);
+  if (await page.getByText("Something went wrong").count())
+    throw new Error(`toggling a section crashed the page: ${head}`);
+  if ((await head.count()) !== 1) throw new Error(`a toggled section lost its head: ${head}`);
+}
+
 async function shoot(page: Page, name: string) {
   for (const [size, viewport, text] of SIZES)
     for (const scheme of ["light", "dark"] as const) {
@@ -1809,6 +1837,8 @@ async function main() {
       throw new Error("Runs should start open");
     await runsHead.click();
     await runProbe(page).waitFor({ state: "detached" });
+    await page.waitForTimeout(800);
+    if ((await runsHead.count()) !== 1) throw new Error("closing Runs took its head (#1824)");
     await page.reload();
     await runsHead.getByText(/failed$/).waitFor({ timeout: 30_000 });
     if ((await runsHead.getAttribute("aria-expanded")) !== "false")
@@ -1937,6 +1967,10 @@ async function main() {
     await page.getByRole("button", { name: /^Snoozed\s*1/ }).waitFor({ timeout: 30_000 });
     if (await probe(page).count()) throw new Error("the snoozed question is still listed open");
     await shoot(page, "inbox-snoozed");
+    step("closing Snoozed or History leaves its head (#1824)");
+    const snoozedHead = page.getByRole("button", { name: /^Snoozed\s*1/ });
+    await foldKeepsHead(page, snoozedHead);
+    await foldKeepsHead(page, page.getByRole("button", { name: /History/ }));
     // The agent hears of it when it would block.
     const snoozeWait = cli(
       "snooze-wait",
