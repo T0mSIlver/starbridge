@@ -46,6 +46,9 @@ command and its local agent), `plugin` and
   push reruns the whole CI, and a PR merges without being up to date.
 - A test that fails and then passes on a rerun gets an issue the first time, never a silent rerun.
   `flakes.yml` lists them each night on the issue labelled `flaky`.
+- A PR that changes what the web shows or a core flow is verified by an agent that didn't write
+  it, from CI's evidence comment and, where that falls short, by driving the app with
+  [verify-web](.claude/skills/verify-web/SKILL.md).
 - Before a PR is ready, run the checks in
   [CONTRIBUTING.md, "Develop"](CONTRIBUTING.md#develop).
 - Before a PR is ready, diff it against `main` (`git diff --name-only origin/main...`) for files
