@@ -122,6 +122,8 @@ try {
     if (!stop.signal.aborted) step(`approving joins stopped: ${e.message}`);
   });
 
+  // A run stopped from outside, by the job's time limit, still reports a failure.
+  kept.manifest(steps, "the run stopped before it finished");
   step("emulator");
   await booted("boot", 300);
   // The FCM broadcast is guarded by a permission only Play services holds; root holds every one.

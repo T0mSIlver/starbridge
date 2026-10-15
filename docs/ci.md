@@ -89,10 +89,11 @@ request's:
 A pull request that touches `android/` or `demo/smoke/` gets the same for the Android app, in its
 own comment marked `<!-- starbridge-evidence android -->` (`android.yml`). The release smoke
 (`demo/smoke/android.ts`) runs with `EVIDENCE` set on a phone (`pixel_7`) and a tablet
-(`pixel_tablet`), API 35, on GitHub's runners with KVM. It signs in, gets a question by FCM,
+(`pixel_tablet`), API 36, on GitHub's runners with KVM. It signs in, gets a question by FCM,
 shows its notification and opens the card, and fails on a crash in logcat. It keeps each stop in
-light and dark (`<profile>-<stop>-<scheme>.png`) with its UI dump, and the app drawer with our icon
-beside the stock apps', and again under each icon shape the system image offers as an overlay. The comparison leaves out the status bar and the times on screen. Each profile
+light and dark (`<profile>-<stop>-<scheme>.png`) with its UI dump, the notification shade in light
+only, and the app drawer with our icon beside the stock apps', again in light under each icon shape
+the system image offers as an overlay. The comparison leaves out the status bar and the times on screen. Each profile
 uploads `android-evidence-<profile>-<tree>`; the changed pairs go under
 `verify/<pr>/<sha>/android/` on `pr-shots`.
 

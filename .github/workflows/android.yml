@@ -121,7 +121,8 @@ jobs:
   # smoke (demo/smoke/android.ts) on a phone and a tablet, keeping each stop in light and dark and
   # the app drawer with our icon beside the stock apps'. Main's runs are what pull requests compare
   # with. GitHub's runner, since an emulator needs KVM; google_apis, since the smoke's FCM delivery
-  # needs root. Never a fork's pull request: the evidence job writes to the repository.
+  # needs root; API 36 as release.yml's smoke, since on 35 the tablet's first run registered no FCM
+  # token. Never a fork's pull request: the evidence job writes to the repository.
   emulator:
     name: emulator (${{ matrix.profile }})
     needs: build
@@ -164,7 +165,7 @@ jobs:
           EVIDENCE: ${{ runner.temp }}/evidence
           PROFILE: ${{ matrix.profile }}
         with:
-          api-level: 35
+          api-level: 36
           target: google_apis
           arch: x86_64
           profile: ${{ matrix.device }}
@@ -200,7 +201,7 @@ jobs:
   evidence:
     name: evidence
     needs: emulator
-    if: ${{ !cancelled() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]' }}
+    if: ${{ !cancelled() && needs.emulator.result != 'skipped' && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:

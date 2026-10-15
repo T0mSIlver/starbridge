@@ -123,12 +123,23 @@ export function emulator(adbPath: string, out: string) {
   const find = (nodes: Node[], label: string) =>
     nodes.find((n) => n.text.includes(label) || n.desc.includes(label));
 
-  /** Waits for the label on screen, failing at once if the app crashed meanwhile. */
+  /**
+   * Waits for the label on screen, failing at once if the app crashed meanwhile. A slow emulator's
+   * own apps can stop answering ("Pixel Launcher isn't responding"): that dialog gets Wait.
+   */
   async function see(label: string, seconds = 30): Promise<Node> {
     return until(`"${label}" on screen`, seconds, async () => {
       const why = await crashed();
       if (why) throw new Crash(why);
-      return find(await screen(), label);
+      const nodes = await screen();
+      const stuck = nodes.some((n) => n.text.endsWith("isn't responding"));
+      const wait = stuck ? find(nodes, "Wait") : undefined;
+      if (wait && !label.includes("Wait")) {
+        step("an emulator app isn't responding; tapping Wait");
+        await shell(`input tap ${wait.x} ${wait.y}`);
+        return undefined;
+      }
+      return find(nodes, label);
     });
   }
 

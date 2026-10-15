@@ -39,7 +39,7 @@ export const CLIENTS = {
     artifact: "android-evidence",
     marker: "<!-- starbridge-evidence android -->",
     run: "The Android app on the emulator",
-    held: "Screenshots on a phone and a tablet, light and dark, UI dumps and logcat",
+    held: "Screenshots on a phone and a tablet, light and dark, with their UI dumps",
     notDriven:
       "answering from the app, a real device's launcher and fonts, the web, iOS and desktop apps",
   },
