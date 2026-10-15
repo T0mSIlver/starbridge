@@ -1,0 +1,33 @@
+{
+  "agent": "cursor",
+  "model": "auto",
+  "arm": "after",
+  "scenario": "unavailable",
+  "rep": 1,
+  "turns": [
+    {
+      "commands": [
+        "starbridge ask \\\n  --question 'Publish to npm as notekit or jotter?' \\\n  --context 'Publishing is public and cannot be undone after 72 hours.\n**notekit:** free on npm, matches the repo.\n**jotter:** free on npm, shorter; a dead app with that name exists.\n**Don’t publish:** leave the package private.' \\\n  --option 'notekit' \\\n  --option 'jotter' \\\n  --option 'Don’t publish' \\\n  --recommended 'notekit' \\\n  --waiting\n"
+      ],
+      "final": "Starbridge isn’t paired on this machine, so I need your yes here.\n\nPublishing makes the package **public on npm** and **cannot be undone after 72 hours**. The name is still open:\n\n- **notekit** — free on npm, matches the repo (my pick)\n- **jotter** — free on npm, shorter; a dead app with that name exists\n- **Don’t publish** — leave it private\n\nReply with `notekit`, `jotter`, or `Don’t publish`.",
+      "session": "68b408ed-3f7a-4438-aa85-e8ac248e2f56",
+      "tokens": 36432,
+      "exit": 0,
+      "seconds": 16.903,
+      "delivery": []
+    }
+  ],
+  "decisions": [],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [],
+  "judge": {
+    "cold": null,
+    "consequences": null,
+    "terminal": true,
+    "links": null,
+    "plain": null,
+    "skim": null,
+    "notes": "No card was posted (Cards it posted is []), so the card-based fields are null; the agent correctly fell back to asking in the terminal, but its message is a bit long for a decision with irreversible consequences and it states the 72-hour window without a clear first-line summary."
+  }
+}

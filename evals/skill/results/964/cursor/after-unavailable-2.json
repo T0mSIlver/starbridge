@@ -1,0 +1,34 @@
+{
+  "agent": "cursor",
+  "model": "auto",
+  "arm": "after",
+  "scenario": "unavailable",
+  "rep": 2,
+  "turns": [
+    {
+      "commands": [
+        "ls -la && npm whoami 2>&1; cat README.md 2>/dev/null | head -40",
+        "starbridge ask \\\n  --question 'Publish to npm as notekit or jotter?' \\\n  --context 'Publishing is public and cannot be undone after 72 hours. package.json still says TBD; both names are free on npm.\n**notekit:** matches the repo.\n**jotter:** shorter; a dead app already used that name.\n**Do not publish:** leave the package unpublished.' \\\n  --option 'Publish as notekit' \\\n  --option 'Publish as jotter' \\\n  --option 'Do not publish' \\\n  --recommended 'Publish as notekit' \\\n  --waiting"
+      ],
+      "final": "Starbridge isn’t paired on this machine, so I need your call here.\n\nPublishing to npm is public and **cannot be undone after 72 hours**. The package name is still `TBD` in `package.json`; both candidates are free on npm:\n\n- **notekit** — matches the repo (recommended)\n- **jotter** — shorter, but a dead app already used that name\n- **Do not publish**\n\nAlso, this machine isn’t logged into npm (`npm whoami` needs auth), so after you pick a name I’ll need npm credentials or a login before publish can succeed.\n\nWhich should it be?",
+      "session": "b7b9a4d0-3224-4ece-8b12-a97d6ca6ff6c",
+      "tokens": 50077,
+      "exit": 0,
+      "seconds": 22.92,
+      "delivery": []
+    }
+  ],
+  "decisions": [],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [],
+  "judge": {
+    "cold": null,
+    "consequences": null,
+    "terminal": true,
+    "links": null,
+    "plain": null,
+    "skim": null,
+    "notes": "It states that both package names are free on npm and that jotter was used by a dead app, but it doesn't show that it checked either claim, and the user would rely on them when choosing a name."
+  }
+}

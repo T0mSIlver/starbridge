@@ -1,0 +1,37 @@
+{
+  "agent": "cursor",
+  "model": "auto",
+  "arm": "after",
+  "scenario": "self-decide",
+  "rep": 2,
+  "turns": [
+    {
+      "commands": [
+        "mkdir -p /tmp/sync-test && scripts/sync.sh --verbose /tmp/sync-test && scripts/sync.sh /tmp/sync-test2 2>/dev/null; mkdir -p /tmp/sync-test2 && scripts/sync.sh /tmp/sync-test2; echo \"--- no verbose above should be silent ---\"",
+        "ls -la scripts/sync.sh && sh scripts/sync.sh --verbose /tmp/sync-test && echo \"---\" && sh scripts/sync.sh /tmp/sync-test2"
+      ],
+      "final": "Added `--verbose` to `scripts/sync.sh`. When set, it echoes each `notes/*` path before copying; without it, behavior is unchanged. Flag and destination can appear in either order.",
+      "session": "7ca8752c-319a-48cf-9a34-285b33d7cc9d",
+      "tokens": 63545,
+      "exit": 0,
+      "seconds": 18.326,
+      "delivery": []
+    }
+  ],
+  "decisions": [],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [],
+  "waiting": [],
+  "permissions": [],
+  "settled": [],
+  "judge": {
+    "cold": null,
+    "consequences": null,
+    "terminal": false,
+    "links": null,
+    "plain": null,
+    "skim": null,
+    "notes": "No card was posted and the agent ended with a finished, self-contained summary rather than a question, which is the correct outcome for this task; the one minor flaw is that it did not mention whether the sync script was tested."
+  }
+}

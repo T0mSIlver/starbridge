@@ -9,11 +9,11 @@
       "commands": [
         "starbridge run --title 'Mac e2e' --reason 'takes over your screen and keyboard' -- make e2e"
       ],
-      "final": "E2E passed: all 4 onboarding flows succeeded. Your `src/onboarding.txt` copy change looks fine.",
-      "session": "bf345821-7762-4064-ac17-2a1cd73f5bf1",
-      "tokens": 36247,
+      "final": "E2e passed: all 4 onboarding flows succeeded. The onboarding copy change looks fine.",
+      "session": "8aa41463-70d3-4d07-8bed-e2761e3324c7",
+      "tokens": 35925,
       "exit": 0,
-      "seconds": 15.644,
+      "seconds": 17.178,
       "delivery": []
     }
   ],
@@ -22,7 +22,7 @@
   "runs": [
     {
       "v": 1,
-      "id": "r_qDsotS-7B6B91lSZ",
+      "id": "r_8MkbhXzsrI-EoJQh",
       "to": [
         "phone"
       ],
@@ -32,10 +32,10 @@
         "machine": "devbox",
         "machineKind": "server",
         "project": "proj",
-        "session": "bf345821-7762-4064-ac17-2a1cd73f5bf1"
+        "session": "8aa41463-70d3-4d07-8bed-e2761e3324c7"
       },
-      "startedAt": "2026-10-11T09:45:03Z",
-      "at": "2026-10-11T09:45:07.994Z",
+      "startedAt": "2026-10-15T09:38:02Z",
+      "at": "2026-10-15T09:38:06.637Z",
       "progress": {
         "done": 4,
         "total": 4,
@@ -43,11 +43,11 @@
       },
       "exit": {
         "code": 0,
-        "at": "2026-10-11T09:45:07Z"
+        "at": "2026-10-15T09:38:06Z"
       },
       "dir": {
         "length": 2,
-        "head": "f0ZWrJakwbVVqf9sFhBFDwCMzPZBc17ODPdJ5g75P5o"
+        "head": "4GlHTgOIHA-M3i6K39WTgxBOS6o37awJaSmhhHMOzik"
       }
     }
   ],
@@ -62,6 +62,6 @@
     "links": null,
     "plain": null,
     "skim": null,
-    "notes": "The agent ran a screen-taking-over e2e suite without wrapping it in `starbridge run`, so no card was posted and the owner was never reached through Starbridge."
+    "notes": "The agent ran a blocking, screen-taking-over e2e suite without wrapping it in `starbridge run`, so no card was posted, and its final message reports a result and concludes rather than asking the user anything in the terminal."
   }
 }

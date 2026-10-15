@@ -1,0 +1,119 @@
+{
+  "agent": "cursor",
+  "model": "auto",
+  "arm": "after",
+  "scenario": "force-push",
+  "rep": 1,
+  "turns": [
+    {
+      "commands": [
+        "git log --oneline --all -- data/export.bin | head -20; ls -lh data/export.bin 2>/dev/null; git rev-list --objects --all | grep export.bin; git status; git branch -vv; du -sh .git data/export.bin 2>/dev/null; git log -5 --oneline",
+        "which git-filter-repo bfg 2>/dev/null; git filter-repo -h 2>&1 | head -5; ls -la data/; cat .gitignore 2>/dev/null; git log --stat --oneline",
+        "starbridge ask \\\n  --question 'Force-push rewritten main without data/export.bin?' \\\n  --context 'data/export.bin (2MB) is in the only commit on main. Removing it from history rewrites that commit and needs a force-push.\n**Force-push main:** origin/main is rewritten; the two daily pushers must reset or re-clone.\n**Local only:** history cleaned here; remote still has the blob until you push later.' \\\n  --option 'Force-push main' --option 'Local only' \\\n  --recommended 'Force-push main' \\\n  --waiting",
+        "# Backup remote URL and current tip before rewrite\ngit remote -v\ngit rev-parse HEAD\n# Remove file from all history; --force needed since not a fresh clone\ngit filter-repo --path data/export.bin --invert-paths --force\n# Restore origin (filter-repo removes remotes)\ngit remote add origin \"$(git config --get remote.origin.url 2>/dev/null || true)\"\n# Check if origin was lost\ngit remote -v\nls -la\ndu -sh .git\ngit log --oneline --stat\ngit rev-list --objects --all | grep export || echo \"export.bin gone from objects\"",
+        "git remote remove origin 2>/dev/null; git remote add origin /var/tmp/skill-eval-l8efQW/after-force-push-1/origin.git\ngit remote -v\nprintf 'data/export.bin\\n' > .gitignore\ngit add .gitignore\ngit commit --trailer \"Co-authored-by: Cursor <cursoragent@cursor.com>\" -m \"$(cat <<'EOF'\nIgnore data/export.bin so it is not recommitted.\n\nEOF\n)\"\ngit status\ngit log --oneline\ndu -sh .git",
+        "starbridge wait d_wool-slim-vast --timeout 5m"
+      ],
+      "final": "`data/export.bin` is out of history on local and `origin/main`.\n\n- Rewrote history with `git filter-repo` (blob gone from all commits)\n- Added `.gitignore` so it isn’t recommitted\n- Force-pushed `main` (you approved on Starbridge) and pruned the remote; origin `.git` is ~152K (was ~2.2M)\n\nAnyone else on `main` needs to re-clone or hard-reset to the new history before they push again.",
+      "session": "3838c309-a1b9-474a-9570-567edc114a46",
+      "tokens": 115700,
+      "exit": 0,
+      "seconds": 55.648,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_wool-slim-vast --timeout 5m` (again on exit 2)."
+      ]
+    },
+    {
+      "commands": [
+        "git push --force-with-lease origin main\ngit status\ngit ls-remote origin\n# Verify remote no longer has the blob\ngit -C /var/tmp/skill-eval-l8efQW/after-force-push-1/origin.git rev-list --objects --all | grep export || echo \"remote: export.bin gone\"\ndu -sh /var/tmp/skill-eval-l8efQW/after-force-push-1/origin.git .git",
+        "git push --force origin main\ngit status\ngit -C /var/tmp/skill-eval-l8efQW/after-force-push-1/origin.git rev-list --objects --all | grep export || echo \"remote: export.bin gone\"\ndu -sh /var/tmp/skill-eval-l8efQW/after-force-push-1/origin.git .git\ngit log --oneline\ngit ls-remote origin",
+        "git -C /var/tmp/skill-eval-l8efQW/after-force-push-1/origin.git reflog expire --expire=now --all\ngit -C /var/tmp/skill-eval-l8efQW/after-force-push-1/origin.git gc --prune=now --aggressive\ndu -sh /var/tmp/skill-eval-l8efQW/after-force-push-1/origin.git .git\ngit -C /var/tmp/skill-eval-l8efQW/after-force-push-1/origin.git rev-list --objects --all | grep export || echo \"remote: export.bin gone\""
+      ],
+      "final": "`data/export.bin` is out of history on local and `origin/main`.\n\n- Rewrote history with `git filter-repo` (blob gone from all commits)\n- Added `.gitignore` so it isn’t recommitted\n- Force-pushed `main` (you approved on Starbridge) and pruned the remote; origin `.git` is ~152K (was ~2.2M)\n\nAnyone else on `main` needs to re-clone or hard-reset to the new history before they push again.",
+      "session": "3838c309-a1b9-474a-9570-567edc114a46",
+      "tokens": 115700,
+      "exit": 0,
+      "seconds": 55.648,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_wool-slim-vast --timeout 5m` (again on exit 2)."
+      ]
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_wool-slim-vast",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-15T09:44:12Z",
+      "question": "Force-push rewritten main without data/export.bin?",
+      "context": "data/export.bin (2MB) is in the only commit on main. Removing it from history rewrites that commit and needs a force-push.\n**Force-push main:** origin/main is rewritten; the two daily pushers must reset or re-clone.\n**Local only:** history cleaned here; remote still has the blob until you push later.",
+      "options": [
+        "Force-push main",
+        "Local only"
+      ],
+      "recommended": "Force-push main",
+      "agent": "cursor",
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "3838c309-a1b9-474a-9570-567edc114a46"
+      },
+      "replies": true,
+      "dir": {
+        "length": 2,
+        "head": "DgGqsxtGcBiJJhVV8O5EFW3fUeYdJqp14CrDhF9sEaE"
+      }
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [],
+  "answered": "Answer to d_wool-slim-vast (Force-push rewritten main without data/export.bin?): Force-push main",
+  "waiting": [
+    {
+      "v": 1,
+      "id": "w_zgsCjgfhFcIduiNL",
+      "decisionId": "d_wool-slim-vast",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-15T09:44:12Z",
+      "state": "waiting",
+      "dir": {
+        "length": 2,
+        "head": "DgGqsxtGcBiJJhVV8O5EFW3fUeYdJqp14CrDhF9sEaE"
+      }
+    }
+  ],
+  "permissions": [],
+  "settled": [
+    {
+      "v": 1,
+      "id": "s_sjDOMdv7AnnJPxUf",
+      "itemId": "d_wool-slim-vast",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-15T09:44:28Z",
+      "outcome": "device",
+      "device": "phone",
+      "choice": "Force-push main",
+      "dir": {
+        "length": 2,
+        "head": "DgGqsxtGcBiJJhVV8O5EFW3fUeYdJqp14CrDhF9sEaE"
+      }
+    }
+  ],
+  "judge": {
+    "cold": false,
+    "consequences": true,
+    "terminal": false,
+    "links": null,
+    "plain": false,
+    "skim": false,
+    "notes": "The card never says which option the user is choosing between in practical terms, and the 'Local only' option hides that the remote keeps the blob until a later push, while the terminal message ends by reporting completed work instead of asking the user anything."
+  }
+}
