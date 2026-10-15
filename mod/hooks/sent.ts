@@ -143,12 +143,16 @@ export class Sent {
    * Records `batch` for subagent `agent`, as the prompt the parent gets should the process exit
    * before the subagent reads it (#1702), then runs `deliver`, the send. A send that fails leaves
    * no record. Claude Code keeps a message for a running subagent in memory until its next tool
-   * round, so `read` drops the record only once the subagent has moved on.
+   * round, so `read` drops the record only once the subagent has moved on. `running` is asked
+   * again once the record is saved, right before the send: a subagent that finished meanwhile is
+   * resumed with the message, which needs no record, and `finished` must not hand it to the parent
+   * too (#1729).
    */
   toAgent(
     agent: string,
     batch: { text: string; ack: string }[],
     deliver: () => Promise<{ isDelivered: boolean; reason?: string }>,
+    running: () => Promise<boolean> = async () => true,
   ): Promise<{ isDelivered: boolean; reason?: string }> {
     // Without a token a reload could not be told from a new process: nothing to recover by.
     if (this.process === undefined) return deliver();
@@ -180,6 +184,10 @@ export class Sent {
         ));
       // Sent without a record, an answer the subagent never read would be lost with the process.
       if (!saved) return { isDelivered: false, reason: "could not record it" };
+      if (!(await running())) {
+        await this.save(me, rest).catch(() => undefined);
+        return deliver();
+      }
       let r: { isDelivered: boolean; reason?: string };
       try {
         r = await deliver();
@@ -206,6 +214,34 @@ export class Sent {
         const keep = lines.filter((l) => l.agent !== agent || l.at > before);
         if (keep.length < lines.length) await this.save(session, keep).catch(() => undefined);
       }
+    });
+  }
+
+  /**
+   * Subagent `agent` finished, its last tool round ending at `before` (undefined when this module
+   * saw none): what was sent to it after then, it never read (#1729). Those records become lines
+   * for the parent, which the next `recover` submits; the rest go. Returns whether any are left
+   * for the parent.
+   */
+  finished(agent: string, before: number | undefined): Promise<boolean> {
+    return this.alone(async () => {
+      await this.load(await this.host.sessionId()).catch(() => undefined);
+      let left = false;
+      for (const session of this.sessions) {
+        const lines = await this.load(session).catch(() => undefined);
+        if (!lines?.some((l) => l.agent === agent)) continue;
+        const keep: Line[] = [];
+        for (const l of lines) {
+          if (l.agent !== agent) keep.push(l);
+          else if (before === undefined || l.at > before) {
+            const { agent: _, ...line } = l;
+            keep.push({ ...line, process: "" });
+            left = true;
+          }
+        }
+        await this.save(session, keep).catch(() => undefined);
+      }
+      return left;
     });
   }
 

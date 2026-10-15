@@ -4,10 +4,10 @@
  * never keep the harness from exiting.
  */
 import { spawn } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
 import { request } from "node:http";
 import { HEADERS, isPortFile, PROOF_HEADER, portTarget, signCall } from "./agent.ts";
-import { configDir } from "./poller.ts";
+import { absolute, configDir } from "./poller.ts";
 
 /**
  * On Windows a bare `starbridge` may be npm's `starbridge.cmd`, which only a shell starts, and
@@ -19,14 +19,32 @@ const plain = (cmd: string, args: string[]) =>
   !viaShell(cmd) || args.every((a) => /^[\w.:@/=-]+$/.test(a));
 
 /**
+ * Whether `path` is a file owned by this user or root that neither its group nor others may
+ * write. Windows keeps owners in ACLs that Node does not read: there, a file.
+ */
+export function ownedFile(path: string): boolean {
+  try {
+    const st = statSync(path);
+    if (!st.isFile()) return false;
+    if (process.platform === "win32") return true;
+    return (st.uid === process.getuid?.() || st.uid === 0) && (st.mode & 0o022) === 0;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * The CLI to start: the path setup recorded in the config folder, since an agent's PATH may lack
- * the install folder (#612), while that binary exists; else `starbridge` on the PATH.
+ * the install folder (#612), while that binary exists; else `starbridge` on the PATH. The record
+ * and the binary count only when no other user may write them, and the path only when absolute.
  */
 export function cli(env: Record<string, string | undefined> = process.env): string {
   try {
-    const recorded = readFileSync(`${configDir(env)}/cli-path`, "utf8").trim();
+    const file = `${configDir(env)}/cli-path`;
+    if (!ownedFile(file)) return "starbridge";
+    const recorded = readFileSync(file, "utf8").trim();
     // A binary removed since setup recorded it: the PATH may still hold another.
-    if (recorded && existsSync(recorded)) return recorded;
+    if (absolute(recorded) && ownedFile(recorded)) return recorded;
   } catch {}
   return "starbridge";
 }

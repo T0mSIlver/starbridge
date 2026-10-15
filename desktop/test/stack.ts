@@ -9,10 +9,10 @@
 import assert from "node:assert/strict";
 import { type ChildProcess, spawn, spawnSync } from "node:child_process";
 import { cpSync, mkdtempSync, readFileSync } from "node:fs";
-import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { _electron as electron } from "playwright";
+import { freePorts } from "./ports.ts";
 
 const ROOT = resolve(import.meta.dirname, "../..");
 const DESKTOP = join(ROOT, "desktop");
@@ -21,14 +21,7 @@ const VERSION = JSON.parse(readFileSync(join(DESKTOP, "package.json"), "utf8")).
 const tmp = mkdtempSync(join(tmpdir(), "starbridge-desktop-stack-"));
 const children: ChildProcess[] = [];
 
-const port = (): Promise<number> =>
-  new Promise((done) => {
-    const s = createServer().listen(0, () => {
-      const p = (s.address() as { port: number }).port;
-      s.close(() => done(p));
-    });
-  });
-const PORTS = { web: await port(), server: await port(), github: await port(), push: await port() };
+const PORTS = await freePorts(["web", "server", "github", "push"]);
 const ORIGIN = `http://localhost:${PORTS.web}`;
 const SERVER = `http://localhost:${PORTS.server}`;
 
@@ -215,18 +208,27 @@ try {
     await page.getByText("Opens your browser.").waitFor();
 
     step("sign in with GitHub (stub) through the browser, and set up the app as the first device");
-    // Clicked in the page: Playwright's click would wait for a navigation the app cancels.
-    await page
+    // Clicked with the mouse, which the app requires to open the browser (#1721): Playwright's
+    // click would wait for a navigation the app cancels.
+    const box = await page
       .getByRole("link", { name: /^(Sign in|Continue) with GitHub$/ })
-      .evaluate((a: HTMLElement) => a.click());
+      .boundingBox();
+    assert.ok(box);
+    await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
     // The app sends the sign-in to the browser; this run plays the browser, following redirects
     // through GitHub and the server until the starbridge://auth link the browser would open.
     let next = await until(
       async () => (await main((g) => g.outside)).find((u) => u.includes("/v1/auth/github?app=1")),
       "the sign-in sent to the browser",
     );
+    // The browser keeps the server's cookie from the start to the callback, which binds the
+    // sign-in's return to it.
+    const jar = new Map<string, string>();
     while (!next.startsWith("starbridge:")) {
-      const res = await fetch(next, { redirect: "manual" });
+      const at = new URL(next).origin;
+      const res = await fetch(next, { redirect: "manual", headers: { cookie: jar.get(at) ?? "" } });
+      const set = res.headers.get("set-cookie");
+      if (set) jar.set(at, set.split(";")[0] ?? "");
       const location = res.headers.get("location");
       assert.ok(location, `${next} answered ${res.status} without a redirect`);
       next = new URL(location, next).toString();

@@ -209,7 +209,9 @@
   main in `deploy.yml`, for amd64 and arm64, each on a runner of its architecture, and pushed to
   ghcr.io, public, tagged by commit (#1518); a commit that changes nothing they are built from
   reuses the previous commit's under its own tag, and the deployed commit, not the built one, is
-  what `/healthz` names. The box pulls them rather than building, so staging, prod and a failover
+  what `/healthz` names. A tag can be pushed again, so prod runs the digests staging ran (#1715):
+  staging pins the digests its tag gave it and the run names them in step names, which prod's box
+  reads with the staging pass and pulls by. The box pulls them rather than building, so staging, prod and a failover
   host run the same build, and the box keeps its CPU for users. It keeps the newest 5 releases'
   images for a rollback. Caddy's image is still built on the box, by the hash of its Dockerfile, and
   the demo server's on sb-staging (`spec/hosted.md`), where it restarts only when its code changed,

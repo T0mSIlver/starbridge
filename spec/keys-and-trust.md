@@ -106,7 +106,8 @@
   got from devices, naming the device as `by`. Since #1627 a device keeps no such head it reads,
   since a replayed one could push the machine's own head out of its slot, and it reads a head it
   kept that way before as its signer's, the stricter reading, since only the signer signed it,
-  rather than move or drop it (#1627).
+  rather than move or drop it (#1627). Forgetting the heads of the signer or of that device drops
+  it, so revoking the device that a false head came from clears it too (#1730).
 - **A revocation ends no hold** (#794, #813). A member signs no head past its own revocation, so
   a chain that revokes the member whose head shows the gap is a fork: a revoked device whose
   revocation the server hides can make one. A head therefore keeps counting while a `revoke`

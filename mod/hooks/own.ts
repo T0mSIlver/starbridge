@@ -17,6 +17,9 @@ const OWN = new Set(["ask", "waiting", "working", "wait", "settle", "hello"]);
 export function ownCommand(command: string): boolean {
   const head = /^starbridge ([a-z]+)(?=$|[ \t])/.exec(command);
   if (!head?.[1] || !OWN.has(head[1])) return false;
+  // `settle` closes one decision of the agent's own: `--all` and `--session` close many (#1761).
+  if (head[1] === "settle" && !/^starbridge settle d_[A-Za-z0-9_-]+(?=$|[ \t])/.test(command))
+    return false;
   let quote: "'" | '"' | undefined;
   for (let i = head[0].length; i < command.length; i++) {
     const c = command[i] as string;

@@ -24,6 +24,13 @@ import { Switch, wantsLoop } from "./switch.ts";
  * An answer submitted as a prompt stays on record until its turn starts, so a process that exits
  * first does not lose it (sent.ts).
  */
+/**
+ * Exits 0 when "$1" is a file owned by this user or root that neither its group nor others may
+ * write: what `ownedFile` (node.ts) checks, for a host that reads no owner or mode.
+ */
+const OWNED =
+  '[ -n "$(find -L "$1" -prune -type f \\( -user "$(id -u)" -o -user 0 \\) ! -perm -020 ! -perm -002 2>/dev/null)" ]';
+
 export const register: Register = (on) => {
   let loop: Switch | undefined;
   /** Prompts submitted whose turn has not started. */
@@ -157,6 +164,7 @@ export const register: Register = (on) => {
             agentId,
             group.map((l) => forParent(l, agentId)),
             send,
+            () => running(agentId),
           );
         },
         log,
@@ -197,6 +205,16 @@ export const register: Register = (on) => {
               read: (path) => $.fs.read(path),
               write: (path, text) => $.fs.write(path, text),
               mtime: async (path) => (await $.fs.stat(path).catch(() => undefined))?.mtimeMs,
+              // The mod's host reads no owner or mode: find does, as plugin/hooks/cli.sh. Windows
+              // has no `sh`, and keeps owners in ACLs: there, as `ownedFile`, a file.
+              owned: async (path) =>
+                env.OS === "Windows_NT"
+                  ? (await $.fs.stat(path).catch(() => undefined))?.kind === "file"
+                  : (
+                      await $.process
+                        .run(["sh", "-c", OWNED, "sh", path], { timeoutMs: 10_000 })
+                        .catch(() => undefined)
+                    )?.exitCode === 0,
               now,
               sleep,
               submit,
@@ -227,12 +245,20 @@ export const register: Register = (on) => {
     return next(e);
   });
 
-  on("turn.complete", async (_$, e, next) => {
+  on("turn.complete", async ($, e, next) => {
     const r = await next(e);
     if (e.agentId !== undefined) {
-      // Its end alone proves nothing: a message that came after its last round waits for a run.
-      const ended = roundEnded.get(e.agentId);
-      if (ended !== undefined) void sent?.read(e.agentId, ended).catch(() => undefined);
+      const agent = e.agentId;
+      const ended = roundEnded.get(agent);
+      if (ended !== undefined) void sent?.read(agent, ended).catch(() => undefined);
+      // A message that came after its last round waits for another one, which a subagent that
+      // finished never runs: the parent gets it instead (#1729).
+      void (async () => {
+        const list = () => $.agent.list();
+        if (!sent || !(await finished(list, (ms) => $.clock.sleep(ms), agent))) return;
+        roundEnded.delete(agent);
+        if (await sent.finished(agent, ended)) await sent.recover();
+      })().catch(() => undefined);
     } else {
       handover.ended();
       // After a `/resume`, or a submit that failed.
@@ -288,3 +314,26 @@ export const register: Register = (on) => {
     return next(e);
   });
 };
+
+/** A subagent's statuses once it runs no more rounds. */
+const DONE = ["completed", "failed", "killed"];
+
+/**
+ * Whether subagent `agentId`, whose turn just completed, runs no more rounds: done, or no longer
+ * listed. The engine may mark it a moment after its `turn.complete`, so it looks twice. An idle
+ * teammate wakes for a message, so it has not; nor, when the list cannot be read, has any.
+ */
+export async function finished(
+  list: () => Promise<{ id: string; status: string }[]>,
+  sleep: (ms: number) => Promise<void>,
+  agentId: string,
+): Promise<boolean> {
+  for (let i = 0; i < 2; i++) {
+    if (i > 0) await sleep(2000);
+    const agents = await list().catch(() => undefined);
+    if (!agents) return false;
+    const status = agents.find((a) => a.id === agentId)?.status;
+    if (status === undefined || DONE.includes(status)) return true;
+  }
+  return false;
+}

@@ -51,6 +51,7 @@ test("a loop that replaces another mid-confirm does not submit its answer again 
       files.set(path, text);
     },
     mtime: async () => undefined,
+    owned: async () => false,
     now: async () => Date.now(),
     sleep: (ms) => Bun.sleep(Math.min(ms, 20)),
     submit: (lines) => {
@@ -108,6 +109,7 @@ test("a host that throws once its session is gone does not reject the loop (#136
       },
       write: async () => {},
       mtime: async () => undefined,
+      owned: async () => false,
       now: async () => Date.now(),
       sleep: (ms) => Bun.sleep(Math.min(ms, 20)),
       submit: () => live([]),

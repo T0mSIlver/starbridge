@@ -1,6 +1,7 @@
 # Runs on starbridge-1 as `sudo docker compose -p starbridge -f /opt/starbridge/deploy/compose.yaml`.
 # deploy/deploy.sh copies the repository to /opt/starbridge; host/apply.sh pulls the server and
-# web images deploy.yml pushed for that commit and writes REVISION to .env beside this file. The
+# web images deploy.yml pushed for that commit and writes REVISION and their digests to .env
+# beside this file. The
 # build sections are for the load test (evals/load/stack.sh), which builds them itself.
 services:
   server:
@@ -9,7 +10,8 @@ services:
       dockerfile: server/Dockerfile
       args:
         REVISION: ${REVISION:-unknown}
-    image: ghcr.io/t0msilver/starbridge-server:${REVISION:?host/apply.sh writes it to deploy/.env}
+    # By digest on the boxes (host/apply.sh writes SERVER_IMAGE and WEB_IMAGE); by tag elsewhere.
+    image: ${SERVER_IMAGE:-ghcr.io/t0msilver/starbridge-server:${REVISION:?host/apply.sh writes it to deploy/.env}}
     restart: unless-stopped
     # Built by deploy/host/server-env.sh from the secrets in /etc/starbridge/secrets.
     env_file: /etc/starbridge/server.env
@@ -51,7 +53,7 @@ services:
       # The public pages load Umami (below); a self-hosted build leaves it out.
       args:
         ANALYTICS: umami
-    image: &web-image ghcr.io/t0msilver/starbridge-web:${REVISION:?host/apply.sh writes it to deploy/.env}
+    image: &web-image ${WEB_IMAGE:-ghcr.io/t0msilver/starbridge-web:${REVISION:?host/apply.sh writes it to deploy/.env}}
     restart: unless-stopped
     environment: &web-env
       PUBLIC_URL: https://starbridge.run

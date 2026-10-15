@@ -159,10 +159,12 @@ test("a head a machine before #794 passed on, naming a by, is not kept", () => {
   const opened = open(decisionBy("m2", passedOn), { id: "a", box: keys.a.box }, mine);
   expect(noteHead(heads, "m2", opened.body.dir, seenByA)).toBe(false);
   expect(heads).toEqual({ m2: own });
-  // Heads kept before #1627 under "signer/by" or "signer/?" count as their signer's, and go with it.
+  // Heads kept before #1627 under "signer/by" or "signer/?" count as their signer's, and go with it
+  // or with the by (#1730).
   const kept: Heads = { "m2/b": passedOn, "m2/?": { ...passedOn, by: "ghost" } } as Heads;
   expect(withheldBy(kept, mine, seenByA)).toEqual({ id: "m2", head: head(verifyDirectory(truth)) });
-  expect(forgetHeads(kept, "b")).toBe(false);
+  expect(forgetHeads(kept, "b")).toBe(true);
+  expect(Object.keys(kept)).toEqual(["m2/?"]);
   expect(forgetHeads(kept, "m2")).toBe(true);
   expect(kept).toEqual({});
 });

@@ -61,7 +61,7 @@ touch "${dir}/printed"
 `,
   );
   chmodSync(cli, 0o755);
-  writeFileSync(join(dir, "cli-path"), cli);
+  writeFileSync(join(dir, "cli-path"), cli, { mode: 0o600 });
   const saved = {
     dir: process.env.STARBRIDGE_CONFIG_DIR,
     noAgent: process.env.STARBRIDGE_NO_AGENT,

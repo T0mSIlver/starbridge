@@ -141,7 +141,13 @@ afterEach(() => release?.server.stop(true));
  * Runs a copy of install.sh that trusts `pubkey` and checks with `verifier`: the PATH loses
  * minisign but for "minisign", and fails `broken` commands, as on RHEL 8 with OpenSSL 1.1.1.
  */
-async function install(url: string, pubkey: string, verifier: string, version?: string) {
+async function install(
+  url: string,
+  pubkey: string,
+  verifier: string,
+  version?: string,
+  extra: Record<string, string> = {},
+) {
   const script = join(dir, "install.sh");
   writeFileSync(
     script,
@@ -166,6 +172,7 @@ async function install(url: string, pubkey: string, verifier: string, version?: 
       STARBRIDGE_INSTALL_DIR: join(dir, "bin"),
       STARBRIDGE_NO_SETUP: "1",
       ...(version ? { STARBRIDGE_VERSION: version } : {}),
+      ...extra,
     },
     stdout: "pipe",
     stderr: "pipe",
@@ -235,6 +242,34 @@ describe.skipIf(WINDOWS).each(verifiers)("install.sh checking with %s", (verifie
     expect(r.err).toContain('SHA256SUMS is signed for "starbridge v1.0.0", not starbridge v9.9.9');
     expect(existsSync(r.bin)).toBe(false);
   });
+});
+
+// The version check comes before any verifier runs, so one run covers them all.
+test.skipIf(WINDOWS)("install.sh refuses a release older than the installed copy", async () => {
+  mkdirSync(join(dir, "bin"));
+  const bin = join(dir, "bin", "starbridge");
+  writeFileSync(bin, '#!/bin/sh\necho "starbridge 1.2.0"\n');
+  chmodSync(bin, 0o755);
+  release = fakeReleases("1.2.0-rc.3");
+  let r = await install(release.url, release.pubkey, "openssl");
+  expect(r.err).toContain(
+    "v1.2.0-rc.3 is older than the installed starbridge 1.2.0; set STARBRIDGE_DOWNGRADE=1 to install it anyway",
+  );
+  expect(r.code).not.toBe(0);
+  expect(spawnSync(bin, ["--version"], { encoding: "utf8" }).stdout).toBe("starbridge 1.2.0\n");
+  r = await install(release.url, release.pubkey, "openssl", undefined, {
+    STARBRIDGE_DOWNGRADE: "1",
+  });
+  expect(r.code).toBe(0);
+  release.server.stop(true);
+  // The same release, or a newer one, installs.
+  release = fakeReleases("1.2.0-rc.3");
+  expect((await install(release.url, release.pubkey, "openssl")).code).toBe(0);
+  release.server.stop(true);
+  release = fakeReleases("1.10.0");
+  r = await install(release.url, release.pubkey, "openssl");
+  expect(r.err).toBe("");
+  expect(r.code).toBe(0);
 });
 
 // The URL check comes before any verifier runs, so one run covers them all.
@@ -418,7 +453,7 @@ describe.skipIf(!pwsh || !(hasMinisign || WINDOWS))("install.ps1", () => {
     url: string,
     pubkey: string,
     version?: string,
-    opts: { minisign?: string; iex?: boolean } = {},
+    opts: { minisign?: string; iex?: boolean; env?: Record<string, string> } = {},
   ) {
     const script = join(dir, "install.ps1");
     writeFileSync(
@@ -458,6 +493,7 @@ describe.skipIf(!pwsh || !(hasMinisign || WINDOWS))("install.ps1", () => {
         STARBRIDGE_NO_SETUP: "1",
         NO_COLOR: "1",
         ...(version ? { STARBRIDGE_VERSION: version } : {}),
+        ...opts.env,
       },
       stdout: "pipe",
       stderr: "pipe",
@@ -505,6 +541,23 @@ describe.skipIf(!pwsh || !(hasMinisign || WINDOWS))("install.ps1", () => {
     });
     expect(r.out).toContain("SHA256SUMS does not carry the release signature");
     expect(existsSync(r.bin)).toBe(false);
+  });
+
+  test("refuses a release older than the installed copy", async () => {
+    release = fakeReleases("9.9.9", { asset });
+    await installPs(release.url, release.pubkey);
+    release.server.stop(true);
+    release = fakeReleases("1.0.0", { asset });
+    let r = await installPs(release.url, release.pubkey);
+    expect(r.out).toContain(
+      "v1.0.0 is older than the installed starbridge 9.9.9; set STARBRIDGE_DOWNGRADE=1 to install it anyway",
+    );
+    expect(readFileSync(r.bin, "utf8")).toContain("starbridge 9.9.9");
+    r = await installPs(release.url, release.pubkey, undefined, {
+      env: { STARBRIDGE_DOWNGRADE: "1" },
+    });
+    expect(r.code).toBe(0);
+    expect(readFileSync(r.bin, "utf8")).toContain("starbridge 1.0.0");
   });
 
   test("is plain ASCII, which Windows PowerShell reads right without a BOM", () => {
