@@ -150,17 +150,16 @@ export default function Privacy() {
           the same visitor fields as a page view. For an account made in the last two days, the
           server also records, once each, these steps: the first sign-in and the app it came from,
           the recovery key saved, the first machine paired, a second device added and the first
-          answer sent, with the app that sent it. It sends them with a hash of the account id, so
-          Umami can tell one account's steps apart from another's; nothing else about the account,
-          its machines or its content goes with them. The hash has no secret in it, so anyone who
-          knows your account id can compute it. A request that sends Do Not Track records no step.
-          Since the server knows when each account was created, the operator could match that first
-          sign-in to your account. Umami sets no cookie, stores nothing in your browser and does not
-          store your IP address: it tells visitors apart by a hash of the IP address, the browser
-          and a salt that changes every day, so a visit to the public pages cannot be traced back to
-          you or linked to your visits on other days. A browser that sends Do Not Track is not
-          counted. Umami keeps its records for 180 days at most, and the nightly backups keep them
-          for about 2 weeks more.
+          answer sent, with the app that sent it. It sends them with a random id kept with your
+          account, so Umami can tell one account's steps apart from another's; nothing else about
+          the account, its machines or its content goes with them. Deleting your account deletes
+          that id. A request that sends Do Not Track records no step. Since the server knows when
+          each account was created, the operator could match that first sign-in to your account.
+          Umami sets no cookie, stores nothing in your browser and does not store your IP address:
+          it tells visitors apart by a hash of the IP address, the browser and a salt that changes
+          every day, so a visit to the public pages cannot be traced back to you or linked to your
+          visits on other days. A browser that sends Do Not Track is not counted. Umami keeps its
+          records for 180 days at most, and the nightly backups keep them for about 2 weeks more.
         </p>
       </details>
 

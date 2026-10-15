@@ -35,15 +35,20 @@ export class Funnel {
   /**
    * Posts `step` for `account` if the account is new, unless the request that took it sends Do
    * Not Track, as Umami's tracker would. Umami makes one visit of each account's steps in a day
-   * from `id`, a hash of the account id; it gets nothing else about the account.
+   * from `id`, the account's random `funnel_id` (#1745); it gets nothing else about the account.
    */
   reached(c: Context<Env>, account: string, step: Step, data?: Record<string, string>): void {
     const umami = this.config.umami;
     if (!umami || c.req.header("dnt") === "1") return;
-    const row = this.db.query("SELECT created_at FROM accounts WHERE id = ?").get(account) as {
-      created_at: string;
-    } | null;
+    const row = this.db
+      .query("SELECT created_at, funnel_id FROM accounts WHERE id = ?")
+      .get(account) as { created_at: string; funnel_id: string | null } | null;
     if (!row || this.now() - Date.parse(row.created_at) >= NEW_FOR_MS) return;
+    let id = row.funnel_id;
+    if (!id) {
+      id = Buffer.from(crypto.getRandomValues(new Uint8Array(16))).toString("hex");
+      this.db.query("UPDATE accounts SET funnel_id = ? WHERE id = ?").run(id, account);
+    }
     const payload = {
       website: umami.websiteId,
       hostname: new URL(this.config.publicUrl).hostname,
@@ -51,7 +56,7 @@ export class Funnel {
       title: "Starbridge",
       name: step,
       ...(data && { data }),
-      id: new Bun.CryptoHasher("sha256").update(`funnel:${account}`).digest("hex").slice(0, 32),
+      id,
       // A loopback address: Umami looks up no place for it, and reads no client's address.
       ip: "127.0.0.1",
       userAgent: USER_AGENT,

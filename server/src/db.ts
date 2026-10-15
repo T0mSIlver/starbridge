@@ -276,7 +276,13 @@ CREATE INDEX apple_tokens_account ON apple_tokens (account_id);
 CREATE INDEX apple_tokens_due ON apple_tokens (due_at);
 `;
 
-export const MIGRATIONS = [V1, V2, V3, V4, V5, V6, V7, V8, V9, V10, V11, V12];
+/**
+ * The visitor id an account's launch funnel steps carry to Umami (#1745): random, so no one can
+ * compute it from the account id, and gone with the account. Made at the account's first step.
+ */
+const V13 = "ALTER TABLE accounts ADD COLUMN funnel_id TEXT;";
+
+export const MIGRATIONS = [V1, V2, V3, V4, V5, V6, V7, V8, V9, V10, V11, V12, V13];
 
 /**
  * Migrations that are not additive. Every other one only adds: a table, an index, or a column that
