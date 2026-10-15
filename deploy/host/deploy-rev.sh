@@ -100,6 +100,14 @@ echo "staging passed $rev (run $run) with server@$server web@$web"
 # release before it one to go back to. One the owner deployed around these checks is recorded too;
 # --rollback still checks it as above.
 record "$current"
+# apply.sh installs its own tree's deploy-rev.sh as this command, and an older tree's may not
+# know --rollback: after a rollback, failed or not, this command comes back, so the next rollback
+# still works and the command never goes back to older checks.
+if [ -n "$rollback" ]; then
+  self=$(mktemp)
+  cp /usr/local/sbin/starbridge-deploy "$self"
+  trap 'install -m 755 -o root -g root "$self" /usr/local/sbin/starbridge-deploy; rm -f "$self"' EXIT
+fi
 
 rm -rf /opt/starbridge.new /opt/starbridge.old
 mkdir /opt/starbridge.new

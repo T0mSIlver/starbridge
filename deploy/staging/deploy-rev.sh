@@ -69,6 +69,13 @@ fi
 # The running commit first, so the first deploy by this script makes the one before it a rollback
 # target.
 record "$current"
+# staging/apply.sh installs its own tree's deploy-rev.sh as this command, and an older tree's may
+# not know --rollback: after a rollback, failed or not, this command comes back.
+if [ -n "$rollback" ]; then
+  self=$(mktemp)
+  cp /usr/local/sbin/starbridge-staging-deploy "$self"
+  trap 'install -m 755 -o root -g root "$self" /usr/local/sbin/starbridge-staging-deploy; rm -f "$self"' EXIT
+fi
 
 dir=/opt/starbridge-staging
 rm -rf $dir.new $dir.old
