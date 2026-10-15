@@ -21,6 +21,11 @@ export type Facts = {
   staging?: string;
   /** The last internal run that built the Android app: its commit and time. */
   internalBuild?: { sha: string; at: string };
+  /** The Mac app's newest tip build (T0mSIlver/starbridge-tip): version, commit and publish time. */
+  tipBuild?: { version: string; sha: string; at: string };
+  /** Commits that touch the Mac app since that build, and whether its paths differ (as androidChanged). */
+  macSince?: number;
+  macChanged?: boolean;
   /** Commits that touch the Android app since that build, and staging's not yet in the newest rc. */
   androidSince?: number;
   /** Whether the paths differ, which is how a build differs from the track's; a change and its revert count commits but build nothing. */
@@ -83,6 +88,11 @@ export function next(f: Facts): string[] {
   );
   out.push(f.iosMainOn ? `iPhone main: nightly, ${both(nn)}` : "iPhone main: off, awaiting Apple");
   out.push(`Next rc: ${f.stagingSinceRc ?? "unknown"} commits on staging`);
+  out.push(
+    f.macSince === undefined
+      ? "Mac main: builds on each merge that touches the app"
+      : `Mac main: builds on each merge that touches the app; ${(f.macChanged ?? f.macSince > 0) ? `${f.macSince} commits not built since ${f.tipBuild?.version ?? "unknown"}` : "none waiting"}`,
+  );
   out.push("Mac apps check every 6 h");
   out.push("Play Alpha: after Play's review");
   return out;
@@ -190,6 +200,10 @@ function main(f: Facts, p: (typeof PRODUCTS)[number]): string {
       return f.internalBuild
         ? `<span class="ver">main-${short(f.internalBuild.sha)}</span><p class="meta">${commit(f.internalBuild.sha)} · ${both(new Date(f.internalBuild.at))}</p><p class="where">Play internal</p>`
         : none("None yet");
+    case "Mac app":
+      return f.tipBuild
+        ? `<span class="ver">${esc(f.tipBuild.version)}</span><p class="meta">${commit(f.tipBuild.sha)} · ${both(new Date(f.tipBuild.at))}</p><p class="where">Tip channel</p>`
+        : none("None yet");
     case "iPhone":
       return none(f.iosMainOn ? "Nightly" : "Off");
     default:
@@ -292,11 +306,17 @@ function sh(cmd: string, ...args: string[]): string {
   return r.status === 0 ? r.stdout.trim() : "";
 }
 
+// The Mac app's tip builds (desktop.yml, desktop/scripts/tip.ts): a public repository.
+const TIP_REPO = "T0mSIlver/starbridge-tip";
+// What the Mac app is built from: APP_PATHS in desktop/scripts/tip.ts.
+const MAC_PATHS = ["desktop", "pnpm-lock.yaml", ".github/workflows/desktop.yml"];
+
 async function api<T>(
   path: string,
   accept = "application/vnd.github+json",
+  repo = REPO,
 ): Promise<T | undefined> {
-  const res = await fetch(`https://api.github.com/repos/${REPO}/${path}`, {
+  const res = await fetch(`https://api.github.com/repos/${repo}/${path}`, {
     headers: { authorization: `Bearer ${process.env.GH_TOKEN}`, accept },
   }).catch(() => undefined);
   return res?.ok ? ((await res.json()) as T) : undefined;
@@ -340,6 +360,23 @@ export async function gather(): Promise<Facts> {
       }
     }
   }
+  // The tip release's tip.json names the build; the file's upload time is when it was published.
+  let tipBuild: Facts["tipBuild"];
+  const tip = await api<{ assets: { name: string; url: string; updated_at: string }[] }>(
+    "releases/tags/tip",
+    undefined,
+    TIP_REPO,
+  );
+  const asset = tip?.assets.find((a) => a.name === "tip.json");
+  if (asset) {
+    const body = await api<{ version?: string; commit?: string }>(
+      asset.url.slice(asset.url.indexOf("/releases/") + 1),
+      "application/octet-stream",
+      TIP_REPO,
+    );
+    if (body?.version && body.commit && /^[0-9a-f]{40}$/.test(body.commit))
+      tipBuild = { version: body.version, sha: body.commit, at: asset.updated_at };
+  }
   const commits: Record<string, string> = {};
   for (const e of data.releases) commits[e.version] = sh("git", "rev-list", "-n1", `v${e.version}`);
   const rc = newest(data, "rc");
@@ -365,6 +402,12 @@ export async function gather(): Promise<Facts> {
           "android",
           "packages/protocol/vectors",
         ]).status !== 0
+      : undefined,
+    tipBuild,
+    macSince: tipBuild ? count(`${tipBuild.sha}..origin/main`, ...MAC_PATHS) : undefined,
+    macChanged: tipBuild
+      ? spawnSync("git", ["diff", "--quiet", tipBuild.sha, "origin/main", "--", ...MAC_PATHS])
+          .status !== 0
       : undefined,
     stagingSinceRc: rc && staging ? count(`v${rc.version}..${staging}`) : undefined,
     commits,

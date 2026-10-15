@@ -116,11 +116,11 @@
   status site rather than the web app so it stays up when the VPS is down and needs no deploy.
 - **Ops page** (#1630). `ops.starbridge.run` is the owner's private page for learning how work flows:
   per product, the version, commit and time of main (staging's and starbridge.run's commits from
-  `/healthz`, the Android internal build), the newest release candidate and the newest final, and what
-  happens next, in Europe/Paris and UTC: how many Android commits wait for a build, how many commits
+  `/healthz`, the Android internal build, the Mac app's newest tip build), the newest release candidate and the newest final, and what
+  happens next, in Europe/Paris and UTC: how many Android and Mac commits wait for a build, how many commits
   staging holds beyond the newest rc, and what promotion still waits on. Unlike the public releases
   page it shows commits, since one person reads it. `ops.yml` builds it from the GitHub API, the
-  tags and `releases.json` every 30 minutes and after each deploy, release, internal build and promotion,
+  tags and `releases.json` every 30 minutes and after each deploy, release, internal build, desktop run and promotion,
   and uploads it to the Pages project `starbridge-ops`, only when its text changed (times round to
   the hour). A GitHub Actions job rather than a VM, so no secret reaches the VMs. Cloudflare Access
   (Zero Trust free plan, one-time PIN to the owner's email) guards the custom domain and the
