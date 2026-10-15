@@ -8,6 +8,10 @@ import type { LegalChange } from "@/lib/legalChanges";
 export const privacyChanges: readonly LegalChange[] = [
   {
     date: "2026-10-15",
+    text: "Deleting your account revokes the token of each Apple sign-in, not only the last, and retries for about 3 days while Apple fails.",
+  },
+  {
+    date: "2026-10-15",
     text: "Sign-up steps in Umami carry a random id kept with your account, in place of a hash of the account id, and deleting your account deletes it.",
   },
   {
@@ -54,4 +58,4 @@ export const privacyChanges: readonly LegalChange[] = [
 ];
 
 /** SHA-256 of page.tsx with its whitespace collapsed (sourceHash); changes.test.ts recomputes it. */
-export const pageHash = "ab894e98f390ddf17894aadeebea044c1954f137fb0d6e11e31493700bc329be";
+export const pageHash = "ec5532bcaff62a2a038472514bd32ed5ee5e380e66747c408879cc44bb864697";

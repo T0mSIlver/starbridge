@@ -35,6 +35,11 @@
   (Caddy's hop to the server's published port), so about 5000 such users fit; CPU stays under
   one core. A new visitor to the landing page costs about 50 ms of CPU across Next and Caddy
   once Caddy compresses (#593), so the VPS serves 15 to 20 a second.
+- **Accounts full of large questions** (#1787). With 20 of 100 users holding about 8 open
+  questions of 2 MB of images each, their pages listing from cursor 0 every 20 s and fetching by
+  id each question listed without its images, the server's peak memory went from 55 to 163 MB and
+  the p99 of all requests from 5 to 26 ms (`load.ts --heavy 0.2 --backlog 8`, 2026-10-15, on the
+  dev box). The 4 MB page of #1735 holds one such question's images; the rest come by id.
 - **Load regressions** (#1548). The load test runs weekly for an hour and monthly for 24 hours
   on the staging VM, from staging's images, capped to 1.5 cores and 3 GB so staging keeps the
   rest, and its result is compared with a stored baseline; a regression is a card to the owner.
@@ -58,7 +63,9 @@
   only when it holds over 200 connections or is being rate-limited (the owner's rule): at
   Caddy's cap of 3000 `/v1` requests a minute (2900 seen by the server, since Caddy logs no
   refusal), or refused with 429 by the server: an HTTP/2 client can flood over few connections, and every
-  other visitor's address would end up in the on-call session's transcript.
+  other visitor's address would end up in the on-call session's transcript. Caddy's error log
+  records a failed request's path without its query, and without its Authorization, Cookie,
+  X-Claim and Referer headers (#1788): a query can carry an OAuth code.
 - **Blocking an address** (#783). The owner can refuse an address or range at Caddy, by a reload
   that keeps open connections (`deploy/host/switch.sh`), with a 403 that names abuse@. An IPv6
   address is blocked as its /64, as the rate limits count it, and nothing wider than a /8 (IPv4)

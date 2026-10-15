@@ -7,7 +7,7 @@
 // The window loads a stand-in page on this machine, so the network is not measured.
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { mkdtempSync, readdirSync, statSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
@@ -59,6 +59,9 @@ const env = { ...process.env, STARBRIDGE_TIMING: "1", STARBRIDGE_SERVER: origin 
 
 /** Launches the app and returns its marks as they come, and a way to stop it. */
 function launch(dir: string) {
+  // A packaged app ignores STARBRIDGE_SERVER (#1721): its server comes from its settings.
+  const saved = join(dir, "settings.json");
+  if (app && !existsSync(saved)) writeFileSync(saved, JSON.stringify({ server: origin }));
   const child = spawn(command, args(dir), { env, stdio: ["ignore", "pipe", "inherit"] });
   // Listened for at once: a second instance hands over and quits before anyone asks.
   const exited = new Promise<void>((done) => child.once("exit", () => done()));

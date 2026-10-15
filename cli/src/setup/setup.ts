@@ -27,6 +27,7 @@ import {
   found,
   installAgent,
   installed,
+  migrateAllowEntries,
   progressLine,
   recordCodex,
   removedAgents,
@@ -101,7 +102,7 @@ async function checkServer(server: string): Promise<void> {
  */
 export async function refresh(sys: Sys): Promise<string[]> {
   recordSelf(sys);
-  const done = refreshFiles(sys);
+  const done = [...refreshFiles(sys), ...migrateAllowEntries(sys)];
   const removed = removedAgents(sys.ctx);
   // Codex installed before setup recorded its binary gets it here, as each update moves it.
   if (!removed.includes("codex")) recordCodex(sys);

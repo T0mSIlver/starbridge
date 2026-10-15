@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { claudeSession } from "../src/claude";
-import { askLines } from "../src/decisions";
+import { askLines, bindSession } from "../src/decisions";
 import { projectName } from "../src/project";
 
 test("a git worktree's project is its repository, not its generated directory (#970)", () => {
@@ -67,4 +67,20 @@ test("ask says why nothing brings the answer when Claude desktop replaced the mo
   mkdirSync(join(dir, "hooks"));
   writeFileSync(join(dir, "hooks", "hooks.json"), "{}");
   expect(askLines(claude, "wait", env, argsOf)).toEqual([]);
+});
+
+test("ask --session names only a session the asker's environment carries (#1748)", () => {
+  const q = { question: "Merge?" };
+  // A Codex agent started from a Claude Code session's shell may ask as either.
+  const env = { CODEX_THREAD_ID: "t1", CLAUDE_CODE_SESSION_ID: "s1" };
+  expect(bindSession({ ...q, session: "s1" }, env)).toEqual({ input: { ...q, session: "s1" } });
+  expect(bindSession({ ...q, session: "t1" }, env)).toEqual({ input: { ...q, session: "t1" } });
+  const other = bindSession({ ...q, session: "t9" }, env);
+  expect(other.input).toEqual(q);
+  expect(other.warning).toBe(
+    "starbridge: --session t9 is not this session, and an answer goes only to the session that asked, so it asks as this session (t1).",
+  );
+  // Outside every agent's session, any.
+  expect(bindSession({ ...q, session: "t9" }, {})).toEqual({ input: { ...q, session: "t9" } });
+  expect(bindSession(q, env)).toEqual({ input: q });
 });

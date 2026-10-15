@@ -8,12 +8,14 @@
  * rewrites the scripts and the rule in place, and the hooks Codex trusted stay the same, so the
  * owner is not asked to trust them again.
  */
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import cli from "../../../plugin/hooks/cli.sh" with { type: "text" };
 import sessionStart from "../../../plugin/hooks/session-start.sh" with { type: "text" };
 import rule from "../../../plugin/rules/codex.md" with { type: "text" };
 import { marker, ours } from "./marker";
+import { shellQuote } from "./quote";
+import { removedLine, removeWritten } from "./remove";
 import { failure, run, type Sys } from "./sys";
 
 type Home = Pick<Sys, "ctx" | "home">;
@@ -37,7 +39,6 @@ export function codexPluginDir(sys: Home): string {
 
 const SCRIPT = "hooks/session-start.sh";
 const CLI = "hooks/cli.sh";
-const shellQuote = (s: string) => `'${s.replaceAll("'", `'\\''`)}'`;
 
 /** Every file of the marketplace, by path inside it. */
 function files(sys: Home): Record<string, string> {
@@ -217,7 +218,7 @@ export async function removeCodexPlugin(sys: Sys): Promise<string[]> {
     );
   }
   await codex(sys, "plugin", "marketplace", "remove", CODEX_MARKETPLACE);
-  rmSync(dir, { recursive: true, force: true });
-  done.push(`Removed ${dir}.`);
+  // Only the files setup wrote: the owner's beside them stay, with their folders (#1749).
+  done.push(removedLine(dir, removeWritten(dir, Object.keys(files(sys)))));
   return done;
 }

@@ -7,6 +7,9 @@
  * - the phone or the web page answers each decision after a while;
  * - a share of the users keep the web page open: its inbox and prompt polls (`--poll`, 20 s), 10 s run poll,
  *   60 s quota poll and the join list long-poll (25 s).
+ * - `--heavy` of the users ask with `--blobs` bytes of images, `--backlog` of them at the start,
+ *   and their pages list the whole inbox from cursor 0 at each poll, as a new device does, then
+ *   fetch by id each question listed without its images (#1787).
  *
  * The users come from setup.ts. `--ramp 300,1000,3000` runs each count for `--stage` seconds,
  * stopping early once a stage's p99 passes 1 s or the server dies. At the end it stops posting,
@@ -54,6 +57,12 @@ const { values } = parseArgs({
     drop: { type: "string" },
     /** The result as JSON, for compare.ts: each stage, the final counts, memory every 5 min. */
     json: { type: "string" },
+    /** Share of users whose questions carry images and whose pages list from cursor 0. */
+    heavy: { type: "string", default: "0" },
+    /** Bytes of images in each of their questions, as 4 blobs: 2 MB less the boxes, the most. */
+    blobs: { type: "string", default: String(2 * 1024 * 1024 - 4000) },
+    /** Questions with images each of their machines asks at the start, left open. */
+    backlog: { type: "string", default: "0" },
   },
 });
 
@@ -82,6 +91,8 @@ const LATE_MS = 5000;
 
 /** The share `--pages` of users keep the web page open, spread evenly over user numbers. */
 const hasPage = (u: User) => (u.n * 0.618) % 1 < Number(values.pages);
+/** The share `--heavy` of users, spread over user numbers apart from the pages'. */
+const isHeavy = (u: User) => (u.n * 0.382 + 0.5) % 1 < Number(values.heavy);
 
 // --- Worker: drives the users n % procs == index -------------------------------------------
 
@@ -179,6 +190,19 @@ async function worker(index: number, procs: number) {
   }
 
   const pause = (ms: number) => Bun.sleep(ms);
+  // The heavy users' images: the server never opens blobs, so one set serves every question.
+  const images = Array.from({ length: 4 }, () => box(Number(values.blobs) / 4));
+  const decision = (u: User) => ({
+    v: 1,
+    kind: "decision",
+    id: id("d"),
+    from: "mac",
+    ...(isHeavy(u) ? { blobs: images } : {}),
+    boxes: [
+      { to: "phone", box: box(1500) },
+      { to: "web", box: box(1500) },
+    ],
+  });
 
   async function machine(u: User) {
     let cursor = "";
@@ -224,20 +248,17 @@ async function worker(index: number, procs: number) {
   }
 
   async function ask(u: User) {
+    // An account full of large questions: 8 s apart, within the 16 MB a minute a machine posts.
+    if (isHeavy(u))
+      for (let k = 0; k < Number(values.backlog) && posting; k++) {
+        await post("post.backlog", u.machine, decision(u));
+        await pause(8000);
+      }
     await pause((Math.random() * 3_600_000) / Number(values.decisions));
     while (posting) {
-      const d = id("d");
-      const item = {
-        v: 1,
-        kind: "decision",
-        id: d,
-        from: "mac",
-        boxes: [
-          { to: "phone", box: box(1500) },
-          { to: "web", box: box(1500) },
-        ],
-      };
-      if (await post("post.decision", u.machine, item)) {
+      const item = decision(u);
+      const d = item.id;
+      if (await post(isHeavy(u) ? "post.large" : "post.decision", u.machine, item)) {
         if (hasPage(u)) decisions.set(d, false);
         if (values.metrics) decidedAt.set(d, Date.now());
         answerLater(u, d);
@@ -327,21 +348,34 @@ async function worker(index: number, procs: number) {
     await Promise.all([
       joins(),
       every(Number(values.poll) * 1000, async () => {
+        // A heavy user's page reads the whole inbox each time, with every image, as a new
+        // device or a server that ignores `blobs=open` would: the 4 MB pages of #1735.
+        let cursor = isHeavy(u) ? "" : cursors.inbox;
         for (;;) {
           const r = await call(
-            "poll.inbox",
+            isHeavy(u) ? "poll.full" : "poll.inbox",
             u.web,
             "GET",
-            `/items?kind=decision,settled,waiting${after(cursors.inbox)}`,
+            `/items?kind=decision,settled,waiting${after(cursor)}`,
           );
           if (r.status !== 200) return;
+          // A question whose images did not fit the page lists without them; the device fetches
+          // it by id to show them.
+          if (isHeavy(u))
+            for (const s of r.json.items as {
+              item: { id: string; kind: string; blobs?: unknown };
+            }[])
+              if (s.item.kind === "decision" && !s.item.blobs)
+                await call("get.large", u.web, "GET", `/items/${s.item.id}`);
           for (const s of r.json.items as { item: { id: string } }[])
             if (decisions.get(s.item.id) === false) {
               decisions.set(s.item.id, true);
               decisionsSeen++;
             }
-          cursors.inbox = r.json.cursor;
-          if (r.json.items.length < 100) break;
+          cursor = r.json.cursor;
+          cursors.inbox = cursor;
+          // A server since #1735 says whether more follows; one before it, by a short page.
+          if (!(r.json.more ?? r.json.items.length === 100)) break;
         }
         await call("poll.prompts", u.web, "GET", "/items?kind=permission&open=1");
         const s = await call(

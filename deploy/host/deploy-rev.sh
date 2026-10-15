@@ -55,23 +55,32 @@ run=$(get "commits/$rev/statuses?per_page=100" |
 get "actions/runs/$run" | jq -e '.path == ".github/workflows/deploy.yml" and .event == "workflow_run"
   and .head_branch == "main" and .head_repository.full_name == "T0mSIlver/starbridge"' >/dev/null ||
   { echo "the staging status of $rev names run $run, not main's deploy.yml; not deployed" >&2; exit 1; }
-# The step ran before the status was set, but the API can show it a few seconds late.
-passed=
+# The step ran before the status was set, but the API can show it a few seconds late. The same
+# job names the image digests staging ran (#1715), which this deploy runs, so a tag pushed again
+# after staging passed changes nothing here.
+digests=
 for _ in 1 2 3 4 5 6; do
-  get "actions/runs/$run/jobs?filter=latest&per_page=100" | jq -e --arg step "Staging passed $rev" \
-    'any(.jobs[] | select(.name == "staging") | .steps[]; .name == $step and .conclusion == "success")' \
-    >/dev/null && { passed=1; break; }
+  digests=$(get "actions/runs/$run/jobs?filter=latest&per_page=100" | jq -r --arg step "Staging passed $rev" '
+    [.jobs[] | select(.name == "staging") | .steps[] | select(.conclusion == "success") | .name] as $done
+    | if any($done[]; . == $step) then
+        [$done[] | capture("^Staging ran (?<i>server|web)@(?<d>sha256:[0-9a-f]{64})$")]
+        | select(([.[].i] | sort) == ["server", "web"]) | map("\(.i) \(.d)") | .[]
+      else empty end') || digests=
+  [ -z "$digests" ] || break
   sleep 5
 done
-[ -n "$passed" ] || { echo "run $run did not pass $rev on staging; not deployed" >&2; exit 1; }
-echo "staging passed $rev (run $run)"
+server=$(printf '%s\n' "$digests" | sed -n 's/^server //p')
+web=$(printf '%s\n' "$digests" | sed -n 's/^web //p')
+[ -n "$server" ] && [ -n "$web" ] ||
+  { echo "run $run did not pass $rev on staging, or names no image digests; not deployed" >&2; exit 1; }
+echo "staging passed $rev (run $run) with server@$server web@$web"
 
 rm -rf /opt/starbridge.new /opt/starbridge.old
 mkdir /opt/starbridge.new
 git -C $repo archive --format=tar "$rev" | tar -x -C /opt/starbridge.new
 if [ -d /opt/starbridge ]; then mv /opt/starbridge /opt/starbridge.old; fi
 mv /opt/starbridge.new /opt/starbridge
-REVISION=$rev /opt/starbridge/deploy/host/apply.sh
+REVISION=$rev SERVER_DIGEST=$server WEB_DIGEST=$web /opt/starbridge/deploy/host/apply.sh
 # Only once it is up and healthy: a failed deploy leaves no REVISION, so only main's head deploys
 # next, and the check above never trusts a release that never ran.
 echo "$rev" > /opt/starbridge/REVISION

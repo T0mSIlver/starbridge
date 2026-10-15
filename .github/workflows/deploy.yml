@@ -237,7 +237,29 @@ jobs:
             echo "staging runs ${got:-no named revision}, not $REV"
             exit 1
           fi
+          # The digests staging pulled and runs (deploy/staging/apply.sh), which prod runs (#1715).
+          for image in server web; do
+            digest=$(sed -n "s/^image $image \(sha256:[0-9a-f]\{64\}\)$/\1/p" "$RUNNER_TEMP/staging.log")
+            [ "$(printf '%s\n' "$digest" | grep -c .)" -eq 1 ] || {
+              status failure "Staging named no $image digest"
+              echo "staging named no single $image digest"
+              exit 1
+            }
+            echo "$image=$digest" >> "$GITHUB_OUTPUT"
+          done
           echo "passed=true" >> "$GITHUB_OUTPUT"
+      # The images staging ran, by digest, which starbridge.run's box reads with the step below and
+      # deploys (deploy/host/deploy-rev.sh, #1715): a tag can be pushed again, a digest cannot.
+      - name: Staging ran server@${{ steps.deploy.outputs.server }}
+        if: steps.deploy.outputs.passed == 'true'
+        env:
+          DIGEST: ${{ steps.deploy.outputs.server }}
+        run: echo "staging ran server@$DIGEST"
+      - name: Staging ran web@${{ steps.deploy.outputs.web }}
+        if: steps.deploy.outputs.passed == 'true'
+        env:
+          DIGEST: ${{ steps.deploy.outputs.web }}
+        run: echo "staging ran web@$DIGEST"
       # starbridge.run's box reads this step from GitHub's API before it deploys the commit
       # (deploy/host/deploy-rev.sh). Its name holds the commit, and only main's deploy.yml runs it,
       # so a status that some other run posted cannot stand in for it. It runs before the status

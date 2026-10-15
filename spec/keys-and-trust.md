@@ -106,7 +106,8 @@
   got from devices, naming the device as `by`. Since #1627 a device keeps no such head it reads,
   since a replayed one could push the machine's own head out of its slot, and it reads a head it
   kept that way before as its signer's, the stricter reading, since only the signer signed it,
-  rather than move or drop it (#1627).
+  rather than move or drop it (#1627). Forgetting the heads of the signer or of that device drops
+  it, so revoking the device that a false head came from clears it too (#1730).
 - **A revocation ends no hold** (#794, #813). A member signs no head past its own revocation, so
   a chain that revokes the member whose head shows the gap is a fork: a revoked device whose
   revocation the server hides can make one. A head therefore keeps counting while a `revoke`
@@ -116,6 +117,13 @@
   device's hold names who revoked the member and offers "I revoked it: stop waiting". Only the
   owner can tell their revocation from a forged one. Tom chose this over a button on every
   device, or none, on 2026-10-08 (#813).
+- **A chain that drops this device holds too** (#1779). Before wiping its keys on a chain that
+  revokes it, at a sync or when a new session cannot bind, a device checks that chain against the
+  heads its machines signed. One that lacks a kept head holds instead: the server, with a device
+  revoked in entries it hides, could fork the chain and revoke this one there to force a re-pair.
+  The device keeps its keys and its pin, so the full chain still extends it, shows the hold naming
+  the machine, and reads the directory again at each sync; Stop waiting works as above, and a chain the heads agree with
+  wipes. The web shows the hold as a page of its own, since it has no inbox to show it over.
 - **Browser keys** (#8, #116, #274, #283, #354). Non-extractable WebCrypto keys in IndexedDB,
   with raw libsodium keys where storage doesn't return them (WebKit reads an X25519 `CryptoKey`
   back as null). The check writes and reads back a throwaway pair, so a page closed midway

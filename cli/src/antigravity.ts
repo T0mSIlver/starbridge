@@ -36,11 +36,13 @@ export interface AgyRoute {
 }
 
 /**
- * Whether a route's address is on loopback, where Antigravity's language server listens. A
- * route anywhere else is never called, since its token goes with every call.
+ * Whether a route's address is on loopback, where Antigravity's language server listens, at a
+ * port a server can take (#1749). A route anywhere else is never called, since its token goes with
+ * every call.
  */
 export function onLoopback(address: string): boolean {
-  return /^(localhost|127\.0\.0\.1|\[::1\]):\d+$/.test(address);
+  const port = /^(?:localhost|127\.0\.0\.1|\[::1\]):([1-9]\d{0,4})$/.exec(address)?.[1];
+  return port !== undefined && Number(port) <= 65_535;
 }
 
 /**

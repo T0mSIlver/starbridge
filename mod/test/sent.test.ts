@@ -456,3 +456,45 @@ test("an answer that cannot be recorded is not sent to the subagent (#1702)", as
   expect(r.isDelivered).toBe(false);
   expect(sent).toBe(false);
 });
+
+test("a subagent that finishes: what it read goes, what came after its last round goes to the parent (#1729)", async () => {
+  const m = machine();
+  const a = m.process("s1", "proc-a");
+  const note = (d: string) =>
+    `Answer to ${d}: yes\nYour subagent a1 asked this and could not take the answer: act on it, or pass it on.`;
+  await a.sent.toAgent("a1", [{ text: note("d_1"), ack: "d_1" }], async () => ({
+    isDelivered: true,
+  }));
+  await Bun.sleep(2);
+  const round = Date.now();
+  await Bun.sleep(2);
+  await a.sent.toAgent("a1", [{ text: note("d_2"), ack: "d_2" }], async () => ({
+    isDelivered: true,
+  }));
+  expect(await a.sent.finished("a1", round)).toBe(true);
+  await a.sent.recover();
+  expect(a.submitted).toEqual([note("d_2")]);
+  await a.start(note("d_2"));
+  expect(lines(m)).toEqual([]);
+  // Nothing left for it: nothing more to do.
+  expect(await a.sent.finished("a1", undefined)).toBe(false);
+});
+
+test("a subagent that finishes while its answer is being recorded is resumed with it: nothing goes to the parent (#1729)", async () => {
+  const m = machine();
+  const a = m.process("s1", "proc-a");
+  let delivered = 0;
+  const r = await a.sent.toAgent(
+    "a1",
+    [{ text: LINE, ack: "d_1" }],
+    async () => {
+      delivered++;
+      return { isDelivered: true };
+    },
+    async () => false,
+  );
+  expect(r.isDelivered).toBe(true);
+  expect(delivered).toBe(1);
+  expect(lines(m)).toEqual([]);
+  expect(await a.sent.finished("a1", undefined)).toBe(false);
+});

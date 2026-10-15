@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { hookPreInvocation, hookPreTool, pbtxtString } from "../src/antigravity";
+import { hookPreInvocation, hookPreTool, onLoopback, pbtxtString } from "../src/antigravity";
 import { testCtx } from "./helpers";
 
 test("a prototext string reads back whatever Go's encoder escaped", () => {
@@ -42,4 +42,21 @@ test("with prompts on, a conversation that ran no starbridge command is told to,
   expect(out(tool("c-2", "starbridge hello"))[0]?.decision).toBe("allow");
   expect(out(tool("c-2", "ls"))[0]?.decision).toBe("deny");
   expect(out(tool("c-2", "ls"))).toEqual([]);
+});
+
+test("a language server's address counts only on loopback, at a port a server can take (#1749)", () => {
+  for (const a of ["127.0.0.1:36469", "localhost:1", "[::1]:65535"])
+    expect([a, onLoopback(a)]).toEqual([a, true]);
+  for (const a of [
+    "127.0.0.1:0",
+    "127.0.0.1:65536",
+    "127.0.0.1:080",
+    "127.0.0.1:",
+    "127.0.0.2:36469",
+    "127.0.0.1:36469/x",
+    "user@127.0.0.1:36469",
+    "example.com:36469",
+    "127.0.0.1:36469\n",
+  ])
+    expect([a, onLoopback(a)]).toEqual([a, false]);
 });

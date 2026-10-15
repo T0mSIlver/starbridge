@@ -2,6 +2,7 @@
 import { existsSync, mkdirSync, readFileSync, rmdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import market from "../../../.claude-plugin/marketplace.json" with { type: "json" };
+import { replaceFile } from "../replace";
 import { COMMIT, VERSION } from "../version";
 import { withoutAllow, writeLeft } from "./remove";
 import { failure, run, type Sys, which } from "./sys";
@@ -303,7 +304,7 @@ function readSettings(sys: Sys): Settings | undefined {
 }
 
 function writeSettings(sys: Sys, s: Settings) {
-  writeFileSync(settingsPath(sys), `${JSON.stringify(s, null, 2)}\n`);
+  replaceFile(settingsPath(sys), `${JSON.stringify(s, null, 2)}\n`);
 }
 
 /** Whether background auto-update is on for the marketplace; undefined when it is not declared. */
@@ -332,8 +333,12 @@ export const ALLOW_RULES = [
   "Bash(starbridge waiting:*)",
   "Bash(starbridge working:*)",
   "Bash(starbridge wait:*)",
-  "Bash(starbridge settle:*)",
+  // One decision by its id, never `settle --all` or `--session` (#1761).
+  "Bash(starbridge settle d_*)",
 ];
+
+/** Entries of earlier releases that setup replaces: `settle:*` let `settle --all --yes` through. */
+export const STALE_ALLOW_RULES = ["Bash(starbridge settle:*)"];
 
 function allowList(s: Settings | undefined): string[] {
   const allow = s?.permissions?.allow;
@@ -343,7 +348,11 @@ function allowList(s: Settings | undefined): string[] {
 /** The rules of ALLOW_RULES missing from user settings. */
 export function missingAllowRules(sys: Sys): string[] {
   const have = new Set(allowList(readSettings(sys)));
-  return ALLOW_RULES.filter((r) => !have.has(r));
+  // A stale entry counts as missing its replacement, so setup rewrites the list.
+  return [
+    ...ALLOW_RULES.filter((r) => !have.has(r)),
+    ...STALE_ALLOW_RULES.filter((r) => have.has(r)),
+  ];
 }
 
 /** False, writing nothing, when settings.json exists but does not parse. */
@@ -351,7 +360,7 @@ export function addAllowRules(sys: Sys): boolean {
   const read = readSettings(sys);
   if (!read && existsSync(settingsPath(sys))) return false;
   const s: Settings = read ?? {};
-  const allow = allowList(s);
+  const allow = allowList(s).filter((r) => !STALE_ALLOW_RULES.includes(r));
   s.permissions = {
     ...s.permissions,
     allow: [...allow, ...ALLOW_RULES.filter((r) => !allow.includes(r))],
@@ -364,7 +373,7 @@ export function addAllowRules(sys: Sys): boolean {
 /** Removes ALLOW_RULES from user settings. False when none was there. */
 export function removeAllowRules(sys: Sys): boolean {
   const s = readSettings(sys);
-  const left = s && withoutAllow(s, ALLOW_RULES);
+  const left = s && withoutAllow(s, [...ALLOW_RULES, ...STALE_ALLOW_RULES]);
   if (!left) return false;
   writeLeft(settingsPath(sys), left);
   return true;

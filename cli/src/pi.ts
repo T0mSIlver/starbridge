@@ -5,9 +5,11 @@
  * an interactive session that gets its answers as prompts from `pi -p` or a Pi without it, even
  * a `pi -p` started from that session's shell, which inherits the variable.
  */
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
+import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import type { Ctx } from "./context";
+import { replaceFile } from "./replace";
 
 /** The env var the extension sets, to its session's id, while it brings answers back. */
 export const PI_ANSWERS = "STARBRIDGE_PI_ANSWERS";
@@ -77,14 +79,17 @@ export function chainPiLink(file: string) {
   const chain = Array.isArray(config.authorizerChain) ? config.authorizerChain : [];
   if (chain.includes(PI_LINK)) return;
   mkdirSync(dirname(file), { recursive: true });
-  writeFileSync(
+  replaceFile(
     file,
     `${JSON.stringify({ ...config, authorizerChain: [...chain, PI_LINK] }, null, 2)}\n`,
   );
 }
-/** Pi's agent folder: `PI_CODING_AGENT_DIR`, else `~/.pi/agent`. */
+/**
+ * Pi's agent folder: `PI_CODING_AGENT_DIR`, else `~/.pi/agent`, with the OS's home folder when
+ * `HOME` is unset, rather than a path relative to wherever the command runs (#1749).
+ */
 function piAgentDir(env: Ctx["env"]): string {
-  return env.PI_CODING_AGENT_DIR || join(env.HOME ?? "", ".pi", "agent");
+  return env.PI_CODING_AGENT_DIR || join(env.HOME || homedir(), ".pi", "agent");
 }
 
 /** Where `pi install git:github.com/T0mSIlver/starbridge@<tag>` puts the Starbridge skill. */
@@ -140,7 +145,7 @@ function readConfig(file: string): Config | undefined {
 
 function writeConfig(file: string, config: Config) {
   mkdirSync(dirname(file), { recursive: true });
-  writeFileSync(file, `${JSON.stringify(config, null, 2)}\n`);
+  replaceFile(file, `${JSON.stringify(config, null, 2)}\n`);
 }
 
 /**

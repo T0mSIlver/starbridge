@@ -525,6 +525,49 @@ function Revoked({ by }: { by: string }) {
   );
 }
 
+/**
+ * The chain drops this browser while a machine's head shows entries it lacks: it keeps its keys
+ * (#1779). Stop waiting, offered as the inbox's hold offers it (#813), forgets that member's heads.
+ */
+function Held({
+  account,
+  text,
+  revoked,
+}: {
+  account: string;
+  text: string;
+  revoked?: { id: string; name: string };
+}) {
+  const { reload } = useApp();
+  const { busy, error, run } = useAction();
+  useEffect(() => send("error-screen", { screen: "held" }), []);
+  return (
+    <FirstRunPage>
+      <h1 className="t-heading">The server may be hiding changes to your devices</h1>
+      <p className={`t-small ${s.lede}`}>{text}</p>
+      <Error_ error={error} />
+      <button type="button" className={`t-label ${ui.btn}`} disabled={busy} onClick={reload}>
+        Try again
+      </button>
+      {revoked && (
+        <button
+          type="button"
+          className={`t-label ${ui.btn}`}
+          disabled={busy}
+          onClick={() =>
+            run(async () => {
+              await (await load()).stopWaiting({ account }, revoked.id);
+              await reload();
+            })
+          }
+        >
+          I revoked {revoked.name}: stop waiting
+        </button>
+      )}
+    </FirstRunPage>
+  );
+}
+
 function Problem({
   screen,
   title,
@@ -638,6 +681,8 @@ export function Gate({ visitor, children }: { visitor: boolean; children: React.
       return <Join account={boot.account} stale={boot.stale} />;
     case "revoked":
       return <Revoked by={boot.by} />;
+    case "held":
+      return <Held account={boot.account} text={boot.text} revoked={boot.revoked} />;
     case "broken":
       return (
         <Problem

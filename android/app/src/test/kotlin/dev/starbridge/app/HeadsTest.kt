@@ -55,10 +55,12 @@ class HeadsTest {
 
         // A head a machine before #794 passed on is not kept, so it cannot push out m2's own (#1627).
         assertFalse(heads.note(known, "m2", DirectoryHead(99, "A".repeat(43), by = "b"), seenByA))
-        // Heads kept before #1627 under "signer/by" or "signer/?" count as their signer's, and go with it.
+        // Heads kept before #1627 under "signer/by" or "signer/?" count as their signer's, and go
+        // with it or with the by (#1730).
         val kept = mutableMapOf("m2/b" to fullHead, "m2/?" to DirectoryHead(99, "A".repeat(43)))
         assertEquals("m2", heads.withheldBy(kept, mine, seenByA)?.id)
-        assertFalse(heads.forget(kept, "b"))
+        assertTrue(heads.forget(kept, "b"))
+        assertEquals(setOf("m2/?"), kept.keys)
         assertTrue(heads.forget(kept, "m2"))
         assertTrue(kept.isEmpty())
     }

@@ -19,6 +19,12 @@ import { ipKey, rateLimit } from "../limits";
 import { SIGNUPS_CLOSED, SIGNUPS_PAUSED, signUpsPaused } from "../signups";
 
 const STATE_COOKIE = "sb_oauth";
+/**
+ * A random token the browser that started an app sign-in gets, which the server keeps with the
+ * challenge (#1721): its return is bound to this browser only when the cookie comes back with it.
+ * Not the challenge itself, which anyone who read it could send as a cookie.
+ */
+const APP_COOKIE = "sb_app";
 /** The page's `signin` when this server has no GitHub sign-in. */
 const SIGNIN_OFF = "off";
 /** RFC 7636: a verifier is 43 to 128 unreserved characters; an S256 challenge is 43. */
@@ -26,6 +32,37 @@ const VERIFIER = /^[A-Za-z0-9._~-]{43,128}$/;
 const CHALLENGE = /^[A-Za-z0-9_-]{43}$/;
 /** RFC 7636 S256: the challenge an app sent for this verifier. */
 const s256 = (verifier: string) => createHash("sha256").update(verifier).digest("base64url");
+
+/**
+ * Starts an app sign-in in this browser. A challenge starts once: the browser that starts it gets
+ * the cookie, and someone who read it from that browser's address later gets none.
+ */
+function startApp(c: Context<Env>, challenge: string): void {
+  // Counted, as a flood of starts would fill the starts kept and refuse the next ones a cookie.
+  rateLimit(c, `app-start:${ipKey(c)}`, c.var.config.limits.githubCallbacks);
+  const token = randomToken("");
+  if (!c.var.appSignIns.start(challenge, token)) return;
+  setCookie(c, APP_COOKIE, token, {
+    httpOnly: true,
+    secure: c.var.config.secureCookies,
+    sameSite: "Lax",
+    path: "/v1/auth",
+    maxAge: 3600,
+  });
+}
+
+/**
+ * An app's code came back through this browser: kept with its state, the app's challenge, and
+ * whether this browser started that sign-in, for the trade to check.
+ */
+function passApp(c: Context<Env>, code: string, state: string): void {
+  // Only the first code back binds, and only from the browser that started the sign-in.
+  const cookie = getCookie(c, APP_COOKIE);
+  const bound = cookie !== undefined && c.var.appSignIns.takeStartToken(state, cookie);
+  if (bound) deleteCookie(c, APP_COOKIE, { path: "/v1/auth" });
+  if (!c.var.appSignIns.passed(code, state, bound))
+    fail(400, "bad-state", "sign-in came from elsewhere; start again in the app");
+}
 
 function newAccountId(): string {
   return randomToken("a").slice(0, 23);
@@ -85,6 +122,7 @@ authRoutes.get("/auth/github", (c) => {
   url.searchParams.set("redirect_uri", callbackUrl(publicUrl, app));
   url.searchParams.set("allow_signup", "true");
   if (app) {
+    startApp(c, challenge);
     url.searchParams.set("state", challenge);
     url.searchParams.set("code_challenge", challenge);
     url.searchParams.set("code_challenge_method", "S256");
@@ -218,8 +256,7 @@ authRoutes.get("/auth/github/callback/app", (c) => {
   const word = /^[A-Za-z0-9_-]{1,100}$/;
   if (!CHALLENGE.test(state) || !(word.test(code) || word.test(error)))
     fail(400, "bad-state", "sign-in came from elsewhere; start again in the app");
-  if (word.test(code) && !c.var.appSignIns.passed(code, state))
-    fail(400, "bad-state", "sign-in came from elsewhere; start again in the app");
+  if (word.test(code)) passApp(c, code, state);
   const sent = word.test(code) ? `code=${code}` : `error=${error}`;
   return c.redirect(`${appRedirectUri}?${sent}&state=${state}`);
 });
@@ -237,6 +274,16 @@ authRoutes.post("/auth/app/session", async (c) => {
     c,
     z.object({ code: z.string().min(1).max(APPLE_CODE_MAX), verifier: z.string().regex(VERIFIER) }),
   );
+  // A code that came back through this server must be traded with its challenge's verifier,
+  // whatever the provider checks: whoever caught the redirect after it has the code, not the
+  // verifier, and a wrong guess leaves the code's challenge in place. The Mac app's must also
+  // have come back to the browser that started its sign-in, since its challenge shows in that
+  // browser's address and its code always passes through here.
+  const passed = c.var.appSignIns.challengeOf(code);
+  if (passed && !safeEqual(passed.challenge, s256(verifier)))
+    fail(400, "bad-code", "sign-in code unknown, used, expired or not yours; sign in again");
+  if (c.var.client?.name === "desktop" && !passed?.bound)
+    fail(400, "bad-code", "sign-in came back to another browser; sign in again");
   let account: string;
   if (code.includes(".")) {
     rateLimit(c, `apple:${ipKey(c)}`, c.var.config.limits.appleSignIns);
@@ -252,15 +299,9 @@ authRoutes.post("/auth/app/session", async (c) => {
   } else {
     rateLimit(c, `github:${ipKey(c)}`, c.var.config.limits.githubCallbacks);
     if (code.length > 100) fail(400, "bad-code", "sign-in code unknown; sign in again");
-    // A code that came back through this server must be traded with its challenge's verifier,
-    // whatever GitHub checks: whoever caught the redirect after it has the code, not the verifier.
-    // A wrong guess leaves the code's challenge in place.
-    const challenge = c.var.appSignIns.challengeOf(code);
-    if (challenge !== undefined && !safeEqual(challenge, s256(verifier)))
-      fail(400, "bad-code", "sign-in code unknown, used, expired or not yours; sign in again");
     account = await gitHubAccount(c, code, verifier);
-    c.var.appSignIns.traded(code);
   }
+  c.var.appSignIns.traded(code);
   c.var.appSignIns.add(s256(verifier), account);
   return c.json({ session: createSession(c.var.db, account, c.var.config.limits.sessions) });
 });
@@ -286,7 +327,7 @@ const APPLE_STATE_COOKIE = "sb_apple";
 
 /**
  * Trades an Apple code issued to the App ID or the Services ID, and returns its account, made on
- * first sign-in, keeping the refresh token that deleting the account revokes. With the iPhone
+ * first sign-in, keeping the refresh token, which deleting the account revokes. With the iPhone
  * app's identity token, the code must be the same user's; with an app's nonce alone, Apple must
  * have signed that nonce into the code's token. A code or token Apple refuses is a 400 `bad-code`.
  */
@@ -323,9 +364,10 @@ async function appleAccount(
     traded.identity.sub,
     client === "appId" ? "app" : "web",
   );
+  // Each sign-in's token stays valid at Apple, so each is kept to revoke (#1746).
   c.var.db
-    .query("UPDATE accounts SET apple_client = ?, apple_refresh_token = ? WHERE id = ?")
-    .run(clientId, traded.refreshToken, account);
+    .query("INSERT OR IGNORE INTO apple_tokens (token, client, account_id) VALUES (?, ?, ?)")
+    .run(traded.refreshToken, clientId, account);
   return account;
 }
 
@@ -368,7 +410,8 @@ authRoutes.get("/auth/apple", (c) => {
   if (app && !CHALLENGE.test(challenge))
     fail(400, "bad-request", "app sign-in needs challenge, the S256 PKCE challenge");
   const state = app ? challenge : randomToken("");
-  if (!app)
+  if (app) startApp(c, challenge);
+  else
     setCookie(c, APPLE_STATE_COOKIE, state, {
       httpOnly: true,
       secure: secureCookies,
@@ -427,6 +470,7 @@ authRoutes.get("/auth/apple/callback/app", (c) => {
   const { code = "", error = "", state = "" } = c.req.query();
   if (!CHALLENGE.test(state) || !(APPLE_CODE.test(code) || /^[A-Za-z0-9_-]{1,100}$/.test(error)))
     fail(400, "bad-state", "sign-in came from elsewhere; start again in the app");
+  if (APPLE_CODE.test(code)) passApp(c, code, state);
   const sent = APPLE_CODE.test(code) ? `code=${code}` : `error=${error}`;
   return c.redirect(`${appRedirectUri}?${sent}&state=${state}`);
 });
