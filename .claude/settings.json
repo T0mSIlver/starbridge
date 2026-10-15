@@ -4,6 +4,16 @@
       {
         "matcher": "startup",
         "hooks": [{ "type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/scripts/worktree-setup.sh", "timeout": 180 }]
+      },
+      {
+        "matcher": "startup|resume",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "curl -fsSL https://raw.githubusercontent.com/T0mSIlver/skills/main/scripts/install-skills.sh | bash > /dev/null",
+            "timeout": 120
+          }
+        ]
       }
     ]
   }

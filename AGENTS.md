@@ -75,6 +75,46 @@ command and its local agent), `plugin` and
   should follow. A PR that changes a client fills its `Parity:` line, which CI
   checks.
 
+## The owner's rules
+
+Load the `owner-charter` skill before you plan a change, ask the owner anything, or mark a PR
+ready: it says what the owner decides on a card and what must hold before a merge. A Claude Code
+session installs it and the skills it names at startup (`.claude/settings.json`). Starbridge adds:
+
+- A PR that touches `.github/` or `deploy/` is release or deploy work: label it `owner-review`,
+  start its body with a three-line summary of that part, and merge it only with the owner's OK.
+- The PR's "Blast radius" section holds the `blast-radius` write-up.
+- Proof by driving the real app (`verify`) covers the core flows a change can reach: ask and
+  answer from a session to a device and back, push notifications, pairing and sign-in, and a
+  release's install and update.
+
+### Repeated corrections and their checks
+
+Each correction the owner made more than once, and the check that catches it (`correct` skill).
+A row with no check is open work.
+
+| Correction | Check |
+|---|---|
+| An icon or mark off-centre against its peers | none yet |
+| Copy that reads like a model wrote it | none yet |
+| One behaviour worded two ways | none yet |
+| A Settings subtitle that repeats its title or isn't needed | none yet |
+| Docs that no longer match the code | partial: `cli/test/contract.test.ts`, `cli/test/protocol-doc.test.ts` |
+| A page, route or screen nobody asked for | none yet |
+| A status claim without its run, file or screenshot | none yet |
+| French times shown with AM/PM | desktop only: `desktop/test/unit/clock.test.ts` |
+
+## Cloud sessions
+
+- [CONTRIBUTING.md, "Set up a box"](CONTRIBUTING.md#set-up-a-box) has the environment's setup
+  script.
+- The GitHub proxy refuses GraphQL, so `gh pr` and `gh issue` fail. Use
+  `gh api repos/T0mSIlver/starbridge/...` instead.
+- Android, iOS and macOS build and test only in CI: push, then read the runs with `gh run list`
+  and `gh run view`.
+- For cards, set `STARBRIDGE_MACHINE` and allow `starbridge.run` in the environment's network
+  access ([cli/README.md, "Cloud sessions"](cli/README.md#cloud-sessions)).
+
 ## CI runners
 
 A Linux job on the self-hosted boxes takes its `runs-on` from a repository
