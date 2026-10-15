@@ -39,7 +39,9 @@ above: any pushed commit with images deploys, staging or not. The previous relea
 
 `deploy.yml` builds those images once per deployed commit, for amd64 and arm64, and pushes them as
 `ghcr.io/t0msilver/starbridge-server:<commit>` and `starbridge-web:<commit>`; the box never builds
-them. So only commits that `deploy.yml` deployed can be deployed again. The box keeps the newest 5
+them. Each box runs them by digest (`host/images.sh`, written to `deploy/.env`): staging the
+digests the tag gave it, prod those staging ran, which `starbridge-deploy` reads from staging's
+run, so a tag pushed again after staging changes nothing on prod. `deploy.sh` takes the tag. So only commits that `deploy.yml` deployed can be deployed again. The box keeps the newest 5
 releases' images. Caddy's image is still built on the box.
 
 ## Rollback

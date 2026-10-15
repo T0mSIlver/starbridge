@@ -37,7 +37,7 @@ import {
   tarballKey,
   updateCodexbar,
 } from "../src/setup/codexbar";
-import { CURSOR_ALLOW } from "../src/setup/cursor";
+import { addCursorAllow, CURSOR_ALLOW } from "../src/setup/cursor";
 import {
   antigravityDir,
   antigravityState,
@@ -51,7 +51,7 @@ import {
 } from "../src/setup/harnesses";
 import { markedSkill } from "../src/setup/marker";
 import opencodeFiles from "../src/setup/opencode-files.js";
-import { marketplaceText } from "../src/setup/plugins";
+import { addAllowRules, marketplaceText, missingAllowRules } from "../src/setup/plugins";
 import {
   installService,
   removeService,
@@ -244,7 +244,7 @@ test("setup --yes installs the agent, the plugins and the skills, and uploads a 
   expect(
     JSON.parse(readFileSync(join(m.home, ".cursor/cli-config.json"), "utf8")).permissions.allow,
   ).toEqual(CURSOR_ALLOW);
-  expect(out).toContain("✓ Cursor       skill installed, 5 starbridge commands allowed");
+  expect(out).toContain("✓ Cursor       skill installed, 4 starbridge commands allowed");
   // Its sessionStart hook adds the rule in Cursor's shape (#954).
   const cursorHooks = JSON.parse(readFileSync(join(m.home, ".cursor/hooks.json"), "utf8"));
   const added = spawnSync(sh(), ["-c", cursorHooks.hooks.sessionStart[0].command], {
@@ -1646,17 +1646,19 @@ test("Antigravity gets the plugin with the rule, the skill and the allow hook (#
     );
   const agySettings = join(m.home, ".gemini/antigravity-cli/settings.json");
   mkdirSync(dirname(agySettings));
-  writeFileSync(agySettings, JSON.stringify({ permissions: { allow: ["command(ls)"] } }));
+  writeFileSync(
+    agySettings,
+    JSON.stringify({ permissions: { allow: ["command(ls)", "command(starbridge settle)"] } }),
+  );
   m.ctx.lines.length = 0;
   await setup(m.sys, { yes: true, noQuota: true, noService: true, agent: "antigravity" });
-  expect(m.ctx.lines).toContain("✓ Antigravity  plugin installed, 6 starbridge commands allowed");
+  expect(m.ctx.lines).toContain("✓ Antigravity  plugin installed, 5 starbridge commands allowed");
   expect(JSON.parse(readFileSync(agySettings, "utf8")).permissions.allow).toEqual([
     "command(ls)",
     "command(starbridge ask)",
     "command(starbridge waiting)",
     "command(starbridge working)",
     "command(starbridge wait)",
-    "command(starbridge settle)",
     "command(starbridge hello)",
   ]);
 
@@ -1711,7 +1713,7 @@ test.skipIf(WINDOWS)(
       cli,
       `#!/bin/sh\nexec "${process.execPath}" "${join(import.meta.dir, "../src/main.ts")}" "$@"\n`,
     );
-    writeFileSync(join(config, "cli-path"), cli);
+    writeFileSync(join(config, "cli-path"), cli, { mode: 0o600 });
     const hook = (line: string) =>
       spawnSync("sh", ["./pre-tool.sh"], {
         cwd: dir,
@@ -1745,3 +1747,44 @@ test.skipIf(WINDOWS)(
     expect(decision("ls")).toBe("");
   },
 );
+
+test("setup replaces the allow entries of releases whose settle let --all through (#1761)", async () => {
+  const m = await machine();
+  writeFileSync(
+    m.settings,
+    JSON.stringify({ permissions: { allow: ["Bash(ls)", "Bash(starbridge settle:*)"] } }),
+  );
+  expect(missingAllowRules(m.sys)).toContain("Bash(starbridge settle:*)");
+  expect(addAllowRules(m.sys)).toBe(true);
+  const allow = JSON.parse(readFileSync(m.settings, "utf8")).permissions.allow as string[];
+  expect(allow).toContain("Bash(starbridge settle d_*)");
+  expect(allow).not.toContain("Bash(starbridge settle:*)");
+  expect(allow).toContain("Bash(ls)");
+  expect(missingAllowRules(m.sys)).toEqual([]);
+
+  const cursor = join(m.home, ".cursor/cli-config.json");
+  mkdirSync(dirname(cursor), { recursive: true });
+  writeFileSync(cursor, JSON.stringify({ permissions: { allow: ["Shell(starbridge settle)"] } }));
+  expect(addCursorAllow(m.sys)).toBe(true);
+  expect(JSON.parse(readFileSync(cursor, "utf8")).permissions.allow).toEqual(CURSOR_ALLOW);
+});
+
+test("an update's refresh replaces the old settle allow entries even when nothing else changed (#1761)", async () => {
+  const m = await machine();
+  writeFileSync(
+    m.settings,
+    JSON.stringify({ permissions: { allow: ["Bash(starbridge settle:*)"] } }),
+  );
+  const cursor = join(m.home, ".cursor/cli-config.json");
+  mkdirSync(dirname(cursor), { recursive: true });
+  writeFileSync(cursor, JSON.stringify({ permissions: { allow: ["Shell(starbridge settle)"] } }));
+  const agy = join(m.home, ".gemini/antigravity-cli/settings.json");
+  mkdirSync(dirname(agy), { recursive: true });
+  writeFileSync(agy, JSON.stringify({ permissions: { allow: ["command(starbridge settle)"] } }));
+  const done = await refresh(m.sys);
+  expect(done.join("\n")).toContain("Replaced the broad settle allow rule");
+  expect(readFileSync(m.settings, "utf8")).not.toContain("settle:*");
+  expect(readFileSync(m.settings, "utf8")).toContain("Bash(starbridge settle d_*)");
+  expect(readFileSync(cursor, "utf8")).not.toContain("settle");
+  expect(readFileSync(agy, "utf8")).not.toContain("settle");
+});

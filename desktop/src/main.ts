@@ -88,10 +88,20 @@ let left = false;
 let signIn: SignIn | null = null;
 /** The update flow, which the page shows and drives (#1398); null until loaded, or unpackaged. */
 let updates: Updates | null = null;
+/**
+ * A development run's override from the environment; a packaged app reads none, so another
+ * process cannot repoint its server or update feed with `launchctl setenv` (#1721).
+ */
+const devEnv = (name: string) => (app.isPackaged ? undefined : process.env[name]);
 /** GitHub's page for the releases; the end-to-end test sets a stand-in (test/smoke.ts). */
-const RELEASES = process.env.STARBRIDGE_RELEASES ?? "https://github.com/T0mSIlver/starbridge";
+const RELEASES = devEnv("STARBRIDGE_RELEASES") ?? "https://github.com/T0mSIlver/starbridge";
 /** The tip builds' repository (#1692), whose one release `tip` holds the newest build of main. */
-const TIP = process.env.STARBRIDGE_TIP ?? "https://github.com/T0mSIlver/starbridge-tip";
+const TIP = devEnv("STARBRIDGE_TIP") ?? "https://github.com/T0mSIlver/starbridge-tip";
+/**
+ * How long after the owner's click or key press a page may open the browser (#1721): a page
+ * can navigate or call window.open at any time, but only the owner's tap opens a tab.
+ */
+const GESTURE_MS = 2_000;
 /** Whether the window's last page failed to load, which leaves its URL on the server. */
 let failed = false;
 /** Links that arrived before the window existed. */
@@ -139,9 +149,8 @@ function start(): void {
 async function ready(): Promise<void> {
   mark("ready");
   settings = readSettings(SETTINGS, app.getVersion());
-  origin = process.env.STARBRIDGE_SERVER
-    ? (serverOrigin(process.env.STARBRIDGE_SERVER) ?? settings.server)
-    : settings.server;
+  const server = devEnv("STARBRIDGE_SERVER");
+  origin = server ? (serverOrigin(server) ?? settings.server) : settings.server;
   notifier = new Notifier(notify, settings.notified, (ids) => {
     settings.notified = ids;
     save();
@@ -311,7 +320,7 @@ function updateSettings(): UpdateSettingsView {
 }
 
 function checkForUpdates(): void {
-  if (!app.isPackaged && !process.env.STARBRIDGE_RELEASES) return;
+  if (!app.isPackaged && !devEnv("STARBRIDGE_RELEASES")) return;
   // Loaded late and by path, so the bundler keeps it out of main.js (src/updater.ts).
   setTimeout(() => {
     // Node keeps the compiled updater on disk, so later starts skip compiling its 0.5 MB.
@@ -403,28 +412,45 @@ function reportMemory(): void {
   mark("memory", { mb: Math.round(kb / 1024) });
 }
 
-/** Every web contents: no new windows, and only the server's and GitHub's pages inside. */
+/**
+ * Every web contents: no new windows, only the server's pages inside, and no subframe
+ * navigations. The browser opens only for the owner's own tap: a top-level navigation or
+ * window.open within GESTURE_MS of a click or key press in this window (#1721).
+ */
 function guard(contents: WebContents): void {
+  let input = 0;
+  contents.on("before-input-event", (_e, i) => {
+    if (i.type === "keyDown") input = Date.now();
+  });
+  contents.on("before-mouse-event", (_e, m) => {
+    if (m.type === "mouseDown" || m.type === "mouseUp") input = Date.now();
+  });
+  const tapped = () => Date.now() - input < GESTURE_MS;
+  const openOutside = (url: string) => {
+    if (tapped() && opensOutside(url)) shell.openExternal(url);
+  };
   contents.setWindowOpenHandler(({ url }) => {
-    if (opensOutside(url)) shell.openExternal(url);
+    openOutside(url);
     return { action: "deny" };
   });
   const leave = (e: { preventDefault(): void; url: string }) => {
     const start = contents === win?.webContents ? startsSignIn(e.url, origin) : null;
     if (start) {
       e.preventDefault();
+      if (!tapped()) return;
       signIn = newSignIn();
       shell.openExternal(browserSignIn(origin, signIn, start));
       return;
     }
     if (staysInWindow(e.url, origin) && contents === win?.webContents) return;
     e.preventDefault();
-    if (opensOutside(e.url)) shell.openExternal(e.url);
+    openOutside(e.url);
   };
   contents.on("will-navigate", leave);
   contents.on("will-redirect", leave);
+  // A subframe never navigates, nor opens anything: the page has no frames of its own.
   contents.on("will-frame-navigate", (e) => {
-    if (!e.isMainFrame) leave(e);
+    if (!e.isMainFrame) e.preventDefault();
   });
   contents.on("will-attach-webview", (e) => e.preventDefault());
 }

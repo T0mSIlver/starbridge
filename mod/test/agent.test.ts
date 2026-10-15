@@ -21,7 +21,7 @@ import {
   socketPath,
 } from "../hooks/agent.ts";
 import { Handover } from "../hooks/handover.ts";
-import { socketFetch } from "../hooks/node.ts";
+import { ownedFile, socketFetch } from "../hooks/node.ts";
 import { Poller, type Timing } from "../hooks/poller.ts";
 import { Switch } from "../hooks/switch.ts";
 
@@ -468,6 +468,7 @@ test("with no agent the CLI path delivers, and the switch follows the agent comi
                 return undefined;
               }
             },
+            owned: async (p) => ownedFile(p),
             now: async () => Date.now(),
             sleep: (ms) => Bun.sleep(ms),
             submit: (lines) => {

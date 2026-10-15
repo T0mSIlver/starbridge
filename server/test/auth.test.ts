@@ -176,6 +176,54 @@ test("a code that came back through the server needs its challenge's verifier, w
   expect(own.status).toBe(200);
 });
 
+test("the Mac app's code must come back to the browser that started its sign-in (#1721)", async () => {
+  const s = await makeServer(githubConfig());
+  const desktop = { "starbridge-client": "desktop/1.0.0" };
+  const { verifier, challenge } = pkce();
+  const start = await s.app.request(`/v1/auth/github?app=1&challenge=${challenge}`);
+  const cookie = (start.headers.get("set-cookie") ?? "").split(";")[0] ?? "";
+  expect(cookie).toMatch(/^sb_app=.{20,}$/);
+  expect(cookie).not.toContain(challenge);
+  // Someone who read the challenge starts a sign-in of their own with it: no cookie.
+  const again = await s.app.request(`/v1/auth/github?app=1&challenge=${challenge}`);
+  expect(again.headers.get("set-cookie") ?? "").not.toContain("sb_app");
+  // Their code comes back to their browser, without the owner's cookie, or with the challenge
+  // sent as one.
+  await s.app.request(`/v1/auth/github/callback/app?code=code-7-${challenge}&state=${challenge}`, {
+    headers: { cookie: `sb_app=${challenge}` },
+  });
+  const theirs = await s.call("POST", "/v1/auth/app/session", {
+    body: { code: `code-7-${challenge}`, verifier },
+    headers: desktop,
+  });
+  expect(theirs.status).toBe(400);
+  expect(theirs.json.error).toBe("bad-code");
+  // A code made up into a link, never passed through the server.
+  const forged = await s.call("POST", "/v1/auth/app/session", {
+    body: { code: `code-8-${challenge}`, verifier },
+    headers: desktop,
+  });
+  expect(forged.status).toBe(400);
+  await s.app.request(`/v1/auth/github/callback/app?code=code-42-${challenge}&state=${challenge}`, {
+    headers: { cookie },
+  });
+  const own = await s.call("POST", "/v1/auth/app/session", {
+    body: { code: `code-42-${challenge}`, verifier },
+    headers: desktop,
+  });
+  expect(own.status).toBe(200);
+  // A link to the callback with their code, opened in the owner's browser after its own came
+  // back, binds nothing: the first code took the cookie's token.
+  await s.app.request(`/v1/auth/github/callback/app?code=code-9-${challenge}&state=${challenge}`, {
+    headers: { cookie },
+  });
+  const phished = await s.call("POST", "/v1/auth/app/session", {
+    body: { code: `code-9-${challenge}`, verifier },
+    headers: desktop,
+  });
+  expect(phished.status).toBe(400);
+});
+
 test("the browser passes the app's sign-in on to the app, untouched", async () => {
   const s = await makeServer(githubConfig());
   const { challenge } = pkce();

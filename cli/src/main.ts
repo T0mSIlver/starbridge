@@ -44,6 +44,7 @@ const ctx: Ctx = {
     }),
   signal: controller.signal,
   terminal: process.stderr.isTTY === true,
+  interactive: process.stdin.isTTY === true,
 };
 try {
   process.exitCode = await run(process.argv.slice(2), ctx);

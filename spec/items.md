@@ -69,7 +69,7 @@
   session has not taken that answer yet, such as one held for the end of the turn that settles,
   `settle` prints it, or the answer was lost (#1575). `settle --session`
   and `settle --all` close every open question of a session or of the machine (#584), so a
-  flood has a way out; `--all` asks first, with the count. Each is one settled notice, posted at
+  flood has a way out; `--all` asks first, with the count, and only on a terminal: `--yes` skips the question, not the terminal, so an agent cannot close every card (#1761). Each is one settled notice, posted at
   the pace the machine's rate limit allows, waiting out each 429: the server needs no bulk
   route, and the notices still reach devices one per question.
 - **A withdrawal says why** (#1008). `settle <id> --outcome withdrawn` takes `--reason`, one line

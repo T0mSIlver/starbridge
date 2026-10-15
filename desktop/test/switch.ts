@@ -23,6 +23,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { chromium, _electron as electron, type Page } from "playwright";
+import { freePorts } from "./ports.ts";
 
 const { values: opts } = parseArgs({
   options: {
@@ -46,20 +47,12 @@ const WEB = join(ROOT, "web");
 const tmp = mkdtempSync(join(tmpdir(), "starbridge-desktop-switch-"));
 const children: ChildProcess[] = [];
 
-const port = (): Promise<number> =>
-  new Promise((done) => {
-    const s = createServer().listen(0, () => {
-      const p = (s.address() as { port: number }).port;
-      s.close(() => done(p));
-    });
-  });
+const free = await freePorts(["web", "proxy", "github", "push"]);
 const PORTS = {
-  web: await port(),
-  proxy: opts.port ? Number(opts.port) : await port(),
+  ...free,
+  proxy: opts.port ? Number(opts.port) : free.proxy,
   // Fixed: the built page proxies /v1 to the address it was built with (SKIP_WEB_BUILD).
   server: 47211,
-  github: await port(),
-  push: await port(),
 };
 const ORIGIN = `http://localhost:${PORTS.proxy}`;
 const SERVER = `http://localhost:${PORTS.server}`;
@@ -326,6 +319,11 @@ try {
     await page.goto(ORIGIN);
     close = () => browser.close();
   } else {
+    // A packaged app ignores STARBRIDGE_SERVER (#1721): its server comes from its settings.
+    if (opts.app) {
+      mkdirSync(join(tmp, "app"), { recursive: true });
+      writeFileSync(join(tmp, "app", "settings.json"), JSON.stringify({ server: ORIGIN }));
+    }
     const app = await electron.launch({
       ...(opts.app
         ? { executablePath: opts.app, args: [`--user-data-dir=${join(tmp, "app")}`] }

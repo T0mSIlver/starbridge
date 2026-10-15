@@ -103,7 +103,8 @@ const HELP = `starbridge: post decisions to your devices, report runs, upload qu
       --session <id>          default: the agent's session ($CLAUDE_CODE_SESSION_ID,
                               $CODEX_THREAD_ID, $PI_SESSION_ID,
                               $STARBRIDGE_OPENCODE_SESSION, $ANTIGRAVITY_CONVERSATION_ID,
-                              $CURSOR_CONVERSATION_ID)
+                              $CURSOR_CONVERSATION_ID); in an agent's session, only
+                              one of those
       --session-title <text>  default: the Claude Code, Pi, opencode or Antigravity
                               session's name
       --image <path>          a PNG or JPEG to show with the question, up to 4 times;
@@ -445,9 +446,10 @@ async function dispatch(argv: string[], ctx: Ctx): Promise<number> {
           id: positionals[0],
           ...v,
           confirm: async (q) => {
+            // --yes skips the question, not the person: an agent must not close every card.
+            if (!ctx.interactive)
+              throw new UsageError("settle --all needs a terminal: run it where you can answer");
             if (yes) return true;
-            if (!process.stdin.isTTY)
-              throw new UsageError("no terminal to ask on: pass --yes to settle them all");
             return terminalPrompt().confirm(q, false);
           },
         });

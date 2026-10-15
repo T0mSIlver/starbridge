@@ -94,7 +94,8 @@ call, and a finished one is resumed with it. When the send fails, the answer
 goes to the parent as a prompt that names the subagent. An answer sent to a
 running subagent stays in `mod-sent` until a tool round of the subagent ends
 after the send, so a later process on the session hands an unread one to the
-parent.
+parent. A subagent that finishes without another tool round never reads it: the
+parent gets it then (#1729).
 
 An answer submitted as a prompt stays in
 `~/.config/starbridge/mod-sent/<session>.json` until its turn starts. Claude

@@ -23,7 +23,14 @@ import { readFile, stat, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { AgentLoop, joinLines, type Line, socketPath } from "../hooks/agent.ts";
-import { hookCommand, permissionHook, runCommand, sleep, socketFetch } from "../hooks/node.ts";
+import {
+  hookCommand,
+  ownedFile,
+  permissionHook,
+  runCommand,
+  sleep,
+  socketFetch,
+} from "../hooks/node.ts";
 import { configDir, Poller } from "../hooks/poller.ts";
 import { Switch } from "../hooks/switch.ts";
 import {
@@ -293,6 +300,7 @@ export default function starbridge(pi: PiApi) {
             read: (path) => readFile(path, "utf8"),
             write: (path, t) => writeFile(path, t),
             mtime: async (path) => (await stat(path).catch(() => undefined))?.mtimeMs,
+            owned: async (path) => ownedFile(path),
             now,
             sleep,
             submit,

@@ -54,6 +54,21 @@ What each user does, from the clients' code:
 | page | `GET /joins?wait=25` long-poll | always one open |
 | page | loads `/` | every 5 min |
 
+`--heavy SHARE` adds accounts full of large questions (#1787): that share of the users ask with
+`--blobs` bytes of images (2 MB, the most, by default), `--backlog N` of them as soon as they
+start, 8 s apart, and left open. Their pages read the whole inbox from cursor 0 at each poll
+(`poll.full`), without `blobs=open`, as a new device does, and fetch by id each question listed
+without its images (`get.large`). Compare such a run with one without `--heavy`:
+
+```bash
+evals/load/stack.sh load --ramp 100 --stage 400 --json /load/base.json
+evals/load/stack.sh load --ramp 100 --stage 400 --heavy 0.2 --backlog 8 --json /load/heavy.json
+bun evals/load/compare.ts $LOAD_DIR/heavy.json $LOAD_DIR/base.json
+```
+
+Each heavy account stores about 2 MB a question, so 20 of them with 8 each fill 320 MB of the
+server's volume.
+
 ## Against a baseline
 
 `load.ts --json FILE` writes the run as JSON: each stage's rates, p50 and p99, answer delivery,

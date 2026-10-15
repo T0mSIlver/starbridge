@@ -164,7 +164,9 @@
   from the Dock has no shell profile. So setup and `update` record the binary's absolute path in
   the config folder (`cli-path`); the Claude Code hooks (`plugin/hooks/cli.sh`), the mod, and the
   Pi and opencode plugins start that one, else `starbridge` on the PATH, and `cli.sh` then tries
-  the installers' folders. When the binary's folder is not on the PATH, setup offers to add it to
+  the installers' folders. They take the recorded path only when it is absolute and both it and
+  `cli-path` belong to the user or root and are writable by no one else (#1748), since whoever
+  can write either picks what the hooks run; setup writes `cli-path` 0600. When the binary's folder is not on the PATH, setup offers to add it to
   the shell's startup file (`--yes` adds it), and its last lines say to open a new terminal or what to add, since
   install.sh's own hint scrolls away under setup. Windows gets the folder on the PATH from
   install.ps1. Uninstall, when it deletes the binary, takes that line and its marker comment out
@@ -192,7 +194,7 @@
   longer matched the CLI (v0.1.1's crashed Pi, #1365). A failed move prints why and does not fail
   the refresh (#1417).
 - **Allow rules** (#245, #322, #443, #488). So a new user's first question needs no prompt and no
-  sandbox flag, setup allows `starbridge ask`, `waiting`, `working`, `wait` and `settle`: Claude
+  sandbox flag, setup allows `starbridge ask`, `waiting`, `working` and `wait`, and `settle <id>` where a rule can name the id (Claude Code's `settle d_*`, Pi's link), never `settle --all` or `--session`, which close many cards (internal audit 2026-10-14, #1761): Claude
   Code allow rules, a Codex execpolicy file (`~/.codex/rules/starbridge.rules`) that runs them
   outside the sandbox, and for Pi the Starbridge link in pi-permission-system's `authorizerChain`
   plus its `skill` and `read` gates for the Starbridge skill, after the owner's own patterns since
@@ -200,7 +202,7 @@
   allows a bash ask itself when the whole typed line, from the ask's "full command" evidence, is
   one of those commands with only words, flags, quoted strings and line-joining backslashes; an ask
   without evidence, or from a shell tool under another name, goes to the owner. For `agy`, setup
-  adds `command(starbridge ask)` and the other four, with `hello` (#962), to `permissions.allow` in
+  adds `command(starbridge ask)`, `waiting`, `working` and `wait`, with `hello` (#962), to `permissions.allow` in
   `~/.gemini/antigravity-cli/settings.json`, since `agy` still prompts after a hook's `allow`. Such
   an entry also passes `LD_PRELOAD=… starbridge ask` and `env … starbridge ask`, so the
   plugin's `PreToolUse` hook on `run_command` returns `force_ask` for any line that names `starbridge`
@@ -248,7 +250,9 @@
   has no Ed25519 check, and no minisign, but always a Python for dnf. With none of them it stops
   and prints the command that installs minisign on that distribution; no flag skips the check.
   The signature's trusted comment must name the version it installs: `STARBRIDGE_VERSION`, else the
-  tag `releases/latest` redirects to. Downloads go over HTTPS only, but from a mirror on the
+  tag `releases/latest` redirects to. A version older than the installed copy is refused unless
+  `STARBRIDGE_DOWNGRADE=1` (#1748), since a served `latest` could otherwise roll a machine back to
+  a signed release with known bugs; `update` already installs only a newer one. Downloads go over HTTPS only, but from a mirror on the
   machine itself. `update`'s downloads give up after 30 s for the checksums and 15 minutes for the binary, and past
   1 MB and 256 MB, so a stalled or endless answer cannot hold the update (#1749). `starbridge update` replaces script installs
   and points Homebrew and npm installs at their manager. Windows refuses to replace or delete a

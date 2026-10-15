@@ -1,5 +1,6 @@
 import {
   appendFileSync,
+  chmodSync,
   closeSync,
   existsSync,
   mkdirSync,
@@ -31,7 +32,11 @@ export function recordSelf(sys: Sys): void {
   mkdirSync(dirname(file), { recursive: true, mode: 0o700 });
   // Forward slashes, which Git Bash's sh and Node both take on Windows.
   const self = sys.self[0] as string;
-  writeFileSync(file, `${sys.platform === "win32" ? self.replace(/\\/g, "/") : self}\n`);
+  // Writable by this user alone: the hooks ignore a file others may write (#1748).
+  writeFileSync(file, `${sys.platform === "win32" ? self.replace(/\\/g, "/") : self}\n`, {
+    mode: 0o600,
+  });
+  chmodSync(file, 0o600);
 }
 
 /** Whether `path` is a script (npm's bundle, a checkout's entry), not a compiled binary. */

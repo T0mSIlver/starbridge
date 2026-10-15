@@ -16,6 +16,7 @@ RUN pnpm install --frozen-lockfile --filter @starbridge/demo... --filter @starbr
 COPY packages/protocol packages/protocol
 COPY server server
 COPY cli cli
+COPY .claude-plugin .claude-plugin
 COPY plugin plugin
 COPY mod mod
 COPY demo demo

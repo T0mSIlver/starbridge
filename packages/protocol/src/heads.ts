@@ -7,13 +7,19 @@ import { type DirectoryHead, SignedEnvelope } from "./schemas";
 /**
  * The longest head each signer vouched for, keyed by the signer. Heads kept before #1627 may also
  * sit under "signer/by" or "signer/?", where machines before #794 put a device's head they passed
- * on: each counts as a head its signer vouched for, since only the signer signed it.
+ * on: each counts as a head its signer vouched for, since only the signer signed it, and goes
+ * when either the signer's or the by's heads are forgotten (#1730).
  */
 export type Heads = Record<string, DirectoryHead>;
 
 /** The member that signed a kept head: its key, up to the "/" of a key kept before #1627. */
 function signerOf(key: string): string {
   return key.split("/")[0] as string;
+}
+
+/** The device whose head a machine before #794 passed on: a key kept before #1627, after its "/". */
+function byOf(key: string): string | undefined {
+  return key.split("/")[1];
 }
 
 /** The `revoke` entry of `entries` that names `id`: who signed it, and when. */
@@ -108,14 +114,15 @@ export function withheldBy(heads: Heads, dir: Directory, entries: unknown[]): He
 }
 
 /**
- * Drops every kept head member `id` signed: the owner's way out after revoking a member that
- * signed a false long head, which no revocation ends. A device does it on its own when it signs
- * that revocation, and on the owner's word otherwise. True when any went.
+ * Drops every kept head member `id` signed, and every head kept before #1627 that a machine
+ * passed on from `id` (#1730): the owner's way out after revoking a member that signed a false
+ * long head, which no revocation ends. A device does it on its own when it signs that revocation,
+ * and on the owner's word otherwise. True when any went.
  */
 export function forgetHeads(heads: Heads, id: string): boolean {
   let changed = false;
   for (const key of Object.keys(heads))
-    if (signerOf(key) === id) {
+    if (signerOf(key) === id || byOf(key) === id) {
       delete heads[key];
       changed = true;
     }

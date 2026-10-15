@@ -221,7 +221,8 @@ read now: it may lie on that device's fork, and in the machine's slot a replayed
 out the machine's own head that shows a gap. Devices kept those heads under `signer/by`, or
 `signer/?` for a `by` their chain did not list, and still read any they kept as a head that
 signer vouched for, the stricter reading, since only the signer signed it: it holds while the
-signer counts, and goes when the device forgets the signer's heads (#1627).
+signer counts, and goes when the device forgets the heads of the signer or of the device it
+names (#1627, #1730).
 
 So one machine that holds a withheld revocation exposes it to every device whose items from that
 machine the server delivers, and one that has only seen the head of the device that made it
@@ -460,7 +461,7 @@ request without the header, or with one the server cannot read, is served.
 | `GET /auth/apple/callback` | anyone | finish the page's, as `/auth/github/callback`, with the same `signin` failures |
 | `GET /auth/apple/callback/app` | anyone | an app's: redirect to `<APP_REDIRECT_URI>?code=<code>&state=<state>`, or Apple's `error` instead of the code; 400 `bad-state` without them |
 | `GET /auth/github/callback/app` | anyone | the browser got the app's sign-in: redirect to `<APP_REDIRECT_URI>?code=<code>&state=<state>`, or GitHub's `error` instead of the code; 400 `bad-state` without them |
-| `POST /auth/app/session` | the app | `{code, verifier}`: GitHub's code, or Apple's (with dots) whose identity token's nonce is the verifier's challenge → `{session}`; 400 `bad-code` when GitHub refuses the code (unknown, used, expired or not this verifier's), or when the code came back through `/auth/github/callback/app` with a state that is not the verifier's challenge; 403 `signups-paused` while sign-ups are paused, or the server lists who may sign up and omits this GitHub user, and the user has no account |
+| `POST /auth/app/session` | the app | `{code, verifier}`: GitHub's code, or Apple's (with dots) whose identity token's nonce is the verifier's challenge → `{session}`; 400 `bad-code` when GitHub refuses the code (unknown, used, expired or not this verifier's), or when the code came back through `/auth/github/callback/app` or `/auth/apple/callback/app` with a state that is not the verifier's challenge, or, from the Mac app (`starbridge-client: desktop/…`), when it did not come back through either with the `sb_app` cookie, a random token the server keeps with the challenge, that the first start of its challenge set in that browser; 403 `signups-paused` while sign-ups are paused, or the server lists who may sign up and omits this GitHub user, and the user has no account |
 | `GET /auth/app/signed-in?state=<challenge>` | device | `{signedIn}`: true once the app whose challenge this is traded its code for a session of the caller's account (#943); the server keeps each challenge's account 10 minutes, in memory |
 | `POST /auth/apple/session` | the iPhone app | `{identityToken, code, nonce}` → `{session}`; 400 `bad-code` when Apple refuses the token or the code (another app's, expired, replayed, the nonce not the token's); 403 `signups-paused` as GitHub's; 404 `not-configured` without the team's key; 502 `apple` when Apple can't be reached |
 | `POST /auth/owner` | anyone | self-hosted: `{token}` against `OWNER_TOKEN`; sets the session and returns `{session}` |
@@ -689,6 +690,7 @@ server whose disk is full answers writes 503 `storage-full` with `Retry-After`; 
 | `GET /auth/github/callback`, `GET /auth/github/callback/app` and `POST /auth/app/session` with GitHub's code | 60 a minute per address, together |
 | Apple sign-ins: `GET /auth/apple` and its app callback, together; `GET /auth/apple/callback`, `POST /auth/apple/session` and `POST /auth/app/session` with Apple's code, together | 60 a minute per address each |
 | `POST /auth/app/session`, either provider's code, counted before the body is read | 60 a minute per address |
+| An app's start, `GET /auth/github?app=1` or `GET /auth/apple?app=1` | 60 a minute per address, together |
 | New accounts | 30 an hour per address, an IPv6 client counting as its /64: the page goes to `/?signin=limited`, the app gets 429 `rate-limited`; sign-ins of existing accounts don't count |
 | `DELETE /account` | 3 an hour per address, an IPv6 client counting as its /64: 429 `rate-limited` |
 | `POST /auth/owner` | 10 a minute per address |
