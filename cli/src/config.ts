@@ -410,6 +410,20 @@ export class Store {
     return this.read<Machine>("machine.json");
   }
 
+  /**
+   * Saves the machine `STARBRIDGE_MACHINE` carries when this folder holds none (#1818), as a
+   * cloud session's fresh container does. A folder that holds a machine keeps it.
+   */
+  seedMachine(exported: string) {
+    if (existsSync(this.path("machine.json"))) return;
+    const m = importMachine(exported);
+    this.locked(() => {
+      if (existsSync(this.path("machine.json"))) return;
+      this.saveMachine(m);
+      if (!existsSync(this.path("agent.json"))) this.saveAgentConfig({ machineKind: "cloud" });
+    });
+  }
+
   saveMachine(m: Machine) {
     this.write("machine.json", m);
   }
@@ -507,6 +521,71 @@ export class Store {
     const mark = promptsMark(s);
     if (this.readMark() !== mark) writeFileSync(this.path(PROMPTS_OPEN), mark, { mode: 0o600 });
   }
+}
+
+/** The start of `starbridge machine export`'s line, which names its format (#1818). */
+const EXPORT_PREFIX = "sbm1.";
+
+/** `STARBRIDGE_MACHINE` holds something `starbridge machine export` did not print. */
+export class MachineEnvError extends Error {
+  constructor(why: string) {
+    super(`STARBRIDGE_MACHINE is not a line \`starbridge machine export\` printed: ${why}`);
+  }
+}
+
+/** This machine's identity as one line, for a cloud environment's `STARBRIDGE_MACHINE` (#1818). */
+export function exportMachine(m: Machine): string {
+  const { server, account, id, name, token, keys, pin } = m;
+  const json = JSON.stringify({ server, account, id, name, token, keys, pin });
+  return EXPORT_PREFIX + toB64(new TextEncoder().encode(json));
+}
+
+/** Reads `exportMachine`'s line back, checking each field's type and each key's length. */
+export function importMachine(line: string): Machine {
+  const text = line.trim();
+  if (!text.startsWith(EXPORT_PREFIX))
+    throw new MachineEnvError(`it does not start with ${EXPORT_PREFIX}`);
+  let m: Record<string, unknown>;
+  try {
+    m = JSON.parse(new TextDecoder().decode(fromB64(text.slice(EXPORT_PREFIX.length))));
+  } catch {
+    throw new MachineEnvError("it does not decode");
+  }
+  const str = (v: unknown) => typeof v === "string" && v.length > 0;
+  if (
+    typeof m !== "object" ||
+    m === null ||
+    !["server", "account", "id", "name", "token"].every((k) => str(m[k]))
+  )
+    throw new MachineEnvError("a field is missing");
+  if (!/^https?:\/\//.test(m.server as string))
+    throw new MachineEnvError("its server is no http(s) URL");
+  const keys = m.keys as Record<string, unknown> | null;
+  const lengths = { boxPk: 32, boxSk: 32, signPk: 32, signSk: 64 } as const;
+  for (const [k, n] of Object.entries(lengths)) {
+    let ok = false;
+    try {
+      ok = typeof keys?.[k] === "string" && fromB64(keys[k] as string).length === n;
+    } catch {}
+    if (!ok) throw new MachineEnvError(`its ${k} key is not ${n} bytes`);
+  }
+  const pin = m.pin as Record<string, unknown> | null;
+  if (!Number.isSafeInteger(pin?.length) || (pin?.length as number) < 1 || !str(pin?.head))
+    throw new MachineEnvError("its directory pin is missing");
+  return {
+    server: m.server as string,
+    account: m.account as string,
+    id: m.id as string,
+    name: m.name as string,
+    token: m.token as string,
+    keys: {
+      boxPk: keys?.boxPk as string,
+      boxSk: keys?.boxSk as string,
+      signPk: keys?.signPk as string,
+      signSk: keys?.signSk as string,
+    },
+    pin: { length: pin?.length as number, head: pin?.head as string },
+  };
 }
 
 export function encodeKeys(k: MemberKeys): Machine["keys"] {

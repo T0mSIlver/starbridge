@@ -2,7 +2,9 @@
 
 Most CI jobs run on GitHub's runners. Some run on three self-hosted Linux boxes, which start them
 sooner. Windows, macOS, Linux ARM64, the e2e and anything that needs KVM stay on GitHub's runners,
-and Android builds on main and in releases run on their own runner, `ANDROID_RUNNER`.
+and main's unsigned Android build runs on its own runner, `ANDROID_RUNNER`. A job that reads a
+signing or deploy key, or builds a file a release signs, runs on GitHub's runners only, so no box
+on the home network ever holds one of those keys (#1825).
 
 ## Pools and labels
 
@@ -15,8 +17,8 @@ wipes that job's folders, and only those (below).
 | `sb-dell3` | 2 | `pr, heavy` |
 | `sb-hp` | 2 | `pr, light` |
 
-- `trusted` runs pushes to main, deploys, uptime checks, releases and the nightly flaky-test count,
-  and nothing else.
+- `trusted` runs pushes to main's tests, the image builds, uptime checks, the release's version
+  check and the nightly flaky-test count, and nothing else.
 - `pr` runs pull requests from this repository's own branches, except Dependabot's. Forks'
   pull requests, Dependabot's and dispatched CI runs stay on GitHub's runners.
 - No pull request job reaches a `trusted` runner or `ANDROID_RUNNER`. A job can use Docker, which
@@ -32,10 +34,10 @@ runs-on: ${{ vars.TRUSTED_RUNNER && fromJSON(vars.TRUSTED_RUNNER) || 'ubuntu-lat
 
 | Variable | Value | Used by |
 |---|---|---|
-| `TRUSTED_RUNNER` | `["self-hosted","starbridge","trusted","heavy"]` | main's test job, deploy, uptime, release, flakes |
+| `TRUSTED_RUNNER` | `["self-hosted","starbridge","trusted","heavy"]` | main's test job, deploy's image builds, uptime, release's version check, flakes |
 | `PR_LIGHT_RUNNER` | `["self-hosted","starbridge","pr"]` | a pull request's test, typecheck and lint job |
 | `PR_DOCKER_RUNNER` | `["self-hosted","starbridge","pr","docker","heavy"]` | a pull request's image builds |
-| `ANDROID_RUNNER` | `starbridge-android` | Android builds on main and in releases |
+| `ANDROID_RUNNER` | `starbridge-android` | main's unsigned Android build (`android.yml`) |
 
 A pull request job also checks that its pull request comes from this repository and not from
 Dependabot before it reads a `PR_` variable (`ci.yml`). To move every job of a pool to GitHub's

@@ -1,17 +1,26 @@
 #!/bin/sh
 # Installed on sb-staging as /usr/local/sbin/starbridge-staging-deploy (setup.sh) and run as root
-# by the forced command of deploy.yml's staging key, with one argument, a commit id. Deploys that
-# commit if it is on main, which it fetches itself over HTTPS, the repository being public, and
-# only once CI passed it there (below). As on
-# prod, a commit older than the deployed one is skipped unless it is main's head: CI on an older
-# commit can finish after a newer one deployed, and its server would refuse a database the newer
-# one migrated.
+# by the forced commands of deploy.yml's staging key and rollback.yml's staging rollback key, with
+# a commit id:
+#   starbridge-staging-deploy <commit>              deploys it if it is on main
+#   starbridge-staging-deploy --rollback <commit>   deploys it if staging ran it before (#1828)
+# Either way only a commit on main, which it fetches itself over HTTPS, the repository being
+# public, and only once CI passed it there (below). As on prod, a commit older than the deployed
+# one is skipped unless it is main's head or a rollback: CI on an older commit can finish after a
+# newer one deployed, and its server would refuse a database the newer one migrated.
 set -eu
-rev=${1:-}
-case $rev in
-  *[!0-9a-f]* | "") echo "usage: starbridge-staging-deploy <40-hex commit id>" >&2; exit 2 ;;
-esac
-[ ${#rev} -eq 40 ] || { echo "usage: starbridge-staging-deploy <40-hex commit id>" >&2; exit 2; }
+usage() { echo "usage: starbridge-staging-deploy [--rollback] <40-hex commit id>" >&2; exit 2; }
+# The forced commands pass what the client sent as one argument, so the deploy key's client cannot
+# add --rollback.
+rollback=
+if [ $# -eq 2 ] && [ "$1" = --rollback ]; then
+  rollback=1
+  shift
+fi
+[ $# -eq 1 ] || usage
+rev=$1
+case $rev in *[!0-9a-f]* | "") usage ;; esac
+[ ${#rev} -eq 40 ] || usage
 
 exec 9>/run/starbridge-staging-deploy.lock
 flock 9
@@ -22,7 +31,17 @@ mkdir -p /var/lib/starbridge-staging
 git -C $repo fetch -q https://github.com/T0mSIlver/starbridge.git +main:main
 git -C $repo merge-base --is-ancestor "$rev" main || { echo "$rev is not on main" >&2; exit 1; }
 current=$(cat /opt/starbridge-staging/REVISION 2>/dev/null || true)
-if [ "$rev" != "$(git -C $repo rev-parse main)" ] &&
+# Every commit staging ran, one per line: what --rollback may go back to.
+deployed=/var/lib/starbridge-staging/deployed
+record() {
+  case $1 in *[!0-9a-f]* | "") return 0 ;; esac
+  [ ${#1} -eq 40 ] || return 0
+  grep -qxF "$1" $deployed 2>/dev/null || echo "$1" >> $deployed
+}
+if [ -n "$rollback" ]; then
+  grep -qxF "$rev" $deployed 2>/dev/null || { echo "staging never ran $rev; not rolled back" >&2; exit 1; }
+  [ "$rev" != "$current" ] || { echo "staging already runs $rev"; exit 0; }
+elif [ "$rev" != "$(git -C $repo rev-parse main)" ] &&
   ! git -C $repo merge-base --is-ancestor "$current" "$rev" 2>/dev/null; then
   echo "$rev is older than the deployed ${current:-release} and is not main's head; not deployed"
   exit 0
@@ -47,6 +66,17 @@ if [ -n "$(docker ps -q -f name='^sb-seed-server$')" ]; then
   exit 1
 fi
 
+# The running commit first, so the first deploy by this script makes the one before it a rollback
+# target.
+record "$current"
+# staging/apply.sh installs its own tree's deploy-rev.sh as this command, and an older tree's may
+# not know --rollback: after a rollback, failed or not, this command comes back.
+if [ -n "$rollback" ]; then
+  self=$(mktemp)
+  cp /usr/local/sbin/starbridge-staging-deploy "$self"
+  trap 'install -m 755 -o root -g root "$self" /usr/local/sbin/starbridge-staging-deploy; rm -f "$self"' EXIT
+fi
+
 dir=/opt/starbridge-staging
 rm -rf $dir.new $dir.old
 mkdir $dir.new
@@ -55,6 +85,7 @@ if [ -d $dir ]; then mv $dir $dir.old; fi
 mv $dir.new $dir
 REVISION=$rev $dir/deploy/staging/apply.sh
 echo "$rev" > $dir/REVISION
+record "$rev"
 # Then one round trip on staging's test account (#1528): a card, its Web Push, an answer read
 # back, from the outside check's staging instance on this VM (starbridge-planning,
 # infra/sb-staging). Its failure fails the deploy, and prod waits for this one (deploy.yml).

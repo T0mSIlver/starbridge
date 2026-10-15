@@ -115,7 +115,8 @@ jobs:
   android:
     needs: plan
     if: needs.plan.outputs.build == 'true'
-    runs-on: ${{ vars.ANDROID_RUNNER || 'ubuntu-24.04' }}
+    # GitHub's runner, as release.yml's: no self-hosted box sees the release key (#1825).
+    runs-on: ubuntu-24.04
     environment: release
     timeout-minutes: 40
     defaults:
@@ -127,11 +128,9 @@ jobs:
         with:
           distribution: temurin
           java-version: 21
-      # As in android.yml: self-hosted runners on one machine share one Gradle home.
       - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
         with:
           cache-read-only: true
-          cache-disabled: ${{ runner.environment == 'self-hosted' }}
       - name: Build the signed App Bundle
         env:
           KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
