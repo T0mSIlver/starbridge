@@ -10,7 +10,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "curl -fsSL https://raw.githubusercontent.com/T0mSIlver/skills/main/scripts/install-skills.sh | bash > /dev/null",
+            "command": "[ \"$CLAUDE_CODE_REMOTE\" != true ] || curl -fsSL https://raw.githubusercontent.com/T0mSIlver/skills/main/scripts/install-skills.sh | bash > /dev/null",
             "timeout": 120
           }
         ]

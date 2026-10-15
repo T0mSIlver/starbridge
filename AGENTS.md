@@ -78,8 +78,8 @@ command and its local agent), `plugin` and
 ## The owner's rules
 
 Load the `owner-charter` skill before you plan a change, ask the owner anything, or mark a PR
-ready: it says what the owner decides on a card and what must hold before a merge. A Claude Code
-session installs it and the skills it names at startup (`.claude/settings.json`). Starbridge adds:
+ready: it says what the owner decides on a card and what must hold before a merge. Starbridge
+adds:
 
 - A PR that touches `.github/` or `deploy/` is release or deploy work: label it `owner-review`,
   start its body with a three-line summary of that part, and merge it only with the owner's OK.
@@ -108,6 +108,8 @@ A row with no check is open work.
 
 - [CONTRIBUTING.md, "Set up a box"](CONTRIBUTING.md#set-up-a-box) has the environment's setup
   script.
+- At each start and resume, a cloud session installs `owner-charter` and the skills it names from
+  T0mSIlver/skills (`.claude/settings.json`). Other machines get them from the skills plugin.
 - The GitHub proxy refuses GraphQL, so `gh pr` and `gh issue` fail. Use
   `gh api repos/T0mSIlver/starbridge/...` instead.
 - Android, iOS and macOS build and test only in CI: push, then read the runs with `gh run list`
