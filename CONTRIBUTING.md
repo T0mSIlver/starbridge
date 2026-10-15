@@ -24,6 +24,27 @@ refused; a commit message that credits an AI is refused. An install replaces an 
 with a newer one, by the `starbridge-hook-version` line each hook carries: raise it when you change
 a hook.
 
+### Set up a box
+
+On Ubuntu or Debian, `scripts/setup-dev.sh` installs Node 24, Bun, pnpm, JDK 21, xvfb and
+Playwright's Firefox, then the dependencies and hooks above. It skips what is already installed,
+so it is safe to run again. Add `--android` for the Android SDK, and `--dry-run` to see the
+commands without running them.
+
+For Claude Code cloud sessions, paste this into your cloud environment's **Setup script** field
+([cloud environments](https://code.claude.com/docs/en/cloud-environments#setup-scripts)):
+
+```bash
+#!/bin/bash
+curl -fsSL https://raw.githubusercontent.com/T0mSIlver/starbridge/main/scripts/setup-dev.sh | bash
+```
+
+The session then installs the dependencies and hooks at startup (`.claude/settings.json`). The
+environment's default network access, Trusted, does not list the hosts Playwright and the Android
+SDK download from, so a cloud session leaves the end-to-end runs and Android builds to CI. To run them in the session,
+add `cdn.playwright.dev`, `playwright.download.prss.microsoft.com` and `dl.google.com` to the
+environment's allowed domains, and add `--android` to the script.
+
 For Android, in `android/`:
 
 ```bash
