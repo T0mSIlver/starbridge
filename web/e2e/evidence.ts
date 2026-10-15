@@ -219,7 +219,13 @@ function pushShots(dir: string, prefix: string, message: string): string {
       git(["update-index", "--add", "--cacheinfo", `100644,${blob},${prefix}/${f}`], index);
     }
     const tree = git(["write-tree"], index);
-    const commit = git(["commit-tree", tree, "-p", tip, "-m", message]);
+    // GitHub's runners have no git identity; the commit is the workflow's.
+    const commit = git(["commit-tree", tree, "-p", tip, "-m", message], {
+      GIT_AUTHOR_NAME: "github-actions[bot]",
+      GIT_AUTHOR_EMAIL: "41898282+github-actions[bot]@users.noreply.github.com",
+      GIT_COMMITTER_NAME: "github-actions[bot]",
+      GIT_COMMITTER_EMAIL: "41898282+github-actions[bot]@users.noreply.github.com",
+    });
     const r = spawnSync("git", ["push", "--quiet", "origin", `${commit}:refs/heads/pr-shots`], {
       encoding: "utf8",
     });

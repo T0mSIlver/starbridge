@@ -25,6 +25,7 @@ function find(fullPage: boolean): Rect[] {
     "recovery-key",
     "shown-code",
   ];
+  const KEYS = ["recovery-key", "current-recovery-key"];
   const dx = fullPage ? scrollX : 0;
   const dy = fullPage ? scrollY : 0;
   const rects: Rect[] = [];
@@ -34,6 +35,15 @@ function find(fullPage: boolean): Rect[] {
   };
   for (const id of CODES)
     for (const el of document.querySelectorAll(`[data-testid="${id}"]`))
+      add(el.getBoundingClientRect());
+  // QR codes of pairing codes (QrCode.tsx): their modules, inside the white square.
+  for (const el of document.querySelectorAll('svg[shape-rendering="crispEdges"] > path'))
+    add(el.getBoundingClientRect());
+  // Fields that hold a key or code as their value, which no text node shows.
+  for (const el of document.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>(
+    "input, textarea",
+  ))
+    if (KEYS.includes(el.id) || /[0-9A-Z]{4}-[0-9A-Z]{4}/.test(el.value))
       add(el.getBoundingClientRect());
   const walk = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
   for (let n = walk.nextNode(); n; n = walk.nextNode()) {
