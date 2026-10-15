@@ -338,9 +338,13 @@ try {
       };
     });
     page = await app.firstWindow();
-    await page
+    // Clicked with the mouse, which the app requires to open the browser (#1721).
+    await page.getByText("Opens your browser.").waitFor();
+    const box = await page
       .getByRole("link", { name: /^(Sign in|Continue) with GitHub$/ })
-      .evaluate((a: HTMLElement) => a.click());
+      .boundingBox();
+    assert.ok(box);
+    await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
     let next = await until(
       async () =>
         (
@@ -348,8 +352,14 @@ try {
         ).find((u) => u.includes("/v1/auth/github?app=1")),
       "the sign-in sent to the browser",
     );
+    // The browser keeps the server's cookie from the start to the callback, which binds the
+    // sign-in's return to it.
+    const jar = new Map<string, string>();
     while (!next.startsWith("starbridge:")) {
-      const res = await fetch(next, { redirect: "manual" });
+      const at = new URL(next).origin;
+      const res = await fetch(next, { redirect: "manual", headers: { cookie: jar.get(at) ?? "" } });
+      const set = res.headers.get("set-cookie");
+      if (set) jar.set(at, set.split(";")[0] ?? "");
       const location = res.headers.get("location");
       assert.ok(location, `${next} answered ${res.status} without a redirect`);
       next = new URL(location, next).toString();
