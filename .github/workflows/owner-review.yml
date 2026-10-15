@@ -35,12 +35,21 @@ jobs:
           HEAD: ${{ github.event.pull_request.head.sha }}
           ACTION: ${{ github.event.action }}
           CHANGED: ${{ github.event.pull_request.changed_files }}
+          BASE: ${{ github.event.pull_request.base.ref }}
+          MAIN: ${{ github.event.repository.default_branch }}
           RUN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           status() {
             gh api "repos/$REPO/statuses/$HEAD" -f context='owner review' -f state="$1" -f description="$2" \
               -f target_url="$RUN" >/dev/null
           }
+          # Only a pull request into main is judged: the status belongs to the head commit, which a
+          # pull request into another branch may share, and that one's files differ from main's.
+          # Retargeting to main reruns this (edited).
+          if [ "$BASE" != "$MAIN" ]; then
+            echo "Into $BASE, not $MAIN: nothing to judge."
+            exit 0
+          fi
           # GitHub lists at most 3000 files: past that, a change in these folders could hide.
           if [ "$CHANGED" -ge 3000 ]; then
             status failure "Over 3000 files, too many to check: split it"
@@ -66,6 +75,16 @@ jobs:
             gh api "repos/$REPO/issues/$PR/labels" -f 'labels[]=owner-review' >/dev/null
           if grep -qx owner-ok <<<"$labels"; then
             status success "The owner reviewed this commit"
+            # A run for a push may have removed owner-ok after the read above and set its failure
+            # before this success: read again, after setting it, and undo it if the label is gone
+            # or the pull request moved on. A removal after this read is followed by that run's
+            # failure, which then comes last.
+            now=$(gh api "repos/$REPO/pulls/$PR" --jq '[.head.sha, (.labels[].name | select(. == "owner-ok"))] | join(" ")')
+            if [ "$now" != "$HEAD owner-ok" ]; then
+              status failure "Changes .github/ or deploy/: waits for the owner's yes (owner-ok)"
+              echo "owner-ok was removed or a new commit came in meanwhile."
+              exit 0
+            fi
             echo "owner-ok: the owner reviewed ${HEAD}."
           else
             status failure "Changes .github/ or deploy/: waits for the owner's yes (owner-ok)"

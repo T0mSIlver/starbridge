@@ -17,7 +17,10 @@ case ${1:-} in
 *) echo "usage: .github/owner-gates.sh [--apply]" >&2; exit 2 ;;
 esac
 
-for env in $(gh api "repos/$repo/environments" --paginate --jq '.environments[].name'); do
+# An assignment, so a failed read stops the script rather than leaving the loop empty.
+envs=$(gh api "repos/$repo/environments" --paginate --jq '.environments[].name')
+[ -n "$envs" ] || { echo "no environments read" >&2; exit 1; }
+for env in $envs; do
   cur=$(gh api "repos/$repo/environments/$env")
   # PUT replaces the environment's settings, so it carries back every one it keeps.
   body=$(printf '%s' "$cur" | jq '{
