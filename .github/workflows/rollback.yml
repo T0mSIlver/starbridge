@@ -1,0 +1,89 @@
+name: rollback
+
+# Redeploys a commit that staging or starbridge.run ran before (#1828), by hand from main:
+# `gh workflow run rollback.yml -f target=starbridge.run -f sha=<commit>`. The box's record of the
+# commits it ran is the list (`sudo cat /var/lib/starbridge/deployed` on prod,
+# `/var/lib/starbridge-staging/deployed` on sb-staging); the newest is the last line. The
+# environment's ROLLBACK_SSH_KEY has a forced command that runs only
+# `starbridge-deploy --rollback <commit>` (deploy/host/deploy-rev.sh; staging's
+# deploy/staging/deploy-rev.sh), which refuses a commit the box never ran, one not on main, and on
+# prod one staging never passed, and deploys the image digests staging ran. So the deploy key
+# still cannot roll back, and prod needs no key from the owner's machine. A rollback past a
+# release that migrated the database stops before anything changes (deploy/README.md, "Restore").
+# The next deploy from deploy.yml goes forward again: staging's on the next merge, prod's on the
+# next rc or hotfix, so revert the bad commit first.
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: The box to roll back
+        type: choice
+        options: [staging, starbridge.run]
+      sha:
+        description: The commit to go back to, 40 hex characters; the box must have run it
+        required: true
+
+permissions: {}
+
+jobs:
+  rollback:
+    # The environments admit main only; this says so before the job waits for one.
+    if: github.ref == 'refs/heads/main'
+    # deploy.yml's groups: never beside a deploy to the same box.
+    concurrency:
+      group: ${{ inputs.target == 'staging' && 'staging' || 'deploy' }}
+      cancel-in-progress: false
+    # GitHub's runner: no self-hosted box sees a deploy key (#1825).
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    environment:
+      name: ${{ inputs.target }}
+      url: ${{ inputs.target == 'staging' && 'https://staging.starbridge.run' || 'https://starbridge.run' }}
+    env:
+      REV: ${{ inputs.sha }}
+      HOST: ${{ inputs.target == 'staging' && 'staging.starbridge.run' || 'starbridge.run' }}
+    steps:
+      - name: Roll back
+        env:
+          KEY: ${{ secrets.ROLLBACK_SSH_KEY }}
+          KNOWN_HOSTS: ${{ inputs.target == 'staging' && secrets.STAGING_KNOWN_HOSTS || secrets.DEPLOY_KNOWN_HOSTS }}
+          TARGET: ${{ inputs.target == 'staging' && secrets.STAGING_SSH_TARGET || 'deploy@starbridge.run' }}
+        run: |
+          # It goes to the box's forced command: a full commit id only.
+          case $REV in *[!0-9a-f]* | "") echo "not a commit id: $REV"; exit 1 ;; esac
+          [ ${#REV} -eq 40 ] || { echo "not a full commit id: $REV"; exit 1; }
+          [ -n "$KEY" ] || { echo "::error::The environment has no ROLLBACK_SSH_KEY (deploy/README.md, \"Rollback\")."; exit 1; }
+          umask 077
+          printf '%s\n' "$KEY" > "$RUNNER_TEMP/key"
+          printf '%s\n' "$KNOWN_HOSTS" > "$RUNNER_TEMP/known_hosts"
+          ssh -i "$RUNNER_TEMP/key" -o IdentitiesOnly=yes -o UserKnownHostsFile="$RUNNER_TEMP/known_hosts" \
+            -o StrictHostKeyChecking=yes -o ConnectTimeout=20 -o ServerAliveInterval=15 "$TARGET" "$REV"
+      # The server names the commit it runs, which must now be this one exactly.
+      - name: Check the live revision
+        run: |
+          got=$(curl -fsS --retry 10 --retry-delay 3 --retry-all-errors -D - -o /dev/null \
+            "https://$HOST/healthz" | tr -d '\r' |
+            awk -F': ' 'tolower($1) == "x-starbridge-revision" { print $2 }')
+          [ "$got" = "$REV" ] || { echo "$HOST runs ${got:-no named revision}, not $REV"; exit 1; }
+          echo "$HOST runs $REV"
+      # As after a deploy: one round trip from sb-oracle on the outside check's test account.
+      # Staging's command ran its own round trip.
+      - name: Round trip from outside
+        if: inputs.target == 'starbridge.run'
+        timeout-minutes: 5
+        env:
+          SMOKE_KEY: ${{ secrets.SMOKE_SSH_KEY }}
+          SMOKE_KNOWN_HOSTS: ${{ secrets.SMOKE_KNOWN_HOSTS }}
+          SMOKE_TARGET: ${{ secrets.SMOKE_SSH_TARGET }}
+        run: |
+          if [ -z "$SMOKE_KEY" ]; then
+            echo "::notice::No SMOKE_SSH_KEY: no round trip."
+            exit 0
+          fi
+          umask 077
+          printf '%s\n' "$SMOKE_KEY" > "$RUNNER_TEMP/smoke-key"
+          printf '%s\n' "$SMOKE_KNOWN_HOSTS" > "$RUNNER_TEMP/smoke-known-hosts"
+          ssh -i "$RUNNER_TEMP/smoke-key" -o IdentitiesOnly=yes -o UserKnownHostsFile="$RUNNER_TEMP/smoke-known-hosts" \
+            -o StrictHostKeyChecking=yes -o ConnectTimeout=20 -o ServerAliveInterval=15 "$SMOKE_TARGET"

@@ -18,7 +18,8 @@ passed on staging (its `staging` status). Actions logs in as
 `deploy` with its own key (secret `DEPLOY_SSH_KEY`), whose forced command runs
 `/usr/local/sbin/starbridge-deploy <commit>` (`host/deploy-rev.sh`) and nothing else. That script
 fetches main from GitHub with a read-only deploy key and deploys only main's head, or a commit on
-main that contains the deployed one, so the Actions key cannot roll back, and only once staging
+main that contains the deployed one, so the Actions deploy key cannot roll back (Rollback, below,
+has its own key), and only once staging
 passed it: it reads the commit's `staging` status and the deploy.yml run behind it from GitHub's
 public API, without a token, so the Actions key cannot skip staging either. It unpacks the commit
 and runs `host/apply.sh`. Once the box runs the commit, the workflow asks sb-oracle for one
@@ -46,17 +47,47 @@ releases' images. Caddy's image is still built on the box.
 
 ## Rollback
 
+From Actions, to a commit the box ran before (#1828):
+
+```bash
+gh workflow run rollback.yml -f target=starbridge.run -f sha=<commit>
+gh workflow run rollback.yml -f target=staging -f sha=<commit>
+```
+
+Each box records every commit it ran, one per line, newest last: `sudo cat
+/var/lib/starbridge/deployed` on prod, `/var/lib/starbridge-staging/deployed` on sb-staging. The
+workflow logs in with the environment's `ROLLBACK_SSH_KEY`, whose forced command runs only
+`starbridge-deploy --rollback <commit>`. That refuses a commit the box never ran or one not on
+main, and on prod one staging never passed; it deploys the commit's whole tree with the image
+digests staging ran, then the workflow checks `/healthz` names it and, on prod, runs the outside
+round trip. The deploy key still cannot roll back.
+
+Setting up a box's rollback key, once, from the owner's machine:
+
+```bash
+ssh-keygen -t ed25519 -N '' -C starbridge-actions-rollback -f /tmp/rollback-key
+gh secret set ROLLBACK_SSH_KEY --env starbridge.run < /tmp/rollback-key   # --env staging for staging
+deploy/setup-actions-rollback.sh prod /tmp/rollback-key.pub               # staging for staging
+shred -u /tmp/rollback-key /tmp/rollback-key.pub
+```
+
+The private half goes only to the secret. The key works once the box runs a `deploy-rev.sh` with
+`--rollback`, which every deploy installs, and the record starts with the first deploy by that
+script, which also records the commit it replaces.
+
+From the owner's machine, with the full-sudo key, to a release whose images the box holds:
+
 ```bash
 deploy/rollback.sh --list        # the releases whose images the box holds, newest first
 deploy/rollback.sh               # back to the one before the running release
 deploy/rollback.sh <commit>      # back to that one
 ```
 
-It shows both releases and asks, then deploys the older commit's whole tree with `deploy.sh`, so
-its compose file and Caddyfile come back too. A rollback past a release that migrated
-the database stops before anything changes (see Restore). The next merge to main deploys main's
-head again, so revert the bad commit first. Rolling back the apps, npm and Homebrew is a
-checklist in `spec/releases.md`.
+It shows both releases and asks, then deploys the older commit's whole tree with `deploy.sh`,
+skipping every check above. Either way, a rollback past a release that migrated
+the database stops before anything changes (see Restore). The next deploy goes forward again, so
+revert the bad commit first. Rolling back the apps, npm and Homebrew is a checklist in
+`spec/releases.md`.
 
 No request fails during a deploy (`spec/releases.md`). The page runs as two copies, `web-a` (port
 3010) and `web-b` (3011): the deploy starts the idle one, waits for its health, then stops the

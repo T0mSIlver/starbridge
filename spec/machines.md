@@ -77,6 +77,12 @@
   pairing active, so Devices shows the added time on rows that share a name (#287). `pair` and
   `setup` guess `machineKind` (cloud, laptop with a battery, server with no display, else desktop);
   `config machine-kind` corrects it.
+- **Cloud sessions** (#1818) run no local agent and no setup: the environment installs the CLI
+  and carries the machine (Keys and trust, "A machine for cloud sessions"). `ask` posts to the
+  server itself, and the answer reaches the session only through `wait` or `ask --wait`, which
+  poll the server, since no plugin or mod hands it over as a prompt. Each session keeps its own
+  state, so it hears only of the questions it asked. The machine saved from the variable is a
+  `cloud` machine for its icon.
 - **Setup names no server question** (#749). Almost everyone uses starbridge.run, and
   `Starbridge server: [https://starbridge.run]` did not read as "Enter for the default". Setup
   takes the first of `--server`, `STARBRIDGE_SERVER`, the server baked into the install script,
