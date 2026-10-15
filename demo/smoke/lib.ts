@@ -12,7 +12,13 @@ import { cli } from "../video/stack";
 
 export const PKG = "dev.starbridge.app";
 
-export const step = (what: string) => console.log(`[smoke] ${what}`);
+/** The steps run so far, in order: the evidence's list of what was driven. */
+export const steps: string[] = [];
+
+export const step = (what: string) => {
+  steps.push(what);
+  console.log(`[smoke] ${what}`);
+};
 
 export class Crash extends Error {
   constructor(readonly log: string) {

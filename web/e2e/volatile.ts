@@ -5,17 +5,17 @@ import type { Page } from "playwright";
 
 export type Rect = { x: number; y: number; width: number; height: number };
 
+/** Text that follows the clock: times, dates, durations. The Android run reads it too. */
+export const TIME = [
+  "\\b\\d{1,2}:\\d{2}(\\s?[AP]M)?\\b",
+  "\\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\\w*\\.?\\s\\d{1,2}\\b",
+  "\\b\\d+\\s?(min|h|days?|s)\\b",
+  "\\bnow\\b",
+].join("|");
+
 /** Runs in the page, so it carries everything it uses. */
-function find(fullPage: boolean): Rect[] {
-  const TIME = new RegExp(
-    [
-      "\\b\\d{1,2}:\\d{2}(\\s?[AP]M)?\\b",
-      "\\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\\w*\\.?\\s\\d{1,2}\\b",
-      "\\b\\d+\\s?(min|h|days?|s)\\b",
-      "\\bnow\\b",
-    ].join("|"),
-    "i",
-  );
+function find({ fullPage, time }: { fullPage: boolean; time: string }): Rect[] {
+  const TIME = new RegExp(time, "i");
   const CODES = [
     "check-code",
     "device-check",
@@ -56,5 +56,5 @@ function find(fullPage: boolean): Rect[] {
 }
 
 export function volatile(page: Page, fullPage: boolean): Promise<Rect[]> {
-  return page.evaluate(find, fullPage);
+  return page.evaluate(find, { fullPage, time: TIME });
 }
