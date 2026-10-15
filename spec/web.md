@@ -12,6 +12,9 @@
   navigation that reaches the server, and starbridge.run deploys many times a day; so a hidden page
   asks `/build` every 5 minutes and reloads onto a new build, unless a reply is typed for an open question (#1189), an answer
   is still being sent (#1167) or it is off the three tabs, where a reload would lose work.
+  The desktop app's window stays shown for days, so the first switch an hour after a deploy
+  blanked it (#1805); it also reloads while shown once the Mac is locked or has had no input for a
+  minute (presence's threshold, #945), with no field focused or dialog open (Tom's pick, #1811).
 - **Landing page HTML** (#694). A request for `/` without the session cookie gets the whole
   landing page from the server, with its own title, description and link preview
   (`public/og.png`), so link previews and crawlers see it and a first visit is never blank. The
