@@ -155,6 +155,18 @@
   environment, open to main only. As repository secrets, a workflow run on any branch could read
   them. The cost: a `release.yml` run dispatched from a branch fails its Android job, so dry runs
   go from main.
+- **Owner review of .github/ and deploy/** (#1833). The keys sit in environments that admit main
+  and `v*` tags only, and ask for no approval: a tap per signing job, several per rc and one per
+  app merge for the internal track, would train the owner to tap without reading. What a key can
+  do is set by main's workflows and deploy scripts, so the owner reviews changes to those instead:
+  a pull request that changes `.github/` or `deploy/` gets the label `owner-review`, and the
+  commit status `owner review`, which main's ruleset requires, passes only once it also carries
+  `owner-ok`. The orchestrator sets that label after the owner's yes on a card, for the commit the
+  pull request then holds; a push removes it, and the status belongs to one commit anyway.
+  `owner-review.yml` runs on `pull_request_target`, so main's copy judges every pull request,
+  including one that edits it, and runs nothing from the pull request. Admins cannot bypass the
+  environments' branch and tag policies (`.github/owner-gates.sh`). It stops a mistaken merge,
+  not a holder of the owner's token, who can set the label too.
 - **Release notes by product** (#1057). A list of PR titles told users little. Each PR body has
   a "Release notes" section, one `Product: line` per product a user sees change (Android, iOS since TestFlight takes every tag (#1451), Web,
   Desktop, CLI, Server, Docs) or `None`, optionally `None: why`, written by whoever knows the change; it can be edited
