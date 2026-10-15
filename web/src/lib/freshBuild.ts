@@ -3,6 +3,7 @@
 import { PRESENCE_INPUT_MS } from "@starbridge/protocol";
 import { useEffect } from "react";
 import { type DesktopScreen, desktop } from "./desktop";
+import { PRESENCE_EVENTS } from "./presence";
 
 /** How often a page nobody looks at asks whether the server runs a new build. */
 const CHECK_MS = 5 * 60_000;
@@ -20,7 +21,7 @@ export type Looks = {
   hidden: boolean;
   /** The desktop app's reading of the Mac (#945); undefined in a browser. */
   screen: DesktopScreen | null | undefined;
-  /** Milliseconds since the last key, click or touch in this page. */
+  /** Milliseconds since the last input in this page (presence's events). */
   sinceInput: number;
   /** A field has the focus, or a dialog is open. */
   editing: boolean;
@@ -77,13 +78,13 @@ export function useFreshBuild(busy: () => boolean): void {
     };
     // Also when it loads hidden: an app opened at login, or after this very reload.
     onChange();
-    const events = ["keydown", "pointerdown", "wheel"] as const;
-    for (const e of events) window.addEventListener(e, onInput, { capture: true, passive: true });
+    for (const e of PRESENCE_EVENTS)
+      window.addEventListener(e, onInput, { capture: true, passive: true });
     document.addEventListener("visibilitychange", onChange);
     desktop?.onShown?.(onChange);
     return () => {
       clearInterval(timer);
-      for (const e of events) window.removeEventListener(e, onInput, { capture: true });
+      for (const e of PRESENCE_EVENTS) window.removeEventListener(e, onInput, { capture: true });
       document.removeEventListener("visibilitychange", onChange);
       desktop?.onShown?.(null);
     };
