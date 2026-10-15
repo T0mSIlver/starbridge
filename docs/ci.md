@@ -75,10 +75,14 @@ change from run to run. The job pushes up to 24 changed pairs to the `pr-shots` 
 `verify/<pr>/<sha>/`, and writes or updates one comment on the pull request, marked
 `<!-- starbridge-evidence -->`.
 
-Two screens change from run to run on their own, so a change there alone is not the pull
-request's: the inbox's full screen (`inbox-full-*`) shows the Turn on notifications banner when
-Firefox drops the first browser's push subscription, and `quotas-machines-*` lists its two
-machines, whose windows are the same, in either order.
+Some screens change from run to run on their own, so a change there alone is not the pull
+request's:
+
+- the inbox's full screen (`inbox-full-*`) shows the Turn on notifications banner when Firefox
+  drops the first browser's push subscription;
+- `quotas-machines-*` lists its two machines, whose windows are the same, in either order;
+- a quota's run-out line says "tomorrow at" or not by the time of day, and can wrap to a second
+  line, which moves the rows below it.
 
 To compare two runs by hand, run the e2e twice with `EVIDENCE` set, each in a folder named after
 its part, then `bun web/e2e/evidence.ts <after> <before> <out>`: it writes `out/comment.md` and the
