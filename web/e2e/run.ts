@@ -4,48 +4,42 @@
 //   xvfb-run -a node web/e2e/run.ts      (Node 22.6+ runs this TypeScript as is)
 //
 // Needs `npx playwright install firefox` once. Writes screenshots to web/screenshots.
-import { type ChildProcess, spawn, spawnSync } from "node:child_process";
+//
+// EVIDENCE=<folder> writes the PR's evidence there instead (docs/ci.md, "Evidence"): the
+// screenshots in shots/ at 360, 768 and 1280 px, light and dark; a Playwright trace per browser;
+// and manifest.json, the steps driven and the result.
+import { spawn, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
   appendFileSync,
   cpSync,
   mkdirSync,
-  mkdtempSync,
   readdirSync,
   readFileSync,
-  rmSync,
   writeFileSync,
 } from "node:fs";
-import { createServer } from "node:net";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
-import { type Browser, type BrowserContext, firefox, type Locator, type Page } from "playwright";
+import { join } from "node:path";
+import type { Browser, BrowserContext, BrowserContextOptions, Locator, Page } from "playwright";
 import { layoutProblems, type Problem, zoomText } from "./layout.ts";
+import {
+  boot,
+  browser,
+  children,
+  cli,
+  ORIGIN,
+  PORTS,
+  ROOT,
+  shutdown,
+  step,
+  steps,
+  tmp,
+  WEB,
+} from "./stack.ts";
+import { volatile } from "./volatile.ts";
 
-const ROOT = resolve(import.meta.dirname, "../..");
-const WEB = join(ROOT, "web");
-/**
- * Ports nothing else listens on, so runs on one machine (CI's runners share one) never collide.
- * They come from below Linux's range for outgoing connections (32768 up), whose closed
- * connections linger and keep a server from taking their port. Each stays held until `free`
- * hands it to its process: the web build takes a minute, time enough to lose it otherwise.
- */
-const held = new Map<number, ReturnType<typeof createServer>>();
-const hold = (): Promise<number> =>
-  new Promise((done) => {
-    const port = 20000 + Math.floor(Math.random() * 12000);
-    const s = createServer()
-      .once("error", () => done(hold()))
-      .listen(port, () => {
-        held.set(port, s);
-        done(port);
-      });
-  });
-const free = (...ports: number[]) =>
-  Promise.all(ports.map((p) => new Promise((done) => held.get(p)?.close(done))));
-const PORTS = { web: await hold(), server: await hold(), github: await hold(), push: await hold() };
-const ORIGIN = `http://localhost:${PORTS.web}`;
-const SHOTS = join(WEB, "screenshots");
+const EVIDENCE = process.env.EVIDENCE;
+const SHOTS = EVIDENCE ? join(EVIDENCE, "shots") : join(WEB, "screenshots");
 // Set to a folder to record the inbox's motion there, as one GIF per motion (needs ffmpeg).
 const MOTION_VIDEO = process.env.MOTION_VIDEO;
 const DESKTOP = { width: 1280, height: 860 };
@@ -59,9 +53,6 @@ const SHARD = process.env.E2E_SHARD;
 if (SHARD && !["inbox", "snooze", "devices"].includes(SHARD))
   throw new Error(`E2E_SHARD is inbox, snooze or devices, not ${SHARD}`);
 const runs = (shard: string) => !SHARD || SHARD === shard;
-const tmp = mkdtempSync(join(tmpdir(), "starbridge-e2e-"));
-const children: ChildProcess[] = [];
-
 /** The artifact two steps answer a question in. */
 const ARTIFACT = "https://claude.ai/artifact/Xq7pLm2VnR4tBz9KcW1sYd";
 
@@ -94,10 +85,6 @@ function image(which: "a" | "b"): string {
   const path = join(tmp, `hero-${which}.png`);
   writeFileSync(path, Buffer.from(shots[which.toUpperCase()], "base64url"));
   return path;
-}
-
-function step(text: string) {
-  console.log(`\n== ${text}`);
 }
 
 /**
@@ -141,68 +128,6 @@ async function choose(page: Page | Locator, label: string) {
   }
 }
 
-/** Starts a process and collects its output; `waitFor` resolves on a matching line. */
-function start(
-  name: string,
-  cmd: string,
-  args: string[],
-  opts: { cwd?: string; env?: object } = {},
-) {
-  const p = spawn(cmd, args, {
-    cwd: opts.cwd ?? ROOT,
-    env: { ...process.env, ...opts.env },
-    stdio: ["ignore", "pipe", "pipe"],
-  });
-  children.push(p);
-  let out = "";
-  const waiters: { re: RegExp; done: (m: RegExpMatchArray) => void }[] = [];
-  const feed = (chunk: Buffer) => {
-    const text = chunk.toString();
-    out += text;
-    for (const line of text.split("\n")) if (line.trim()) console.log(`[${name}] ${line}`);
-    for (const w of [...waiters]) {
-      const m = out.match(w.re);
-      if (m) {
-        waiters.splice(waiters.indexOf(w), 1);
-        w.done(m);
-      }
-    }
-  };
-  p.stdout?.on("data", feed);
-  p.stderr?.on("data", feed);
-  const exited = new Promise<number>((r) =>
-    p.on("exit", (code, signal) => {
-      if (code !== 0 && !p.killed) console.log(`[${name}] exited ${signal ?? code}`);
-      r(code ?? -1);
-    }),
-  );
-  return {
-    proc: p,
-    exited,
-    output: () => out,
-    waitFor(re: RegExp, ms = 30_000): Promise<RegExpMatchArray> {
-      const m = out.match(re);
-      if (m) return Promise.resolve(m);
-      return new Promise((done, fail) => {
-        const t = setTimeout(() => fail(new Error(`${name}: no ${re} within ${ms} ms`)), ms);
-        waiters.push({
-          re,
-          done: (x) => {
-            clearTimeout(t);
-            done(x);
-          },
-        });
-      });
-    },
-  };
-}
-
-function cli(name: string, args: string[], home: string) {
-  return start(name, "bun", ["run", join(ROOT, "cli/src/main.ts"), ...args], {
-    env: { STARBRIDGE_CONFIG_DIR: home, STARBRIDGE_SERVER: `http://localhost:${PORTS.server}` },
-  });
-}
-
 /**
  * The owner's side of a machine's check code (#795): the code the page shows after Approve must
  * be the one `starbridge pair` printed, then `pair --confirm` answers its question.
@@ -215,32 +140,6 @@ async function confirmCheck(page: Page, pair: ReturnType<typeof cli>, name: stri
   if ((await cli(`${name}-confirm`, ["pair", "--confirm"], home).exited) !== 0)
     throw new Error("pair --confirm failed");
   return printed;
-}
-
-const vapid = JSON.parse(
-  spawnSync("bun", ["-e", "console.log(JSON.stringify(require('web-push').generateVAPIDKeys()))"], {
-    cwd: join(ROOT, "server"),
-    encoding: "utf8",
-  }).stdout,
-) as { publicKey: string; privateKey: string };
-
-async function browser() {
-  // Headless Firefox has no notification backend, so this runs headed (under xvfb-run on a
-  // server) with Firefox's own notification popups instead of the desktop's.
-  return firefox.launch({
-    headless: false,
-    firefoxUserPrefs: {
-      "alerts.useSystemBackend": false,
-      "dom.push.enabled": true,
-      "dom.push.connection.enabled": true,
-      "dom.push.serverURL": `ws://localhost:${PORTS.push}/`,
-      "dom.push.testing.allowInsecureServerURL": true,
-      "permissions.default.desktop-notification": 1,
-      // Firefox queues past a few notifications that stay up until dismissed, and their
-      // showNotification never settles; the run leaves many up across its browsers.
-      "dom.webnotifications.requireinteraction.count": 100,
-    },
-  });
 }
 
 /** Content-Security-Policy violations on any page; the run fails on any (#312). */
@@ -364,10 +263,16 @@ const SIZES = AUDIT
       ).map(([width, height]) => [`${width}`, { width, height }, 1] as const),
       ["390-text200", { width: 390, height: 844 }, 2] as const,
     ] as const)
-  : ([
-      ["phone", { width: 390, height: 844 }, 1],
-      ["desktop", DESKTOP, 1],
-    ] as const);
+  : EVIDENCE
+    ? ([
+        ["phone", { width: 360, height: 780 }, 1],
+        ["tablet", { width: 768, height: 1024 }, 1],
+        ["desktop", DESKTOP, 1],
+      ] as const)
+    : ([
+        ["phone", { width: 390, height: 844 }, 1],
+        ["desktop", DESKTOP, 1],
+      ] as const);
 
 /** A reply long enough to wrap past 10 lines at a phone's width (#947). */
 const LONG_REPLY =
@@ -424,11 +329,29 @@ async function replyClear(page: Page, reply: Locator, reopen: () => Promise<void
       await page.emulateMedia({ colorScheme: scheme, reducedMotion: "reduce" });
       await page.waitForTimeout(150);
       await fitsLayout(page, `long reply ${scheme}`);
-      await page.screenshot({ path: join(SHOTS, `reply-long-${name}-${scheme}.png`) });
+      await capture(page, join(SHOTS, `reply-long-${name}-${scheme}.png`));
     }
   }
   await page.emulateMedia({ reducedMotion: "no-preference" });
   await reply.fill("");
+}
+
+/**
+ * A screenshot of a page or one element at `path`. With EVIDENCE, the boxes of what changes from
+ * run to run go beside it (volatile.ts).
+ */
+async function capture(target: Page | Locator, path: string, fullPage = false) {
+  if (EVIDENCE) {
+    const page = "page" in target ? target.page() : target;
+    const box = "page" in target ? await target.boundingBox() : { x: 0, y: 0 };
+    const rects = (await volatile(page, fullPage)).map((r) => ({
+      ...r,
+      x: r.x - (box?.x ?? 0),
+      y: r.y - (box?.y ?? 0),
+    }));
+    writeFileSync(path.replace(/\.png$/, ".json"), JSON.stringify(rects));
+  }
+  await target.screenshot({ path, fullPage });
 }
 
 async function shoot(page: Page, name: string) {
@@ -441,10 +364,11 @@ async function shoot(page: Page, name: string) {
       const unzoom = text > 1 ? await zoomText(page, text) : undefined;
       await fitsLayout(page, `${name} ${scheme}${unzoom ? " text 200%" : ""}`);
       // Firefox draws the phone layout's fixed bottom bar mid-page in a full-page capture.
-      await page.screenshot({
-        path: join(AUDIT ?? SHOTS, `${name}-${size}-${scheme}.png`),
-        fullPage: AUDIT !== undefined || viewport.width >= 600,
-      });
+      await capture(
+        page,
+        join(AUDIT ?? SHOTS, `${name}-${size}-${scheme}.png`),
+        AUDIT !== undefined || viewport.width >= 600,
+      );
       await unzoom?.();
     }
   // The narrowest phones are checked too, without a shot.
@@ -460,55 +384,40 @@ async function shoot(page: Page, name: string) {
 
 let failPage: Page | undefined;
 let ff: Browser | undefined;
+const contexts: BrowserContext[] = [];
+
+/** A browser's context, traced when the run keeps evidence. */
+async function context(opts: BrowserContextOptions) {
+  if (!ff) throw new Error("no browser yet");
+  const ctx = await ff.newContext(opts);
+  contexts.push(ctx);
+  if (EVIDENCE) await ctx.tracing.start({ snapshots: true, screenshots: false });
+  return ctx;
+}
+
+/** Saves each browser's trace and the manifest; the run's result is `error`'s absence. */
+async function keepEvidence(error?: unknown) {
+  if (!EVIDENCE) return;
+  for (const [i, ctx] of contexts.entries())
+    await ctx.tracing.stop({ path: join(EVIDENCE, `trace-${i + 1}.zip`) }).catch(() => {});
+  const manifest = {
+    shard: SHARD ?? "all",
+    passed: error === undefined,
+    error: error === undefined ? undefined : String(error).slice(0, 2000),
+    steps,
+    sizes: SIZES.map(([name, viewport]) => ({ name, ...viewport })),
+  };
+  writeFileSync(join(EVIDENCE, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`);
+}
 
 async function main() {
   mkdirSync(AUDIT ?? SHOTS, { recursive: true });
 
   step("services, server, web");
-  await free(PORTS.github, PORTS.push);
-  const services = start("services", "bun", [join(WEB, "e2e/services.ts")], {
-    env: { GITHUB_PORT: PORTS.github, PUSH_PORT: PORTS.push },
-  });
-  await services.waitFor(/"event":"ready"/);
-  await free(PORTS.server);
-  const server = start("server", "bun", ["run", "server/src/main.ts"], {
-    env: {
-      PORT: PORTS.server,
-      DB_PATH: join(tmp, "starbridge.db"),
-      PUBLIC_URL: ORIGIN,
-      GITHUB_CLIENT_ID: "stub",
-      GITHUB_CLIENT_SECRET: "stub",
-      GITHUB_AUTHORIZE_URL: `http://localhost:${PORTS.github}/login/oauth/authorize`,
-      GITHUB_TOKEN_URL: `http://localhost:${PORTS.github}/login/oauth/access_token`,
-      GITHUB_API_URL: `http://localhost:${PORTS.github}`,
-      VAPID_PUBLIC_KEY: vapid.publicKey,
-      VAPID_PRIVATE_KEY: vapid.privateKey,
-      VAPID_SUBJECT: "mailto:e2e@starbridge.invalid",
-      ALLOW_PRIVATE_PUSH_ENDPOINTS: "1",
-    },
-  });
-  await server.waitFor(/starbridge server on port/);
-  const env = { STARBRIDGE_SERVER: `http://localhost:${PORTS.server}` };
-  if (
-    spawnSync("bun", ["run", "build"], {
-      cwd: WEB,
-      env: { ...process.env, ...env },
-      stdio: "inherit",
-    }).status
-  )
-    throw new Error("web build failed");
-  // The standalone server, laid out as web/Dockerfile copies it.
-  const standalone = join(WEB, ".next/standalone/web");
-  cpSync(join(WEB, ".next/static"), join(standalone, ".next/static"), { recursive: true });
-  cpSync(join(WEB, "public"), join(standalone, "public"), { recursive: true });
-  await free(PORTS.web);
-  const web = start("web", "node", [join(standalone, "server.js")], {
-    env: { ...env, PORT: String(PORTS.web), HOSTNAME: "127.0.0.1" },
-  });
-  await web.waitFor(/Ready|started server/i);
+  const { services } = await boot();
 
   ff = await browser();
-  const a = await ff.newContext({
+  const a = await context({
     permissions: ["notifications"],
     ...(MOTION_VIDEO ? { recordVideo: { dir: join(tmp, "video"), size: DESKTOP } } : {}),
   });
@@ -666,7 +575,7 @@ async function main() {
       for (const scheme of ["light", "dark"] as const) {
         await page.emulateMedia({ colorScheme: scheme });
         await page.waitForTimeout(150);
-        await row.screenshot({ path: join(SHOTS, `devices-check-row-${scheme}.png`) });
+        await capture(row, join(SHOTS, `devices-check-row-${scheme}.png`));
       }
       await page.emulateMedia({ colorScheme: "light" });
       // A page whose clock runs on: the code leaves once `starbridge pair` stops waiting for it.
@@ -989,7 +898,7 @@ async function main() {
         await page.emulateMedia({ colorScheme: scheme, reducedMotion: "reduce" });
         await page.waitForTimeout(150);
         await fitsLayout(page, `picks ${scheme}`);
-        await page.screenshot({ path: join(SHOTS, `picks-phone-${scheme}.png`) });
+        await capture(page, join(SHOTS, `picks-phone-${scheme}.png`));
       }
       await page.emulateMedia({ reducedMotion: "no-preference" });
       // In place of the list, J and K open the next and previous card on the open card's history
@@ -1398,7 +1307,7 @@ async function main() {
       for (const scheme of ["light", "dark"] as const) {
         await page.emulateMedia({ colorScheme: scheme });
         await page.waitForTimeout(150);
-        await page.screenshot({ path: join(SHOTS, `quotas-pinned-${scheme}.png`) });
+        await capture(page, join(SHOTS, `quotas-pinned-${scheme}.png`));
       }
     await page.keyboard.press("Escape");
     await why.waitFor({ state: "hidden" });
@@ -1454,7 +1363,7 @@ async function main() {
     for (const scheme of ["light", "dark"] as const) {
       await page.emulateMedia({ colorScheme: scheme });
       await page.waitForTimeout(150);
-      await page.screenshot({ path: join(AUDIT ?? SHOTS, `inbox-aside-wide-${scheme}.png`) });
+      await capture(page, join(AUDIT ?? SHOTS, `inbox-aside-wide-${scheme}.png`));
     }
 
     step("a newly raised quota alert notifies a browser that picked it for its window");
@@ -1583,10 +1492,11 @@ async function main() {
         await page.setViewportSize(viewport);
         await page.emulateMedia({ colorScheme: "light" });
         await page.waitForTimeout(150);
-        await page.screenshot({
-          path: join(AUDIT ?? SHOTS, `quotas-long-resets-${clock}-${size}.png`),
-          fullPage: size !== "phone",
-        });
+        await capture(
+          page,
+          join(AUDIT ?? SHOTS, `quotas-long-resets-${clock}-${size}.png`),
+          size !== "phone",
+        );
         await fitsLayout(page, "quotas");
         for (const cell of await resets.all()) {
           const { text, scroll, client, lines } = await cell.evaluate((el) => ({
@@ -1798,7 +1708,7 @@ async function main() {
   if (SHARD === "inbox") return;
 
   step("add a second browser by pairing code");
-  const b = await ff.newContext({ permissions: ["notifications"] });
+  const b = await context({ permissions: ["notifications"] });
   await watchCsp(b);
   const pageB = await signIn(b);
   await pageB.getByTestId("pairing-code").waitFor({ timeout: 10_000 });
@@ -2294,7 +2204,7 @@ async function main() {
   step(
     "recover a third browser with the new key: the old one is refused, every other member goes (#348, #363)",
   );
-  const c = await ff.newContext({ permissions: ["notifications"] });
+  const c = await context({ permissions: ["notifications"] });
   await watchCsp(c);
   const pageC = await signIn(c);
   await pageC.getByRole("button", { name: "Use the recovery key" }).click();
@@ -2351,7 +2261,7 @@ async function main() {
     throw new Error("signing out left notifications on screen");
 
   step("delete the account: typed confirmation, then a new sign-in starts a new account (#1104)");
-  const d = await ff.newContext({ permissions: ["notifications"] });
+  const d = await context({ permissions: ["notifications"] });
   await watchCsp(d);
   const pageD = await signIn(d);
   // Unpaired, the join screen deletes too, and says why that is the way out (#1117).
@@ -2388,11 +2298,13 @@ async function main() {
 
 try {
   await main();
+  await keepEvidence();
   await ff?.close();
   if (violations.length) throw new Error(`CSP violations:\n${violations.join("\n")}`);
   console.log("\nE2E PASSED");
 } catch (e) {
   console.error("\nE2E FAILED:", e);
+  await keepEvidence(e).catch(() => {});
   if (failPage) {
     await failPage
       .screenshot({ path: join(tmpdir(), "starbridge-e2e-failure.png") })
@@ -2409,9 +2321,7 @@ try {
   process.exitCode = 1;
 } finally {
   await ff?.close().catch(() => {});
-  for (const p of children) p.kill();
-  for (const s of held.values()) s.close();
-  rmSync(tmp, { recursive: true, force: true });
+  shutdown();
   // A browser that would not close keeps Node running: a CI job would hang until its timeout.
   process.exit();
 }

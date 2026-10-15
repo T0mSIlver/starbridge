@@ -237,7 +237,7 @@ jobs:
               continue
             set -- $line
             [ "$1" = "$TREE" ] || { echo "artifact $artifact: $tested has another tree"; continue; }
-            case " $2 $3 ${4:-} " in *" $head "*) passed=true; break ;; esac
+            case " $2 $3 ${4:-} " in *" $head "*) passed=true; echo "run=$run" >> "$GITHUB_OUTPUT"; break ;; esac
             echo "artifact $artifact: $tested is neither $head nor a merge of it"
           done <<ROWS
           $rows
@@ -276,6 +276,7 @@ jobs:
         env:
           TMPDIR: ${{ runner.temp }}
           E2E_SHARD: ${{ matrix.shard }}
+          EVIDENCE: ${{ runner.temp }}/evidence
       # The narrow-window rules (web/e2e/narrow.ts, #1608) in WebKit, once, beside the devices part.
       - if: steps.scope.outputs.run == 'true' && matrix.shard == 'devices'
         run: pnpm --filter @starbridge/web exec playwright install --with-deps webkit
@@ -307,6 +308,62 @@ jobs:
             ${{ runner.temp }}/starbridge-e2e-failure.png
             ${{ runner.temp }}/starbridge-narrow-failure.png
           if-no-files-found: ignore
+      # The part's evidence (docs/ci.md, "Evidence"): screenshots, traces and the steps driven,
+      # named after the tree tested. The evidence job compares a pull request's with main's at its
+      # base, so a push to main that skipped the part carries over the passing run's evidence.
+      - if: steps.tested.outputs.passed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN: ${{ steps.tested.outputs.run }}
+          NAME: evidence-${{ matrix.shard }}-${{ github.event.head_commit.tree_id }}
+        run: gh run download "$RUN" -R "$GITHUB_REPOSITORY" -n "$NAME" -D "$RUNNER_TEMP/evidence" || echo "no $NAME in run $RUN"
+      - if: ${{ !cancelled() && (steps.scope.outputs.run == 'true' || steps.tested.outputs.passed == 'true') }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: evidence-${{ matrix.shard }}-${{ job.status == 'success' && (steps.tree.outputs.tree || github.event.head_commit.tree_id) || 'failed' }}
+          path: ${{ runner.temp }}/evidence
+          retention-days: 30
+          overwrite: true
+          if-no-files-found: ignore
+
+  # A pull request's evidence comment (web/e2e/evidence.ts): its end-to-end screenshots against
+  # main's at its base, the changed ones pushed to the pr-shots branch and shown before and after,
+  # and the steps driven. Runs when the end-to-end run does, on this repository's branches only:
+  # it writes to the repository, which a fork's pull request must not.
+  evidence:
+    name: evidence
+    needs: [changes, e2e]
+    if: ${{ !cancelled() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]' && needs.changes.outputs.e2e == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      actions: read
+    steps:
+      # The merge with main and its first parents: the base whose evidence it compares with.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 12
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          dest: ${{ runner.temp }}/setup-pnpm
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.2
+      - run: pnpm install --frozen-lockfile --filter @starbridge/web
+        timeout-minutes: 5
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: evidence-*
+          path: ${{ runner.temp }}/pr
+      - run: bun web/e2e/evidence.ts "$RUNNER_TEMP/pr" "$RUNNER_TEMP/base" "$RUNNER_TEMP/out"
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          SHA: ${{ github.event.pull_request.head.sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
   # The desktop app on the whole product (desktop/test/stack.ts): signs in and pairs in the app's
   # window, and answers `starbridge ask --wait` from its notifications. GitHub's runner, whatever

@@ -316,6 +316,16 @@
   binary and runs the whole CLI suite, which must pass: the launchd service and the screen readers
   run only on a Mac, so the real launchd starts and stops the agent there. A `ubuntu-24.04-arm` job (#1481), skipped the same way, does the same for the
   linux-arm64 binary. All three jobs run each test file alone and kill one that hangs (`cli/scripts/test-each.ts`, #862).
+- **Evidence** (#1826). Agents prove a pull request from what the product shows, not from its
+  diff: the icon passed review four times while it sat low (#1477, #1453, #1564, #1713). The
+  web e2e, set to keep evidence, also shoots at 360, 768 and 1280 px in light and dark, and keeps
+  a Playwright trace per browser and the steps it drove. A job on this repository's pull requests
+  compares each screenshot with main's at the base and keeps one comment: the steps, the changed
+  screens before and after, or "No visual change". Times, dates and made-up codes are left out of
+  the comparison, since they change from run to run. The changed pairs go on the `pr-shots`
+  branch, never into the pull request. No model or Claude credential runs in CI: an agent reads
+  the evidence and judges it. A fork's pull request gets no comment, since the job writes to the
+  repository.
 - **CI runners** (#146, #1204, #1213, #1638). Self-hosted Linux runners in two pools that never
   share a box: `trusted` runs main's tests, deploys, uptime checks, releases and the nightly
   flaky-test count (#1657); `pr` runs the

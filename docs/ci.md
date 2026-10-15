@@ -61,6 +61,28 @@ down, take the line out. The mirror is plain HTTP, so a build that signs with th
 (`STARBRIDGE_KEYSTORE` set: `release.yml`, `internal.yml`) leaves it out and resolves over HTTPS,
 and every build checks each dependency against `android/gradle/verification-metadata.xml`.
 
+## Evidence
+
+In CI the web end-to-end run keeps evidence (`EVIDENCE` in `web/e2e/run.ts`): every screenshot at 360, 768 and 1280 px in light and dark, a
+Playwright trace per browser, and `manifest.json`, the steps it drove and its result. Each part
+uploads it as `evidence-<part>-<tree>`, or `evidence-<part>-failed`.
+
+On a pull request from this repository's branches, the `evidence` job (`web/e2e/evidence.ts`)
+then compares the screenshots with those of main's run
+at the pull request's base, or the nearest of its 10 first parents that ran the e2e. A screen
+counts as changed when over 0.2% of its pixels differ, outside the times, dates and codes that
+change from run to run. The job pushes up to 24 changed pairs to the `pr-shots` branch under
+`verify/<pr>/<sha>/`, and writes or updates one comment on the pull request, marked
+`<!-- starbridge-evidence -->`.
+
+The inbox's full screen (`inbox-full-*`) can show the Turn on notifications banner in one run
+and not the next, when Firefox drops the first browser's push subscription. A change there alone
+is that, not the pull request.
+
+To compare two runs by hand, run the e2e twice with `EVIDENCE` set, each in a folder named after
+its part, then `bun web/e2e/evidence.ts <after> <before> <out>`: it writes `out/comment.md` and the
+changed pairs.
+
 ## How a runner works
 
 - The setup files are in [`.github/runners`](../.github/runners). Each box runs one systemd unit
