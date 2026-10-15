@@ -64,6 +64,24 @@ down, take the line out. The mirror is plain HTTP, so a build that signs with th
 (`STARBRIDGE_KEYSTORE` set: `release.yml`, `internal.yml`) leaves it out and resolves over HTTPS,
 and every build checks each dependency against `android/gradle/verification-metadata.xml`.
 
+## Owner review
+
+A pull request that changes `.github/` or `deploy/` needs the owner's yes before it merges
+(`spec/releases.md`, "Owner review"). `owner-review.yml` labels it `owner-review` and sets the
+commit status `owner review`, required on main, to failure until the pull request also carries
+`owner-ok`; a push removes `owner-ok`. The orchestrator adds `owner-ok` once the owner answered
+yes on his card, only while the pull request still holds the commit the card named, and checks
+the head again afterwards: the label names no commit, so a push that lands as it is added would
+get the yes too.
+
+```bash
+gh api repos/T0mSIlver/starbridge/issues/<n>/labels -f 'labels[]=owner-ok'
+```
+
+A pull request with nothing in those folders gets the status as success on its next push or label
+change. `.github/owner-gates.sh` (print-only; `--apply` changes them) sets the repository settings
+behind it: the required status, and no admin bypass on any environment.
+
 ## How a runner works
 
 - The setup files are in [`.github/runners`](../.github/runners). Each box runs one systemd unit

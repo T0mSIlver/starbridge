@@ -46,6 +46,8 @@ command and its local agent), `plugin` and
   push reruns the whole CI, and a PR merges without being up to date.
 - A test that fails and then passes on a rerun gets an issue the first time, never a silent rerun.
   `flakes.yml` lists them each night on the issue labelled `flaky`.
+- A PR that changes `.github/` or `deploy/` merges only after the owner's yes and
+  the `owner-ok` label (docs/ci.md, "Owner review").
 - Before a PR is ready, run the checks in
   [CONTRIBUTING.md, "Develop"](CONTRIBUTING.md#develop).
 - A PR that touches `.github/` or `deploy/` merges only with a maintainer's OK.
