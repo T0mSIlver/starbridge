@@ -1,0 +1,107 @@
+{
+  "agent": "cursor",
+  "model": "auto",
+  "arm": "after",
+  "scenario": "answer-in",
+  "rep": 2,
+  "turns": [
+    {
+      "commands": [
+        "ls -la /var/tmp/skill-eval-5WzYgs/after-answer-in-2/home/.cursor/projects/var-tmp-skill-eval-5WzYgs-after-answer-in-2-proj/agent-transcripts/ 2>/dev/null; find /var/tmp/skill-eval-5WzYgs/after-answer-in-2 -name '*artifact*' -o -name '*tier*' 2>/dev/null | head -50; which starbridge; starbridge --help 2>&1 | head -80",
+        "ls -la /var/tmp/skill-eval-5WzYgs/after-answer-in-2/home/.cursor/projects/var-tmp-skill-eval-5WzYgs-after-answer-in-2-proj/agent-transcripts/6e0bbf5e-05f0-4dee-ad89-425a6c32c324/; head -c 5000 /var/tmp/skill-eval-5WzYgs/after-answer-in-2/home/.cursor/projects/var-tmp-skill-eval-5WzYgs-after-answer-in-2-proj/agent-transcripts/6e0bbf5e-05f0-4dee-ad89-425a6c32c324/*.jsonl 2>/dev/null | head -100",
+        "starbridge ask --help 2>&1 | tail -40",
+        "starbridge ask \\\n  --question 'Which tier names should we use on Pricing?' \\\n  --context 'Pricing still has TIER_1 / TIER_2 / TIER_3 placeholders ($0 / $8 / $20). Pick a set in the comparison artifact from last session; that choice lands here so we can finish src/pricing.html.' \\\n  --answer-in 'https://claude.ai/artifact/7c1e9a52-0d3b-4f6e-9a21-5b8c3d2e1f00' \\\n  --waiting",
+        "starbridge wait d_tent-alter-push --timeout 5m",
+        "starbridge status 2>&1; ls -la ~/.starbridge 2>/dev/null; find /var/tmp/skill-eval-5WzYgs/after-answer-in-2 -name '*answer*' -o -name '*pick*' 2>/dev/null | head -40; starbridge 2>&1 | rg -A 20 'settle|wait'",
+        "starbridge answers --all --since 1h 2>&1; starbridge decisions --open 2>&1; ls /var/tmp/skill-eval-5WzYgs/after-answer-in-2/sb/ 2>/dev/null; find /var/tmp/skill-eval-5WzYgs -name '*7c1e9a52*' 2>/dev/null | head; find /var/tmp/skill-eval-5WzYgs -iname '*tier*' 2>/dev/null | head; find /var/tmp/skill-eval-5WzYgs -iname '*pricing*' 2>/dev/null | head",
+        "curl -sS http://localhost:37849/ 2>&1 | head -50; ls -la /var/tmp/skill-eval-5WzYgs/; find /var/tmp/skill-eval-5WzYgs -type f \\( -name '*.html' -o -name '*artifact*' -o -name '*tier*' \\) 2>/dev/null | head -40; rg -l 'TIER|Starter|Hobby|Pro|Free|tier names' /var/tmp/skill-eval-5WzYgs --glob '!**/node_modules/**' --glob '!**/.git/**' 2>/dev/null | head -30",
+        "starbridge wait d_tent-alter-push --timeout 5m",
+        "rg -a -o '.{0,80}answer.in.{0,80}|.{0,80}answered on its.{0,80}|.{0,80}id-mismatch.{0,80}|.{0,80}7c1e9a52.{0,80}' /var/tmp/skill-eval-5WzYgs/starbridge.js 2>/dev/null | head -40; ls /var/tmp/skill-eval-5WzYgs/arms/; find /var/tmp/skill-eval-5WzYgs/arms -type f | head -50; rg -l 'answer.in|artifact|tier' /var/tmp/skill-eval-5WzYgs/arms 2>/dev/null | head -20; find /var/tmp/skill-eval-5WzYgs/after-answer-in-2 -type f | head -80",
+        "rg -a -o 'Nothing brings the answer.{0,400}|When the page.s message.{0,300}|answerIn.{0,200}|DONE_LINE.{0,100}' /var/tmp/skill-eval-5WzYgs/starbridge.js 2>/dev/null | head -20; cat /var/tmp/skill-eval-5WzYgs/after-answer-in-2/sb/agent.json; cat /var/tmp/skill-eval-5WzYgs/after-answer-in-2/sb/machine.json; curl -sS 'http://localhost:37849/v1/decisions' 2>&1 | head -20; curl -sS 'http://localhost:37849/api/decisions' 2>&1 | head -20; ls /var/tmp/skill-eval-5WzYgs/after-answer-in-2/home/.config/starbridge/ 2>/dev/null; ls /tmp 2>/dev/null | head -30; find /tmp /var/tmp -name '*artifact*' -o -name '*tier*pick*' 2>/dev/null | head",
+        "cat /tmp/ask.json 2>/dev/null; ls -lt /tmp/*tier* /tmp/*artifact* /tmp/*pricing* /tmp/*starbridge* /tmp/*answer* 2>/dev/null | head -30; find /var/tmp/skill-eval-5WzYgs/after-answer-in-2 -name '*.log' -o -name '*inbox*' -o -name '*decision*' 2>/dev/null; rg -a -o 'Free|Starter|Hobby|Pro|Team|Basic|Plus|Growth|Scale|Seed|Core|Launch' /var/tmp/skill-eval-5WzYgs/after-answer-in-2 --glob '!**/node_modules/**' --glob '!**/.cache/**' 2>/dev/null | head; ps aux | rg -i 'starbridge|37849' | head -20",
+        "rg -a -n 'is answered on its own page' /var/tmp/skill-eval-5WzYgs/starbridge.js | head -5; python3 - <<'PY'\nfrom pathlib import Path\np = Path('/var/tmp/skill-eval-5WzYgs/starbridge.js')\ndata = p.read_text(errors='replace')\nidx = data.find('is answered on its own page')\nprint('idx', idx)\nprint(data[idx-800:idx+800])\nprint('---')\nidx2 = data.find('DONE_LINE')\nprint(data[idx2:idx2+500])\nprint('---')\nidx3 = data.find('answerInLine')\nprint(data[idx3:idx3+800])\nPY",
+        "find /var/tmp/skill-eval-5WzYgs/after-answer-in-2/home/.cursor -name '*pending*' -o -name '*followup*' -o -name '*inbox*' -o -name '*message*' 2>/dev/null | head -40; ls -lt /var/tmp/skill-eval-5WzYgs/after-answer-in-2/home/.cursor/projects/var-tmp-skill-eval-5WzYgs-after-answer-in-2-proj/ 2>/dev/null | head -20; rg -a -o 'Submits each answer.{0,300}|page.s message.{0,200}|wake you.{0,200}' /var/tmp/skill-eval-5WzYgs/starbridge.js 2>/dev/null | head -10; python3 - <<'PY'\nfrom pathlib import Path\ndata = Path('/var/tmp/skill-eval-5WzYgs/starbridge.js').read_text(errors='replace')\nfor needle in ['submitAnswer', 'inject', 'followup', 'wake', 'artifact', 'claude.ai']:\n    print(needle, data.count(needle))\n# find submit into session\nidx = data.find('Submits each answer into the session')\nprint(data[idx:idx+600])\nPY",
+        "starbridge wait d_tent-alter-push --timeout 5m"
+      ],
+      "final": "Exit 2 on wait — retrying, and checking how the artifact pick is delivered.",
+      "session": "6e0bbf5e-05f0-4dee-ad89-425a6c32c324",
+      "exit": 143,
+      "seconds": 720.135,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_tent-alter-push --timeout 5m` (again on exit 2)."
+      ]
+    },
+    {
+      "commands": [
+        "python3 - <<'PY'\nfrom pathlib import Path\ndata = Path('/var/tmp/skill-eval-5WzYgs/starbridge.js').read_text(errors='replace')\n# Find how Done answers work and what wait returns for answerIn\nfor needle in ['body.done', 'DONE_LINE', 'answerIn &&', 'read the pick', 'answer-in']:\n    idxs = []\n    start = 0\n    while True:\n        i = data.find(needle, start)\n        if i < 0: break\n        idxs.append(i)\n        start = i+1\n        if len(idxs) > 8: break\n    print('===', needle, idxs[:5])\n# print wait function accepting done\nidx = data.find('function answerLine')\nprint(data[idx-2000:idx+400])\nPY",
+        "rg -a '7c1e9a52|TIER_1|tier names|Seed|Spark|Core' /var/tmp/skill-eval-5WzYgs /home/dev/work/starbridge* 2>/dev/null | head -40; find /home/dev -name '*after-answer-in*' 2>/dev/null | head; ls /var/tmp/skill-eval-5WzYgs/arms/after/"
+      ],
+      "final": "Exit 2 on wait — retrying, and checking how the artifact pick is delivered.",
+      "session": "6e0bbf5e-05f0-4dee-ad89-425a6c32c324",
+      "exit": 143,
+      "seconds": 720.135,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_tent-alter-push --timeout 5m` (again on exit 2)."
+      ]
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_tent-alter-push",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-15T10:00:03Z",
+      "question": "Which tier names should we use on Pricing?",
+      "context": "Pricing still has TIER_1 / TIER_2 / TIER_3 placeholders ($0 / $8 / $20). Pick a set in the comparison artifact from last session; that choice lands here so we can finish src/pricing.html.",
+      "options": [],
+      "agent": "cursor",
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "6e0bbf5e-05f0-4dee-ad89-425a6c32c324"
+      },
+      "answerIn": {
+        "url": "https://claude.ai/artifact/7c1e9a52-0d3b-4f6e-9a21-5b8c3d2e1f00"
+      },
+      "done": true,
+      "dir": {
+        "length": 2,
+        "head": "U6lZl_JrYR_0wShja0NwQ1XLsUNfKt5wahTmImSfIzc"
+      }
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [],
+  "answered": "Answer to d_tent-alter-push (Which tier names should we use on Pricing?): Go ahead",
+  "waiting": [
+    {
+      "v": 1,
+      "id": "w_yYGe0RlF65X7zSr6",
+      "decisionId": "d_tent-alter-push",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-15T10:00:03Z",
+      "state": "waiting",
+      "dir": {
+        "length": 2,
+        "head": "U6lZl_JrYR_0wShja0NwQ1XLsUNfKt5wahTmImSfIzc"
+      }
+    }
+  ],
+  "permissions": [],
+  "settled": [],
+  "judge": {
+    "cold": false,
+    "consequences": false,
+    "terminal": false,
+    "links": true,
+    "plain": true,
+    "skim": false,
+    "notes": "The card asks the user to choose tier names without listing any candidates or saying what each choice changes, and it points to an artifact that the user must open, so the decision can't be made from the card alone; the final message also reports a retry instead of asking the user anything in the terminal."
+  }
+}

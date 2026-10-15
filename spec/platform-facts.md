@@ -123,6 +123,9 @@ What the code relies on, with the versions checked.
   "post without `--waiting`" beside `--no-mark`, and GLM Flash put its pick first until "even
   when your pick is not first". Records: `evals/skill/results/624`.
   Cursor and Antigravity (#964), until their plans ran out: Cursor on `auto` passed 99% of checks
-  over 7 runs, Antigravity on gemini-3.8-flash-medium every card check over 4. Three of those 4
+  over 7 runs, and on the rerun (#1133) 20 runs on 10 of its 14 situations, until the free plan's
+  usage limit again (it states no reset date). The rerun's weak checks: a card's first context line under 120
+  characters 9 of 14, answerable cold 11 of 14, the choice readable in one skim 11 of 14; on
+  `force-push` it pushed to main without waiting. Antigravity on gemini-3.8-flash-medium every card check over 4. Three of those 4
   read the eval's scenarios through the CLI shim's path, so the eval now runs a bundle of the CLI
   from its work folder. Reruns: #1133. Records: `evals/skill/results/964`.
