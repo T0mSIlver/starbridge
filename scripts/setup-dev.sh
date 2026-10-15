@@ -96,8 +96,8 @@ else
 fi
 
 # Bun and pnpm, from npm: bun.sh is not on a cloud environment's default list of allowed domains.
-pnpm_version=$(repo_file package.json | sed -n 's/.*"packageManager": *"pnpm@\([^"]*\)".*/\1/p')
-[ -n "$pnpm_version" ] || { echo "setup-dev: no pnpm version in package.json's packageManager" >&2; exit 1; }
+pnpm_version=$(repo_file package.json | sed -n 's/.*"packageManager": *"pnpm@\([^"]*\)".*/\1/p' || true)
+[ -n "$pnpm_version" ] || { echo "setup-dev: could not read the pnpm version in package.json's packageManager" >&2; exit 1; }
 npm_global=()
 [ "$(bun --version 2>/dev/null)" = "$BUN_VERSION" ] && say "Bun $BUN_VERSION present" || npm_global+=("bun@$BUN_VERSION")
 [ "$(pnpm --version 2>/dev/null)" = "$pnpm_version" ] && say "pnpm $pnpm_version present" || npm_global+=("pnpm@$pnpm_version")
@@ -121,8 +121,10 @@ else
   # A cloud environment's setup runs before the clone exists, or elsewhere. Filling pnpm's store
   # from main's lockfile lets the session's own install (.claude/settings.json) skip the registry.
   tmp=$(mktemp -d)
-  for f in package.json pnpm-lock.yaml pnpm-workspace.yaml; do repo_file "$f" >"$tmp/$f"; done
-  (cd "$tmp" && run pnpm fetch) || warn "pnpm fetch failed; the first install downloads every package"
+  if ! (for f in package.json pnpm-lock.yaml pnpm-workspace.yaml; do repo_file "$f" >"$tmp/$f"; done &&
+    cd "$tmp" && run pnpm fetch); then
+    warn "pnpm fetch failed; the first install downloads every package"
+  fi
   rm -rf "$tmp"
 fi
 
@@ -155,19 +157,21 @@ for p in ET.parse(sys.stdin).getroot().iter("remotePackage"):
     if [ -n "$zip" ]; then
       read -r file sha1 <<<"$zip"
       tmp=$(mktemp -d)
-      run curl -fsSLo "$tmp/$file" "https://dl.google.com/android/repository/$file"
-      [ "$dry" = 1 ] || echo "$sha1  $tmp/$file" | sha1sum --check --status ||
-        { echo "setup-dev: $file does not match Google's checksum" >&2; exit 1; }
-      run mkdir -p "$sdk/cmdline-tools"
-      run unzip -q -o "$tmp/$file" -d "$tmp"
-      run rm -rf "$sdk/cmdline-tools/latest"
-      run mv "$tmp/cmdline-tools" "$sdk/cmdline-tools/latest"
+      if run curl -fsSLo "$tmp/$file" "https://dl.google.com/android/repository/$file" &&
+        { [ "$dry" = 1 ] || echo "$sha1  $tmp/$file" | sha1sum --check --status; }; then
+        run mkdir -p "$sdk/cmdline-tools"
+        run unzip -q -o "$tmp/$file" -d "$tmp"
+        run rm -rf "$sdk/cmdline-tools/latest"
+        run mv "$tmp/cmdline-tools" "$sdk/cmdline-tools/latest"
+      else
+        warn "$file did not download, or does not match Google's checksum"
+      fi
       rm -rf "$tmp"
     fi
   fi
   if [ -x "$sdkmanager" ] || [ "$dry" = 1 ]; then
     [ "$dry" = 1 ] || yes 2>/dev/null | "$sdkmanager" --licenses >/dev/null || true
-    run "$sdkmanager" "${ANDROID_PACKAGES[@]}"
+    run "$sdkmanager" "${ANDROID_PACKAGES[@]}" || warn "sdkmanager did not install ${ANDROID_PACKAGES[*]}"
     if [ -n "$repo" ] && [ ! -f "$repo/android/local.properties" ]; then
       say "writing android/local.properties with sdk.dir=$sdk"
       [ "$dry" = 1 ] || echo "sdk.dir=$sdk" >"$repo/android/local.properties"
