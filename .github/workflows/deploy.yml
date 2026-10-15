@@ -5,7 +5,8 @@ name: deploy
 # `staging`. starbridge.run takes a commit only by dispatch, `gh workflow run deploy.yml -f
 # sha=<commit>`: release.yml dispatches each rc tag's commit, and the owner a hotfix. Either way it
 # deploys only a commit whose `staging` status is success, which the boxes check again
-# (deploy/*/deploy-rev.sh). deploy/deploy.sh and deploy/rollback.sh stay the owner's way around it.
+# (deploy/*/deploy-rev.sh). rollback.yml goes back to a commit a box ran before; deploy/deploy.sh and
+# deploy/rollback.sh stay the owner's way around both.
 on:
   workflow_run:
     workflows: [CI]

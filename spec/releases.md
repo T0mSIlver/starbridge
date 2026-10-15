@@ -204,8 +204,7 @@
   containing the deployed one; the box fetches it itself. The box also checks the gate the
   workflow checked, from GitHub's public API without a token (#1714): prod, that staging passed
   the commit, staging, that CI passed it on main. So a stolen deploy key cannot skip either, and
-  the boxes get no GitHub credential. Rollbacks are the owner's
-  (`deploy/rollback.sh`, `deploy/deploy.sh`). The server and web images are built once per commit of
+  the boxes get no GitHub credential. Rollbacks go through their own key (Rollback, below). The server and web images are built once per commit of
   main in `deploy.yml`, for amd64 and arm64, each on a runner of its architecture, and pushed to
   ghcr.io, public, tagged by commit (#1518); a commit that changes nothing they are built from
   reuses the previous commit's under its own tag, and the deployed commit, not the built one, is
@@ -222,7 +221,16 @@
   healthy server that cannot push or answer fails the run at once, rather than at the check's next
   round trip up to 15 minutes later. Its key's forced command only asks for that round trip and
   prints the result.
-- **Rollback** (#1520). `deploy/rollback.sh` deploys the release before the running one, or a
+- **Rollback** (#1520, #1828). `rollback.yml`, dispatched with a box and a commit, redeploys a
+  commit that box ran before, so prod rolls back without the owner's full-sudo key, which was the
+  only way before. It logs in with a second key per box, whose forced command runs only
+  `starbridge-deploy --rollback <commit>`: the box keeps a record of every commit it ran
+  (`/var/lib/starbridge/deployed`) and refuses any other, and keeps every other check of a deploy
+  (on main, and on prod passed by staging, with the digests staging ran). A second key rather than
+  a mode of the deploy key, so a leaked deploy key still cannot go back to an older, weaker
+  release, and the rollback key appears only in rollback runs. Staging has the same, which is
+  where the path is tested; prod is never a test. `deploy/rollback.sh`, the owner's, stays as the
+  way around every check: it deploys the release before the running one, or a
   commit given, from the images the box holds, so it needs no download or build; the box keeps
   five releases, about 2.5 GB. It deploys that commit's whole tree, not only its images, so the
   compose file and Caddyfile match the server. It stops at a database migrated past that server
