@@ -327,7 +327,7 @@ const APPLE_STATE_COOKIE = "sb_apple";
 
 /**
  * Trades an Apple code issued to the App ID or the Services ID, and returns its account, made on
- * first sign-in, keeping the refresh token that deleting the account revokes. With the iPhone
+ * first sign-in, keeping the refresh token, which deleting the account revokes. With the iPhone
  * app's identity token, the code must be the same user's; with an app's nonce alone, Apple must
  * have signed that nonce into the code's token. A code or token Apple refuses is a 400 `bad-code`.
  */
@@ -364,9 +364,10 @@ async function appleAccount(
     traded.identity.sub,
     client === "appId" ? "app" : "web",
   );
+  // Each sign-in's token stays valid at Apple, so each is kept to revoke (#1746).
   c.var.db
-    .query("UPDATE accounts SET apple_client = ?, apple_refresh_token = ? WHERE id = ?")
-    .run(clientId, traded.refreshToken, account);
+    .query("INSERT OR IGNORE INTO apple_tokens (token, client, account_id) VALUES (?, ?, ?)")
+    .run(traded.refreshToken, clientId, account);
   return account;
 }
 

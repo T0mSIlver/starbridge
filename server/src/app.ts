@@ -78,6 +78,8 @@ export async function createApp(config: Config, fetchFn: typeof fetch = fetch) {
     sweepJoins(db);
     deps.presence.sweep();
     deps.appSignIns.sweep();
+    // Apple revocations that failed are tried again (#1746).
+    deps.apple?.revokeDue(db);
   });
   // Apart from the sweeps, which a full disk stops: the counts must still turn over.
   const watchMinute = () => {

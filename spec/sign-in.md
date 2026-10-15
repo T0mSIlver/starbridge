@@ -16,9 +16,10 @@
   Apple key, so its clients show only its own methods.
   - Starbridge asks Apple for no name and no email, as it keeps no email from GitHub: the data
     is end-to-end encrypted and an account is only a sign-in's stable id. So Hide My Email never
-    arises. The server keeps Apple's user id (`sub`) and the refresh token of the account's last
-    Apple sign-in, only to revoke it when the account is deleted, which Apple asks of an app that
-    deletes accounts. `/privacy` says so, and names Apple among who else sees what (#1640).
+    arises. The server keeps Apple's user id (`sub`) and the refresh token of each
+    Apple sign-in, since each stays valid, only to revoke them when the account is deleted, which
+    Apple asks of an app that deletes accounts. A revocation Apple fails is retried for about 3
+    days, the tokens kept under no account meanwhile, so a deletion never waits on Apple (#1746). `/privacy` says so, and names Apple among who else sees what (#1640).
   - An Apple id no account holds makes a new account, as a new GitHub id does; accounts are not
     linked. Each signs in with its own provider everywhere, so nothing needs linking, and a
     GitHub user who taps Apple by mistake gets an empty account that Delete account removes.

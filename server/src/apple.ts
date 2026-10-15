@@ -1,3 +1,4 @@
+import type { Database } from "bun:sqlite";
 import { createHash, createPublicKey, verify } from "node:crypto";
 import type { Config } from "./config";
 
@@ -12,6 +13,13 @@ const KEYS_TTL_MS = 3_600_000;
  * waits for the next fetch.
  */
 const REFETCH_MS = 60_000;
+/**
+ * A failed revocation is tried again after 1 minute, then twice as long each time up to 6 hours,
+ * 20 tries in all: about 3 days, enough to outlast an outage at Apple or on this server.
+ */
+export const REVOKE_ATTEMPTS = 20;
+const REVOKE_WAIT_MAX = 6 * 3_600_000;
+export const revokeWait = (tries: number) => Math.min(60_000 * 2 ** (tries - 1), REVOKE_WAIT_MAX);
 /** Apple takes a client secret for up to 6 months; one lasts the server's day. */
 const SECRET_LIFETIME_S = 86_400;
 /** Leeway for the clocks of Apple and this server. */
@@ -40,6 +48,8 @@ export class Apple {
   private fetchedAt = Number.NEGATIVE_INFINITY;
   private fetching?: Promise<void>;
   private readonly revoking = new Set<Promise<void>>();
+  /** The tokens whose revocation is under way, so a second round does not send them again. */
+  private readonly inFlight = new Set<string>();
   private readonly secrets = new Map<string, { value: Promise<string>; madeAt: number }>();
 
   constructor(
@@ -115,23 +125,63 @@ export class Apple {
   }
 
   /**
-   * Revokes a refresh token, so Apple lists Starbridge no more under the user's Apple ID. It runs
-   * after the reply, and [idle] lets a shutdown wait for it: the token is gone from the database
-   * by then, so nothing could retry it.
+   * Revokes the refresh tokens of deleted accounts that are due (#1746), so Apple lists Starbridge
+   * no more under the user's Apple ID. A token Apple confirms revoked is deleted; any other answer
+   * tries it again later, waiting twice as long each time up to REVOKE_WAIT_MAX, and the token is
+   * deleted after REVOKE_ATTEMPTS. [idle] lets a shutdown wait for the revocations under way.
    */
-  revoke(clientId: string, refreshToken: string): void {
-    const p = (async () => {
-      const res = await this.post("/auth/revoke", {
-        client_id: clientId,
-        client_secret: await this.clientSecret(clientId),
-        token: refreshToken,
-        token_type_hint: "refresh_token",
-      });
-      if (!res.ok) throw new Error(`Apple revoke answered ${res.status}`);
-    })()
-      .catch((e) => console.error(`Apple revoke on account deletion: ${e}`))
-      .finally(() => this.revoking.delete(p));
-    this.revoking.add(p);
+  revokeDue(db: Database, now = Date.now()): void {
+    // A server one release behind deletes an account without queueing its tokens (#1746).
+    db.query(
+      `UPDATE apple_tokens SET account_id = NULL, due_at = ?
+       WHERE account_id IS NOT NULL AND account_id NOT IN (SELECT id FROM accounts)`,
+    ).run(now);
+    const due = db
+      .query(
+        "SELECT token, client, attempts FROM apple_tokens WHERE account_id IS NULL AND due_at <= ?",
+      )
+      .all(now) as { token: string; client: string; attempts: number }[];
+    for (const { token, client, attempts } of due) {
+      if (this.inFlight.has(token)) continue;
+      this.inFlight.add(token);
+      const p = this.revoke(client, token)
+        .then(
+          () => {
+            db.query("DELETE FROM apple_tokens WHERE token = ?").run(token);
+          },
+          (e) => {
+            const tries = attempts + 1;
+            if (tries >= REVOKE_ATTEMPTS) {
+              console.error(`Apple revoke on account deletion: ${e}; gave up after ${tries} tries`);
+              db.query("DELETE FROM apple_tokens WHERE token = ?").run(token);
+            } else {
+              console.error(`Apple revoke on account deletion: ${e}; try ${tries}, will retry`);
+              db.query("UPDATE apple_tokens SET attempts = ?, due_at = ? WHERE token = ?").run(
+                tries,
+                Date.now() + revokeWait(tries),
+                token,
+              );
+            }
+          },
+        )
+        // The database refused the write (a full disk): the token stays due for the next round.
+        .catch((e) => console.error(`Apple revoke on account deletion: ${e}`))
+        .finally(() => {
+          this.inFlight.delete(token);
+          this.revoking.delete(p);
+        });
+      this.revoking.add(p);
+    }
+  }
+
+  private async revoke(clientId: string, refreshToken: string): Promise<void> {
+    const res = await this.post("/auth/revoke", {
+      client_id: clientId,
+      client_secret: await this.clientSecret(clientId),
+      token: refreshToken,
+      token_type_hint: "refresh_token",
+    });
+    if (!res.ok) throw new Error(`Apple revoke answered ${res.status}`);
   }
 
   /** Resolves once every revocation started so far has settled. */
