@@ -57,6 +57,10 @@ jobs:
           fi
           # Old and new names, so moving a file out of these folders counts too.
           files=$(gh api --paginate "repos/$REPO/pulls/$PR/files" --jq '.[] | .filename, (.previous_filename // empty)')
+          # The list is the pull request's now: it must still go into main from this commit, or the
+          # run for that change judges it.
+          [ "$(gh api "repos/$REPO/pulls/$PR" --jq '"\(.base.ref) \(.head.sha)"')" = "$MAIN $HEAD" ] ||
+            { echo "The pull request moved on since this event; its own run judges it."; exit 0; }
           if ! grep -Eq '^(\.github|deploy)/' <<<"$files"; then
             status success "Nothing in .github/ or deploy/ changed"
             echo "Nothing in .github/ or deploy/ changed."
@@ -79,7 +83,8 @@ jobs:
             # before this success: read again, after setting it, and undo it if the label is gone
             # or the pull request moved on. A removal after this read is followed by that run's
             # failure, which then comes last.
-            now=$(gh api "repos/$REPO/pulls/$PR" --jq '[.head.sha, (.labels[].name | select(. == "owner-ok"))] | join(" ")')
+            # A failed read leaves the gate shut too.
+            now=$(gh api "repos/$REPO/pulls/$PR" --jq '[.head.sha, (.labels[].name | select(. == "owner-ok"))] | join(" ")') || now=
             if [ "$now" != "$HEAD owner-ok" ]; then
               status failure "Changes .github/ or deploy/: waits for the owner's yes (owner-ok)"
               echo "owner-ok was removed or a new commit came in meanwhile."
