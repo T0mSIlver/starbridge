@@ -15,7 +15,7 @@ import { runAgent } from "./agent/main";
 import { hello, hookPreInvocation, hookPreTool, hookStop, registerAgyRoute } from "./antigravity";
 import { ApiError, sandboxHint, Unreachable } from "./api";
 import { hookCodexQuestion } from "./codex-question";
-import { StateFileError } from "./config";
+import { exportMachine, MachineEnvError, StateFileError } from "./config";
 import { type Ctx, UsageError } from "./context";
 import {
   type AskInput,
@@ -88,6 +88,11 @@ const HELP = `starbridge: post decisions to your devices, report runs, upload qu
       Answer that for a waiting \`pair\` or \`setup\` that has no terminal.
       --server <url>          a self-hosted server (default: $STARBRIDGE_SERVER, else
                               https://starbridge.run)
+
+  starbridge machine export
+      Print this machine's identity, its keys included, as one line. Where the config
+      directory holds no machine, as in a cloud session, the CLI uses the one in
+      $STARBRIDGE_MACHINE.
 
   starbridge ask --question <text> [--option <text>]... [options]
       Post a decision to every paired device and print its id. Devices show it as
@@ -342,6 +347,9 @@ const PERSON_COMMANDS = new Set([
   undefined,
 ]);
 
+/** Commands that read no machine, so a malformed `STARBRIDGE_MACHINE` does not stop them. */
+const QUIET_COMMANDS = new Set(["--version", "-v", "help", "--help", "-h", undefined]);
+
 export async function run(argv: string[], ctx: Ctx): Promise<number> {
   const code = await dispatch(argv, ctx);
   const [command, ...rest] = argv;
@@ -356,6 +364,8 @@ async function dispatch(argv: string[], ctx: Ctx): Promise<number> {
   const [command, ...rest] = argv;
   try {
     await ready;
+    if (ctx.env.STARBRIDGE_MACHINE && !QUIET_COMMANDS.has(command))
+      ctx.store.seedMachine(ctx.env.STARBRIDGE_MACHINE);
     if (command !== "agent" && command !== "hook" && command !== "hello")
       await registerAgyRoute(ctx);
     switch (command) {
@@ -599,6 +609,19 @@ async function dispatch(argv: string[], ctx: Ctx): Promise<number> {
           ...(v["no-agents"] ? { noAgents: true } : {}),
         });
       }
+      case "machine": {
+        const [sub, ...args] = rest;
+        parseArgs({ args, options: {} });
+        if (sub !== "export") throw new UsageError("usage: starbridge machine export");
+        const machine = ctx.store.machine();
+        if (!machine)
+          throw new UsageError("this machine is not paired: run `starbridge pair` first");
+        ctx.out(exportMachine(machine));
+        ctx.err(
+          "starbridge: this line holds the machine's private keys and token: put it only in STARBRIDGE_MACHINE, where you trust everyone who can read it",
+        );
+        return 0;
+      }
       case "hello":
         parseArgs({ args: rest, options: {} });
         return await hello(ctx);
@@ -702,7 +725,8 @@ async function dispatch(argv: string[], ctx: Ctx): Promise<number> {
       e instanceof ProtocolError ||
       e instanceof ReleaseError ||
       e instanceof AgentError ||
-      e instanceof StateFileError
+      e instanceof StateFileError ||
+      e instanceof MachineEnvError
     ) {
       ctx.err(`starbridge: ${e.message}`);
       return 1;

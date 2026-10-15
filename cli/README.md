@@ -114,6 +114,26 @@ the Starbridge app shows the same one under Devices, `n` if not. With no termina
 into an account it controls ([PROTOCOL.md](../PROTOCOL.md#pairing)), and the machine saves
 nothing.
 
+### Cloud sessions
+
+A Claude Code cloud session starts in a new container each time, so it can't pair. Instead, pair
+one machine for all your cloud sessions and give them its identity:
+
+1. On a machine with the CLI, pair a machine in a folder of its own:
+   `STARBRIDGE_CONFIG_DIR=~/.config/starbridge-cloud starbridge pair --name "Cloud sessions"`.
+2. Print its identity: `STARBRIDGE_CONFIG_DIR=~/.config/starbridge-cloud starbridge machine export`.
+   The line holds the machine's private keys.
+3. In your [cloud environment](https://code.claude.com/docs/en/cloud-environments), set the
+   environment variable `STARBRIDGE_MACHINE` to that line, add `npm install -g starbridge` to the
+   setup script, and set network access to Custom with `starbridge.run` (or your server) and
+   **Also include default list of common package managers** checked.
+
+Where the config folder holds no machine, the CLI uses the one in `STARBRIDGE_MACHINE`. Every
+cloud session is that one machine, shown as Cloud sessions under Devices, and removing it there
+stops them all. No background service runs, so an agent there waits for its answer with
+`starbridge ask --wait` or `starbridge wait`. Anyone who can use the environment can read the
+variable.
+
 ### Ask
 
 ```bash

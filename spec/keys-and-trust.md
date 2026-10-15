@@ -59,6 +59,17 @@
   A phone without the app opens the printed link or types the code instead, and the machine
   asks. The code stays after `#`, where Android 0.1.0's scanner reads it, so that scanner still
   pairs (and the machine asks); 0.1.0's camera opens nothing until the app updates.
+- **A machine for cloud sessions** (#1818). A Claude Code cloud session starts in a new
+  container each time, so it cannot pair. The owner pairs one machine for them, and
+  `starbridge machine export` prints its identity as one line: server, account, id, name, token,
+  keys and pin, nothing a device holds. The cloud environment carries it as
+  `STARBRIDGE_MACHINE`, and a CLI whose config folder holds no machine saves that one and uses
+  it; a folder that holds a machine keeps it. Every cloud session is that one machine, under one
+  name in the apps, and revoking it stops them all. Tom chose a plain environment variable over
+  a network secret (2026-10-16): the CLI signs and opens with the keys itself, which a secret the
+  proxy attaches to requests cannot do, and he accepts that anyone who can use the environment
+  can read it. Each session starts from the exported pin with no device heads, so, like a newly
+  paired machine, it sees a withheld revocation only past that pin.
 - **The recovery key** is a random 16-byte seed shown as 28 Crockford base32 characters with a
   12-bit check, in seven groups of four, read in any case, with or without dashes (#199). 128 bits
   is Ed25519's own security level; the seed is random, so it needs no slow key derivation:

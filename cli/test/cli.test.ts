@@ -238,6 +238,50 @@ test("a machine the owner removed says so and how to pair it again", async () =>
   );
 });
 
+test("a cloud session asks and waits as the machine STARBRIDGE_MACHINE carries, until it is revoked (#1818)", async () => {
+  const owner = await paired(server, "Cloud sessions");
+  expect(await run(["machine", "export"], owner)).toBe(0);
+  const [line] = owner.lines;
+  expect(owner.errors.at(-1)).toContain("private keys");
+  const id = owner.store.machine()?.id;
+
+  for (const name of ["first", "second"]) {
+    const cloud = testCtx({ STARBRIDGE_MACHINE: line as string });
+    expect(await run([...ASK, "--session", name], cloud)).toBe(0);
+    const asked = cloud.lines.at(-1) as string;
+    expect(cloud.store.machine()?.id).toBe(id);
+    expect((await server.opened("decision")).at(-1)?.source).toMatchObject({
+      machine: "Cloud sessions",
+      machineKind: "cloud",
+      session: name,
+    });
+    await server.answer(asked, { choice: "Wait" });
+    cloud.lines.length = 0;
+    expect(await run(["wait", asked, "--timeout", "5s"], cloud)).toBe(0);
+    expect(cloud.lines).toEqual([`Answer to ${asked} (Merge #12 now?): Wait`]);
+  }
+
+  await server.revoke(id as string);
+  const late = testCtx({ STARBRIDGE_MACHINE: line as string });
+  expect(await run(ASK, late)).toBe(1);
+  expect(late.errors.at(-1)).toContain("removed from your Starbridge account");
+});
+
+test("a folder that holds a machine keeps it over STARBRIDGE_MACHINE, and a bad one stops commands (#1818)", async () => {
+  const one = await paired(server, "one");
+  const two = await paired(server, "two");
+  expect(await run(["machine", "export"], two)).toBe(0);
+  one.env.STARBRIDGE_MACHINE = two.lines[0] as string;
+  expect(await run(ASK, one)).toBe(0);
+  expect(one.store.machine()?.name).toBe("one");
+
+  const bad = testCtx({ STARBRIDGE_MACHINE: `sbm1.${"A".repeat(40)}` });
+  expect(await run(ASK, bad)).toBe(1);
+  expect(bad.errors.at(-1)).toStartWith("starbridge: STARBRIDGE_MACHINE is not a line");
+  expect(bad.store.machine()).toBeUndefined();
+  expect(await run(["--version"], bad)).toBe(0);
+});
+
 test("ask seals a decision the phone can open, recommended first", async () => {
   const ctx = await paired(server);
   expect(await run([...ASK, "--session", "s1"], ctx)).toBe(0);
