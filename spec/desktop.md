@@ -132,7 +132,8 @@ a browser; the app adds a menu bar light and notifications, so a web release nee
   app on the Mac counts, with no switch of its own (#1003): the owner found two "Hold" rows read
   as two holds, and with the switch off the window still counted while touched, so a Mac in
   another app held a push one time and not the next. The hold time is the opt-in: Off, nothing
-  is held, whatever presence says.
+  is held, whatever presence says. The page also reads it to reload onto a new build
+  while the Mac sits idle, window shown (spec/web.md, #1811).
 - **The Needs you widget** (#1031), in Notification Center and on the desktop: Android's 2×2
   (#894) at WidgetKit's small size, the same count and amber. The owner left out Quotas widgets,
   which CodexBar's own widgets already show. A WidgetKit extension in `Contents/PlugIns` draws it;
