@@ -48,6 +48,9 @@ command and its local agent), `plugin` and
   `flakes.yml` lists them each night on the issue labelled `flaky`.
 - Before a PR is ready, run the checks in
   [CONTRIBUTING.md, "Develop"](CONTRIBUTING.md#develop).
+- A PR that touches `.github/` or `deploy/` merges only with a maintainer's OK.
+- [docs/checks.md](docs/checks.md) lists the mistakes that keep coming back and the check for each;
+  one without a check is open work.
 - Before a PR is ready, diff it against `main` (`git diff --name-only origin/main...`) for files
   outside the packages it is meant to touch, such as a copy of a package path at the repo root.
 - Before review, check your change for the bugs reviews keep finding:
@@ -74,6 +77,14 @@ command and its local agent), `plugin` and
   `spec/parity.md`, and the PR opens an issue for each client the row says
   should follow. A PR that changes a client fills its `Parity:` line, which CI
   checks.
+
+## Cloud sessions
+
+- The GitHub proxy refuses GraphQL, so `gh pr` and `gh issue` fail; use
+  `gh api repos/T0mSIlver/starbridge/...`.
+- Android, iOS and macOS build and test only in CI: push, then read the runs with `gh run list`.
+- Cards need `STARBRIDGE_MACHINE` and `starbridge.run` in the environment's network access
+  ([cli/README.md, "Cloud sessions"](cli/README.md#cloud-sessions)).
 
 ## CI runners
 

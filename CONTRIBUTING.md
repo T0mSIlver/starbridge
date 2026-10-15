@@ -45,6 +45,9 @@ SDK download from, so a cloud session leaves the end-to-end runs and Android bui
 add `cdn.playwright.dev`, `playwright.download.prss.microsoft.com` and `dl.google.com` to the
 environment's allowed domains, and add `--android` to the script.
 
+To bring your own Claude Code skills into the session, add `-s -- --skills <owner>/<repo>` after
+`bash`: the script then runs that repository's `scripts/install-skills.sh`. This is optional.
+
 For Android, in `android/`:
 
 ```bash
