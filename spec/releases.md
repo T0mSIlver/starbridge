@@ -319,7 +319,7 @@
   run only on a Mac, so the real launchd starts and stops the agent there. A `ubuntu-24.04-arm` job (#1481), skipped the same way, does the same for the
   linux-arm64 binary. All three jobs run each test file alone and kill one that hangs (`cli/scripts/test-each.ts`, #862).
 - **CI runners** (#146, #1204, #1213, #1638). Self-hosted Linux runners in two pools that never
-  share a box: `trusted` runs main's tests, the image builds, uptime checks, the release's version
+  share a box: `trusted` runs main's tests, uptime checks, the release's version
   check and the nightly flaky-test count (#1657); `pr` runs the
   test and image jobs of a pull request from this repository's own branches, so they start sooner
   than on GitHub's runners. The e2e stays on GitHub's runners: its three parts per run queued a
@@ -329,8 +329,9 @@
   Windows and macOS. Main's unsigned Android build uses its own runner, `ANDROID_RUNNER`.
   Every job that reads a signing or deploy key, or builds a file a release signs (the APK and App
   Bundle, the CLI binaries, the minisign signature, the Homebrew formula, the internal track's
-  build, staging's and prod's deploys), runs on GitHub's runners (#1825), so a compromised box
-  on the home network reaches neither a key nor the bytes a key vouches for. Each Android push to main also builds on GitHub's runner, to save the Gradle
+  build, staging's and prod's deploys), or builds or picks the server and web images prod runs
+  (#1839), runs on GitHub's runners (#1825), so a compromised box on the home network reaches
+  neither a key nor the bytes a key vouches for or prod runs. Each Android push to main also builds on GitHub's runner, to save the Gradle
   cache that pull requests restore there (#1662). The PR pool holds no secrets, and no pull
   request job reaches the other two.
   Each runner registers for one job, and its slot wipes that job's folders before the next;

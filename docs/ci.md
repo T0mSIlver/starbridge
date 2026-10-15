@@ -3,8 +3,9 @@
 Most CI jobs run on GitHub's runners. Some run on three self-hosted Linux boxes, which start them
 sooner. Windows, macOS, Linux ARM64, the e2e and anything that needs KVM stay on GitHub's runners,
 and main's unsigned Android build runs on its own runner, `ANDROID_RUNNER`. A job that reads a
-signing or deploy key, or builds a file a release signs, runs on GitHub's runners only, so no box
-on the home network ever holds one of those keys (#1825).
+signing or deploy key, builds a file a release signs, or builds the images prod runs, runs on
+GitHub's runners only, so no box on the home network holds one of those keys or makes what ships
+(#1825, #1839).
 
 ## Pools and labels
 
@@ -17,7 +18,7 @@ wipes that job's folders, and only those (below).
 | `sb-dell3` | 2 | `pr, heavy` |
 | `sb-hp` | 2 | `pr, light` |
 
-- `trusted` runs pushes to main's tests, the image builds, uptime checks, the release's version
+- `trusted` runs pushes to main's tests, uptime checks, the release's version
   check and the nightly flaky-test count, and nothing else.
 - `pr` runs pull requests from this repository's own branches, except Dependabot's. Forks'
   pull requests, Dependabot's and dispatched CI runs stay on GitHub's runners.
@@ -34,7 +35,7 @@ runs-on: ${{ vars.TRUSTED_RUNNER && fromJSON(vars.TRUSTED_RUNNER) || 'ubuntu-lat
 
 | Variable | Value | Used by |
 |---|---|---|
-| `TRUSTED_RUNNER` | `["self-hosted","starbridge","trusted","heavy"]` | main's test job, deploy's image builds, uptime, release's version check, flakes |
+| `TRUSTED_RUNNER` | `["self-hosted","starbridge","trusted","heavy"]` | main's test job, uptime, release's version check, flakes |
 | `PR_LIGHT_RUNNER` | `["self-hosted","starbridge","pr"]` | a pull request's test, typecheck and lint job |
 | `PR_DOCKER_RUNNER` | `["self-hosted","starbridge","pr","docker","heavy"]` | a pull request's image builds |
 | `ANDROID_RUNNER` | `starbridge-android` | main's unsigned Android build (`android.yml`) |
