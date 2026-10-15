@@ -14,6 +14,14 @@
   PATCH*100` plus the rc number or 99, so release candidates sort first; the 2000000 keeps 0.1.0
   above 1.0.0-rc.1 (1000001), which Play's closed test already had (#551). Play App Signing keeps the release
   key, so Play and GitHub builds share one signature (#148).
+- **Build provenance** (#1831). Each tag's APK, App Bundle, macOS DMG and zip, and CLI binaries
+  carry a GitHub artifact attestation (SLSA build provenance, `actions/attest` in the `release`
+  job): it names the `release.yml` run and the commit that built the file, which the minisign
+  signature does not. It is made before the GitHub Release, so a failed attestation publishes
+  nothing, and only on tags, so dry runs leave no public record. Every file it covers is built on
+  GitHub's runners (#1825), so the provenance names the machine that built it. To check a
+  downloaded file (gh 2.68 or later):
+  `gh attestation verify starbridge-1.2.3.apk --repo T0mSIlver/starbridge --signer-workflow T0mSIlver/starbridge/.github/workflows/release.yml --source-ref refs/tags/v1.2.3`.
 - **Release candidates first** (#1004). v0.1.3 crashed on every card with context: Android's ICU
   regex refused `(?U)`, which the JVM's regex, and so unit tests and Robolectric, accept. A tag is
   live at once, so the release publishes nothing until the release APK passes a smoke test on an
@@ -154,7 +162,9 @@
   name it. The deploy key and starbridge.run's host key are secrets of the `starbridge.run`
   environment, open to main only. As repository secrets, a workflow run on any branch could read
   them. The cost: a `release.yml` run dispatched from a branch fails its Android job, so dry runs
-  go from main.
+  go from main. The jobs that read them run on GitHub's runners (#1825, CI runners below), so
+  staging's and prod's SSH take connections from any address, key only: a firewall that limited
+  port 22 to the home network would stop every deploy.
 - **Release notes by product** (#1057). A list of PR titles told users little. Each PR body has
   a "Release notes" section, one `Product: line` per product a user sees change (Android, iOS since TestFlight takes every tag (#1451), Web,
   Desktop, CLI, Server, Docs) or `None`, optionally `None: why`, written by whoever knows the change; it can be edited
@@ -204,8 +214,7 @@
   containing the deployed one; the box fetches it itself. The box also checks the gate the
   workflow checked, from GitHub's public API without a token (#1714): prod, that staging passed
   the commit, staging, that CI passed it on main. So a stolen deploy key cannot skip either, and
-  the boxes get no GitHub credential. Rollbacks are the owner's
-  (`deploy/rollback.sh`, `deploy/deploy.sh`). The server and web images are built once per commit of
+  the boxes get no GitHub credential. Rollbacks go through their own key (Rollback, below). The server and web images are built once per commit of
   main in `deploy.yml`, for amd64 and arm64, each on a runner of its architecture, and pushed to
   ghcr.io, public, tagged by commit (#1518); a commit that changes nothing they are built from
   reuses the previous commit's under its own tag, and the deployed commit, not the built one, is
@@ -222,7 +231,16 @@
   healthy server that cannot push or answer fails the run at once, rather than at the check's next
   round trip up to 15 minutes later. Its key's forced command only asks for that round trip and
   prints the result.
-- **Rollback** (#1520). `deploy/rollback.sh` deploys the release before the running one, or a
+- **Rollback** (#1520, #1828). `rollback.yml`, dispatched with a box and a commit, redeploys a
+  commit that box ran before, so prod rolls back without the owner's full-sudo key, which was the
+  only way before. It logs in with a second key per box, whose forced command runs only
+  `starbridge-deploy --rollback <commit>`: the box keeps a record of every commit it ran
+  (`/var/lib/starbridge/deployed`) and refuses any other, and keeps every other check of a deploy
+  (on main, and on prod passed by staging, with the digests staging ran). A second key rather than
+  a mode of the deploy key, so a leaked deploy key still cannot go back to an older, weaker
+  release, and the rollback key appears only in rollback runs. Staging has the same, which is
+  where the path is tested; prod is never a test. `deploy/rollback.sh`, the owner's, stays as the
+  way around every check: it deploys the release before the running one, or a
   commit given, from the images the box holds, so it needs no download or build; the box keeps
   five releases, about 2.5 GB. It deploys that commit's whole tree, not only its images, so the
   compose file and Caddyfile match the server. It stops at a database migrated past that server
@@ -317,15 +335,18 @@
   run only on a Mac, so the real launchd starts and stops the agent there. A `ubuntu-24.04-arm` job (#1481), skipped the same way, does the same for the
   linux-arm64 binary. All three jobs run each test file alone and kill one that hangs (`cli/scripts/test-each.ts`, #862).
 - **CI runners** (#146, #1204, #1213, #1638). Self-hosted Linux runners in two pools that never
-  share a box: `trusted` runs main's tests, deploys, uptime checks, releases and the nightly
-  flaky-test count (#1657); `pr` runs the
+  share a box: `trusted` runs main's tests, the image builds, uptime checks, the release's version
+  check and the nightly flaky-test count (#1657); `pr` runs the
   test and image jobs of a pull request from this repository's own branches, so they start sooner
   than on GitHub's runners. The e2e stays on GitHub's runners: its three parts per run queued a
   median 4 min, p90 22 min, behind the PR pool's two heavy slots. Each job names its pool through a repository variable holding a JSON array
   of labels, and falls back to GitHub's runner when it is unset (docs/ci.md). Dependabot's and
   forks' pull requests stay on GitHub's runners, and so do the desktop e2e (Electron's libraries),
-  Windows and macOS. Android builds on main and in releases use their own runner,
-  `ANDROID_RUNNER`. Each Android push to main also builds on GitHub's runner, to save the Gradle
+  Windows and macOS. Main's unsigned Android build uses its own runner, `ANDROID_RUNNER`.
+  Every job that reads a signing or deploy key, or builds a file a release signs (the APK and App
+  Bundle, the CLI binaries, the minisign signature, the Homebrew formula, the internal track's
+  build, staging's and prod's deploys), runs on GitHub's runners (#1825), so a compromised box
+  on the home network reaches neither a key nor the bytes a key vouches for. Each Android push to main also builds on GitHub's runner, to save the Gradle
   cache that pull requests restore there (#1662). The PR pool holds no secrets, and no pull
   request job reaches the other two.
   Each runner registers for one job, and its slot wipes that job's folders before the next;

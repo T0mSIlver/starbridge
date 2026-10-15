@@ -5,7 +5,8 @@ name: deploy
 # `staging`. starbridge.run takes a commit only by dispatch, `gh workflow run deploy.yml -f
 # sha=<commit>`: release.yml dispatches each rc tag's commit, and the owner a hotfix. Either way it
 # deploys only a commit whose `staging` status is success, which the boxes check again
-# (deploy/*/deploy-rev.sh). deploy/deploy.sh and deploy/rollback.sh stay the owner's way around it.
+# (deploy/*/deploy-rev.sh). rollback.yml goes back to a commit a box ran before; deploy/deploy.sh and
+# deploy/rollback.sh stay the owner's way around both.
 on:
   workflow_run:
     workflows: [CI]
@@ -183,7 +184,8 @@ jobs:
     concurrency:
       group: staging
       cancel-in-progress: false
-    runs-on: ${{ vars.TRUSTED_RUNNER && fromJSON(vars.TRUSTED_RUNNER) || 'ubuntu-latest' }}
+    # GitHub's runners for the jobs that hold a deploy key: no self-hosted box sees one (#1825).
+    runs-on: ubuntu-latest
     timeout-minutes: 25
     permissions:
       statuses: write
@@ -283,7 +285,7 @@ jobs:
     concurrency:
       group: deploy
       cancel-in-progress: false
-    runs-on: ${{ vars.TRUSTED_RUNNER && fromJSON(vars.TRUSTED_RUNNER) || 'ubuntu-latest' }}
+    runs-on: ubuntu-latest
     timeout-minutes: 90
     # Reads the commit's statuses and main's history.
     permissions:
