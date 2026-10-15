@@ -20,7 +20,7 @@
   signature does not. It is made before the GitHub Release, so a failed attestation publishes
   nothing, and only on tags, so dry runs leave no public record. Every file it covers is built on
   GitHub's runners (#1825), so the provenance names the machine that built it. To check a
-  downloaded file (gh 2.49 or later):
+  downloaded file (gh 2.68 or later):
   `gh attestation verify starbridge-1.2.3.apk --repo T0mSIlver/starbridge --signer-workflow T0mSIlver/starbridge/.github/workflows/release.yml --source-ref refs/tags/v1.2.3`.
 - **Release candidates first** (#1004). v0.1.3 crashed on every card with context: Android's ICU
   regex refused `(?U)`, which the JVM's regex, and so unit tests and Robolectric, accept. A tag is
