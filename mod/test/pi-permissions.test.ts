@@ -203,7 +203,7 @@ test("the link allows a lone starbridge command, and nothing chained to it (#488
   // Where PowerShell may run the line, nothing it would split differently (#1749).
   for (const c of [
     "starbridge ask --question 'Merge #12?' --option Yes --option No",
-    "starbridge settle 3f2a",
+    "starbridge settle d_3f2a",
     "starbridge ask --question 'C:\\work' --option Yes",
   ])
     expect([c, ownCommand(c, true)]).toEqual([c, true]);
