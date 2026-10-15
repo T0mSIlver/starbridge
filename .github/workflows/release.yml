@@ -284,6 +284,9 @@ jobs:
       contents: write
       # The release notes read each pull request's body.
       pull-requests: read
+      # The build provenance below: a Sigstore certificate for this run, and its record on GitHub.
+      id-token: write
+      attestations: write
     steps:
       # Every tag and commit, for the release notes' range.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -344,6 +347,20 @@ jobs:
           path: |
             out/
             notes.md
+      # Build provenance for each file a user installs (#1831): which run of this workflow, at which
+      # commit, built it. `gh attestation verify` checks it (spec/releases.md). Before the release is
+      # created, so a failed attestation publishes nothing.
+      - if: startsWith(github.ref, 'refs/tags/v')
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: |
+            out/*.apk
+            out/*.aab
+            out/*.dmg
+            out/*.zip
+            out/starbridge-linux-*
+            out/starbridge-darwin-*
+            out/starbridge-windows-*
       - if: startsWith(github.ref, 'refs/tags/v')
         env:
           GH_TOKEN: ${{ github.token }}

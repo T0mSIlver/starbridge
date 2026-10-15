@@ -14,6 +14,14 @@
   PATCH*100` plus the rc number or 99, so release candidates sort first; the 2000000 keeps 0.1.0
   above 1.0.0-rc.1 (1000001), which Play's closed test already had (#551). Play App Signing keeps the release
   key, so Play and GitHub builds share one signature (#148).
+- **Build provenance** (#1831). Each tag's APK, App Bundle, macOS DMG and zip, and CLI binaries
+  carry a GitHub artifact attestation (SLSA build provenance, `actions/attest` in the `release`
+  job): it names the `release.yml` run and the commit that built the file, which the minisign
+  signature does not. It is made before the GitHub Release, so a failed attestation publishes
+  nothing, and only on tags, so dry runs leave no public record. Every file it covers is built on
+  GitHub's runners (#1825), so the provenance names the machine that built it. To check a
+  downloaded file (gh 2.49 or later):
+  `gh attestation verify starbridge-1.2.3.apk --repo T0mSIlver/starbridge --signer-workflow T0mSIlver/starbridge/.github/workflows/release.yml --source-ref refs/tags/v1.2.3`.
 - **Release candidates first** (#1004). v0.1.3 crashed on every card with context: Android's ICU
   regex refused `(?U)`, which the JVM's regex, and so unit tests and Robolectric, accept. A tag is
   live at once, so the release publishes nothing until the release APK passes a smoke test on an
