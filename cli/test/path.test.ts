@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { spawnSync } from "node:child_process";
 import {
   chmodSync,
   existsSync,
@@ -165,3 +166,37 @@ test("uninstall takes out the PATH line setup added, only while it is as setup w
   expect(readFileSync(profile, "utf8")).toBe(changed);
   expect(removePathLines(s, bin)).toEqual([]);
 });
+
+test.skipIf(process.platform === "win32")(
+  "a folder with a space, a quote or a $ goes on the PATH as itself, in sh and in fish, and uninstall takes it out (#1749)",
+  async () => {
+    for (const shell of ["/bin/bash", "/usr/bin/fish"]) {
+      const s = sys({ SHELL: shell, PATH: "/usr/bin" }, []);
+      const dir = `/opt/it's "my" $HOME tools/bin`;
+      const lines = await pathStep({ ...s, self: [`${dir}/starbridge`] });
+      const file = join(s.home, shell.endsWith("fish") ? ".config/fish/config.fish" : ".profile");
+      const line = readFileSync(file, "utf8").trim().split("\n").at(-1) as string;
+      if (shell.endsWith("fish"))
+        expect(line).toBe(`fish_add_path '/opt/it\\'s "my" $HOME tools/bin'`);
+      else {
+        expect(line).toBe(`export PATH='/opt/it'\\''s "my" $HOME tools/bin':"$PATH"`);
+        const r = spawnSync("sh", ["-c", `${line}; printf %s "$PATH"`], { encoding: "utf8" });
+        expect(r.stdout).toBe(`${dir}:${process.env.PATH}`);
+        expect(lines.at(-1)).toBe(`  ${line}`);
+      }
+      expect(removePathLines(s, dir)).toEqual([file]);
+      expect(existsSync(file)).toBe(false);
+    }
+    // A line an earlier release wrote, unquoted, still comes out.
+    const old = sys({ SHELL: "/bin/bash", PATH: "/usr/bin" }, []);
+    const profile = join(old.home, ".profile");
+    writeFileSync(profile, '\n# Added by starbridge setup\nexport PATH="$HOME/my tools:$PATH"\n');
+    expect(removePathLines(old, join(old.home, "my tools"))).toEqual([profile]);
+    // In the home folder, $HOME stays a variable, quoted.
+    const s = sys({ SHELL: "/bin/bash", PATH: "/usr/bin" }, []);
+    await pathStep({ ...s, self: [join(s.home, "my tools/starbridge")] });
+    expect(readFileSync(join(s.home, ".profile"), "utf8")).toContain(
+      `export PATH="$HOME"'/my tools':"$PATH"`,
+    );
+  },
+);

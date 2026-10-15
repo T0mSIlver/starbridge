@@ -2,6 +2,7 @@
 import { existsSync, mkdirSync, readFileSync, rmdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import market from "../../../.claude-plugin/marketplace.json" with { type: "json" };
+import { replaceFile } from "../replace";
 import { COMMIT, VERSION } from "../version";
 import { withoutAllow, writeLeft } from "./remove";
 import { failure, run, type Sys, which } from "./sys";
@@ -303,7 +304,7 @@ function readSettings(sys: Sys): Settings | undefined {
 }
 
 function writeSettings(sys: Sys, s: Settings) {
-  writeFileSync(settingsPath(sys), `${JSON.stringify(s, null, 2)}\n`);
+  replaceFile(settingsPath(sys), `${JSON.stringify(s, null, 2)}\n`);
 }
 
 /** Whether background auto-update is on for the marketplace; undefined when it is not declared. */

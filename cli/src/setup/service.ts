@@ -101,15 +101,32 @@ export function withInstalledPlaces(
     const unit = new RegExp(`^Environment="?${k}=((?:[^"\\\\\\n]|\\\\.)*)"?$`, "m").exec(text);
     const plist = new RegExp(`<key>${k}</key>\\s*<string>([^<]*)</string>`).exec(text);
     const v =
-      unit?.[1]?.replace(/\\(.)/g, "$1") ??
+      unit?.[1]
+        ?.replace(/\\(.)/g, (_, c: string) => ({ n: "\n", r: "\r", t: "\t" })[c] ?? c)
+        .replace(/%%/g, "%") ??
       plist?.[1]?.replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
     if (v) out[k] = v;
   }
   return out;
 }
 
-/** systemd quotes arguments with spaces in double quotes. */
-const sdQuote = (s: string) => (/[\s"\\]/.test(s) ? `"${s.replace(/(["\\])/g, "\\$1")}"` : s);
+const C_ESCAPES: Record<string, string> = { "\n": "\\n", "\r": "\\r", "\t": "\\t" };
+
+/**
+ * One word of a unit's line, as systemd reads it back (#1749): `%` doubled, since it expands
+ * specifiers in every value, and `$` too in an argument of `ExecStart` (`exec`), which expands
+ * variables there but not in the executable's path. A word
+ * with a space, a quote, a backslash or a line break goes in double quotes, the break as `\n`,
+ * which would otherwise end the line and start another.
+ */
+export function sdQuote(s: string, exec = false): string {
+  const specifiers = s.replace(/%/g, "%%");
+  const v = exec ? specifiers.replace(/\$/g, "$$$$") : specifiers;
+  return /[\s"\\]/.test(v)
+    ? `"${v.replace(/["\\]/g, "\\$&").replace(/[\n\r\t]/g, (c) => C_ESCAPES[c] as string)}"`
+    : v;
+}
+
 const xml = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
 export function unitText(sys: Sys): string {
@@ -123,7 +140,7 @@ After=network-online.target
 Wants=network-online.target
 
 [Service]
-ExecStart=${[...sys.self, "agent"].map(sdQuote).join(" ")}
+ExecStart=${[...sys.self, "agent"].map((w, i) => sdQuote(w, i > 0)).join(" ")}
 ${env}
 Restart=on-failure
 RestartSec=10

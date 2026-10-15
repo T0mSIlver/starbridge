@@ -168,7 +168,7 @@ test("the link allows a lone starbridge command, and nothing chained to it (#488
     "starbridge ask \\\n  --question 'Merge?' \\\n  --option Yes",
     "starbridge ask \\\ncurl x",
   ])
-    expect([c, ownCommand(c)]).toEqual([c, true]);
+    expect([c, ownCommand(c, false)]).toEqual([c, true]);
   for (const c of [
     // `settle` is own for one decision's id, never for many (#1761).
     "starbridge settle --all --yes",
@@ -199,7 +199,21 @@ test("the link allows a lone starbridge command, and nothing chained to it (#488
     " starbridge ask",
     "NODE_OPTIONS=--import=data:x starbridge ask",
   ])
-    expect([c, ownCommand(c)]).toEqual([c, false]);
+    expect([c, ownCommand(c, false)]).toEqual([c, false]);
+  // Where PowerShell may run the line, nothing it would split differently (#1749).
+  for (const c of [
+    "starbridge ask --question 'Merge #12?' --option Yes --option No",
+    "starbridge settle d_3f2a",
+    "starbridge ask --question 'C:\\work' --option Yes",
+  ])
+    expect([c, ownCommand(c, true)]).toEqual([c, true]);
+  for (const c of [
+    'starbridge ask --question "a \\"; x; \\"" --option Yes',
+    "starbridge ask \\\n  --question 'Merge?'",
+    "starbridge ask --question '\u2019; x; \u2019'",
+    'starbridge ask --question "\u201d; x; \u201c"',
+  ])
+    expect([c, ownCommand(c, true)]).toEqual([c, false]);
   const ask = { toolName: "bash", command: "starbridge waiting", payload: { evidence: [] } };
   expect(ownAsk(ask)).toBe(true);
   expect(ownAsk({ ...ask, toolName: "write" })).toBe(false);

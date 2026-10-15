@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import {
   allowPiRules,
@@ -70,4 +70,8 @@ test("a bash surface that denies stops the starbridge commands before the link h
     { "*": "deny", bash: { "*": "ask" } },
   ])
     expect(piBashDenies(home({ permission }).env)).toBe(false);
+});
+
+test("without HOME, Pi's folder is the OS's home folder's, not one relative to where setup runs (#1749)", () => {
+  expect(piSkillDir({}).startsWith(join(homedir(), ".pi", "agent"))).toBe(true);
 });

@@ -55,7 +55,9 @@ import { addAllowRules, marketplaceText, missingAllowRules } from "../src/setup/
 import {
   installService,
   removeService,
+  sdQuote,
   serviceState,
+  unitText,
   withInstalledPlaces,
 } from "../src/setup/service";
 import { probeLines, refresh, setup } from "../src/setup/setup";
@@ -593,6 +595,21 @@ test("a refresh keeps the places the installed unit points the agent at", () => 
     STARBRIDGE_CONFIG_DIR: "/srv/a b",
     CODEX_HOME: "/c",
   });
+});
+
+test("a unit's values keep %, $ and line breaks as systemd reads them back (#1749)", () => {
+  expect(sdQuote("/usr/bin/starbridge")).toBe("/usr/bin/starbridge");
+  expect(sdQuote("/home/a%h/bin/starbridge", true)).toBe("/home/a%%h/bin/starbridge");
+  expect(sdQuote("/srv/$USER/starbridge", true)).toBe("/srv/$$USER/starbridge");
+  expect(sdQuote("X=$USER")).toBe("X=$USER");
+  // systemd expands variables in ExecStart's arguments, not in the executable's path.
+  const unit = unitText({ ...linuxSys(testCtx({}), "/h"), self: ["/srv/$a/node", "/srv/$a/x.js"] });
+  expect(unit).toContain("ExecStart=/srv/$a/node /srv/$$a/x.js agent");
+  const broken = "STARBRIDGE_CONFIG_DIR=/srv/a\nb %h";
+  const line = `Environment=${sdQuote(broken)}`;
+  expect(line).toBe('Environment="STARBRIDGE_CONFIG_DIR=/srv/a\\nb %%h"');
+  expect(line.split("\n")).toHaveLength(1);
+  expect(withInstalledPlaces({}, line).STARBRIDGE_CONFIG_DIR).toBe("/srv/a\nb %h");
 });
 
 test("status reports the agent, the service and the plugins", async () => {

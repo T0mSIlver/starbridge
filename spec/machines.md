@@ -182,7 +182,9 @@
   installed (#538). An owner who
   deletes the line keeps the file. Setup and uninstall remove only the files they write, then a
   folder left empty: a file the owner put beside them, such as a skill's `references/`, stays,
-  and uninstall says so (#1324). A settings or hooks file that uninstall's edits leave holding
+  and uninstall says so (#1324). A settings file of another tool that setup or uninstall edits is
+  rewritten through a temporary file and a rename, keeping its mode and any symbolic link to it, so
+  a crash never leaves it half written (#1749). A settings or hooks file that uninstall's edits leave holding
   nothing, such as an allow list setup created, is deleted rather than left as `{}`: an empty file
   and none mean the same to its tool (#1494). `starbridge update` runs the new binary's `setup --refresh`,
   which rewrites the marked files that differ and restarts the local agent; Homebrew and npm users
@@ -251,7 +253,8 @@
   tag `releases/latest` redirects to. A version older than the installed copy is refused unless
   `STARBRIDGE_DOWNGRADE=1` (#1748), since a served `latest` could otherwise roll a machine back to
   a signed release with known bugs; `update` already installs only a newer one. Downloads go over HTTPS only, but from a mirror on the
-  machine itself. `starbridge update` replaces script installs
+  machine itself. `update`'s downloads give up after 30 s for the checksums and 15 minutes for the binary, and past
+  1 MB and 256 MB, so a stalled or endless answer cannot hold the update (#1749). `starbridge update` replaces script installs
   and points Homebrew and npm installs at their manager. Windows refuses to replace or delete a
   running `.exe` but lets it be renamed, so `update` moves it aside to `starbridge.exe.old` and
   the next update removes that; `uninstall` deletes the binary from a detached cmd.exe two seconds
