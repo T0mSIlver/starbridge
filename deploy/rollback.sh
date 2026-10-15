@@ -1,6 +1,7 @@
 #!/bin/sh
-# Rolls starbridge.run back to a release whose images the box still holds (host/apply.sh keeps
-# the newest 5):
+# The owner's rollback, with the full-sudo key, around every check; rollback.yml is the one from
+# Actions (#1828). Rolls starbridge.run back to a release whose images the box still holds
+# (host/apply.sh keeps the newest 5):
 #   deploy/rollback.sh             the release before the running one
 #   deploy/rollback.sh <commit>    that commit
 #   deploy/rollback.sh --list      the releases the box holds, newest first
