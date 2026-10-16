@@ -420,7 +420,7 @@ private fun NeedsYou(count: Int, running: Int) {
 private fun ViewMenu(view: InboxView, onView: (InboxView) -> Unit) {
     var open by remember { mutableStateOf(false) }
     Box {
-        IconButton(onClick = { open = true }) { Symbol(Sym.Filter, size = 22.dp, tint = MaterialTheme.colorScheme.onSurfaceVariant, contentDescription = "View") }
+        IconButton(onClick = { open = true }) { Symbol(Sym.Filter, size = 22.dp, tint = MaterialTheme.colorScheme.onSurfaceVariant, contentDescription = "Group by") }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
             listOf(Grouping.None to "One feed", Grouping.Machine to "Group by machine", Grouping.Waiting to "Group by waiting").forEach { (grouping, label) ->
                 DropdownMenuItem(
