@@ -355,7 +355,8 @@
   the comparison, since they change from run to run. The changed pairs go on the `pr-shots`
   branch, never into the pull request. A pull request that touches the Android app gets the same
   from the release smoke on an emulator, a phone and a tablet in light and dark, with the app
-  drawer showing our icon beside the stock apps' (#1844). No model or Claude credential runs in CI: an agent reads
+  drawer showing our icon beside the stock apps' (#1844), and one that touches the desktop app gets
+the window's screens in light and dark from its end-to-end run (#1846). No model or Claude credential runs in CI: an agent reads
   the evidence and judges it. A fork's pull request gets no comment, since the job writes to the
   repository.
 - **CI runners** (#146, #1204, #1213, #1638). Self-hosted Linux runners in two pools that never

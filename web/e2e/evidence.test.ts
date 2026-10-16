@@ -1,6 +1,9 @@
 import { expect, test } from "bun:test";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { PNG } from "pngjs";
-import { difference } from "./evidence.ts";
+import { difference, parts } from "./evidence.ts";
 
 /** A 10 × 10 white PNG with the given pixels black. */
 function png(black: [number, number][] = [], width = 10): Buffer {
@@ -21,4 +24,15 @@ test("counts the pixels that differ, outside the boxes that change from run to r
 
 test("another size is a whole change", () => {
   expect(difference(png(), png([], 11))).toBe(1);
+});
+
+test("finds a part whether its artifact sits in a subfolder or alone in the folder", () => {
+  const manifest = JSON.stringify({ shard: "app", passed: true, steps: [] });
+  const alone = mkdtempSync(join(tmpdir(), "evidence-"));
+  writeFileSync(join(alone, "manifest.json"), manifest);
+  const several = mkdtempSync(join(tmpdir(), "evidence-"));
+  mkdirSync(join(several, "x"));
+  writeFileSync(join(several, "x", "manifest.json"), manifest);
+  expect(parts(alone).map((p) => p.manifest.shard)).toEqual(["app"]);
+  expect(parts(several).map((p) => p.manifest.shard)).toEqual(["app"]);
 });

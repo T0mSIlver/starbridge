@@ -9,7 +9,8 @@
 // and the changed pairs, for a run by hand. With it, it downloads main's evidence into <base dir>
 // first, from a checkout of the pull request's merge with main, and pushes and comments; env: PR,
 // SHA (the pull request's head), RUN_URL, GITHUB_REPOSITORY, GITHUB_API_URL. CLIENT names the
-// run, `web` (the default) or `android` (demo/smoke/android.ts with EVIDENCE set).
+// run, `web` (the default), `android` (demo/smoke/android.ts with EVIDENCE set) or `desktop`
+// (desktop/test/stack.ts with EVIDENCE set).
 import { spawnSync } from "node:child_process";
 import {
   copyFileSync,
@@ -43,6 +44,14 @@ export const CLIENTS = {
     notDriven:
       "answering from the app, a real device's launcher and fonts, the web, iOS and desktop apps",
   },
+  desktop: {
+    artifact: "desktop-evidence",
+    marker: "<!-- starbridge-evidence desktop -->",
+    run: "The desktop app's end-to-end run",
+    held: "Screenshots of the window, light and dark",
+    notDriven:
+      "the menu bar icon (the run has no menu bar), macOS's own notifications and window frame, the web, Android and iOS apps",
+  },
 } as const;
 export type Client = keyof typeof CLIENTS;
 /** A pixel differs when a channel moves by more than this, which antialiasing stays under. */
@@ -65,8 +74,11 @@ type Part = { dir: string; manifest: Manifest };
 
 export function parts(root: string): Part[] {
   if (!existsSync(root)) return [];
-  return readdirSync(root)
-    .map((d) => join(root, d))
+  // download-artifact puts a lone artifact's files in the folder itself, not in a subfolder.
+  const folders = existsSync(join(root, "manifest.json"))
+    ? [root]
+    : readdirSync(root).map((d) => join(root, d));
+  return folders
     .filter((d) => existsSync(join(d, "manifest.json")))
     .map((dir) => ({ dir, manifest: JSON.parse(readFileSync(join(dir, "manifest.json"), "utf8")) }))
     .sort((a, b) => a.manifest.shard.localeCompare(b.manifest.shard));
