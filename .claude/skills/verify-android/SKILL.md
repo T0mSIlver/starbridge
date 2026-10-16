@@ -19,7 +19,7 @@ before it publishes.
   docs/ci.md "Evidence"): the steps the smoke drove, and each screen that
   changed against main, before and after. The run's
   `android-evidence-<phone|tablet>-<tree>` artifacts hold every screenshot
-  (empty inbox, the notification, the card, the app drawer; light and dark)
+  (empty inbox, the card, the app drawer; light and dark, and the notification shade in light only)
   with its UI dump:
 
   ```bash
