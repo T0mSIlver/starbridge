@@ -18,7 +18,6 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.starbridge.app.data.Source
@@ -113,12 +112,13 @@ fun agentName(agent: String?, source: Source) = when {
 }
 
 /**
- * The end of every detail (#970): [leading], the quiet actions, then the session's name,
- * middle-truncated, opening the session in Claude or Codex when the phone can. A session with no
- * name the owner gave shows "Open in Claude" alone: its id says nothing.
+ * The end of every detail (#970, #1848): the session's name, middle-truncated, as grey text with
+ * the open icon before it, opening the session in Claude or Codex when the phone can; then the
+ * quiet [actions] at the end. A session with no name the owner gave shows "Open in Claude" alone:
+ * its id says nothing. With no session the line is the actions alone.
  */
 @Composable
-fun SessionLine(source: Source, agent: String?, modifier: Modifier = Modifier, leading: @Composable RowScope.() -> Unit = {}) {
+fun SessionLine(source: Source, agent: String?, modifier: Modifier = Modifier, actions: @Composable RowScope.() -> Unit = {}) {
     val context = LocalContext.current
     val scheme = MaterialTheme.colorScheme
     val name = source.title?.trim().orEmpty()
@@ -126,14 +126,13 @@ fun SessionLine(source: Source, agent: String?, modifier: Modifier = Modifier, l
     val app = agentName(agent, source)
     val opens = link != null && app != null
     Row(modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.s3)) {
-        leading()
-        val style = StarbridgeTheme.type.small.copy(textDecoration = if (opens) TextDecoration.Underline else null)
+        val style = StarbridgeTheme.type.small
         val measurer = rememberTextMeasurer()
-        BoxWithConstraints(Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) {
+        BoxWithConstraints(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
             val text = when {
                 name.isNotEmpty() -> {
                     // Cut in the middle only when the line runs out of room, as on the web (#172).
-                    val room = constraints.maxWidth - with(LocalDensity.current) { (Spacing.s5 + Spacing.s1).roundToPx() }
+                    val room = constraints.maxWidth - with(LocalDensity.current) { (Spacing.s5 + Spacing.s2).roundToPx() }
                     val max = (name.length downTo 8).firstOrNull { measurer.measure(middle(name, it), style, maxLines = 1).size.width <= room } ?: 8
                     middle(name, max)
                 }
@@ -144,12 +143,13 @@ fun SessionLine(source: Source, agent: String?, modifier: Modifier = Modifier, l
                 Row(
                     if (opens) Modifier.clickable(onClickLabel = "Open the session in $app") { openLink(context, link!!.url) }.padding(vertical = Spacing.s3) else Modifier.padding(vertical = Spacing.s3),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(Spacing.s1),
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
                 ) {
-                    Text(text, style = style, color = if (opens) scheme.onSurface else scheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     if (opens) Symbol(Sym.Open, size = Spacing.s5, tint = scheme.onSurfaceVariant)
+                    Text(text, style = style, color = scheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
         }
+        actions()
     }
 }
