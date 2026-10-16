@@ -55,10 +55,10 @@ xvfb-run -a node web/e2e/run.ts
 
 `e2e/drive.ts` runs one scenario on the same stack, after signing in, setting up the first
 device and pairing a machine: how an agent verifying a pull request drives the app
-([verify-web](../.claude/skills/verify-web/SKILL.md)).
+([verify-web](../.agents/skills/verify-web/SKILL.md)).
 
 ```bash
-xvfb-run -a node web/e2e/drive.ts .claude/skills/verify-web/scenarios/ask-answer.ts out
+xvfb-run -a node web/e2e/drive.ts .agents/skills/verify-web/scenarios/ask-answer.ts out
 ```
 
 It runs headed because headless Firefox cannot show notifications. With `codexbar` on the PATH the
