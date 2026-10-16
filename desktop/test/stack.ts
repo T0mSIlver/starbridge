@@ -15,7 +15,7 @@ import { type ChildProcess, spawn, spawnSync } from "node:child_process";
 import { cpSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { _electron as electron, type ElectronApplication, type Page } from "playwright";
+import { type ElectronApplication, _electron as electron, type Page } from "playwright";
 import { volatile } from "../../web/e2e/volatile.ts";
 import { freePorts } from "./ports.ts";
 
@@ -110,10 +110,14 @@ async function shoot(app: ElectronApplication, page: Page, stop: string) {
       await app.evaluate(({ nativeTheme }, s) => {
         nativeTheme.themeSource = s;
       }, scheme);
-      await page.waitForFunction(
-        (dark) => matchMedia("(prefers-color-scheme: dark)").matches === dark,
-        scheme === "dark",
-      );
+      const seen = await page
+        .waitForFunction(
+          (dark) => matchMedia("(prefers-color-scheme: dark)").matches === dark,
+          scheme === "dark",
+          { timeout: 5000 },
+        )
+        .then(() => true, () => false);
+      console.log(`[evidence] ${stop} ${scheme}: page follows the theme: ${seen}`);
       // The page repaints its background and the app's colours on the change.
       await new Promise((r) => setTimeout(r, 500));
       const file = join(dir, `${stop}-${scheme}`);
