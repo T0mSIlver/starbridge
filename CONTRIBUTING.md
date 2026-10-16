@@ -158,6 +158,8 @@ A pull request has one of two classes.
 **Merge by default.** No card from the owner:
 
 - A bug fix that restores behaviour `spec/` or the docs already state.
+- A fix that makes one client show what another client or `spec/` already shows, with
+  screenshots of the result that the review checks.
 - Tests.
 - Docs under `docs/` and package READMEs that match what the code does.
 - A refactor with no behaviour change, no new dependency and no new component.
@@ -169,9 +171,10 @@ A merge-by-default PR merges once every CI check is green and the review that gr
 has posted a `<!-- proof-verdict -->` comment saying PROOF SUFFICIENT for the PR's current head.
 A push makes the verdict stale. Without it the PR waits for the owner.
 
-A change that fits both lists, or neither, is sign-off. A fix that changes what renders counts
-as UX. UX stays sign-off until the owner hands it over, once the review's verdicts have matched
-the owner's for two weeks; this section changes then.
+A change that fits both lists, or neither, is sign-off, except a fix that matches another
+client or `spec/`. Any other fix that changes what renders counts as UX. UX stays sign-off
+until the owner hands it over, once the review's verdicts have matched the owner's for two
+weeks; this section changes then.
 
 ## Pull requests
 
