@@ -10,6 +10,10 @@
  * fake FCM here, and the payload is delivered as Play services delivers it, which needs a root
  * shell: a `google_apis` image, not `google_apis_playstore`. Env: ADB (adb), ANDROID_SERIAL, PORT
  * (8411). Exits 1 on failure, leaving screenshots, the UI dump and logcat in the out dir.
+ *
+ * With EVIDENCE=<dir> it also keeps a pull request's evidence there (evidence.ts): each stop in
+ * light and dark, and the app drawer with our icon beside the stock apps'. PROFILE names the
+ * device (phone).
  */
 
 import { Database } from "bun:sqlite";
@@ -19,7 +23,8 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { DemoDevice } from "../src/device";
 import { ROOT } from "../video/stack";
-import { ask, Crash, emulator, PKG, pair, step, until } from "./lib";
+import { keeper } from "./evidence";
+import { ask, Crash, emulator, PKG, pair, step, steps, until } from "./lib";
 
 const QUESTION = "Ship the invoice migration tonight, or wait for the backfill?";
 /** Every block the context subset renders: bold, code, a heading, both lists and both links. */
@@ -52,7 +57,9 @@ const server = `http://127.0.0.1:${port}`;
 // Letters and digits only: `input text` is typed through the keyboard.
 const ownerToken = crypto.randomUUID().replaceAll("-", "");
 const ADB = process.env.ADB ?? "adb";
-const { adb, shell, booted, see, tap, crashed, evidence, signInAndJoin } = emulator(ADB, out);
+const em = emulator(ADB, out);
+const { adb, shell, booted, see, tap, crashed, evidence, signInAndJoin } = em;
+const kept = keeper(em, ADB, process.env.EVIDENCE, process.env.PROFILE ?? "phone");
 
 /** A fake FCM: an OAuth token endpoint and messages:send, which records each message. */
 function fakeFcm() {
@@ -102,6 +109,24 @@ async function startServer(fcm: string) {
   return sbd;
 }
 
+/**
+ * With NO_FIREBASE set (pull requests' emulator runs, whose APK carries made-up Firebase values),
+ * the app can never get an FCM token: Google refuses its API key. The server then holds a made-up
+ * token for the app's own device, as if the app had registered it. The release's smoke leaves
+ * NO_FIREBASE unset and needs the app to register itself.
+ */
+function subscribeForApp(db: Database) {
+  const app = db
+    .query(
+      "SELECT account_id, id FROM members WHERE role = 'device' AND active = 1 AND id != 'demo-owner'",
+    )
+    .get() as { account_id: string; id: string } | null;
+  if (!app) return;
+  db.query(
+    "INSERT OR IGNORE INTO push_subscriptions (id, account_id, member_id, type, endpoint, created_at) VALUES (?, ?, ?, 'fcm', 'smoke-token', ?)",
+  ).run(`ps_smoke_${app.id}`.slice(0, 24), app.account_id, app.id, new Date().toISOString());
+}
+
 const fcm = fakeFcm();
 const sbd = await startServer(fcm.url);
 const stop = new AbortController();
@@ -115,6 +140,8 @@ try {
     if (!stop.signal.aborted) step(`approving joins stopped: ${e.message}`);
   });
 
+  // A run stopped from outside, by the job's time limit, still reports a failure.
+  kept.manifest(steps, "the run stopped before it finished");
   step("emulator");
   await booted("boot", 300);
   // The FCM broadcast is guarded by a permission only Play services holds; root holds every one.
@@ -132,6 +159,7 @@ try {
   await adb("reverse", `tcp:${port}`, `tcp:${port}`);
   await shell("input keyevent KEYCODE_WAKEUP");
   await shell("wm dismiss-keyguard");
+  await kept.demoMode();
   await adb("uninstall", PKG).catch(() => {});
   step(`install ${apk}`);
   await adb("install", "-r", "-g", apk);
@@ -146,14 +174,20 @@ try {
     `am startservice -n ${PKG}/.push.FcmService -a com.google.firebase.messaging.NEW_TOKEN --es token smoke-token`,
   );
 
+  const noFirebase = process.env.NO_FIREBASE !== undefined;
   await until("the app's push subscription", 60, async () => {
-    const db = new Database(join(dir, "starbridge.db"), { readonly: true });
+    const db = new Database(
+      join(dir, "starbridge.db"),
+      noFirebase ? undefined : { readonly: true },
+    );
     try {
+      if (noFirebase) subscribeForApp(db);
       return db.query("SELECT 1 FROM push_subscriptions WHERE type = 'fcm'").get() ?? undefined;
     } finally {
       db.close();
     }
   });
+  await kept.keep("inbox-empty");
 
   step("app in the background; the machine asks");
   await shell("input keyevent KEYCODE_HOME");
@@ -177,17 +211,26 @@ try {
 
   step("open the notification");
   await shell("cmd statusbar expand-notifications");
+  await see(QUESTION.slice(0, 30));
+  await kept.keep("notification", ["light"]);
   await tap(QUESTION.slice(0, 30));
   await see(RENDERED);
   await Bun.sleep(2000);
   const why = await crashed();
   if (why) throw new Crash(why);
   await evidence("card");
+  await kept.keep("card");
   step("passed: notification shown, card opened with its context");
+  if (process.env.EVIDENCE) {
+    step("the app drawer, our icon beside the stock apps'");
+    await kept.launcher();
+  }
+  kept.manifest(steps);
 } catch (e) {
   failed = true;
   console.error(`[smoke] FAILED: ${(e as Error).message}`);
   await evidence("failure");
+  kept.manifest(steps, (e as Error).message);
 } finally {
   stop.abort();
   await adb("logcat", "-d")

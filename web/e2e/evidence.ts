@@ -8,7 +8,8 @@
 // Without GITHUB_TOKEN it compares with what <base dir> holds and only writes <out dir>/comment.md
 // and the changed pairs, for a run by hand. With it, it downloads main's evidence into <base dir>
 // first, from a checkout of the pull request's merge with main, and pushes and comments; env: PR,
-// SHA (the pull request's head), RUN_URL, GITHUB_REPOSITORY, GITHUB_API_URL.
+// SHA (the pull request's head), RUN_URL, GITHUB_REPOSITORY, GITHUB_API_URL. CLIENT names the
+// run, `web` (the default) or `android` (demo/smoke/android.ts with EVIDENCE set).
 import { spawnSync } from "node:child_process";
 import {
   copyFileSync,
@@ -22,8 +23,28 @@ import { join } from "node:path";
 import { PNG } from "pngjs";
 import type { Rect } from "./volatile.ts";
 
-/** The comment's hidden marker, which finds it again on the next push. */
-export const MARKER = "<!-- starbridge-evidence -->";
+/**
+ * What each client's run is, and its artifacts' and comment's names. `marker` finds the comment
+ * again on the next push; no marker starts with another.
+ */
+export const CLIENTS = {
+  web: {
+    artifact: "evidence",
+    marker: "<!-- starbridge-evidence -->",
+    run: "The web end-to-end run",
+    held: "Screenshots at 360, 768 and 1280 px, light and dark, and Playwright traces",
+    notDriven: "the Android, iOS and desktop apps",
+  },
+  android: {
+    artifact: "android-evidence",
+    marker: "<!-- starbridge-evidence android -->",
+    run: "The Android app on the emulator",
+    held: "Screenshots on a phone and a tablet, light and dark, with their UI dumps",
+    notDriven:
+      "answering from the app, a real device's launcher and fonts, the web, iOS and desktop apps",
+  },
+} as const;
+export type Client = keyof typeof CLIENTS;
 /** A pixel differs when a channel moves by more than this, which antialiasing stays under. */
 const TOLERANCE = 24;
 /**
@@ -31,6 +52,11 @@ const TOLERANCE = 24;
  * differ in what each run makes up (a recovery key, pairing codes, times), up to about this.
  */
 export const CHANGED = 0.002;
+/**
+ * How many of the base's first parents to look through for main's evidence. Main's Android run
+ * runs only on merges that touch the app, so it can be far back; the checkout fetches this deep.
+ */
+const DEPTH = 30;
 /** Pairs shown inline and pushed to pr-shots; past it, the comment names the rest. */
 const SHOWN = 24;
 
@@ -113,6 +139,7 @@ export function compare(pr: Map<string, string>, base: Map<string, string>): Cha
 }
 
 type Context = {
+  client: Client;
   sha: string;
   baseSha?: string;
   runUrl: string;
@@ -128,18 +155,17 @@ export function render(
   total: number,
   ctx: Context,
 ): string {
-  const lines = [MARKER, `### Evidence for ${ctx.sha.slice(0, 7)}`, ""];
+  const client = CLIENTS[ctx.client];
+  const lines = [client.marker, `### Evidence for ${ctx.sha.slice(0, 7)}`, ""];
   if (pr.length === 0) {
-    lines.push(
-      "The web end-to-end run did not run: none of this pull request's files can affect it.",
-    );
+    lines.push(`${client.run} did not run: none of this pull request's files can affect it.`);
     return `${lines.join("\n")}\n`;
   }
   const failed = pr.filter((p) => !p.manifest.passed);
   lines.push(
     failed.length
       ? `**The run failed** in ${failed.map((p) => p.manifest.shard).join(", ")}: its evidence stops at the failing step.`
-      : `The web end-to-end run passed in ${pr.map((p) => p.manifest.shard).join(", ")}.`,
+      : `${client.run} passed in ${pr.map((p) => p.manifest.shard).join(", ")}.`,
     "",
   );
   for (const p of failed)
@@ -185,8 +211,8 @@ export function render(
   }
   lines.push(
     "",
-    `Screenshots at 360, 768 and 1280 px, light and dark, and Playwright traces: [the run's artifacts](${ctx.runUrl}).`,
-    "Not driven here: the Android, iOS and desktop apps.",
+    `${client.held}: [the run's artifacts](${ctx.runUrl}).`,
+    `Not driven here: ${client.notDriven}.`,
   );
   return `${lines.join("\n")}\n`;
 }
@@ -253,13 +279,13 @@ async function api(path: string, init: RequestInit = {}) {
 }
 
 /** Updates the comment that holds the marker, or posts one. */
-async function comment(pr: string, body: string) {
+async function comment(pr: string, body: string, marker: string) {
   for (let page = 1; page <= 10; page++) {
     const list = (await api(`/issues/${pr}/comments?per_page=100&page=${page}`)) as {
       id: number;
       body: string;
     }[];
-    const mine = list.find((c) => c.body.startsWith(MARKER));
+    const mine = list.find((c) => c.body.startsWith(marker));
     if (mine) {
       await api(`/issues/comments/${mine.id}`, { method: "PATCH", body: JSON.stringify({ body }) });
       return;
@@ -271,18 +297,22 @@ async function comment(pr: string, body: string) {
 
 /**
  * Downloads main's evidence into `dir`: what main's run of the pull request's base uploaded (CI
- * names a passing part's evidence after the tree it tested), or of the nearest of its 10 first
+ * names a passing part's evidence after the tree it tested), or of the nearest of its first
  * parents with some, since a merge whose files cannot affect the run skips it. Returns the commit
  * found.
  */
-async function fetchBase(dir: string, shards: string[]): Promise<string | undefined> {
-  const commits = git(["rev-list", "--first-parent", "-n", "10", "HEAD^1"]).split("\n");
+async function fetchBase(
+  dir: string,
+  shards: string[],
+  artifact: string,
+): Promise<string | undefined> {
+  const commits = git(["rev-list", "--first-parent", "-n", `${DEPTH}`, "HEAD^1"]).split("\n");
   for (const sha of commits) {
     const tree = git(["rev-parse", `${sha}^{tree}`]);
     let found = false;
     for (const shard of shards) {
       const { artifacts } = (await api(
-        `/actions/artifacts?name=evidence-${shard}-${tree}&per_page=20`,
+        `/actions/artifacts?name=${artifact}-${shard}-${tree}&per_page=20`,
       )) as {
         artifacts: {
           expired: boolean;
@@ -327,12 +357,15 @@ if (import.meta.main) {
     process.exit(64);
   }
   const { PR, SHA = "local", RUN_URL = "", GITHUB_TOKEN, GITHUB_REPOSITORY } = process.env;
+  const client = (process.env.CLIENT ?? "web") as Client;
+  if (!(client in CLIENTS)) throw new Error(`CLIENT is ${Object.keys(CLIENTS).join(" or ")}`);
   const pr = parts(prDir);
   const baseSha =
     GITHUB_TOKEN && pr.length
       ? await fetchBase(
           baseDir,
           pr.map((p) => p.manifest.shard),
+          CLIENTS[client].artifact,
         ).catch((e) => {
           // The comment still goes up, saying there was nothing to compare with.
           console.error("main's evidence:", e);
@@ -354,11 +387,12 @@ if (import.meta.main) {
   }
   let images: string | undefined;
   if (GITHUB_TOKEN && PR && shown.length) {
-    const prefix = `verify/${PR}/${SHA}`;
+    const prefix = `verify/${PR}/${SHA}${client === "web" ? "" : `/${client}`}`;
     const commit = pushShots(pairs, prefix, `Evidence for #${PR} at ${SHA.slice(0, 7)}`);
     images = `https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/${commit}/${prefix}/`;
   }
   const body = render(pr, base, changes, prShots.size, {
+    client,
     sha: SHA,
     baseSha,
     runUrl: RUN_URL,
@@ -366,5 +400,5 @@ if (import.meta.main) {
   });
   writeFileSync(join(outDir, "comment.md"), body);
   console.log(body);
-  if (GITHUB_TOKEN && PR) await comment(PR, body);
+  if (GITHUB_TOKEN && PR) await comment(PR, body, CLIENTS[client].marker);
 }

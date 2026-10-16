@@ -72,7 +72,7 @@ uploads it as `evidence-<part>-<tree>`, or `evidence-<part>-failed`.
 
 On a pull request from this repository's branches, the `evidence` job (`web/e2e/evidence.ts`)
 then compares the screenshots with those of main's run
-at the pull request's base, or the nearest of its 10 first parents that ran the e2e. A screen
+at the pull request's base, or the nearest of its 30 first parents that ran the e2e. A screen
 counts as changed when over 0.2% of its pixels differ, outside the times, dates and codes that
 change from run to run. The job pushes up to 24 changed pairs to the `pr-shots` branch under
 `verify/<pr>/<sha>/`, and writes or updates one comment on the pull request, marked
@@ -86,6 +86,17 @@ request's:
 - `quotas-machines-*` lists its two machines, whose windows are the same, in either order;
 - a quota's run-out line says "tomorrow at" or not by the time of day, and can wrap to a second
   line, which moves the rows below it.
+
+A pull request that touches `android/` or `demo/smoke/` gets the same for the Android app, in its
+own comment marked `<!-- starbridge-evidence android -->` (`android.yml`). The release smoke
+(`demo/smoke/android.ts`) runs with `EVIDENCE` set on a phone (`pixel_7`) and a tablet
+(`pixel_tablet`), API 36, on GitHub's runners with KVM. It signs in, gets a question by FCM,
+shows its notification and opens the card, and fails on a crash in logcat. A pull request's APK has made-up Firebase values (a build with no `google-services.json`), which Google refuses, so the app never gets an FCM token; the emulator job sets `NO_FIREBASE` and the smoke puts a made-up token on the app's device in the server's database. The release smoke leaves it unset and needs the app to register itself. It keeps each stop in
+light and dark (`<profile>-<stop>-<scheme>.png`) with its UI dump, the notification shade in light
+only, and the app drawer with our icon beside the stock apps', again in light under each icon shape
+the system image offers as an overlay. The comparison leaves out the status bar and the times on screen. Each profile
+uploads `android-evidence-<profile>-<tree>`; the changed pairs go under
+`verify/<pr>/<sha>/android/` on `pr-shots`.
 
 To compare two runs by hand, run the e2e twice with `EVIDENCE` set, each in a folder named after
 its part, then `bun web/e2e/evidence.ts <after> <before> <out>`: it writes `out/comment.md` and the
