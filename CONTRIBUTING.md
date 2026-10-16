@@ -140,6 +140,37 @@ sign with the debug key. A phone with a debug-signed build must uninstall it onc
 release-signed one, since Android refuses an update signed with another key. Keep release-signed
 APKs out of folders that CI runners can read.
 
+## What merges without the owner
+
+A pull request has one of two classes.
+
+**Sign-off.** The owner decides before code is written and approves the merge:
+
+- A new feature, or a change in what a feature does.
+- UX: layout, flow, interaction, motion, look, icons and any copy a user sees.
+- Architecture: a new component, a new dependency, a protocol or data model change, anything
+  hard to undo.
+- The landing page, the root README.md and the store listing.
+- `.github/`, `deploy/`, signing and release.
+- Spending money or quota, or publishing outside the repository.
+- Removing a feature or dropping scope.
+
+**Merge by default.** No card from the owner:
+
+- A bug fix that restores behaviour `spec/` or the docs already state.
+- Tests.
+- Docs under `docs/` and package READMEs that match what the code does.
+- A refactor with no behaviour change, no new dependency and no new component.
+- A fix to test or lint tooling outside `.github/` and `deploy/`.
+
+A merge-by-default PR merges once every CI check is green and the review that grades its proof
+has posted a `<!-- proof-verdict -->` comment saying PROOF SUFFICIENT for the PR's current head.
+A push makes the verdict stale. Without it the PR waits for the owner.
+
+A change that fits both lists, or neither, is sign-off. A fix that changes what renders counts
+as UX. UX stays sign-off until the owner hands it over, once the review's verdicts have matched
+the owner's for two weeks; this section changes then.
+
 ## Pull requests
 
 The rules for branches, PRs, tests and where decisions are written down are in

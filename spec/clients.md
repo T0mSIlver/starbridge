@@ -13,8 +13,11 @@
   worktree and the session line a made-up name. The CLI now sends a git worktree's repository as
   the project and replaces a derived session name with the session's first sentence
   (spec/harnesses.md, #1181); clients show no bare session id either.
-  The detail ends with one line: Snooze (Back now, Done) on the left, the session's name on the
-  right as the link that opens it in Claude or Codex, or "Open in Claude" when it has no name. The
+  The detail ends with one line (#1848, the owner's pick from mockups): the session's name on the
+  left as grey text with the open icon before it, the link that opens it in Claude or Codex, or
+  "Open in Claude" when it has no name; on the right Back now and Done as text and Snooze as a
+  round tonal icon button, each client in its own icon language (DESIGN.md, "Icons"). With no
+  session the line is the button alone. The
   "Attached by the agent" caption went: the chips sit inside the agent's words. The owner chose
   this from mockups of every element.
 - **Snoozed** (#571, #692, #699). Snooze sits under the reply field in a question's detail (web)
