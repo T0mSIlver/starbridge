@@ -83,6 +83,8 @@ class QuotaSettingsTest {
         fun names(w: List<QuotaWindow>) = QuotaSettings().arrange(w, noon).map { "${it.machine} ${it.window}" }
         assertEquals(expected, names(alpha + beta))
         assertEquals(expected, names(beta + alpha))
+        // Digits compare as text, as web's localeCompare does: "Mac 10" before "Mac 2".
+        assertEquals(listOf("Mac 10 5-hour", "Mac 2 5-hour"), names(listOf(on("Mac 2", "5-hour"), on("Mac 10", "5-hour"))))
     }
 
     @Test fun notifiesTheKindsPickedForTheWindow() {
