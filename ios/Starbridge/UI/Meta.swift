@@ -108,8 +108,9 @@ func agentName(_ agent: String?, _ source: Source) -> String? {
 }
 
 /**
- * The end of a detail (#970): the session's name, opening the session in Claude or Codex when it
- * has a link; a session with no name the owner gave shows "Open in Claude" alone.
+ * The end of a detail (#970, #1848): the session's name at the start, opening the session in
+ * Claude or Codex when it has a link; a session with no name the owner gave shows "Open in
+ * Claude" alone.
  */
 struct SessionLine: View {
     let source: Source
@@ -118,8 +119,8 @@ struct SessionLine: View {
     var body: some View {
         if SessionLink.shows(source, agent) {
             HStack {
-                Spacer()
                 SessionLink(source: source, agent: agent)
+                Spacer()
             }
             .type(Tokens.Typography.small)
             .frame(minHeight: Tokens.Sizes.tap)
@@ -127,7 +128,10 @@ struct SessionLine: View {
     }
 }
 
-/** The session's name, as the link that opens it in its app, else "Open in Claude" (#970). */
+/**
+ * The session's name as grey text, with the open icon before it when it opens the session in its
+ * app, else "Open in Claude" (#970, #1848). No underline.
+ */
 struct SessionLink: View {
     let source: Source
     let agent: String?
@@ -150,12 +154,12 @@ struct SessionLink: View {
             Group {
                 if let link, app != nil {
                     Link(destination: link) {
-                        HStack(spacing: Tokens.Spacing.s1) {
-                            Text(text).underline().lineLimit(1).truncationMode(.middle)
+                        HStack(spacing: Tokens.Spacing.s2) {
                             Image(systemName: "arrow.up.right").font(.system(size: 13))
+                            Text(text).lineLimit(1).truncationMode(.middle)
                         }
                     }
-                    .foregroundStyle(Tokens.Colors.fg.color)
+                    .foregroundStyle(Tokens.Colors.fg2.color)
                     .accessibilityHint("Opens the session in \(app!)")
                 } else {
                     Text(text).lineLimit(1).truncationMode(.middle).foregroundStyle(Tokens.Colors.fg2.color)
