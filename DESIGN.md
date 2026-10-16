@@ -374,7 +374,8 @@ into `web/src/styles/tokens.css` and `type.css`, into
 `android/app/src/main/kotlin/dev/starbridge/app/ui/theme/Tokens.kt` and into
 `ios/Starbridge/Theme/Tokens.swift`, so every client shares colours, type and
 spacing. The iPhone sets the type roles in SF Pro rather than Google Sans Flex,
-whose case (the face of Google's own apps) holds only on Android. Change a value here, then run
+whose case (the face of Google's own apps) holds only on Android. So does the Mac app's
+window, through `data-platform="mac"` (spec/desktop.md); the web in a browser keeps Google Sans Flex. Change a value here, then run
 `bun web/scripts/tokens.ts`; `--check` fails when an output is stale.
 
 ## The look
@@ -685,7 +686,8 @@ round caps and joins, no fills. Android uses Material Symbols Rounded tuned to
 Google Sans Flex. Every platform has the same icons by job: laptop, desktop, server and cloud (a
 machine's kind), permission prompt, question, run, quota, history, settings,
 devices, open in the agent, waiting, inbox, send, expand (an image opens full
-screen). Link chips take GitHub's Octicons (MIT), filled on their 16-unit
+screen). `design/icons-by-job.json` holds the table, job by job; a test fails on
+a glyph it does not list, so a new glyph arrives with its row. Link chips take GitHub's Octicons (MIT), filled on their 16-unit
 grid, in every client: a GitHub link's kind, and `browser` for a Claude
 artifact. No other brand marks.
 

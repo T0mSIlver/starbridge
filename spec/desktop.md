@@ -131,6 +131,15 @@ a browser; the app adds a menu bar light and notifications, so a web release nee
   Developer Tools in every build. Right-click shows Copy and Look Up on a selection, Copy Link
   on a link, and Cut, Copy, Paste and Select All in a field; nothing elsewhere. Find… does nothing
   while the cursor is in a field, as the `/` key doesn't.
+- **A Mac layer, not a Mac app** (#1863). The owner kept Electron around the web page over a native
+  Mac app (cards d_skirt-front-drip, 16 Oct): the Mac's own look is one thin layer on the page, not
+  branches per feature. The bridge's presence sets `data-platform="mac"` on the page before its
+  first paint (`lib/themeScript.ts`, with `data-titlebar`), and the stylesheet switches on it, never
+  on a user agent or a second build. The first thing the layer holds is the font: the window sets
+  type in SF Pro, the system font (`-apple-system`), as the iPhone does, where the web in a browser
+  keeps Google Sans Flex (owner's pick, card d_gain-lock-stock, 16 Oct). Code keeps Google Sans Code.
+  Text widths change with the font, so the desktop evidence comment is checked for text that no
+  longer fits.
 - **Presence** (#945). The window in use holds pushes as a web page does (#848). Hidden, it said
   absent while the owner worked in another app, so the phone buzzed at a desk. Electron's
   `powerMonitor` reads what the CLI's machine presence reads: lock, sleep and wake, and the

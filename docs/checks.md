@@ -6,6 +6,7 @@ time, add the cheapest check that fails on it (a type, a lint, a test) and its r
 
 | Mistake | Check |
 |---|---|
+| A control or icon from another platform's design language (an alarm clock on the Mac, #1848) | `design/icons-by-job.test.ts`: fails on a glyph not in `design/icons-by-job.json`, and on a Material import in the web or the iPhone app |
 | An icon or mark off-centre against its peers on the same screen | none yet |
 | Copy that reads like a model wrote it: filler, narration, AI vocabulary | none yet |
 | One behaviour worded two ways across clients or docs | none yet |

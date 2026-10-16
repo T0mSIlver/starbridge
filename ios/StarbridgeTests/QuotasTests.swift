@@ -34,9 +34,9 @@ final class QuotasTests: XCTestCase {
         return Store(vault: MemoryVault(), disk: disk, deviceName: "Test iPhone")
     }
 
-    private func row(_ provider: String, _ id: String, pace: QuotaPace = .even, used: Int = 40, resetsIn: Double? = 3, minutes: Int? = 300, steady: Int? = nil) -> QuotaRow {
+    private func row(_ provider: String, _ id: String, pace: QuotaPace = .even, used: Int = 40, resetsIn: Double? = 3, minutes: Int? = 300, steady: Int? = nil, machine: String? = nil) -> QuotaRow {
         QuotaRow(id: "m_1/\(provider)/\(id)", provider: provider, window: id, windowId: id, usedPercent: used, resetsAt: resetsIn.map { now.addingTimeInterval($0 * 3600) },
-                 pace: pace, steadyPercent: steady, machine: nil, windowMinutes: minutes, takenAt: now, error: nil)
+                 pace: pace, steadyPercent: steady, machine: machine, windowMinutes: minutes, takenAt: now, error: nil)
     }
 
     func testWindowsAndFailuresComeFromTheSavedSnapshot() throws {
@@ -71,6 +71,18 @@ final class QuotasTests: XCTestCase {
         XCTAssertEqual(s.groups(s.arrange(windows, now)).map { $0.map(\.id) }, [["m_1/claude/b", "m_1/claude/a"], ["m_1/codex/a"]])
         s.runningOutFirst = false
         XCTAssertEqual(s.arrange(windows, now).map(\.id), ["m_1/codex/a", "m_1/claude/a", "m_1/claude/b"])
+    }
+
+    func testAProvidersMachinesGoByNameWhateverOrderTheServerSent() {
+        func on(_ machine: String, _ id: String) -> QuotaRow { row("claude", id, machine: machine) }
+        let alpha = [on("alpha", "5-hour"), on("alpha", "Weekly")]
+        let beta = [on("beta", "5-hour"), on("beta", "Weekly")]
+        let expected = ["alpha 5-hour", "alpha Weekly", "beta 5-hour", "beta Weekly"]
+        func names(_ rows: [QuotaRow]) -> [String] { QuotaSettings().arrange(rows, now).map { "\($0.machine!) \($0.window)" } }
+        XCTAssertEqual(names(alpha + beta), expected)
+        XCTAssertEqual(names(beta + alpha), expected)
+        // Digits compare as text, as web's localeCompare does: "Mac 10" before "Mac 2".
+        XCTAssertEqual(names([on("Mac 2", "5-hour"), on("Mac 10", "5-hour")]), ["Mac 10 5-hour", "Mac 2 5-hour"])
     }
 
     func testABarShowsUsedOrLeftOnOneScale() {

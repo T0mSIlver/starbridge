@@ -1698,7 +1698,7 @@ async function main() {
       ["Group by waiting", "inbox-by-waiting"],
       ["One feed", ""],
     ] as const) {
-      await page.getByRole("button", { name: "View", exact: true }).click();
+      await page.getByRole("button", { name: "Group by", exact: true }).click();
       await page.getByRole("menuitemradio", { name: view }).click();
       if (name) await shoot(page, name);
     }
