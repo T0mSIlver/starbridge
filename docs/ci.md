@@ -101,7 +101,7 @@ A pull request that touches the desktop app, the web page it shows, the server o
 same for the desktop app, in its own comment marked `<!-- starbridge-evidence desktop -->`
 (`ci.yml`, the `desktop evidence` job). The desktop end-to-end run (`desktop/test/stack.ts`) keeps
 the window at each stop (sign-in, keys, empty inbox, pairing, a question, Quotas, Settings) in light
-and dark (`<stop>-<scheme>.png`), switched through Electron's `nativeTheme`, with the boxes of the
+and dark (`<stop>-<scheme>.png`), with the boxes of the
 times and codes beside each. It uploads `desktop-evidence-app-<tree>`, or
 `desktop-evidence-app-failed`; the changed pairs go under `verify/<pr>/<sha>/desktop/` on
 `pr-shots`. The menu bar icon is not kept: the run has no menu bar to shoot.
