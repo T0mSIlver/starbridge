@@ -130,7 +130,8 @@ one machine for all your cloud sessions and give them its identity:
 
 Where the config folder holds no machine, the CLI uses the one in `STARBRIDGE_MACHINE`. Every
 cloud session is that one machine, shown as Cloud sessions under Devices, and removing it there
-stops them all. No background service runs, so an agent there waits for its answer with
+stops them all: its sessions then say to run `starbridge machine export` on a paired machine and
+replace the variable with the new line. No background service runs, so an agent there waits for its answer with
 `starbridge ask --wait` or `starbridge wait`. Anyone who can use the environment can read the
 variable.
 
