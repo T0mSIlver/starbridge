@@ -46,6 +46,9 @@ command and its local agent), `plugin` and
   push reruns the whole CI, and a PR merges without being up to date.
 - A test that fails and then passes on a rerun gets an issue the first time, never a silent rerun.
   `flakes.yml` lists them each night on the issue labelled `flaky`.
+- A PR that changes what the web shows or a core flow is verified by an agent that didn't write
+  it, from CI's evidence comment and, where that falls short, by driving the app with
+  [verify-web](.claude/skills/verify-web/SKILL.md).
 - A PR that changes `.github/` or `deploy/` merges only after the owner's yes and
   the `owner-ok` label (docs/ci.md, "Owner review").
 - Before a PR is ready, run the checks in
