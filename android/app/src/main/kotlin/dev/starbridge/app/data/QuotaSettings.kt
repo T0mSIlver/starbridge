@@ -1,5 +1,6 @@
 package dev.starbridge.app.data
 
+import java.text.Collator
 import java.time.Instant
 import java.time.ZoneId
 import kotlin.math.roundToInt
@@ -42,12 +43,15 @@ data class QuotaSettings(
 
     /**
      * The windows to show (spec/items.md, "Quota order"): hidden providers out, the rest by provider in
-     * this order, each provider's windows in the uploader's order. With [runningOutFirst], windows
+     * this order, a provider's machines by name (the server sends them by machine id, which differs
+     * between accounts), each machine's windows in the uploader's order. With [runningOutFirst], windows
      * that will run out or ran out, and have not reset, lead in that same order.
      */
     fun arrange(windows: List<QuotaWindow>, now: Instant): List<QuotaWindow> {
         val rank = providers(windows).withIndex().associate { (i, p) -> p to i }
-        val ordered = windows.filter { it.provider !in hidden }.sortedBy { rank.getValue(it.provider) }
+        val byName = Collator.getInstance()
+        val ordered = windows.filter { it.provider !in hidden }
+            .sortedWith(compareBy<QuotaWindow> { rank.getValue(it.provider) }.thenComparator { a, b -> byName.compare(a.machine.orEmpty(), b.machine.orEmpty()) })
         if (!runningOutFirst) return ordered
         return ordered.sortedByDescending { it.pace is Pace.RunsOut && it.resetsAt?.isAfter(now) != false }
     }

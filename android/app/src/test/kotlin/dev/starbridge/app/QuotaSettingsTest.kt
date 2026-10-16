@@ -75,6 +75,16 @@ class QuotaSettingsTest {
         )
     }
 
+    @Test fun arrangeListsAProvidersMachinesByNameWhateverOrderTheServerSent() {
+        fun on(machine: String, label: String) = win("claude", label, Pace.Even).copy(machine = machine)
+        val alpha = listOf(on("alpha", "5-hour"), on("alpha", "Weekly"))
+        val beta = listOf(on("beta", "5-hour"), on("beta", "Weekly"))
+        val expected = listOf("alpha 5-hour", "alpha Weekly", "beta 5-hour", "beta Weekly")
+        fun names(w: List<QuotaWindow>) = QuotaSettings().arrange(w, noon).map { "${it.machine} ${it.window}" }
+        assertEquals(expected, names(alpha + beta))
+        assertEquals(expected, names(beta + alpha))
+    }
+
     @Test fun notifiesTheKindsPickedForTheWindow() {
         fun n(kind: String, minutes: Int?, threshold: Int? = null) = QuotaNotice("k", "zai", "primary", kind, "", "", threshold, minutes)
         val defaults = QuotaSettings()
