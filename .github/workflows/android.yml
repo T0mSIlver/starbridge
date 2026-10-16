@@ -52,6 +52,15 @@ jobs:
         with:
           cache-disabled: ${{ runner.environment == 'self-hosted' }}
 
+      # Without google-services.json the app builds with FCM off, and the emulator job's smoke needs
+      # it on: a build with no real file gets made-up Firebase values. The smoke hands the app its
+      # FCM token and fakes FCM itself, so the values never reach Google. No release uses this APK:
+      # release.yml builds its own with the real file.
+      - name: Placeholder Firebase values
+        run: |
+          [ -f app/google-services.json ] || [ -f ~/.config/starbridge/secrets/google-services.json ] ||
+            printf '%s' '{"project_info": {"project_number": "123456789012", "project_id": "starbridge-ci"}, "client": [{"client_info": {"mobilesdk_app_id": "1:123456789012:android:0123456789abcdef", "android_client_info": {"package_name": "dev.starbridge.app"}}, "api_key": [{"current_key": "AIzaSy000000000000000000000000000000000"}]}]}' > app/google-services.json
+
       # verifyRoborazziDebug runs every unit test and fails when a screen drifts
       # from app/screenshots/; lintDebug fails on any lint error (#899).
       - name: Build, lint and test
