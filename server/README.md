@@ -68,7 +68,7 @@ them. Its routes are in `PROTOCOL.md`.
 5. Sign in. On the web, open your origin, pick "Sign in" and enter the owner token. In the
    Android app, pick "Use your own server", enter your origin, then the owner token. With
    [GitHub sign-in](#sign-in) set up, both can use it on your server too, and the web page
-   shows "Continue with GitHub" first, with the owner token behind "Use your own server".
+   shows "Sign in with GitHub" first, with the owner token behind "Use your own server".
 
 6. Install the CLI on each machine that runs your harnesses. Its install script carries
    its `PUBLIC_URL`, so setup pairs the machine with your server:

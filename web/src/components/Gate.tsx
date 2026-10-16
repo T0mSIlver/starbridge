@@ -147,13 +147,13 @@ export function SignIn({
       {!off && (
         <a href="/v1/auth/github" className={`t-label ${ui.btn} ${ui.lg} ${ui.fill} ${s.go}`}>
           <Icon name="github" size={18} />
-          {failed ? "Sign in again" : "Continue with GitHub"}
+          {failed ? "Sign in again" : "Sign in with GitHub"}
         </a>
       )}
       {apple && !off && others && (
         <a href="/v1/auth/apple" className={`t-label ${ui.btn} ${ui.lg} ${s.go}`}>
           <AppleLogo />
-          Continue with Apple
+          Sign in with Apple
         </a>
       )}
       {desktop && !off && <p className={`t-meta ${s.dim}`}>Opens your browser.</p>}
