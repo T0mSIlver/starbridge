@@ -264,7 +264,9 @@ test("a cloud session asks and waits as the machine STARBRIDGE_MACHINE carries, 
   await server.revoke(id as string);
   const late = testCtx({ STARBRIDGE_MACHINE: line as string });
   expect(await run(ASK, late)).toBe(1);
-  expect(late.errors.at(-1)).toContain("removed from your Starbridge account");
+  expect(late.errors.at(-1)).toBe(
+    "starbridge: this machine was removed from your Starbridge account: run `starbridge machine export` on a paired machine, then replace STARBRIDGE_MACHINE with its line",
+  );
 });
 
 test("a folder that holds a machine keeps it over STARBRIDGE_MACHINE, and a bad one stops commands (#1818)", async () => {
