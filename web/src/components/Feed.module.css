@@ -85,8 +85,7 @@
 .session {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
-  gap: var(--s1) var(--s3);
+  gap: var(--s3);
   padding-top: var(--s2);
 }
 
@@ -119,6 +118,7 @@
   display: flex;
   align-items: center;
   gap: var(--s2);
+  flex: 0 1 auto;
   min-width: 0;
   color: var(--fg2);
   white-space: nowrap;
