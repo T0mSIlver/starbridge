@@ -262,6 +262,6 @@ notify about nothing, weekly and monthly ones (and those of unknown length) abou
 
 One rule on both clients (#159, #162). Hidden providers drop out; the rest go in the order set in
 Settings (unlisted ones after, in the uploader's order), each provider's windows in the uploader's
-order. "Running out first", on by default, then moves windows that will run out or ran out, and
+order; a provider's machines go by name, since the server sends them by machine id (#1849). "Running out first", on by default, then moves windows that will run out or ran out, and
 have not reset, above the others. Windows are grouped by provider (#160); groups follow their
 first window, so a provider with a window running out leads.

@@ -26,7 +26,9 @@ jobs:
   # deploy/); otherwise that commit's images are tagged with this one's. Any doubt builds.
   changed:
     if: github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'
-    runs-on: ${{ vars.TRUSTED_RUNNER && fromJSON(vars.TRUSTED_RUNNER) || 'ubuntu-latest' }}
+    # GitHub's runners for every job that builds or picks the images prod runs, as for the jobs that
+    # hold a deploy key: no self-hosted box decides what ships (#1825, #1839).
+    runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
       actions: read
@@ -70,7 +72,7 @@ jobs:
   # The server and web images, built once per deployed commit for both architectures and pushed
   # to ghcr.io as <image>:<commit>; the box pulls them rather than building (#1518). arm64 is for
   # the Oracle VMs, staging's and the failover target's. Each architecture builds natively on its
-  # own runner, GitHub's for arm64, and pushes <commit>-<arch>; the images job joins the two.
+  # own GitHub runner and pushes <commit>-<arch>; the images job joins the two.
   build:
     needs: changed
     if: needs.changed.outputs.build == 'true'
@@ -78,7 +80,7 @@ jobs:
       matrix:
         image: [server, web]
         arch: [amd64, arm64]
-    runs-on: ${{ matrix.arch == 'arm64' && 'ubuntu-24.04-arm' || (vars.TRUSTED_RUNNER && fromJSON(vars.TRUSTED_RUNNER) || 'ubuntu-latest') }}
+    runs-on: ${{ matrix.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
     timeout-minutes: 30
     permissions:
       contents: read
@@ -133,7 +135,7 @@ jobs:
   images:
     needs: [changed, build]
     if: ${{ !cancelled() && needs.changed.result == 'success' && needs.build.result != 'failure' }}
-    runs-on: ${{ vars.TRUSTED_RUNNER && fromJSON(vars.TRUSTED_RUNNER) || 'ubuntu-latest' }}
+    runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
       packages: write
