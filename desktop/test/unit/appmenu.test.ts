@@ -49,6 +49,8 @@ test("right-click: Copy and Look Up on a selection, Copy Link on a link, edit it
   ]);
   expect(at("", "", true)).toEqual(["cut", "copy", "paste", "selectAll"]);
   expect(at("", "  ")).toEqual([]);
+  // A long or multi-line selection becomes one short line, never a split emoji.
+  expect(at("", `${"a".repeat(23)}😀😀\nsecond line`)[1]).toBe(`Look Up “${"a".repeat(23)}😀…”`);
 });
 
 test("Copy Link copies the link under the pointer", () => {

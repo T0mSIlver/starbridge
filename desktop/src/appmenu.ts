@@ -85,7 +85,9 @@ export function contextMenu(c: Clicked, a: ContextActions): MenuItemConstructorO
     const word = c.selectionText.trim();
     if (c.linkURL) items.push([{ label: "Copy Link", click: () => a.copyLink(c.linkURL) }]);
     if (word) {
-      const shown = word.length > 24 ? `${word.slice(0, 24)}…` : word;
+      // One line, cut by characters, as a menu title.
+      const chars = [...(word.split(/\r?\n/)[0] ?? "")];
+      const shown = chars.length > 24 ? `${chars.slice(0, 24).join("")}…` : chars.join("");
       items.push([{ role: "copy" }, { label: `Look Up “${shown}”`, click: a.lookUp }]);
       items.push([{ role: "selectAll" }]);
     }
