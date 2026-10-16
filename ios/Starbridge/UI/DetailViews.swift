@@ -142,7 +142,8 @@ private struct Answering: View {
 /**
  * Snooze, under the reply field (#571): it opens the times in place: 1 hour and This evening, the
  * days as chips, a time, and "Snooze until 15:00". A snoozed question offers Snooze again and Back now.
- * In a question's detail the row is the session's line: Done and Snooze left, the session right (#970).
+ * In a question's detail the row is the session's line: the session at the start, then Done, Back
+ * now and Snooze, which is a round icon button (#970, #1848).
  */
 struct SnoozeControls: View {
     let store: Store
@@ -179,18 +180,26 @@ struct SnoozeControls: View {
     var body: some View {
         let now = Date()
         VStack(alignment: .leading, spacing: Tokens.Spacing.s3) {
-            HStack(spacing: Tokens.Spacing.s6) {
+            HStack(spacing: Tokens.Spacing.s4) {
+                if let session {
+                    SessionLink(source: session, agent: agent).type(Tokens.Typography.small)
+                }
+                Spacer(minLength: Tokens.Spacing.s2)
                 if let markDone { quiet("Done", markDone) }
-                quiet(until == nil ? "Snooze" : "Snooze again") {
+                if until != nil { quiet("Back now") { snooze(Date()) } }
+                Button {
                     withAnimation { open.toggle() }
                     day = Calendar.current.startOfDay(for: now)
                     time = SnoozeTimes.start(day, now)
+                } label: {
+                    Image(systemName: "moon.zzz")
+                        .font(.system(size: 20))
+                        .foregroundStyle(Tokens.Colors.fg.color)
+                        .frame(width: Tokens.Sizes.tap, height: Tokens.Sizes.tap)
+                        .background(Circle().fill(Tokens.Colors.surface2.color))
                 }
-                if until != nil { quiet("Back now") { snooze(Date()) } }
-                if let session {
-                    Spacer(minLength: Tokens.Spacing.s2)
-                    SessionLink(source: session, agent: agent).type(Tokens.Typography.small)
-                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(until == nil ? "Snooze" : "Snooze again")
             }
             if open {
                 ForEach(SnoozeTimes.presets(now), id: \.0) { name, at in
@@ -237,7 +246,7 @@ struct SnoozeControls: View {
     }
 
     private func quiet(_ text: String, _ action: @escaping () -> Void) -> some View {
-        Button(action: action) { Text(text).type(Tokens.Typography.action).underline() }
+        Button(action: action) { Text(text).type(Tokens.Typography.action).foregroundStyle(Tokens.Colors.fg2.color) }
             .buttonStyle(.plain)
             .frame(minHeight: Tokens.Sizes.tap)
     }
