@@ -211,3 +211,17 @@ test("runsOutSoonest: the leading group whose window runs out first, wherever it
   const noTime = { ...unknown, window: { ...unknown.window, pace: { ...pace, runsOutAt: null } } };
   expect(runsOutSoonest(groups([noTime]), now)).toBeUndefined();
 });
+
+test("arrange: a provider's machines go by name, whatever order the server sent them in", () => {
+  const on = (machine: string, label: string): QuotaCardData => ({
+    ...win("claude", label, "even"),
+    machine,
+  });
+  const names = (cards: QuotaCardData[]) =>
+    arrange(cards, settings({}), now).map((c) => `${c.machine} ${c.window.label}`);
+  const expected = ["alpha 5-hour", "alpha Weekly", "beta 5-hour", "beta Weekly"];
+  const alpha = [on("alpha", "5-hour"), on("alpha", "Weekly")];
+  const beta = [on("beta", "5-hour"), on("beta", "Weekly")];
+  expect(names([...alpha, ...beta])).toEqual(expected);
+  expect(names([...beta, ...alpha])).toEqual(expected);
+});

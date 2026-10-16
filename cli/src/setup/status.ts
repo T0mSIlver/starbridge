@@ -2,7 +2,7 @@
 import { join } from "node:path";
 import type { Status } from "../agent/api";
 import { AgentClient } from "../agent/client";
-import { REMOVED } from "../api";
+import { REMOVED, REMOVED_CLOUD } from "../api";
 import { autoOn, RETRY_MS } from "../autoupdate";
 import { hooklessCopies } from "../claude";
 import type { LatestRelease, UpdateRecord } from "../config";
@@ -116,7 +116,8 @@ export async function status(sys: Sys): Promise<number> {
     out(`Agent: ${agent.version}, pid ${agent.pid}, since ${agent.startedAt}, on ${agent.socket}`);
     const s = agent.server;
     // The server answered, refusing this machine's token.
-    if (s.lastError === REMOVED) out(`Server: reachable, but ${REMOVED}`);
+    if (s.lastError === REMOVED || s.lastError === REMOVED_CLOUD)
+      out(`Server: reachable, but ${s.lastError}`);
     else
       out(
         `Server: ${s.reachable ? "reachable" : "not reachable"}${s.lastOkAt ? `, last answered ${s.lastOkAt}` : ""}${s.lastError ? `, last error: ${s.lastError}` : ""}`,

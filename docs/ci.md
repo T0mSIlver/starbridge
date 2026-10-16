@@ -3,8 +3,9 @@
 Most CI jobs run on GitHub's runners. Some run on three self-hosted Linux boxes, which start them
 sooner. Windows, macOS, Linux ARM64, the e2e and anything that needs KVM stay on GitHub's runners,
 and main's unsigned Android build runs on its own runner, `ANDROID_RUNNER`. A job that reads a
-signing or deploy key, or builds a file a release signs, runs on GitHub's runners only, so no box
-on the home network ever holds one of those keys (#1825).
+signing or deploy key, builds a file a release signs, or builds the images prod runs, runs on
+GitHub's runners only, so no box on the home network holds one of those keys or makes what ships
+(#1825, #1839).
 
 ## Pools and labels
 
@@ -17,7 +18,7 @@ wipes that job's folders, and only those (below).
 | `sb-dell3` | 2 | `pr, heavy` |
 | `sb-hp` | 2 | `pr, light` |
 
-- `trusted` runs pushes to main's tests, the image builds, uptime checks, the release's version
+- `trusted` runs pushes to main's tests, uptime checks, the release's version
   check and the nightly flaky-test count, and nothing else.
 - `pr` runs pull requests from this repository's own branches, except Dependabot's. Forks'
   pull requests, Dependabot's and dispatched CI runs stay on GitHub's runners.
@@ -34,7 +35,7 @@ runs-on: ${{ vars.TRUSTED_RUNNER && fromJSON(vars.TRUSTED_RUNNER) || 'ubuntu-lat
 
 | Variable | Value | Used by |
 |---|---|---|
-| `TRUSTED_RUNNER` | `["self-hosted","starbridge","trusted","heavy"]` | main's test job, deploy's image builds, uptime, release's version check, flakes |
+| `TRUSTED_RUNNER` | `["self-hosted","starbridge","trusted","heavy"]` | main's test job, uptime, release's version check, flakes |
 | `PR_LIGHT_RUNNER` | `["self-hosted","starbridge","pr"]` | a pull request's test, typecheck and lint job |
 | `PR_DOCKER_RUNNER` | `["self-hosted","starbridge","pr","docker","heavy"]` | a pull request's image builds |
 | `ANDROID_RUNNER` | `starbridge-android` | main's unsigned Android build (`android.yml`) |
@@ -89,6 +90,24 @@ request's:
 To compare two runs by hand, run the e2e twice with `EVIDENCE` set, each in a folder named after
 its part, then `bun web/e2e/evidence.ts <after> <before> <out>`: it writes `out/comment.md` and the
 changed pairs.
+
+## Owner review
+
+A pull request that changes `.github/` or `deploy/` needs the owner's yes before it merges
+(`spec/releases.md`, "Owner review"). `owner-review.yml` labels it `owner-review` and sets the
+commit status `owner review`, required on main, to failure until the pull request also carries
+`owner-ok`; a push removes `owner-ok`. The orchestrator adds `owner-ok` once the owner answered
+yes on his card, only while the pull request still holds the commit the card named, and checks
+the head again afterwards: the label names no commit, so a push that lands as it is added would
+get the yes too.
+
+```bash
+gh api repos/T0mSIlver/starbridge/issues/<n>/labels -f 'labels[]=owner-ok'
+```
+
+A pull request with nothing in those folders gets the status as success on its next push or label
+change. `.github/owner-gates.sh` (print-only; `--apply` changes them) sets the repository settings
+behind it: the required status, and no admin bypass on any environment.
 
 ## How a runner works
 

@@ -1,0 +1,97 @@
+name: owner review
+
+# A pull request that changes .github/ or deploy/ changes what CI, releases and deploys do with the
+# signing and deploy keys, so the owner reviews it before it merges (#1833); environments ask for
+# no approval. This labels such a pull request `owner-review` and sets the commit status
+# `owner review`, which the ruleset on main requires, to success only once the pull request also
+# carries `owner-ok`. The orchestrator sets that label once the owner said yes on his card to the
+# commit the pull request then holds. A status belongs to one commit, so a push needs a new yes,
+# and the push also removes `owner-ok`.
+#
+# pull_request_target runs main's copy of this file, never the pull request's, so a pull request
+# cannot change its own check. It checks out nothing and runs no code from the pull request.
+# Labels set with this job's token start no workflow, so its own labelling does not rerun it.
+on:
+  pull_request_target:
+    # edited: a new base changes which files the pull request changes.
+    types: [opened, synchronize, reopened, edited, labeled, unlabeled]
+
+permissions: {}
+
+jobs:
+  label:
+    # GitHub's runner, whatever the runner variables say: it reads the API and checks out nothing.
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      pull-requests: write
+      statuses: write
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+          # The commit the event saw: a yes covers it, not a later push.
+          HEAD: ${{ github.event.pull_request.head.sha }}
+          ACTION: ${{ github.event.action }}
+          CHANGED: ${{ github.event.pull_request.changed_files }}
+          BASE: ${{ github.event.pull_request.base.ref }}
+          MAIN: ${{ github.event.repository.default_branch }}
+          RUN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          status() {
+            gh api "repos/$REPO/statuses/$HEAD" -f context='owner review' -f state="$1" -f description="$2" \
+              -f target_url="$RUN" >/dev/null
+          }
+          # Only a pull request into main is judged: the status belongs to the head commit, which a
+          # pull request into another branch may share, and that one's files differ from main's.
+          # Retargeting to main reruns this (edited).
+          if [ "$BASE" != "$MAIN" ]; then
+            echo "Into $BASE, not $MAIN: nothing to judge."
+            exit 0
+          fi
+          # GitHub lists at most 3000 files: past that, a change in these folders could hide.
+          if [ "$CHANGED" -ge 3000 ]; then
+            status failure "Over 3000 files, too many to check: split it"
+            exit 0
+          fi
+          # Old and new names, so moving a file out of these folders counts too.
+          files=$(gh api --paginate "repos/$REPO/pulls/$PR/files" --jq '.[] | .filename, (.previous_filename // empty)')
+          # The list is the pull request's now: it must still go into main from this commit, or the
+          # run for that change judges it.
+          [ "$(gh api "repos/$REPO/pulls/$PR" --jq '"\(.base.ref) \(.head.sha)"')" = "$MAIN $HEAD" ] ||
+            { echo "The pull request moved on since this event; its own run judges it."; exit 0; }
+          if ! grep -Eq '^(\.github|deploy)/' <<<"$files"; then
+            status success "Nothing in .github/ or deploy/ changed"
+            echo "Nothing in .github/ or deploy/ changed."
+            exit 0
+          fi
+          grep -E '^(\.github|deploy)/' <<<"$files" | sort -u | sed 's/^/changed: /'
+          # The labels now, not the event's: another run may have removed owner-ok since.
+          labels=$(gh api "repos/$REPO/issues/$PR/labels" --jq '.[].name')
+          if [ "$ACTION" = synchronize ] && grep -qx owner-ok <<<"$labels"; then
+            # A concurrent run may have removed it already.
+            gh api -X DELETE "repos/$REPO/issues/$PR/labels/owner-ok" >/dev/null || true
+            labels=$(grep -vx owner-ok <<<"$labels" || true)
+            echo "A new push: owner-ok removed."
+          fi
+          grep -qx owner-review <<<"$labels" ||
+            gh api "repos/$REPO/issues/$PR/labels" -f 'labels[]=owner-review' >/dev/null
+          if grep -qx owner-ok <<<"$labels"; then
+            status success "The owner reviewed this commit"
+            # A run for a push may have removed owner-ok after the read above and set its failure
+            # before this success: read again, after setting it, and undo it if the label is gone
+            # or the pull request moved on. A removal after this read is followed by that run's
+            # failure, which then comes last.
+            # A failed read leaves the gate shut too.
+            now=$(gh api "repos/$REPO/pulls/$PR" --jq '[.head.sha, (.labels[].name | select(. == "owner-ok"))] | join(" ")') || now=
+            if [ "$now" != "$HEAD owner-ok" ]; then
+              status failure "Changes .github/ or deploy/: waits for the owner's yes (owner-ok)"
+              echo "owner-ok was removed or a new commit came in meanwhile."
+              exit 0
+            fi
+            echo "owner-ok: the owner reviewed ${HEAD}."
+          else
+            status failure "Changes .github/ or deploy/: waits for the owner's yes (owner-ok)"
+            echo "Changes .github/ or deploy/: merges once the owner said yes and the pull request carries owner-ok (spec/releases.md, \"Owner review\")."
+          fi
