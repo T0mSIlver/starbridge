@@ -121,14 +121,20 @@ struct QuotaSettings: Codable, Equatable {
 
     /**
      * The windows to show (spec/items.md, "Quota order"): hidden providers out, the rest by
-     * provider in this order, each provider's windows in the uploader's order. With
+     * provider in this order, a provider's machines by name (the server sends them by machine id, which
+     * differs between accounts), each machine's windows in the uploader's order. With
      * `runningOutFirst`, windows that will run out or ran out, and have not reset, lead.
      */
     func arrange(_ windows: [QuotaRow], _ now: Date) -> [QuotaRow] {
         let rank = Dictionary(providers(windows).enumerated().map { ($1, $0) }, uniquingKeysWith: { a, _ in a })
         let ordered = windows.enumerated()
             .filter { !hidden.contains($0.element.provider) }
-            .sorted { (rank[$0.element.provider]!, $0.offset) < (rank[$1.element.provider]!, $1.offset) }
+            .sorted { a, b in
+                let (ra, rb) = (rank[a.element.provider]!, rank[b.element.provider]!)
+                if ra != rb { return ra < rb }
+                let byName = (a.element.machine ?? "").localizedStandardCompare(b.element.machine ?? "")
+                return byName == .orderedSame ? a.offset < b.offset : byName == .orderedAscending
+            }
             .map(\.element)
         guard runningOutFirst else { return ordered }
         return ordered.filter { $0.runningOut(now) } + ordered.filter { !$0.runningOut(now) }
