@@ -227,6 +227,9 @@ importers:
       '@types/node':
         specifier: ^26
         version: 26.6.4
+      '@types/pngjs':
+        specifier: ^6.0.5
+        version: 6.0.5
       '@types/react':
         specifier: ^19
         version: 19.3.0
@@ -239,6 +242,9 @@ importers:
       playwright:
         specifier: 1.64.0
         version: 1.64.0
+      pngjs:
+        specifier: ^7.0.0
+        version: 7.0.0
       typescript:
         specifier: ^7
         version: 7.0.2
