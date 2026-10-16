@@ -150,19 +150,23 @@ try {
   step("sign in with the owner token");
   await signInAndJoin(server, ownerToken);
   // Play services hands out a token only once Google's servers answered it, which a fresh
-  // emulator may take minutes to do. This one goes through the same onNewToken; a real token
-  // that comes later replaces it, and the server sends to the fake FCM either way.
-  await shell(
-    `am startservice -n ${PKG}/.push.FcmService -a com.google.firebase.messaging.NEW_TOKEN --es token smoke-token`,
-  );
-
+  // emulator may take minutes to do, and a build with made-up Firebase values never gets one. This
+  // one goes through the same onNewToken; a real token that comes later replaces it, and the server
+  // sends to the fake FCM either way. The app drops a token it is handed before it is set up, so
+  // it is handed again until the server has it.
+  const hand = () =>
+    shell(`am startservice -n ${PKG}/.push.FcmService -a com.google.firebase.messaging.NEW_TOKEN --es token smoke-token`);
+  let probes = 0;
   await until("the app's push subscription", 60, async () => {
     const db = new Database(join(dir, "starbridge.db"), { readonly: true });
     try {
-      return db.query("SELECT 1 FROM push_subscriptions WHERE type = 'fcm'").get() ?? undefined;
+      const row = db.query("SELECT 1 FROM push_subscriptions WHERE type = 'fcm'").get();
+      if (row) return row;
     } finally {
       db.close();
     }
+    if (probes++ % 4 === 0) await hand();
+    return undefined;
   });
   await kept.keep("inbox-empty");
 
