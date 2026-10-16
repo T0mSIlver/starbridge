@@ -685,7 +685,8 @@ round caps and joins, no fills. Android uses Material Symbols Rounded tuned to
 Google Sans Flex. Every platform has the same icons by job: laptop, desktop, server and cloud (a
 machine's kind), permission prompt, question, run, quota, history, settings,
 devices, open in the agent, waiting, inbox, send, expand (an image opens full
-screen). Link chips take GitHub's Octicons (MIT), filled on their 16-unit
+screen). `design/icons-by-job.json` holds the table, job by job; a test fails on
+a glyph it does not list, so a new glyph arrives with its row. Link chips take GitHub's Octicons (MIT), filled on their 16-unit
 grid, in every client: a GitHub link's kind, and `browser` for a Claude
 artifact. No other brand marks.
 
