@@ -9,7 +9,8 @@
 // and the changed pairs, for a run by hand. With it, it downloads main's evidence into <base dir>
 // first, from a checkout of the pull request's merge with main, and pushes and comments; env: PR,
 // SHA (the pull request's head), RUN_URL, GITHUB_REPOSITORY, GITHUB_API_URL. CLIENT names the
-// run, `web` (the default) or `android` (demo/smoke/android.ts with EVIDENCE set).
+// run, `web` (the default), `android` (demo/smoke/android.ts with EVIDENCE set) or `desktop`
+// (desktop/test/stack.ts with EVIDENCE set).
 import { spawnSync } from "node:child_process";
 import {
   copyFileSync,
@@ -42,6 +43,14 @@ export const CLIENTS = {
     held: "Screenshots on a phone and a tablet, light and dark, with their UI dumps",
     notDriven:
       "answering from the app, a real device's launcher and fonts, the web, iOS and desktop apps",
+  },
+  desktop: {
+    artifact: "desktop-evidence",
+    marker: "<!-- starbridge-evidence desktop -->",
+    run: "The desktop app's end-to-end run",
+    held: "Screenshots of the window, light and dark",
+    notDriven:
+      "the menu bar icon (the run has no menu bar), macOS's own notifications and window frame, the web, Android and iOS apps",
   },
 } as const;
 export type Client = keyof typeof CLIENTS;

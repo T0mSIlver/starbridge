@@ -396,12 +396,63 @@ jobs:
         timeout-minutes: 11
         env:
           TMPDIR: ${{ runner.temp }}
+          EVIDENCE: ${{ runner.temp }}/evidence
       - if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: desktop-e2e-failure
           path: ${{ runner.temp }}/starbridge-desktop-failure.png
           if-no-files-found: ignore
+      # The run's evidence (docs/ci.md, "Evidence"), named after the tree tested, as the web's.
+      - id: tree
+        if: ${{ !cancelled() }}
+        run: echo "tree=$(git rev-parse 'HEAD^{tree}')" >> "$GITHUB_OUTPUT"
+      - if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: desktop-evidence-app-${{ job.status == 'success' && steps.tree.outputs.tree || 'failed' }}
+          path: ${{ runner.temp }}/evidence
+          retention-days: 30
+          overwrite: true
+          if-no-files-found: ignore
+
+  # A pull request's desktop evidence comment, as the evidence job writes the web's
+  # (web/e2e/evidence.ts with CLIENT=desktop): the window's screenshots against main's.
+  desktop-evidence:
+    name: desktop evidence
+    needs: desktop-e2e
+    if: ${{ !cancelled() && needs.desktop-e2e.result != 'skipped' && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      actions: read
+    steps:
+      # The merge with main and its first parents: the base whose evidence it compares with.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 32
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          dest: ${{ runner.temp }}/setup-pnpm
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.2
+      - run: pnpm install --frozen-lockfile --filter @starbridge/web
+        timeout-minutes: 5
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: desktop-evidence-*
+          path: ${{ runner.temp }}/pr
+      - run: bun web/e2e/evidence.ts "$RUNNER_TEMP/pr" "$RUNNER_TEMP/base" "$RUNNER_TEMP/out"
+        env:
+          CLIENT: desktop
+          GITHUB_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          SHA: ${{ github.event.pull_request.head.sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
   # Builds the deployed images, without pushing them, when a pull request can change their base
   # images or dependencies: a change that breaks a build fails here, not at the deploy (#430).

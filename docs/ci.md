@@ -97,6 +97,15 @@ the system image offers as an overlay. The comparison leaves out the status bar 
 uploads `android-evidence-<profile>-<tree>`; the changed pairs go under
 `verify/<pr>/<sha>/android/` on `pr-shots`.
 
+A pull request that touches the desktop app, the web page it shows, the server or the CLI gets the
+same for the desktop app, in its own comment marked `<!-- starbridge-evidence desktop -->`
+(`ci.yml`, the `desktop evidence` job). The desktop end-to-end run (`desktop/test/stack.ts`) keeps
+the window at each stop (sign-in, keys, empty inbox, pairing, a question, Quotas, Settings) in light
+and dark (`<stop>-<scheme>.png`), switched through Electron's `nativeTheme`, with the boxes of the
+times and codes beside each. It uploads `desktop-evidence-app-<tree>`, or
+`desktop-evidence-app-failed`; the changed pairs go under `verify/<pr>/<sha>/desktop/` on
+`pr-shots`. The menu bar icon is not kept: the run has no menu bar to shoot.
+
 To compare two runs by hand, run the e2e twice with `EVIDENCE` set, each in a folder named after
 its part, then `bun web/e2e/evidence.ts <after> <before> <out>`: it writes `out/comment.md` and the
 changed pairs.

@@ -6,12 +6,17 @@
 // menu bar's dot follows Needs you. Notifications and the tray are watched in the main process.
 //
 //   xvfb-run -a node desktop/test/stack.ts      (after `pnpm --filter @starbridge/desktop build`)
+//
+// EVIDENCE=<folder> keeps a pull request's evidence there (docs/ci.md, "Evidence"): the window at
+// each stop in light and dark, beside each screenshot the boxes of what changes from run to run
+// (web/e2e/volatile.ts), and manifest.json, the steps driven and the result.
 import assert from "node:assert/strict";
 import { type ChildProcess, spawn, spawnSync } from "node:child_process";
-import { cpSync, mkdtempSync, readFileSync } from "node:fs";
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { _electron as electron } from "playwright";
+import { _electron as electron, type ElectronApplication, type Page } from "playwright";
+import { volatile } from "../../web/e2e/volatile.ts";
 import { freePorts } from "./ports.ts";
 
 const ROOT = resolve(import.meta.dirname, "../..");
@@ -65,8 +70,61 @@ async function until<T>(f: () => Promise<T>, what: string, ms = 30_000): Promise
   throw new Error(`timed out waiting for ${what}`);
 }
 
+const EVIDENCE = process.env.EVIDENCE;
+const steps: string[] = [];
+
 function step(text: string) {
+  steps.push(text);
   console.log(`\n== ${text}`);
+}
+
+function manifest(error?: unknown) {
+  if (!EVIDENCE) return;
+  mkdirSync(EVIDENCE, { recursive: true });
+  writeFileSync(
+    join(EVIDENCE, "manifest.json"),
+    `${JSON.stringify(
+      {
+        shard: "app",
+        passed: error === undefined,
+        error: error === undefined ? undefined : String(error).slice(0, 2000),
+        steps,
+      },
+      null,
+      2,
+    )}\n`,
+  );
+}
+
+/**
+ * The window as it is, in light then dark (Electron's nativeTheme, which the page's
+ * prefers-color-scheme follows), as `<stop>-<scheme>.png` with the boxes to leave out of the
+ * comparison with main's beside it.
+ */
+async function shoot(app: ElectronApplication, page: Page, stop: string) {
+  if (!EVIDENCE) return;
+  const dir = join(EVIDENCE, "shots");
+  mkdirSync(dir, { recursive: true });
+  try {
+    for (const scheme of ["light", "dark"] as const) {
+      await app.evaluate(({ nativeTheme }, s) => {
+        nativeTheme.themeSource = s;
+      }, scheme);
+      await page.waitForFunction(
+        (dark) => matchMedia("(prefers-color-scheme: dark)").matches === dark,
+        scheme === "dark",
+      );
+      // The page repaints its background and the app's colours on the change.
+      await new Promise((r) => setTimeout(r, 500));
+      const file = join(dir, `${stop}-${scheme}`);
+      await page.screenshot({ path: `${file}.png` });
+      writeFileSync(`${file}.json`, JSON.stringify(await volatile(page, false)));
+    }
+  } finally {
+    await app.evaluate(({ nativeTheme }) => {
+      nativeTheme.themeSource = "light";
+    });
+  }
 }
 
 /**
@@ -189,6 +247,7 @@ try {
 
     step("signed out, the app shows sign-in, not the landing page (#905)");
     await page.getByRole("heading", { name: "Sign in to Starbridge" }).waitFor();
+    await shoot(app, page, "sign-in");
     const html = await (await fetch(ORIGIN, { headers: { cookie: "sb_desktop=1" } })).text();
     assert.ok(!html.includes("Know the moment"), "the server sent the app the landing page");
     // The server is chosen here, as on the web, in the app's own window (#1449).
@@ -237,6 +296,7 @@ try {
       app.emit("open-url", { preventDefault() {} }, link);
     }, next);
     await page.getByText("This app creates your account's keys.").waitFor();
+    await shoot(app, page, "keys");
     assert.match(
       await page.getByLabel("Name this app").inputValue(),
       /^Starbridge on (Mac|Linux)$/,
@@ -248,6 +308,7 @@ try {
     // No machine yet, so the inbox says how to add one; its own heading depends on the window's
     // width, which differs between runners.
     await page.getByRole("heading", { name: "Add a machine" }).waitFor();
+    await shoot(app, page, "inbox-empty");
     // The app notifies; the page offers no Web Push of its own.
     assert.equal(await page.getByRole("button", { name: "Turn on notifications" }).count(), 0);
 
@@ -267,6 +328,7 @@ try {
     // `pair --confirm` answers the terminal's question.
     const printed = (await pair.waitFor(/Check code: (\S+)/))[1] as string;
     assert.equal(await page.getByTestId("check-code").textContent(), `Check code ${printed}`);
+    await shoot(app, page, "pairing");
     assert.equal(
       await cli("confirm", ["pair", "--confirm"], machine).exited,
       0,
@@ -321,6 +383,9 @@ try {
       );
     }
 
+    await page.evaluate(switchTab, ["Quotas", "Quotas"] as const);
+    await shoot(app, page, "quotas");
+
     step("a page load on Settings shows every tab from its first frame, as after a deploy");
     // A window open across a deploy loads in full on its next switch that reaches the server; the
     // Quotas tab hid until the quotas arrived (#1805).
@@ -341,6 +406,7 @@ try {
     await page.goto(`${ORIGIN}/settings`);
     await page.getByRole("heading", { name: "Notifications" }).waitFor();
     await new Promise((r) => setTimeout(r, 3000));
+    await shoot(app, page, "settings");
     const frames = await page.evaluate(
       () => (window as unknown as { navFrames: string[] }).navFrames,
     );
@@ -371,6 +437,8 @@ try {
     );
     assert.deepEqual(note.actions, ["Ship it", "Wait"]);
     await until(() => main((g) => g.tips.at(-1) === "Starbridge: 1 needs you"), "the amber dot");
+    await page.getByText("Ship the desktop app?").first().waitFor();
+    await shoot(app, page, "inbox-question");
     // While the window is hidden, as when closed to the menu bar.
     await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.hide());
     await main((g) => {
@@ -419,8 +487,10 @@ try {
       headers.length > 0 && headers.every((h) => h === `desktop/${VERSION}`),
       `the page names itself desktop/${VERSION}: ${[...new Set(headers)].join(", ")}`,
     );
+    manifest();
     console.log("\ndesktop stack test passed");
   } catch (e) {
+    manifest(e);
     // What the window showed when it failed, beside the run's temporary files.
     const page = app.windows()[0];
     if (page) {
