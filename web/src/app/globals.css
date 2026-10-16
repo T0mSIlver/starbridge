@@ -11,6 +11,11 @@
   --titlebar: 0px;
 }
 
+:root[data-platform="mac"] {
+  /* The Mac app sets type in the system font, SF Pro (spec/desktop.md, "Mac layer"). Mono stays. */
+  --sans: -apple-system, system-ui, sans-serif;
+}
+
 :root[data-titlebar="inset"] {
   --window-buttons: 52px;
   --titlebar: 52px;

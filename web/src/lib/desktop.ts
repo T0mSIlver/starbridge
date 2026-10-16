@@ -1,6 +1,8 @@
 // The desktop app's bridge (desktop/README.md, "The bridge"): present only when this page runs in
 // the app, on the server the app is set to. The page hands it the Needs-you count and what to
-// notify, and answers what the owner sends from a notification (#886).
+// notify, and answers what the owner sends from a notification (#886). Its presence also marks the
+// page `data-platform="mac"` before the first paint (lib/themeScript.ts), the one switch the
+// Mac's own look hangs on (spec/desktop.md, "Mac layer").
 
 /** One item to notify, as `desktop/src/bridge.ts` reads it. */
 export type DesktopEntry = {
