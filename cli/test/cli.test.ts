@@ -276,6 +276,10 @@ test("a folder that holds a machine keeps it over STARBRIDGE_MACHINE, and a bad 
   one.env.STARBRIDGE_MACHINE = two.lines[0] as string;
   expect(await run(ASK, one)).toBe(0);
   expect(one.store.machine()?.name).toBe("one");
+  // Revoked, the folder's machine is paired again with `pair --force`, not exported (#1838).
+  await server.revoke(one.store.machine()?.id as string);
+  expect(await run(ASK, one)).toBe(1);
+  expect(one.errors.at(-1)).toContain("`starbridge pair --force`");
 
   const bad = testCtx({ STARBRIDGE_MACHINE: `sbm1.${"A".repeat(40)}` });
   expect(await run(ASK, bad)).toBe(1);

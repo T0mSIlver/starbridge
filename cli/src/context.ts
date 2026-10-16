@@ -9,7 +9,7 @@ import {
   withheldBy,
 } from "@starbridge/protocol";
 import { Api, removedText } from "./api";
-import { decodeKeys, type Machine, type State, type Store } from "./config";
+import { carries, decodeKeys, type Machine, type State, type Store } from "./config";
 
 /** Everything a command touches outside its arguments, so tests can run commands in-process. */
 export interface Ctx {
@@ -50,7 +50,7 @@ export interface Session {
 export function session(ctx: Ctx): Session {
   const machine = ctx.store.machine();
   if (!machine) throw new UsageError("this machine is not paired: run `starbridge pair` first");
-  const cloud = !!ctx.env.STARBRIDGE_MACHINE;
+  const cloud = carries(ctx.env.STARBRIDGE_MACHINE, machine);
   return {
     machine,
     keys: decodeKeys(machine.keys),
