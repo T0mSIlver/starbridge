@@ -1,7 +1,7 @@
 # Sign-in and the first device
 
 The app opens the server's page. Signed out it shows "Sign in to Starbridge", not
-the landing page. "Continue with GitHub" sends the sign-in to the owner's browser,
+the landing page. "Sign in with GitHub" sends the sign-in to the owner's browser,
 which returns with a `starbridge://auth` link; the app then makes the account's
 keys and its recovery key.
 
