@@ -48,6 +48,16 @@ export function step(text: string) {
   console.log(`\n== ${text}`);
 }
 
+/**
+ * This process's environment without the variables an agent session sets: the CLI reads them to
+ * name the session a question comes from, so a run started inside one would show its name.
+ */
+export function machineEnv(): NodeJS.ProcessEnv {
+  return Object.fromEntries(
+    Object.entries(process.env).filter(([k]) => !/^(CLAUDE|CODEX|OPENCODE|CURSOR|PI_)/.test(k)),
+  ) as NodeJS.ProcessEnv;
+}
+
 /** Starts a process and collects its output; `waitFor` resolves on a matching line. */
 export function start(
   name: string,
@@ -57,7 +67,7 @@ export function start(
 ) {
   const p = spawn(cmd, args, {
     cwd: opts.cwd ?? ROOT,
-    env: { ...process.env, ...opts.env },
+    env: { ...machineEnv(), ...opts.env },
     stdio: ["ignore", "pipe", "pipe"],
   });
   children.push(p);

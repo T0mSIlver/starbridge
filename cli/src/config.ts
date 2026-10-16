@@ -603,3 +603,13 @@ export function decodeKeys(k: Machine["keys"]): MemberKeys {
     sign: { publicKey: fromB64(k.signPk), privateKey: fromB64(k.signSk) },
   };
 }
+
+/** `STARBRIDGE_MACHINE` carries `machine`, rather than the folder holding another one (#1838). */
+export function carries(line: string | undefined, machine: Machine): boolean {
+  if (!line) return false;
+  try {
+    return importMachine(line).id === machine.id;
+  } catch {
+    return false;
+  }
+}

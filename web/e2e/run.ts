@@ -27,6 +27,7 @@ import {
   browser,
   children,
   cli,
+  machineEnv,
   ORIGIN,
   PORTS,
   ROOT,
@@ -1652,7 +1653,7 @@ async function main() {
       ["run", join(ROOT, "cli/src/main.ts"), "hook", "permission", "--agent", "claude-code"],
       {
         env: {
-          ...process.env,
+          ...machineEnv(),
           STARBRIDGE_CONFIG_DIR: farHome,
           STARBRIDGE_SERVER: `http://localhost:${PORTS.server}`,
         },

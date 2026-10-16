@@ -46,8 +46,16 @@ command and its local agent), `plugin` and
   push reruns the whole CI, and a PR merges without being up to date.
 - A test that fails and then passes on a rerun gets an issue the first time, never a silent rerun.
   `flakes.yml` lists them each night on the issue labelled `flaky`.
+- A PR that changes what the web shows or a core flow is verified by an agent that didn't write
+  it, from CI's evidence comment and, where that falls short, by driving the app with
+  [verify-web](.claude/skills/verify-web/SKILL.md).
+- A PR that changes `.github/` or `deploy/` merges only after the owner's yes and
+  the `owner-ok` label (docs/ci.md, "Owner review").
 - Before a PR is ready, run the checks in
   [CONTRIBUTING.md, "Develop"](CONTRIBUTING.md#develop).
+- A PR that touches `.github/` or `deploy/` merges only with a maintainer's OK.
+- [docs/checks.md](docs/checks.md) lists the mistakes that keep coming back and the check for each;
+  one without a check is open work.
 - Before a PR is ready, diff it against `main` (`git diff --name-only origin/main...`) for files
   outside the packages it is meant to touch, such as a copy of a package path at the repo root.
 - Before review, check your change for the bugs reviews keep finding:
@@ -75,6 +83,14 @@ command and its local agent), `plugin` and
   should follow. A PR that changes a client fills its `Parity:` line, which CI
   checks.
 
+## Cloud sessions
+
+- The GitHub proxy refuses GraphQL, so `gh pr` and `gh issue` fail; use
+  `gh api repos/T0mSIlver/starbridge/...`.
+- Android, iOS and macOS build and test only in CI: push, then read the runs with `gh run list`.
+- Cards need `STARBRIDGE_MACHINE` and `starbridge.run` in the environment's network access
+  ([cli/README.md, "Cloud sessions"](cli/README.md#cloud-sessions)).
+
 ## CI runners
 
 A Linux job on the self-hosted boxes takes its `runs-on` from a repository
@@ -82,8 +98,9 @@ variable, a JSON array of labels, with GitHub's runner as the fallback:
 `TRUSTED_RUNNER` for pushes to main, `PR_LIGHT_RUNNER` and `PR_DOCKER_RUNNER`
 for pull requests from this repository's branches. Never send a pull request
 job to `TRUSTED_RUNNER` or `ANDROID_RUNNER`, and never name a runner label in a
-workflow directly. A job that reads a signing or deploy key, or builds a file
-a release signs, runs on GitHub's runners only (#1825). Windows, macOS, KVM, e2e
+workflow directly. A job that reads a signing or deploy key, builds a file a
+release signs, or builds an image prod runs, runs on GitHub's runners only
+(#1825, #1839). Windows, macOS, KVM, e2e
 and Electron jobs stay on GitHub's runners. A job must not
 rely on an earlier one's files, and must run beside another on one box: no
 fixed host port, unique container, Compose project and image names.
