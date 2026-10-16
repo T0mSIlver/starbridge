@@ -1,5 +1,5 @@
 // Drives one scenario on the whole product, for an agent verifying a pull request
-// (.claude/skills/verify-web): the stack of run.ts, a GitHub sign-in, the first device set up and
+// (.agents/skills/verify-web): the stack of run.ts, a GitHub sign-in, the first device set up and
 // one machine paired, then the scenario's own steps.
 //
 //   xvfb-run -a node web/e2e/drive.ts <scenario.ts> <out dir>

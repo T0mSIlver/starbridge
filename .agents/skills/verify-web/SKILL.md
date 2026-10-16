@@ -34,7 +34,7 @@ From the repository root, after `pnpm install` and, once,
 `pnpm --filter @starbridge/web exec playwright install firefox`:
 
 ```bash
-CI=1 xvfb-run -a node web/e2e/drive.ts .claude/skills/verify-web/scenarios/ask-answer.ts <scratch>/out
+CI=1 xvfb-run -a node web/e2e/drive.ts .agents/skills/verify-web/scenarios/ask-answer.ts <scratch>/out
 ```
 
 `drive.ts` builds the web app (about a minute), starts the stack on free

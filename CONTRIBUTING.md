@@ -162,6 +162,8 @@ A pull request has one of two classes.
 - Docs under `docs/` and package READMEs that match what the code does.
 - A refactor with no behaviour change, no new dependency and no new component.
 - A fix to test or lint tooling outside `.github/` and `deploy/`.
+- Agent skills under `.agents/skills/`, and the drivers they and the end-to-end runs use
+  (`web/e2e/`, `demo/smoke/`, `desktop/test/`), when no workflow under `.github/` changes.
 
 A merge-by-default PR merges once every CI check is green and the review that grades its proof
 has posted a `<!-- proof-verdict -->` comment saying PROOF SUFFICIENT for the PR's current head.

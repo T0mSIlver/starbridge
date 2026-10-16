@@ -221,7 +221,7 @@ try {
   await evidence("card");
   await kept.keep("card");
   step("passed: notification shown, card opened with its context");
-  // For a verifier (.claude/skills/verify-android): answer from the card, and read the answer on
+  // For a verifier (.agents/skills/verify-android): answer from the card, and read the answer on
   // the machine's side. The release smoke leaves ANSWER unset.
   if (process.env.ANSWER) {
     step(`answer "${process.env.ANSWER}" from the card`);
