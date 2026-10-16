@@ -1006,8 +1006,8 @@ function ViewMenu({
         }
         aria-haspopup="menu"
         aria-expanded={open}
-        aria-label="View"
-        title={icon ? undefined : "View"}
+        aria-label="Group by"
+        title={icon ? undefined : "Group by"}
         onClick={() => setOpen(!open)}
       >
         <Icon name="view" size={icon ? 22 : 16} />
