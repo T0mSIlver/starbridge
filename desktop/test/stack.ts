@@ -382,6 +382,30 @@ try {
     await page.evaluate(switchTab, ["Quotas", "Quotas"] as const);
     await shoot(page, "quotas");
 
+    step("the app menu's Find… focuses the page's Find box, and Settings… opens Settings (#1857)");
+    await page.evaluate(switchTab, ["Inbox", "Inbox"] as const);
+    const clickMenu = (label: string) =>
+      app.evaluate(({ Menu }, name) => {
+        const walk = (menu: Electron.Menu | null | undefined): Electron.MenuItem | undefined => {
+          for (const item of menu?.items ?? []) {
+            if (item.label === name) return item;
+            const inner = walk(item.submenu);
+            if (inner) return inner;
+          }
+        };
+        const item = walk(Menu.getApplicationMenu());
+        if (!item) throw new Error(`no menu item ${name}`);
+        item.click();
+      }, label);
+    await clickMenu("Find…");
+    await until(
+      () => page.evaluate(() => document.activeElement?.getAttribute("aria-label") === "Find"),
+      "the Find box focused by Find…",
+    );
+    await clickMenu("Settings…");
+    await page.getByRole("heading", { name: "Settings", exact: true }).waitFor();
+    await page.evaluate(switchTab, ["Quotas", "Quotas"] as const);
+
     step("a page load on Settings shows every tab from its first frame, as after a deploy");
     // A window open across a deploy loads in full on its next switch that reaches the server; the
     // Quotas tab hid until the quotas arrived (#1805).
