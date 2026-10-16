@@ -2,7 +2,8 @@ import type { MenuItemConstructorOptions } from "electron";
 
 // The Mac's own menus (#1857): the application menu bar and the right-click menu, as the
 // owner picked from mockups (card d_acid-creek-health). Plain data, so a unit test reads them
-// without Electron; main.ts hands it the app's actions.
+// without Electron; main.ts hands it the app's actions. macOS adds Toggle Full Screen to View by
+// itself, so a role of ours would list it twice.
 
 export type AppMenuActions = {
   /** Settings… (⌘,): the page's Settings, or the server window while the page can't load. */
@@ -59,8 +60,6 @@ export function appMenu(a: AppMenuActions): MenuItemConstructorOptions[] {
         { role: "resetZoom" },
         { role: "zoomIn" },
         { role: "zoomOut" },
-        { type: "separator" },
-        { role: "togglefullscreen" },
       ],
     },
     { role: "windowMenu" },
