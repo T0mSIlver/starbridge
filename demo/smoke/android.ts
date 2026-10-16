@@ -22,7 +22,7 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { DemoDevice } from "../src/device";
-import { ROOT } from "../video/stack";
+import { cli, ROOT } from "../video/stack";
 import { keeper } from "./evidence";
 import { ask, Crash, emulator, PKG, pair, step, steps, until } from "./lib";
 
@@ -221,6 +221,19 @@ try {
   await evidence("card");
   await kept.keep("card");
   step("passed: notification shown, card opened with its context");
+  // For a verifier (.claude/skills/verify-android): answer from the card, and read the answer on
+  // the machine's side. The release smoke leaves ANSWER unset.
+  if (process.env.ANSWER) {
+    step(`answer "${process.env.ANSWER}" from the card`);
+    await tap(process.env.ANSWER);
+    const wait = cli(dir, "workstation", ["wait", id, "--timeout", "30s"]);
+    const text = await new Response(wait.stdout).text();
+    if ((await wait.exited) !== 0 || !text.includes(`: ${process.env.ANSWER}`))
+      throw new Error(`the machine did not get the answer: ${text}`);
+    step(`the machine got it: ${text.trim()}`);
+    await see("Nothing needs you");
+    await evidence("answered");
+  }
   if (process.env.EVIDENCE) {
     step("the app drawer, our icon beside the stock apps'");
     await kept.launcher();
