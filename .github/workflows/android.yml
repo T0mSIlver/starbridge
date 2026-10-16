@@ -53,9 +53,10 @@ jobs:
           cache-disabled: ${{ runner.environment == 'self-hosted' }}
 
       # Without google-services.json the app builds with FCM off, and the emulator job's smoke needs
-      # it on: a build with no real file gets made-up Firebase values. The smoke hands the app its
-      # FCM token and fakes FCM itself, so the values never reach Google. No release uses this APK:
-      # release.yml builds its own with the real file.
+      # it on: a build with no real file gets made-up Firebase values. Google refuses them, so the app
+      # gets no FCM token; the emulator job sets NO_FIREBASE and the smoke subscribes a made-up token
+      # for the app's device (demo/smoke/android.ts), and fakes FCM itself. No release uses this APK:
+      # release.yml builds its own with the real file, and its smoke needs the app to register.
       - name: Placeholder Firebase values
         run: |
           [ -f app/google-services.json ] || [ -f ~/.config/starbridge/secrets/google-services.json ] ||
@@ -173,6 +174,8 @@ jobs:
         env:
           EVIDENCE: ${{ runner.temp }}/evidence
           PROFILE: ${{ matrix.profile }}
+          # This APK has made-up Firebase values, so the app cannot get an FCM token.
+          NO_FIREBASE: "1"
         with:
           api-level: 36
           target: google_apis

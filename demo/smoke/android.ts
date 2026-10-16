@@ -109,6 +109,24 @@ async function startServer(fcm: string) {
   return sbd;
 }
 
+/**
+ * With NO_FIREBASE set (pull requests' emulator runs, whose APK carries made-up Firebase values),
+ * the app can never get an FCM token: Google refuses its API key. The server then holds a made-up
+ * token for the app's own device, as if the app had registered it. The release's smoke leaves
+ * NO_FIREBASE unset and needs the app to register itself.
+ */
+function subscribeForApp(db: Database) {
+  const app = db
+    .query(
+      "SELECT account_id, id FROM members WHERE role = 'device' AND active = 1 AND id != 'demo-owner'",
+    )
+    .get() as { account_id: string; id: string } | null;
+  if (!app) return;
+  db.query(
+    "INSERT OR IGNORE INTO push_subscriptions (id, account_id, member_id, type, endpoint, created_at) VALUES (?, ?, ?, 'fcm', 'smoke-token', ?)",
+  ).run(`ps_smoke_${app.id}`.slice(0, 24), app.account_id, app.id, new Date().toISOString());
+}
+
 const fcm = fakeFcm();
 const sbd = await startServer(fcm.url);
 const stop = new AbortController();
@@ -150,23 +168,24 @@ try {
   step("sign in with the owner token");
   await signInAndJoin(server, ownerToken);
   // Play services hands out a token only once Google's servers answered it, which a fresh
-  // emulator may take minutes to do, and a build with made-up Firebase values never gets one. This
-  // one goes through the same onNewToken; a real token that comes later replaces it, and the server
-  // sends to the fake FCM either way. The app drops a token it is handed before it is set up, so
-  // it is handed again until the server has it.
-  const hand = () =>
-    shell(`am startservice -n ${PKG}/.push.FcmService -a com.google.firebase.messaging.NEW_TOKEN --es token smoke-token`);
-  let probes = 0;
+  // emulator may take minutes to do. This one goes through the same onNewToken; a real token
+  // that comes later replaces it, and the server sends to the fake FCM either way.
+  await shell(
+    `am startservice -n ${PKG}/.push.FcmService -a com.google.firebase.messaging.NEW_TOKEN --es token smoke-token`,
+  );
+
+  const noFirebase = process.env.NO_FIREBASE !== undefined;
   await until("the app's push subscription", 60, async () => {
-    const db = new Database(join(dir, "starbridge.db"), { readonly: true });
+    const db = new Database(
+      join(dir, "starbridge.db"),
+      noFirebase ? undefined : { readonly: true },
+    );
     try {
-      const row = db.query("SELECT 1 FROM push_subscriptions WHERE type = 'fcm'").get();
-      if (row) return row;
+      if (noFirebase) subscribeForApp(db);
+      return db.query("SELECT 1 FROM push_subscriptions WHERE type = 'fcm'").get() ?? undefined;
     } finally {
       db.close();
     }
-    if (probes++ % 4 === 0) await hand();
-    return undefined;
   });
   await kept.keep("inbox-empty");
 

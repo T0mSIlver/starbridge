@@ -90,7 +90,7 @@ A pull request that touches `android/` or `demo/smoke/` gets the same for the An
 own comment marked `<!-- starbridge-evidence android -->` (`android.yml`). The release smoke
 (`demo/smoke/android.ts`) runs with `EVIDENCE` set on a phone (`pixel_7`) and a tablet
 (`pixel_tablet`), API 36, on GitHub's runners with KVM. It signs in, gets a question by FCM,
-shows its notification and opens the card, and fails on a crash in logcat. It keeps each stop in
+shows its notification and opens the card, and fails on a crash in logcat. A pull request's APK has made-up Firebase values (a build with no `google-services.json`), which Google refuses, so the app never gets an FCM token; the emulator job sets `NO_FIREBASE` and the smoke puts a made-up token on the app's device in the server's database. The release smoke leaves it unset and needs the app to register itself. It keeps each stop in
 light and dark (`<profile>-<stop>-<scheme>.png`) with its UI dump, the notification shade in light
 only, and the app drawer with our icon beside the stock apps', again in light under each icon shape
 the system image offers as an overlay. The comparison leaves out the status bar and the times on screen. Each profile
