@@ -155,6 +155,15 @@ const PATHS = {
       <path d="M3.5 4.5 6 2.5M20.5 4.5 18 2.5M9.5 10h5l-5 6h5" />
     </>
   ),
+  // The Mac app's Snooze (#1848): Lucide's clock (ISC, © Lucide Icons and Contributors), at the
+  // 1.5 stroke that sits next to SF Symbols' regular weight. SF Symbols are licensed for Apple
+  // platforms only, and this page is also served to browsers elsewhere.
+  clock: (
+    <g strokeWidth={1.5}>
+      <circle cx="12" cy="12" r="10" />
+      <path d="M12 6v6l4 2" />
+    </g>
+  ),
   history: (
     <>
       <path d="M3 12a9 9 0 1 0 3-6.7L3 8" />

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { desktop } from "@/lib/desktop";
 import { usePref } from "@/lib/prefs";
 import {
   dayLabel,
@@ -13,23 +14,22 @@ import {
   snoozeTakes,
   snoozeTime,
 } from "@/lib/snooze";
+import { Icon } from "./icons";
 import s from "./Snooze.module.css";
 import ui from "./ui.module.css";
 
 /**
- * "Snooze" and its times (#571, #699), up to 7 days ahead. Quiet, as Done: putting a question off
- * is never the default.
+ * Snooze's round icon button and its times (#571, #699, #1848), up to 7 days ahead. Quiet, as
+ * Done: putting a question off is never the default. `label` names it for screen readers and the
+ * tooltip. The Mac app draws a clock, as the Mac does; the web, its own snooze icon.
  */
 export function SnoozeMenu({
   label,
   disabled,
-  className,
   onSnooze,
 }: {
   label: string;
   disabled?: boolean;
-  /** The trigger's classes, so it matches the quiet buttons beside it. */
-  className: string;
   onSnooze: (until: Date) => void;
 }) {
   const [clock] = usePref("clock");
@@ -60,13 +60,15 @@ export function SnoozeMenu({
     <div className={s.snooze} ref={ref}>
       <button
         type="button"
-        className={className}
+        className={s.trigger}
         disabled={disabled}
+        aria-label={label}
+        title={label}
         aria-haspopup="dialog"
         aria-expanded={open}
         onClick={() => setOpen(!open)}
       >
-        {label}
+        <Icon name={desktop ? "clock" : "snooze"} size={22} />
       </button>
       {open && <SnoozeTimes now={now} clock={clock} onPick={pick} />}
     </div>

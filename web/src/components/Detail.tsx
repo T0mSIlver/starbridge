@@ -306,7 +306,7 @@ export function QuestionDetail({
         </p>
       )}
       {/* Quiet, so the answer stays above: Done for a page's answer (#539), and putting it off
-          (#571), on the session's line (#970). */}
+          (#571), on the session's line (#970), where Snooze is a round icon button at the end (#1848). */}
       <SessionLine source={d.source} agent={agentOf(d)}>
         {!closed && (
           <div className={s.quiet}>
@@ -320,12 +320,6 @@ export function QuestionDetail({
                 Done
               </button>
             )}
-            <SnoozeMenu
-              label={snoozed ? "Snooze again" : "Snooze"}
-              className={`t-small ${s.link} ${s.reply}`}
-              disabled={snoozeSend.sending}
-              onSnooze={(until) => snoozeSend.send(until)}
-            />
             {snoozed && (
               <button
                 type="button"
@@ -336,6 +330,11 @@ export function QuestionDetail({
                 Back now
               </button>
             )}
+            <SnoozeMenu
+              label={snoozed ? "Snooze again" : "Snooze"}
+              disabled={snoozeSend.sending}
+              onSnooze={(until) => snoozeSend.send(until)}
+            />
           </div>
         )}
       </SessionLine>
