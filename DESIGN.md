@@ -523,10 +523,12 @@ it has no title. A session's title is words, in the reading face (#563).
   row, starting on the text's edge.
 - Every item opens with one meta row of facts Starbridge knows: the machine's
   kind icon and name, the repo, and the time right-aligned. The agent's own
-  words come below it. Details end with one line: the quiet actions (Snooze,
-  Back now, Done) on the left, and on the right the session's name, truncated
-  in the middle, as a text link with an arrow out, else "Open in Claude" or
-  "Open in Codex". No logos.
+  words come below it. Details end with one line: on the left the session's
+  name, truncated in the middle, as grey text with the open icon before it and
+  no underline, else "Open in Claude" or "Open in Codex" (no logos); on the
+  right the quiet actions, Back now and Done as text and Snooze last, as a
+  round tonal icon button named "Snooze" (#1848). With no session the line is
+  the button alone.
 - Links the agent attaches are chips after the context: the label and an
   open-outside icon, never the word "Open". A GitHub link leads with the
   Octicon for its kind and reads as its reference ("#123", "v0.1.2"); a
@@ -686,6 +688,10 @@ devices, open in the agent, waiting, inbox, send, expand (an image opens full
 screen). Link chips take GitHub's Octicons (MIT), filled on their 16-unit
 grid, in every client: a GitHub link's kind, and `browser` for a Claude
 artifact. No other brand marks.
+
+Snooze's icon follows its platform (#1848): a clock on the web and in the Mac app (the
+web's own set; SF Symbols are licensed for Apple platforms and the page is served to every
+browser), Material Symbols Rounded's `snooze` on Android, an SF Symbol on iOS.
 
 ## The mark
 

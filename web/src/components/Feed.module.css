@@ -86,8 +86,7 @@
   display: flex;
   align-items: center;
   gap: var(--s3);
-  padding-top: var(--s3);
-  border-top: 1px solid var(--line);
+  padding-top: var(--s2);
 }
 
 .sessionName {
@@ -98,7 +97,6 @@
 
 .sessionHead,
 .sessionTail {
-  color: var(--fg);
   /* Each half is a flex item, whose line drops a space at its start or end: a space at the cut
      would vanish, "Starbridge orchestrator" showing as "Starbridgeorchestrator" (#630). */
   white-space: pre;
@@ -114,16 +112,21 @@
   flex: none;
 }
 
-/* The session, at the end of the line: its name opens it, with the external-link mark. */
+/* The session, at the start of the line: the external-link mark, then its name, which opens it.
+   Plain, as its neighbours' text is: no underline. */
 .open {
   display: flex;
   align-items: center;
-  gap: var(--s1);
+  gap: var(--s2);
+  flex: 0 1 auto;
   min-width: 0;
-  margin-left: auto;
   color: var(--fg2);
   white-space: nowrap;
-  text-underline-offset: 3px;
+  text-decoration: none;
+}
+
+a.open:hover {
+  color: var(--fg);
 }
 
 .open svg {

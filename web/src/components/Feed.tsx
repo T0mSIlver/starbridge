@@ -148,7 +148,7 @@ export function SessionLine({
 }: {
   source: Source;
   agent?: string;
-  /** Snooze, Back now and Done, at the start of the line. */
+  /** Done, Back now and Snooze, at the end of the line. */
   children?: React.ReactNode;
 }) {
   // One space per run of white space, as the line would show it: the halves keep theirs (#630).
@@ -166,7 +166,6 @@ export function SessionLine({
   );
   return (
     <div className={`t-meta ${s.session}`}>
-      {children}
       {link ? (
         <a
           className={s.open}
@@ -175,12 +174,13 @@ export function SessionLine({
           aria-label={name ? `Open in ${app}: ${name}` : undefined}
           {...(link.kind === "desktop" ? {} : { target: "_blank", rel: "noopener noreferrer" })}
         >
-          {named || `Open in ${app}`}
           <Icon name="open" size={14} />
+          {named || `Open in ${app}`}
         </a>
       ) : (
         <span className={s.open}>{named}</span>
       )}
+      {children}
     </div>
   );
 }

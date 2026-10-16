@@ -4,9 +4,39 @@
   position: relative;
 }
 
+/* A tonal round button, as Android's secondary buttons on a card (DESIGN.md). */
+.trigger {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--s10);
+  height: var(--s10);
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--surface2);
+  color: var(--fg);
+}
+
+.trigger:hover:not(:disabled) {
+  background: var(--line);
+}
+
+.trigger:disabled {
+  opacity: 0.5;
+}
+
+@media (max-width: 599px) {
+  .trigger {
+    width: var(--size-tap);
+    height: var(--size-tap);
+  }
+}
+
+/* Opens upward-left of the button, which sits at the line's end. */
 .menu {
   position: absolute;
-  left: 0;
+  right: 0;
   top: calc(100% + var(--s1));
   z-index: 3;
   width: 340px;
