@@ -203,7 +203,7 @@ class LayoutAuditTest(private val shot: String, private val look: Look) {
         "inbox-by-waiting" to Shot(Tab.Inbox) { Inbox(InboxView(grouping = Grouping.Waiting)) },
         "inbox-history" to Shot(Tab.Inbox) { InboxScreen(worst.decisions.filter { it.answer != null }, now, decisionActions, view = InboxView(historyOpen = true)) },
         "inbox-runs" to Shot(Tab.Inbox) { InboxScreen(worst.decisions.take(1), now, decisionActions, runs = worst.runs + fake.endedRuns) },
-        "inbox-view-menu" to Shot(Tab.Inbox, before = { compose.onNodeWithContentDescription("View").performClick() }) { Inbox() },
+        "inbox-view-menu" to Shot(Tab.Inbox, before = { compose.onNodeWithContentDescription("Group by").performClick() }) { Inbox() },
         "inbox-prompt-menu" to Shot(Tab.Inbox, before = { compose.onAllNodes(SemanticsMatcher.expectValue(SemanticsProperties.ContentDescription, listOf("More answers")))[0].performScrollTo().performClick() }) {
             InboxScreen(emptyList(), now, decisionActions, prompts = worst.prompts, promptActions = promptActions)
         },
