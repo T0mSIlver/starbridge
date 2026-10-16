@@ -122,6 +122,15 @@ a browser; the app adds a menu bar light and notifications, so a web release nee
   the Window menu, whatever the page's title. Under the page, the window shows the page's last
   background, else the system theme's (#1072): a fixed dark one flashed black in light mode
   whenever the page reloaded.
+- **Menus** (#1857, owner's pick "A, full menus", card d_acid-creek-health). The app sets a
+  Mac application menu: Starbridge (About, Settings… ⌘, which is the menu bar icon's Settings…,
+  Services, Hide, Quit), File (Close Window), Edit (the standard items and Find… ⌘F, which the
+  page's `/` key does too, so the page owns what Find means), View (Reload ⌘R, zoom, full
+  screen; Toggle Developer Tools only in a development run, never a release), Window, and Help
+  (Starbridge Docs, in the browser). Electron's default menu had Settings… nowhere and
+  Developer Tools in every build. Right-click shows Copy and Look Up on a selection, Copy Link
+  on a link, and Cut, Copy, Paste and Select All in a field; nothing elsewhere. Find… does nothing
+  while the cursor is in a field, as the `/` key doesn't.
 - **A Mac layer, not a Mac app** (#1863). The owner kept Electron around the web page over a native
   Mac app (cards d_skirt-front-drip, 16 Oct): the Mac's own look is one thin layer on the page, not
   branches per feature. The bridge's presence sets `data-platform="mac"` on the page before its

@@ -3,6 +3,7 @@ import { join } from "node:path";
 import {
   app,
   BrowserWindow,
+  clipboard,
   dialog,
   globalShortcut,
   type IpcMainEvent,
@@ -20,6 +21,7 @@ import {
   type WebContents,
 } from "electron";
 import { Answers } from "./answers";
+import { appMenu, contextMenu } from "./appmenu";
 import { badgeText } from "./badge";
 import { type Answer, type Entry, parseAnswered, parseState } from "./bridge";
 import { macHours } from "./clock";
@@ -142,7 +144,10 @@ function start(): void {
     menuBar.stop();
     widgets.close();
   });
-  app.on("web-contents-created", (_e, contents) => guard(contents));
+  app.on("web-contents-created", (_e, contents) => {
+    guard(contents);
+    rightClick(contents);
+  });
   app.whenReady().then(ready);
 }
 
@@ -155,6 +160,17 @@ async function ready(): Promise<void> {
     settings.notified = ids;
     save();
   });
+
+  Menu.setApplicationMenu(
+    Menu.buildFromTemplate(
+      appMenu({
+        settings: showSettings,
+        find: findInPage,
+        docs: () => shell.openExternal(`${origin}/docs`),
+        development: !app.isPackaged,
+      }),
+    ),
+  );
 
   const ses = session.fromPartition("persist:starbridge");
   // The page copies codes and keys, and shows quota alerts and ended runs as web notifications; items notify
@@ -453,6 +469,26 @@ function guard(contents: WebContents): void {
     if (!e.isMainFrame) e.preventDefault();
   });
   contents.on("will-attach-webview", (e) => e.preventDefault());
+}
+
+/** The right-click menu (#1857): Copy, Look Up and Copy Link, and the edit items in a field. */
+function rightClick(contents: WebContents): void {
+  contents.on("context-menu", (_e, p) => {
+    const items = contextMenu(p, {
+      copyLink: (url) => clipboard.writeText(url),
+      lookUp: () => contents.showDefinitionForSelection(),
+    });
+    const window = BrowserWindow.fromWebContents(contents) ?? undefined;
+    if (items.length) Menu.buildFromTemplate(items).popup({ window });
+  });
+}
+
+/** Find… (⌘F): the page's Find box, which the / key focuses, so the page owns what Find means. */
+function findInPage(): void {
+  const contents = win?.webContents;
+  if (!win || win.isDestroyed() || !contents || !fromServer(contents.getURL())) return;
+  showWindow();
+  for (const type of ["keyDown", "keyUp"] as const) contents.sendInputEvent({ type, keyCode: "/" });
 }
 
 /**
