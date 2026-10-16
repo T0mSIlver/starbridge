@@ -74,8 +74,11 @@ type Part = { dir: string; manifest: Manifest };
 
 export function parts(root: string): Part[] {
   if (!existsSync(root)) return [];
-  return readdirSync(root)
-    .map((d) => join(root, d))
+  // download-artifact puts a lone artifact's files in the folder itself, not in a subfolder.
+  const folders = existsSync(join(root, "manifest.json"))
+    ? [root]
+    : readdirSync(root).map((d) => join(root, d));
+  return folders
     .filter((d) => existsSync(join(d, "manifest.json")))
     .map((dir) => ({ dir, manifest: JSON.parse(readFileSync(join(dir, "manifest.json"), "utf8")) }))
     .sort((a, b) => a.manifest.shard.localeCompare(b.manifest.shard));
