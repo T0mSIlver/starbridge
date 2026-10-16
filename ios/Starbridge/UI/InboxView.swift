@@ -107,11 +107,11 @@ struct InboxView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
-                        Picker("View", selection: $grouping) {
+                        Picker("Group by", selection: $grouping) {
                             ForEach(Grouping.allCases, id: \.self) { Text($0.label).tag($0) }
                         }
                     } label: {
-                        Image(systemName: "ellipsis.circle").accessibilityLabel("Options")
+                        Image(systemName: "ellipsis.circle").accessibilityLabel("Group by")
                     }
                 }
             }
