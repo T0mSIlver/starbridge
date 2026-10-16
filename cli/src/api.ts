@@ -11,6 +11,12 @@ import { VERSION } from "./version";
 export const REMOVED =
   "this machine was removed from your Starbridge account: run `starbridge pair --force` to add it again";
 
+/** `REMOVED` for a machine `STARBRIDGE_MACHINE` carries, which has no folder to pair again (#1838). */
+export const REMOVED_CLOUD =
+  "this machine was removed from your Starbridge account: run `starbridge machine export` on a paired machine, then replace STARBRIDGE_MACHINE with its line";
+
+export const removedText = (cloud: boolean) => (cloud ? REMOVED_CLOUD : REMOVED);
+
 export class ApiError extends Error {
   /** With a 429, the seconds the server's Retry-After asks to wait. */
   retryAfter?: number;
@@ -89,6 +95,7 @@ export class Api {
   constructor(
     readonly server: string,
     private readonly token?: string,
+    private readonly cloud = false,
   ) {}
 
   private async call(
@@ -146,7 +153,12 @@ export class Api {
         );
       // The server drops a machine's token when the directory revokes the machine.
       if (res.status === 401 && this.token)
-        throw new ApiError(401, e.error ?? serverText(res.statusText) ?? "", e.detail, REMOVED);
+        throw new ApiError(
+          401,
+          e.error ?? serverText(res.statusText) ?? "",
+          e.detail,
+          removedText(this.cloud),
+        );
       const err = new ApiError(
         res.status,
         e.error ?? serverText(res.statusText) ?? "",

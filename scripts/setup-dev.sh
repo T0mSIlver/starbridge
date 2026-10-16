@@ -5,7 +5,10 @@
 # (scripts/worktree-setup.sh). Safe to run again: each step skips what is already there.
 # CONTRIBUTING.md, "Set up a box", says how to use it.
 #
-#   scripts/setup-dev.sh [--android] [--no-browser] [--dry-run]
+#   scripts/setup-dev.sh [--android] [--no-browser] [--skills <owner/repo>] [--dry-run]
+#
+# --skills (or SKILLS_REPO) also runs that repository's scripts/install-skills.sh, which puts
+# your own Claude Code skills in ~/.claude/skills.
 set -euo pipefail
 
 BUN_VERSION=1.4.2   # CI's pin, in .github/workflows/*.yml
@@ -14,15 +17,22 @@ NODE_VERSION=24.18.0
 ANDROID_PACKAGES=("platforms;android-37.0" "build-tools;37.0.0" "platform-tools")
 RAW=${STARBRIDGE_RAW:-https://raw.githubusercontent.com/T0mSIlver/starbridge/main}
 
-android=0 browser=1 dry=0
-for arg in "$@"; do
-  case $arg in
+android=0 browser=1 dry=0 skills=${SKILLS_REPO:-}
+usage="usage: setup-dev.sh [--android] [--no-browser] [--skills <owner/repo>] [--dry-run]"
+while [ $# -gt 0 ]; do
+  case $1 in
     --android) android=1 ;;
     --no-browser) browser=0 ;;
     --dry-run) dry=1 ;;
-    -h | --help) echo "usage: setup-dev.sh [--android] [--no-browser] [--dry-run]"; exit 0 ;;
-    *) echo "setup-dev: unknown option $arg" >&2; exit 2 ;;
+    --skills)
+      [ $# -gt 1 ] || { echo "$usage" >&2; exit 2; }
+      skills=$2
+      shift
+      ;;
+    -h | --help) echo "$usage"; exit 0 ;;
+    *) echo "setup-dev: unknown option $1" >&2; exit 2 ;;
   esac
+  shift
 done
 
 say() { printf 'setup-dev: %s\n' "$*"; }
@@ -176,6 +186,20 @@ for p in ET.parse(sys.stdin).getroot().iter("remotePackage"):
       say "writing android/local.properties with sdk.dir=$sdk"
       [ "$dry" = 1 ] || echo "sdk.dir=$sdk" >"$repo/android/local.properties"
     fi
+  fi
+fi
+
+# Your own Claude Code skills, from a repository of yours that has scripts/install-skills.sh.
+if [ -n "$skills" ]; then
+  if [[ $skills =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]; then
+    url=https://raw.githubusercontent.com/$skills/main/scripts/install-skills.sh
+    if [ "$dry" = 1 ]; then
+      echo "+ curl -fsSL $url | bash"
+    else
+      curl -fsSL "$url" | bash || warn "the skills from $skills did not install"
+    fi
+  else
+    warn "--skills takes owner/repo, not $skills"
   fi
 fi
 
