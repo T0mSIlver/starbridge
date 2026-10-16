@@ -42,7 +42,8 @@ its options as notification actions when the browser can show all of them.
 `starbridge pair` approval and a refusal, `starbridge quota push`, answering `starbridge ask
 --wait`, a second browser by pairing code, a third by the recovery key, a revoke, and a
 sign-in again that binds the new session to the existing device. It writes
-the screenshots in `screenshots/`. Ports 3870 to 3873 on localhost.
+the screenshots in `screenshots/`, or with `EVIDENCE=<dir>` the PR evidence ([docs/ci.md](../docs/ci.md#evidence)). It takes
+free ports on localhost.
 
 ```bash
 npx playwright install firefox
@@ -50,6 +51,14 @@ npx playwright install firefox
 
 ```bash
 xvfb-run -a node web/e2e/run.ts
+```
+
+`e2e/drive.ts` runs one scenario on the same stack, after signing in, setting up the first
+device and pairing a machine: how an agent verifying a pull request drives the app
+([verify-web](../.claude/skills/verify-web/SKILL.md)).
+
+```bash
+xvfb-run -a node web/e2e/drive.ts .claude/skills/verify-web/scenarios/ask-answer.ts out
 ```
 
 It runs headed because headless Firefox cannot show notifications. With `codexbar` on the PATH the

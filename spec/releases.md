@@ -165,6 +165,18 @@
   go from main. The jobs that read them run on GitHub's runners (#1825, CI runners below), so
   staging's and prod's SSH take connections from any address, key only: a firewall that limited
   port 22 to the home network would stop every deploy.
+- **Owner review of .github/ and deploy/** (#1833). The keys sit in environments that admit main
+  and `v*` tags only, and ask for no approval: a tap per signing job, several per rc and one per
+  app merge for the internal track, would train the owner to tap without reading. What a key can
+  do is set by main's workflows and deploy scripts, so the owner reviews changes to those instead:
+  a pull request that changes `.github/` or `deploy/` gets the label `owner-review`, and the
+  commit status `owner review`, which main's ruleset requires, passes only once it also carries
+  `owner-ok`. The orchestrator sets that label after the owner's yes on a card, for the commit the
+  pull request then holds; a push removes it, and the status belongs to one commit anyway.
+  `owner-review.yml` runs on `pull_request_target`, so main's copy judges every pull request,
+  including one that edits it, and runs nothing from the pull request. Admins cannot bypass the
+  environments' branch and tag policies (`.github/owner-gates.sh`). It stops a mistaken merge,
+  not a holder of the owner's token, who can set the label too.
 - **Release notes by product** (#1057). A list of PR titles told users little. Each PR body has
   a "Release notes" section, one `Product: line` per product a user sees change (Android, iOS since TestFlight takes every tag (#1451), Web,
   Desktop, CLI, Server, Docs) or `None`, optionally `None: why`, written by whoever knows the change; it can be edited
@@ -347,7 +359,7 @@
   the evidence and judges it. A fork's pull request gets no comment, since the job writes to the
   repository.
 - **CI runners** (#146, #1204, #1213, #1638). Self-hosted Linux runners in two pools that never
-  share a box: `trusted` runs main's tests, the image builds, uptime checks, the release's version
+  share a box: `trusted` runs main's tests, uptime checks, the release's version
   check and the nightly flaky-test count (#1657); `pr` runs the
   test and image jobs of a pull request from this repository's own branches, so they start sooner
   than on GitHub's runners. The e2e stays on GitHub's runners: its three parts per run queued a
@@ -357,8 +369,9 @@
   Windows and macOS. Main's unsigned Android build uses its own runner, `ANDROID_RUNNER`.
   Every job that reads a signing or deploy key, or builds a file a release signs (the APK and App
   Bundle, the CLI binaries, the minisign signature, the Homebrew formula, the internal track's
-  build, staging's and prod's deploys), runs on GitHub's runners (#1825), so a compromised box
-  on the home network reaches neither a key nor the bytes a key vouches for. Each Android push to main also builds on GitHub's runner, to save the Gradle
+  build, staging's and prod's deploys), or builds or picks the server and web images prod runs
+  (#1839), runs on GitHub's runners (#1825), so a compromised box on the home network reaches
+  neither a key nor the bytes a key vouches for or prod runs. Each Android push to main also builds on GitHub's runner, to save the Gradle
   cache that pull requests restore there (#1662). The PR pool holds no secrets, and no pull
   request job reaches the other two.
   Each runner registers for one job, and its slot wipes that job's folders before the next;

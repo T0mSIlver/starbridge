@@ -8,8 +8,8 @@ import {
   verifyDirectory,
   withheldBy,
 } from "@starbridge/protocol";
-import { Api, REMOVED } from "./api";
-import { decodeKeys, type Machine, type State, type Store } from "./config";
+import { Api, removedText } from "./api";
+import { carries, decodeKeys, type Machine, type State, type Store } from "./config";
 
 /** Everything a command touches outside its arguments, so tests can run commands in-process. */
 export interface Ctx {
@@ -43,12 +43,20 @@ export interface Session {
   machine: Machine;
   keys: MemberKeys;
   api: Api;
+  /** The machine came from `STARBRIDGE_MACHINE`. */
+  cloud: boolean;
 }
 
 export function session(ctx: Ctx): Session {
   const machine = ctx.store.machine();
   if (!machine) throw new UsageError("this machine is not paired: run `starbridge pair` first");
-  return { machine, keys: decodeKeys(machine.keys), api: new Api(machine.server, machine.token) };
+  const cloud = carries(ctx.env.STARBRIDGE_MACHINE, machine);
+  return {
+    machine,
+    keys: decodeKeys(machine.keys),
+    api: new Api(machine.server, machine.token, cloud),
+    cloud,
+  };
 }
 
 /**
@@ -86,7 +94,7 @@ export async function refreshDirectory(
     return ours;
   });
   const me = dir.members.get(s.machine.id);
-  if (!me?.active) throw new UsageError(REMOVED);
+  if (!me?.active) throw new UsageError(removedText(s.cloud));
   return dir;
 }
 

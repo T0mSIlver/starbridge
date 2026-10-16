@@ -8,7 +8,7 @@ import { CLIENT_HEADER, clientHeader, type QuotaSnapshot } from "@starbridge/pro
 import type { Status } from "../agent/api";
 import { AgentClient, Interrupted, withAgent } from "../agent/client";
 import { askVia, quotaVia } from "../agent/commands";
-import { ApiError, REMOVED, Unreachable } from "../api";
+import { ApiError, REMOVED, REMOVED_CLOUD, Unreachable } from "../api";
 import { autoOn } from "../autoupdate";
 import type { AgentConfig } from "../config";
 import { type Ctx, refreshDirectory, session, UsageError } from "../context";
@@ -180,7 +180,8 @@ async function checkPairing(ctx: Ctx): Promise<"paired" | "removed" | { why: str
     return "paired";
   } catch (e) {
     if (e instanceof ApiError && e.status === 401) return "removed";
-    if (e instanceof UsageError && e.message === REMOVED) return "removed";
+    if (e instanceof UsageError && (e.message === REMOVED || e.message === REMOVED_CLOUD))
+      return "removed";
     if (e instanceof Unreachable) return { why: e.message };
     if ((e as Error).name === "TimeoutError")
       return { why: `cannot reach ${trimServer(s.machine.server)}: no answer in 15 s` };

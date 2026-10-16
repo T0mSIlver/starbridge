@@ -136,7 +136,8 @@ export function runningOut(w: QuotaWindow, now: Date): boolean {
 
 /**
  * The cards to show (spec/items.md, "Quota order"): hidden providers out, the rest by provider in the
- * settings' order, each provider's windows in the uploader's order. With `runningOutFirst`,
+ * settings' order, a provider's machines by name (the server's order is by machine id, which differs
+ * between accounts), each machine's windows in the uploader's order. With `runningOutFirst`,
  * windows that will run out or ran out, and have not reset, lead in that same order.
  */
 export function arrange(
@@ -153,6 +154,7 @@ export function arrange(
       (a, b) =>
         lead(a.c) - lead(b.c) ||
         (rank.get(a.c.provider) ?? 0) - (rank.get(b.c.provider) ?? 0) ||
+        (a.c.machine ?? "").localeCompare(b.c.machine ?? "") ||
         a.i - b.i,
     )
     .map(({ c }) => c);
