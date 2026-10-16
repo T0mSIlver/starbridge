@@ -374,7 +374,8 @@ into `web/src/styles/tokens.css` and `type.css`, into
 `android/app/src/main/kotlin/dev/starbridge/app/ui/theme/Tokens.kt` and into
 `ios/Starbridge/Theme/Tokens.swift`, so every client shares colours, type and
 spacing. The iPhone sets the type roles in SF Pro rather than Google Sans Flex,
-whose case (the face of Google's own apps) holds only on Android. Change a value here, then run
+whose case (the face of Google's own apps) holds only on Android. So does the Mac app's
+window, through `data-platform="mac"` (spec/desktop.md); the web in a browser keeps Google Sans Flex. Change a value here, then run
 `bun web/scripts/tokens.ts`; `--check` fails when an output is stale.
 
 ## The look
