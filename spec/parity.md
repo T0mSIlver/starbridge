@@ -17,7 +17,7 @@ Android's and iOS's tests read, so a change to one fails the others until they f
 | Typed reply (field under the options, Enter sends) | yes | yes | yes | yes (#1122: field in the detail, the arrow sends; Return starts a new line) |
 | Drafts | yes (until the page reloads) | yes (survives rotation and process death) | yes (as web) | yes (#1122: until the app quits) |
 | Snooze | yes | yes | yes | yes (#1131: in the detail, times in place under Snooze; the time in the system picker) |
-| Snooze button (#1848: a round tonal icon button at the end of the session's line, the session's name as grey text before it) | yes (the web's own `snooze` icon) | yes (Material Symbols Rounded) | yes (a clock, as the Mac draws it) | yes (an SF Symbol) |
+| Snooze button (#1848: a round tonal icon button at the end of the session's line, the session's name as grey text before it) | yes (a clock from the web's icon set) | yes (Material Symbols Rounded) | yes (the web's clock) | yes (an SF Symbol) |
 | Swipe to snooze | no (Android gesture; web has the Snooze control only) | yes (#692) | no (as web) | yes (#1236: Undo in a bar at the bottom, as Android's snackbar) |
 | History | yes | yes | yes | yes (#1122: answered questions, with how; prompts not listed) |
 | Find | yes (rail box) | yes (Material 3 search view) | yes | yes (#1131: the system search field) |

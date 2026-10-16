@@ -689,10 +689,9 @@ screen). Link chips take GitHub's Octicons (MIT), filled on their 16-unit
 grid, in every client: a GitHub link's kind, and `browser` for a Claude
 artifact. No other brand marks.
 
-Snooze's icon follows its platform (#1848): the web draws its own `snooze`; the
-Mac app, a clock (Lucide, ISC) at a 1.5 stroke, since SF Symbols are licensed
-for Apple platforms and the page is served to every browser; Android, Material
-Symbols Rounded; iOS, an SF Symbol.
+Snooze's icon follows its platform (#1848): a clock on the web and in the Mac app (the
+web's own set; SF Symbols are licensed for Apple platforms and the page is served to every
+browser), Material Symbols Rounded's `snooze` on Android, an SF Symbol on iOS.
 
 ## The mark
 

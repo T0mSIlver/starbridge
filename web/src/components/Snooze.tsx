@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { desktop } from "@/lib/desktop";
 import { usePref } from "@/lib/prefs";
 import {
   dayLabel,
@@ -21,7 +20,7 @@ import ui from "./ui.module.css";
 /**
  * Snooze's round icon button and its times (#571, #699, #1848), up to 7 days ahead. Quiet, as
  * Done: putting a question off is never the default. `label` names it for screen readers and the
- * tooltip. The Mac app draws a clock, as the Mac does; the web, its own snooze icon.
+ * tooltip. Its icon is a clock, on the web and in the Mac app alike.
  */
 export function SnoozeMenu({
   label,
@@ -68,7 +67,7 @@ export function SnoozeMenu({
         aria-expanded={open}
         onClick={() => setOpen(!open)}
       >
-        <Icon name={desktop ? "clock" : "snooze"} size={22} />
+        <Icon name="clock" size={22} />
       </button>
       {open && <SnoozeTimes now={now} clock={clock} onPick={pick} />}
     </div>
