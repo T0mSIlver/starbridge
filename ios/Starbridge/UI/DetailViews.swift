@@ -246,7 +246,7 @@ struct SnoozeControls: View {
     }
 
     private func quiet(_ text: String, _ action: @escaping () -> Void) -> some View {
-        Button(action: action) { Text(text).type(Tokens.Typography.action).underline() }
+        Button(action: action) { Text(text).type(Tokens.Typography.action).foregroundStyle(Tokens.Colors.fg2.color) }
             .buttonStyle(.plain)
             .frame(minHeight: Tokens.Sizes.tap)
     }
