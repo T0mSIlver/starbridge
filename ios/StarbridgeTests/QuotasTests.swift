@@ -81,6 +81,8 @@ final class QuotasTests: XCTestCase {
         func names(_ rows: [QuotaRow]) -> [String] { QuotaSettings().arrange(rows, now).map { "\($0.machine!) \($0.window)" } }
         XCTAssertEqual(names(alpha + beta), expected)
         XCTAssertEqual(names(beta + alpha), expected)
+        // Digits compare as text, as web's localeCompare does: "Mac 10" before "Mac 2".
+        XCTAssertEqual(names([on("Mac 2", "5-hour"), on("Mac 10", "5-hour")]), ["Mac 10 5-hour", "Mac 2 5-hour"])
     }
 
     func testABarShowsUsedOrLeftOnOneScale() {

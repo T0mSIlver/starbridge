@@ -132,7 +132,7 @@ struct QuotaSettings: Codable, Equatable {
             .sorted { a, b in
                 let (ra, rb) = (rank[a.element.provider]!, rank[b.element.provider]!)
                 if ra != rb { return ra < rb }
-                let byName = (a.element.machine ?? "").localizedStandardCompare(b.element.machine ?? "")
+                let byName = (a.element.machine ?? "").localizedCompare(b.element.machine ?? "")
                 return byName == .orderedSame ? a.offset < b.offset : byName == .orderedAscending
             }
             .map(\.element)
