@@ -155,6 +155,14 @@ const PATHS = {
       <path d="M3.5 4.5 6 2.5M20.5 4.5 18 2.5M9.5 10h5l-5 6h5" />
     </>
   ),
+  // Snooze's button (#1848): a plain clock, the geometry of Lucide's clock (ISC, © Lucide Icons
+  // and Contributors) at this set's stroke. Not `snooze`, whose alarm with a Z is Material's.
+  clock: (
+    <>
+      <circle cx="12" cy="12" r="10" />
+      <path d="M12 6v6l4 2" />
+    </>
+  ),
   history: (
     <>
       <path d="M3 12a9 9 0 1 0 3-6.7L3 8" />

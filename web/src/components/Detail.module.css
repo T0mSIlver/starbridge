@@ -248,12 +248,13 @@
   text-decoration: none;
 }
 
-/* Done, Snooze and Back now on one line, under the answer. */
+/* Done, Back now and the Snooze button at the end of the session's line, under the answer. */
 .quiet {
   display: flex;
-  flex-wrap: wrap;
+  flex: none;
   align-items: center;
-  gap: var(--s2) var(--s5);
+  gap: var(--s4);
+  margin-left: auto;
 }
 
 .quiet .reply {

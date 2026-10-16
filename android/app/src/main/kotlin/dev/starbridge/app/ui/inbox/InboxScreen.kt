@@ -41,6 +41,8 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.FilledTonalIconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialShapes
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -744,8 +746,8 @@ fun DecisionSheet(decision: Decision, now: Instant, onAnswer: (String, String?, 
         // (#539), and putting it off (#571).
         footer = {
             if (done) Done { send(null, null) }
-            if (snooze != null) Quiet(if (until != null) "Snooze again" else "Snooze") { snoozing = !snoozing; tapped = snoozing }
             if (snooze != null && until != null) Quiet("Back now") { snooze(Instant.now()) }
+            if (snooze != null) SnoozeButton(if (until != null) "Snooze again" else "Snooze") { snoozing = !snoozing; tapped = snoozing }
         },
         below = {
             if (snooze != null && snoozing) {
@@ -840,7 +842,20 @@ private fun Picks(decision: Decision, answer: (String?, String?) -> Unit) {
 private fun Reply(id: String, replies: Replies, onAnswer: (String) -> Unit) =
     FreeText(replies.drafts[id].orEmpty(), { replies.drafts[id] = it }, onAnswer)
 
-/** A quiet text button under a question's answer: Snooze, Back now. */
+/** Snooze, a round tonal icon button at the end of the session's line (#1848); [label] names it for TalkBack. */
+@Composable
+private fun SnoozeButton(label: String, onClick: () -> Unit) {
+    FilledTonalIconButton(
+        onClick = onClick,
+        modifier = Modifier.size(48.dp),
+        colors = IconButtonDefaults.filledTonalIconButtonColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+            contentColor = MaterialTheme.colorScheme.onSurface,
+        ),
+    ) { Symbol(Sym.Snooze, contentDescription = label) }
+}
+
+/** A quiet text button under a question's answer: Back now, Done. */
 @Composable
 private fun Quiet(label: String, onClick: () -> Unit) {
     TextButton(onClick = onClick, colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.onSurfaceVariant)) {

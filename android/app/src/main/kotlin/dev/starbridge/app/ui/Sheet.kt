@@ -12,7 +12,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -82,7 +81,7 @@ fun SheetBody(
     agent: String?,
     blocked: String? = null,
     head: @Composable () -> Unit = {},
-    /** Quiet actions at the start of the session's line (#970), and what they open under it. */
+    /** Quiet actions at the end of the session's line (#970, #1848), and what they open under it. */
     footer: @Composable RowScope.() -> Unit = {},
     below: @Composable () -> Unit = {},
     content: @Composable () -> Unit,
@@ -105,8 +104,7 @@ fun SheetBody(
         // Below a filled head, the body keeps its distance from the ground's edge.
         Column(Modifier.padding(start = Spacing.s4, end = Spacing.s4, top = if (blocked != null) 14.dp else 0.dp, bottom = Spacing.s4)) {
             content()
-            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant, modifier = Modifier.padding(top = 14.dp))
-            SessionLine(source, agent, Modifier.padding(top = Spacing.s1), footer)
+            SessionLine(source, agent, Modifier.padding(top = Spacing.s2), footer)
             below()
         }
     }
