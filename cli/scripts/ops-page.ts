@@ -331,7 +331,7 @@ export function render(f: Facts): string {
     .map((t) => `<li>${esc(t)}</li>`)
     .join("");
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex">
-<title>Ops · Starbridge</title><link rel="icon" href="favicon.ico" sizes="48x48"><link rel="preload" href="fonts/google-sans-flex.woff2" as="font" type="font/woff2" crossorigin>
+<title>Ops · Starbridge</title><link rel="icon" href="favicon.ico" sizes="48x48"><link rel="icon" href="icon.svg" type="image/svg+xml"><link rel="preload" href="fonts/google-sans-flex.woff2" as="font" type="font/woff2" crossorigin>
 <style>${CSS}</style></head><body><main>
 <header><span class="brand">${MARK}Starbridge ops</span></header>
 <div class="card intro"><h1>Rings</h1><p>Main: staging.starbridge.run, your phone.<br>rc: testers, starbridge.run.<br>Final: everyone.</p><p><a href="https://github.com/${REPO}/blob/main/spec/releases.md">spec/releases.md</a> · <a href="${POLICY}">Policy</a></p></div>
@@ -576,4 +576,5 @@ if (import.meta.main) {
     join(out, "fonts/google-sans-flex.woff2"),
   );
   copyFileSync("web/src/app/favicon.ico", join(out, "favicon.ico"));
+  copyFileSync("web/src/app/icon.svg", join(out, "icon.svg"));
 }
