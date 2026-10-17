@@ -35,11 +35,12 @@ export const MANAGED = {
 const PLUGINS = ["starbridge@starbridge", "starbridge-mod@starbridge"];
 
 /** Runs a command quietly; null when it is not on the PATH. */
-function sh(ctx: Ctx, cmd: string, args: string[]) {
+function sh(ctx: Ctx, cmd: string, args: string[], cwd?: string) {
   const bin = resolveCommand(ctx.env, cmd);
   if (!bin) return null;
   const start = spawnable(bin, args, ctx.env);
   const r = spawnSync(start.file, start.args, {
+    cwd,
     env: ctx.env as NodeJS.ProcessEnv,
     encoding: "utf8",
     windowsVerbatimArguments: start.windowsVerbatimArguments,
@@ -69,9 +70,14 @@ async function restartAgent(ctx: Ctx) {
   ctx.out(r?.ok ? "Restarted the starbridge agent." : `Could not restart the agent: ${r?.out}`);
 }
 
-/** Updates the Claude Code plugins this machine has installed from the Starbridge marketplace. */
+/**
+ * Updates the Claude Code plugins this machine has installed from the Starbridge marketplace,
+ * running `claude` from the home directory as setup does, so no repository's `.claude` settings
+ * are read or edited (#762).
+ */
 function updatePlugins(ctx: Ctx) {
-  const list = sh(ctx, "claude", ["plugin", "list", "--json"]);
+  const claude = (...args: string[]) => sh(ctx, "claude", args, ctx.env.HOME ?? homedir());
+  const list = claude("plugin", "list", "--json");
   if (!list?.ok) return;
   let ids: string[];
   try {
@@ -80,7 +86,7 @@ function updatePlugins(ctx: Ctx) {
     return;
   }
   for (const id of PLUGINS.filter((p) => ids.includes(p))) {
-    const r = sh(ctx, "claude", ["plugin", "update", id]);
+    const r = claude("plugin", "update", id);
     ctx.out(r?.ok ? `Updated the ${id} plugin.` : `Could not update the ${id} plugin: ${r?.out}`);
   }
 }
