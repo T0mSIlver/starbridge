@@ -1021,7 +1021,7 @@ async function main() {
       throw new Error("the open decision has no chip for its Claude artifact");
 
     // Desktop: one selection, whether picked by click or by J and K; focus follows it in the list.
-    const row = page.locator('[aria-current="true"]:has(button[data-id])');
+    const row = page.locator("[data-row]:has(button[aria-current='true'])");
     const detail = page.locator('section[aria-label="Selected"] h2');
     await page.locator("button[data-id]").first().click();
     for (const key of ["j", "j", "k"]) {
@@ -1033,6 +1033,24 @@ async function main() {
         );
       if (!(await row.evaluate((el) => el.contains(document.activeElement))))
         throw new Error(`after ${key}, focus is not on the selected row`);
+    }
+    step("the inbox list tells a screen reader what is selected, grouped and listed (#1942)");
+    {
+      const list = page.locator('section[aria-label="Inbox"]');
+      // The selected row's own button says so; its wrapper does not repeat it.
+      if ((await list.locator('button[aria-current="true"]').count()) !== 1)
+        throw new Error("exactly one row's button should be aria-current");
+      if ((await list.locator("li[aria-current]").count()) !== 0)
+        throw new Error("a row's wrapper carries aria-current, where nothing can focus");
+      const heads = await list.getByRole("heading", { level: 2 }).allInnerTexts();
+      if (!heads.some((h) => h.startsWith("Needs you")))
+        throw new Error(`no heading names the Needs you group: ${heads}`);
+      // Every listed row is a list item, and the list names its items.
+      const rows = await list
+        .locator("[data-id]")
+        .evaluateAll((buttons) => buttons.filter((b) => b.parentElement?.tagName !== "LI").length);
+      const items = await list.getByRole("listitem").count();
+      if (items === 0 || rows > 0) throw new Error(`${items} list items, ${rows} rows outside one`);
     }
     step("on a phone, Back closes an open question first; a reload and a link keep it (#347)");
     {
@@ -1281,6 +1299,11 @@ async function main() {
     );
     const [mootId] = await moot.waitFor(/d_[\w-]+/);
     if ((await moot.exited) !== 0) throw new Error("ask failed");
+    // A question arriving in an open page is announced by a polite status (#1942).
+    await page
+      .getByRole("status")
+      .filter({ hasText: /^New question from .*: Retry the flaky upload test\?$/ })
+      .waitFor({ state: "attached", timeout: 30_000 });
     const reason = "Fixed it myself after rereading the logs";
     const withdraw = cli(
       "withdraw",

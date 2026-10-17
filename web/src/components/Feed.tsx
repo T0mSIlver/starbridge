@@ -241,15 +241,16 @@ export function NeedRow({
       ? `${waitingLabel(now - Date.parse(since))}. `
       : "";
   return (
-    <div
+    <li
       className={`${s.row} ${comfy ? s.comfy : ""} ${since ? s.blocks : ""}`}
-      aria-current={selected ? "true" : undefined}
+      data-selected={selected ? "" : undefined}
       data-row={entry.id}
     >
       <button
         type="button"
         className={s.hit}
         data-id={entry.id}
+        aria-current={selected ? "true" : undefined}
         aria-label={waited + label(entry)}
         tabIndex={selected ? 0 : -1}
         onClick={onSelect}
@@ -296,7 +297,7 @@ export function NeedRow({
         ) : null}
         {actions && <div className={s.actions}>{actions}</div>}
       </div>
-    </div>
+    </li>
   );
 }
 
@@ -323,7 +324,7 @@ function PromptBody({ p, comfy, filled }: { p: PromptItem; comfy?: boolean; fill
   );
 }
 
-const label = (e: Entry) =>
+export const label = (e: Entry) =>
   e.type === "prompt"
     ? `${e.item.permission.description || e.item.permission.tool}: ${e.item.permission.summary}`
     : e.type === "question"
@@ -435,20 +436,22 @@ export function RunsHead({
   const failed = states.filter((x) => x === "failed").length;
   const lost = states.filter((x) => x === "lost").length;
   return (
-    <button
-      type="button"
-      className={`${comfy ? "t-small" : "t-meta"} ${s.historyHead} ${comfy ? s.comfy : ""}`}
-      aria-expanded={open}
-      onClick={onToggle}
-    >
-      {/* A circled play, as History's clock: a bare triangle read as a second chevron (#868). */}
-      <Icon name="run" size={16} />
-      <span className={s.historyTitle}>Runs</span>
-      <span>{runs.length}</span>
-      {failed > 0 && <span className={`${s.outcome} ${s.bad}`}>· {failed} failed</span>}
-      {lost > 0 && <span>· {lost} lost</span>}
-      <Icon name="chev" size={16} className={s.chev} />
-    </button>
+    <h2 className={s.headBox}>
+      <button
+        type="button"
+        className={`${comfy ? "t-small" : "t-meta"} ${s.historyHead} ${comfy ? s.comfy : ""}`}
+        aria-expanded={open}
+        onClick={onToggle}
+      >
+        {/* A circled play, as History's clock: a bare triangle read as a second chevron (#868). */}
+        <Icon name="run" size={16} />
+        <span className={s.historyTitle}>Runs</span>
+        <span>{runs.length}</span>
+        {failed > 0 && <span className={`${s.outcome} ${s.bad}`}>· {failed} failed</span>}
+        {lost > 0 && <span>· {lost} lost</span>}
+        <Icon name="chev" size={16} className={s.chev} />
+      </button>
+    </h2>
   );
 }
 
@@ -465,17 +468,19 @@ export function HistoryHead({
   onToggle: () => void;
 }) {
   return (
-    <button
-      type="button"
-      className={`${comfy ? "t-small" : "t-meta"} ${s.historyHead} ${comfy ? s.comfy : ""}`}
-      aria-expanded={open}
-      onClick={onToggle}
-    >
-      <Icon name="history" size={16} />
-      <span className={s.historyTitle}>History</span>
-      <span>{count} answered today</span>
-      <Icon name="chev" size={16} className={s.chev} />
-    </button>
+    <h2 className={s.headBox}>
+      <button
+        type="button"
+        className={`${comfy ? "t-small" : "t-meta"} ${s.historyHead} ${comfy ? s.comfy : ""}`}
+        aria-expanded={open}
+        onClick={onToggle}
+      >
+        <Icon name="history" size={16} />
+        <span className={s.historyTitle}>History</span>
+        <span>{count} answered today</span>
+        <Icon name="chev" size={16} className={s.chev} />
+      </button>
+    </h2>
   );
 }
 
@@ -514,17 +519,19 @@ export function SnoozedHead({
   onToggle: () => void;
 }) {
   return (
-    <button
-      type="button"
-      className={`${comfy ? "t-small" : "t-meta"} ${s.historyHead} ${comfy ? s.comfy : ""}`}
-      aria-expanded={open}
-      onClick={onToggle}
-    >
-      <Icon name="snooze" size={16} />
-      <span className={s.historyTitle}>Snoozed</span>
-      <span>{count}</span>
-      <Icon name="chev" size={16} className={s.chev} />
-    </button>
+    <h2 className={s.headBox}>
+      <button
+        type="button"
+        className={`${comfy ? "t-small" : "t-meta"} ${s.historyHead} ${comfy ? s.comfy : ""}`}
+        aria-expanded={open}
+        onClick={onToggle}
+      >
+        <Icon name="snooze" size={16} />
+        <span className={s.historyTitle}>Snoozed</span>
+        <span>{count}</span>
+        <Icon name="chev" size={16} className={s.chev} />
+      </button>
+    </h2>
   );
 }
 
@@ -542,14 +549,15 @@ export function PastRow({
 }) {
   const e = past.entry;
   return (
-    <div
+    <li
       className={`${s.row} ${s.past} ${comfy ? s.comfy : ""}`}
-      aria-current={selected ? "true" : undefined}
+      data-selected={selected ? "" : undefined}
     >
       <button
         type="button"
         className={s.hit}
         data-id={e.id}
+        aria-current={selected ? "true" : undefined}
         aria-label={past.text}
         tabIndex={selected ? 0 : -1}
         onClick={onSelect}
@@ -582,6 +590,6 @@ export function PastRow({
           )}
         </div>
       </div>
-    </div>
+    </li>
   );
 }
