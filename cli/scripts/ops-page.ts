@@ -154,20 +154,6 @@ export function promotion(f: Facts): Promotion {
   };
 }
 
-// What promotion changes for each app (spec/releases.md, "rcs for testers, finals for everyone").
-const WHAT_CHANGES: [string, string, string][] = [
-  ["Server and web", "Runs the rc", "Nothing new"],
-  [
-    "Android",
-    "Play Alpha, GitHub prerelease",
-    "GitHub latest (Obtainium), Play production once open",
-  ],
-  ["iPhone", "TestFlight", "App Store once approved"],
-  ["Mac app", "Apps with Release candidates on", "Every Mac app"],
-  ["CLI", "npm next", "npm latest, Homebrew, starbridge update, install.sh"],
-  ["Claude Code plugin", "Nobody", "Marketplace"],
-];
-
 const PRODUCTS = ["Server and web", "Android", "iPhone", "Mac app", "CLI", "Plugin"] as const;
 
 function where(p: (typeof PRODUCTS)[number], e: Releases["releases"][number], f: Facts): string {
@@ -186,7 +172,11 @@ function where(p: (typeof PRODUCTS)[number], e: Releases["releases"][number], f:
     if (c.homebrew) l.push("Homebrew");
     if (c.github) l.push(gh);
   }
-  if (p === "Plugin") l.push(e.ring === "final" ? "Marketplace after its PR" : "Finals only");
+  if (p === "Plugin") l.push(
+      e.ring === "final"
+        ? "Marketplace, once the PR pointing it at this tag merges"
+        : "Not published: the plugin ships with finals",
+    );
   void f;
   return l.join(" · ") || "not published";
 }
@@ -237,15 +227,10 @@ function promotionHtml(f: Facts): string {
     `No open regression issue: ${p.regressions ?? "unknown"} open.`,
     "Your yes on a card.",
   ];
-  const rows = WHAT_CHANGES.map(
-    ([name, now, then]) =>
-      `<div class="chg"><p class="name">${esc(name)}</p><p><span class="label">Now, rc</span><br>${esc(now)}</p><p><span class="label">After promotion</span><br>${esc(then)}</p></div>`,
-  ).join("");
-  return `<div class="card promo"><p class="verdict">${esc(p.verdict)}</p>${lines.map((l) => `<p>${esc(l)}</p>`).join("")}
+  return `<div class="card promo"><p class="verdict">${esc(p.candidate.version)} becomes ${esc(p.becomes)}: ${esc(p.verdict)}</p>${lines.map((l) => `<p>${esc(l)}</p>`).join("")}
 <p class="label">Earliest</p><p>${esc(both(p.earliest))}. A newer rc restarts the clock.</p>${p.holdsNewRc ? `<p>No new rc while this waits for your yes</p>` : ""}
 <p class="label">Needs</p><ul>${checks.map((c) => `<li>${esc(c)}</li>`).join("")}</ul>
-<p class="label">What it is</p><p>Promotion republishes ${esc(p.candidate.version)}'s code as ${esc(p.becomes)}, with no rebuild. New work then goes to ${esc(p.nextRc ?? "")}.</p>
-<div class="chgs">${rows}</div></div>`;
+<p>Promoting republishes ${esc(p.candidate.version)}'s builds as ${esc(p.becomes)} for everyone, with no rebuild; the Final column above shows where finals go. New work then goes to ${esc(p.nextRc ?? "")}.</p></div>`;
 }
 
 export function render(f: Facts): string {
@@ -263,7 +248,7 @@ export function render(f: Facts): string {
 <style>${CSS}</style></head><body><main>
 <header><span class="brand">${MARK}Starbridge ops</span></header>
 <div class="card intro"><h1>Rings</h1><p>Main: staging.starbridge.run, your phone.<br>rc: testers, starbridge.run.<br>Final: everyone.</p><p><a href="https://github.com/${REPO}/blob/main/spec/releases.md">spec/releases.md</a> · <a href="${POLICY}">Policy</a></p></div>
-<section><h2>Promotion</h2>${promotionHtml(f)}</section>
+<section><h2>Next final</h2>${promotionHtml(f)}</section>
 <section><h2>Now</h2><div class="card prods">${rows}</div></section>
 <section><h2>Next</h2><div class="card next"><ul>${nextRows}</ul></div></section>
 <footer><p>As of ${both(f.now)}</p></footer></main></body></html>`;
@@ -296,10 +281,9 @@ section{margin:0 0 40px}
 .where{font:400 14px/20px var(--sans)}
 .promo{padding:16px 24px 8px}.promo p{margin:0 0 8px}.promo .label{margin:16px 0 4px}.promo ul{margin:0 0 8px;padding-left:20px}.promo li{padding:2px 0}
 .verdict{font:500 18px/24px var(--sans)}
-.chgs{display:grid;grid-template-columns:repeat(3,1fr);gap:0 16px;margin-top:8px}.chg{padding:12px 0;border-top:1px solid var(--line);grid-column:1/-1;display:grid;grid-template-columns:subgrid}.chg p{margin:0}.chg .name{font:500 16px/24px var(--sans)}.chg .label{font-size:13px}
 .next{padding:16px 24px}.next ul{margin:0;padding-left:20px}.next li{padding:4px 0}
 footer{color:var(--fg2);font:400 13px/20px var(--sans)}
-@media (max-width:700px){main{padding:24px 16px 48px}.intro{padding:20px;margin:24px 0 32px}.prods,.next,.promo{padding-left:16px;padding-right:16px}.chgs{grid-template-columns:1fr}.chg{grid-template-columns:1fr;gap:6px}.rings{grid-template-columns:1fr;gap:12px}}`;
+@media (max-width:700px){main{padding:24px 16px 48px}.intro{padding:20px;margin:24px 0 32px}.prods,.next,.promo{padding-left:16px;padding-right:16px}.rings{grid-template-columns:1fr;gap:12px}}`;
 
 function sh(cmd: string, ...args: string[]): string {
   const r = spawnSync(cmd, args, { encoding: "utf8" });
