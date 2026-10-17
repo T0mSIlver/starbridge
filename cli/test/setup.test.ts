@@ -27,6 +27,7 @@ import { poll } from "../src/decisions";
 import { which } from "../src/platform";
 import { pushOnce } from "../src/quota";
 import { recordCodex, setRemoved } from "../src/setup/agents";
+import { ALLOW, addAllow, missingAllow } from "../src/setup/allow";
 import { codexPlugin } from "../src/setup/codex-plugin";
 import {
   compareCodexbar,
@@ -37,7 +38,6 @@ import {
   tarballKey,
   updateCodexbar,
 } from "../src/setup/codexbar";
-import { addCursorAllow, CURSOR_ALLOW } from "../src/setup/cursor";
 import {
   antigravityDir,
   antigravityState,
@@ -51,7 +51,7 @@ import {
 } from "../src/setup/harnesses";
 import { markedSkill } from "../src/setup/marker";
 import opencodeFiles from "../src/setup/opencode-files.js";
-import { addAllowRules, marketplaceText, missingAllowRules } from "../src/setup/plugins";
+import { marketplaceText } from "../src/setup/plugins";
 import {
   installService,
   removeService,
@@ -243,7 +243,7 @@ test("setup --yes installs the agent, the plugins and the skills, and uploads a 
   expect(readFileSync(join(m.home, ".cursor/skills/starbridge/SKILL.md"), "utf8")).toBe(skill);
   expect(
     JSON.parse(readFileSync(join(m.home, ".cursor/cli-config.json"), "utf8")).permissions.allow,
-  ).toEqual(CURSOR_ALLOW);
+  ).toEqual(ALLOW.cursor.rules);
   expect(out).toContain("✓ Cursor       skill installed, 4 starbridge commands allowed");
   // Its sessionStart hook adds the rule in Cursor's shape (#954).
   const cursorHooks = JSON.parse(readFileSync(join(m.home, ".cursor/hooks.json"), "utf8"));
@@ -639,7 +639,7 @@ test("Cursor: setup keeps the owner's config and skill, and refresh updates its 
   const opts = { yes: true, noQuota: true, noService: true } as const;
   await setup(m.sys, opts);
   expect(JSON.parse(readFileSync(config, "utf8"))).toEqual({
-    permissions: { allow: ["Shell(ls)", ...CURSOR_ALLOW], deny: [] },
+    permissions: { allow: ["Shell(ls)", ...ALLOW.cursor.rules], deny: [] },
     v: 1,
   });
 
@@ -1758,19 +1758,19 @@ test("setup replaces the allow entries of releases whose settle let --all throug
     m.settings,
     JSON.stringify({ permissions: { allow: ["Bash(ls)", "Bash(starbridge settle:*)"] } }),
   );
-  expect(missingAllowRules(m.sys)).toContain("Bash(starbridge settle:*)");
-  expect(addAllowRules(m.sys)).toBe(true);
+  expect(missingAllow(ALLOW.claude, m.sys)).toContain("Bash(starbridge settle:*)");
+  expect(addAllow(ALLOW.claude, m.sys)).toBe(true);
   const allow = JSON.parse(readFileSync(m.settings, "utf8")).permissions.allow as string[];
   expect(allow).toContain("Bash(starbridge settle d_*)");
   expect(allow).not.toContain("Bash(starbridge settle:*)");
   expect(allow).toContain("Bash(ls)");
-  expect(missingAllowRules(m.sys)).toEqual([]);
+  expect(missingAllow(ALLOW.claude, m.sys)).toEqual([]);
 
   const cursor = join(m.home, ".cursor/cli-config.json");
   mkdirSync(dirname(cursor), { recursive: true });
   writeFileSync(cursor, JSON.stringify({ permissions: { allow: ["Shell(starbridge settle)"] } }));
-  expect(addCursorAllow(m.sys)).toBe(true);
-  expect(JSON.parse(readFileSync(cursor, "utf8")).permissions.allow).toEqual(CURSOR_ALLOW);
+  expect(addAllow(ALLOW.cursor, m.sys)).toBe(true);
+  expect(JSON.parse(readFileSync(cursor, "utf8")).permissions.allow).toEqual(ALLOW.cursor.rules);
 });
 
 test("an update's refresh replaces the old settle allow entries even when nothing else changed (#1761)", async () => {
