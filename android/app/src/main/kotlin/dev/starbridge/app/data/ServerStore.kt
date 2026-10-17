@@ -176,7 +176,7 @@ class ServerStore(
     override val phase = MutableStateFlow<Phase>(Phase.SignedOut)
     override val joinLink = MutableStateFlow<String?>(null)
     override val decisions = MutableStateFlow<List<Decision>>(emptyList())
-    override val prompts = MutableStateFlow<List<Prompt>>(emptyList())
+    override val prompts: StateFlow<List<Prompt>> get() = promptKind.shown
     override val windows: StateFlow<List<QuotaWindow>> get() = quotaKind.windows
     override val quotaFailures: StateFlow<List<QuotaFailure>> get() = quotaKind.failures
     override val quotasHeld: StateFlow<Boolean> get() = quotaKind.held
@@ -264,12 +264,13 @@ class ServerStore(
         override suspend fun locked(showBusy: Boolean, block: suspend () -> Unit) = this@ServerStore.locked(showBusy, block = block)
     }
 
+    private val promptKind = PromptKind(core) { id, from, notice -> settleDecision(id, from, notice) }
     private val quotaKind = QuotaKind(core)
     private val joinKind = JoinKind(core, joins)
     private val runKind = RunKind(core)
 
     /** Every kind of item, in the order a sync reads them. */
-    private val kinds: List<ItemKind> = listOf(quotaKind, runKind, joinKind)
+    private val kinds: List<ItemKind> = listOf(promptKind, quotaKind, runKind, joinKind)
 
     init {
         ImageFiles.read = disk::image
@@ -334,7 +335,6 @@ class ServerStore(
         // A revoked machine's items leave, as on the web: nothing it asked can be answered (#344).
         fun active(from: String) = directory?.members?.get(from)?.active != false
         savedDecisions = if (held) emptyList() else saved.decisions.filter { active(it.from) }.map(::toUi)
-        prompts.value = if (held) emptyList() else saved.prompts.filter { active(it.from) }.map(::toUi)
         val view = View(held, directory)
         for (kind in kinds) kind.publish(view)
         members.value = directory?.let(::toUi).orEmpty()
@@ -938,7 +938,6 @@ class ServerStore(
         // Before the reads: one failing, during a rate-limit hold say, must not keep an answer back (#1390).
         if (saved.outbox.isNotEmpty()) flushHeld()
         syncDecisions()
-        syncPrompts()
         for (kind in kinds) kind.sync()
         // The server answered, so a push route that failed to register gets another try.
         pendingPush?.let { runCatching { subscribeHeld(it) } }
@@ -980,7 +979,7 @@ class ServerStore(
     /** Closes the notifications of revoked machines' questions and prompts: no answer reaches them. */
     private fun closeRevoked(dir: Directory) {
         for (d in saved.decisions) if (dir.members[d.from]?.active == false) alerts.cancel(d.body.id)
-        for (p in saved.prompts) if (dir.members[p.from]?.active == false) alerts.cancelPrompt(toUi(p))
+        for (kind in kinds) kind.revoked(dir)
     }
 
     /**
@@ -1261,58 +1260,6 @@ class ServerStore(
         return d.copy(waiting = w.state, waitingAt = w.at)
     }
 
-    /**
-     * Reads permission prompts and settled notices past the cursor. A prompt comes again once it
-     * is answered or settled, with its time; a notice counts only from the machine that asked.
-     */
-    private suspend fun syncPrompts() {
-        var cursor = saved.promptCursor
-        val byId = saved.prompts.associateBy { it.body.id }.toMutableMap()
-        val read = mutableListOf<Listed>()
-        while (true) {
-            val page = api().items("permission,settled", cursor)
-            read += page.items
-            cursor = page.cursor
-            if (page.last) break
-        }
-        if (scan(read.map { it.item })) return
-        // A settled prompt comes back after its notice, so prompts go first: a notice whose
-        // prompt is new to this phone would otherwise find nothing to close.
-        for (listed in read.sortedBy { if (it.item.kind == "permission") 0 else 1 }) takePrompt(listed.item, listed.answeredAt, byId)
-        keepPrompts(byId, cursor)
-    }
-
-    /** Merges one verified prompt or notice into [byId]; clears the notification of one that ended. */
-    private fun takePrompt(item: SealedItem, answeredAt: String?, byId: MutableMap<String, SavedPrompt>): SavedPrompt? {
-        when (item.kind) {
-            "permission" -> {
-                val known = byId[item.id]
-                if (known != null) {
-                    if (answeredAt != null && known.answeredAt == null) {
-                        byId[item.id] = known.copy(answeredAt = answeredAt)
-                        alerts.cancelPrompt(toUi(known))
-                    }
-                    return null
-                }
-                val (from, _, text) = open(item) ?: return null
-                return SavedPrompt(from, text, answeredAt).also { byId[item.id] = it }
-            }
-            "settled" -> {
-                val (from, body, text) = open(item) ?: return null
-                val notice = body as Settled
-                val p = byId[notice.itemId]
-                if (p == null) {
-                    settleDecision(notice.itemId, from, notice)
-                    return null
-                }
-                if (p.from != from) return null
-                byId[p.body.id] = p.copy(settledText = text, answeredAt = p.answeredAt ?: notice.at)
-                alerts.cancelPrompt(toUi(p))
-            }
-        }
-        return null
-    }
-
     /** A settled notice may close one of the machine's decisions: it counts as answered. */
     /** A notice after a device's answer closed nothing, so only an open decision takes its [outcome]. */
     private fun settleDecision(id: String, from: String, notice: Settled) {
@@ -1350,82 +1297,22 @@ class ServerStore(
 
     private fun deviceName(device: String) = directory?.members?.get(device)?.member?.name ?: device
 
-    /** Keeps a week of prompts, the log's span, as the server does. */
-    private fun keepPrompts(byId: Map<String, SavedPrompt>, cursor: String = saved.promptCursor) {
-        val weekAgo = Instant.now().minus(7, ChronoUnit.DAYS)
-        val kept = byId.values.filter { instant(it.body.createdAt)?.isAfter(weekAgo) != false }.sortedBy { it.body.createdAt }
-        persist(saved.copy(promptCursor = cursor, prompts = kept))
-    }
-
-    /**
-     * The inbox's quick read while a prompt shows. After a failure (offline, say) it waits 3 s,
-     * then twice as long after each further one, up to a minute, instead of retrying every 1.5 s.
-     */
-    override fun refreshPrompts() {
-        if (System.currentTimeMillis() < promptsRetryAt) return
-        run(showBusy = false, sync = true) {
-            if (phase.value != Phase.Ready) return@run
-            try {
-                syncPrompts()
-                promptFailures = 0
-            } catch (e: Exception) {
-                promptFailures++
-                promptsRetryAt = System.currentTimeMillis() + minOf(60_000L, 1_500L shl promptFailures.coerceAtMost(6))
-                throw e
-            }
-        }
-    }
-
-    @Volatile private var promptFailures = 0
-    @Volatile private var promptsRetryAt = 0L
-
     override fun refreshDirectory() = run(showBusy = false, sync = true) {
         if (phase.value == Phase.Ready) syncDirectory()
     }
 
-    override fun answerPrompt(id: String, allow: Boolean, scope: String, message: String?) =
-        run(showBusy = false) { sendPrompt(id, allow, scope, message) }
+    override fun refreshPrompts() = promptKind.refresh()
+
+    override fun answerPrompt(id: String, allow: Boolean, scope: String, message: String?) = promptKind.answer(id, allow, scope, message)
 
     /**
      * Signs the answer, bound to the prompt's id and input hash, and seals it to the machine that
      * asked. A deny is for this call only; a wider allow only for a scope the prompt offered.
      */
-    suspend fun sendPrompt(id: String, allow: Boolean, scope: String, message: String?) {
-        withheld()?.let { throw IllegalStateException(it) }
-        val p = saved.prompts.find { it.body.id == id } ?: throw IllegalStateException("No such prompt.")
-        if (p.answeredAt != null || p.answer != null) throw IllegalStateException("Already answered.")
-        val chosen = if (allow) scope else "once"
-        if (chosen != "once" && p.body.suggestions.none { it.scope == chosen }) throw IllegalArgumentException("Not offered.")
-        val machine = directory?.members?.get(p.from)?.takeIf { it.active }?.member
-            ?: throw IllegalStateException("The machine that asked is no longer in your directory.")
-        val body = buildJsonObject {
-            put("v", 1)
-            put("id", newId("pa_"))
-            put("permissionId", id)
-            put("to", machine.id)
-            put("answeredAt", now())
-            put("behavior", if (allow) "allow" else "deny")
-            put("scope", chosen)
-            put("inputHash", p.body.inputHash)
-            if (!allow) message?.trim()?.takeIf { it.isNotEmpty() }?.let { put("message", it.takeCodePoints(500)) }
-            // Lets the machine notice a server holding back entries, such as a revocation.
-            directory?.let { d -> putJsonObject("dir") { put("length", d.length); put("head", d.head) } }
-        }
-        val item = envelopes.seal("permission-answer", body, me.id, signKey, listOf(machine))
-        try {
-            api().postItem(item)
-        } catch (e: ApiException) {
-            if (e.error == "already-answered" || e.error == "expired") syncPrompts()
-            if (e is TooOld) describe(e)
-            throw e
-        }
-        val answer = if (allow) "allow:$chosen" else "deny"
-        persist(saved.copy(prompts = saved.prompts.map { if (it.body.id == id) it.copy(answeredAt = now(), answer = answer) else it }))
-    }
+    suspend fun sendPrompt(id: String, allow: Boolean, scope: String, message: String?) = promptKind.send(id, allow, scope, message)
 
     /** For the notification's buttons: holds the lock like any other change. */
-    suspend fun sendPromptFromNotification(id: String, allow: Boolean, scope: String) =
-        lock.withLock { sendPrompt(id, allow, scope, null) }
+    suspend fun sendPromptFromNotification(id: String, allow: Boolean, scope: String) = promptKind.sendFromNotification(id, allow, scope)
 
     override fun dismissRun(id: String) = runKind.dismiss(id)
 
@@ -1718,8 +1605,7 @@ class ServerStore(
             "answered" -> {
                 // Nothing in this push is verified, so it only takes the notification down; what
                 // was answered is read from the server's signed items on the next sync.
-                val prompt = saved.prompts.find { it.body.id == id }
-                if (prompt != null) alerts.cancelPrompt(toUi(prompt)) else alerts.cancel(id)
+                if (!promptKind.cancelNotification(id)) alerts.cancel(id)
                 if (inFront) {
                     try {
                         sync()
@@ -1748,21 +1634,6 @@ class ServerStore(
                 val saved1 = saved(item, SavedDecision(from, text, answeredAt))
                 persist(saved.copy(decisions = saved.decisions + saved1))
                 if (answeredAt == null) alerts.decision(toUi(saved1))
-            }
-            "permission", "settled" -> {
-                if (kind == "permission" && saved.prompts.any { it.body.id == id }) return@withLock
-                val box = p["box"]?.jsonPrimitive?.content
-                var answeredAt: String? = null
-                val item = if (box != null) {
-                    SealedItem(1, kind, id, p.getValue("from").jsonPrimitive.content, p["re"]?.jsonPrimitive?.content, listOf(SealedBox(me.id, box)))
-                } else {
-                    api().item(id).also { answeredAt = it.answeredAt }.item
-                }
-                catchUp(item)
-                val byId = saved.prompts.associateBy { it.body.id }.toMutableMap()
-                val added = takePrompt(item, answeredAt, byId)
-                keepPrompts(byId)
-                if (added != null && added.answeredAt == null) alerts.prompt(toUi(added))
             }
             "waiting" -> {
                 // Pushed when the agent flips: to waiting re-notifies once, back to working moves
@@ -2258,27 +2129,6 @@ class ServerStore(
         )
     }
 
-    /** How a prompt ended, in words, from this device's answer or the machine's notice. */
-    private fun ended(p: SavedPrompt) = promptEnded(p.answer, p.settled, p.answeredAt, p.body.source.machine, me.id) { directory?.members?.get(it)?.member?.name }
-
-    private fun toUi(p: SavedPrompt): Prompt {
-        val b = p.body
-        return Prompt(
-            id = b.id,
-            tool = b.tool,
-            summary = visible(b.summary),
-            description = b.description?.let(::visible),
-            input = b.input,
-            scopes = b.suggestions.map { PromptScope(it.scope, it.label, visible(it.rule)) },
-            source = Source(b.source.machine, b.source.project, b.source.session, b.source.sessionTitle, b.source.links.orEmpty().map { SessionLink(it.kind, it.url) }, b.source.machineKind),
-            agent = b.agent,
-            createdAt = instant(b.createdAt) ?: Instant.EPOCH,
-            expiresAt = instant(b.expiresAt) ?: Instant.EPOCH,
-            ended = ended(p),
-            endedAt = instant(p.answeredAt),
-        )
-    }
-
     private fun toUi(dir: Directory): List<Member> {
         val added = saved.entries.mapNotNull { raw ->
             runCatching {
@@ -2299,25 +2149,6 @@ class ServerStore(
 }
 
 private operator fun dev.starbridge.app.protocol.DirectoryMember.component1() = member
-
-/**
- * How a prompt ended and where, as the web's History puts it (#349): "Denied · on Pixel",
- * "Allowed for this session · on this phone"; null while it waits.
- */
-internal fun promptEnded(answer: String?, s: Settled?, answeredAt: String?, machine: String, me: String, name: (String) -> String?): String? {
-    val allowed = mapOf("once" to "Allowed once", "session" to "Allowed for this session", "project" to "Always allowed")
-    answer?.let { return "${if (it == "deny") "Denied" else allowed[it.removePrefix("allow:")] ?: "Allowed"} · on this phone" }
-    return when {
-        s?.outcome == "keyboard" -> "Answered · on $machine"
-        s?.outcome == "timeout" -> "Timed out: left to the keyboard"
-        s?.outcome == "device" && s.device != null -> {
-            val what = when (s.behavior) { "allow" -> "Allowed"; "deny" -> "Denied"; else -> "Answered" }
-            "$what · on ${if (s.device == me) "this phone" else name(s.device) ?: "another device"}"
-        }
-        answeredAt != null -> "Answered · on another device"
-        else -> null
-    }
-}
 
 /** What a Done reads as, in History and on the device it lost on: where the owner answered. */
 internal fun doneText(page: DecisionLink) = "Answered in ${Link(page.url, page.title).place()}"
