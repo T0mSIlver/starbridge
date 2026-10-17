@@ -128,7 +128,7 @@ phones and browsers.
 ### Why is the CLI so large?
 
 It is TypeScript compiled with `bun build --compile`, so the binary carries the Bun runtime: 63 to
-82 MB, depending on the platform (v0.1.7). `starbridge --version` takes about 50 ms, and the
+87 MB, depending on the platform (v0.1.7). `starbridge --version` takes about 50 ms, and the
 background service held 85 MB of memory on Linux (v0.1.8-rc.2, measured 2026-10-18).
 
 ### Will the hosted server hold up?
