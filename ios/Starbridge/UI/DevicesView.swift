@@ -94,7 +94,7 @@ private struct MemberRow: View {
     var body: some View {
         HStack(spacing: Tokens.Spacing.s4) {
             Image(systemName: memberSymbol(row, client: info.clients[row.id]))
-                .font(.system(size: 20))
+                .scaledFont(size: 20)
                 .frame(width: 28)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {

@@ -329,7 +329,7 @@ struct Meter: View {
         // Ten points tall; the pace tick and the cap reach 5 past it each way.
         .frame(height: h * 2)
         .padding(.vertical, -h / 2)
-        .animation(.smooth, value: fill)
+        .animation(Motion.animation(.smooth), value: fill)
         .accessibilityElement()
         .accessibilityLabel("\(bar.percent)% \(bar.word)" + (bar.steady.map { ", steady pace \($0)%" } ?? ""))
     }

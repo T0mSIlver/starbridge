@@ -80,7 +80,7 @@ struct MetaRow: View {
 
     var body: some View {
         HStack(spacing: 6) {
-            Image(systemName: machineSymbol(source.machineKind)).font(.system(size: 14)).accessibilityHidden(true)
+            Image(systemName: machineSymbol(source.machineKind)).scaledFont(size: 14).accessibilityHidden(true)
             Text([source.machine, source.project].filter { !$0.isEmpty }.joined(separator: " · "))
                 .lineLimit(1)
                 .truncationMode(.middle)
@@ -155,7 +155,7 @@ struct SessionLink: View {
                 if let link, app != nil {
                     Link(destination: link) {
                         HStack(spacing: Tokens.Spacing.s2) {
-                            Image(systemName: "arrow.up.right").font(.system(size: 13))
+                            Image(systemName: "arrow.up.right").scaledFont(size: 13)
                             Text(text).lineLimit(1).truncationMode(.middle)
                         }
                     }
@@ -224,6 +224,8 @@ struct OptionButton: View {
     let amber: Bool
     var height: CGFloat = 44
     let action: () -> Void
+    /** The label's growth with Dynamic Type, which the pill's curve follows (1 at the default size). */
+    @ScaledMetric private var scale: CGFloat = 1
 
     var body: some View {
         Button(action: action) {
@@ -234,7 +236,7 @@ struct OptionButton: View {
                 .padding(.horizontal, Tokens.Spacing.s3)
                 .foregroundStyle(strong ? (amber ? Tokens.Colors.onAccent.color : Tokens.Colors.bg.color) : Tokens.Colors.fg.color)
                 .background(
-                    Capsule().fill(strong ? (amber ? Tokens.Colors.accent.color : Tokens.Colors.fg.color) : Tokens.Colors.surface2.color)
+                    Pill(limit: height / 2 * scale).fill(strong ? (amber ? Tokens.Colors.accent.color : Tokens.Colors.fg.color) : Tokens.Colors.surface2.color)
                 )
         }
         .buttonStyle(.plain)
