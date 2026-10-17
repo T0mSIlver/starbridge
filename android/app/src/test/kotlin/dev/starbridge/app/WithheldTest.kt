@@ -337,12 +337,4 @@ class WithheldTest {
         assertEquals(null, store.heldRevoked.value)
         assertEquals(null, store.notice.value)
     }
-
-    private fun until(pred: () -> Boolean) {
-        val end = System.currentTimeMillis() + 10_000
-        while (!pred()) {
-            check(System.currentTimeMillis() < end) { "timed out" }
-            Thread.sleep(10)
-        }
-    }
 }

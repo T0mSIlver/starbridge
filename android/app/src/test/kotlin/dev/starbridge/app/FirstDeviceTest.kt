@@ -154,12 +154,4 @@ class FirstDeviceTest {
         assertEquals(null, disk.saved()?.me)
         assertEquals(null, signedOut.pushHold.value)
     }
-
-    private fun until(pred: () -> Boolean) {
-        val end = System.currentTimeMillis() + 10_000
-        while (!pred()) {
-            check(System.currentTimeMillis() < end) { "timed out" }
-            Thread.sleep(10)
-        }
-    }
 }

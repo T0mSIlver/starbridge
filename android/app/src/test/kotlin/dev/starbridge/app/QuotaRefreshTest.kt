@@ -140,7 +140,7 @@ class QuotaRefreshTest {
     private fun refreshAndWait(store: ServerStore) {
         store.refreshQuotas()
         // Busy holds from the ask to the end of the sync, so it clears only once both ran.
-        until { http.requestCount > 0 && !store.busy.value }
+        until("the refresh never ended") { http.requestCount > 0 && !store.busy.value }
     }
 
     /** A phone in an account with one machine; [route] answers first, else empty lists. */
@@ -184,13 +184,5 @@ class QuotaRefreshTest {
             override fun run(run: Run) {}
         }
         return ServerStore(disk, OkHttpClient(), sodium, envelopes, directories, Pairings(sodium), Joins(sodium), alerts, "Phone", server, false, scope)
-    }
-
-    private fun until(pred: () -> Boolean) {
-        val end = System.currentTimeMillis() + 10_000
-        while (!pred()) {
-            check(System.currentTimeMillis() < end) { "the refresh never ended" }
-            Thread.sleep(10)
-        }
     }
 }

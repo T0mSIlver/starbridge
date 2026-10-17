@@ -241,12 +241,4 @@ class AnsweredImagesTest {
         ServerStore(disk, OkHttpClient(), sodium, envelopes, directories, Pairings(sodium), Joins(sodium), alerts, "Phone", "http://127.0.0.1:9", false, scope)
         assertTrue(disk.hasImage("d_old.0"))
     }
-
-    private fun until(pred: () -> Boolean) {
-        val end = System.currentTimeMillis() + 10_000
-        while (!pred()) {
-            check(System.currentTimeMillis() < end) { "timed out" }
-            Thread.sleep(10)
-        }
-    }
 }
