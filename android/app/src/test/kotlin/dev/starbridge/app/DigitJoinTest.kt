@@ -166,12 +166,4 @@ class DigitJoinTest {
         until { disk.saved()!!.pin != null }
         assertEquals(joins.openRequest(request).id, disk.saved()!!.me!!.id)
     }
-
-    private fun until(pred: () -> Boolean) {
-        val end = System.currentTimeMillis() + 10_000
-        while (!pred()) {
-            check(System.currentTimeMillis() < end) { "timed out" }
-            Thread.sleep(10)
-        }
-    }
 }
