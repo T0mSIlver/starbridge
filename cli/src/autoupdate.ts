@@ -16,7 +16,7 @@ export const RETRY_MS = 24 * 3_600_000;
 /** How long after the agent first sees a release it may wait, at random, before installing it. */
 export const JITTER_MS = 2 * 3_600_000;
 /** A question asked longer ago no longer holds an update: one forgotten card would stop them. */
-export const QUESTION_HOLD_MS = 24 * 3_600_000;
+const QUESTION_HOLD_MS = 24 * 3_600_000;
 /** Devices call a run lost after 3 minutes without news (spec/items.md, "Runs"). */
 export const RUN_LOST_MS = 3 * 60_000;
 

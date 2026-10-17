@@ -99,7 +99,7 @@ export interface Asked {
 }
 
 /** A `question.asked` event's properties: one call of the `question` tool. */
-export interface QuestionAsked {
+interface QuestionAsked {
   id: string;
   sessionID: string;
   questions: {

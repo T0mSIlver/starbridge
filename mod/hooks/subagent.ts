@@ -9,7 +9,7 @@ import { joinLines, type Line } from "./agent.ts";
  */
 
 /** The variable the CLI reads the asking subagent's id from. */
-export const AGENT_VAR = "STARBRIDGE_CLAUDE_AGENT";
+const AGENT_VAR = "STARBRIDGE_CLAUDE_AGENT";
 
 /** Characters a Claude Code agent id or teammate address takes, as the CLI checks them. */
 const AGENT_ID = /^[A-Za-z0-9_.@-]{1,200}$/;

@@ -7,16 +7,16 @@ import { COMMIT, VERSION } from "../version";
 import { withoutAllow, writeLeft } from "./remove";
 import { failure, run, type Sys, which } from "./sys";
 
-export const MARKETPLACE = "starbridge";
+const MARKETPLACE = "starbridge";
 /** The repository's own marketplace, which setup before #1768 added and now replaces. */
-export const MARKETPLACE_SOURCE = "T0mSIlver/starbridge";
+const MARKETPLACE_SOURCE = "T0mSIlver/starbridge";
 export const PLUGINS = [`starbridge@${MARKETPLACE}`, `starbridge-mod@${MARKETPLACE}`];
 
 /**
  * The folder setup writes the marketplace into, from this binary: Claude Code installs the plugins
  * from it, never from the repository's default branch, which a push changes for every machine.
  */
-export function marketplaceDir(sys: Sys): string {
+function marketplaceDir(sys: Sys): string {
   return join(claudeDir(sys), "starbridge-marketplace");
 }
 
@@ -91,10 +91,10 @@ async function listJson<T>(sys: Sys, ...args: string[]): Promise<T[] | string> {
  * The oldest Claude Code Starbridge works with: the first that runs its mod (docs/tell-your-agents.md), which
  * also has the `--json` plugin listings setup reads (#620).
  */
-export const MIN_CLAUDE = "2.1.287";
+const MIN_CLAUDE = "2.1.287";
 
 /** `claude --version`'s number, such as "2.1.289", or undefined when it gives none. */
-export async function claudeVersion(sys: Sys): Promise<string | undefined> {
+async function claudeVersion(sys: Sys): Promise<string | undefined> {
   const r = await claude(sys, "--version");
   return r?.code === 0 ? /\d+\.\d+\.\d+/.exec(r.stdout)?.[0] : undefined;
 }

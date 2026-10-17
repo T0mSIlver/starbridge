@@ -94,7 +94,7 @@ export interface AskInput {
 }
 
 /** What the server stores at most for one decision, boxes and blobs together (PROTOCOL.md, Limits). */
-export const ITEM_BYTES = 2 * 1024 * 1024;
+const ITEM_BYTES = 2 * 1024 * 1024;
 
 /** One image's file at most: its blob is then the 512 KB of base64url `BLOB_MAX` allows. */
 const IMAGE_BYTES = 384 * 1024;
@@ -214,7 +214,7 @@ export function typedBreaks(context: string): string {
     .join("");
 }
 
-export function buildDecision(input: AskInput, ctx: Ctx, machine: string, to: string[]): Decision {
+function buildDecision(input: AskInput, ctx: Ctx, machine: string, to: string[]): Decision {
   if (!input.question) throw new UsageError("ask needs --question");
   const options = input.options ?? [];
   const link = (l: string | DecisionLink) => (typeof l === "string" ? { url: l } : l);
@@ -800,7 +800,7 @@ type Asked = Pick<State["asked"][string], "options" | "settled" | "answerIn" | "
  * sealed to, for an open decision this machine asked that takes answers in Starbridge, with one of
  * its options or a typed reply; or, for one answered on its own page, a Done.
  */
-export function checkAnswer(
+function checkAnswer(
   raw: unknown,
   s: Session,
   dir: Directory,
@@ -840,7 +840,7 @@ export function checkAnswer(
  * to signed it and it is newer than the one kept. A snooze is not an answer: it only tells `wait`
  * and `waiting` that none comes before its time.
  */
-export function acceptSnooze(raw: unknown, s: Session, dir: Directory, st: State): void {
+function acceptSnooze(raw: unknown, s: Session, dir: Directory, st: State): void {
   const item = parseWith(SealedItem, raw);
   if (item.kind !== "snooze") throw new ProtocolError("wrong-kind", item.kind);
   const { body, signer } = open(
@@ -950,7 +950,7 @@ export function noteHead(
  * Why no answer counts now: a device active in `dir` signed a head the machine's chain `entries`
  * lacks, so the server is holding back entries, perhaps the revocation of a device that answers.
  */
-export function behindBy(st: State, dir: Directory, entries: unknown[]): string | undefined {
+function behindBy(st: State, dir: Directory, entries: unknown[]): string | undefined {
   const held = withheld(st, dir, entries);
   return held && `${held}. No answer counts meanwhile`;
 }
@@ -1611,7 +1611,7 @@ export function named(id: string, question: string | undefined): string {
 }
 
 /** "13:02", "yesterday 13:02", "Mon 12 Oct 13:02": a time that has passed, in this machine's zone. */
-export function pastTime(at: Date, now: Date): string {
+function pastTime(at: Date, now: Date): string {
   const time = at.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
   const day = (d: Date) => d.toDateString();
   if (day(at) === day(now)) return time;
@@ -1643,7 +1643,7 @@ export function closedHow(st: State, id: string, now: Date): string | undefined 
 }
 
 /** What `waiting`, `working` and `settle` say of a card that is closed already. */
-export function staleLine(st: State, id: string, now: Date): string {
+function staleLine(st: State, id: string, now: Date): string {
   return `${named(id, st.asked[id]?.question)} was already ${closedHow(st, id, now) ?? "closed"}`;
 }
 
@@ -1657,7 +1657,7 @@ export async function markWaiting(ctx: Ctx, post: () => Promise<unknown>): Promi
 }
 
 /** Keeps a `--wait` cycle under the 30 s the mod's host allows a call to run. */
-export const MAX_CYCLE_SECONDS = 25;
+const MAX_CYCLE_SECONDS = 25;
 
 /** One line for a session: the answer to a decision it asked. */
 export interface SessionLine {
@@ -1886,7 +1886,7 @@ export async function answersAll(
 }
 
 /** One line of `decisions --open`: a question this machine asked that is still open. */
-export interface OpenDecision {
+interface OpenDecision {
   decisionId: string;
   question: string;
   options: string[];

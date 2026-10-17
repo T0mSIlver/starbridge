@@ -14,9 +14,9 @@
 import { spawnSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { isRc, parseVersion } from "../src/release";
 
 const ROOT = join(import.meta.dir, "..", "..");
-const NUMBER = /^\d+\.\d+\.\d+(-rc\.\d+)?$/;
 
 /** Each place: its file and the one pattern whose first group is the version. */
 const PLACES: { file: string; pattern: RegExp; tag?: boolean }[] = [
@@ -36,8 +36,6 @@ const PLACES: { file: string; pattern: RegExp; tag?: boolean }[] = [
   { file: ".claude-plugin/marketplace.json", pattern: /"ref": "v([^"]+)"/g, tag: true },
 ];
 
-const isRc = (v: string) => v.includes("-rc.");
-
 /** Each version the pattern finds; `[""]` when it finds none, which check and stamp refuse. */
 function found(text: string, pattern: RegExp): string[] {
   const all = pattern.global ? [...text.matchAll(pattern)] : [text.match(pattern)];
@@ -51,7 +49,7 @@ export function check(version?: string, root = ROOT): string[] {
   const wrong: string[] = [];
   for (const { file, pattern, tag } of PLACES)
     for (const v of found(read(file), pattern)) {
-      const ok = tag && isRc(want) ? NUMBER.test(v) && !isRc(v) : v === want;
+      const ok = tag && isRc(want) ? parseVersion(v) !== undefined && !isRc(v) : v === want;
       if (!ok)
         wrong.push(`${file}: ${tag ? "v" : ""}${v || "(none)"}, want ${tag ? "v" : ""}${want}`);
     }
@@ -76,9 +74,9 @@ export function beyondStamp(
 }
 
 export function stamp(version: string, root = ROOT, only?: "marketplace") {
-  if (!NUMBER.test(version)) throw new Error(`not a version: ${version}`);
+  if (!parseVersion(version)) throw new Error(`not a version: ${version}`);
   // rcs take versionCode slots 1 to 49; main's builds for Play's internal track take 50 to 98 (#1540).
-  if (Number(version.split("-rc.")[1] ?? 1) > 49)
+  if ((parseVersion(version)?.rc ?? 1) > 49)
     throw new Error(`rc numbers stop at 49: ${version}; cut the final or a new version`);
   for (const { file, pattern, tag } of PLACES) {
     if (tag ? isRc(version) : only === "marketplace") continue;
@@ -111,7 +109,7 @@ if (import.meta.main) {
     process.exit(wrong.length ? 1 : 0);
   }
   if (first === "--final") {
-    if (!second || !NUMBER.test(second) || isRc(second)) {
+    if (!second || !parseVersion(second) || isRc(second)) {
       console.error(`--final takes a release version, not ${second ?? "nothing"}`);
       process.exit(64);
     }
@@ -133,7 +131,7 @@ if (import.meta.main) {
     process.exit(extra.length ? 1 : 0);
   }
   if (first === "--marketplace") {
-    if (!second || !NUMBER.test(second) || isRc(second)) {
+    if (!second || !parseVersion(second) || isRc(second)) {
       console.error(`--marketplace takes a release version, not ${second ?? "nothing"}`);
       process.exit(64);
     }

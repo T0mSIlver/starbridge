@@ -201,7 +201,7 @@ const size = (bytes: number) =>
   bytes >= 1e6 ? `${Math.round(bytes / 1e6)} MB` : `${Math.max(1, Math.round(bytes / 1e3))} kB`;
 
 /** The version a tarball install says it is, from the `VERSION` file its tarball carries. */
-export function installedVersion(sys: Sys): string | undefined {
+function installedVersion(sys: Sys): string | undefined {
   try {
     return readFileSync(join(optDir(sys), "VERSION"), "utf8").trim() || undefined;
   } catch {

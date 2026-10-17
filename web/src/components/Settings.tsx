@@ -74,7 +74,7 @@ export function Row({
 }
 
 /** Choices side by side, one picked: a radio group drawn as joined buttons. */
-export function Segmented<T extends string | number | boolean | null>({
+function Segmented<T extends string | number | boolean | null>({
   label,
   value,
   options,
@@ -444,7 +444,7 @@ type Win = { provider: string; id: string; label: string; minutes: number | null
  * A window's own alerts, or none to follow its length's. A provider's key, which only settings
  * from before #914 hold, first becomes a key per window, so the provider's other windows keep it.
  */
-export function setWindowAlerts(
+function setWindowAlerts(
   a: QuotaAlertSettings,
   w: Win,
   all: Win[],

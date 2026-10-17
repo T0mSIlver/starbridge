@@ -10,7 +10,7 @@ import { join } from "node:path";
 import { KEYS, latestCodexbar, type Pin, releaseVersion } from "../src/setup/codexbar";
 
 const RELEASES = "https://github.com/steipete/CodexBar/releases";
-export const PIN_FILE = join(import.meta.dir, "..", "src", "setup", "codexbar-pin.json");
+const PIN_FILE = join(import.meta.dir, "..", "src", "setup", "codexbar-pin.json");
 
 /** Fetches `version`'s checksums, or the latest release's, and writes the pin. */
 export async function pinCodexbar(version?: string, env = process.env): Promise<Pin> {
