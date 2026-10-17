@@ -80,6 +80,7 @@
 }
 
 .headTitle {
+  font-size: inherit;
   font-weight: 500;
 }
 

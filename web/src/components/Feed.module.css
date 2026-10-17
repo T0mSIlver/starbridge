@@ -184,7 +184,7 @@ a.open:hover {
   padding: var(--s4);
 }
 
-.row[aria-current="true"] {
+.row[data-selected] {
   background: var(--surface2);
 }
 
@@ -196,7 +196,7 @@ a.open:hover {
   background: linear-gradient(var(--accent-soft), var(--accent-soft)), var(--surface);
 }
 
-.row.blocks[aria-current="true"] {
+.row.blocks[data-selected] {
   background: linear-gradient(var(--accent-soft), var(--accent-soft)), var(--surface2);
 }
 
@@ -219,12 +219,12 @@ a.open:hover {
 }
 
 @media (hover: hover) {
-  .row:not([aria-current="true"]):hover,
+  .row:not([data-selected]):hover,
   .historyHead:hover {
     background: color-mix(in srgb, var(--surface2) 50%, var(--surface));
   }
 
-  .row.blocks:not([aria-current="true"]):hover {
+  .row.blocks:not([data-selected]):hover {
     background:
       linear-gradient(var(--accent-soft), var(--accent-soft)),
       color-mix(in srgb, var(--surface2) 50%, var(--surface));
@@ -416,6 +416,11 @@ a.open:hover {
   }
 }
 
+/* The heading a group's toggle button sits in: no type of its own, so the button looks as it did. */
+.headBox {
+  font: inherit;
+}
+
 .historyHead {
   display: flex;
   align-items: center;
@@ -455,6 +460,12 @@ a.open:hover {
 
 /* Under a grouping's header, the group's items share one box with hairline dividers, as a
    settings section does (#248). */
+/* A list of rows: the browser's bullets and indent are off. */
+.items,
+.seg {
+  list-style: none;
+}
+
 .seg {
   margin: 0 var(--s2) var(--s2);
   border: 1px solid var(--line);
@@ -474,8 +485,8 @@ a.open:hover {
 }
 
 .seg > * + *,
-.seg > div > .past + .past,
-.seg > div > .row + .row {
+.seg > :is(div, ul) > .past + .past,
+.seg > :is(div, ul) > .row + .row {
   border-top: 1px solid var(--line);
 }
 
