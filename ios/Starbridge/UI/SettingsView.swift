@@ -173,7 +173,14 @@ struct SettingsView: View {
     }
 
     /// The app's version, as the bug form asks for it (#1892).
-    static let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? ""
+    /// The whole tag, release candidate suffix included: `StarbridgeVersion`, since
+    /// `CFBundleShortVersionString` must stay numeric for Apple.
+    static let version = shown(Bundle.main.infoDictionary)
+
+    static func shown(_ info: [String: Any]?) -> String {
+        (info?["StarbridgeVersion"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+            ?? info?["CFBundleShortVersionString"] as? String ?? ""
+    }
     /** How to tell agents to ask through Starbridge. */
     static let guide = URL(string: "https://starbridge.run/docs/tell-your-agents")!
 }
@@ -307,35 +314,48 @@ struct QuotaAlertsView: View {
     }
 }
 
-/// The version at the end of Account, right-aligned; a tap copies it and the value reads "Copied"
-/// for a moment (#1892).
-struct VersionRow: View {
+/// What a tap on the Version row does: copies the version, then reads "Copied" for a moment (#1892).
+@MainActor @Observable
+final class VersionCopy {
     let version: String
-    @State private var copied: Bool
+    private(set) var copied = false
+    private let hold: Duration
+    private var reset: Task<Void, Never>?
 
-    init(version: String, copied: Bool = false) {
+    init(version: String, hold: Duration = .seconds(1.5)) {
         self.version = version
-        _copied = State(initialValue: copied)
+        self.hold = hold
     }
 
+    func copy() {
+        UIPasteboard.general.string = version
+        copied = true
+        reset?.cancel()
+        reset = Task { [hold] in
+            try? await Task.sleep(for: hold)
+            if !Task.isCancelled { copied = false }
+        }
+    }
+}
+
+/// The version at the end of Account, right-aligned; a tap copies it (#1892).
+struct VersionRow: View {
+    @State private var model: VersionCopy
+
+    init(version: String) { _model = State(initialValue: VersionCopy(version: version)) }
+    init(model: VersionCopy) { _model = State(initialValue: model) }
+
     var body: some View {
-        Button {
-            UIPasteboard.general.string = version
-            copied = true
-            Task {
-                try? await Task.sleep(for: .seconds(1.5))
-                copied = false
-            }
-        } label: {
+        Button(action: model.copy) {
             HStack {
                 Text("Version")
                     .foregroundStyle(Tokens.Colors.fg.color)
                 Spacer()
-                Text(copied ? "Copied" : version)
+                Text(model.copied ? "Copied" : model.version)
                     .foregroundStyle(Tokens.Colors.fg2.color)
             }
         }
-        .accessibilityValue(copied ? "Copied" : version)
+        .accessibilityValue(model.copied ? "Copied" : model.version)
         .accessibilityHint("Copies the version")
     }
 }
