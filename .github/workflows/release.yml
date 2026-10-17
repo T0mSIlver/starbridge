@@ -518,7 +518,7 @@ jobs:
         run: |
           xcodebuild -quiet -project Starbridge.xcodeproj -scheme Starbridge -configuration Release \
             -destination generic/platform=iOS -archivePath "$RUNNER_TEMP/Starbridge.xcarchive" \
-            CODE_SIGNING_ALLOWED=NO MARKETING_VERSION="${VERSION%%-*}" CURRENT_PROJECT_VERSION="$BUILD" \
+            CODE_SIGNING_ALLOWED=NO MARKETING_VERSION="${VERSION%%-*}" STARBRIDGE_VERSION="$VERSION" CURRENT_PROJECT_VERSION="$BUILD" \
             archive
           scripts/adhoc-sign.sh "$RUNNER_TEMP/Starbridge.xcarchive"
       # xcodebuild's own sign-in refuses the API key that the REST API takes (#1419), so this run

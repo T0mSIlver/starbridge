@@ -1319,6 +1319,29 @@ async function main() {
     await page.getByRole("heading", { name: "Settings" }).waitFor();
     for (const label of ["Left", "Resets 14:20", "5"]) await choose(page, label);
     await shoot(page, "settings");
+
+    step("the Version row shows the build's version and copies it (#1892)");
+    const version = JSON.parse(readFileSync(join(WEB, "package.json"), "utf8")).version;
+    const versionRow = page.getByRole("button", { name: /^Version / });
+    await versionRow.scrollIntoViewIfNeeded();
+    if (!(await versionRow.innerText()).includes(version))
+      throw new Error(`the Version row does not show ${version}`);
+    await shoot(page, "settings-version");
+    // The account section at a phone's width, at rest and within the 1.5 s the value reads Copied.
+    await page.setViewportSize({ width: 390, height: 800 });
+    const account = page.getByRole("region", { name: "Account" });
+    for (const scheme of ["light", "dark"] as const) {
+      await page.emulateMedia({ colorScheme: scheme });
+      await account.scrollIntoViewIfNeeded();
+      await versionRow.getByText(version).waitFor();
+      await capture(account, join(AUDIT ?? SHOTS, `settings-version-row-${scheme}.png`));
+      await versionRow.click();
+      await versionRow.getByText("Copied").waitFor();
+      await capture(account, join(AUDIT ?? SHOTS, `settings-version-copied-${scheme}.png`));
+      await versionRow.getByText(version).waitFor();
+    }
+    await page.setViewportSize(DESKTOP);
+    await versionRow.getByText(version).waitFor();
     await page.getByRole("link", { name: "Quotas" }).click();
     await page.locator("article").first().waitFor();
     if (!(await page.locator("article").first().innerText()).includes("% left"))

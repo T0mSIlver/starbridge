@@ -293,6 +293,21 @@ class ScreenshotTest(private val dark: Boolean) {
         }
     }
 
+    // The Account section's Version row (#1892), at the end of the page, at rest and just after a tap.
+    @Config(qualifiers = "w412dp-h2400dp-xxhdpi")
+    @Test fun settingsVersion() = capture("settings-version", { compose.onNode(hasScrollToNodeAction()).performScrollToNode(hasText("Version")) }) {
+        Phone(Tab.Settings, 4) {
+            SettingsScreen(fake.windows, QuotaSettings(), fake.members.size, Colours.Starbridge, fake.push, "https://starbridge.run", settingsActions, pushHold = 30, version = "0.1.8-rc.3")
+        }
+    }
+
+    @Config(qualifiers = "w412dp-h2400dp-xxhdpi")
+    @Test fun settingsVersionCopied() = capture("settings-version-copied", { compose.onNode(hasScrollToNodeAction()).performScrollToNode(hasText("Version")); compose.onNodeWithText("Version").performClick() }) {
+        Phone(Tab.Settings, 4) {
+            SettingsScreen(fake.windows, QuotaSettings(), fake.members.size, Colours.Starbridge, fake.push, "https://starbridge.run", settingsActions, pushHold = 30, version = "0.1.8-rc.3")
+        }
+    }
+
     // Settings → Alerts (#930): the column names once, a row per window of the providers shown.
     @Test fun settingsAlerts() = capture("settings-alerts") {
         Phone(Tab.Settings, 4) {

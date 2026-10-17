@@ -17,9 +17,8 @@ body:
     attributes:
       label: Version
       description: |
-        The Starbridge version you hit the bug on, such as 0.1.8-rc.2. Run `starbridge --version`.
-        In the Mac app, it is under Starbridge > About Starbridge. On Android, it is in Settings > Apps > Starbridge,
-        and on iPhone in Settings > Apps > Starbridge. The web page has none yet: use the CLI's, or the app's, on that machine.
+        The Starbridge version you hit the bug on, such as 0.1.8-rc.2. In the web page, the Mac app, Android and iPhone,
+        it is in Settings > Account > Version: tap it to copy. For the CLI, run `starbridge --version`.
       placeholder: 0.1.8-rc.2
     validations:
       required: true

@@ -11,6 +11,9 @@ settings:
     DEVELOPMENT_TEAM: 3N63N7U9R3
     SWIFT_VERSION: "6.0"
     MARKETING_VERSION: "0.1.0"
+    # What Settings shows. MARKETING_VERSION stays numeric for Apple, so the release build passes the
+    # whole tag here, release candidate suffix included (#1892).
+    STARBRIDGE_VERSION: $(MARKETING_VERSION)
     CURRENT_PROJECT_VERSION: "1"
 packages:
   StarbridgeProtocol:
@@ -53,6 +56,7 @@ targets:
         CFBundleDisplayName: Starbridge
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        StarbridgeVersion: $(STARBRIDGE_VERSION)
         UILaunchScreen:
           UIColorName: ""
         UISupportedInterfaceOrientations:

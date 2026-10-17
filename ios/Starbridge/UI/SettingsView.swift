@@ -155,6 +155,7 @@ struct SettingsView: View {
                     }
                     Button("Sign out") { signingOut = true }
                     Button("Delete account", role: .destructive) { deleting = true }
+                    VersionRow(version: Self.version)
                 }
                 .listRowBackground(Tokens.Colors.surface.color)
             }
@@ -171,6 +172,15 @@ struct SettingsView: View {
         .deleteAccount(store: store, isPresented: $deleting, text: DeleteAccount.paired)
     }
 
+    /// The app's version, as the bug form asks for it (#1892).
+    /// The whole tag, release candidate suffix included: `StarbridgeVersion`, since
+    /// `CFBundleShortVersionString` must stay numeric for Apple.
+    static let version = shown(Bundle.main.infoDictionary)
+
+    static func shown(_ info: [String: Any]?) -> String {
+        (info?["StarbridgeVersion"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+            ?? info?["CFBundleShortVersionString"] as? String ?? ""
+    }
     /** How to tell agents to ask through Starbridge. */
     static let guide = URL(string: "https://starbridge.run/docs/tell-your-agents")!
 }
@@ -301,5 +311,51 @@ struct QuotaAlertsView: View {
             }
         }
         .listRowBackground(Tokens.Colors.surface.color)
+    }
+}
+
+/// What a tap on the Version row does: copies the version, then reads "Copied" for a moment (#1892).
+@MainActor @Observable
+final class VersionCopy {
+    let version: String
+    private(set) var copied = false
+    private let hold: Duration
+    private var reset: Task<Void, Never>?
+
+    init(version: String, hold: Duration = .seconds(1.5)) {
+        self.version = version
+        self.hold = hold
+    }
+
+    func copy() {
+        UIPasteboard.general.string = version
+        copied = true
+        reset?.cancel()
+        reset = Task { [hold] in
+            try? await Task.sleep(for: hold)
+            if !Task.isCancelled { copied = false }
+        }
+    }
+}
+
+/// The version at the end of Account, right-aligned; a tap copies it (#1892).
+struct VersionRow: View {
+    @State private var model: VersionCopy
+
+    init(version: String) { _model = State(initialValue: VersionCopy(version: version)) }
+    init(model: VersionCopy) { _model = State(initialValue: model) }
+
+    var body: some View {
+        Button(action: model.copy) {
+            HStack {
+                Text("Version")
+                    .foregroundStyle(Tokens.Colors.fg.color)
+                Spacer()
+                Text(model.copied ? "Copied" : model.version)
+                    .foregroundStyle(Tokens.Colors.fg2.color)
+            }
+        }
+        .accessibilityValue(model.copied ? "Copied" : model.version)
+        .accessibilityHint("Copies the version")
     }
 }
