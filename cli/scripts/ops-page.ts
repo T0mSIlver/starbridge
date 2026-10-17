@@ -471,7 +471,8 @@ async function gatherBugs(): Promise<Bug[] | undefined> {
           const events = await api<{ event: string; commit_id: string | null }[]>(
             `issues/${row.number}/events?per_page=100`,
           );
-          const closed = events?.filter((e) => e.event === "closed").pop();
+          if (!events) return undefined;
+          const closed = events.filter((e) => e.event === "closed").pop();
           if (closed?.commit_id) b.fixedIn = firstTag(closed.commit_id) || undefined;
           else b.closedByHand = true;
         }
