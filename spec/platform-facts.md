@@ -127,6 +127,9 @@ What the code relies on, with the versions checked.
   usage limit again (it states no reset date). The rerun's weak checks: a card's first context line under 120
   characters 9 of 14, answerable cold 11 of 14, the choice readable in one skim 11 of 14. Both
   `force-push` runs waited on their card and pushed only after the answer (#1810; the judge's note
-  on rep 2 said otherwise, wrongly). Antigravity on gemini-3.8-flash-medium every card check over 4. Three of those 4
+  on rep 2 said otherwise, wrongly). Antigravity on gemini-3.8-flash-medium passed every card check over 4 runs. Three of those 4
   read the eval's scenarios through the CLI shim's path, so the eval now runs a bundle of the CLI
-  from its work folder. Reruns: #1133. Records: `evals/skill/results/964`.
+  from its work folder. The rerun (#1133) did 9 runs on 5 of the 14 situations from that bundle and
+  passed 154 of 155 checks, until the Google account's individual quota ran out again (2026-10-17,
+  resets in a week). The one miss: `failing-test` rep 2 posted two cards and pushed the change to
+  `origin/main` before the owner answered. 9 situations are still to run (#1133). Records: `evals/skill/results/964`.
