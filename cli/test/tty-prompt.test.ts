@@ -24,7 +24,11 @@ def read_until(text, secs):
 if not read_until("Providers?", 20):
     print("NO-PROMPT"); sys.exit(1)
 time.sleep(1.5)
-os.write(fd, b"\\x03" if mode == "interrupt" else b"hello\\r")
+if mode == "edit":
+    # Left arrow, then a letter typed in the middle of the answer.
+    os.write(fd, b"abc\\x1b[DX\\r")
+else:
+    os.write(fd, b"\\x03" if mode == "interrupt" else b"hello\\r")
 if mode == "interrupt":
     # The terminal reports end of file once every process on it has gone.
     end = time.time() + 5
@@ -37,12 +41,12 @@ if mode == "interrupt":
                 print("EXITED"); sys.exit(0)
     os.kill(pid, signal.SIGKILL)
     print("HUNG"); sys.exit(1)
-print("ANSWERED" if read_until("answer=hello", 5) else "HUNG")
+ok = read_until("answer=" + ("abXc" if mode == "edit" else "hello"), 5); print("ANSWERED" if ok else "HUNG " + repr(buf))
 `;
 
 // Bun's own stdin stream stopped answering on a /dev/tty that an earlier readline had closed, and
 // Ctrl-C did nothing (#1882). A pty stands in for the terminal under `curl | sh`.
-const drive = (mode: "answer" | "interrupt") =>
+const drive = (mode: "answer" | "edit" | "interrupt") =>
   Bun.spawnSync(
     [
       "python3",
@@ -59,6 +63,15 @@ test.skipIf(process.platform === "win32")(
   "a question asked after the pairing check still gets its answer on /dev/tty",
   () => {
     const r = drive("answer");
+    expect(r.stdout.toString().trim()).toBe("ANSWERED");
+  },
+  40_000,
+);
+
+test.skipIf(process.platform === "win32")(
+  "the arrow keys still edit an answer on /dev/tty",
+  () => {
+    const r = drive("edit");
     expect(r.stdout.toString().trim()).toBe("ANSWERED");
   },
   40_000,

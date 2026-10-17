@@ -35,22 +35,22 @@ export const defaults: Prompt = {
 };
 
 /**
- * One line from the terminal, read by a shell that shares this process's stdin instead of through
+ * One line from the terminal, read by bash, which shares this process's stdin instead of through
  * `process.stdin`. Under `curl | sh` stdin is `/dev/tty`, and on macOS Bun cannot read it again
  * once an earlier readline (the pairing check) has closed it: the next question never gets its
- * answer and Ctrl-C does nothing (#1882). The shell reads in the terminal's normal mode, so
- * Enter ends the line, and Ctrl-C ends it too: setup stops as it does at any other step.
+ * answer and Ctrl-C does nothing (#1882). Bash's own line editor reads the answer, so the arrow
+ * keys edit it, and Ctrl-C ends it too: setup stops as it does at any other step.
  */
 export function readLine(): Promise<string> {
   return new Promise((resolve) => {
-    const child = spawn("/bin/sh", ["-c", 'IFS= read -r line; printf %s "$line"'], {
+    const child = spawn("/bin/bash", ["-c", 'IFS= read -e -r line; printf %s "$line"'], {
       stdio: ["inherit", "pipe", "inherit"],
     });
     let line = "";
     child.stdout.on("data", (d: Buffer) => {
       line += d.toString("utf8");
     });
-    // No /bin/sh to run: take the default rather than wait for an answer nobody can read.
+    // No /bin/bash to run: take the default rather than wait for an answer nobody can read.
     child.on("error", () => resolve(""));
     child.on("close", (_code, signal) => {
       if (signal) process.exit(130);
@@ -62,8 +62,8 @@ export function readLine(): Promise<string> {
 /** Questions on the terminal. */
 export function terminalPrompt(): Prompt {
   const ask = async (q: string) => {
-    // Windows' console keeps the stream: the direct read is for the Unix terminals.
-    if (process.platform !== "win32") {
+    // Only macOS needs the shell. Its `read -e` keeps the arrow keys working in an answer.
+    if (process.platform === "darwin") {
       process.stdout.write(q);
       return (await readLine()).trim();
     }
