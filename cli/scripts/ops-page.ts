@@ -195,7 +195,7 @@ function main(f: Facts, p: (typeof PRODUCTS)[number]): string {
   const none = (t: string) => `<span class="ver none">${t}</span>`;
   switch (p) {
     case "Server and web":
-      return `<span class="ver">${commit(f.staging)}</span><p class="where">Staging · prod ${commit(f.prod)}</p>`;
+      return `<span class="ver">${commit(f.staging)}</span><p class="where">staging.starbridge.run · prod ${commit(f.prod)}</p>`;
     case "Android":
       return f.internalBuild
         ? `<span class="ver">main-${short(f.internalBuild.sha)}</span><p class="meta">${commit(f.internalBuild.sha)} · ${both(new Date(f.internalBuild.at))}</p><p class="where">Play internal</p>`
@@ -262,7 +262,7 @@ export function render(f: Facts): string {
 <title>Ops · Starbridge</title><link rel="icon" href="favicon.ico" sizes="48x48"><link rel="preload" href="fonts/google-sans-flex.woff2" as="font" type="font/woff2" crossorigin>
 <style>${CSS}</style></head><body><main>
 <header><span class="brand">${MARK}Starbridge ops</span></header>
-<div class="card intro"><h1>Rings</h1><p>Main: staging, your phone.<br>rc: testers, starbridge.run.<br>Final: everyone.</p><p><a href="https://github.com/${REPO}/blob/main/spec/releases.md">spec/releases.md</a> · <a href="${POLICY}">Policy</a></p></div>
+<div class="card intro"><h1>Rings</h1><p>Main: staging.starbridge.run, your phone.<br>rc: testers, starbridge.run.<br>Final: everyone.</p><p><a href="https://github.com/${REPO}/blob/main/spec/releases.md">spec/releases.md</a> · <a href="${POLICY}">Policy</a></p></div>
 <section><h2>Promotion</h2>${promotionHtml(f)}</section>
 <section><h2>Now</h2><div class="card prods">${rows}</div></section>
 <section><h2>Next</h2><div class="card next"><ul>${nextRows}</ul></div></section>
