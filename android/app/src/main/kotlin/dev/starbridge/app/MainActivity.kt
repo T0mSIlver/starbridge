@@ -230,5 +230,3 @@ class MainActivity : ComponentActivity() {
         const val TAB_QUOTAS = "quotas"
     }
 }
-
-// Timing probe for #1916: makes both Android jobs compile; reverted next commit.
