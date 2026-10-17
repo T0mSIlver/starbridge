@@ -1525,7 +1525,11 @@ test("on macOS, setup loads a launchd agent that runs the agent, and uninstall u
 test.each([
   ["waits until bootout has removed the job", { FAKE_LAUNCHD_LINGER: "2" }],
   ["tries again when launchd refuses a bootstrap with error 5", { FAKE_LAUNCHD_REFUSE: "1" }],
-])("on macOS, setup's restart of the agent %s (#1326)", async (_, env) => {
+  [
+    "enables a disabled job, which launchd refuses with error 5 for good",
+    { FAKE_LAUNCHD_DISABLED: "1" },
+  ],
+])("on macOS, setup's restart of the agent %s (#1326, #1886)", async (_, env) => {
   const m = await machine();
   await startAgent(m.ctx);
   const sys: Sys = { ...m.sys, platform: "darwin", arch: "arm64", uid: 501 };
