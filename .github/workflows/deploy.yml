@@ -5,7 +5,7 @@ name: deploy
 # `staging`. starbridge.run takes a commit only by dispatch, `gh workflow run deploy.yml -f
 # sha=<commit>`: release.yml dispatches each rc tag's commit, and the owner a hotfix. Either way it
 # deploys only a commit whose `staging` status is success, which the boxes check again
-# (deploy/*/deploy-rev.sh). rollback.yml goes back to a commit a box ran before; deploy/deploy.sh and
+# (deploy/host/deploy-rev.sh). rollback.yml goes back to a commit a box ran before; deploy/deploy.sh and
 # deploy/rollback.sh stay the owner's way around both.
 on:
   workflow_run:
@@ -241,7 +241,7 @@ jobs:
             echo "staging runs ${got:-no named revision}, not $REV"
             exit 1
           fi
-          # The digests staging pulled and runs (deploy/staging/apply.sh), which prod runs (#1715).
+          # The digests staging pulled and runs (deploy/host/apply.sh), which prod runs (#1715).
           for image in server web; do
             digest=$(sed -n "s/^image $image \(sha256:[0-9a-f]\{64\}\)$/\1/p" "$RUNNER_TEMP/staging.log")
             [ "$(printf '%s\n' "$digest" | grep -c .)" -eq 1 ] || {
