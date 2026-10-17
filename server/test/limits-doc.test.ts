@@ -15,6 +15,12 @@ const blocks = readFileSync(join(import.meta.dir, "../../PROTOCOL.md"), "utf8")
   .split(/\n\s*\n|\n(?=\|)|(?<=\|)\n/)
   .map((b) => b.replace(/\s+/g, " ").trim());
 
+/** Whether `block` holds `phrase` with no digit against either end: "50 a minute" is not in "150 a minute". */
+function states(block: string, phrase: string): boolean {
+  const escaped = phrase.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`(?<![0-9])${escaped}(?![0-9])`).test(block);
+}
+
 /** `n` bytes as PROTOCOL.md writes them: 2 GB, 256 MB, 8 KB or 512 bytes. */
 function bytes(n: number): string {
   for (const [unit, size] of [
@@ -211,7 +217,7 @@ for (const [key, [where, ...says]] of Object.entries(STATED)) {
     const found = blocks.filter((b) => b.includes(where));
     expect(found.length, `no block of PROTOCOL.md holds ${where}`).toBeGreaterThan(0);
     expect(
-      found.some((b) => says.every((s) => b.includes(s))),
+      found.some((b) => says.every((s) => states(b, s))),
       `PROTOCOL.md, ${where}: says no ${JSON.stringify(says)} (limits.ts has ${JSON.stringify(L[key as keyof Limits])})`,
     ).toBe(true);
   });
