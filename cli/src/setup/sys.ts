@@ -34,9 +34,37 @@ export const defaults: Prompt = {
   text: async (_q, def) => def,
 };
 
+/**
+ * One line from the terminal, read by a shell that shares this process's stdin instead of through
+ * `process.stdin`. Under `curl | sh` stdin is `/dev/tty`, and on macOS Bun cannot read it again
+ * once an earlier readline (the pairing check) has closed it: the next question never gets its
+ * answer and Ctrl-C does nothing (#1882). The shell reads in the terminal's normal mode, so
+ * Enter ends the line, and Ctrl-C ends it too: setup stops as it does at any other step.
+ */
+export function readLine(): Promise<string> {
+  return new Promise((resolve) => {
+    const child = spawn("/bin/sh", ["-c", 'IFS= read -r line; printf %s "$line"'], {
+      stdio: ["inherit", "pipe", "inherit"],
+    });
+    let line = "";
+    child.stdout.on("data", (d: Buffer) => {
+      line += d.toString("utf8");
+    });
+    child.on("close", (_code, signal) => {
+      if (signal) process.exit(130);
+      resolve(line);
+    });
+  });
+}
+
 /** Questions on the terminal. */
 export function terminalPrompt(): Prompt {
   const ask = async (q: string) => {
+    // Windows' console keeps the stream: the direct read is for the Unix terminals.
+    if (process.platform !== "win32") {
+      process.stdout.write(q);
+      return (await readLine()).trim();
+    }
     const rl = createInterface({ input: process.stdin, output: process.stdout });
     try {
       return (await rl.question(q)).trim();
