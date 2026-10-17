@@ -621,7 +621,8 @@ export async function hookQuestion(
           held: true,
           askedAt: new Date(at + i),
         };
-        const how = { wait: true, json: true };
+        // SIGTERM is the terminal's answer: a post it cuts is settled elsewhere too (#1913).
+        const how = { wait: true, json: true, answered: outer.signal };
         try {
           let code = await ask(sub, input, how);
           ids[i] = lines[0];

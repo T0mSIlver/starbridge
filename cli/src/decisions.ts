@@ -491,16 +491,24 @@ export async function postDecision(
   }
 }
 
-/** Posts a decision and prints its id; with `wait`, then waits for its answer. */
+/**
+ * Posts a decision and prints its id; with `wait`, then waits for its answer. `answered` is
+ * `postDecision`'s: aborted, a post it cuts is settled elsewhere.
+ */
 export async function ask(
   ctx: Ctx,
   asked: AskInput,
-  opts: { wait?: boolean; timeout?: string; json?: boolean },
+  opts: { wait?: boolean; timeout?: string; json?: boolean; answered?: AbortSignal },
 ): Promise<number> {
   const s = session(ctx);
   const { input, warning } = bindSession(asked, ctx.env);
   const resolved = resolveSource(input, ctx.env, process.cwd());
-  const decision = await postDecision(ctx, s, { ...resolved, waiting: input.waiting || opts.wait });
+  const decision = await postDecision(
+    ctx,
+    s,
+    { ...resolved, waiting: input.waiting || opts.wait },
+    opts.answered,
+  );
   ctx.out(decision.id);
   if (warning) ctx.err(warning);
   // With no agent, nothing tells which sessions run a mod: the poller's lease says only that one
