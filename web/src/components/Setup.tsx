@@ -91,10 +91,12 @@ export function FirstRunPage({
 }) {
   return (
     <div className={s.frame}>
-      <a href="/" className={`t-action ${s.brand}`}>
-        <Mark size={20} />
-        Starbridge
-      </a>
+      <header className={s.top}>
+        <a href="/" className={`t-action ${s.brand}`}>
+          <Mark size={20} />
+          Starbridge
+        </a>
+      </header>
       <main className={s.center}>
         <div className={centered ? `${s.column} ${s.centered}` : s.column}>{children}</div>
       </main>
