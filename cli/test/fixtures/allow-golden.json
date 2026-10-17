@@ -1,0 +1,570 @@
+{
+  "claude": {
+    "missing": {
+      "before": null,
+      "missing": [
+        "Bash(starbridge ask:*)",
+        "Bash(starbridge waiting:*)",
+        "Bash(starbridge working:*)",
+        "Bash(starbridge wait:*)",
+        "Bash(starbridge settle d_*)"
+      ],
+      "add": {
+        "result": true,
+        "after": "{\n  \"permissions\": {\n    \"allow\": [\n      \"Bash(starbridge ask:*)\",\n      \"Bash(starbridge waiting:*)\",\n      \"Bash(starbridge working:*)\",\n      \"Bash(starbridge wait:*)\",\n      \"Bash(starbridge settle d_*)\"\n    ]\n  }\n}\n"
+      },
+      "remove": {
+        "result": false,
+        "after": null
+      }
+    },
+    "empty": {
+      "before": "{}\n",
+      "missing": [
+        "Bash(starbridge ask:*)",
+        "Bash(starbridge waiting:*)",
+        "Bash(starbridge working:*)",
+        "Bash(starbridge wait:*)",
+        "Bash(starbridge settle d_*)"
+      ],
+      "add": {
+        "result": true,
+        "after": "{\n  \"permissions\": {\n    \"allow\": [\n      \"Bash(starbridge ask:*)\",\n      \"Bash(starbridge waiting:*)\",\n      \"Bash(starbridge working:*)\",\n      \"Bash(starbridge wait:*)\",\n      \"Bash(starbridge settle d_*)\"\n    ]\n  }\n}\n"
+      },
+      "remove": {
+        "result": false,
+        "after": "{}\n"
+      }
+    },
+    "others and stale": {
+      "before": "{\"v\":1,\"permissions\":{\"deny\":[\"Other(rm)\"],\"allow\":[\"Other(ls)\",\"Bash(starbridge settle:*)\",\"Other(cat)\"]}}",
+      "missing": [
+        "Bash(starbridge ask:*)",
+        "Bash(starbridge waiting:*)",
+        "Bash(starbridge working:*)",
+        "Bash(starbridge wait:*)",
+        "Bash(starbridge settle d_*)",
+        "Bash(starbridge settle:*)"
+      ],
+      "add": {
+        "result": true,
+        "after": "{\n  \"v\": 1,\n  \"permissions\": {\n    \"deny\": [\n      \"Other(rm)\"\n    ],\n    \"allow\": [\n      \"Other(ls)\",\n      \"Other(cat)\",\n      \"Bash(starbridge ask:*)\",\n      \"Bash(starbridge waiting:*)\",\n      \"Bash(starbridge working:*)\",\n      \"Bash(starbridge wait:*)\",\n      \"Bash(starbridge settle d_*)\"\n    ]\n  }\n}\n"
+      },
+      "remove": {
+        "result": true,
+        "after": "{\n  \"v\": 1,\n  \"permissions\": {\n    \"deny\": [\n      \"Other(rm)\"\n    ],\n    \"allow\": [\n      \"Other(ls)\",\n      \"Other(cat)\"\n    ]\n  }\n}\n"
+      }
+    },
+    "complete": {
+      "before": "{\n    \"permissions\": {\n        \"allow\": [\n            \"Other(ls)\",\n            \"Bash(starbridge ask:*)\",\n            \"Bash(starbridge waiting:*)\",\n            \"Bash(starbridge working:*)\",\n            \"Bash(starbridge wait:*)\",\n            \"Bash(starbridge settle d_*)\"\n        ]\n    }\n}",
+      "missing": [],
+      "add": {
+        "result": true,
+        "after": "{\n  \"permissions\": {\n    \"allow\": [\n      \"Other(ls)\",\n      \"Bash(starbridge ask:*)\",\n      \"Bash(starbridge waiting:*)\",\n      \"Bash(starbridge working:*)\",\n      \"Bash(starbridge wait:*)\",\n      \"Bash(starbridge settle d_*)\"\n    ]\n  }\n}\n"
+      },
+      "remove": {
+        "result": true,
+        "after": "{\n  \"permissions\": {\n    \"allow\": [\n      \"Other(ls)\"\n    ]\n  }\n}\n"
+      }
+    },
+    "ours only": {
+      "before": "{\"permissions\":{\"allow\":[\"Bash(starbridge ask:*)\",\"Bash(starbridge waiting:*)\",\"Bash(starbridge working:*)\",\"Bash(starbridge wait:*)\",\"Bash(starbridge settle d_*)\"]}}",
+      "missing": [],
+      "add": {
+        "result": true,
+        "after": "{\n  \"permissions\": {\n    \"allow\": [\n      \"Bash(starbridge ask:*)\",\n      \"Bash(starbridge waiting:*)\",\n      \"Bash(starbridge working:*)\",\n      \"Bash(starbridge wait:*)\",\n      \"Bash(starbridge settle d_*)\"\n    ]\n  }\n}\n"
+      },
+      "remove": {
+        "result": true,
+        "after": null
+      }
+    },
+    "ours and other permissions": {
+      "before": "{\"permissions\":{\"allow\":[\"Bash(starbridge ask:*)\",\"Bash(starbridge waiting:*)\",\"Bash(starbridge working:*)\",\"Bash(starbridge wait:*)\",\"Bash(starbridge settle d_*)\"],\"ask\":[\"Other(x)\"]}}",
+      "missing": [],
+      "add": {
+        "result": true,
+        "after": "{\n  \"permissions\": {\n    \"allow\": [\n      \"Bash(starbridge ask:*)\",\n      \"Bash(starbridge waiting:*)\",\n      \"Bash(starbridge working:*)\",\n      \"Bash(starbridge wait:*)\",\n      \"Bash(starbridge settle d_*)\"\n    ],\n    \"ask\": [\n      \"Other(x)\"\n    ]\n  }\n}\n"
+      },
+      "remove": {
+        "result": true,
+        "after": "{\n  \"permissions\": {\n    \"ask\": [\n      \"Other(x)\"\n    ]\n  }\n}\n"
+      }
+    },
+    "allow not a list": {
+      "before": "{\"permissions\":{\"allow\":\"Other(ls)\"},\"x\":[1,2]}",
+      "missing": [
+        "Bash(starbridge ask:*)",
+        "Bash(starbridge waiting:*)",
+        "Bash(starbridge working:*)",
+        "Bash(starbridge wait:*)",
+        "Bash(starbridge settle d_*)"
+      ],
+      "add": {
+        "result": true,
+        "after": "{\n  \"permissions\": {\n    \"allow\": [\n      \"Bash(starbridge ask:*)\",\n      \"Bash(starbridge waiting:*)\",\n      \"Bash(starbridge working:*)\",\n      \"Bash(starbridge wait:*)\",\n      \"Bash(starbridge settle d_*)\"\n    ]\n  },\n  \"x\": [\n    1,\n    2\n  ]\n}\n"
+      },
+      "remove": {
+        "result": false,
+        "after": "{\"permissions\":{\"allow\":\"Other(ls)\"},\"x\":[1,2]}"
+      }
+    },
+    "not JSON": {
+      "before": "{oops",
+      "missing": [
+        "Bash(starbridge ask:*)",
+        "Bash(starbridge waiting:*)",
+        "Bash(starbridge working:*)",
+        "Bash(starbridge wait:*)",
+        "Bash(starbridge settle d_*)"
+      ],
+      "add": {
+        "result": false,
+        "after": "{oops"
+      },
+      "remove": {
+        "result": false,
+        "after": "{oops"
+      }
+    },
+    "a list": {
+      "before": "[]\n",
+      "missing": [
+        "Bash(starbridge ask:*)",
+        "Bash(starbridge waiting:*)",
+        "Bash(starbridge working:*)",
+        "Bash(starbridge wait:*)",
+        "Bash(starbridge settle d_*)"
+      ],
+      "add": {
+        "result": false,
+        "after": "[]\n"
+      },
+      "remove": {
+        "result": false,
+        "after": "[]\n"
+      }
+    },
+    "non-string entries": {
+      "before": "{\"permissions\":{\"allow\":[1,\"Other(ls)\",null]}}",
+      "missing": [
+        "Bash(starbridge ask:*)",
+        "Bash(starbridge waiting:*)",
+        "Bash(starbridge working:*)",
+        "Bash(starbridge wait:*)",
+        "Bash(starbridge settle d_*)"
+      ],
+      "add": {
+        "result": true,
+        "after": "{\n  \"permissions\": {\n    \"allow\": [\n      \"Other(ls)\",\n      \"Bash(starbridge ask:*)\",\n      \"Bash(starbridge waiting:*)\",\n      \"Bash(starbridge working:*)\",\n      \"Bash(starbridge wait:*)\",\n      \"Bash(starbridge settle d_*)\"\n    ]\n  }\n}\n"
+      },
+      "remove": {
+        "result": false,
+        "after": "{\"permissions\":{\"allow\":[1,\"Other(ls)\",null]}}"
+      }
+    }
+  },
+  "cursor": {
+    "missing": {
+      "before": null,
+      "missing": [
+        "Shell(starbridge ask)",
+        "Shell(starbridge waiting)",
+        "Shell(starbridge working)",
+        "Shell(starbridge wait)"
+      ],
+      "add": {
+        "result": true,
+        "after": "{\n  \"permissions\": {\n    \"allow\": [\n      \"Shell(starbridge ask)\",\n      \"Shell(starbridge waiting)\",\n      \"Shell(starbridge working)\",\n      \"Shell(starbridge wait)\"\n    ]\n  }\n}\n"
+      },
+      "removeStale": {
+        "result": false,
+        "after": null
+      },
+      "remove": {
+        "result": false,
+        "after": null
+      }
+    },
+    "empty": {
+      "before": "{}\n",
+      "missing": [
+        "Shell(starbridge ask)",
+        "Shell(starbridge waiting)",
+        "Shell(starbridge working)",
+        "Shell(starbridge wait)"
+      ],
+      "add": {
+        "result": true,
+        "after": "{\n  \"permissions\": {\n    \"allow\": [\n      \"Shell(starbridge ask)\",\n      \"Shell(starbridge waiting)\",\n      \"Shell(starbridge working)\",\n      \"Shell(starbridge wait)\"\n    ]\n  }\n}\n"
+      },
+      "removeStale": {
+        "result": false,
+        "after": "{}\n"
+      },
+      "remove": {
+        "result": false,
+        "after": "{}\n"
+      }
+    },
+    "others and stale": {
+      "before": "{\"v\":1,\"permissions\":{\"deny\":[\"Other(rm)\"],\"allow\":[\"Other(ls)\",\"Shell(starbridge settle)\",\"Other(cat)\"]}}",
+      "missing": [
+        "Shell(starbridge ask)",
+        "Shell(starbridge waiting)",
+        "Shell(starbridge working)",
+        "Shell(starbridge wait)",
+        "Shell(starbridge settle)"
+      ],
+      "add": {
+        "result": true,
+        "after": "{\n  \"v\": 1,\n  \"permissions\": {\n    \"deny\": [\n      \"Other(rm)\"\n    ],\n    \"allow\": [\n      \"Other(ls)\",\n      \"Other(cat)\",\n      \"Shell(starbridge ask)\",\n      \"Shell(starbridge waiting)\",\n      \"Shell(starbridge working)\",\n      \"Shell(starbridge wait)\"\n    ]\n  }\n}\n"
+      },
+      "removeStale": {
+        "result": true,
+        "after": "{\n  \"v\": 1,\n  \"permissions\": {\n    \"deny\": [\n      \"Other(rm)\"\n    ],\n    \"allow\": [\n      \"Other(ls)\",\n      \"Other(cat)\"\n    ]\n  }\n}\n"
+      },
+      "remove": {
+        "result": true,
+        "after": "{\n  \"v\": 1,\n  \"permissions\": {\n    \"deny\": [\n      \"Other(rm)\"\n    ],\n    \"allow\": [\n      \"Other(ls)\",\n      \"Other(cat)\"\n    ]\n  }\n}\n"
+      }
+    },
+    "complete": {
+      "before": "{\n    \"permissions\": {\n        \"allow\": [\n            \"Other(ls)\",\n            \"Shell(starbridge ask)\",\n            \"Shell(starbridge waiting)\",\n            \"Shell(starbridge working)\",\n            \"Shell(starbridge wait)\"\n        ]\n    }\n}",
+      "missing": [],
+      "add": {
+        "result": true,
+        "after": "{\n    \"permissions\": {\n        \"allow\": [\n            \"Other(ls)\",\n            \"Shell(starbridge ask)\",\n            \"Shell(starbridge waiting)\",\n            \"Shell(starbridge working)\",\n            \"Shell(starbridge wait)\"\n        ]\n    }\n}"
+      },
+      "removeStale": {
+        "result": false,
+        "after": "{\n    \"permissions\": {\n        \"allow\": [\n            \"Other(ls)\",\n            \"Shell(starbridge ask)\",\n            \"Shell(starbridge waiting)\",\n            \"Shell(starbridge working)\",\n            \"Shell(starbridge wait)\"\n        ]\n    }\n}"
+      },
+      "remove": {
+        "result": true,
+        "after": "{\n  \"permissions\": {\n    \"allow\": [\n      \"Other(ls)\"\n    ]\n  }\n}\n"
+      }
+    },
+    "ours only": {
+      "before": "{\"permissions\":{\"allow\":[\"Shell(starbridge ask)\",\"Shell(starbridge waiting)\",\"Shell(starbridge working)\",\"Shell(starbridge wait)\"]}}",
+      "missing": [],
+      "add": {
+        "result": true,
+        "after": "{\"permissions\":{\"allow\":[\"Shell(starbridge ask)\",\"Shell(starbridge waiting)\",\"Shell(starbridge working)\",\"Shell(starbridge wait)\"]}}"
+      },
+      "removeStale": {
+        "result": false,
+        "after": "{\"permissions\":{\"allow\":[\"Shell(starbridge ask)\",\"Shell(starbridge waiting)\",\"Shell(starbridge working)\",\"Shell(starbridge wait)\"]}}"
+      },
+      "remove": {
+        "result": true,
+        "after": null
+      }
+    },
+    "ours and other permissions": {
+      "before": "{\"permissions\":{\"allow\":[\"Shell(starbridge ask)\",\"Shell(starbridge waiting)\",\"Shell(starbridge working)\",\"Shell(starbridge wait)\"],\"ask\":[\"Other(x)\"]}}",
+      "missing": [],
+      "add": {
+        "result": true,
+        "after": "{\"permissions\":{\"allow\":[\"Shell(starbridge ask)\",\"Shell(starbridge waiting)\",\"Shell(starbridge working)\",\"Shell(starbridge wait)\"],\"ask\":[\"Other(x)\"]}}"
+      },
+      "removeStale": {
+        "result": false,
+        "after": "{\"permissions\":{\"allow\":[\"Shell(starbridge ask)\",\"Shell(starbridge waiting)\",\"Shell(starbridge working)\",\"Shell(starbridge wait)\"],\"ask\":[\"Other(x)\"]}}"
+      },
+      "remove": {
+        "result": true,
+        "after": "{\n  \"permissions\": {\n    \"ask\": [\n      \"Other(x)\"\n    ]\n  }\n}\n"
+      }
+    },
+    "allow not a list": {
+      "before": "{\"permissions\":{\"allow\":\"Other(ls)\"},\"x\":[1,2]}",
+      "missing": [
+        "Shell(starbridge ask)",
+        "Shell(starbridge waiting)",
+        "Shell(starbridge working)",
+        "Shell(starbridge wait)"
+      ],
+      "add": {
+        "result": true,
+        "after": "{\n  \"permissions\": {\n    \"allow\": [\n      \"Shell(starbridge ask)\",\n      \"Shell(starbridge waiting)\",\n      \"Shell(starbridge working)\",\n      \"Shell(starbridge wait)\"\n    ]\n  },\n  \"x\": [\n    1,\n    2\n  ]\n}\n"
+      },
+      "removeStale": {
+        "result": false,
+        "after": "{\"permissions\":{\"allow\":\"Other(ls)\"},\"x\":[1,2]}"
+      },
+      "remove": {
+        "result": false,
+        "after": "{\"permissions\":{\"allow\":\"Other(ls)\"},\"x\":[1,2]}"
+      }
+    },
+    "not JSON": {
+      "before": "{oops",
+      "missing": [
+        "Shell(starbridge ask)",
+        "Shell(starbridge waiting)",
+        "Shell(starbridge working)",
+        "Shell(starbridge wait)"
+      ],
+      "add": {
+        "result": false,
+        "after": "{oops"
+      },
+      "removeStale": {
+        "result": false,
+        "after": "{oops"
+      },
+      "remove": {
+        "result": false,
+        "after": "{oops"
+      }
+    },
+    "a list": {
+      "before": "[]\n",
+      "missing": [
+        "Shell(starbridge ask)",
+        "Shell(starbridge waiting)",
+        "Shell(starbridge working)",
+        "Shell(starbridge wait)"
+      ],
+      "add": {
+        "result": false,
+        "after": "[]\n"
+      },
+      "removeStale": {
+        "result": false,
+        "after": "[]\n"
+      },
+      "remove": {
+        "result": false,
+        "after": "[]\n"
+      }
+    },
+    "non-string entries": {
+      "before": "{\"permissions\":{\"allow\":[1,\"Other(ls)\",null]}}",
+      "missing": [
+        "Shell(starbridge ask)",
+        "Shell(starbridge waiting)",
+        "Shell(starbridge working)",
+        "Shell(starbridge wait)"
+      ],
+      "add": {
+        "result": true,
+        "after": "{\n  \"permissions\": {\n    \"allow\": [\n      1,\n      \"Other(ls)\",\n      null,\n      \"Shell(starbridge ask)\",\n      \"Shell(starbridge waiting)\",\n      \"Shell(starbridge working)\",\n      \"Shell(starbridge wait)\"\n    ]\n  }\n}\n"
+      },
+      "removeStale": {
+        "result": false,
+        "after": "{\"permissions\":{\"allow\":[1,\"Other(ls)\",null]}}"
+      },
+      "remove": {
+        "result": false,
+        "after": "{\"permissions\":{\"allow\":[1,\"Other(ls)\",null]}}"
+      }
+    }
+  },
+  "antigravity": {
+    "missing": {
+      "before": null,
+      "missing": [
+        "command(starbridge ask)",
+        "command(starbridge waiting)",
+        "command(starbridge working)",
+        "command(starbridge wait)",
+        "command(starbridge hello)"
+      ],
+      "add": {
+        "result": true,
+        "after": "{\n  \"permissions\": {\n    \"allow\": [\n      \"command(starbridge ask)\",\n      \"command(starbridge waiting)\",\n      \"command(starbridge working)\",\n      \"command(starbridge wait)\",\n      \"command(starbridge hello)\"\n    ]\n  }\n}\n"
+      },
+      "removeStale": {
+        "result": false,
+        "after": null
+      },
+      "remove": {
+        "result": false,
+        "after": null
+      }
+    },
+    "empty": {
+      "before": "{}\n",
+      "missing": [
+        "command(starbridge ask)",
+        "command(starbridge waiting)",
+        "command(starbridge working)",
+        "command(starbridge wait)",
+        "command(starbridge hello)"
+      ],
+      "add": {
+        "result": true,
+        "after": "{\n  \"permissions\": {\n    \"allow\": [\n      \"command(starbridge ask)\",\n      \"command(starbridge waiting)\",\n      \"command(starbridge working)\",\n      \"command(starbridge wait)\",\n      \"command(starbridge hello)\"\n    ]\n  }\n}\n"
+      },
+      "removeStale": {
+        "result": false,
+        "after": "{}\n"
+      },
+      "remove": {
+        "result": false,
+        "after": "{}\n"
+      }
+    },
+    "others and stale": {
+      "before": "{\"v\":1,\"permissions\":{\"deny\":[\"Other(rm)\"],\"allow\":[\"Other(ls)\",\"command(starbridge settle)\",\"Other(cat)\"]}}",
+      "missing": [
+        "command(starbridge ask)",
+        "command(starbridge waiting)",
+        "command(starbridge working)",
+        "command(starbridge wait)",
+        "command(starbridge hello)",
+        "command(starbridge settle)"
+      ],
+      "add": {
+        "result": true,
+        "after": "{\n  \"v\": 1,\n  \"permissions\": {\n    \"deny\": [\n      \"Other(rm)\"\n    ],\n    \"allow\": [\n      \"Other(ls)\",\n      \"Other(cat)\",\n      \"command(starbridge ask)\",\n      \"command(starbridge waiting)\",\n      \"command(starbridge working)\",\n      \"command(starbridge wait)\",\n      \"command(starbridge hello)\"\n    ]\n  }\n}\n"
+      },
+      "removeStale": {
+        "result": true,
+        "after": "{\n  \"v\": 1,\n  \"permissions\": {\n    \"deny\": [\n      \"Other(rm)\"\n    ],\n    \"allow\": [\n      \"Other(ls)\",\n      \"Other(cat)\"\n    ]\n  }\n}\n"
+      },
+      "remove": {
+        "result": true,
+        "after": "{\n  \"v\": 1,\n  \"permissions\": {\n    \"deny\": [\n      \"Other(rm)\"\n    ],\n    \"allow\": [\n      \"Other(ls)\",\n      \"Other(cat)\"\n    ]\n  }\n}\n"
+      }
+    },
+    "complete": {
+      "before": "{\n    \"permissions\": {\n        \"allow\": [\n            \"Other(ls)\",\n            \"command(starbridge ask)\",\n            \"command(starbridge waiting)\",\n            \"command(starbridge working)\",\n            \"command(starbridge wait)\",\n            \"command(starbridge hello)\"\n        ]\n    }\n}",
+      "missing": [],
+      "add": {
+        "result": true,
+        "after": "{\n  \"permissions\": {\n    \"allow\": [\n      \"Other(ls)\",\n      \"command(starbridge ask)\",\n      \"command(starbridge waiting)\",\n      \"command(starbridge working)\",\n      \"command(starbridge wait)\",\n      \"command(starbridge hello)\"\n    ]\n  }\n}\n"
+      },
+      "removeStale": {
+        "result": false,
+        "after": "{\n    \"permissions\": {\n        \"allow\": [\n            \"Other(ls)\",\n            \"command(starbridge ask)\",\n            \"command(starbridge waiting)\",\n            \"command(starbridge working)\",\n            \"command(starbridge wait)\",\n            \"command(starbridge hello)\"\n        ]\n    }\n}"
+      },
+      "remove": {
+        "result": true,
+        "after": "{\n  \"permissions\": {\n    \"allow\": [\n      \"Other(ls)\"\n    ]\n  }\n}\n"
+      }
+    },
+    "ours only": {
+      "before": "{\"permissions\":{\"allow\":[\"command(starbridge ask)\",\"command(starbridge waiting)\",\"command(starbridge working)\",\"command(starbridge wait)\",\"command(starbridge hello)\"]}}",
+      "missing": [],
+      "add": {
+        "result": true,
+        "after": "{\n  \"permissions\": {\n    \"allow\": [\n      \"command(starbridge ask)\",\n      \"command(starbridge waiting)\",\n      \"command(starbridge working)\",\n      \"command(starbridge wait)\",\n      \"command(starbridge hello)\"\n    ]\n  }\n}\n"
+      },
+      "removeStale": {
+        "result": false,
+        "after": "{\"permissions\":{\"allow\":[\"command(starbridge ask)\",\"command(starbridge waiting)\",\"command(starbridge working)\",\"command(starbridge wait)\",\"command(starbridge hello)\"]}}"
+      },
+      "remove": {
+        "result": true,
+        "after": null
+      }
+    },
+    "ours and other permissions": {
+      "before": "{\"permissions\":{\"allow\":[\"command(starbridge ask)\",\"command(starbridge waiting)\",\"command(starbridge working)\",\"command(starbridge wait)\",\"command(starbridge hello)\"],\"ask\":[\"Other(x)\"]}}",
+      "missing": [],
+      "add": {
+        "result": true,
+        "after": "{\n  \"permissions\": {\n    \"allow\": [\n      \"command(starbridge ask)\",\n      \"command(starbridge waiting)\",\n      \"command(starbridge working)\",\n      \"command(starbridge wait)\",\n      \"command(starbridge hello)\"\n    ],\n    \"ask\": [\n      \"Other(x)\"\n    ]\n  }\n}\n"
+      },
+      "removeStale": {
+        "result": false,
+        "after": "{\"permissions\":{\"allow\":[\"command(starbridge ask)\",\"command(starbridge waiting)\",\"command(starbridge working)\",\"command(starbridge wait)\",\"command(starbridge hello)\"],\"ask\":[\"Other(x)\"]}}"
+      },
+      "remove": {
+        "result": true,
+        "after": "{\n  \"permissions\": {\n    \"ask\": [\n      \"Other(x)\"\n    ]\n  }\n}\n"
+      }
+    },
+    "allow not a list": {
+      "before": "{\"permissions\":{\"allow\":\"Other(ls)\"},\"x\":[1,2]}",
+      "missing": [
+        "command(starbridge ask)",
+        "command(starbridge waiting)",
+        "command(starbridge working)",
+        "command(starbridge wait)",
+        "command(starbridge hello)"
+      ],
+      "add": {
+        "result": true,
+        "after": "{\n  \"permissions\": {\n    \"allow\": [\n      \"command(starbridge ask)\",\n      \"command(starbridge waiting)\",\n      \"command(starbridge working)\",\n      \"command(starbridge wait)\",\n      \"command(starbridge hello)\"\n    ]\n  },\n  \"x\": [\n    1,\n    2\n  ]\n}\n"
+      },
+      "removeStale": {
+        "result": false,
+        "after": "{\"permissions\":{\"allow\":\"Other(ls)\"},\"x\":[1,2]}"
+      },
+      "remove": {
+        "result": false,
+        "after": "{\"permissions\":{\"allow\":\"Other(ls)\"},\"x\":[1,2]}"
+      }
+    },
+    "not JSON": {
+      "before": "{oops",
+      "missing": [
+        "command(starbridge ask)",
+        "command(starbridge waiting)",
+        "command(starbridge working)",
+        "command(starbridge wait)",
+        "command(starbridge hello)"
+      ],
+      "add": {
+        "result": false,
+        "after": "{oops"
+      },
+      "removeStale": {
+        "result": false,
+        "after": "{oops"
+      },
+      "remove": {
+        "result": false,
+        "after": "{oops"
+      }
+    },
+    "a list": {
+      "before": "[]\n",
+      "missing": [
+        "command(starbridge ask)",
+        "command(starbridge waiting)",
+        "command(starbridge working)",
+        "command(starbridge wait)",
+        "command(starbridge hello)"
+      ],
+      "add": {
+        "result": false,
+        "after": "[]\n"
+      },
+      "removeStale": {
+        "result": false,
+        "after": "[]\n"
+      },
+      "remove": {
+        "result": false,
+        "after": "[]\n"
+      }
+    },
+    "non-string entries": {
+      "before": "{\"permissions\":{\"allow\":[1,\"Other(ls)\",null]}}",
+      "missing": [
+        "command(starbridge ask)",
+        "command(starbridge waiting)",
+        "command(starbridge working)",
+        "command(starbridge wait)",
+        "command(starbridge hello)"
+      ],
+      "add": {
+        "result": true,
+        "after": "{\n  \"permissions\": {\n    \"allow\": [\n      \"Other(ls)\",\n      \"command(starbridge ask)\",\n      \"command(starbridge waiting)\",\n      \"command(starbridge working)\",\n      \"command(starbridge wait)\",\n      \"command(starbridge hello)\"\n    ]\n  }\n}\n"
+      },
+      "removeStale": {
+        "result": false,
+        "after": "{\"permissions\":{\"allow\":[1,\"Other(ls)\",null]}}"
+      },
+      "remove": {
+        "result": false,
+        "after": "{\"permissions\":{\"allow\":[1,\"Other(ls)\",null]}}"
+      }
+    }
+  }
+}

@@ -10,6 +10,7 @@ import { permissionsEnabled } from "../permissions";
 import { piPermissionConfig, removePiEntries } from "../pi";
 import { which } from "../platform";
 import { offerPiAllow, offerPiChain } from "../settings";
+import { ALLOW, type AllowList, addAllow, missingAllow, removeAllow } from "./allow";
 import {
   CODEX_PLUGIN,
   codexHookTrusted,
@@ -19,8 +20,6 @@ import {
   removeCodexPlugin,
 } from "./codex-plugin";
 import {
-  addCursorAllow,
-  CURSOR_ALLOW,
   cursorConfigPath,
   cursorHooksPath,
   cursorSkillDir,
@@ -28,15 +27,9 @@ import {
   hasCursor,
   hooksToAdd,
   installCursorFiles,
-  missingCursorAllow,
-  removeCursorAllow,
   removeCursorFiles,
-  removeStaleCursorAllow,
-  STALE_CURSOR_ALLOW,
 } from "./cursor";
 import {
-  AGY_ALLOW,
-  addAgyAllow,
   agySettingsPath,
   antigravityDir,
   antigravityDisabled,
@@ -55,35 +48,26 @@ import {
   installCodexSkill,
   installOpencode,
   installPiPackage,
-  missingAgyAllow,
   opencodeState,
   PI_PACKAGE,
   piPackage,
-  removeAgyAllow,
   removeAntigravity,
   removeCodexRule,
   removeCodexSkill,
   removeOpencode,
   removePiPackage,
-  removeStaleAgyAllow,
-  STALE_AGY_ALLOW,
 } from "./harnesses";
 import {
-  ALLOW_RULES,
-  addAllowRules,
   autoUpdate,
   claudeTooOld,
   enableAutoUpdate,
   foreignMarketplace,
   hasClaude,
   installPlugins,
-  missingAllowRules,
   PLUGINS,
   pluginState,
   pluginsStale,
-  removeAllowRules,
   removePlugins,
-  STALE_ALLOW_RULES,
   settingsPath,
 } from "./plugins";
 import { defaults, type Sys } from "./sys";
@@ -222,14 +206,13 @@ function oneLine(text: string): string {
  */
 export function migrateAllowEntries(sys: Sys): string[] {
   const done: string[] = [];
-  if (missingAllowRules(sys).some((r) => STALE_ALLOW_RULES.includes(r)) && addAllowRules(sys))
+  const stale = (list: AllowList) => missingAllow(list, sys).some((r) => list.stale.includes(r));
+  // Claude Code's rules go back with the narrow settle rule; the others' only lose the old entry.
+  if (stale(ALLOW.claude) && addAllow(ALLOW.claude, sys))
     done.push(`Replaced the broad settle allow rule in ${settingsPath(sys)}.`);
-  if (
-    missingCursorAllow(sys).some((r) => STALE_CURSOR_ALLOW.includes(r)) &&
-    removeStaleCursorAllow(sys)
-  )
+  if (stale(ALLOW.cursor) && removeAllow(ALLOW.cursor, sys, true))
     done.push(`Removed the broad settle allow entry from ${cursorConfigPath(sys)}.`);
-  if (missingAgyAllow(sys).some((r) => STALE_AGY_ALLOW.includes(r)) && removeStaleAgyAllow(sys))
+  if (stale(ALLOW.antigravity) && removeAllow(ALLOW.antigravity, sys, true))
     done.push(`Removed the broad settle allow entry from ${agySettingsPath(sys)}.`);
   return done;
 }
@@ -246,16 +229,16 @@ async function installClaude(sys: Sys): Promise<Outcome> {
   if (pluginsStale(sys, state)) await installPlugins(sys, state);
   if (autoUpdate(sys) === false && !enableAutoUpdate(sys))
     notes.push("Could not turn on the plugins' auto-update.");
-  let allowed = missingAllowRules(sys).length === 0;
+  let allowed = missingAllow(ALLOW.claude, sys).length === 0;
   if (!allowed) {
-    allowed = addAllowRules(sys);
+    allowed = addAllow(ALLOW.claude, sys);
     if (!allowed)
       notes.push(
-        `${settingsPath(sys)} is not valid JSON: add ${ALLOW_RULES.join(", ")} to permissions.allow there.`,
+        `${settingsPath(sys)} is not valid JSON: add ${ALLOW.claude.rules.join(", ")} to permissions.allow there.`,
       );
   }
   const text = allowed
-    ? `plugins installed, ${ALLOW_RULES.length} starbridge commands allowed`
+    ? `plugins installed, ${ALLOW.claude.rules.length} starbridge commands allowed`
     : "plugins installed";
   return { mark: "✓", text, notes };
 }
@@ -344,15 +327,15 @@ function installCursor(sys: Sys): Outcome {
     notes.push(
       `${cursorHooksPath(sys)} is not valid JSON or not Cursor's hooks file: add to its "hooks" ${hooksToAdd(sys)}.`,
     );
-  const allowed = missingCursorAllow(sys).length === 0 || addCursorAllow(sys);
+  const allowed = missingAllow(ALLOW.cursor, sys).length === 0 || addAllow(ALLOW.cursor, sys);
   if (!allowed)
     notes.push(
-      `${cursorConfigPath(sys)} is not valid JSON: add ${CURSOR_ALLOW.join(", ")} to permissions.allow there.`,
+      `${cursorConfigPath(sys)} is not valid JSON: add ${ALLOW.cursor.rules.join(", ")} to permissions.allow there.`,
     );
   if (plugin === "foreign" && !allowed) return { mark: "–", text: "skipped", notes };
   const text = [
     ...(plugin === "foreign" ? [] : ["skill installed"]),
-    ...(allowed ? [`${CURSOR_ALLOW.length} starbridge commands allowed`] : []),
+    ...(allowed ? [`${ALLOW.cursor.rules.length} starbridge commands allowed`] : []),
   ].join(", ");
   return { mark: "✓", text, notes };
 }
@@ -364,7 +347,7 @@ function installCursor(sys: Sys): Outcome {
 function installAntigravityAgent(sys: Sys): Outcome {
   const state = antigravityState(sys);
   if (state === "foreign") {
-    removeAgyAllow(sys);
+    removeAllow(ALLOW.antigravity, sys);
     return {
       mark: "–",
       text: "skipped",
@@ -374,20 +357,21 @@ function installAntigravityAgent(sys: Sys): Outcome {
   if (state !== "current") installAntigravity(sys);
   const notes: string[] = [];
   if (antigravityDisabled(sys)) {
-    removeAgyAllow(sys);
+    removeAllow(ALLOW.antigravity, sys);
     notes.push(
       "The plugin is turned off in Antigravity: `agy plugin enable starbridge`, then `starbridge setup --agent antigravity`.",
     );
     return { mark: "✓", text: "plugin installed, turned off", notes };
   }
   if (!hasAgy(sys)) return { mark: "✓", text: "plugin installed", notes };
-  const allowed = missingAgyAllow(sys).length === 0 || addAgyAllow(sys);
+  const allowed =
+    missingAllow(ALLOW.antigravity, sys).length === 0 || addAllow(ALLOW.antigravity, sys);
   if (!allowed)
     notes.push(
-      `${agySettingsPath(sys)} is not valid JSON: add ${AGY_ALLOW.join(", ")} to permissions.allow there.`,
+      `${agySettingsPath(sys)} is not valid JSON: add ${ALLOW.antigravity.rules.join(", ")} to permissions.allow there.`,
     );
   const text = allowed
-    ? `plugin installed, ${AGY_ALLOW.length} starbridge commands allowed`
+    ? `plugin installed, ${ALLOW.antigravity.rules.length} starbridge commands allowed`
     : "plugin installed";
   return { mark: "✓", text, notes };
 }
@@ -401,7 +385,7 @@ export async function removeAgent(sys: Sys, id: AgentId): Promise<string[]> {
       const state = await pluginState(sys);
       if (typeof state !== "string") done.push(...(await removePlugins(sys, state)));
       else done.push(`${state}. Remove the Starbridge plugins with \`claude plugin uninstall\`.`);
-      if (removeAllowRules(sys))
+      if (removeAllow(ALLOW.claude, sys))
         done.push(`Removed the starbridge allow rules from ${settingsPath(sys)}.`);
       break;
     }
@@ -416,12 +400,12 @@ export async function removeAgent(sys: Sys, id: AgentId): Promise<string[]> {
       break;
     case "cursor":
       done.push(...removeCursorFiles(sys));
-      if (removeCursorAllow(sys))
+      if (removeAllow(ALLOW.cursor, sys))
         done.push(`Removed the starbridge allow rules from ${cursorConfigPath(sys)}.`);
       break;
     case "antigravity":
       done.push(...[removeAntigravity(sys)].filter((l) => l !== undefined));
-      if (removeAgyAllow(sys))
+      if (removeAllow(ALLOW.antigravity, sys))
         done.push(`Removed the starbridge allow entries from ${agySettingsPath(sys)}.`);
       break;
     case "pi": {
