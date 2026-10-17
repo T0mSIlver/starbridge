@@ -151,7 +151,7 @@ export function SignIn({
         </a>
       )}
       {apple && !off && others && (
-        <a href="/v1/auth/apple" className={`t-label ${ui.btn} ${ui.lg} ${s.go}`}>
+        <a href="/v1/auth/apple" className={`t-label ${ui.btn} ${ui.lg} ${s.go} ${s.apple}`}>
           <AppleLogo />
           Sign in with Apple
         </a>

@@ -6,6 +6,8 @@ import android.view.WindowManager
 import androidx.activity.compose.LocalActivity
 import dev.starbridge.app.protocol.RecoveryKeys
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.foundation.layout.Column
@@ -251,8 +253,20 @@ private fun SignIn(server: String, busy: Boolean, actions: SetupActions, openUrl
                 // Apple's sign-in sits behind a link: GitHub is the main way, and an account made
                 // with Apple on the iPhone signs in here too (spec/sign-in.md).
                 if (others) {
-                    OutlinedButton(onClick = { openUrl(actions.apple()) }, enabled = !busy, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
-                        Icon(painterResource(R.drawable.ic_apple), contentDescription = null, modifier = Modifier.size(20.dp))
+                    // Apple's rules (HIG, custom Sign in with Apple button): black or white only, the
+                    // logo-only artwork cut to its bounds and sized like GitHub's mark, its title one of Apple's. Black on a light
+                    // screen, white on a dark one.
+                    val dark = MaterialTheme.colorScheme.background.luminance() < 0.5f
+                    Button(
+                        onClick = { openUrl(actions.apple()) },
+                        enabled = !busy,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (dark) Color.White else Color.Black,
+                            contentColor = if (dark) Color.Black else Color.White,
+                        ),
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
+                    ) {
+                        Icon(painterResource(R.drawable.ic_apple), contentDescription = null, modifier = Modifier.size(width = 15.8.dp, height = 20.dp))
                         Text("Sign in with Apple", style = StarbridgeTheme.type.action, modifier = Modifier.padding(start = Spacing.s2))
                     }
                 } else {

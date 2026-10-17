@@ -51,6 +51,55 @@
   border-radius: var(--radius-sm);
 }
 
+/* Sign in with Apple (DESIGN.md, "Icons"): Apple's rules allow a custom button in black or white
+   only, so these are pure black and white, not the theme's near-black and near-white. Light
+   pages get the black button, dark pages the white one. The logo and gap are GitHub's. */
+.go.apple {
+  background: #fff;
+  border-color: #fff;
+  color: #000;
+}
+
+@media (prefers-color-scheme: light) {
+  :global(:root:not([data-theme="dark"])) .go.apple {
+    background: #000;
+    border-color: #000;
+    color: #fff;
+  }
+}
+
+:global(:root[data-theme="light"]) .go.apple {
+  background: #000;
+  border-color: #000;
+  color: #fff;
+}
+
+/* Hover and press keep the button black or white; press is not behind (hover: hover), so a touch
+   press would otherwise take ui.btn's grey. */
+.go.apple:hover:not(:disabled),
+.go.apple:active:not(:disabled) {
+  background: #fff;
+  border-color: #fff;
+}
+
+.go.apple:hover:not(:disabled) {
+  opacity: 0.85;
+}
+
+@media (prefers-color-scheme: light) {
+  :global(:root:not([data-theme="dark"])) .go.apple:hover:not(:disabled),
+  :global(:root:not([data-theme="dark"])) .go.apple:active:not(:disabled) {
+    background: #000;
+    border-color: #000;
+  }
+}
+
+:global(:root[data-theme="light"]) .go.apple:hover:not(:disabled),
+:global(:root[data-theme="light"]) .go.apple:active:not(:disabled) {
+  background: #000;
+  border-color: #000;
+}
+
 .link {
   justify-self: center;
   padding: 0;
