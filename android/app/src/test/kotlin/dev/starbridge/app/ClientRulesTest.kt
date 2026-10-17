@@ -6,6 +6,8 @@ import dev.starbridge.app.data.ROW_INPUT_MAX
 import dev.starbridge.app.data.RETRY_FOR_MS
 import dev.starbridge.app.data.Source
 import dev.starbridge.app.data.SwipeSnooze
+import dev.starbridge.app.protocol.ANSWER_TEXT_MAX
+import dev.starbridge.app.protocol.BLOB_MAX
 import dev.starbridge.app.ui.inbox.SNOOZE_MAX
 import dev.starbridge.app.ui.inbox.SNOOZE_MIN
 import dev.starbridge.app.ui.inbox.snoozeAllowed
@@ -47,6 +49,12 @@ class ClientRulesTest {
         assertEquals(presence.getValue("holdChoices").jsonArray.map { it.jsonPrimitive.int }, Beacon.HOLD_CHOICES)
         assertEquals(rules.long("retryForMs"), RETRY_FOR_MS)
         assertEquals(rules.long("rowInputMax"), ROW_INPUT_MAX.toLong())
+    }
+
+    @Test fun limits() {
+        val limits = rules.getValue("limits").jsonObject
+        assertEquals(limits.long("answerTextMax"), ANSWER_TEXT_MAX.toLong())
+        assertEquals(limits.long("blobMax"), BLOB_MAX.toLong())
     }
 
     @Test fun snooze() {
