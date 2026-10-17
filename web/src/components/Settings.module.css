@@ -414,3 +414,10 @@
 .bad {
   color: var(--bad);
 }
+
+/* Touch-only devices have no keyboard to list shortcuts for. */
+@media (hover: none) and (pointer: coarse) {
+  .keysRow {
+    display: none;
+  }
+}

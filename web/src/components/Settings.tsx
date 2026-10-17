@@ -23,6 +23,7 @@ import { applyTheme, type Prefs, usePref } from "@/lib/prefs";
 import type { PushState } from "@/lib/push";
 import { holdsQuotas, providerOrder, type QuotaSettings } from "@/lib/quotaSettings";
 import { keptSettingsData, loadSettingsData, type SettingsData, WAIT_MS } from "@/lib/settingsData";
+import { setShortcuts } from "@/lib/shortcuts";
 import { chime } from "@/lib/sound";
 import type { Device, QuotaCardData } from "@/lib/types";
 import { useApp } from "./AppProvider";
@@ -160,10 +161,15 @@ function InboxSection() {
       </Row>
       {/* The one place the keys are written down: hints on some buttons and not others read as
           missing ones (#970). */}
-      <Row
-        label="Keyboard shortcuts"
-        sub="J and K move between cards. In windows 1100 px wide or more, 1 to 4 answer, A allows, D denies. / finds anywhere."
-      />
+      {/* A phone has no keyboard: the row is hidden on touch-only devices (#1889). */}
+      <button
+        type="button"
+        className={`t-small ${s.linkRow} ${s.keysRow}`}
+        onClick={() => setShortcuts(true)}
+      >
+        Keyboard shortcuts
+        <Icon name="chev" size={18} />
+      </button>
     </Section>
   );
 }

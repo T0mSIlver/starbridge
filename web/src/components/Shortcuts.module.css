@@ -1,0 +1,83 @@
+/* The shortcuts dialog (DESIGN.md, "Key caps"): the Settings dialog's frame, its list scrolling
+   inside it so a short window never cuts off the last group. */
+dialog.dialog[open] {
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: var(--s4);
+  width: min(480px, calc(100vw - 2 * var(--s4)));
+  max-height: calc(100dvh - 2 * var(--s4));
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s4);
+}
+
+.body {
+  display: grid;
+  gap: var(--s5);
+  align-content: start;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.group {
+  display: grid;
+  gap: var(--s1);
+}
+
+.name {
+  color: var(--fg2);
+}
+
+.note {
+  margin: 0;
+  color: var(--fg2);
+}
+
+.list {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: var(--s4);
+  min-height: var(--s10);
+  border-top: 1px solid var(--line);
+}
+
+.item:first-child {
+  border-top: 0;
+}
+
+.keys {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s1);
+  width: 7.75rem;
+}
+
+.what {
+  flex: 1;
+  min-width: 0;
+}
+
+.kbd {
+  display: inline-block;
+  min-width: var(--s6);
+  padding: 0 var(--s2);
+  border: 1px solid var(--line-strong);
+  border-bottom-width: 2px;
+  border-radius: var(--radius-xs);
+  background: var(--surface2);
+  color: var(--fg);
+  text-align: center;
+}

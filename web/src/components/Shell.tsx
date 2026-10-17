@@ -9,10 +9,12 @@ import { needsYou } from "@/lib/feed";
 import { setFind, useFind } from "@/lib/find";
 import { useFreshBuild } from "@/lib/freshBuild";
 import { heldQuotas, holdsQuotas } from "@/lib/quotaSettings";
+import { setShortcuts, useShortcuts } from "@/lib/shortcuts";
 import { sending } from "@/lib/unsent";
 import { type Store, useApp } from "./AppProvider";
 import { Icon, type IconName, Mark } from "./icons";
 import s from "./Shell.module.css";
+import { ShortcutsDialog } from "./Shortcuts";
 import { UpdateButton } from "./UpdateButton";
 import ui from "./ui.module.css";
 
@@ -54,13 +56,15 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const open = needsYou(inbox.items, prompts, Date.now()).length;
   const machines = pairedMachines(app) ?? 0;
   const q = useFind();
+  const keysOpen = useShortcuts();
   const findRef = useRef<HTMLInputElement>(null);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "/" || e.ctrlKey || e.metaKey || e.altKey) return;
-      if ((e.target as HTMLElement).closest("input, textarea, [contenteditable]")) return;
+      if ((e.key !== "/" && e.key !== "?") || e.ctrlKey || e.metaKey || e.altKey) return;
+      if ((e.target as HTMLElement).closest("input, textarea, [contenteditable], dialog")) return;
       e.preventDefault();
-      findRef.current?.focus();
+      if (e.key === "?") setShortcuts(true);
+      else findRef.current?.focus();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -154,6 +158,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
         )}
         {children}
       </main>
+      {keysOpen && <ShortcutsDialog />}
       <nav className={s.bottom} aria-label="Main">
         {tabs.map((t) => (
           <Link

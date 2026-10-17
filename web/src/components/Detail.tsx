@@ -55,7 +55,7 @@ function useKeys(on: boolean, handler: (key: string) => boolean) {
     if (!on) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.ctrlKey || e.metaKey || e.altKey || e.repeat) return;
-      if ((e.target as HTMLElement).closest("input, textarea, [contenteditable]")) return;
+      if ((e.target as HTMLElement).closest("input, textarea, [contenteditable], dialog")) return;
       if (latest.current(e.key.toLowerCase())) e.preventDefault();
     };
     window.addEventListener("keydown", onKey);

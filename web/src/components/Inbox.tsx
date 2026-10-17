@@ -222,7 +222,7 @@ export function Inbox() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.ctrlKey || e.metaKey || e.altKey) return;
-      if ((e.target as HTMLElement).closest("input, textarea, [contenteditable]")) return;
+      if ((e.target as HTMLElement).closest("input, textarea, [contenteditable], dialog")) return;
       const by = e.key === "j" || e.key === "J" ? 1 : e.key === "k" || e.key === "K" ? -1 : 0;
       if (!by) return;
       const { ids, selected, wide } = latest.current;
