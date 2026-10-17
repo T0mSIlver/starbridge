@@ -20,11 +20,10 @@ export function dropClosedDrafts(inbox: InboxItem[]): void {
 export const REPLY_LIMIT = 4000;
 
 /**
- * A reply cut to `REPLY_LIMIT`, as Android and iOS cap their fields (#1921), without splitting an
- * emoji's surrogate pair at the cut.
+ * A reply cut to `REPLY_LIMIT`, as Android and iOS cap their fields (#1921). An emoji cut in two,
+ * here or by the field's `maxLength`, loses its first half too: the server refuses a lone one.
  */
 export function capReply(text: string): string {
-  if (text.length <= REPLY_LIMIT) return text;
-  const end = /[\uD800-\uDBFF]/.test(text[REPLY_LIMIT - 1] ?? "") ? REPLY_LIMIT - 1 : REPLY_LIMIT;
-  return text.slice(0, end);
+  const cut = text.slice(0, REPLY_LIMIT);
+  return /[\uD800-\uDBFF]$/.test(cut) ? cut.slice(0, -1) : cut;
 }

@@ -26,4 +26,7 @@ test("a reply stops at the server's 4000 characters, never inside an emoji (#192
   expect(capReply("short")).toBe("short");
   // The 4000th unit is the first half of a pair: the whole emoji goes.
   expect(capReply(`${"x".repeat(3999)}😀y`)).toBe("x".repeat(3999));
+  // The field's maxLength left the first half of a pair at the end.
+  expect(capReply(`${"x".repeat(3999)}\uD83D`)).toBe("x".repeat(3999));
+  expect(capReply(`${"x".repeat(3998)}😀`)).toBe(`${"x".repeat(3998)}😀`);
 });
