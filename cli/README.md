@@ -74,7 +74,7 @@ The server refuses a CLI before 0.1.1. Its commands say to run `starbridge updat
 | `starbridge config updates off` | Stops automatic updates; the line still says when a release is out. |
 | `starbridge config update-check off` | Stops the daily check, the line and automatic updates; `STARBRIDGE_NO_UPDATE_CHECK=1` does the same. |
 | `starbridge status` | Shows both versions, whether updates are automatic, what holds the next one, and the last update and failure. `~/.config/starbridge/update.log` holds the last automatic update's output. |
-| `starbridge uninstall` | Removes the background service, Starbridge from every harness and the binary, and asks your devices to revoke the machine. Asks before deleting the keys (`--purge` doesn't ask). |
+| `starbridge uninstall` | Removes the background service, Starbridge from every harness and the binary, and asks your devices to revoke the machine; `starbridge setup` with the kept keys withdraws that card. Asks before deleting the keys (`--purge` doesn't ask). |
 | `starbridge uninstall --agent <name>` | Removes Starbridge from one harness; setup leaves it out until `setup --agent <name>`. |
 
 Setup replaces, and uninstall removes, only files that start with a `Written by starbridge

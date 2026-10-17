@@ -892,6 +892,19 @@ test("uninstall removes the service and plugins, asks the devices to revoke, kee
   expect(d?.question).toBe("Revoke devbox? It was uninstalled.");
   expect(existsSync(join(m.ctx.store.dir, "machine.json"))).toBe(true);
 
+  // Set up again with the kept keys, the machine is in use: setup withdraws the card (#1907).
+  m.ctx.lines.length = 0;
+  await setup(m.sys, { yes: true, noAgents: true, noService: true });
+  expect(m.ctx.lines).toContain(
+    '✓ Withdrew "Revoke devbox? It was uninstalled.": this machine is set up again',
+  );
+  const settled = await server.opened("settled");
+  expect(settled.map((x) => [x.itemId, x.outcome])).toEqual([[d?.id, "withdrawn"]]);
+  // A second setup has nothing left to withdraw.
+  m.ctx.lines.length = 0;
+  await setup(m.sys, { yes: true, noAgents: true, noService: true });
+  expect(m.ctx.lines.join("\n")).not.toContain("Withdrew");
+
   expect(await uninstall(m.sys, { purge: true })).toBe(0);
   expect(existsSync(m.ctx.store.dir)).toBe(false);
 });

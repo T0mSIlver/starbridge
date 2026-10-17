@@ -6,7 +6,8 @@ import { existsSync, realpathSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { withAgent } from "../agent/client";
 import { askVia } from "../agent/commands";
-import { type AskInput, ask } from "../decisions";
+import type { Ctx } from "../context";
+import { type AskInput, ask, openDecisions, settle } from "../decisions";
 import { pathFor } from "../platform";
 import type { InstallKind } from "../release";
 import { removeBinary } from "../update";
@@ -31,6 +32,34 @@ export interface UninstallOpts {
   install?: InstallKind;
 }
 
+/** The card uninstall posts: a machine cannot revoke itself, so it asks a device to. */
+export const revokeQuestion = (name: string) => `Revoke ${name}? It was uninstalled.`;
+const REVOKE_QUESTION = /^Revoke .+\? It was uninstalled\.$/;
+
+/**
+ * Withdraws the revoke cards an earlier uninstall left open (#1907). Setup calls it once the
+ * server still lists this machine under the same keys: the machine is in use again, and the
+ * card's advice would cut it off. Each uninstall and setup again would otherwise add one more.
+ */
+export async function withdrawRevokeCards(ctx: Ctx): Promise<void> {
+  const open = openDecisions(ctx.store.state(), ctx.now()).filter(
+    (d) => d.project === "starbridge" && REVOKE_QUESTION.test(d.question),
+  );
+  const quiet = { ...ctx, out: () => {}, err: () => {} };
+  for (const d of open) {
+    try {
+      await settle(quiet, {
+        id: d.decisionId,
+        outcome: "withdrawn",
+        reason: "Set up again on this machine",
+      });
+      ctx.out(`✓ Withdrew "${d.question}": this machine is set up again`);
+    } catch (e) {
+      ctx.out(`✗ Could not withdraw "${d.question}": ${(e as Error).message}`);
+    }
+  }
+}
+
 export async function uninstall(sys: Sys, opts: UninstallOpts): Promise<number> {
   const { ctx, prompt } = sys;
   const machine = ctx.store.machine();
@@ -39,7 +68,7 @@ export async function uninstall(sys: Sys, opts: UninstallOpts): Promise<number> 
   // only a device can revoke it.
   if (machine) {
     const input: AskInput = {
-      question: `Revoke ${machine.name}? It was uninstalled.`,
+      question: revokeQuestion(machine.name),
       context: `\`starbridge uninstall\` ran on ${machine.name}. A machine cannot revoke itself: revoke it under Devices so its keys no longer receive your decisions and quotas.`,
       options: ["I revoked it", "Keep it"],
       project: "starbridge",
