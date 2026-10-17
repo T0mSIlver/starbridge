@@ -162,7 +162,6 @@ class ServerStore(
     private var pendingCheckKey: String? = null
     private var joinJob: Job? = null
     private var showJob: Job? = null
-    private var watchJob: Job? = null
     private var pollJob: Job? = null
 
     /** A push reached this app since it started: the server can deliver, so nothing polls (#445). */
@@ -173,11 +172,6 @@ class ServerStore(
 
     /** How often the app in front reads the items while no push has arrived. */
     internal var pollMs = 10_000L
-    private var compareJob: Job? = null
-    /** The join requests as last listed, by id, so comparing uses what was listed. */
-    private var joinViews = mapOf<String, JoinView>()
-    /** What comparing digits derived: the request, its body and the keys. */
-    private var compared: Triple<JoinView, JoinRequestBody, JoinKeys>? = null
 
     override val phase = MutableStateFlow<Phase>(Phase.SignedOut)
     override val joinLink = MutableStateFlow<String?>(null)
@@ -189,8 +183,8 @@ class ServerStore(
     override val runs: StateFlow<List<Run>> get() = runKind.shown
     override val members = MutableStateFlow<List<Member>>(emptyList())
     override val approval = MutableStateFlow<Approval>(Approval.Idle)
-    override val joinAsks = MutableStateFlow<List<JoinAsk>>(emptyList())
-    override val comparison = MutableStateFlow<Comparison>(Comparison.Idle)
+    override val joinAsks: StateFlow<List<JoinAsk>> get() = joinKind.asks
+    override val comparison: StateFlow<Comparison> get() = joinKind.comparison
     override val push = MutableStateFlow(PushSetting(saved.pushType, fcmAvailable, emptyList(), false))
     override val server = MutableStateFlow(saved.server)
     override val keepsKeys = MutableStateFlow(false)
@@ -271,10 +265,11 @@ class ServerStore(
     }
 
     private val quotaKind = QuotaKind(core)
+    private val joinKind = JoinKind(core, joins)
     private val runKind = RunKind(core)
 
     /** Every kind of item, in the order a sync reads them. */
-    private val kinds: List<ItemKind> = listOf(quotaKind, runKind)
+    private val kinds: List<ItemKind> = listOf(quotaKind, runKind, joinKind)
 
     init {
         ImageFiles.read = disk::image
@@ -455,11 +450,7 @@ class ServerStore(
         wipes++
         joinJob?.cancel()
         showJob?.cancel()
-        watchJob?.cancel()
-        compareJob?.cancel()
-        compared = null
-        joinAsks.value = emptyList()
-        comparison.value = Comparison.Idle
+        for (kind in kinds) kind.wipe()
         disk.wipe()
         alerts.clearAll()
         pendingPush = null
@@ -1823,11 +1814,6 @@ class ServerStore(
                     if (Instant.now().isBefore(until.minus(WAKE_SKEW))) alerts.cancel(body.decisionId)
                 } else if (updated.answeredAt == null && updated.answer == null) alerts.back(toUi(updated))
             }
-            "join" -> {
-                val list = api().joins("0", 0)
-                listJoins(list)
-                list.joins.find { it.id == id }?.let(::toAsk)?.let { alerts.join("join:${it.id}", it.name) }
-            }
         }
     }
 
@@ -1976,16 +1962,6 @@ class ServerStore(
 
     // --- Approving joins by digits ---------------------------------------------------
 
-    private fun toAsk(view: JoinView): JoinAsk? = runCatching {
-        val body = joins.openRequest(view.request)
-        JoinAsk(view.id, body.name, instant(body.at) ?: Instant.now(), elsewhere = view.approver != null && view.approver != saved.me?.id)
-    }.getOrNull()
-
-    private fun listJoins(list: JoinList) {
-        joinViews = list.joins.associateBy { it.id }
-        joinAsks.value = list.joins.mapNotNull(::toAsk)
-    }
-
     /**
      * While the app is in front and no push has reached it, reads the items every [pollMs]: a
      * server without a relay or UnifiedPush sends none, and the Inbox would never change (#445).
@@ -2075,104 +2051,15 @@ class ServerStore(
         }
     }
 
-    override fun watchJoins(on: Boolean) {
-        watchJob?.cancel()
-        if (!on) return
-        watchJob = scope.launch {
-            var cursor = "0"
-            while (true) {
-                if (phase.value != Phase.Ready) {
-                    delay(5_000)
-                    continue
-                }
-                try {
-                    val list = api().joins(cursor, 50)
-                    cursor = list.cursor
-                    listJoins(list)
-                } catch (e: IOException) {
-                    delay(5_000)
-                }
-            }
-        }
-    }
+    override fun watchJoins(on: Boolean) = joinKind.watch(on)
 
-    /** Takes the request as listed and posts this phone's key; the digits come once the joiner reveals. */
-    override fun compareJoin(id: String) {
-        val view = joinViews[id] ?: return
-        val ask = toAsk(view) ?: return
-        compareJob?.cancel()
-        comparison.value = Comparison.Waiting(ask)
-        compareJob = scope.launch {
-            try {
-                val body = joins.openRequest(view.request)
-                if (body.account != saved.account) throw ProtocolException("wrong-account", body.account)
-                if (body.join != view.id) throw ProtocolException("id-mismatch", "join")
-                val eph = joins.newKeyPair()
-                var after = api().claimJoin(id, toB64(eph.public), me.id).version - 1
-                while (true) {
-                    val now = try {
-                        api().join(id, after, 60)
-                    } catch (e: IOException) {
-                        // Giving up would lose this phone's key, and the server takes one.
-                        if (!transient(e)) throw e
-                        if (instant(view.expiresAt)?.isBefore(Instant.now()) != false) throw IllegalStateException("The request expired.")
-                        delay(5_000)
-                        continue
-                    }
-                    after = now.version
-                    if (now.state == "cancelled") throw IllegalStateException("${ask.name} cancelled the request.")
-                    val joinerKey = now.joinerKey ?: continue
-                    val keys = joins.approverKeys(eph, joinerKey, view.request, view.commitment)
-                    eph.secret.fill(0)
-                    compared = Triple(view, body, keys)
-                    comparison.value = Comparison.Digits(ask, keys.digits)
-                    return@launch
-                }
-            } catch (e: Exception) {
-                if (e is kotlinx.coroutines.CancellationException) throw e
-                comparison.value = Comparison.Failed(if (e is IllegalStateException) e.message ?: "" else describe(e))
-            }
-        }
-    }
+    override fun compareJoin(id: String) = joinKind.compare(id)
 
-    /** Appends the new device's entry, then sends the approval under the compared key. */
-    override fun approveJoin() = run(showBusy = false) {
-        val (view, body, keys) = compared ?: return@run
-        val shown = comparison.value as? Comparison.Digits ?: return@run
-        comparison.value = shown.copy(approving = true, error = null)
-        try {
-            syncDirectory()
-            addMember(body.member(), "Another member already uses this id. Ask again from the new device.")
-            val after = directory!!
-            api().approveJoin(view.id, joins.approval(JoinApprovalBody(1, view.id, saved.account!!, after.length, after.head, me.id), keys))
-            compared = null
-            alerts.cancel("join:${view.id}")
-            comparison.value = Comparison.Done("${body.name} joined.")
-        } catch (e: Exception) {
-            // The server holds this phone's key for the join, so a blip keeps the digits and
-            // their keys for another try; the entry appended already is reused.
-            comparison.value = if (e is IOException && transient(e)) shown.copy(error = describe(e)) else Comparison.Failed(describe(e))
-        }
-    }
+    override fun approveJoin() = joinKind.approve()
 
-    private fun transient(e: IOException) = e !is ApiException || e.status >= 500 || e.status == 429
+    override fun refuseJoin(id: String) = joinKind.refuse(id)
 
-    override fun refuseJoin(id: String) = run(showBusy = false) {
-        compareJob?.cancel()
-        val name = joinAsks.value.find { it.id == id }?.name ?: "the device"
-        val differed = compared?.first?.id == id
-        compared = null
-        alerts.cancel("join:$id")
-        runCatching { api().cancelJoin(id) }
-        joinAsks.value = joinAsks.value.filter { it.id != id }
-        comparison.value = Comparison.Done(if (differed) "Refused $name: the digits differed." else "Refused $name.")
-    }
-
-    override fun closeComparison() {
-        compareJob?.cancel()
-        compared = null
-        comparison.value = Comparison.Idle
-    }
+    override fun closeComparison() = joinKind.closeComparison()
 
     override fun revoke(memberId: String) = run {
         if (memberId == me.id) throw IllegalArgumentException("Sign out to remove this phone.")
