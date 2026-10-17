@@ -158,31 +158,17 @@ jobs:
           echo "a2e905fb68446e9bb4008cdfe2e13e3f176d0cbcca828b71770f8e53fca91b73  $RUNNER_TEMP/xcodegen.zip" | shasum -a 256 -c
           unzip -q "$RUNNER_TEMP/xcodegen.zip" -d "$RUNNER_TEMP"
           "$RUNNER_TEMP/xcodegen/bin/xcodegen" generate
-      # swift-sodium's checkout, from GitHub's cache, keyed on the package manifest that pins its
-      # commit. Only the source checkout: DerivedData's build products are not reused, so the
-      # app and its tests always build from this commit (#1916). Pull requests restore what main
-      # saved and save nothing.
-      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ${{ runner.temp }}/SourcePackages
-          key: ios-spm-${{ hashFiles('ios/StarbridgeProtocol/Package.swift') }}
       - id: sim
         run: echo "id=$(xcrun simctl list devices available -j | jq -r '[.devices[][] | select(.name | startswith("iPhone"))][0].udid')" >> "$GITHUB_OUTPUT"
-      # Build and test as two steps, so the job's timing shows which one is slow.
+      # Build and test as two steps, so the job's timing shows which one is slow: the tests on the
+      # simulator, about 4 of the job's 7 minutes, not the build (#1916).
       - name: Build for testing
         env:
           SIM: ${{ steps.sim.outputs.id }}
         run: |
           set -o pipefail
-          xcodebuild -project Starbridge.xcodeproj -scheme Starbridge -destination "id=$SIM" \
-            -clonedSourcePackagesDirPath "$RUNNER_TEMP/SourcePackages" build-for-testing 2>&1 |
-            tee "$RUNNER_TEMP/build.log" | grep -E "error:|Resolved source packages|\*\* TEST BUILD"
-      - if: github.event_name == 'push'
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        continue-on-error: true
-        with:
-          path: ${{ runner.temp }}/SourcePackages
-          key: ios-spm-${{ hashFiles('ios/StarbridgeProtocol/Package.swift') }}
+          xcodebuild -project Starbridge.xcodeproj -scheme Starbridge -destination "id=$SIM" build-for-testing 2>&1 |
+            tee "$RUNNER_TEMP/build.log" | grep -E "error:|\*\* TEST BUILD"
       - name: Test
         env:
           TEST_RUNNER_STARBRIDGE_TEST_SERVER: http://localhost:18731
@@ -190,8 +176,7 @@ jobs:
           SIM: ${{ steps.sim.outputs.id }}
         run: |
           set -o pipefail
-          xcodebuild -project Starbridge.xcodeproj -scheme Starbridge -destination "id=$SIM" \
-            -clonedSourcePackagesDirPath "$RUNNER_TEMP/SourcePackages" test-without-building 2>&1 |
+          xcodebuild -project Starbridge.xcodeproj -scheme Starbridge -destination "id=$SIM" test-without-building 2>&1 |
             tee "$RUNNER_TEMP/test.log" | grep -E "error:|Test Case .*(passed|failed|skipped)|\*\* TEST"
           # JoinTests skips without a server; here it must have run.
           ! grep -q "JoinTests.*skipped" "$RUNNER_TEMP/test.log"
