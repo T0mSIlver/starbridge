@@ -456,32 +456,41 @@ export function firstTag(sha: string): string {
 async function gatherBugs(): Promise<Bug[] | undefined> {
   const out: Bug[] = [];
   const seen = new Set<number>();
-  for (let page = 1; page <= 5; page++) {
-    const labels = await api<{ name: string }[]>(`labels?per_page=100&page=${page}`);
-    if (!labels) return undefined;
-    for (const l of labels.filter((l) => l.name.startsWith(LABEL_PREFIX))) {
-      const rows = await api<IssueRow[]>(
-        `issues?labels=${encodeURIComponent(l.name)}&state=all&per_page=100`,
-      );
-      if (!rows) return undefined;
-      for (const row of rows.filter((i) => !i.pull_request && !seen.has(i.number))) {
-        seen.add(row.number);
-        const b = bug(row);
-        if (!b.open) {
-          const events = await api<{ event: string; commit_id: string | null }[]>(
-            `issues/${row.number}/events?per_page=100`,
-          );
-          if (!events) return undefined;
-          const closed = events.filter((e) => e.event === "closed").pop();
-          if (closed?.commit_id) b.fixedIn = firstTag(closed.commit_id) || undefined;
-          else b.closedByHand = true;
-        }
-        out.push(b);
+  const labels = await pages<{ name: string }>("labels?per_page=100");
+  if (!labels) return undefined;
+  for (const l of labels.filter((l) => l.name.startsWith(LABEL_PREFIX))) {
+    const rows = await pages<IssueRow>(
+      `issues?labels=${encodeURIComponent(l.name)}&state=all&per_page=100`,
+    );
+    if (!rows) return undefined;
+    for (const row of rows.filter((i) => !i.pull_request && !seen.has(i.number))) {
+      seen.add(row.number);
+      const b = bug(row);
+      if (!b.open) {
+        const events = await pages<{ event: string; commit_id: string | null }>(
+          `issues/${row.number}/events?per_page=100`,
+        );
+        if (!events) return undefined;
+        const closed = events.filter((e) => e.event === "closed").pop();
+        if (closed?.commit_id) b.fixedIn = firstTag(closed.commit_id) || undefined;
+        else b.closedByHand = true;
       }
+      out.push(b);
     }
-    if (labels.length < 100) break;
   }
   return out;
+}
+
+/** Every page of a list endpoint, up to 10; undefined when any page fails. */
+async function pages<T>(path: string): Promise<T[] | undefined> {
+  const all: T[] = [];
+  for (let page = 1; page <= 10; page++) {
+    const rows = await api<T[]>(`${path}&page=${page}`);
+    if (!rows) return undefined;
+    all.push(...rows);
+    if (rows.length < 100) break;
+  }
+  return all;
 }
 
 export async function gather(): Promise<Facts> {
