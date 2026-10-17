@@ -172,7 +172,8 @@ function where(p: (typeof PRODUCTS)[number], e: Releases["releases"][number], f:
     if (c.homebrew) l.push("Homebrew");
     if (c.github) l.push(gh);
   }
-  if (p === "Plugin") l.push(
+  if (p === "Plugin")
+    l.push(
       e.ring === "final"
         ? "Marketplace, once the PR pointing it at this tag merges"
         : "Not published: the plugin ships with finals",
@@ -230,7 +231,7 @@ function promotionHtml(f: Facts): string {
   return `<div class="card promo"><p class="verdict">${esc(p.candidate.version)} becomes ${esc(p.becomes)}: ${esc(p.verdict)}</p>${lines.map((l) => `<p>${esc(l)}</p>`).join("")}
 <p class="label">Earliest</p><p>${esc(both(p.earliest))}. A newer rc restarts the clock.</p>${p.holdsNewRc ? `<p>No new rc while this waits for your yes</p>` : ""}
 <p class="label">Needs</p><ul>${checks.map((c) => `<li>${esc(c)}</li>`).join("")}</ul>
-<p>Promoting republishes ${esc(p.candidate.version)}'s builds as ${esc(p.becomes)} for everyone, with no rebuild; the Final column above shows where finals go. New work then goes to ${esc(p.nextRc ?? "")}.</p></div>`;
+<p>Promoting republishes ${esc(p.candidate.version)}'s builds as ${esc(p.becomes)} for everyone, with no rebuild; the Final column under Now shows where finals go. New work then goes to ${esc(p.nextRc ?? "")}.</p></div>`;
 }
 
 export function render(f: Facts): string {
