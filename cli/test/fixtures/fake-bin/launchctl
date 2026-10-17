@@ -1,7 +1,8 @@
 #!/bin/sh
 # Stands in for `launchctl`: logs each call; the agent runs unless booted out. As launchd does
 # (#1326), a bootout leaves the job going away for FAKE_LAUNCHD_LINGER more prints, and a
-# bootstrap meanwhile fails with error 5; FAKE_LAUNCHD_REFUSE refuses the first bootstraps too.
+# bootstrap meanwhile fails with error 5; FAKE_LAUNCHD_REFUSE refuses the first bootstraps too;
+# FAKE_LAUNCHD_DISABLED refuses every bootstrap until the job is enabled (#1886).
 echo "launchctl $*" >>"$FAKE_LOG"
 mkdir -p "$FAKE_STATE"
 going="$FAKE_STATE/launchd-going"
@@ -9,6 +10,9 @@ out="$FAKE_STATE/launchd-out"
 refused="$FAKE_STATE/launchd-refused"
 left=$(cat "$going" 2>/dev/null || echo 0)
 case "$1" in
+  enable)
+    touch "$FAKE_STATE/launchd-enabled"
+    ;;
   bootout)
     echo "${FAKE_LAUNCHD_LINGER:-0}" >"$going"
     touch "$out"
@@ -26,6 +30,10 @@ case "$1" in
     n=$(cat "$refused" 2>/dev/null || echo 0)
     if [ "$left" -gt 0 ] || [ "$n" -lt "${FAKE_LAUNCHD_REFUSE:-0}" ]; then
       echo $((n + 1)) >"$refused"
+      echo "Bootstrap failed: 5: Input/output error" >&2
+      exit 5
+    fi
+    if [ -n "$FAKE_LAUNCHD_DISABLED" ] && [ ! -e "$FAKE_STATE/launchd-enabled" ]; then
       echo "Bootstrap failed: 5: Input/output error" >&2
       exit 5
     fi

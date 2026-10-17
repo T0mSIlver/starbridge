@@ -328,13 +328,16 @@ const BOOTSTRAP_TRIES = 3;
 /**
  * Restarts the launchd job from `path`. bootout returns before launchd has removed the job, and
  * a bootstrap meanwhile fails with "5: Input/output error" (#1326): so it waits, up to 10 s,
- * until `print` no longer finds the job, and tries a bootstrap refused with error 5 again.
+ * until `print` no longer finds the job, and tries a bootstrap refused with error 5 again. A job
+ * that was disabled (launchctl disable, or its Login Items switch turned off) is refused with
+ * error 5 however long it waits, so the job is enabled first (#1886).
  */
 async function relaunch(sys: Sys, path: string) {
   const job = `gui/${sys.uid}/${LABEL}`;
   await launchctl(sys, "bootout", job);
   for (let i = 0; i < GONE_TRIES && (await launchctl(sys, "print", job))?.code === 0; i++)
     await sys.ctx.sleep(GONE_MS);
+  await launchctl(sys, "enable", job);
   for (let tries = 1; ; tries++) {
     const r = await launchctl(sys, "bootstrap", `gui/${sys.uid}`, path);
     if (r?.code === 0) return;
