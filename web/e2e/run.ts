@@ -2013,7 +2013,15 @@ async function main() {
     await pageB.clock.install({ time: new Date(Date.now() - SHIFT) });
     await pageB.goto(ORIGIN);
     await probe(pageB).click({ timeout: 30_000 });
-    await selected(pageB).getByRole("button", { name: "Snooze", exact: true }).click();
+    const opener = selected(pageB).getByRole("button", { name: "Snooze", exact: true });
+    step("Esc closes Snooze's times and focus returns to its button (#1943)");
+    await opener.click();
+    await pageB.getByRole("dialog", { name: "Snooze until" }).waitFor();
+    await pageB.keyboard.press("Escape");
+    await pageB.getByRole("dialog", { name: "Snooze until" }).waitFor({ state: "detached" });
+    if (!(await opener.evaluate((b) => b === document.activeElement)))
+      throw new Error("focus did not return to the Snooze button after Esc");
+    await opener.click();
     await pageB.getByRole("button", { name: /^1 hour/ }).click();
     const snoozedAt = Date.now();
     // It leaves Needs you on both, for the collapsed Snoozed group, and its notification closes.
