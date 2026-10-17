@@ -9,6 +9,7 @@ import { holdPairCode, takePairCode } from "@/lib/pairLink";
 import type { PairingRequest } from "@/lib/types";
 import { useApp, useDevice } from "./AppProvider";
 import { useNow } from "./Feed";
+import { Grouped } from "./Grouped";
 import { Icon } from "./icons";
 import p from "./Pairing.module.css";
 import { type PairOutcome, PairResult } from "./PairResult";
@@ -209,7 +210,7 @@ export function AddDevice() {
                 Expires in {timer(new Date(now).toISOString(), shown.until)}
               </p>
               <p className={`t-snippet ${p.dim}`} data-testid="shown-code">
-                {shown.code}
+                <Grouped code={shown.code} />
               </p>
               <div className={p.actions}>
                 <button
