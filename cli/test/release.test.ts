@@ -11,7 +11,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { delimiter, join } from "node:path";
+import { delimiter, dirname, join } from "node:path";
 import {
   capped,
   compareVersions,
@@ -22,7 +22,7 @@ import {
 } from "../src/release";
 import { update } from "../src/update";
 import { VERSION } from "../src/version";
-import { compiledFake, testCtx } from "./helpers";
+import { compiledFake, FAKE_BIN, testCtx } from "./helpers";
 
 const WINDOWS = process.platform === "win32";
 
@@ -132,6 +132,8 @@ function fakeReleases(
     minisig?: (sig: string) => string;
     /** Changes the file's signature before the trusted comment's signs it. */
     fileSig?: (s: Buffer) => Buffer;
+    /** The new binary's `setup --refresh` fails, saying "no room left" (POSIX only). */
+    failSetup?: boolean;
   } = {},
 ) {
   const key = signer();
@@ -139,7 +141,9 @@ function fakeReleases(
   // Windows starts only a real executable.
   const binary = WINDOWS
     ? readFileSync(compiledFake(`console.log("starbridge ${version}");`))
-    : Buffer.from(`#!/bin/sh\necho "starbridge ${version}"\n`);
+    : Buffer.from(
+        `#!/bin/sh\n${opts.failSetup ? '[ "$1" = setup ] && { echo "no room left" >&2; exit 1; }\n' : ""}echo "starbridge ${version}"\n`,
+      );
   const sums = `${createHash("sha256").update(binary).digest("hex")}  ${asset}\n`;
   const files: Record<string, string | Uint8Array<ArrayBuffer>> = {
     SHA256SUMS: opts.tamper === "sums" ? `${"0".repeat(64)}  ${asset}\n` : sums,
@@ -673,6 +677,72 @@ describe("update", () => {
       updated: { at: expect.any(String), from: VERSION, to: "99.0.0" },
     });
   });
+
+  test("updates the Starbridge plugins Claude Code has, from the home directory (#762)", async () => {
+    release = fakeReleases("99.0.0");
+    const log = join(dir, "fake.log");
+    const state = join(dir, "claude-state");
+    mkdirSync(state);
+    for (const id of ["starbridge@starbridge", "other@elsewhere"])
+      writeFileSync(join(state, `plugin-${id}`), "");
+    const path = installed();
+    const env = {
+      HOME: dir,
+      PATH: `${FAKE_BIN}${delimiter}${process.env.PATH}`,
+      FAKE_LOG: log,
+      FAKE_STATE: state,
+      STARBRIDGE_RELEASES_URL: release.url,
+    };
+    const c = testCtx(env);
+    expect(await update(c, { kind: "binary", path }, release.pubkey)).toBe(0);
+    expect(c.lines.at(-1)).toBe("Updated the starbridge@starbridge plugin.");
+    // Only Starbridge's own, and only those installed.
+    expect(readFileSync(log, "utf8").match(/^claude plugin update .*$/gm)).toEqual([
+      "claude plugin update starbridge@starbridge",
+    ]);
+
+    writeFileSync(path, "old");
+    const failing = testCtx({ ...env, FAKE_FAIL_UPDATE: "1" });
+    expect(await update(failing, { kind: "binary", path }, release.pubkey)).toBe(0);
+    expect(failing.lines.at(-1)).toBe(
+      "Could not update the starbridge@starbridge plugin: update failed",
+    );
+  });
+
+  // Windows restarts its scheduled task instead (setup's own tests).
+  test.skipIf(WINDOWS)(
+    "restarts the agent's service when the new binary could not refresh the files setup wrote",
+    async () => {
+      release = fakeReleases("99.0.0", { failSetup: true });
+      for (const [unit, call] of [
+        [
+          ".config/systemd/user/starbridge-agent.service",
+          "systemctl --user try-restart starbridge-agent.service",
+        ],
+        [
+          "Library/LaunchAgents/run.starbridge.agent.plist",
+          `launchctl kickstart -k gui/${process.getuid?.()}/run.starbridge.agent`,
+        ],
+      ] as const) {
+        dir = mkdtempSync(join(tmpdir(), "starbridge-release-"));
+        mkdirSync(dirname(join(dir, unit)), { recursive: true });
+        writeFileSync(join(dir, unit), "");
+        const log = join(dir, "fake.log");
+        const path = installed();
+        const c = testCtx({
+          HOME: dir,
+          PATH: `${FAKE_BIN}${delimiter}${process.env.PATH}`,
+          FAKE_LOG: log,
+          FAKE_STATE: join(dir, "claude-state"),
+          STARBRIDGE_RELEASES_URL: release.url,
+        });
+        expect(await update(c, { kind: "binary", path }, release.pubkey)).toBe(0);
+        expect(c.lines).toContain("Could not update the files setup wrote: no room left");
+        expect(c.lines).toContain("Restarted the starbridge agent.");
+        expect(readFileSync(log, "utf8")).toContain(`${call}\n`);
+      }
+    },
+  );
 
   test("keeps the binary when the download does not check out", async () => {
     release = fakeReleases("99.0.0", { tamper: "binary" });
