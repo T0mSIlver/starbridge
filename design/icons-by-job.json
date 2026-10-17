@@ -23,7 +23,6 @@
     "group-by": {"web": "view", "android": "Filter", "ios": "ellipsis.circle"},
     "selected": {"web": "check", "android": "Check", "ios": null},
     "done": {"web": "check", "android": "CheckCircle", "ios": "checkmark.circle.fill"},
-    "checkbox": {"web": null, "android": null, "ios": ["checkmark.square.fill", "square"]},
     "more-answers": {"web": "more", "android": "More", "ios": null},
     "close": {"web": "close", "android": "Close", "ios": "xmark"},
     "back": {"web": ["back", "prev"], "android": "Back", "ios": null},
