@@ -1,5 +1,6 @@
 package dev.starbridge.app.data
 
+import dev.starbridge.app.protocol.QuotaCourse
 import dev.starbridge.app.protocol.RUN_STALE_MS
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
@@ -203,13 +204,20 @@ data class Run(
     }
 }
 
-/** Where a window is headed by its reset, as the uploader computed it. */
+/** Where a window is headed by its reset, as the uploader computed it (protocol's QuotaCourse). */
 sealed interface Pace {
     data object Even : Pace
     data class RunsOut(val at: Instant) : Pace
     data class Unused(val percent: Int) : Pace
     /** Too early in the window to tell. */
     data object Unknown : Pace
+
+    val course: QuotaCourse get() = when (this) {
+        Even -> QuotaCourse.EVEN
+        is RunsOut -> QuotaCourse.RUNS_OUT
+        is Unused -> QuotaCourse.UNUSED
+        Unknown -> QuotaCourse.UNKNOWN
+    }
 }
 
 /**

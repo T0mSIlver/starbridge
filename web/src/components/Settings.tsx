@@ -6,10 +6,10 @@ import {
   PUSH_HOLD_OFF,
   PUSH_HOLD_ON_LEAVE,
   QUOTA_ALERT_CHOICES,
+  QUOTA_ALERT_LABELS,
   type QuotaAlertChoice,
-  type QuotaAlertSettings,
   quotaAlertChoices,
-  quotaWindowKey,
+  withWindowAlerts,
 } from "@starbridge/protocol";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
@@ -441,29 +441,6 @@ async function asked() {
 type Win = { provider: string; id: string; label: string; minutes: number | null };
 
 /**
- * A window's own alerts, or none to follow its length's. A provider's key, which only settings
- * from before #914 hold, first becomes a key per window, so the provider's other windows keep it.
- */
-export function setWindowAlerts(
-  a: QuotaAlertSettings,
-  w: Win,
-  all: Win[],
-  picked: QuotaAlertChoice[] | undefined,
-): QuotaAlertSettings {
-  const windows = { ...a.windows };
-  const shared = windows[w.provider];
-  if (shared) {
-    for (const o of all)
-      if (o.provider === w.provider) windows[quotaWindowKey(o.provider, o.id)] ??= shared;
-    delete windows[w.provider];
-  }
-  const key = quotaWindowKey(w.provider, w.id);
-  if (picked) windows[key] = picked;
-  else delete windows[key];
-  return { ...a, windows };
-}
-
-/**
  * Everything about quotas, shown once a machine of the account sends them (#914): until then the
  * owner may never use CodexBar, and the page stays about agents.
  */
@@ -474,12 +451,16 @@ function QuotaSections() {
 }
 
 const ALERT_COLUMNS: [QuotaAlertChoice, string, string][] = [
-  ["runs-out", "Runs out", "At the rate used so far, the window runs out before its reset."],
-  ["low-50", "50% left", "50% left"],
-  ["low-20", "20% left", "20% left"],
+  [
+    "runs-out",
+    QUOTA_ALERT_LABELS["runs-out"],
+    "At the rate used so far, the window runs out before its reset.",
+  ],
+  ["low-50", QUOTA_ALERT_LABELS["low-50"], "50% left"],
+  ["low-20", QUOTA_ALERT_LABELS["low-20"], "20% left"],
   [
     "unused-headroom",
-    "Unused",
+    QUOTA_ALERT_LABELS["unused-headroom"],
     "At the rate used so far, 30% or more of the window will be left unused when it resets. Comes in the last hour before the reset, or the last day for a window longer than a day.",
   ],
 ];
@@ -540,7 +521,15 @@ function Providers({
       });
   const pick = async (w: Win, picked: QuotaAlertChoice[]) => {
     if (picked.length > 0) await asked();
-    patch({ alerts: setWindowAlerts(q.alerts, w, all, picked) });
+    patch({
+      alerts: withWindowAlerts(
+        q.alerts,
+        w.provider,
+        w.id,
+        all.map((o) => ({ provider: o.provider, window: o.id })),
+        picked,
+      ),
+    });
   };
   return (
     <div className={`${s.providers} ${reorder.list.className ?? ""}`}>

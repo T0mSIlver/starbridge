@@ -1,4 +1,5 @@
 import SwiftUI
+import StarbridgeProtocol
 
 /** One card per provider, its windows inside, in the settings' order (spec/items.md, "Quota order"), as Android's. */
 struct QuotasView: View {
@@ -181,14 +182,15 @@ enum QuotaState {
     enum Mood { case ok, bad, warn, neutral }
 
     static func of(_ w: QuotaRow, _ now: Date, absolute: Bool) -> (Mood, String) {
-        if w.ended(now) { return (.neutral, "Window reset") }
-        switch w.pace {
-        case .even: return (.ok, "On pace")
-        case let .runsOut(at):
-            if at <= now { return (.bad, "Ran out \(Times.clockAt(at, now))") }
-            return (.bad, absolute ? "Will run out \(Times.clockAt(at, now))" : "Will run out in \(Times.span(now, at))")
-        case .unused: return (.warn, "Headroom unused")
-        case .unknown: return (.neutral, "Too early to tell")
+        let state = StarbridgeProtocol.QuotaState(w.pace.course, runsOutAt: w.pace.runsOutAt, resetsAt: w.resetsAt, now: now)
+        switch state {
+        case .reset, .unknown: return (.neutral, state.word)
+        case .ok: return (.ok, state.word)
+        case .unused: return (.warn, state.word)
+        case .ranOut: return (.bad, "\(state.word) \(Times.clockAt(w.pace.runsOutAt!, now))")
+        case .out:
+            let at = w.pace.runsOutAt!
+            return (.bad, absolute ? "\(state.word) \(Times.clockAt(at, now))" : "\(state.word) in \(Times.span(now, at))")
         }
     }
 

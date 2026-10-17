@@ -1,14 +1,15 @@
 package dev.starbridge.app.data
 
+import dev.starbridge.app.protocol.arrangeQuotas
+import dev.starbridge.app.protocol.quotaProviders
+import dev.starbridge.app.protocol.quotaRunningOut
 import java.text.Collator
 import java.time.Instant
 import java.time.ZoneId
 import kotlin.math.roundToInt
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
@@ -35,11 +36,7 @@ data class QuotaSettings(
 ) {
 
     /** Every provider the windows name, in this order. */
-    fun providers(windows: List<QuotaWindow>): List<String> {
-        val seen = windows.map { it.provider }.distinct()
-        val known = order.filter { it in seen }
-        return known + seen.filter { it !in known }
-    }
+    fun providers(windows: List<QuotaWindow>): List<String> = quotaProviders(windows.map { it.provider }, order)
 
     /**
      * The windows to show (spec/items.md, "Quota order"): hidden providers out, the rest by provider in
@@ -48,12 +45,14 @@ data class QuotaSettings(
      * that will run out or ran out, and have not reset, lead in that same order.
      */
     fun arrange(windows: List<QuotaWindow>, now: Instant): List<QuotaWindow> {
-        val rank = providers(windows).withIndex().associate { (i, p) -> p to i }
         val byName = Collator.getInstance()
-        val ordered = windows.filter { it.provider !in hidden }
-            .sortedWith(compareBy<QuotaWindow> { rank.getValue(it.provider) }.thenComparator { a, b -> byName.compare(a.machine.orEmpty(), b.machine.orEmpty()) })
-        if (!runningOutFirst) return ordered
-        return ordered.sortedByDescending { it.pace is Pace.RunsOut && it.resetsAt?.isAfter(now) != false }
+        return arrangeQuotas(
+            windows, order, hidden, runningOutFirst,
+            provider = { it.provider },
+            machine = { it.machine },
+            runningOut = { quotaRunningOut(it.pace.course, it.resetsAt, now) },
+            names = { a, b -> byName.compare(a, b) },
+        )
     }
 
     /**
@@ -91,18 +90,14 @@ data class QuotaSettings(
         const val WEEK = 10080
 
         /**
-         * Settings as stored, from this release or an older one: a provider bell and two switches
-         * before #914 become per-window alerts, and the tick style's "Hidden" was ticks off.
+         * Settings as stored, from this release or an older one, whose tick style's "Hidden" was
+         * ticks off. The bell and switches of releases before #914 are dropped: their alerts are
+         * the defaults.
          */
         fun read(json: Json, text: String): QuotaSettings {
             val o = json.parseToJsonElement(text).jsonObject
             val s = json.decodeFromJsonElement(serializer(), o)
-            val old = o["notify"]?.jsonArray?.map { it.jsonPrimitive.content }
-            val bool = { k: String -> o[k]?.jsonPrimitive?.booleanOrNull ?: true }
-            return s.copy(
-                alerts = if ("alerts" !in o && old != null) QuotaAlerts.migrate(old, bool("notifyLow"), bool("notifyPace")) else s.alerts,
-                workDays = if (o["ticks"]?.jsonPrimitive?.contentOrNull == "Hidden") null else s.workDays,
-            )
+            return s.copy(workDays = if (o["ticks"]?.jsonPrimitive?.contentOrNull == "Hidden") null else s.workDays)
         }
 
         /**
