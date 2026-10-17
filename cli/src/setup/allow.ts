@@ -28,6 +28,12 @@ export type AllowList = {
   rules: readonly string[];
   /** Entries of earlier releases that setup removes: they let `settle --all --yes` through (#1761). */
   stale: readonly string[];
+  /**
+   * Cursor's file, as setup has always read it: a file it cannot read counts as empty, entries
+   * that are not strings stay, and a list that holds every rule is not rewritten. The others
+   * refuse a file they cannot read, drop entries that are not strings and rewrite the list.
+   */
+  lenient?: boolean;
 };
 
 export const ALLOW = {
@@ -48,6 +54,7 @@ export const ALLOW = {
     path: (sys) => cursorConfigPath(sys),
     rules: ALLOWED_COMMANDS.map((c) => `Shell(starbridge ${c})`),
     stale: ["Shell(starbridge settle)"],
+    lenient: true,
   },
   /**
    * `agy`'s settings; the app and the IDE keep their own, which setup does not know. A hook cannot
@@ -66,26 +73,36 @@ type Settings = Record<string, unknown> & {
   permissions?: Record<string, unknown> & { allow?: unknown };
 };
 
-/** The file, `{}` when there is none, undefined when it cannot be read, does not parse or is no object. */
+/**
+ * The file, `{}` when there is none (or, `lenient`, when it cannot be read), undefined when it
+ * cannot be read, does not parse or is no object.
+ */
 function read(list: AllowList, sys: Home): Settings | undefined {
   const path = list.path(sys);
-  if (!existsSync(path)) return {};
+  let text: string;
   try {
-    const v = JSON.parse(readFileSync(path, "utf8")) as unknown;
+    text = readFileSync(path, "utf8");
+  } catch {
+    return list.lenient || !existsSync(path) ? {} : undefined;
+  }
+  try {
+    const v = JSON.parse(text) as unknown;
     return v && typeof v === "object" && !Array.isArray(v) ? (v as Settings) : undefined;
   } catch {
     return undefined;
   }
 }
 
-function entries(s: Settings): unknown[] {
+/** The file's allow entries; only its strings unless `lenient`. */
+function entries(list: AllowList, s: Settings): unknown[] {
   const allow = s.permissions?.allow;
-  return Array.isArray(allow) ? allow : [];
+  if (!Array.isArray(allow)) return [];
+  return list.lenient ? allow : allow.filter((r) => typeof r === "string");
 }
 
 /** The rules the file lacks, then the stale entries it holds: either means setup rewrites it. */
 export function missingAllow(list: AllowList, sys: Home): string[] {
-  const have = new Set(entries(read(list, sys) ?? {}));
+  const have = new Set(entries(list, read(list, sys) ?? {}));
   return [...list.rules.filter((r) => !have.has(r)), ...list.stale.filter((r) => have.has(r))];
 }
 
@@ -96,8 +113,8 @@ export function missingAllow(list: AllowList, sys: Home): string[] {
 export function addAllow(list: AllowList, sys: Home): boolean {
   const s = read(list, sys);
   if (!s) return false;
-  if (missingAllow(list, sys).length === 0) return true;
-  const allow = entries(s).filter((r) => !list.stale.includes(r as string));
+  if (list.lenient && missingAllow(list, sys).length === 0) return true;
+  const allow = entries(list, s).filter((r) => !list.stale.includes(r as string));
   s.permissions = {
     ...s.permissions,
     allow: [...allow, ...list.rules.filter((r) => !allow.includes(r))],

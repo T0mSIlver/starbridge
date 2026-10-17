@@ -40,3 +40,24 @@ for (const [harness, cases] of Object.entries(golden as Record<string, Record<st
       }
     });
 }
+
+// A file that exists but cannot be read, which the fixture cannot hold: as before #1903, Claude
+// Code's and Antigravity's add refuses it, and Cursor's counts it as empty, then fails to replace it.
+test.skipIf(process.getuid?.() === 0)("an unreadable file is left alone", () => {
+  for (const [harness, list] of Object.entries(ALLOW)) {
+    const home = mkdtempSync(join(tmpdir(), "allow-golden-"));
+    try {
+      const sys = { home, ctx: { env: {} } } as Parameters<typeof addAllow>[1];
+      const path = list.path(sys);
+      mkdirSync(dirname(path), { recursive: true });
+      writeFileSync(path, '{"permissions":{"allow":["Other(ls)"]}}', { mode: 0o000 });
+      expect(missingAllow(list, sys), harness).toEqual([...list.rules]);
+      if (harness === "cursor") expect(() => addAllow(list, sys), harness).toThrow("EACCES");
+      else expect(addAllow(list, sys), harness).toBe(false);
+      expect(removeAllow(list, sys), harness).toBe(false);
+      expect(() => readFileSync(path, "utf8"), harness).toThrow();
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  }
+});
