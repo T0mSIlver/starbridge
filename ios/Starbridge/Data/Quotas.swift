@@ -10,19 +10,29 @@ enum QuotaPace: Equatable {
     /** Too early in the window to tell. */
     case unknown
 
-    /** The card's state follows a pace alert; "low" only notifies. */
+    /** The card's state follows a pace alert; "low" only notifies. The protocol's QuotaCourse decides. */
     init(_ pace: Pace?, unusedAlert: Double?) {
-        if let pace, pace.stage != "unknown" {
-            if !pace.willLastToReset {
-                self = pace.runsOutAt.flatMap(Dates.parse).map(QuotaPace.runsOut) ?? .unknown
-            } else if let unusedAlert {
-                self = .unused(Int(unusedAlert.rounded()))
-            } else {
-                self = .even
-            }
-        } else {
-            self = .unknown
+        switch QuotaCourse(pace, unusedAlert: unusedAlert != nil) {
+        case .unknown: self = .unknown
+        case .runsOut: self = pace?.runsOutAt.flatMap(Dates.parse).map(QuotaPace.runsOut) ?? .unknown
+        case .unused: self = .unused(Int(unusedAlert!.rounded()))
+        case .even: self = .even
         }
+    }
+
+    var course: QuotaCourse {
+        switch self {
+        case .even: .even
+        case .runsOut: .runsOut
+        case .unused: .unused
+        case .unknown: .unknown
+        }
+    }
+
+    /** When it runs out, for a window that will or did. */
+    var runsOutAt: Date? {
+        if case let .runsOut(at) = self { return at }
+        return nil
     }
 }
 
@@ -57,10 +67,7 @@ struct QuotaRow: Identifiable, Equatable {
     }
 
     /** Will run out, or ran out, and has not reset: what "Running out first" moves up. */
-    func runningOut(_ now: Date) -> Bool {
-        if case .runsOut = pace { return resetsAt.map { $0 > now } ?? true }
-        return false
-    }
+    func runningOut(_ now: Date) -> Bool { quotaRunningOut(pace.course, resetsAt: resetsAt, now: now) }
 }
 
 /** Where a window is headed, as its meter draws it. */
@@ -112,12 +119,7 @@ struct QuotaSettings: Codable, Equatable {
     }
 
     /** Every provider the windows name, in this order. */
-    func providers(_ windows: [QuotaRow]) -> [String] {
-        var seen: [String] = []
-        for w in windows where !seen.contains(w.provider) { seen.append(w.provider) }
-        let known = order.filter(seen.contains)
-        return known + seen.filter { !known.contains($0) }
-    }
+    func providers(_ windows: [QuotaRow]) -> [String] { quotaProviders(windows.map(\.provider), order: order) }
 
     /**
      * The windows to show (spec/items.md, "Quota order"): hidden providers out, the rest by
@@ -126,18 +128,11 @@ struct QuotaSettings: Codable, Equatable {
      * `runningOutFirst`, windows that will run out or ran out, and have not reset, lead.
      */
     func arrange(_ windows: [QuotaRow], _ now: Date) -> [QuotaRow] {
-        let rank = Dictionary(providers(windows).enumerated().map { ($1, $0) }, uniquingKeysWith: { a, _ in a })
-        let ordered = windows.enumerated()
-            .filter { !hidden.contains($0.element.provider) }
-            .sorted { a, b in
-                let (ra, rb) = (rank[a.element.provider]!, rank[b.element.provider]!)
-                if ra != rb { return ra < rb }
-                let byName = (a.element.machine ?? "").localizedCompare(b.element.machine ?? "")
-                return byName == .orderedSame ? a.offset < b.offset : byName == .orderedAscending
-            }
-            .map(\.element)
-        guard runningOutFirst else { return ordered }
-        return ordered.filter { $0.runningOut(now) } + ordered.filter { !$0.runningOut(now) }
+        arrangeQuotas(
+            windows, order: order, hidden: hidden, runningOutFirst: runningOutFirst,
+            provider: \.provider, machine: \.machine, runningOut: { $0.runningOut(now) },
+            names: { $0.localizedCompare($1) }
+        )
     }
 
     /** Arranged windows under one heading per provider and machine (#160), in the order of their first window. */
@@ -231,7 +226,7 @@ struct QuotaAlerts: Codable, Equatable {
     var windows: [String: [String]] = [:]
 
     /** The columns of Settings → Quotas → Alerts, in order. */
-    static let choices: [(String, String)] = [("runs-out", "Runs out"), ("low-50", "50% left"), ("low-20", "20% left"), ("unused-headroom", "Unused")]
+    static let choices: [(String, String)] = QuotaAlertSettings.labels
 
     init() {}
 
@@ -259,13 +254,7 @@ struct QuotaAlerts: Codable, Equatable {
      */
     func with(provider: String, window: String, all: [(String, String)], picked: [String]) -> QuotaAlerts {
         var next = self
-        if let shared = next.windows.removeValue(forKey: provider) {
-            for (p, w) in all where p == provider {
-                let key = QuotaAlertSettings.windowKey(provider: p, window: w)
-                if next.windows[key] == nil { next.windows[key] = shared }
-            }
-        }
-        next.windows[QuotaAlertSettings.windowKey(provider: provider, window: window)] = picked
+        next.windows = settings.with(provider: provider, window: window, all: all, picked: picked).windows
         return next
     }
 }

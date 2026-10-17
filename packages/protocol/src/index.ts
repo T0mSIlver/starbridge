@@ -14,6 +14,7 @@ export * from "./pairing";
 export * from "./permission";
 export * from "./presence";
 export * from "./quotaAlerts";
+export * from "./quotas";
 export * from "./readable";
 export * from "./releases";
 export * from "./schemas";
