@@ -21,7 +21,7 @@ export function relative(iso: string, now: Date = new Date()): string {
 }
 
 /** A session id short enough to read: the first 8 characters of a UUID, other ids whole. */
-export function shortSession(id: string): string {
+function shortSession(id: string): string {
   return /^[0-9a-f]{8}-[0-9a-f-]+$/i.test(id) ? id.slice(0, 8) : id;
 }
 

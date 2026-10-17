@@ -2,7 +2,7 @@
  * The format of what this app keeps in localStorage, written as `v` (#473); a later format raises
  * it and reads the ones before.
  */
-export const STORED_VERSION = 1;
+const STORED_VERSION = 1;
 
 /**
  * Reads a JSON object kept under `key`. A value this page cannot read (not JSON, not an object,

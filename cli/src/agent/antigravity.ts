@@ -16,7 +16,7 @@ import { selfCommand } from "../setup/sys";
 import { type Feature, HttpError, type Hub, pause } from "./server";
 
 /** How often each server is read: how late a prompt reaches the devices at most. */
-export const WATCH_MS = 1_000;
+const WATCH_MS = 1_000;
 /** How many of a conversation's newest steps are read each time. */
 const TAIL = 3;
 /** The most prompts open at once for one server: a fake one must not start hooks without end. */
@@ -51,7 +51,7 @@ interface Summary {
 export type RunHook = (args: string[], input: unknown, signal: AbortSignal) => Promise<string>;
 
 /** The hook as a child process of this binary; aborting `signal` sends it SIGTERM. */
-export function spawnHook(env: Record<string, string | undefined>): RunHook {
+function spawnHook(env: Record<string, string | undefined>): RunHook {
   return (args, input, signal) =>
     new Promise((resolve) => {
       const [cmd, ...pre] = selfCommand(env);
@@ -92,7 +92,7 @@ export function permissionAnswer(
 }
 
 /** The labels `hook question` printed for each question, as Antigravity's responses. */
-export function questionAnswer(out: string, questions: Question[]): unknown[] | undefined {
+function questionAnswer(out: string, questions: Question[]): unknown[] | undefined {
   let answers: unknown;
   try {
     answers = (JSON.parse(out) as { answers?: unknown }).answers;

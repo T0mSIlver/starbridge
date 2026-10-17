@@ -110,7 +110,7 @@ export function identify(c: Context<Env>): Caller | undefined {
   };
 }
 
-export const ACCOUNT_SUSPENDED =
+const ACCOUNT_SUSPENDED =
   "this account's machines are suspended for abuse of starbridge.run; its phones and browsers still work. Write to abuse@starbridge.run";
 
 /** A machine of a suspended account may read, never write. */

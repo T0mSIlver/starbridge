@@ -10,9 +10,9 @@ import type { Status } from "./api";
 import { type Feature, type Hub, pause } from "./server";
 
 /** How often the screen is read: a lock reaches the server within this. */
-export const READ_MS = 10_000;
+const READ_MS = 10_000;
 
-export function presenceEnabled(hub: Hub): boolean {
+function presenceEnabled(hub: Hub): boolean {
   return hub.ctx.store.agentConfig().presence?.enabled === true;
 }
 

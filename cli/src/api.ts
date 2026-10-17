@@ -45,7 +45,7 @@ export const MAX_RESPONSE_BYTES = 32 << 20;
 /** The most of an error's body that is read: only its three short fields matter. */
 const MAX_ERROR_BYTES = 64 << 10;
 /** The longest wait a Retry-After may ask for, in seconds. */
-export const MAX_RETRY_AFTER = 300;
+const MAX_RETRY_AFTER = 300;
 /** The most characters of a server's text that reach the terminal. */
 const MAX_SERVER_TEXT = 200;
 /** The most items one page of answers may hold, and the longest cursor. */
@@ -59,7 +59,7 @@ const POLL_GRACE_MS = 30_000;
  * A server's text, as the terminal may show it: control and bidi characters as escapes, cut to
  * MAX_SERVER_TEXT. Anything that is not a string is dropped.
  */
-export function serverText(text: unknown): string | undefined {
+function serverText(text: unknown): string | undefined {
   return typeof text === "string" ? visible(text).slice(0, MAX_SERVER_TEXT) : undefined;
 }
 

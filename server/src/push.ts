@@ -10,7 +10,7 @@ import { type Config, type PrivatePushHosts, pushHostKey } from "./config";
 export const PushType = z.enum(["fcm", "webpush", "unifiedpush", "apns"]);
 export type PushType = z.infer<typeof PushType>;
 
-export const PushKeys = z.object({ p256dh: z.string().max(200), auth: z.string().max(100) });
+const PushKeys = z.object({ p256dh: z.string().max(200), auth: z.string().max(100) });
 
 export const PushTarget = z.object({
   type: PushType,
@@ -41,7 +41,7 @@ export function applePush(endpoint: string): boolean {
 }
 
 /** Whether `url`'s host is one the server's owner allowed though private (`privatePushHosts`). */
-export const allowedPrivate = (url: URL, hosts: PrivatePushHosts) =>
+const allowedPrivate = (url: URL, hosts: PrivatePushHosts) =>
   hosts === "any" || hosts.includes(pushHostKey(url.hostname));
 
 /** Returns why `target` cannot be accepted, or undefined. */
@@ -77,7 +77,7 @@ const publicPort = (url: URL) => url.port === "";
  * Refuses hosts that name this machine or a private network, so a subscription cannot make the
  * server call into its own network. `Push` also checks the addresses a name resolves to.
  */
-export function isPrivateHost(hostname: string): boolean {
+function isPrivateHost(hostname: string): boolean {
   const h = hostname
     .toLowerCase()
     .replace(/^\[|\]$/g, "")
@@ -153,7 +153,7 @@ const ACCOUNT_CONCURRENCY = 4;
 const ACCOUNT_QUEUE = 200;
 
 /** A request to a push service, as `web-push` builds it. */
-export interface PushRequest {
+interface PushRequest {
   method: string;
   headers: Record<string, string>;
   body: Uint8Array<ArrayBuffer> | null;
@@ -170,7 +170,7 @@ export type PinnedSend = (
   timeoutMs: number,
 ) => Promise<number>;
 
-export const pinnedHttps: PinnedSend = (url, address, req, timeoutMs) =>
+const pinnedHttps: PinnedSend = (url, address, req, timeoutMs) =>
   new Promise((resolve, reject) => {
     const host = url.hostname.replace(/^\[|\]$/g, "");
     const r = request(

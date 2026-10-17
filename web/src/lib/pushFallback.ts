@@ -7,7 +7,7 @@
  * How long a push may take to show its notification before the placeholder shows: under
  * Safari's 30 s, with room for a slow phone.
  */
-export const SHOW_WITHIN_MS = 20_000;
+const SHOW_WITHIN_MS = 20_000;
 
 /** Whether `endpoint` is Apple's Web Push service, Safari's on iOS and macOS. */
 export function applePush(endpoint: string): boolean {
@@ -72,7 +72,7 @@ const ASKS: Record<string, string> = {
 };
 
 /** The tags a fallback shows under, so the page closes them once the owner opens it. */
-export const FALLBACK_TAGS = ["open", "quiet"];
+const FALLBACK_TAGS = ["open", "quiet"];
 
 /**
  * What to show for a push that showed nothing, or undefined to show nothing. One that asks for

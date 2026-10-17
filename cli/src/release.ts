@@ -64,12 +64,27 @@ export function platformAsset(platform: string = process.platform, arch: string 
   return `starbridge-${os}-${cpu}${os === "windows" ? ".exe" : ""}`;
 }
 
-/** Orders `1.2.3` and `1.2.3-rc.4` versions; a release sorts after its release candidates. */
+/** A version's numbers; `rc` is unset for a final. */
+export type Version = { major: number; minor: number; patch: number; rc?: number };
+
+/** Reads `1.2.3` or `1.2.3-rc.4`, the only versions Starbridge releases; undefined for anything else. */
+export function parseVersion(v: string): Version | undefined {
+  const m = /^(\d+)\.(\d+)\.(\d+)(?:-rc\.(\d+))?$/.exec(v);
+  if (!m) return undefined;
+  const version: Version = { major: Number(m[1]), minor: Number(m[2]), patch: Number(m[3]) };
+  if (m[4] !== undefined) version.rc = Number(m[4]);
+  return version;
+}
+
+/** Whether `v` names a release candidate. */
+export const isRc = (v: string): boolean => v.includes("-rc.");
+
+/** Orders `1.2.3` and `1.2.3-rc.4` versions, `v` prefix or not; a release sorts after its release candidates. */
 export function compareVersions(a: string, b: string): number {
   const parse = (v: string) => {
-    const m = /^v?(\d+)\.(\d+)\.(\d+)(?:-rc\.(\d+))?$/.exec(v);
-    if (!m) throw new ReleaseError(`not a version: ${v}`);
-    return [Number(m[1]), Number(m[2]), Number(m[3]), m[4] === undefined ? Infinity : Number(m[4])];
+    const p = parseVersion(v.replace(/^v/, ""));
+    if (!p) throw new ReleaseError(`not a version: ${v}`);
+    return [p.major, p.minor, p.patch, p.rc ?? Infinity];
   };
   const x = parse(a);
   const y = parse(b);

@@ -185,7 +185,7 @@ export function SessionLine({
   );
 }
 
-export function Thumbs({ d, width }: { d: Decision; width: number }) {
+function Thumbs({ d, width }: { d: Decision; width: number }) {
   const images = (d.images ?? []).slice(0, 2);
   if (images.length === 0) return null;
   return (

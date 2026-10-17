@@ -431,9 +431,6 @@ export type Answer = z.infer<typeof Answer>;
 /** A permission prompt lives at most this long; the server refuses answers after it. */
 export const PERMISSION_TTL_MS = 10 * 60 * 1000;
 
-export const PermissionAgent = Agent;
-export type PermissionAgent = Agent;
-
 /** How far an allow reaches: this call, the rest of the session, or always in this project. */
 export const PermissionScope = z.enum(["once", "session", "project"]);
 export type PermissionScope = z.infer<typeof PermissionScope>;
