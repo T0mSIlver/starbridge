@@ -689,7 +689,7 @@ devices, open in the agent, waiting, inbox, send, expand (an image opens full
 screen). `design/icons-by-job.json` holds the table, job by job; a test fails on
 a glyph it does not list, so a new glyph arrives with its row. Link chips take GitHub's Octicons (MIT), filled on their 16-unit
 grid, in every client: a GitHub link's kind, and `browser` for a Claude
-artifact. No other brand marks.
+artifact. No other brand marks. The `settings` gear is Lucide's (ISC licence), on the same grid and strokes.
 
 Snooze's icon follows its platform (#1848): a clock on the web and in the Mac app (the
 web's own set; SF Symbols are licensed for Apple platforms and the page is served to every
