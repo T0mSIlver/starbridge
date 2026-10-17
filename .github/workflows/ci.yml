@@ -298,7 +298,7 @@ jobs:
         timeout-minutes: 6
         env:
           TMPDIR: ${{ runner.temp }}
-      - if: steps.scope.outputs.run == 'true' && github.event_name == 'push'
+      - if: steps.scope.outputs.run == 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         continue-on-error: true
         with:
