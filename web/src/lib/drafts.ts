@@ -15,3 +15,16 @@ export const drafts = new Map<string, string>();
 export function dropClosedDrafts(inbox: InboxItem[]): void {
   for (const i of inbox) if (closedAt(i)) drafts.delete(i.decision.id);
 }
+
+/** The longest reply the server takes: the Answer schema's 4000 UTF-16 units (#1921). */
+export const REPLY_LIMIT = 4000;
+
+/**
+ * A reply cut to `REPLY_LIMIT`, as Android and iOS cap their fields (#1921), without splitting an
+ * emoji's surrogate pair at the cut.
+ */
+export function capReply(text: string): string {
+  if (text.length <= REPLY_LIMIT) return text;
+  const end = /[\uD800-\uDBFF]/.test(text[REPLY_LIMIT - 1] ?? "") ? REPLY_LIMIT - 1 : REPLY_LIMIT;
+  return text.slice(0, end);
+}

@@ -2,6 +2,7 @@
 
 import type { DecisionLink } from "@starbridge/protocol";
 import { useEffect, useRef, useState } from "react";
+import { capReply, REPLY_LIMIT } from "@/lib/drafts";
 import type { MachineKind } from "@/lib/feed";
 import { AnsweredFirst, answeredFirstText, answerPlace } from "@/lib/outcome";
 import { fullInput } from "@/lib/permissionInput";
@@ -99,7 +100,7 @@ function FreeText({
   onDraft: (text: string) => void;
   onSend: (text: string) => void;
 }) {
-  const [text, setText] = useState(draft);
+  const [text, setText] = useState(() => capReply(draft));
   return (
     <form
       className={s.free}
@@ -118,9 +119,12 @@ function FreeText({
           rows={1}
           placeholder="Your answer"
           value={text}
+          // The server takes 4000 characters, so the field stops there, as on Android (#1921).
+          maxLength={REPLY_LIMIT}
           onChange={(e) => {
-            setText(e.target.value);
-            onDraft(e.target.value);
+            const capped = capReply(e.target.value);
+            setText(capped);
+            onDraft(capped);
           }}
           // Enter sends and Shift+Enter starts a new line (#562); an Enter that ends an input
           // method's composition only commits it.
