@@ -68,6 +68,21 @@ test("the terminal answering first settles the questions still open, as answered
   expect((await server.opened("settled")).map((s) => s.outcome)).toEqual(["elsewhere"]);
 });
 
+test("the terminal answering while a question's post is in flight settles it elsewhere (#1913)", async () => {
+  const ctx = await paired(server);
+  // The server stores the card but its reply does not come back before the terminal answers.
+  server.lostReplies.push("POST /items");
+  const stop = new AbortController();
+  const done = hookQuestion({ ...ctx, signal: stop.signal }, hookInput([DB]), {
+    agent: "opencode",
+  });
+  await until(async () => (await server.opened("decision")).length === 1);
+  stop.abort();
+  expect(await done).toBe(0);
+  await until(async () => (await server.opened("settled")).length === 1);
+  expect((await server.opened("settled")).map((s) => s.outcome)).toEqual(["elsewhere"]);
+});
+
 test("a snooze keeps the question waiting, and the answer after it still reaches opencode (#1226)", async () => {
   const ctx = await paired(server);
   const done = hookQuestion(ctx, hookInput([DB]), { agent: "opencode" });
