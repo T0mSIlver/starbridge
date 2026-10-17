@@ -53,11 +53,8 @@
 
 /* Sign in with Apple (DESIGN.md, "Icons"): Apple's rules allow a custom button in black or white
    only, so these are pure black and white, not the theme's near-black and near-white. Light
-   pages get the black button, dark pages the white one. Apple's logo file is as tall as the
-   button and carries its own margins, so the button has no padding or gap on that side. */
+   pages get the black button, dark pages the white one. The logo and gap are GitHub's. */
 .go.apple {
-  gap: 0;
-  padding: 0 18px 0 0;
   background: #fff;
   border-color: #fff;
   color: #000;

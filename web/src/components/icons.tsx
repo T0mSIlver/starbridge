@@ -227,11 +227,18 @@ export function Icon({
 /**
  * Apple's "Sign in with Apple" logo, the logo-only artwork from Apple Design Resources
  * (developer.apple.com/design/resources, "Sign in with Apple - Logo Only"), used under Apple's
- * licence for that button and not to be redrawn. Its 56-unit square carries Apple's padding:
- * show it as tall as the button, uncropped. It takes the button's text colour.
+ * licence for that button and not to be redrawn. The viewBox is cut to the artwork's own bounds
+ * (x 20.5 to 35.5, y 16 to 35 of Apple's 56-unit square), so the logo sits beside the title like
+ * GitHub's mark, 18 px tall, not inside Apple's padding (#1858). It takes the button's text colour.
  */
-export const AppleLogo = ({ size = 48 }: { size?: number }) => (
-  <svg width={size} height={size} viewBox="0 0 56 56" aria-hidden="true" style={{ flex: "none" }}>
+export const AppleLogo = ({ size = 18 }: { size?: number }) => (
+  <svg
+    width={(size * 15) / 19}
+    height={size}
+    viewBox="20.5 16 15 19"
+    aria-hidden="true"
+    style={{ flex: "none" }}
+  >
     <path
       fill="currentColor"
       fillRule="nonzero"

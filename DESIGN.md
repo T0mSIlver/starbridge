@@ -692,8 +692,8 @@ grid, in every client: a GitHub link's kind, and `browser` for a Claude
 artifact. No other brand marks, except Apple's own logo on the Sign in with Apple button (#1858): Apple's
 human interface guidelines allow a custom button only with the logo artwork from Apple Design Resources (the
 logo-only SVG, never redrawn), the title "Sign in with Apple", and black or white only. So on the web and
-Android it is a pill like GitHub's, pure black on light screens and pure white on dark ones, the logo file as
-tall as the button, uncropped. The `settings` gear is Lucide's (ISC licence), on the same grid and strokes.
+Android it is a pill like GitHub's, pure black on light screens and pure white on dark ones, the logo as
+tall as GitHub's mark beside it, its viewBox cut to the artwork's own bounds, never redrawn. The `settings` gear is Lucide's (ISC licence), on the same grid and strokes.
 
 Snooze's icon follows its platform (#1848): a clock on the web and in the Mac app (the
 web's own set; SF Symbols are licensed for Apple platforms and the page is served to every

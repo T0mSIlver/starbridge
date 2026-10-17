@@ -6,7 +6,6 @@ import android.view.WindowManager
 import androidx.activity.compose.LocalActivity
 import dev.starbridge.app.protocol.RecoveryKeys
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.foundation.layout.FlowRow
@@ -255,7 +254,7 @@ private fun SignIn(server: String, busy: Boolean, actions: SetupActions, openUrl
                 // with Apple on the iPhone signs in here too (spec/sign-in.md).
                 if (others) {
                     // Apple's rules (HIG, custom Sign in with Apple button): black or white only, the
-                    // logo file as tall as the button and its title one of Apple's. Black on a light
+                    // logo-only artwork cut to its bounds and sized like GitHub's mark, its title one of Apple's. Black on a light
                     // screen, white on a dark one.
                     val dark = MaterialTheme.colorScheme.background.luminance() < 0.5f
                     Button(
@@ -265,11 +264,10 @@ private fun SignIn(server: String, busy: Boolean, actions: SetupActions, openUrl
                             containerColor = if (dark) Color.White else Color.Black,
                             contentColor = if (dark) Color.Black else Color.White,
                         ),
-                        contentPadding = PaddingValues(start = 0.dp, end = 20.dp),
                         modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
                     ) {
-                        Icon(painterResource(R.drawable.ic_apple), contentDescription = null, modifier = Modifier.size(56.dp))
-                        Text("Sign in with Apple", style = StarbridgeTheme.type.action)
+                        Icon(painterResource(R.drawable.ic_apple), contentDescription = null, modifier = Modifier.size(width = 15.8.dp, height = 20.dp))
+                        Text("Sign in with Apple", style = StarbridgeTheme.type.action, modifier = Modifier.padding(start = Spacing.s2))
                     }
                 } else {
                     Link("Other ways to sign in") { others = true }
