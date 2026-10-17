@@ -183,12 +183,9 @@ class ServerStore(
     override val joinLink = MutableStateFlow<String?>(null)
     override val decisions = MutableStateFlow<List<Decision>>(emptyList())
     override val prompts = MutableStateFlow<List<Prompt>>(emptyList())
-    override val windows = MutableStateFlow<List<QuotaWindow>>(emptyList())
-    override val quotaFailures = MutableStateFlow<List<QuotaFailure>>(emptyList())
-    override val quotasHeld = MutableStateFlow(false)
-
-    /** The server listed quota snapshots on the last read, even ones this phone cannot open yet. */
-    @Volatile private var quotasListed = false
+    override val windows: StateFlow<List<QuotaWindow>> get() = quotaKind.windows
+    override val quotaFailures: StateFlow<List<QuotaFailure>> get() = quotaKind.failures
+    override val quotasHeld: StateFlow<Boolean> get() = quotaKind.held
     override val runs: StateFlow<List<Run>> get() = runKind.shown
     override val members = MutableStateFlow<List<Member>>(emptyList())
     override val approval = MutableStateFlow<Approval>(Approval.Idle)
@@ -273,10 +270,11 @@ class ServerStore(
         override suspend fun locked(showBusy: Boolean, block: suspend () -> Unit) = this@ServerStore.locked(showBusy, block = block)
     }
 
+    private val quotaKind = QuotaKind(core)
     private val runKind = RunKind(core)
 
     /** Every kind of item, in the order a sync reads them. */
-    private val kinds: List<ItemKind> = listOf(runKind)
+    private val kinds: List<ItemKind> = listOf(quotaKind, runKind)
 
     init {
         ImageFiles.read = disk::image
@@ -342,11 +340,6 @@ class ServerStore(
         fun active(from: String) = directory?.members?.get(from)?.active != false
         savedDecisions = if (held) emptyList() else saved.decisions.filter { active(it.from) }.map(::toUi)
         prompts.value = if (held) emptyList() else saved.prompts.filter { active(it.from) }.map(::toUi)
-        // As the web: named once the account has more than one active machine.
-        val named = (directory?.members?.values?.count { it.active && it.member.role == "machine" } ?: 0) > 1
-        windows.value = if (held) emptyList() else saved.quotas.filter { active(it.from) }.flatMap { toUi(it, named) }
-        quotaFailures.value = if (held) emptyList() else saved.quotas.filter { active(it.from) }.flatMap { failures(it, named) }
-        quotasHeld.value = quotasListed || saved.quotas.isNotEmpty()
         val view = View(held, directory)
         for (kind in kinds) kind.publish(view)
         members.value = directory?.let(::toUi).orEmpty()
@@ -941,7 +934,7 @@ class ServerStore(
             // The directory first, as a full sync: a machine added since could not sign its snapshots otherwise.
             syncDirectory()
             if (phase.value != Phase.Ready) return@locked
-            syncQuotas()
+            quotaKind.sync()
             done = true
         }
         return done
@@ -955,7 +948,6 @@ class ServerStore(
         if (saved.outbox.isNotEmpty()) flushHeld()
         syncDecisions()
         syncPrompts()
-        syncQuotas()
         for (kind in kinds) kind.sync()
         // The server answered, so a push route that failed to register gets another try.
         pendingPush?.let { runCatching { subscribeHeld(it) } }
@@ -1444,34 +1436,6 @@ class ServerStore(
     suspend fun sendPromptFromNotification(id: String, allow: Boolean, scope: String) =
         lock.withLock { sendPrompt(id, allow, scope, null) }
 
-    private suspend fun syncQuotas() {
-        val listed = api().quota()
-        quotasListed = listed.isNotEmpty()
-        if (scan(listed.map { it.item })) return
-        // A snapshot this app cannot open keeps that machine's last good one, rather than blanking it.
-        val quotas = listed.mapNotNull { l ->
-            open(l.item)?.let { SavedQuota(it.from, it.text) } ?: saved.quotas.find { it.from == l.item.from }
-        }
-        persist(saved.copy(quotas = quotas))
-        alerts.quota(quotas.flatMap(::notices))
-    }
-
-    private fun notices(q: SavedQuota): List<QuotaNotice> {
-        val now = Instant.now()
-        val labels = q.body.providers.flatMap { p -> p.windows.map { "${p.provider}/${it.id}" to it.label.ifBlank { it.id } } }.toMap()
-        val minutes = q.body.providers.flatMap { p -> p.windows.map { "${p.provider}/${it.id}" to it.windowMinutes } }.toMap()
-        return q.body.alerts.filter { it.notify == true }.map { a ->
-            val name = "${a.provider} ${labels["${a.provider}/${a.window}"] ?: a.window}"
-            val resets = instant(a.resetsAt)?.let { "in ${span(now, it)}" } ?: "soon"
-            val (title, text) = when (a.kind) {
-                "low" -> "$name: ${a.threshold}% left" to "Resets $resets."
-                "runs-out" -> "$name will run out" to (instant(a.runsOutAt)?.let { "Runs out in ${span(now, it)} at this pace; resets $resets." } ?: "Resets $resets.")
-                else -> "$name resets with headroom unused" to "Resets $resets with ${a.unusedPercent?.roundToInt() ?: 0}% unused."
-            }
-            QuotaNotice("${q.body.id}/${a.provider}/${a.window}/${a.kind}", a.provider, a.window, a.kind, title, text, a.threshold, minutes["${a.provider}/${a.window}"])
-        }
-    }
-
     override fun dismissRun(id: String) = runKind.dismiss(id)
 
     // --- Answering ---------------------------------------------------------------
@@ -1859,7 +1823,6 @@ class ServerStore(
                     if (Instant.now().isBefore(until.minus(WAKE_SKEW))) alerts.cancel(body.decisionId)
                 } else if (updated.answeredAt == null && updated.answer == null) alerts.back(toUi(updated))
             }
-            "quota" -> syncQuotas()
             "join" -> {
                 val list = api().joins("0", 0)
                 listJoins(list)
@@ -2429,35 +2392,6 @@ class ServerStore(
         )
     }
 
-    private fun machineName(from: String, named: Boolean) = if (named) directory?.members?.get(from)?.member?.name ?: from else null
-
-    private fun failures(q: SavedQuota, named: Boolean): List<QuotaFailure> = q.body.providers.mapNotNull { p ->
-        p.error?.takeIf { p.windows.isEmpty() }?.let { QuotaFailure(p.provider, it, machineName(q.from, named)) }
-    }
-
-    private fun toUi(q: SavedQuota, named: Boolean): List<QuotaWindow> = q.body.providers.flatMap { p ->
-        p.windows.map { w ->
-            // The card's state follows a pace alert; "low" only notifies.
-            val alerts = q.body.alerts.filter { it.provider == p.provider && it.window == w.id && it.kind != "low" }
-            val pace = w.pace
-            val unused = alerts.firstOrNull { it.kind == "unused-headroom" }?.unusedPercent
-            QuotaWindow(
-                id = "${q.from}/${p.provider}/${w.id}",
-                provider = p.provider,
-                window = w.label.ifBlank { w.id },
-                usedPercent = w.usedPercent.roundToInt(),
-                resetsAt = instant(w.resetsAt),
-                pace = paceOf(pace, unused),
-                alert = alerts.isNotEmpty(),
-                steadyPercent = pace?.expectedUsedPercent?.roundToInt()?.coerceIn(0, 100),
-                windowMinutes = w.windowMinutes,
-                machine = machineName(q.from, named),
-                takenAt = instant(p.updatedAt ?: q.body.takenAt),
-                error = p.error,
-            )
-        }
-    }
-
     private fun toUi(dir: Directory): List<Member> {
         val added = saved.entries.mapNotNull { raw ->
             runCatching {
@@ -2478,18 +2412,6 @@ class ServerStore(
 }
 
 private operator fun dev.starbridge.app.protocol.DirectoryMember.component1() = member
-
-/**
- * A window's state, by the web's rule: "Headroom unused" only when the uploader raised an
- * unused-headroom alert for it, not whenever usage runs behind the steady pace.
- */
-internal fun paceOf(pace: dev.starbridge.app.protocol.Pace?, unusedAlert: Double?): Pace = when {
-    pace == null || pace.stage == "unknown" -> Pace.Unknown
-    !pace.willLastToReset ->
-        pace.runsOutAt?.let { runCatching { OffsetDateTime.parse(it).toInstant() }.getOrNull() }?.let { Pace.RunsOut(it) } ?: Pace.Unknown
-    unusedAlert != null -> Pace.Unused(unusedAlert.roundToInt())
-    else -> Pace.Even
-}
 
 /**
  * How a prompt ended and where, as the web's History puts it (#349): "Denied · on Pixel",
