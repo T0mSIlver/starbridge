@@ -1,6 +1,6 @@
 /* The shortcuts dialog (DESIGN.md, "Key caps"): the Settings dialog's frame, its list scrolling
    inside it so a short window never cuts off the last group. */
-dialog.dialog {
+dialog.dialog[open] {
   grid-template-rows: auto minmax(0, 1fr);
   gap: var(--s4);
   width: min(480px, calc(100vw - 2 * var(--s4)));
