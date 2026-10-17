@@ -762,6 +762,31 @@ test("ask refuses a decision that would not stand alone", async () => {
   expect(await server.opened("decision")).toEqual([]);
 });
 
+test("ask names the flag that is too long and its limit, as the help lists them (#1920)", async () => {
+  const ctx = await paired(server);
+  const x = (n: number) => "x".repeat(n);
+  for (const [args, line] of [
+    [["--question", x(301), "--option", "a", "--option", "b"], "--question takes at most 300"],
+    [["--question", "Q?", "--option", x(101), "--option", "b"], "--option takes at most 100"],
+    [
+      ["--question", "Q?", "--option", "a", "--option", "b", "--context", x(8001)],
+      "--context takes at most 8000",
+    ],
+  ] as const) {
+    expect(await run(["ask", ...args], ctx)).toBe(1);
+    expect(ctx.errors.at(-1)).toBe(`starbridge: ${line} characters`);
+  }
+  expect(await server.opened("decision")).toEqual([]);
+  expect(await run(["--help"], ctx)).toBe(0);
+  expect(ctx.lines.join("\n")).toContain(
+    "The question takes at most\n      300 characters, each option 100 and the context 8000.",
+  );
+  // pair says the same of --name, before it reaches the server.
+  const fresh = testCtx();
+  expect(await run(["pair", "--server", server.url, "--name", x(101)], fresh)).toBe(1);
+  expect(fresh.errors.at(-1)).toBe("starbridge: --name takes at most 100 characters");
+});
+
 test("ask refuses a default, as a flag or in --input: agents never answer for the owner", async () => {
   const ctx = await paired(server);
   expect(await run([...ASK, "--default", "A"], ctx)).toBe(1);
