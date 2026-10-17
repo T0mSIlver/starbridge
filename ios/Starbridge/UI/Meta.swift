@@ -191,7 +191,7 @@ struct ContextView: View {
                     ScrollView(.horizontal) {
                         Text(code).type(Tokens.Typography.snippet).padding(Tokens.Spacing.s3)
                     }
-                    .background(RoundedRectangle(cornerRadius: Tokens.Radius.sm).fill(Tokens.Colors.surface2.color))
+                    .background(RoundedRectangle(cornerRadius: Tokens.Radius.sm, style: .continuous).fill(Tokens.Colors.surface2.color))
                 }
             }
         }

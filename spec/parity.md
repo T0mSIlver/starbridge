@@ -25,7 +25,7 @@ Android's and iOS's tests read, so a change to one fails the others until they f
 | Runs (section, progress, dismiss) | yes | yes | yes | yes (#1122; the section #1170) |
 | Link chips (icon and text from `linkChip`, packages/protocol) | yes (#971, #1577) | yes (#971, #1590) | yes (as web) | yes (#1591) |
 | Quotas tab | yes | yes | yes | yes (#1234: read with the inbox every 10 s while the app is open, since APNs carries no snapshots; Order is a page under Settings → Quotas) |
-| Quota alerts per window (settings) | yes | yes | yes | yes (#1235: Settings → Quotas → Alerts, as Android's page) |
+| Quota alerts per window (settings) | yes | yes | yes | yes (#1235: Settings → Quotas → Alerts, a page like Android's; a section per window with a Toggle per alert, not a checkbox grid, #1859) |
 | Widgets | n/a | yes (#894: Needs you, Quotas) | yes (#1031: Needs you only; no Quotas widget by owner's choice) | not yet |
 | Notification: questions | yes (Web Push) | yes | yes | yes (#1137: a service extension opens the sealed box in place of the server's placeholder; delivery on a device waits for TestFlight) |
 | Notification: permission prompts | yes (taps open the page; no Allow/Deny) | yes (Allow / Deny buttons) | yes (no Allow/Deny; opens window) | yes (#1137: Deny answers from the notification; Allow opens the prompt, which shows the whole input first) |

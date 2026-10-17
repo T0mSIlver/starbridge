@@ -211,7 +211,7 @@ struct SnoozeControls: View {
                         }
                         .frame(minHeight: Tokens.Sizes.tap)
                         .padding(.horizontal, Tokens.Spacing.s4)
-                        .background(RoundedRectangle(cornerRadius: Tokens.Radius.md).fill(Tokens.Colors.surface.color))
+                        .background(RoundedRectangle(cornerRadius: Tokens.Radius.md, style: .continuous).fill(Tokens.Colors.surface.color))
                     }
                     .buttonStyle(.plain)
                 }
@@ -294,7 +294,7 @@ private struct ReplyField: View {
         .padding(.horizontal, Tokens.Spacing.s4)
         .padding(.vertical, Tokens.Spacing.s2)
         .frame(minHeight: 56)
-        .background(RoundedRectangle(cornerRadius: Tokens.Radius.md).fill(Tokens.Colors.surface2.color))
+        .background(RoundedRectangle(cornerRadius: Tokens.Radius.md, style: .continuous).fill(Tokens.Colors.surface2.color))
     }
 }
 
@@ -322,7 +322,7 @@ struct PromptDetail: View {
                         .padding(Tokens.Spacing.s4)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .foregroundStyle(Tokens.Colors.onTerminal.color)
-                        .background(RoundedRectangle(cornerRadius: Tokens.Radius.lg).fill(Tokens.Colors.terminal.color))
+                        .background(RoundedRectangle(cornerRadius: Tokens.Radius.lg, style: .continuous).fill(Tokens.Colors.terminal.color))
                     Color.clear.frame(height: 1).background(
                         GeometryReader { g in
                             Color.clear.onChange(of: g.frame(in: .global).minY, initial: true) { _, y in
@@ -348,7 +348,7 @@ struct PromptDetail: View {
                                 .lineLimit(1...4)
                                 .type(Tokens.Typography.body)
                                 .padding(Tokens.Spacing.s3)
-                                .background(RoundedRectangle(cornerRadius: Tokens.Radius.md).fill(Tokens.Colors.surface2.color))
+                                .background(RoundedRectangle(cornerRadius: Tokens.Radius.md, style: .continuous).fill(Tokens.Colors.surface2.color))
                             OptionButton(label: "Deny", strong: false, amber: true, height: 48) { answer(p, allow: false, .once) }
                         }
                     } else {

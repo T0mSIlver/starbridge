@@ -43,7 +43,7 @@ private struct Chip: View {
             .padding(.leading, chip.icon == nil ? Tokens.Spacing.s4 : Tokens.Spacing.s3)
             .padding(.trailing, Tokens.Spacing.s2h)
             .frame(minHeight: Tokens.Spacing.s8)
-            .overlay(RoundedRectangle(cornerRadius: Tokens.Radius.sm).strokeBorder(Tokens.Colors.lineStrong.color))
+            .overlay(RoundedRectangle(cornerRadius: Tokens.Radius.sm, style: .continuous).strokeBorder(Tokens.Colors.lineStrong.color))
             .contentShape(Rectangle())
         }
         .accessibilityHint("Opens in the browser")

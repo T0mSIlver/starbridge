@@ -241,6 +241,12 @@ notify about nothing, weekly and monthly ones (and those of unknown length) abou
   name shrinks rather than breaks inside a word, as the rail's tab labels do: "Unused" broke at
   font scale 1.3. The owner chose this from mockups over the names repeated in each provider's
   card; the web keeps the one table.
+- **The iPhone's alerts are a section per window** (#1859). Its page is Android's (#930), but the
+  window's name heads a section with a Toggle row per alert, since a grid of checkboxes is
+  Material's idiom and iOS lists switches; the column names go, and a row grows with the text
+  size where a column would break. The same pass made the iPhone's buttons the system's large
+  prominent (the main action) and bordered (the second) capsule, from iOS 26 (before it keeps the
+  56 pt capsule, since the system has no full-width size there), and its corners continuous.
 - **Settings' section names on the web** (#930). Beside the rail, a 1200 px window (the desktop
   app's) gave the names a 220 px column and pushed the boxes off to the right. From 1440 px the
   names keep that column; from 1100 px they take 160 px and the page a smaller margin; narrower,
