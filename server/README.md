@@ -15,10 +15,10 @@ them. Its routes are in `PROTOCOL.md`.
 ## Set it up
 
 1. With Docker installed, clone the
-   [latest release](https://github.com/T0mSIlver/starbridge/releases/latest), here `v0.1.6`:
+   [latest release](https://github.com/T0mSIlver/starbridge/releases/latest), here `v0.1.7`:
 
    ```bash
-   git clone --branch v0.1.6 https://github.com/T0mSIlver/starbridge
+   git clone --branch v0.1.7 https://github.com/T0mSIlver/starbridge
    cd starbridge
    ```
 
@@ -127,8 +127,8 @@ each browser's own push service still carries them, encrypted, such as Google's 
    ntfy access everyone 'up*' write-only
    ```
 
-3. On the phone, install the ntfy app and set its default server to yours. In Starbridge, pick
-   UnifiedPush under Settings → Notifications → Delivered through.
+3. On the phone, install the ntfy app and set its default server to yours. In the Android app, pick
+   UnifiedPush under Settings → Account → Notifications delivered through.
 
 The phone must reach your ntfy, and your Starbridge server must reach it too.
 
@@ -141,10 +141,10 @@ with the server running:
 sudo sqlite3 "$(docker volume inspect -f '{{.Mountpoint}}' starbridge_data)/starbridge.db" ".backup 'starbridge-before.db'"
 ```
 
-Then check out the new release's tag, such as `v0.1.6`, and rebuild:
+Then check out the new release's tag, such as `v0.1.7`, and rebuild:
 
 ```bash
-git fetch --tags && git checkout v0.1.6
+git fetch --tags && git checkout v0.1.7
 docker compose -f server/compose.yaml up -d --build
 ```
 
@@ -163,7 +163,7 @@ release, restore the copy you made before upgrading.
 <dt><code>DB_PATH</code></dt>
 <dd>The SQLite file. Default: <code>./data/starbridge.db</code>, or <code>/data/starbridge.db</code> in the image.</dd>
 <dt><code>TRUST_PROXY</code></dt>
-<dd>Read the client's IP from the last <code>X-Forwarded-For</code> hop. Turn it on behind a reverse proxy. Default: off.</dd>
+<dd>Read the client's IP from the last <code>X-Forwarded-For</code> hop. Turn it on behind a reverse proxy. Default: off; the Compose file turns it on.</dd>
 </dl>
 
 ### Sign-in
