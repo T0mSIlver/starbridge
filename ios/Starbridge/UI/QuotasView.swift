@@ -101,7 +101,7 @@ private struct NoQuotas: View {
                     .textSelection(.enabled)
                     .padding(Tokens.Spacing.s4)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(RoundedRectangle(cornerRadius: Tokens.Radius.lg).fill(Tokens.Colors.surface2.color))
+                    .background(RoundedRectangle(cornerRadius: Tokens.Radius.lg, style: .continuous).fill(Tokens.Colors.surface2.color))
                 Link(destination: Self.docs) {
                     Text("How to set it up").type(Tokens.Typography.action)
                 }
@@ -168,7 +168,7 @@ private struct ProviderCard: View {
         }
         .padding(Tokens.Spacing.s4)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: Tokens.Radius.lg).fill(Tokens.Colors.surface.color))
+        .background(RoundedRectangle(cornerRadius: Tokens.Radius.lg, style: .continuous).fill(Tokens.Colors.surface.color))
     }
 
     @ViewBuilder private var machineText: some View {

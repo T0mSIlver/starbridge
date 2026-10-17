@@ -253,12 +253,11 @@ struct QuotaOrderView: View {
 }
 
 /**
- * Settings → Quotas → Alerts (#930): one card, the column names once on top, then a row per
- * window of the providers shown, a checkbox per alert. A window with no box ticked is off.
+ * Settings → Quotas → Alerts (#930): a section per window of the providers shown, named for it,
+ * with a toggle per alert (#1859). A window with no toggle on is off.
  */
 struct QuotaAlertsView: View {
     @Bindable var store: Store
-    @ScaledMetric(relativeTo: .caption) private var column: CGFloat = 56
 
     var body: some View {
         let windows = store.quotaWindows
@@ -267,28 +266,17 @@ struct QuotaAlertsView: View {
         let all = windows.filter { seen.insert("\($0.provider)/\($0.windowId)").inserted }
         let shown = settings.providers(windows).filter { !settings.hidden.contains($0) }
         List {
-            Section {
-                HStack(alignment: .bottom, spacing: 0) {
-                    Spacer(minLength: 0)
-                    ForEach(QuotaAlerts.choices, id: \.0) { _, label in
-                        Text(label)
-                            .type(Tokens.Typography.caption)
-                            .foregroundStyle(Tokens.Colors.fg2.color)
-                            .multilineTextAlignment(.center)
-                            .frame(width: column)
-                    }
-                }
-                .accessibilityHidden(true)
-                if shown.isEmpty {
+            if shown.isEmpty {
+                Section {
                     Text("No quota windows shown").foregroundStyle(Tokens.Colors.fg2.color)
                 }
-                ForEach(shown, id: \.self) { p in
-                    ForEach(all.filter { $0.provider == p }, id: \.windowId) { w in
-                        row(w, all: all.map { ($0.provider, $0.windowId) }, settings: settings)
-                    }
+                .listRowBackground(Tokens.Colors.surface.color)
+            }
+            ForEach(shown, id: \.self) { p in
+                ForEach(all.filter { $0.provider == p }, id: \.windowId) { w in
+                    section(w, all: all.map { ($0.provider, $0.windowId) }, settings: settings)
                 }
             }
-            .listRowBackground(Tokens.Colors.surface.color)
         }
         .scrollContentBackground(.hidden)
         .background(Tokens.Colors.bg.color.ignoresSafeArea())
@@ -296,25 +284,22 @@ struct QuotaAlertsView: View {
         .navigationBarTitleDisplayMode(.inline)
     }
 
-    private func row(_ w: QuotaRow, all: [(String, String)], settings: QuotaSettings) -> some View {
+    private func section(_ w: QuotaRow, all: [(String, String)], settings: QuotaSettings) -> some View {
         let picked = settings.alerts.choices(provider: w.provider, window: w.windowId, minutes: w.windowMinutes)
-        return HStack(spacing: 0) {
-            Text("\(w.provider) \(w.window)").frame(maxWidth: .infinity, alignment: .leading)
+        return Section("\(w.provider) \(w.window)") {
             ForEach(QuotaAlerts.choices, id: \.0) { kind, label in
                 let on = picked.contains(kind)
-                Button {
-                    let next = QuotaAlerts.choices.map(\.0).filter { ($0 == kind && !on) || ($0 != kind && picked.contains($0)) }
-                    store.quotaSettings.alerts = settings.alerts.with(provider: w.provider, window: w.windowId, all: all, picked: next)
-                } label: {
-                    Image(systemName: on ? "checkmark.square.fill" : "square")
-                        .font(.title3)
-                        .foregroundStyle(on ? Tokens.Colors.fg.color : Tokens.Colors.fg3.color)
-                        .frame(width: column, height: 44)
-                }
-                .buttonStyle(.borderless)
+                Toggle(label, isOn: Binding(
+                    get: { on },
+                    set: { now in
+                        let next = QuotaAlerts.choices.map(\.0).filter { ($0 == kind && now) || ($0 != kind && picked.contains($0)) }
+                        store.quotaSettings.alerts = settings.alerts.with(provider: w.provider, window: w.windowId, all: all, picked: next)
+                    }
+                ))
+                .tint(Tokens.Colors.fg.color)
                 .accessibilityLabel("\(w.provider) \(w.window): \(label)")
-                .accessibilityAddTraits(on ? .isSelected : [])
             }
         }
+        .listRowBackground(Tokens.Colors.surface.color)
     }
 }

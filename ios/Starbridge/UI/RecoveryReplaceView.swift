@@ -37,7 +37,7 @@ struct RecoveryReplaceView: View {
                 .foregroundStyle(Tokens.Colors.fg2.color)
             RecoveryKeyField(label: "Your current recovery key", key: $typed)
             Button("Make a new key") { Task { await store.newRecoveryKey(current: typed) } }
-                .buttonStyle(Primary(busy: store.busy))
+                .primaryButton(busy: store.busy)
                 .disabled(store.busy || !RecoveryKeyField.complete(typed))
             Text("Lost it? Without the current key it can't be replaced. Your devices keep working.")
                 .type(Tokens.Typography.small)
@@ -53,7 +53,7 @@ struct RecoveryReplaceView: View {
                 .foregroundStyle(Tokens.Colors.fg2.color)
             RecoveryKeyShown(key: key, stored: $stored)
             Button("Save the new key") { Task { await store.saveRecoveryKey() } }
-                .buttonStyle(Primary(busy: saving))
+                .primaryButton(busy: saving)
                 .disabled(saving || !stored)
             if !saving {
                 Button("Cancel") { store.closeRecoveryKey(); dismiss() }
@@ -71,7 +71,7 @@ struct RecoveryReplaceView: View {
             Text("The old key no longer works. Your devices are not affected.")
                 .type(Tokens.Typography.body)
                 .foregroundStyle(Tokens.Colors.fg2.color)
-            Button("Back to Devices") { dismiss() }.buttonStyle(Primary())
+            Button("Back to Devices") { dismiss() }.primaryButton()
         }
     }
 }

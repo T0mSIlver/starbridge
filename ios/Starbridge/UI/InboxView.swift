@@ -395,9 +395,9 @@ private struct Card<Content: View>: View {
             .padding(Tokens.Spacing.s5)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
-                RoundedRectangle(cornerRadius: Tokens.Radius.lg)
+                RoundedRectangle(cornerRadius: Tokens.Radius.lg, style: .continuous)
                     .fill(Tokens.Colors.surface.color)
-                    .overlay(RoundedRectangle(cornerRadius: Tokens.Radius.lg).fill(amber ? Tokens.Colors.accentSoft.color : .clear))
+                    .overlay(RoundedRectangle(cornerRadius: Tokens.Radius.lg, style: .continuous).fill(amber ? Tokens.Colors.accentSoft.color : .clear))
             )
     }
 }
@@ -489,7 +489,7 @@ private struct PromptCard: View {
                     .padding(Tokens.Spacing.s3)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .foregroundStyle(Tokens.Colors.onTerminal.color)
-                    .background(RoundedRectangle(cornerRadius: Tokens.Radius.md).fill(Tokens.Colors.terminal.color))
+                    .background(RoundedRectangle(cornerRadius: Tokens.Radius.md, style: .continuous).fill(Tokens.Colors.terminal.color))
                 HStack(spacing: Tokens.Spacing.s2) {
                     OptionButton(label: "Deny", strong: false, amber: true, height: 40) { Task { await store.answerPrompt(prompt.id, allow: false) } }
                     OptionButton(label: "Allow", strong: true, amber: true, height: 40) {
@@ -569,7 +569,7 @@ private struct RecoveryBanner: View {
         }
         .padding(.leading, Tokens.Spacing.s4)
         .padding(.vertical, Tokens.Spacing.s2)
-        .background(RoundedRectangle(cornerRadius: Tokens.Radius.lg).fill(Tokens.Colors.surface2.color))
+        .background(RoundedRectangle(cornerRadius: Tokens.Radius.lg, style: .continuous).fill(Tokens.Colors.surface2.color))
     }
 }
 
@@ -587,7 +587,7 @@ private struct HeldBanner: View {
         }
         .padding(Tokens.Spacing.s4)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: Tokens.Radius.lg).fill(Tokens.Colors.badSoft.color))
+        .background(RoundedRectangle(cornerRadius: Tokens.Radius.lg, style: .continuous).fill(Tokens.Colors.badSoft.color))
     }
 }
 
@@ -655,7 +655,7 @@ private struct SwipeToSnooze<Content: View>: View {
                     .foregroundStyle(armed ? Tokens.Colors.fg.color : Tokens.Colors.fg2.color)
                     .padding(.horizontal, Tokens.Spacing.s5)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
-                    .background(RoundedRectangle(cornerRadius: Tokens.Radius.lg).fill(armed ? Tokens.Colors.lineStrong.color : Tokens.Colors.surface2.color))
+                    .background(RoundedRectangle(cornerRadius: Tokens.Radius.lg, style: .continuous).fill(armed ? Tokens.Colors.lineStrong.color : Tokens.Colors.surface2.color))
                     .accessibilityHidden(true)
                 }
             }
@@ -727,7 +727,7 @@ private struct UndoBar: View {
         .foregroundStyle(Tokens.Colors.bg.color)
         .tint(Tokens.Colors.bg.color)
         .padding(.horizontal, Tokens.Spacing.s4)
-        .background(RoundedRectangle(cornerRadius: Tokens.Radius.md).fill(Tokens.Colors.fg.color))
+        .background(RoundedRectangle(cornerRadius: Tokens.Radius.md, style: .continuous).fill(Tokens.Colors.fg.color))
         .padding(.horizontal, Tokens.Spacing.s3)
         .padding(.bottom, Tokens.Spacing.s2)
     }
@@ -770,22 +770,22 @@ struct NoMachine: View {
                 .textSelection(.enabled)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(Tokens.Spacing.s4)
-                .background(RoundedRectangle(cornerRadius: Tokens.Radius.lg).fill(Tokens.Colors.surface2.color))
+                .background(RoundedRectangle(cornerRadius: Tokens.Radius.lg, style: .continuous).fill(Tokens.Colors.surface2.color))
             HStack(spacing: Tokens.Spacing.s2) {
                 Button {
                     UIPasteboard.general.string = install
                 } label: {
                     Label("Copy", systemImage: "doc.on.doc")
                 }
-                .buttonStyle(Secondary())
+                .secondaryButton()
                 // To the computer, by mail or a chat, when this iPhone is not where the terminal is.
                 ShareLink(item: install) { Text("Send") }
-                    .buttonStyle(Secondary())
+                    .secondaryButton()
             }
             Button(action: scan) {
                 Label("Scan a QR code", systemImage: "qrcode.viewfinder")
             }
-            .buttonStyle(Primary())
+            .primaryButton()
             Button("Other ways to add a device", action: addDevice)
                 .type(Tokens.Typography.action)
                 .frame(minHeight: Tokens.Sizes.tap)

@@ -17,7 +17,7 @@ struct AddDeviceView: View {
                 PairCard(store: store)
             }
             .padding(Tokens.Spacing.s5)
-            .background(RoundedRectangle(cornerRadius: Tokens.Radius.xl).fill(Tokens.Colors.surface.color))
+            .background(RoundedRectangle(cornerRadius: Tokens.Radius.xl, style: .continuous).fill(Tokens.Colors.surface.color))
             .padding(.horizontal, Tokens.Spacing.s4)
             .animation(.default, value: store.approval)
         }
@@ -66,10 +66,10 @@ private struct PairCard: View {
             Text(j.code).type(Tokens.Typography.machine).foregroundStyle(Tokens.Colors.fg2.color)
             HStack(spacing: Tokens.Spacing.s2) {
                 Button("Approve") { Task { await store.approvePairing() } }
-                    .buttonStyle(Primary(busy: approving, accent: true))
+                    .primaryButton(busy: approving, accent: true)
                     .allowsHitTesting(!approving)
                 Button("Cancel") { store.closePairing(); code = "" }
-                    .buttonStyle(Secondary())
+                    .secondaryButton()
                     .frame(width: 120)
             }
         }
@@ -84,7 +84,7 @@ private struct PairCard: View {
                 .foregroundStyle(Tokens.Colors.fg2.color)
             QRImage(text: link).accessibilityLabel("QR code for pairing code \(shown)")
             Text(shown).type(Tokens.Typography.machine).foregroundStyle(Tokens.Colors.fg2.color)
-            Button("Cancel") { store.closePairing(); code = "" }.buttonStyle(Secondary()).frame(width: 120)
+            Button("Cancel") { store.closePairing(); code = "" }.secondaryButton().frame(width: 120)
         }
     }
 
@@ -103,8 +103,8 @@ private struct PairCard: View {
             } label: {
                 Text("Scan a QR code")
             }
-            .buttonStyle(Primary())
-            Button("Show a QR code for a new phone") { store.showCode() }.buttonStyle(Secondary())
+            .primaryButton()
+            Button("Show a QR code for a new phone") { store.showCode() }.secondaryButton()
             if let scanError { Text(scanError).type(Tokens.Typography.small).foregroundStyle(Tokens.Colors.bad.color) }
             Text("Or type the code it shows: starbridge pair on a machine, or Join on a new phone or browser.")
                 .type(Tokens.Typography.small)
@@ -125,7 +125,7 @@ private struct PairCard: View {
             } label: {
                 Text("Check code")
             }
-            .buttonStyle(Secondary())
+            .secondaryButton()
             .disabled(code.trimmingCharacters(in: .whitespaces).isEmpty || store.approval == .checking)
         }
         .sheet(isPresented: $scanning) {
@@ -148,7 +148,7 @@ struct QRImage: View {
             .resizable()
             .aspectRatio(1, contentMode: .fit)
             .frame(maxWidth: 260)
-            .clipShape(RoundedRectangle(cornerRadius: Tokens.Radius.sm))
+            .clipShape(RoundedRectangle(cornerRadius: Tokens.Radius.sm, style: .continuous))
     }
 
     static func image(_ text: String) -> UIImage {

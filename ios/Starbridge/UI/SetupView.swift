@@ -76,10 +76,67 @@ private struct Lede: View {
     }
 }
 
-/** The main action: filled in `fg`, or the accent for one that waits on the owner, the full width. */
-struct Primary: ButtonStyle {
-    var busy = false
-    var accent = false
+/**
+ * The main action: the system's large prominent button (#1859), filled in `fg`, or the accent for
+ * one that waits on the owner, the full width. Before iOS 26 has no flexible button size, so
+ * there it stays the 56 pt capsule.
+ */
+private struct PrimaryButton: ViewModifier {
+    let busy: Bool
+    let accent: Bool
+
+    func body(content: Content) -> some View {
+        if #available(iOS 26.0, *) {
+            let on = (accent ? Tokens.Colors.onAccent : Tokens.Colors.bg).color
+            content
+                .buttonStyle(.borderedProminent)
+                .buttonSizing(.flexible)
+                .buttonBorderShape(.capsule)
+                .controlSize(.large)
+                .tint((accent ? Tokens.Colors.accent : Tokens.Colors.fg).color)
+                .overlay {
+                    // Covers the label: a system style sets its own foreground, so an outer one cannot hide it.
+                    if busy { Capsule().fill((accent ? Tokens.Colors.accent : Tokens.Colors.fg).color).overlay { ProgressView().tint(on) } }
+                }
+                .foregroundStyle(on)
+        } else {
+            content.buttonStyle(CapsulePrimary(busy: busy, accent: accent))
+        }
+    }
+}
+
+/** The second action: the system's large bordered button, `destructive` in the bad colour. */
+private struct SecondaryButton: ViewModifier {
+    let destructive: Bool
+
+    func body(content: Content) -> some View {
+        if #available(iOS 26.0, *) {
+            content
+                .buttonStyle(.bordered)
+                .buttonSizing(.flexible)
+                .buttonBorderShape(.capsule)
+                .controlSize(.large)
+                .tint((destructive ? Tokens.Colors.bad : Tokens.Colors.fg).color)
+        } else {
+            content.buttonStyle(CapsuleSecondary()).foregroundStyle(destructive ? Tokens.Colors.bad.color : Tokens.Colors.fg.color)
+        }
+    }
+}
+
+enum SystemButton {
+    /** The system's large button, and the 56 pt capsule where it has no full-width size (before iOS 26). */
+    static var height: CGFloat { if #available(iOS 26.0, *) { 50 } else { 56 } }
+}
+
+extension View {
+    func primaryButton(busy: Bool = false, accent: Bool = false) -> some View { modifier(PrimaryButton(busy: busy, accent: accent)) }
+    func secondaryButton(destructive: Bool = false) -> some View { modifier(SecondaryButton(destructive: destructive)) }
+}
+
+/** `PrimaryButton` before iOS 26. */
+private struct CapsulePrimary: ButtonStyle {
+    let busy: Bool
+    let accent: Bool
     @Environment(\.isEnabled) private var enabled
 
     private var on: Color { (accent ? Tokens.Colors.onAccent : Tokens.Colors.bg).color }
@@ -97,8 +154,8 @@ struct Primary: ButtonStyle {
     }
 }
 
-/** The second action: outlined. */
-struct Secondary: ButtonStyle {
+/** `SecondaryButton` before iOS 26. */
+private struct CapsuleSecondary: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .type(Tokens.Typography.action)
@@ -121,7 +178,7 @@ struct Filled<Field: View>: View {
         .padding(.horizontal, Tokens.Spacing.s4)
         .padding(.vertical, Tokens.Spacing.s2)
         .frame(maxWidth: .infinity, minHeight: 56, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: Tokens.Radius.md).fill(Tokens.Colors.surface2.color))
+        .background(RoundedRectangle(cornerRadius: Tokens.Radius.md, style: .continuous).fill(Tokens.Colors.surface2.color))
     }
 }
 
@@ -143,11 +200,11 @@ private struct Tile: View {
     let symbol: String
 
     var body: some View {
-        RoundedRectangle(cornerRadius: Tokens.Radius.xl)
+        RoundedRectangle(cornerRadius: Tokens.Radius.xl, style: .continuous)
             .fill(Tokens.Colors.surface.color)
             .frame(height: 200)
             .overlay {
-                RoundedRectangle(cornerRadius: 32)
+                RoundedRectangle(cornerRadius: 32, style: .continuous)
                     .fill(Tokens.Colors.surface2.color)
                     .frame(width: 120, height: 120)
                     .overlay { Image(systemName: symbol).font(.system(size: 52)) }
@@ -188,13 +245,13 @@ private struct SignInStep: View {
         } bottom: {
             if !selfHosted {
                 Button { gitHub(Store.defaultServer) } label: { Label { Text("Sign in with GitHub") } icon: { Image("GitHub").resizable().frame(width: 20, height: 20) } }
-                    .buttonStyle(Primary(busy: store.busy))
+                    .primaryButton(busy: store.busy)
                     .disabled(store.busy)
                 // As tall and as wide as GitHub's: App Store guideline 4.8 wants Apple's no less
                 // prominent (spec/sign-in.md).
                 SignInWithAppleButton(.signIn, onRequest: appleRequest, onCompletion: appleDone)
                     .signInWithAppleButtonStyle(colorScheme == .dark ? .white : .black)
-                    .frame(height: 56)
+                    .frame(height: SystemButton.height)
                     .clipShape(Capsule())
                     .disabled(store.busy)
                 LinkButton(text: "Use your own server") {
@@ -203,10 +260,10 @@ private struct SignInStep: View {
                 }
             } else {
                 Button("Sign in") { Task { await store.signInWithOwnerToken(server: server, token: token) } }
-                    .buttonStyle(Primary(busy: store.busy))
+                    .primaryButton(busy: store.busy)
                     .disabled(store.busy || server.isEmpty || token.isEmpty)
                 Button("Sign in with GitHub on this server") { gitHub(server) }
-                    .buttonStyle(Secondary())
+                    .secondaryButton()
                     .disabled(store.busy || server.isEmpty)
                 LinkButton(text: "Use starbridge.run") { selfHosted = false }
             }
@@ -294,7 +351,7 @@ private struct JoinStep: View {
             } label: {
                 Label("Scan a QR code", systemImage: "qrcode.viewfinder")
             }
-            .buttonStyle(Primary(busy: store.busy))
+            .primaryButton(busy: store.busy)
             .disabled(store.busy)
             LinkButton(text: "Can't scan? Compare digits") { Task { await store.askDevices() } }
             // Three to a line when they fit, else stacked.
@@ -334,7 +391,7 @@ private struct FirstDeviceStep: View {
             Tile(symbol: "key")
         } bottom: {
             Button("Create the keys") { Task { await store.setUpFirstDevice() } }
-                .buttonStyle(Primary(busy: store.busy))
+                .primaryButton(busy: store.busy)
                 .disabled(store.busy)
             LinkButton(text: "Sign out") { Task { await store.signOut() } }
         }
@@ -358,7 +415,7 @@ private struct RecoverStep: View {
             .padding(.top, Tokens.Spacing.s6)
         } bottom: {
             Button("Recover") { Task { await store.recover(key) } }
-                .buttonStyle(Primary(busy: store.busy))
+                .primaryButton(busy: store.busy)
                 .disabled(store.busy || !RecoveryKeyField.complete(key))
             HStack(spacing: Tokens.Spacing.s6) {
                 LinkButton(text: "Back", action: back)
@@ -388,7 +445,7 @@ private struct RecoveryKeyStep: View {
             .padding(.top, Tokens.Spacing.s6)
         } bottom: {
             Button("Continue") { Task { await store.confirmRecoveryKey() } }
-                .buttonStyle(Primary(busy: store.busy))
+                .primaryButton(busy: store.busy)
                 .disabled(store.busy || !stored)
             LinkButton(text: "Sign out") { Task { await store.signOut() } }
         }
@@ -450,7 +507,7 @@ struct RecoveryKeyShown: View {
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: .infinity)
                 .padding(Tokens.Spacing.s5)
-                .background(RoundedRectangle(cornerRadius: Tokens.Radius.xl).fill(Tokens.Colors.surface.color))
+                .background(RoundedRectangle(cornerRadius: Tokens.Radius.xl, style: .continuous).fill(Tokens.Colors.surface.color))
                 .accessibilityLabel(key.map(String.init).joined(separator: " "))
             Button {
                 RecoveryKeyText.copy(key)
@@ -458,7 +515,7 @@ struct RecoveryKeyShown: View {
             } label: {
                 Label("Copy", systemImage: "doc.on.doc")
             }
-            .buttonStyle(Secondary())
+            .secondaryButton()
             if copied {
                 Text("Copied. The clipboard clears itself in a minute.")
                     .type(Tokens.Typography.small)
@@ -488,7 +545,7 @@ private struct WaitingStep: View {
                     .font(.system(size: 40, weight: .semibold).monospacedDigit())
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, Tokens.Spacing.s10)
-                    .background(RoundedRectangle(cornerRadius: Tokens.Radius.xl).fill(Tokens.Colors.surface.color))
+                    .background(RoundedRectangle(cornerRadius: Tokens.Radius.xl, style: .continuous).fill(Tokens.Colors.surface.color))
                     .padding(.horizontal, Tokens.Spacing.s3)
                     .padding(.top, Tokens.Spacing.s6)
                     .accessibilityLabel(digits.map(String.init).joined(separator: " "))
@@ -501,8 +558,8 @@ private struct WaitingStep: View {
                 .padding(Tokens.Spacing.s4)
             }
         } bottom: {
-            if let onMatch { Button("They match", action: onMatch).buttonStyle(Primary()) }
-            Button("Cancel") { Task { await store.cancelJoin() } }.buttonStyle(Secondary())
+            if let onMatch { Button("They match", action: onMatch).primaryButton() }
+            Button("Cancel") { Task { await store.cancelJoin() } }.secondaryButton()
         }
         .privacyCover()
     }

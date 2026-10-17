@@ -46,10 +46,10 @@ private struct JoinSheet: View {
                         .type(Tokens.Typography.body)
                         .foregroundStyle(Tokens.Colors.fg2.color)
                     Spacer()
-                    Button("Compare digits") { store.compareJoin(ask.id) }.buttonStyle(Primary(accent: true))
+                    Button("Compare digits") { store.compareJoin(ask.id) }.primaryButton(accent: true)
                     HStack(spacing: Tokens.Spacing.s2) {
-                        Button("Later") { later(ask.id) }.buttonStyle(Secondary())
-                        Button("Refuse") { Task { await store.refuseJoin(ask.id) } }.buttonStyle(Secondary()).foregroundStyle(Tokens.Colors.bad.color)
+                        Button("Later") { later(ask.id) }.secondaryButton()
+                        Button("Refuse") { Task { await store.refuseJoin(ask.id) } }.secondaryButton(destructive: true)
                     }
                 }
             case let .waiting(ask):
@@ -59,7 +59,7 @@ private struct JoinSheet: View {
                     Text("Waiting for \(ask.name)…").type(Tokens.Typography.body)
                 }
                 Spacer()
-                Button("Refuse") { Task { await store.refuseJoin(ask.id) } }.buttonStyle(Secondary()).foregroundStyle(Tokens.Colors.bad.color)
+                Button("Refuse") { Task { await store.refuseJoin(ask.id) } }.secondaryButton(destructive: true)
             case let .digits(ask, digits, approving, error):
                 Text("Same digits on \(ask.name)?").type(Tokens.Typography.heading)
                 Text(Joins.formatDigits(digits))
@@ -70,21 +70,20 @@ private struct JoinSheet: View {
                 if let error { Text(error).type(Tokens.Typography.body).foregroundStyle(Tokens.Colors.bad.color) }
                 Spacer()
                 Button(error != nil ? "Try again" : "Approve") { Task { await store.approveJoin() } }
-                    .buttonStyle(Primary(busy: approving, accent: true))
+                    .primaryButton(busy: approving, accent: true)
                     .allowsHitTesting(!approving)
                 Button("Digits differ") { Task { await store.refuseJoin(ask.id) } }
-                    .buttonStyle(Secondary())
-                    .foregroundStyle(Tokens.Colors.bad.color)
+                    .secondaryButton(destructive: true)
                     .disabled(approving)
             case let .done(message):
                 Text(message).type(Tokens.Typography.heading)
                 Spacer()
-                Button("OK") { store.closeComparison() }.buttonStyle(Primary())
+                Button("OK") { store.closeComparison() }.primaryButton()
             case let .failed(message):
                 Text("Not approved").type(Tokens.Typography.heading)
                 Text(message).type(Tokens.Typography.body).foregroundStyle(Tokens.Colors.fg2.color)
                 Spacer()
-                Button("OK") { store.closeComparison() }.buttonStyle(Primary())
+                Button("OK") { store.closeComparison() }.primaryButton()
             }
         }
         .padding(Tokens.Spacing.s5)

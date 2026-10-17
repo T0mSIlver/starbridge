@@ -84,7 +84,7 @@ struct PendingImages: View {
                 let aspects = row.map { $0.height > 0 ? CGFloat($0.width) / CGFloat($0.height) : 1 }
                 HStack(spacing: Tokens.Spacing.s2) {
                     ForEach(Array(aspects.enumerated()), id: \.offset) { _, aspect in
-                        RoundedRectangle(cornerRadius: Tokens.Radius.sm)
+                        RoundedRectangle(cornerRadius: Tokens.Radius.sm, style: .continuous)
                             .fill(Tokens.Colors.surface2.color)
                             .aspectRatio(aspect, contentMode: .fit)
                     }
@@ -117,7 +117,7 @@ struct Thumb: View {
                     .foregroundStyle(.white)
                     .padding(6)
             }
-            .clipShape(RoundedRectangle(cornerRadius: Tokens.Radius.sm))
+            .clipShape(RoundedRectangle(cornerRadius: Tokens.Radius.sm, style: .continuous))
         }
         .buttonStyle(.plain)
         .accessibilityLabel(image.alt ?? "Image")
