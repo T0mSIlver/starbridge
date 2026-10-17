@@ -311,7 +311,6 @@ final class ProtocolVectorsTests: XCTestCase {
             XCTAssertEqual(got, settings(c["expect"]!), c.str("name"))
         }
     }
-    }
 
     func testQuotas() throws {
         let v = try vectors("quotas.json")
