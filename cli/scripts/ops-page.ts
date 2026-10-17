@@ -8,10 +8,25 @@
 import { spawnSync } from "node:child_process";
 import { copyFileSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { LABEL_PREFIX } from "./found-in";
 import type { Releases } from "./releases";
 
 const REPO = "T0mSIlver/starbridge";
 const POLICY = "https://claude.ai/artifact/8HEhZtHRWRS5nECZB51MNk";
+
+/** A bug and the release it was found in (found-in.yml's label, #1890). */
+export type Bug = {
+  number: number;
+  title: string;
+  open: boolean;
+  /** The version in its `found-in:` label, or "unknown". */
+  foundIn: string;
+  regression: boolean;
+  /** For a closed bug: the first tag that holds the commit that closed it, if any. */
+  fixedIn?: string;
+  /** Closed, but not by a commit on main (a duplicate, won't fix, or closed by hand). */
+  closedByHand?: boolean;
+};
 
 export type Facts = {
   now: Date;
@@ -35,6 +50,9 @@ export type Facts = {
   commits: Record<string, string>;
   /** Undefined when GitHub did not answer. */
   openRegressions?: number;
+  /** Open `regression` issues, and every issue with a `found-in:` label. Undefined when GitHub did not answer. */
+  regressions?: Bug[];
+  bugs?: Bug[];
   iosMainOn: boolean;
 };
 
@@ -248,6 +266,74 @@ function promotionHtml(f: Facts): string {
 <div class="chgs">${rows}</div></div>`;
 }
 
+/** -1, 0 or 1: releases by version, an rc before its final, "unknown" last. */
+export function compareVersions(a: string, b: string): number {
+  if (a === "unknown" || b === "unknown") return a === b ? 0 : a === "unknown" ? 1 : -1;
+  const part = (v: string) => {
+    const [core = "", pre] = v.split("-");
+    const [x = 0, y = 0, z = 0] = core.split(".").map(Number);
+    const [kind = "", n = "0"] = (pre ?? "").split(".");
+    return [x, y, z, pre === undefined ? 1 : 0, kind, Number(n)] as const;
+  };
+  const [pa, pb] = [part(a), part(b)];
+  for (let i = 0; i < 6; i++) {
+    const [x, y] = [pa[i] as string | number, pb[i] as string | number];
+    if (x !== y) return x < y ? -1 : 1;
+  }
+  return 0;
+}
+
+export type RcBugs = { version: string; bugs: Bug[] };
+
+/** Bugs by the version they were found in, newest first: every version with a bug, and the newest rc even with none. */
+export function bugsByVersion(f: Facts): RcBugs[] {
+  const by = new Map<string, Bug[]>();
+  for (const b of f.bugs ?? []) by.set(b.foundIn, [...(by.get(b.foundIn) ?? []), b]);
+  const rc = newest(f.releases, "rc");
+  if (rc && !by.has(rc.version)) by.set(rc.version, []);
+  return [...by]
+    .sort(([a], [b]) =>
+      a === "unknown" || b === "unknown" ? compareVersions(a, b) : compareVersions(b, a),
+    )
+    .map(([version, bugs]) => ({
+      version,
+      bugs: bugs.sort((a, b) => Number(b.open) - Number(a.open) || a.number - b.number),
+    }));
+}
+
+const issueLink = (b: Bug) =>
+  `<a href="https://github.com/${REPO}/issues/${b.number}">#${b.number}</a> ${esc(b.title)}`;
+
+function fate(b: Bug): string {
+  if (b.open) return "open";
+  if (b.fixedIn)
+    return `fixed in <a href="https://github.com/${REPO}/releases/tag/${esc(b.fixedIn)}">${esc(b.fixedIn)}</a>`;
+  return b.closedByHand ? "closed without a fix" : "fixed on main, in no tag yet";
+}
+
+function bugsHtml(f: Facts): string {
+  if (!f.bugs || !f.regressions)
+    return `<div class="card promo"><p>GitHub did not answer: bugs unknown.</p></div>`;
+  const reg = f.regressions.length
+    ? `<ul>${f.regressions.map((b) => `<li>${issueLink(b)} <span class="meta">found in ${esc(b.foundIn)}</span></li>`).join("")}</ul>`
+    : `<p>None open.</p>`;
+  const groups = bugsByVersion(f)
+    .map(({ version, bugs }) => {
+      const known = f.releases.releases.some((e) => e.version === version);
+      const name = known
+        ? `<a href="https://github.com/${REPO}/releases/tag/v${esc(version)}">${esc(version)}</a>`
+        : esc(version);
+      const open = bugs.filter((b) => b.open).length;
+      const count = bugs.length ? `${bugs.length} found, ${open} open` : "none found";
+      const list = bugs.length
+        ? `<ul>${bugs.map((b) => `<li>${issueLink(b)}${b.regression ? ` <span class="reg">regression</span>` : ""}: ${fate(b)}</li>`).join("")}</ul>`
+        : "";
+      return `<div class="rcbugs"><p class="name">${name} <span class="meta">${count}</span></p>${list}</div>`;
+    })
+    .join("");
+  return `<div class="card bugs"><div class="rcbugs"><p class="name">Open regressions</p>${reg}</div>${groups}</div>`;
+}
+
 export function render(f: Facts): string {
   const rc = newest(f.releases, "rc");
   const fin = newest(f.releases, "final");
@@ -264,6 +350,7 @@ export function render(f: Facts): string {
 <header><span class="brand">${MARK}Starbridge ops</span></header>
 <div class="card intro"><h1>Rings</h1><p>Main: staging, your phone.<br>rc: testers, starbridge.run.<br>Final: everyone.</p><p><a href="https://github.com/${REPO}/blob/main/spec/releases.md">spec/releases.md</a> · <a href="${POLICY}">Policy</a></p></div>
 <section><h2>Promotion</h2>${promotionHtml(f)}</section>
+<section><h2>Bugs by release</h2>${bugsHtml(f)}</section>
 <section><h2>Now</h2><div class="card prods">${rows}</div></section>
 <section><h2>Next</h2><div class="card next"><ul>${nextRows}</ul></div></section>
 <footer><p>As of ${both(f.now)}</p></footer></main></body></html>`;
@@ -297,9 +384,10 @@ section{margin:0 0 40px}
 .promo{padding:16px 24px 8px}.promo p{margin:0 0 8px}.promo .label{margin:16px 0 4px}.promo ul{margin:0 0 8px;padding-left:20px}.promo li{padding:2px 0}
 .verdict{font:500 18px/24px var(--sans)}
 .chgs{display:grid;grid-template-columns:repeat(3,1fr);gap:0 16px;margin-top:8px}.chg{padding:12px 0;border-top:1px solid var(--line);grid-column:1/-1;display:grid;grid-template-columns:subgrid}.chg p{margin:0}.chg .name{font:500 16px/24px var(--sans)}.chg .label{font-size:13px}
+.bugs{padding:4px 24px}.rcbugs{padding:20px 0;border-top:1px solid var(--line)}.rcbugs:first-child{border-top:0}.rcbugs p{margin:0}.rcbugs .name{font:500 16px/24px var(--sans)}.rcbugs ul{margin:8px 0 0;padding-left:20px}.rcbugs li{padding:2px 0}.reg{font:500 13px/20px var(--sans);color:var(--accent)}
 .next{padding:16px 24px}.next ul{margin:0;padding-left:20px}.next li{padding:4px 0}
 footer{color:var(--fg2);font:400 13px/20px var(--sans)}
-@media (max-width:700px){main{padding:24px 16px 48px}.intro{padding:20px;margin:24px 0 32px}.prods,.next,.promo{padding-left:16px;padding-right:16px}.chgs{grid-template-columns:1fr}.chg{grid-template-columns:1fr;gap:6px}.rings{grid-template-columns:1fr;gap:12px}}`;
+@media (max-width:700px){main{padding:24px 16px 48px}.intro{padding:20px;margin:24px 0 32px}.prods,.next,.promo,.bugs{padding-left:16px;padding-right:16px}.chgs{grid-template-columns:1fr}.chg{grid-template-columns:1fr;gap:6px}.rings{grid-template-columns:1fr;gap:12px}}`;
 
 function sh(cmd: string, ...args: string[]): string {
   const r = spawnSync(cmd, args, { encoding: "utf8" });
@@ -332,6 +420,68 @@ const count = (range: string, ...paths: string[]) => {
   const n = sh("git", "rev-list", "--count", range, ...(paths.length ? ["--", ...paths] : []));
   return n === "" ? undefined : Number(n);
 };
+
+type IssueRow = {
+  number: number;
+  title: string;
+  state: string;
+  labels: { name: string }[];
+  pull_request?: unknown;
+};
+
+function bug(i: IssueRow): Bug {
+  const label = i.labels.find((l) => l.name.startsWith(LABEL_PREFIX));
+  return {
+    number: i.number,
+    title: i.title,
+    open: i.state === "open",
+    foundIn: label ? label.name.slice(LABEL_PREFIX.length) : "unknown",
+    regression: i.labels.some((l) => l.name === "regression"),
+  };
+}
+
+/** The first tag holding a commit: "" when none does (or the clone lacks the commit). */
+export function firstTag(sha: string): string {
+  if (!/^[0-9a-f]{40}$/.test(sha)) return "";
+  return (
+    sh("git", "tag", "--contains", sha, "--list", "v*", "--sort=creatordate").split("\n")[0] ?? ""
+  );
+}
+
+/**
+ * Every issue with a `found-in:` label (#1890). Fixed-in is not stored: it is the first tag that
+ * holds the commit that closed the issue, which a squash-merged PR's "Closes #n" records on the
+ * issue's closed event. Undefined when GitHub did not answer.
+ */
+async function gatherBugs(): Promise<Bug[] | undefined> {
+  const out: Bug[] = [];
+  const seen = new Set<number>();
+  for (let page = 1; page <= 5; page++) {
+    const labels = await api<{ name: string }[]>(`labels?per_page=100&page=${page}`);
+    if (!labels) return undefined;
+    for (const l of labels.filter((l) => l.name.startsWith(LABEL_PREFIX))) {
+      const rows = await api<IssueRow[]>(
+        `issues?labels=${encodeURIComponent(l.name)}&state=all&per_page=100`,
+      );
+      if (!rows) return undefined;
+      for (const row of rows.filter((i) => !i.pull_request && !seen.has(i.number))) {
+        seen.add(row.number);
+        const b = bug(row);
+        if (!b.open) {
+          const events = await api<{ event: string; commit_id: string | null }[]>(
+            `issues/${row.number}/events?per_page=100`,
+          );
+          const closed = events?.filter((e) => e.event === "closed").pop();
+          if (closed?.commit_id) b.fixedIn = firstTag(closed.commit_id) || undefined;
+          else b.closedByHand = true;
+        }
+        out.push(b);
+      }
+    }
+    if (labels.length < 100) break;
+  }
+  return out;
+}
 
 export async function gather(): Promise<Facts> {
   const releases = (await api<{ content: string }>("contents/releases.json?ref=releases-data"))
@@ -380,9 +530,9 @@ export async function gather(): Promise<Facts> {
   const commits: Record<string, string> = {};
   for (const e of data.releases) commits[e.version] = sh("git", "rev-list", "-n1", `v${e.version}`);
   const rc = newest(data, "rc");
-  const issues = await api<{ pull_request?: unknown }[]>(
-    "issues?labels=regression&state=open&per_page=100",
-  );
+  const regIssues = await api<IssueRow[]>("issues?labels=regression&state=open&per_page=100");
+  const regressions = regIssues?.filter((i) => !i.pull_request).map((i) => bug(i));
+  const bugs = await gatherBugs();
   return {
     now: new Date(),
     releases: data,
@@ -411,7 +561,9 @@ export async function gather(): Promise<Facts> {
       : undefined,
     stagingSinceRc: rc && staging ? count(`v${rc.version}..${staging}`) : undefined,
     commits,
-    openRegressions: issues ? issues.filter((i) => !i.pull_request).length : undefined,
+    openRegressions: regressions?.length,
+    regressions,
+    bugs,
     iosMainOn: process.env.IOS_MAIN_TESTFLIGHT === "true",
   };
 }

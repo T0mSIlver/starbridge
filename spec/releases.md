@@ -58,6 +58,14 @@
   and main's builds for apps on Tip, the CLI's rcs to npm's `next` and finals to `latest` and
   Homebrew, the plugin marketplace on finals. The iPhone app follows Android once Apple's export
   compliance code arrives: rcs to TestFlight, finals to the App Store.
+- **Bugs by the release they were found in** (#1890). `regression` blocks a promotion but said
+  nothing about which rc a bug came from, and a bug fixed in the next rc left no trace. The bug
+  form has a required Version field, and `found-in.yml` turns it into a `found-in:<version>` label
+  (`found-in:unknown` when the field holds no version), so the version is the reporter's word and
+  the label is derived from it, not typed twice. Fixed-in is not stored, since it is a fact of git:
+  the first tag that holds the commit that closed the issue, which the ops page computes. The page
+  lists each version's bugs, open or fixed in a tag, and the open `regression` issues. The label
+  `regression` stays a person's call, since it blocks the owner's yes.
 - **Three rings: tip, rc, final** (#1540). The owner's devices run the tip ring, every
   change on main (Android's internal track per Android merge and rc tag, #1691; the Mac's Tip
   channel, #1692; the dev box through staging); testers and

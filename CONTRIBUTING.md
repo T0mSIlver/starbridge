@@ -85,7 +85,8 @@ of main that staging passed.
 1. Run `bun cli/scripts/version.ts 1.2.3-rc.1` from the repository root, merge it in a PR, and tag the merged
    commit `v1.2.3-rc.1`. The marketplace stays on the last final.
 2. The maintainer installs the rc's APK on their phone and uses it. A fix means another rc (`-rc.2`). A
-   bug that an earlier release did not have gets the `regression` label.
+   bug that an earlier release did not have gets the `regression` label. The bug form's Version field
+   gives each bug a `found-in:<version>` label, and the ops page lists a release's bugs and where they were fixed.
 3. Once the maintainer approves, run the `promote` workflow with `1.2.3`
    (`gh workflow run promote.yml -f version=1.2.3`). It refuses while a `regression` issue is open, stamps the
    newest rc's commit as `1.2.3` on a commit of its own, tags it `v1.2.3` and runs the release on that tag, so

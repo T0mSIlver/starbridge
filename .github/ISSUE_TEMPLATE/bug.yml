@@ -1,0 +1,38 @@
+name: Bug
+description: Something doesn't work as described
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what you expected
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: |
+        The Starbridge version you hit the bug on, such as 0.1.8-rc.2. Run `starbridge --version`.
+        In the Mac app, it is under Starbridge > About Starbridge. On Android, it is in Settings > Apps > Starbridge,
+        and on iPhone in Settings > Apps > Starbridge. The web page has none yet: use the CLI's, or the app's, on that machine.
+      placeholder: 0.1.8-rc.2
+    validations:
+      required: true
+  - type: input
+    id: agent
+    attributes:
+      label: Agent and its version
+      description: Claude Code, Codex, Pi or opencode.
+  - type: input
+    id: where
+    attributes:
+      label: Where you use it
+      description: Android app, iPhone app, web, Mac app; starbridge.run or your own server.
+  - type: markdown
+    attributes:
+      value: Leave out tokens, recovery keys, and the text of questions and answers.
