@@ -61,6 +61,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.encodeToJsonElement
 import kotlinx.serialization.json.jsonObject
@@ -188,7 +189,7 @@ class ServerStore(
 
     /** The server listed quota snapshots on the last read, even ones this phone cannot open yet. */
     @Volatile private var quotasListed = false
-    override val runs = MutableStateFlow<List<Run>>(emptyList())
+    override val runs: StateFlow<List<Run>> get() = runKind.shown
     override val members = MutableStateFlow<List<Member>>(emptyList())
     override val approval = MutableStateFlow<Approval>(Approval.Idle)
     override val joinAsks = MutableStateFlow<List<JoinAsk>>(emptyList())
@@ -237,6 +238,45 @@ class ServerStore(
     private val notSent = java.util.concurrent.ConcurrentHashMap<String, String>()
     /** The decisions as saved, before this phone's unsent answers are laid over them ([showUnsent]). */
     @Volatile private var savedDecisions: List<Decision> = emptyList()
+
+    /** What the item kinds use of this store; see [Core]. */
+    private val core = object : Core {
+        override val saved get() = this@ServerStore.saved
+        override fun persist(newSaved: Saved) = this@ServerStore.persist(newSaved)
+        override fun api() = this@ServerStore.api()
+        override val phase get() = this@ServerStore.phase
+        override val notice get() = this@ServerStore.notice
+        override val alerts get() = this@ServerStore.alerts
+        override val envelopes get() = this@ServerStore.envelopes
+        override val scope get() = this@ServerStore.scope
+        override val lock get() = this@ServerStore.lock
+        override val directory get() = this@ServerStore.directory
+        override val me get() = this@ServerStore.me
+        override val signKey get() = this@ServerStore.signKey
+        override fun now() = this@ServerStore.now()
+        override fun newId(prefix: String) = this@ServerStore.newId(prefix)
+        override fun describe(e: Exception) = this@ServerStore.describe(e)
+        override fun report(e: Exception, sync: Boolean) = this@ServerStore.report(e, sync = sync)
+        override fun withheld() = this@ServerStore.withheld()
+        override fun open(item: SealedItem) = this@ServerStore.open(item)
+        override suspend fun scan(items: List<SealedItem>) = this@ServerStore.scan(items)
+        override suspend fun catchUp(item: SealedItem) = this@ServerStore.catchUp(item)
+        override suspend fun syncDirectory() = this@ServerStore.syncDirectory()
+        override suspend fun pushed(kind: String, id: String, push: JsonObject, re: Boolean, wakeAt: Boolean): Pair<SealedItem, String?> {
+            val box = push["box"]?.jsonPrimitive?.content
+            if (box == null) return api().item(id).let { it.item to it.answeredAt }
+            val from = push.getValue("from").jsonPrimitive.content
+            return SealedItem(1, kind, id, from, if (re) push["re"]?.jsonPrimitive?.content else null, listOf(SealedBox(me.id, box)), if (wakeAt) push["wakeAt"]?.jsonPrimitive?.content else null) to null
+        }
+        override suspend fun addMember(joining: DirectoryMember, taken: String) = this@ServerStore.addMember(joining, taken)
+        override fun run(showBusy: Boolean, sync: Boolean, block: suspend () -> Unit) = this@ServerStore.run(showBusy, sync, block)
+        override suspend fun locked(showBusy: Boolean, block: suspend () -> Unit) = this@ServerStore.locked(showBusy, block = block)
+    }
+
+    private val runKind = RunKind(core)
+
+    /** Every kind of item, in the order a sync reads them. */
+    private val kinds: List<ItemKind> = listOf(runKind)
 
     init {
         ImageFiles.read = disk::image
@@ -307,7 +347,8 @@ class ServerStore(
         windows.value = if (held) emptyList() else saved.quotas.filter { active(it.from) }.flatMap { toUi(it, named) }
         quotaFailures.value = if (held) emptyList() else saved.quotas.filter { active(it.from) }.flatMap { failures(it, named) }
         quotasHeld.value = quotasListed || saved.quotas.isNotEmpty()
-        runs.value = if (held) emptyList() else saved.runs.filter { active(it.from) }.map(::toUi)
+        val view = View(held, directory)
+        for (kind in kinds) kind.publish(view)
         members.value = directory?.let(::toUi).orEmpty()
         recovery.value = directory?.let(::recoveryUi)
         showUnsent()
@@ -915,7 +956,7 @@ class ServerStore(
         syncDecisions()
         syncPrompts()
         syncQuotas()
-        syncRuns()
+        for (kind in kinds) kind.sync()
         // The server answered, so a push route that failed to register gets another try.
         pendingPush?.let { runCatching { subscribeHeld(it) } }
     }
@@ -963,8 +1004,6 @@ class ServerStore(
      * Opens a machine's item and keeps the directory head it signed. Refuses every item while a
      * head an active machine signed is missing from this phone's chain (#362).
      */
-    /** An item that opened: its signer, its body, and the body's signed text, which is what is kept. */
-    private data class Item(val from: String, val body: Any, val text: String)
 
     private fun open(item: SealedItem): Item? = try {
         // Null once a directory read found this phone removed (wipe).
@@ -1433,67 +1472,7 @@ class ServerStore(
         }
     }
 
-    /** Every run the server holds, the latest update of each. */
-    private suspend fun syncRuns() {
-        var cursor = ""
-        val fresh = mutableListOf<SavedRun>()
-        while (true) {
-            val page = api().items("run", cursor)
-            if (scan(page.items.map { it.item })) return
-            for (listed in page.items) open(listed.item)?.let { fresh += SavedRun(it.from, it.text) }
-            cursor = page.cursor
-            if (page.last) break
-        }
-        keepRuns(fresh, fromSync = true)
-    }
-
-    override fun dismissRun(id: String) {
-        run(showBusy = false) {
-            val r = saved.runs.find { it.body.id == id } ?: return@run
-            persist(saved.copy(runs = saved.runs - r, dismissedRuns = saved.dismissedRuns + (id to r.body.at)))
-            alerts.cancelRun(id)
-            try {
-                api().deleteItem(id)
-            } catch (e: ApiException) {
-                if (e.status == 401) throw e
-                // 404: gone already, or a server without the route; this phone hides it either way.
-                if (e.status != 404) notice.value = "Dismissed on this phone only: ${describe(e)}"
-            } catch (e: IOException) {
-                notice.value = "No connection. Dismissed on this phone only."
-            }
-        }
-    }
-
-    /**
-     * Keeps each update newer than the one held for its run (by `at`, then the exit), drops runs
-     * with no news for a day, as the server does, and hands each newer update to [alerts]. A sync
-     * skips runs it first learns of already ended, so a new phone does not alert for old results.
-     * A sync lists every run the server holds, so a run it leaves out was dismissed on another
-     * device (#827). A run dismissed here stays out until its machine posts a newer update.
-     */
-    private fun keepRuns(updates: List<SavedRun>, fromSync: Boolean = false) {
-        fun rank(r: SavedRun) = (instant(r.body.at) ?: Instant.EPOCH) to (r.body.exit != null)
-        val dismissed = saved.dismissedRuns
-        val listed = updates.map { it.body.id }.toSet()
-        val (kept, gone) = saved.runs.partition { !fromSync || it.body.id in listed }
-        gone.forEach { alerts.cancelRun(it.body.id) }
-        val held = kept.associateBy { it.body.id }.toMutableMap()
-        val newer = updates.filter { u -> dismissed[u.body.id]?.let { at -> (instant(u.body.at) ?: Instant.EPOCH) > (instant(at) ?: Instant.EPOCH) } ?: true }.filter { u ->
-            val h = held[u.body.id]
-            val (at, exited) = rank(u)
-            val wins = h == null || rank(h).let { (hAt, hExited) -> at > hAt || (at == hAt && exited && !hExited) }
-            if (wins) held[u.body.id] = u
-            wins && !(fromSync && h == null && exited)
-        }
-        val dayAgo = Instant.now().minus(java.time.Duration.ofDays(1))
-        persist(
-            saved.copy(
-                runs = held.values.filter { toUi(it).lastNews > dayAgo }.sortedBy { it.body.startedAt },
-                dismissedRuns = dismissed.filter { (id, at) -> id !in held && (instant(at) ?: Instant.EPOCH) > dayAgo },
-            ),
-        )
-        newer.forEach { alerts.run(toUi(it)) }
-    }
+    override fun dismissRun(id: String) = runKind.dismiss(id)
 
     // --- Answering ---------------------------------------------------------------
 
@@ -1779,6 +1758,7 @@ class ServerStore(
         val id = p["id"]?.jsonPrimitive?.content ?: return@withLock
         // An id goes into /items/$id, a kind into the branch below: neither may carry anything else.
         if (!isItemId(id) || kind?.let(::isPushKind) == false) return@withLock
+        kinds.find { kind in it.pushes }?.let { return@withLock it.onPush(kind!!, id, p) }
         when (kind) {
             "answered" -> {
                 // Nothing in this push is verified, so it only takes the notification down; what
@@ -1885,17 +1865,6 @@ class ServerStore(
                 listJoins(list)
                 list.joins.find { it.id == id }?.let(::toAsk)?.let { alerts.join("join:${it.id}", it.name) }
             }
-            "run" -> {
-                val box = p["box"]?.jsonPrimitive?.content
-                val item = if (box != null) {
-                    SealedItem(1, "run", id, p.getValue("from").jsonPrimitive.content, null, listOf(SealedBox(me.id, box)))
-                } else {
-                    api().item(id).item
-                }
-                catchUp(item)
-                val opened = open(item) ?: return@withLock
-                keepRuns(listOf(SavedRun(opened.from, opened.text)))
-            }
         }
     }
 
@@ -1983,19 +1952,8 @@ class ServerStore(
         approval.value = Approval.Approving(approval.value as? Approval.Found ?: return@run)
         try {
             syncDirectory()
-            val joining = body.member()
             // A retry after the approval failed to send finds the entry already in the chain.
-            val present = directory!!.members[joining.id]
-            if (present == null) {
-                val entry = directories.addEntry(directory!!, me.id, signKey, joining, now())
-                api().append(entry)
-                val all = saved.entries + ProtocolJson.encodeToJsonElement(entry)
-                val after = directories.verify(all, saved.account, saved.pin)
-                directory = after
-                persist(saved.copy(entries = all, pin = Pin(after.length, after.head)))
-            } else if (!present.active || present.member != joining) {
-                throw IllegalStateException("Another member already uses this id. Make a new code.")
-            }
+            addMember(body.member(), "Another member already uses this id. Make a new code.")
             val after = directory!!
             // From the machine's QR: proves which add entry this phone wrote, so the machine needs
             // no one to compare check codes (#795).
@@ -2221,18 +2179,7 @@ class ServerStore(
         comparison.value = shown.copy(approving = true, error = null)
         try {
             syncDirectory()
-            val joining = body.member()
-            val present = directory!!.members[joining.id]
-            if (present == null) {
-                val entry = directories.addEntry(directory!!, me.id, signKey, joining, now())
-                api().append(entry)
-                val all = saved.entries + ProtocolJson.encodeToJsonElement(entry)
-                val after = directories.verify(all, saved.account, saved.pin)
-                directory = after
-                persist(saved.copy(entries = all, pin = Pin(after.length, after.head)))
-            } else if (!present.active || present.member != joining) {
-                throw IllegalStateException("Another member already uses this id. Ask again from the new device.")
-            }
+            addMember(body.member(), "Another member already uses this id. Ask again from the new device.")
             val after = directory!!
             api().approveJoin(view.id, joins.approval(JoinApprovalBody(1, view.id, saved.account!!, after.length, after.head, me.id), keys))
             compared = null
@@ -2354,6 +2301,13 @@ class ServerStore(
         replacement = null
     }
 
+    /** Appends [joining]'s add entry unless the chain holds it already; [taken] says why one with its id differs. */
+    private suspend fun addMember(joining: DirectoryMember, taken: String) {
+        val present = directory!!.members[joining.id]
+        if (present == null) appendEntry { directories.addEntry(it, me.id, signKey, joining, now()) }
+        else if (!present.active || present.member != joining) throw IllegalStateException(taken)
+    }
+
     /** Appends the entry [make] signs on the current chain, and moves the pin to it. */
     private suspend fun appendEntry(make: (Directory) -> SignedEnvelope) {
         val entry = make(directory!!)
@@ -2412,8 +2366,6 @@ class ServerStore(
     }
 
     // --- To the screens' shapes --------------------------------------------------
-
-    private fun instant(text: String?): Instant? = text?.let { runCatching { OffsetDateTime.parse(it).toInstant() }.getOrNull() }
 
     private fun toUi(d: SavedDecision): Decision {
         val b = d.body
@@ -2504,21 +2456,6 @@ class ServerStore(
                 error = p.error,
             )
         }
-    }
-
-    private fun toUi(r: SavedRun): Run {
-        val b = r.body
-        return Run(
-            id = b.id,
-            title = b.title,
-            reason = b.reason,
-            source = Source(b.source.machine, b.source.project, b.source.session, b.source.sessionTitle, b.source.links.orEmpty().map { SessionLink(it.kind, it.url) }, b.source.machineKind),
-            startedAt = instant(b.startedAt) ?: Instant.EPOCH,
-            at = instant(b.at) ?: Instant.EPOCH,
-            progress = b.progress?.let { Run.Progress(it.done, it.total, it.unit == "percent") },
-            exitCode = b.exit?.code,
-            endedAt = instant(b.exit?.at),
-        )
     }
 
     private fun toUi(dir: Directory): List<Member> {
