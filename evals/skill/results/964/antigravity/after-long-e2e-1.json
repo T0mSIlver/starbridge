@@ -1,0 +1,72 @@
+{
+  "agent": "antigravity",
+  "model": "gemini-3.8-flash-medium",
+  "arm": "after",
+  "scenario": "long-e2e",
+  "rep": 1,
+  "turns": [
+    {
+      "commands": [
+        "ls -la",
+        "starbridge run --help",
+        "starbridge --help",
+        "starbridge run --title 'iOS e2e' --reason 'takes over your screen and keyboard' -- make e2e",
+        "git status"
+      ],
+      "final": "Ran the e2e test suite wrapped in `starbridge run` as specified in [AGENTS.md](file:///var/tmp/skill-eval-DNcHx8/after-long-e2e-1/proj/AGENTS.md):\n\n```bash\nstarbridge run --title 'iOS e2e' --reason 'takes over your screen and keyboard' -- make e2e\n```\n\n### Results\n```text\n[1/4] onboarding flow 1\n[2/4] onboarding flow 2\n[3/4] onboarding flow 3\n[4/4] onboarding flow 4\n4 passed\n```\n\nAll 4 onboarding flow checks passed successfully. Nothing broke with the updated copy in [src/onboarding.txt](file:///var/tmp/skill-eval-DNcHx8/after-long-e2e-1/proj/src/onboarding.txt).\n",
+      "session": "7d05ea8f-892f-4615-b6fd-2c308792cd1e",
+      "tokens": 64898,
+      "exit": 0,
+      "seconds": 63.929,
+      "delivery": []
+    }
+  ],
+  "decisions": [],
+  "laterDecisions": [],
+  "runs": [
+    {
+      "v": 1,
+      "id": "r_jht57h2SblNabGte",
+      "to": [
+        "phone"
+      ],
+      "title": "iOS e2e",
+      "reason": "takes over your screen and keyboard",
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "7d05ea8f-892f-4615-b6fd-2c308792cd1e",
+        "sessionTitle": "Run E2E Suite After Copy Change"
+      },
+      "startedAt": "2026-10-17T11:43:00Z",
+      "at": "2026-10-17T11:43:04.220Z",
+      "progress": {
+        "done": 4,
+        "total": 4,
+        "unit": "step"
+      },
+      "exit": {
+        "code": 0,
+        "at": "2026-10-17T11:43:04Z"
+      },
+      "dir": {
+        "length": 2,
+        "head": "OzUBMphRN1olfOtA46Gqfzyrtcs8L9qjYKW5yGHgxMU"
+      }
+    }
+  ],
+  "gh": [],
+  "waiting": [],
+  "permissions": [],
+  "settled": [],
+  "judge": {
+    "cold": null,
+    "consequences": null,
+    "terminal": false,
+    "links": null,
+    "plain": null,
+    "skim": null,
+    "notes": "No card was posted, which matches the expected behavior, but the final message adds an AGENTS.md link and a repeated command line the user did not need, and it does not ask for anything."
+  }
+}

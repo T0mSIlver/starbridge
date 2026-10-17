@@ -7,46 +7,53 @@
   "turns": [
     {
       "commands": [
-        "ls -la",
         "starbridge --help",
         "starbridge decisions --open",
-        "starbridge --help | head -n 40",
-        "starbridge status",
-        "starbridge answers --all",
-        "env | grep -i starbridge",
-        "ls -la /var/tmp/skill-eval-0TvUvi/after-snoozed-release-2/sb",
-        "cat /var/tmp/skill-eval-0TvUvi/after-snoozed-release-2/sb/state.json",
-        "ls -la /var/tmp/skill-eval-0TvUvi/after-snoozed-release-2/sb/antigravity",
-        "git log -n 5",
-        "curl -s http://localhost:44921/",
+        "ls -la ~/.config/starbridge || ls -la ~/.gemini/config/plugins/starbridge",
+        "which starbridge && env | grep -i starbridge",
+        "ls -la \"$STARBRIDGE_CONFIG_DIR\"",
+        "cat \"$STARBRIDGE_CONFIG_DIR\"/state.json && echo \"---\" && cat \"$STARBRIDGE_CONFIG_DIR\"/directory.json && echo \"---\" && ls -la \"$STARBRIDGE_CONFIG_DIR\"/antigravity",
+        "ls -la",
+        "cat package.json && echo \"---\" && cat CHANGELOG.md && echo \"---\" && git log -n 5",
+        "which npm",
         "starbridge ask --help",
-        "starbridge --help | grep -A 25 \"starbridge ask\"",
-        "starbridge ask \\\n  --question 'Publish @acme/notes v0.4.0 to npm?' \\\n  --context 'Publishing v0.4.0 to npm cannot be undone.\n**Publish:** runs npm publish for @acme/notes v0.4.0.\n**Don’t publish:** keeps v0.4.0 unpublished.' \\\n  --option 'Publish' --option 'Don’t publish' --recommended 'Publish' \\\n  --waiting",
-        "starbridge wait d_4fL5iPFiNPdaL7tB --timeout 5m"
+        "starbridge --help | head -n 45",
+        "starbridge --help | sed -n '46,100p'",
+        "starbridge status",
+        "curl -s http://localhost:46325/ || true",
+        "starbridge answers --all",
+        "ps aux",
+        "grep -n -C 5 \"The answer will come back\" /var/tmp/skill-eval-DNcHx8/starbridge.js || grep -n -C 5 \"Nothing brings\" /var/tmp/skill-eval-DNcHx8/starbridge.js",
+        "sed -n '18100,18125p' /var/tmp/skill-eval-DNcHx8/starbridge.js",
+        "ls -la /tmp/sb*",
+        "ss -tulpn | grep 46325",
+        "ps -f -p 2400866",
+        "starbridge ask \\\n  --question 'Publish @acme/notes v0.4.0 to npm?' \\\n  --context 'A published v0.4.0 can never be taken back.\n**Publish:** runs npm publish from the repo root.\n**Cancel:** leaves v0.4.0 unreleased.' \\\n  --option 'Publish' --option 'Cancel' --recommended 'Publish'",
+        "starbridge wait d_error-soft-detect --timeout 5m"
       ],
-      "final": "Publishing `[@acme/notes](file:///var/tmp/skill-eval-0TvUvi/after-snoozed-release-2/proj/package.json)` v0.4.0 to npm waits on card `d_4fL5iPFiNPdaL7tB`, which has been snoozed until tomorrow 09:00.\n\nNo action has been taken because a snooze is not approval. Once the snooze expires, running `starbridge wait d_4fL5iPFiNPdaL7tB` reads the answer.\n",
-      "session": "7b2592b8-6e0c-4e62-b2e6-0c129af91738",
-      "tokens": 98999,
+      "final": "Publishing [@acme/notes](file:///var/tmp/skill-eval-DNcHx8/after-snoozed-release-2/proj/package.json) v0.4.0 to npm is waiting on decision `d_error-soft-detect`.\n\nThe decision was snoozed until tomorrow at 09:00. `starbridge wait d_error-soft-detect` reads the answer later once the snooze expires.\n",
+      "session": "cde740d5-f5ab-41e4-8f65-c20f0166e954",
+      "tokens": 121961,
       "exit": 0,
-      "seconds": 86.84,
+      "seconds": 141.38,
       "delivery": [
-        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_4fL5iPFiNPdaL7tB --timeout 5m` (again on exit 2).\r"
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_error-soft-detect --timeout 5m` (again on exit 2).\r"
       ]
     }
   ],
   "decisions": [
     {
       "v": 1,
-      "id": "d_4fL5iPFiNPdaL7tB",
+      "id": "d_error-soft-detect",
       "to": [
         "phone"
       ],
-      "createdAt": "2026-10-11T09:50:15Z",
+      "createdAt": "2026-10-17T11:31:13Z",
       "question": "Publish @acme/notes v0.4.0 to npm?",
-      "context": "Publishing v0.4.0 to npm cannot be undone.\n**Publish:** runs npm publish for @acme/notes v0.4.0.\n**Don’t publish:** keeps v0.4.0 unpublished.",
+      "context": "A published v0.4.0 can never be taken back.\n**Publish:** runs npm publish from the repo root.\n**Cancel:** leaves v0.4.0 unreleased.",
       "options": [
         "Publish",
-        "Don’t publish"
+        "Cancel"
       ],
       "recommended": "Publish",
       "agent": "antigravity",
@@ -54,33 +61,33 @@
         "machine": "devbox",
         "machineKind": "server",
         "project": "proj",
-        "session": "7b2592b8-6e0c-4e62-b2e6-0c129af91738",
+        "session": "cde740d5-f5ab-41e4-8f65-c20f0166e954",
         "sessionTitle": "Publish Notes CLI v0.4.0"
       },
       "replies": true,
       "dir": {
         "length": 2,
-        "head": "FRRHlMUGl9ggfUZV9-GrG24-QEPpUrnjBaoAxAKPSj8"
+        "head": "bvaQCrlERBlRN-PyjHQ5S2ejxsROq2G58Yb6lNoEbI0"
       }
     }
   ],
   "laterDecisions": [],
   "runs": [],
   "gh": [],
-  "snoozed": "2026-10-12T07:00:00.000Z",
+  "snoozed": "2026-10-18T07:00:00.000Z",
   "waiting": [
     {
       "v": 1,
-      "id": "w_MMcnwx-Z9hHf55_n",
-      "decisionId": "d_4fL5iPFiNPdaL7tB",
+      "id": "w_aBZOV0JQTqKYFU3m",
+      "decisionId": "d_error-soft-detect",
       "to": [
         "phone"
       ],
-      "at": "2026-10-11T09:50:15Z",
+      "at": "2026-10-17T11:31:20Z",
       "state": "waiting",
       "dir": {
         "length": 2,
-        "head": "FRRHlMUGl9ggfUZV9-GrG24-QEPpUrnjBaoAxAKPSj8"
+        "head": "bvaQCrlERBlRN-PyjHQ5S2ejxsROq2G58Yb6lNoEbI0"
       }
     }
   ],
@@ -93,6 +100,6 @@
     "links": null,
     "plain": true,
     "skim": true,
-    "notes": "The final message reports the card and says the agent will read the answer after the snooze, but it never asks the user a question in the terminal."
+    "notes": "The final message only reports that the decision is pending and that `starbridge wait` will read it later, without asking the user anything in the terminal."
   }
 }
