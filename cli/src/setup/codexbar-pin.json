@@ -1,11 +1,11 @@
 {
-  "version": "0.75.0",
+  "version": "0.77.0",
   "sha256": {
-    "macos-arm64": "5f00d29988be3ce70e0115be3a4cf4fd4c67b0d22682ef93db2f5d84ecc48923",
-    "macos-x86_64": "3f4cc1bbacd80fe2b04289a7fc8164ee4ae3a40b1e1639140f5adb585b35dbc2",
-    "linux-aarch64": "6b63c3fefeb2ec59618fa8b5c8424ea734cda00648afd4e7dd397d1bc0c16d61",
-    "linux-x86_64": "7920c8e42a64aa5dc249bdb3a745e8ec91a062cb2668b78dc9266dfffa0d7ad7",
-    "linux-musl-aarch64": "070f8836121c410962133158e222cdbaf4230cfaf354b2d511c06f2ee204d6ce",
-    "linux-musl-x86_64": "7070a6d64bc940d924973f183f1d217175522e926ae18a0942f0aff94fefee06"
+    "macos-arm64": "e9e6ac95e358402d488ad3cb4eba4f49ad2967d83ce7c87d82727145f1a95764",
+    "macos-x86_64": "20bc0dac4580d4a2d66e3ee43f480954d270913b6d29751e87a4c5f8225d2a5c",
+    "linux-aarch64": "8c8708e18a27223aa4fa0abe7b0d3b88400355c45c89a6d7b6c7109bc54dfdf3",
+    "linux-x86_64": "a9c30b8b56ec2fc8526b63ba472f31989605c7e01c2c65ac95b4abf20b7e54d4",
+    "linux-musl-aarch64": "c2adf404d721eade8a11c83f5b6c1208c1ede55f5c06e664f5c5aaa2367b1dcc",
+    "linux-musl-x86_64": "e1eb0d0756857b4b8940e1ef075627fc9582d7b55de067a6208dc1084b66b437"
   }
 }
