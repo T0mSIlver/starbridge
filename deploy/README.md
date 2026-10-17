@@ -27,6 +27,16 @@ round trip on the outside check's test account (secrets `SMOKE_SSH_KEY`, `SMOKE_
 `SMOKE_SSH_TARGET`; the key's forced command runs nothing else). `deploy/setup-actions-deploy.sh` installs both keys
 on the box; the private halves stay in `~/.config/starbridge/secrets`.
 
+Both boxes run the same scripts: `host/apply.sh`, `host/deploy-rev.sh` and `host/server-env.sh`
+on the box, `push-secrets.sh` and `setup-actions-deploy.sh` from the owner's machine. What
+differs between them is a file of settings each, `host/prod.env` and `staging/staging.env`: names
+and paths, which check a commit must pass, staging's round trip and demo server, prod's backups,
+Umami, denylist and two copies of the page. The deploy command on each box carries a copy of its
+settings ahead of `host/deploy-rev.sh`. `deploy/test/trace.sh <commit>` runs both boxes' deploys
+of that commit and of the working tree with every outside command stubbed, in a throwaway mount
+namespace, and diffs the commands they run: a change to these scripts shows there what it changes
+on each box.
+
 To deploy a commit by hand, from the operator's machine:
 
 ```bash
@@ -104,14 +114,14 @@ image is tagged by a hash of that file and built only when no image has the tag.
 main: the same images as prod, prod's compose file with `staging/compose.yaml` laid over it, and
 prod's Caddyfile under staging's host name with `X-Robots-Tag: noindex`. It has its own secrets
 and no Umami or backups; the Play demo server runs beside it (below). `deploy.yml`'s staging key runs only
-`starbridge-staging-deploy <commit>` (`staging/deploy-rev.sh`), which fetches main over HTTPS,
-checks from GitHub's public API that CI passed the commit on main, runs `staging/apply.sh`, then one round trip on staging's test account through the outside
+`starbridge-staging-deploy <commit>` (`host/deploy-rev.sh` with `staging/staging.env`), which fetches main over HTTPS,
+checks from GitHub's public API that CI passed the commit on main, runs `host/apply.sh` (through `staging/apply.sh`), then one round trip on staging's test account through the outside
 check's staging instance on the VM (`sb-check-now /var/lib/sb-check-staging`). Prod's deploy
 waits for that job and runs only when it passed.
 
 | What | How |
 |---|---|
-| Set up | The VM comes with Docker, git, curl, jq and its firewall from the homelab. `deploy/staging/setup.sh` installs the deploy command and the Actions key; `deploy/staging/push-secrets.sh` copies the secrets in `~/.config/starbridge/secrets/staging` (`github-oauth-client-id`, `github-oauth-client-secret` of the "Starbridge staging" OAuth app, `vapid-public-key`, `vapid-private-key`, `signup-github-ids`, `owner-token`) |
+| Set up | The VM comes with Docker, git, curl, jq and its firewall from the homelab. `deploy/setup-actions-deploy.sh staging` installs the deploy command and the Actions key; `deploy/push-secrets.sh staging` copies the secrets in `~/.config/starbridge/secrets/staging` (`github-oauth-client-id`, `github-oauth-client-secret` of the "Starbridge staging" OAuth app, `vapid-public-key`, `vapid-private-key`, `signup-github-ids`, `owner-token`) |
 | Who can sign in | Only the GitHub ids in `signup-github-ids` can make an account (`SIGNUP_GITHUB_IDS`), and the holder of `owner-token` (`OWNER_TOKEN`) the owner account, which only the app check uses (`staging-app.yml`) |
 | Data | Synthetic only: `deploy/staging/seed.sh 200` makes 200 users through the real sign-in and pairing flows (`evals/load/setup.ts`), with staging's server stopped meanwhile. Nothing is backed up: the seed is the backup |
 | Compose project | `sudo docker compose -p starbridge-staging -f /opt/starbridge-staging/deploy/compose.yaml -f /opt/starbridge-staging/deploy/staging/compose.yaml` |

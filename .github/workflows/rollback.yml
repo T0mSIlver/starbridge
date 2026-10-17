@@ -5,8 +5,8 @@ name: rollback
 # commits it ran is the list (`sudo cat /var/lib/starbridge/deployed` on prod,
 # `/var/lib/starbridge-staging/deployed` on sb-staging); the newest is the last line. The
 # environment's ROLLBACK_SSH_KEY has a forced command that runs only
-# `starbridge-deploy --rollback <commit>` (deploy/host/deploy-rev.sh; staging's
-# deploy/staging/deploy-rev.sh), which refuses a commit the box never ran, one not on main, and on
+# `starbridge-deploy --rollback <commit>` (deploy/host/deploy-rev.sh, staging's with its own
+# settings), which refuses a commit the box never ran, one not on main, and on
 # prod one staging never passed, and deploys the image digests staging ran. So the deploy key
 # still cannot roll back, and prod needs no key from the owner's machine. A rollback past a
 # release that migrated the database stops before anything changes (deploy/README.md, "Restore").
