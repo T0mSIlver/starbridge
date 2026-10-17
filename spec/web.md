@@ -31,9 +31,14 @@
   version a visitor could fail without, and the actions; no subtitles. Android has two buttons
   (the APK, Obtainium) and the Play testing links. No copy says "signed".
   The CLI never sits in a device card: a machine runs the agents, a device is where you answer.
-- **Keyboard shortcuts** (#970) are written down once, in Settings → Inbox: J and K at any width
-  (#1432), 1 to 4, A and D from 1100 px, and / anywhere. Hints on the buttons and the Find box
-  crowded the detail, and hints in some places but not others read as missing ones.
+- **Keyboard shortcuts** (#970, #1889) are written down once, in a dialog that Settings → Inbox →
+  "Keyboard shortcuts" opens, and that `?` opens from anywhere outside a text field (Shell mounts
+  it, so no page change). It groups Move (J, K at any width, #1432), Answer (1 to 4, A and D from
+  1100 px), Reply (Enter, Shift+Enter), Find (/) and Help (?), and scrolls inside itself in a short
+  window. Esc, the image viewer's keys and the drag handles' arrows stay out: they work where the
+  thing they act on is. A touch-only device hides the row, since it has no keyboard. Hints on the
+  buttons and the Find box crowded the detail, and hints in some places but not others read as
+  missing ones. The Mac app shows the same page, so it has the dialog too.
 - **Back** (#347). Under 1100 px an open item is `/?item=<id>`, its own history entry, so Back
   returns to the list. J and K, and an answer that opens the next card, replace that entry rather
   than add one, so Back still returns to the list (#1432). Dialogs are modal `<dialog>`s, which

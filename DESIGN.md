@@ -534,7 +534,10 @@ it has no title. A session's title is words, in the reading face (#563).
   open-outside icon, never the word "Open". A GitHub link leads with the
   Octicon for its kind and reads as its reference ("#123", "v0.1.2"); a
   Claude artifact leads with the `browser` Octicon.
-- No key hints on buttons or fields: Settings lists the shortcuts.
+- No key hints on buttons or fields: Settings lists the shortcuts, in a dialog its "Keyboard
+  shortcuts" row opens (#1889). The row has no subtitle and a chevron, and a touch-only device hides
+  it. Key caps (`<kbd>`) are `key` type in `fg` on `surface2`, with a 1 px `line-strong` border,
+  2 px at the bottom, `radius.xs`, and at least `s6` wide.
 - An answered item goes to History, collapsed by default, as one line: the
   answer, the question, which device answered and when.
 - Find (the web rail's box) lists the matching open items, then "History · N"
