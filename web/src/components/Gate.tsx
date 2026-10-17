@@ -10,6 +10,7 @@ import { hasPairCode, holdPairCode } from "@/lib/pairLink";
 import { useSignInMethods } from "@/lib/signInMethods";
 import { useApp } from "./AppProvider";
 import { ConfirmDialog } from "./ConfirmDialog";
+import { Grouped } from "./Grouped";
 import { AppleLogo, Icon } from "./icons";
 import { Landing } from "./Landing";
 import { QrCode } from "./QrCode";
@@ -372,7 +373,7 @@ function Join({ account, stale }: { account: string; stale: boolean }) {
                 />
               </div>
               <p className={`t-snippet ${s.dim}`} data-testid="pairing-code">
-                {code}
+                <Grouped code={code} />
               </p>
             </>
           )}
