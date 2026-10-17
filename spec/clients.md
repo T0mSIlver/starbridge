@@ -147,7 +147,7 @@
   something notifies here: Android's channels or this device's switch (#943), the hold, the web's
   sound, Android's Allow from notifications), Quotas (see "Quota alerts per window"), the Inbox's,
   Devices, Look (colours and the clock) and Account (the server, Android's push delivery, agent
-  instructions, sign out). They had grown one issue at a time: the hold sat under Inbox on the web
+  instructions, sign out, delete account, and last the Version, which a tap copies, #1892). They had grown one issue at a time: the hold sat under Inbox on the web
   and under Notifications on Android, and push delivery, a connection setting, sat with
   notifications.
 - **Sign out says the same on every client** (#1612): "This <Mac | browser | phone | iPhone> deletes its keys

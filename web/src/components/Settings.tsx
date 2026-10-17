@@ -26,6 +26,7 @@ import { keptSettingsData, loadSettingsData, type SettingsData, WAIT_MS } from "
 import { setShortcuts } from "@/lib/shortcuts";
 import { chime } from "@/lib/sound";
 import type { Device, QuotaCardData } from "@/lib/types";
+import pkg from "../../package.json";
 import { useApp } from "./AppProvider";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { Icon, type IconName } from "./icons";
@@ -840,7 +841,37 @@ function AccountSection() {
           }}
         />
       )}
+      <VersionRow />
     </Section>
+  );
+}
+
+/** The build's version, as the bug form asks for it (#1892): a click copies it. */
+function VersionRow() {
+  const [copied, setCopied] = useState(false);
+  // The Mac app's own version, not the page's it wraps.
+  const version = desktop?.version ?? pkg.version;
+  useEffect(() => {
+    if (!copied) return;
+    const t = setTimeout(() => setCopied(false), 1500);
+    return () => clearTimeout(t);
+  }, [copied]);
+  return (
+    <button
+      type="button"
+      className={`t-small ${s.linkRow}`}
+      onClick={async () => {
+        try {
+          await navigator.clipboard.writeText(version);
+          setCopied(true);
+        } catch {}
+      }}
+    >
+      <span>Version</span>
+      <span className={s.dim} aria-live="polite">
+        {copied ? "Copied" : version}
+      </span>
+    </button>
   );
 }
 

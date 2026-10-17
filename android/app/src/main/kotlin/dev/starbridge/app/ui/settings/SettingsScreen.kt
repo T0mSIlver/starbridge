@@ -2,7 +2,17 @@ package dev.starbridge.app.ui.settings
 
 import androidx.compose.ui.layout.SubcomposeLayout
 import androidx.compose.ui.text.style.TextOverflow
+import android.content.ClipData
 import androidx.compose.foundation.clickable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.platform.ClipEntry
+import androidx.compose.ui.platform.LocalClipboard
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import dev.starbridge.app.BuildConfig
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -149,6 +159,8 @@ fun SettingsScreen(
     pushHold: Int? = null,
     /** A machine of the account sends quotas (#914); until then their settings stay out of the way. */
     quotas: Boolean = true,
+    /** The build's version, copied by its row (#1892). */
+    version: String = BuildConfig.VERSION_NAME,
 ) {
     val context = LocalContext.current
     var signingOut by rememberSaveable { mutableStateOf(false) }
@@ -245,15 +257,16 @@ fun SettingsScreen(
         }
 
         item { Section("Account") }
-        item { LinkRow(0, 5, "Server", server, null, null) }
+        item { LinkRow(0, 6, "Server", server, null, null) }
         item {
-            ChoiceRow(1, 5, "Notifications delivered through", pushState(push, server)) {
+            ChoiceRow(1, 6, "Notifications delivered through", pushState(push, server)) {
                 Segments(listOf("fcm" to "Google", "unifiedpush" to "UnifiedPush"), push.type, actions.push)
             }
         }
-        item { LinkRow(2, 5, "Agent instructions", null, Sym.Open) { openLink(context, GUIDE) } }
-        item { LinkRow(3, 5, "Sign out", null, Sym.Logout) { signingOut = true } }
-        item { LinkRow(4, 5, "Delete account", null, null) { deleting = true } }
+        item { LinkRow(2, 6, "Agent instructions", null, Sym.Open) { openLink(context, GUIDE) } }
+        item { LinkRow(3, 6, "Sign out", null, Sym.Logout) { signingOut = true } }
+        item { LinkRow(4, 6, "Delete account", null, null) { deleting = true } }
+        item { VersionRow(5, 6, version) }
     }
     if (signingOut) {
         Confirm(
@@ -352,6 +365,26 @@ private fun LinkRow(index: Int, count: Int, title: String, sub: String?, icon: S
         Line {
             Texts(title, sub, Modifier.weight(1f))
             icon?.let { Symbol(it, size = 20.dp, tint = MaterialTheme.colorScheme.onSurface) }
+        }
+    }
+}
+
+/** The build's version at the row's end, right-aligned; a tap copies it and the value reads "Copied" for a moment (#1892). */
+@Composable
+private fun VersionRow(index: Int, count: Int, version: String) {
+    val clipboard = LocalClipboard.current
+    val scope = rememberCoroutineScope()
+    var copied by remember { mutableStateOf(false) }
+    LaunchedEffect(copied) {
+        if (copied) { delay(1500); copied = false }
+    }
+    Shell(index, count, Modifier.clickable(onClickLabel = "Copy version") {
+        scope.launch { clipboard.setClipEntry(ClipEntry(ClipData.newPlainText("Version", version))) }
+        copied = true
+    }) {
+        Line {
+            Text("Version", style = StarbridgeTheme.type.body, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.weight(1f))
+            Text(if (copied) "Copied" else version, style = StarbridgeTheme.type.body, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
         }
     }
 }

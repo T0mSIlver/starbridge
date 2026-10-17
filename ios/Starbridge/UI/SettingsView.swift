@@ -155,6 +155,7 @@ struct SettingsView: View {
                     }
                     Button("Sign out") { signingOut = true }
                     Button("Delete account", role: .destructive) { deleting = true }
+                    VersionRow(version: Self.version)
                 }
                 .listRowBackground(Tokens.Colors.surface.color)
             }
@@ -171,6 +172,8 @@ struct SettingsView: View {
         .deleteAccount(store: store, isPresented: $deleting, text: DeleteAccount.paired)
     }
 
+    /// The app's version, as the bug form asks for it (#1892).
+    static let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? ""
     /** How to tell agents to ask through Starbridge. */
     static let guide = URL(string: "https://starbridge.run/docs/tell-your-agents")!
 }
@@ -301,5 +304,38 @@ struct QuotaAlertsView: View {
             }
         }
         .listRowBackground(Tokens.Colors.surface.color)
+    }
+}
+
+/// The version at the end of Account, right-aligned; a tap copies it and the value reads "Copied"
+/// for a moment (#1892).
+struct VersionRow: View {
+    let version: String
+    @State private var copied: Bool
+
+    init(version: String, copied: Bool = false) {
+        self.version = version
+        _copied = State(initialValue: copied)
+    }
+
+    var body: some View {
+        Button {
+            UIPasteboard.general.string = version
+            copied = true
+            Task {
+                try? await Task.sleep(for: .seconds(1.5))
+                copied = false
+            }
+        } label: {
+            HStack {
+                Text("Version")
+                    .foregroundStyle(Tokens.Colors.fg.color)
+                Spacer()
+                Text(copied ? "Copied" : version)
+                    .foregroundStyle(Tokens.Colors.fg2.color)
+            }
+        }
+        .accessibilityValue(copied ? "Copied" : version)
+        .accessibilityHint("Copies the version")
     }
 }
