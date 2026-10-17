@@ -427,6 +427,11 @@ try {
     await page.getByRole("heading", { name: "Notifications" }).waitFor();
     await new Promise((r) => setTimeout(r, 3000));
     await shoot(page, "settings");
+    // The Version row (#1892): the app's own version, at the end of Account.
+    const versionRow = page.getByRole("button", { name: /^Version / });
+    await versionRow.scrollIntoViewIfNeeded();
+    assert.match(await versionRow.innerText(), /\d+\.\d+\.\d+/);
+    await shoot(page, "settings-version");
     const frames = await page.evaluate(
       () => (window as unknown as { navFrames: string[] }).navFrames,
     );
