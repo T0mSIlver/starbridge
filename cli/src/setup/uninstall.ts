@@ -7,7 +7,7 @@ import { join } from "node:path";
 import { withAgent } from "../agent/client";
 import { askVia } from "../agent/commands";
 import type { Ctx } from "../context";
-import { type AskInput, ask, openDecisions, settle } from "../decisions";
+import { type AskInput, ask, RESEAL_MS, settle } from "../decisions";
 import { pathFor } from "../platform";
 import type { InstallKind } from "../release";
 import { removeBinary } from "../update";
@@ -42,20 +42,26 @@ const REVOKE_QUESTION = /^Revoke .+\? It was uninstalled\.$/;
  * card's advice would cut it off. Each uninstall and setup again would otherwise add one more.
  */
 export async function withdrawRevokeCards(ctx: Ctx): Promise<void> {
-  const open = openDecisions(ctx.store.state(), ctx.now()).filter(
-    (d) => d.project === "starbridge" && REVOKE_QUESTION.test(d.question),
+  const st = ctx.store.state();
+  const now = ctx.now().getTime();
+  // As `settle --all` picks them: a withdrawal whose notice failed is posted again (#584).
+  const open = Object.entries(st.asked).filter(
+    ([id, a]) =>
+      (!a.settled || a.unposted) &&
+      !a.revoked &&
+      !st.answers[id] &&
+      a.project === "starbridge" &&
+      REVOKE_QUESTION.test(a.question) &&
+      // Older ones the server no longer holds.
+      now - Date.parse(a.askedAt) < RESEAL_MS,
   );
   const quiet = { ...ctx, out: () => {}, err: () => {} };
-  for (const d of open) {
+  for (const [id, { question }] of open) {
     try {
-      await settle(quiet, {
-        id: d.decisionId,
-        outcome: "withdrawn",
-        reason: "Set up again on this machine",
-      });
-      ctx.out(`✓ Withdrew "${d.question}": this machine is set up again`);
+      await settle(quiet, { id, outcome: "withdrawn", reason: "Set up again on this machine" });
+      ctx.out(`✓ Withdrew "${question}": this machine is set up again`);
     } catch (e) {
-      ctx.out(`✗ Could not withdraw "${d.question}": ${(e as Error).message}`);
+      ctx.out(`✗ Could not withdraw "${question}": ${(e as Error).message}`);
     }
   }
 }
