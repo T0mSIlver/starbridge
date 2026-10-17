@@ -915,7 +915,10 @@ test("uninstall removes the service and plugins, asks the devices to revoke, kee
   expect(m.ctx.lines).toContain(
     '✓ Withdrew "Revoke devbox? It was uninstalled.": this machine is set up again',
   );
-  expect((await server.opened("settled")).map((x) => x.itemId)).toEqual([d?.id, again?.id]);
+  expect((await server.opened("settled")).map((x) => x.itemId)).toEqual([
+    d?.id as string,
+    again?.id as string,
+  ]);
 
   expect(await uninstall(m.sys, { purge: true })).toBe(0);
   expect(existsSync(m.ctx.store.dir)).toBe(false);
