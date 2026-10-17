@@ -80,6 +80,7 @@ import java.time.temporal.ChronoUnit
 import kotlin.math.roundToInt
 import dev.starbridge.app.protocol.Decision as DecisionBody
 import dev.starbridge.app.protocol.Member as DirectoryMember
+import dev.starbridge.app.protocol.ANSWER_TEXT_MAX
 import dev.starbridge.app.protocol.takeCodePoints
 
 /** Shows and clears notifications; the app's is [dev.starbridge.app.push.Notifier]. */
@@ -1692,7 +1693,7 @@ class ServerStore(
      */
     suspend fun sendFromNotification(id: String, choice: String?, text: String?): Sent {
         alerts.cancel(id)
-        val sent = lock.withLock { send(id, choice, text?.takeCodePoints(4000)) }
+        val sent = lock.withLock { send(id, choice, text?.takeCodePoints(ANSWER_TEXT_MAX)) }
         if (sent is Sent.Failed) refused(id, sent.why)
         return sent
     }

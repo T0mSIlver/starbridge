@@ -219,6 +219,15 @@ export type ImageRef = z.infer<typeof ImageRef>;
 export const BLOB_MAX = 512 * 1024 + 64;
 
 /**
+ * The most the server stores for one machine-signed item, its boxes and blobs together
+ * (PROTOCOL.md, Limits): the server's `itemBytes`, and what the CLI fits a decision's images to.
+ */
+export const ITEM_BYTES = 2 * 1024 * 1024;
+
+/** An answer's text at most, in UTF-16 units as `z.string().max` counts them. */
+export const ANSWER_TEXT_MAX = 4000;
+
+/**
  * What the server stores and relays: one sealed box per recipient. `id`, `kind`, `from`, `re` and
  * `to` are routing hints the server can read; clients check them against the signed body inside.
  */
@@ -416,7 +425,7 @@ export const Answer = z
     to: Id,
     answeredAt: Time,
     choice: z.string().max(100).optional(),
-    text: z.string().max(4000).optional(),
+    text: z.string().max(ANSWER_TEXT_MAX).optional(),
     /** The owner answered on the decision's `answerIn` page (#539). */
     done: z.literal(true).optional(),
     dir: DirectoryHead.optional(),
@@ -529,7 +538,7 @@ export const Settled = z
      * Neither for a Done answer.
      */
     choice: z.string().max(100).optional(),
-    text: z.string().max(4000).optional(),
+    text: z.string().max(ANSWER_TEXT_MAX).optional(),
     dir: DirectoryHead.optional(),
     /** With outcome "device" on a permission: what that device answered (#349). */
     behavior: z.enum(["allow", "deny"]).optional(),

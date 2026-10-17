@@ -4,9 +4,11 @@
  * Run: bun run vectors
  */
 import {
+  ANSWER_TEXT_MAX,
   addEntry,
   alertsFor,
   approverKeys,
+  BLOB_MAX,
   bindMessage,
   checkCode,
   checkProof,
@@ -24,6 +26,7 @@ import {
   genesisEntry,
   type Heads,
   hashInput,
+  ITEM_BYTES,
   joinApproval,
   joinCommitment,
   joinerKeys,
@@ -3086,6 +3089,8 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
       holdChoices: [...PUSH_HOLD_CHOICES],
     },
     retryForMs: 20_000,
+    // Limits a client applies before the server would refuse (PROTOCOL.md, Limits).
+    limits: { answerTextMax: ANSWER_TEXT_MAX, blobMax: BLOB_MAX, itemBytes: ITEM_BYTES },
     // The longest permission input a card's line holds, in UTF-16 units.
     rowInputMax: 200,
     snooze: {
