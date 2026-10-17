@@ -2,7 +2,7 @@
 
 import type { DecisionLink } from "@starbridge/protocol";
 import { useEffect, useRef, useState } from "react";
-import { capReply, REPLY_LIMIT } from "@/lib/drafts";
+import { capReply } from "@/lib/drafts";
 import type { MachineKind } from "@/lib/feed";
 import { AnsweredFirst, answeredFirstText, answerPlace } from "@/lib/outcome";
 import { fullInput } from "@/lib/permissionInput";
@@ -119,8 +119,8 @@ function FreeText({
           rows={1}
           placeholder="Your answer"
           value={text}
-          // The server takes 4000 characters, so the field stops there, as on Android (#1921).
-          maxLength={REPLY_LIMIT}
+          // The server takes 4000 characters, so the field stops there, as on Android (#1921). Not
+          // `maxLength`, which counts an emoji as two.
           onChange={(e) => {
             const capped = capReply(e.target.value);
             setText(capped);

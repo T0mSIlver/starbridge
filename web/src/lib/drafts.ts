@@ -16,14 +16,16 @@ export function dropClosedDrafts(inbox: InboxItem[]): void {
   for (const i of inbox) if (closedAt(i)) drafts.delete(i.decision.id);
 }
 
-/** The longest reply the server takes: the Answer schema's 4000 UTF-16 units (#1921). */
+/** The longest reply the server takes: the Answer schema's 4000, which zod counts in code points. */
 export const REPLY_LIMIT = 4000;
 
 /**
- * A reply cut to `REPLY_LIMIT`, as Android and iOS cap their fields (#1921). An emoji cut in two,
- * here or by the field's `maxLength`, loses its first half too: the server refuses a lone one.
+ * A reply cut to its first `REPLY_LIMIT` code points, as Android and iOS cap their fields (#1921):
+ * a cut never splits an emoji's pair, which the server refuses.
  */
 export function capReply(text: string): string {
-  const cut = text.slice(0, REPLY_LIMIT);
-  return /[\uD800-\uDBFF]$/.test(cut) ? cut.slice(0, -1) : cut;
+  // Each code point is at most 2 units, so a text this short needs no count.
+  if (text.length <= REPLY_LIMIT) return text;
+  const points = Array.from(text);
+  return points.length <= REPLY_LIMIT ? text : points.slice(0, REPLY_LIMIT).join("");
 }

@@ -19,14 +19,13 @@ test("a question closed elsewhere drops its draft; an open or snoozed one keeps 
   drafts.clear();
 });
 
-test("a reply stops at the server's 4000 characters, never inside an emoji (#1921)", () => {
+test("a reply stops at the server's 4000 code points, never inside an emoji (#1921)", () => {
   expect(REPLY_LIMIT).toBe(4000);
   expect(capReply("x".repeat(4001))).toBe("x".repeat(4000));
   expect(capReply("x".repeat(4000))).toBe("x".repeat(4000));
   expect(capReply("short")).toBe("short");
-  // The 4000th unit is the first half of a pair: the whole emoji goes.
-  expect(capReply(`${"x".repeat(3999)}😀y`)).toBe("x".repeat(3999));
-  // The field's maxLength left the first half of a pair at the end.
-  expect(capReply(`${"x".repeat(3999)}\uD83D`)).toBe("x".repeat(3999));
-  expect(capReply(`${"x".repeat(3998)}😀`)).toBe(`${"x".repeat(3998)}😀`);
+  // Emoji count one each, as zod and the other clients count them: 3000 fit, 4001 lose one.
+  expect(capReply("😀".repeat(3000))).toBe("😀".repeat(3000));
+  expect(capReply("😀".repeat(4001))).toBe("😀".repeat(4000));
+  expect(capReply(`${"x".repeat(3999)}😀y`)).toBe(`${"x".repeat(3999)}😀`);
 });
