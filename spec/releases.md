@@ -353,7 +353,7 @@
   a public one or paid minutes. A `macos-latest` job (#877), skipped the same way, starts a built
   binary and runs the whole CLI suite, which must pass: the launchd service and the screen readers
   run only on a Mac, so the real launchd starts and stops the agent there. A `ubuntu-24.04-arm` job (#1481), skipped the same way, does the same for the
-  linux-arm64 binary. All three jobs run each test file alone and kill one that hangs (`cli/scripts/test-each.ts`, #862).
+  linux-arm64 binary. All three jobs run each test file in its own process, two at a time, and kill one that hangs (`cli/scripts/test-each.ts`, #862, #1916).
 - **Evidence** (#1826). Agents prove a pull request from what the product shows, not from its
   diff: the icon passed review four times while it sat low (#1477, #1453, #1564, #1713). The
   web e2e, set to keep evidence, also shoots at 360, 768 and 1280 px in light and dark, and keeps
