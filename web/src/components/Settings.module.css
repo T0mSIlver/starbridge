@@ -121,7 +121,8 @@
    tap; the provider rows above each group carry the handle and the eye. */
 .alertGrid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) repeat(4, 4.25rem);
+  /* The checkbox columns narrow before the name does, so a window name keeps whole words. */
+  grid-template-columns: minmax(5.5rem, 1fr) repeat(4, minmax(3rem, 4.25rem));
   align-items: center;
   column-gap: var(--s2);
   padding: 0 var(--s4) 0 calc(var(--s4) + 18px + var(--s3));
@@ -141,9 +142,13 @@
 
 .alertHeads {
   min-height: var(--size-tap);
-  padding-left: var(--s4);
   border-bottom: 1px solid var(--line);
   color: var(--fg2);
+}
+
+/* The heads share the rows' tracks, so the label hangs back to the card's edge. */
+.alertHeads > :first-child {
+  margin-left: calc(-1 * (18px + var(--s3)));
 }
 
 .alertRow {
