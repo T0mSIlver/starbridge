@@ -1367,6 +1367,41 @@ async function main() {
       .click();
     await choose(page, "24-hour");
     await shoot(page, "settings-clock");
+
+    step(
+      "keyboard shortcuts: ? opens the dialog outside a field, Esc closes it, a short window scrolls it (#1889)",
+    );
+    const keys = page.getByRole("dialog", { name: "Keyboard shortcuts" });
+    await page.getByRole("heading", { name: "Settings", level: 1 }).click();
+    await page.keyboard.press("?");
+    await keys.waitFor();
+    await page.keyboard.press("Escape");
+    await keys.waitFor({ state: "hidden" });
+    await page.getByRole("button", { name: "Keyboard shortcuts" }).click();
+    await keys.waitFor();
+    await shoot(page, "settings-keys");
+    await page.setViewportSize({ width: 1280, height: 420 });
+    const last = keys.getByRole("region", { name: "Help" });
+    await last.scrollIntoViewIfNeeded();
+    const within = (el: Element) => {
+      const r = el.getBoundingClientRect();
+      return r.top >= 0 && r.bottom <= innerHeight;
+    };
+    if (!(await keys.evaluate(within)))
+      throw new Error("the shortcuts dialog overflows a short window");
+    if (!(await last.evaluate(within))) throw new Error("a short window cut off the last group");
+    for (const scheme of ["light", "dark"] as const) {
+      await page.emulateMedia({ colorScheme: scheme });
+      await page.waitForTimeout(150);
+      await capture(page, join(SHOTS, `settings-keys-short-${scheme}.png`));
+    }
+    await page.setViewportSize(DESKTOP);
+    await page.keyboard.press("Escape");
+    await keys.waitFor({ state: "hidden" });
+    // Typing a question mark into Find is not a shortcut.
+    await page.getByRole("textbox", { name: "Find" }).fill("?");
+    if (await keys.isVisible()) throw new Error("? in a field opened the dialog");
+    await page.getByRole("textbox", { name: "Find" }).fill("");
     await page.getByRole("link", { name: "Quotas" }).click();
     await page.locator("article").first().waitFor();
     if (/\b[AP]M\b/.test(await page.locator("main").innerText()))
