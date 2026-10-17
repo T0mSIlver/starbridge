@@ -50,6 +50,8 @@ export function readLine(): Promise<string> {
     child.stdout.on("data", (d: Buffer) => {
       line += d.toString("utf8");
     });
+    // No /bin/sh to run: take the default rather than wait for an answer nobody can read.
+    child.on("error", () => resolve(""));
     child.on("close", (_code, signal) => {
       if (signal) process.exit(130);
       resolve(line);
