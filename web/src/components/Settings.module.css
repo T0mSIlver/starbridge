@@ -142,9 +142,13 @@
 
 .alertHeads {
   min-height: var(--size-tap);
-  padding-left: var(--s4);
   border-bottom: 1px solid var(--line);
   color: var(--fg2);
+}
+
+/* The heads share the rows' tracks, so the label hangs back to the card's edge. */
+.alertHeads > :first-child {
+  margin-left: calc(-1 * (18px + var(--s3)));
 }
 
 .alertRow {
