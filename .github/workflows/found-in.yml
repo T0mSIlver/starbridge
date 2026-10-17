@@ -1,0 +1,37 @@
+name: found-in
+
+# Labels a new bug with the release it was found in (#1890): `found-in:<version>` from the bug form's
+# Version field, or `found-in:unknown`. The ops page groups bugs by that label. The issue's text reaches
+# cli/scripts/found-in.ts through the environment, never a shell line, and only a matched version
+# reaches a label. The job runs main's code with a token that can write issues and nothing else.
+on:
+  issues:
+    types: [opened, edited]
+
+permissions: {}
+
+concurrency:
+  group: found-in-${{ github.event.issue.number }}
+  cancel-in-progress: true
+
+jobs:
+  label:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: cli/scripts
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.2
+      - name: Label the bug
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          ISSUE_BODY: ${{ github.event.issue.body }}
+        run: bun cli/scripts/found-in.ts

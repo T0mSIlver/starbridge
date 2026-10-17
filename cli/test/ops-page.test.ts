@@ -1,5 +1,14 @@
 import { expect, test } from "bun:test";
-import { type Facts, next, nextNightly, promotion, render } from "../scripts/ops-page";
+import {
+  type Bug,
+  bugsByVersion,
+  compareVersions,
+  type Facts,
+  next,
+  nextNightly,
+  promotion,
+  render,
+} from "../scripts/ops-page";
 import { record } from "../scripts/releases";
 
 const releases = record(
@@ -102,4 +111,59 @@ test("the Mac app's main is the newest tip build, and says what is not built yet
   expect(next(facts({ macSince: 2, macChanged: false })).join("\n")).toContain("none waiting");
   expect(next(facts({ macSince: undefined })).join("\n")).not.toContain("since 0.1.8");
   expect(render(facts({ tipBuild: undefined }))).toContain("None yet");
+});
+
+const bug = (over: Partial<Bug>): Bug => ({
+  number: 1,
+  title: "A bug",
+  open: true,
+  foundIn: "0.1.7-rc.2",
+  regression: false,
+  ...over,
+});
+
+test("versions sort with an rc before its final and unknown last", () => {
+  const sorted = ["unknown", "0.1.8-rc.2", "0.1.7", "0.1.8-rc.10", "0.1.8", "0.1.8-rc.3"].sort(
+    compareVersions,
+  );
+  expect(sorted).toEqual(["0.1.7", "0.1.8-rc.2", "0.1.8-rc.3", "0.1.8-rc.10", "0.1.8", "unknown"]);
+});
+
+test("bugs group by the version they were found in, newest first, and the newest rc always shows (#1890)", () => {
+  const f = facts({
+    bugs: [
+      bug({ number: 5, open: false }),
+      bug({ number: 3 }),
+      bug({ number: 9, foundIn: "unknown" }),
+    ],
+  });
+  expect(bugsByVersion(f).map((g) => [g.version, g.bugs.map((b) => b.number)])).toEqual([
+    ["0.1.7-rc.2", [3, 5]],
+    ["unknown", [9]],
+  ]);
+  expect(bugsByVersion(facts({ bugs: [] })).map((g) => g.version)).toEqual(["0.1.7-rc.2"]);
+});
+
+test("the page says where each bug stands: open, fixed in a tag, on main, or closed by hand", () => {
+  const html = render(
+    facts({
+      regressions: [bug({ number: 3, regression: true })],
+      bugs: [
+        bug({ number: 3, regression: true }),
+        bug({ number: 4, open: false, fixedIn: "v0.1.7-rc.3" }),
+        bug({ number: 5, open: false }),
+        bug({ number: 6, open: false, closedByHand: true }),
+        bug({ number: 7, title: "<script>x</script>" }),
+      ],
+    }),
+  );
+  expect(html).toContain("5 found, 2 open");
+  expect(html).toContain("fixed in <a");
+  expect(html).toContain(">v0.1.7-rc.3</a>");
+  expect(html).toContain("fixed on main, in no tag yet");
+  expect(html).toContain("closed without a fix");
+  expect(html).toContain("&#60;script&#62;");
+  expect(html).not.toContain("<script>x");
+  expect(render(facts({ regressions: [], bugs: [] }))).toContain("None open.");
+  expect(render(facts())).toContain("GitHub did not answer: bugs unknown.");
 });

@@ -118,7 +118,7 @@
   per product, the version, commit and time of main (staging's and starbridge.run's commits from
   `/healthz`, the Android internal build, the Mac app's newest tip build), the newest release candidate and the newest final, and what
   happens next, in Europe/Paris and UTC: how many Android and Mac commits wait for a build, how many commits
-  staging holds beyond the newest rc, and what promotion still waits on. Unlike the public releases
+  staging holds beyond the newest rc, and what promotion still waits on, and the bugs found in each release (#1890). Unlike the public releases
   page it shows commits, since one person reads it. `ops.yml` builds it from the GitHub API, the
   tags and `releases.json` every 30 minutes and after each deploy, release, internal build, desktop run and promotion,
   and uploads it to the Pages project `starbridge-ops`, only when its text changed (times round to
