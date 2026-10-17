@@ -51,6 +51,47 @@
   border-radius: var(--radius-sm);
 }
 
+/* Sign in with Apple (DESIGN.md, "Icons"): Apple's rules allow a custom button in black or white
+   only, so these are pure black and white, not the theme's near-black and near-white. Light
+   pages get the black button, dark pages the white one. Apple's logo file is as tall as the
+   button and carries its own margins, so the button has no padding or gap on that side. */
+.go.apple {
+  gap: 0;
+  padding: 0 18px 0 0;
+  background: #fff;
+  border-color: #fff;
+  color: #000;
+}
+
+@media (prefers-color-scheme: light) {
+  :global(:root:not([data-theme="dark"])) .go.apple {
+    background: #000;
+    border-color: #000;
+    color: #fff;
+  }
+}
+
+:global(:root[data-theme="light"]) .go.apple {
+  background: #000;
+  border-color: #000;
+  color: #fff;
+}
+
+.go.apple:hover:not(:disabled) {
+  background: #fff;
+  opacity: 0.85;
+}
+
+@media (prefers-color-scheme: light) {
+  :global(:root:not([data-theme="dark"])) .go.apple:hover:not(:disabled) {
+    background: #000;
+  }
+}
+
+:global(:root[data-theme="light"]) .go.apple:hover:not(:disabled) {
+  background: #000;
+}
+
 .link {
   justify-self: center;
   padding: 0;
