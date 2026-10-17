@@ -7,6 +7,11 @@
   min-height: calc(100dvh - var(--titlebar));
 }
 
+/* The brand's landmark: it stays the grid's first row, the link filling it as it did. */
+.top {
+  display: grid;
+}
+
 .brand {
   display: flex;
   /* The name stands on the mark's ground: its baseline on the mark's bottom edge (DESIGN.md). */

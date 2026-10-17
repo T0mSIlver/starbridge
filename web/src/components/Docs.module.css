@@ -72,6 +72,10 @@
   display: none;
 }
 
+.main:focus {
+  outline: none;
+}
+
 .main {
   max-width: var(--size-content);
   padding-bottom: var(--s16);

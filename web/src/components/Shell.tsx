@@ -88,6 +88,18 @@ export function Shell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className={s.frame}>
+      {/* biome-ignore lint/a11y/useValidAnchor: a skip link, which focuses the main content */}
+      <a
+        href="#main"
+        className="skip t-action"
+        onClick={(e) => {
+          // Not a hash navigation: that would put #main in the URL, where Back would have to undo it.
+          e.preventDefault();
+          document.getElementById("main")?.focus();
+        }}
+      >
+        Skip to content
+      </a>
       <nav className={s.rail} aria-label="Main">
         <Link href={home} className={`t-action ${s.brand}`} aria-label="Starbridge, Inbox">
           <Mark size={20} />
@@ -144,7 +156,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
           <UpdateButton />
         </div>
       </nav>
-      <main className={s.main}>
+      <main id="main" tabIndex={-1} className={s.main}>
         {withheld && (
           <div className={`t-small ${ui.error} ${s.withheld}`} role="alert">
             <p>{withheld.text}</p>
