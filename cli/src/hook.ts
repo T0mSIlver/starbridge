@@ -437,7 +437,7 @@ async function racePicker(
       };
       let id: string;
       try {
-        ({ id } = await postDecision(sub, s, resolveSource(input, ctx.env, cwd)));
+        ({ id } = await postDecision(sub, s, resolveSource(input, ctx.env, cwd), outer.signal));
       } catch (e) {
         failed.abort();
         throw e;

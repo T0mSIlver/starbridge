@@ -388,9 +388,16 @@ function sealWithPictures(
 
 /**
  * Seals the decision to every active device, posts it and records it in the state, so its
- * answer reaches the session that asked. Returns the decision.
+ * answer reaches the session that asked. Returns the decision. A post cut short is settled, as
+ * the server may hold it: `elsewhere` once `answered` is aborted (a harness's picker answered
+ * at the keyboard, #1913), otherwise withdrawn.
  */
-export async function postDecision(ctx: Ctx, s: Session, input: AskInput): Promise<Decision> {
+export async function postDecision(
+  ctx: Ctx,
+  s: Session,
+  input: AskInput,
+  answered?: AbortSignal,
+): Promise<Decision> {
   const deadline = AbortSignal.timeout(POST_MS);
   const signal = ctx.signal ? AbortSignal.any([ctx.signal, deadline]) : deadline;
   // Ctrl-C exits 130, as everywhere (CONTRACT.md); the deadline says what it cut.
@@ -470,7 +477,7 @@ export async function postDecision(ctx: Ctx, s: Session, input: AskInput): Promi
           s,
           dir,
           decision.id,
-          "withdrawn",
+          answered?.aborted ? "elsewhere" : "withdrawn",
           false,
           undefined,
           AbortSignal.timeout(WITHDRAW_MS),
