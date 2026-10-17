@@ -1,7 +1,24 @@
 {
  "schema": 1,
- "updated": "2026-10-15T03:10:30.262Z",
+ "updated": "2026-10-17T14:19:22.154Z",
  "releases": [
+  {
+   "version": "0.1.8-rc.3",
+   "ring": "rc",
+   "shipped": "2026-10-17T14:15:08Z",
+   "channels": {
+    "github": true,
+    "npm": true,
+    "desktop": true,
+    "play": {
+     "track": "alpha",
+     "versionCode": 2010803
+    },
+    "testflight": {
+     "build": "51.1"
+    }
+   }
+  },
   {
    "version": "0.1.8-rc.2",
    "ring": "rc",
