@@ -73,8 +73,7 @@ private struct JoinSheet: View {
                     .primaryButton(busy: approving, accent: true)
                     .allowsHitTesting(!approving)
                 Button("Digits differ") { Task { await store.refuseJoin(ask.id) } }
-                    .secondaryButton()
-                    .foregroundStyle(Tokens.Colors.bad.color)
+                    .secondaryButton(destructive: true)
                     .disabled(approving)
             case let .done(message):
                 Text(message).type(Tokens.Typography.heading)

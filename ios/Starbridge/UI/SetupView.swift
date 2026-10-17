@@ -94,8 +94,11 @@ private struct PrimaryButton: ViewModifier {
                 .buttonBorderShape(.capsule)
                 .controlSize(.large)
                 .tint((accent ? Tokens.Colors.accent : Tokens.Colors.fg).color)
-                .foregroundStyle(busy ? Color.clear : on)
-                .overlay { if busy { ProgressView().tint(on) } }
+                .overlay {
+                    // Covers the label: a system style sets its own foreground, so an outer one cannot hide it.
+                    if busy { Capsule().fill((accent ? Tokens.Colors.accent : Tokens.Colors.fg).color).overlay { ProgressView().tint(on) } }
+                }
+                .foregroundStyle(on)
         } else {
             content.buttonStyle(CapsulePrimary(busy: busy, accent: accent))
         }
@@ -118,6 +121,11 @@ private struct SecondaryButton: ViewModifier {
             content.buttonStyle(CapsuleSecondary()).foregroundStyle(destructive ? Tokens.Colors.bad.color : Tokens.Colors.fg.color)
         }
     }
+}
+
+enum SystemButton {
+    /** The system's large button, and the 56 pt capsule where it has no full-width size (before iOS 26). */
+    static var height: CGFloat { if #available(iOS 26.0, *) { 50 } else { 56 } }
 }
 
 extension View {
@@ -243,7 +251,7 @@ private struct SignInStep: View {
                 // prominent (spec/sign-in.md).
                 SignInWithAppleButton(.signIn, onRequest: appleRequest, onCompletion: appleDone)
                     .signInWithAppleButtonStyle(colorScheme == .dark ? .white : .black)
-                    .frame(height: 50)
+                    .frame(height: SystemButton.height)
                     .clipShape(Capsule())
                     .disabled(store.busy)
                 LinkButton(text: "Use your own server") {
