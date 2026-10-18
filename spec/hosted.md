@@ -133,6 +133,7 @@
   with a new date, so each edit to one adds a dated entry to its Changes list (`changes.ts` beside
   the page), which also sets "Last updated"; a test fails until the entry and the page's hash are
   in (#1620, #1639).
+  A failed deploy's service logs (`deploy/host/keep-logs.sh`) are the same kind of log as the containers', so they sit outside the five-file cap: deleted by the first deploy more than 2 days later, because they are read once after the failed run, and `/privacy` says so (#2016).
 - **Analytics** (#141). Umami, self-hosted, on the landing page, the docs, `/privacy` and `/terms`
   only. No cookie, no stored IP, a daily salt, Do Not Track honoured, so no consent banner. The
   Android app sends none (Play data safety form); the server sends a new account's launch funnel
