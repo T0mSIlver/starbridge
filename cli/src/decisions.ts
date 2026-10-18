@@ -1,3 +1,9 @@
+// A question's life on this machine, one module per job under decisions/, re-exported here so
+// callers import from one place: source (who asks), build (the decision, its limits and its
+// seal), post (`ask`), waiting (`waiting` and `working`), poll (the long-poll, the shared cursor
+// and answers held while the directory is behind), trust (answer checks against the directory),
+// reseal (new devices), take (handing answers to sessions), wait, snooze, settle, observe
+// (`answers --all`, `decisions --open`) and lines (what the CLI prints).
 export { ASK_LIMITS, buildDecision, typedBreaks } from "./decisions/build";
 export {
   answerInLine,
