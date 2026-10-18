@@ -328,7 +328,7 @@ function SoundRow({ push }: { push: BrowserPush }) {
   };
   const pushed = push.state === "on";
   return (
-    <Row label="Sound for new questions" off={!pushed}>
+    <Row label="Sound for new questions" off={!pushed && push.state !== "denied"}>
       <Switch
         label="Sound for new questions"
         checked={sound && pushed}
