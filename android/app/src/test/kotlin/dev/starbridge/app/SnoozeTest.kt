@@ -273,4 +273,17 @@ class SnoozeTest {
         for (i in 0 until 50) if (alerted.isEmpty()) Thread.sleep(100)
         assertEquals(listOf("cancel d_1"), alerted)
     }
+
+    @Test
+    fun undoRightAfterASnoozeCarriesALaterTime() {
+        val store = store()
+        store.snooze("d_1", Instant.now().plus(Duration.ofHours(1)))
+        for (i in 0 until 50) if (posted.size < 1) Thread.sleep(100)
+        // Undo, at once: back now.
+        store.snooze("d_1", Instant.now())
+        for (i in 0 until 50) if (posted.size < 2) Thread.sleep(100)
+        val (snoozed, undone) = posted.map { envelopes.open(it, phone.id, boxKeys, dir).body as dev.starbridge.app.protocol.Snooze }
+        // The machine and the other devices keep the snooze with the latest `at`, in whole seconds.
+        check(Instant.parse(undone.at).isAfter(Instant.parse(snoozed.at))) { "${undone.at} is not after ${snoozed.at}" }
+    }
 }

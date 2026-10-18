@@ -1555,7 +1555,9 @@ class ServerStore(
             // To the machine that asked, so its agent hears when it would block, and to every
             // active device, this one included, so each one hides it.
             val to = listOf(machine) + dir.members.values.filter { it.active && it.member.role == "device" }.map { it.member }
-            val at = now()
+            // The latest `at`, in whole seconds, wins everywhere: an Undo within the second of its
+            // snooze goes a second later, or the machine and the other devices keep the snooze (#1981).
+            val at = listOfNotNull(Instant.parse(now()), instant(d.snoozedAt)?.plusSeconds(1)?.truncatedTo(ChronoUnit.SECONDS)).max().toString()
             val body = buildJsonObject {
                 put("v", 1)
                 put("id", newId("z_"))
