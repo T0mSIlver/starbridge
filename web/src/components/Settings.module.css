@@ -100,6 +100,10 @@
   color: var(--fg3);
 }
 
+.off {
+  opacity: 0.5;
+}
+
 .provider {
   gap: var(--s3);
   padding-block: var(--s2h);

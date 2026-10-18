@@ -54,16 +54,20 @@ export function Row({
   sub,
   children,
   muted,
+  off,
 }: {
   /** A target for links to this setting. */
   id?: string;
   label: React.ReactNode;
   sub?: React.ReactNode;
   children?: React.ReactNode;
+  /** A hint, in the quietest text. */
   muted?: boolean;
+  /** A setting that does nothing until something else is on: faded like a disabled control. */
+  off?: boolean;
 }) {
   return (
-    <div id={id} className={`${s.row} ${muted ? s.muted : ""}`}>
+    <div id={id} className={`${s.row} ${muted ? s.muted : ""} ${off ? s.off : ""}`}>
       <div className={s.rowText}>
         <div className="t-small">{label}</div>
         {sub && <div className={`t-meta ${s.sub}`}>{sub}</div>}
@@ -324,7 +328,7 @@ function SoundRow({ push }: { push: BrowserPush }) {
   };
   const pushed = push.state === "on";
   return (
-    <Row label="Sound for new questions" muted={!pushed}>
+    <Row label="Sound for new questions" off={!pushed}>
       <Switch
         label="Sound for new questions"
         checked={sound && pushed}
