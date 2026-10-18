@@ -1033,6 +1033,9 @@ test("a number reply is checked against the question's range and step (#2061)", 
   expect(numberReply("10000.005", { kind: "number", min: 0, max: 20000, step: 0.001 })).toEqual({
     value: "10000.005",
   });
+  expect(numberReply("1000000000.5", { kind: "number", min: 0, max: 2e9, step: 1 })).toEqual({
+    error: '"1000000000.5" is not a whole number from 0 to 2000000000.',
+  });
   expect(numberReply("0.3", q)).toEqual({
     error: '"0.3" is not a number from 0 to 1 %, in steps of 0.25.',
   });

@@ -655,7 +655,8 @@ export function numberReply(text: string, q: Extended): { value: string } | { er
   const max = q.max ?? Number.POSITIVE_INFINITY;
   const steps = q.step ? (n - (q.min ?? 0)) / q.step : 0;
   // Float error grows with the count: 0.3 is 2.9999999999999996 steps of 0.1 from 0.
-  const onStep = Math.abs(steps - Math.round(steps)) <= 1e-9 * Math.max(1, Math.abs(steps));
+  const onStep =
+    Math.abs(steps - Math.round(steps)) <= 16 * Number.EPSILON * Math.max(1, Math.abs(steps));
   if (Number.isFinite(n) && n >= min && n <= max && onStep) return { value: String(n) };
   return { error: `"${clip(bare, 40)}" is not ${numberRange(q)}.` };
 }
