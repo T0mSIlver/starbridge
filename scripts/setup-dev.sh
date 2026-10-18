@@ -13,7 +13,7 @@ set -euo pipefail
 
 BUN_VERSION=1.4.2   # CI's pin, in .github/workflows/*.yml
 NODE_MAJOR=24       # CI's node-version
-NODE_VERSION=24.18.0
+NODE_VERSION=24.22.0
 ANDROID_PACKAGES=("platforms;android-37.0" "build-tools;37.0.0" "platform-tools")
 RAW=${STARBRIDGE_RAW:-https://raw.githubusercontent.com/T0mSIlver/starbridge/main}
 
