@@ -170,7 +170,15 @@ const QUOTA_JOIN_MS = 30_000;
 /** How long a refresh holds for the machines' new snapshots, as Android's QUOTA_ASK_SECONDS. */
 const QUOTA_ASK_SECONDS = 25;
 
-export function AppProvider({ children }: { children: React.ReactNode }) {
+export function AppProvider({
+  visitor = false,
+  children,
+}: {
+  /** The request carried no session cookie: the first boot is signed out without asking. */
+  visitor?: boolean;
+  children: React.ReactNode;
+}) {
+  const visiting = useRef(visitor);
   const [boot, setBoot] = useState<Store["boot"]>({ state: "loading" });
   const [inbox, setInbox] = useState<Inbox>({ items: [], rejected: [] });
   const [unsent, setUnsent] = useState<Unsent>({});
@@ -284,8 +292,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const boot1 = useCallback(async (): Promise<Store["boot"]["state"]> => {
     try {
-      const d = await load();
-      const b = await d.boot();
+      // A visitor's first boot needs no keys, so the protocol code and libsodium (200 KB) stay
+      // unloaded until something signs in (#1961). Every later boot loads them.
+      const b = visiting.current
+        ? await (await import("@/lib/signedOut")).signedOut()
+        : await (await load()).boot();
+      visiting.current = false;
       ctxSet.current++;
       setBoot(b);
       // Signed out, revoked or broken: nothing decrypted stays behind the page that says so.
@@ -294,6 +306,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         settledRef.current = { byKey: new Map() };
       }
       if (b.state === "ready") {
+        const d = await load();
         await inboxTurn(async () => {
           let landed = () => false;
           const gen = generation.current;
