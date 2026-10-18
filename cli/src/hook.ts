@@ -653,12 +653,33 @@ export function numberReply(text: string, q: Extended): { value: string } | { er
   const n = /^[-+]?(\d+\.?\d*|\.\d+)$/.test(digits) ? Number(digits) : Number.NaN;
   const min = q.min ?? Number.NEGATIVE_INFINITY;
   const max = q.max ?? Number.POSITIVE_INFINITY;
-  const steps = q.step ? (n - (q.min ?? 0)) / q.step : 0;
-  // Float error grows with the count: 0.3 is 2.9999999999999996 steps of 0.1 from 0.
-  const onStep =
-    Math.abs(steps - Math.round(steps)) <= 16 * Number.EPSILON * Math.max(1, Math.abs(steps));
+  const onStep = !q.step || onDecimalStep(digits, q.min ?? 0, q.step);
   if (Number.isFinite(n) && n >= min && n <= max && onStep) return { value: String(n) };
   return { error: `"${clip(bare, 40)}" is not ${numberRange(q)}.` };
+}
+
+/**
+ * Whether the decimal `reply` is a whole number of `step`s from `min`, counted exactly: float
+ * division is off by its rounding, which no one tolerance fits at every scale (0.3 is
+ * 2.9999999999999996 steps of 0.1 from 0).
+ */
+function onDecimalStep(reply: string, min: number, step: number): boolean {
+  const places = (x: string) => {
+    const m = /^[-+]?\d*\.?(\d*)(?:e([-+]?\d+))?$/i.exec(x);
+    return m ? Math.max(0, (m[1]?.length ?? 0) - Number(m[2] ?? 0)) : 0;
+  };
+  const d = Math.min(100, Math.max(places(reply), places(String(min)), places(String(step))));
+  // "-1.5" at 2 places is -150n.
+  const scaled = (x: string) => {
+    const [whole = "", frac = ""] = x.replace(/^\+/, "").split(".");
+    return BigInt(`${whole === "" || whole === "-" ? `${whole}0` : whole}${frac.padEnd(d, "0")}`);
+  };
+  try {
+    return (scaled(reply) - scaled(min.toFixed(d))) % scaled(step.toFixed(d)) === 0n;
+  } catch {
+    // Past 1e21 toFixed writes an exponent; such a range has no fraction left to check.
+    return Number.isInteger((Number(reply) - min) / step);
+  }
 }
 
 /**
