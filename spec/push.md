@@ -151,3 +151,9 @@
   use holds a question from a headless dev box. The hold is one account setting, since the server
   applies it and it is about the person, not a device. PROTOCOL.md, "Held pushes", has the
   timings.
+- **Web Push encryption is the server's own code** (#2023). The `web-push` library had no release
+  since January 2024, and the server used one call of it: encrypting the payload and signing the
+  VAPID header. `server/src/webpush.ts` does both with WebCrypto, one aes128gcm record (RFC 8291)
+  and an ES256 JWT valid 12 hours (RFC 8292), and sends the same headers as before (TTL, Urgency,
+  no Topic). Its tests hold it to RFC 8291's example byte for byte and to `http_ece`, kept as a
+  test dependency, in both directions. FCM and APNs never went through it.

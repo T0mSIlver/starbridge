@@ -2,6 +2,7 @@
 // starts and their output, the stand-ins for GitHub and the Web Push service (services.ts), the
 // server, the built web page, the real CLI and Firefox.
 import { type ChildProcess, spawn, spawnSync } from "node:child_process";
+import { generateKeyPairSync } from "node:crypto";
 import { cpSync, mkdtempSync, rmSync } from "node:fs";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
@@ -121,12 +122,18 @@ export function cli(name: string, args: string[], home: string) {
   });
 }
 
-const vapid = JSON.parse(
-  spawnSync("bun", ["-e", "console.log(JSON.stringify(require('web-push').generateVAPIDKeys()))"], {
-    cwd: join(ROOT, "server"),
-    encoding: "utf8",
-  }).stdout,
-) as { publicKey: string; privateKey: string };
+/** A VAPID key pair: the uncompressed public point and the private scalar, base64url. */
+const vapid = (() => {
+  const { x, y, d } = generateKeyPairSync("ec", { namedCurve: "P-256" }).privateKey.export({
+    format: "jwk",
+  });
+  const point = Buffer.concat([
+    Buffer.of(4),
+    Buffer.from(x ?? "", "base64url"),
+    Buffer.from(y ?? "", "base64url"),
+  ]);
+  return { publicKey: point.toString("base64url"), privateKey: d ?? "" };
+})();
 
 /** Starts the stand-ins, the server on a fresh database and the built web page. */
 export async function boot() {

@@ -2,7 +2,6 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { createECDH, randomBytes } from "node:crypto";
 import { type Decision, type QuotaSnapshot, type Run, seal } from "@starbridge/protocol";
 import * as ece from "http_ece";
-import webpush from "web-push";
 import { createApp } from "../src/app";
 import { type Config, configFromEnv, privatePushHosts } from "../src/config";
 import { DEFAULT_LIMITS } from "../src/limits";
@@ -32,7 +31,14 @@ let fake: ReturnType<typeof Bun.serve>;
 const seen: Seen[] = [];
 let rsa: CryptoKeyPair;
 let pem: string;
-const vapid = webpush.generateVAPIDKeys();
+const vapid = await (async () => {
+  const pair = (await crypto.subtle.generateKey({ name: "ECDSA", namedCurve: "P-256" }, true, [
+    "sign",
+  ])) as CryptoKeyPair;
+  const raw = await crypto.subtle.exportKey("raw", pair.publicKey);
+  const { d } = await crypto.subtle.exportKey("jwk", pair.privateKey);
+  return { publicKey: Buffer.from(raw).toString("base64url"), privateKey: d as string };
+})();
 const base = () => `http://localhost:${fake.port}`;
 
 beforeAll(async () => {

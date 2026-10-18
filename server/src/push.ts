@@ -2,10 +2,10 @@ import type { Database } from "bun:sqlite";
 import { lookup } from "node:dns/promises";
 import { request } from "node:https";
 import { isIP } from "node:net";
-import webpush from "web-push";
 import { z } from "zod";
 import { Apns } from "./apns";
 import { type Config, type PrivatePushHosts, pushHostKey } from "./config";
+import { generateRequestDetails } from "./webpush";
 
 export const PushType = z.enum(["fcm", "webpush", "unifiedpush", "apns"]);
 export type PushType = z.infer<typeof PushType>;
@@ -152,7 +152,7 @@ const ACCOUNT_CONCURRENCY = 4;
 /** Most pushes one account may have waiting; later ones are dropped. */
 const ACCOUNT_QUEUE = 200;
 
-/** A request to a push service, as `web-push` builds it. */
+/** A request to a push service. */
 interface PushRequest {
   method: string;
   headers: Record<string, string>;
@@ -447,14 +447,9 @@ export class Push {
     payload: string,
     vapid: boolean,
   ): Promise<PushResult> {
-    let req: {
-      method: string;
-      headers: Record<string, string | number>;
-      body: Buffer | null;
-      endpoint: string;
-    };
+    let req: PushRequest & { endpoint: string };
     if (target.keys) {
-      req = webpush.generateRequestDetails(
+      req = await generateRequestDetails(
         { endpoint: target.endpoint, keys: target.keys },
         payload,
         {
@@ -462,22 +457,18 @@ export class Push {
           urgency: "high",
           ...(vapid && this.config.vapid ? { vapidDetails: this.config.vapid } : {}),
         },
-      ) as typeof req;
+      );
     } else {
       // A UnifiedPush distributor without Web Push keys takes the payload as is.
       req = {
         method: "POST",
-        headers: { TTL: 86_400 },
-        body: Buffer.from(payload),
+        headers: { TTL: "86400" },
+        body: new TextEncoder().encode(payload),
         endpoint: target.endpoint,
       };
     }
-    const out: PushRequest = {
-      method: req.method,
-      headers: Object.fromEntries(Object.entries(req.headers).map(([k, v]) => [k, String(v)])),
-      body: req.body ? new Uint8Array(req.body) : null,
-    };
-    const url = new URL(req.endpoint);
+    const { endpoint, ...out } = req;
+    const url = new URL(endpoint);
     const own = allowedPrivate(url, this.config.privatePushHosts);
     // A subscription stored before the port rule (#1738) is refused here too.
     if (!own && !publicPort(url)) {
@@ -494,7 +485,7 @@ export class Push {
     let status: number;
     try {
       if (own) {
-        const res = await this.fetchFn(req.endpoint, {
+        const res = await this.fetchFn(endpoint, {
           ...out,
           redirect: "manual",
           signal: this.timeout(),
