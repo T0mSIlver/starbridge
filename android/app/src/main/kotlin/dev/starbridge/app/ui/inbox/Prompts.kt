@@ -98,6 +98,10 @@ fun shownPrompts(prompts: List<Prompt>, now: Instant): List<Prompt> = prompts
     .filter { it.waiting(now) || (it.endedAt != null && now.toEpochMilli() - it.endedAt.toEpochMilli() < CLOSING_MS) }
     .sortedBy { it.createdAt }
 
+/** What needs the owner: open questions and waiting prompts, snoozed questions out (#691); the Inbox badge and its subtitle (#1963). */
+fun needYou(decisions: List<Decision>, prompts: List<Prompt>, now: Instant): Int =
+    decisions.count { it.isOpen && !it.snoozed(now) } + prompts.count { it.waiting(now) }
+
 /** Open questions as the feed lists them (spec/clients.md): those whose agent waits first, each oldest first. */
 fun openQuestions(decisions: List<Decision>): List<Decision> = decisions
     .filter { it.isOpen }
