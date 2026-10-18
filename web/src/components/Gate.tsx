@@ -10,6 +10,7 @@ import { hasPairCode, holdPairCode } from "@/lib/pairLink";
 import { useSignInMethods } from "@/lib/signInMethods";
 import { useApp } from "./AppProvider";
 import { ConfirmDialog } from "./ConfirmDialog";
+import { Grouped } from "./Grouped";
 import { AppleLogo, Icon } from "./icons";
 import { Landing } from "./Landing";
 import { QrCode } from "./QrCode";
@@ -130,6 +131,10 @@ export function SignIn({
   const own = ownChosen || off;
   const [token, setToken] = useState("");
   const { busy, error, run } = useAction();
+  // The owner token signs in without leaving the page, and the boot after it needs the keys.
+  useEffect(() => {
+    if (own) load().catch(() => {});
+  }, [own]);
   useEffect(() => {
     if (refused) send("error-screen", { screen: "sign-in-refused" });
     else if (failed) send("error-screen", { screen: "sign-in-failed" });
@@ -372,7 +377,7 @@ function Join({ account, stale }: { account: string; stale: boolean }) {
                 />
               </div>
               <p className={`t-snippet ${s.dim}`} data-testid="pairing-code">
-                {code}
+                <Grouped code={code} />
               </p>
             </>
           )}

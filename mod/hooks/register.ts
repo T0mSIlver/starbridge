@@ -1,6 +1,8 @@
 import type { Register } from "claude-code";
 import {
   AgentLoop,
+  agentAddress,
+  CONFIG_HEADER,
   HEADERS,
   isPortFile,
   type Line,
@@ -8,7 +10,6 @@ import {
   pidRuns,
   portTarget,
   signCall,
-  socketPath,
 } from "./agent.ts";
 import { Handover } from "./handover.ts";
 import { configDir, Poller } from "./poller.ts";
@@ -69,7 +70,8 @@ export const register: Register = (on) => {
       OS: await $.env.get("OS"),
     };
     const dir = configDir(env);
-    const socket = socketPath(env);
+    const { socket, config } = await agentAddress(env);
+    const base = config ? { ...HEADERS, [CONFIG_HEADER]: config } : HEADERS;
     // Kept across a hot reload, and new in each process (sent.ts); undefined on a build that
     // lacks `$.state`.
     const proc = { plugin: "starbridge-mod", key: "process" } as const;
@@ -84,8 +86,7 @@ export const register: Register = (on) => {
       token = undefined;
     }
     const fetch = async (method: string, path: string, body?: unknown) => {
-      const headers =
-        body === undefined ? HEADERS : { ...HEADERS, "content-type": "application/json" };
+      const headers = body === undefined ? base : { ...base, "content-type": "application/json" };
       const init = { method, ...(body === undefined ? {} : { body: JSON.stringify(body) }) };
       let r: Awaited<ReturnType<typeof $.http.fetch>>;
       if (isPortFile(socket)) {

@@ -134,7 +134,7 @@ private fun ImageBox(image: Attached, size: DpSize, crop: Boolean, onOpen: () ->
             // drag from the image did that one from the text did not (#246).
             .clickable(enabled = !pending, interactionSource = null, indication = null, onClickLabel = "View full screen", onClick = onOpen)
             // Labelled before the bitmap lands.
-            .semantics { image.alt?.let { contentDescription = it } },
+            .semantics { contentDescription = image.alt ?: "Image" },
     ) {
         val loaded = bitmap
         if (loaded != null) {

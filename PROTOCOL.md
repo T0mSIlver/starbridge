@@ -925,9 +925,12 @@ prompts.
 
 `starbridge agent` runs once per machine as a user service. It holds the machine's keys and its
 one connection to the server, and serves the CLI and the Claude Code sessions on that machine
-over HTTP on a unix socket: `$XDG_RUNTIME_DIR/starbridge/agent.sock` on Linux when that is set,
-else `agent.sock` in the config directory (`$STARBRIDGE_AGENT_SOCKET` overrides). The directory
-is 0700, the socket 0600. Types: `cli/src/agent/api.ts`.
+over HTTP on a unix socket: for the default config directory,
+`$XDG_RUNTIME_DIR/starbridge/agent-<key>.sock` on Linux when that is set, else `agent.sock` in the
+config directory (`$STARBRIDGE_AGENT_SOCKET` overrides). `<key>` is the first 16 hex digits of
+the SHA-256 of the config directory's path, with runs of `/` as one, no trailing `/` and, on
+Windows only, `\` as `/`, so two homes of one user, which share `$XDG_RUNTIME_DIR`, reach their
+own agents (#1966). The directory is 0700, the socket 0600. Types: `cli/src/agent/api.ts`.
 
 On Windows (#552), Node and Bun read a socket path as a named pipe, which other local users can
 open, so the agent listens on a free port on 127.0.0.1 instead. It writes `agent.port`,
@@ -941,6 +944,11 @@ proof as no agent: whatever took the port after the agent stopped learns nothing
 cannot answer for it. (SHA-256 rather than HMAC, since the mod's host has no HMAC; the fixed
 shape leaves a length extension nothing to forge.) A client sends nothing while `pid` runs no
 more (#570): the CLI, the mod and the Pi and opencode extensions all check it before each call. An address ending in `.port` names such a file on any platform.
+
+A client that worked out the address from its config directory also sends `starbridge-config:
+<key>`; an agent whose own key differs answers 421 `{error: "other-config", detail}`, which a
+client takes as no agent. A client that `$STARBRIDGE_AGENT_SOCKET` sent to the agent, or one older
+than the header, sends none and is served.
 
 Every request sends `starbridge-api: <n>` and a `user-agent` such as `starbridge-mod/0.2.0`. The
 agent serves revisions `min` to `max` (1 to 1 today) and answers anything else with 426

@@ -29,6 +29,7 @@ import { useApp } from "./AppProvider";
 import { PromptDetail, QuestionDetail } from "./Detail";
 import {
   HistoryHead,
+  label,
   machineIcon,
   NeedRow,
   OlderHead,
@@ -98,6 +99,7 @@ export function Inbox() {
   const {
     inbox,
     inboxLoaded,
+    promptsLoaded,
     prompts,
     runs,
     promptLog,
@@ -183,6 +185,41 @@ export function Inbox() {
     if (wide && selected && picked !== selected) setPicked(selected);
   }, [wide, selected, picked]);
 
+  // Announces what arrived since the last list: the first full list this page loads, questions and
+  // permission prompts both, is not news. A live region ignores text it already holds, so the
+  // text clears first and a repeat is read out again.
+  const [arrived, setArrived] = useState({ text: "", n: 0 });
+  const [announced, setAnnounced] = useState("");
+  const heard = useRef<Set<string>>(null);
+  const waiting = all.filter((e) => e.type !== "run");
+  const waitingKey = waiting.map((e) => e.id).join(" ");
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `waiting` changes with `waitingKey`
+  useEffect(() => {
+    if (!inboxLoaded || !promptsLoaded) return;
+    const before = heard.current;
+    heard.current = new Set(waiting.map((e) => e.id));
+    const fresh = before ? waiting.filter((e) => !before.has(e.id)) : [];
+    const [one] = fresh;
+    if (!one) return;
+    const text =
+      fresh.length > 1
+        ? `${fresh.length} new questions`
+        : `New ${one.type === "prompt" ? "permission request" : "question"} from ${one.machine}: ${label(one)}`;
+    setArrived((was) => ({ text, n: was.n + 1 }));
+  }, [waitingKey, inboxLoaded, promptsLoaded]);
+  useEffect(() => {
+    setAnnounced("");
+    if (!arrived.n) return;
+    const timer = setTimeout(() => setAnnounced(arrived.text), 50);
+    return () => clearTimeout(timer);
+  }, [arrived]);
+  // Mounted in every layout: an open question replaces the list on a narrow screen.
+  const status = (
+    <div className="sr-only" role="status">
+      {announced}
+    </div>
+  );
+
   const latest = useRef({ ids, selected, wide });
   latest.current = { ids, selected, wide };
   const listRef = useRef<HTMLDivElement>(null);
@@ -192,7 +229,7 @@ export function Inbox() {
   // A Find that scrolled far leaves no long list behind it.
   // biome-ignore lint/correctness/useExhaustiveDependencies: resets when the query changes
   useEffect(() => setPastShown(PAST_PAGE), [find]);
-  const pastMore = useRef<HTMLDivElement>(null);
+  const pastMore = useRef<HTMLLIElement>(null);
   // Rows past the selected one too, so J lands on one laid out.
   const pastUpTo = Math.max(
     pastShown,
@@ -426,12 +463,13 @@ export function Inbox() {
   const row = (e: Entry) => entryRow(e);
   const snoozedRow = (e: Entry) =>
     entryRow(e, e.type === "question" ? e.item.snoozedUntil : undefined);
-  const sub = (label: React.ReactNode) => <div className={`t-caption ${s.sub}`}>{label}</div>;
+  const sub = (label: React.ReactNode) => <h2 className={`t-caption ${s.sub}`}>{label}</h2>;
   // Under a grouping's header, the group's items share one box (#248).
   const grouped = view !== "none";
-  const seg = (children: React.ReactNode) => (
-    <div className={`${feed.seg} ${comfy ? feed.comfy : ""}`}>{children}</div>
-  );
+  const seg = (children: React.ReactNode, list?: boolean) => {
+    const Box = list ? "ul" : "div";
+    return <Box className={`${feed.seg} ${comfy ? feed.comfy : ""}`}>{children}</Box>;
+  };
 
   const count = needs.length;
   // Nothing can reach this inbox until a machine pairs: say how (#610).
@@ -456,12 +494,12 @@ export function Inbox() {
         />
       )}
       {showSnoozed && (
-        <div
-          className={snoozedToggled ? "m-appear" : undefined}
+        <ul
+          className={`${feed.items} ${snoozedToggled ? "m-appear" : ""}`}
           onAnimationEnd={() => setSnoozedToggled(false)}
         >
           {snoozed.map(snoozedRow)}
-        </div>
+        </ul>
       )}
     </>
   );
@@ -509,8 +547,8 @@ export function Inbox() {
         />
       )}
       {showPast && (
-        <div
-          className={historyToggled ? "m-appear" : undefined}
+        <ul
+          className={`${feed.items} ${historyToggled ? "m-appear" : ""}`}
           onAnimationEnd={() => setHistoryToggled(false)}
         >
           {listed.slice(0, pastUpTo).map((p) => (
@@ -522,18 +560,22 @@ export function Inbox() {
               onSelect={() => (wide ? setPicked(p.entry.id) : openItem(p.entry.id))}
             />
           ))}
-          {pastLeft && <div ref={pastMore} className={s.pastMore} />}
-          {older > 0 && <OlderHead count={older} comfy={comfy} onShow={() => setShowOlder(true)} />}
-        </div>
+          {pastLeft && <li ref={pastMore} className={s.pastMore} aria-hidden="true" />}
+          {older > 0 && (
+            <li>
+              <OlderHead count={older} comfy={comfy} onShow={() => setShowOlder(true)} />
+            </li>
+          )}
+        </ul>
       )}
     </>
   );
   const list = (
     <section className={s.list} ref={listRef} aria-label="Inbox">
       <header className={`t-small ${s.head}`}>
-        <span className={s.headTitle}>
+        <h2 className={s.headTitle}>
           Needs you {count > 0 && <span className={s.count}>{count}</span>}
-        </span>
+        </h2>
         <ViewMenu grouping={grouping} setGrouping={setGrouping} />
       </header>
       <RecoveryBanner />
@@ -555,7 +597,7 @@ export function Inbox() {
                   Waiting on you <span className={s.count}>{waitingOn.length}</span>
                 </>,
               )}
-              {seg(waitingOn.map(row))}
+              {seg(waitingOn.map(row), true)}
             </>
           )}
           {whenYouCan.length > 0 && (
@@ -565,7 +607,7 @@ export function Inbox() {
                   When you can <span className={s.countQuiet}>{whenYouCan.length}</span>
                 </>,
               )}
-              {seg(whenYouCan.map(row))}
+              {seg(whenYouCan.map(row), true)}
             </>
           )}
         </>
@@ -577,14 +619,14 @@ export function Inbox() {
                 <Icon name={machineIcon(g.kind)} size={13} className={s.subIcon} /> {g.machine}
               </>,
             )}
-            {seg(g.entries.map(row))}
+            {seg(g.entries.map(row), true)}
           </div>
         ))
       ) : (
         needs.length > 0 && (
           <>
             {sub(comfy ? `Needs you · ${count}` : "Needs you")}
-            {needs.map(row)}
+            <ul className={feed.items}>{needs.map(row)}</ul>
           </>
         )
       )}
@@ -620,6 +662,7 @@ export function Inbox() {
   if (!wide && opened) {
     return (
       <div className={s.single}>
+        {status}
         <PhoneBar title="Inbox" back={closeItem} always />
         <div className={`m-enter ${s.openDetail}`}>
           {detail(opened) ?? (resolved && <p className={`t-small ${s.empty}`}>Answered</p>)}
@@ -630,6 +673,7 @@ export function Inbox() {
   if (!wide)
     return (
       <div className={s.single}>
+        {status}
         <PhoneBar
           title="Inbox"
           view={<ViewMenu grouping={grouping} setGrouping={setGrouping} icon />}
@@ -638,7 +682,7 @@ export function Inbox() {
       </div>
     );
   return (
-    <Panes list={list}>
+    <Panes list={list} status={status}>
       <section className={s.detail} aria-label="Selected">
         {detail(selected) ?? (noMachine && <NoMachine />)}
       </section>
@@ -671,7 +715,15 @@ const DETAIL_MIN = 400;
 const ASIDE_FROM = 1400;
 
 /** The wide layout: list, open item and Quota windows, with edges the owner drags (#173). */
-function Panes({ list, children }: { list: React.ReactNode; children: React.ReactNode }) {
+function Panes({
+  list,
+  status,
+  children,
+}: {
+  list: React.ReactNode;
+  status: React.ReactNode;
+  children: React.ReactNode;
+}) {
   const [listPref, setList] = usePref("listWidth");
   const [asidePref, setAside] = usePref("asideWidth");
   const vw = useWindowWidth();
@@ -688,6 +740,7 @@ function Panes({ list, children }: { list: React.ReactNode; children: React.Reac
   return (
     <div className={`${s.panes} ${quotas ? "" : s.noAside}`} style={style}>
       <h1 className="sr-only">Inbox</h1>
+      {status}
       {list}
       <Resizer
         label="Inbox width"

@@ -371,7 +371,7 @@ function pickerQuestions(input: unknown): PickerQuestion[] | undefined {
 }
 
 /** The picker's open questions on this machine's devices, by the session that asked them. */
-export function pickerOpen(st: ReturnType<Ctx["store"]["state"]>, session: string): string[] {
+function pickerOpen(st: ReturnType<Ctx["store"]["state"]>, session: string): string[] {
   return Object.entries(st.asked)
     .filter(([id, a]) => a.picker === session && !a.settled && !st.answers[id])
     .map(([id]) => id);
@@ -437,7 +437,7 @@ async function racePicker(
       };
       let id: string;
       try {
-        ({ id } = await postDecision(sub, s, resolveSource(input, ctx.env, cwd)));
+        ({ id } = await postDecision(sub, s, resolveSource(input, ctx.env, cwd), outer.signal));
       } catch (e) {
         failed.abort();
         throw e;
@@ -498,7 +498,7 @@ export interface OpencodeQuestion {
 }
 
 /** What the plugin hands `hook question` on stdin. */
-export interface QuestionHookInput {
+interface QuestionHookInput {
   session_id: string;
   cwd: string;
   questions: OpencodeQuestion[];
@@ -521,7 +521,7 @@ const TITLE_CHARS = 70;
  * TITLE_CHARS (#1085). Agents put their findings in the question, since the harness's ask tool
  * has no context field. Undefined when no sentence fits.
  */
-export function questionTitle(text: string): string | undefined {
+function questionTitle(text: string): string | undefined {
   if (text.length <= TITLE_CHARS) return undefined;
   // Where each sentence ends: a line break, or a space after . ? ! and a closing quote or bracket.
   const breaks = [...text.matchAll(/\s*\n\s*|(?<=[.?!]["'”)\]]?)\s+/g)];
@@ -621,7 +621,8 @@ export async function hookQuestion(
           held: true,
           askedAt: new Date(at + i),
         };
-        const how = { wait: true, json: true };
+        // SIGTERM is the terminal's answer: a post it cuts is settled elsewhere too (#1913).
+        const how = { wait: true, json: true, answered: outer.signal };
         try {
           let code = await ask(sub, input, how);
           ids[i] = lines[0];
@@ -699,7 +700,7 @@ interface CursorHook {
  * at once, with the same input; only one may hold, or an answer could go in twice. False when
  * another process took it.
  */
-export function claimStop(ctx: Ctx, hook: CursorHook): boolean {
+function claimStop(ctx: Ctx, hook: CursorHook): boolean {
   const dir = join(ctx.store.dir, "cursor-stops");
   mkdirSync(dir, { recursive: true, mode: 0o700 });
   // File times are the wall clock's.

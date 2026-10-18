@@ -71,20 +71,39 @@ export interface AgentTiming {
   maxBackoffMs: number;
 }
 
-export const AGENT_TIMING: AgentTiming = {
+const AGENT_TIMING: AgentTiming = {
   waitSeconds: 25,
   minCycleMs: 2_000,
   backoffMs: 2_000,
   maxBackoffMs: 60_000,
 };
 
+const hex = (bytes: Uint8Array) => [...bytes].map((b) => b.toString(16).padStart(2, "0")).join("");
+
+/**
+ * The CLI's `configKey` (cli/src/agent/api.ts) of config folder `dir`: the first 16 hex digits of
+ * the SHA-256 of its path, with runs of `/` as one, no trailing `/`, and on Windows `\` as `/`.
+ * Sent as `CONFIG_HEADER`, so an agent of another config folder refuses the call (#1966).
+ */
+export async function configKey(dir: string, windows = false): Promise<string> {
+  const path = (windows ? dir.replace(/\\/g, "/") : dir)
+    .replace(/\/+/g, "/")
+    .replace(/(.)\/$/, "$1");
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(path));
+  return hex(new Uint8Array(digest)).slice(0, 16);
+}
+
+export const CONFIG_HEADER = "starbridge-config";
+
 /**
  * Where the agent listens, as the CLI's `socketPath` (cli/src/agent/api.ts) works it out:
  * `$STARBRIDGE_AGENT_SOCKET`; on Windows (`OS=Windows_NT`) the port file `agent.port` in the
- * config directory; for the default config directory `$XDG_RUNTIME_DIR/starbridge/agent.sock`
- * when that is set; else `agent.sock` in the config directory.
+ * config directory; for the default config directory
+ * `$XDG_RUNTIME_DIR/starbridge/agent-<configKey>.sock` when that is set; else `agent.sock` in the
+ * config directory. `config` is the key to send, undefined when `$STARBRIDGE_AGENT_SOCKET` names
+ * the agent.
  */
-export function socketPath(env: {
+export async function agentAddress(env: {
   STARBRIDGE_AGENT_SOCKET?: string;
   STARBRIDGE_CONFIG_DIR?: string;
   XDG_CONFIG_HOME?: string;
@@ -92,14 +111,15 @@ export function socketPath(env: {
   HOME?: string;
   USERPROFILE?: string;
   OS?: string;
-}): string {
-  if (env.STARBRIDGE_AGENT_SOCKET) return env.STARBRIDGE_AGENT_SOCKET;
+}): Promise<{ socket: string; config?: string }> {
   const dir = configDir(env);
-  if (env.OS === "Windows_NT") return `${dir}/agent.port`;
+  if (env.STARBRIDGE_AGENT_SOCKET) return { socket: env.STARBRIDGE_AGENT_SOCKET };
+  const config = await configKey(dir, env.OS === "Windows_NT");
+  if (env.OS === "Windows_NT") return { socket: `${dir}/agent.port`, config };
   const standard = configDir({ ...env, STARBRIDGE_CONFIG_DIR: undefined });
   if (env.XDG_RUNTIME_DIR && dir === standard)
-    return `${env.XDG_RUNTIME_DIR}/starbridge/agent.sock`;
-  return `${dir}/agent.sock`;
+    return { socket: `${env.XDG_RUNTIME_DIR}/starbridge/agent-${config}.sock`, config };
+  return { socket: `${dir}/agent.sock`, config };
 }
 
 /**
@@ -150,8 +170,6 @@ export async function pidRuns(
     return false;
   }
 }
-
-const hex = (bytes: Uint8Array) => [...bytes].map((b) => b.toString(16).padStart(2, "0")).join("");
 
 async function proof(token: string, role: "client" | "agent", nonce: string): Promise<string> {
   const data = new TextEncoder().encode(`${token}:${role}:${nonce}`);
@@ -320,8 +338,9 @@ export class AgentLoop {
     }
     const body = parse<{ error?: string; detail?: string }>(r.text);
     const reason = body?.detail ?? body?.error ?? `status ${r.status}`;
-    // 426: the agent and this mod cannot work together; the CLI's own path still can.
-    if (r.status === 426) throw new Error(reason);
+    // 426: the agent and this mod cannot work together; 421: it serves another config folder
+    // (#1966). The CLI's own path still can.
+    if (r.status === 426 || r.status === 421) throw new Error(reason);
     this.failures++;
     const delay = Math.min(this.t.maxBackoffMs, this.t.backoffMs * 2 ** (this.failures - 1));
     const text = `starbridge: ${reason}`;

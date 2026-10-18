@@ -7,6 +7,8 @@ import { VERSION } from "../version";
 import {
   API,
   API_HEADER,
+  CONFIG_HEADER,
+  configKey,
   type ErrorBody,
   isPortFile,
   NONCE_HEADER,
@@ -74,12 +76,19 @@ export class AgentClient {
   constructor(
     readonly socket: string,
     private readonly client = `starbridge-cli/${VERSION}`,
+    /** The `configKey` of the folder whose agent this must be, sent as `CONFIG_HEADER`. */
+    private readonly config?: string,
   ) {}
 
-  /** The agent for this configuration, unless `STARBRIDGE_NO_AGENT` is set. */
+  /**
+   * The agent for this configuration, unless `STARBRIDGE_NO_AGENT` is set. One that serves
+   * another config folder counts as no agent (#1966); one `$STARBRIDGE_AGENT_SOCKET` names is
+   * taken as it is.
+   */
   static for(ctx: Ctx): AgentClient | undefined {
     if (ctx.env.STARBRIDGE_NO_AGENT) return undefined;
-    return new AgentClient(socketPath(ctx.env, ctx.store.dir));
+    const config = ctx.env.STARBRIDGE_AGENT_SOCKET ? undefined : configKey(ctx.store.dir);
+    return new AgentClient(socketPath(ctx.env, ctx.store.dir), undefined, config);
   }
 
   /**
@@ -124,6 +133,7 @@ export class AgentClient {
           headers: {
             ...auth,
             [API_HEADER]: String(API),
+            ...(this.config ? { [CONFIG_HEADER]: this.config } : {}),
             "user-agent": this.client,
             ...(text !== undefined
               ? { "content-type": "application/json", "content-length": Buffer.byteLength(text) }
@@ -154,8 +164,15 @@ export class AgentClient {
             const status = res.statusCode ?? 0;
             // A refusal (4xx) did nothing, so a fallback after one cannot act twice.
             if (status < 400) this.answered = true;
-            if (status >= 400) {
-              const e = (json ?? {}) as ErrorBody;
+            const e = (json ?? {}) as ErrorBody;
+            if (status === 421 && e.error === "other-config")
+              reject(
+                new NoAgent(
+                  e.detail ?? `the agent on ${this.socket} serves another config folder`,
+                  "other-config",
+                ),
+              );
+            else if (status >= 400) {
               reject(new AgentError(status, { ...e, error: e.error ?? `status ${status}` }));
             } else resolve(json as T);
           });
@@ -200,8 +217,13 @@ export async function withAgent<T>(
   } catch (e) {
     if (e instanceof NoAgent && !agent.answered) {
       // An agent may listen where this client cannot connect: say why, and how to fix it (#714).
-      const why = isPortFile(agent.socket) ? undefined : tooLong(agent.socket);
-      if (why && existsSync(agent.socket))
+      const why =
+        e.code === "other-config"
+          ? e.message
+          : isPortFile(agent.socket)
+            ? undefined
+            : tooLong(agent.socket);
+      if (why && (e.code === "other-config" || existsSync(agent.socket)))
         ctx.err(`starbridge: ${why}; going to the server directly`);
       return direct();
     }

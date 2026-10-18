@@ -116,7 +116,7 @@ export async function hookCodexQuestion(
 }
 
 /** What Codex takes for one question: the label tapped, or a typed reply as the TUI's note. */
-export function codexAnswer(a: Answer): string[] {
+function codexAnswer(a: Answer): string[] {
   return a.choice !== undefined ? [a.choice] : [`user_note: ${a.text ?? ""}`];
 }
 
@@ -203,7 +203,7 @@ async function ask(
         askedAt: new Date(at + i),
       };
       try {
-        ({ id: ids[i] } = await postDecision(sub, s, resolveSource(input, ctx.env, cwd)));
+        ({ id: ids[i] } = await postDecision(sub, s, resolveSource(input, ctx.env, cwd), signal));
       } catch (e) {
         failed.abort();
         throw e;

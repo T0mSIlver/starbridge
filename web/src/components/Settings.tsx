@@ -12,7 +12,7 @@ import {
   quotaWindowKey,
 } from "@starbridge/protocol";
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { api } from "@/lib/api";
 import { type DesktopChannel, type DesktopPlace, desktop, desktopClock } from "@/lib/desktop";
 import type { RecoveryState } from "@/lib/device";
@@ -74,7 +74,7 @@ export function Row({
 }
 
 /** Choices side by side, one picked: a radio group drawn as joined buttons. */
-export function Segmented<T extends string | number | boolean | null>({
+function Segmented<T extends string | number | boolean | null>({
   label,
   value,
   options,
@@ -85,12 +85,15 @@ export function Segmented<T extends string | number | boolean | null>({
   options: [T, string][];
   onChange: (v: T) => void;
 }) {
+  // One name per group makes the browser treat its radios as one: a single Tab stop, arrows that move and pick.
+  const name = useId();
   return (
     <div className={s.segmented} role="radiogroup" aria-label={label}>
       {options.map(([v, text]) => (
         <label key={String(v)} className={`t-meta ${s.segment}`}>
           <input
             type="radio"
+            name={name}
             className="sr-only"
             checked={v === value}
             onChange={() => onChange(v)}
@@ -444,7 +447,7 @@ type Win = { provider: string; id: string; label: string; minutes: number | null
  * A window's own alerts, or none to follow its length's. A provider's key, which only settings
  * from before #914 hold, first becomes a key per window, so the provider's other windows keep it.
  */
-export function setWindowAlerts(
+function setWindowAlerts(
   a: QuotaAlertSettings,
   w: Win,
   all: Win[],

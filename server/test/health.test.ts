@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { mkdtempSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { diskHasRoom, housekeep } from "../src/app";
 import { makeServer } from "../test-support/app";
 
 test("/healthz/backup fails until a backup ran, and again once it is over 26 h old", async () => {
@@ -55,4 +56,54 @@ test("/healthz names the commit the server was built from", async () => {
   expect(
     (await (await makeServer()).app.request("/healthz")).headers.has("x-starbridge-revision"),
   ).toBe(false);
+});
+
+test("/healthz/disk counts free blocks times their size against 2 GiB", () => {
+  const GiB = 1024 ** 3;
+  for (const [bavail, bsize, room] of [
+    [(2 * GiB) / 4096, 4096, true],
+    [(2 * GiB) / 4096 - 1, 4096, false],
+    [(2 * GiB) / 512, 512, true],
+    [(2 * GiB) / 512 - 1, 512, false],
+    // A disk with plenty of blocks of a small size can still be nearly full.
+    [3_000_000, 512, false],
+    [0, 4096, false],
+  ] as const)
+    expect([bavail, bsize, diskHasRoom({ bavail, bsize })]).toEqual([bavail, bsize, room]);
+});
+
+test("housekeeping on a full disk waits for its next round, and any other error still throws", async () => {
+  const s = await makeServer();
+  const { db } = s.deps;
+  const { page_count } = db.query("PRAGMA page_count").get() as { page_count: number };
+  db.run(`PRAGMA max_page_count = ${page_count}`);
+  const fill = db.query("INSERT INTO usage_events (day, metric, subject) VALUES ('d', 'm', ?)");
+  let i = 0;
+  const job = housekeep(() => {
+    for (;;) fill.run(`${i++}`.padEnd(200, "x"));
+  });
+  // SQLite's own SQLITE_FULL, not a stand-in.
+  expect(job).not.toThrow();
+  expect(i).toBeGreaterThan(0);
+  expect(
+    housekeep(() => {
+      throw new Error("no such table: pairings");
+    }),
+  ).toThrow("no such table: pairings");
+});
+
+test("an error the server did not expect answers 500 internal, with nothing of what failed", async () => {
+  const s = await makeServer();
+  s.app.get("/v1/boom", () => {
+    throw new Error("secret detail");
+  });
+  const logged = console.error;
+  console.error = () => {};
+  try {
+    const r = await s.call("GET", "/v1/boom");
+    expect(r.status).toBe(500);
+    expect(r.json).toEqual({ error: "internal" });
+  } finally {
+    console.error = logged;
+  }
 });

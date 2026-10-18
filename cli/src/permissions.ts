@@ -251,7 +251,7 @@ const BARE_REDIRECTION = /^[0-9]*(?:>>?|<<?<?|>&|<&|>\||<>)$/;
 const SHELL_ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*\+?=/;
 
 /** A word the shell runs as a command, or one a wrapper names, with where it sits in the text. */
-export interface CommandWord {
+interface CommandWord {
   word: string;
   start: number;
   end: number;
@@ -266,7 +266,7 @@ export interface CommandWord {
  * other lines are data. It reads as the shell does as far as hiding a command goes; where it cannot
  * tell, it takes a word for a command word, which only keeps the word in view.
  */
-export function commandWords(text: string, offset = 0): CommandWord[] {
+function commandWords(text: string, offset = 0): CommandWord[] {
   const out: CommandWord[] = [];
   const n = text.length;
   let i = 0;
@@ -436,7 +436,7 @@ export function commandWords(text: string, offset = 0): CommandWord[] {
  * runs: a command word differs, or one runs a variable or substitution while something was
  * redacted (`X_KEY=rm; $X_KEY -rf ~`). Such a command stays at the keyboard.
  */
-export function hidesCommand(command: string, shown: string): boolean {
+function hidesCommand(command: string, shown: string): boolean {
   if (command === shown) return false;
   const a = commandWords(command).map((w) => w.word);
   const b = commandWords(shown).map((w) => w.word);
@@ -454,7 +454,7 @@ function uniqueKeys(entries: (readonly [string, unknown])[]): Record<string, unk
 }
 
 /** Redacts every string in a JSON value, keys included, and a token under a secret's name. */
-export function redactValue(value: unknown): unknown {
+function redactValue(value: unknown): unknown {
   if (typeof value === "string") return redactText(value);
   if (Array.isArray(value)) return value.map(redactValue);
   if (value && typeof value === "object")
@@ -559,7 +559,7 @@ export function summarize(tool: string, input: unknown): string {
  * The updates a phone may approve. Only allow rules and extra directories: a mode change
  * (`setMode`) or a deny rule reaches beyond the call at hand, so it stays at the keyboard.
  */
-export function usableUpdates(suggestions: unknown[] | undefined): PermissionUpdate[] {
+function usableUpdates(suggestions: unknown[] | undefined): PermissionUpdate[] {
   const out: PermissionUpdate[] = [];
   for (const raw of suggestions ?? []) {
     if (!raw || typeof raw !== "object") continue;
@@ -599,10 +599,7 @@ export function ruleText(updates: PermissionUpdate[]): string {
 const DESTINATION = { session: "session", project: "localSettings" } as const;
 
 /** The `updatedPermissions` the hook returns for an allow with `scope`. */
-export function updatesFor(
-  updates: PermissionUpdate[],
-  scope: PermissionScope,
-): PermissionUpdate[] {
+function updatesFor(updates: PermissionUpdate[], scope: PermissionScope): PermissionUpdate[] {
   if (scope === "once") return [];
   return updates.map((u) => ({ ...u, destination: DESTINATION[scope] }));
 }

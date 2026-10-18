@@ -125,11 +125,11 @@ notice before a shutdown. Self-hosting is free, under the MIT licence.
 Each account takes up to 3 machines, the computers that run your harnesses, and any number of
 phones and browsers.
 
-### Why is the CLI 82 MB?
+### Why is the CLI so large?
 
-It is TypeScript compiled with `bun build --compile`, so the binary carries the Bun runtime.
-`starbridge --version` takes about 45 ms, and the background service holds about 35 MB of memory
-of its own.
+It is TypeScript compiled with `bun build --compile`, so the binary carries the Bun runtime: 63 to
+87 MB, depending on the platform (v0.1.7). `starbridge --version` takes about 50 ms, and the
+background service held 85 MB of memory on Linux (v0.1.8-rc.2, measured 2026-10-18).
 
 ### Will the hosted server hold up?
 

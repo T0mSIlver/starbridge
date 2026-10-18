@@ -15,7 +15,7 @@ import { json } from "../http";
 import { rateLimit } from "../limits";
 import { refusePairings } from "./pairings";
 
-export function loadEntries(db: Database, account: string, from = 0): SignedEnvelope[] {
+function loadEntries(db: Database, account: string, from = 0): SignedEnvelope[] {
   const rows = db
     .query("SELECT entry FROM directory WHERE account_id = ? AND seq >= ? ORDER BY seq")
     .all(account, from) as { entry: string }[];

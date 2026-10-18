@@ -4,6 +4,9 @@ import android.os.Build
 import android.view.HapticFeedbackConstants
 import android.view.View
 import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -384,3 +387,13 @@ fun fieldColors() = MaterialTheme.colorScheme.surfaceContainerHighest.let {
 fun View.thresholdDeactivate() {
     if (Build.VERSION.SDK_INT >= 34) performHapticFeedback(HapticFeedbackConstants.GESTURE_THRESHOLD_DEACTIVATE)
 }
+
+/**
+ * A button that swaps its label for a spinner while it works keeps its name for TalkBack: [label]
+ * as the description, and "In progress" as its state (#1945). Unchanged when not [busy].
+ */
+internal fun Modifier.busyAs(label: String, busy: Boolean): Modifier =
+    if (!busy) this else semantics {
+        contentDescription = label
+        stateDescription = "In progress"
+    }

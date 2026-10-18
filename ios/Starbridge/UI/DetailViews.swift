@@ -188,7 +188,7 @@ struct SnoozeControls: View {
                 if let markDone { quiet("Done", markDone) }
                 if until != nil { quiet("Back now") { snooze(Date()) } }
                 Button {
-                    withAnimation { open.toggle() }
+                    Motion.with { open.toggle() }
                     day = Calendar.current.startOfDay(for: now)
                     time = SnoozeTimes.start(day, now)
                 } label: {

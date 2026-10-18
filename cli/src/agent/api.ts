@@ -21,12 +21,34 @@ export const API_HEADER = "starbridge-api";
 export const MAX_HOLD_SECONDS = 25;
 
 /**
+ * The header a client sends with its config folder's `configKey` when it worked out the agent's
+ * address from that folder. The agent answers 421 `other-config` when the key is not its own
+ * (#1966), so a client never acts as another configuration's machine; a client that sends none,
+ * as one named by `$STARBRIDGE_AGENT_SOCKET` or one older than this header, is served.
+ */
+export const CONFIG_HEADER = "starbridge-config";
+
+/**
+ * A short key for config folder `dir`: the first 16 hex digits of the SHA-256 of its path, with
+ * runs of `/` as one, no trailing `/`, and on Windows `\` as `/`, so the mod, which builds the
+ * path from `$HOME` by hand, gets the same key (mod/hooks/agent.ts). Elsewhere `\` is a
+ * character of a name, and two folders must not share a key.
+ */
+export function configKey(dir: string, platform: NodeJS.Platform = process.platform): string {
+  const path = (platform === "win32" ? dir.replace(/\\/g, "/") : dir)
+    .replace(/\/+/g, "/")
+    .replace(/(.)\/$/, "$1");
+  return createHash("sha256").update(path).digest("hex").slice(0, 16);
+}
+
+/**
  * Where the agent listens. `$STARBRIDGE_AGENT_SOCKET` wins. On Windows, the port file
  * `agent.port` in the config directory (`PortFile`). Elsewhere, for the default config directory,
- * `$XDG_RUNTIME_DIR/starbridge/agent.sock` when that is set (Linux), else `agent.sock` in the
- * config directory: macOS caps socket paths at 104 bytes, and its config path stays short. Any
- * other config directory (`$STARBRIDGE_CONFIG_DIR`, tests) keeps its socket inside it, so two
- * configurations never share an agent.
+ * `$XDG_RUNTIME_DIR/starbridge/agent-<configKey>.sock` when that is set (Linux), else
+ * `agent.sock` in the config directory: macOS caps socket paths at 104 bytes, and its config path
+ * stays short. The key keeps two homes of one user, which share `$XDG_RUNTIME_DIR`, on their own
+ * agents (#1966). Any other config directory (`$STARBRIDGE_CONFIG_DIR`, tests) keeps its socket
+ * inside it.
  */
 export function socketPath(
   env: Record<string, string | undefined>,
@@ -37,7 +59,7 @@ export function socketPath(
   if (platform === "win32") return join(storeDir, "agent.port");
   const standard = configDir({ ...env, STARBRIDGE_CONFIG_DIR: undefined });
   if (env.XDG_RUNTIME_DIR && storeDir === standard)
-    return join(env.XDG_RUNTIME_DIR, "starbridge", "agent.sock");
+    return join(env.XDG_RUNTIME_DIR, "starbridge", `agent-${configKey(storeDir, platform)}.sock`);
   return join(storeDir, "agent.sock");
 }
 

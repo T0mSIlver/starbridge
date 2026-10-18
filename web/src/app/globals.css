@@ -36,6 +36,26 @@
   white-space: nowrap;
 }
 
+/* Skip to content: out of sight until the keyboard reaches it, then a plain button top left,
+   below the Mac app's window buttons (`--window-buttons`, 0 elsewhere). */
+.skip {
+  position: fixed;
+  top: calc(var(--window-buttons) + var(--s2));
+  left: var(--s2);
+  z-index: 100;
+  padding: var(--s2) var(--s3);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  color: var(--fg);
+  text-decoration: none;
+  transform: translateY(-300%);
+}
+
+.skip:focus-visible {
+  transform: none;
+}
+
 /* The page keeps its scrollbar's gutter, so nothing shifts when it starts to scroll; scrollbars
    are thin and on-token (DESIGN.md, "Motion and states"). Overlay scrollbars ignore both. */
 html {

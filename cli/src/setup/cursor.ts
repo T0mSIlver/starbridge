@@ -15,7 +15,7 @@ import { replaceFile } from "../replace";
 import { type FileState, SKILL } from "./harnesses";
 import { marker, ours } from "./marker";
 import { shellQuote } from "./quote";
-import { removedLine, removeWritten, withoutAllow, writeLeft } from "./remove";
+import { removedLine, removeWritten, writeLeft } from "./remove";
 import { type Sys, which } from "./sys";
 
 type Home = Pick<Sys, "ctx" | "home">;
@@ -235,84 +235,6 @@ export function removeCursorFiles(sys: Home): string[] {
   return done;
 }
 
-/**
- * The commands that post a question and read its answer, as Claude Code's allow rules list them.
- * `Shell(starbridge ask)` matches `starbridge ask` and what starts with `starbridge ask `; a
- * compound command runs without a prompt only when each of its commands is allowed.
- */
-export const CURSOR_ALLOW = ["ask", "waiting", "working", "wait"].map(
-  (c) => `Shell(starbridge ${c})`,
-);
-
-/** Entries of earlier releases that setup removes: `settle` let `settle --all --yes` through. */
-export const STALE_CURSOR_ALLOW = ["Shell(starbridge settle)"];
-
 export function cursorConfigPath(sys: Home): string {
   return join(cursorConfigDir(sys), "cli-config.json");
-}
-
-type CliConfig = Record<string, unknown> & {
-  permissions?: Record<string, unknown> & { allow?: unknown };
-};
-
-/** The config, `{}` when there is none, undefined when it does not parse. */
-function readConfig(sys: Home): CliConfig | undefined {
-  const text = readText(cursorConfigPath(sys));
-  if (text === undefined) return {};
-  try {
-    const v = JSON.parse(text) as unknown;
-    return v && typeof v === "object" && !Array.isArray(v) ? (v as CliConfig) : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
-function allowOf(c: CliConfig): string[] {
-  const allow = c.permissions?.allow;
-  return Array.isArray(allow) ? allow.filter((r): r is string => typeof r === "string") : [];
-}
-
-export function missingCursorAllow(sys: Home): string[] {
-  const c = readConfig(sys);
-  const have = new Set(c ? allowOf(c) : []);
-  return [
-    ...CURSOR_ALLOW.filter((r) => !have.has(r)),
-    ...STALE_CURSOR_ALLOW.filter((r) => have.has(r)),
-  ];
-}
-
-/** Adds the rules; false, writing nothing, when the config does not parse. */
-export function addCursorAllow(sys: Home): boolean {
-  const c = readConfig(sys);
-  if (!c) return false;
-  const missing = missingCursorAllow(sys);
-  if (missing.length === 0) return true;
-  const allow = (
-    Array.isArray(c.permissions?.allow) ? (c.permissions.allow as unknown[]) : []
-  ).filter((r) => !STALE_CURSOR_ALLOW.includes(r as string));
-  c.permissions = {
-    ...c.permissions,
-    allow: [...allow, ...missing.filter((r) => CURSOR_ALLOW.includes(r))],
-  };
-  mkdirSync(dirname(cursorConfigPath(sys)), { recursive: true });
-  replaceFile(cursorConfigPath(sys), `${JSON.stringify(c, null, 2)}\n`);
-  return true;
-}
-
-/** Removes the entries of earlier releases only; whether it removed any. */
-export function removeStaleCursorAllow(sys: Home): boolean {
-  const c = readConfig(sys);
-  const left = c && withoutAllow(c, STALE_CURSOR_ALLOW);
-  if (!left) return false;
-  writeLeft(cursorConfigPath(sys), left);
-  return true;
-}
-
-/** Removes the rules setup adds; whether it removed any. */
-export function removeCursorAllow(sys: Home): boolean {
-  const c = readConfig(sys);
-  const left = c && withoutAllow(c, [...CURSOR_ALLOW, ...STALE_CURSOR_ALLOW]);
-  if (!left) return false;
-  writeLeft(cursorConfigPath(sys), left);
-  return true;
 }

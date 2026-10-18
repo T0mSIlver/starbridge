@@ -107,7 +107,7 @@ private fun Zoomable(image: Attached, onZoom: (Boolean) -> Unit) {
         if (loaded != null) {
             Image(
                 loaded,
-                contentDescription = image.alt,
+                contentDescription = image.alt ?: "Image",
                 contentScale = ContentScale.Fit,
                 modifier = Modifier
                     .fillMaxSize()

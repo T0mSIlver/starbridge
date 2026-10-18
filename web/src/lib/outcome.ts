@@ -25,7 +25,7 @@ export function outcomeText(item: InboxItem): string {
 }
 
 /** What a reply says: the choice, the text, or for Done where it was answered. */
-export function replyText(reply: Reply, d: Decision): string {
+function replyText(reply: Reply, d: Decision): string {
   if ("choice" in reply) return reply.choice;
   if ("text" in reply) return reply.text;
   return d.answerIn ? `Answered in ${answerPlace(d.answerIn)}` : "Answered";
