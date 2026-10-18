@@ -95,6 +95,8 @@ private struct MemberRow: View {
      its row and the name keeps the room it needs at the largest sizes (#1947).
      */
     @ScaledMetric private var symbolWidth: CGFloat = 28
+    /** At the accessibility sizes Revoke goes under the name, which then keeps the row's width. */
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
         HStack(spacing: Tokens.Spacing.s4) {
@@ -119,18 +121,21 @@ private struct MemberRow: View {
                 if info.behind.contains(row.id) {
                     Text("Update available").type(Tokens.Typography.small).foregroundStyle(Tokens.Colors.fg2.color)
                 }
+                if typeSize.isAccessibilitySize && !row.current { revoke.padding(.top, Tokens.Spacing.s1) }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            if !row.current {
-                Button("Revoke", action: onRevoke)
-                    .buttonStyle(.borderless)
-                    .type(Tokens.Typography.label)
-                    .foregroundStyle(Tokens.Colors.fg.color)
-                    .accessibilityLabel("Revoke \(row.name)")
-            }
+            if !typeSize.isAccessibilitySize && !row.current { revoke }
         }
         .padding(.vertical, Tokens.Spacing.s1)
         .listRowBackground(Tokens.Colors.surface.color)
+    }
+
+    private var revoke: some View {
+        Button("Revoke", action: onRevoke)
+            .buttonStyle(.borderless)
+            .type(Tokens.Typography.label)
+            .foregroundStyle(Tokens.Colors.fg.color)
+            .accessibilityLabel("Revoke \(row.name)")
     }
 
     private static let notifyLabels = ["on": "Notifications on", "off": "Notifications off", "blocked": "Notifications blocked"]
