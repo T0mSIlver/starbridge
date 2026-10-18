@@ -178,8 +178,21 @@ the command anyway. [Runs](../docs/index.md#runs) says what your devices show.
 The background service uploads a quota snapshot every 5 minutes, and the other commands go
 through it when it runs (`STARBRIDGE_NO_AGENT=1` bypasses it).
 
+### What stays on this machine
+
 Keys and state live in `~/.config/starbridge` (or `$XDG_CONFIG_HOME/starbridge`, or
-`$STARBRIDGE_CONFIG_DIR`), readable only by you.
+`$STARBRIDGE_CONFIG_DIR`), readable only by you. They hold this machine's private keys and token,
+and in `state.json` each question it asked, in plain text: the question, its options, the answer,
+and the asking session's title and project. The CLI deletes a question and its answer 30 days
+after it was asked, or 7 days after `starbridge settle` closed it, as the hosted server does.
+`starbridge uninstall` asks before it deletes the keys and state.
+
+### What the server sees of this machine
+
+The machine's name, its CLI release and when that changed, and its public keys. The name is the
+host name unless you pass `--name` to `starbridge pair`, and it is not encrypted: the server and
+its backups keep it until you delete the account. Questions, answers, permission prompts and quota
+windows are sealed before upload ([What does the server see?](../docs/faq.md#what-does-the-server-see)).
 
 ## What agents parse
 

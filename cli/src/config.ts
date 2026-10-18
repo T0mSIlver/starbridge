@@ -21,6 +21,7 @@ import {
   type PermissionAnswer,
   type Pin,
   type QuotaWindow,
+  RETENTION_DAYS,
   toB64,
   type Waiting,
 } from "@starbridge/protocol";
@@ -73,6 +74,26 @@ export interface Machine {
   keys: { boxPk: string; boxSk: string; signPk: string; signSk: string };
   /** The directory as last verified; a later fetch must extend it. */
   pin: Pin;
+}
+
+const DAY_MS = 86_400_000;
+
+/**
+ * Drops the questions the server has forgotten, with their answers (#2017): the server deletes a
+ * decision 30 days after it arrived, and a settled one 7 days after the notice (PROTOCOL.md,
+ * Limits), so the text, options, answers and session titles kept here past that are history
+ * nobody can read back. One still being posted stays. An answer whose question is gone from
+ * `asked` is left, since it carries no time.
+ */
+export function pruneState(s: State, now: number): void {
+  for (const [id, a] of Object.entries(s.asked)) {
+    if (a.posting) continue;
+    const kept = a.settled && a.settledAt ? RETENTION_DAYS.week : RETENTION_DAYS.month;
+    const since = Date.parse(a.settled && a.settledAt ? a.settledAt : a.askedAt);
+    if (Number.isNaN(since) || now - since < kept * DAY_MS) continue;
+    delete s.asked[id];
+    delete s.answers[id];
+  }
 }
 
 /** What `ask` and `wait` share across processes. */
@@ -495,6 +516,7 @@ export class Store {
     return this.locked(() => {
       const s = this.state();
       fn(s);
+      pruneState(s, Date.now());
       this.write("state.json", s);
       this.markPromptsOpen(s);
       return s;
