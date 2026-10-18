@@ -485,14 +485,16 @@ export async function postDecision(
       if (e instanceof ApiError && e.code === "duplicate-id" && tries < 4) continue;
       if (!(e instanceof ApiError) || e.status >= 500) {
         posted();
+        // Settled while it posted, its own word stands.
+        const a = ctx.store.state().asked[decision.id];
         await settleOne(
           { ...ctx, signal: undefined },
           s,
           dir,
           decision.id,
-          answered?.aborted ? "elsewhere" : "withdrawn",
+          a?.settled ? a.outcome : answered?.aborted ? "elsewhere" : "withdrawn",
           false,
-          undefined,
+          a?.settled ? a.reason : undefined,
           AbortSignal.timeout(WITHDRAW_MS),
         ).catch(() => {});
       }

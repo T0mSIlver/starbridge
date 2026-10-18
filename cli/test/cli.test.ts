@@ -1377,6 +1377,24 @@ test("a question settled while its post is in flight is settled once the server 
   await expect(server.answer(decision.id, { choice: "Merge" })).rejects.toThrow();
 });
 
+test("a question settled while its post is in flight keeps that outcome when the reply is lost (#1975)", async () => {
+  const ctx = await paired(server);
+  const s = session(ctx);
+  const postItem = s.api.postItem.bind(s.api);
+  s.api.postItem = async (item, signal) => {
+    if (item.kind !== "decision") return postItem(item, signal);
+    expect(await run(["settle", "--session", "s", "--outcome", "elsewhere"], ctx)).toBe(0);
+    await postItem(item, signal);
+    throw new TypeError("fetch failed");
+  };
+  await expect(
+    postDecision(ctx, s, { question: "Merge #12 now?", options: ["Merge", "Wait"], session: "s" }),
+  ).rejects.toThrow();
+  const notices = await server.opened("settled");
+  expect(notices.length).toBeGreaterThan(0);
+  expect(notices.map((n) => n.outcome)).toEqual(notices.map(() => "elsewhere"));
+});
+
 test("a question the server refused leaves nothing asked (#1975)", async () => {
   server.stop();
   server = await LiveServer.start({ limits: { ...DEFAULT_LIMITS, storedBytes: 1 } });
