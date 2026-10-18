@@ -2615,10 +2615,20 @@ async function main() {
   const confirm = dialog.getByRole("button", { name: "Delete account" });
   if (await confirm.isEnabled()) throw new Error("Delete account worked before typing delete");
   await dialog.getByLabel("Type delete to confirm").fill("delete");
+  // Deleting the account forgets the localStorage keys too, as signing out does (#2014).
+  await pageD.evaluate(() => {
+    localStorage.setItem("starbridge:quota-settings", '{"v":1}');
+    localStorage.setItem("starbridge:quota-account", '{"v":1,"account":"a_gone"}');
+  });
   await confirm.click();
   await pageD
     .getByRole("heading", { name: /Know the moment your agent is stuck/ })
     .waitFor({ timeout: 30_000 });
+  const keptAfterDelete = await pageD.evaluate(() =>
+    Object.keys(localStorage).filter((k) => k.startsWith("starbridge:quota")),
+  );
+  if (keptAfterDelete.length > 0)
+    throw new Error(`deleting the account left ${keptAfterDelete.join(", ")}`);
   await d.clearCookies();
   await pageD.goto(ORIGIN);
   await pageD.getByRole("link", { name: SIGN_IN }).click();
