@@ -39,6 +39,12 @@ final class ClientRulesTests: XCTestCase {
         XCTAssertEqual(rules["rowInputMax"]!.number, Double(SavedPrompt.rowInputMax))
     }
 
+    func testLimits() {
+        let limits = rules["limits"]!
+        XCTAssertEqual(limits["answerTextMax"]!.number, Double(ANSWER_TEXT_MAX))
+        XCTAssertEqual(limits["blobMax"]!.number, Double(BLOB_MAX))
+    }
+
     func testSnooze() {
         let snooze = rules["snooze"]!
         XCTAssertEqual(snooze["minMs"]!.number, ms(SnoozeTimes.minimum))

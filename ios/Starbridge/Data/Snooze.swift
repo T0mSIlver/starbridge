@@ -28,10 +28,12 @@ enum SnoozeTimes {
     /** A day's first time: today an hour ahead, up to the half hour; 9:00 on another day. */
     static func start(_ day: Date, _ now: Date, _ calendar: Calendar = .current) -> Date {
         if calendar.isDate(day, inSameDayAs: now) {
-            let ahead = now.addingTimeInterval(3600)
+            // From the minute's start: 16:30:20 offers 17:30, not the minute after (#1951).
+            let hourAhead = now.addingTimeInterval(3600)
+            let ahead = calendar.dateInterval(of: .minute, for: hourAhead)?.start ?? hourAhead
             let minute = calendar.component(.minute, from: ahead)
             let up = minute == 0 ? 0 : minute <= 30 ? 30 - minute : 60 - minute
-            let start = calendar.date(bySetting: .second, value: 0, of: ahead.addingTimeInterval(TimeInterval(up * 60))) ?? ahead
+            let start = ahead.addingTimeInterval(TimeInterval(up * 60))
             // Late in the evening that would be tomorrow: today's last half hour instead.
             if !calendar.isDate(start, inSameDayAs: day) { return calendar.date(bySettingHour: 23, minute: 30, second: 0, of: day) ?? start }
             return start

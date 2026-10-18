@@ -170,7 +170,7 @@ export type PinnedSend = (
   timeoutMs: number,
 ) => Promise<number>;
 
-const pinnedHttps: PinnedSend = (url, address, req, timeoutMs) =>
+export const pinnedHttps: PinnedSend = (url, address, req, timeoutMs) =>
   new Promise((resolve, reject) => {
     const host = url.hostname.replace(/^\[|\]$/g, "");
     const r = request(

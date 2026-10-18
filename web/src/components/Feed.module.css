@@ -200,8 +200,10 @@ a.open:hover {
   background: linear-gradient(var(--accent-soft), var(--accent-soft)), var(--surface2);
 }
 
+/* A commit hash or a token breaks anywhere rather than run past the row (#1906). */
 .question {
   font-weight: 400;
+  overflow-wrap: anywhere;
 }
 
 .blocks .question {

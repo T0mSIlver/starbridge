@@ -11,14 +11,14 @@ import { dirname, join } from "node:path";
 import agyRule from "../../../plugin/rules/antigravity.md" with { type: "text" };
 import opencodeRule from "../../../plugin/rules/opencode.md" with { type: "text" };
 import skill from "../../../plugin/skills/starbridge/SKILL.md" with { type: "text" };
-import { replaceFile } from "../replace";
 import { COMMIT, VERSION } from "../version";
+import { ALLOW, removeAllow } from "./allow";
 import agyFiles from "./antigravity-files.js";
 import { codexPluginDir, refreshCodexPluginFiles } from "./codex-plugin";
 import { cursorHooksPath, cursorSkillDir, cursorState, installCursorFiles } from "./cursor";
 import { markedSkill, marker, ours } from "./marker";
 import plugin from "./opencode-files.js";
-import { removedLine, removeWritten, withoutAllow, writeLeft } from "./remove";
+import { removedLine, removeWritten } from "./remove";
 import { failure, run, type Sys, which } from "./sys";
 
 /** What the Codex skill steps need: the agent has no prompt. */
@@ -351,80 +351,9 @@ export function installAntigravity(sys: Home) {
   }
 }
 
-/**
- * The allow entries for `agy`'s settings, which let the commands the skill runs skip the prompt.
- * A hook cannot do it: `agy` 1.3.2 still prompts after a `PreToolUse` `allow`. An entry also
- * passes the command behind a variable assignment or `env`, so the plugin's hook makes such a
- * line ask again (`hook pre-tool`).
- */
-export const AGY_ALLOW = ["ask", "waiting", "working", "wait", "hello"].map(
-  (c) => `command(starbridge ${c})`,
-);
-
-/** Entries of earlier releases that setup removes: `settle` let `settle --all --yes` through. */
-export const STALE_AGY_ALLOW = ["command(starbridge settle)"];
-
 /** `agy`'s settings file. The app and the IDE keep their own, which setup does not know. */
 export function agySettingsPath(sys: Home): string {
   return join(sys.home, ".gemini", "antigravity-cli", "settings.json");
-}
-
-type AgySettings = { permissions?: { allow?: unknown } & Record<string, unknown> } & Record<
-  string,
-  unknown
->;
-
-function readAgySettings(sys: Home): AgySettings | undefined {
-  try {
-    const v = JSON.parse(readFileSync(agySettingsPath(sys), "utf8")) as unknown;
-    return v && typeof v === "object" && !Array.isArray(v) ? (v as AgySettings) : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
-const agyAllowList = (s: AgySettings | undefined): string[] => {
-  const allow = s?.permissions?.allow;
-  return Array.isArray(allow) ? allow.filter((r): r is string => typeof r === "string") : [];
-};
-
-/** The entries of AGY_ALLOW missing from `agy`'s settings. */
-export function missingAgyAllow(sys: Home): string[] {
-  const have = new Set(agyAllowList(readAgySettings(sys)));
-  return [...AGY_ALLOW.filter((r) => !have.has(r)), ...STALE_AGY_ALLOW.filter((r) => have.has(r))];
-}
-
-/** Adds AGY_ALLOW to `agy`'s settings. False, writing nothing, when the file does not parse. */
-export function addAgyAllow(sys: Home): boolean {
-  const read = readAgySettings(sys);
-  if (!read && existsSync(agySettingsPath(sys))) return false;
-  const s: AgySettings = read ?? {};
-  const allow = agyAllowList(s).filter((r) => !STALE_AGY_ALLOW.includes(r));
-  s.permissions = {
-    ...s.permissions,
-    allow: [...allow, ...AGY_ALLOW.filter((r) => !allow.includes(r))],
-  };
-  mkdirSync(dirname(agySettingsPath(sys)), { recursive: true });
-  replaceFile(agySettingsPath(sys), `${JSON.stringify(s, null, 2)}\n`);
-  return true;
-}
-
-/** Removes the entries of earlier releases only; whether it removed any. */
-export function removeStaleAgyAllow(sys: Home): boolean {
-  const s = readAgySettings(sys);
-  const left = s && withoutAllow(s, STALE_AGY_ALLOW);
-  if (!left) return false;
-  writeLeft(agySettingsPath(sys), left);
-  return true;
-}
-
-/** Removes AGY_ALLOW from `agy`'s settings. False when none was there. */
-export function removeAgyAllow(sys: Home): boolean {
-  const s = readAgySettings(sys);
-  const left = s && withoutAllow(s, [...AGY_ALLOW, ...STALE_AGY_ALLOW]);
-  if (!left) return false;
-  writeLeft(agySettingsPath(sys), left);
-  return true;
 }
 
 /** Removes the plugin, only when it is the one setup wrote; the owner's files in its folder stay. */
@@ -472,7 +401,10 @@ export function refreshFiles(sys: Home): string[] {
     step(antigravityDir(sys), () => installAntigravity(sys));
   // The entries pass more than the commands once no hook of ours narrows them.
   const agy = antigravityState(sys);
-  if ((agy === "foreign" || (agy !== "missing" && antigravityDisabled(sys))) && removeAgyAllow(sys))
+  if (
+    (agy === "foreign" || (agy !== "missing" && antigravityDisabled(sys))) &&
+    removeAllow(ALLOW.antigravity, sys)
+  )
     done.push(`Removed the starbridge allow entries from ${agySettingsPath(sys)}.`);
   return done;
 }

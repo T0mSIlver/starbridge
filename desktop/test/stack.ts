@@ -2,8 +2,9 @@
 // real CLI, and web/e2e/services.ts standing in for GitHub. It signs in through the browser (this
 // run follows the browser's redirects) and sets up the app as a device, pairs a machine, times the
 // switch between tabs, and answers `starbridge ask --wait` from the app's notifications: by a
-// button and by a typed reply; a question answered in the window closes its notification, and the
-// menu bar's dot follows Needs you. Notifications and the tray are watched in the main process.
+// button and by a typed reply; a question answered in the window closes its notification, a pasted
+// reply stops at 4000 characters (#1921), and the menu bar's dot follows Needs you. Notifications
+// and the tray are watched in the main process.
 //
 //   xvfb-run -a node desktop/test/stack.ts      (after `pnpm --filter @starbridge/desktop build`)
 //
@@ -507,6 +508,19 @@ try {
       async () => (await main((g) => g.closed)).includes(id),
       "the answered notification to close",
     );
+
+    step("a pasted reply stops at the server's 4000 characters and is sent (#1921)");
+    const fourth = ask("Paste the build log?", "--option", "Paste", "--option", "Skip");
+    await page.getByText("Paste the build log?").first().click();
+    const reply = page.getByRole("textbox", { name: "Your answer" });
+    await reply.click();
+    // Emoji count one each, as the server and the phone apps count them.
+    await page.keyboard.insertText("😀".repeat(4001));
+    assert.equal(Array.from(await reply.inputValue()).length, 4000);
+    await shoot(page, "reply-capped");
+    await reply.press("Enter");
+    await fourth.waitFor(/Answer to d_\S+ \(Paste the build log\?\): 😀/);
+    assert.equal(await fourth.exited, 0);
 
     assert.ok(
       headers.length > 0 && headers.every((h) => h === `desktop/${VERSION}`),

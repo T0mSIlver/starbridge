@@ -49,6 +49,9 @@ junit = { group = "junit", name = "junit", version.ref = "junit" }
 androidx-test-runner = { group = "androidx.test", name = "runner", version.ref = "androidx-test-runner" }
 androidx-test-junit = { group = "androidx.test.ext", name = "junit", version.ref = "androidx-test-junit" }
 robolectric = { group = "org.robolectric", name = "robolectric", version.ref = "robolectric" }
+# Robolectric 4.17's Android for SDK 36, the only one the tests run (#1910). A new Robolectric
+# names another: its tests then fail with "Unable to locate dependency" and the version it wants.
+robolectric-android-all = { group = "org.robolectric", name = "android-all-instrumented", version = "16-robolectric-13921718-i7" }
 roborazzi = { group = "io.github.takahirom.roborazzi", name = "roborazzi", version.ref = "roborazzi" }
 roborazzi-compose = { group = "io.github.takahirom.roborazzi", name = "roborazzi-compose", version.ref = "roborazzi" }
 roborazzi-junit-rule = { group = "io.github.takahirom.roborazzi", name = "roborazzi-junit-rule", version.ref = "roborazzi" }

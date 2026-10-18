@@ -142,8 +142,8 @@
   repository's marketplace that earlier setups added, which also served only this repository
   (#274). Setup turns on plugin auto-update through `extraKnownMarketplaces`, and uninstall
   removes only its own marketplace, so a developer's own `starbridge` marketplace survives;
-  both run `claude` from the home directory, so no repository's `.claude` settings are read or
-  edited (#762). Setup installs Codex's skill and rule, opencode's plugin and skill and the
+  both, and `starbridge update`'s plugin update, run `claude` from the home directory, so no
+  repository's `.claude` settings are read or edited (#762, #1919). Setup installs Codex's skill and rule, opencode's plugin and skill and the
   Antigravity plugin from copies the CLI carries so versions match. The local agent rewrites outdated copies when it starts.
 - **Setup asks little** (#750). Each question was one more Enter between a new user and their
   first answer, and nearly everyone said yes. Setup installs Starbridge in every agent it finds

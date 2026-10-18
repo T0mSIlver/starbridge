@@ -1,10 +1,9 @@
 /** Setup's Claude Code step: the Starbridge marketplace and its two plugins, at user scope. */
-import { existsSync, mkdirSync, readFileSync, rmdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, rmdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import market from "../../../.claude-plugin/marketplace.json" with { type: "json" };
 import { replaceFile } from "../replace";
 import { COMMIT, VERSION } from "../version";
-import { withoutAllow, writeLeft } from "./remove";
 import { failure, run, type Sys, which } from "./sys";
 
 const MARKETPLACE = "starbridge";
@@ -63,7 +62,7 @@ export function hasClaude(sys: Sys): boolean {
   return which(sys.ctx.env, "claude") !== undefined;
 }
 
-function claudeDir(sys: Sys) {
+function claudeDir(sys: Pick<Sys, "ctx" | "home">) {
   return sys.ctx.env.CLAUDE_CONFIG_DIR || join(sys.home, ".claude");
 }
 
@@ -289,7 +288,7 @@ type Settings = Record<string, unknown> & {
   extraKnownMarketplaces?: Record<string, Record<string, unknown>>;
 };
 
-export function settingsPath(sys: Sys) {
+export function settingsPath(sys: Pick<Sys, "ctx" | "home">) {
   return join(claudeDir(sys), "settings.json");
 }
 
@@ -320,61 +319,5 @@ export function enableAutoUpdate(sys: Sys): boolean {
   if (!s || !entry) return false;
   entry.autoUpdate = true;
   writeSettings(sys, s);
-  return true;
-}
-
-/**
- * The commands that post a question and read its answer. Each would otherwise stop at a
- * permission prompt before the question reaches the owner. `starbridge run` stays out: the
- * command it wraps is the agent's own.
- */
-export const ALLOW_RULES = [
-  "Bash(starbridge ask:*)",
-  "Bash(starbridge waiting:*)",
-  "Bash(starbridge working:*)",
-  "Bash(starbridge wait:*)",
-  // One decision by its id, never `settle --all` or `--session` (#1761).
-  "Bash(starbridge settle d_*)",
-];
-
-/** Entries of earlier releases that setup replaces: `settle:*` let `settle --all --yes` through. */
-export const STALE_ALLOW_RULES = ["Bash(starbridge settle:*)"];
-
-function allowList(s: Settings | undefined): string[] {
-  const allow = s?.permissions?.allow;
-  return Array.isArray(allow) ? allow.filter((r): r is string => typeof r === "string") : [];
-}
-
-/** The rules of ALLOW_RULES missing from user settings. */
-export function missingAllowRules(sys: Sys): string[] {
-  const have = new Set(allowList(readSettings(sys)));
-  // A stale entry counts as missing its replacement, so setup rewrites the list.
-  return [
-    ...ALLOW_RULES.filter((r) => !have.has(r)),
-    ...STALE_ALLOW_RULES.filter((r) => have.has(r)),
-  ];
-}
-
-/** False, writing nothing, when settings.json exists but does not parse. */
-export function addAllowRules(sys: Sys): boolean {
-  const read = readSettings(sys);
-  if (!read && existsSync(settingsPath(sys))) return false;
-  const s: Settings = read ?? {};
-  const allow = allowList(s).filter((r) => !STALE_ALLOW_RULES.includes(r));
-  s.permissions = {
-    ...s.permissions,
-    allow: [...allow, ...ALLOW_RULES.filter((r) => !allow.includes(r))],
-  };
-  mkdirSync(claudeDir(sys), { recursive: true });
-  writeSettings(sys, s);
-  return true;
-}
-
-/** Removes ALLOW_RULES from user settings. False when none was there. */
-export function removeAllowRules(sys: Sys): boolean {
-  const s = readSettings(sys);
-  const left = s && withoutAllow(s, [...ALLOW_RULES, ...STALE_ALLOW_RULES]);
-  if (!left) return false;
-  writeLeft(settingsPath(sys), left);
   return true;
 }

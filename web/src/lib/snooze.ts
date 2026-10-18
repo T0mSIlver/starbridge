@@ -1,11 +1,11 @@
 // Snoozing a question (#571): the owner's "not now, show me this again at T". Times resolve on
 // this device, in its zone, and travel as absolute times. Pure, so the presets have tests.
+import { SNOOZE_MAX_MS } from "@starbridge/protocol";
 import { clockTime } from "./format";
 import type { Prefs } from "./prefs";
 import type { InboxItem } from "./types";
 
-/** The latest a snooze may run: an unanswered question drops 30 days after it came. */
-export const SNOOZE_MAX_MS = 7 * 24 * 60 * 60_000;
+export { SNOOZE_MAX_MS };
 
 /** "This evening" is 18:00, offered until 17:00; another day's time starts at 9:00. */
 const EVENING = 18;

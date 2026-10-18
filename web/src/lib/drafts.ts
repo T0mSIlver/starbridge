@@ -15,3 +15,17 @@ export const drafts = new Map<string, string>();
 export function dropClosedDrafts(inbox: InboxItem[]): void {
   for (const i of inbox) if (closedAt(i)) drafts.delete(i.decision.id);
 }
+
+/** The longest reply the server takes: the Answer schema's 4000, which zod counts in code points. */
+export const REPLY_LIMIT = 4000;
+
+/**
+ * A reply cut to its first `REPLY_LIMIT` code points, as Android and iOS cap their fields (#1921):
+ * a cut never splits an emoji's pair, which the server refuses.
+ */
+export function capReply(text: string): string {
+  // Each code point is at most 2 units, so a text this short needs no count.
+  if (text.length <= REPLY_LIMIT) return text;
+  const points = Array.from(text);
+  return points.length <= REPLY_LIMIT ? text : points.slice(0, REPLY_LIMIT).join("");
+}

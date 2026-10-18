@@ -7,6 +7,7 @@ import {
   Decision,
   type DecisionLink,
   type Directory,
+  ITEM_BYTES,
   noteHead as keepHead,
   newDecisionId,
   open,
@@ -92,9 +93,6 @@ export interface AskInput {
   /** The page the owner answers on instead of Starbridge; the decision then has no options. */
   answerIn?: string | DecisionLink;
 }
-
-/** What the server stores at most for one decision, boxes and blobs together (PROTOCOL.md, Limits). */
-const ITEM_BYTES = 2 * 1024 * 1024;
 
 /** One image's file at most: its blob is then the 512 KB of base64url `BLOB_MAX` allows. */
 const IMAGE_BYTES = 384 * 1024;
@@ -214,7 +212,7 @@ export function typedBreaks(context: string): string {
     .join("");
 }
 
-function buildDecision(input: AskInput, ctx: Ctx, machine: string, to: string[]): Decision {
+export function buildDecision(input: AskInput, ctx: Ctx, machine: string, to: string[]): Decision {
   if (!input.question) throw new UsageError("ask needs --question");
   const options = input.options ?? [];
   const link = (l: string | DecisionLink) => (typeof l === "string" ? { url: l } : l);
@@ -388,9 +386,16 @@ function sealWithPictures(
 
 /**
  * Seals the decision to every active device, posts it and records it in the state, so its
- * answer reaches the session that asked. Returns the decision.
+ * answer reaches the session that asked. Returns the decision. A post cut short is settled, as
+ * the server may hold it: `elsewhere` once `answered` is aborted (a harness's picker answered
+ * at the keyboard, #1913), otherwise withdrawn.
  */
-export async function postDecision(ctx: Ctx, s: Session, input: AskInput): Promise<Decision> {
+export async function postDecision(
+  ctx: Ctx,
+  s: Session,
+  input: AskInput,
+  answered?: AbortSignal,
+): Promise<Decision> {
   const deadline = AbortSignal.timeout(POST_MS);
   const signal = ctx.signal ? AbortSignal.any([ctx.signal, deadline]) : deadline;
   // Ctrl-C exits 130, as everywhere (CONTRACT.md); the deadline says what it cut.
@@ -470,7 +475,7 @@ export async function postDecision(ctx: Ctx, s: Session, input: AskInput): Promi
           s,
           dir,
           decision.id,
-          "withdrawn",
+          answered?.aborted ? "elsewhere" : "withdrawn",
           false,
           undefined,
           AbortSignal.timeout(WITHDRAW_MS),
@@ -484,16 +489,24 @@ export async function postDecision(ctx: Ctx, s: Session, input: AskInput): Promi
   }
 }
 
-/** Posts a decision and prints its id; with `wait`, then waits for its answer. */
+/**
+ * Posts a decision and prints its id; with `wait`, then waits for its answer. `answered` is
+ * `postDecision`'s: aborted, a post it cuts is settled elsewhere.
+ */
 export async function ask(
   ctx: Ctx,
   asked: AskInput,
-  opts: { wait?: boolean; timeout?: string; json?: boolean },
+  opts: { wait?: boolean; timeout?: string; json?: boolean; answered?: AbortSignal },
 ): Promise<number> {
   const s = session(ctx);
   const { input, warning } = bindSession(asked, ctx.env);
   const resolved = resolveSource(input, ctx.env, process.cwd());
-  const decision = await postDecision(ctx, s, { ...resolved, waiting: input.waiting || opts.wait });
+  const decision = await postDecision(
+    ctx,
+    s,
+    { ...resolved, waiting: input.waiting || opts.wait },
+    opts.answered,
+  );
   ctx.out(decision.id);
   if (warning) ctx.err(warning);
   // With no agent, nothing tells which sessions run a mod: the poller's lease says only that one
@@ -800,7 +813,7 @@ type Asked = Pick<State["asked"][string], "options" | "settled" | "answerIn" | "
  * sealed to, for an open decision this machine asked that takes answers in Starbridge, with one of
  * its options or a typed reply; or, for one answered on its own page, a Done.
  */
-function checkAnswer(
+export function checkAnswer(
   raw: unknown,
   s: Session,
   dir: Directory,
@@ -840,7 +853,7 @@ function checkAnswer(
  * to signed it and it is newer than the one kept. A snooze is not an answer: it only tells `wait`
  * and `waiting` that none comes before its time.
  */
-function acceptSnooze(raw: unknown, s: Session, dir: Directory, st: State): void {
+export function acceptSnooze(raw: unknown, s: Session, dir: Directory, st: State): void {
   const item = parseWith(SealedItem, raw);
   if (item.kind !== "snooze") throw new ProtocolError("wrong-kind", item.kind);
   const { body, signer } = open(
@@ -950,7 +963,7 @@ export function noteHead(
  * Why no answer counts now: a device active in `dir` signed a head the machine's chain `entries`
  * lacks, so the server is holding back entries, perhaps the revocation of a device that answers.
  */
-function behindBy(st: State, dir: Directory, entries: unknown[]): string | undefined {
+export function behindBy(st: State, dir: Directory, entries: unknown[]): string | undefined {
   const held = withheld(st, dir, entries);
   return held && `${held}. No answer counts meanwhile`;
 }
@@ -1611,7 +1624,7 @@ export function named(id: string, question: string | undefined): string {
 }
 
 /** "13:02", "yesterday 13:02", "Mon 12 Oct 13:02": a time that has passed, in this machine's zone. */
-function pastTime(at: Date, now: Date): string {
+export function pastTime(at: Date, now: Date): string {
   const time = at.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
   const day = (d: Date) => d.toDateString();
   if (day(at) === day(now)) return time;
@@ -1643,7 +1656,7 @@ export function closedHow(st: State, id: string, now: Date): string | undefined 
 }
 
 /** What `waiting`, `working` and `settle` say of a card that is closed already. */
-function staleLine(st: State, id: string, now: Date): string {
+export function staleLine(st: State, id: string, now: Date): string {
   return `${named(id, st.asked[id]?.question)} was already ${closedHow(st, id, now) ?? "closed"}`;
 }
 
@@ -1657,7 +1670,7 @@ export async function markWaiting(ctx: Ctx, post: () => Promise<unknown>): Promi
 }
 
 /** Keeps a `--wait` cycle under the 30 s the mod's host allows a call to run. */
-const MAX_CYCLE_SECONDS = 25;
+export const MAX_CYCLE_SECONDS = 25;
 
 /** One line for a session: the answer to a decision it asked. */
 export interface SessionLine {
@@ -1886,7 +1899,7 @@ export async function answersAll(
 }
 
 /** One line of `decisions --open`: a question this machine asked that is still open. */
-interface OpenDecision {
+export interface OpenDecision {
   decisionId: string;
   question: string;
   options: string[];
