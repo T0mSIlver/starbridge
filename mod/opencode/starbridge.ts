@@ -42,7 +42,7 @@ import {
 } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { AgentLoop, joinLines, type Line, socketPath } from "../hooks/agent.ts";
+import { AgentLoop, agentAddress, joinLines, type Line } from "../hooks/agent.ts";
 import {
   answersOf,
   hookCommand,
@@ -325,9 +325,9 @@ async function server({ client, directory }: Input) {
   const answers = !isRun(process.argv);
   const env: Record<string, string | undefined> = process.env;
   const dir = configDir(env);
-  const socket = socketPath(env);
+  const { socket, config } = await agentAddress(env);
   const fetch = (method: string, path: string, body?: unknown) =>
-    socketFetch(socket, method, path, body);
+    socketFetch(socket, method, path, body, config);
   const now = async () => Date.now();
   const log = (_s: string) => {};
   const status = (_s: string | undefined) => {};

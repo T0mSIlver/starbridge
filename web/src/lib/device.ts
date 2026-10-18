@@ -68,6 +68,7 @@ import {
 } from "./kinds/core";
 import { retrying } from "./kinds/joins";
 import { otherServer } from "./otherServer";
+import { signedOut } from "./signedOut";
 import * as store from "./store";
 import type { Device, PairingRequest } from "./types";
 
@@ -158,15 +159,10 @@ export async function boot(): Promise<Boot> {
     me = await api.me();
   } catch (e) {
     if (e instanceof ApiError && e.status === 401) {
-      const last = await store.get("current");
       // A "revoked" here is the server's word only: the keys stay, and the next sign-in reads
       // the chain, which alone revokes a device (#310). Closing notifications loses nothing.
       if (e.code === "revoked") await closeNotifications();
-      return {
-        state: "signed-out",
-        known: !!last && !!(await store.get("device", last)),
-        ...(e.code === "revoked" ? { refused: e.code } : {}),
-      };
+      return signedOut(e.code === "revoked" ? e.code : undefined);
     }
     throw e;
   }

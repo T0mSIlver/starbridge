@@ -250,7 +250,9 @@
   Then sb-oracle, the outside check's VM, runs one round trip on its test account (#1522): a
   healthy server that cannot push or answer fails the run at once, rather than at the check's next
   round trip up to 15 minutes later. Its key's forced command only asks for that round trip and
-  prints the result.
+  prints the result. Both boxes run one set of deploy scripts, and what differs between them is a
+  settings file per box (`deploy/host/prod.env`, `deploy/staging/staging.env`), since copies drifted
+  and the same fix landed four times (#1663, #1675, #1953).
 - **Rollback** (#1520, #1828). `rollback.yml`, dispatched with a box and a commit, redeploys a
   commit that box ran before, so prod rolls back without the owner's full-sudo key, which was the
   only way before. It logs in with a second key per box, whose forced command runs only
@@ -353,7 +355,7 @@
   a public one or paid minutes. A `macos-latest` job (#877), skipped the same way, starts a built
   binary and runs the whole CLI suite, which must pass: the launchd service and the screen readers
   run only on a Mac, so the real launchd starts and stops the agent there. A `ubuntu-24.04-arm` job (#1481), skipped the same way, does the same for the
-  linux-arm64 binary. All three jobs run each test file alone and kill one that hangs (`cli/scripts/test-each.ts`, #862).
+  linux-arm64 binary. All three jobs run each test file in its own process, two at a time, and kill one that hangs (`cli/scripts/test-each.ts`, #862, #1916).
 - **Evidence** (#1826). Agents prove a pull request from what the product shows, not from its
   diff: the icon passed review four times while it sat low (#1477, #1453, #1564, #1713). The
   web e2e, set to keep evidence, also shoots at 360, 768 and 1280 px in light and dark, and keeps

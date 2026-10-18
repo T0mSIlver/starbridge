@@ -9,6 +9,10 @@
   display: none;
 }
 
+.main:focus {
+  outline: none;
+}
+
 .main {
   max-width: var(--size-content);
   margin: 0 auto;
