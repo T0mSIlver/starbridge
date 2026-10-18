@@ -176,6 +176,9 @@ jobs:
       - run: pnpm lint
       - run: pnpm typecheck
       - run: pnpm test
+      # A copyleft, attribution, vendor-terms or unnamed licence among the runtime dependencies fails
+      # unless scripts/licenses/allow.json lists it with a reason (#2024). Android's runs in android.yml.
+      - run: bun scripts/licenses/licenses.ts check npm
 
   # The whole product on one machine (web/e2e/run.ts), in three parts side by side, each with its
   # own server and browser (E2E_SHARD). Each screenshot also fails on layout breakage: a page wider
