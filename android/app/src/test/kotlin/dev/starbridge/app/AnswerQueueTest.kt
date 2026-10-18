@@ -436,6 +436,27 @@ class AnswerQueueTest {
     }
 
     @Test
+    fun aWorkerStartedDuringTheTapsPostWaitsOutTheHoldThatPostStarts() {
+        setUp()
+        gate = CountDownLatch(1)
+        // The tap's post comes back with a 429 and a hold longer than a call waits.
+        reply = { MockResponse(429, Headers.headersOf("content-type", "application/json", "retry-after", "60"), """{"error":"rate-limited"}""") }
+        val store = store()
+        store.answer("d_ship", "Hold", null)
+        runBlocking { withTimeout(5_000) { while (wakes == 0) delay(10) } }
+        // The worker it scheduled starts while that post is out, and waits for the store.
+        val run = scope.async { store.flushAnswers() }
+        runBlocking { delay(200) }
+        gate.countDown()
+        runBlocking { withTimeout(5_000) { while (store.notice.value == null) delay(10) } }
+        // It waits the hold out rather than failing at once and backing off.
+        runBlocking { delay(1_000) }
+        assertFalse(run.isCompleted)
+        assertEquals(1, posted.size)
+        run.cancel()
+    }
+
+    @Test
     fun aSyncSendsTheQueuedAnswerEvenWhenItsReadsFail() {
         setUp()
         offline = true

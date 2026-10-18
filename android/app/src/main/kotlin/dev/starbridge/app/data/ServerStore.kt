@@ -1720,10 +1720,20 @@ class ServerStore(
     suspend fun flushAnswers(): Boolean {
         while (true) {
             val held = limitedUntil - System.currentTimeMillis()
-            if (held <= 0) break
-            delay(held)
+            if (held > 0) {
+                delay(held)
+                continue
+            }
+            lock.lock()
+            try {
+                // A post under the lock meanwhile, such as the tap's own that scheduled this run
+                // (#1979), may have started a hold: wait it out too, without the lock.
+                if (limitedUntil > System.currentTimeMillis()) continue
+                return flushQueued()
+            } finally {
+                lock.unlock()
+            }
         }
-        return lock.withLock { flushQueued() }
     }
 
     private suspend fun flushQueued(): Boolean {
