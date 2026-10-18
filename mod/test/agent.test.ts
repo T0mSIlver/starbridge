@@ -170,9 +170,14 @@ test("the mod finds the socket where the CLI's agent listens, and sends its conf
   for (const [mod, cli] of [
     ["/home/tom//.config/starbridge", "/home/tom/.config/starbridge"],
     ["/home/tom/.config/starbridge/", "/home/tom/.config/starbridge"],
-    ["C:/Users/tom/.config/starbridge", "C:\\Users\\tom\\.config\\starbridge"],
   ] as const)
-    expect(await configKey(mod)).toBe(cliConfigKey(cli));
+    expect(await configKey(mod)).toBe(cliConfigKey(cli, "linux"));
+  const windows = "C:\\Users\\tom\\.config\\starbridge";
+  expect(await configKey("C:/Users/tom/.config/starbridge", true)).toBe(
+    cliConfigKey(windows, "win32"),
+  );
+  // Elsewhere a backslash is part of a name: two folders, two keys.
+  expect(cliConfigKey("/tmp/a\\b", "linux")).not.toBe(cliConfigKey("/tmp/a/b", "linux"));
   // Two homes of one user share $XDG_RUNTIME_DIR, never an agent (#1966).
   const run = { XDG_RUNTIME_DIR: "/run/user/1000" };
   expect((await agentAddress({ ...run, HOME: "/home/a" })).socket).not.toBe(

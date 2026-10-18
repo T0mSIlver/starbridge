@@ -928,9 +928,9 @@ one connection to the server, and serves the CLI and the Claude Code sessions on
 over HTTP on a unix socket: for the default config directory,
 `$XDG_RUNTIME_DIR/starbridge/agent-<key>.sock` on Linux when that is set, else `agent.sock` in the
 config directory (`$STARBRIDGE_AGENT_SOCKET` overrides). `<key>` is the first 16 hex digits of
-the SHA-256 of the config directory's path, with `\` as `/`, runs of `/` as one and no trailing
-`/`, so two homes of one user, which share `$XDG_RUNTIME_DIR`, reach their own agents (#1966).
-The directory is 0700, the socket 0600. Types: `cli/src/agent/api.ts`.
+the SHA-256 of the config directory's path, with runs of `/` as one, no trailing `/` and, on
+Windows only, `\` as `/`, so two homes of one user, which share `$XDG_RUNTIME_DIR`, reach their
+own agents (#1966). The directory is 0700, the socket 0600. Types: `cli/src/agent/api.ts`.
 
 On Windows (#552), Node and Bun read a socket path as a named pipe, which other local users can
 open, so the agent listens on a free port on 127.0.0.1 instead. It writes `agent.port`,

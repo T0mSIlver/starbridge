@@ -82,12 +82,11 @@ const hex = (bytes: Uint8Array) => [...bytes].map((b) => b.toString(16).padStart
 
 /**
  * The CLI's `configKey` (cli/src/agent/api.ts) of config folder `dir`: the first 16 hex digits of
- * the SHA-256 of its path, with `\` as `/`, runs of `/` as one and no trailing `/`. Sent as
- * `CONFIG_HEADER`, so an agent of another config folder refuses the call (#1966).
+ * the SHA-256 of its path, with runs of `/` as one, no trailing `/`, and on Windows `\` as `/`.
+ * Sent as `CONFIG_HEADER`, so an agent of another config folder refuses the call (#1966).
  */
-export async function configKey(dir: string): Promise<string> {
-  const path = dir
-    .replace(/\\/g, "/")
+export async function configKey(dir: string, windows = false): Promise<string> {
+  const path = (windows ? dir.replace(/\\/g, "/") : dir)
     .replace(/\/+/g, "/")
     .replace(/(.)\/$/, "$1");
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(path));
@@ -115,7 +114,7 @@ export async function agentAddress(env: {
 }): Promise<{ socket: string; config?: string }> {
   const dir = configDir(env);
   if (env.STARBRIDGE_AGENT_SOCKET) return { socket: env.STARBRIDGE_AGENT_SOCKET };
-  const config = await configKey(dir);
+  const config = await configKey(dir, env.OS === "Windows_NT");
   if (env.OS === "Windows_NT") return { socket: `${dir}/agent.port`, config };
   const standard = configDir({ ...env, STARBRIDGE_CONFIG_DIR: undefined });
   if (env.XDG_RUNTIME_DIR && dir === standard)

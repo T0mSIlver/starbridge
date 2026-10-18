@@ -30,12 +30,12 @@ export const CONFIG_HEADER = "starbridge-config";
 
 /**
  * A short key for config folder `dir`: the first 16 hex digits of the SHA-256 of its path, with
- * `\` as `/`, runs of `/` as one and no trailing `/`, so the mod, which builds the path from
- * `$HOME` by hand, gets the same key (mod/hooks/agent.ts).
+ * runs of `/` as one, no trailing `/`, and on Windows `\` as `/`, so the mod, which builds the
+ * path from `$HOME` by hand, gets the same key (mod/hooks/agent.ts). Elsewhere `\` is a
+ * character of a name, and two folders must not share a key.
  */
-export function configKey(dir: string): string {
-  const path = dir
-    .replace(/\\/g, "/")
+export function configKey(dir: string, platform: NodeJS.Platform = process.platform): string {
+  const path = (platform === "win32" ? dir.replace(/\\/g, "/") : dir)
     .replace(/\/+/g, "/")
     .replace(/(.)\/$/, "$1");
   return createHash("sha256").update(path).digest("hex").slice(0, 16);
@@ -59,7 +59,7 @@ export function socketPath(
   if (platform === "win32") return join(storeDir, "agent.port");
   const standard = configDir({ ...env, STARBRIDGE_CONFIG_DIR: undefined });
   if (env.XDG_RUNTIME_DIR && storeDir === standard)
-    return join(env.XDG_RUNTIME_DIR, "starbridge", `agent-${configKey(storeDir)}.sock`);
+    return join(env.XDG_RUNTIME_DIR, "starbridge", `agent-${configKey(storeDir, platform)}.sock`);
   return join(storeDir, "agent.sock");
 }
 

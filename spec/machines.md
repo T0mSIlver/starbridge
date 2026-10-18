@@ -28,7 +28,8 @@
   upgrade nothing listens on the old `agent.sock`: a mod or extension from before, or a new one
   whose agent has not restarted yet, finds no agent and answers through the CLI until
   `starbridge update` has moved both, since an agent that also listened there would serve the
-  other home's old clients again.
+  other home's old clients again. A new agent does not start while an older one serves its
+  machine on `agent.sock`, so one machine never runs two agents.
 - **On Windows** (#552) the agent listens on loopback TCP with a per-start token in `agent.port`
   in the config directory (PROTOCOL.md, "Local agent API"). A named pipe was the other choice:
   libuv creates one with the default DACL, which lets other users open it for reading, and Bun's

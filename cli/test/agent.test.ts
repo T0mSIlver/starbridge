@@ -335,6 +335,33 @@ test("a second home of the same user never acts through the first home's agent (
   expect(await server.opened("decision")).toHaveLength(1);
 });
 
+test("an agent does not start while one from before #1966 serves its machine on agent.sock", async () => {
+  if (WINDOWS) return;
+  const runtime = mkdtempSync(join(tmpdir(), "starbridge-run-"));
+  const config = mkdtempSync(join(tmpdir(), "starbridge-home-"));
+  const c = testCtx({ XDG_CONFIG_HOME: config, XDG_RUNTIME_DIR: runtime });
+  const a = await paired(server, "box-a", { ...c, store: new Store(join(config, "starbridge")) });
+  const id = a.store.machine()?.id;
+  let machine = id;
+  const old = createServer((_req, res) => {
+    res.writeHead(200, { "content-type": "application/json" });
+    res.end(JSON.stringify({ pid: 4242, machine: { id: machine } }));
+  });
+  mkdirSync(join(runtime, "starbridge"), { recursive: true });
+  await new Promise<void>((r) => old.listen(join(runtime, "starbridge", "agent.sock"), r));
+  try {
+    const refused = await rejection(makeAgent(a, { noQuota: true }).start());
+    expect(refused.message).toContain("an agent of this machine already runs");
+    // Another home's older agent, of another machine, is no reason to stay down.
+    machine = "m_other";
+    const agent = makeAgent(a, { noQuota: true });
+    await agent.start();
+    agents.push(agent);
+  } finally {
+    await new Promise<void>((r) => old.close(() => r()));
+  }
+});
+
 test("a client of another API revision gets 426 with what to update", async () => {
   const { socket } = await machine();
   // On TCP, the call proves the port file's token, or the agent refuses it before its revision.
