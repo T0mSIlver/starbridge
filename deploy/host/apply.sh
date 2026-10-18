@@ -7,6 +7,7 @@ set -eu
 cd "$(dirname "$0")/.."
 DEPLOY_ENV=${DEPLOY_ENV:-host/prod.env}
 . "./$DEPLOY_ENV"
+host/keep-logs.sh --prune
 compose="docker compose -p $PROJECT $COMPOSE_FILES"
 etc=/etc/$PROJECT
 # The commit, built into the server for /healthz. An older deploy command passes none and writes

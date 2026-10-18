@@ -7,6 +7,10 @@ import type { LegalChange } from "@/lib/legalChanges";
  */
 export const privacyChanges: readonly LegalChange[] = [
   {
+    date: "2026-10-18",
+    text: "Added the logs a failed deploy saves: the last 50 lines of the service that failed, readable only by the operator and deleted after 2 days.",
+  },
+  {
     date: "2026-10-15",
     text: "Deleting your account revokes the token of each Apple sign-in, not only the last, and retries for about 3 days while Apple fails.",
   },
@@ -58,4 +62,4 @@ export const privacyChanges: readonly LegalChange[] = [
 ];
 
 /** SHA-256 of page.tsx with its whitespace collapsed (sourceHash); changes.test.ts recomputes it. */
-export const pageHash = "ec5532bcaff62a2a038472514bd32ed5ee5e380e66747c408879cc44bb864697";
+export const pageHash = "b093ee0c1504d1bdd367bdaa1a9b7d51d208789030f1a42f9b4636923a864a5f";

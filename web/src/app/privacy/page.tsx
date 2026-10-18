@@ -90,13 +90,15 @@ export default function Privacy() {
           endpoint, but not IP addresses or your content. Caddy&apos;s error log is the exception:
           for a request that failed at the proxy, it can hold the request&apos;s IP address, path
           and headers; so can a connection that timed out in its TLS handshake or its request
-          headers. Each keeps five files of 10 MB, so how long a log covers depends on traffic.
-          Umami and its Postgres database keep the same; Postgres logs a failed statement with its
-          values. To enforce rate limits, the server counts requests per IP address in memory; it
-          never writes them to disk, and a restart clears them. Addresses blocked for abuse are kept
-          in a block list, and in a log of blocks with the date and the operator, until they are
-          unblocked, which removes them from both; Hetzner&apos;s backups of the server keep them
-          for up to 7 days after.
+          headers. Each keeps five files of 10 MB, so how long a log covers depends on traffic. When
+          a service fails to start during a deploy, its last 50 log lines go to a file only the
+          operator can read, deleted after 2 days; Hetzner&apos;s backups of the server keep it for
+          up to 7 days after. Umami and its Postgres database keep the same; Postgres logs a failed
+          statement with its values. To enforce rate limits, the server counts requests per IP
+          address in memory; it never writes them to disk, and a restart clears them. Addresses
+          blocked for abuse are kept in a block list, and in a log of blocks with the date and the
+          operator, until they are unblocked, which removes them from both; Hetzner&apos;s backups
+          of the server keep them for up to 7 days after.
         </p>
 
         <p>
