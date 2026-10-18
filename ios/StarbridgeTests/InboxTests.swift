@@ -232,8 +232,16 @@ final class InboxTests: XCTestCase {
         XCTAssertTrue(store.openDecisions.contains { $0.id == "d_four" })
 
         // --- Snooze, then Back now within the same second: the machine keeps Back now (#1991) ---
-        await store.snooze("d_four", until: Date().addingTimeInterval(3600))
-        await store.snooze("d_four", until: Date())
+        // Tried until both calls land within one second of the clock, the case #1991 is about.
+        var sameSecond = false
+        for _ in 0..<15 where !sameSecond {
+            let start = Date()
+            await store.snooze("d_four", until: Date().addingTimeInterval(3600))
+            await store.snooze("d_four", until: Date())
+            sameSecond = floor(start.timeIntervalSince1970) == floor(Date().timeIntervalSince1970)
+            if !sameSecond { try await Task.sleep(for: .milliseconds(Int.random(in: 0..<1000))) }
+        }
+        XCTAssertTrue(sameSecond, "no snooze and Back now landed within one second")
         XCTAssertNil(store.notice)
         XCTAssertTrue(store.openDecisions.contains { $0.id == "d_four" })
         // The machine reads every snooze sealed to it and keeps the latest `at` (cli acceptSnooze).
@@ -244,10 +252,13 @@ final class InboxTests: XCTestCase {
             return try Envelopes.open(item, me: machine.id, keys: keys.box, directory: chain).body as? Snooze
         }.filter { $0.decisionId == "d_four" }
         XCTAssertGreaterThanOrEqual(seen.count, 4)
-        let latest = try XCTUnwrap(seen.max { Dates.instant($0.at) < Dates.instant($1.at) })
+        // The last pair: the machine keeps the first snooze with the latest `at`, so Back now's
+        // must be later than every snooze before it.
+        let byAt = seen.sorted { Dates.instant($0.at) < Dates.instant($1.at) }
+        let latest = try XCTUnwrap(byAt.last)
         let tied = seen.filter { $0.at == latest.at }
         XCTAssertEqual(tied.count, 1, "two snoozes share the latest at \(latest.at): the machine keeps the first")
-        XCTAssertLessThanOrEqual(Dates.instant(latest.until), Dates.instant(latest.at))
+        XCTAssertLessThanOrEqual(Dates.instant(latest.until), Dates.instant(latest.at), "the latest snooze is not Back now")
 
         // --- Past a page's 4 MB of images, questions list without theirs, fetched when shown (#1735) ---
         let big = Array(repeating: UInt8(7), count: 350_000)
