@@ -16,7 +16,7 @@ import { type ChildProcess, spawn, spawnSync } from "node:child_process";
 import { cpSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { _electron as electron, type Page } from "playwright";
+import { type ElectronApplication, _electron as electron, type Page } from "playwright";
 import { volatile } from "../../web/e2e/volatile.ts";
 import { freePorts } from "./ports.ts";
 
@@ -97,13 +97,52 @@ function manifest(error?: unknown) {
   );
 }
 
+/** The page's size and the main window's content size, which a shot needs equal (#1970). */
+async function sizes(app: ElectronApplication, page: Page) {
+  const inner = await page.evaluate(() => [innerWidth, innerHeight]);
+  const content = await app.evaluate(({ BrowserWindow }) =>
+    BrowserWindow.getAllWindows()
+      .find((w) => w.getTitle() === "Starbridge")
+      ?.getContentSize(),
+  );
+  return { inner, content };
+}
+
+/**
+ * Gives the page the window the Mac shows, 1200 x 800 with no menu bar in it (#1970). Under xvfb,
+ * Linux's menu bar takes 27 px of the window, and the page did not always follow: some shots were
+ * 800 px tall with the window's 773 painted, the last 27 rows repeating the brand at the top.
+ * Hiding the bar and nudging the size until the page and the window agree removes both.
+ */
+async function fit(app: ElectronApplication, page: Page) {
+  await until(
+    async () => {
+      const { inner, content } = await sizes(app, page);
+      if (inner[1] === 800 && content?.[1] === 800) return true;
+      await app.evaluate(({ BrowserWindow }) => {
+        const w = BrowserWindow.getAllWindows().find((x) => x.getTitle() === "Starbridge");
+        w?.setMenuBarVisibility(false);
+        w?.setContentSize(1200, 799);
+        w?.setContentSize(1200, 800);
+      });
+      await new Promise((r) => setTimeout(r, 300));
+      return false;
+    },
+    "the page filling a 1200 x 800 window",
+    10_000,
+  );
+}
+
 /**
  * The window as it is, in light then dark (the page's prefers-color-scheme, set through
  * Playwright: Electron's nativeTheme.themeSource did not reach the page under xvfb), as
  * `<stop>-<scheme>.png` with the boxes to leave out of the comparison with main's beside it.
  */
-async function shoot(page: Page, stop: string) {
+async function shoot(app: ElectronApplication, page: Page, stop: string) {
   if (!EVIDENCE) return;
+  // The page fills the window as on the Mac, 1200 x 800 (#1970).
+  await fit(app, page);
+  assert.deepEqual(await sizes(app, page), { inner: [1200, 800], content: [1200, 800] });
   const dir = join(EVIDENCE, "shots");
   mkdirSync(dir, { recursive: true });
   try {
@@ -244,7 +283,7 @@ try {
 
     step("signed out, the app shows sign-in, not the landing page (#905)");
     await page.getByRole("heading", { name: "Sign in to Starbridge" }).waitFor();
-    await shoot(page, "sign-in");
+    await shoot(app, page, "sign-in");
     const html = await (await fetch(ORIGIN, { headers: { cookie: "sb_desktop=1" } })).text();
     assert.ok(!html.includes("Know the moment"), "the server sent the app the landing page");
     // The server is chosen here, as on the web, in the app's own window (#1449).
@@ -293,7 +332,7 @@ try {
       app.emit("open-url", { preventDefault() {} }, link);
     }, next);
     await page.getByText("This app creates your account's keys.").waitFor();
-    await shoot(page, "keys");
+    await shoot(app, page, "keys");
     assert.match(
       await page.getByLabel("Name this app").inputValue(),
       /^Starbridge on (Mac|Linux)$/,
@@ -305,7 +344,7 @@ try {
     // No machine yet, so the inbox says how to add one; its own heading depends on the window's
     // width, which differs between runners.
     await page.getByRole("heading", { name: "Add a machine" }).waitFor();
-    await shoot(page, "inbox-empty");
+    await shoot(app, page, "inbox-empty");
     // The app notifies; the page offers no Web Push of its own.
     assert.equal(await page.getByRole("button", { name: "Turn on notifications" }).count(), 0);
 
@@ -325,7 +364,7 @@ try {
     // `pair --confirm` answers the terminal's question.
     const printed = (await pair.waitFor(/Check code: (\S+)/))[1] as string;
     assert.equal(await page.getByTestId("check-code").textContent(), `Check code ${printed}`);
-    await shoot(page, "pairing");
+    await shoot(app, page, "pairing");
     assert.equal(
       await cli("confirm", ["pair", "--confirm"], machine).exited,
       0,
@@ -381,7 +420,7 @@ try {
     }
 
     await page.evaluate(switchTab, ["Quotas", "Quotas"] as const);
-    await shoot(page, "quotas");
+    await shoot(app, page, "quotas");
 
     step("the app menu's Find… focuses the page's Find box, and Settings… opens Settings (#1857)");
     await page.evaluate(switchTab, ["Inbox", "Inbox"] as const);
@@ -427,12 +466,12 @@ try {
     await page.goto(`${ORIGIN}/settings`);
     await page.getByRole("heading", { name: "Notifications" }).waitFor();
     await new Promise((r) => setTimeout(r, 3000));
-    await shoot(page, "settings");
+    await shoot(app, page, "settings");
     // The Version row (#1892): the app's own version, at the end of Account.
     const versionRow = page.getByRole("button", { name: /^Version / });
     await versionRow.scrollIntoViewIfNeeded();
     assert.match(await versionRow.innerText(), /\d+\.\d+\.\d+/);
-    await shoot(page, "settings-version");
+    await shoot(app, page, "settings-version");
     const frames = await page.evaluate(
       () => (window as unknown as { navFrames: string[] }).navFrames,
     );
@@ -464,7 +503,7 @@ try {
     assert.deepEqual(note.actions, ["Ship it", "Wait"]);
     await until(() => main((g) => g.tips.at(-1) === "Starbridge: 1 needs you"), "the amber dot");
     await page.getByText("Ship the desktop app?", { exact: true }).first().waitFor();
-    await shoot(page, "inbox-question");
+    await shoot(app, page, "inbox-question");
     // While the window is hidden, as when closed to the menu bar.
     await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.hide());
     await main((g) => {
@@ -517,7 +556,7 @@ try {
     // Emoji count one each, as the server and the phone apps count them.
     await page.keyboard.insertText("😀".repeat(4001));
     assert.equal(Array.from(await reply.inputValue()).length, 4000);
-    await shoot(page, "reply-capped");
+    await shoot(app, page, "reply-capped");
     await reply.press("Enter");
     await fourth.waitFor(/Answer to d_\S+ \(Paste the build log\?\): 😀/);
     assert.equal(await fourth.exited, 0);
