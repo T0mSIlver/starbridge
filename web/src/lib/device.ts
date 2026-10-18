@@ -73,7 +73,14 @@ import type { Device, PairingRequest } from "./types";
 
 export { type Ctx, heldText, reverify, stopWaiting, Withheld } from "./kinds/core";
 export * from "./kinds/decisions";
-export * from "./kinds/joins";
+// By name: `retrying` stays inside, shared with the joining side here.
+export {
+  type Comparison,
+  compareJoin,
+  refuseJoin,
+  retryDelay,
+  watchJoins,
+} from "./kinds/joins";
 export * from "./kinds/prompts";
 export * from "./kinds/quotas";
 export * from "./kinds/runs";
