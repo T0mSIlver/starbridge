@@ -2,7 +2,7 @@
 
 `starbridge` connects a machine that runs your harnesses to your phone and browsers. Agents use it
 to ask you questions and report runs, and it uploads your AI plans' quotas, read from CodexBar.
-`starbridge --help` lists every command and flag.
+`starbridge --help` lists every command and flag, and `starbridge <command> --help` one command's.
 
 ## Install
 

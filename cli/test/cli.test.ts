@@ -1728,3 +1728,39 @@ test("a context typed with \\n for its line breaks gets them, but never in code 
   );
   expect(typedBreaks("Path C:\\\\new")).toBe("Path C:\\\\new");
 });
+
+test("<command> --help prints that command's usage, as help <command> does (#1967)", async () => {
+  const commands = ["setup", "status", "uninstall", "pair", "machine", "ask", "waiting", "working"];
+  commands.push("settle", "wait", "answers", "decisions", "run", "quota", "agent", "config");
+  commands.push("hook", "hello", "update");
+  for (const command of commands) {
+    const usage = testCtx();
+    expect(await run([command, "--help"], usage)).toBe(0);
+    const text = usage.lines.join("\n");
+    expect(text).toContain(`  starbridge ${command}`);
+    // Only that command's: no other command's usage line.
+    for (const other of commands.filter((c) => c !== command && !text.includes(`starbridge ${c} `)))
+      expect(text).not.toContain(`\n  starbridge ${other}`);
+    for (const args of [
+      [command, "-h"],
+      ["help", command],
+    ]) {
+      const again = testCtx();
+      expect(await run(args, again)).toBe(0);
+      expect(again.lines.join("\n")).toBe(text);
+    }
+  }
+  const ask = testCtx();
+  expect(await run(["ask", "--question", "Q?", "--help"], ask)).toBe(0);
+  expect(ask.lines.join("\n")).toContain("The question takes at most\n      300 characters");
+  expect(ask.lines.join("\n")).not.toContain("starbridge setup");
+  // After run's --, --help belongs to the command.
+  const wrapped = testCtx();
+  expect(await run(["run", "--help", "--", "ls", "--help"], wrapped)).toBe(0);
+  expect(wrapped.lines.join("\n")).toContain("starbridge run --title");
+  const unknown = testCtx();
+  expect(await run(["frobnicate", "--help"], unknown)).toBe(1);
+  expect(unknown.errors.at(-1)).toContain("unknown command: frobnicate");
+  expect(await run(["help", "frobnicate"], unknown)).toBe(1);
+  expect(unknown.errors.at(-1)).toContain("unknown command: frobnicate");
+});
