@@ -524,6 +524,7 @@ export function SnoozedHead({
         type="button"
         className={`${comfy ? "t-small" : "t-meta"} ${s.historyHead} ${comfy ? s.comfy : ""}`}
         aria-expanded={open}
+        data-head="snoozed"
         onClick={onToggle}
       >
         <Icon name="snooze" size={16} />
