@@ -2,7 +2,6 @@ import { randomBytes } from "node:crypto";
 import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { hostname } from "node:os";
 import { join } from "node:path";
-import { createInterface } from "node:readline";
 import {
   CHECK_CONFIRM_MS,
   checkCode,
@@ -27,6 +26,7 @@ import { encodeKeys } from "./config";
 import { type Ctx, iso, UsageError } from "./context";
 import { terminalQr } from "./qr";
 import { rememberMachineKind } from "./settings";
+import { terminalLines } from "./setup/sys";
 
 /** A pairing code expires after this long (PROTOCOL.md). */
 const CODE_LIFETIME_MS = 10 * 60_000;
@@ -239,7 +239,7 @@ export function sendConfirm(ctx: Ctx, same: boolean): number {
  * this terminal or through `starbridge pair --confirm` or `--reject`. Undefined when nobody
  * answered in time.
  */
-async function confirmCheck(
+export async function confirmCheck(
   ctx: Ctx,
   code: string,
   name: string,
@@ -264,8 +264,8 @@ async function confirmCheck(
   // Lines typed while the machine waited for approval arrive at once: a stray Enter among them
   // must not confirm a code nobody read.
   const shown = Date.now();
-  const rl = tty
-    ? createInterface({ input: process.stdin }).on("line", (l) => {
+  const stopReading = tty
+    ? terminalLines((l) => {
         if (Date.now() - shown > 500) typed.push(l);
       })
     : undefined;
@@ -285,7 +285,7 @@ async function confirmCheck(
       }
     }
   } finally {
-    rl?.close();
+    stopReading?.();
     rmSync(file, { force: true });
     try {
       if (readFileSync(waitingFile(ctx), "utf8") === code)
