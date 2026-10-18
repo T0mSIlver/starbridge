@@ -1,5 +1,5 @@
 #!/bin/sh
-# images.sh: run as root by host/apply.sh and staging/apply.sh with REVISION set. Makes sure the
+# images.sh: run as root by host/apply.sh with REVISION set. Makes sure the
 # box holds the server and web images of that commit, tagged by it, and prints one line per image,
 # `server sha256:…` and `web sha256:…`: the digest the deploy runs, which apply.sh pins in
 # deploy/.env.

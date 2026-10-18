@@ -1,10 +1,18 @@
 import { describe, expect, test } from "bun:test";
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { candidates, inBunfs, normalEnv, resolveCommand, spawnable } from "../src/platform";
 import { platformAsset } from "../src/release";
-import { replaceBinary } from "../src/update";
+import { removeBinary, replaceBinary } from "../src/update";
+import { compiledFake, testCtx, until } from "./helpers";
 
 describe("normalEnv", () => {
   test("on Windows, Path reads as PATH and HOME falls back to USERPROFILE", () => {
@@ -144,5 +152,46 @@ describe("replaceBinary on Windows", () => {
     const { target, dir } = setup();
     expect(() => replaceBinary(join(dir, "missing"), target, "win32")).toThrow();
     expect(readFileSync(target, "utf8")).toBe("old");
+  });
+});
+
+// Windows deletes no running `.exe`: a detached cmd.exe deletes it once uninstall returns. Its
+// command line quotes the path, so a path with spaces and parentheses must reach `del` whole,
+// and one cmd.exe would read otherwise must not reach it at all.
+describe.skipIf(process.platform !== "win32")("removeBinary on Windows", () => {
+  test("deletes the running binary and an update's leftovers once it exits", async () => {
+    const dir = join(
+      mkdtempSync(join(tmpdir(), "sb-remove-")),
+      "Program Files (x86)",
+      "star bridge",
+    );
+    mkdirSync(dir, { recursive: true });
+    const exe = join(dir, "starbridge.exe");
+    copyFileSync(compiledFake("await Bun.sleep(1000);"), exe);
+    writeFileSync(`${exe}.old`, "from the update before");
+    writeFileSync(`${exe}.4242.old`, "kept by a copy that still ran");
+    // A neighbour the wildcard must not take.
+    writeFileSync(join(dir, "starbridge.toml"), "");
+    const running = Bun.spawn([exe]);
+    const ctx = testCtx();
+    expect(removeBinary(ctx, { kind: "binary", path: exe })).toBe(0);
+    expect(ctx.lines).toEqual([
+      `${exe} is deleted once this command returns; if it stays, a program still runs it.`,
+    ]);
+    await running.exited;
+    await until(() => ![exe, `${exe}.old`, `${exe}.4242.old`].some(existsSync), 15_000);
+    expect(existsSync(join(dir, "starbridge.toml"))).toBe(true);
+  });
+
+  test("leaves a path cmd.exe would read otherwise to the person, and says so", async () => {
+    const dir = join(mkdtempSync(join(tmpdir(), "sb-remove-")), "R&D 100%");
+    mkdirSync(dir, { recursive: true });
+    const exe = join(dir, "starbridge.exe");
+    writeFileSync(exe, "");
+    const ctx = testCtx();
+    expect(removeBinary(ctx, { kind: "binary", path: exe })).toBe(0);
+    expect(ctx.lines).toEqual([`Delete ${exe} once this command returns.`]);
+    await Bun.sleep(3_000);
+    expect(existsSync(exe)).toBe(true);
   });
 });

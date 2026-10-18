@@ -10,6 +10,17 @@ plugins {
     alias(libs.plugins.hilt)
 }
 
+// Robolectric's Android jar, resolved, cached and checked against verification-metadata.xml like
+// every other dependency, rather than downloaded by Robolectric during the test run, where a
+// dropped connection failed the run (#1910).
+val robolectricSdk: Configuration by configurations.creating { isTransitive = false }
+
+/** Points Robolectric at the jar's folder, and makes the jar an input of the test task. */
+class RobolectricSdk(@get:InputFiles @get:PathSensitive(PathSensitivity.NAME_ONLY) val jars: FileCollection) :
+    CommandLineArgumentProvider {
+    override fun asArguments() = listOf("-Drobolectric.dependency.dir=${jars.singleFile.parentFile.absolutePath}")
+}
+
 // buildSrc/src/main/kotlin/DogfoodSigning.kt: null on every build but the maintainer's dogfood ones.
 val dogfood = dogfoodKey(
     Properties().apply { rootProject.file("local.properties").takeIf { it.exists() }?.inputStream()?.use(::load) },
@@ -96,6 +107,9 @@ android {
             // Screenshots render clock times in UTC whichever test runs first: a screenshot class
             // setting the zone in its own init lost it once another Robolectric test ran before it.
             it.systemProperty("user.timezone", "UTC")
+            // Offline, Robolectric fails at once on a jar it lacks instead of fetching it.
+            it.systemProperty("robolectric.offline", "true")
+            it.jvmArgumentProviders.add(RobolectricSdk(robolectricSdk))
             // The tests' temp dirs and Robolectric's go under build/, not /tmp (a tmpfs on dev
             // machines that thousands of them filled), and go when the run ends. A failed run
             // leaves them until the next one starts (#687).
@@ -150,6 +164,7 @@ dependencies {
     testImplementation(platform(libs.compose.bom))
     testImplementation(libs.junit)
     testImplementation(libs.robolectric)
+    robolectricSdk(libs.robolectric.android.all)
     testImplementation(libs.compose.ui.test.junit4)
     testImplementation(libs.roborazzi)
     testImplementation(libs.roborazzi.compose)

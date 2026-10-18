@@ -10,7 +10,7 @@ import { MANAGED } from "./update";
 import { VERSION } from "./version";
 
 /** GitHub's latest release that is neither a draft nor a pre-release. */
-export const LATEST_URL = "https://api.github.com/repos/T0mSIlver/starbridge/releases/latest";
+const LATEST_URL = "https://api.github.com/repos/T0mSIlver/starbridge/releases/latest";
 
 export const CHECK_EVERY_MS = 24 * 3_600_000;
 

@@ -41,7 +41,7 @@ export const defaults: Prompt = {
  * answer and Ctrl-C does nothing (#1882). Bash's own line editor reads the answer, so the arrow
  * keys edit it, and Ctrl-C ends it too: setup stops as it does at any other step.
  */
-export function readLine(): Promise<string> {
+function readLine(): Promise<string> {
   return new Promise((resolve) => {
     const child = spawn("/bin/bash", ["-c", 'IFS= read -e -r line; printf %s "$line"'], {
       stdio: ["inherit", "pipe", "inherit"],

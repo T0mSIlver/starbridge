@@ -31,7 +31,7 @@ const EXIT_INTERRUPTED = 130;
 /** Slack past a held request's `wait` before the client gives up on the agent. */
 const SLACK_MS = 15_000;
 /** How long `wait` keeps trying an agent that stopped before it waits at the server (#548). */
-export const RESTART_MS = 30_000;
+const RESTART_MS = 30_000;
 
 /**
  * The agent stopped under a `wait` and did not come back: the caller waits at the server itself,

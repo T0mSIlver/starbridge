@@ -27,12 +27,21 @@ defaults:
   run:
     working-directory: android
 
+env:
+  # google-services.json for a build without the real one (the build job's "Placeholder Firebase
+  # values" step says why).
+  PLACEHOLDER_FIREBASE: '{"project_info": {"project_number": "123456789012", "project_id": "starbridge-ci"}, "client": [{"client_info": {"mobilesdk_app_id": "1:123456789012:android:0123456789abcdef", "android_client_info": {"package_name": "dev.starbridge.app"}}, "api_key": [{"current_key": "AIzaSy000000000000000000000000000000000"}]}]}'
+
 jobs:
   # A push to main builds on the labelled runner ANDROID_RUNNER when it is set; pull requests' and
   # dispatched runs' code builds on GitHub's runners only. One labelled runner takes every Android
-  # build: two Gradle builds at once ran the box out of memory.
+  # build: two Gradle builds at once ran the box out of memory, so on a push the two jobs below
+  # take turns on it.
+  #
+  # The release APK and the checks are two jobs side by side, which share only the Gradle cache:
+  # the emulator jobs start once the APK is built, while the unit tests still run (#1916).
   build:
-    name: build, unit tests, screenshots
+    name: build
     runs-on: ${{ github.event_name == 'push' && vars.ANDROID_RUNNER || 'ubuntu-24.04' }}
     timeout-minutes: 40
     # Builds of pull requests never sign with the release key, even on a runner whose environment sets it.
@@ -60,14 +69,47 @@ jobs:
       - name: Placeholder Firebase values
         run: |
           [ -f app/google-services.json ] || [ -f ~/.config/starbridge/secrets/google-services.json ] ||
-            printf '%s' '{"project_info": {"project_number": "123456789012", "project_id": "starbridge-ci"}, "client": [{"client_info": {"mobilesdk_app_id": "1:123456789012:android:0123456789abcdef", "android_client_info": {"package_name": "dev.starbridge.app"}}, "api_key": [{"current_key": "AIzaSy000000000000000000000000000000000"}]}]}' > app/google-services.json
+            printf '%s' "$PLACEHOLDER_FIREBASE" > app/google-services.json
+
+      # The release build: R8's shrinking and lintVitalRelease, then the APK the emulator jobs install.
+      - name: Build the release APK
+        # No daemon and an in-process Kotlin compiler: nothing stays in memory after the build on
+        # a shared self-hosted runner.
+        run: ./gradlew --no-daemon --console=plain -Pkotlin.compiler.execution.strategy=in-process assembleRelease
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: starbridge-apk
+          path: android/app/build/outputs/apk/release/*.apk
+
+  test:
+    name: unit tests, lint, screenshots
+    runs-on: ${{ github.event_name == 'push' && vars.ANDROID_RUNNER || 'ubuntu-24.04' }}
+    timeout-minutes: 40
+    env:
+      STARBRIDGE_KEYSTORE: ""
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+        with:
+          cache-disabled: ${{ runner.environment == 'self-hosted' }}
+
+      # The same placeholder as the build job's: the debug build reads it too.
+      - name: Placeholder Firebase values
+        run: |
+          [ -f app/google-services.json ] || [ -f ~/.config/starbridge/secrets/google-services.json ] ||
+            printf '%s' "$PLACEHOLDER_FIREBASE" > app/google-services.json
 
       # verifyRoborazziDebug runs every unit test and fails when a screen drifts
       # from app/screenshots/; lintDebug fails on any lint error (#899).
-      - name: Build, lint and test
-        # No daemon and an in-process Kotlin compiler: nothing stays in memory after the build on
-        # a shared self-hosted runner.
-        run: ./gradlew --no-daemon --console=plain -Pkotlin.compiler.execution.strategy=in-process assembleRelease lintDebug verifyRoborazziDebug
+      - name: Lint and test
+        run: ./gradlew --no-daemon --console=plain -Pkotlin.compiler.execution.strategy=in-process lintDebug verifyRoborazziDebug
 
       - name: Screenshot diffs
         if: failure()
@@ -79,17 +121,12 @@ jobs:
             android/app/screenshots/*_compare.png
             android/app/build/outputs/roborazzi/
 
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: starbridge-apk
-          path: android/app/build/outputs/apk/release/*.apk
-
   # A dispatched run reports through the commit status `android`, since a dispatched run's checks
   # never show on a pull request: dependabot-gradle.yml dispatches one after it pushes Gradle's
   # checksums to a Dependabot branch, and set the status pending.
   status:
     name: status
-    needs: build
+    needs: [build, test]
     if: always() && github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -101,10 +138,10 @@ jobs:
     steps:
       - env:
           GH_TOKEN: ${{ github.token }}
-          RESULT: ${{ needs.build.result }}
+          RESULT: ${{ needs.build.result == 'success' && needs.test.result == 'success' }}
         run: |
           gh api "repos/$GITHUB_REPOSITORY/statuses/$GITHUB_SHA" -f context=android \
-            -f state="$([ "$RESULT" = success ] && echo success || echo failure)" \
+            -f state="$([ "$RESULT" = true ] && echo success || echo failure)" \
             -f target_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" >/dev/null
 
   # Pull requests build on GitHub's runners, which start with an empty Gradle home unless main

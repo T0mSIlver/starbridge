@@ -19,3 +19,4 @@ export * from "./readable";
 export * from "./releases";
 export * from "./schemas";
 export { type ErrorCode, fromB64, ProtocolError, ready, toB64 } from "./sodium";
+export * from "./timing";

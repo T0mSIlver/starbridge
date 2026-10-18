@@ -52,6 +52,7 @@ import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.ui.NavDisplay
 import dev.starbridge.app.data.Kind
 import dev.starbridge.app.data.Decision
+import dev.starbridge.app.data.Prompt
 import dev.starbridge.app.data.Phase
 import dev.starbridge.app.data.Run
 import dev.starbridge.app.ui.devices.DevicesScreen
@@ -71,6 +72,7 @@ import dev.starbridge.app.ui.inbox.Replies
 import dev.starbridge.app.ui.inbox.rememberDrafts
 import dev.starbridge.app.ui.inbox.PromptActions
 import dev.starbridge.app.ui.inbox.QuestionSheet
+import dev.starbridge.app.ui.inbox.needYou
 import dev.starbridge.app.ui.inbox.onlyNeed
 import dev.starbridge.app.ui.inbox.PromptSheet
 import dev.starbridge.app.ui.inbox.snoozed
@@ -214,11 +216,12 @@ internal fun suiteType(): NavigationSuiteType {
  */
 @OptIn(ExperimentalMaterial3AdaptiveApi::class)
 @Composable
-fun Main(decisions: List<Decision>, notice: StateFlow<String?>, dismiss: () -> Unit, opening: Flow<NavKey>, stopWaiting: Pair<String, () -> Unit>? = null, quotas: Boolean = true, connection: StateFlow<String?> = MutableStateFlow(null)) {
+fun Main(decisions: List<Decision>, prompts: List<Prompt>, notice: StateFlow<String?>, dismiss: () -> Unit, opening: Flow<NavKey>, stopWaiting: Pair<String, () -> Unit>? = null, quotas: Boolean = true, connection: StateFlow<String?> = MutableStateFlow(null)) {
     val backStack = rememberNavBackStack(InboxKey)
     val now = now()
-    // A snoozed question counts again once it is back (#691).
-    val openDecisions = decisions.count { it.isOpen && !it.snoozed(now) }
+    // A snoozed question counts again once it is back (#691); a waiting prompt counts too (#1963).
+    // A prompt ends on the second, as the Inbox header's does: tick each second while one waits.
+    val openDecisions = needYou(decisions, prompts, seconds(prompts.any { it.waiting(now) }, now))
     // Shared by a decision's card and its detail, which are separate entries.
     val drafts = rememberDrafts()
     val host = Notices(notice, dismiss, stopWaiting, connection)

@@ -6,7 +6,7 @@
 import { spawn } from "node:child_process";
 import { readFileSync, statSync } from "node:fs";
 import { request } from "node:http";
-import { HEADERS, isPortFile, PROOF_HEADER, portTarget, signCall } from "./agent.ts";
+import { CONFIG_HEADER, HEADERS, isPortFile, PROOF_HEADER, portTarget, signCall } from "./agent.ts";
 import { absolute, configDir } from "./poller.ts";
 
 /**
@@ -56,10 +56,17 @@ const CALL_MS = 30_000;
 export const STOP_MS = 10_000;
 
 /**
- * One HTTP call on the agent's unix socket, or on loopback TCP when the address is a port file.
- * Rejects when it cannot connect or takes too long.
+ * One HTTP call on the agent's unix socket, or on loopback TCP when the address is a port file,
+ * sending `config` as `CONFIG_HEADER` (`agentAddress`). Rejects when it cannot connect or takes
+ * too long.
  */
-export async function socketFetch(socket: string, method: string, path: string, body?: unknown) {
+export async function socketFetch(
+  socket: string,
+  method: string,
+  path: string,
+  body?: unknown,
+  config?: string,
+) {
   let target: { socketPath: string } | { host: string; port: number } = { socketPath: socket };
   let auth: Record<string, string> = {};
   let expect: string | undefined;
@@ -85,6 +92,7 @@ export async function socketFetch(socket: string, method: string, path: string, 
         headers: {
           ...auth,
           ...HEADERS,
+          ...(config ? { [CONFIG_HEADER]: config } : {}),
           ...(payload === undefined ? {} : { "content-type": "application/json" }),
         },
         timeout: CALL_MS,

@@ -90,7 +90,7 @@ struct QuotaFailure: Equatable {
 struct QuotaSettings: Codable, Equatable {
     /** The bar and the percentage show used, else remaining (CodexBar `usageBarsShowUsed`). */
     var showUsed = true
-    /** Reset times as a clock time, else "in 2 h" (`resetTimesShowAbsolute`). */
+    /** Reset times as a clock time, else "in 2 h" (`absoluteResets`). */
     var absoluteResets = false
     /** Workdays a week on weekly bars, from Monday (`weeklyProgressWorkDays`); nil is off. */
     var workDays: Int?

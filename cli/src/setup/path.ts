@@ -126,7 +126,7 @@ export function removePathLines(sys: Sys, dir: string): string[] {
 }
 
 /** The startup file of the owner's shell, and the line there that puts `dir` on the PATH. */
-export function shellProfile(sys: Sys, dir: string): { file: string; line: string } {
+function shellProfile(sys: Sys, dir: string): { file: string; line: string } {
   const { basename, join } = pathFor(sys.platform);
   const shell = basename(sys.ctx.env.SHELL ?? "");
   const { sh: exported, fish } = pathLines(dir, sys.home);

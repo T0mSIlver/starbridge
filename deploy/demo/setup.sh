@@ -1,7 +1,7 @@
 #!/bin/sh
 # Gives the demo server for Play reviewers (#423) its owner token on sb-staging and starts it from
 # staging's checkout, /opt/starbridge-staging; safe to run again, and how to change the token. From
-# then on every staging deploy whose round trip passed rebuilds it (staging/deploy-rev.sh, #1557).
+# then on every staging deploy whose round trip passed rebuilds it (host/deploy-rev.sh, #1557).
 # It touches nothing of staging's.
 set -eu
 host=${STAGING_HOST:-sb-staging}

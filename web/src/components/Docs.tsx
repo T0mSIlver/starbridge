@@ -24,6 +24,9 @@ export function DocsPage({ doc, html }: { doc: Doc; html: string }) {
   return (
     <div className={s.page}>
       <Analytics />
+      <a href="#main" className="skip t-action">
+        Skip to content
+      </a>
       <header className={s.top}>
         <a href="/" className={`t-subtitle ${s.brand}`}>
           <Mark size={22} />
@@ -43,7 +46,7 @@ export function DocsPage({ doc, html }: { doc: Doc; html: string }) {
         <nav className={`t-small ${s.side}`} aria-label="Docs">
           <Nav current={doc.slug} />
         </nav>
-        <main className={s.main}>
+        <main id="main" tabIndex={-1} className={s.main}>
           <h1 className="t-title">{doc.title}</h1>
           <article
             className={`t-body ${s.text}`}

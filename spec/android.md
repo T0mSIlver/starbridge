@@ -68,7 +68,7 @@
   settings would be lost to new channel ids. The owner picked these in a debug build from six
   candidates, dropping the pull's tick.
 - **Home-screen widgets** (#894), in Jetpack Glance. "Needs you" (2×2) counts what the Inbox's
-  badge counts: with an agent waiting, that number in amber on the amber card ("waiting on you",
+  badge counts, questions and permission prompts (#1963): with an agent waiting (a prompt always blocks one), that number in amber on the amber card ("waiting on you",
   then how many more "when you can"), else the open questions in `fg`. Quotas (2×2, widened to
   4×2) shows at 2×2 the first window in the Quotas screen's order as a figure, its meter and its
   state, and at 4×2 every window that fits, under its provider, as a meter and a figure. A tap

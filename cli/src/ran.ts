@@ -16,7 +16,7 @@ export interface Proc {
 }
 
 /** How often the hook looks for the call's process. */
-export const RUN_CHECK_MS = 500;
+const RUN_CHECK_MS = 500;
 
 /** Shells that stand between Claude Code and the hook: `sh -c <hook>`, then `sh cli.sh`. */
 const SHELLS = new Set(["sh", "dash", "bash", "zsh", "ash", "ksh", "fish", "busybox"]);

@@ -34,6 +34,7 @@ import dev.starbridge.app.ui.devices.DevicesScreen
 import dev.starbridge.app.ui.inbox.DecisionActions
 import dev.starbridge.app.ui.inbox.FindScreen
 import dev.starbridge.app.ui.inbox.InboxScreen
+import dev.starbridge.app.ui.inbox.needYou
 import dev.starbridge.app.ui.inbox.PromptActions
 import dev.starbridge.app.data.QuotaSettings
 import dev.starbridge.app.data.QuotaAlerts
@@ -137,6 +138,12 @@ class ScreenshotTest(private val dark: Boolean) {
 
     // The mockup's inbox: the run, the prompt, the question an agent waits on, then the others.
     @Test fun inbox() = capture("inbox") { Phone(Tab.Inbox, 4) { Inbox() } }
+
+    // #1963: the tab badge counts the three open questions and the waiting prompt, four, as the header does.
+    @Test fun inboxBadge() = capture("inbox-badge") {
+        val questions = fake.decisions.filter { it.isOpen }
+        Phone(Tab.Inbox, needYou(questions, fake.prompts, now)) { InboxScreen(questions, now, decisionActions, prompts = fake.prompts, promptActions = promptActions, runs = fake.runs) }
+    }
 
     // Find over the inbox: open matches under "Needs you", answered ones under "History", the words marked.
     @Test fun find() = capture("find", { find("starbridge") }) { Phone(null, 0) { Entry { FindScreen(fake.decisions, fake.prompts, now, {}, {}, {}) } } }

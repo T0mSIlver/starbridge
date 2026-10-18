@@ -58,7 +58,7 @@ export interface Timing {
   maxBackoffMs: number;
 }
 
-export const TIMING: Timing = {
+const TIMING: Timing = {
   waitSeconds: 25,
   checkMs: 2_000,
   recheckMs: 30_000,

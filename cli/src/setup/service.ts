@@ -11,7 +11,7 @@ import { processAlive } from "../platform";
 import { marker, ours } from "./marker";
 import { failure, run, type Sys } from "./sys";
 
-export const UNIT = "starbridge-agent.service";
+const UNIT = "starbridge-agent.service";
 export const LABEL = "run.starbridge.agent";
 export const TASK = "starbridge-agent";
 
@@ -28,7 +28,7 @@ function localDir(sys: Sys) {
   return join(sys.ctx.env.LOCALAPPDATA || join(sys.home, "AppData", "Local"), "starbridge");
 }
 
-export const agentLog = (sys: Sys) =>
+const agentLog = (sys: Sys) =>
   kind(sys) === "task"
     ? join(localDir(sys), "agent.log")
     : join(sys.home, "Library/Logs/starbridge-agent.log");
@@ -41,7 +41,7 @@ function unitDir(sys: Sys) {
   return join(sys.home, ".config/systemd/user");
 }
 
-export function servicePath(sys: Sys): string | undefined {
+function servicePath(sys: Sys): string | undefined {
   const k = kind(sys);
   if (k === "systemd") return join(unitDir(sys), UNIT);
   if (k === "launchd") return join(sys.home, "Library/LaunchAgents", `${LABEL}.plist`);
@@ -53,7 +53,7 @@ export function servicePath(sys: Sys): string | undefined {
  * The PATH the service runs with: setup's own, so CodexBar finds the `claude` and `codex` it
  * shells out to, plus the usual binary folders; never a relative, temporary or node_modules folder.
  */
-export function servicePathVar(sys: Sys): string {
+function servicePathVar(sys: Sys): string {
   const extra = [
     join(sys.home, ".local/bin"),
     "/opt/homebrew/bin",
@@ -150,7 +150,7 @@ WantedBy=default.target
 `;
 }
 
-export function plistText(sys: Sys): string {
+function plistText(sys: Sys): string {
   const args = [...sys.self, "agent"].map((a) => `    <string>${xml(a)}</string>`).join("\n");
   const env = Object.entries(serviceEnv(sys))
     .map(([k, v]) => `    <key>${xml(k)}</key>\n    <string>${xml(v)}</string>`)
@@ -202,7 +202,7 @@ const winArg = (s: string) =>
  * 5 minutes when it is not running, since conhost may not pass a crash on as a failure. A console program opens a window, so conhost runs it headless, and the log
  * goes to a file. A task carries no environment of its own: the agent gets the user's.
  */
-export function taskXml(sys: Sys): string {
+function taskXml(sys: Sys): string {
   const env = sys.ctx.env;
   const name = env.USERNAME || userInfo().username;
   const user = env.USERDOMAIN ? `${env.USERDOMAIN}\\${name}` : name;

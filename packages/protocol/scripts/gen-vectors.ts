@@ -4,10 +4,12 @@
  * Run: bun run vectors
  */
 import {
+  ANSWER_TEXT_MAX,
   addEntry,
   alertsFor,
   approverKeys,
   arrangeQuotas,
+  BLOB_MAX,
   bindMessage,
   checkCode,
   checkProof,
@@ -25,6 +27,7 @@ import {
   genesisEntry,
   type Heads,
   hashInput,
+  ITEM_BYTES,
   joinApproval,
   joinCommitment,
   joinerKeys,
@@ -3245,6 +3248,13 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
         "stale",
       ),
       noteCase(
+        "a signer whose id is __proto__ is kept like any other (#1977)",
+        {},
+        "__proto__",
+        H,
+        "stale",
+      ),
+      noteCase(
         "heads kept before #1627 stay beside the signer's",
         { "devbox/phone": passedOn, "devbox/?": unknownBy },
         "devbox",
@@ -3287,6 +3297,8 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
       holdChoices: [...PUSH_HOLD_CHOICES],
     },
     retryForMs: 20_000,
+    // Limits a client applies before the server would refuse (PROTOCOL.md, Limits).
+    limits: { answerTextMax: ANSWER_TEXT_MAX, blobMax: BLOB_MAX, itemBytes: ITEM_BYTES },
     // The longest permission input a card's line holds, in UTF-16 units.
     rowInputMax: 200,
     snooze: {

@@ -82,6 +82,7 @@ import java.time.temporal.ChronoUnit
 import kotlin.math.roundToInt
 import dev.starbridge.app.protocol.Decision as DecisionBody
 import dev.starbridge.app.protocol.Member as DirectoryMember
+import dev.starbridge.app.protocol.ANSWER_TEXT_MAX
 import dev.starbridge.app.protocol.takeCodePoints
 
 /** Shows and clears notifications; the app's is [dev.starbridge.app.push.Notifier]. */
@@ -1618,7 +1619,10 @@ class ServerStore(
         }
         val queued = QueuedAnswer(id, choice ?: text ?: doneText(page!!), envelopes.seal("answer", body, me.id, signKey, listOf(machine)), at = at)
         persist(saved.copy(outbox = saved.outbox + queued))
-        return post(queued)
+        // Scheduled before the request leaves: were the app killed mid-request, the saved answer
+        // still has a sender (#1979). The run waits for the lock this holds, then finds it sent.
+        wakeWhenOnline()
+        return post(queued, wake = false)
     }
 
     /**
@@ -1694,7 +1698,7 @@ class ServerStore(
      */
     suspend fun sendFromNotification(id: String, choice: String?, text: String?): Sent {
         alerts.cancel(id)
-        val sent = lock.withLock { send(id, choice, text?.takeCodePoints(4000)) }
+        val sent = lock.withLock { send(id, choice, text?.takeCodePoints(ANSWER_TEXT_MAX)) }
         if (sent is Sent.Failed) refused(id, sent.why)
         return sent
     }
@@ -1718,10 +1722,20 @@ class ServerStore(
     suspend fun flushAnswers(): Boolean {
         while (true) {
             val held = limitedUntil - System.currentTimeMillis()
-            if (held <= 0) break
-            delay(held)
+            if (held > 0) {
+                delay(held)
+                continue
+            }
+            lock.lock()
+            try {
+                // A post under the lock meanwhile, such as the tap's own that scheduled this run
+                // (#1979), may have started a hold: wait it out too, without the lock.
+                if (limitedUntil > System.currentTimeMillis()) continue
+                return flushQueued()
+            } finally {
+                lock.unlock()
+            }
         }
-        return lock.withLock { flushQueued() }
     }
 
     private suspend fun flushQueued(): Boolean {
@@ -1769,6 +1783,8 @@ class ServerStore(
             } catch (e: Exception) {
                 // Nothing may escape this coroutine: it would end the app (#253).
                 Log.w("Starbridge", "push failed", e)
+                // Its item may be unread, and with `pushed` set no poll reads it (#1978).
+                catchUp()
             }
         }
         withTimeoutOrNull(pushWaitMs) { job.join() }

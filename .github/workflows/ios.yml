@@ -158,13 +158,25 @@ jobs:
           echo "a2e905fb68446e9bb4008cdfe2e13e3f176d0cbcca828b71770f8e53fca91b73  $RUNNER_TEMP/xcodegen.zip" | shasum -a 256 -c
           unzip -q "$RUNNER_TEMP/xcodegen.zip" -d "$RUNNER_TEMP"
           "$RUNNER_TEMP/xcodegen/bin/xcodegen" generate
+      - id: sim
+        run: echo "id=$(xcrun simctl list devices available -j | jq -r '[.devices[][] | select(.name | startswith("iPhone"))][0].udid')" >> "$GITHUB_OUTPUT"
+      # Build and test as two steps, so the job's timing shows which one is slow: the tests on the
+      # simulator, about 4 of the job's 7 minutes, not the build (#1916).
+      - name: Build for testing
+        env:
+          SIM: ${{ steps.sim.outputs.id }}
+        run: |
+          set -o pipefail
+          xcodebuild -project Starbridge.xcodeproj -scheme Starbridge -destination "id=$SIM" build-for-testing 2>&1 |
+            tee "$RUNNER_TEMP/build.log" | grep -E "error:|\*\* TEST BUILD"
       - name: Test
         env:
           TEST_RUNNER_STARBRIDGE_TEST_SERVER: http://localhost:18731
           TEST_RUNNER_STARBRIDGE_TEST_OWNER_TOKEN: ci-owner-token-ios
+          SIM: ${{ steps.sim.outputs.id }}
         run: |
-          sim=$(xcrun simctl list devices available -j | jq -r '[.devices[][] | select(.name | startswith("iPhone"))][0].udid')
           set -o pipefail
-          xcodebuild -project Starbridge.xcodeproj -scheme Starbridge -destination "id=$sim" test 2>&1 | tee "$RUNNER_TEMP/test.log" | grep -E "error:|Test Case .*(passed|failed|skipped)|\*\* TEST"
+          xcodebuild -project Starbridge.xcodeproj -scheme Starbridge -destination "id=$SIM" test-without-building 2>&1 |
+            tee "$RUNNER_TEMP/test.log" | grep -E "error:|Test Case .*(passed|failed|skipped)|\*\* TEST"
           # JoinTests skips without a server; here it must have run.
           ! grep -q "JoinTests.*skipped" "$RUNNER_TEMP/test.log"

@@ -28,7 +28,7 @@ import type { Rect } from "./volatile.ts";
  * What each client's run is, and its artifacts' and comment's names. `marker` finds the comment
  * again on the next push; no marker starts with another.
  */
-export const CLIENTS = {
+const CLIENTS = {
   web: {
     artifact: "evidence",
     marker: "<!-- starbridge-evidence -->",
@@ -60,7 +60,7 @@ const TOLERANCE = 24;
  * A screen changed when more than this share of its pixels differ. Two runs of the same tree
  * differ in what each run makes up (a recovery key, pairing codes, times), up to about this.
  */
-export const CHANGED = 0.002;
+const CHANGED = 0.002;
 /**
  * How many of the base's first parents to look through for main's evidence. Main's Android run
  * runs only on merges that touch the app, so it can be far back; the checkout fetches this deep.

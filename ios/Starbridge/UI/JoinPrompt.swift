@@ -63,7 +63,10 @@ private struct JoinSheet: View {
             case let .digits(ask, digits, approving, error):
                 Text("Same digits on \(ask.name)?").type(Tokens.Typography.heading)
                 Text(Joins.formatDigits(digits))
-                    .font(.system(size: 40, weight: .semibold).monospacedDigit())
+                    .monospacedDigit()
+                    .scaledFont(size: 40, weight: .semibold, relativeTo: .largeTitle)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.5)
                     .frame(maxWidth: .infinity)
                     .accessibilityLabel(digits.map(String.init).joined(separator: " "))
                 Text("Approve only if \(ask.name) shows these same digits.").type(Tokens.Typography.body)

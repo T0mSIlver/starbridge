@@ -21,7 +21,7 @@ import type { QuotaAlert, QuotaCardData, QuotaWindow } from "./types";
 export type QuotaSettings = {
   /** The bar and the percentage show used, else remaining (CodexBar `usageBarsShowUsed`). */
   showUsed: boolean;
-  /** Reset times as a clock time, else "in 2 h" (`resetTimesShowAbsolute`). */
+  /** Reset times as a clock time, else "in 2 h" (`absoluteResets`). */
   absoluteResets: boolean;
   /** Workdays a week on weekly bars: Monday on (`weeklyProgressWorkDays`); null is off. */
   workDays: 4 | 5 | 7 | null;
@@ -216,7 +216,7 @@ export function toNotify(
 }
 
 /** A notification's title and body. */
-export function alertText(
+function alertText(
   a: QuotaAlert,
   label: string,
   now = new Date(),
@@ -275,11 +275,6 @@ export function clockAt(iso: string, now = new Date(), hours?: "12" | "24"): str
   return `on ${d.toLocaleDateString(undefined, { month: "short", day: "numeric" })} at ${time}`;
 }
 
-/** A reset time in the chosen style: "in 2 h", "2 h ago", or a clock time. */
-export function resetTime(iso: string, s: QuotaSettings, now = new Date()): string {
-  return s.absoluteResets ? clock(iso, now) : relative(iso, now);
-}
-
 const WEEK = 10080;
 
 /**
@@ -313,7 +308,7 @@ export function workdayExpected(
 }
 
 /** CodexBar's workday ticks: one per workday boundary, evenly spaced along a weekly bar. */
-export function workdayTicks(w: Pick<QuotaWindow, "windowMinutes">, s: QuotaSettings): number[] {
+function workdayTicks(w: Pick<QuotaWindow, "windowMinutes">, s: QuotaSettings): number[] {
   if (!s.workDays || w.windowMinutes !== WEEK) return [];
   return Array.from({ length: s.workDays - 1 }, (_, i) => ((i + 1) * 100) / (s.workDays as number));
 }

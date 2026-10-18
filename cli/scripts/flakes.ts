@@ -13,7 +13,7 @@ const repo = process.env.GITHUB_REPOSITORY ?? "T0mSIlver/starbridge";
 const token = process.env.GH_TOKEN ?? "";
 const server = process.env.GITHUB_SERVER_URL ?? "https://github.com";
 
-export type Flake = {
+type Flake = {
   run: number;
   workflow: string;
   url: string;
