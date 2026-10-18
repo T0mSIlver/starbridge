@@ -53,7 +53,7 @@ final class DroppedQuestionTests: XCTestCase {
         func body(_ id: String) -> JSON {
             [
                 "v": 1, "id": .string(id), "to": [.string(f.phone.id)], "createdAt": "2026-09-01T12:00:00Z", "question": "Merge the inbox PR?",
-                "context": "", "options": ["Merge", "Wait"], "source": NotifyFixture.source,
+                "context": "", "options": ["Merge", "Wait"], "recommended": "Wait", "source": NotifyFixture.source,
             ]
         }
         OpenListServer.open = [try f.decision("d_still")]
