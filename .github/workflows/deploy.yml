@@ -343,7 +343,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           STARBRIDGE_MACHINE: ${{ secrets.CI_CARD_MACHINE }}
         run: |
-          for _ in $(seq 1 700); do
+          for _ in $(seq 1 650); do
             job=$(curl -fsS -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' \
               "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/jobs?per_page=100" |
               jq -r '[.jobs[] | select(.name == "deploy")][0] | "\(.status) \(.conclusion)"') || job=
@@ -394,7 +394,6 @@ jobs:
             echo "staging: ${state}; waiting"
             sleep 30
           done
-          starbridge settle "$ID" --outcome withdrawn --reason "Six hours passed; the deploy may still wait on its run page" || true
           echo "staging never passed $REV within an hour"
           exit 1
       # The key's forced command on the box runs starbridge-deploy with this commit id and nothing
