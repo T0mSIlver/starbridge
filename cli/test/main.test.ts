@@ -45,7 +45,7 @@ test("the binary prints a command's help unpaired and with a broken STARBRIDGE_M
     ];
     return { out, err, code };
   };
-  for (const extra of [{}, { STARBRIDGE_MACHINE: "not a machine" }]) {
+  for (const extra of [{}, { STARBRIDGE_MACHINE: "not a machine" }] as Record<string, string>[]) {
     const help = await cli(["ask", "--help"], extra);
     expect(help).toMatchObject({ code: 0, err: "" });
     expect(help.out).toStartWith("  starbridge ask --question <text>");
