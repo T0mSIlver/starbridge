@@ -76,12 +76,19 @@ export function noteHead(
   entries: unknown[],
 ): boolean {
   if (!head || head.by !== undefined) return false;
-  const known = heads[signer];
+  // Own keys only: a member id such as `__proto__` is a valid id, not the object's prototype (#1977).
+  const known = Object.hasOwn(heads, signer) ? heads[signer] : undefined;
   const replace =
     !known ||
     head.length > known.length ||
     (holdsHead(entries, known) && !holdsHead(entries, head));
-  if (replace) heads[signer] = { length: head.length, head: head.head };
+  if (replace)
+    Object.defineProperty(heads, signer, {
+      value: { length: head.length, head: head.head },
+      enumerable: true,
+      writable: true,
+      configurable: true,
+    });
   return replace;
 }
 
