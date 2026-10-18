@@ -264,6 +264,26 @@ const HELP = `starbridge: post decisions to your devices, report runs, upload qu
 Keys and state live in $STARBRIDGE_CONFIG_DIR, else $XDG_CONFIG_HOME/starbridge, else
 ~/.config/starbridge.`;
 
+/**
+ * One command's part of [HELP], for `starbridge <command> --help` and `starbridge help <command>`
+ * (#1967): the paragraphs whose usage lines run that command, or undefined for none.
+ */
+function commandHelp(command: string): string | undefined {
+  const runs = (line: string) =>
+    line.startsWith(`  starbridge ${command} `) || line === `  starbridge ${command}`;
+  const parts = HELP.split("\n\n").filter((part) =>
+    part.split("\n").some((line) => line.startsWith("  starbridge ") && runs(line)),
+  );
+  return parts.length ? parts.join("\n\n") : undefined;
+}
+
+/** `--help` or `-h` among a command's own flags; after `run`'s `--`, they are the wrapped command's. */
+function asksHelp(args: string[]): boolean {
+  const end = args.indexOf("--");
+  const own = end < 0 ? args : args.slice(0, end);
+  return own.includes("--help") || own.includes("-h");
+}
+
 /** Questions on the terminal; without one, every question takes its default, as --yes. */
 function noTerminal(): boolean {
   return !process.stdin.isTTY;
@@ -365,6 +385,19 @@ export async function run(argv: string[], ctx: Ctx): Promise<number> {
 async function dispatch(argv: string[], ctx: Ctx): Promise<number> {
   const [command, ...rest] = argv;
   try {
+    const helpFor =
+      command === "help" || command === "--help" || command === "-h"
+        ? rest[0]
+        : command !== undefined && asksHelp(rest)
+          ? command
+          : undefined;
+    if (helpFor !== undefined) {
+      const usage = commandHelp(helpFor);
+      if (usage === undefined)
+        throw new UsageError(`unknown command: ${helpFor} (try starbridge --help)`);
+      ctx.out(usage);
+      return 0;
+    }
     await ready;
     if (ctx.env.STARBRIDGE_MACHINE && !QUIET_COMMANDS.has(command))
       ctx.store.seedMachine(ctx.env.STARBRIDGE_MACHINE);
