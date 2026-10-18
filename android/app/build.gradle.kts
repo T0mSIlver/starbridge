@@ -122,6 +122,18 @@ android {
 }
 
 dependencies {
+    // Fixed releases of what Android lint's own classpath pulls in (osv-scanner, #2068; the same
+    // pins as the root build.gradle.kts, whose constraints cannot reach this configuration).
+    // Build-time only: none of these ships in the APK.
+    constraints {
+        for (pin in listOf(
+            "org.apache.commons:commons-lang3:3.18.0",
+            "org.apache.httpcomponents:httpclient:4.5.14",
+            "org.bouncycastle:bcpkix-jdk18on:1.85",
+            "org.bouncycastle:bcprov-jdk18on:1.85",
+        )) add("androidLintTool", pin)
+    }
+
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.ui)
     implementation(libs.compose.ui.tooling.preview)
