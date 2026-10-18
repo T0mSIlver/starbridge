@@ -16,6 +16,12 @@ final class WipeTests: XCTestCase {
         await Notify.post("d_secret", kind: "decision", title: "Drop the prod table?", subtitle: nil, body: "")
         await Notify.register("d.d_secret", [NotificationAction(id: "a0", title: "Drop it")])
         for _ in 0..<50 where await !delivered().contains("d_secret") { try await Task.sleep(for: .milliseconds(100)) }
+        // A snoozed question's return waits as a pending request.
+        let later = UNMutableNotificationContent()
+        later.title = "Drop the prod table?"
+        try await center.add(UNNotificationRequest(identifier: "snooze-d_secret", content: later, trigger: UNTimeIntervalNotificationTrigger(timeInterval: 3600, repeats: false)))
+        let pending = await center.pendingNotificationRequests().map(\.identifier)
+        XCTAssertTrue(pending.contains("snooze-d_secret"))
         let before = await delivered()
         XCTAssertTrue(before.contains("d_secret"))
         let registered = await categories()
@@ -38,12 +44,15 @@ final class WipeTests: XCTestCase {
         for _ in 0..<50 {
             let left = await delivered()
             let cats = await categories()
-            if left.isEmpty && cats.isEmpty { break }
+            let waiting = await center.pendingNotificationRequests()
+            if left.isEmpty && cats.isEmpty && waiting.isEmpty { break }
             try await Task.sleep(for: .milliseconds(100))
         }
         let left = await delivered()
         let cats = await categories()
         XCTAssertTrue(left.isEmpty, "delivered: \(left)")
         XCTAssertTrue(cats.isEmpty, "categories: \(cats)")
+        let waiting = await center.pendingNotificationRequests().map(\.identifier)
+        XCTAssertTrue(waiting.isEmpty, "pending: \(waiting)")
     }
 }
