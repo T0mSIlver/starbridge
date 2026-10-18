@@ -7,6 +7,7 @@ cd "$(dirname "$0")/.."
 
 # behind NAME PINNED LATEST WHERE: a row when LATEST is newer than PINNED.
 behind() {
+  [ -n "$3" ] || { echo "pinned-tools.sh: no latest version for $1" >&2; exit 1; }
   [ "$2" = "$3" ] && return 0
   [ "$(printf '%s\n%s\n' "$2" "$3" | sort -V | tail -1)" = "$3" ] || return 0
   printf '| %s | %s | %s | %s |\n' "$1" "$2" "$3" "$4"
@@ -24,16 +25,23 @@ for v in "$trivy" "$osv" "$runner" "$node" "$minisign" "$sodium"; do
   [ -n "$v" ] || { echo "pinned-tools.sh: a pin was not found; its file changed shape" >&2; exit 1; }
 done
 
+# Plain assignments, so a failed lookup stops the script (set -e) instead of passing an empty version.
+trivy_latest=$(release aquasecurity/trivy)
+osv_latest=$(release google/osv-scanner)
+runner_latest=$(release actions/runner)
+minisign_latest=$(release jedisct1/minisign)
+# The newest release of the major line the boxes run.
+node_latest=$(curl -fsS https://nodejs.org/dist/index.json |
+  jq -er --arg major "v${node%%.*}." '[.[] | select(.version | startswith($major))][0].version')
+# swift-sodium is pinned by commit: its last tag is from 2020.
+ahead=$(gh api "repos/jedisct1/swift-sodium/compare/$sodium...master" --jq .ahead_by)
+
 rows=$(
-  behind Trivy "$trivy" "$(release aquasecurity/trivy | tr -d v)" ".github/workflows/scan.yml"
-  behind osv-scanner "$osv" "$(release google/osv-scanner | tr -d v)" ".github/workflows/scan.yml"
-  behind "Actions runner" "$runner" "$(release actions/runner | tr -d v)" ".github/runners/setup.sh"
-  behind minisign "$minisign" "$(release jedisct1/minisign)" ".github/workflows/release.yml, cli/install.ps1"
-  # The newest release of the major line the boxes run.
-  behind Node "$node" "$(curl -fsSL https://nodejs.org/dist/index.json |
-    jq -r --arg major "v${node%%.*}." '[.[] | select(.version | startswith($major))][0].version' | tr -d v)" ".github/runners/setup.sh"
-  # swift-sodium is pinned by commit: its last tag is from 2020.
-  ahead=$(gh api "repos/jedisct1/swift-sodium/compare/$sodium...master" --jq .ahead_by)
+  behind Trivy "$trivy" "${trivy_latest#v}" ".github/workflows/scan.yml"
+  behind osv-scanner "$osv" "${osv_latest#v}" ".github/workflows/scan.yml"
+  behind "Actions runner" "$runner" "${runner_latest#v}" ".github/runners/setup.sh"
+  behind minisign "$minisign" "$minisign_latest" ".github/workflows/release.yml, cli/install.ps1"
+  behind Node "$node" "${node_latest#v}" ".github/runners/setup.sh"
   [ "$ahead" = 0 ] || printf '| swift-sodium | %s | master, %s commits ahead | ios/StarbridgeProtocol/Package.swift |\n' "${sodium:0:7}" "$ahead"
 )
 [ -z "$rows" ] || printf '| Tool | Pinned | Latest | Pinned in |\n|---|---|---|---|\n%s\n' "$rows"
