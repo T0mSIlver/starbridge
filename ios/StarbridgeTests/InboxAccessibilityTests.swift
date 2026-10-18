@@ -52,7 +52,7 @@ final class InboxAccessibilityTests: XCTestCase {
         for k in kids { elements(k, &out) }
     }
 
-    private func voiceOverStops() async throws -> [NSObject] {
+    private func voiceOverStops() async throws -> (stops: [NSObject], window: UIWindow) {
         switchAccessibilityOn()
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         addTeardownBlock { try? FileManager.default.removeItem(at: dir) }
@@ -67,27 +67,44 @@ final class InboxAccessibilityTests: XCTestCase {
         try await Task.sleep(for: .seconds(2))
         var stops: [NSObject] = []
         elements(try XCTUnwrap(window.rootViewController?.view), &stops)
-        return stops
+        return (stops, window)
     }
 
     private func describe(_ stops: [NSObject]) -> String {
         stops.map { "[\($0.accessibilityLabel ?? "-") | \($0.accessibilityValue ?? "-") | \(($0.accessibilityCustomActions ?? []).map(\.name))]" }.joined(separator: " ")
     }
 
+    /** Runs the named custom action the way VoiceOver's actions rotor does; the card opens its sheet. */
+    private func perform(_ name: String, on stop: NSObject, in window: UIWindow, _ stops: [NSObject]) async throws {
+        let action = try XCTUnwrap((stop.accessibilityCustomActions ?? []).first { $0.name == name }, describe(stops))
+        XCTAssertNil(window.rootViewController?.presentedViewController)
+        _ = action.actionHandler?(action)
+        for _ in 0..<50 where window.rootViewController?.presentedViewController == nil { try await Task.sleep(for: .milliseconds(100)) }
+        XCTAssertNotNil(window.rootViewController?.presentedViewController, "\(name) opened nothing")
+    }
+
     func testAQuestionIsOneStopWithItsWaitingTimeAndWayIn() async throws {
-        let stops = try await voiceOverStops()
+        let (stops, window) = try await voiceOverStops()
         let stop = try XCTUnwrap(stops.first { ($0.accessibilityLabel ?? "").contains("Ship the release?") }, describe(stops))
         XCTAssertEqual(stop.accessibilityLabel?.contains("devbox · starbridge"), true, describe(stops))
         XCTAssertEqual(stop.accessibilityValue, "Waiting for you, 5 minutes", describe(stops))
         XCTAssertTrue(stop.accessibilityTraits.contains(.button), describe(stops))
-        XCTAssertTrue((stop.accessibilityCustomActions ?? []).map(\.name).contains("Open the question"), describe(stops))
+        // The answers stay stops of their own.
+        for label in ["Ship", "Hold"] {
+            let option = try XCTUnwrap(stops.first { $0.accessibilityLabel == label }, describe(stops))
+            XCTAssertTrue(option.accessibilityTraits.contains(.button), describe(stops))
+        }
+        try await perform("Open the question", on: stop, in: window, stops)
     }
 
     func testAPromptIsOneStopWithItsWaitingTimeAndWayIn() async throws {
-        let stops = try await voiceOverStops()
+        let (stops, window) = try await voiceOverStops()
         let stop = try XCTUnwrap(stops.first { ($0.accessibilityLabel ?? "").contains("Bash") }, describe(stops))
         XCTAssertEqual(stop.accessibilityValue, "Waiting for you, 5 minutes", describe(stops))
         XCTAssertTrue(stop.accessibilityTraits.contains(.button), describe(stops))
-        XCTAssertTrue((stop.accessibilityCustomActions ?? []).map(\.name).contains("Open the prompt"), describe(stops))
+        for label in ["Deny", "Allow"] {
+            XCTAssertNotNil(stops.first { $0.accessibilityLabel == label }, describe(stops))
+        }
+        try await perform("Open the prompt", on: stop, in: window, stops)
     }
 }
