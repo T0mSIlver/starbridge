@@ -253,14 +253,31 @@ line, the safe side: at worst a prompt repeats an answer the agent already read.
   quick question at the desk still went only to the phone. The picker is a permission dialog, so
   the plugin's `PermissionRequest` hook takes it whatever the permissions setting: one waiting
   card per question, held from the session's answer loop, and once each has a device's answer it
-  allows the call with those answers, which closes the picker (a multi-select answer
-  comma-joined, as Claude Code's own). An answer in the picker sends the hook nothing, so
+  allows the call with those answers, which closes the picker (a multi-select answer as its
+  labels, which Claude Code joins, #2061). An answer in the picker sends the hook nothing, so
   `PostToolUse` on `AskUserQuestion` settles the cards; Esc sends SIGTERM, as does Claude Code's
   hook timeout, so the hook has its own entry with a day's timeout and withdraws its cards 10
   minutes before it, when no answer could reach the picker any more. The generic
   `PermissionRequest` entry excludes `AskUserQuestion` by its matcher. The plugin dropped its `PreToolUse` entry
   once the server refused CLIs before 0.1.1 (#1625); the CLI's `hook ask-user` still prints
   nothing for plugins before that.
+- Claude Code's extended questions (2.1.299+, #2061). The desktop app and SDK sessions with
+  `CLAUDE_CODE_QUESTION_EXTENDED` let the agent add a call `title`, a question `description`
+  and a `kind`: `"text"` (no options) or `"number"` (`min`, `max`, optional `step`,
+  `defaultValue`, `unit`); an option's `description` becomes optional. Options in either mode may
+  carry a `preview`, markdown in the terminal and HTML in the desktop app
+  (`CLAUDE_CODE_QUESTION_PREVIEW_FORMAT=html`, which the hook inherits). The title and
+  description lead the card's context, since a card has no other place for them. A number
+  question is a typed-reply card that states its range, unit and default; a reply outside the
+  range or off its step is asked again on a new card that says why, because Claude Code takes
+  the hook's answer without checking it. Answers go back keyed by the question: a number as a
+  string without its unit, as the picker's own. Previews follow the options as plain
+  text, HTML stripped of its tags, so the context limit cuts a long preview rather than the
+  options. A typed reply to a multi-select question, here or in opencode or Pi, is read as its
+  labels only when it names nothing else, each label matched whole before the reply is split on
+  commas, so a label with a comma in it stays one. A number card asked again after `hook
+  settle` closed the picker is settled as answered elsewhere at once, since no answer can reach
+  the picker. A multi-select question still shows one card with a typed reply.
 - opencode (#345): each `question` call becomes one Starbridge question per question, already
   waiting, and the answers go back into the call through `POST /question/{id}/reply`. The first
   answer, on a device or at the keyboard, wins; the other side is settled `elsewhere`. A question

@@ -22,7 +22,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { join } from "node:path";
-import { type Answer, type Permission, ProtocolError } from "@starbridge/protocol";
+import { type Answer, Decision, type Permission, ProtocolError } from "@starbridge/protocol";
 import type { SessionEvent } from "./agent/api";
 import { MAX_HOLD_SECONDS } from "./agent/api";
 import { type AgentClient, Interrupted, withAgent } from "./agent/client";
@@ -351,23 +351,29 @@ export async function hookSettle(
   return 0;
 }
 
-/** One question of Claude Code's `AskUserQuestion`, as its tool input carries it. */
-interface PickerQuestion {
+/**
+ * One question of Claude Code's `AskUserQuestion`, as its tool input carries it. Extended
+ * questions (2.1.299+, spec/harnesses.md, #2061) add `kind` and its fields; the call's `title`
+ * is copied onto each.
+ */
+interface PickerQuestion extends Extended {
   question: string;
   header?: string;
-  options?: { label: string; description?: string }[];
+  options?: { label: string; description?: string; preview?: string }[];
   multiSelect?: boolean;
 }
 
 function pickerQuestions(input: unknown): PickerQuestion[] | undefined {
-  const questions = (input as { questions?: unknown } | undefined)?.questions;
+  const { questions, title } = (input ?? {}) as { questions?: unknown; title?: unknown };
   if (
     !Array.isArray(questions) ||
     questions.length === 0 ||
     !questions.every((q) => typeof (q as { question?: unknown })?.question === "string")
   )
     return undefined;
-  return questions as PickerQuestion[];
+  return (questions as PickerQuestion[]).map((q) =>
+    typeof title === "string" && title ? { ...q, title } : q,
+  );
 }
 
 /** The picker's open questions on this machine's devices, by the session that asked them. */
@@ -378,6 +384,9 @@ function pickerOpen(st: ReturnType<Ctx["store"]["state"]>, session: string): str
 }
 
 async function settlePicker(ctx: Ctx, session: string, outcome: "elsewhere" | "withdrawn") {
+  ctx.store.updateState((st) => {
+    for (const a of Object.values(st.asked)) if (a.picker === session) a.pickerClosed = true;
+  });
   // Its own deadline, not SIGTERM's: a stalled server would hold the hook until the harness
   // kills it (#1286).
   const deadline = AbortSignal.timeout(REPORT_MS);
@@ -422,37 +431,44 @@ async function racePicker(
     failed.signal,
   ]);
   const at = ctx.now().getTime();
+  const html = ctx.env.CLAUDE_CODE_QUESTION_PREVIEW_FORMAT === "html";
   const results = await Promise.allSettled(
     questions.map(async (q, i) => {
       const sub: Ctx = { ...ctx, signal, err: () => {} };
-      const input: AskInput = {
-        ...questionInput({ ...q, multiple: q.multiSelect }),
-        agent: "claude-code",
-        session: sessionId,
-        project: projectName(cwd),
-        held: true,
-        picker: sessionId,
-        waiting: true,
-        askedAt: new Date(at + i),
-      };
-      let id: string;
-      try {
-        ({ id } = await postDecision(sub, s, resolveSource(input, ctx.env, cwd), outer.signal));
-      } catch (e) {
-        failed.abort();
-        throw e;
-      }
-      // A snooze puts it off on the devices; the picker still waits for an answer.
-      while (true) {
-        const lines: string[] = [];
-        const code = await wait(
-          { ...sub, out: (l) => lines.push(l) },
-          { id, json: true, "no-mark": true },
-          s,
-        );
-        if (code === 0 && lines[0])
-          return opencodeAnswer(JSON.parse(lines[0]) as Answer, { ...q, multiple: q.multiSelect });
-        if (code !== EXIT_SNOOZED) return undefined;
+      const card = questionInput({ ...q, multiple: q.multiSelect }, { html });
+      // A number off its range is asked again, saying why: Claude Code takes any answer as given.
+      let first: string | undefined;
+      for (let refused: string | undefined; ; ) {
+        const input: AskInput = {
+          ...card,
+          ...(refused ? { context: clip(`${refused}\n\n${card.context}`, CONTEXT_CHARS) } : {}),
+          agent: "claude-code",
+          session: sessionId,
+          project: projectName(cwd),
+          held: true,
+          picker: sessionId,
+          waiting: true,
+          askedAt: new Date(at + i),
+        };
+        let id: string;
+        try {
+          ({ id } = await postDecision(sub, s, resolveSource(input, ctx.env, cwd), outer.signal));
+        } catch (e) {
+          failed.abort();
+          throw e;
+        }
+        first ??= id;
+        // The picker closed while this card was being posted: it is moot (#2061).
+        if (id !== first && ctx.store.state().asked[first]?.pickerClosed) {
+          await settlePicker(ctx, sessionId, "elsewhere");
+          return undefined;
+        }
+        const answer = await pickerAnswer(sub, s, id);
+        if (!answer) return undefined;
+        if (q.kind !== "number") return opencodeAnswer(answer, { ...q, multiple: q.multiSelect });
+        const n = numberReply(answer.text ?? answer.choice ?? "", q);
+        if ("value" in n) return [n.value];
+        refused = n.error;
       }
     }),
   );
@@ -461,8 +477,12 @@ async function racePicker(
   if (error && !signal.aborted)
     ctx.err(`starbridge: question not sent: ${(error.reason as Error).message}`);
   if (picked.every((p) => p !== undefined) && !signal.aborted) {
+    // A multi-select answer goes back as its labels: Claude Code joins them as its picker does.
     const answers = Object.fromEntries(
-      questions.map((q, i) => [q.question, (picked[i] as string[]).join(", ")]),
+      questions.map((q, i) => {
+        const p = picked[i] as string[];
+        return [q.question, q.multiSelect ? p : p.join(", ")];
+      }),
     );
     const decision = {
       behavior: "allow",
@@ -479,6 +499,20 @@ async function racePicker(
   return 0;
 }
 
+/** A device's answer to the picker's card `id`; a snooze puts it off, as the picker still waits. */
+async function pickerAnswer(sub: Ctx, s: ReturnType<typeof session>, id: string) {
+  while (true) {
+    const lines: string[] = [];
+    const code = await wait(
+      { ...sub, out: (l) => lines.push(l) },
+      { id, json: true, "no-mark": true },
+      s,
+    );
+    if (code === 0 && lines[0]) return JSON.parse(lines[0]) as Answer;
+    if (code !== EXIT_SNOOZED) return undefined;
+  }
+}
+
 /**
  * `starbridge hook ask-user`, on `PreToolUse` for `AskUserQuestion`, from plugins before #1625:
  * prints nothing, so the picker opens and `hook permission` races it. It stays while such plugins
@@ -492,9 +526,24 @@ export function hookAskUser(): number {
 export interface OpencodeQuestion {
   question: string;
   header?: string;
-  options?: { label: string; description?: string }[];
+  options?: { label: string; description?: string; preview?: string }[];
   multiple?: boolean;
   custom?: boolean;
+}
+
+/**
+ * What Claude Code's extended questions add (2.1.299+, #2061): the call's `title`, a helper line,
+ * and a `kind`. A `"text"` question has no options; a `"number"` one takes a value in `min..max`.
+ */
+interface Extended {
+  title?: string;
+  description?: string;
+  kind?: string;
+  min?: number;
+  max?: number;
+  step?: number;
+  defaultValue?: number;
+  unit?: string;
 }
 
 /** What the plugin hands `hook question` on stdin. */
@@ -505,10 +554,10 @@ interface QuestionHookInput {
 }
 
 /** Limits of a decision (PROTOCOL.md): its question, context, options and each option. */
-const QUESTION_CHARS = 300;
-const CONTEXT_CHARS = 8000;
+const QUESTION_CHARS = Decision.shape.question.maxLength ?? 300;
+const CONTEXT_CHARS = Decision.shape.context.maxLength ?? 8000;
 const MAX_OPTIONS = 4;
-const OPTION_CHARS = 100;
+const OPTION_CHARS = Decision.shape.options.element.maxLength ?? 100;
 
 const clip = (text: string, max: number) =>
   text.length > max ? `${text.slice(0, max - 1)}…` : text;
@@ -539,29 +588,161 @@ function questionTitle(text: string): string | undefined {
  * The decision for one question. Its labels become the options, so a tap answers with the label
  * opencode expects; the agent marks its pick "(Recommended)" and puts it first. A question a
  * decision cannot offer as taps (more than 4 options, a label too long, one option) lists them
- * in the context and takes a typed reply.
+ * in the context and takes a typed reply. Claude Code's title and description lead the context,
+ * a number question states its range, and option previews follow the options as plain text,
+ * so a long one is what gets cut (#2061). `html`: the previews are HTML, as Desktop sends them.
  */
-export function questionInput(q: OpencodeQuestion): AskInput {
-  const title = questionTitle(q.question);
+export function questionInput(
+  q: OpencodeQuestion & Extended,
+  { html = false }: { html?: boolean } = {},
+): AskInput {
+  const short = questionTitle(q.question);
   const labels = (q.options ?? []).map((o) => o.label);
   const taps =
     labels.length >= 2 &&
     labels.length <= MAX_OPTIONS &&
     new Set(labels).size === labels.length &&
     labels.every((l) => l.length > 0 && l.length <= OPTION_CHARS);
-  const lines = [
-    ...(title || q.question.length > QUESTION_CHARS ? [q.question, ""] : []),
-    ...(q.options ?? []).map((o) =>
-      o.description ? `- ${o.label}: ${o.description}` : `- ${o.label}`,
-    ),
-    ...(q.multiple ? ["", "More than one can apply: reply with each one you pick."] : []),
+  const lead = [q.title, q.description].filter((l): l is string => !!l?.trim());
+  const sections = [
+    lead.join("\n"),
+    short || q.question.length > QUESTION_CHARS ? q.question : "",
+    q.kind === "number" ? `Reply with ${numberRange(q)}${defaultOf(q)}.` : "",
+    (q.options ?? [])
+      .map((o) => (o.description ? `- ${o.label}: ${o.description}` : `- ${o.label}`))
+      .join("\n"),
+    q.multiple ? "More than one can apply: reply with each one you pick." : "",
+    ...(q.options ?? []).flatMap((o) => {
+      const text = o.preview && previewText(o.preview, html);
+      return text ? [`Preview of ${o.label}:\n${text}`] : [];
+    }),
   ];
   const recommended = labels.find((l) => /\(recommended\)\s*$/i.test(l));
   return {
-    question: title ?? clip(q.question, QUESTION_CHARS),
-    context: clip(lines.join("\n").trim(), CONTEXT_CHARS),
+    question: short ?? clip(q.question, QUESTION_CHARS),
+    context: clip(
+      sections
+        .filter((x) => x)
+        .join("\n\n")
+        .trim(),
+      CONTEXT_CHARS,
+    ),
     ...(taps ? { options: labels, ...(recommended ? { recommended } : {}) } : {}),
   };
+}
+
+/** "a whole number from 3 to 20 slides": what a number question takes, unit included. */
+function numberRange(q: Extended): string {
+  const unit = q.unit ? ` ${q.unit}` : "";
+  const whole = q.step === 1 && Number.isInteger(q.min);
+  const steps = q.step !== undefined && !whole ? `, in steps of ${q.step}` : "";
+  return `${whole ? "a whole number" : "a number"} from ${q.min} to ${q.max}${unit}${steps}`;
+}
+
+const defaultOf = (q: Extended) =>
+  q.defaultValue !== undefined ? ` (default ${q.defaultValue})` : "";
+
+/**
+ * A typed reply to a number question, as the picker's answer: the number, its unit dropped, if it
+ * lies in `min..max` on a `step` from `min`; otherwise why not, for the card that asks again.
+ */
+export function numberReply(text: string, q: Extended): { value: string } | { error: string } {
+  const bare = text.trim();
+  const unit = q.unit?.trim();
+  const digits = (unit && bare.endsWith(unit) ? bare.slice(0, -unit.length) : bare).trim();
+  const n = /^[-+]?(\d+\.?\d*|\.\d+)$/.test(digits) ? Number(digits) : Number.NaN;
+  const min = q.min ?? Number.NEGATIVE_INFINITY;
+  const max = q.max ?? Number.POSITIVE_INFINITY;
+  const onStep = !q.step || onDecimalStep(digits, q.min ?? 0, q.step);
+  if (Number.isFinite(n) && n >= min && n <= max && onStep) return { value: String(n) };
+  return { error: `"${clip(bare, 40)}" is not ${numberRange(q)}.` };
+}
+
+/**
+ * Whether the decimal `reply` is a whole number of `step`s from `min`, counted exactly: float
+ * division is off by its rounding, which no one tolerance fits at every scale (0.3 is
+ * 2.9999999999999996 steps of 0.1 from 0).
+ */
+function onDecimalStep(reply: string, min: number, step: number): boolean {
+  const places = (x: string) => {
+    const m = /^[-+]?\d*\.?(\d*)(?:e([-+]?\d+))?$/i.exec(x);
+    return m ? Math.max(0, (m[1]?.length ?? 0) - Number(m[2] ?? 0)) : 0;
+  };
+  const d = Math.min(100, Math.max(places(reply), places(String(min)), places(String(step))));
+  // "-1.5" at 2 places is -150n.
+  const scaled = (x: string) => {
+    const [whole = "", frac = ""] = x.replace(/^\+/, "").split(".");
+    return BigInt(`${whole === "" || whole === "-" ? `${whole}0` : whole}${frac.padEnd(d, "0")}`);
+  };
+  try {
+    return (scaled(reply) - scaled(min.toFixed(d))) % scaled(step.toFixed(d)) === 0n;
+  } catch {
+    // Past 1e21 toFixed writes an exponent; such a range has no fraction left to check.
+    return Number.isInteger((Number(reply) - min) / step);
+  }
+}
+
+/**
+ * An option's preview as plain text: markdown as written; HTML without its tags, styles and
+ * scripts, its block ends as line breaks and its entities read.
+ */
+function previewText(preview: string, html: boolean): string {
+  if (!html && !/^\s*</.test(preview)) return preview.trim();
+  const entities: Record<string, string> = {
+    amp: "&",
+    lt: "<",
+    gt: ">",
+    quot: '"',
+    apos: "'",
+    nbsp: " ",
+  };
+  return withoutTags(preview)
+    .replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (m, e: string) => {
+      if (e[0] !== "#") return entities[e.toLowerCase()] ?? m;
+      const code =
+        e[1] === "x" || e[1] === "X" ? Number.parseInt(e.slice(2), 16) : Number(e.slice(1));
+      return code > 0 && code <= 0x10ffff ? String.fromCodePoint(code) : m;
+    })
+    .replace(/[ \t]+/g, " ")
+    .replace(/ *\n[\s]*/g, "\n")
+    .trim();
+}
+
+/** Elements whose end is a line break in the text. */
+const BLOCKS = new Set(
+  "br p div li ul ol tr table h1 h2 h3 h4 h5 h6 pre blockquote section".split(" "),
+);
+
+/**
+ * HTML's text, in one pass: tags dropped, a block's end a line break, a script's or style's
+ * body dropped, an unclosed tag the end. A "<" that starts no tag stays text.
+ */
+function withoutTags(html: string): string {
+  const lower = html.toLowerCase();
+  let out = "";
+  let i = 0;
+  while (i < html.length) {
+    const lt = html.indexOf("<", i);
+    if (lt < 0) return out + html.slice(i);
+    out += html.slice(i, lt);
+    if (!/[a-z/!?]/i.test(html[lt + 1] ?? "")) {
+      out += "<";
+      i = lt + 1;
+      continue;
+    }
+    const gt = html.indexOf(">", lt);
+    if (gt < 0) return out;
+    const name = /^\/?([a-z0-9]+)/i.exec(html.slice(lt + 1, gt))?.[1]?.toLowerCase() ?? "";
+    if (BLOCKS.has(name)) out += "\n";
+    i = gt + 1;
+    if ((name === "script" || name === "style") && html[lt + 1] !== "/") {
+      const end = lower.indexOf(`</${name}`, i);
+      const close = end < 0 ? -1 : html.indexOf(">", end);
+      if (close < 0) return out;
+      i = close + 1;
+    }
+  }
+  return out;
 }
 
 /**
@@ -571,12 +752,32 @@ export function questionInput(q: OpencodeQuestion): AskInput {
 export function opencodeAnswer(a: Answer, q: OpencodeQuestion): string[] {
   if (a.choice !== undefined) return [a.choice];
   const text = a.text ?? "";
-  const labels = new Set((q.options ?? []).map((o) => o.label));
-  const parts = text
-    .split(/[,\n]/)
-    .map((p) => p.trim())
-    .filter((p) => p.length > 0);
-  return q.multiple && parts.length > 0 && parts.every((p) => labels.has(p)) ? parts : [text];
+  const picked = q.multiple
+    ? labelsIn(
+        text,
+        (q.options ?? []).map((o) => o.label),
+      )
+    : undefined;
+  return picked ?? [text];
+}
+
+/**
+ * The labels a reply names, each once, when it names nothing else: a label is matched whole
+ * before the reply is split on commas or lines, so one with a comma in it stays one (#2061).
+ */
+function labelsIn(text: string, labels: string[]): string[] | undefined {
+  const longest = [...labels].filter((l) => l.trim()).sort((a, b) => b.length - a.length);
+  const found = new Set<string>();
+  let rest = text.replace(/^[\s,]+/, "");
+  while (rest) {
+    const label = longest.find(
+      (l) => rest.startsWith(l) && /^\s*([,\n]|$)/.test(rest.slice(l.length)),
+    );
+    if (!label) return undefined;
+    found.add(label);
+    rest = rest.slice(label.length).replace(/^[\s,]+/, "");
+  }
+  return found.size > 0 ? [...found] : undefined;
 }
 
 /**
