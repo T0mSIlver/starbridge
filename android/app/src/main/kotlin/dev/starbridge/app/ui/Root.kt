@@ -220,7 +220,8 @@ fun Main(decisions: List<Decision>, prompts: List<Prompt>, notice: StateFlow<Str
     val backStack = rememberNavBackStack(InboxKey)
     val now = now()
     // A snoozed question counts again once it is back (#691); a waiting prompt counts too (#1963).
-    val openDecisions = needYou(decisions, prompts, now)
+    // A prompt ends on the second, as the Inbox header's does: tick each second while one waits.
+    val openDecisions = needYou(decisions, prompts, seconds(prompts.any { it.waiting(now) }, now))
     // Shared by a decision's card and its detail, which are separate entries.
     val drafts = rememberDrafts()
     val host = Notices(notice, dismiss, stopWaiting, connection)
