@@ -419,17 +419,24 @@ private struct DecisionCard: View {
                 ?? since.map { Times.waited($0, now) }
                 ?? Dates.parse(decision.body.createdAt).map { Times.since($0, now) } ?? ""
             Card(amber: waiting) {
-                MetaRow(source: decision.body.source, time: slot, clock: waiting)
-                HStack(alignment: .top, spacing: Tokens.Spacing.s2) {
-                    Image(systemName: "questionmark.circle")
-                        .foregroundStyle(waiting ? Tokens.Colors.accent.color : Tokens.Colors.fg2.color)
-                        .accessibilityHidden(true)
-                    // A long press copies it; a tap still opens the question (#1143).
-                    Text(decision.body.question)
-                        .type(Tokens.Typography.subtitle)
-                        .fontWeight(waiting ? .medium : .regular)
-                        .textSelection(.enabled)
+                // One stop for VoiceOver: who asks and what, how long it has waited, and the way in (#1946).
+                VStack(alignment: .leading, spacing: 6) {
+                    MetaRow(source: decision.body.source, time: slot, clock: waiting)
+                    HStack(alignment: .top, spacing: Tokens.Spacing.s2) {
+                        Image(systemName: "questionmark.circle")
+                            .foregroundStyle(waiting ? Tokens.Colors.accent.color : Tokens.Colors.fg2.color)
+                            .accessibilityHidden(true)
+                        // A long press copies it; a tap still opens the question (#1143).
+                        Text(decision.body.question)
+                            .type(Tokens.Typography.subtitle)
+                            .fontWeight(waiting ? .medium : .regular)
+                            .textSelection(.enabled)
+                    }
                 }
+                .accessibilityElement(children: .combine)
+                .accessibilityValue(waiting ? since.map { Times.waitingLabel($0, now) } ?? "Waiting for you" : until.map { "Snoozed until \(Times.clock($0, now))" } ?? "")
+                .accessibilityAddTraits(.isButton)
+                .accessibilityAction(named: "Open the question", open)
                 if let why = store.notSent[decision.id] {
                     Text("Not sent: \(why)").type(Tokens.Typography.small).foregroundStyle(Tokens.Colors.bad.color)
                 }
@@ -445,9 +452,6 @@ private struct DecisionCard: View {
             }
             .contentShape(Rectangle())
             .onTapGesture(perform: open)
-            .accessibilityElement(children: .contain)
-            .accessibilityValue(waiting ? since.map { Times.waitingLabel($0, now) } ?? "Waiting for you" : until.map { "Snoozed until \(Times.clock($0, now))" } ?? "")
-            .accessibilityAction(named: "Open the question", open)
         }
     }
 }
@@ -466,6 +470,9 @@ private struct HistoryRow: View {
         }
         .contentShape(Rectangle())
         .onTapGesture(perform: open)
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isButton)
+        .accessibilityAction(named: "Open the question", open)
     }
 }
 
@@ -477,19 +484,27 @@ private struct PromptCard: View {
     var body: some View {
         TimelineView(.periodic(from: .now, by: 1)) { context in
             Card(amber: true) {
-                MetaRow(source: prompt.body.source, time: Dates.parse(prompt.body.createdAt).map { Times.waited($0, context.date) } ?? "", clock: true)
-                HStack(alignment: .top, spacing: Tokens.Spacing.s2) {
-                    Image(systemName: "terminal").foregroundStyle(Tokens.Colors.accent.color).accessibilityHidden(true)
-                    Text(prompt.headline).type(Tokens.Typography.action)
+                let since = Dates.parse(prompt.body.createdAt)
+                // One stop for VoiceOver, as a question's (#1946); Deny and Allow stay their own.
+                VStack(alignment: .leading, spacing: 6) {
+                    MetaRow(source: prompt.body.source, time: since.map { Times.waited($0, context.date) } ?? "", clock: true)
+                    HStack(alignment: .top, spacing: Tokens.Spacing.s2) {
+                        Image(systemName: "terminal").foregroundStyle(Tokens.Colors.accent.color).accessibilityHidden(true)
+                        Text(prompt.headline).type(Tokens.Typography.action)
+                    }
+                    // The whole input when it fits a line, else the summary; Allow covers only what shows (#356).
+                    Text(prompt.fitsRow ? prompt.fullInput : visible(prompt.body.summary))
+                        .type(Tokens.Typography.code)
+                        .lineLimit(prompt.fitsRow ? nil : 3)
+                        .padding(Tokens.Spacing.s3)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .foregroundStyle(Tokens.Colors.onTerminal.color)
+                        .background(RoundedRectangle(cornerRadius: Tokens.Radius.md, style: .continuous).fill(Tokens.Colors.terminal.color))
                 }
-                // The whole input when it fits a line, else the summary; Allow covers only what shows (#356).
-                Text(prompt.fitsRow ? prompt.fullInput : visible(prompt.body.summary))
-                    .type(Tokens.Typography.code)
-                    .lineLimit(prompt.fitsRow ? nil : 3)
-                    .padding(Tokens.Spacing.s3)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .foregroundStyle(Tokens.Colors.onTerminal.color)
-                    .background(RoundedRectangle(cornerRadius: Tokens.Radius.md, style: .continuous).fill(Tokens.Colors.terminal.color))
+                .accessibilityElement(children: .combine)
+                .accessibilityValue(since.map { Times.waitingLabel($0, context.date) } ?? "Waiting for you")
+                .accessibilityAddTraits(.isButton)
+                .accessibilityAction(named: "Open the prompt", open)
                 HStack(spacing: Tokens.Spacing.s2) {
                     OptionButton(label: "Deny", strong: false, amber: true, height: 40) { Task { await store.answerPrompt(prompt.id, allow: false) } }
                     OptionButton(label: "Allow", strong: true, amber: true, height: 40) {
@@ -500,8 +515,6 @@ private struct PromptCard: View {
             }
             .contentShape(Rectangle())
             .onTapGesture(perform: open)
-            .accessibilityElement(children: .contain)
-            .accessibilityAction(named: "Open the prompt", open)
         }
     }
 }
