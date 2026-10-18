@@ -22,6 +22,13 @@ test("a deploy deletes the failed-deploy logs older than 2 days and keeps newer 
   expect(readdirSync(dir)).toEqual(["server-new.log"]);
 });
 
+test("pruning a folder that does not exist succeeds", () => {
+  const r = spawnSync("sh", [script, "--prune"], {
+    env: { ...process.env, KEEP_LOGS_DIR: join(tmpdir(), "keep-logs-absent-dir") },
+  });
+  expect(r.status).toBe(0);
+});
+
 test("a failed service's logs go to a file only the operator reads, and only its path is printed", () => {
   const dir = mkdtempSync(join(tmpdir(), "keep-logs-"));
   const r = spawnSync("sh", [script, "web", "echo", "secret-log-line"], {
@@ -38,5 +45,5 @@ test("apply.sh prunes the logs on every deploy, and /privacy states the 2 days",
     "host/keep-logs.sh --prune",
   );
   const page = readFileSync(join(root, "web/src/app/privacy/page.tsx"), "utf8");
-  expect(page).toMatch(/deleted after 2 days/);
+  expect(page).toContain("deleted by the first deploy more than 2 days later");
 });
