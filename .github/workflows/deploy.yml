@@ -355,6 +355,12 @@ jobs:
             sleep 30
           done
           starbridge settle "$ID" --outcome withdrawn --reason "Six hours passed; the deploy may still wait on its run page" || true
+      # Cancelling the run while it waits ends this job too.
+      - name: Close the card when the run is cancelled
+        if: cancelled() && env.ID != ''
+        env:
+          STARBRIDGE_MACHINE: ${{ secrets.CI_CARD_MACHINE }}
+        run: starbridge settle "$ID" --outcome withdrawn --reason "The run was cancelled" || true
 
   # starbridge.run, by dispatch only: release.yml for each rc tag, the owner for a hotfix. It waits
   # for the commit's `staging` status, up to an hour, as an rc tag can follow its merge by minutes,
