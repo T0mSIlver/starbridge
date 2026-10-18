@@ -294,6 +294,8 @@ jobs:
   # and a failed card never stops the deploy.
   card:
     if: github.event_name == 'workflow_dispatch'
+    # A failed card must not fail the run, which release.yml reads to end its wait.
+    continue-on-error: true
     runs-on: ubuntu-latest
     # GitHub's runners end every job at 6 hours, so the card closes by then at the latest.
     timeout-minutes: 360
