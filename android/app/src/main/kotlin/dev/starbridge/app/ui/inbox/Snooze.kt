@@ -250,10 +250,14 @@ fun SwipeToSnooze(shape: Shape, onSwipe: () -> Unit, modifier: Modifier = Modifi
     // Whether the card sits past the threshold, so backing off it ticks too (#997). A snooze
     // clears it first: the card springing back after one is no back-off.
     var crossed by remember { mutableStateOf(false) }
+    // Whether this card has sat at rest since it came: a card Undo brings back has its swiped
+    // state restored with it, which Material reports as one more dismiss (#1998).
+    var rested by remember { mutableStateOf(false) }
+    LaunchedEffect(state.currentValue) { if (state.currentValue == SwipeToDismissBoxValue.Settled) rested = true }
     val dismiss: (SwipeToDismissBoxValue) -> Unit = remember(state) {
         {
             crossed = false
-            swiped()
+            if (rested) swiped()
             scope.launch { state.reset() }
         }
     }
