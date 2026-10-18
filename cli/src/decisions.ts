@@ -922,7 +922,7 @@ export function deliverable(st: State, id: string): boolean {
   return !!asked && !asked.settled && (!asked.answerIn || !!asked.done) && !st.behind;
 }
 
-/** Held items other than answers to open questions, at most, while the directory is behind. */
+/** Held items other than answers to open questions and prompts, at most, while the directory is behind. */
 const HELD_MAX = 100;
 
 /**
@@ -1118,14 +1118,17 @@ export async function poll(
       if (behind) {
         // Kept, not dropped: the device's client counts them sent, and the server takes no other.
         st.behind = behind;
-        // Every answer to a question still open here: the cursor moved past it, and the server
-        // takes no other (#1976). Devices sign each, so their number is bounded by those
-        // questions; the rest, such as snoozes, keep the latest.
+        // Every answer to a question or permission prompt still open here: the cursor moved
+        // past it, and the server takes no other (#1976). Devices sign each, so their number is
+        // bounded by those; the rest, such as snoozes, keep the latest.
         const due = (raw: unknown) => {
           const r = raw as { kind?: unknown; re?: unknown } | null;
-          if (r?.kind !== "answer" || typeof r.re !== "string" || !Object.hasOwn(st.asked, r.re))
-            return false;
-          return !st.asked[r.re]?.settled && !st.answers[r.re];
+          if (typeof r?.re !== "string") return false;
+          if (r.kind === "answer" && Object.hasOwn(st.asked, r.re))
+            return !st.asked[r.re]?.settled && !st.answers[r.re];
+          const prompt =
+            st.permissions && Object.hasOwn(st.permissions, r.re) && st.permissions[r.re];
+          return r.kind === "permission-answer" && !!prompt && !prompt.answer && !prompt.settled;
         };
         const rest = new Set(answers.filter((raw) => !due(raw)).slice(-HELD_MAX));
         st.held = answers.filter((raw) => due(raw) || rest.has(raw));
