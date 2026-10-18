@@ -16,12 +16,13 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { LiveServer } from "@starbridge/server/test-support";
 import { PNG } from "pngjs";
-import { proof, type SessionEvent, type Status } from "../src/agent/api";
+import { configKey, proof, type SessionEvent, type Status } from "../src/agent/api";
 import { AgentClient, AgentError, Interrupted, NoAgent } from "../src/agent/client";
 import { makeAgent } from "../src/agent/main";
 import type { Agent } from "../src/agent/server";
 import { hookStop } from "../src/antigravity";
 import { run } from "../src/cli";
+import { Store } from "../src/config";
 import { countFollowup, hookCursorSession, MAX_EMPTY_FOLLOWUPS } from "../src/hook";
 import {
   agentAddress,
@@ -305,6 +306,33 @@ test("the socket is the user's only, and a second agent refuses to start", async
     expect(statSync(ctx.store.dir).mode & 0o777).toBe(0o700);
   }
   expect((await rejection(makeAgent(ctx, { socket }).start())).message).toContain("already runs");
+});
+
+test("a second home of the same user never acts through the first home's agent (#1966)", async () => {
+  // Windows keeps the agent's port file in each config folder.
+  if (WINDOWS) return;
+  // Two homes share the user's $XDG_RUNTIME_DIR, as a test home on a dev box does.
+  const runtime = mkdtempSync(join(tmpdir(), "starbridge-run-"));
+  const home = (name: string): TestCtx => {
+    const config = mkdtempSync(join(tmpdir(), `starbridge-home-${name}-`));
+    const c = testCtx({ XDG_CONFIG_HOME: config, XDG_RUNTIME_DIR: runtime });
+    return { ...c, store: new Store(join(config, "starbridge")) };
+  };
+  const a = await paired(server, "box-a", home("a"));
+  const agent = makeAgent(a, { noQuota: true });
+  await agent.start();
+  agents.push(agent);
+  // Unpaired: anything it posts went through the first home's agent, as its machine.
+  const b = home("b");
+  expect(await run([...ASK, "--session", "s1"], b)).not.toBe(0);
+  expect(await server.opened("decision")).toHaveLength(0);
+  // An agent reached from another config folder's address refuses the call.
+  const astray = new AgentClient(agent.socket, undefined, configKey(b.store.dir));
+  const e = await rejection(astray.call("GET", "/v1/status"));
+  expect(e).toBeInstanceOf(NoAgent);
+  expect(e.message).toContain("serves another config folder");
+  expect(await run([...ASK, "--session", "s1"], a)).toBe(0);
+  expect(await server.opened("decision")).toHaveLength(1);
 });
 
 test("a client of another API revision gets 426 with what to update", async () => {

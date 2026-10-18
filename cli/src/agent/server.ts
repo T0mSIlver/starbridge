@@ -28,6 +28,8 @@ import { VERSION } from "../version";
 import {
   API,
   API_HEADER,
+  CONFIG_HEADER,
+  configKey,
   dropPortFile,
   type ErrorBody,
   isPortFile,
@@ -349,6 +351,14 @@ export class Agent implements Hub {
     };
     const fail = (status: number, body: ErrorBody) => send(status, body);
     if (!proven) return fail(401, { error: "unauthorized" });
+    // A client that worked out this address from another config folder must not act as this
+    // machine (#1966).
+    const key = req.headers[CONFIG_HEADER];
+    if (key !== undefined && key !== configKey(this.ctx.store.dir))
+      return fail(421, {
+        error: "other-config",
+        detail: `the agent on ${this.socket} serves another config folder, ${this.ctx.store.dir}`,
+      });
     const api = Number(req.headers[API_HEADER]);
     if (!Number.isInteger(api) || api < MIN_API || api > API) {
       const tooOld = Number.isInteger(api) && api > API;
