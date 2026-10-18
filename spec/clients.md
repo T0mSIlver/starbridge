@@ -116,6 +116,12 @@
   `--context-file` or `--input`. Fenced code needs real line breaks, so none is touched. The
   cost: a Windows path written outside a code span, `C:\new`, breaks after `C:`.
 - **Revoked machines.** Their items leave the Inbox and their notifications close (#344).
+- **A question the server dropped leaves the Inbox** (#1980). The server deletes an unanswered
+  question after its retention, a server limit, so a client asks it which questions it holds
+  open and drops an open one it kept that the server no longer lists: the web on each load
+  (#1380), the Android and iPhone apps on their first sync of a run and after an answer finds its
+  question gone, since a full list on every sync would cost each phone the open questions'
+  images again.
 - **Clock** (#161): the default, 12-hour or 24-hour, per device. UI words stay English. The
   default follows the device's own choice: the phone's 12/24-hour switch on Android and iOS, and
   on the web the browser's language, so a browser in en-US read in France shows PM; the row

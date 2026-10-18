@@ -86,6 +86,12 @@ final class Store {
     @ObservationIgnored var answerRetry: Task<Void, Never>?
     @ObservationIgnored var presenceTask: Task<Void, Never>?
     @ObservationIgnored var inFront = false
+    /**
+     * The next sync reads which questions the server holds open, and drops the open ones kept here
+     * that it no longer lists, as the web does: once a run, and after an answer found its question
+     * gone (#1980).
+     */
+    @ObservationIgnored var checkOpen = true
     @ObservationIgnored private(set) var beacon: Beacon!
 
     @ObservationIgnored private let vault: Vault

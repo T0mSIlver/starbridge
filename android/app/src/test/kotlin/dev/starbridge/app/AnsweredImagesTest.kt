@@ -120,7 +120,9 @@ class AnsweredImagesTest {
         http.dispatcher = object : Dispatcher() {
             override fun dispatch(request: RecordedRequest): MockResponse = when (request.url.encodedPath) {
                 "/v1/directory" -> json(buildJsonObject { put("entries", buildJsonArray {}) })
-                "/v1/items" -> if (request.url.queryParameter("kind")!!.startsWith("decision")) {
+                // Which questions are open, read once a run (#1980): none.
+                "/v1/items" -> if (request.url.queryParameter("open") == "1") json(empty)
+                else if (request.url.queryParameter("kind")!!.startsWith("decision")) {
                     asked += request.url.queryParameter("blobs") ?: ""
                     // Answered, listed without its blobs.
                     json(buildJsonObject { put("items", buildJsonArray { add(listed(pictured)); add(listed(swapped)) }); put("cursor", "2") })
