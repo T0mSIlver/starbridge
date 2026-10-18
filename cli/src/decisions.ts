@@ -1334,7 +1334,6 @@ function refuse(raw: unknown, e: unknown, s: Session, dir: Directory, st: State)
   forget(asked);
 }
 
-/** Drops a closed decision's body, so its plaintext does not stay on disk. */
 /**
  * Drops the answers accepted but not yet delivered whose device the chain now revokes, such as
  * one accepted while the server withheld that revocation, or before the owner revoked a stolen
@@ -1386,6 +1385,7 @@ export async function dropRevokedNow(ctx: Ctx) {
   if (dropRevoked(st, dir)) ctx.store.updateState((fresh) => dropRevoked(fresh, dir));
 }
 
+/** Drops a closed decision's body, so its plaintext does not stay on disk. */
 function forget(a: State["asked"][string]) {
   delete a.body;
 }
@@ -1394,18 +1394,18 @@ function forget(a: State["asked"][string]) {
 export const RESEAL_MS = 29 * 24 * 3600_000;
 
 /**
+ * When each store's re-seal may run again after a 429: until then the machine's rate window is
+ * left to its own asks (#650).
+ */
+const resealPaused = new WeakMap<object, number>();
+
+/**
  * Re-seals this machine's open decisions, with their waiting state, and permission prompts to
  * the active devices of the verified directory when one of those was not among their
  * recipients. They keep their ids, so a device that had them sees no second copy, and the server
  * pushes only the new devices. Revoked devices get nothing, and nothing is re-sealed while the
  * server may be withholding directory entries.
  */
-/**
- * When each store's re-seal may run again after a 429: until then the machine's rate window is
- * left to its own asks (#650).
- */
-const resealPaused = new WeakMap<object, number>();
-
 async function reseal(ctx: Ctx, s: Session, known: Directory): Promise<void> {
   const st = ctx.store.state();
   const now = ctx.now().getTime();
