@@ -401,4 +401,7 @@ the window's screens in light and dark from its end-to-end run (#1846). No model
   take Debian's updates at build time, on a layer the commit id keeps out of the build cache, and the web
   image drops npm, which it never runs. osv-scanner reads the lockfiles weekly and reports every
   finding. Each scan keeps one issue open while it finds something and closes it once a run finds
-  nothing. Dependabot's alerts cover the Gradle catalog, which osv-scanner cannot read.
+  nothing. Dependabot's alerts cover the Gradle catalog, which osv-scanner cannot read. The tools
+  pinned by hand (the two scanners, the runner, Node, minisign, swift-sodium's commit) are in no file
+  Dependabot reads, so the same weekly run compares each with its latest release and keeps a
+  `tool-pins` issue open while one trails (#2026).

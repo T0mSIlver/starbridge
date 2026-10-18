@@ -7,8 +7,8 @@
 set -euo pipefail
 slots=${1:?usage: setup.sh <number of runner slots>}
 here=$(dirname "$(readlink -f "$0")")
-RUNNER_VERSION=2.337.0
-RUNNER_SHA256=70920811a4f8ad4328818682bca5c6469c1c942fab52448868071d0063816613
+RUNNER_VERSION=2.338.0
+RUNNER_SHA256=af4b794c1bc41d73d40535e3fe092a39f9679cd8d965954c2aca25a05ca41d32
 NODE_VERSION=24.18.0
 export DEBIAN_FRONTEND=noninteractive
 

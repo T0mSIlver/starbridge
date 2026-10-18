@@ -2,7 +2,8 @@ name: scan
 
 # Known vulnerabilities in what we ship (#1542). Trivy scans the server and web images that
 # starbridge.run and staging serve, after every deploy run that was not skipped and weekly, since new advisories come
-# out after a build. osv-scanner reads the lockfiles weekly. Each keeps
+# out after a build. osv-scanner reads the lockfiles weekly, and pinned-tools.sh compares the tools pinned by
+# hand with their latest release (#2026). Each keeps
 # one issue open while it finds something, and closes it once a run finds nothing.
 on:
   workflow_run:
@@ -26,8 +27,8 @@ concurrency:
 permissions: {}
 
 env:
-  TRIVY: aquasec/trivy:0.74.0@sha256:62b1e65e8869bc4b4c6aa4fa2b21595256c7c2f6018a9d9ad61caf87187c1969
-  OSV_SCANNER: ghcr.io/google/osv-scanner:v2.6.0@sha256:afd838850ac1a0fcc15ff4a041dc9ba11123c3f0d2666217a5f0fcf9222b55fa
+  TRIVY: aquasec/trivy:0.76.0@sha256:2416d1f74045b57274df1a340eee6b510cacd73c66a6ccb8da092b117eb7d222
+  OSV_SCANNER: ghcr.io/google/osv-scanner:v2.7.0@sha256:4f3b7e2c64b9d38a5febc5a7e4a3dfef1d1362f726dea7a2ef4762b46469fcd0
 
 jobs:
   # Fails on a high or critical vulnerability that has a fixed version; lists the rest in the
@@ -176,3 +177,39 @@ jobs:
           [ "$OUTCOME" = success ] || FOUND="The scan itself failed; see the run."
           .github/scan-issue.sh dependency-scan "Lockfile scan: known vulnerabilities" \
             "osv-scanner found these in the lockfiles at $GITHUB_SHA." "$FOUND"
+
+  # Weekly, and by hand. Dependabot reads none of these pins: the scanners' images above, the
+  # runner and Node in .github/runners/setup.sh, minisign in release.yml and swift-sodium's commit.
+  pins:
+    if: github.event_name != 'workflow_run'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          .github/pinned-tools.sh > "$RUNNER_TEMP/pins.md"
+          cat "$RUNNER_TEMP/pins.md" >> "$GITHUB_STEP_SUMMARY"
+          {
+            echo "found<<EOF"
+            cat "$RUNNER_TEMP/pins.md"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+      - name: Open, update or close the issue
+        if: ${{ !cancelled() }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          OUTCOME: ${{ steps.check.outcome }}
+          FOUND: ${{ steps.check.outputs.found }}
+        run: |
+          [ "$OUTCOME" = success ] || FOUND="The check itself failed; see the run."
+          .github/scan-issue.sh tool-pins "Pinned tools trail their latest release" \
+            "These tools are pinned by hand, so Dependabot never proposes an update. Bump the pin and, for the runner and Node, the hash next to it." "$FOUND"
