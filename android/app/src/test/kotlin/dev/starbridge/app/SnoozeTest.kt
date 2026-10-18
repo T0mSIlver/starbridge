@@ -285,5 +285,9 @@ class SnoozeTest {
         val (snoozed, undone) = posted.map { envelopes.open(it, phone.id, boxKeys, dir).body as dev.starbridge.app.protocol.Snooze }
         // The machine and the other devices keep the snooze with the latest `at`, in whole seconds.
         check(Instant.parse(undone.at).isAfter(Instant.parse(snoozed.at))) { "${undone.at} is not after ${snoozed.at}" }
+        // Back now goes at its own time, so the question is back in this phone's inbox at once.
+        assertEquals(undone.at, undone.until)
+        for (i in 0 until 50) if (store.decisions.value.single().snoozedUntil != null) Thread.sleep(100)
+        assertEquals(null, store.decisions.value.single().snoozedUntil)
     }
 }

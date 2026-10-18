@@ -1559,12 +1559,16 @@ class ServerStore(
             // snooze goes a second later, or the machine and the other devices keep the snooze (#1981).
             val last = saved.decisions.find { it.body.id == id }?.snoozedAt
             val at = listOfNotNull(Instant.parse(now()), instant(last)?.plusSeconds(1)?.truncatedTo(ChronoUnit.SECONDS)).max().toString()
+            // Back now, as Undo is, goes at its own `at`, which every client reads as back now
+            // (PROTOCOL.md, "Snoozing"): the tap's instant is ahead of the clock the inbox keeps,
+            // so the question stayed under Snoozed until that clock next ticked.
+            val sent = if (until.isAfter(Instant.now())) until else Instant.parse(at)
             val body = buildJsonObject {
                 put("v", 1)
                 put("id", newId("z_"))
                 put("decisionId", id)
                 putJsonArray("to") { to.forEach { add(it.id) } }
-                put("until", until.toString())
+                put("until", sent.toString())
                 put("at", at)
                 putJsonObject("dir") { put("length", dir.length); put("head", dir.head) }
             }
@@ -1579,7 +1583,7 @@ class ServerStore(
                 notice.value = "No connection. Not snoozed."
                 return@run
             }
-            persist(saved.copy(decisions = saved.decisions.map { if (it.body.id == id) it.copy(snoozedUntil = until.toString(), snoozedAt = at) else it }))
+            persist(saved.copy(decisions = saved.decisions.map { if (it.body.id == id) it.copy(snoozedUntil = sent.toString(), snoozedAt = at) else it }))
             if (until.isAfter(Instant.now())) alerts.cancel(id)
         }
     }
