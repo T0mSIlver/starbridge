@@ -123,3 +123,47 @@ final class AnswerRetryTests: XCTestCase {
         XCTAssertNotNil(store.notice)
     }
 }
+
+/** Back now within the second of a snooze reaches every device and the machine (#1991). */
+@MainActor
+final class BackNowTests: XCTestCase {
+    func testBackNowRightAfterASnoozeIsStampedLater() async throws {
+        AnswerServer.posts = []
+        AnswerServer.posted = 0
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        addTeardownBlock { try? FileManager.default.removeItem(at: dir) }
+        let f = try NotifyFixture()
+        let body: JSON = [
+            "v": 1, "id": "d_one", "to": [.string(f.phone.id)], "createdAt": .string(Dates.format(Date())), "question": "Merge the inbox PR?",
+            "context": "", "options": ["Merge", "Wait"], "recommended": "Wait", "source": NotifyFixture.source,
+        ]
+        var saved = f.saved
+        saved.decisions = [try SavedDecision(from: f.machine.id, text: body.text, answeredAt: nil)]
+        let disk = Disk(url: dir.appendingPathComponent("saved.json"))
+        try disk.save(saved)
+        let vault = MemoryVault()
+        vault.secrets = f.secrets
+        let config = URLSessionConfiguration.ephemeral
+        config.protocolClasses = [AnswerServer.self]
+        let store = Store(vault: vault, disk: disk, deviceName: "Test iPhone", http: URLSession(configuration: config))
+        try await store.serial { try await store.syncDirectory() }
+
+        // Snoozed, then back now at once: within the same second, as a quick tap does.
+        var stamps: [String] = []
+        repeat {
+            let start = Date()
+            await store.snooze("d_one", until: Date().addingTimeInterval(3600))
+            let first = try XCTUnwrap(store.decision("d_one")?.snoozedAt)
+            await store.snooze("d_one", until: Date())
+            stamps = [first, try XCTUnwrap(store.decision("d_one")?.snoozedAt)]
+            if Date().timeIntervalSince(start) < 0.9 { break }
+        } while true
+        XCTAssertEqual(AnswerServer.posted % 2, 0)
+        XCTAssertNil(store.notice)
+        // Every device and the machine keep the latest `at`: Back now must carry a later one.
+        XCTAssertGreaterThan(Dates.instant(stamps[1]), Dates.instant(stamps[0]))
+        // Its until no later than when it was sent: the server schedules no return push.
+        XCTAssertLessThanOrEqual(Dates.instant(try XCTUnwrap(store.decision("d_one")?.snoozedUntil)), Date())
+        XCTAssertNil(store.decision("d_one")?.snoozed)
+    }
+}

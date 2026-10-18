@@ -88,6 +88,26 @@ enum SwipeSnooze: String, CaseIterable {
     }
 }
 
+/** A snooze's `until` and `at`, in whole seconds (#1991). */
+enum SnoozeStamps {
+    /**
+     * Every device and the machine keep the snooze with the latest `at`, so one within the second
+     * of the question's last snooze goes a second later, or they would keep that one: Back now
+     * right after a snooze would reach no one. Back now goes no later than its own `at`, which
+     * every client reads as back now (PROTOCOL.md, "Snoozing"), nor than now: the server pushes a
+     * return at a future `until`, which would show "Back from snooze".
+     */
+    static func of(until: Date, last: String?, now: Date) -> (until: String, at: String) {
+        let second = Date(timeIntervalSince1970: now.timeIntervalSince1970.rounded(.down))
+        var at = second
+        if let last = last.flatMap(Dates.parse) {
+            let next = Date(timeIntervalSince1970: last.timeIntervalSince1970.rounded(.down) + 1)
+            if next > at { at = next }
+        }
+        return (until > now ? Dates.format(until) : Dates.format(min(now, at)), Dates.format(at))
+    }
+}
+
 extension Store {
     /**
      * Puts question `id` off until `until`, on every device: the snooze goes to the machine that
@@ -116,16 +136,18 @@ extension Store {
             throw Notice(message: "the machine that asked is no longer in your devices.")
         }
         let to = [machine.member] + dir.active(.device)
-        let at = now()
+        // Read now, after the directory's await: a snooze from another device may have come since.
+        let stamps = SnoozeStamps.of(until: until, last: decision(id)?.snoozedAt, now: Date())
+        let at = stamps.at
         let body: JSONObject = [
             "v": 1, "id": .string(newId("z_")), "decisionId": .string(id), "to": .array(to.map { .string($0.id) }),
-            "until": .string(Dates.format(until)), "at": .string(at), "dir": DirectoryHead(length: dir.length, head: dir.head).json,
+            "until": .string(stamps.until), "at": .string(at), "dir": DirectoryHead(length: dir.length, head: dir.head).json,
         ]
         let item = try Envelopes.seal(kind: .snooze, body: .object(body), signer: me.id, secretKey: try signKey, recipients: to)
         try await api().postItem(item.json)
         var s = saved
         if let i = s.decisions.firstIndex(where: { $0.id == id }) {
-            s.decisions[i].snoozedUntil = Dates.format(until)
+            s.decisions[i].snoozedUntil = stamps.until
             s.decisions[i].snoozedAt = at
         }
         persist(s)
