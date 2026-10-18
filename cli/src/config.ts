@@ -82,13 +82,22 @@ const DAY_MS = 86_400_000;
  * Drops the questions the server has forgotten, with their answers (#2017): the server deletes a
  * decision 30 days after it arrived, and a settled one 7 days after the notice (PROTOCOL.md,
  * Limits), so the text, options, answers and session titles kept here past that are history
- * nobody can read back. One still being posted stays. An answer whose question is gone from
+ * nobody can read back. One still being posted or settled stays, and one with an answer not yet delivered stays a week longer. An answer whose question is gone from
  * `asked` is left, since it carries no time.
  */
 export function pruneState(s: State, now: number): void {
   for (const [id, a] of Object.entries(s.asked)) {
-    if (a.posting) continue;
-    const kept = a.settled && a.settledAt ? RETENTION_DAYS.week : RETENTION_DAYS.month;
+    // A settled notice not yet at the server is still owed. An answer no `wait` printed and the mod
+    // did not confirm, or whose winner the devices have not heard, can still arrive: the server
+    // keeps an answer a week after it came, and an answer comes up to a month after the question.
+    const answer = s.answers[id];
+    if (a.posting || a.unposted) continue;
+    const owed = answer && (!answer.seen || answer.announce);
+    const kept = owed
+      ? RETENTION_DAYS.month + RETENTION_DAYS.week
+      : a.settled && a.settledAt
+        ? RETENTION_DAYS.week
+        : RETENTION_DAYS.month;
     const since = Date.parse(a.settled && a.settledAt ? a.settledAt : a.askedAt);
     if (Number.isNaN(since) || now - since < kept * DAY_MS) continue;
     delete s.asked[id];
