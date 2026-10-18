@@ -21,7 +21,10 @@ env:
 
 jobs:
   check:
-    runs-on: ${{ vars.TRUSTED_RUNNER && fromJSON(vars.TRUSTED_RUNNER) || 'ubuntu-latest' }}
+    # GitHub's runner on purpose, never a repository variable: the monitor must not share the
+    # network or the variables of the boxes it watches (#2010). sb-ops-watch on sb-oracle alerts
+    # when this workflow has not finished a run for 3 hours.
+    runs-on: ubuntu-latest
     # Three checks of up to about 90 s each, then the issue step.
     timeout-minutes: 8
     steps:
