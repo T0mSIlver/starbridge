@@ -271,6 +271,12 @@
 }
 
 @media (max-width: 599px) {
+  /* The buttons join the session's line, which wraps, so Snooze's times can take a line of their
+     own (#1995). */
+  .quiet {
+    display: contents;
+  }
+
   .options > button {
     min-height: var(--size-tap);
   }

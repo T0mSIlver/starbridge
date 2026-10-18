@@ -2047,6 +2047,22 @@ async function main() {
     await pageB.clock.install({ time: new Date(Date.now() - SHIFT) });
     await pageB.goto(ORIGIN);
     await probe(pageB).click({ timeout: 30_000 });
+    step("on a phone's width the Snooze times stay inside the window (#1995)");
+    const wide = pageB.viewportSize();
+    for (const width of [360, 390]) {
+      await pageB.setViewportSize({ width, height: 800 });
+      const snooze = pageB.getByRole("button", { name: "Snooze", exact: true });
+      if (!(await snooze.count())) await probe(pageB).click();
+      await snooze.click();
+      const times = await pageB.getByRole("dialog", { name: "Snooze until" }).boundingBox();
+      if (!times || times.x < 0 || times.x + times.width > width)
+        throw new Error(
+          `the Snooze times run past the window at ${width} px: ${JSON.stringify(times)}`,
+        );
+      await pageB.keyboard.press("Escape");
+    }
+    if (wide) await pageB.setViewportSize(wide);
+    if (!(await selected(pageB).count())) await probe(pageB).click();
     await selected(pageB).getByRole("button", { name: "Snooze", exact: true }).click();
     await pageB.getByRole("button", { name: /^1 hour/ }).click();
     const snoozedAt = Date.now();

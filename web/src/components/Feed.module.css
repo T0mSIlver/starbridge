@@ -125,6 +125,18 @@
   text-decoration: none;
 }
 
+/* On a phone the line wraps, so Snooze's times open on a line of their own under it rather than
+   past the window's edge (#1995); the name takes the room the actions leave. */
+@media (max-width: 599px) {
+  .session {
+    flex-wrap: wrap;
+  }
+
+  .open {
+    flex: 1 1 8rem;
+  }
+}
+
 a.open:hover {
   color: var(--fg);
 }
