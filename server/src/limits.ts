@@ -1,5 +1,5 @@
 import { isIPv6 } from "node:net";
-import { ITEM_BYTES } from "@starbridge/protocol";
+import { ITEM_BYTES, RETENTION_DAYS } from "@starbridge/protocol";
 import type { Context } from "hono";
 import { HTTPException } from "hono/http-exception";
 import type { Env } from "./env";
@@ -86,11 +86,11 @@ export const DEFAULT_LIMITS = {
    */
   runBytes: 32 * 1024,
   /** Runs are dropped this long after their last update. */
-  runRetention: DAY,
+  runRetention: RETENTION_DAYS.day * DAY,
   /** Answered decisions and their answers are dropped this long after the answer. */
-  answeredRetention: 7 * DAY,
+  answeredRetention: RETENTION_DAYS.week * DAY,
   /** Unanswered decisions, and quota snapshots no machine has replaced, are dropped after this. */
-  staleRetention: 30 * DAY,
+  staleRetention: RETENTION_DAYS.month * DAY,
   /**
    * Unanswered decisions an account may hold before they are kept only floodRetention: a
    * looping agent fills the decisions cap in under 2 hours, and its account would refuse every
