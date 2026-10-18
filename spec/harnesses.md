@@ -261,6 +261,19 @@ line, the safe side: at worst a prompt repeats an answer the agent already read.
   `PermissionRequest` entry excludes `AskUserQuestion` by its matcher. The plugin dropped its `PreToolUse` entry
   once the server refused CLIs before 0.1.1 (#1625); the CLI's `hook ask-user` still prints
   nothing for plugins before that.
+- Claude Code's extended questions (2.1.299+, #2061). The desktop app and SDK sessions with
+  `CLAUDE_CODE_QUESTION_EXTENDED` let the agent add a call `title`, a question `description`
+  and a `kind`: `"text"` (no options) or `"number"` (`min`, `max`, optional `step`,
+  `defaultValue`, `unit`); an option's `description` becomes optional. Options in either mode may
+  carry a `preview`, markdown in the terminal and HTML in the desktop app
+  (`CLAUDE_CODE_QUESTION_PREVIEW_FORMAT=html`, which the hook inherits). The title and
+  description lead the card's context, since a card has no other place for them. A number
+  question is a typed-reply card that states its range, unit and default; a reply outside the
+  range or off its step is asked again on a new card that says why, because Claude Code takes
+  the hook's answer without checking it. Every answer goes back as a string keyed by the
+  question, a number without its unit, as the picker's own. Previews follow the options as plain
+  text, HTML stripped of its tags, so the context limit cuts a long preview rather than the
+  options. A multi-select question stays as it was.
 - opencode (#345): each `question` call becomes one Starbridge question per question, already
   waiting, and the answers go back into the call through `POST /question/{id}/reply`. The first
   answer, on a device or at the keyboard, wins; the other side is settled `elsewhere`. A question

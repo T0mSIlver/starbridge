@@ -1,0 +1,62 @@
+{
+  "plain": {
+    "questions": [
+      {
+        "question": "Which theme?",
+        "header": "Theme",
+        "options": [
+          {
+            "label": "Dark",
+            "description": "White on black"
+          },
+          {
+            "label": "Light",
+            "description": "Black on white"
+          }
+        ],
+        "multiSelect": false
+      }
+    ]
+  },
+  "extended": {
+    "title": "Before I build your deck",
+    "questions": [
+      {
+        "question": "Which theme?",
+        "header": "Theme",
+        "description": "Pick the look of the slides.",
+        "options": [
+          {
+            "label": "Dark",
+            "preview": "<div style=\"background:#000\"><h1>Dark</h1><p>White on black</p></div>"
+          },
+          {
+            "label": "Light",
+            "description": "Black on white"
+          }
+        ],
+        "multiSelect": false
+      },
+      {
+        "question": "How many slides?",
+        "header": "Slides",
+        "kind": "number",
+        "options": [],
+        "multiSelect": false,
+        "min": 3,
+        "max": 20,
+        "step": 1,
+        "defaultValue": 8,
+        "unit": "slides"
+      },
+      {
+        "question": "Anything else?",
+        "header": "Notes",
+        "kind": "text",
+        "options": [],
+        "multiSelect": false,
+        "placeholder": "Optional notes"
+      }
+    ]
+  }
+}

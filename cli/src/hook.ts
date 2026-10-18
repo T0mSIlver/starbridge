@@ -22,7 +22,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { join } from "node:path";
-import { type Answer, type Permission, ProtocolError } from "@starbridge/protocol";
+import { type Answer, Decision, type Permission, ProtocolError } from "@starbridge/protocol";
 import type { SessionEvent } from "./agent/api";
 import { MAX_HOLD_SECONDS } from "./agent/api";
 import { type AgentClient, Interrupted, withAgent } from "./agent/client";
@@ -351,23 +351,29 @@ export async function hookSettle(
   return 0;
 }
 
-/** One question of Claude Code's `AskUserQuestion`, as its tool input carries it. */
-interface PickerQuestion {
+/**
+ * One question of Claude Code's `AskUserQuestion`, as its tool input carries it. Extended
+ * questions (2.1.299+, spec/harnesses.md, #2061) add `kind` and its fields; the call's `title`
+ * is copied onto each.
+ */
+interface PickerQuestion extends Extended {
   question: string;
   header?: string;
-  options?: { label: string; description?: string }[];
+  options?: { label: string; description?: string; preview?: string }[];
   multiSelect?: boolean;
 }
 
 function pickerQuestions(input: unknown): PickerQuestion[] | undefined {
-  const questions = (input as { questions?: unknown } | undefined)?.questions;
+  const { questions, title } = (input ?? {}) as { questions?: unknown; title?: unknown };
   if (
     !Array.isArray(questions) ||
     questions.length === 0 ||
     !questions.every((q) => typeof (q as { question?: unknown })?.question === "string")
   )
     return undefined;
-  return questions as PickerQuestion[];
+  return (questions as PickerQuestion[]).map((q) =>
+    typeof title === "string" && title ? { ...q, title } : q,
+  );
 }
 
 /** The picker's open questions on this machine's devices, by the session that asked them. */
@@ -422,37 +428,37 @@ async function racePicker(
     failed.signal,
   ]);
   const at = ctx.now().getTime();
+  const html = ctx.env.CLAUDE_CODE_QUESTION_PREVIEW_FORMAT === "html";
   const results = await Promise.allSettled(
     questions.map(async (q, i) => {
       const sub: Ctx = { ...ctx, signal, err: () => {} };
-      const input: AskInput = {
-        ...questionInput({ ...q, multiple: q.multiSelect }),
-        agent: "claude-code",
-        session: sessionId,
-        project: projectName(cwd),
-        held: true,
-        picker: sessionId,
-        waiting: true,
-        askedAt: new Date(at + i),
-      };
-      let id: string;
-      try {
-        ({ id } = await postDecision(sub, s, resolveSource(input, ctx.env, cwd), outer.signal));
-      } catch (e) {
-        failed.abort();
-        throw e;
-      }
-      // A snooze puts it off on the devices; the picker still waits for an answer.
-      while (true) {
-        const lines: string[] = [];
-        const code = await wait(
-          { ...sub, out: (l) => lines.push(l) },
-          { id, json: true, "no-mark": true },
-          s,
-        );
-        if (code === 0 && lines[0])
-          return opencodeAnswer(JSON.parse(lines[0]) as Answer, { ...q, multiple: q.multiSelect });
-        if (code !== EXIT_SNOOZED) return undefined;
+      const card = questionInput({ ...q, multiple: q.multiSelect }, { html });
+      // A number off its range is asked again, saying why: Claude Code takes any answer as given.
+      for (let refused: string | undefined; ; ) {
+        const input: AskInput = {
+          ...card,
+          ...(refused ? { context: clip(`${refused}\n\n${card.context}`, CONTEXT_CHARS) } : {}),
+          agent: "claude-code",
+          session: sessionId,
+          project: projectName(cwd),
+          held: true,
+          picker: sessionId,
+          waiting: true,
+          askedAt: new Date(at + i),
+        };
+        let id: string;
+        try {
+          ({ id } = await postDecision(sub, s, resolveSource(input, ctx.env, cwd), outer.signal));
+        } catch (e) {
+          failed.abort();
+          throw e;
+        }
+        const answer = await pickerAnswer(sub, s, id);
+        if (!answer) return undefined;
+        if (q.kind !== "number") return opencodeAnswer(answer, { ...q, multiple: q.multiSelect });
+        const n = numberReply(answer.text ?? answer.choice ?? "", q);
+        if ("value" in n) return [n.value];
+        refused = n.error;
       }
     }),
   );
@@ -479,6 +485,20 @@ async function racePicker(
   return 0;
 }
 
+/** A device's answer to the picker's card `id`; a snooze puts it off, as the picker still waits. */
+async function pickerAnswer(sub: Ctx, s: ReturnType<typeof session>, id: string) {
+  while (true) {
+    const lines: string[] = [];
+    const code = await wait(
+      { ...sub, out: (l) => lines.push(l) },
+      { id, json: true, "no-mark": true },
+      s,
+    );
+    if (code === 0 && lines[0]) return JSON.parse(lines[0]) as Answer;
+    if (code !== EXIT_SNOOZED) return undefined;
+  }
+}
+
 /**
  * `starbridge hook ask-user`, on `PreToolUse` for `AskUserQuestion`, from plugins before #1625:
  * prints nothing, so the picker opens and `hook permission` races it. It stays while such plugins
@@ -492,9 +512,24 @@ export function hookAskUser(): number {
 export interface OpencodeQuestion {
   question: string;
   header?: string;
-  options?: { label: string; description?: string }[];
+  options?: { label: string; description?: string; preview?: string }[];
   multiple?: boolean;
   custom?: boolean;
+}
+
+/**
+ * What Claude Code's extended questions add (2.1.299+, #2061): the call's `title`, a helper line,
+ * and a `kind`. A `"text"` question has no options; a `"number"` one takes a value in `min..max`.
+ */
+interface Extended {
+  title?: string;
+  description?: string;
+  kind?: string;
+  min?: number;
+  max?: number;
+  step?: number;
+  defaultValue?: number;
+  unit?: string;
 }
 
 /** What the plugin hands `hook question` on stdin. */
@@ -505,10 +540,10 @@ interface QuestionHookInput {
 }
 
 /** Limits of a decision (PROTOCOL.md): its question, context, options and each option. */
-const QUESTION_CHARS = 300;
-const CONTEXT_CHARS = 8000;
+const QUESTION_CHARS = Decision.shape.question.maxLength ?? 300;
+const CONTEXT_CHARS = Decision.shape.context.maxLength ?? 8000;
 const MAX_OPTIONS = 4;
-const OPTION_CHARS = 100;
+const OPTION_CHARS = Decision.shape.options.element.maxLength ?? 100;
 
 const clip = (text: string, max: number) =>
   text.length > max ? `${text.slice(0, max - 1)}…` : text;
@@ -539,29 +574,105 @@ function questionTitle(text: string): string | undefined {
  * The decision for one question. Its labels become the options, so a tap answers with the label
  * opencode expects; the agent marks its pick "(Recommended)" and puts it first. A question a
  * decision cannot offer as taps (more than 4 options, a label too long, one option) lists them
- * in the context and takes a typed reply.
+ * in the context and takes a typed reply. Claude Code's title and description lead the context,
+ * a number question states its range, and option previews follow the options as plain text,
+ * so a long one is what gets cut (#2061). `html`: the previews are HTML, as Desktop sends them.
  */
-export function questionInput(q: OpencodeQuestion): AskInput {
-  const title = questionTitle(q.question);
+export function questionInput(
+  q: OpencodeQuestion & Extended,
+  { html = false }: { html?: boolean } = {},
+): AskInput {
+  const short = questionTitle(q.question);
   const labels = (q.options ?? []).map((o) => o.label);
   const taps =
     labels.length >= 2 &&
     labels.length <= MAX_OPTIONS &&
     new Set(labels).size === labels.length &&
     labels.every((l) => l.length > 0 && l.length <= OPTION_CHARS);
-  const lines = [
-    ...(title || q.question.length > QUESTION_CHARS ? [q.question, ""] : []),
-    ...(q.options ?? []).map((o) =>
-      o.description ? `- ${o.label}: ${o.description}` : `- ${o.label}`,
-    ),
-    ...(q.multiple ? ["", "More than one can apply: reply with each one you pick."] : []),
+  const lead = [q.title, q.description].filter((l): l is string => !!l?.trim());
+  const sections = [
+    lead.join("\n"),
+    short || q.question.length > QUESTION_CHARS ? q.question : "",
+    q.kind === "number" ? `Reply with ${numberRange(q)}${defaultOf(q)}.` : "",
+    (q.options ?? [])
+      .map((o) => (o.description ? `- ${o.label}: ${o.description}` : `- ${o.label}`))
+      .join("\n"),
+    q.multiple ? "More than one can apply: reply with each one you pick." : "",
+    ...(q.options ?? []).flatMap((o) => {
+      const text = o.preview && previewText(o.preview, html);
+      return text ? [`Preview of ${o.label}:\n${text}`] : [];
+    }),
   ];
   const recommended = labels.find((l) => /\(recommended\)\s*$/i.test(l));
   return {
-    question: title ?? clip(q.question, QUESTION_CHARS),
-    context: clip(lines.join("\n").trim(), CONTEXT_CHARS),
+    question: short ?? clip(q.question, QUESTION_CHARS),
+    context: clip(
+      sections
+        .filter((x) => x)
+        .join("\n\n")
+        .trim(),
+      CONTEXT_CHARS,
+    ),
     ...(taps ? { options: labels, ...(recommended ? { recommended } : {}) } : {}),
   };
+}
+
+/** "a whole number from 3 to 20 slides": what a number question takes, unit included. */
+function numberRange(q: Extended): string {
+  const unit = q.unit ? ` ${q.unit}` : "";
+  const whole = q.step === 1 && Number.isInteger(q.min);
+  const steps = q.step !== undefined && !whole ? `, in steps of ${q.step}` : "";
+  return `${whole ? "a whole number" : "a number"} from ${q.min} to ${q.max}${unit}${steps}`;
+}
+
+const defaultOf = (q: Extended) =>
+  q.defaultValue !== undefined ? ` (default ${q.defaultValue})` : "";
+
+/**
+ * A typed reply to a number question, as the picker's answer: the number, its unit dropped, if it
+ * lies in `min..max` on a `step` from `min`; otherwise why not, for the card that asks again.
+ */
+export function numberReply(text: string, q: Extended): { value: string } | { error: string } {
+  const bare = text.trim();
+  const unit = q.unit?.trim();
+  const digits = (unit && bare.endsWith(unit) ? bare.slice(0, -unit.length) : bare).trim();
+  const n = /^[-+]?(\d+\.?\d*|\.\d+)$/.test(digits) ? Number(digits) : Number.NaN;
+  const min = q.min ?? Number.NEGATIVE_INFINITY;
+  const max = q.max ?? Number.POSITIVE_INFINITY;
+  const steps = q.step ? (n - (q.min ?? 0)) / q.step : 0;
+  // Steps of 0.1 add up with float error: 0.3 is 2.9999999999999996 steps of 0.1 from 0.
+  const onStep = Math.abs(steps - Math.round(steps)) < 1e-9;
+  if (Number.isFinite(n) && n >= min && n <= max && onStep) return { value: String(n) };
+  return { error: `"${clip(bare, 40)}" is not ${numberRange(q)}.` };
+}
+
+/**
+ * An option's preview as plain text: markdown as written; HTML without its tags, styles and
+ * scripts, its block ends as line breaks and its entities read.
+ */
+function previewText(preview: string, html: boolean): string {
+  if (!html && !/^\s*</.test(preview)) return preview.trim();
+  const entities: Record<string, string> = {
+    amp: "&",
+    lt: "<",
+    gt: ">",
+    quot: '"',
+    apos: "'",
+    nbsp: " ",
+  };
+  return preview
+    .replace(/<(script|style)\b[\s\S]*?<\/\1\s*>/gi, "")
+    .replace(/<(br|\/?(p|div|li|ul|ol|tr|table|h[1-6]|pre|blockquote|section))\b[^>]*>/gi, "\n")
+    .replace(/<[^>]*>/g, "")
+    .replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (m, e: string) => {
+      if (e[0] !== "#") return entities[e.toLowerCase()] ?? m;
+      const code =
+        e[1] === "x" || e[1] === "X" ? Number.parseInt(e.slice(2), 16) : Number(e.slice(1));
+      return code > 0 && code <= 0x10ffff ? String.fromCodePoint(code) : m;
+    })
+    .replace(/[ \t]+/g, " ")
+    .replace(/ *\n[\s]*/g, "\n")
+    .trim();
 }
 
 /**

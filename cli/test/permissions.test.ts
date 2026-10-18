@@ -14,7 +14,14 @@ import { run } from "../src/cli";
 import { PROMPTS_OPEN, promptsMark } from "../src/config";
 import { session } from "../src/context";
 import { poll } from "../src/decisions";
-import { hookAskUser, hookPermission, hookSettle, untilOrphaned } from "../src/hook";
+import {
+  hookAskUser,
+  hookPermission,
+  hookSettle,
+  numberReply,
+  questionInput,
+  untilOrphaned,
+} from "../src/hook";
 import {
   buildPermission,
   DENIED,
@@ -903,6 +910,110 @@ test("a device answers Claude Code's picker, permissions on or off, and the sess
   // The PostToolUse that follows finds nothing open: only the devices' answers were announced.
   expect(await hookSettle(ctx, pickerDone(), { agent: "claude-code" })).toBe(0);
   expect((await server.opened("settled")).map((s) => s.outcome)).toEqual(["device", "device"]);
+});
+
+/**
+ * `tool_input` as Claude Code 2.1.301 sends it to `PermissionRequest`: plain, and with extended
+ * questions on (a desktop or SDK session with `CLAUDE_CODE_QUESTION_EXTENDED`, #2061).
+ */
+const SHAPES = JSON.parse(
+  readFileSync(join(import.meta.dir, "fixtures/claude/ask-user-question-2.1.301.json"), "utf8"),
+) as Record<"plain" | "extended", { title?: string; questions: unknown[] }>;
+
+test("a plain picker's card lists its options as before (#2061)", async () => {
+  const ctx = await paired(server);
+  const done = hookPermission(ctx, picker(SHAPES.plain.questions), { agent: "claude-code" });
+  await until(async () => (await server.opened("waiting")).length === 1);
+  const [card] = await server.opened("decision");
+  expect(card).toMatchObject({
+    question: "Which theme?",
+    context: "- Dark: White on black\n- Light: Black on white",
+    options: ["Dark", "Light"],
+  });
+  await server.answer(card?.id as string, { choice: "Light" });
+  expect(await done).toBe(0);
+  expect(JSON.parse(ctx.lines[0] as string).hookSpecificOutput.decision.updatedInput).toEqual({
+    ...SHAPES.plain,
+    answers: { "Which theme?": "Light" },
+  });
+});
+
+test("extended questions keep their title, description and preview, and a number its range (#2061)", async () => {
+  const ctx = await paired(server);
+  const hook = JSON.parse(picker()) as Record<string, unknown>;
+  const done = hookPermission(
+    { ...ctx, env: { ...ctx.env, CLAUDE_CODE_QUESTION_PREVIEW_FORMAT: "html" } },
+    JSON.stringify({ ...hook, tool_input: SHAPES.extended }),
+    { agent: "claude-code" },
+  );
+  await until(async () => (await server.opened("waiting")).length === 3);
+  const cards = await server.opened("decision");
+  const card = (q: string) => cards.find((d) => d.question === q);
+  expect(card("Which theme?")).toMatchObject({
+    context:
+      "Before I build your deck\nPick the look of the slides.\n\n- Dark\n- Light: Black on white" +
+      "\n\nPreview of Dark:\nDark\nWhite on black",
+    options: ["Dark", "Light"],
+  });
+  expect(card("How many slides?")).toMatchObject({
+    context:
+      "Before I build your deck\n\nReply with a whole number from 3 to 20 slides (default 8).",
+    options: [],
+  });
+  expect(card("Anything else?")).toMatchObject({
+    context: "Before I build your deck",
+    options: [],
+  });
+  await server.answer(card("Which theme?")?.id as string, { choice: "Dark" });
+  await server.answer(card("Anything else?")?.id as string, { text: "Keep it short" });
+  // A number out of range is asked again, saying why.
+  await server.answer(card("How many slides?")?.id as string, { text: "50" });
+  await until(async () => (await server.opened("decision")).length === 4);
+  const again = (await server.opened("decision")).find((d) => !cards.some((c) => c.id === d.id));
+  expect(again).toMatchObject({
+    question: "How many slides?",
+    context:
+      '"50" is not a whole number from 3 to 20 slides.\n\nBefore I build your deck\n\n' +
+      "Reply with a whole number from 3 to 20 slides (default 8).",
+  });
+  await server.answer(again?.id as string, { text: "12 slides" });
+  expect(await done).toBe(0);
+  expect(JSON.parse(ctx.lines[0] as string).hookSpecificOutput.decision.updatedInput).toEqual({
+    ...SHAPES.extended,
+    answers: {
+      "Which theme?": "Dark",
+      "How many slides?": "12",
+      "Anything else?": "Keep it short",
+    },
+  });
+});
+
+test("a preview reaches the card as plain text, after every option, within the context limit (#2061)", () => {
+  const markdown = "```ts\nconst a = <b>1</b>;\n```";
+  const html = "<style>p{color:red}</style><p>Tom &amp; Jerry&nbsp;&lt;3</p><script>x()</script>";
+  const options = [
+    { label: "A", preview: markdown },
+    { label: "B", preview: html },
+    { label: "C", preview: "y".repeat(20_000) },
+  ];
+  const md = questionInput({ question: "Which?", options });
+  expect(md.context).toStartWith(`- A\n- B\n- C\n\nPreview of A:\n${markdown}\n\nPreview of B:\n`);
+  expect(md.context?.length).toBeLessThanOrEqual(8000);
+  // Desktop sends HTML: its tags, styles and scripts go, its entities are read.
+  const h = questionInput({ question: "Which?", options }, { html: true });
+  expect(h.context).toContain("Preview of B:\nTom & Jerry <3\n\nPreview of C:");
+});
+
+test("a number reply is checked against the question's range and step (#2061)", () => {
+  const q = { kind: "number", min: 0, max: 1, step: 0.25, unit: "%" };
+  expect(numberReply(" 0.75 % ", q)).toEqual({ value: "0.75" });
+  expect(numberReply("1", q)).toEqual({ value: "1" });
+  expect(numberReply("0.3", q)).toEqual({
+    error: '"0.3" is not a number from 0 to 1 %, in steps of 0.25.',
+  });
+  expect(numberReply("lots", { kind: "number", min: -5, max: 5 })).toEqual({
+    error: '"lots" is not a number from -5 to 5.',
+  });
 });
 
 test("withdrawing the picker's cards gives up on a server that never answers (#1286)", async () => {
