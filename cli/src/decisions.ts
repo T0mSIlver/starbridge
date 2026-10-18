@@ -435,7 +435,11 @@ export async function postDecision(
     // A wait for this decision starts at the cursor known now, so it never misses its answer.
     const cursor = ctx.store.state().cursor;
     // Asked already waiting, its waiting state pushes instead, so the notification says so.
+    let minted = false;
     ctx.store.updateState((st) => {
+      // An id this machine already holds is another question's: mint again, keeping its record.
+      if (st.asked[decision.id]) return;
+      minted = true;
       st.asked[decision.id] = {
         question: decision.question,
         options: decision.options,
@@ -460,6 +464,10 @@ export async function postDecision(
         posting: true,
       };
     });
+    if (!minted) {
+      if (tries < 4) continue;
+      throw new Error(`could not mint a new decision id`);
+    }
     const posted = () =>
       ctx.store.updateState((st) => {
         delete st.asked[decision.id]?.posting;
@@ -491,6 +499,22 @@ export async function postDecision(
       throw cut(e);
     }
     posted();
+    // Settled while it posted, as by `settle --all`: that notice may have reached the server
+    // first and closed nothing, so it goes again now that the server holds the question.
+    const a = ctx.store.state().asked[decision.id];
+    if (a?.settled && !a.revoked && !ctx.store.state().answers[decision.id]) {
+      await settleOne(
+        { ...ctx, signal: undefined },
+        s,
+        dir,
+        decision.id,
+        a.outcome,
+        false,
+        a.reason,
+        AbortSignal.timeout(WITHDRAW_MS),
+      ).catch(() => {});
+      return decision;
+    }
     if (input.waiting) await markWaiting(ctx, () => postWaiting(ctx, s, decision.id, "waiting"));
     return decision;
   }

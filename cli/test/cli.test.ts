@@ -1356,6 +1356,27 @@ test("an answer the agent reads before the question's post replies still counts 
   expect(ctx.store.state().answers[decision.id]?.answer.choice).toBe("Merge");
 });
 
+test("a question settled while its post is in flight is settled once the server holds it (#1975)", async () => {
+  const ctx = await paired(server);
+  const s = session(ctx);
+  const postItem = s.api.postItem.bind(s.api);
+  s.api.postItem = async (item, signal) => {
+    // The session's questions are settled before the server stores this one.
+    if (item.kind === "decision")
+      expect(await run(["settle", "--session", "s", "--outcome", "elsewhere"], ctx)).toBe(0);
+    await postItem(item, signal);
+  };
+  const decision = await postDecision(ctx, s, {
+    question: "Merge #12 now?",
+    options: ["Merge", "Wait"],
+    session: "s",
+  });
+  const notices = (await server.opened("settled")).filter((n) => n.itemId === decision.id);
+  expect(notices.length).toBeGreaterThan(0);
+  // The server now holds it closed: a device's answer is refused.
+  await expect(server.answer(decision.id, { choice: "Merge" })).rejects.toThrow();
+});
+
 test("a question the server refused leaves nothing asked (#1975)", async () => {
   server.stop();
   server = await LiveServer.start({ limits: { ...DEFAULT_LIMITS, storedBytes: 1 } });
