@@ -19,6 +19,7 @@ import { dirname, join } from "node:path";
 import agyRule from "../../../plugin/rules/antigravity.md" with { type: "text" };
 import opencodeRule from "../../../plugin/rules/opencode.md" with { type: "text" };
 import skill from "../../../plugin/skills/starbridge/SKILL.md" with { type: "text" };
+import { piAgentDir } from "../pi";
 import { COMMIT, VERSION } from "../version";
 import { ALLOW, removeAllow } from "./allow";
 import agyFiles from "./antigravity-files.js";
@@ -129,16 +130,9 @@ export function hasPi(sys: Sys): boolean {
 /** This repository as a Pi source, at any ref and in any URL form, and no other repository (#763). */
 const STARBRIDGE_PI = /github\.com[/:]T0mSIlver\/starbridge(?:\.git)?\/?(?:@.*)?$/i;
 
-/** Pi's agent folder: `PI_CODING_AGENT_DIR` with a leading `~` expanded, as Pi does, else `~/.pi/agent`. */
-function piAgentDir(sys: Home): string {
-  const env = sys.ctx.env.PI_CODING_AGENT_DIR;
-  if (!env) return join(sys.home, ".pi", "agent");
-  return env === "~" || env.startsWith("~/") ? join(sys.home, env.slice(1)) : env;
-}
-
 /** The package source as Pi's settings list it, when installed (any ref or URL form). */
 export function piPackage(sys: Home): string | undefined {
-  const dir = piAgentDir(sys);
+  const dir = piAgentDir({ ...sys.ctx.env, HOME: sys.home });
   let packages: unknown;
   try {
     packages = (
@@ -175,7 +169,13 @@ function alive(pid: number): boolean {
 
 /** Where Pi keeps its checkout of this repository (Pi's own layout for a `git:` source). */
 const piCheckout = (sys: Home) =>
-  join(piAgentDir(sys), "git", "github.com", "T0mSIlver", "starbridge");
+  join(
+    piAgentDir({ ...sys.ctx.env, HOME: sys.home }),
+    "git",
+    "github.com",
+    "T0mSIlver",
+    "starbridge",
+  );
 
 /**
  * Fetches only the release's commit into Pi's checkout before `pi install`, which would clone the
