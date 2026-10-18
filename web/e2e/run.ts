@@ -747,6 +747,12 @@ async function main() {
     await page
       .locator('section[aria-label="Selected"] h2')
       .waitFor({ state: "detached", timeout: 10_000 });
+    // The tabs settle first (#1973): Quotas joins them once the page reads the snapshot uploaded
+    // above, at its next read of quotas, since quota pushes go to phones only.
+    await page
+      .getByRole("navigation", { name: "Main" })
+      .getByRole("link", { name: "Quotas" })
+      .waitFor({ timeout: 65_000 });
     await shoot(page, "inbox-cleared");
     await page.getByRole("button", { name: /History/ }).click();
 
