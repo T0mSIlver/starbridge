@@ -58,7 +58,7 @@ const STATED: Record<keyof Limits, string[]> = {
   machineItems: ["| `POST /items` |", `${L.machineItems[0]} ${per(L.machineItems[1])} per machine`],
   deviceItems: ["| `POST /items` |", `${L.deviceItems[0]} ${per(L.deviceItems[1])} per device`],
   itemReads: [
-    "| `GET /items`, `GET /items/:id` |",
+    "| `GET /items`, `GET /items/:id`, `GET /answers`, `GET /quota` |",
     `${bytes(L.itemReads[0])} of boxes and blobs ${per(L.itemReads[1])}`,
   ],
   decisions: ["| Stored decisions, open or answered |", `${L.decisions} per account`],
