@@ -450,6 +450,25 @@
       }
     },
     {
+      "name": "a signer whose id is __proto__ is kept like any other (#1977)",
+      "heads": {},
+      "signer": "__proto__",
+      "head": {
+        "length": 4,
+        "head": "DqW2HO3Vt_cPnrJrqXxbeyPchpXRn2bYiCLol2xRw9w"
+      },
+      "chain": "stale",
+      "expect": {
+        "changed": true,
+        "heads": {
+          "__proto__": {
+            "length": 4,
+            "head": "DqW2HO3Vt_cPnrJrqXxbeyPchpXRn2bYiCLol2xRw9w"
+          }
+        }
+      }
+    },
+    {
       "name": "heads kept before #1627 stay beside the signer's",
       "heads": {
         "devbox/phone": {
