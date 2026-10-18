@@ -322,12 +322,47 @@ export function bindSession(
   return { input: rest, warning: `starbridge: --session ${named} ${why}, so it asks as ${as}.` };
 }
 
+/** The longest question, option and context the protocol takes, for `ask --help` (#1920). */
+export const ASK_LIMITS = {
+  question: Decision.shape.question.maxLength ?? 0,
+  option: Decision.shape.options.element.maxLength ?? 0,
+  context: Decision.shape.context.maxLength ?? 0,
+};
+
+/** The `ask` flag each field of a decision comes from, by its path with no array index. */
+const FLAGS: Record<string, string> = {
+  question: "--question",
+  context: "--context",
+  options: "--option",
+  "links.url": "--link",
+  "links.title": "--link",
+  "answerIn.url": "--answer-in",
+  "source.project": "--project",
+  "source.session": "--session",
+  "source.sessionTitle": "--session-title",
+};
+
+/**
+ * A text too long for the protocol, said as `run` says it: the flag and its limit (#1920), not
+ * the schema's own words, which name neither.
+ */
+function tooLong(decision: unknown): string | undefined {
+  const issue = Decision.safeParse(decision).error?.issues.find(
+    (i) => i.code === "too_big" && i.origin === "string",
+  );
+  if (issue?.code !== "too_big") return undefined;
+  const flag = FLAGS[issue.path.filter((p) => typeof p === "string").join(".")];
+  return flag && `${flag} takes at most ${issue.maximum} characters`;
+}
+
 function checked(decision: unknown): Decision {
+  // Agents' text, cut to length, can hold a lone surrogate, which the protocol refuses (#1090).
+  const wellFormed = toWellFormed(decision);
   try {
-    // Agents' text, cut to length, can hold a lone surrogate, which the protocol refuses (#1090).
-    return parseWith(Decision, toWellFormed(decision));
+    return parseWith(Decision, wellFormed);
   } catch (e) {
-    throw e instanceof ProtocolError ? new UsageError(`bad decision: ${e.message}`) : e;
+    if (!(e instanceof ProtocolError)) throw e;
+    throw new UsageError(tooLong(wellFormed) ?? `bad decision: ${e.message}`);
   }
 }
 

@@ -18,6 +18,7 @@ import { hookCodexQuestion } from "./codex-question";
 import { exportMachine, MachineEnvError, StateFileError } from "./config";
 import { type Ctx, UsageError } from "./context";
 import {
+  ASK_LIMITS,
   type AskInput,
   answers,
   answersAll,
@@ -96,7 +97,8 @@ const HELP = `starbridge: post decisions to your devices, report runs, upload qu
 
   starbridge ask --question <text> [--option <text>]... [options]
       Post a decision to every paired device and print its id. Devices show it as
-      "Working on other things" until \`waiting\` marks it.
+      "Working on other things" until \`waiting\` marks it. The question takes at most
+      ${ASK_LIMITS.question} characters, each option ${ASK_LIMITS.option} and the context ${ASK_LIMITS.context}.
       --context <text>        why it is asked and what each option changes
       --context-file <path>   the same, from a file ("-" for stdin)
       --option <text>         2 to 4 times; none asks for a free-text answer
