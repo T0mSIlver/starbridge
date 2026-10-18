@@ -202,6 +202,29 @@ final class InboxTests: XCTestCase {
         got = try await answers()
         XCTAssertEqual(got.first { $0.decisionId == "d_three" }?.choice, "No")
 
+        // --- A question the server drops, as its retention does, leaves the inbox (#1980) ---
+        // Only with a server that drops d_expire for it (STARBRIDGE_TEST_EXPIRES): retention runs
+        // after days on a real one.
+        if ProcessInfo.processInfo.environment["STARBRIDGE_TEST_EXPIRES"] != nil {
+            try await ask("d_expire")
+            await store.refresh()
+            XCTAssertTrue(store.openDecisions.contains { $0.id == "d_expire" })
+            var dropped = false
+            for _ in 0..<60 where !dropped {
+                try await Task.sleep(for: .seconds(1))
+                var request = URLRequest(url: try XCTUnwrap(URL(string: server + "/v1/items/d_expire")))
+                request.setValue("Bearer \(phoneSession)", forHTTPHeaderField: "Authorization")
+                let (_, response) = try await URLSession.shared.data(for: request)
+                dropped = (response as? HTTPURLResponse)?.statusCode == 404
+            }
+            XCTAssertTrue(dropped, "the server never dropped d_expire")
+            // The app starts again on what it kept: its first sync drops the question.
+            let again = Store(vault: vault, disk: Disk(url: dir.appendingPathComponent("saved.json")), deviceName: "Test iPhone", http: URLSession(configuration: config))
+            await again.refresh()
+            XCTAssertFalse(again.openDecisions.contains { $0.id == "d_expire" }, "a question the server dropped is still open")
+            XCTAssertTrue(again.openDecisions.contains { $0.id == "d_two" } || again.decision("d_two")?.answer != nil)
+        }
+
         // --- A Reply longer than the Answer schema takes is cut to it, and sent (#1169) ---
         try await ask("d_long")
         await store.answerFromNotification("d_long", choice: nil, text: String(repeating: "é", count: 3999) + "👍🏽!")
