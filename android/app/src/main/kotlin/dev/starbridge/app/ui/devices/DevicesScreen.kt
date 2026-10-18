@@ -87,6 +87,7 @@ import dev.starbridge.app.ui.Page
 import androidx.compose.ui.unit.dp
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.foundation.layout.height
+import dev.starbridge.app.ui.busyAs
 
 @HiltViewModel
 class DevicesViewModel @Inject constructor(private val store: Store) : ViewModel() {
@@ -304,7 +305,7 @@ fun PairCard(approval: Approval, actions: DeviceActions, otherWays: @Composable 
                                     disabledContainerColor = colors.accent,
                                     disabledContentColor = colors.onAccent,
                                 ),
-                                modifier = Modifier.weight(1f).heightIn(min = Sizes.tap),
+                                modifier = Modifier.weight(1f).heightIn(min = Sizes.tap).busyAs("Approve", state is Approval.Approving),
                             ) {
                                 if (state is Approval.Approving) LoadingIndicator(Modifier.size(Spacing.s6), color = colors.onAccent)
                                 else Text("Approve", style = StarbridgeTheme.type.action)
@@ -352,7 +353,7 @@ fun PairCard(approval: Approval, actions: DeviceActions, otherWays: @Composable 
                         OutlinedButton(
                             onClick = { actions.lookUp(code) },
                             enabled = code.isNotBlank() && state != Approval.Checking,
-                            modifier = Modifier.fillMaxWidth().heightIn(min = Sizes.tap),
+                            modifier = Modifier.fillMaxWidth().heightIn(min = Sizes.tap).busyAs("Check code", state == Approval.Checking),
                         ) {
                             if (state == Approval.Checking) LoadingIndicator(Modifier.size(Spacing.s6), color = MaterialTheme.colorScheme.secondary)
                             else Text("Check code", style = StarbridgeTheme.type.action)

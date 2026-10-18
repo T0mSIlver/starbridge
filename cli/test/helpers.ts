@@ -142,8 +142,11 @@ export async function until(pred: () => boolean | Promise<boolean>, ms = 5000) {
 }
 
 /** Runs `starbridge pair` and approves it from the owner's phone. */
-export async function paired(server: LiveServer, name = "devbox"): Promise<TestCtx> {
-  const ctx = testCtx();
+export async function paired(
+  server: LiveServer,
+  name = "devbox",
+  ctx: TestCtx = testCtx(),
+): Promise<TestCtx> {
   const done = run(["pair", "--server", server.url, "--name", name], ctx);
   await until(() => ctx.lines.some((l) => l.startsWith("Pairing code: "))).catch((e) => {
     throw new Error(`pair printed no code: ${[...ctx.lines, ...ctx.errors].join("\n")}`, {
