@@ -62,7 +62,10 @@ async function answerInBrowser(agent: Agent, stack: string) {
   try {
     const page = ctx.pages()[0] ?? (await ctx.newPage());
     await page.goto(WEB);
-    await page.getByText(EVAL.question.question).waitFor({ timeout: 30_000 });
+    await page
+      .getByText(EVAL.question.question, { exact: true })
+      .first()
+      .waitFor({ timeout: 30_000 });
     await press(page, EVAL.answer);
     await agent.wait(15);
   } finally {

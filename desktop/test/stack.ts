@@ -463,7 +463,7 @@ try {
     );
     assert.deepEqual(note.actions, ["Ship it", "Wait"]);
     await until(() => main((g) => g.tips.at(-1) === "Starbridge: 1 needs you"), "the amber dot");
-    await page.getByText("Ship the desktop app?").first().waitFor();
+    await page.getByText("Ship the desktop app?", { exact: true }).first().waitFor();
     await shoot(page, "inbox-question");
     // While the window is hidden, as when closed to the menu bar.
     await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.hide());
@@ -511,7 +511,7 @@ try {
 
     step("a pasted reply stops at the server's 4000 characters and is sent (#1921)");
     const fourth = ask("Paste the build log?", "--option", "Paste", "--option", "Skip");
-    await page.getByText("Paste the build log?").first().click();
+    await page.getByText("Paste the build log?", { exact: true }).first().click();
     const reply = page.getByRole("textbox", { name: "Your answer" });
     await reply.click();
     // Emoji count one each, as the server and the phone apps count them.
