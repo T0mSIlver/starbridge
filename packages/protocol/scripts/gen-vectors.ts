@@ -3047,6 +3047,13 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
         "stale",
       ),
       noteCase(
+        "a signer whose id is __proto__ is kept like any other (#1977)",
+        {},
+        "__proto__",
+        H,
+        "stale",
+      ),
+      noteCase(
         "heads kept before #1627 stay beside the signer's",
         { "devbox/phone": passedOn, "devbox/?": unknownBy },
         "devbox",
