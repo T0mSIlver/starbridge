@@ -103,6 +103,8 @@ export type Store = {
   inbox: Inbox;
   /** The inbox came back once since boot: until then, an empty one means nothing yet. */
   inboxLoaded: boolean;
+  /** The open permission prompts came back once since boot: the ones listed then are not news. */
+  promptsLoaded: boolean;
   quotas?: Quotas;
   runs?: Runs;
   /** Runs boot again, after sign-in, setup, pairing or recovery. */
@@ -170,7 +172,15 @@ const QUOTA_JOIN_MS = 30_000;
 /** How long a refresh holds for the machines' new snapshots, as Android's QUOTA_ASK_SECONDS. */
 const QUOTA_ASK_SECONDS = 25;
 
-export function AppProvider({ children }: { children: React.ReactNode }) {
+export function AppProvider({
+  visitor = false,
+  children,
+}: {
+  /** The request carried no session cookie: the first boot is signed out without asking. */
+  visitor?: boolean;
+  children: React.ReactNode;
+}) {
+  const visiting = useRef(visitor);
   const [boot, setBoot] = useState<Store["boot"]>({ state: "loading" });
   const [inbox, setInbox] = useState<Inbox>({ items: [], rejected: [] });
   const [unsent, setUnsent] = useState<Unsent>({});
@@ -189,6 +199,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, [unsent]);
   useEffect(() => dropClosedDrafts(inbox.items), [inbox]);
   const [inboxLoaded, setInboxLoaded] = useState(false);
+  const [promptsLoaded, setPromptsLoaded] = useState(false);
   const [pushed, setPushed] = useState(false);
   const [quotas, setQuotas] = useState<Quotas>();
   const [withheld, setWithheld] = useState<Store["withheld"]>();
@@ -245,6 +256,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     inboxRef.current = { items: [], rejected: [] };
     setInbox(inboxRef.current);
     setPrompts([]);
+    setPromptsLoaded(false);
     setPromptLog(undefined);
     setQuotas(undefined);
     setRuns(undefined);
@@ -284,8 +296,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const boot1 = useCallback(async (): Promise<Store["boot"]["state"]> => {
     try {
-      const d = await load();
-      const b = await d.boot();
+      // A visitor's first boot needs no keys, so the protocol code and libsodium (200 KB) stay
+      // unloaded until something signs in (#1961). Every later boot loads them.
+      const b = visiting.current
+        ? await (await import("@/lib/signedOut")).signedOut()
+        : await (await load()).boot();
+      visiting.current = false;
       ctxSet.current++;
       setBoot(b);
       // Signed out, revoked or broken: nothing decrypted stays behind the page that says so.
@@ -294,6 +310,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         settledRef.current = { byKey: new Map() };
       }
       if (b.state === "ready") {
+        const d = await load();
         await inboxTurn(async () => {
           let landed = () => false;
           const gen = generation.current;
@@ -483,6 +500,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       };
       return [...open, ...closed].map(withNotice);
     });
+    setPromptsLoaded(true);
   }, [current, holding]);
 
   const fetchQuotas = useCallback(async () => {
@@ -865,6 +883,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         boot,
         inbox: shownInbox,
         inboxLoaded,
+        promptsLoaded,
         quotas,
         runs,
         reload,

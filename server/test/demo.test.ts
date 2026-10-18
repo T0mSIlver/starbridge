@@ -1,20 +1,41 @@
 import { expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { configFromEnv } from "../src/config";
 import { makeServer } from "../test-support/app";
 
 /**
- * The environment deploy/host/server-env.sh gives the hosted server, each secret read from a file
- * replaced by "secret".
+ * The environment deploy/host/server-env.sh gives the hosted server, from prod's settings and
+ * every secret file holding "secret".
  */
-const PROD = Object.fromEntries(
-  [
-    ...readFileSync(join(import.meta.dir, "../../deploy/host/server-env.sh"), "utf8").matchAll(
-      /"([A-Z_]+)='([^'$]*)/g,
+const PROD = (() => {
+  const dir = mkdtempSync(join(tmpdir(), "server-env-"));
+  mkdirSync(join(dir, "secrets"));
+  for (const f of [
+    "github-oauth-client-secret",
+    "vapid-public-key",
+    "vapid-private-key",
+    "apns-key-id",
+    "apple-signin-key-id",
+    "apns-key.p8",
+    "apple-signin-key.p8",
+  ])
+    writeFileSync(join(dir, "secrets", f), "secret");
+  writeFileSync(
+    join(dir, "secrets/fcm-service-account.json"),
+    JSON.stringify({ project_id: "secret", client_email: "secret", private_key: "secret" }),
+  );
+  const script = join(import.meta.dir, "../../deploy/host/server-env.sh");
+  const r = spawnSync("sh", [script, dir], { encoding: "utf8" });
+  if (r.status !== 0) throw new Error(`server-env.sh: ${r.stderr}`);
+  return Object.fromEntries(
+    [...readFileSync(join(dir, "server.env"), "utf8").matchAll(/^([A-Z_]+)='(.*)'$/gm)].map(
+      ([, k, v]) => [k as string, v as string],
     ),
-  ].map(([, k, v]) => [k as string, v || "secret"]),
-);
+  );
+})();
 const DEMO = {
   PUBLIC_URL: "https://demo.starbridge.run",
   OWNER_TOKEN: "demo-owner-token-16",

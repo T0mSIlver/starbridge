@@ -72,7 +72,7 @@ function parse(doc: Doc, source: string): string {
       // A block without a language is text to paste, such as an agent's rules: it wraps.
       code({ text, lang }: Tokens.Code) {
         const wrap = lang ? "" : " data-wrap";
-        return `<div data-code${wrap}><pre><code>${attr(text)}</code></pre><button type="button" data-copy aria-label="Copy"></button></div>\n`;
+        return `<div data-code${wrap}><pre tabindex="0" role="region" aria-label="Code"><code>${attr(text)}</code></pre><button type="button" data-copy aria-label="Copy"></button></div>\n`;
       },
       link({ href, title: t, tokens }: Tokens.Link) {
         const to = rewrite(doc.file, href);

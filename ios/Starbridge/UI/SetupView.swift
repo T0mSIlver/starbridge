@@ -149,7 +149,7 @@ private struct CapsulePrimary: ButtonStyle {
         .type(Tokens.Typography.action)
         .foregroundStyle(on)
         .frame(maxWidth: .infinity, minHeight: 56)
-        .background(Capsule().fill((accent ? Tokens.Colors.accent : Tokens.Colors.fg).color.opacity(enabled ? 1 : 0.38)))
+        .background(Pill(limit: 28).fill((accent ? Tokens.Colors.accent : Tokens.Colors.fg).color.opacity(enabled ? 1 : 0.38)))
         .opacity(configuration.isPressed ? 0.8 : 1)
     }
 }
@@ -160,7 +160,7 @@ private struct CapsuleSecondary: ButtonStyle {
         configuration.label
             .type(Tokens.Typography.action)
             .frame(maxWidth: .infinity, minHeight: 56)
-            .overlay(Capsule().stroke(Tokens.Colors.lineStrong.color))
+            .overlay(Pill(limit: 28).stroke(Tokens.Colors.lineStrong.color))
             .opacity(configuration.isPressed ? 0.6 : 1)
     }
 }

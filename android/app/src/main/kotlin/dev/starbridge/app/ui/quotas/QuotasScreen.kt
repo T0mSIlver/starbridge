@@ -39,6 +39,8 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dev.starbridge.app.protocol.QuotaState
+import dev.starbridge.app.protocol.quotaState
 import dev.starbridge.app.data.Pace
 import dev.starbridge.app.data.Prefs
 import dev.starbridge.app.data.QuotaFailure
@@ -223,16 +225,14 @@ internal enum class Mood { Ok, Bad, Warn, Neutral }
 
 /** The window's state in words (DESIGN.md: the words carry the state, never a colour alone), and its mood. */
 internal fun QuotaWindow.state(now: Instant, absolute: Boolean, h24: Boolean): Pair<Mood, String> {
-    if (ended(now)) return Mood.Neutral to "Window reset"
-    return when (val pace = pace) {
-        Pace.Even -> Mood.Ok to "On pace"
-        is Pace.RunsOut -> Mood.Bad to when {
-            !pace.at.isAfter(now) -> "Ran out ${clockAt(pace.at, now, h24)}"
-            absolute -> "Will run out ${clockAt(pace.at, now, h24)}"
-            else -> "Will run out in ${span(now, pace.at)}"
-        }
-        is Pace.Unused -> Mood.Warn to "Headroom unused"
-        Pace.Unknown -> Mood.Neutral to "Too early to tell"
+    val at = (pace as? Pace.RunsOut)?.at
+    val state = quotaState(pace.course, at, resetsAt, now)
+    return when (state) {
+        QuotaState.RESET, QuotaState.UNKNOWN -> Mood.Neutral to state.word
+        QuotaState.OK -> Mood.Ok to state.word
+        QuotaState.UNUSED -> Mood.Warn to state.word
+        QuotaState.RAN_OUT -> Mood.Bad to "${state.word} ${clockAt(at!!, now, h24)}"
+        QuotaState.OUT -> Mood.Bad to if (absolute) "${state.word} ${clockAt(at!!, now, h24)}" else "${state.word} in ${span(now, at!!)}"
     }
 }
 

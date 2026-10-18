@@ -22,7 +22,7 @@ import { readFileSync } from "node:fs";
 import { readFile, stat, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { AgentLoop, joinLines, type Line, socketPath } from "../hooks/agent.ts";
+import { AgentLoop, agentAddress, joinLines, type Line } from "../hooks/agent.ts";
 import {
   hookCommand,
   ownedFile,
@@ -257,9 +257,11 @@ export default function starbridge(pi: PiApi) {
     const over = ended.signal;
     const env: Record<string, string | undefined> = process.env;
     const dir = configDir(env);
-    const socket = socketPath(env);
-    const fetch = (method: string, path: string, body?: unknown) =>
-      socketFetch(socket, method, path, body);
+    const address = agentAddress(env);
+    const fetch = async (method: string, path: string, body?: unknown) => {
+      const { socket, config } = await address;
+      return socketFetch(socket, method, path, body, config);
+    };
     const sessionId = async () => id;
     const now = async () => Date.now();
     // The answers one poll brought go as one message (#1597), which enters the run after its

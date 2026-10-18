@@ -30,6 +30,7 @@ import dev.starbridge.app.data.JoinAsk
 import dev.starbridge.app.protocol.formatDigits
 import dev.starbridge.app.ui.theme.Spacing
 import dev.starbridge.app.ui.theme.StarbridgeTheme
+import dev.starbridge.app.ui.busyAs
 
 class JoinActions(
     val compare: (String) -> Unit,
@@ -94,7 +95,7 @@ fun JoinPrompt(asks: List<JoinAsk>, comparison: Comparison, actions: JoinActions
                 }
             },
             confirmButton = {
-                TextButton(onClick = actions.approve, enabled = !comparison.approving) {
+                TextButton(onClick = actions.approve, enabled = !comparison.approving, modifier = Modifier.busyAs(if (comparison.error != null) "Try again" else "Approve", comparison.approving)) {
                     if (comparison.approving) CircularProgressIndicator(Modifier.size(Spacing.s5), strokeWidth = 2.dp) else Text(if (comparison.error != null) "Try again" else "Approve")
                 }
             },

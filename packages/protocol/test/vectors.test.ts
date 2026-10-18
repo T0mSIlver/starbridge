@@ -4,6 +4,7 @@ import { buildVectors, render } from "../scripts/gen-vectors";
 import {
   alertsFor,
   approverKeys,
+  arrangeQuotas,
   BODY_SCHEMAS,
   bindMessage,
   checkCode,
@@ -23,18 +24,24 @@ import {
   joinerKeys,
   joinRequest,
   linkChip,
-  migrateQuotaAlerts,
   noteHead,
   open,
   openImage,
   openJoinApproval,
   openPairingApproval,
   openPairingRequest,
+  type Pace,
   ProtocolError,
   pairingKey,
   parseBody,
   parseContext,
   parsePairingCode,
+  QUOTA_ALERT_CHOICES,
+  QUOTA_ALERT_LABELS,
+  QUOTA_STATE_WORDS,
+  quotaCourse,
+  quotaRunningOut,
+  quotaState,
   readable,
   readRecoveryKey,
   ready,
@@ -50,6 +57,7 @@ import {
   verifyDirectory,
   wantsQuotaAlert,
   withheldBy,
+  withWindowAlerts,
 } from "../src/index";
 
 const load = async (name: string) =>
@@ -79,6 +87,7 @@ const V = {
   context: await load("context.json"),
   links: await load("links.json"),
   quotaAlerts: await load("quota-alerts.json"),
+  quotas: await load("quotas.json"),
   schemas: await load("schemas.json"),
 };
 
@@ -331,14 +340,60 @@ describe("links.json", () => {
 });
 
 describe("quota-alerts.json", () => {
-  const { cases, migrate, defaults } = V.quotaAlerts;
+  const { cases, defaults, labels } = V.quotaAlerts;
   test("defaults", () => expect(DEFAULT_QUOTA_ALERTS).toEqual(defaults));
+  test("labels", () =>
+    expect(QUOTA_ALERT_CHOICES.map((c) => [c, QUOTA_ALERT_LABELS[c]])).toEqual(labels));
   for (const c of cases)
     test(c.name, () =>
       expect(wantsQuotaAlert(c.settings, c.alert, c.windowMinutes)).toBe(c.expect),
     );
-  for (const c of migrate)
-    test(`migrate: ${c.name}`, () => expect(migrateQuotaAlerts(c.old)).toEqual(c.expect));
+  for (const c of V.quotaAlerts.with)
+    test(`with: ${c.name}`, () =>
+      expect(withWindowAlerts(c.settings, c.provider, c.window, c.all, c.picked)).toEqual(
+        c.expect,
+      ));
+});
+
+type ArrangedWindow = {
+  id: string;
+  provider: string;
+  machine?: string;
+  pace: Pace;
+  resetsAt: string | null;
+};
+
+describe("quotas.json", () => {
+  const v = V.quotas;
+  const now = new Date(v.now);
+  test("words", () => expect(QUOTA_STATE_WORDS).toEqual(v.words));
+  for (const c of v.state)
+    test(c.name, () => {
+      const place = {
+        course: quotaCourse(c.pace, c.unusedAlert),
+        runsOutAt: c.pace?.runsOutAt ?? null,
+        resetsAt: c.resetsAt,
+      };
+      const state = quotaState(place, now);
+      expect({
+        course: place.course,
+        state,
+        word: QUOTA_STATE_WORDS[state],
+        runningOut: quotaRunningOut(place, now),
+      }).toEqual(c.expect);
+    });
+  for (const c of v.arrange.cases)
+    test(`arrange: ${c.name}`, () => {
+      const got = arrangeQuotas(v.arrange.windows as ArrangedWindow[], c, (w) => ({
+        provider: w.provider,
+        machine: w.machine,
+        runningOut: quotaRunningOut(
+          { course: quotaCourse(w.pace, false), runsOutAt: w.pace.runsOutAt, resetsAt: w.resetsAt },
+          now,
+        ),
+      }));
+      expect(got.map((w) => w.id)).toEqual(c.expect);
+    });
 });
 
 describe("schemas.json", () => {
