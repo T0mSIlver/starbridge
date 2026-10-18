@@ -43,6 +43,7 @@ import {
   antigravityState,
   CODEX_RULE,
   installOpencode,
+  installPiPackage,
   opencodeState,
   PI_PACKAGE,
   piPackage,
@@ -237,6 +238,8 @@ test("setup --yes installs the agent, the plugins and the skills, and uploads a 
       spawnSync("git", ["-C", PI_REPO, "rev-parse", "HEAD"], { encoding: "utf8" }).stdout.trim(),
     );
     expect(git("rev-list", "--count", "HEAD")).toBe("1");
+    // Built beside it and moved in whole: nothing else is left there.
+    expect(readdirSync(dirname(checkout))).toEqual(["starbridge"]);
   }
   expect(readFileSync(join(m.home, ".codex/rules/starbridge.rules"), "utf8")).toContain(
     '"starbridge", ["ask"',
@@ -549,6 +552,19 @@ test("refresh moves the Pi package to this release's tag, reports a failure, and
   setRemoved(m.ctx, "pi", true);
   expect((await refresh(m.sys)).filter((l) => l.includes("Pi package"))).toEqual([]);
 });
+
+test.skipIf(WINDOWS)(
+  "the Pi checkout goes in PI_CODING_AGENT_DIR, with ~ as Pi reads it (#2039)",
+  async () => {
+    const m = await machine();
+    m.ctx.env.PI_CODING_AGENT_DIR = "~/custom-pi";
+    await installPiPackage(m.sys);
+    expect(
+      existsSync(join(m.home, "custom-pi/git/github.com/T0mSIlver/starbridge/package.json")),
+    ).toBe(true);
+    expect(existsSync("~")).toBe(false);
+  },
+);
 
 test("a failed agent install says why and how to retry, and setup goes on (#750)", async () => {
   const m = await machine();

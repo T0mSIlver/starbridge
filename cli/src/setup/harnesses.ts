@@ -6,7 +6,15 @@
  * ship inside this binary, so setup needs no download and installs the version that matches the
  * CLI.
  */
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { dirname, join } from "node:path";
 import agyRule from "../../../plugin/rules/antigravity.md" with { type: "text" };
 import opencodeRule from "../../../plugin/rules/opencode.md" with { type: "text" };
@@ -121,9 +129,16 @@ export function hasPi(sys: Sys): boolean {
 /** This repository as a Pi source, at any ref and in any URL form, and no other repository (#763). */
 const STARBRIDGE_PI = /github\.com[/:]T0mSIlver\/starbridge(?:\.git)?\/?(?:@.*)?$/i;
 
+/** Pi's agent folder: `PI_CODING_AGENT_DIR` with a leading `~` expanded, as Pi does, else `~/.pi/agent`. */
+function piAgentDir(sys: Home): string {
+  const env = sys.ctx.env.PI_CODING_AGENT_DIR;
+  if (!env) return join(sys.home, ".pi", "agent");
+  return env === "~" || env.startsWith("~/") ? join(sys.home, env.slice(1)) : env;
+}
+
 /** The package source as Pi's settings list it, when installed (any ref or URL form). */
 export function piPackage(sys: Home): string | undefined {
-  const dir = sys.ctx.env.PI_CODING_AGENT_DIR || join(sys.home, ".pi", "agent");
+  const dir = piAgentDir(sys);
   let packages: unknown;
   try {
     packages = (
@@ -150,26 +165,29 @@ function piFailure(r: Awaited<ReturnType<typeof pi>>): string {
 
 /** Where Pi keeps its checkout of this repository (Pi's own layout for a `git:` source). */
 const piCheckout = (sys: Home) =>
-  join(
-    sys.ctx.env.PI_CODING_AGENT_DIR || join(sys.home, ".pi", "agent"),
-    "git",
-    "github.com",
-    "T0mSIlver",
-    "starbridge",
-  );
+  join(piAgentDir(sys), "git", "github.com", "T0mSIlver", "starbridge");
 
 /**
  * Fetches only the release's commit into Pi's checkout before `pi install`, which would clone the
  * whole repository, over 800 MB and growing (#2039). Pi finds the ref already checked out and only
- * fetches the ref again. Best effort: on any failure the folder goes, and Pi clones as before.
+ * fetches the ref again. Best effort: the checkout is built beside the folder and moved in only
+ * once complete, so a failed or interrupted fetch leaves no folder, and Pi clones as before.
  */
 async function prefetchPiPackage(sys: Sys) {
   const dir = piCheckout(sys);
   if (existsSync(dir)) return;
   const ref = COMMIT ?? `refs/tags/v${VERSION}`;
-  const git = (...args: string[]) => run(sys, "git", ["-C", dir, ...args], { timeoutMs: 300_000 });
+  const part = `${dir}.starbridge-${process.pid}`;
+  // What an interrupted setup left beside it.
+  const parent = dirname(dir);
+  if (existsSync(parent))
+    for (const f of readdirSync(parent))
+      if (f.startsWith("starbridge.starbridge-"))
+        rmSync(join(parent, f), { recursive: true, force: true });
+  const git = (...args: string[]) => run(sys, "git", ["-C", part, ...args], { timeoutMs: 300_000 });
   try {
-    mkdirSync(dir, { recursive: true });
+    rmSync(part, { recursive: true, force: true });
+    mkdirSync(part, { recursive: true });
     // What Pi writes on a first clone, so a Pi folder kept in git ignores its checkouts.
     const ignore = join(dirname(dirname(dirname(dir))), ".gitignore");
     if (!existsSync(ignore)) writeFileSync(ignore, "*\n!.gitignore\n");
@@ -182,8 +200,9 @@ async function prefetchPiPackage(sys: Sys) {
       const r = await git(...args);
       if (r?.code !== 0) throw new Error(failure(r));
     }
+    renameSync(part, dir);
   } catch {
-    rmSync(dir, { recursive: true, force: true });
+    rmSync(part, { recursive: true, force: true });
   }
 }
 
