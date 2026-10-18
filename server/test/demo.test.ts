@@ -63,3 +63,8 @@ test("a demo server keeps reviewers to its own machine", () => {
   const config = configFromEnv({ ...DEMO, MAX_MACHINES: "5" });
   expect(config.maxMachines).toBe(1);
 });
+
+test("a demo server keeps 200 testers' phones signed in, not 50", () => {
+  expect(configFromEnv(DEMO).limits.sessions).toBe(200);
+  expect(configFromEnv({ ...DEMO, DEMO: "" }).limits.sessions).toBe(50);
+});
