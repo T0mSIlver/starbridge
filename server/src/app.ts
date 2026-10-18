@@ -97,11 +97,16 @@ export async function createApp(config: Config, fetchFn: typeof fetch = fetch) {
     deps.watch.rotate();
   };
   setInterval(watchMinute, 60_000).unref();
+  // Within the hour of the sweep, deleted rows leave the WAL too (#2015); a reader keeps it, so try
+  // each minute until it goes.
+  const emptyWal = (tries = 30) => {
+    if (!truncateWal(db) && tries > 1) setTimeout(() => emptyWal(tries - 1), 60_000).unref();
+  };
   // The sweep deletes in batches and lets requests in between (#585).
   const hourly = () =>
     sweepStorage(db, config.limits)
       .then(() => closeDays(db))
-      .then(() => truncateWal(db))
+      .then(() => emptyWal())
       .catch((e) => {
         if (!diskFull(e)) throw e;
       });

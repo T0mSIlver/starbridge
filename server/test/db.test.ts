@@ -192,9 +192,27 @@ test("a deleted row's bytes leave the database file and its WAL", () => {
   db.run("CREATE TABLE t (v TEXT)");
   db.run("INSERT INTO t VALUES (?)", [marker.repeat(200)]);
   db.run("DELETE FROM t");
-  truncateWal(db);
+  expect(truncateWal(db)).toBe(true);
   for (const file of [path, `${path}-wal`]) {
     if (existsSync(file)) expect(readFileSync(file).includes(marker)).toBe(false);
   }
+  db.close();
+});
+
+test("the WAL checkpoint reports a reader that holds it instead of waiting for it", () => {
+  const path = join(mkdtempSync(join(tmpdir(), "sb-db-")), "s.db");
+  const db = openDb(path);
+  db.run("CREATE TABLE t (v TEXT)");
+  db.run("INSERT INTO t VALUES ('a')");
+  const reader = new Database(path);
+  reader.run("BEGIN");
+  reader.query("SELECT * FROM t").all();
+  db.run("INSERT INTO t VALUES ('b')");
+  const started = performance.now();
+  expect(truncateWal(db)).toBe(false);
+  expect(performance.now() - started).toBeLessThan(1000);
+  reader.run("COMMIT");
+  expect(truncateWal(db)).toBe(true);
+  reader.close();
   db.close();
 });
