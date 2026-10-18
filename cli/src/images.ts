@@ -62,7 +62,7 @@ function typeOf(bytes: Uint8Array): DecisionImage["type"] | undefined {
  * A JPEG's EXIF orientation (1 to 8), which says how to turn the stored pixels upright; phone
  * cameras store portraits sideways and set 6 or 8. 1 when absent.
  */
-export function exifOrientation(b: Uint8Array): number {
+function exifOrientation(b: Uint8Array): number {
   let i = 2;
   while (i + 4 <= b.length && b[i] === 0xff) {
     const marker = b[i + 1] as number;

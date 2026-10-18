@@ -5,7 +5,7 @@ import type { QuotaWindow } from "@/lib/types";
 import s from "./Meter.module.css";
 
 /** The provider's lab colour from DESIGN.md, keyed by CodexBar's id; `fg3` for one it lacks. */
-export function providerFill(provider: string): CSSProperties {
+function providerFill(provider: string): CSSProperties {
   const id = provider.toLowerCase().replace(/[^a-z0-9]/g, "");
   return { "--fill": `var(--provider-${id}, var(--fg3))` } as CSSProperties;
 }

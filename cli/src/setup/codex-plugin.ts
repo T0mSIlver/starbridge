@@ -20,7 +20,7 @@ import { failure, run, type Sys } from "./sys";
 
 type Home = Pick<Sys, "ctx" | "home">;
 
-export const CODEX_MARKETPLACE = "starbridge-cli";
+const CODEX_MARKETPLACE = "starbridge-cli";
 export const CODEX_PLUGIN = `starbridge@${CODEX_MARKETPLACE}`;
 /**
  * The plugin's version, which names its folder in Codex's cache. Raise it when `hooks.json`

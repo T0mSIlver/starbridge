@@ -8,7 +8,7 @@
  * decision (#950). Its hook asks to hand over: it posts nothing while the owner sits at this
  * machine, and its hold ends, settled at the keyboard, as soon as they come back to it.
  */
-import { PermissionAgent } from "@starbridge/protocol";
+import { Agent } from "@starbridge/protocol";
 import { type Ctx, session } from "../context";
 import {
   hookDecision,
@@ -78,7 +78,7 @@ export class Permissions implements Feature {
         if (!permissionsEnabled(this.ctx))
           throw new HttpError(403, "disabled", "run `starbridge config permissions on` first");
         const b = obj(req.body);
-        const agent = PermissionAgent.safeParse(b.agent);
+        const agent = Agent.safeParse(b.agent);
         const source = obj(b.source);
         if (!agent.success)
           throw new HttpError(400, "bad-request", "agent is claude-code, codex or pi");

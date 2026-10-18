@@ -261,14 +261,14 @@ export function configFromEnv(env: Env = process.env): Config {
 }
 
 /** The shortest OWNER_TOKEN a server takes (#1720). */
-export const OWNER_TOKEN_MIN = 16;
+const OWNER_TOKEN_MIN = 16;
 
 /**
  * The owner token signs in to the owner account, and `/v1/auth/owner` allows a few tries a
  * minute per address, so a short one could be guessed. The hosted server signs in with GitHub
  * and Apple only: an owner token there would be one more way into one account (#1720).
  */
-export function checkOwnerToken(config: Config): void {
+function checkOwnerToken(config: Config): void {
   const token = config.ownerToken ?? "";
   if ([...token].length < OWNER_TOKEN_MIN)
     throw new Error(`OWNER_TOKEN must be at least ${OWNER_TOKEN_MIN} characters`);
@@ -281,8 +281,8 @@ export function checkOwnerToken(config: Config): void {
  * none of them adds one whose items every other reviewer would see. Its database lives in a
  * 64 MB tmpfs (deploy/demo/compose.yaml), which pairings at about 4 KB each must not fill.
  */
-export const DEMO_MACHINES = 1;
-export const DEMO_PAIRINGS = 5_000;
+const DEMO_MACHINES = 1;
+const DEMO_PAIRINGS = 5_000;
 
 /**
  * A demo server approves every join, so it must never be the hosted one: prod sets

@@ -86,7 +86,7 @@ function parents(max: number): string[][] {
 }
 
 /** Whether an `agy -p` (`--print`, `--prompt`) runs this command. */
-export function agyHeadless(): boolean {
+function agyHeadless(): boolean {
   const agy = parents(8).find((a) => /^agy(\.exe)?$/.test(basename(a[0] ?? "")));
   return !!agy?.slice(1).some((a) => a === "-p" || a === "--print" || a === "--prompt");
 }
@@ -189,7 +189,7 @@ function needsHello(ctx: Ctx, id: unknown): boolean {
 }
 
 /** What the agent is told, at the start of a turn, until the conversation registered. */
-export const NUDGE =
+const NUDGE =
   "Starbridge sends this session's permission prompts and questions to the owner's devices once it has run a starbridge command. Before anything else, run `starbridge hello` once.";
 
 /**
@@ -333,7 +333,7 @@ export function pbtxtString(text: string, name: string): string | undefined {
 }
 
 /** What Antigravity's `PreToolUse` hook gets on stdin, the parts Starbridge reads. */
-export interface PreToolInput {
+interface PreToolInput {
   conversationId?: string;
   workspacePaths?: string[];
   toolCall?: { name?: string; args?: Record<string, unknown> };
@@ -394,7 +394,7 @@ const CYCLE_SECONDS = 25;
  * `agy -p`, or with no route to its language server, is marked waiting, open, and not snoozed
  * past now.
  */
-export function waitsOn(st: State, id: string, now: Date): boolean {
+function waitsOn(st: State, id: string, now: Date): boolean {
   return Object.entries(st.asked).some(
     ([d, a]) =>
       a.session === id &&

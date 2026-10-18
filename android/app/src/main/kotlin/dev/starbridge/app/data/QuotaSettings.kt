@@ -21,7 +21,7 @@ import kotlinx.serialization.json.jsonPrimitive
 data class QuotaSettings(
     /** The bar and the percentage show used, else remaining (CodexBar `usageBarsShowUsed`). */
     val showUsed: Boolean = true,
-    /** Reset times as a clock time, else "in 2 h" (`resetTimesShowAbsolute`). */
+    /** Reset times as a clock time, else "in 2 h" (`absoluteResets`). */
     val absoluteResets: Boolean = false,
     /** Workdays a week on weekly bars, from Monday (`weeklyProgressWorkDays`); null is off. */
     val workDays: Int? = null,

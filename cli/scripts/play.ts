@@ -11,6 +11,7 @@
 import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { parseArgs } from "node:util";
+import { parseVersion } from "../src/release";
 
 export const PACKAGE = "dev.starbridge.app";
 export const TRACKS = ["internal", "alpha", "production"] as const;
@@ -177,10 +178,10 @@ const VERSION_CODE_BASE = 2_000_000;
  * android/buildSrc/.../VersionCode.kt, which Gradle still enforces.
  */
 export function mainCode(version: string, after: number, finalTagged = false): number | null {
-  const m = /^(\d+)\.(\d+)\.(\d+)(-rc\.\d+)?$/.exec(version);
-  if (!m) throw new Error(`not a version: ${version}`);
-  const patch = Number(m[3]) + (m[4] && !finalTagged ? 0 : 1);
-  const slot0 = VERSION_CODE_BASE + Number(m[1]) * 1_000_000 + Number(m[2]) * 10_000 + patch * 100;
+  const v = parseVersion(version);
+  if (!v) throw new Error(`not a version: ${version}`);
+  const patch = v.patch + (v.rc !== undefined && !finalTagged ? 0 : 1);
+  const slot0 = VERSION_CODE_BASE + v.major * 1_000_000 + v.minor * 10_000 + patch * 100;
   const first = slot0 + 50;
   const code = Math.max(first, after + 1);
   return code <= slot0 + 98 ? code : null;

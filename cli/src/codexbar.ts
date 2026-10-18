@@ -134,7 +134,7 @@ function window(id: string, label: string, raw: unknown, now: Date): QuotaWindow
 }
 
 /** One provider's windows from one row of CodexBar's output. */
-export function parseRow(row: Obj, now: Date): ProviderQuota {
+function parseRow(row: Obj, now: Date): ProviderQuota {
   const provider = clip(str(row.provider) ?? "unknown", 100);
   const usage = isObj(row.usage) ? row.usage : {};
   const labels = isObj(row.rateWindowLabels) ? row.rateWindowLabels : {};

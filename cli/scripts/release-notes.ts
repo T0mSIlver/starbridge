@@ -6,7 +6,7 @@
  * shows only in the folded list of all pull requests, and is named on stderr.
  */
 import { spawnSync } from "node:child_process";
-import { compareVersions } from "../src/release";
+import { compareVersions, isRc, parseVersion } from "../src/release";
 
 /** The products a note can name, in the order the release shows them. */
 export const PRODUCTS = ["Android", "iOS", "Web", "Desktop", "CLI", "Server", "Docs"] as const;
@@ -17,10 +17,10 @@ export type Note = { product: Product; text: string; pr?: number };
 
 /** The tag a version's notes start from: the newest final below it, or for an rc the newest tag of any kind. */
 export function baseTag(version: string, tags: string[]): string | undefined {
-  const rc = version.includes("-rc.");
+  const rc = isRc(version);
   return tags
-    .filter((t) => /^v\d+\.\d+\.\d+(-rc\.\d+)?$/.test(t))
-    .filter((t) => (rc || !t.includes("-rc.")) && compareVersions(t, version) < 0)
+    .filter((t) => t.startsWith("v") && parseVersion(t.slice(1)))
+    .filter((t) => (rc || !isRc(t)) && compareVersions(t, version) < 0)
     .sort(compareVersions)
     .at(-1);
 }

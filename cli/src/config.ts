@@ -47,7 +47,7 @@ export const PROMPTS_OPEN = "permissions-open";
 export const CLI_PATH = "cli-path";
 
 /** Claude Code's timeout for the picker's hook (plugin/hooks/hooks.json, #848). */
-export const PICKER_MAX_MS = 86_400_000;
+const PICKER_MAX_MS = 86_400_000;
 
 /** What `PROMPTS_OPEN` holds for state `s`. */
 export function promptsMark(s: State, now = Date.now()): string {
@@ -274,7 +274,7 @@ export interface UpdateRecord {
  * The format of every file in the config folder, written as `v` (#473). A file without `v` is
  * version 1, the format 0.1.0 shipped; a later format raises it and reads the ones before.
  */
-export const STATE_VERSION = 1;
+const STATE_VERSION = 1;
 
 /** A file this CLI cannot read. It stays as it is: nothing overwrites it with defaults. */
 export class StateFileError extends Error {
@@ -541,7 +541,7 @@ export function exportMachine(m: Machine): string {
 }
 
 /** Reads `exportMachine`'s line back, checking each field's type and each key's length. */
-export function importMachine(line: string): Machine {
+function importMachine(line: string): Machine {
   const text = line.trim();
   if (!text.startsWith(EXPORT_PREFIX))
     throw new MachineEnvError(`it does not start with ${EXPORT_PREFIX}`);
