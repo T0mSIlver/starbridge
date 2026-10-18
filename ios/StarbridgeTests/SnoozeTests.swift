@@ -53,4 +53,18 @@ final class SnoozeTests: XCTestCase {
         XCTAssertEqual(SwipeSnooze.morning.until(at(12, 1, 0), calendar), at(12, 9, 0))
         XCTAssertNil(SwipeSnooze.ask.until(at(11, 14, 0), calendar))
     }
+
+    /** Back now within the second of a snooze goes a second later, and at its own time (#1991). */
+    func testBackNowRightAfterASnoozeCarriesALaterTime() {
+        let now = Date(timeIntervalSince1970: 1_792_317_600.4)
+        let snoozed = SnoozeStamps.of(until: now.addingTimeInterval(3600), last: nil, now: now)
+        XCTAssertEqual(snoozed.at, "2026-10-18T10:00:00Z")
+        XCTAssertEqual(snoozed.until, "2026-10-18T11:00:00Z")
+        let back = SnoozeStamps.of(until: now.addingTimeInterval(0.3), last: snoozed.at, now: now.addingTimeInterval(0.3))
+        XCTAssertEqual(back.at, "2026-10-18T10:00:01Z")
+        XCTAssertEqual(back.until, back.at)
+        // A second later, the clock's own second.
+        let later = SnoozeStamps.of(until: now.addingTimeInterval(5), last: snoozed.at, now: now.addingTimeInterval(5))
+        XCTAssertEqual(later.at, "2026-10-18T10:00:05Z")
+    }
 }
