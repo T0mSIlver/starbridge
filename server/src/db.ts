@@ -302,8 +302,8 @@ export function openDb(path: string): Database {
   db.run("PRAGMA journal_mode = WAL");
   db.run("PRAGMA foreign_keys = ON");
   db.run("PRAGMA busy_timeout = 5000");
-  // Zero deleted rows' bytes in the file and WAL, so a deleted account leaves nothing behind
-  // beyond the backups /privacy names (#2015).
+  // Zero deleted rows' bytes in the file, so a deleted account leaves nothing behind beyond the
+  // backups /privacy names (#2015). The WAL still holds the frames that wrote them: truncateWal.
   db.run("PRAGMA secure_delete = ON");
   // Transactions begin IMMEDIATE, taking the write lock first, so they wait under busy_timeout
   // while another connection writes. A deferred one that reads before it writes gets SQLITE_BUSY
@@ -337,6 +337,14 @@ export function refuses(db: Database, known: number): string | null {
     db.query("SELECT 1 FROM additive_migrations WHERE version = ?").get(at);
   if (recorded) return null;
   return `the database is at schema ${at}, newer than this server's ${known}${at === known + 1 ? " by a migration that is not additive" : ""}: run the release that wrote it, or restore a backup`;
+}
+
+/**
+ * Checkpoints the WAL and empties it, dropping the frames that still hold deleted rows' bytes,
+ * which secure_delete cannot reach (#2015). The hourly sweep runs it once it has deleted.
+ */
+export function truncateWal(db: Database): void {
+  db.run("PRAGMA wal_checkpoint(TRUNCATE)");
 }
 
 /**

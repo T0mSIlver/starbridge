@@ -3,7 +3,15 @@ import { expect, test } from "bun:test";
 import { existsSync, mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { MIGRATIONS, migrate, NOT_ADDITIVE, openDb, refuses, SCHEMA_VERSION } from "../src/db";
+import {
+  MIGRATIONS,
+  migrate,
+  NOT_ADDITIVE,
+  openDb,
+  refuses,
+  SCHEMA_VERSION,
+  truncateWal,
+} from "../src/db";
 import { OLD_MIGRATIONS } from "./fixtures/migrations-v1-v6";
 
 const version = (db: Database) =>
@@ -183,9 +191,8 @@ test("a deleted row's bytes leave the database file and its WAL", () => {
   const marker = "secure-delete-marker-2015";
   db.run("CREATE TABLE t (v TEXT)");
   db.run("INSERT INTO t VALUES (?)", [marker.repeat(200)]);
-  db.run("PRAGMA wal_checkpoint(TRUNCATE)");
   db.run("DELETE FROM t");
-  db.run("PRAGMA wal_checkpoint(TRUNCATE)");
+  truncateWal(db);
   for (const file of [path, `${path}-wal`]) {
     if (existsSync(file)) expect(readFileSync(file).includes(marker)).toBe(false);
   }

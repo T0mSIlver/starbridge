@@ -10,7 +10,7 @@ import { AppSignIns } from "./appSignIns";
 import { SESSION_COOKIE } from "./auth";
 import { clientVersion } from "./clients";
 import type { Config } from "./config";
-import { openDb } from "./db";
+import { openDb, truncateWal } from "./db";
 import type { Deps, Env } from "./env";
 import { Funnel } from "./funnel";
 import { applyOverrides } from "./overrides";
@@ -101,6 +101,7 @@ export async function createApp(config: Config, fetchFn: typeof fetch = fetch) {
   const hourly = () =>
     sweepStorage(db, config.limits)
       .then(() => closeDays(db))
+      .then(() => truncateWal(db))
       .catch((e) => {
         if (!diskFull(e)) throw e;
       });
