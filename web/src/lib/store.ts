@@ -107,12 +107,48 @@ export async function get<K extends keyof Records>(
   return (await run("readonly", (s) => s.get(key(kind, account)))) as Records[K] | undefined;
 }
 
+/**
+ * Kinds that live only beside the account's device or its pending join. Sign-out deletes them
+ * all; a write from a read still in flight then finds neither and is dropped, so it cannot bring
+ * them back (#1983).
+ */
+const SIGNED_IN = new Set<keyof Records>([
+  "answers",
+  "promptAnswers",
+  "recoverySeen",
+  "heads",
+  "forgotten",
+  "snoozes",
+  "kept",
+]);
+
+/** Runs `then` in the transaction unless `kind` is one that needs the account signed in here. */
+function signedIn(
+  s: IDBObjectStore,
+  step: (f: () => void) => () => void,
+  kind: keyof Records,
+  account: string,
+  then: () => void,
+) {
+  if (!SIGNED_IN.has(kind)) return then();
+  const device = s.count(key("device", account));
+  device.onsuccess = step(() => {
+    if (device.result > 0) return then();
+    const pending = s.count(key("pending", account));
+    pending.onsuccess = step(() => {
+      if (pending.result > 0) then();
+    });
+  });
+}
+
 export async function put<K extends keyof Records>(
   kind: K,
   value: Records[K],
   account = "",
 ): Promise<void> {
-  await run("readwrite", (s) => s.put(value, key(kind, account)));
+  await transact((s, step) =>
+    signedIn(s, step, kind, account, () => s.put(value, key(kind, account))),
+  );
 }
 
 export async function del(kind: keyof Records, account = ""): Promise<void> {
@@ -190,12 +226,14 @@ export async function update<K extends keyof Records>(
   account: string,
   change: (old: Records[K] | undefined) => Records[K],
 ): Promise<void> {
-  await transact((s, step) => {
-    const req = s.get(key(kind, account));
-    req.onsuccess = step(() =>
-      s.put(change(req.result as Records[K] | undefined), key(kind, account)),
-    );
-  });
+  await transact((s, step) =>
+    signedIn(s, step, kind, account, () => {
+      const req = s.get(key(kind, account));
+      req.onsuccess = step(() =>
+        s.put(change(req.result as Records[K] | undefined), key(kind, account)),
+      );
+    }),
+  );
 }
 
 /** Read-modify-write of one record, reading another in the same transaction. */
@@ -205,18 +243,20 @@ export async function updateWith<K extends keyof Records, R extends keyof Record
   read: R,
   change: (old: Records[K] | undefined, other: Records[R] | undefined) => Records[K],
 ): Promise<void> {
-  await transact((s, step) => {
-    const other = s.get(key(read, account));
-    other.onsuccess = step(() => {
-      const req = s.get(key(kind, account));
-      req.onsuccess = step(() =>
-        s.put(
-          change(req.result as Records[K] | undefined, other.result as Records[R] | undefined),
-          key(kind, account),
-        ),
-      );
-    });
-  });
+  await transact((s, step) =>
+    signedIn(s, step, kind, account, () => {
+      const other = s.get(key(read, account));
+      other.onsuccess = step(() => {
+        const req = s.get(key(kind, account));
+        req.onsuccess = step(() =>
+          s.put(
+            change(req.result as Records[K] | undefined, other.result as Records[R] | undefined),
+            key(kind, account),
+          ),
+        );
+      });
+    }),
+  );
 }
 
 /**

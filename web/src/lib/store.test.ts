@@ -22,7 +22,17 @@ test("the pin extends along its chain and refuses stale or forked ones", async (
   expect(await store.get("pin", "acct")).toEqual({ length: 3, head: "h3" });
 });
 
+const device = {
+  account: "acct",
+  id: "d1",
+  name: "Chrome",
+  boxPk: "b",
+  signPk: "s",
+  keys: { kind: "raw" },
+} as unknown as store.DeviceRecord;
+
 test("update merges into the stored record", async () => {
+  await store.put("device", device, "acct");
   await Promise.all(
     ["d1", "d2", "d3"].map((id) =>
       store.update("answers", "acct", (old) => ({
@@ -39,6 +49,7 @@ test("update merges into the stored record", async () => {
 });
 
 test("a change that throws rejects with its error, writes nothing and leaves the database free (#1495)", async () => {
+  await store.put("device", device, "bad");
   await store.put("answers", { d1: { choice: "Yes", answeredAt: "2026-10-04T12:00:00Z" } }, "bad");
   await store.put("pin", { length: 1, head: "h1" }, "bad");
   const boom = new Error("another shape");
@@ -59,4 +70,18 @@ test("a change that throws rejects with its error, writes nothing and leaves the
       indexedDB.deleteDatabase("starbridge").onsuccess = () => resolve();
     };
   });
+});
+
+test("a write that lands after sign-out deleted the account's records brings none back (#1983)", async () => {
+  await store.put("device", device, "gone");
+  await store.update("heads", "gone", () => ({ m: { length: 1, head: "h1" } }));
+  expect(await store.get("heads", "gone")).toBeDefined();
+  // Sign-out deletes every record of the account; a read still in flight then writes.
+  for (const kind of store.ACCOUNT_KINDS) await store.del(kind, "gone");
+  await store.update("heads", "gone", () => ({ m: { length: 2, head: "h2" } }));
+  await store.updateWith("heads", "gone", "forgotten", () => ({ m: { length: 2, head: "h2" } }));
+  await store.update("kept", "gone", () => ({ device: "d1", cursor: "9", items: [] }));
+  await store.update("snoozes", "gone", () => ({ d_1: "2026-10-18T10:00:00Z" }));
+  await store.put("recoverySeen", 3, "gone");
+  for (const kind of store.ACCOUNT_KINDS) expect(await store.get(kind, "gone")).toBeUndefined();
 });
