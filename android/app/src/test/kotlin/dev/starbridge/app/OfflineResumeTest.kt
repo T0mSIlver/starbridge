@@ -128,12 +128,4 @@ class OfflineResumeTest {
         assertNull(store.notice.value)
         assertNull(store.connection.value)
     }
-
-    private fun until(pred: () -> Boolean) {
-        val end = System.currentTimeMillis() + 10_000
-        while (!pred()) {
-            check(System.currentTimeMillis() < end) { "timed out" }
-            Thread.sleep(10)
-        }
-    }
 }

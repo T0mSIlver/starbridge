@@ -160,12 +160,4 @@ class RecoveryReplaceTest {
         assertEquals("This is a recovery key, but not this account's current one.", stranger.notice.value)
         assertEquals(before, entries.size)
     }
-
-    private fun until(pred: () -> Boolean) {
-        val end = System.currentTimeMillis() + 10_000
-        while (!pred()) {
-            check(System.currentTimeMillis() < end) { "timed out" }
-            Thread.sleep(10)
-        }
-    }
 }

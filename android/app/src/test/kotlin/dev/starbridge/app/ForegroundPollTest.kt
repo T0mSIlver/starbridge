@@ -201,12 +201,4 @@ class ForegroundPollTest {
         assertEquals(emptyList<String>(), w.notified.toList())
         until { w.notified.toList() == listOf("d_late") }
     }
-
-    private fun until(pred: () -> Boolean) {
-        val end = System.currentTimeMillis() + 10_000
-        while (!pred()) {
-            check(System.currentTimeMillis() < end) { "timed out" }
-            Thread.sleep(10)
-        }
-    }
 }
