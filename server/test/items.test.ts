@@ -456,3 +456,39 @@ test("an account reads itemReads bytes a minute; a list past it comes without bl
   // The list still goes on, without images, until its boxes spend the window too.
   expect(await blobsListed()).toEqual([0, 0]);
 });
+
+test("a machine's answer list and a device's quota list count against the account's read window", async () => {
+  s = await makeServer({ limits: { ...DEFAULT_LIMITS, itemReads: [4_000, 60_000] } });
+  acct = await setupAccount(s);
+  phone = acct.device;
+  devbox = await pair(s, acct, "devbox", "machine");
+  for (let i = 0; i < 3; i++) {
+    const d = decision([phone]);
+    expect((await post(devbox, d)).status).toBe(201);
+    expect((await post(phone, answer(d))).status).toBe(201);
+  }
+  const snapshot: QuotaSnapshot = {
+    v: 1,
+    id: "q1",
+    to: [phone.id],
+    takenAt: at,
+    providers: [],
+    alerts: [],
+  };
+  const sealed = seal("quota", snapshot, { id: devbox.id, signKey: devbox.keys.sign.privateKey }, [
+    phone.member,
+  ]);
+  expect((await post(devbox, sealed)).status).toBe(201);
+  // The same page again and again, as a looping script reads it, ends at the window.
+  const spent = async (who: Actor, path: string) => {
+    for (let i = 0; i < 40; i++) {
+      const r = await s.call("GET", path, { token: who.token });
+      if (r.status === 429) return r;
+    }
+  };
+  const answers = await spent(devbox, "/v1/answers?after=0");
+  expect(answers?.status).toBe(429);
+  expect(Number(answers?.headers.get("retry-after"))).toBeGreaterThan(0);
+  // The window is the account's, so the quota list that follows is refused too.
+  expect((await s.call("GET", "/v1/quota", { token: phone.token })).status).toBe(429);
+});

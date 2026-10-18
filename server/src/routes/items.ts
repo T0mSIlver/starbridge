@@ -682,6 +682,7 @@ itemRoutes.get("/items/:id", requireCaller("paired"), (c) => {
 
 itemRoutes.get("/quota", requireCaller("paired-device"), (c) => {
   const caller = c.var.caller;
+  const reads = readWindow(c);
   const rows = c.var.db
     .query(
       `${SELECT} JOIN members m ON m.account_id = i.account_id AND m.id = i.from_id AND m.active = 1
@@ -691,6 +692,7 @@ itemRoutes.get("/quota", requireCaller("paired-device"), (c) => {
        ORDER BY i.from_id`,
     )
     .all(caller.account, memberOf(caller)) as Row[];
+  reads.charge(rows.reduce((sum, r) => sum + r.box.length + (r.blobs?.length ?? 0), 0));
   return c.json({ items: rows.map(stored) });
 });
 
@@ -715,7 +717,12 @@ itemRoutes.get("/answers", requireCaller("machine"), async (c) => {
   const kinds = raw === undefined ? MACHINE_KINDS : raw.split(",");
   if (kinds.some((k) => !(MACHINE_KINDS as string[]).includes(k)))
     fail(400, "bad-request", `kinds is a comma-separated list of ${MACHINE_KINDS.join(", ")}`);
-  const fetch = () => list(c.var.db, caller.account, me, kinds, from);
+  const reads = readWindow(c);
+  const fetch = () => {
+    const listed = list(c.var.db, caller.account, me, kinds, from);
+    reads.charge(listed.bytes);
+    return listed;
+  };
   // A machine that passes what it knows hears at once when the directory grew past it or a
   // device asked for fresh quotas since.
   const known = c.req.query("directory");

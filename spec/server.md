@@ -27,8 +27,8 @@
   fetches them by id when it shows them, as for an answered question under `blobs=open` (#1382):
   every client stops at a page under 100 items, and a short page would have ended an older one's
   sync with questions missing. Only boxes past 4 MB, which no client makes, end a page early,
-  and the page says whether more follows. An account reads 128 MB a minute through `GET /items`
-  and `/items/:id`; a list's images fit what is left of it, so a sync always finishes, and only
+  and the page says whether more follows. An account reads 128 MB a minute through `GET /items`,
+  `/items/:id`, `/answers` and `/quota` (#2077); a list's images fit what is left of it, so a sync always finishes, and only
   fetching images waits for the window.
 - **Runs** are one item the machine re-posts under its id; the server keeps the latest, at most
   500 per account, for a day after the last update.
