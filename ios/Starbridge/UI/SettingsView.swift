@@ -1,7 +1,7 @@
 import SwiftUI
 
 /**
- * The tabs, as Android's (#1233): Inbox, with how many questions need the owner, Quotas once a
+ * The tabs, as Android's (#1233): Inbox, with how many questions and prompts need the owner (#1950), Quotas once a
  * machine sends them (#914), and Settings.
  */
 struct MainTabs: View {
@@ -12,7 +12,7 @@ struct MainTabs: View {
     enum Tab: Hashable { case inbox, quotas, settings }
 
     var body: some View {
-        let needYou = store.openDecisions.count
+        let needYou = store.needYou
         TabView(selection: $tab) {
             InboxView(store: store)
                 .tabItem { Label("Inbox", systemImage: "tray").accessibilityValue(needYou > 0 ? "\(needYou) need you" : "") }

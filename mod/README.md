@@ -47,12 +47,13 @@ answers on its unix socket, each session talks to it with `$.http.fetch`:
 - `POST /v1/sessions/<id>/bye` when the session ends.
 
 The socket is `$STARBRIDGE_AGENT_SOCKET`, else
-`$XDG_RUNTIME_DIR/starbridge/agent.sock` for the default config directory,
-else `agent.sock` in the config directory, as the CLI works it out; on Windows
-(`OS=Windows_NT`), the port file `agent.port` in the config directory, which
-names the loopback port and the token every call carries (PROTOCOL.md). A 426 (the
-agent speaks another API revision) or a call that cannot connect sends the
-session to the CLI path.
+`$XDG_RUNTIME_DIR/starbridge/agent-<key>.sock` for the default config directory,
+where `<key>` comes from the config directory's path, else `agent.sock` in the
+config directory, as the CLI works it out; on Windows (`OS=Windows_NT`), the
+port file `agent.port` in the config directory, which names the loopback port
+and the token every call carries (PROTOCOL.md). A 426 (the agent speaks another
+API revision), a 421 (the agent serves another config directory) or a call that
+cannot connect sends the session to the CLI path.
 
 ### Through the CLI
 

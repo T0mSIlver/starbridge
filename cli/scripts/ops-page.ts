@@ -426,7 +426,7 @@ function bug(i: IssueRow): Bug {
 }
 
 /** The first tag holding a commit: "" when none does (or the clone lacks the commit). */
-export function firstTag(sha: string): string {
+function firstTag(sha: string): string {
   if (!/^[0-9a-f]{40}$/.test(sha)) return "";
   return (
     sh("git", "tag", "--contains", sha, "--list", "v*", "--sort=creatordate").split("\n")[0] ?? ""

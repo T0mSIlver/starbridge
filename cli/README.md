@@ -74,7 +74,7 @@ The server refuses a CLI before 0.1.1. Its commands say to run `starbridge updat
 | `starbridge config updates off` | Stops automatic updates; the line still says when a release is out. |
 | `starbridge config update-check off` | Stops the daily check, the line and automatic updates; `STARBRIDGE_NO_UPDATE_CHECK=1` does the same. |
 | `starbridge status` | Shows both versions, whether updates are automatic, what holds the next one, and the last update and failure. `~/.config/starbridge/update.log` holds the last automatic update's output. |
-| `starbridge uninstall` | Removes the background service, Starbridge from every harness and the binary, and asks your devices to revoke the machine. Asks before deleting the keys (`--purge` doesn't ask). |
+| `starbridge uninstall` | Removes the background service, Starbridge from every harness and the binary, and asks your devices to revoke the machine; `starbridge setup` with the kept keys withdraws that card. Asks before deleting the keys (`--purge` doesn't ask). |
 | `starbridge uninstall --agent <name>` | Removes Starbridge from one harness; setup leaves it out until `setup --agent <name>`. |
 
 Setup replaces, and uninstall removes, only files that start with a `Written by starbridge
@@ -147,7 +147,7 @@ starbridge ask --question "Merge #12 now?" --option Merge --option Wait
 | `starbridge wait <id> [--timeout 5m]` | Prints the answer; exits 2 when the time runs out, 3 when you snoozed the question. `--no-mark` doesn't show "Waiting for you". |
 | `starbridge waiting <id>` | Shows "Waiting for you" on every device and notifies you once more. Prints the answer if it came in already. |
 | `starbridge working <id>` | Clears "Waiting for you"; the question stays open. |
-| `starbridge settle <id>` | Closes a question that no longer needs an answer. Commands that take an id print the question beside it, and say when the question already closed. |
+| `starbridge settle <id> --reason <text>` | Closes a question that no longer needs an answer. The reason is one line of at most 120 characters, which History shows. Commands that take an id print the question beside it, and say when the question already closed. |
 | `starbridge answers --all --follow` | Prints each answer to this machine's questions as a JSON line, for an orchestrator. `--since 2h` skips older ones. |
 | `starbridge decisions --open` | Prints the questions still open, in the same form. |
 

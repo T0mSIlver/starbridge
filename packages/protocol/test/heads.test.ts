@@ -168,3 +168,24 @@ test("a head a machine before #794 passed on, naming a by, is not kept", () => {
   expect(forgetHeads(kept, "m2")).toBe(true);
   expect(kept).toEqual({});
 });
+
+test("a member whose id is __proto__ has its head kept like any other (#1977)", () => {
+  const proto = { ...members.b, id: "__proto__" };
+  const by = { id: "a", signKey: keys.a.sign.privateKey };
+  const chain = [seenByA[0] as SignedEnvelope];
+  chain.push(addEntry(verifyDirectory(chain), by, proto, at));
+  chain.push(addEntry(verifyDirectory(chain), by, members.m, at));
+  const full = [...chain, revokeEntry(verifyDirectory(chain), by, "m", at)];
+  const shown = verifyDirectory(chain);
+  const heads: Heads = {};
+  expect(noteHead(heads, "__proto__", head(verifyDirectory(full)), chain)).toBe(true);
+  expect(withheldBy(heads, shown, chain)).toEqual({
+    id: "__proto__",
+    head: head(verifyDirectory(full)),
+  });
+  // Kept on disk as JSON and read back, it still counts.
+  const read: Heads = JSON.parse(JSON.stringify(heads));
+  expect(withheldBy(read, shown, chain)?.id).toBe("__proto__");
+  expect(forgetHeads(read, "__proto__")).toBe(true);
+  expect(withheldBy(read, shown, chain)).toBeUndefined();
+});

@@ -13,6 +13,11 @@
     ]
   },
   "retryForMs": 20000,
+  "limits": {
+    "answerTextMax": 4000,
+    "blobMax": 524352,
+    "itemBytes": 2097152
+  },
   "rowInputMax": 200,
   "snooze": {
     "minMs": 300000,

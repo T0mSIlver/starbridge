@@ -6,10 +6,10 @@
  * job fills in what was missing. It holds no commit, rollout, CI state or tester list: the page is public.
  */
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
-import { compareVersions } from "../src/release";
+import { compareVersions, isRc, parseVersion } from "../src/release";
 
 /** Where a release is. GitHub's channel (prerelease or latest) and npm's tag follow from the ring. */
-export type Channels = {
+type Channels = {
   /** The GitHub release exists; the desktop app's files are on it when `desktop` is true. */
   github?: true;
   npm?: true;
@@ -29,7 +29,7 @@ export type Entry = {
 
 export type Releases = { schema: 1; updated: string; releases: Entry[] };
 
-export const ring = (version: string): Entry["ring"] => (version.includes("-rc.") ? "rc" : "final");
+export const ring = (version: string): Entry["ring"] => (isRc(version) ? "rc" : "final");
 
 /** Keeps only the channels this file knows, in a shape it knows, so nothing else can reach a public page. */
 export function clean(input: unknown): Channels {
@@ -56,7 +56,7 @@ export function record(
   shipped: string,
   now = new Date().toISOString(),
 ): Releases {
-  if (!/^\d+\.\d+\.\d+(-rc\.\d+)?$/.test(version)) throw new Error(`not a version: ${version}`);
+  if (!parseVersion(version)) throw new Error(`not a version: ${version}`);
   const rest = (file?.releases ?? []).filter((e) => e.version !== version);
   const old = file?.releases.find((e) => e.version === version);
   const merged = { ...old?.channels, ...clean(channels) };

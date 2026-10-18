@@ -20,6 +20,16 @@
   (#1757). `ask --input` sets no delivery route or session kind (`codex`, `antigravity`,
   `extensionAnswers`, `headless`, `held`, `picker`, `subagent`): those come from the asking
   process's environment, since an agent writes the file.
+- **One agent per config folder** (#1966). Two homes of one user share `$XDG_RUNTIME_DIR`, so a
+  test home's `uninstall` once posted 8 cards through the owner's agent, as his machine. The
+  default folder's socket there is `agent-<key>.sock`, the key hashed from the folder's path, and
+  a client sends its key, which an agent of another folder refuses (421), in case an address
+  still collides. A client that `$STARBRIDGE_AGENT_SOCKET` sent is served as before. Across the
+  upgrade nothing listens on the old `agent.sock`: a mod or extension from before, or a new one
+  whose agent has not restarted yet, finds no agent and answers through the CLI until
+  `starbridge update` has moved both, since an agent that also listened there would serve the
+  other home's old clients again. A new agent does not start while an older one serves its
+  machine on `agent.sock`, so one machine never runs two agents.
 - **On Windows** (#552) the agent listens on loopback TCP with a per-start token in `agent.port`
   in the config directory (PROTOCOL.md, "Local agent API"). A named pipe was the other choice:
   libuv creates one with the default DACL, which lets other users open it for reading, and Bun's
@@ -142,8 +152,8 @@
   repository's marketplace that earlier setups added, which also served only this repository
   (#274). Setup turns on plugin auto-update through `extraKnownMarketplaces`, and uninstall
   removes only its own marketplace, so a developer's own `starbridge` marketplace survives;
-  both run `claude` from the home directory, so no repository's `.claude` settings are read or
-  edited (#762). Setup installs Codex's skill and rule, opencode's plugin and skill and the
+  both, and `starbridge update`'s plugin update, run `claude` from the home directory, so no
+  repository's `.claude` settings are read or edited (#762, #1919). Setup installs Codex's skill and rule, opencode's plugin and skill and the
   Antigravity plugin from copies the CLI carries so versions match. The local agent rewrites outdated copies when it starts.
 - **Setup asks little** (#750). Each question was one more Enter between a new user and their
   first answer, and nearly everyone said yes. Setup installs Starbridge in every agent it finds
@@ -161,6 +171,8 @@
   server, so setup checks the server and the pairing first (#774): a machine the server no
   longer lists, revoked or lost with the server's database, is offered to pair again (`[Y/n]`,
   what `pair --force` does), and an unreachable server stops setup with the command to retry.
+  A machine the server still lists is in use again, so setup withdraws the "Revoke <name>? It
+  was uninstalled." cards an earlier `uninstall` left open: their advice would cut it off (#1907).
   `uninstall --agent` records the agent,
   and setup and `--refresh` leave it out until `setup --agent` brings it back. An
   agent installed after setup gets nothing in the background: `status` names it, and `setup

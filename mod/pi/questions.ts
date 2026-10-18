@@ -39,7 +39,7 @@ type Done = (result: { answers: QuestionAnswer[]; cancelled: false }) => void;
 type Custom = ((factory: unknown, options?: unknown) => unknown) & { [WRAPPED]?: true };
 
 /** The prompt event's questions, if it carries any. */
-export function promptQuestions(data: unknown): RpivQuestion[] | undefined {
+function promptQuestions(data: unknown): RpivQuestion[] | undefined {
   const qs = (data as { questions?: unknown } | undefined)?.questions;
   if (!Array.isArray(qs) || qs.length === 0) return undefined;
   const ok = qs.every(

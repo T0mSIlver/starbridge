@@ -948,6 +948,24 @@ test("an answer in the picker settles its cards as answered elsewhere, and Esc d
   ]);
 });
 
+test("Esc while a card's post is in flight settles it elsewhere, as Esc does later (#1913)", async () => {
+  const ctx = await paired(server);
+  // The server stores the card but its reply does not come back before Esc.
+  server.lostReplies.push("POST /items");
+  const esc = new AbortController();
+  const dismissed = hookPermission({ ...ctx, signal: esc.signal }, picker(PICKED.slice(0, 1)), {
+    agent: "claude-code",
+  });
+  await until(async () => (await server.opened("decision")).length === 1);
+  esc.abort();
+  expect(await dismissed).toBe(0);
+  const [card] = await server.opened("decision");
+  await until(async () => (await server.opened("settled")).length === 1);
+  expect(await server.opened("settled")).toMatchObject([
+    { itemId: card?.id, outcome: "elsewhere" },
+  ]);
+});
+
 test("the hook withdraws its cards before Claude Code's timeout, which looks like Esc", async () => {
   const ctx = await paired(server);
   const done = hookPermission(ctx, picker(PICKED.slice(0, 1)), {

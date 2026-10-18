@@ -6,7 +6,7 @@ import { join } from "node:path";
 const script = readFileSync(join(import.meta.dir, "../../deploy/host/deploy-rev.sh"), "utf8");
 
 test("the deploy fetches main only from the host key GitHub publishes", () => {
-  const line = /^echo "(github\.com ssh-ed25519 \S+)" > \$known$/m.exec(script)?.[1];
+  const line = /^\s*echo "(github\.com ssh-ed25519 \S+)" > \$known$/m.exec(script)?.[1];
   expect(line).toBeDefined();
   const r = spawnSync("ssh-keygen", ["-lf", "-"], { input: `${line}\n`, encoding: "utf8" });
   // docs.github.com, "GitHub's SSH key fingerprints".

@@ -15,6 +15,7 @@ import {
   newClaimSecret,
   newPairingCode,
   openPairingApproval,
+  PairingRequestBody,
   pairingLink,
   pairingRequest,
   publicKeys,
@@ -37,6 +38,10 @@ export async function pair(
   ctx: Ctx,
   opts: { server?: string; name?: string; force?: boolean; again?: string },
 ): Promise<number> {
+  // Said here, before the server would refuse it in the schema's words (#1920).
+  const most = PairingRequestBody.shape.name.maxLength ?? 0;
+  if (opts.name !== undefined && opts.name.length > most)
+    throw new UsageError(`--name takes at most ${most} characters`);
   const previous = ctx.store.machine();
   if (previous && !opts.force)
     throw new UsageError(

@@ -8,7 +8,7 @@
  */
 
 export const LABEL_PREFIX = "found-in:";
-export const UNKNOWN = `${LABEL_PREFIX}unknown`;
+const UNKNOWN = `${LABEL_PREFIX}unknown`;
 
 // A release (0.1.8, v0.1.8) or an rc or tip build (0.1.8-rc.2, 0.1.8-tip.85), alone: not inside a
 // longer dotted number, not followed by another suffix (0.1.8-beta). A build suffix such as
@@ -16,7 +16,7 @@ export const UNKNOWN = `${LABEL_PREFIX}unknown`;
 const VERSION = /(?<![\w.])v?(\d{1,4}\.\d{1,4}\.\d{1,4}(?:-(?:rc|tip)\.\d{1,6})?)(?![\w-]|\.\w)/;
 
 /** The text under the form's "Version" heading, which GitHub renders as `### Version`. */
-export function versionField(body: string): string | undefined {
+function versionField(body: string): string | undefined {
   const m = /^###[ \t]+Version[ \t]*\r?\n([\s\S]*?)(?=^###[ \t]|(?![\s\S]))/im.exec(body);
   return m?.[1];
 }

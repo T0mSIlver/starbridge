@@ -24,7 +24,7 @@ import { type Prompt, which } from "./setup/sys";
  * A guess at what this machine is: `cloud` in a cloud session or codespace, `laptop` with a
  * battery, `server` for Linux with no display, else `desktop`. `config machine-kind` corrects it.
  */
-export function detectMachineKind(
+function detectMachineKind(
   env: Ctx["env"],
   platform: NodeJS.Platform = process.platform,
 ): MachineKind {
@@ -58,7 +58,7 @@ export function rememberMachineKind(ctx: Ctx): MachineKind {
   return kind;
 }
 
-export function setPermissions(ctx: Ctx, enabled: boolean) {
+function setPermissions(ctx: Ctx, enabled: boolean) {
   const config = ctx.store.agentConfig();
   ctx.store.saveAgentConfig({ ...config, permissions: { enabled } });
 }

@@ -121,7 +121,8 @@ async function take(dir: string, out: string) {
     await Bun.sleep(1200);
     await second.ask();
     await pushed(page);
-    for (const a of [first, second]) await page.getByText(a.script.question.question).waitFor();
+    for (const a of [first, second])
+      await page.getByText(a.script.question.question, { exact: true }).first().waitFor();
     mark("both");
     await Bun.sleep(3000);
     await press(page, EVAL.answer);

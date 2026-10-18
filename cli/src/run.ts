@@ -45,7 +45,7 @@ const GRACE_MS = 1_000;
 const EXIT_NOT_FOUND = 127;
 
 /** What `run` says in Codex's sandbox, where no device would hear of the run. */
-export const CODEX_SANDBOX =
+const CODEX_SANDBOX =
   "Codex's sandbox has no network, so no device would hear of this run, and the command did not start. Run the same `starbridge run` again outside the sandbox (escalated permissions, justified by the network the report needs). If the escalation is refused, run the command without `starbridge run`.";
 
 /** What a run update says, before the machine adds its name and the recipients. */
@@ -63,7 +63,7 @@ export interface RunInput {
   links?: SessionLink[];
 }
 
-export function buildRun(
+function buildRun(
   input: RunInput,
   machine: string,
   to: string[],
@@ -178,7 +178,7 @@ export type Poster = (input: RunInput) => Promise<void>;
  * Each update replaces the last under the run's id, so whichever path posted the previous one,
  * falling back can never post anything twice that matters.
  */
-export function makePoster(ctx: Ctx): Poster {
+function makePoster(ctx: Ctx): Poster {
   let direct: Session | undefined;
   return async (input) => {
     const agent = AgentClient.for(ctx);

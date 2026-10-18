@@ -41,6 +41,7 @@ export function SampleProvider({
     return {
       boot: { state: "loading" },
       inboxLoaded: true,
+      promptsLoaded: true,
       ...s,
       inbox: { ...s.inbox, items: landing ? items.filter((i) => !i.snoozedUntil) : items },
       ...(landing && {

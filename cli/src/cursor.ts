@@ -13,7 +13,7 @@ export const CURSOR_CONVERSATION = "CURSOR_CONVERSATION_ID";
  * The arguments of a hook's ancestors, nearest first: the hook runs under a shell or two below
  * `cursor-agent`. Empty where they cannot be read.
  */
-export function ancestorArgs(pid = process.ppid, depth = 8): string[][] {
+function ancestorArgs(pid = process.ppid, depth = 8): string[][] {
   const out: string[][] = [];
   try {
     for (let i = 0; i < depth && pid > 1; i++) {

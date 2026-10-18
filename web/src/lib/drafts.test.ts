@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { drafts, dropClosedDrafts } from "./drafts";
+import { capReply, drafts, dropClosedDrafts, REPLY_LIMIT } from "./drafts";
 import type { InboxItem } from "./types";
 
 const item = (id: string, over: Partial<InboxItem> = {}) =>
@@ -17,4 +17,15 @@ test("a question closed elsewhere drops its draft; an open or snoozed one keeps 
   ]);
   expect([...drafts.keys()].sort()).toEqual(["d_not_listed", "d_open", "d_snoozed"]);
   drafts.clear();
+});
+
+test("a reply stops at the server's 4000 code points, never inside an emoji (#1921)", () => {
+  expect(REPLY_LIMIT).toBe(4000);
+  expect(capReply("x".repeat(4001))).toBe("x".repeat(4000));
+  expect(capReply("x".repeat(4000))).toBe("x".repeat(4000));
+  expect(capReply("short")).toBe("short");
+  // Emoji count one each, as zod and the other clients count them: 3000 fit, 4001 lose one.
+  expect(capReply("😀".repeat(3000))).toBe("😀".repeat(3000));
+  expect(capReply("😀".repeat(4001))).toBe("😀".repeat(4000));
+  expect(capReply(`${"x".repeat(3999)}😀y`)).toBe(`${"x".repeat(3999)}😀`);
 });

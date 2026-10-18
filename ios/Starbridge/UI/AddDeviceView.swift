@@ -19,7 +19,7 @@ struct AddDeviceView: View {
             .padding(Tokens.Spacing.s5)
             .background(RoundedRectangle(cornerRadius: Tokens.Radius.xl, style: .continuous).fill(Tokens.Colors.surface.color))
             .padding(.horizontal, Tokens.Spacing.s4)
-            .animation(.default, value: store.approval)
+            .animation(Motion.animation(), value: store.approval)
         }
         .background(Tokens.Colors.bg.color.ignoresSafeArea())
         // The pairing code and its QR code stay out of the app switcher's snapshot.

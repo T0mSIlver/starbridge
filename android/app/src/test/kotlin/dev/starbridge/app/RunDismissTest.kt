@@ -158,7 +158,7 @@ class RunDismissTest {
     private fun ServerStore.synced(expected: List<String>) {
         val reads = runReads.get()
         refresh(shown = false)
-        waitUntil { runReads.get() > reads && shown() == expected }
+        until { runReads.get() > reads && shown() == expected }
     }
 
     @Test
@@ -168,7 +168,7 @@ class RunDismissTest {
         store.synced(listOf("r1"))
 
         store.dismissRun("r1")
-        waitUntil { deleted == listOf("r1") }
+        until { deleted == listOf("r1") }
         assertEquals(emptyList<String>(), store.shown())
         assertEquals(listOf("r1"), cancelled)
 
@@ -190,13 +190,5 @@ class RunDismissTest {
         listed.removeIf { it.id == "r1" }
         store.synced(listOf("r2"))
         assertTrue("r1" in cancelled)
-    }
-
-    private fun waitUntil(condition: () -> Boolean) {
-        val end = System.currentTimeMillis() + 10_000
-        while (!condition()) {
-            check(System.currentTimeMillis() < end) { "timed out" }
-            Thread.sleep(20)
-        }
     }
 }

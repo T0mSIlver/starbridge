@@ -168,12 +168,4 @@ class SettledTest {
         assertEquals("withdrawn", disk.saved()!!.decisions.single().settled)
         assertEquals("You answered in the terminal", disk.saved()!!.decisions.single().reason)
     }
-
-    private fun until(pred: () -> Boolean) {
-        val end = System.currentTimeMillis() + 10_000
-        while (!pred()) {
-            check(System.currentTimeMillis() < end) { "timed out" }
-            Thread.sleep(10)
-        }
-    }
 }

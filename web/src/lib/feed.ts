@@ -20,7 +20,7 @@ const facts = (source: Source & { machineKind?: MachineKind }) => ({
   repo: source.project,
 });
 
-export const promptEntry = (p: PromptItem): Entry => ({
+const promptEntry = (p: PromptItem): Entry => ({
   type: "prompt",
   id: p.permission.id,
   at: p.permission.createdAt,
@@ -28,7 +28,7 @@ export const promptEntry = (p: PromptItem): Entry => ({
   ...facts(p.permission.source),
 });
 
-export const questionEntry = (i: InboxItem): Entry => ({
+const questionEntry = (i: InboxItem): Entry => ({
   type: "question",
   id: i.decision.id,
   at: i.decision.createdAt,
@@ -138,7 +138,7 @@ const sameDay = (a: Date, b: Date) => a.toDateString() === b.toDateString();
 
 /** How many of `past` closed today, in the device's zone. */
 /** History lists the last 7 days, the server's own; older rows, kept in this browser, wait. */
-export const RECENT_DAYS = 7;
+const RECENT_DAYS = 7;
 export const isRecent = (p: Past, now: number) =>
   now - Date.parse(p.closed) < RECENT_DAYS * 86_400_000;
 

@@ -97,7 +97,7 @@ struct InboxView: View {
                 }
                 .padding(.horizontal, Tokens.Spacing.s3)
                 .padding(.bottom, Tokens.Spacing.s6)
-                .animation(.default, value: decisions.map(\.id))
+                .animation(Motion.animation(), value: decisions.map(\.id))
             }
             .refreshable { await store.refresh() }
             .background(Tokens.Colors.bg.color.ignoresSafeArea())
@@ -143,7 +143,7 @@ struct InboxView: View {
                 .transition(.move(edge: .bottom).combined(with: .opacity))
                 .task(id: undo) {
                     try? await Task.sleep(for: .seconds(4))
-                    if self.undo == undo { withAnimation { self.undo = nil } }
+                    if self.undo == undo { Motion.with { self.undo = nil } }
                 }
             }
         }
@@ -181,7 +181,7 @@ extension InboxView {
         }
         Task {
             await store.snooze(id, until: until)
-            if store.decision(id)?.snoozedUntil == Dates.format(until) { withAnimation { undo = Swiped(id: id, until: until) } }
+            if store.decision(id)?.snoozedUntil == Dates.format(until) { Motion.with { undo = Swiped(id: id, until: until) } }
         }
     }
 
@@ -337,7 +337,7 @@ private struct Collapsible<Content: View>: View {
     var body: some View {
         VStack(spacing: Tokens.Spacing.s2) {
             Button {
-                withAnimation { open.toggle() }
+                Motion.with { open.toggle() }
             } label: {
                 HStack(spacing: Tokens.Spacing.s2) {
                     Image(systemName: symbol)
@@ -670,7 +670,7 @@ private struct SwipeToSnooze<Content: View>: View {
                     .onEnded { _ in
                         let snooze = sideways == true && width > 0 && offset >= width * swipeArms
                         sideways = nil
-                        withAnimation(.spring(duration: 0.3)) { offset = 0 }
+                        Motion.with(.spring(duration: 0.3)) { offset = 0 }
                         if snooze { onSwipe() }
                     }
             )

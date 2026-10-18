@@ -1,4 +1,5 @@
 import { isIPv6 } from "node:net";
+import { ITEM_BYTES } from "@starbridge/protocol";
 import type { Context } from "hono";
 import { HTTPException } from "hono/http-exception";
 import type { Env } from "./env";
@@ -57,7 +58,7 @@ export const DEFAULT_LIMITS = {
    * Sealed boxes and blobs of one decision, in bytes. A decision's images are its blobs, stored
    * once whatever the number of devices (#685), so four phone screenshots fit at full size.
    */
-  itemBytes: 2 * 1024 * 1024,
+  itemBytes: ITEM_BYTES,
   /**
    * Sealed boxes of one quota snapshot, in bytes. A real one is about 8 KB per device (six
    * providers with three windows each), and pages count as devices, so this leaves room for

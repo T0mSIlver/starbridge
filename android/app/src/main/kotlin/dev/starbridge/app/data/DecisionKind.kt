@@ -7,6 +7,7 @@ import dev.starbridge.app.protocol.Snooze
 import dev.starbridge.app.protocol.Waiting
 import dev.starbridge.app.protocol.DecisionLink
 import dev.starbridge.app.protocol.fromB64
+import dev.starbridge.app.protocol.ANSWER_TEXT_MAX
 import dev.starbridge.app.protocol.takeCodePoints
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
@@ -451,7 +452,10 @@ internal class DecisionKind(
         }
         val queued = QueuedAnswer(id, choice ?: text ?: doneText(page!!), envelopes.seal("answer", body, me.id, signKey, listOf(machine)), at = at)
         persist(saved.copy(outbox = saved.outbox + queued))
-        return post(queued)
+        // Scheduled before the request leaves: were the app killed mid-request, the saved answer
+        // still has a sender (#1979). The run waits for the lock this holds, then finds it sent.
+        wakeWhenOnline()
+        return post(queued, wake = false)
     }
 
     /**
@@ -527,7 +531,7 @@ internal class DecisionKind(
      */
     suspend fun sendFromNotification(id: String, choice: String?, text: String?): Sent {
         alerts.cancel(id)
-        val sent = lock.withLock { send(id, choice, text?.takeCodePoints(4000)) }
+        val sent = lock.withLock { send(id, choice, text?.takeCodePoints(ANSWER_TEXT_MAX)) }
         if (sent is Sent.Failed) refused(id, sent.why)
         return sent
     }
@@ -551,10 +555,20 @@ internal class DecisionKind(
     suspend fun flushAnswers(): Boolean {
         while (true) {
             val held = limitedUntil - System.currentTimeMillis()
-            if (held <= 0) break
-            delay(held)
+            if (held > 0) {
+                delay(held)
+                continue
+            }
+            lock.lock()
+            try {
+                // A post under the lock meanwhile, such as the tap's own that scheduled this run
+                // (#1979), may have started a hold: wait it out too, without the lock.
+                if (limitedUntil > System.currentTimeMillis()) continue
+                return flushQueued()
+            } finally {
+                lock.unlock()
+            }
         }
-        return lock.withLock { flushQueued() }
     }
 
     private suspend fun flushQueued(): Boolean {

@@ -9,7 +9,7 @@ import { VERSION } from "../version";
 import type { Status } from "./api";
 import { type Feature, type Hub, pause } from "./server";
 
-export const LOOK_MS = 10 * 60_000;
+const LOOK_MS = 10 * 60_000;
 
 export interface AutoUpdateDeps {
   install: typeof installKind;
