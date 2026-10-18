@@ -895,10 +895,18 @@ async function forget(account: string): Promise<void> {
   await store.del("current");
   // Not in a service worker, which has no localStorage; a browser that blocks storage throws on
   // the read itself.
-  try {
-    const local = (globalThis as { localStorage?: { removeItem(key: string): void } }).localStorage;
-    for (const key of Object.values(ACCOUNT_STORAGE_KEYS)) local?.removeItem(key);
-  } catch {}
+  const local = (() => {
+    try {
+      return (globalThis as { localStorage?: { removeItem(key: string): void } }).localStorage;
+    } catch {
+      return undefined;
+    }
+  })();
+  for (const key of Object.values(ACCOUNT_STORAGE_KEYS)) {
+    try {
+      local?.removeItem(key);
+    } catch {}
+  }
   // Last: a push the service worker was still opening finds no keys now.
   await closeNotifications();
 }

@@ -2567,6 +2567,12 @@ async function main() {
   );
   if (!(await pageC.evaluate(NOTIFICATIONS)).some((n) => n.tag === "e2e-left"))
     throw new Error("the left-over notification did not show");
+  // What the browser keeps of the account in localStorage goes too; the display prefs stay (#2014).
+  await pageC.evaluate(() => {
+    for (const k of ["quota-settings", "quota-account", "quota-notified", "run-notified"])
+      localStorage.setItem(`starbridge:${k}`, '{"v":1,"account":"a_left"}');
+    localStorage.setItem("starbridge:prefs", '{"v":1,"theme":"dark"}');
+  });
   await pageC.getByRole("button", { name: "Sign out" }).click();
   await pageC.getByRole("dialog").getByRole("button", { name: "Sign out" }).click();
   // With no keys left, the browser is a visitor: the landing page, not "Sign in to Starbridge".
@@ -2576,6 +2582,13 @@ async function main() {
   // Notifications hold decrypted questions: none outlive the sign-out (#311).
   if ((await pageC.evaluate(NOTIFICATIONS)).length > 0)
     throw new Error("signing out left notifications on screen");
+  const left = await pageC.evaluate(() =>
+    Object.keys(localStorage)
+      .filter((k) => k.startsWith("starbridge:"))
+      .sort(),
+  );
+  if (left.join() !== "starbridge:prefs")
+    throw new Error(`signing out left these localStorage keys: ${left.join(", ")}`);
 
   step("delete the account: typed confirmation, then a new sign-in starts a new account (#1104)");
   const d = await context({ permissions: ["notifications"] });

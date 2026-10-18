@@ -19,13 +19,16 @@ test("a stored value carries its format, and one in a newer format is kept, not 
 test("every localStorage key of the app is listed as account data, or is the display prefs (#2014)", () => {
   const listed = new Set<string>(Object.values(ACCOUNT_STORAGE_KEYS));
   const found = new Set<string>();
-  for (const dir of [import.meta.dir, join(import.meta.dir, "../components")]) {
-    for (const file of readdirSync(dir)) {
-      if (!/\.tsx?$/.test(file) || /\.test\./.test(file)) continue;
-      for (const m of readFileSync(join(dir, file), "utf8").matchAll(/"(starbridge:[a-z-]+)"/g))
-        found.add(m[1] as string);
+  const walk = (dir: string) => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const path = join(dir, entry.name);
+      if (entry.isDirectory()) walk(path);
+      else if (/\.tsx?$/.test(entry.name) && !/\.test\./.test(entry.name))
+        for (const m of readFileSync(path, "utf8").matchAll(/"(starbridge:[a-z-]+)"/g))
+          found.add(m[1] as string);
     }
-  }
+  };
+  walk(join(import.meta.dir, ".."));
   // Message types of the service worker are not storage keys.
   for (const key of found) {
     if (key === "starbridge:prefs" || key.startsWith("starbridge:push")) continue;
