@@ -111,6 +111,13 @@ class Prefs @Inject constructor(@ApplicationContext context: Context) {
         return true
     }
 
+    /** Forgets the account's quota settings and shown alerts; the display settings stay (#2035). */
+    @Synchronized
+    fun forgetAccount() {
+        prefs.edit().remove(QUOTA).remove(QUOTA_SHOWN).apply()
+        _quota.value = QuotaSettings()
+    }
+
     private companion object {
         const val COLOURS = "colours"
         const val CLOCK = "clock"

@@ -66,6 +66,7 @@ class FirstDeviceTest {
 
     private val account = "acct"
     private lateinit var disk: Disk
+    private var forgotten = 0
     private lateinit var server: String
     private lateinit var open: () -> ServerStore
 
@@ -109,6 +110,7 @@ class FirstDeviceTest {
             override fun prompt(prompt: Prompt) {}
             override fun cancelPrompt(prompt: Prompt) {}
             override fun run(run: Run) {}
+            override fun forget() { forgotten++ }
         }
         open = { ServerStore(disk, OkHttpClient(), sodium, envelopes, directories, Pairings(sodium), Joins(sodium), alerts, "Phone", server, false, scope) }
 
@@ -153,5 +155,7 @@ class FirstDeviceTest {
         until { !signedOut.keepsKeys.value }
         assertEquals(null, disk.saved()?.me)
         assertEquals(null, signedOut.pushHold.value)
+        // And what the account left on the phone: notifications, quota settings, shown alerts (#2035).
+        assertEquals(1, forgotten)
     }
 }
