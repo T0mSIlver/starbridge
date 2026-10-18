@@ -250,7 +250,9 @@
   Then sb-oracle, the outside check's VM, runs one round trip on its test account (#1522): a
   healthy server that cannot push or answer fails the run at once, rather than at the check's next
   round trip up to 15 minutes later. Its key's forced command only asks for that round trip and
-  prints the result.
+  prints the result. Both boxes run one set of deploy scripts, and what differs between them is a
+  settings file per box (`deploy/host/prod.env`, `deploy/staging/staging.env`), since copies drifted
+  and the same fix landed four times (#1663, #1675, #1953).
 - **Rollback** (#1520, #1828). `rollback.yml`, dispatched with a box and a commit, redeploys a
   commit that box ran before, so prod rolls back without the owner's full-sudo key, which was the
   only way before. It logs in with a second key per box, whose forced command runs only
