@@ -1356,7 +1356,7 @@ function forget(a: State["asked"][string]) {
 }
 
 /** The server drops an unanswered decision after 30 days; one re-sealed later would come back. */
-const RESEAL_MS = 29 * 24 * 3600_000;
+export const RESEAL_MS = 29 * 24 * 3600_000;
 
 /**
  * Re-seals this machine's open decisions, with their waiting state, and permission prompts to

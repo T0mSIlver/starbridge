@@ -171,6 +171,8 @@
   server, so setup checks the server and the pairing first (#774): a machine the server no
   longer lists, revoked or lost with the server's database, is offered to pair again (`[Y/n]`,
   what `pair --force` does), and an unreachable server stops setup with the command to retry.
+  A machine the server still lists is in use again, so setup withdraws the "Revoke <name>? It
+  was uninstalled." cards an earlier `uninstall` left open: their advice would cut it off (#1907).
   `uninstall --agent` records the agent,
   and setup and `--refresh` leave it out until `setup --agent` brings it back. An
   agent installed after setup gets nothing in the background: `status` names it, and `setup

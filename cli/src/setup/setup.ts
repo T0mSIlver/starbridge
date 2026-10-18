@@ -60,6 +60,7 @@ import {
   withInstalledPlaces,
 } from "./service";
 import { otherCopies, type Sys } from "./sys";
+import { withdrawRevokeCards } from "./uninstall";
 
 export interface SetupOpts {
   /** `--yes`: every question takes its default; sys.prompt answers so. */
@@ -234,8 +235,10 @@ export async function setup(sys: Sys, opts: SetupOpts): Promise<number> {
   if (machine && !switching) {
     section(ctx, "Pairing");
     const pairing = await checkPairing(ctx);
-    if (pairing === "paired") ctx.out(`✓ Paired as ${machine.name} on ${host(machine.server)}`);
-    else if (pairing === "removed") {
+    if (pairing === "paired") {
+      ctx.out(`✓ Paired as ${machine.name} on ${host(machine.server)}`);
+      await withdrawRevokeCards(ctx);
+    } else if (pairing === "removed") {
       gone = `✗ ${host(machine.server)} no longer lists ${machine.name}`;
       ctx.out(gone);
       again = await prompt.confirm("  Pair this machine again?", true);
