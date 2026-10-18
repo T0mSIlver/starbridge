@@ -620,7 +620,7 @@ extension Store {
     }
 
     /** The Answer schema's cap on a reply's text, in code points. */
-    static let replyLimit = 4000
+    static let replyLimit = ANSWER_TEXT_MAX
 
     /** `text` cut to [replyLimit] code points. */
     static func capped(_ text: String) -> String {

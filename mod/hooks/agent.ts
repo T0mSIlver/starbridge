@@ -71,7 +71,7 @@ export interface AgentTiming {
   maxBackoffMs: number;
 }
 
-export const AGENT_TIMING: AgentTiming = {
+const AGENT_TIMING: AgentTiming = {
   waitSeconds: 25,
   minCycleMs: 2_000,
   backoffMs: 2_000,

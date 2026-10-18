@@ -116,7 +116,7 @@ export async function hookCodexQuestion(
 }
 
 /** What Codex takes for one question: the label tapped, or a typed reply as the TUI's note. */
-export function codexAnswer(a: Answer): string[] {
+function codexAnswer(a: Answer): string[] {
   return a.choice !== undefined ? [a.choice] : [`user_note: ${a.text ?? ""}`];
 }
 

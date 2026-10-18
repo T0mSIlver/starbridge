@@ -185,6 +185,9 @@ public struct SignedEnvelope: Equatable, Sendable {
 /** An image's blob, as base64url, at most: 384 KB of image, its nonce and MAC. */
 public let BLOB_MAX = 512 * 1024 + 64
 
+/** An answer's text at most (ANSWER_TEXT_MAX in schemas.ts). */
+public let ANSWER_TEXT_MAX = 4000
+
 /** The key and hash that open and check an image's blob. */
 public struct ImageRef: Equatable, Sendable {
     /** The blob's secretbox key, 32 bytes. */
@@ -558,7 +561,7 @@ public struct Answer: ItemBody, Equatable {
         to = try f.id("to")
         answeredAt = try f.time("answeredAt")
         choice = try f.optText("choice", 0, 100)
-        text = try f.optText("text", 0, 4000)
+        text = try f.optText("text", 0, ANSWER_TEXT_MAX)
         done = try f.optTrue("done")
         dir = try optDir(f)
         try schema([choice != nil, text != nil, done != nil].filter { $0 }.count == 1, "exactly one of choice, text and done")
@@ -731,7 +734,7 @@ public struct Settled: ItemBody, Equatable {
         if let outcome { try schema(SETTLED_OUTCOMES.contains(outcome), "outcome") }
         device = try f.optId("device")
         choice = try f.optText("choice", 0, 100)
-        text = try f.optText("text", 0, 4000)
+        text = try f.optText("text", 0, ANSWER_TEXT_MAX)
         dir = try optDir(f)
         behavior = try f.optString("behavior")
         if let behavior { try schema(behavior == "allow" || behavior == "deny", "behavior") }

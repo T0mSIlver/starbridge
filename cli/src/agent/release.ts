@@ -10,7 +10,7 @@ import { checkLatest, updateCheckOn, within } from "../latest";
 import { VERSION } from "../version";
 import { type Feature, type Hub, pause } from "./server";
 
-export const TICK_MS = 3_600_000;
+const TICK_MS = 3_600_000;
 
 export class Release implements Feature {
   /** What the server last took from this machine. */

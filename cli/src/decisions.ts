@@ -7,6 +7,7 @@ import {
   Decision,
   type DecisionLink,
   type Directory,
+  ITEM_BYTES,
   noteHead as keepHead,
   newDecisionId,
   open,
@@ -92,9 +93,6 @@ export interface AskInput {
   /** The page the owner answers on instead of Starbridge; the decision then has no options. */
   answerIn?: string | DecisionLink;
 }
-
-/** What the server stores at most for one decision, boxes and blobs together (PROTOCOL.md, Limits). */
-export const ITEM_BYTES = 2 * 1024 * 1024;
 
 /** One image's file at most: its blob is then the 512 KB of base64url `BLOB_MAX` allows. */
 const IMAGE_BYTES = 384 * 1024;

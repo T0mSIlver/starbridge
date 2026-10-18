@@ -11,7 +11,7 @@ export type State = "ok" | "unused" | "out" | "ran-out" | "unknown";
 export type Status = { state: State; word: string; reset: string };
 
 /** "38 min", "1 h 50 min", "2 d 4 h": how long until `iso`. */
-export function span(iso: string, now: Date): string {
+function span(iso: string, now: Date): string {
   const m = Math.max(0, Math.round((Date.parse(iso) - now.getTime()) / 60_000));
   if (m < 60) return `${m} min`;
   if (m < 24 * 60) return m % 60 ? `${Math.floor(m / 60)} h ${m % 60} min` : `${m / 60} h`;
