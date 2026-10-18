@@ -278,8 +278,8 @@ function checkOwnerToken(config: Config): void {
 
 /**
  * A demo server's caps. Its machine is the demo program's, and reviewers share its account, so
- * none of them adds one whose items every other reviewer would see. Its database lives in a
- * 64 MB tmpfs (deploy/demo/compose.yaml), which pairings at about 4 KB each must not fill.
+ * none of them adds one whose items every other reviewer would see. Pending pairings, about 4 KB
+ * each, stay under 20 MB of its database.
  */
 const DEMO_MACHINES = 1;
 const DEMO_PAIRINGS = 5_000;

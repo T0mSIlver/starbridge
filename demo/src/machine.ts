@@ -3,7 +3,7 @@
  * demo device, runs the agent with a scripted CodexBar for quota windows, keeps one question
  * open and a run going.
  */
-import { mkdirSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { Broken, type DemoDevice } from "./device";
 
@@ -78,7 +78,7 @@ export class DemoMachine {
       env: {
         ...process.env,
         HOME: this.opts.dir,
-        STARBRIDGE_CONFIG_DIR: join(this.opts.dir, "starbridge"),
+        STARBRIDGE_CONFIG_DIR: this.config,
       },
       stdout,
       stderr: "inherit",
@@ -90,6 +90,23 @@ export class DemoMachine {
 
   stop() {
     for (const c of this.children) c.kill();
+  }
+
+  private get config() {
+    return join(this.opts.dir, "starbridge");
+  }
+
+  /** The id this machine paired as, kept across restarts in its directory (#2049). */
+  pairedAs(): string | undefined {
+    const file = join(this.config, "machine.json");
+    return existsSync(file)
+      ? (JSON.parse(readFileSync(file, "utf8")) as { id: string }).id
+      : undefined;
+  }
+
+  /** Drops a pairing the account no longer holds, before pairing again. */
+  forget(): void {
+    rmSync(this.opts.dir, { recursive: true, force: true });
   }
 
   /** `starbridge pair`, approved by the demo device. */
@@ -134,6 +151,22 @@ export class DemoMachine {
 
   /** Keeps one question open: posts the next a few seconds after each answer. */
   async questions(signal: AbortSignal): Promise<void> {
+    // The question a restart left open would stay beside the next one.
+    const open = this.spawn(["decisions", "--open"], "pipe");
+    const lines = (await new Response(open.stdout as ReadableStream).text()).split("\n");
+    await open.exited;
+    for (const line of lines.filter(Boolean)) {
+      if (signal.aborted) return;
+      const { decisionId } = JSON.parse(line) as { decisionId: string };
+      await this.spawn([
+        "settle",
+        decisionId,
+        "--outcome",
+        "withdrawn",
+        "--reason",
+        "The demo server restarted",
+      ]).exited;
+    }
     let failures = 0;
     for (let i = 0; !signal.aborted; i++) {
       const q = QUESTIONS[i % QUESTIONS.length] as Question;
@@ -156,7 +189,7 @@ export class DemoMachine {
         q.session,
       ]).exited;
       if (signal.aborted) return;
-      // A revoked machine fails every ask: start over with a fresh account.
+      // A revoked machine fails every ask: stop, and the next start pairs it again.
       failures = code === 0 ? 0 : failures + 1;
       if (failures >= 3) throw new Broken("three questions in a row failed");
       await Bun.sleep((code === 0 ? (this.opts.nextQuestionAfter ?? 5) : 10) * 1000);
@@ -185,4 +218,25 @@ export class DemoMachine {
       await Bun.sleep(180_000);
     }
   }
+}
+
+/**
+ * Goes on with the account and machine a restart left in `data` (#2049): the device resumes or
+ * starts a fresh account, and the machine pairs again unless its pairing still holds.
+ */
+export async function resumeDemo(
+  device: DemoDevice,
+  machine: DemoMachine,
+  data: string,
+): Promise<"fresh" | "resumed"> {
+  const how = await device.resume(join(data, "device.json"));
+  const paired = machine.pairedAs();
+  if (how === "resumed" && paired && (await device.directory()).members.get(paired)?.active)
+    device.machine = paired;
+  else {
+    await device.revokeMachines();
+    machine.forget();
+    await machine.pair();
+  }
+  return how;
 }

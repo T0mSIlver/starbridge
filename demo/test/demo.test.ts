@@ -1,5 +1,5 @@
 import { afterAll, expect, test } from "bun:test";
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -21,15 +21,16 @@ import {
 } from "@starbridge/protocol";
 import { makeServer } from "@starbridge/server/test-support";
 import { Broken, DemoDevice } from "../src/device";
-import { DemoMachine, QUESTIONS } from "../src/machine";
+import { DemoMachine, QUESTIONS, resumeDemo } from "../src/machine";
 
 const TOKEN = "owner-secret";
 const ROOT = join(import.meta.dir, "..", "..");
 
-async function serve(demo: boolean) {
-  const { app } = await makeServer({ demo, ownerToken: TOKEN });
-  const http = Bun.serve({ port: 0, fetch: (req, server) => app.fetch(req, { server }) });
-  return { url: `http://localhost:${http.port}`, stop: () => http.stop(true) };
+/** A server on `dbPath`, by default in memory; `port` 0 picks one. */
+async function serve(demo: boolean, dbPath = ":memory:", port = 0) {
+  const { app } = await makeServer({ demo, ownerToken: TOKEN, dbPath });
+  const http = Bun.serve({ port, fetch: (req, server) => app.fetch(req, { server }) });
+  return { url: `http://localhost:${http.port}`, port: http.port, stop: () => http.stop(true) };
 }
 
 const cleanup: (() => void)[] = [];
@@ -214,16 +215,113 @@ test("two phones joining at once both get in", async () => {
 }, 60_000);
 
 for (const revoked of ["demo-owner", "machine"])
-  test(`stops, for a fresh account, once a reviewer revokes the ${revoked}`, async () => {
+  test(`stops once a reviewer revokes the ${revoked}`, async () => {
     const { url, device, joins } = await demo();
     const phone = await joinByDigits(url);
     await phone.revoke(revoked === "machine" ? (device.machine as string) : device.id);
     await expect(joins).rejects.toBeInstanceOf(Broken);
   }, 60_000);
 
-test("stops, for a fresh account, once a reviewer deletes the account", async () => {
+test("stops once a reviewer deletes the account", async () => {
   const { url, joins } = await demo();
   const phone = await joinByDigits(url);
   await phone.deleteAccount();
   await expect(joins).rejects.toThrow("the demo account was deleted");
 }, 60_000);
+
+/** The demo program as its container starts it, on what an earlier start left in `data`. */
+async function boot(url: string, data: string) {
+  const device = new DemoDevice(url, TOKEN, () => {});
+  const machine = new DemoMachine(
+    {
+      cli: ["bun", join(ROOT, "cli/src/main.ts")],
+      server: url,
+      dir: join(data, "machine"),
+      codexbar: join(ROOT, "demo/src/codexbar.ts"),
+      nextQuestionAfter: 0,
+      log: () => {},
+    },
+    device,
+  );
+  const stop = new AbortController();
+  cleanup.push(() => {
+    stop.abort();
+    machine.stop();
+  });
+  const how = await resumeDemo(device, machine, data);
+  device.approveJoins(stop.signal).catch(() => {});
+  return { device, machine, how, stop };
+}
+
+test("a restart goes on with the same account: a phone that joined before answers the next question", async () => {
+  const data = mkdtempSync(join(tmpdir(), "starbridge-demo-"));
+  const db = join(data, "starbridge.db");
+  const before = await serve(true, db);
+  const first = await boot(before.url, data);
+  expect(first.how).toBe("fresh");
+  first.machine.agent().catch(() => {});
+  first.machine.questions(first.stop.signal).catch(() => {});
+  const phone = await joinByDigits(before.url);
+  const left = await until(async () => (await phone.questions())[0], 40_000);
+  first.stop.abort();
+  first.machine.stop();
+  before.stop();
+
+  // A new server on the same database and port, as the container on its volume.
+  const after = await serve(true, db, before.port);
+  cleanup.push(after.stop);
+  const second = await boot(after.url, data);
+  expect(second.how).toBe("resumed");
+  expect(second.device.account).toBe(first.device.account);
+  expect(second.device.machine).toBe(first.device.machine as string);
+  second.machine.agent().catch(() => {});
+  second.machine.questions(second.stop.signal).catch(() => {});
+  // The question the restart left open is withdrawn: one stays open.
+  const next = await until(async () => {
+    const open = await phone.questions();
+    return open.length === 1 && open[0]?.id !== left.id ? open[0] : undefined;
+  }, 40_000);
+  await phone.answer(next, next.options?.[0] as string);
+  await until(async () => (await phone.questions()).find((d) => d.id !== next.id), 40_000);
+}, 180_000);
+
+test("a restart after a reviewer revoked the demo's machine pairs it again in the same account", async () => {
+  const s = await serve(true);
+  cleanup.push(s.stop);
+  const data = mkdtempSync(join(tmpdir(), "starbridge-demo-"));
+  const first = await boot(s.url, data);
+  const phone = await joinByDigits(s.url);
+  await phone.revoke(first.device.machine as string);
+  first.stop.abort();
+  const second = await boot(s.url, data);
+  expect(second.how).toBe("resumed");
+  expect(second.device.account).toBe(first.device.account);
+  expect(second.device.machine).not.toBe(first.device.machine as string);
+  const dir = await second.device.directory();
+  expect(dir.members.get(second.device.machine as string)?.active).toBe(true);
+  expect(dir.members.get("pixel")?.active).toBe(true);
+}, 60_000);
+
+for (const [broken, act] of [
+  ["a reviewer revoked the demo's device", (p, d) => p.revoke(d.id)],
+  ["a reviewer deleted the account", (p) => p.deleteAccount()],
+  ["the demo's keys were lost", (_p, _d, data) => rmSync(join(data, "device.json"))],
+] as [
+  string,
+  (phone: Awaited<ReturnType<typeof joinByDigits>>, device: DemoDevice, data: string) => unknown,
+][])
+  test(`a restart after ${broken} starts a fresh account`, async () => {
+    const s = await serve(true);
+    cleanup.push(s.stop);
+    const data = mkdtempSync(join(tmpdir(), "starbridge-demo-"));
+    const first = await boot(s.url, data);
+    const phone = await joinByDigits(s.url);
+    await act(phone, first.device, data);
+    first.stop.abort();
+    first.machine.stop();
+    const second = await boot(s.url, data);
+    expect(second.how).toBe("fresh");
+    expect(second.device.account).not.toBe(first.device.account);
+    const dir = await second.device.directory();
+    expect(dir.members.get(second.device.machine as string)?.active).toBe(true);
+  }, 60_000);
