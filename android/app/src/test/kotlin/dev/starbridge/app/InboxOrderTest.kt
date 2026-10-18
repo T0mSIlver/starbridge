@@ -4,6 +4,7 @@ import dev.starbridge.app.data.Decision
 import dev.starbridge.app.data.Prompt
 import dev.starbridge.app.data.Source
 import dev.starbridge.app.ui.inbox.needYou
+import dev.starbridge.app.widget.NeedsYou
 import dev.starbridge.app.ui.inbox.openQuestions
 import dev.starbridge.app.ui.inbox.shownPrompts
 import org.junit.Assert.assertEquals
@@ -47,5 +48,12 @@ class InboxOrderTest {
         val snoozed = question("zz", 9).copy(snoozedUntil = now.plusSeconds(3600))
         val ended = prompt("ended", 3).copy(ended = "Allowed once", endedAt = now.minusSeconds(5))
         assertEquals(5, needYou(questions + snoozed, listOf(prompt("p", 0), ended), now))
+    }
+
+    // The home-screen widget counts what the badge counts; a waiting prompt blocks its agent (#1963).
+    @Test
+    fun widgetCountsAWaitingPromptAlone() {
+        assertEquals(NeedsYou(open = 1, waiting = 1), NeedsYou.of(emptyList(), listOf(prompt("p", 0)), now))
+        assertEquals(NeedsYou(open = 2, waiting = 1), NeedsYou.of(listOf(question("q", 1)), listOf(prompt("p", 0)), now))
     }
 }
