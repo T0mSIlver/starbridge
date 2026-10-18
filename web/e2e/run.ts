@@ -108,6 +108,20 @@ async function follow(page: Page, link: Locator, path: string) {
   }
 }
 
+/** The first Tab reaches a skip link, shown only now, and Enter on it focuses the page's main. */
+async function skipToContent(page: Page) {
+  const skip = page.getByRole("link", { name: "Skip to content" });
+  const rect = () => skip.evaluate((a) => a.getBoundingClientRect().bottom);
+  if ((await rect()) > 0) throw new Error("the skip link shows before the keyboard reaches it");
+  await page.locator("body").press("Tab");
+  if (!(await skip.evaluate((a) => a === document.activeElement)))
+    throw new Error("the first Tab does not reach the skip link");
+  if ((await rect()) <= 0) throw new Error("the skip link stays hidden on focus");
+  await page.keyboard.press("Enter");
+  if ((await page.evaluate(() => document.activeElement?.id)) !== "main")
+    throw new Error("the skip link does not focus the main content");
+}
+
 /**
  * Picks an option of a Settings segmented control. Its radio hides inside the segment, which
  * takes the click. Right after a navigation the click now and then leaves the radio as it was
@@ -488,6 +502,20 @@ async function main() {
       "/sample",
     ])
       await visitor.goto(ORIGIN + path, { waitUntil: "networkidle" });
+    step("docs: code blocks scroll from the keyboard, and a skip link leads past the nav (#1944)");
+    await visitor.goto(`${ORIGIN}/docs/cli`);
+    const blocks = await visitor
+      .locator("article pre")
+      .evaluateAll((pres) =>
+        pres.map((p) => [
+          p.getAttribute("tabindex"),
+          p.getAttribute("role"),
+          p.getAttribute("aria-label"),
+        ]),
+      );
+    if (blocks.length === 0 || blocks.some(([i, r, l]) => i !== "0" || !r || !l))
+      throw new Error(`a docs code block is not keyboard-scrollable: ${JSON.stringify(blocks)}`);
+    await skipToContent(visitor);
     await visitor.close();
   }
 
@@ -508,6 +536,8 @@ async function main() {
   if (!/^([0-9A-Z]{4}){7}$/.test(key)) throw new Error(`expected a recovery key, got: ${key}`);
   await noWordsAsked(page);
   await shoot(page, "setup");
+  if ((await page.locator('header a[href="/"]').count()) !== 1)
+    throw new Error("the first-run page's brand link is outside a header landmark");
   await page.setViewportSize({ width: 1280, height: 860 });
   await page.emulateMedia({ colorScheme: "light" });
   await page.getByLabel(/I wrote this key down/).check();
@@ -516,6 +546,8 @@ async function main() {
   // No machine yet: the inbox says how to add one (#610).
   await page.getByRole("heading", { name: "Add a machine" }).waitFor();
   await shoot(page, "inbox-empty");
+  step("the app's skip link leads past the rail (#1944)");
+  await skipToContent(page);
 
   step("turn on Web Push");
   await page.getByRole("button", { name: "Turn on notifications" }).click();
