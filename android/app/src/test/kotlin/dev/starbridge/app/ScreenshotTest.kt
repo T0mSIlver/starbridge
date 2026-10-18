@@ -344,9 +344,10 @@ class ScreenshotTest(private val dark: Boolean) {
         }
     }
 
+    // The version is pinned: the default, BuildConfig.VERSION_NAME, changes with every release bump.
     @Composable
     private fun NotificationsOffSettings(inbox: InboxView) =
-        SettingsScreen(fake.windows, QuotaSettings(), fake.members.size, Colours.Starbridge, fake.push, "https://starbridge.run", settingsActions, inbox = inbox, notificationsOff = true)
+        SettingsScreen(fake.windows, QuotaSettings(), fake.members.size, Colours.Starbridge, fake.push, "https://starbridge.run", settingsActions, inbox = inbox, notificationsOff = true, version = "0.1.8-rc.3")
 
     private fun notifications() = compose.onNode(hasScrollToNodeAction()).performScrollToNode(hasText("Notifications delivered through"))
 

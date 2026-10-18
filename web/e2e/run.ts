@@ -1102,6 +1102,44 @@ async function main() {
       const items = await list.getByRole("listitem").count();
       if (items === 0 || rows > 0) throw new Error(`${items} list items, ${rows} rows outside one`);
     }
+    step("the inbox splitter shows an accent line on keyboard focus, not on hover (#1974)");
+    {
+      const edge = page.getByRole("separator", { name: "Inbox width" });
+      const line = async () => {
+        await page.waitForTimeout(400); // past the line's fade
+        return edge.evaluate((el) => {
+          const probe = document.createElement("i");
+          probe.style.background = "var(--accent)";
+          document.body.append(probe);
+          const accent = getComputedStyle(probe).backgroundColor;
+          probe.remove();
+          const c = getComputedStyle(el, "::after");
+          return { color: c.backgroundColor, width: c.width, accent };
+        });
+      };
+      for (const scheme of ["light", "dark"] as const) {
+        await page.emulateMedia({ colorScheme: scheme });
+        await page.mouse.move(5, 5);
+        await edge.hover();
+        const hover = await line();
+        if (hover.color === hover.accent || hover.width !== "3px")
+          throw new Error(
+            `${scheme}: hover gives ${JSON.stringify(hover)}, not the 3px neutral line`,
+          );
+        await page.mouse.move(5, 5);
+        await page.keyboard.press("Tab");
+        await edge.focus();
+        if (!(await edge.evaluate((el) => el.matches(":focus-visible"))))
+          throw new Error(`${scheme}: the splitter is not :focus-visible`);
+        const focus = await line();
+        if (focus.color !== focus.accent || focus.width !== "5px")
+          throw new Error(
+            `${scheme}: keyboard focus gives ${JSON.stringify(focus)}, not a 5px accent line`,
+          );
+        await edge.evaluate((el) => (el as HTMLElement).blur());
+      }
+      await page.emulateMedia({ colorScheme: "light" });
+    }
     step("on a phone, Back closes an open question first; a reload and a link keep it (#347)");
     {
       const MERGE = "Merge #19 (server) before the web PR rebases?";
