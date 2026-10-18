@@ -1,4 +1,4 @@
-:root { color-scheme: light dark; --bg: #fafafa; --fg: #121212; --fg2: #5c5c5c; --line: #d6d6d6; --accent: #965700; }
+:root { color-scheme: light dark; --bg: #fafafa; --fg: #121212; --fg2: #5c5c5c; --line: #d6d6d6; --accent: #8f5300; }
 @media (prefers-color-scheme: dark) { :root { --bg: #0c0c0c; --fg: #f1f1f1; --fg2: #a3a3a3; --line: #333; --accent: #f5a83b; } }
 body { margin: 0; padding: 20px; background: var(--bg); color: var(--fg); font: 14px/1.4 -apple-system, system-ui, sans-serif; }
 label { display: block; font-weight: 500; margin-bottom: 6px; }

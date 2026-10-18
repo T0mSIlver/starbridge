@@ -56,6 +56,15 @@ class WallpaperContrastTest {
                 if (hint < 4.5) failures += "$scheme: fg3 on $ground %.2f < 4.5".format(hint)
                 val border = ratio(c.lineStrong, bg)
                 if (border < 3.0) failures += "$scheme: lineStrong on $ground %.2f < 3".format(border)
+                // Amber and red also read as text on their own tint over a ground (#2042).
+                for ((name, fg, soft) in listOf(
+                    Triple("accent", c.accent, c.accentSoft),
+                    Triple("warn", c.warn, c.warnSoft),
+                    Triple("bad", c.bad, c.badSoft),
+                )) {
+                    val onTint = ratio(fg, soft.compositeOver(bg))
+                    if (onTint < 4.5) failures += "$scheme: $name on its tint over $ground %.2f < 4.5".format(onTint)
+                }
             }
         }
         assertTrue(failures.joinToString("\n"), failures.isEmpty())
