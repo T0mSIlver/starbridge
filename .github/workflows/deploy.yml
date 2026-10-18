@@ -17,6 +17,9 @@ on:
       sha:
         description: The commit to deploy to starbridge.run, 40 hex characters; it must have passed on staging
         required: true
+      version:
+        description: The release this deploys, for the approval card; release.yml sets it, a hotfix leaves it out
+        required: false
 
 permissions: {}
 
@@ -279,6 +282,57 @@ jobs:
             -d "$(jq -n --arg u "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
               '{context: "staging", state: "success", description: "Deployed to staging; round trip passed", target_url: $u}')" >/dev/null
 
+  # starbridge.run's environment waits for the owner's approval (#2009), and the release waits for
+  # the deploy up to 12 hours (#2076). This job sends the owner a Starbridge card with the run's
+  # link as the deploy starts waiting, and `settle` closes it when the run ends. It reads the
+  # CI_CARD_MACHINE secret of the `ci-card` environment, a Starbridge machine of its own (docs/ci.md,
+  # "Approval cards"); without it the job only prints the link. It holds no key to anything else,
+  # and a failed card never stops the deploy.
+  ask:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    environment: ci-card
+    outputs:
+      id: ${{ steps.ask.outputs.id }}
+    steps:
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+      - id: ask
+        env:
+          STARBRIDGE_MACHINE: ${{ secrets.CI_CARD_MACHINE }}
+          GH_TOKEN: ${{ github.token }}
+          REV: ${{ inputs.sha }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          run_url=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID
+          echo "starbridge.run waits for your approval: $run_url"
+          if [ -z "$STARBRIDGE_MACHINE" ]; then
+            echo "::notice::No CI_CARD_MACHINE secret in the ci-card environment: no card sent."
+            exit 0
+          fi
+          # The inputs go into text, not a shell: only a full commit id and a release number pass.
+          case $REV in *[!0-9a-f]* | "") exit 0 ;; esac
+          [ ${#REV} -eq 40 ] || exit 0
+          printf '%s' "$VERSION" | grep -Eqx '([0-9]+\.[0-9]+\.[0-9]+(-rc\.[0-9]+)?)?' || VERSION=
+          short=$(printf '%.7s' "$REV")
+          subject=$(curl -fsS -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' \
+            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/commits/$REV" | jq -r '.commit.message | split("\n")[0]') || subject=
+          name=${VERSION:+v$VERSION}
+          context="Ships ${name:+$name, }commit $short${subject:+: $subject}."
+          if [ -n "$VERSION" ]; then
+            context="$context The release gives up waiting 12 hours after this deploy started, at about $(date -u -d '+12 hours' '+%H:%M UTC'), and publishes nothing."
+          fi
+          context="$context Approve it on the run page, linked here; this card does not approve it, and closes when the run ends."
+          npm install -g starbridge >/dev/null 2>&1 || { echo "::warning::starbridge did not install: no card sent."; exit 0; }
+          id=$(starbridge ask --waiting --project starbridge --link "$run_url" \
+            --question "Approve the prod deploy of ${name:-$short}?" \
+            --context "$context" --option Approved --option "Not now") || { echo "::warning::The card was not sent."; exit 0; }
+          echo "id=$id" >> "$GITHUB_OUTPUT"
+
   # starbridge.run, by dispatch only: release.yml for each rc tag, the owner for a hotfix. It waits
   # for the commit's `staging` status, up to an hour, as an rc tag can follow its merge by minutes,
   # and deploys only on success.
@@ -368,3 +422,29 @@ jobs:
           printf '%s\n' "$SMOKE_KNOWN_HOSTS" > "$RUNNER_TEMP/smoke-known-hosts"
           ssh -i "$RUNNER_TEMP/smoke-key" -o IdentitiesOnly=yes -o UserKnownHostsFile="$RUNNER_TEMP/smoke-known-hosts" \
             -o StrictHostKeyChecking=yes -o ConnectTimeout=20 -o ServerAliveInterval=15 "$SMOKE_TARGET"
+
+  # Closes the card when the run ends, approved or not: the owner's approval happens on the run
+  # page, which the card cannot see.
+  settle:
+    needs: [ask, deploy]
+    if: ${{ always() && needs.ask.outputs.id != '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions: {}
+    environment: ci-card
+    steps:
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+      - env:
+          STARBRIDGE_MACHINE: ${{ secrets.CI_CARD_MACHINE }}
+          ID: ${{ needs.ask.outputs.id }}
+          RESULT: ${{ needs.deploy.result }}
+        run: |
+          case $ID in *[!A-Za-z0-9_-]* | "") exit 0 ;; esac
+          npm install -g starbridge >/dev/null 2>&1 || exit 0
+          if [ "$RESULT" = success ]; then
+            starbridge settle "$ID" --outcome elsewhere --reason "Approved and deployed" || true
+          else
+            starbridge settle "$ID" --outcome withdrawn --reason "The deploy ended: $RESULT" || true
+          fi

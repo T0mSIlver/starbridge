@@ -32,8 +32,9 @@ permissions:
 jobs:
   version:
     runs-on: ${{ vars.TRUSTED_RUNNER && fromJSON(vars.TRUSTED_RUNNER) || 'ubuntu-latest' }}
-    # The wait for starbridge.run below is limited to 120 minutes.
-    timeout-minutes: 130
+    # The wait for starbridge.run below is limited to 12 hours: the deploy waits for the owner's
+    # approval (#2009), who gets a card (#2076).
+    timeout-minutes: 740
     # An rc dispatches deploy.yml.
     permissions:
       actions: write
@@ -80,13 +81,14 @@ jobs:
         name: Deploy the rc to starbridge.run
         env:
           GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.v.outputs.version }}
         run: |
           curl -fsS -X POST -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' \
             "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/actions/workflows/deploy.yml/dispatches" \
-            -d "$(jq -n --arg sha "$(git rev-parse HEAD)" '{ref: "main", inputs: {sha: $sha}}')"
+            -d "$(jq -n --arg sha "$(git rev-parse HEAD)" --arg v "$VERSION" '{ref: "main", inputs: {sha: $sha, version: $v}}')"
       - if: startsWith(github.ref, 'refs/tags/v')
         name: starbridge.run runs this release's commit
-        timeout-minutes: 120
+        timeout-minutes: 720
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ steps.v.outputs.version }}
