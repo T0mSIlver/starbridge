@@ -336,6 +336,9 @@ data class Source(
 /** An image's blob, as base64url, at most (BLOB_MAX in schemas.ts). */
 const val BLOB_MAX = 512 * 1024 + 64
 
+/** An answer's text at most (ANSWER_TEXT_MAX in schemas.ts). */
+const val ANSWER_TEXT_MAX = 4000
+
 /** PNG or JPEG only: never SVG, which can carry script (DecisionImage in schemas.ts). */
 val IMAGE_TYPES = setOf("image/png", "image/jpeg")
 private val HTTPS_URL_RE = Regex("^https://[\\x21-\\x7e]+$")
@@ -448,7 +451,7 @@ data class Answer(
         id(to, "to")
         time(answeredAt, "answeredAt")
         choice?.let { len(it, 0, 100, "choice") }
-        text?.let { len(it, 0, 4000, "text") }
+        text?.let { len(it, 0, ANSWER_TEXT_MAX, "text") }
         done?.let { schema(it, "done is true or absent") }
         schema(listOfNotNull(choice, text, done).size == 1, "exactly one of choice, text and done")
     }
@@ -575,7 +578,7 @@ data class Settled(
         time(at, "at")
         schema((outcome == "device") == (device != null), "device is set exactly when outcome is device")
         choice?.let { len(it, 0, 100, "choice") }
-        text?.let { len(it, 0, 4000, "text") }
+        text?.let { len(it, 0, ANSWER_TEXT_MAX, "text") }
         behavior?.let { schema(it == "allow" || it == "deny", "behavior") }
         schema(behavior == null || outcome == "device", "behavior comes only with a device's outcome")
         schema(reason == null || outcome == "withdrawn", "reason comes only with outcome withdrawn")
