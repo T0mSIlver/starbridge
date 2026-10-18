@@ -90,12 +90,14 @@ private struct MemberRow: View {
     let info: DeviceInfo
     let now: Date
     let onRevoke: () -> Void
+    /** The symbol's column, which grows with it so a large text size keeps it inside the row (#1947). */
+    @ScaledMetric private var symbolWidth: CGFloat = 28
 
     var body: some View {
         HStack(spacing: Tokens.Spacing.s4) {
             Image(systemName: memberSymbol(row, client: info.clients[row.id]))
                 .scaledFont(size: 20)
-                .frame(width: 28)
+                .frame(width: symbolWidth)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
                 Text(row.name).type(Tokens.Typography.body)

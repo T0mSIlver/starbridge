@@ -90,6 +90,8 @@ struct MetaRow: View {
                     .fontWeight(clock ? .medium : .regular)
                     .foregroundStyle(clock ? Tokens.Colors.accent.color : Tokens.Colors.fg2.color)
                     .lineLimit(1)
+                    // The time stays whole; the machine and repo give way at large text sizes (#1947).
+                    .fixedSize()
             }
         }
         .type(Tokens.Typography.machine)
