@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
-import { chmodSync, existsSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { AutoUpdate } from "../src/agent/autoupdate";
 import { Runs } from "../src/agent/runs";
@@ -203,6 +204,52 @@ test.skipIf(WINDOWS)(
     await until(() => readFileSync(join(ctx.store.dir, "update.log"), "utf8") !== "");
     expect(readFileSync(join(ctx.store.dir, "update.log"), "utf8")).toBe("starbridge update\n");
     expect(await launchUpdate(ctx, join(ctx.store.dir, "missing"))).toContain("ENOENT");
+  },
+);
+
+test.skipIf(WINDOWS)(
+  "under systemd, launchUpdate runs the update in a unit of its own, with the agent's places and nothing else (#1266)",
+  async () => {
+    const bin = mkdtempSync(join(tmpdir(), "starbridge-bin-"));
+    const log = join(bin, "systemd-run.log");
+    // Starts the command after `--` with only the variables named by -E, as a transient unit gets
+    // the user manager's environment plus those.
+    writeFileSync(
+      join(bin, "systemd-run"),
+      `#!/bin/sh
+echo "$@" >>"${log}"
+[ -n "$FAKE_FAIL" ] && { echo "Failed to connect to bus: No medium found" >&2; exit 1; }
+keep=""
+while [ "$1" != "--" ]; do [ "$1" = "-E" ] && { shift; keep="$keep $1=$(printenv "$1")"; }; shift; done
+shift
+env -i $keep "$@"
+`,
+      { mode: 0o755 },
+    );
+    const env = {
+      INVOCATION_ID: "0123",
+      PATH: `${bin}:${process.env.PATH ?? ""}`,
+      STARBRIDGE_CONFIG_DIR: "/srv/starbridge",
+      SECRET: "agent-only",
+    };
+    const ctx = testCtx(env);
+    const binary = join(ctx.store.dir, "star bridge");
+    writeFileSync(binary, '#!/bin/sh\necho "starbridge $1 $STARBRIDGE_CONFIG_DIR [$SECRET]"\n');
+    chmodSync(binary, 0o755);
+    expect(await launchUpdate(ctx, binary)).toBeUndefined();
+    expect(readFileSync(join(ctx.store.dir, "update.log"), "utf8")).toBe(
+      "starbridge update /srv/starbridge []\n",
+    );
+    const [call] = readFileSync(log, "utf8").trim().split("\n");
+    expect(call).toStartWith("--user --collect --quiet ");
+    expect(call).toContain("-E PATH");
+    expect(call).toContain("-E STARBRIDGE_CONFIG_DIR");
+    expect(call).not.toContain("SECRET");
+
+    const failing = testCtx({ ...env, FAKE_FAIL: "1" });
+    expect(await launchUpdate(failing, binary)).toBe(
+      "systemd-run: Failed to connect to bus: No medium found",
+    );
   },
 );
 
