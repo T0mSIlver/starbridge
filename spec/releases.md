@@ -370,7 +370,7 @@ the window's screens in light and dark from its end-to-end run (#1846). No model
   the evidence and judges it. A fork's pull request gets no comment, since the job writes to the
   repository.
 - **CI runners** (#146, #1204, #1213, #1638). Self-hosted Linux runners in two pools that never
-  share a box: `trusted` runs main's tests, uptime checks, the release's version
+  share a box: `trusted` runs main's tests, the release's version
   check and the nightly flaky-test count (#1657); `pr` runs the
   test and image jobs of a pull request from this repository's own branches, so they start sooner
   than on GitHub's runners. The e2e stays on GitHub's runners: its three parts per run queued a
@@ -390,7 +390,9 @@ the window's screens in light and dark from its end-to-end run (#1846). No model
   hence the separate boxes (#1718). A fork's pull request runs its
   own `ci.yml`, which could name any label, so a fork's run is never approved.
 - **Monitoring.** `uptime.yml` checks `/healthz`, `/healthz/backup` (fails when the last nightly
-  backup is over 26 h old) and `/healthz/disk` (under 2 GB free), and opens one `outage` issue.
+  backup is over 26 h old) and `/healthz/disk` (under 2 GB free), and opens one `outage` issue. It runs on GitHub's runner, never on a self-hosted pool: a monitor
+  must not share the network of the boxes it watches (#2010, dark for 2.9 days in the 15 to 18 Oct
+  fibre outage). sb-ops-watch on sb-oracle alerts when it has finished no run for 3 hours.
 - **Vulnerability scans** (#1542). `scan.yml` runs Trivy on the server and web images that
   starbridge.run and staging serve, as their `/healthz` names them, after every deploy run that
   was not skipped and weekly, since advisories appear after a build. Not the deploy run's own commit, which can be
