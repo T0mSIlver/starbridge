@@ -1325,6 +1325,35 @@ async function main() {
     for (const label of ["Left", "Resets 14:20", "5"]) await choose(page, label);
     await shoot(page, "settings");
 
+    step("settings: each radio group is one group to the keyboard (#1941)");
+    const groups = page.getByRole("radiogroup");
+    const names = new Set<string>();
+    for (const group of await groups.all()) {
+      const named = await group
+        .locator('input[type="radio"]')
+        .evaluateAll((radios) => radios.map((r) => (r as HTMLInputElement).name));
+      if (named.some((n) => n === "" || n !== named[0]))
+        throw new Error(`a radio group's radios do not share one name: ${named.join(", ")}`);
+      if (names.has(named[0])) throw new Error(`two radio groups share the name ${named[0]}`);
+      names.add(named[0]);
+    }
+    // Arrows move and pick within a group; the next one returns it to what it was.
+    const sound = groups.filter({ has: page.getByLabel("Left", { exact: true }) });
+    const was = await sound
+      .locator(":checked")
+      .evaluate((r) => (r as HTMLInputElement).labels?.[0]?.textContent);
+    await sound.locator(":checked").focus();
+    await page.keyboard.press("ArrowRight");
+    const moved = await sound
+      .locator(":checked")
+      .evaluate((r) => (r as HTMLInputElement).labels?.[0]?.textContent);
+    await page.keyboard.press("ArrowLeft");
+    const back = await sound
+      .locator(":checked")
+      .evaluate((r) => (r as HTMLInputElement).labels?.[0]?.textContent);
+    if (moved === was || back !== was)
+      throw new Error(`arrows in a radio group: was ${was}, moved to ${moved}, back to ${back}`);
+
     step("the Version row shows the build's version and copies it (#1892)");
     const version = JSON.parse(readFileSync(join(WEB, "package.json"), "utf8")).version;
     const versionRow = page.getByRole("button", { name: /^Version / });
