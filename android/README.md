@@ -7,6 +7,9 @@ Jetpack Compose, Material 3 Expressive, Hilt and Navigation 3.
   chain, pairing, the recovery key), checked against its test vectors.
 - `data/`: the server API and `ServerStore`, which verifies the directory
   against its pin and every item against the directory before showing it.
+  The store holds the session, the keys and the sync loop; each kind of item
+  (decisions, prompts, quotas, runs, join requests) keeps its own part in a
+  `*Kind.kt` module behind `ItemKind`, which the store drives.
   Private keys, the session and the decrypted state are wrapped by an Android
   Keystore key that does not need an unlocked screen, so notification buttons
   answer from the lock screen.
