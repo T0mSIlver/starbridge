@@ -275,4 +275,9 @@ test("status names the setting, the last update and the last failure (#1266)", a
   ]);
   ctx.store.saveAgentConfig({ updates: { auto: false } });
   expect(updateLines(ctx, binary)[0]).toBe("Updates: off (`starbridge config updates on`)");
+  // Off because the update check is: the line says how to turn that back on (#2037).
+  ctx.store.saveAgentConfig({ updateCheck: { enabled: false } });
+  expect(updateLines(ctx, binary)[0]).toBe(
+    "Updates: off while the update check is off (`starbridge config update-check on`)",
+  );
 });
