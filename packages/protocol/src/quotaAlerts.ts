@@ -3,10 +3,18 @@ import type { QuotaAlert } from "./schemas";
 /**
  * Which quota alerts a device notifies about, per window (#914). The uploader raises every alert
  * at fixed levels (`alertsFor`), so each device filters them by these settings, which stay on it;
- * Android and the web share this rule and its vectors.
+ * every client shares this rule and its vectors.
  */
 export const QUOTA_ALERT_CHOICES = ["runs-out", "low-50", "low-20", "unused-headroom"] as const;
 export type QuotaAlertChoice = (typeof QUOTA_ALERT_CHOICES)[number];
+
+/** Each choice's name, as the alerts table heads its column. */
+export const QUOTA_ALERT_LABELS: Record<QuotaAlertChoice, string> = {
+  "runs-out": "Runs out",
+  "low-50": "50% left",
+  "low-20": "20% left",
+  "unused-headroom": "Unused",
+};
 
 export type QuotaAlertSettings = {
   /** Windows of a day or less. */
@@ -15,8 +23,8 @@ export type QuotaAlertSettings = {
   long: QuotaAlertChoice[];
   /**
    * A window's own choices, by `provider/window`, where an empty list is off. A key with no
-   * window covers every window of its provider that has no key of its own; only settings from
-   * before #914 write one.
+   * window covers every window of its provider that has no key of its own; only settings moved
+   * from before #914, by releases up to 0.1.8, hold one.
    */
   windows: Record<string, QuotaAlertChoice[]>;
 };
@@ -63,22 +71,25 @@ export function wantsQuotaAlert(
 }
 
 /**
- * Settings from before #914: a bell per provider, and two switches for every provider whose bell
- * was on, "runs low" (50% and 20% left) and "runs out" (which also covered unused headroom).
- * Each provider with its bell on keeps what the switches let through; the others get the defaults.
+ * The settings with a window's own choices, or with none to follow its length's. A provider's key
+ * first becomes a key per window of `all`, so the provider's other windows keep it.
  */
-export function migrateQuotaAlerts(old: {
-  notify: string[];
-  notifyLow?: boolean;
-  notifyPace?: boolean;
-}): QuotaAlertSettings {
-  const kept: QuotaAlertChoice[] = [
-    ...(old.notifyPace !== false ? (["runs-out"] as const) : []),
-    ...(old.notifyLow !== false ? (["low-50", "low-20"] as const) : []),
-    ...(old.notifyPace !== false ? (["unused-headroom"] as const) : []),
-  ];
-  return {
-    ...DEFAULT_QUOTA_ALERTS,
-    windows: Object.fromEntries(old.notify.map((p) => [p, kept])),
-  };
+export function withWindowAlerts(
+  s: QuotaAlertSettings,
+  provider: string,
+  window: string,
+  all: { provider: string; window: string }[],
+  picked: QuotaAlertChoice[] | undefined,
+): QuotaAlertSettings {
+  const windows = { ...s.windows };
+  const shared = windows[provider];
+  if (shared) {
+    for (const o of all)
+      if (o.provider === provider) windows[quotaWindowKey(o.provider, o.window)] ??= shared;
+    delete windows[provider];
+  }
+  const key = quotaWindowKey(provider, window);
+  if (picked) windows[key] = picked;
+  else delete windows[key];
+  return { ...s, windows };
 }

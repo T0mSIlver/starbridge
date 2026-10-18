@@ -1,8 +1,9 @@
 // A quota window's state, as words (DESIGN.md, "Rules"): the status word carries the state in
 // its colour, and the time it is about. A window whose reset passed is over until the next
 // upload, which says when it reset, and a run-out time that passed reads "Ran out".
+import { QUOTA_STATE_WORDS, quotaState } from "@starbridge/protocol";
 import { relative } from "./format";
-import { clock, clockAt, type QuotaSettings } from "./quotaSettings";
+import { clock, clockAt, place, type QuotaSettings } from "./quotaSettings";
 import type { QuotaAlert, QuotaWindow } from "./types";
 
 /** The colour of the word: grey on pace, amber with headroom unused, red when it runs out. */
@@ -31,25 +32,19 @@ export function status(
   s: Pick<QuotaSettings, "absoluteResets">,
   now = new Date(),
 ): Status {
-  if (w.resetsAt && Date.parse(w.resetsAt) <= now.getTime())
-    return {
-      state: "unknown",
-      word: "Window reset",
-      // Always "12 min ago": a bare clock time would read as the next reset.
-      reset: relative(w.resetsAt, now),
-    };
+  const at = place(w, alert?.kind === "unused-headroom");
+  const state = quotaState(at, now);
+  const word = QUOTA_STATE_WORDS[state];
+  // Always "12 min ago": a bare clock time would read as the next reset.
+  if (state === "reset") return { state: "unknown", word, reset: relative(w.resetsAt ?? "", now) };
   const reset = w.resetsAt ? when(w.resetsAt, s, now) : "";
-  if (!w.pace || w.pace.stage === "unknown")
-    return { state: "unknown", word: "Too early to tell", reset };
-  if (!w.pace.willLastToReset) {
-    const at = w.pace.runsOutAt;
-    if (at && Date.parse(at) <= now.getTime())
-      return { state: "ran-out", word: `Ran out ${clockAt(at, now)}`, reset };
-    if (!at) return { state: "out", word: "Will run out", reset };
+  if (state === "ran-out")
+    return { state, word: `${word} ${clockAt(at.runsOutAt ?? "", now)}`, reset };
+  if (state === "out") {
+    const runsOutAt = at.runsOutAt ?? "";
     // "in 50 min", or "at 14:20", "tomorrow at 07:20", "on Oct 8 at 10:15".
-    const by = s.absoluteResets ? clockAt(at, now) : relative(at, now);
-    return { state: "out", word: `Will run out ${by}`, reset };
+    const by = s.absoluteResets ? clockAt(runsOutAt, now) : relative(runsOutAt, now);
+    return { state, word: `${word} ${by}`, reset };
   }
-  if (alert?.kind === "unused-headroom") return { state: "unused", word: "Headroom unused", reset };
-  return { state: "ok", word: "On pace", reset };
+  return { state, word, reset };
 }

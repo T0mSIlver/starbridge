@@ -41,6 +41,13 @@ import dev.starbridge.app.protocol.pairingLink
 import dev.starbridge.app.protocol.parsePairingCode
 import dev.starbridge.app.protocol.toB64
 import dev.starbridge.app.data.QuotaAlerts
+import dev.starbridge.app.protocol.Pace
+import dev.starbridge.app.protocol.QuotaState
+import dev.starbridge.app.protocol.arrangeQuotas
+import dev.starbridge.app.protocol.quotaCourse
+import dev.starbridge.app.protocol.quotaRunningOut
+import dev.starbridge.app.protocol.quotaState
+import java.time.Instant
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
@@ -63,7 +70,7 @@ import java.io.File
 /** The vector files these tests read; [ProtocolVectorsTest.everyVectorFileIsRead] keeps it whole. */
 private val READ = setOf(
     "context.json", "directory.json", "envelopes.json", "heads.json", "images.json", "join.json",
-    "keys.json", "links.json", "pairing.json", "quota-alerts.json", "schemas.json",
+    "keys.json", "links.json", "pairing.json", "quota-alerts.json", "quotas.json", "schemas.json",
 )
 
 /** Vector files only the machine's code runs: the local agent computes pace and alerts (#1147). */
@@ -446,12 +453,13 @@ class ProtocolVectorsTest {
         }
     }
 
-    // quota-alerts.json (#914): which quota alerts notify, per window, and the old settings' move.
+    // quota-alerts.json (#914): which quota alerts notify, per window, the table's column names, and a window's own choices.
     @Test fun quotaAlerts() {
         val v = load("quota-alerts.json")
         val json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
         fun alerts(e: JsonElement) = json.decodeFromJsonElement(QuotaAlerts.serializer(), e)
         assertEquals(alerts(v.getValue("defaults")), QuotaAlerts())
+        assertEquals(v.getValue("labels").jsonArray.map { it.jsonArray.let { p -> p[0].str to p[1].str } }, QuotaAlerts.LABELS)
         for (c in v.getValue("cases").jsonArray.map { it.jsonObject }) {
             val a = c.getValue("alert").jsonObject
             val wants = alerts(c.getValue("settings")).wants(
@@ -461,11 +469,50 @@ class ProtocolVectorsTest {
             )
             assertEquals(c.str("name"), c.getValue("expect").jsonPrimitive.boolean, wants)
         }
-        for (c in v.getValue("migrate").jsonArray.map { it.jsonObject }) {
-            val old = c.getValue("old").jsonObject
-            val flag = { k: String -> old.opt(k)?.jsonPrimitive?.boolean ?: true }
-            val migrated = QuotaAlerts.migrate(old.getValue("notify").jsonArray.map { it.str }, flag("notifyLow"), flag("notifyPace"))
-            assertEquals(c.str("name"), alerts(c.getValue("expect")), migrated)
+        for (c in v.getValue("with").jsonArray.map { it.jsonObject }) {
+            val all = c.getValue("all").jsonArray.map { it.jsonObject.let { w -> w.str("provider") to w.str("window") } }
+            val got = alerts(c.getValue("settings")).with(c.str("provider"), c.str("window"), all, c.opt("picked")?.jsonArray?.map { it.str })
+            assertEquals(c.str("name"), alerts(c.getValue("expect")), got)
+        }
+    }
+
+    // quotas.json (#1904): a window's course, state and words, and the order windows come in.
+    @Test fun quotas() {
+        val v = load("quotas.json")
+        val now = Instant.parse(v.str("now"))
+        fun pace(e: JsonElement?) = e?.takeIf { it !is JsonNull }?.let { ProtocolJson.decodeFromJsonElement(Pace.serializer(), it) }
+        fun instant(e: JsonElement?) = e?.takeIf { it !is JsonNull }?.let { Instant.parse(it.str) }
+        val words = v.getValue("words").jsonObject
+        fun id(e: Enum<*>) = e.name.lowercase().replace('_', '-')
+        assertEquals(words.keys, QuotaState.entries.map(::id).toSet())
+        for (s in QuotaState.entries) assertEquals(words.str(id(s)), s.word)
+        for (c in v.getValue("state").jsonArray.map { it.jsonObject }) {
+            val p = pace(c["pace"])
+            val course = quotaCourse(p, c.getValue("unusedAlert").jsonPrimitive.boolean)
+            val resetsAt = instant(c["resetsAt"])
+            val state = quotaState(course, p?.runsOutAt?.let(Instant::parse), resetsAt, now)
+            val expect = c.getValue("expect").jsonObject
+            val name = c.str("name")
+            assertEquals(name, expect.str("course"), id(course))
+            assertEquals(name, expect.str("state"), id(state))
+            assertEquals(name, expect.str("word"), state.word)
+            assertEquals(name, expect.getValue("runningOut").jsonPrimitive.boolean, quotaRunningOut(course, resetsAt, now))
+        }
+        val arrange = v.getValue("arrange").jsonObject
+        val windows = arrange.getValue("windows").jsonArray.map { it.jsonObject }
+        val names = java.text.Collator.getInstance()
+        for (c in arrange.getValue("cases").jsonArray.map { it.jsonObject }) {
+            val got = arrangeQuotas(
+                windows,
+                c.getValue("order").jsonArray.map { it.str },
+                c.getValue("hidden").jsonArray.map { it.str },
+                c.getValue("runningOutFirst").jsonPrimitive.boolean,
+                provider = { it.str("provider") },
+                machine = { it.opt("machine")?.str },
+                runningOut = { quotaRunningOut(quotaCourse(pace(it["pace"]), false), instant(it["resetsAt"]), now) },
+                names = { a, b -> names.compare(a, b) },
+            )
+            assertEquals(c.str("name"), c.getValue("expect").jsonArray.map { it.str }, got.map { it.str("id") })
         }
     }
 }

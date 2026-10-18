@@ -3,9 +3,13 @@
 // nothing of them. Android keeps the same set (QuotaSettings.kt).
 
 import {
+  arrangeQuotas,
   DEFAULT_QUOTA_ALERTS,
-  migrateQuotaAlerts,
   type QuotaAlertSettings,
+  type QuotaPlace,
+  quotaCourse,
+  quotaProviders,
+  quotaRunningOut,
   wantsQuotaAlert,
 } from "@starbridge/protocol";
 import { desktop } from "./desktop";
@@ -41,18 +45,12 @@ export const DEFAULT_SETTINGS: QuotaSettings = {
 };
 
 /**
- * Settings as stored, from this release or an older one: a provider bell and two switches before
- * #914, which become per-window alerts, and a tick style whose "Hidden" was ticks off.
+ * Settings as stored, from this release or an older one, whose tick style's "Hidden" was ticks
+ * off. The bell and switches of releases before #914 are dropped: their alerts are the defaults.
  */
 export function readSettings(stored: Record<string, unknown> | null): QuotaSettings {
-  const { notify, notifyLow, notifyPace, ticks, ...rest } = stored ?? {};
+  const { notify: _, notifyLow: __, notifyPace: ___, ticks, ...rest } = stored ?? {};
   const s = { ...DEFAULT_SETTINGS, ...(rest as Partial<QuotaSettings>) };
-  if (!rest.alerts && Array.isArray(notify))
-    s.alerts = migrateQuotaAlerts({
-      notify: notify as string[],
-      notifyLow: notifyLow as boolean | undefined,
-      notifyPace: notifyPace as boolean | undefined,
-    });
   if (ticks === "hidden") s.workDays = null;
   return s;
 }
@@ -113,9 +111,10 @@ export function keepHeldQuotas(account: string, held: boolean): void {
 
 /** Every provider the cards name, in the settings' order. */
 export function providerOrder(cards: QuotaCardData[], s: QuotaSettings): string[] {
-  const seen = [...new Set(cards.map((c) => c.provider))];
-  const known = s.order.filter((p) => seen.includes(p));
-  return [...known, ...seen.filter((p) => !known.includes(p))];
+  return quotaProviders(
+    cards.map((c) => c.provider),
+    s,
+  );
 }
 
 /**
@@ -128,10 +127,18 @@ export function reorder(order: string[], sequence: string[]): string[] {
   return order.map((p) => (moved.has(p) ? (sequence[next++] ?? p) : p));
 }
 
+/** A window as packages/protocol places and words it; `unused` when its card's alert says so. */
+export function place(w: QuotaWindow, unused = false): QuotaPlace {
+  return {
+    course: quotaCourse(w.pace, unused),
+    runsOutAt: w.pace?.runsOutAt ?? null,
+    resetsAt: w.resetsAt,
+  };
+}
+
 /** The window will run out or ran out, and has not reset: what `status` words in red. */
 export function runningOut(w: QuotaWindow, now: Date): boolean {
-  if (w.resetsAt && Date.parse(w.resetsAt) <= now.getTime()) return false;
-  return !!w.pace && w.pace.stage !== "unknown" && !w.pace.willLastToReset;
+  return quotaRunningOut(place(w), now);
 }
 
 /**
@@ -145,19 +152,11 @@ export function arrange(
   s: QuotaSettings,
   now = new Date(),
 ): QuotaCardData[] {
-  const rank = new Map(providerOrder(cards, s).map((p, i) => [p, i]));
-  const lead = (c: QuotaCardData) => (s.runningOutFirst && runningOut(c.window, now) ? 0 : 1);
-  return cards
-    .filter((c) => !s.hidden.includes(c.provider))
-    .map((c, i) => ({ c, i }))
-    .sort(
-      (a, b) =>
-        lead(a.c) - lead(b.c) ||
-        (rank.get(a.c.provider) ?? 0) - (rank.get(b.c.provider) ?? 0) ||
-        (a.c.machine ?? "").localeCompare(b.c.machine ?? "") ||
-        a.i - b.i,
-    )
-    .map(({ c }) => c);
+  return arrangeQuotas(cards, s, (c) => ({
+    provider: c.provider,
+    machine: c.machine,
+    runningOut: runningOut(c.window, now),
+  }));
 }
 
 export type QuotaGroup = {

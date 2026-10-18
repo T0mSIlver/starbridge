@@ -11,32 +11,22 @@ import dev.starbridge.app.protocol.Directory
 import dev.starbridge.app.protocol.DirectoryEntry
 import dev.starbridge.app.protocol.Envelopes
 import dev.starbridge.app.protocol.DirectoryHead
-import dev.starbridge.app.protocol.DecisionLink
 import dev.starbridge.app.protocol.Heads
 import dev.starbridge.app.protocol.Withheld
 import dev.starbridge.app.protocol.ItemBody
-import dev.starbridge.app.protocol.JoinApprovalBody
-import dev.starbridge.app.protocol.JoinKeys
 import dev.starbridge.app.protocol.JoinRequestBody
 import dev.starbridge.app.protocol.Joins
 import dev.starbridge.app.protocol.KeyPair
 import dev.starbridge.app.protocol.PairingApprovalBody
-import dev.starbridge.app.protocol.Permission
 import dev.starbridge.app.protocol.PairingCode
 import dev.starbridge.app.protocol.PairingRequestBody
 import dev.starbridge.app.protocol.Pairings
 import dev.starbridge.app.protocol.Pin
 import dev.starbridge.app.protocol.ProtocolException
 import dev.starbridge.app.protocol.ProtocolJson
-import dev.starbridge.app.protocol.QuotaSnapshot
-import dev.starbridge.app.protocol.RECOVERY
-import dev.starbridge.app.protocol.Run as RunBody
 import dev.starbridge.app.protocol.SealedBox
 import dev.starbridge.app.protocol.SealedItem
-import dev.starbridge.app.protocol.Settled
 import dev.starbridge.app.protocol.SIGNER_ROLE
-import dev.starbridge.app.protocol.Snooze
-import dev.starbridge.app.protocol.Waiting
 import dev.starbridge.app.protocol.SignedEnvelope
 import dev.starbridge.app.protocol.Sodium
 import dev.starbridge.app.protocol.bindMessage
@@ -61,26 +51,16 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.encodeToJsonElement
 import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.jsonPrimitive
-import kotlinx.serialization.json.put
-import kotlinx.serialization.json.add
-import kotlinx.serialization.json.putJsonArray
-import kotlinx.serialization.json.putJsonObject
 import okhttp3.OkHttpClient
 import java.io.IOException
 import java.net.URI
-import dev.starbridge.app.ui.span
 import java.time.Instant
-import java.time.OffsetDateTime
 import java.time.temporal.ChronoUnit
-import kotlin.math.roundToInt
-import dev.starbridge.app.protocol.Decision as DecisionBody
 import dev.starbridge.app.protocol.Member as DirectoryMember
-import dev.starbridge.app.protocol.ANSWER_TEXT_MAX
 import dev.starbridge.app.protocol.takeCodePoints
 
 /** Shows and clears notifications; the app's is [dev.starbridge.app.push.Notifier]. */
@@ -109,22 +89,6 @@ interface Alerts {
     fun failed(decision: Decision, why: String) {}
 }
 
-/** An answer this phone has yet to hand the server, and when it was given; null for one queued before #895. */
-private data class Tap(val answer: String, val at: Instant?)
-
-/** What became of an answer: sent, waiting for a connection, answered elsewhere, or refused. */
-sealed interface Sent {
-    /** The server took this device's answer, now or before: a second tap lands here (#331). */
-    data class Answered(val answer: String) : Sent
-    /**
-     * Kept on the phone until the server takes it; [AnswerWorker] sends it (#329). [offline] when
-     * the request never got an answer, rather than a 429 or 5xx (#1390).
-     */
-    data class Queued(val answer: String, val offline: Boolean = false) : Sent
-    data object Elsewhere : Sent
-    data class Failed(val why: String) : Sent
-}
-
 /** How long pull to refresh on Quotas waits for the machines' fresh snapshots. */
 private const val QUOTA_ASK_SECONDS = 25
 
@@ -151,7 +115,6 @@ class ServerStore(
     private val wakeWhenOnline: () -> Unit = {},
 ) : Store {
     private val lock = Mutex()
-    private val images = Images(sodium)
     private val loaded = disk.load()
     private var saved = loaded.first?.readable() ?: Saved(defaultServer)
     private var secrets = loaded.second
@@ -162,7 +125,6 @@ class ServerStore(
     private var pendingCheckKey: String? = null
     private var joinJob: Job? = null
     private var showJob: Job? = null
-    private var watchJob: Job? = null
     private var pollJob: Job? = null
 
     /** A push reached this app since it started: the server can deliver, so nothing polls (#445). */
@@ -173,27 +135,19 @@ class ServerStore(
 
     /** How often the app in front reads the items while no push has arrived. */
     internal var pollMs = 10_000L
-    private var compareJob: Job? = null
-    /** The join requests as last listed, by id, so comparing uses what was listed. */
-    private var joinViews = mapOf<String, JoinView>()
-    /** What comparing digits derived: the request, its body and the keys. */
-    private var compared: Triple<JoinView, JoinRequestBody, JoinKeys>? = null
 
     override val phase = MutableStateFlow<Phase>(Phase.SignedOut)
     override val joinLink = MutableStateFlow<String?>(null)
-    override val decisions = MutableStateFlow<List<Decision>>(emptyList())
-    override val prompts = MutableStateFlow<List<Prompt>>(emptyList())
-    override val windows = MutableStateFlow<List<QuotaWindow>>(emptyList())
-    override val quotaFailures = MutableStateFlow<List<QuotaFailure>>(emptyList())
-    override val quotasHeld = MutableStateFlow(false)
-
-    /** The server listed quota snapshots on the last read, even ones this phone cannot open yet. */
-    @Volatile private var quotasListed = false
-    override val runs = MutableStateFlow<List<Run>>(emptyList())
+    override val decisions: StateFlow<List<Decision>> get() = decisionKind.shown
+    override val prompts: StateFlow<List<Prompt>> get() = promptKind.shown
+    override val windows: StateFlow<List<QuotaWindow>> get() = quotaKind.windows
+    override val quotaFailures: StateFlow<List<QuotaFailure>> get() = quotaKind.failures
+    override val quotasHeld: StateFlow<Boolean> get() = quotaKind.held
+    override val runs: StateFlow<List<Run>> get() = runKind.shown
     override val members = MutableStateFlow<List<Member>>(emptyList())
     override val approval = MutableStateFlow<Approval>(Approval.Idle)
-    override val joinAsks = MutableStateFlow<List<JoinAsk>>(emptyList())
-    override val comparison = MutableStateFlow<Comparison>(Comparison.Idle)
+    override val joinAsks: StateFlow<List<JoinAsk>> get() = joinKind.asks
+    override val comparison: StateFlow<Comparison> get() = joinKind.comparison
     override val push = MutableStateFlow(PushSetting(saved.pushType, fcmAvailable, emptyList(), false))
     override val server = MutableStateFlow(saved.server)
     override val keepsKeys = MutableStateFlow(false)
@@ -232,16 +186,53 @@ class ServerStore(
     override val replacing = MutableStateFlow<Replacing>(Replacing.Idle)
     /** While a new recovery key is on screen: its key pair, and the current one. */
     private var replacement: Pair<KeyPair, KeyPair>? = null
-    /** Answers tapped but not yet sealed into [Saved.outbox]: the lock may be busy. */
-    private val tapped = java.util.concurrent.ConcurrentHashMap<String, Tap>()
-    /** Why the server refused this phone's last answer to a question, by decision id: its card says so. */
-    private val notSent = java.util.concurrent.ConcurrentHashMap<String, String>()
-    /** The decisions as saved, before this phone's unsent answers are laid over them ([showUnsent]). */
-    @Volatile private var savedDecisions: List<Decision> = emptyList()
+    /** What the item kinds use of this store; see [Core]. */
+    private val core = object : Core {
+        override val saved get() = this@ServerStore.saved
+        override fun persist(newSaved: Saved) = this@ServerStore.persist(newSaved)
+        override fun api() = this@ServerStore.api()
+        override val phase get() = this@ServerStore.phase
+        override val notice get() = this@ServerStore.notice
+        override val alerts get() = this@ServerStore.alerts
+        override val envelopes get() = this@ServerStore.envelopes
+        override val scope get() = this@ServerStore.scope
+        override val lock get() = this@ServerStore.lock
+        override val directory get() = this@ServerStore.directory
+        override val me get() = this@ServerStore.me
+        override val signKey get() = this@ServerStore.signKey
+        override fun now() = this@ServerStore.now()
+        override fun newId(prefix: String) = this@ServerStore.newId(prefix)
+        override fun describe(e: Exception) = this@ServerStore.describe(e)
+        override fun report(e: Exception, sync: Boolean) = this@ServerStore.report(e, sync = sync)
+        override fun withheld() = this@ServerStore.withheld()
+        override fun open(item: SealedItem) = this@ServerStore.open(item)
+        override suspend fun scan(items: List<SealedItem>) = this@ServerStore.scan(items)
+        override suspend fun catchUp(item: SealedItem) = this@ServerStore.catchUp(item)
+        override suspend fun syncDirectory() = this@ServerStore.syncDirectory()
+        override suspend fun pushed(kind: String, id: String, push: JsonObject, re: Boolean, wakeAt: Boolean): Pair<SealedItem, String?> {
+            val box = push["box"]?.jsonPrimitive?.content
+            if (box == null) return api().item(id).let { it.item to it.answeredAt }
+            val from = push.getValue("from").jsonPrimitive.content
+            return SealedItem(1, kind, id, from, if (re) push["re"]?.jsonPrimitive?.content else null, listOf(SealedBox(me.id, box)), if (wakeAt) push["wakeAt"]?.jsonPrimitive?.content else null) to null
+        }
+        override suspend fun addMember(joining: DirectoryMember, taken: String) = this@ServerStore.addMember(joining, taken)
+        override fun run(showBusy: Boolean, sync: Boolean, block: suspend () -> Unit) = this@ServerStore.run(showBusy, sync, block)
+        override suspend fun locked(showBusy: Boolean, block: suspend () -> Unit) = this@ServerStore.locked(showBusy, block = block)
+    }
+
+    private val decisionKind = DecisionKind(core, disk, Images(sodium), wakeWhenOnline)
+    private val promptKind = PromptKind(core, decisionKind::settle)
+    private val quotaKind = QuotaKind(core)
+    private val joinKind = JoinKind(core, joins)
+    private val runKind = RunKind(core)
+
+    /** Every kind of item, in the order a sync reads them. */
+    private val kinds: List<ItemKind> = listOf(decisionKind, promptKind, quotaKind, runKind, joinKind)
 
     init {
         ImageFiles.read = disk::image
-        moveImagesToFiles()
+        // Written before anything else, so the next launch reads the small file.
+        decisionKind.moveImagesToFiles(loaded.first != null && disk.unreadable.isEmpty()) { saved = it }
         directory = runCatching { verified(saved.entries) }.getOrNull()
         publish()
         if (saved.joining != null) waitForApproval()
@@ -299,36 +290,11 @@ class ServerStore(
         // A hold that ended takes its notice with it; only a confirmed one raises it.
         if (!held && notice.value != null && notice.value == shownHold) notice.value = null
         if (!held) heldRevoked.value = null
-        // A revoked machine's items leave, as on the web: nothing it asked can be answered (#344).
-        fun active(from: String) = directory?.members?.get(from)?.active != false
-        savedDecisions = if (held) emptyList() else saved.decisions.filter { active(it.from) }.map(::toUi)
-        prompts.value = if (held) emptyList() else saved.prompts.filter { active(it.from) }.map(::toUi)
-        // As the web: named once the account has more than one active machine.
-        val named = (directory?.members?.values?.count { it.active && it.member.role == "machine" } ?: 0) > 1
-        windows.value = if (held) emptyList() else saved.quotas.filter { active(it.from) }.flatMap { toUi(it, named) }
-        quotaFailures.value = if (held) emptyList() else saved.quotas.filter { active(it.from) }.flatMap { failures(it, named) }
-        quotasHeld.value = quotasListed || saved.quotas.isNotEmpty()
-        runs.value = if (held) emptyList() else saved.runs.filter { active(it.from) }.map(::toUi)
         members.value = directory?.let(::toUi).orEmpty()
         recovery.value = directory?.let(::recoveryUi)
-        showUnsent()
-    }
-
-    /**
-     * Lays this phone's unsent answers over the decisions: a question leaves the open list the
-     * moment it is answered, and comes back with [Decision.notSent] if the server refuses it (#895).
-     */
-    @Synchronized
-    private fun showUnsent() {
-        val unsent = saved.outbox.associate { it.decisionId to Tap(it.answer, instant(it.at)) } + tapped
-        decisions.value = savedDecisions.map { d ->
-            val tap = unsent[d.id]
-            when {
-                !d.isOpen -> d
-                tap != null -> d.copy(answer = tap.answer, answeredAt = tap.at ?: d.createdAt, sending = true)
-                else -> notSent[d.id]?.let { d.copy(notSent = it) } ?: d
-            }
-        }
+        // A revoked machine's items leave, as on the web: nothing it asked can be answered (#344).
+        val view = View(held, directory)
+        for (kind in kinds) kind.publish(view)
     }
 
     fun setDistributors(list: List<String>) {
@@ -422,11 +388,7 @@ class ServerStore(
         wipes++
         joinJob?.cancel()
         showJob?.cancel()
-        watchJob?.cancel()
-        compareJob?.cancel()
-        compared = null
-        joinAsks.value = emptyList()
-        comparison.value = Comparison.Idle
+        for (kind in kinds) kind.wipe()
         disk.wipe()
         alerts.clearAll()
         pendingPush = null
@@ -901,7 +863,7 @@ class ServerStore(
             // The directory first, as a full sync: a machine added since could not sign its snapshots otherwise.
             syncDirectory()
             if (phase.value != Phase.Ready) return@locked
-            syncQuotas()
+            quotaKind.sync()
             done = true
         }
         return done
@@ -911,12 +873,7 @@ class ServerStore(
         if (phase.value != Phase.Ready) return
         syncDirectory()
         if (phase.value != Phase.Ready) return
-        // Before the reads: one failing, during a rate-limit hold say, must not keep an answer back (#1390).
-        if (saved.outbox.isNotEmpty()) flushHeld()
-        syncDecisions()
-        syncPrompts()
-        syncQuotas()
-        syncRuns()
+        for (kind in kinds) kind.sync()
         // The server answered, so a push route that failed to register gets another try.
         pendingPush?.let { runCatching { subscribeHeld(it) } }
     }
@@ -956,17 +913,13 @@ class ServerStore(
 
     /** Closes the notifications of revoked machines' questions and prompts: no answer reaches them. */
     private fun closeRevoked(dir: Directory) {
-        for (d in saved.decisions) if (dir.members[d.from]?.active == false) alerts.cancel(d.body.id)
-        for (p in saved.prompts) if (dir.members[p.from]?.active == false) alerts.cancelPrompt(toUi(p))
+        for (kind in kinds) kind.revoked(dir)
     }
 
     /**
      * Opens a machine's item and keeps the directory head it signed. Refuses every item while a
      * head an active machine signed is missing from this phone's chain (#362).
      */
-    /** An item that opened: its signer, its body, and the body's signed text, which is what is kept. */
-    private data class Item(val from: String, val body: Any, val text: String)
-
     private fun open(item: SealedItem): Item? = try {
         // Null once a directory read found this phone removed (wipe).
         val dir = directory ?: throw ProtocolException("no-directory", "")
@@ -1057,717 +1010,45 @@ class ServerStore(
         confirmHold()
     }
 
-    private suspend fun syncDecisions() {
-        var cursor = saved.cursor
-        val byId = saved.decisions.associateBy { it.body.id }.toMutableMap()
-        // How each item a settled notice closed was closed, with the time: the notice lists before
-        // the decision it closed, which moved past it.
-        val closings = mutableMapOf<String, Pair<Settled, String>>()
-        // Which device's answer each machine took, whenever its notice comes (#330).
-        val wins = mutableListOf<Pair<String, Settled>>()
-        val waits = mutableListOf<Pair<String, Waiting>>()
-        val snoozes = mutableListOf<Snooze>()
-        while (true) {
-            // An answered question's images download when its sheet shows them (#1382).
-            val page = api().items("decision,settled,waiting,snooze", cursor, openBlobs = true)
-            // Held: the cursor stays, so these items are read again once the hold ends.
-            if (scan(page.items.map { it.item })) return
-            for (listed in page.items) {
-                if (listed.item.kind == "waiting") {
-                    val (from, body) = open(listed.item) ?: continue
-                    waits += from to body as Waiting
-                    continue
-                }
-                if (listed.item.kind == "snooze") {
-                    val (_, body) = open(listed.item) ?: continue
-                    snoozes += body as Snooze
-                    continue
-                }
-                if (listed.item.kind == "settled") {
-                    val (from, body) = open(listed.item) ?: continue
-                    body as Settled
-                    if (body.outcome == "device") wins += from to body
-                    // Keyed by machine: a notice closes only the machine's own items (#362).
-                    else closings["$from/${body.itemId}"] = body to listed.receivedAt
-                    continue
-                }
-                // The notice that closed it arrived in the same write, so it carries the same time;
-                // a later one, after a device's answer, closed nothing.
-                fun settledBy(machine: String) = closings["$machine/${listed.item.id}"]?.takeIf { it.second == listed.answeredAt }?.first
-                val known = byId[listed.item.id]
-                if (known != null) {
-                    // A settled push marked it answered already, without saying how.
-                    val notice = settledBy(known.from)
-                    if (listed.answeredAt != null && (known.answeredAt == null || notice?.outcome != null)) {
-                        byId[known.body.id] = if (notice?.outcome != null) closedBy(known.copy(answeredAt = listed.answeredAt), notice)
-                        else known.copy(answeredAt = listed.answeredAt)
-                        alerts.cancel(known.body.id)
-                    }
-                    continue
-                }
-                val (from, _, text) = open(listed.item) ?: continue
-                val decision = SavedDecision(from, text, listed.answeredAt)
-                byId[listed.item.id] = saved(listed.item, settledBy(from)?.let { closedBy(decision, it) } ?: decision)
-            }
-            cursor = page.cursor
-            if (page.last) break
-        }
-        // An update may list before the decision it is about, so they apply once all are read.
-        for ((from, w) in waits) byId[w.decisionId]?.let { d -> wait(d, from, w)?.let { byId[w.decisionId] = it } }
-        for (z in snoozes) byId[z.decisionId]?.let { d ->
-            snoozed(d, z)?.let {
-                byId[z.decisionId] = it
-                if (isSnoozed(it)) alerts.cancel(z.decisionId)
-            }
-        }
-        for ((from, n) in wins) byId[n.itemId]?.let { d -> won(d, from, n)?.let { byId[n.itemId] = it } }
-        persist(saved.copy(cursor = cursor, decisions = byId.values.sortedBy { it.body.createdAt }.takeLast(500)))
-    }
-
-    /**
-     * [d] with the agent's waiting state from [w], or null when [w] changes nothing: it must come
-     * from the machine that asked, and only a later update replaces an earlier one.
-     */
-    /**
-     * [d] with its images opened from [item]'s blobs, once, as it is kept (#685). Listed answered
-     * without them, it keeps none until its sheet shows it ([loadImages]).
-     */
-    private fun saved(item: SealedItem, d: SavedDecision): SavedDecision =
-        if (d.body.images.isNullOrEmpty() || item.blobs == null) d else filed(d, images.openAll(d.body.images.orEmpty(), item.blobs))
-
-    /** [d] with [opened] (base64url, null for one that did not open) each in its own file (#1471). */
-    private fun filed(d: SavedDecision, opened: List<String?>): SavedDecision =
-        d.copy(images = emptyList(), imageFiles = opened.mapIndexed { i, b64 -> b64?.let { disk.putImage("${d.body.id}.$i", fromB64(it)) } })
-
-    /**
-     * Moves the images an older app kept inside `state.bin` into files of their own, once (#1471).
-     * A question whose files cannot be written keeps its images where they were. A file's name is
-     * its question's id and the image's place, so a question an older app rewrote without
-     * [SavedDecision.imageFiles] finds its files again, and only a question no longer kept, such
-     * as one past the 500, loses its files. Nothing goes while a state file could not be read: the
-     * one set aside may name them.
-     */
-    private fun moveImagesToFiles() {
-        val moved = saved.decisions.map { d ->
-            when {
-                d.images.isNotEmpty() -> runCatching { filed(d, d.images) }.getOrElse { d }
-                d.imagesPending -> {
-                    val found = d.body.images.orEmpty().indices.map { i -> "${d.body.id}.$i".takeIf { disk.hasImage(it) } }
-                    // Only a whole set: one cut short by a failed write still fetches the rest.
-                    if (found.all { it != null }) d.copy(imageFiles = found) else d
-                }
-                else -> d
-            }
-        }
-        if (moved != saved.decisions) {
-            val next = saved.copy(decisions = moved)
-            // Written before anything else, so the next launch reads the small file.
-            if (runCatching { disk.save(next) }.isSuccess) saved = next
-        }
-        if (loaded.first != null && disk.unreadable.isEmpty()) {
-            val kept = saved.decisions.map { it.body.id }.toSet()
-            runCatching { disk.pruneImages { name -> name.substringBeforeLast('.') in kept } }
-        }
-    }
-
-    /** Questions whose images this run fetched or is fetching (#1382). */
-    private val imagesAsked = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
-
-    /**
-     * Fetches the images of a question listed without them (#1382), each checked against the hash
-     * its signed body holds, and keeps them. Once per question while the app runs, unless the fetch
-     * fails: one whose images fail to open stays without them.
-     */
-    override fun loadImages(id: String) {
-        if (saved.decisions.find { it.body.id == id }?.imagesPending != true || !imagesAsked.add(id)) return
-        scope.launch {
-            val listed = try {
-                api().item(id)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                // Offline or refused: the next show asks again.
-                imagesAsked.remove(id)
-                return@launch
-            }
-            // After any sync under way, which writes back the list it read; a failed write is
-            // reported, as every locked run's is.
-            locked(showBusy = false) {
-                val d = saved.decisions.find { it.body.id == id }?.takeIf { it.imagesPending } ?: return@locked
-                // The same question from the same machine: each blob opens against the key and
-                // hash in the body this phone kept, never one the server sends now.
-                val (from, _) = open(listed.item) ?: return@locked
-                if (listed.item.kind != "decision" || listed.item.id != id || from != d.from) return@locked
-                val opened = images.openAll(d.body.images.orEmpty(), listed.item.blobs)
-                if (opened.all { it == null }) return@locked
-                persist(saved.copy(decisions = saved.decisions.map { if (it === d) filed(d, opened) else it }))
-            }
-        }
-    }
-
-    /** Fetches decision [id] and keeps it; null when it does not open. */
-    private suspend fun fetchDecision(id: String): SavedDecision? {
-        val listed = api().item(id)
-        if (directory?.members?.containsKey(listed.item.from) != true) syncDirectory()
-        val (from, _, text) = open(listed.item) ?: return null
-        val d = saved(listed.item, SavedDecision(from, text, listed.answeredAt))
-        persist(saved.copy(decisions = saved.decisions + d))
-        return d
-    }
-
-    /** [d] with the owner's snooze [z], or null when an earlier or equal one is kept already. */
-    private fun snoozed(d: SavedDecision, z: Snooze): SavedDecision? {
-        val at = instant(z.at) ?: return null
-        if (d.snoozedAt != null && instant(d.snoozedAt)?.isBefore(at) == false) return null
-        return d.copy(snoozedUntil = z.until, snoozedAt = z.at)
-    }
-
-    /** Whether the owner put [d] off and its time has not come. */
-    private fun isSnoozed(d: SavedDecision, now: Instant = Instant.now()) =
-        d.answeredAt == null && d.answer == null && snoozedUntil(d)?.isAfter(now) == true
-
-    /** Until when [d] is snoozed; none after back now, whose time is its own (#571). */
-    private fun snoozedUntil(d: SavedDecision): Instant? {
-        val until = instant(d.snoozedUntil) ?: return null
-        val at = instant(d.snoozedAt)
-        return until.takeIf { at == null || it.isAfter(at) }
-    }
-
-    private fun wait(d: SavedDecision, from: String, w: Waiting): SavedDecision? {
-        if (d.from != from) return null
-        val at = instant(w.at) ?: return null
-        if (d.waitingAt != null && instant(d.waitingAt)?.isBefore(at) == false) return null
-        return d.copy(waiting = w.state, waitingAt = w.at)
-    }
-
-    /**
-     * Reads permission prompts and settled notices past the cursor. A prompt comes again once it
-     * is answered or settled, with its time; a notice counts only from the machine that asked.
-     */
-    private suspend fun syncPrompts() {
-        var cursor = saved.promptCursor
-        val byId = saved.prompts.associateBy { it.body.id }.toMutableMap()
-        val read = mutableListOf<Listed>()
-        while (true) {
-            val page = api().items("permission,settled", cursor)
-            read += page.items
-            cursor = page.cursor
-            if (page.last) break
-        }
-        if (scan(read.map { it.item })) return
-        // A settled prompt comes back after its notice, so prompts go first: a notice whose
-        // prompt is new to this phone would otherwise find nothing to close.
-        for (listed in read.sortedBy { if (it.item.kind == "permission") 0 else 1 }) takePrompt(listed.item, listed.answeredAt, byId)
-        keepPrompts(byId, cursor)
-    }
-
-    /** Merges one verified prompt or notice into [byId]; clears the notification of one that ended. */
-    private fun takePrompt(item: SealedItem, answeredAt: String?, byId: MutableMap<String, SavedPrompt>): SavedPrompt? {
-        when (item.kind) {
-            "permission" -> {
-                val known = byId[item.id]
-                if (known != null) {
-                    if (answeredAt != null && known.answeredAt == null) {
-                        byId[item.id] = known.copy(answeredAt = answeredAt)
-                        alerts.cancelPrompt(toUi(known))
-                    }
-                    return null
-                }
-                val (from, _, text) = open(item) ?: return null
-                return SavedPrompt(from, text, answeredAt).also { byId[item.id] = it }
-            }
-            "settled" -> {
-                val (from, body, text) = open(item) ?: return null
-                val notice = body as Settled
-                val p = byId[notice.itemId]
-                if (p == null) {
-                    settleDecision(notice.itemId, from, notice)
-                    return null
-                }
-                if (p.from != from) return null
-                byId[p.body.id] = p.copy(settledText = text, answeredAt = p.answeredAt ?: notice.at)
-                alerts.cancelPrompt(toUi(p))
-            }
-        }
-        return null
-    }
-
-    /** A settled notice may close one of the machine's decisions: it counts as answered. */
-    /** A notice after a device's answer closed nothing, so only an open decision takes its [outcome]. */
-    private fun settleDecision(id: String, from: String, notice: Settled) {
-        val d = saved.decisions.find { it.body.id == id && it.from == from } ?: return
-        alerts.cancel(id)
-        val updated = if (notice.outcome == "device") won(d, from, notice)
-        else if (d.answeredAt == null && d.answer == null) closedBy(d.copy(answeredAt = now()), notice)
-        else null
-        if (updated != null) persist(saved.copy(decisions = saved.decisions.map { if (it === d) updated else it }))
-    }
-
-    /** [d] as its machine's [notice] closed it, with the agent's reason for a withdrawal (#1008). */
-    private fun closedBy(d: SavedDecision, notice: Settled) =
-        d.copy(settled = notice.outcome, reason = notice.reason?.takeIf { notice.outcome == "withdrawn" })
-
-    /** Decisions this phone's answer lost to another device's, until the machine says which won. */
-    private val lost = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
-
-    /**
-     * [d] answered with the other device's answer the asking machine's notice names, or null when
-     * the notice is not the asking machine's, names this phone, or carries no answer (#330).
-     */
-    private fun won(d: SavedDecision, from: String, n: Settled): SavedDecision? {
-        // A device's notice with neither choice nor text applied a Done (#539).
-        val answer = n.choice ?: n.text ?: d.body.answerIn?.let(::doneText) ?: return null
-        if (d.from != from || n.device == null || n.device == me.id || d.answer != null) return null
-        if (lost.remove(d.body.id)) notice.value = if ((n.choice ?: n.text) == null) markedBy(n.device) else answeredFirst(answer, n.device)
-        return d.copy(answeredAt = d.answeredAt ?: now(), theirAnswer = answer, answeredBy = n.device)
-    }
-
-    private fun answeredFirst(answer: String, device: String) = "Answered on ${deviceName(device)}: $answer"
-
-    /** This phone's answer lost to another device's Done (#539). */
-    private fun markedBy(device: String) = "Marked answered on ${deviceName(device)}."
-
-    private fun deviceName(device: String) = directory?.members?.get(device)?.member?.name ?: device
-
-    /** Keeps a week of prompts, the log's span, as the server does. */
-    private fun keepPrompts(byId: Map<String, SavedPrompt>, cursor: String = saved.promptCursor) {
-        val weekAgo = Instant.now().minus(7, ChronoUnit.DAYS)
-        val kept = byId.values.filter { instant(it.body.createdAt)?.isAfter(weekAgo) != false }.sortedBy { it.body.createdAt }
-        persist(saved.copy(promptCursor = cursor, prompts = kept))
-    }
-
-    /**
-     * The inbox's quick read while a prompt shows. After a failure (offline, say) it waits 3 s,
-     * then twice as long after each further one, up to a minute, instead of retrying every 1.5 s.
-     */
-    override fun refreshPrompts() {
-        if (System.currentTimeMillis() < promptsRetryAt) return
-        run(showBusy = false, sync = true) {
-            if (phase.value != Phase.Ready) return@run
-            try {
-                syncPrompts()
-                promptFailures = 0
-            } catch (e: Exception) {
-                promptFailures++
-                promptsRetryAt = System.currentTimeMillis() + minOf(60_000L, 1_500L shl promptFailures.coerceAtMost(6))
-                throw e
-            }
-        }
-    }
-
-    @Volatile private var promptFailures = 0
-    @Volatile private var promptsRetryAt = 0L
-
     override fun refreshDirectory() = run(showBusy = false, sync = true) {
         if (phase.value == Phase.Ready) syncDirectory()
     }
 
-    override fun answerPrompt(id: String, allow: Boolean, scope: String, message: String?) =
-        run(showBusy = false) { sendPrompt(id, allow, scope, message) }
+    override fun refreshPrompts() = promptKind.refresh()
+
+    override fun answerPrompt(id: String, allow: Boolean, scope: String, message: String?) = promptKind.answer(id, allow, scope, message)
 
     /**
      * Signs the answer, bound to the prompt's id and input hash, and seals it to the machine that
      * asked. A deny is for this call only; a wider allow only for a scope the prompt offered.
      */
-    suspend fun sendPrompt(id: String, allow: Boolean, scope: String, message: String?) {
-        withheld()?.let { throw IllegalStateException(it) }
-        val p = saved.prompts.find { it.body.id == id } ?: throw IllegalStateException("No such prompt.")
-        if (p.answeredAt != null || p.answer != null) throw IllegalStateException("Already answered.")
-        val chosen = if (allow) scope else "once"
-        if (chosen != "once" && p.body.suggestions.none { it.scope == chosen }) throw IllegalArgumentException("Not offered.")
-        val machine = directory?.members?.get(p.from)?.takeIf { it.active }?.member
-            ?: throw IllegalStateException("The machine that asked is no longer in your directory.")
-        val body = buildJsonObject {
-            put("v", 1)
-            put("id", newId("pa_"))
-            put("permissionId", id)
-            put("to", machine.id)
-            put("answeredAt", now())
-            put("behavior", if (allow) "allow" else "deny")
-            put("scope", chosen)
-            put("inputHash", p.body.inputHash)
-            if (!allow) message?.trim()?.takeIf { it.isNotEmpty() }?.let { put("message", it.takeCodePoints(500)) }
-            // Lets the machine notice a server holding back entries, such as a revocation.
-            directory?.let { d -> putJsonObject("dir") { put("length", d.length); put("head", d.head) } }
-        }
-        val item = envelopes.seal("permission-answer", body, me.id, signKey, listOf(machine))
-        try {
-            api().postItem(item)
-        } catch (e: ApiException) {
-            if (e.error == "already-answered" || e.error == "expired") syncPrompts()
-            if (e is TooOld) describe(e)
-            throw e
-        }
-        val answer = if (allow) "allow:$chosen" else "deny"
-        persist(saved.copy(prompts = saved.prompts.map { if (it.body.id == id) it.copy(answeredAt = now(), answer = answer) else it }))
-    }
+    suspend fun sendPrompt(id: String, allow: Boolean, scope: String, message: String?) = promptKind.send(id, allow, scope, message)
 
     /** For the notification's buttons: holds the lock like any other change. */
-    suspend fun sendPromptFromNotification(id: String, allow: Boolean, scope: String) =
-        lock.withLock { sendPrompt(id, allow, scope, null) }
+    suspend fun sendPromptFromNotification(id: String, allow: Boolean, scope: String) = promptKind.sendFromNotification(id, allow, scope)
 
-    private suspend fun syncQuotas() {
-        val listed = api().quota()
-        quotasListed = listed.isNotEmpty()
-        if (scan(listed.map { it.item })) return
-        // A snapshot this app cannot open keeps that machine's last good one, rather than blanking it.
-        val quotas = listed.mapNotNull { l ->
-            open(l.item)?.let { SavedQuota(it.from, it.text) } ?: saved.quotas.find { it.from == l.item.from }
-        }
-        persist(saved.copy(quotas = quotas))
-        alerts.quota(quotas.flatMap(::notices))
-    }
+    override fun loadImages(id: String) = decisionKind.loadImages(id)
 
-    private fun notices(q: SavedQuota): List<QuotaNotice> {
-        val now = Instant.now()
-        val labels = q.body.providers.flatMap { p -> p.windows.map { "${p.provider}/${it.id}" to it.label.ifBlank { it.id } } }.toMap()
-        val minutes = q.body.providers.flatMap { p -> p.windows.map { "${p.provider}/${it.id}" to it.windowMinutes } }.toMap()
-        return q.body.alerts.filter { it.notify == true }.map { a ->
-            val name = "${a.provider} ${labels["${a.provider}/${a.window}"] ?: a.window}"
-            val resets = instant(a.resetsAt)?.let { "in ${span(now, it)}" } ?: "soon"
-            val (title, text) = when (a.kind) {
-                "low" -> "$name: ${a.threshold}% left" to "Resets $resets."
-                "runs-out" -> "$name will run out" to (instant(a.runsOutAt)?.let { "Runs out in ${span(now, it)} at this pace; resets $resets." } ?: "Resets $resets.")
-                else -> "$name resets with headroom unused" to "Resets $resets with ${a.unusedPercent?.roundToInt() ?: 0}% unused."
-            }
-            QuotaNotice("${q.body.id}/${a.provider}/${a.window}/${a.kind}", a.provider, a.window, a.kind, title, text, a.threshold, minutes["${a.provider}/${a.window}"])
-        }
-    }
+    override fun answer(id: String, choice: String?, text: String?) = decisionKind.answer(id, choice, text)
 
-    /** Every run the server holds, the latest update of each. */
-    private suspend fun syncRuns() {
-        var cursor = ""
-        val fresh = mutableListOf<SavedRun>()
-        while (true) {
-            val page = api().items("run", cursor)
-            if (scan(page.items.map { it.item })) return
-            for (listed in page.items) open(listed.item)?.let { fresh += SavedRun(it.from, it.text) }
-            cursor = page.cursor
-            if (page.last) break
-        }
-        keepRuns(fresh, fromSync = true)
-    }
+    override fun snooze(id: String, until: Instant) = decisionKind.snooze(id, until)
 
-    override fun dismissRun(id: String) {
-        run(showBusy = false) {
-            val r = saved.runs.find { it.body.id == id } ?: return@run
-            persist(saved.copy(runs = saved.runs - r, dismissedRuns = saved.dismissedRuns + (id to r.body.at)))
-            alerts.cancelRun(id)
-            try {
-                api().deleteItem(id)
-            } catch (e: ApiException) {
-                if (e.status == 401) throw e
-                // 404: gone already, or a server without the route; this phone hides it either way.
-                if (e.status != 404) notice.value = "Dismissed on this phone only: ${describe(e)}"
-            } catch (e: IOException) {
-                notice.value = "No connection. Dismissed on this phone only."
-            }
-        }
-    }
+    /** Answers decision [id]; the notification's buttons call this too. */
+    suspend fun send(id: String, choice: String?, text: String?): Sent = decisionKind.send(id, choice, text)
 
-    /**
-     * Keeps each update newer than the one held for its run (by `at`, then the exit), drops runs
-     * with no news for a day, as the server does, and hands each newer update to [alerts]. A sync
-     * skips runs it first learns of already ended, so a new phone does not alert for old results.
-     * A sync lists every run the server holds, so a run it leaves out was dismissed on another
-     * device (#827). A run dismissed here stays out until its machine posts a newer update.
-     */
-    private fun keepRuns(updates: List<SavedRun>, fromSync: Boolean = false) {
-        fun rank(r: SavedRun) = (instant(r.body.at) ?: Instant.EPOCH) to (r.body.exit != null)
-        val dismissed = saved.dismissedRuns
-        val listed = updates.map { it.body.id }.toSet()
-        val (kept, gone) = saved.runs.partition { !fromSync || it.body.id in listed }
-        gone.forEach { alerts.cancelRun(it.body.id) }
-        val held = kept.associateBy { it.body.id }.toMutableMap()
-        val newer = updates.filter { u -> dismissed[u.body.id]?.let { at -> (instant(u.body.at) ?: Instant.EPOCH) > (instant(at) ?: Instant.EPOCH) } ?: true }.filter { u ->
-            val h = held[u.body.id]
-            val (at, exited) = rank(u)
-            val wins = h == null || rank(h).let { (hAt, hExited) -> at > hAt || (at == hAt && exited && !hExited) }
-            if (wins) held[u.body.id] = u
-            wins && !(fromSync && h == null && exited)
-        }
-        val dayAgo = Instant.now().minus(java.time.Duration.ofDays(1))
-        persist(
-            saved.copy(
-                runs = held.values.filter { toUi(it).lastNews > dayAgo }.sortedBy { it.body.startedAt },
-                dismissedRuns = dismissed.filter { (id, at) -> id !in held && (instant(at) ?: Instant.EPOCH) > dayAgo },
-            ),
-        )
-        newer.forEach { alerts.run(toUi(it)) }
-    }
-
-    // --- Answering ---------------------------------------------------------------
-
-    /**
-     * One answer per decision: the decision stays locked until the server takes it, which may
-     * wait for a connection (#329).
-     */
-    override fun answer(id: String, choice: String?, text: String?) {
-        if (saved.outbox.any { it.decisionId == id }) return
-        val page = saved.decisions.find { it.body.id == id }?.body?.answerIn
-        if (tapped.putIfAbsent(id, Tap(choice ?: text ?: page?.let(::doneText).orEmpty(), Instant.now())) != null) return
-        notSent.remove(id)
-        showUnsent()
-        run(showBusy = false) {
-            try {
-                when (val sent = send(id, choice, text)) {
-                    is Sent.Queued -> {
-                        val what = if (choice == null && text == null) "Done" else sent.answer
-                        notice.value = if (sent.offline) "No connection. $what will be sent when the phone is back online." else "$what isn't sent yet. Retrying."
-                    }
-                    Sent.Elsewhere -> {
-                        val d = saved.decisions.find { it.body.id == id }
-                        val by = d?.answeredBy
-                        val theirs = d?.theirAnswer
-                        if (by != null && theirs != null) notice.value = if (d?.body?.answerIn?.let { theirs == doneText(it) } == true) markedBy(by) else answeredFirst(theirs, by)
-                        else {
-                            lost += id
-                            notice.value = "Already answered on another device."
-                        }
-                    }
-                    is Sent.Failed -> notSent[id] = sent.why
-                    is Sent.Answered -> Unit
-                }
-            } catch (e: Exception) {
-                // The session ended: report() asks to sign in again, and the answer waits for it.
-                if (e is CancellationException || e is ApiException && e.status == 401) throw e
-                notSent[id] = describe(e)
-            } finally {
-                tapped.remove(id)
-                showUnsent()
-            }
-        }
-    }
-
-    override fun snooze(id: String, until: Instant) {
-        run(showBusy = false) {
-            withheld()?.let { notice.value = "Not snoozed: $it"; return@run }
-            val d = saved.decisions.find { it.body.id == id } ?: return@run
-            // Fresh, as the server checks the recipients against its own: a device removed
-            // elsewhere since the last read would make it refuse the snooze.
-            syncDirectory()
-            val dir = directory ?: return@run
-            val machine = dir.members[d.from]?.takeIf { it.active }?.member
-            if (machine == null) {
-                notice.value = "Not snoozed: the machine that asked is no longer in your directory."
-                return@run
-            }
-            // To the machine that asked, so its agent hears when it would block, and to every
-            // active device, this one included, so each one hides it.
-            val to = listOf(machine) + dir.members.values.filter { it.active && it.member.role == "device" }.map { it.member }
-            // The latest `at`, in whole seconds, wins everywhere: an Undo within the second of its
-            // snooze goes a second later, or the machine and the other devices keep the snooze (#1981).
-            val last = saved.decisions.find { it.body.id == id }?.snoozedAt
-            val at = listOfNotNull(Instant.parse(now()), instant(last)?.plusSeconds(1)?.truncatedTo(ChronoUnit.SECONDS)).max().toString()
-            // Back now, as Undo is, goes no later than its own `at`, which every client reads as
-            // back now (PROTOCOL.md, "Snoozing"): the tap's instant is ahead of the clock the
-            // inbox keeps, so the question stayed under Snoozed until that clock next ticked. Nor
-            // later than now: the server pushes a return at a future `until` (#1981).
-            val sent = Instant.now().let { now -> if (until.isAfter(now)) until else minOf(now, Instant.parse(at)) }
-            val body = buildJsonObject {
-                put("v", 1)
-                put("id", newId("z_"))
-                put("decisionId", id)
-                putJsonArray("to") { to.forEach { add(it.id) } }
-                put("until", sent.toString())
-                put("at", at)
-                putJsonObject("dir") { put("length", dir.length); put("head", dir.head) }
-            }
-            try {
-                api().postItem(envelopes.seal("snooze", body, me.id, signKey, to))
-            } catch (e: ApiException) {
-                // The session ended: report() asks to sign in again.
-                if (e.status == 401) throw e
-                notice.value = if (e.error == "already-answered") "Already answered on another device." else "Not snoozed: ${describe(e)}"
-                return@run
-            } catch (e: IOException) {
-                notice.value = "No connection. Not snoozed."
-                return@run
-            }
-            persist(saved.copy(decisions = saved.decisions.map { if (it.body.id == id) it.copy(snoozedUntil = sent.toString(), snoozedAt = at) else it }))
-            if (until.isAfter(Instant.now())) alerts.cancel(id)
-        }
-    }
-
-    /**
-     * Signs the answer, seals it to the machine that asked, the only recipient the server
-     * accepts, and keeps it in [Saved.outbox] before posting it, so an answer tapped offline is
-     * sent once the server can be reached. Tapping again repeats the first answer's outcome.
-     * The notification's buttons call this too.
-     */
-    suspend fun send(id: String, choice: String?, text: String?): Sent {
-        // Not even an answer queued before: its machine may be the one the server keeps revoked.
-        withheld()?.let { return Sent.Failed(it) }
-        saved.outbox.find { it.decisionId == id }?.let { return post(it) }
-        val d = saved.decisions.find { it.body.id == id } ?: throw IllegalStateException("No such decision.")
-        d.answer?.let { return Sent.Answered(it) }
-        if (d.answeredAt != null) return Sent.Elsewhere
-        if (choice != null && choice !in d.body.options) throw IllegalArgumentException("Not one of the options.")
-        // Neither choice nor text is Done (#539), for a decision answered on its own page that takes it.
-        val page = d.body.answerIn?.takeIf { d.body.done == true }
-        val done = choice == null && text == null
-        if (done && page == null) throw IllegalArgumentException("Done is only for a question answered on its own page.")
-        val machine = directory?.members?.get(d.from)?.takeIf { it.active }?.member
-            ?: throw IllegalStateException("The machine that asked is no longer in your directory.")
-        val answerId = newId("a_")
-        val at = now()
-        val body = buildJsonObject {
-            put("v", 1)
-            put("id", answerId)
-            put("decisionId", id)
-            put("to", machine.id)
-            put("answeredAt", at)
-            choice?.let { put("choice", it) }
-            text?.let { put("text", it) }
-            if (done) put("done", true)
-            // Lets the machine notice a server holding back entries, such as a revocation.
-            directory?.let { d -> putJsonObject("dir") { put("length", d.length); put("head", d.head) } }
-        }
-        val queued = QueuedAnswer(id, choice ?: text ?: doneText(page!!), envelopes.seal("answer", body, me.id, signKey, listOf(machine)), at = at)
-        persist(saved.copy(outbox = saved.outbox + queued))
-        // Scheduled before the request leaves: were the app killed mid-request, the saved answer
-        // still has a sender (#1979). The run waits for the lock this holds, then finds it sent.
-        wakeWhenOnline()
-        return post(queued, wake = false)
-    }
-
-    /**
-     * Posts a queued answer and settles it, or keeps it for [wakeWhenOnline] to send later. [wake]
-     * is false in [AnswerWorker]'s own run, which retries by its backoff instead.
-     */
-    private suspend fun post(q: QueuedAnswer, wake: Boolean = true): Sent {
-        try {
-            api().postItem(q.item)
-        } catch (e: CancellationException) {
-            // Cut off mid-request, by the notification's time limit say: it may have landed.
-            keep(q, landed = true, wake)
-            throw e
-        } catch (e: ApiException) {
-            return when {
-                e.error == "already-answered" -> {
-                    // A retry of an answer the server took before its reply was lost finds the
-                    // decision answered; the server can't say by whom, so this guesses ours.
-                    settle(q, if (q.mayHaveLanded) q.answer else null)
-                    if (q.mayHaveLanded) Sent.Answered(q.answer) else Sent.Elsewhere
-                }
-                // The session ended: report() asks to sign in again, and the answer waits for it.
-                e.status == 401 -> {
-                    keep(q, landed = false, wake)
-                    throw e
-                }
-                // This release is refused: the answer waits for the updated app to send it.
-                e is TooOld -> {
-                    describe(e)
-                    keep(q, landed = false, wake)
-                    Sent.Queued(q.answer)
-                }
-                e.status >= 500 || e.status == 429 -> {
-                    keep(q, landed = e.status != 502 && e.status != 503 && e.status != 429, wake)
-                    Sent.Queued(q.answer)
-                }
-                else -> {
-                    persist(saved.copy(outbox = saved.outbox.filter { it.decisionId != q.decisionId }))
-                    Sent.Failed(describe(e))
-                }
-            }
-        } catch (e: IOException) {
-            // No route or no name: the request never left. Anything else may have reached it.
-            keep(q, landed = e !is java.net.ConnectException && e !is java.net.UnknownHostException && e !is java.net.NoRouteToHostException, wake)
-            return Sent.Queued(q.answer, offline = true)
-        }
-        settle(q, q.answer)
-        return Sent.Answered(q.answer)
-    }
-
-    private fun keep(q: QueuedAnswer, landed: Boolean, wake: Boolean) {
-        if (landed && !q.mayHaveLanded) {
-            persist(saved.copy(outbox = saved.outbox.map { if (it.decisionId == q.decisionId) it.copy(mayHaveLanded = true) else it }))
-        }
-        if (wake) wakeWhenOnline()
-    }
-
-    /** Takes the answer out of the outbox and marks its decision answered, by this device when [answer] is set. */
-    private fun settle(q: QueuedAnswer, answer: String?) {
-        persist(
-            saved.copy(
-                outbox = saved.outbox.filter { it.decisionId != q.decisionId },
-                decisions = saved.decisions.map { if (it.body.id == q.decisionId) it.copy(answeredAt = now(), answer = answer) else it },
-            ),
-        )
-    }
-
-    /**
-     * For the notification's buttons. The notification goes at the tap, as the card does, and
-     * comes back only if the server refuses the answer; one left queued goes out with
-     * [AnswerWorker] (#1447). A reply typed into a notification is cut as the in-app field cuts
-     * it (#1205).
-     */
-    suspend fun sendFromNotification(id: String, choice: String?, text: String?): Sent {
-        alerts.cancel(id)
-        val sent = lock.withLock { send(id, choice, text?.takeCodePoints(ANSWER_TEXT_MAX)) }
-        if (sent is Sent.Failed) refused(id, sent.why)
-        return sent
-    }
+    /** For the notification's buttons, under the lock. */
+    suspend fun sendFromNotification(id: String, choice: String?, text: String?): Sent = decisionKind.sendFromNotification(id, choice, text)
 
     /** The server refused this phone's answer to [id]: its card and its notification come back, saying [why]. */
-    fun refused(id: String, why: String) {
-        notSent[id] = why
-        showUnsent()
-        decisions.value.find { it.id == id }?.let { alerts.failed(it, why) }
-    }
+    fun refused(id: String, why: String) = decisionKind.refused(id, why)
 
     /** The answer waiting to be sent for decision [id], if any. */
-    fun queued(id: String): String? = saved.outbox.find { it.decisionId == id }?.answer
+    fun queued(id: String): String? = decisionKind.queued(id)
 
-    /**
-     * Sends the queued answers, oldest first, and tells the notifications how each ended. False
-     * while some still wait, so [AnswerWorker] tries again later. It first waits out a rate-limit
-     * hold, outside the lock: posting during it would fail at once and only lengthen the worker's
-     * backoff (#1390).
-     */
-    suspend fun flushAnswers(): Boolean {
-        while (true) {
-            val held = limitedUntil - System.currentTimeMillis()
-            if (held > 0) {
-                delay(held)
-                continue
-            }
-            lock.lock()
-            try {
-                // A post under the lock meanwhile, such as the tap's own that scheduled this run
-                // (#1979), may have started a hold: wait it out too, without the lock.
-                if (limitedUntil > System.currentTimeMillis()) continue
-                return flushQueued()
-            } finally {
-                lock.unlock()
-            }
-        }
-    }
+    /** Sends the queued answers; false while some still wait, so [AnswerWorker] tries again later. */
+    suspend fun flushAnswers(): Boolean = decisionKind.flushAnswers()
 
-    private suspend fun flushQueued(): Boolean {
-        if (phase.value != Phase.Ready) return true
-        return try {
-            flushHeld(wake = false) && saved.outbox.isEmpty()
-        } catch (e: IOException) {
-            // The answers wait in the outbox, and their cards say "not sent yet".
-            report(e, sync = true)
-            false
-        }
-    }
-
-    private suspend fun flushHeld(wake: Boolean = true): Boolean {
-        // Kept, and tried again once the hold ends.
-        if (withheld() != null) return false
-        for (q in saved.outbox) {
-            val decision = decisions.value.find { it.id == q.decisionId }
-            when (val sent = post(q, wake)) {
-                is Sent.Queued -> return false
-                is Sent.Answered, Sent.Elsewhere -> alerts.cancel(q.decisionId)
-                is Sent.Failed -> refused(q.decisionId, sent.why)
-            }
-        }
-        return true
-    }
+    override fun dismissRun(id: String) = runKind.dismiss(id)
 
     // --- Push --------------------------------------------------------------------
 
@@ -1799,126 +1080,26 @@ class ServerStore(
     private suspend fun onPushHeld(payload: String) = lock.withLock {
         if (phase.value != Phase.Ready) return@withLock
         val p = ProtocolJson.parseToJsonElement(payload).jsonObject
-        val kind = p["kind"]?.jsonPrimitive?.content
+        val kind = p["kind"]?.jsonPrimitive?.content ?: return@withLock
         val id = p["id"]?.jsonPrimitive?.content ?: return@withLock
-        // An id goes into /items/$id, a kind into the branch below: neither may carry anything else.
-        if (!isItemId(id) || kind?.let(::isPushKind) == false) return@withLock
-        when (kind) {
-            "answered" -> {
-                // Nothing in this push is verified, so it only takes the notification down; what
-                // was answered is read from the server's signed items on the next sync.
-                val prompt = saved.prompts.find { it.body.id == id }
-                if (prompt != null) alerts.cancelPrompt(toUi(prompt)) else alerts.cancel(id)
-                if (inFront) {
-                    try {
-                        sync()
-                    } catch (e: CancellationException) {
-                        throw e
-                    } catch (e: Exception) {
-                        // Unreachable now: the foreground poll, which a working push stops, reads it later.
-                        pushed = false
-                        throw e
-                    }
-                }
-            }
-            "decision" -> {
-                if (saved.decisions.any { it.body.id == id }) return@withLock
-                val box = p["box"]?.jsonPrimitive?.content
-                var answeredAt: String? = null
-                val item = if (box != null) {
-                    SealedItem(1, "decision", id, p.getValue("from").jsonPrimitive.content, p["re"]?.jsonPrimitive?.content, listOf(SealedBox(me.id, box)))
-                } else {
-                    // Fetched later than the push: another device may have answered meanwhile.
-                    api().item(id).also { answeredAt = it.answeredAt }.item
-                }
-                // A machine paired since the last sync is not in the cached chain yet.
-                catchUp(item)
-                val (from, _, text) = open(item) ?: return@withLock
-                val saved1 = saved(item, SavedDecision(from, text, answeredAt))
-                persist(saved.copy(decisions = saved.decisions + saved1))
-                if (answeredAt == null) alerts.decision(toUi(saved1))
-            }
-            "permission", "settled" -> {
-                if (kind == "permission" && saved.prompts.any { it.body.id == id }) return@withLock
-                val box = p["box"]?.jsonPrimitive?.content
-                var answeredAt: String? = null
-                val item = if (box != null) {
-                    SealedItem(1, kind, id, p.getValue("from").jsonPrimitive.content, p["re"]?.jsonPrimitive?.content, listOf(SealedBox(me.id, box)))
-                } else {
-                    api().item(id).also { answeredAt = it.answeredAt }.item
-                }
-                catchUp(item)
-                val byId = saved.prompts.associateBy { it.body.id }.toMutableMap()
-                val added = takePrompt(item, answeredAt, byId)
-                keepPrompts(byId)
-                if (added != null && added.answeredAt == null) alerts.prompt(toUi(added))
-            }
-            "waiting" -> {
-                // Pushed when the agent flips: to waiting re-notifies once, back to working moves
-                // the notification silently (#191). A question asked already waiting pushes only
-                // this, so its decision may be new here.
-                val box = p["box"]?.jsonPrimitive?.content
-                val item = if (box != null) {
-                    SealedItem(1, "waiting", id, p.getValue("from").jsonPrimitive.content, p["re"]?.jsonPrimitive?.content, listOf(SealedBox(me.id, box)))
-                } else {
-                    api().item(id).item
-                }
-                catchUp(item)
-                val (from, body) = open(item) ?: return@withLock
-                body as Waiting
-                val d = saved.decisions.find { it.body.id == body.decisionId } ?: fetchDecision(body.decisionId) ?: return@withLock
-                val updated = wait(d, from, body) ?: return@withLock
-                persist(saved.copy(decisions = saved.decisions.map { if (it === d) updated else it }))
-                if (d.answeredAt == null && d.answer == null && saved.outbox.none { it.decisionId == d.body.id } && !isSnoozed(d) && (d.waiting == "waiting") != (updated.waiting == "waiting")) {
-                    alerts.decision(toUi(updated), silent = updated.waiting != "waiting")
-                }
-            }
-            "snooze" -> {
-                // The owner put a question off (#571): its notification goes until its time, when
-                // the server pushes the snooze once more and the question notifies again, once.
-                val box = p["box"]?.jsonPrimitive?.content
-                val item = if (box != null) {
-                    SealedItem(1, "snooze", id, p.getValue("from").jsonPrimitive.content, p["re"]?.jsonPrimitive?.content, listOf(SealedBox(me.id, box)), p["wakeAt"]?.jsonPrimitive?.content)
-                } else {
-                    api().item(id).item
-                }
-                catchUp(item)
-                val (_, body) = open(item) ?: return@withLock
-                body as Snooze
-                val d = saved.decisions.find { it.body.id == body.decisionId } ?: fetchDecision(body.decisionId) ?: return@withLock
-                // A newer snooze of the question, from any device, stands: an older one's return
-                // shows nothing.
-                val sent = instant(body.at) ?: return@withLock
-                if (instant(d.snoozedAt)?.isAfter(sent) == true) return@withLock
-                val updated = snoozed(d, body) ?: d
-                if (updated !== d) persist(saved.copy(decisions = saved.decisions.map { if (it === d) updated else it }))
-                val until = instant(body.until) ?: return@withLock
-                if (!until.isAfter(instant(body.at) ?: until)) return@withLock // Back now: listed again, quietly.
-                // The server says which push this is (#1290); without it, the clock, which takes a
-                // first push that comes late for the return (#1320).
-                val due = p["due"]?.jsonPrimitive?.booleanOrNull ?: !Instant.now().isBefore(until.minus(WAKE_SKEW))
-                if (!due) {
-                    // Near or past its time, its return showed the question or will, maybe by a
-                    // server clock ahead of this one: cancelling would hide it.
-                    if (Instant.now().isBefore(until.minus(WAKE_SKEW))) alerts.cancel(body.decisionId)
-                } else if (updated.answeredAt == null && updated.answer == null) alerts.back(toUi(updated))
-            }
-            "quota" -> syncQuotas()
-            "join" -> {
-                val list = api().joins("0", 0)
-                listJoins(list)
-                list.joins.find { it.id == id }?.let(::toAsk)?.let { alerts.join("join:${it.id}", it.name) }
-            }
-            "run" -> {
-                val box = p["box"]?.jsonPrimitive?.content
-                val item = if (box != null) {
-                    SealedItem(1, "run", id, p.getValue("from").jsonPrimitive.content, null, listOf(SealedBox(me.id, box)))
-                } else {
-                    api().item(id).item
-                }
-                catchUp(item)
-                val opened = open(item) ?: return@withLock
-                keepRuns(listOf(SavedRun(opened.from, opened.text)))
+        // An id goes into /items/$id, a kind picks the item kind that takes it: neither may carry anything else.
+        if (!isItemId(id) || !isPushKind(kind)) return@withLock
+        if (kind != "answered") {
+            kinds.find { kind in it.pushes }?.onPush(kind, id, p)
+            return@withLock
+        }
+        // Nothing in this push is verified, so it only takes the notification down; what
+        // was answered is read from the server's signed items on the next sync.
+        if (!promptKind.cancelNotification(id)) alerts.cancel(id)
+        if (inFront) {
+            try {
+                sync()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // Unreachable now: the foreground poll, which a working push stops, reads it later.
+                pushed = false
+                throw e
             }
         }
     }
@@ -2007,19 +1188,8 @@ class ServerStore(
         approval.value = Approval.Approving(approval.value as? Approval.Found ?: return@run)
         try {
             syncDirectory()
-            val joining = body.member()
             // A retry after the approval failed to send finds the entry already in the chain.
-            val present = directory!!.members[joining.id]
-            if (present == null) {
-                val entry = directories.addEntry(directory!!, me.id, signKey, joining, now())
-                api().append(entry)
-                val all = saved.entries + ProtocolJson.encodeToJsonElement(entry)
-                val after = directories.verify(all, saved.account, saved.pin)
-                directory = after
-                persist(saved.copy(entries = all, pin = Pin(after.length, after.head)))
-            } else if (!present.active || present.member != joining) {
-                throw IllegalStateException("Another member already uses this id. Make a new code.")
-            }
+            addMember(body.member(), "Another member already uses this id. Make a new code.")
             val after = directory!!
             // From the machine's QR: proves which add entry this phone wrote, so the machine needs
             // no one to compare check codes (#795).
@@ -2078,16 +1248,6 @@ class ServerStore(
     }
 
     // --- Approving joins by digits ---------------------------------------------------
-
-    private fun toAsk(view: JoinView): JoinAsk? = runCatching {
-        val body = joins.openRequest(view.request)
-        JoinAsk(view.id, body.name, instant(body.at) ?: Instant.now(), elsewhere = view.approver != null && view.approver != saved.me?.id)
-    }.getOrNull()
-
-    private fun listJoins(list: JoinList) {
-        joinViews = list.joins.associateBy { it.id }
-        joinAsks.value = list.joins.mapNotNull(::toAsk)
-    }
 
     /**
      * While the app is in front and no push has reached it, reads the items every [pollMs]: a
@@ -2178,115 +1338,15 @@ class ServerStore(
         }
     }
 
-    override fun watchJoins(on: Boolean) {
-        watchJob?.cancel()
-        if (!on) return
-        watchJob = scope.launch {
-            var cursor = "0"
-            while (true) {
-                if (phase.value != Phase.Ready) {
-                    delay(5_000)
-                    continue
-                }
-                try {
-                    val list = api().joins(cursor, 50)
-                    cursor = list.cursor
-                    listJoins(list)
-                } catch (e: IOException) {
-                    delay(5_000)
-                }
-            }
-        }
-    }
+    override fun watchJoins(on: Boolean) = joinKind.watch(on)
 
-    /** Takes the request as listed and posts this phone's key; the digits come once the joiner reveals. */
-    override fun compareJoin(id: String) {
-        val view = joinViews[id] ?: return
-        val ask = toAsk(view) ?: return
-        compareJob?.cancel()
-        comparison.value = Comparison.Waiting(ask)
-        compareJob = scope.launch {
-            try {
-                val body = joins.openRequest(view.request)
-                if (body.account != saved.account) throw ProtocolException("wrong-account", body.account)
-                if (body.join != view.id) throw ProtocolException("id-mismatch", "join")
-                val eph = joins.newKeyPair()
-                var after = api().claimJoin(id, toB64(eph.public), me.id).version - 1
-                while (true) {
-                    val now = try {
-                        api().join(id, after, 60)
-                    } catch (e: IOException) {
-                        // Giving up would lose this phone's key, and the server takes one.
-                        if (!transient(e)) throw e
-                        if (instant(view.expiresAt)?.isBefore(Instant.now()) != false) throw IllegalStateException("The request expired.")
-                        delay(5_000)
-                        continue
-                    }
-                    after = now.version
-                    if (now.state == "cancelled") throw IllegalStateException("${ask.name} cancelled the request.")
-                    val joinerKey = now.joinerKey ?: continue
-                    val keys = joins.approverKeys(eph, joinerKey, view.request, view.commitment)
-                    eph.secret.fill(0)
-                    compared = Triple(view, body, keys)
-                    comparison.value = Comparison.Digits(ask, keys.digits)
-                    return@launch
-                }
-            } catch (e: Exception) {
-                if (e is kotlinx.coroutines.CancellationException) throw e
-                comparison.value = Comparison.Failed(if (e is IllegalStateException) e.message ?: "" else describe(e))
-            }
-        }
-    }
+    override fun compareJoin(id: String) = joinKind.compare(id)
 
-    /** Appends the new device's entry, then sends the approval under the compared key. */
-    override fun approveJoin() = run(showBusy = false) {
-        val (view, body, keys) = compared ?: return@run
-        val shown = comparison.value as? Comparison.Digits ?: return@run
-        comparison.value = shown.copy(approving = true, error = null)
-        try {
-            syncDirectory()
-            val joining = body.member()
-            val present = directory!!.members[joining.id]
-            if (present == null) {
-                val entry = directories.addEntry(directory!!, me.id, signKey, joining, now())
-                api().append(entry)
-                val all = saved.entries + ProtocolJson.encodeToJsonElement(entry)
-                val after = directories.verify(all, saved.account, saved.pin)
-                directory = after
-                persist(saved.copy(entries = all, pin = Pin(after.length, after.head)))
-            } else if (!present.active || present.member != joining) {
-                throw IllegalStateException("Another member already uses this id. Ask again from the new device.")
-            }
-            val after = directory!!
-            api().approveJoin(view.id, joins.approval(JoinApprovalBody(1, view.id, saved.account!!, after.length, after.head, me.id), keys))
-            compared = null
-            alerts.cancel("join:${view.id}")
-            comparison.value = Comparison.Done("${body.name} joined.")
-        } catch (e: Exception) {
-            // The server holds this phone's key for the join, so a blip keeps the digits and
-            // their keys for another try; the entry appended already is reused.
-            comparison.value = if (e is IOException && transient(e)) shown.copy(error = describe(e)) else Comparison.Failed(describe(e))
-        }
-    }
+    override fun approveJoin() = joinKind.approve()
 
-    private fun transient(e: IOException) = e !is ApiException || e.status >= 500 || e.status == 429
+    override fun refuseJoin(id: String) = joinKind.refuse(id)
 
-    override fun refuseJoin(id: String) = run(showBusy = false) {
-        compareJob?.cancel()
-        val name = joinAsks.value.find { it.id == id }?.name ?: "the device"
-        val differed = compared?.first?.id == id
-        compared = null
-        alerts.cancel("join:$id")
-        runCatching { api().cancelJoin(id) }
-        joinAsks.value = joinAsks.value.filter { it.id != id }
-        comparison.value = Comparison.Done(if (differed) "Refused $name: the digits differed." else "Refused $name.")
-    }
-
-    override fun closeComparison() {
-        compareJob?.cancel()
-        compared = null
-        comparison.value = Comparison.Idle
-    }
+    override fun closeComparison() = joinKind.closeComparison()
 
     override fun revoke(memberId: String) = run {
         if (memberId == me.id) throw IllegalArgumentException("Sign out to remove this phone.")
@@ -2378,6 +1438,13 @@ class ServerStore(
         replacement = null
     }
 
+    /** Appends [joining]'s add entry unless the chain holds it already; [taken] says why one with its id differs. */
+    private suspend fun addMember(joining: DirectoryMember, taken: String) {
+        val present = directory!!.members[joining.id]
+        if (present == null) appendEntry { directories.addEntry(it, me.id, signKey, joining, now()) }
+        else if (!present.active || present.member != joining) throw IllegalStateException(taken)
+    }
+
     /** Appends the entry [make] signs on the current chain, and moves the pin to it. */
     private suspend fun appendEntry(make: (Directory) -> SignedEnvelope) {
         val entry = make(directory!!)
@@ -2437,114 +1504,6 @@ class ServerStore(
 
     // --- To the screens' shapes --------------------------------------------------
 
-    private fun instant(text: String?): Instant? = text?.let { runCatching { OffsetDateTime.parse(it).toInstant() }.getOrNull() }
-
-    private fun toUi(d: SavedDecision): Decision {
-        val b = d.body
-        return Decision(
-            id = b.id,
-            question = b.question,
-            context = b.context,
-            options = b.options,
-            recommended = b.recommended,
-            source = Source(
-                b.source.machine,
-                b.source.project,
-                b.source.session,
-                b.source.sessionTitle,
-                b.source.links.orEmpty().map { SessionLink(it.kind, it.url) },
-                machineKind = b.source.machineKind,
-            ),
-            createdAt = instant(b.createdAt) ?: Instant.EPOCH,
-            agent = b.agent,
-            waiting = d.waiting == "waiting",
-            waitingSince = if (d.waiting == "waiting") instant(d.waitingAt) else null,
-            snoozedUntil = snoozedUntil(d),
-            // Pending, each holds its place at its shape until it downloads (#1382).
-            images = when {
-                d.imagesPending -> b.images.orEmpty().map { Image("", it.width, it.height, it.alt) }
-                // Read from its file when it is decoded, off the main thread (#1471).
-                d.imageFiles.isNotEmpty() -> b.images.orEmpty().mapIndexedNotNull { i, it -> d.imageFiles.getOrNull(i)?.let { f -> Image("", it.width, it.height, it.alt, file = f) } }
-                else -> b.images.orEmpty().mapIndexedNotNull { i, it -> d.images.getOrNull(i)?.let { data -> Image(data, it.width, it.height, it.alt) } }
-            },
-            links = b.links.orEmpty().map { Link(it.url, it.title) },
-            answerIn = b.answerIn?.let { Link(it.url, it.title) },
-            answer = d.answer,
-            answeredAt = instant(d.answeredAt) ?: d.answer?.let { Instant.now() },
-            settled = d.settled,
-            reason = d.reason,
-            theirAnswer = d.theirAnswer,
-            answeredOn = d.answeredBy?.let { directory?.members?.get(it)?.member?.name ?: it },
-            replies = b.replies == true,
-            takesDone = b.answerIn != null && b.done == true,
-        )
-    }
-
-    /** How a prompt ended, in words, from this device's answer or the machine's notice. */
-    private fun ended(p: SavedPrompt) = promptEnded(p.answer, p.settled, p.answeredAt, p.body.source.machine, me.id) { directory?.members?.get(it)?.member?.name }
-
-    private fun toUi(p: SavedPrompt): Prompt {
-        val b = p.body
-        return Prompt(
-            id = b.id,
-            tool = b.tool,
-            summary = visible(b.summary),
-            description = b.description?.let(::visible),
-            input = b.input,
-            scopes = b.suggestions.map { PromptScope(it.scope, it.label, visible(it.rule)) },
-            source = Source(b.source.machine, b.source.project, b.source.session, b.source.sessionTitle, b.source.links.orEmpty().map { SessionLink(it.kind, it.url) }, b.source.machineKind),
-            agent = b.agent,
-            createdAt = instant(b.createdAt) ?: Instant.EPOCH,
-            expiresAt = instant(b.expiresAt) ?: Instant.EPOCH,
-            ended = ended(p),
-            endedAt = instant(p.answeredAt),
-        )
-    }
-
-    private fun machineName(from: String, named: Boolean) = if (named) directory?.members?.get(from)?.member?.name ?: from else null
-
-    private fun failures(q: SavedQuota, named: Boolean): List<QuotaFailure> = q.body.providers.mapNotNull { p ->
-        p.error?.takeIf { p.windows.isEmpty() }?.let { QuotaFailure(p.provider, it, machineName(q.from, named)) }
-    }
-
-    private fun toUi(q: SavedQuota, named: Boolean): List<QuotaWindow> = q.body.providers.flatMap { p ->
-        p.windows.map { w ->
-            // The card's state follows a pace alert; "low" only notifies.
-            val alerts = q.body.alerts.filter { it.provider == p.provider && it.window == w.id && it.kind != "low" }
-            val pace = w.pace
-            val unused = alerts.firstOrNull { it.kind == "unused-headroom" }?.unusedPercent
-            QuotaWindow(
-                id = "${q.from}/${p.provider}/${w.id}",
-                provider = p.provider,
-                window = w.label.ifBlank { w.id },
-                usedPercent = w.usedPercent.roundToInt(),
-                resetsAt = instant(w.resetsAt),
-                pace = paceOf(pace, unused),
-                alert = alerts.isNotEmpty(),
-                steadyPercent = pace?.expectedUsedPercent?.roundToInt()?.coerceIn(0, 100),
-                windowMinutes = w.windowMinutes,
-                machine = machineName(q.from, named),
-                takenAt = instant(p.updatedAt ?: q.body.takenAt),
-                error = p.error,
-            )
-        }
-    }
-
-    private fun toUi(r: SavedRun): Run {
-        val b = r.body
-        return Run(
-            id = b.id,
-            title = b.title,
-            reason = b.reason,
-            source = Source(b.source.machine, b.source.project, b.source.session, b.source.sessionTitle, b.source.links.orEmpty().map { SessionLink(it.kind, it.url) }, b.source.machineKind),
-            startedAt = instant(b.startedAt) ?: Instant.EPOCH,
-            at = instant(b.at) ?: Instant.EPOCH,
-            progress = b.progress?.let { Run.Progress(it.done, it.total, it.unit == "percent") },
-            exitCode = b.exit?.code,
-            endedAt = instant(b.exit?.at),
-        )
-    }
-
     private fun toUi(dir: Directory): List<Member> {
         val added = saved.entries.mapNotNull { raw ->
             runCatching {
@@ -2565,45 +1524,3 @@ class ServerStore(
 }
 
 private operator fun dev.starbridge.app.protocol.DirectoryMember.component1() = member
-
-/**
- * A window's state, by the web's rule: "Headroom unused" only when the uploader raised an
- * unused-headroom alert for it, not whenever usage runs behind the steady pace.
- */
-internal fun paceOf(pace: dev.starbridge.app.protocol.Pace?, unusedAlert: Double?): Pace = when {
-    pace == null || pace.stage == "unknown" -> Pace.Unknown
-    !pace.willLastToReset ->
-        pace.runsOutAt?.let { runCatching { OffsetDateTime.parse(it).toInstant() }.getOrNull() }?.let { Pace.RunsOut(it) } ?: Pace.Unknown
-    unusedAlert != null -> Pace.Unused(unusedAlert.roundToInt())
-    else -> Pace.Even
-}
-
-/**
- * How a prompt ended and where, as the web's History puts it (#349): "Denied · on Pixel",
- * "Allowed for this session · on this phone"; null while it waits.
- */
-internal fun promptEnded(answer: String?, s: Settled?, answeredAt: String?, machine: String, me: String, name: (String) -> String?): String? {
-    val allowed = mapOf("once" to "Allowed once", "session" to "Allowed for this session", "project" to "Always allowed")
-    answer?.let { return "${if (it == "deny") "Denied" else allowed[it.removePrefix("allow:")] ?: "Allowed"} · on this phone" }
-    return when {
-        s?.outcome == "keyboard" -> "Answered · on $machine"
-        s?.outcome == "timeout" -> "Timed out: left to the keyboard"
-        s?.outcome == "device" && s.device != null -> {
-            val what = when (s.behavior) { "allow" -> "Allowed"; "deny" -> "Denied"; else -> "Answered" }
-            "$what · on ${if (s.device == me) "this phone" else name(s.device) ?: "another device"}"
-        }
-        answeredAt != null -> "Answered · on another device"
-        else -> null
-    }
-}
-
-/** What a Done reads as, in History and on the device it lost on: where the owner answered. */
-internal fun doneText(page: DecisionLink) = "Answered in ${Link(page.url, page.title).place()}"
-
-/**
- * How far a snooze's time may be ahead of the phone's clock when its second push comes: the server
- * sends it at the time, a little late, by its own clock. A snooze runs at least 5 minutes
- * (SNOOZE_MIN in ui/inbox/Snooze.kt), so its first push passes for its second only when it comes
- * over 3 minutes late (#571). Servers since #1290 say which push is which; this is for older ones.
- */
-private val WAKE_SKEW: java.time.Duration = java.time.Duration.ofMinutes(2)

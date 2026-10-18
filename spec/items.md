@@ -254,14 +254,13 @@ notify about nothing, weekly and monthly ones (and those of unknown length) abou
   each name sits over its box.
 - **Filtering on the device.** The uploader still raises every alert, and each device shows the
   ones its settings pick, so the server and the uploader learn nothing of them.
-  `packages/protocol/src/quotaAlerts.ts` holds the rule and `quota-alerts.json` its vectors, which
-  Android's port checks. `alertsFor` raises only the lowest level reached, so a window that skips
+  `packages/protocol/src/quotaAlerts.ts` holds the rule, the column names and how a window's choices
+  change, and `quota-alerts.json` their vectors, which Android and iOS check. `alertsFor` raises only the lowest level reached, so a window that skips
   past a level picked still notifies at the next one down.
-- **Migration.** These replace the bell per provider and the two switches that gated every
-  provider's alerts ("Warn when a window runs low", and "Warn before a window runs out", which also
-  covered unused headroom). A device whose bell was on for a provider keeps what its switches let
-  through, as one key for the provider, which becomes a key per window the first time one of them
-  is set. A device with no bell on gets the defaults.
+- **Migration.** These replaced the bell per provider and the two switches that gated every
+  provider's alerts. Releases up to 0.1.8 moved a device's bells into one key per provider, which
+  still works and becomes a key per window the first time one of them is set. Later releases drop
+  the old bells and switches instead: a device that still holds them gets the defaults (#1904).
 - **The hidden page polls.** A web page that is hidden reads quotas each minute while any window
   can notify, as it did while any provider's bell was on; with the defaults that is every page.
 
@@ -271,4 +270,5 @@ One rule on both clients (#159, #162). Hidden providers drop out; the rest go in
 Settings (unlisted ones after, in the uploader's order), each provider's windows in the uploader's
 order; a provider's machines go by name, since the server sends them by machine id (#1849). "Running out first", on by default, then moves windows that will run out or ran out, and
 have not reset, above the others. Windows are grouped by provider (#160); groups follow their
-first window, so a provider with a window running out leads.
+first window, so a provider with a window running out leads. `packages/protocol/src/quotas.ts` holds this order and each window's state and
+words, and `quotas.json` their vectors, which Android and iOS check (#1904).

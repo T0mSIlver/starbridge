@@ -12,7 +12,7 @@ private let vectorsDir = URL(fileURLWithPath: #filePath)
 /** The vector files these tests read; `testEveryVectorFileIsRead` keeps it whole. */
 private let READ: Set<String> = [
     "context.json", "directory.json", "envelopes.json", "heads.json", "images.json", "join.json",
-    "keys.json", "links.json", "pairing.json", "quota-alerts.json", "schemas.json",
+    "keys.json", "links.json", "pairing.json", "quota-alerts.json", "quotas.json", "schemas.json",
 ]
 
 /** Vector files only the machine's code runs: the local agent computes pace and alerts (#1147). */
@@ -304,12 +304,49 @@ final class ProtocolVectorsTests: XCTestCase {
             )
             XCTAssertEqual(wants, c["expect"]!.bool!, c.str("name"))
         }
-        for c in v["migrate"]!.items {
-            let old = c["old"]!
-            let migrated = QuotaAlertSettings.migrate(
-                notify: old["notify"]!.items.map(\.string!), notifyLow: old.opt("notifyLow")?.bool ?? true, notifyPace: old.opt("notifyPace")?.bool ?? true
+        XCTAssertEqual(v["labels"]!.items.map { [$0.items[0].string!, $0.items[1].string!] }, QuotaAlertSettings.labels.map { [$0.0, $0.1] })
+        for c in v["with"]!.items {
+            let all = c["all"]!.items.map { ($0.str("provider"), $0.str("window")) }
+            let got = settings(c["settings"]!).with(provider: c.str("provider"), window: c.str("window"), all: all, picked: c.opt("picked")?.items.map(\.string!))
+            XCTAssertEqual(got, settings(c["expect"]!), c.str("name"))
+        }
+    }
+
+    func testQuotas() throws {
+        let v = try vectors("quotas.json")
+        let iso = ISO8601DateFormatter()
+        let now = iso.date(from: v.str("now"))!
+        func date(_ j: JSON?) -> Date? { j?.string.flatMap(iso.date(from:)) }
+        func pace(_ j: JSON?) -> Pace? {
+            guard let j else { return nil }
+            return Pace(
+                stage: j.str("stage"), expectedUsedPercent: j["expectedUsedPercent"]!.number!, deltaPercent: j["deltaPercent"]!.number!,
+                projectedUsedPercent: j.opt("projectedUsedPercent")?.number, willLastToReset: j["willLastToReset"]!.bool!, runsOutAt: j.opt("runsOutAt")?.string
             )
-            XCTAssertEqual(migrated, settings(c["expect"]!), c.str("name"))
+        }
+        XCTAssertEqual(Set(v["words"]!.object!.keys), Set(QuotaState.allCases.map(\.rawValue)))
+        for s in QuotaState.allCases { XCTAssertEqual(v["words"]![s.rawValue]!.string, s.word) }
+        for c in v["state"]!.items {
+            let p = pace(c.opt("pace"))
+            let course = QuotaCourse(p, unusedAlert: c["unusedAlert"]!.bool!)
+            let resetsAt = date(c.opt("resetsAt"))
+            let state = QuotaState(course, runsOutAt: p?.runsOutAt.flatMap(iso.date(from:)), resetsAt: resetsAt, now: now)
+            let expect = c["expect"]!
+            XCTAssertEqual(course.rawValue, expect.str("course"), c.str("name"))
+            XCTAssertEqual(state.rawValue, expect.str("state"), c.str("name"))
+            XCTAssertEqual(state.word, expect.str("word"), c.str("name"))
+            XCTAssertEqual(quotaRunningOut(course, resetsAt: resetsAt, now: now), expect["runningOut"]!.bool!, c.str("name"))
+        }
+        let windows = v["arrange"]!["windows"]!.items
+        for c in v["arrange"]!["cases"]!.items {
+            let got = arrangeQuotas(
+                windows, order: c["order"]!.items.map(\.string!), hidden: c["hidden"]!.items.map(\.string!),
+                runningOutFirst: c["runningOutFirst"]!.bool!,
+                provider: { $0.str("provider") }, machine: { $0.opt("machine")?.string },
+                runningOut: { quotaRunningOut(QuotaCourse(pace($0.opt("pace")), unusedAlert: false), resetsAt: date($0.opt("resetsAt")), now: now) },
+                names: { $0.compare($1) }
+            )
+            XCTAssertEqual(got.map { $0.str("id") }, c["expect"]!.items.map(\.string!), c.str("name"))
         }
     }
 
