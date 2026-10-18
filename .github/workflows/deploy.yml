@@ -311,6 +311,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           REV: ${{ inputs.sha }}
           VERSION: ${{ inputs.version }}
+          # release.yml's limit on the runner it picked.
+          WAIT_MINUTES: ${{ vars.TRUSTED_RUNNER && 715 || 350 }}
         run: |
           run_url=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID
           echo "starbridge.run waits for your approval: $run_url"
@@ -328,7 +330,7 @@ jobs:
           name=${VERSION:+v$VERSION}
           context="Ships ${name:+$name, }commit $short${subject:+: $subject}."
           if [ -n "$VERSION" ]; then
-            context="$context The release gives up waiting 12 hours after this deploy started, at about $(date -u -d '+12 hours' '+%H:%M UTC'), and publishes nothing."
+            context="$context The release gives up waiting at about $(date -u -d "+$WAIT_MINUTES minutes" '+%H:%M UTC') and publishes nothing."
           fi
           context="$context Approve it on the run page, linked here; this card does not approve it, and closes when the run ends."
           # `next` is the newest rc: the latest final may predate STARBRIDGE_MACHINE.
