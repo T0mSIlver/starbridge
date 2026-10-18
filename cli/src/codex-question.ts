@@ -203,7 +203,7 @@ async function ask(
         askedAt: new Date(at + i),
       };
       try {
-        ({ id: ids[i] } = await postDecision(sub, s, resolveSource(input, ctx.env, cwd)));
+        ({ id: ids[i] } = await postDecision(sub, s, resolveSource(input, ctx.env, cwd), signal));
       } catch (e) {
         failed.abort();
         throw e;

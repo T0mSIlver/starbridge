@@ -388,9 +388,16 @@ function sealWithPictures(
 
 /**
  * Seals the decision to every active device, posts it and records it in the state, so its
- * answer reaches the session that asked. Returns the decision.
+ * answer reaches the session that asked. Returns the decision. A post cut short is settled, as
+ * the server may hold it: `elsewhere` once `answered` is aborted (a harness's picker answered
+ * at the keyboard, #1913), otherwise withdrawn.
  */
-export async function postDecision(ctx: Ctx, s: Session, input: AskInput): Promise<Decision> {
+export async function postDecision(
+  ctx: Ctx,
+  s: Session,
+  input: AskInput,
+  answered?: AbortSignal,
+): Promise<Decision> {
   const deadline = AbortSignal.timeout(POST_MS);
   const signal = ctx.signal ? AbortSignal.any([ctx.signal, deadline]) : deadline;
   // Ctrl-C exits 130, as everywhere (CONTRACT.md); the deadline says what it cut.
@@ -470,7 +477,7 @@ export async function postDecision(ctx: Ctx, s: Session, input: AskInput): Promi
           s,
           dir,
           decision.id,
-          "withdrawn",
+          answered?.aborted ? "elsewhere" : "withdrawn",
           false,
           undefined,
           AbortSignal.timeout(WITHDRAW_MS),
@@ -484,16 +491,24 @@ export async function postDecision(ctx: Ctx, s: Session, input: AskInput): Promi
   }
 }
 
-/** Posts a decision and prints its id; with `wait`, then waits for its answer. */
+/**
+ * Posts a decision and prints its id; with `wait`, then waits for its answer. `answered` is
+ * `postDecision`'s: aborted, a post it cuts is settled elsewhere.
+ */
 export async function ask(
   ctx: Ctx,
   asked: AskInput,
-  opts: { wait?: boolean; timeout?: string; json?: boolean },
+  opts: { wait?: boolean; timeout?: string; json?: boolean; answered?: AbortSignal },
 ): Promise<number> {
   const s = session(ctx);
   const { input, warning } = bindSession(asked, ctx.env);
   const resolved = resolveSource(input, ctx.env, process.cwd());
-  const decision = await postDecision(ctx, s, { ...resolved, waiting: input.waiting || opts.wait });
+  const decision = await postDecision(
+    ctx,
+    s,
+    { ...resolved, waiting: input.waiting || opts.wait },
+    opts.answered,
+  );
   ctx.out(decision.id);
   if (warning) ctx.err(warning);
   // With no agent, nothing tells which sessions run a mod: the poller's lease says only that one
