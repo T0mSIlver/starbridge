@@ -1,12 +1,17 @@
 package dev.starbridge.app
 
+import android.app.Application
+import androidx.test.core.app.ApplicationProvider
 import com.goterl.lazysodium.LazySodiumJava
 import com.goterl.lazysodium.SodiumJava
 import dev.starbridge.app.data.Alerts
+import dev.starbridge.app.data.Colours
 import dev.starbridge.app.data.Decision
 import dev.starbridge.app.data.Disk
 import dev.starbridge.app.data.Phase
+import dev.starbridge.app.data.Prefs
 import dev.starbridge.app.data.Prompt
+import dev.starbridge.app.data.QuotaSettings
 import dev.starbridge.app.data.Run
 import dev.starbridge.app.data.Saved
 import dev.starbridge.app.data.Secrets
@@ -18,6 +23,7 @@ import dev.starbridge.app.protocol.Joins
 import dev.starbridge.app.protocol.Pairings
 import dev.starbridge.app.protocol.ProtocolJson
 import dev.starbridge.app.protocol.Sodium
+import dev.starbridge.app.push.Notifier
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -67,6 +73,8 @@ class FirstDeviceTest {
     private val account = "acct"
     private lateinit var disk: Disk
     private var forgotten = 0
+    private val context = ApplicationProvider.getApplicationContext<Application>()
+    private val prefs = Prefs(context)
     private lateinit var server: String
     private lateinit var open: () -> ServerStore
 
@@ -110,7 +118,10 @@ class FirstDeviceTest {
             override fun prompt(prompt: Prompt) {}
             override fun cancelPrompt(prompt: Prompt) {}
             override fun run(run: Run) {}
-            override fun forget() { forgotten++ }
+            override fun forget() {
+                forgotten++
+                Notifier(context, prefs).forget()
+            }
         }
         open = { ServerStore(disk, OkHttpClient(), sodium, envelopes, directories, Pairings(sodium), Joins(sodium), alerts, "Phone", server, false, scope) }
 
@@ -151,11 +162,18 @@ class FirstDeviceTest {
         assertNotNull(disk.secrets().signSk)
         // Sign-in offers the way out: signing out removes the keys, and the account's hold (#1192).
         signedOut.pushHold.value = 45
+        prefs.setColours(Colours.Wallpaper)
+        prefs.setQuota(QuotaSettings(showUsed = false))
+        prefs.firstShow("codex/weekly/90")
         signedOut.signOut()
         until { !signedOut.keepsKeys.value }
         assertEquals(null, disk.saved()?.me)
         assertEquals(null, signedOut.pushHold.value)
         // And what the account left on the phone: notifications, quota settings, shown alerts (#2035).
         assertEquals(1, forgotten)
+        val reopened = Prefs(context)
+        assertEquals(QuotaSettings(), reopened.quota.value)
+        assertEquals(true, reopened.firstShow("codex/weekly/90"))
+        assertEquals(Colours.Wallpaper, reopened.colours.value)
     }
 }
