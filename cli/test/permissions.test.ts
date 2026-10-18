@@ -851,7 +851,7 @@ const PICKED = [
     header: "Sizes",
     options: [
       { label: "S", description: "Small" },
-      { label: "L", description: "Large" },
+      { label: "L, tall", description: "Large" },
     ],
     multiSelect: true,
   },
@@ -889,7 +889,7 @@ test("a device answers Claude Code's picker, permissions on or off, and the sess
   expect(Date.parse(sizes?.createdAt as string) - Date.parse(color?.createdAt as string)).toBe(1);
   expect(readFileSync(join(ctx.store.dir, PROMPTS_OPEN), "utf8")).toBe("open");
   await server.answer(color?.id as string, { choice: "Blue" });
-  await server.answer(sizes?.id as string, { text: "S, L" });
+  await server.answer(sizes?.id as string, { text: "S, L, tall" });
   expect(await done).toBe(0);
   expect(JSON.parse(ctx.lines[0] as string)).toEqual({
     hookSpecificOutput: {
@@ -898,7 +898,8 @@ test("a device answers Claude Code's picker, permissions on or off, and the sess
         behavior: "allow",
         updatedInput: {
           questions: PICKED,
-          answers: { "Which color?": "Blue", "Which sizes?": "S, L" },
+          // A multi-select answer goes back as its labels, for Claude Code to join (#2061).
+          answers: { "Which color?": "Blue", "Which sizes?": ["S", "L, tall"] },
         },
       },
     },
@@ -988,6 +989,26 @@ test("extended questions keep their title, description and preview, and a number
   });
 });
 
+test("a number asked again after the picker closed is settled, not left open (#2061)", async () => {
+  const ctx = await paired(server);
+  const slides = SHAPES.extended.questions.slice(1, 2);
+  const done = hookPermission(ctx, picker(slides), { agent: "claude-code", wait: "5s" });
+  await until(async () => (await server.opened("waiting")).length === 1);
+  const [card] = await server.opened("decision");
+  // `hook settle` closed the picker (the keyboard answered it) as the device's reply came in.
+  ctx.store.updateState((st) => {
+    const a = st.asked[card?.id as string];
+    if (a) a.pickerClosed = true;
+  });
+  await server.answer(card?.id as string, { text: "50" });
+  expect(await done).toBe(0);
+  expect(ctx.lines).toEqual([]);
+  const again = (await server.opened("decision")).find((d) => d.id !== card?.id);
+  // Settled as moot at once, not withdrawn once the hook's own time ran out.
+  const moot = (await server.opened("settled")).find((x) => x.itemId === again?.id);
+  expect(moot).toMatchObject({ outcome: "elsewhere" });
+});
+
 test("a preview reaches the card as plain text, after every option, within the context limit (#2061)", () => {
   const markdown = "```ts\nconst a = <b>1</b>;\n```";
   const html = "<style>p{color:red}</style><p>Tom &amp; Jerry&nbsp;&lt;3</p><script>x()</script>";
@@ -1008,6 +1029,10 @@ test("a number reply is checked against the question's range and step (#2061)", 
   const q = { kind: "number", min: 0, max: 1, step: 0.25, unit: "%" };
   expect(numberReply(" 0.75 % ", q)).toEqual({ value: "0.75" });
   expect(numberReply("1", q)).toEqual({ value: "1" });
+  // Float error grows with the number of steps.
+  expect(numberReply("10000.005", { kind: "number", min: 0, max: 20000, step: 0.001 })).toEqual({
+    value: "10000.005",
+  });
   expect(numberReply("0.3", q)).toEqual({
     error: '"0.3" is not a number from 0 to 1 %, in steps of 0.25.',
   });

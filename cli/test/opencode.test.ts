@@ -152,4 +152,13 @@ test("a reply that names only a multi-select question's labels picks those label
   ]);
   expect(opencodeAnswer(reply("Redis, and Postgres"), q)).toEqual(["Redis, and Postgres"]);
   expect(opencodeAnswer(reply("Redis"), { ...q, multiple: false })).toEqual(["Redis"]);
+  // A label with a comma in it is matched whole before the reply is split.
+  const commas = {
+    question: "Which?",
+    multiple: true,
+    options: [{ label: "Red, dark" }, { label: "Red" }, { label: "Blue" }],
+  };
+  expect(opencodeAnswer(reply("Red, dark, Blue"), commas)).toEqual(["Red, dark", "Blue"]);
+  expect(opencodeAnswer(reply("Red,\nBlue, Red"), commas)).toEqual(["Red", "Blue"]);
+  expect(opencodeAnswer(reply("Red, darkish"), commas)).toEqual(["Red, darkish"]);
 });

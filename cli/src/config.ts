@@ -170,6 +170,11 @@ export interface State {
        * the picker is answered there.
        */
       picker?: string;
+      /**
+       * Set by `hook settle` on every card of that picker, answered or not, once it closed: a
+       * number the hook asks again after that is settled, not left open (#2061).
+       */
+      pickerClosed?: boolean;
     }
   >;
   /**

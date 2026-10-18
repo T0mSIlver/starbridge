@@ -384,6 +384,9 @@ function pickerOpen(st: ReturnType<Ctx["store"]["state"]>, session: string): str
 }
 
 async function settlePicker(ctx: Ctx, session: string, outcome: "elsewhere" | "withdrawn") {
+  ctx.store.updateState((st) => {
+    for (const a of Object.values(st.asked)) if (a.picker === session) a.pickerClosed = true;
+  });
   // Its own deadline, not SIGTERM's: a stalled server would hold the hook until the harness
   // kills it (#1286).
   const deadline = AbortSignal.timeout(REPORT_MS);
@@ -434,6 +437,7 @@ async function racePicker(
       const sub: Ctx = { ...ctx, signal, err: () => {} };
       const card = questionInput({ ...q, multiple: q.multiSelect }, { html });
       // A number off its range is asked again, saying why: Claude Code takes any answer as given.
+      let first: string | undefined;
       for (let refused: string | undefined; ; ) {
         const input: AskInput = {
           ...card,
@@ -453,6 +457,12 @@ async function racePicker(
           failed.abort();
           throw e;
         }
+        first ??= id;
+        // The picker closed while this card was being posted: it is moot (#2061).
+        if (id !== first && ctx.store.state().asked[first]?.pickerClosed) {
+          await settlePicker(ctx, sessionId, "elsewhere");
+          return undefined;
+        }
         const answer = await pickerAnswer(sub, s, id);
         if (!answer) return undefined;
         if (q.kind !== "number") return opencodeAnswer(answer, { ...q, multiple: q.multiSelect });
@@ -467,8 +477,12 @@ async function racePicker(
   if (error && !signal.aborted)
     ctx.err(`starbridge: question not sent: ${(error.reason as Error).message}`);
   if (picked.every((p) => p !== undefined) && !signal.aborted) {
+    // A multi-select answer goes back as its labels: Claude Code joins them as its picker does.
     const answers = Object.fromEntries(
-      questions.map((q, i) => [q.question, (picked[i] as string[]).join(", ")]),
+      questions.map((q, i) => {
+        const p = picked[i] as string[];
+        return [q.question, q.multiSelect ? p : p.join(", ")];
+      }),
     );
     const decision = {
       behavior: "allow",
@@ -640,8 +654,8 @@ export function numberReply(text: string, q: Extended): { value: string } | { er
   const min = q.min ?? Number.NEGATIVE_INFINITY;
   const max = q.max ?? Number.POSITIVE_INFINITY;
   const steps = q.step ? (n - (q.min ?? 0)) / q.step : 0;
-  // Steps of 0.1 add up with float error: 0.3 is 2.9999999999999996 steps of 0.1 from 0.
-  const onStep = Math.abs(steps - Math.round(steps)) < 1e-9;
+  // Float error grows with the count: 0.3 is 2.9999999999999996 steps of 0.1 from 0.
+  const onStep = Math.abs(steps - Math.round(steps)) <= 1e-9 * Math.max(1, Math.abs(steps));
   if (Number.isFinite(n) && n >= min && n <= max && onStep) return { value: String(n) };
   return { error: `"${clip(bare, 40)}" is not ${numberRange(q)}.` };
 }
@@ -652,6 +666,8 @@ export function numberReply(text: string, q: Extended): { value: string } | { er
  */
 function previewText(preview: string, html: boolean): string {
   if (!html && !/^\s*</.test(preview)) return preview.trim();
+  // Tag stripping rescans after each unclosed "<": the card keeps far less than this anyway.
+  preview = preview.slice(0, 2 * CONTEXT_CHARS);
   const entities: Record<string, string> = {
     amp: "&",
     lt: "<",
@@ -682,12 +698,32 @@ function previewText(preview: string, html: boolean): string {
 export function opencodeAnswer(a: Answer, q: OpencodeQuestion): string[] {
   if (a.choice !== undefined) return [a.choice];
   const text = a.text ?? "";
-  const labels = new Set((q.options ?? []).map((o) => o.label));
-  const parts = text
-    .split(/[,\n]/)
-    .map((p) => p.trim())
-    .filter((p) => p.length > 0);
-  return q.multiple && parts.length > 0 && parts.every((p) => labels.has(p)) ? parts : [text];
+  const picked = q.multiple
+    ? labelsIn(
+        text,
+        (q.options ?? []).map((o) => o.label),
+      )
+    : undefined;
+  return picked ?? [text];
+}
+
+/**
+ * The labels a reply names, each once, when it names nothing else: a label is matched whole
+ * before the reply is split on commas or lines, so one with a comma in it stays one (#2061).
+ */
+function labelsIn(text: string, labels: string[]): string[] | undefined {
+  const longest = [...labels].filter((l) => l.trim()).sort((a, b) => b.length - a.length);
+  const found = new Set<string>();
+  let rest = text.replace(/^[\s,]+/, "");
+  while (rest) {
+    const label = longest.find(
+      (l) => rest.startsWith(l) && /^\s*([,\n]|$)/.test(rest.slice(l.length)),
+    );
+    if (!label) return undefined;
+    found.add(label);
+    rest = rest.slice(label.length).replace(/^[\s,]+/, "");
+  }
+  return found.size > 0 ? [...found] : undefined;
 }
 
 /**
