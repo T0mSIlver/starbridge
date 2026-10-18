@@ -74,6 +74,7 @@ import {
   paired,
   SYSTEM_PATH,
   sh,
+  slashes,
   type TestCtx,
   testCtx,
   until,
@@ -98,6 +99,30 @@ afterEach(async () => {
 });
 
 /**
+ * This repository as GitHub serves it to setup's Pi step: two commits, the second tagged as this
+ * release. A machine's git config sends the GitHub URL here, so no test fetches from GitHub.
+ */
+const PI_REPO = (() => {
+  const repo = mkdtempSync(join(tmpdir(), "starbridge-pi-repo-"));
+  const env = {
+    ...process.env,
+    GIT_AUTHOR_NAME: "t",
+    GIT_AUTHOR_EMAIL: "t@example.com",
+    GIT_COMMITTER_NAME: "t",
+    GIT_COMMITTER_EMAIL: "t@example.com",
+  };
+  const git = (...args: string[]) => spawnSync("git", ["-C", repo, ...args], { env });
+  git("init", "-q");
+  writeFileSync(join(repo, "package.json"), "{}");
+  git("add", "-A");
+  git("commit", "-q", "-m", "older");
+  writeFileSync(join(repo, "package.json"), '{"pi":{}}');
+  git("commit", "-q", "-am", "release");
+  git("tag", `v${VERSION}`);
+  return repo;
+})();
+
+/**
  * A paired machine in a throwaway HOME, with fake systemctl, loginctl, claude and codexbar on
  * the PATH.
  */
@@ -116,6 +141,10 @@ async function machine(name?: string) {
       FAKE_LOG: log,
       FAKE_STATE: join(home, "fake-state"),
     }),
+  );
+  writeFileSync(
+    join(home, ".gitconfig"),
+    `[url "file://${slashes(PI_REPO)}"]\n\tinsteadOf = https://github.com/T0mSIlver/starbridge\n`,
   );
   const units = join(home, ".config/systemd/user");
   mkdirSync(units, { recursive: true });
@@ -199,6 +228,16 @@ test("setup --yes installs the agent, the plugins and the skills, and uploads a 
     `# Written by starbridge ${VERSION}; \`starbridge uninstall\` removes it.`,
   );
   expect(m.calls()).toContain(`pi install ${PI_PACKAGE}`);
+  // Only the release's commit, not the whole repository's history (#2039).
+  if (!WINDOWS) {
+    const checkout = join(m.home, ".pi/agent/git/github.com/T0mSIlver/starbridge");
+    const git = (...args: string[]) =>
+      spawnSync("git", ["-C", checkout, ...args], { encoding: "utf8" }).stdout.trim();
+    expect(git("rev-parse", "HEAD")).toBe(
+      spawnSync("git", ["-C", PI_REPO, "rev-parse", "HEAD"], { encoding: "utf8" }).stdout.trim(),
+    );
+    expect(git("rev-list", "--count", "HEAD")).toBe("1");
+  }
   expect(readFileSync(join(m.home, ".codex/rules/starbridge.rules"), "utf8")).toContain(
     '"starbridge", ["ask"',
   );

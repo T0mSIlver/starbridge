@@ -148,7 +148,47 @@ function piFailure(r: Awaited<ReturnType<typeof pi>>): string {
   return reason?.trim() ?? failure(r);
 }
 
+/** Where Pi keeps its checkout of this repository (Pi's own layout for a `git:` source). */
+const piCheckout = (sys: Home) =>
+  join(
+    sys.ctx.env.PI_CODING_AGENT_DIR || join(sys.home, ".pi", "agent"),
+    "git",
+    "github.com",
+    "T0mSIlver",
+    "starbridge",
+  );
+
+/**
+ * Fetches only the release's commit into Pi's checkout before `pi install`, which would clone the
+ * whole repository, over 800 MB and growing (#2039). Pi finds the ref already checked out and only
+ * fetches the ref again. Best effort: on any failure the folder goes, and Pi clones as before.
+ */
+async function prefetchPiPackage(sys: Sys) {
+  const dir = piCheckout(sys);
+  if (existsSync(dir)) return;
+  const ref = COMMIT ?? `refs/tags/v${VERSION}`;
+  const git = (...args: string[]) => run(sys, "git", ["-C", dir, ...args], { timeoutMs: 300_000 });
+  try {
+    mkdirSync(dir, { recursive: true });
+    // What Pi writes on a first clone, so a Pi folder kept in git ignores its checkouts.
+    const ignore = join(dirname(dirname(dirname(dir))), ".gitignore");
+    if (!existsSync(ignore)) writeFileSync(ignore, "*\n!.gitignore\n");
+    for (const args of [
+      ["init", "-q"],
+      ["remote", "add", "origin", "https://github.com/T0mSIlver/starbridge"],
+      ["fetch", "-q", "--depth", "1", "--no-tags", "origin", ref],
+      ["checkout", "-q", "FETCH_HEAD"],
+    ]) {
+      const r = await git(...args);
+      if (r?.code !== 0) throw new Error(failure(r));
+    }
+  } catch {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
 export async function installPiPackage(sys: Sys) {
+  await prefetchPiPackage(sys);
   const r = await pi(sys, "install", PI_PACKAGE);
   if (r?.code !== 0) throw new Error(`pi install ${PI_PACKAGE}: ${piFailure(r)}`);
 }
