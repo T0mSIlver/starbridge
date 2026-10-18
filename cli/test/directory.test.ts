@@ -6,6 +6,7 @@ import {
   generateMemberKeys,
   generateRecoverySeed,
   open,
+  type PermissionAnswer,
   publicKeys,
   recoveryConfirmEntry,
   recoveryEntry,
@@ -24,7 +25,7 @@ import { Store } from "../src/config";
 import { refreshDirectory, session } from "../src/context";
 import { poll, postWaiting } from "../src/decisions";
 import { hookPermission } from "../src/hook";
-import { postSettled } from "../src/permissions";
+import { postPermission, postSettled } from "../src/permissions";
 import { pushOnce } from "../src/quota";
 import { postRun } from "../src/run";
 import { FAKE_CODEXBAR, paired, testCtx, until } from "./helpers";
@@ -206,6 +207,109 @@ test("a revocation the server withholds stops counting once another device answe
   expect(await delivered()).toEqual([second]);
   expect(ctx.store.state().answers[first]).toBeUndefined();
   expect(ctx.errors.at(-1)).toContain("revoked");
+});
+
+test("an answer held while the directory is behind outlasts any number of snoozes (#1976)", async () => {
+  const { ctx, laptop, ids, answer, delivered, serve, known } = await withholding();
+  const machine = (await server.directory()).members.get(ctx.store.machine()?.id as string)?.member;
+  if (!machine) throw new Error("no machine");
+  await laptopAppends(laptop, (dir) =>
+    revokeEntry(dir, { id: laptop.id, signKey: laptop.keys.sign.privateKey }, "phone", now()),
+  );
+  const full = await laptopChain(laptop);
+  const head = { length: full.length, head: full.head };
+  serve(known);
+  try {
+    answer(laptop, ids[0], "No", head);
+    await poll(ctx, session(ctx), { cursor: ctx.store.state().cursor, seconds: 1, shared: true });
+    expect(ctx.errors.at(-1)).toContain("holding back directory entries");
+    // The laptop snoozes another question again and again, each read in a later poll.
+    for (let i = 0; i < 101; i++) {
+      const body = {
+        v: 1,
+        id: `z_${crypto.randomUUID()}`,
+        decisionId: ids[1],
+        to: [machine.id],
+        until: new Date(Date.now() + 3_600_000).toISOString(),
+        at: now(),
+        dir: head,
+      } satisfies Snooze;
+      server.inject(
+        seal("snooze", body, { id: laptop.id, signKey: laptop.keys.sign.privateKey }, [machine]),
+      );
+    }
+    await poll(ctx, session(ctx), { cursor: ctx.store.state().cursor, seconds: 1, shared: true });
+  } finally {
+    serve(undefined);
+  }
+  // Served in full: the held answer counts.
+  expect(await delivered()).toEqual([ids[0]]);
+});
+
+test("a permission answer held while the directory is behind outlasts any number of snoozes (#1976)", async () => {
+  const { ctx, laptop, ids, serve, known } = await withholding();
+  const machine = (await server.directory()).members.get(ctx.store.machine()?.id as string)?.member;
+  if (!machine) throw new Error("no machine");
+  const hook = {
+    session_id: "s",
+    cwd: "/work/p",
+    hook_event_name: "PermissionRequest",
+    tool_name: "Bash",
+    tool_input: { command: "git push" },
+  };
+  const permissionId = await postPermission(ctx, session(ctx), hook, {
+    agent: "claude-code",
+    source: { project: "p", session: "s" },
+    waitMs: 60_000,
+  });
+  // Sealed now, with the head of the chain the laptop is about to extend.
+  const asked = (await server.opened("permission")).find((p) => p.id === permissionId);
+  await laptopAppends(laptop, (dir) =>
+    revokeEntry(dir, { id: laptop.id, signKey: laptop.keys.sign.privateKey }, "phone", now()),
+  );
+  const full = await laptopChain(laptop);
+  const head = { length: full.length, head: full.head };
+  const signer = { id: laptop.id, signKey: laptop.keys.sign.privateKey };
+  serve(known);
+  try {
+    server.inject(
+      seal(
+        "permission-answer",
+        {
+          v: 1,
+          id: `pa_${crypto.randomUUID()}`,
+          permissionId,
+          to: machine.id,
+          answeredAt: now(),
+          inputHash: asked?.inputHash as string,
+          behavior: "allow",
+          scope: "once",
+          dir: head,
+        } satisfies PermissionAnswer,
+        signer,
+        [machine],
+      ),
+    );
+    await poll(ctx, session(ctx), { cursor: ctx.store.state().cursor, seconds: 1, shared: true });
+    expect(ctx.errors.at(-1)).toContain("holding back directory entries");
+    for (let i = 0; i < 101; i++) {
+      const body = {
+        v: 1,
+        id: `z_${crypto.randomUUID()}`,
+        decisionId: ids[1],
+        to: [machine.id],
+        until: new Date(Date.now() + 3_600_000).toISOString(),
+        at: now(),
+        dir: head,
+      } satisfies Snooze;
+      server.inject(seal("snooze", body, signer, [machine]));
+    }
+    await poll(ctx, session(ctx), { cursor: ctx.store.state().cursor, seconds: 1, shared: true });
+  } finally {
+    serve(undefined);
+  }
+  await poll(ctx, session(ctx), { cursor: ctx.store.state().cursor, seconds: 1, shared: true });
+  expect(ctx.store.state().permissions?.[permissionId]?.answer?.behavior).toBe("allow");
 });
 
 test("a snooze's signed head shows a withheld revocation too (#571)", async () => {

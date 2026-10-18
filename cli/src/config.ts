@@ -89,6 +89,11 @@ export interface State {
       answerIn?: boolean;
       /** With `answerIn`: takes a Done answer from a device (#539). */
       done?: boolean;
+      /**
+       * Recorded before its post returned (#1975), so an answer the server hands out meanwhile
+       * counts; not re-sealed until then.
+       */
+      posting?: boolean;
       /** Closed with `settle`, or by `revoked`: no answer will follow. */
       settled?: boolean;
       /** Settled here, but its settled notice has not reached the server yet (#584). */

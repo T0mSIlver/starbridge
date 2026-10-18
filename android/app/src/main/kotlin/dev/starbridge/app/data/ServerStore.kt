@@ -1768,6 +1768,8 @@ class ServerStore(
             } catch (e: Exception) {
                 // Nothing may escape this coroutine: it would end the app (#253).
                 Log.w("Starbridge", "push failed", e)
+                // Its item may be unread, and with `pushed` set no poll reads it (#1978).
+                catchUp()
             }
         }
         withTimeoutOrNull(pushWaitMs) { job.join() }

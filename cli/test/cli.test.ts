@@ -18,7 +18,7 @@ import { makeAgent } from "../src/agent/main";
 import { hookStop } from "../src/antigravity";
 import { run } from "../src/cli";
 import { session } from "../src/context";
-import { DONE_LINE, poll, typedBreaks } from "../src/decisions";
+import { DONE_LINE, poll, postDecision, typedBreaks } from "../src/decisions";
 import { piAllow, piPermissionConfig } from "../src/pi";
 import { configCommand, offerPiChain } from "../src/settings";
 import { agentAddress, approveAndConfirm, FAKE_CODEXBAR, paired, testCtx, until } from "./helpers";
@@ -1349,6 +1349,74 @@ test("a waiting flip within the same second as the last one carries a later time
   expect(second?.state).toBe("working");
   // Devices keep the update with the latest `at`: an equal one would leave them on `waiting`.
   expect(Date.parse(second?.at ?? "")).toBeGreaterThan(Date.parse(first?.at ?? ""));
+});
+
+test("an answer the agent reads before the question's post replies still counts (#1975)", async () => {
+  const ctx = await paired(server);
+  const s = session(ctx);
+  const postItem = s.api.postItem.bind(s.api);
+  // The server stores the question; before its reply comes back, the owner answers and the
+  // agent's poll reads that answer.
+  s.api.postItem = async (item, signal) => {
+    await postItem(item, signal);
+    if (item.kind !== "decision") return;
+    await server.answer(item.id, { choice: "Merge" });
+    const st = ctx.store.state();
+    await poll(ctx, session(ctx), { cursor: st.cursor, seconds: 0, shared: true });
+  };
+  const decision = await postDecision(ctx, s, {
+    question: "Merge #12 now?",
+    options: ["Merge", "Wait"],
+    session: "s",
+  });
+  expect(ctx.store.state().answers[decision.id]?.answer.choice).toBe("Merge");
+});
+
+test("a question settled while its post is in flight is settled once the server holds it (#1975)", async () => {
+  const ctx = await paired(server);
+  const s = session(ctx);
+  const postItem = s.api.postItem.bind(s.api);
+  s.api.postItem = async (item, signal) => {
+    // The session's questions are settled before the server stores this one.
+    if (item.kind === "decision")
+      expect(await run(["settle", "--session", "s", "--outcome", "elsewhere"], ctx)).toBe(0);
+    await postItem(item, signal);
+  };
+  const decision = await postDecision(ctx, s, {
+    question: "Merge #12 now?",
+    options: ["Merge", "Wait"],
+    session: "s",
+  });
+  const notices = (await server.opened("settled")).filter((n) => n.itemId === decision.id);
+  expect(notices.length).toBeGreaterThan(0);
+  // The server now holds it closed: a device's answer is refused.
+  await expect(server.answer(decision.id, { choice: "Merge" })).rejects.toThrow();
+});
+
+test("a question settled while its post is in flight keeps that outcome when the reply is lost (#1975)", async () => {
+  const ctx = await paired(server);
+  const s = session(ctx);
+  const postItem = s.api.postItem.bind(s.api);
+  s.api.postItem = async (item, signal) => {
+    if (item.kind !== "decision") return postItem(item, signal);
+    expect(await run(["settle", "--session", "s", "--outcome", "elsewhere"], ctx)).toBe(0);
+    await postItem(item, signal);
+    throw new TypeError("fetch failed");
+  };
+  await expect(
+    postDecision(ctx, s, { question: "Merge #12 now?", options: ["Merge", "Wait"], session: "s" }),
+  ).rejects.toThrow();
+  const notices = await server.opened("settled");
+  expect(notices.length).toBeGreaterThan(0);
+  expect(notices.map((n) => n.outcome)).toEqual(notices.map(() => "elsewhere"));
+});
+
+test("a question the server refused leaves nothing asked (#1975)", async () => {
+  server.stop();
+  server = await LiveServer.start({ limits: { ...DEFAULT_LIMITS, storedBytes: 1 } });
+  const ctx = await paired(server);
+  expect(await run(["ask", "--question", "First?", "--session", "s"], ctx)).not.toBe(0);
+  expect(ctx.store.state().asked).toEqual({});
 });
 
 test("ask on a full account says so in plain words (#586)", async () => {

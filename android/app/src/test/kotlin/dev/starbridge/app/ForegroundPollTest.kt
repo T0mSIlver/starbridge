@@ -121,7 +121,9 @@ class ForegroundPollTest {
                         json(page())
                     } else json(empty)
                     "/v1/quota" -> json(empty)
-                    else -> MockResponse(404, okhttp3.Headers.headersOf(), "")
+                    // One item's own read fails, as on a server erroring for a moment.
+                    else -> if (request.url.encodedPath.startsWith("/v1/items/")) MockResponse(500, okhttp3.Headers.headersOf(), "")
+                    else MockResponse(404, okhttp3.Headers.headersOf(), "")
                 }
             }
             http.start()
@@ -179,6 +181,20 @@ class ForegroundPollTest {
         val pushed = reads.get()
         Thread.sleep(300)
         assertEquals(pushed, reads.get())
+    }
+
+    @Test
+    fun aPushWhoseItemCannotBeReadLeavesTheAppInFrontReadingItLater() {
+        val w = World()
+        val store = w.store
+        store.foreground(true)
+        // A push arrived before, so nothing polls.
+        runBlocking { store.onPush("""{"kind":"answered","id":"d_none"}""") }
+        synchronized(w.listed) { w.listed += w.decision("d_big") }
+        // Too large for its push: only the id comes, and reading the item fails.
+        runBlocking { store.onPush("""{"v":1,"kind":"decision","id":"d_big"}""") }
+        // In front, a sync shows it in the inbox, as the poll does.
+        until { store.decisions.value.map { it.id } == listOf("d_big") }
     }
 
     @Test
