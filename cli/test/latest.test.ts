@@ -6,6 +6,7 @@ import { Release } from "../src/agent/release";
 import { run } from "../src/cli";
 import { CHECK_EVERY_MS, checkLatest } from "../src/latest";
 import { latestLine } from "../src/setup/status";
+import { MANAGED } from "../src/update";
 import { VERSION } from "../src/version";
 import { paired, type TestCtx, testCtx } from "./helpers";
 
@@ -184,4 +185,14 @@ test("an unreadable latest.json is moved aside and read again; an unreadable age
   await new Release(hub).tick();
   expect(await run(["--version"], ctx)).toBe(0);
   expect(ctx.errors).toEqual([]);
+});
+
+test("an npm release candidate updates along next, a final along latest (#2038)", () => {
+  // `latest` would take a release candidate back to the last final.
+  expect(MANAGED.npm.update("0.1.8-rc.3")).toBe(
+    "npm i -g starbridge@next, then starbridge setup --refresh",
+  );
+  expect(MANAGED.npm.update("0.1.8")).toBe(
+    "npm i -g starbridge@latest, then starbridge setup --refresh",
+  );
 });
