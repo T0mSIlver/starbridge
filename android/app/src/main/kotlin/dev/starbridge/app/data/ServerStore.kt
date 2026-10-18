@@ -1557,7 +1557,8 @@ class ServerStore(
             val to = listOf(machine) + dir.members.values.filter { it.active && it.member.role == "device" }.map { it.member }
             // The latest `at`, in whole seconds, wins everywhere: an Undo within the second of its
             // snooze goes a second later, or the machine and the other devices keep the snooze (#1981).
-            val at = listOfNotNull(Instant.parse(now()), instant(d.snoozedAt)?.plusSeconds(1)?.truncatedTo(ChronoUnit.SECONDS)).max().toString()
+            val last = saved.decisions.find { it.body.id == id }?.snoozedAt
+            val at = listOfNotNull(Instant.parse(now()), instant(last)?.plusSeconds(1)?.truncatedTo(ChronoUnit.SECONDS)).max().toString()
             val body = buildJsonObject {
                 put("v", 1)
                 put("id", newId("z_"))
