@@ -310,6 +310,22 @@ enum Notify {
         return (granted, await center.notificationSettings().authorizationStatus == .denied)
     }
 
+    /**
+     * Signing out or deleting the account (#2013): what the notification center holds for it goes.
+     * Delivered notifications carry decrypted questions, and each question's category its answer
+     * options as button titles.
+     */
+    static func forgetAll() async {
+        await changingCategories {
+            let center = UNUserNotificationCenter.current()
+            center.removeAllDeliveredNotifications()
+            center.removeAllPendingNotificationRequests()
+            center.setNotificationCategories([])
+            _ = await center.notificationCategories()
+        }
+        await setBadge(0)
+    }
+
     /** Closes every notification about item `id`: answered, settled, or snoozed elsewhere. */
     static func removeDelivered(about id: String) async { await removeDelivered(about: [id]) }
 
