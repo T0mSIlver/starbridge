@@ -302,6 +302,9 @@ export function openDb(path: string): Database {
   db.run("PRAGMA journal_mode = WAL");
   db.run("PRAGMA foreign_keys = ON");
   db.run("PRAGMA busy_timeout = 5000");
+  // Zero deleted rows' bytes in the file and WAL, so a deleted account leaves nothing behind
+  // beyond the backups /privacy names (#2015).
+  db.run("PRAGMA secure_delete = ON");
   // Transactions begin IMMEDIATE, taking the write lock first, so they wait under busy_timeout
   // while another connection writes. A deferred one that reads before it writes gets SQLITE_BUSY
   // at once in WAL mode (#628).

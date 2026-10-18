@@ -1,6 +1,6 @@
 import { Database } from "bun:sqlite";
 import { expect, test } from "bun:test";
-import { mkdtempSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { MIGRATIONS, migrate, NOT_ADDITIVE, openDb, refuses, SCHEMA_VERSION } from "../src/db";
@@ -175,4 +175,19 @@ test("every migration not listed in NOT_ADDITIVE only adds (#1555)", () => {
 test("openDb records the additive migrations it runs from V11 on (#1555)", () => {
   const db = openDb(join(mkdtempSync(join(tmpdir(), "sb-db-")), "db.sqlite"));
   expect(db.query("SELECT version FROM additive_migrations").all()).toContainEqual({ version: 11 });
+});
+
+test("a deleted row's bytes leave the database file and its WAL", () => {
+  const path = join(mkdtempSync(join(tmpdir(), "sb-db-")), "s.db");
+  const db = openDb(path);
+  const marker = "secure-delete-marker-2015";
+  db.run("CREATE TABLE t (v TEXT)");
+  db.run("INSERT INTO t VALUES (?)", [marker.repeat(200)]);
+  db.run("PRAGMA wal_checkpoint(TRUNCATE)");
+  db.run("DELETE FROM t");
+  db.run("PRAGMA wal_checkpoint(TRUNCATE)");
+  for (const file of [path, `${path}-wal`]) {
+    if (existsSync(file)) expect(readFileSync(file).includes(marker)).toBe(false);
+  }
+  db.close();
 });
