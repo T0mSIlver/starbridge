@@ -133,7 +133,7 @@ behind it: the required status, and no admin bypass on any environment.
 
 The `starbridge.run` environment waits for the maintainer's review before a deploy runs, and an
 rc's release waits up to 12 hours for the deploy. When `deploy.yml` is dispatched, its `card` job
-posts a Starbridge card, "Approve the prod deploy of v1.2.3-rc.1?", with the run's link; the same job closes it once the deploy job starts or ends. The card does
+posts a Starbridge card, "Approve the prod deploy of v1.2.3-rc.1?", with the run's link; the same job closes it once the deploy job starts or ends, or after 6 hours, the longest a GitHub runner lives. The card does
 not approve anything: the review is on the run's page.
 
 The job uses a machine of their own, "GitHub Actions", whose identity is the `CI_CARD_MACHINE`

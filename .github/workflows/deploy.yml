@@ -292,8 +292,8 @@ jobs:
   card:
     if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-    # Waits as long as the release does for the deploy (release.yml).
-    timeout-minutes: 740
+    # GitHub's runners end every job at 6 hours, so the card closes by then at the latest.
+    timeout-minutes: 360
     permissions:
       actions: read
       contents: read
@@ -338,12 +338,12 @@ jobs:
       # cancelled one ends too, and the card closes either way.
       - name: Close the card when the deploy starts or ends
         if: env.ID != ''
-        timeout-minutes: 735
+        timeout-minutes: 355
         env:
           GH_TOKEN: ${{ github.token }}
           STARBRIDGE_MACHINE: ${{ secrets.CI_CARD_MACHINE }}
         run: |
-          for _ in $(seq 1 1500); do
+          for _ in $(seq 1 700); do
             job=$(curl -fsS -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' \
               "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/jobs?per_page=100" |
               jq -r '[.jobs[] | select(.name == "deploy")][0] | "\(.status) \(.conclusion)"') || job=
@@ -354,6 +354,7 @@ jobs:
             esac
             sleep 30
           done
+          starbridge settle "$ID" --outcome withdrawn --reason "Six hours passed; the deploy may still wait on its run page" || true
 
   # starbridge.run, by dispatch only: release.yml for each rc tag, the owner for a hotfix. It waits
   # for the commit's `staging` status, up to an hour, as an rc tag can follow its merge by minutes,
@@ -393,6 +394,7 @@ jobs:
             echo "staging: ${state}; waiting"
             sleep 30
           done
+          starbridge settle "$ID" --outcome withdrawn --reason "Six hours passed; the deploy may still wait on its run page" || true
           echo "staging never passed $REV within an hour"
           exit 1
       # The key's forced command on the box runs starbridge-deploy with this commit id and nothing
