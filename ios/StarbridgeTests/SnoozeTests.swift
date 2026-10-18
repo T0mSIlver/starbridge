@@ -9,8 +9,16 @@ final class SnoozeTests: XCTestCase {
         return c
     }()
 
-    private func at(_ day: Int, _ hour: Int, _ minute: Int) -> Date {
-        calendar.date(from: DateComponents(year: 2026, month: 10, day: day, hour: hour, minute: minute))!
+    private func at(_ day: Int, _ hour: Int, _ minute: Int, _ second: Int = 0) -> Date {
+        calendar.date(from: DateComponents(year: 2026, month: 10, day: day, hour: hour, minute: minute, second: second))!
+    }
+
+    /** The clock is rarely on a whole minute: 16:30:20 offers 17:30, not 17:31 (#1951). */
+    func testTodayStartsOnTheHalfHourWhateverTheSeconds() {
+        XCTAssertEqual(SnoozeTimes.start(at(11, 0, 0), at(11, 16, 30, 20), calendar), at(11, 17, 30))
+        XCTAssertEqual(SnoozeTimes.start(at(11, 0, 0), at(11, 16, 0, 20), calendar), at(11, 17, 0))
+        XCTAssertEqual(SnoozeTimes.start(at(11, 0, 0), at(11, 16, 29, 59), calendar), at(11, 17, 30))
+        XCTAssertEqual(SnoozeTimes.start(at(11, 0, 0), at(11, 16, 31, 5), calendar), at(11, 18, 0))
     }
 
     func testThisEveningIsOfferedUntilFive() {
