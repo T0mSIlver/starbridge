@@ -174,7 +174,7 @@ test("notifications: only new alerts, of the kinds picked for their window", () 
   expect(kinds(picked, 300)).toEqual(["zai low"]);
 });
 
-test("settings from before #914 move to per-window alerts; Hidden ticks become ticks off", () => {
+test("settings from before #914 keep the default alerts; Hidden ticks become ticks off", () => {
   const old = readSettings({
     notify: ["zai"],
     notifyLow: false,
@@ -182,10 +182,9 @@ test("settings from before #914 move to per-window alerts; Hidden ticks become t
     workDays: 5,
     ticks: "hidden",
   });
-  expect(old.alerts.windows).toEqual({ zai: ["runs-out", "unused-headroom"] });
+  expect(old.alerts).toEqual(DEFAULT_SETTINGS.alerts);
   expect(old.workDays).toBeNull();
-  expect("notify" in old || "ticks" in old).toBe(false);
-  expect(readSettings({ notify: [] }).alerts).toEqual(DEFAULT_SETTINGS.alerts);
+  expect("notify" in old || "notifyLow" in old || "ticks" in old).toBe(false);
   expect(readSettings(null)).toEqual(DEFAULT_SETTINGS);
 });
 

@@ -1,6 +1,8 @@
 package dev.starbridge.app.data
 
 import android.util.Log
+import dev.starbridge.app.protocol.QuotaCourse
+import dev.starbridge.app.protocol.quotaCourse
 import dev.starbridge.app.protocol.Images
 import dev.starbridge.app.protocol.RecoveryKeys
 import dev.starbridge.app.protocol.recoverySignSeed
@@ -2558,16 +2560,13 @@ class ServerStore(
 
 private operator fun dev.starbridge.app.protocol.DirectoryMember.component1() = member
 
-/**
- * A window's state, by the web's rule: "Headroom unused" only when the uploader raised an
- * unused-headroom alert for it, not whenever usage runs behind the steady pace.
- */
-internal fun paceOf(pace: dev.starbridge.app.protocol.Pace?, unusedAlert: Double?): Pace = when {
-    pace == null || pace.stage == "unknown" -> Pace.Unknown
-    !pace.willLastToReset ->
-        pace.runsOutAt?.let { runCatching { OffsetDateTime.parse(it).toInstant() }.getOrNull() }?.let { Pace.RunsOut(it) } ?: Pace.Unknown
-    unusedAlert != null -> Pace.Unused(unusedAlert.roundToInt())
-    else -> Pace.Even
+/** A window's course by the protocol's rule (quotaCourse), with what the card shows of it. */
+internal fun paceOf(pace: dev.starbridge.app.protocol.Pace?, unusedAlert: Double?): Pace = when (quotaCourse(pace, unusedAlert != null)) {
+    QuotaCourse.UNKNOWN -> Pace.Unknown
+    QuotaCourse.RUNS_OUT ->
+        pace?.runsOutAt?.let { runCatching { OffsetDateTime.parse(it).toInstant() }.getOrNull() }?.let { Pace.RunsOut(it) } ?: Pace.Unknown
+    QuotaCourse.UNUSED -> Pace.Unused(unusedAlert!!.roundToInt())
+    QuotaCourse.EVEN -> Pace.Even
 }
 
 /**

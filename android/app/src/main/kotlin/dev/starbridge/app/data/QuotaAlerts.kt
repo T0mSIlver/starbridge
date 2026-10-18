@@ -15,8 +15,8 @@ data class QuotaAlerts(
     val long: List<String> = listOf(RUNS_OUT),
     /**
      * A window's own choices, by `provider/window`, where an empty list is off. A key with no
-     * window covers every window of its provider that has no key of its own; only settings from
-     * before #914 write one.
+     * window covers every window of its provider that has no key of its own; only settings moved
+     * from before #914, by releases up to 0.1.8, hold one.
      */
     val windows: Map<String, List<String>> = emptyMap(),
 ) {
@@ -53,25 +53,13 @@ data class QuotaAlerts(
 
     companion object {
         const val RUNS_OUT = "runs-out"
-        val CHOICES = listOf(RUNS_OUT, "low-50", "low-20", "unused-headroom")
+        /** The choices and their names, in the alerts table's column order (QUOTA_ALERT_LABELS). */
+        val LABELS = listOf(RUNS_OUT to "Runs out", "low-50" to "50% left", "low-20" to "20% left", "unused-headroom" to "Unused")
+        val CHOICES = LABELS.map { it.first }
 
         fun key(provider: String, window: String) = "$provider/$window"
 
         /** A window of a day or less, as `alertsFor` tells them apart. */
         fun isShort(minutes: Int?) = minutes != null && minutes <= 24 * 60
-
-        /**
-         * Settings from before #914: a bell per provider and two switches, "runs low" (50% and 20%
-         * left) and "runs out" (which also covered unused headroom). Each provider with its bell on
-         * keeps what the switches let through; the others get the defaults.
-         */
-        fun migrate(notify: List<String>, low: Boolean, pace: Boolean): QuotaAlerts {
-            val kept = buildList {
-                if (pace) add(RUNS_OUT)
-                if (low) addAll(listOf("low-50", "low-20"))
-                if (pace) add("unused-headroom")
-            }
-            return QuotaAlerts(windows = notify.associateWith { kept })
-        }
     }
 }
