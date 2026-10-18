@@ -317,6 +317,11 @@ class Notifier(private val context: Context, private val prefs: Prefs) : Alerts 
         manager.cancelAll()
     }
 
+    override fun forget() {
+        clearAll()
+        prefs.forgetAccount()
+    }
+
     // --- Permission prompts ------------------------------------------------------
 
     /** One notification per session, updated in place: the prompt it shows now. */

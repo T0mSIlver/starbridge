@@ -85,6 +85,11 @@ interface Alerts {
      * decrypted questions and commands and let the owner answer.
      */
     fun clearAll() {}
+    /**
+     * Signed out, deleted or removed: [clearAll], and what the account left on this phone beyond
+     * its keys, its quota settings and the quota alerts already shown (#2035).
+     */
+    fun forget() = clearAll()
     /** An answer the server refused; the notification and its buttons come back. */
     fun failed(decision: Decision, why: String) {}
 }
@@ -390,7 +395,7 @@ class ServerStore(
         showJob?.cancel()
         for (kind in kinds) kind.wipe()
         disk.wipe()
-        alerts.clearAll()
+        alerts.forget()
         pendingPush = null
         confirmedPush = null
         saved = Saved(saved.server, pushType = saved.pushType)

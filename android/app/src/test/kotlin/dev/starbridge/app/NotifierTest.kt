@@ -8,7 +8,9 @@ import android.content.Context
 import android.content.Intent
 import dev.starbridge.app.data.browserIntent
 import androidx.test.core.app.ApplicationProvider
+import dev.starbridge.app.data.Colours
 import dev.starbridge.app.data.Prefs
+import dev.starbridge.app.data.QuotaSettings
 import dev.starbridge.app.data.visible
 import dev.starbridge.app.push.Notifier
 import dev.starbridge.app.push.PromptReceiver
@@ -92,6 +94,21 @@ class NotifierTest {
         assertEquals("a\tb\nc\\u000D", visible("a\tb\nc\r"))
         val p = fake.prompts.first().copy(input = """{"command":"ls #\u202E hs"}""")
         assertEquals("ls #\\u202E hs", p.fullInput)
+    }
+
+    // Signing out forgets the account's quota settings and shown alerts, not the look (#2035).
+    @Test
+    fun forgettingTheAccountKeepsTheDisplaySettings() {
+        val prefs = Prefs(context)
+        prefs.setColours(Colours.Wallpaper)
+        prefs.setQuota(QuotaSettings(showUsed = false))
+        assertTrue(prefs.firstShow("codex/weekly/90"))
+        Notifier(context, prefs).forget()
+        assertEquals(QuotaSettings(), prefs.quota.value)
+        val reopened = Prefs(context)
+        assertEquals(QuotaSettings(), reopened.quota.value)
+        assertTrue(reopened.firstShow("codex/weekly/90"))
+        assertEquals(Colours.Wallpaper, reopened.colours.value)
     }
 
     // With "Allow from notifications" on, both Allows send (#390).
