@@ -435,31 +435,34 @@ export async function postDecision(
     // A wait for this decision starts at the cursor known now, so it never misses its answer.
     const cursor = ctx.store.state().cursor;
     // Asked already waiting, its waiting state pushes instead, so the notification says so.
-    const record = () =>
+    ctx.store.updateState((st) => {
+      st.asked[decision.id] = {
+        question: decision.question,
+        options: decision.options,
+        askedAt: decision.createdAt,
+        to: decision.to,
+        body: decision,
+        ...(cursor !== undefined ? { cursor } : {}),
+        ...(decision.source.session && !input.held ? { session: decision.source.session } : {}),
+        ...(decision.source.sessionTitle ? { sessionTitle: decision.source.sessionTitle } : {}),
+        project: decision.source.project,
+        ...(decision.answerIn ? { answerIn: true } : {}),
+        ...(decision.done ? { done: true } : {}),
+        ...(input.codex && decision.source.session ? { codex: input.codex } : {}),
+        ...(input.antigravity && decision.source.session ? { antigravity: input.antigravity } : {}),
+        ...(input.extensionAnswers && decision.source.session ? { extensionAnswers: true } : {}),
+        ...(input.held ? { held: true } : {}),
+        ...(input.picker ? { picker: input.picker } : {}),
+        ...(input.subagent && decision.source.session && !input.held
+          ? { subagent: input.subagent }
+          : {}),
+        // Recorded before the post: the server may hand out its answer before it replies.
+        posting: true,
+      };
+    });
+    const posted = () =>
       ctx.store.updateState((st) => {
-        st.asked[decision.id] = {
-          question: decision.question,
-          options: decision.options,
-          askedAt: decision.createdAt,
-          to: decision.to,
-          body: decision,
-          ...(cursor !== undefined ? { cursor } : {}),
-          ...(decision.source.session && !input.held ? { session: decision.source.session } : {}),
-          ...(decision.source.sessionTitle ? { sessionTitle: decision.source.sessionTitle } : {}),
-          project: decision.source.project,
-          ...(decision.answerIn ? { answerIn: true } : {}),
-          ...(decision.done ? { done: true } : {}),
-          ...(input.codex && decision.source.session ? { codex: input.codex } : {}),
-          ...(input.antigravity && decision.source.session
-            ? { antigravity: input.antigravity }
-            : {}),
-          ...(input.extensionAnswers && decision.source.session ? { extensionAnswers: true } : {}),
-          ...(input.held ? { held: true } : {}),
-          ...(input.picker ? { picker: input.picker } : {}),
-          ...(input.subagent && decision.source.session && !input.held
-            ? { subagent: input.subagent }
-            : {}),
-        };
+        delete st.asked[decision.id]?.posting;
       });
     try {
       await s.api.postItem(input.waiting ? { ...item, quiet: true } : item, signal);
@@ -467,9 +470,13 @@ export async function postDecision(
       // Refused: the server stored nothing. Otherwise it may have stored the decision before the
       // reply was lost (#1289): withdrawn, or its card stays open on the devices and its answer
       // finds no decision here. A server that never got it refuses this, which changes nothing.
+      if (e instanceof ApiError && e.status < 500)
+        ctx.store.updateState((st) => {
+          delete st.asked[decision.id];
+        });
       if (e instanceof ApiError && e.code === "duplicate-id" && tries < 4) continue;
       if (!(e instanceof ApiError) || e.status >= 500) {
-        record();
+        posted();
         await settleOne(
           { ...ctx, signal: undefined },
           s,
@@ -483,7 +490,7 @@ export async function postDecision(
       }
       throw cut(e);
     }
-    record();
+    posted();
     if (input.waiting) await markWaiting(ctx, () => postWaiting(ctx, s, decision.id, "waiting"));
     return decision;
   }
@@ -1332,7 +1339,12 @@ async function reseal(ctx: Ctx, s: Session, known: Directory): Promise<void> {
   // A decision's recipients are those of its body as last posted; `to`, whose answers count, may
   // hold more: a post whose reply was lost could have reached the server.
   const decisions = Object.entries(st.asked).flatMap(([id, a]) =>
-    a.body && a.to && !a.settled && !st.answers[id] && now - Date.parse(a.askedAt) < RESEAL_MS
+    a.body &&
+    a.to &&
+    !a.posting &&
+    !a.settled &&
+    !st.answers[id] &&
+    now - Date.parse(a.askedAt) < RESEAL_MS
       ? [{ id, a, body: a.body }]
       : [],
   );

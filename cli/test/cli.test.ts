@@ -18,7 +18,7 @@ import { makeAgent } from "../src/agent/main";
 import { hookStop } from "../src/antigravity";
 import { run } from "../src/cli";
 import { session } from "../src/context";
-import { DONE_LINE, poll, typedBreaks } from "../src/decisions";
+import { DONE_LINE, poll, postDecision, typedBreaks } from "../src/decisions";
 import { piAllow, piPermissionConfig } from "../src/pi";
 import { configCommand, offerPiChain } from "../src/settings";
 import { agentAddress, approveAndConfirm, FAKE_CODEXBAR, paired, testCtx, until } from "./helpers";
@@ -1333,6 +1333,35 @@ test("a decision whose post lost its reply is withdrawn, so its card does not st
   expect(await server.opened("settled")).toMatchObject([
     { itemId: decision?.id, outcome: "withdrawn" },
   ]);
+});
+
+test("an answer the agent reads before the question's post replies still counts (#1975)", async () => {
+  const ctx = await paired(server);
+  const s = session(ctx);
+  const postItem = s.api.postItem.bind(s.api);
+  // The server stores the question; before its reply comes back, the owner answers and the
+  // agent's poll reads that answer.
+  s.api.postItem = async (item, signal) => {
+    await postItem(item, signal);
+    if (item.kind !== "decision") return;
+    await server.answer(item.id, { choice: "Merge" });
+    const st = ctx.store.state();
+    await poll(ctx, session(ctx), { cursor: st.cursor, seconds: 0, shared: true });
+  };
+  const decision = await postDecision(ctx, s, {
+    question: "Merge #12 now?",
+    options: ["Merge", "Wait"],
+    session: "s",
+  });
+  expect(ctx.store.state().answers[decision.id]?.answer.choice).toBe("Merge");
+});
+
+test("a question the server refused leaves nothing asked (#1975)", async () => {
+  server.stop();
+  server = await LiveServer.start({ limits: { ...DEFAULT_LIMITS, storedBytes: 1 } });
+  const ctx = await paired(server);
+  expect(await run(["ask", "--question", "First?", "--session", "s"], ctx)).not.toBe(0);
+  expect(ctx.store.state().asked).toEqual({});
 });
 
 test("ask on a full account says so in plain words (#586)", async () => {
