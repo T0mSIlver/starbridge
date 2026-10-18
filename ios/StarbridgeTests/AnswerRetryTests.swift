@@ -162,6 +162,8 @@ final class BackNowTests: XCTestCase {
         XCTAssertNil(store.notice)
         // Every device and the machine keep the latest `at`: Back now must carry a later one.
         XCTAssertGreaterThan(Dates.instant(stamps[1]), Dates.instant(stamps[0]))
+        // Its until no later than when it was sent: the server schedules no return push.
+        XCTAssertLessThanOrEqual(Dates.instant(try XCTUnwrap(store.decision("d_one")?.snoozedUntil)), Date())
         XCTAssertNil(store.decision("d_one")?.snoozed)
     }
 }

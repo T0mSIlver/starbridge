@@ -93,8 +93,9 @@ enum SnoozeStamps {
     /**
      * Every device and the machine keep the snooze with the latest `at`, so one within the second
      * of the question's last snooze goes a second later, or they would keep that one: Back now
-     * right after a snooze would reach no one. Back now goes at its own `at`, which every client
-     * reads as back now (PROTOCOL.md, "Snoozing").
+     * right after a snooze would reach no one. Back now goes no later than its own `at`, which
+     * every client reads as back now (PROTOCOL.md, "Snoozing"), nor than now: the server pushes a
+     * return at a future `until`, which would show "Back from snooze".
      */
     static func of(until: Date, last: String?, now: Date) -> (until: String, at: String) {
         let second = Date(timeIntervalSince1970: now.timeIntervalSince1970.rounded(.down))
@@ -103,8 +104,7 @@ enum SnoozeStamps {
             let next = Date(timeIntervalSince1970: last.timeIntervalSince1970.rounded(.down) + 1)
             if next > at { at = next }
         }
-        let stamp = Dates.format(at)
-        return (until > now ? Dates.format(until) : stamp, stamp)
+        return (until > now ? Dates.format(until) : Dates.format(min(now, at)), Dates.format(at))
     }
 }
 

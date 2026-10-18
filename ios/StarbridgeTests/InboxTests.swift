@@ -231,6 +231,24 @@ final class InboxTests: XCTestCase {
         XCTAssertNil(store.notice)
         XCTAssertTrue(store.openDecisions.contains { $0.id == "d_four" })
 
+        // --- Snooze, then Back now within the same second: the machine keeps Back now (#1991) ---
+        await store.snooze("d_four", until: Date().addingTimeInterval(3600))
+        await store.snooze("d_four", until: Date())
+        XCTAssertNil(store.notice)
+        XCTAssertTrue(store.openDecisions.contains { $0.id == "d_four" })
+        // The machine reads every snooze sealed to it and keeps the latest `at` (cli acceptSnooze).
+        let page = try await call(machineToken, "GET", "/answers?wait=0&kinds=snooze")
+        let chain = try await directory()
+        let seen = try (page?["items"]?.array ?? []).compactMap { json -> Snooze? in
+            let item = try SealedItem(json: json["item"] ?? json)
+            return try Envelopes.open(item, me: machine.id, keys: keys.box, directory: chain).body as? Snooze
+        }.filter { $0.decisionId == "d_four" }
+        XCTAssertGreaterThanOrEqual(seen.count, 4)
+        let latest = try XCTUnwrap(seen.max { Dates.instant($0.at) < Dates.instant($1.at) })
+        let tied = seen.filter { $0.at == latest.at }
+        XCTAssertEqual(tied.count, 1, "two snoozes share the latest at \(latest.at): the machine keeps the first")
+        XCTAssertLessThanOrEqual(Dates.instant(latest.until), Dates.instant(latest.at))
+
         // --- Past a page's 4 MB of images, questions list without theirs, fetched when shown (#1735) ---
         let big = Array(repeating: UInt8(7), count: 350_000)
         for id in ["d_big1", "d_big2", "d_big3"] {

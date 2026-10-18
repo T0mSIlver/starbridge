@@ -62,7 +62,12 @@ final class SnoozeTests: XCTestCase {
         XCTAssertEqual(snoozed.until, "2026-10-18T11:00:00Z")
         let back = SnoozeStamps.of(until: now.addingTimeInterval(0.3), last: snoozed.at, now: now.addingTimeInterval(0.3))
         XCTAssertEqual(back.at, "2026-10-18T10:00:01Z")
-        XCTAssertEqual(back.until, back.at)
+        // At or before its `at`, and not after now, so the server schedules no return.
+        XCTAssertEqual(back.until, "2026-10-18T10:00:00Z")
+        // A last snooze from the web, in milliseconds, within the same second.
+        let fromWeb = SnoozeStamps.of(until: now, last: "2026-10-18T10:00:00.900Z", now: now.addingTimeInterval(0.3))
+        XCTAssertEqual(fromWeb.at, "2026-10-18T10:00:01Z")
+        XCTAssertEqual(fromWeb.until, "2026-10-18T10:00:00Z")
         // A second later, the clock's own second.
         let later = SnoozeStamps.of(until: now.addingTimeInterval(5), last: snoozed.at, now: now.addingTimeInterval(5))
         XCTAssertEqual(later.at, "2026-10-18T10:00:05Z")
