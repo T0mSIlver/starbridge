@@ -4,7 +4,7 @@ import { createServer, request } from "node:http";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { LiveServer } from "@starbridge/server/test-support";
-import { socketPath as cliSocketPath } from "../../cli/src/agent/api";
+import { configKey as cliConfigKey, socketPath as cliSocketPath } from "../../cli/src/agent/api";
 import { makeAgent } from "../../cli/src/agent/main";
 import type { Agent } from "../../cli/src/agent/server";
 import { run } from "../../cli/src/cli";
@@ -13,12 +13,13 @@ import {
   type AgentHost,
   AgentLoop,
   type AgentTiming,
+  agentAddress,
+  configKey,
   HEADERS,
   joinLines,
   type Line,
   pidRuns,
   type Reply,
-  socketPath,
 } from "../hooks/agent.ts";
 import { Handover } from "../hooks/handover.ts";
 import { ownedFile, socketFetch } from "../hooks/node.ts";
@@ -143,7 +144,7 @@ function loop(host: AgentHost) {
   return { loop: l, done };
 }
 
-test("the mod finds the socket where the CLI's agent listens", () => {
+test("the mod finds the socket where the CLI's agent listens, and sends its config folder's key", async () => {
   // The CLI reads the home directory from the OS, the mod from $HOME: the same in a session.
   const HOME = homedir();
   const cases: Record<string, string>[] = [
@@ -161,14 +162,33 @@ test("the mod finds the socket where the CLI's agent listens", () => {
   for (const env of cases) {
     const dir =
       env.STARBRIDGE_CONFIG_DIR ?? `${env.XDG_CONFIG_HOME ?? `${env.HOME}/.config`}/starbridge`;
-    expect(socketPath(env)).toBe(cliSocketPath(env, dir));
+    const { socket, config } = await agentAddress(env);
+    expect(socket).toBe(cliSocketPath(env, dir));
+    expect(config).toBe(env.STARBRIDGE_AGENT_SOCKET ? undefined : cliConfigKey(dir));
   }
+  // The mod builds the path from $HOME by hand, the CLI with path.join: the same key either way.
+  for (const [mod, cli] of [
+    ["/home/tom//.config/starbridge", "/home/tom/.config/starbridge"],
+    ["/home/tom/.config/starbridge/", "/home/tom/.config/starbridge"],
+  ] as const)
+    expect(await configKey(mod)).toBe(cliConfigKey(cli, "linux"));
+  const windows = "C:\\Users\\tom\\.config\\starbridge";
+  expect(await configKey("C:/Users/tom/.config/starbridge", true)).toBe(
+    cliConfigKey(windows, "win32"),
+  );
+  // Elsewhere a backslash is part of a name: two folders, two keys.
+  expect(cliConfigKey("/tmp/a\\b", "linux")).not.toBe(cliConfigKey("/tmp/a/b", "linux"));
+  // Two homes of one user share $XDG_RUNTIME_DIR, never an agent (#1966).
+  const run = { XDG_RUNTIME_DIR: "/run/user/1000" };
+  expect((await agentAddress({ ...run, HOME: "/home/a" })).socket).not.toBe(
+    (await agentAddress({ ...run, HOME: "/home/b" })).socket,
+  );
 });
 
-test("on Windows the mod finds the agent's port file where the CLI writes it", () => {
+test("on Windows the mod finds the agent's port file where the CLI writes it", async () => {
   const env = { USERPROFILE: "C:/Users/tom", OS: "Windows_NT" };
   const dir = "C:/Users/tom/.config/starbridge";
-  expect(socketPath(env)).toBe(`${dir}/agent.port`);
+  expect((await agentAddress(env)).socket).toBe(`${dir}/agent.port`);
   expect(cliSocketPath(env, dir, "win32").replace(/\\/g, "/")).toBe(`${dir}/agent.port`);
 });
 
@@ -178,6 +198,15 @@ test("the Node fetch of Pi and opencode reaches an agent on loopback TCP", async
   const r = await socketFetch(socket, "GET", "/v1/status");
   expect(r.status).toBe(200);
   expect(JSON.parse(r.text).socket).toBe(socket);
+});
+
+test("an agent refuses a mod that worked out its address from another config folder (#1966)", async () => {
+  await startAgent();
+  const own = await configKey(cli.store.dir);
+  expect((await socketFetch(socket, "GET", "/v1/status", undefined, own)).status).toBe(200);
+  const other = await socketFetch(socket, "GET", "/v1/status", undefined, await configKey("/b"));
+  expect(other.status).toBe(421);
+  expect(JSON.parse(other.text).error).toBe("other-config");
 });
 
 test("Pi and opencode send nothing to the port of an agent that died (#570)", async () => {

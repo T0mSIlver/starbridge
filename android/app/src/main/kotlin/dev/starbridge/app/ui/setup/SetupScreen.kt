@@ -86,6 +86,7 @@ import dev.starbridge.app.R
 import dev.starbridge.app.ui.Sym
 import dev.starbridge.app.ui.Symbol
 import javax.inject.Inject
+import dev.starbridge.app.ui.busyAs
 
 @HiltViewModel
 class SetupViewModel @Inject constructor(private val store: Store) : ViewModel() {
@@ -175,7 +176,7 @@ internal fun Title(text: String, modifier: Modifier = Modifier) {
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 internal fun Primary(text: String, busy: Boolean, enabled: Boolean = true, icon: (@Composable () -> Unit)? = null, onClick: () -> Unit) {
-    Button(onClick = onClick, enabled = enabled && !busy, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
+    Button(onClick = onClick, enabled = enabled && !busy, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp).busyAs(text, busy)) {
         if (busy) {
             LoadingIndicator(Modifier.size(Spacing.s6), color = MaterialTheme.colorScheme.onPrimary)
         } else {

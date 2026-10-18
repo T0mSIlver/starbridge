@@ -20,7 +20,14 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { Browser, BrowserContext, BrowserContextOptions, Locator, Page } from "playwright";
+import type {
+  Browser,
+  BrowserContext,
+  BrowserContextOptions,
+  Locator,
+  Page,
+  Route,
+} from "playwright";
 import { layoutProblems, type Problem, zoomText } from "./layout.ts";
 import {
   boot,
@@ -106,6 +113,20 @@ async function follow(page: Page, link: Locator, path: string) {
       );
     }
   }
+}
+
+/** The first Tab reaches a skip link, shown only now, and Enter on it focuses the page's main. */
+async function skipToContent(page: Page) {
+  const skip = page.getByRole("link", { name: "Skip to content" });
+  const rect = () => skip.evaluate((a) => a.getBoundingClientRect().bottom);
+  if ((await rect()) > 0) throw new Error("the skip link shows before the keyboard reaches it");
+  await page.locator("body").press("Tab");
+  if (!(await skip.evaluate((a) => a === document.activeElement)))
+    throw new Error("the first Tab does not reach the skip link");
+  if ((await rect()) <= 0) throw new Error("the skip link stays hidden on focus");
+  await page.keyboard.press("Enter");
+  if ((await page.evaluate(() => document.activeElement?.id)) !== "main")
+    throw new Error("the skip link does not focus the main content");
 }
 
 /**
@@ -488,6 +509,20 @@ async function main() {
       "/sample",
     ])
       await visitor.goto(ORIGIN + path, { waitUntil: "networkidle" });
+    step("docs: code blocks scroll from the keyboard, and a skip link leads past the nav (#1944)");
+    await visitor.goto(`${ORIGIN}/docs/cli`);
+    const blocks = await visitor
+      .locator("article pre")
+      .evaluateAll((pres) =>
+        pres.map((p) => [
+          p.getAttribute("tabindex"),
+          p.getAttribute("role"),
+          p.getAttribute("aria-label"),
+        ]),
+      );
+    if (blocks.length === 0 || blocks.some(([i, r, l]) => i !== "0" || !r || !l))
+      throw new Error(`a docs code block is not keyboard-scrollable: ${JSON.stringify(blocks)}`);
+    await skipToContent(visitor);
     await visitor.close();
   }
 
@@ -508,6 +543,8 @@ async function main() {
   if (!/^([0-9A-Z]{4}){7}$/.test(key)) throw new Error(`expected a recovery key, got: ${key}`);
   await noWordsAsked(page);
   await shoot(page, "setup");
+  if ((await page.locator('header a[href="/"]').count()) !== 1)
+    throw new Error("the first-run page's brand link is outside a header landmark");
   await page.setViewportSize({ width: 1280, height: 860 });
   await page.emulateMedia({ colorScheme: "light" });
   await page.getByLabel(/I wrote this key down/).check();
@@ -516,6 +553,8 @@ async function main() {
   // No machine yet: the inbox says how to add one (#610).
   await page.getByRole("heading", { name: "Add a machine" }).waitFor();
   await shoot(page, "inbox-empty");
+  step("the app's skip link leads past the rail (#1944)");
+  await skipToContent(page);
 
   step("turn on Web Push");
   await page.getByRole("button", { name: "Turn on notifications" }).click();
@@ -1026,7 +1065,7 @@ async function main() {
       throw new Error("the open decision has no chip for its Claude artifact");
 
     // Desktop: one selection, whether picked by click or by J and K; focus follows it in the list.
-    const row = page.locator('[aria-current="true"]:has(button[data-id])');
+    const row = page.locator("[data-row]:has(button[aria-current='true'])");
     const detail = page.locator('section[aria-label="Selected"] h2');
     await page.locator("button[data-id]").first().click();
     for (const key of ["j", "j", "k"]) {
@@ -1038,6 +1077,24 @@ async function main() {
         );
       if (!(await row.evaluate((el) => el.contains(document.activeElement))))
         throw new Error(`after ${key}, focus is not on the selected row`);
+    }
+    step("the inbox list tells a screen reader what is selected, grouped and listed (#1942)");
+    {
+      const list = page.locator('section[aria-label="Inbox"]');
+      // The selected row's own button says so; its wrapper does not repeat it.
+      if ((await list.locator('button[aria-current="true"]').count()) !== 1)
+        throw new Error("exactly one row's button should be aria-current");
+      if ((await list.locator("li[aria-current]").count()) !== 0)
+        throw new Error("a row's wrapper carries aria-current, where nothing can focus");
+      const heads = await list.getByRole("heading", { level: 2 }).allInnerTexts();
+      if (!heads.some((h) => h.startsWith("Needs you")))
+        throw new Error(`no heading names the Needs you group: ${heads}`);
+      // Every listed row is a list item, and the list names its items.
+      const rows = await list
+        .locator("[data-id]")
+        .evaluateAll((buttons) => buttons.filter((b) => b.parentElement?.tagName !== "LI").length);
+      const items = await list.getByRole("listitem").count();
+      if (items === 0 || rows > 0) throw new Error(`${items} list items, ${rows} rows outside one`);
     }
     step("on a phone, Back closes an open question first; a reload and a link keep it (#347)");
     {
@@ -1276,16 +1333,88 @@ async function main() {
       .waitFor();
 
     step("a withdrawn decision shows the agent's reason in History (#1008)");
-    const moot = cli(
-      "moot",
+    // Every time a status line takes the text, so a repeat the page does not re-announce shows.
+    await page.evaluate(() => {
+      const heard: string[] = [];
+      (window as unknown as { heard: string[] }).heard = heard;
+      new MutationObserver((records) => {
+        const seen = new Set<Element>();
+        for (const r of records) {
+          const el = (r.target instanceof Element ? r.target : r.target.parentElement)?.closest(
+            '[role="status"]',
+          );
+          if (el?.textContent && !seen.has(el)) {
+            seen.add(el);
+            heard.push(el.textContent);
+          }
+        }
+      }).observe(document.body, { childList: true, characterData: true, subtree: true });
+    });
+    const heardCount = (text: RegExp) =>
+      page.evaluate(
+        ([src]) =>
+          (window as unknown as { heard: string[] }).heard.filter((x) => new RegExp(src).test(x))
+            .length,
+        [text.source],
+      );
+    const retry = [
+      ...["ask", "--question", "Retry the flaky upload test?", "--option", "Retry"],
+      ...["--option", "Skip", "--project", "starbridge"],
+    ];
+    const moot = cli("moot", retry, machineHome);
+    const [mootId] = await moot.waitFor(/d_[\w-]+/);
+    if ((await moot.exited) !== 0) throw new Error("ask failed");
+    // A question arriving in an open page is announced by a polite status (#1942).
+    const retried = /^New question from .*: Retry the flaky upload test\?$/;
+    await page
+      .getByRole("status")
+      .filter({ hasText: retried })
+      .waitFor({ state: "attached", timeout: 30_000 });
+
+    step("the same announcement twice in a row is read out again (#1942)");
+    const repeated = cli("repeated", retry, machineHome);
+    const [againId] = await repeated.waitFor(/d_[\w-]+/);
+    for (let i = 0; i < 60 && (await heardCount(retried)) < 2; i++) await page.waitForTimeout(500);
+    if ((await heardCount(retried)) < 2)
+      throw new Error("a repeated announcement did not reach the status line again");
+    step("the status line is announced with a question open on a narrow screen (#1942)");
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page
+      .locator("button[data-id]")
+      .nth(3)
+      .click({ position: { x: 80, y: 12 } });
+    await page.getByRole("button", { name: /Back/ }).waitFor();
+    const narrow = cli(
+      "narrow",
       [
-        ...["ask", "--question", "Retry the flaky upload test?", "--option", "Retry"],
-        ...["--option", "Skip", "--project", "starbridge"],
+        "ask",
+        "--question",
+        "Is the narrow status mounted?",
+        "--option",
+        "Yes",
+        "--option",
+        "No",
+        "--project",
+        "starbridge",
       ],
       machineHome,
     );
-    const [mootId] = await moot.waitFor(/d_[\w-]+/);
-    if ((await moot.exited) !== 0) throw new Error("ask failed");
+    const [narrowId] = await narrow.waitFor(/d_[\w-]+/);
+    await page
+      .getByRole("status")
+      .filter({ hasText: /^New question from .*: Is the narrow status mounted\?$/ })
+      .waitFor({ state: "attached", timeout: 30_000 });
+    await page.setViewportSize(DESKTOP);
+
+    for (const id of [narrowId, againId])
+      if (
+        (await cli(
+          "close",
+          ["settle", id as string, "--outcome", "withdrawn", "--reason", "Asked to test"],
+          machineHome,
+        ).exited) !== 0
+      )
+        throw new Error("settle --outcome withdrawn failed");
     const reason = "Fixed it myself after rereading the logs";
     const withdraw = cli(
       "withdraw",
@@ -1814,6 +1943,23 @@ async function main() {
     await page.getByLabel("Find").fill("rebase");
     await shoot(page, "inbox-search");
     await page.getByLabel("Find").fill("");
+    step("a prompt already open when the page loads is not announced (#1942)");
+    // The prompts come back after the questions, as they do on a slow link.
+    const slowPrompts = async (route: Route) => {
+      await new Promise((done) => setTimeout(done, 2_000));
+      await route.fallback();
+    };
+    await page.route(/\/v1\/items\?kind=permission&open=1/, slowPrompts);
+    await page.reload();
+    await page
+      .getByText(/^git push --force-with-lease/)
+      .first()
+      .waitFor({ timeout: 30_000 });
+    await page.waitForTimeout(1_500);
+    const early = await page.getByRole("status").allTextContents();
+    if (early.some((x) => /^(New |\d+ new )/.test(x)))
+      throw new Error(`a prompt listed at load was announced: ${early.join(" | ")}`);
+    await page.unroute(/\/v1\/items\?kind=permission&open=1/, slowPrompts);
     await page.getByRole("link", { name: "Quotas" }).click();
     await page.locator("article").first().waitFor();
     await shoot(page, "quotas-machines");
@@ -2047,11 +2193,55 @@ async function main() {
     await pageB.clock.install({ time: new Date(Date.now() - SHIFT) });
     await pageB.goto(ORIGIN);
     await probe(pageB).click({ timeout: 30_000 });
-    await selected(pageB).getByRole("button", { name: "Snooze", exact: true }).click();
-    await pageB.getByRole("button", { name: /^1 hour/ }).click();
+    step("on a phone's width the Snooze times stay inside the window (#1995)");
+    const wide = pageB.viewportSize();
+    for (const width of [360, 390]) {
+      await pageB.setViewportSize({ width, height: 800 });
+      const snooze = pageB.getByRole("button", { name: "Snooze", exact: true });
+      if (!(await snooze.count())) await probe(pageB).click();
+      await snooze.click();
+      const times = await pageB.getByRole("dialog", { name: "Snooze until" }).boundingBox();
+      if (!times || times.x < 0 || times.x + times.width > width)
+        throw new Error(
+          `the Snooze times run past the window at ${width} px: ${JSON.stringify(times)}`,
+        );
+      await pageB.keyboard.press("Escape");
+    }
+    if (wide) await pageB.setViewportSize(wide);
+    if (!(await selected(pageB).count())) await probe(pageB).click();
+    const opener = selected(pageB).getByRole("button", { name: "Snooze", exact: true });
+    step("Esc closes Snooze's times and focus returns to its button (#1943)");
+    await opener.click();
+    await pageB.getByRole("dialog", { name: "Snooze until" }).waitFor();
+    await pageB.keyboard.press("Escape");
+    await pageB.getByRole("dialog", { name: "Snooze until" }).waitFor({ state: "detached" });
+    if (!(await opener.evaluate((b) => b === document.activeElement)))
+      throw new Error("focus did not return to the Snooze button after Esc");
+    // Picked from the keyboard, as Esc: the card and its Snooze button leave, so focus goes to the
+    // next question's row, else to the Snoozed head, never to the page. Nothing else is open here.
+    step("picking a snooze time moves focus to the inbox list, not the page (#1943)");
+    await opener.press("Enter");
+    await pageB.getByRole("button", { name: /^1 hour/ }).press("Enter");
     const snoozedAt = Date.now();
     // It leaves Needs you on both, for the collapsed Snoozed group, and its notification closes.
     await probe(pageB).waitFor({ state: "detached", timeout: 10_000 });
+    const focused = async () =>
+      pageB.evaluate(() => {
+        const a = document.activeElement as HTMLElement | null;
+        const list = document.querySelector('section[aria-label="Inbox"]');
+        return {
+          onHead: !!a && !!list?.contains(a) && a.dataset.head === "snoozed",
+          what: a ? a.outerHTML.slice(0, 80) : "nothing",
+        };
+      });
+    let landed = await focused();
+    for (let i = 0; i < 20 && !landed.onHead; i++) {
+      await pageB.waitForTimeout(100);
+      landed = await focused();
+    }
+    console.log(`  focus after the snooze: ${landed.what}`);
+    if (!landed.onHead)
+      throw new Error(`focus is not on the Snoozed head after a snooze: ${landed.what}`);
     await pageB.getByRole("button", { name: /^Snoozed\s*1/ }).waitFor();
     for (let i = 0; i < 50 && (await probes(pageB)).length > 0; i++)
       await pageB.waitForTimeout(200);

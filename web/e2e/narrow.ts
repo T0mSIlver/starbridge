@@ -195,7 +195,7 @@ async function main() {
       ...["--project", "research-control-plane", "--session", "narrow-again"],
     ]);
     await again.waitFor(/d_[\w-]+/);
-    await page.getByText("Push the branch?").first().click();
+    await page.getByText("Push the branch?", { exact: true }).first().click();
     await page.getByText("Hold", { exact: true }).click();
     await empty.waitFor();
     if (await open()) throw new Error("the answered last card is still open");

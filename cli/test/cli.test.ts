@@ -18,7 +18,7 @@ import { makeAgent } from "../src/agent/main";
 import { hookStop } from "../src/antigravity";
 import { run } from "../src/cli";
 import { session } from "../src/context";
-import { DONE_LINE, poll, typedBreaks } from "../src/decisions";
+import { DONE_LINE, poll, postDecision, typedBreaks } from "../src/decisions";
 import { piAllow, piPermissionConfig } from "../src/pi";
 import { configCommand, offerPiChain } from "../src/settings";
 import { agentAddress, approveAndConfirm, FAKE_CODEXBAR, paired, testCtx, until } from "./helpers";
@@ -762,6 +762,31 @@ test("ask refuses a decision that would not stand alone", async () => {
   expect(await server.opened("decision")).toEqual([]);
 });
 
+test("ask names the flag that is too long and its limit, as the help lists them (#1920)", async () => {
+  const ctx = await paired(server);
+  const x = (n: number) => "x".repeat(n);
+  for (const [args, line] of [
+    [["--question", x(301), "--option", "a", "--option", "b"], "--question takes at most 300"],
+    [["--question", "Q?", "--option", x(101), "--option", "b"], "--option takes at most 100"],
+    [
+      ["--question", "Q?", "--option", "a", "--option", "b", "--context", x(8001)],
+      "--context takes at most 8000",
+    ],
+  ] as const) {
+    expect(await run(["ask", ...args], ctx)).toBe(1);
+    expect(ctx.errors.at(-1)).toBe(`starbridge: ${line} characters`);
+  }
+  expect(await server.opened("decision")).toEqual([]);
+  expect(await run(["--help"], ctx)).toBe(0);
+  expect(ctx.lines.join("\n")).toContain(
+    "The question takes at most\n      300 characters, each option 100 and the context 8000.",
+  );
+  // pair says the same of --name, before it reaches the server.
+  const fresh = testCtx();
+  expect(await run(["pair", "--server", server.url, "--name", x(101)], fresh)).toBe(1);
+  expect(fresh.errors.at(-1)).toBe("starbridge: --name takes at most 100 characters");
+});
+
 test("ask refuses a default, as a flag or in --input: agents never answer for the owner", async () => {
   const ctx = await paired(server);
   expect(await run([...ASK, "--default", "A"], ctx)).toBe(1);
@@ -1333,6 +1358,74 @@ test("a decision whose post lost its reply is withdrawn, so its card does not st
   expect(await server.opened("settled")).toMatchObject([
     { itemId: decision?.id, outcome: "withdrawn" },
   ]);
+});
+
+test("an answer the agent reads before the question's post replies still counts (#1975)", async () => {
+  const ctx = await paired(server);
+  const s = session(ctx);
+  const postItem = s.api.postItem.bind(s.api);
+  // The server stores the question; before its reply comes back, the owner answers and the
+  // agent's poll reads that answer.
+  s.api.postItem = async (item, signal) => {
+    await postItem(item, signal);
+    if (item.kind !== "decision") return;
+    await server.answer(item.id, { choice: "Merge" });
+    const st = ctx.store.state();
+    await poll(ctx, session(ctx), { cursor: st.cursor, seconds: 0, shared: true });
+  };
+  const decision = await postDecision(ctx, s, {
+    question: "Merge #12 now?",
+    options: ["Merge", "Wait"],
+    session: "s",
+  });
+  expect(ctx.store.state().answers[decision.id]?.answer.choice).toBe("Merge");
+});
+
+test("a question settled while its post is in flight is settled once the server holds it (#1975)", async () => {
+  const ctx = await paired(server);
+  const s = session(ctx);
+  const postItem = s.api.postItem.bind(s.api);
+  s.api.postItem = async (item, signal) => {
+    // The session's questions are settled before the server stores this one.
+    if (item.kind === "decision")
+      expect(await run(["settle", "--session", "s", "--outcome", "elsewhere"], ctx)).toBe(0);
+    await postItem(item, signal);
+  };
+  const decision = await postDecision(ctx, s, {
+    question: "Merge #12 now?",
+    options: ["Merge", "Wait"],
+    session: "s",
+  });
+  const notices = (await server.opened("settled")).filter((n) => n.itemId === decision.id);
+  expect(notices.length).toBeGreaterThan(0);
+  // The server now holds it closed: a device's answer is refused.
+  await expect(server.answer(decision.id, { choice: "Merge" })).rejects.toThrow();
+});
+
+test("a question settled while its post is in flight keeps that outcome when the reply is lost (#1975)", async () => {
+  const ctx = await paired(server);
+  const s = session(ctx);
+  const postItem = s.api.postItem.bind(s.api);
+  s.api.postItem = async (item, signal) => {
+    if (item.kind !== "decision") return postItem(item, signal);
+    expect(await run(["settle", "--session", "s", "--outcome", "elsewhere"], ctx)).toBe(0);
+    await postItem(item, signal);
+    throw new TypeError("fetch failed");
+  };
+  await expect(
+    postDecision(ctx, s, { question: "Merge #12 now?", options: ["Merge", "Wait"], session: "s" }),
+  ).rejects.toThrow();
+  const notices = await server.opened("settled");
+  expect(notices.length).toBeGreaterThan(0);
+  expect(notices.map((n) => n.outcome)).toEqual(notices.map(() => "elsewhere"));
+});
+
+test("a question the server refused leaves nothing asked (#1975)", async () => {
+  server.stop();
+  server = await LiveServer.start({ limits: { ...DEFAULT_LIMITS, storedBytes: 1 } });
+  const ctx = await paired(server);
+  expect(await run(["ask", "--question", "First?", "--session", "s"], ctx)).not.toBe(0);
+  expect(ctx.store.state().asked).toEqual({});
 });
 
 test("ask on a full account says so in plain words (#586)", async () => {

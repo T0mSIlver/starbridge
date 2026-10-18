@@ -181,7 +181,7 @@ private struct Zoomable: View {
             including: scale > 1 ? .all : .none
         )
         .onTapGesture(count: 2) {
-            withAnimation {
+            Motion.with {
                 scale = scale > 1 ? 1 : 2
                 base = scale
                 offset = .zero

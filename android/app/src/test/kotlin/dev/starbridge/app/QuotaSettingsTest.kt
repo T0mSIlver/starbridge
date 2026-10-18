@@ -97,14 +97,10 @@ class QuotaSettingsTest {
         assertEquals(false, picked.wants(n("runs-out", 10080)))
     }
 
-    @Test fun settingsFromBefore914MoveToPerWindowAlerts() {
+    @Test fun settingsFromBefore914KeepTheDefaultAlerts() {
         val json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true; encodeDefaults = true }
         val old = QuotaSettings.read(json, """{"workDays":5,"ticks":"Hidden","notify":["zai"],"notifyLow":false,"notifyPace":true}""")
-        assertEquals(mapOf("zai" to listOf("runs-out", "unused-headroom")), old.alerts.windows)
+        assertEquals(QuotaAlerts(), old.alerts)
         assertEquals(null, old.workDays)
-        assertEquals(QuotaAlerts(), QuotaSettings.read(json, """{"notify":[]}""").alerts)
-        // A provider's key becomes one per window once a window is set, so the others keep it.
-        val set = old.alerts.with("zai", "primary", listOf("zai" to "primary", "zai" to "mcp"), null)
-        assertEquals(mapOf("zai/mcp" to listOf("runs-out", "unused-headroom")), set.windows)
     }
 }

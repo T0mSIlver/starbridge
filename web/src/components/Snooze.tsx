@@ -34,13 +34,16 @@ export function SnoozeMenu({
   const [clock] = usePref("clock");
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const trigger = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     if (!open) return;
     const close = (e: MouseEvent | KeyboardEvent) => {
-      if (
-        e instanceof KeyboardEvent ? e.key === "Escape" : !ref.current?.contains(e.target as Node)
-      )
+      if (e instanceof KeyboardEvent) {
+        if (e.key !== "Escape") return;
+        // Focus goes back to the button that opened it, not to the page.
+        trigger.current?.focus();
         setOpen(false);
+      } else if (!ref.current?.contains(e.target as Node)) setOpen(false);
     };
     document.addEventListener("mousedown", close);
     document.addEventListener("keydown", close);
@@ -53,11 +56,13 @@ export function SnoozeMenu({
   const now = new Date();
   const pick = (until: Date) => {
     setOpen(false);
+    trigger.current?.focus();
     onSnooze(until);
   };
   return (
     <div className={s.snooze} ref={ref}>
       <button
+        ref={trigger}
         type="button"
         className={s.trigger}
         disabled={disabled}

@@ -10,7 +10,7 @@ export default async function MainLayout({ children }: { children: React.ReactNo
   // The desktop app is no visitor: signed out, it gets sign-in rather than the landing page.
   const visitor = !jar.has(SESSION_COOKIE) && !jar.has(DESKTOP_COOKIE);
   return (
-    <AppProvider>
+    <AppProvider visitor={visitor}>
       <Gate visitor={visitor}>
         <Shell>
           <JoinRequests />

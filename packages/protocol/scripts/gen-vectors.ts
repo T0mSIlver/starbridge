@@ -8,6 +8,7 @@ import {
   addEntry,
   alertsFor,
   approverKeys,
+  arrangeQuotas,
   BLOB_MAX,
   bindMessage,
   checkCode,
@@ -36,8 +37,8 @@ import {
   type MemberKeys,
   machineQrText,
   memberKeysFromSeeds,
-  migrateQuotaAlerts,
   noteHead,
+  type Pace,
   PRESENCE_BEAT_MS,
   PRESENCE_INPUT_MS,
   PUSH_HOLD_CHOICES,
@@ -48,8 +49,15 @@ import {
   parseContext,
   parsePairingCode,
   publicKeys,
+  QUOTA_ALERT_CHOICES,
+  QUOTA_ALERT_LABELS,
+  QUOTA_STATE_WORDS,
   type QuotaAlert,
+  type QuotaAlertChoice,
   type QuotaAlertSettings,
+  quotaCourse,
+  quotaRunningOut,
+  quotaState,
   RECOVERY,
   ready,
   recoverEntry,
@@ -68,6 +76,7 @@ import {
   verifyDirectory,
   wantsQuotaAlert,
   withheldBy,
+  withWindowAlerts,
 } from "../src/index";
 import { concat, fromB64, sodium, utf8 } from "../src/sodium";
 
@@ -2134,27 +2143,219 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
       c.windowMinutes,
     ),
   }));
-  const migrateCases = [
-    { name: "never opted in: defaults", old: { notify: [], notifyLow: true, notifyPace: true } },
+  // A provider's key, which settings moved from before #914 hold, splits into its windows' keys.
+  const moved = {
+    ...DEFAULT_QUOTA_ALERTS,
+    windows: { codex: ["low-50"], "zai/primary": [] },
+  } satisfies QuotaAlertSettings;
+  const codexWindows = [
+    { provider: "codex", window: "primary" },
+    { provider: "codex", window: "secondary" },
+    { provider: "zai", window: "primary" },
+  ];
+  const withCases = [
     {
-      name: "bell on, both switches on",
-      old: { notify: ["claude"], notifyLow: true, notifyPace: true },
+      name: "a window's own choices",
+      settings: DEFAULT_QUOTA_ALERTS,
+      provider: "claude",
+      window: "primary",
+      picked: ["runs-out", "low-20"],
     },
     {
-      name: "bell on, only runs low",
-      old: { notify: ["claude", "zai"], notifyLow: true, notifyPace: false },
+      name: "none picked: the window is off",
+      settings: DEFAULT_QUOTA_ALERTS,
+      provider: "claude",
+      window: "primary",
+      picked: [],
     },
     {
-      name: "bell on, only runs out",
-      old: { notify: ["codex"], notifyLow: false, notifyPace: true },
+      name: "undefined: the window follows its length again",
+      settings: moved,
+      provider: "zai",
+      window: "primary",
     },
-    { name: "switches unset are on", old: { notify: ["codex"] } },
-  ].map((c) => ({ ...c, expect: migrateQuotaAlerts(c.old) }));
+    {
+      name: "a provider's key goes to its other windows",
+      settings: moved,
+      provider: "codex",
+      window: "primary",
+      picked: ["runs-out"],
+    },
+  ].map((c) => ({
+    ...c,
+    all: codexWindows,
+    expect: withWindowAlerts(
+      c.settings,
+      c.provider,
+      c.window,
+      codexWindows,
+      c.picked as QuotaAlertChoice[] | undefined,
+    ),
+  }));
   const quotaAlertsFile = {
-    note: "wantsQuotaAlert(settings, alert, windowMinutes) and migrateQuotaAlerts(old) (#914).",
+    note: "wantsQuotaAlert(settings, alert, windowMinutes) and withWindowAlerts(settings, provider, window, all, picked) (#914, #1904). labels: the alerts table's column names, in order.",
     defaults: DEFAULT_QUOTA_ALERTS,
+    labels: QUOTA_ALERT_CHOICES.map((c) => [c, QUOTA_ALERT_LABELS[c]]),
     cases: alertCases,
-    migrate: migrateCases,
+    with: withCases,
+  };
+
+  // --- quotas.json ---
+  // How every client reads a window on the Quotas tab (#1904). Times are UTC.
+  const qNow = "2026-10-12T10:00:00Z";
+  const qPace = (
+    willLastToReset: boolean,
+    runsOutAt: string | null,
+    stage: Pace["stage"] = "ahead",
+  ) => ({
+    stage,
+    expectedUsedPercent: 40,
+    deltaPercent: 10,
+    projectedUsedPercent: willLastToReset ? 90 : 130,
+    willLastToReset,
+    runsOutAt,
+  });
+  const stateCases = [
+    { name: "on pace", pace: qPace(true, null, "on-track"), resetsAt: "2026-10-12T12:00:00Z" },
+    {
+      name: "headroom unused: the uploader raised the alert",
+      pace: qPace(true, null, "behind"),
+      unusedAlert: true,
+      resetsAt: "2026-10-12T10:30:00Z",
+    },
+    {
+      name: "behind without the alert is on pace",
+      pace: qPace(true, null, "behind"),
+      resetsAt: "2026-10-12T10:30:00Z",
+    },
+    {
+      name: "will run out",
+      pace: qPace(false, "2026-10-12T11:00:00Z"),
+      resetsAt: "2026-10-12T12:00:00Z",
+    },
+    {
+      name: "ran out",
+      pace: qPace(false, "2026-10-12T09:00:00Z"),
+      resetsAt: "2026-10-12T12:00:00Z",
+    },
+    {
+      name: "ran out this very second",
+      pace: qPace(false, qNow),
+      resetsAt: "2026-10-12T12:00:00Z",
+    },
+    { name: "no pace yet", pace: null, resetsAt: "2026-10-12T12:00:00Z" },
+    {
+      name: "too early in the window",
+      pace: qPace(true, null, "unknown"),
+      resetsAt: "2026-10-12T12:00:00Z",
+    },
+    {
+      name: "runs out with no time is too early to tell",
+      pace: qPace(false, null),
+      resetsAt: "2026-10-12T12:00:00Z",
+    },
+    {
+      name: "the reset passed: window reset, whatever the pace",
+      pace: qPace(false, "2026-10-12T09:00:00Z"),
+      resetsAt: "2026-10-12T09:30:00Z",
+    },
+    { name: "the reset is now", pace: qPace(true, null, "on-track"), resetsAt: qNow },
+    { name: "no reset time", pace: qPace(false, "2026-10-12T11:00:00Z"), resetsAt: null },
+  ].map((c) => {
+    const place = {
+      course: quotaCourse(c.pace, c.unusedAlert ?? false),
+      runsOutAt: c.pace?.runsOutAt ?? null,
+      resetsAt: c.resetsAt,
+    };
+    const state = quotaState(place, new Date(qNow));
+    return {
+      ...c,
+      unusedAlert: c.unusedAlert ?? false,
+      expect: {
+        course: place.course,
+        state,
+        word: QUOTA_STATE_WORDS[state],
+        runningOut: quotaRunningOut(place, new Date(qNow)),
+      },
+    };
+  });
+  const out = qPace(false, "2026-10-12T11:00:00Z");
+  const even = qPace(true, null, "on-track");
+  // The uploader's order: claude (two machines, laptop's first), codex, zai, gemini, mistral.
+  const arrangeWindows = [
+    {
+      id: "claude laptop 5-hour",
+      provider: "claude",
+      machine: "laptop",
+      pace: even,
+      resetsAt: "2026-10-12T12:00:00Z",
+    },
+    {
+      id: "claude devbox 5-hour",
+      provider: "claude",
+      machine: "devbox",
+      pace: even,
+      resetsAt: "2026-10-12T12:00:00Z",
+    },
+    {
+      id: "claude devbox Weekly",
+      provider: "claude",
+      machine: "devbox",
+      pace: out,
+      resetsAt: "2026-10-15T12:00:00Z",
+    },
+    { id: "codex Weekly", provider: "codex", pace: out, resetsAt: "2026-10-15T12:00:00Z" },
+    { id: "zai 5-hour", provider: "zai", pace: even, resetsAt: "2026-10-12T12:00:00Z" },
+    {
+      id: "gemini Daily",
+      provider: "gemini",
+      pace: qPace(false, "2026-10-12T07:00:00Z"),
+      resetsAt: "2026-10-12T09:00:00Z",
+    },
+    { id: "mistral Monthly", provider: "mistral", pace: out, resetsAt: "2026-10-30T00:00:00Z" },
+  ];
+  const arrangeCases = [
+    {
+      name: "running out first, then by provider in the uploader's order",
+      order: [],
+      hidden: ["mistral"],
+      runningOutFirst: true,
+    },
+    {
+      name: "running out first, then the order set",
+      order: ["zai", "gemini"],
+      hidden: ["mistral"],
+      runningOutFirst: true,
+    },
+    {
+      name: "the order set holds for every window when running out first is off",
+      order: ["zai", "gemini"],
+      hidden: ["mistral"],
+      runningOutFirst: false,
+    },
+    {
+      name: "a provider set in the order but absent is skipped",
+      order: ["openai", "codex"],
+      hidden: [],
+      runningOutFirst: false,
+    },
+  ].map((c) => ({
+    ...c,
+    expect: arrangeQuotas(arrangeWindows, c, (w) => ({
+      provider: w.provider,
+      machine: w.machine,
+      runningOut: quotaRunningOut(
+        { course: quotaCourse(w.pace, false), runsOutAt: w.pace.runsOutAt, resetsAt: w.resetsAt },
+        new Date(qNow),
+      ),
+    })).map((w) => w.id),
+  }));
+  const quotasFile = {
+    note: 'How every client reads a quota window (#1904): quotaCourse(pace, unusedAlert), quotaState({course, runsOutAt, resetsAt}, now) and its QUOTA_STATE_WORDS, quotaRunningOut, and arrangeQuotas(windows, {order, hidden, runningOutFirst}) by machine name. Each client formats the time after "Ran out" and "Will run out".',
+    now: qNow,
+    words: QUOTA_STATE_WORDS,
+    state: stateCases,
+    arrange: { windows: arrangeWindows, cases: arrangeCases },
   };
 
   // --- schemas.json ---
@@ -3047,6 +3248,13 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
         "stale",
       ),
       noteCase(
+        "a signer whose id is __proto__ is kept like any other (#1977)",
+        {},
+        "__proto__",
+        H,
+        "stale",
+      ),
+      noteCase(
         "heads kept before #1627 stay beside the signer's",
         { "devbox/phone": passedOn, "devbox/?": unknownBy },
         "devbox",
@@ -3166,6 +3374,7 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
     "context.json": contextFile,
     "links.json": linksFile,
     "quota-alerts.json": quotaAlertsFile,
+    "quotas.json": quotasFile,
     "schemas.json": schemas,
     "rules.json": rules,
   };
