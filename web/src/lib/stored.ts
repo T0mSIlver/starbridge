@@ -40,3 +40,20 @@ export function writable(raw: string | null): boolean {
 export function stored(value: object): string {
   return JSON.stringify({ v: STORED_VERSION, ...value });
 }
+
+/**
+ * Every localStorage key that holds an account's data, so signing out removes them all. The
+ * display prefs (`starbridge:prefs`: theme, grouping, widths) are not here: they say nothing of
+ * the account, and a browser keeps its theme across accounts. A new key for account data goes
+ * here, or stored.test.ts fails (#2014).
+ */
+export const ACCOUNT_STORAGE_KEYS = {
+  /** Which providers and windows the owner alerts on. */
+  quotaSettings: "starbridge:quota-settings",
+  /** The account id that held quotas, for the Quotas tab's first frame. */
+  quotaAccount: "starbridge:quota-account",
+  /** The quota alerts shown, by snapshot, provider and window. */
+  quotaNotified: "starbridge:quota-notified",
+  /** The run ids notified. */
+  runNotified: "starbridge:run-notified",
+} as const;

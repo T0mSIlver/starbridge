@@ -15,7 +15,7 @@ import {
 import { desktop } from "./desktop";
 import { clockTime, relative } from "./format";
 import { switchedOff } from "./notify";
-import { readStored, stored, writable } from "./stored";
+import { ACCOUNT_STORAGE_KEYS, readStored, stored, writable } from "./stored";
 import type { QuotaAlert, QuotaCardData, QuotaWindow } from "./types";
 
 export type QuotaSettings = {
@@ -59,7 +59,7 @@ export function readSettings(stored: Record<string, unknown> | null): QuotaSetti
 export const alertsOn = (a: QuotaAlertSettings) =>
   a.short.length > 0 || a.long.length > 0 || Object.values(a.windows).some((c) => c.length > 0);
 
-const KEY = "starbridge:quota-settings";
+const KEY = ACCOUNT_STORAGE_KEYS.quotaSettings;
 
 export function loadSettings(): QuotaSettings {
   try {
@@ -86,7 +86,7 @@ export const holdsQuotas = (
   q: { cards: unknown[]; errors: unknown[]; rejected: unknown[] } | undefined,
 ) => !!q && q.cards.length + q.errors.length + q.rejected.length > 0;
 
-const SENDS = "starbridge:quota-account";
+const SENDS = ACCOUNT_STORAGE_KEYS.quotaAccount;
 
 /**
  * Whether `account` held quotas when this browser last read them, so a page load shows the Quotas
@@ -327,7 +327,7 @@ export function bar(w: QuotaWindow, s: QuotaSettings, now = new Date()) {
   };
 }
 
-const SHOWN = "starbridge:quota-notified";
+const SHOWN = ACCOUNT_STORAGE_KEYS.quotaNotified;
 
 /**
  * Shows a normal notification for each alert this browser opted in to that it has not shown

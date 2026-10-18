@@ -2,10 +2,10 @@
 // notifies while open, as it does for quota alerts.
 import { switchedOff } from "./notify";
 import { runKey, runNote, runsToNotify } from "./runs";
-import { readStored, stored, writable } from "./stored";
+import { ACCOUNT_STORAGE_KEYS, readStored, stored, writable } from "./stored";
 import type { RunItem } from "./types";
 
-const SHOWN = "starbridge:run-notified";
+const SHOWN = ACCOUNT_STORAGE_KEYS.runNotified;
 
 const tag = (id: string) => `r:${id}`;
 

@@ -70,6 +70,7 @@ import { retrying } from "./kinds/joins";
 import { otherServer } from "./otherServer";
 import { signedOut } from "./signedOut";
 import * as store from "./store";
+import { ACCOUNT_STORAGE_KEYS } from "./stored";
 import type { Device, PairingRequest } from "./types";
 
 export { type Ctx, heldText, reverify, stopWaiting, Withheld } from "./kinds/core";
@@ -892,6 +893,20 @@ async function forget(account: string): Promise<void> {
   await (await reg?.pushManager.getSubscription())?.unsubscribe().catch(() => {});
   for (const kind of store.ACCOUNT_KINDS) await store.del(kind, account);
   await store.del("current");
+  // Not in a service worker, which has no localStorage; a browser that blocks storage throws on
+  // the read itself.
+  const local = (() => {
+    try {
+      return (globalThis as { localStorage?: { removeItem(key: string): void } }).localStorage;
+    } catch {
+      return undefined;
+    }
+  })();
+  for (const key of Object.values(ACCOUNT_STORAGE_KEYS)) {
+    try {
+      local?.removeItem(key);
+    } catch {}
+  }
   // Last: a push the service worker was still opening finds no keys now.
   await closeNotifications();
 }

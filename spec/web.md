@@ -66,7 +66,7 @@
   the kept cursor means another or a reset server, which starts the read from scratch. Inbox
   reads run one at a time: a poll or a push during a read waits for it and starts from its
   cursor. A load shows the kept questions the server lists open before it opens the answered
-  ones, which took a phone-speed CPU 7 s on a 500-question history (#1458). Signing out, revocation and deleting the account forget what was kept. On a 500-question
+  ones, which took a phone-speed CPU 7 s on a 500-question history (#1458). Signing out, revocation and deleting the account forget what was kept; signing out and deleting also remove the account's localStorage keys (quota settings, the account id that held quotas, shown quota and run alerts), listed once in `ACCOUNT_STORAGE_KEYS`, and keep the display prefs, which say nothing of the account (#2014). On a 500-question
   history (bench in #1380), a load went from 42 MB in 18 lists to 0.7 MB in 2.
 - **Polling without push** (#664). Until a push reaches it, a visible page reads its inbox and
   open prompts every 5 s rather than 20 s, as Android does at 10 s (#445): it cannot tell a browser
