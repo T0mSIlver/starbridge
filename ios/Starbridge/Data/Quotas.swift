@@ -207,6 +207,12 @@ struct QuotaSettings: Codable, Equatable {
     func store(_ defaults: UserDefaults = .standard) {
         if let data = try? JSONEncoder().encode(self) { defaults.set(data, forKey: Self.key) }
     }
+
+    /** Removes what this iPhone kept of how Quotas reads and which alerts it showed (#2013). */
+    static func forget(_ defaults: UserDefaults = .standard) {
+        defaults.removeObject(forKey: key)
+        defaults.removeObject(forKey: QuotaShown.key)
+    }
 }
 
 /**

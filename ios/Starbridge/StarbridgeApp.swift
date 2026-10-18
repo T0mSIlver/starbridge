@@ -18,6 +18,7 @@ struct StarbridgeApp: App {
 /** The update screen when the server refuses this release, else the inbox once set up, else setup. */
 struct Root: View {
     let store: Store
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         Group {
@@ -29,6 +30,11 @@ struct Root: View {
             } else {
                 SetupView(store: store)
             }
+        }
+        // The notification extension may still have been rewriting a push as sign-out wiped (#2013):
+        // signed out, nothing it left in the notification center belongs to an account.
+        .onChange(of: scenePhase, initial: true) {
+            if scenePhase == .active && store.phase == .signedOut { Task { await Notify.forgetAll() } }
         }
         .alert("Starbridge", isPresented: showsNotice) {
             Button("OK", role: .cancel) {}

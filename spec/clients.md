@@ -159,6 +159,7 @@
 - **Sign out says the same on every client** (#1612): "This <Mac | browser | phone | iPhone> deletes its keys
   and is removed from your devices. Your other devices and machines keep working. If it's your only
   device, you'll need your recovery key to sign in again." Only the device word differs; the desktop app is a Mac, not a browser.
+  Signing out and deleting the account forget, on the web, desktop and iPhone, the notifications it showed (they hold decrypted questions), the notification categories (answer options as button titles), and the quota settings and shown alerts, and on Android the notifications; display prefs such as the theme stay (#2013, #2014).
 - **No quotas, no Quotas tab** (#914). Until the server holds a quota snapshot for the account,
   opened on this device or not, the Quotas tab, its settings and the web's quota column stay
   hidden, so an owner who skips CodexBar never sees an empty feature and the app stays about
