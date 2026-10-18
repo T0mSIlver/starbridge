@@ -1347,6 +1347,8 @@ async function main() {
         "Is the narrow status mounted?",
         "--option",
         "Yes",
+        "--option",
+        "No",
         "--project",
         "starbridge",
       ],
