@@ -667,8 +667,6 @@ export function numberReply(text: string, q: Extended): { value: string } | { er
  */
 function previewText(preview: string, html: boolean): string {
   if (!html && !/^\s*</.test(preview)) return preview.trim();
-  // Tag stripping rescans after each unclosed "<": the card keeps far less than this anyway.
-  preview = preview.slice(0, 2 * CONTEXT_CHARS);
   const entities: Record<string, string> = {
     amp: "&",
     lt: "<",
@@ -677,10 +675,7 @@ function previewText(preview: string, html: boolean): string {
     apos: "'",
     nbsp: " ",
   };
-  return preview
-    .replace(/<(script|style)\b[\s\S]*?<\/\1\s*>/gi, "")
-    .replace(/<(br|\/?(p|div|li|ul|ol|tr|table|h[1-6]|pre|blockquote|section))\b[^>]*>/gi, "\n")
-    .replace(/<[^>]*>/g, "")
+  return withoutTags(preview)
     .replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (m, e: string) => {
       if (e[0] !== "#") return entities[e.toLowerCase()] ?? m;
       const code =
@@ -690,6 +685,43 @@ function previewText(preview: string, html: boolean): string {
     .replace(/[ \t]+/g, " ")
     .replace(/ *\n[\s]*/g, "\n")
     .trim();
+}
+
+/** Elements whose end is a line break in the text. */
+const BLOCKS = new Set(
+  "br p div li ul ol tr table h1 h2 h3 h4 h5 h6 pre blockquote section".split(" "),
+);
+
+/**
+ * HTML's text, in one pass: tags dropped, a block's end a line break, a script's or style's
+ * body dropped, an unclosed tag the end. A "<" that starts no tag stays text.
+ */
+function withoutTags(html: string): string {
+  const lower = html.toLowerCase();
+  let out = "";
+  let i = 0;
+  while (i < html.length) {
+    const lt = html.indexOf("<", i);
+    if (lt < 0) return out + html.slice(i);
+    out += html.slice(i, lt);
+    if (!/[a-z/!?]/i.test(html[lt + 1] ?? "")) {
+      out += "<";
+      i = lt + 1;
+      continue;
+    }
+    const gt = html.indexOf(">", lt);
+    if (gt < 0) return out;
+    const name = /^\/?([a-z0-9]+)/i.exec(html.slice(lt + 1, gt))?.[1]?.toLowerCase() ?? "";
+    if (BLOCKS.has(name)) out += "\n";
+    i = gt + 1;
+    if ((name === "script" || name === "style") && html[lt + 1] !== "/") {
+      const end = lower.indexOf(`</${name}`, i);
+      const close = end < 0 ? -1 : html.indexOf(">", end);
+      if (close < 0) return out;
+      i = close + 1;
+    }
+  }
+  return out;
 }
 
 /**

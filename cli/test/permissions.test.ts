@@ -1023,6 +1023,14 @@ test("a preview reaches the card as plain text, after every option, within the c
   // Desktop sends HTML: its tags, styles and scripts go, its entities are read.
   const h = questionInput({ question: "Which?", options }, { html: true });
   expect(h.context).toContain("Preview of B:\nTom & Jerry <3\n\nPreview of C:");
+  // A "<" that opens no tag is text; a tag split around another, or left open, leaves no tag.
+  const odd = (preview: string) =>
+    questionInput({ question: "Which?", options: [{ label: "A", preview }] }, { html: true })
+      .context;
+  expect(odd("<p>a < b</p><scr<script>x()</script>ipt>alert(1)")).toBe(
+    "- A\n\nPreview of A:\na < b\nx()ipt>alert(1)",
+  );
+  expect(odd(`<b>bold</b>${"<a".repeat(100_000)}`)).toBe("- A\n\nPreview of A:\nbold");
 });
 
 test("a number reply is checked against the question's range and step (#2061)", () => {
