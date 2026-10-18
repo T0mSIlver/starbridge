@@ -4,6 +4,7 @@ import { homedir, tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import {
   allowPiRules,
+  piAgentDir,
   piAllow,
   piBashDenies,
   piPermissionConfig,
@@ -74,4 +75,14 @@ test("a bash surface that denies stops the starbridge commands before the link h
 
 test("without HOME, Pi's folder is the OS's home folder's, not one relative to where setup runs (#1749)", () => {
   expect(piSkillDir({}).startsWith(join(homedir(), ".pi", "agent"))).toBe(true);
+});
+
+test("Pi's agent folder expands a leading ~ as Pi does, ~\\ on Windows too (#2039)", () => {
+  const home = join(tmpdir(), "home");
+  expect(piAgentDir({ HOME: home, PI_CODING_AGENT_DIR: "~" })).toBe(home);
+  expect(piAgentDir({ HOME: home, PI_CODING_AGENT_DIR: "~/pi" })).toBe(join(home, "pi"));
+  expect(piAgentDir({ HOME: home, PI_CODING_AGENT_DIR: join(home, "x") })).toBe(join(home, "x"));
+  expect(piAgentDir({ HOME: home })).toBe(join(home, ".pi", "agent"));
+  if (process.platform === "win32")
+    expect(piAgentDir({ HOME: home, PI_CODING_AGENT_DIR: "~\\pi" })).toBe(join(home, "pi"));
 });

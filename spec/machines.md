@@ -148,7 +148,8 @@
   commit, which the release workflow records in the binary, and the Pi package at that commit
   (#1768): the binary is signed, but the repository's marketplace follows its default branch and
   a tag can move, so both installed code the signature does not cover. A build from source pins
-  its version's tag. `starbridge update`'s refresh moves both to the new commit; it replaces the
+  its version's tag. Setup fetches only that commit into Pi's checkout before `pi install`, whose
+  own `git clone` would take the whole history, over 800 MB (#2039). `starbridge update`'s refresh moves both to the new commit; it replaces the
   repository's marketplace that earlier setups added, which also served only this repository
   (#274). Setup turns on plugin auto-update through `extraKnownMarketplaces`, and uninstall
   removes only its own marketplace, so a developer's own `starbridge` marketplace survives;

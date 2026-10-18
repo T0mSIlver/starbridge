@@ -6,11 +6,20 @@
  * ship inside this binary, so setup needs no download and installs the version that matches the
  * CLI.
  */
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { dirname, join } from "node:path";
 import agyRule from "../../../plugin/rules/antigravity.md" with { type: "text" };
 import opencodeRule from "../../../plugin/rules/opencode.md" with { type: "text" };
 import skill from "../../../plugin/skills/starbridge/SKILL.md" with { type: "text" };
+import { piAgentDir } from "../pi";
 import { COMMIT, VERSION } from "../version";
 import { ALLOW, removeAllow } from "./allow";
 import agyFiles from "./antigravity-files.js";
@@ -123,7 +132,7 @@ const STARBRIDGE_PI = /github\.com[/:]T0mSIlver\/starbridge(?:\.git)?\/?(?:@.*)?
 
 /** The package source as Pi's settings list it, when installed (any ref or URL form). */
 export function piPackage(sys: Home): string | undefined {
-  const dir = sys.ctx.env.PI_CODING_AGENT_DIR || join(sys.home, ".pi", "agent");
+  const dir = piAgentDir({ ...sys.ctx.env, HOME: sys.home });
   let packages: unknown;
   try {
     packages = (
@@ -148,7 +157,71 @@ function piFailure(r: Awaited<ReturnType<typeof pi>>): string {
   return reason?.trim() ?? failure(r);
 }
 
+/** Whether process `pid` runs: signal 0 checks without sending; EPERM means another user's. */
+function alive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (e) {
+    return (e as NodeJS.ErrnoException).code === "EPERM";
+  }
+}
+
+/** Where Pi keeps its checkout of this repository (Pi's own layout for a `git:` source). */
+const piCheckout = (sys: Home) =>
+  join(
+    piAgentDir({ ...sys.ctx.env, HOME: sys.home }),
+    "git",
+    "github.com",
+    "T0mSIlver",
+    "starbridge",
+  );
+
+/**
+ * Fetches only the release's commit into Pi's checkout before `pi install`, which would clone the
+ * whole repository, over 800 MB and growing (#2039). Pi finds the ref already checked out and only
+ * fetches the ref again. Best effort: the checkout is built beside the folder and moved in only
+ * once complete, so a failed or interrupted fetch leaves no folder, and Pi clones as before.
+ */
+async function prefetchPiPackage(sys: Sys) {
+  const dir = piCheckout(sys);
+  if (existsSync(dir)) return;
+  const ref = COMMIT ?? `refs/tags/v${VERSION}`;
+  const part = `${dir}.starbridge-${process.pid}`;
+  const git = (...args: string[]) => run(sys, "git", ["-C", part, ...args], { timeoutMs: 300_000 });
+  try {
+    // What an interrupted setup left beside it; another setup's fetch still running stays.
+    const parent = dirname(dir);
+    if (existsSync(parent))
+      for (const f of readdirSync(parent)) {
+        const pid = /^starbridge\.starbridge-(\d+)$/.exec(f)?.[1];
+        if (pid && !alive(Number(pid))) rmSync(join(parent, f), { recursive: true, force: true });
+      }
+    rmSync(part, { recursive: true, force: true });
+    mkdirSync(part, { recursive: true });
+    // What Pi writes on a first clone, so a Pi folder kept in git ignores its checkouts.
+    const ignore = join(dirname(dirname(dirname(dir))), ".gitignore");
+    if (!existsSync(ignore)) writeFileSync(ignore, "*\n!.gitignore\n");
+    for (const args of [
+      ["init", "-q"],
+      ["remote", "add", "origin", "https://github.com/T0mSIlver/starbridge"],
+      ["fetch", "-q", "--depth", "1", "--no-tags", "origin", ref],
+      ["checkout", "-q", "FETCH_HEAD"],
+    ]) {
+      const r = await git(...args);
+      if (r?.code !== 0) throw new Error(failure(r));
+    }
+    renameSync(part, dir);
+  } catch {
+    // Nothing here may stop `pi install`, which clones by itself.
+    try {
+      rmSync(part, { recursive: true, force: true });
+    } catch {}
+  }
+}
+
 export async function installPiPackage(sys: Sys) {
+  await prefetchPiPackage(sys);
   const r = await pi(sys, "install", PI_PACKAGE);
   if (r?.code !== 0) throw new Error(`pi install ${PI_PACKAGE}: ${piFailure(r)}`);
 }

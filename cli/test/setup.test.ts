@@ -2,6 +2,7 @@ import { afterEach, beforeEach, expect, setDefaultTimeout, test } from "bun:test
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
+  chmodSync,
   copyFileSync,
   existsSync,
   mkdirSync,
@@ -43,6 +44,7 @@ import {
   antigravityState,
   CODEX_RULE,
   installOpencode,
+  installPiPackage,
   opencodeState,
   PI_PACKAGE,
   piPackage,
@@ -74,6 +76,7 @@ import {
   paired,
   SYSTEM_PATH,
   sh,
+  slashes,
   type TestCtx,
   testCtx,
   until,
@@ -98,6 +101,30 @@ afterEach(async () => {
 });
 
 /**
+ * This repository as GitHub serves it to setup's Pi step: two commits, the second tagged as this
+ * release. A machine's git config sends the GitHub URL here, so no test fetches from GitHub.
+ */
+const PI_REPO = (() => {
+  const repo = mkdtempSync(join(tmpdir(), "starbridge-pi-repo-"));
+  const env = {
+    ...process.env,
+    GIT_AUTHOR_NAME: "t",
+    GIT_AUTHOR_EMAIL: "t@example.com",
+    GIT_COMMITTER_NAME: "t",
+    GIT_COMMITTER_EMAIL: "t@example.com",
+  };
+  const git = (...args: string[]) => spawnSync("git", ["-C", repo, ...args], { env });
+  git("init", "-q");
+  writeFileSync(join(repo, "package.json"), "{}");
+  git("add", "-A");
+  git("commit", "-q", "-m", "older");
+  writeFileSync(join(repo, "package.json"), '{"pi":{}}');
+  git("commit", "-q", "-am", "release");
+  git("tag", `v${VERSION}`);
+  return repo;
+})();
+
+/**
  * A paired machine in a throwaway HOME, with fake systemctl, loginctl, claude and codexbar on
  * the PATH.
  */
@@ -116,6 +143,10 @@ async function machine(name?: string) {
       FAKE_LOG: log,
       FAKE_STATE: join(home, "fake-state"),
     }),
+  );
+  writeFileSync(
+    join(home, ".gitconfig"),
+    `[url "file://${slashes(PI_REPO)}"]\n\tinsteadOf = https://github.com/T0mSIlver/starbridge\n`,
   );
   const units = join(home, ".config/systemd/user");
   mkdirSync(units, { recursive: true });
@@ -199,6 +230,18 @@ test("setup --yes installs the agent, the plugins and the skills, and uploads a 
     `# Written by starbridge ${VERSION}; \`starbridge uninstall\` removes it.`,
   );
   expect(m.calls()).toContain(`pi install ${PI_PACKAGE}`);
+  // Only the release's commit, not the whole repository's history (#2039).
+  if (!WINDOWS) {
+    const checkout = join(m.home, ".pi/agent/git/github.com/T0mSIlver/starbridge");
+    const git = (...args: string[]) =>
+      spawnSync("git", ["-C", checkout, ...args], { encoding: "utf8" }).stdout.trim();
+    expect(git("rev-parse", "HEAD")).toBe(
+      spawnSync("git", ["-C", PI_REPO, "rev-parse", "HEAD"], { encoding: "utf8" }).stdout.trim(),
+    );
+    expect(git("rev-list", "--count", "HEAD")).toBe("1");
+    // Built beside it and moved in whole: nothing else is left there.
+    expect(readdirSync(dirname(checkout))).toEqual(["starbridge"]);
+  }
   expect(readFileSync(join(m.home, ".codex/rules/starbridge.rules"), "utf8")).toContain(
     '"starbridge", ["ask"',
   );
@@ -510,6 +553,56 @@ test("refresh moves the Pi package to this release's tag, reports a failure, and
   setRemoved(m.ctx, "pi", true);
   expect((await refresh(m.sys)).filter((l) => l.includes("Pi package"))).toEqual([]);
 });
+
+test.skipIf(WINDOWS)(
+  "the Pi checkout goes in PI_CODING_AGENT_DIR, with ~ as Pi reads it (#2039)",
+  async () => {
+    const m = await machine();
+    m.ctx.env.PI_CODING_AGENT_DIR = "~/custom-pi";
+    await installPiPackage(m.sys);
+    expect(
+      existsSync(join(m.home, "custom-pi/git/github.com/T0mSIlver/starbridge/package.json")),
+    ).toBe(true);
+    expect(existsSync("~")).toBe(false);
+  },
+);
+
+test.skipIf(WINDOWS)(
+  "a failed Pi prefetch leaves nothing behind and Pi installs as before (#2039)",
+  async () => {
+    const m = await machine();
+    const parent = join(m.home, ".pi/agent/git/github.com/T0mSIlver");
+    mkdirSync(parent, { recursive: true });
+    // Left by an interrupted setup whose process is gone, and by one still fetching (a live pid).
+    mkdirSync(join(parent, "starbridge.starbridge-999999999"));
+    mkdirSync(join(parent, `starbridge.starbridge-${process.ppid}`));
+    // GitHub, as the test's git config sends it, has no such repository.
+    writeFileSync(
+      join(m.home, ".gitconfig"),
+      `[url "file://${slashes(join(m.home, "missing"))}"]\n\tinsteadOf = https://github.com/T0mSIlver/starbridge\n`,
+    );
+    await installPiPackage(m.sys);
+    expect(m.calls()).toContain(`pi install ${PI_PACKAGE}`);
+    expect(readdirSync(parent)).toEqual([`starbridge.starbridge-${process.ppid}`]);
+  },
+);
+
+test.skipIf(WINDOWS)(
+  "a leftover setup cannot remove still leaves Pi to install (#2039)",
+  async () => {
+    const m = await machine();
+    const parent = join(m.home, ".pi/agent/git/github.com/T0mSIlver");
+    mkdirSync(join(parent, "starbridge.starbridge-999999999", "locked"), { recursive: true });
+    // Read-only: neither the leftover nor a new checkout can go there.
+    chmodSync(parent, 0o555);
+    try {
+      await installPiPackage(m.sys);
+    } finally {
+      chmodSync(parent, 0o755);
+    }
+    expect(m.calls()).toContain(`pi install ${PI_PACKAGE}`);
+  },
+);
 
 test("a failed agent install says why and how to retry, and setup goes on (#750)", async () => {
   const m = await machine();

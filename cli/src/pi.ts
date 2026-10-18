@@ -85,11 +85,17 @@ export function chainPiLink(file: string) {
   );
 }
 /**
- * Pi's agent folder: `PI_CODING_AGENT_DIR`, else `~/.pi/agent`, with the OS's home folder when
- * `HOME` is unset, rather than a path relative to wherever the command runs (#1749).
+ * Pi's agent folder: `PI_CODING_AGENT_DIR` with a leading `~` expanded, as Pi does (#2039), else
+ * `~/.pi/agent`, with the OS's home folder when `HOME` is unset, rather than a path relative to
+ * wherever the command runs (#1749).
  */
-function piAgentDir(env: Ctx["env"]): string {
-  return env.PI_CODING_AGENT_DIR || join(env.HOME || homedir(), ".pi", "agent");
+export function piAgentDir(env: Ctx["env"]): string {
+  const home = env.HOME || homedir();
+  const dir = env.PI_CODING_AGENT_DIR;
+  if (!dir) return join(home, ".pi", "agent");
+  if (dir === "~") return home;
+  const tilde = dir.startsWith("~/") || (process.platform === "win32" && dir.startsWith("~\\"));
+  return tilde ? join(home, dir.slice(2)) : dir;
 }
 
 /** Where `pi install git:github.com/T0mSIlver/starbridge@<tag>` puts the Starbridge skill. */
