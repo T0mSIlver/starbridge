@@ -150,6 +150,14 @@ export const ITEM_KINDS = {
 >;
 
 export type RetentionPeriod = "day" | "week" | "month";
+/**
+ * How many days each period lasts on the hosted server (PROTOCOL.md, Limits): the server's default
+ * retention limits, and how long the CLI keeps what it asked. A self-hosted server may set others.
+ */
+export const RETENTION_DAYS = { day: 1, week: 7, month: 30 } as const satisfies Record<
+  RetentionPeriod,
+  number
+>;
 export interface Keep {
   received?: RetentionPeriod;
   answered?: RetentionPeriod;
