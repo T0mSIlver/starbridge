@@ -22,7 +22,7 @@ import {
 } from "./agents";
 import { findCodexbar } from "./codexbar";
 import { removePathLines } from "./path";
-import { removeService } from "./service";
+import { removeService, undoLinger } from "./service";
 import type { Sys } from "./sys";
 
 export interface UninstallOpts {
@@ -104,6 +104,11 @@ export async function uninstall(sys: Sys, opts: UninstallOpts): Promise<number> 
   } catch (e) {
     stopped = false;
     ctx.out(`Could not stop the agent service, so it stays: ${(e as Error).message}`);
+  }
+
+  if (stopped) {
+    const linger = await undoLinger(sys);
+    if (linger) ctx.out(linger);
   }
 
   for (const id of AGENT_IDS) for (const line of await removeAgent(sys, id)) ctx.out(line);

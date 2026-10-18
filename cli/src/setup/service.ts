@@ -445,6 +445,7 @@ export async function removeService(sys: Sys): Promise<boolean> {
     );
     if (r?.code !== 0) throw new Error(`Unregister-ScheduledTask: ${failure(r)}`);
     rmSync(path, { force: true });
+    removeLog(sys);
   } else if (kind(sys) === "systemd") {
     await stopUnit(sys, UNIT);
     rmSync(path, { force: true });
@@ -455,8 +456,16 @@ export async function removeService(sys: Sys): Promise<boolean> {
     if (r?.code !== 0 && r?.code !== 3 && r?.code !== 113)
       throw new Error(`launchctl bootout: ${failure(r)}`);
     rmSync(path, { force: true });
+    removeLog(sys);
   }
   return true;
+}
+
+/** The agent's log goes with the service that wrote it (#2041); journald keeps systemd's. */
+function removeLog(sys: Sys) {
+  try {
+    rmSync(agentLog(sys), { force: true });
+  } catch {}
 }
 
 async function stopUnit(sys: Sys, unit: string) {
@@ -514,5 +523,24 @@ export async function lingering(sys: Sys): Promise<boolean | undefined> {
 
 export async function enableLinger(sys: Sys): Promise<string | undefined> {
   const r = await run(sys, "loginctl", ["enable-linger"], { timeoutMs: 30_000 });
-  return r?.code === 0 ? undefined : failure(r);
+  if (r?.code !== 0) return failure(r);
+  sys.ctx.store.updateState((s) => {
+    s.lingerEnabled = true;
+  });
+  return undefined;
+}
+
+/**
+ * Turns lingering off again when setup turned it on, and only then: lingering the owner had
+ * before stays. A line that says so, or undefined when setup had not turned it on.
+ */
+export async function undoLinger(sys: Sys): Promise<string | undefined> {
+  if (!sys.ctx.store.state().lingerEnabled) return undefined;
+  const r = await run(sys, "loginctl", ["disable-linger"], { timeoutMs: 30_000 });
+  if (r?.code !== 0)
+    return `Could not turn off lingering, which setup turned on: ${failure(r)}. Run \`loginctl disable-linger\` to turn it off.`;
+  sys.ctx.store.updateState((s) => {
+    delete s.lingerEnabled;
+  });
+  return "Turned off lingering (`loginctl disable-linger`), which setup turned on.";
 }

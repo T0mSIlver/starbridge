@@ -206,7 +206,9 @@
   rewritten through a temporary file and a rename, keeping its mode and any symbolic link to it, so
   a crash never leaves it half written (#1749). A settings or hooks file that uninstall's edits leave holding
   nothing, such as an allow list setup created, is deleted rather than left as `{}`: an empty file
-  and none mean the same to its tool (#1494). `starbridge update` runs the new binary's `setup --refresh`,
+  and none mean the same to its tool (#1494). Uninstall turns systemd lingering off only when setup
+  turned it on, which setup records, so lingering the owner had before stays (#2040),
+  and removes the agent's log with the service on macOS and Windows (#2041). `starbridge update` runs the new binary's `setup --refresh`,
   which rewrites the marked files that differ and restarts the local agent; Homebrew and npm users
   run it after upgrading, and the local agent refreshes the skills and rule when it starts.
   The refresh moves every harness integration to the new version, the Pi package included: Pi
