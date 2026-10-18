@@ -220,7 +220,7 @@ function pomOf(cache: string, group: string, name: string, version: string): str
 const tag = (xml: string, name: string) =>
   xml.match(new RegExp(`<${name}>([\\s\\S]*?)</${name}>`))?.[1]?.trim();
 const decode = (s: string) =>
-  s.replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/\s+/g, " ").trim();
+  s.replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&").replace(/\s+/g, " ").trim();
 
 /** The licences a POM declares, else its parent's; the project's URL. */
 export function readPom(
