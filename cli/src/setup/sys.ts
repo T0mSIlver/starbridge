@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import { realpathSync } from "node:fs";
 import { homedir } from "node:os";
+import { createInterface as lines } from "node:readline";
 import { createInterface } from "node:readline/promises";
 import type { Ctx } from "../context";
 import { inBunfs, killTree, resolveCommand, spawnable, which, whichAll } from "../platform";
@@ -37,26 +38,61 @@ export const defaults: Prompt = {
 /**
  * One line from the terminal, read by bash, which shares this process's stdin instead of through
  * `process.stdin`. Under `curl | sh` stdin is `/dev/tty`, and on macOS Bun cannot read it again
- * once an earlier readline (the pairing check) has closed it: the next question never gets its
- * answer and Ctrl-C does nothing (#1882). Bash's own line editor reads the answer, so the arrow
- * keys edit it, and Ctrl-C ends it too: setup stops as it does at any other step.
+ * once an earlier readline has closed it, nor read it at all while the pairing check waits: the
+ * answer never arrives and Ctrl-C does nothing (#1882, #2036). Bash's own line editor reads the
+ * answer, so the arrow keys edit it, and Ctrl-C ends it too: the command stops as it does at any
+ * other step. The line is undefined at end of input, without bash, or once `stop` ends the read.
  */
-function readLine(): Promise<string> {
-  return new Promise((resolve) => {
-    const child = spawn("/bin/bash", ["-c", 'IFS= read -e -r line; printf %s "$line"'], {
-      stdio: ["inherit", "pipe", "inherit"],
+function bashLine(): { line: Promise<string | undefined>; stop: () => void } {
+  let stopped = false;
+  const child = spawn("/bin/bash", ["-c", 'IFS= read -e -r line && printf %s "$line"'], {
+    stdio: ["inherit", "pipe", "inherit"],
+  });
+  const line = new Promise<string | undefined>((resolve) => {
+    let text = "";
+    child.stdout?.on("data", (d: Buffer) => {
+      text += d.toString("utf8");
     });
-    let line = "";
-    child.stdout.on("data", (d: Buffer) => {
-      line += d.toString("utf8");
-    });
-    // No /bin/bash to run: take the default rather than wait for an answer nobody can read.
-    child.on("error", () => resolve(""));
-    child.on("close", (_code, signal) => {
-      if (signal) process.exit(130);
-      resolve(line);
+    child.on("error", () => resolve(undefined));
+    child.on("close", (code, signal) => {
+      if (signal && !stopped) process.exit(130);
+      resolve(stopped || code !== 0 ? undefined : text);
     });
   });
+  return {
+    line,
+    stop: () => {
+      stopped = true;
+      child.kill();
+    },
+  };
+}
+
+/**
+ * Hands each line typed on the terminal to `onLine` until the returned function is called. Only
+ * macOS needs bash for it (`bashLine`); elsewhere a readline on stdin reads them.
+ */
+export function terminalLines(onLine: (line: string) => void): () => void {
+  if (process.platform !== "darwin") {
+    const rl = lines({ input: process.stdin }).on("line", onLine);
+    return () => rl.close();
+  }
+  let stopped = false;
+  let read: ReturnType<typeof bashLine> | undefined;
+  const next = () => {
+    if (stopped) return;
+    read = bashLine();
+    void read.line.then((l) => {
+      if (l === undefined || stopped) return;
+      onLine(l);
+      next();
+    });
+  };
+  next();
+  return () => {
+    stopped = true;
+    read?.stop();
+  };
 }
 
 /** Questions on the terminal. */
@@ -65,7 +101,7 @@ export function terminalPrompt(): Prompt {
     // Only macOS needs the shell. Its `read -e` keeps the arrow keys working in an answer.
     if (process.platform === "darwin") {
       process.stdout.write(q);
-      return (await readLine()).trim();
+      return ((await bashLine().line) ?? "").trim();
     }
     const rl = createInterface({ input: process.stdin, output: process.stdout });
     try {
