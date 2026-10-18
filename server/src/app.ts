@@ -39,6 +39,24 @@ const BACKUP_MAX_AGE_MS = 26 * 3_600_000;
 /** /healthz/disk fails below this much free space beside the database. */
 const DISK_MIN_FREE = 2 * 1024 ** 3;
 
+/** Whether `statfs` beside the database shows the room /healthz/disk asks for. */
+export function diskHasRoom({ bavail, bsize }: { bavail: number; bsize: number }): boolean {
+  return bavail * bsize >= DISK_MIN_FREE;
+}
+
+/**
+ * A housekeeping job, for a timer: a delete needs room in the WAL, so on a full disk the job
+ * waits for the next round rather than crash the server, at start included. Any other error
+ * still throws.
+ */
+export const housekeep = (job: () => void) => () => {
+  try {
+    job();
+  } catch (e) {
+    if (!diskFull(e)) throw e;
+  }
+};
+
 export async function createApp(config: Config, fetchFn: typeof fetch = fetch) {
   await ready;
   const db = openDb(config.dbPath);
@@ -63,15 +81,6 @@ export async function createApp(config: Config, fetchFn: typeof fetch = fetch) {
   };
   deps.push.onSent = (type, result) => usage.record(`push.${type}.${result}`);
 
-  // Housekeeping deletes, and a delete needs room in the WAL: on a full disk it waits for the
-  // next round rather than crash the server, at start included.
-  const housekeep = (job: () => void) => () => {
-    try {
-      job();
-    } catch (e) {
-      if (!diskFull(e)) throw e;
-    }
-  };
   const minutely = housekeep(() => {
     sweepPairings(db);
     deps.pairingClients.sweep(Date.now());
@@ -165,9 +174,10 @@ export async function createApp(config: Config, fetchFn: typeof fetch = fetch) {
   });
   // The uptime check calls this too: a filling disk opens an issue before writes fail (#301).
   app.get("/healthz/disk", async (c) => {
-    const { bavail, bsize } = await statfs(dirname(config.dbPath));
     // No figure: anyone can call it, and the headroom left is the operator's to know.
-    return bavail * bsize >= DISK_MIN_FREE ? c.text("ok") : c.text("disk low", 503);
+    return diskHasRoom(await statfs(dirname(config.dbPath)))
+      ? c.text("ok")
+      : c.text("disk low", 503);
   });
   // The demo program (demo/) runs only against a server that answers this.
   if (config.demo) app.get("/v1/demo", (c) => c.json({ demo: true }));
