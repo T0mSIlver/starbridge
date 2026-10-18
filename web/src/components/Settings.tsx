@@ -12,7 +12,7 @@ import {
   quotaWindowKey,
 } from "@starbridge/protocol";
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { api } from "@/lib/api";
 import { type DesktopChannel, type DesktopPlace, desktop, desktopClock } from "@/lib/desktop";
 import type { RecoveryState } from "@/lib/device";
@@ -85,12 +85,15 @@ export function Segmented<T extends string | number | boolean | null>({
   options: [T, string][];
   onChange: (v: T) => void;
 }) {
+  // One name per group makes the browser treat its radios as one: a single Tab stop, arrows that move and pick.
+  const name = useId();
   return (
     <div className={s.segmented} role="radiogroup" aria-label={label}>
       {options.map(([v, text]) => (
         <label key={String(v)} className={`t-meta ${s.segment}`}>
           <input
             type="radio"
+            name={name}
             className="sr-only"
             checked={v === value}
             onChange={() => onChange(v)}

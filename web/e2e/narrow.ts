@@ -77,16 +77,17 @@ const cli = (name: string, args: string[]) =>
   });
 
 async function expectFits(page: Page, where: string) {
+  const width = page.viewportSize()?.width;
   // Measured at rest: the detail slides in.
   await page.waitForFunction(() =>
     document.getAnimations().every((a) => a.playState !== "running"),
   );
-  const problems = (await layoutProblems(page, { phone: true })).filter((p) =>
+  const problems = (await layoutProblems(page, { phone: width === 390 })).filter((p) =>
     ["page-width", "spills", "offscreen", "clipped"].includes(p.kind),
   );
   if (problems.length)
     throw new Error(`${where}:\n${problems.map((p) => `  ${p.kind}: ${p.what}`).join("\n")}`);
-  console.log(`ok: ${where} fits 390 px`);
+  console.log(`ok: ${where} fits ${width} px`);
 }
 
 async function main() {
@@ -199,6 +200,39 @@ async function main() {
     await empty.waitFor();
     if (await open()) throw new Error("the answered last card is still open");
     console.log("ok: answering the last card returns to the empty list");
+
+    // A run with no break point (a commit hash, a token) wraps in the row, the card and the
+    // detail's context, at a phone's width and a desktop's (#1906).
+    const hash = "9f2c1ab4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f80";
+    const unbroken = cli("ask-unbroken", [
+      "ask",
+      ...["--question", `Revert commit ${hash}?`, "--context", "x".repeat(600)],
+      ...["--option", "Revert", "--option", "Keep"],
+      ...["--project", "research-control-plane", "--session", "narrow-unbroken"],
+    ]);
+    await unbroken.waitFor(/d_[\w-]+/);
+    const row = page.getByText(/^Revert commit/).first();
+    await row.waitFor();
+    await expectFits(page, "a card with a commit hash");
+    await row.click();
+    await page.getByRole("heading", { name: /Revert commit/ }).waitFor();
+    await expectFits(page, "the detail with an unbroken context");
+    await page.setViewportSize({ width: 1280, height: 844 });
+    await page.getByRole("heading", { name: /Revert commit/ }).waitFor();
+    await expectFits(page, "the row and detail with a commit hash");
+    // At this width the list and the detail are panes that clip or scroll, which layout.ts lets
+    // text run past: no box may hold content wider than itself.
+    const wide = await page.evaluate(() =>
+      [...document.querySelectorAll("body *")]
+        .filter((el) => el.scrollWidth > el.clientWidth + 1 && el.clientWidth > 1)
+        .filter((el) => getComputedStyle(el).overflowX !== "visible")
+        .map(
+          (el) =>
+            `${el.tagName.toLowerCase()}.${el.className} ${el.scrollWidth} in ${el.clientWidth}`,
+        ),
+    );
+    if (wide.length) throw new Error(`text runs past its pane at 1280 px:\n  ${wide.join("\n  ")}`);
+    console.log("ok: nothing runs past its pane at 1280 px");
   } catch (e) {
     await current?.screenshot({ path: join(tmpdir(), "starbridge-narrow-failure.png") });
     throw e;

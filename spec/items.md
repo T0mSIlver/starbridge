@@ -13,7 +13,8 @@
   steers an agent this way ("show me two other mockups"), and a Reply button that opened the field
   made it a second-class answer. Cards in the list keep only the options, so they stay one-tap
   and short. The owner chose this from mockups over a full-width Reply button and a mic in the
-  field; the field reads "Your answer" on both clients.
+  field; the field reads "Your answer" on both clients. Every client's field stops at the
+  server's 4000 characters, so a pasted log never comes back refused (#1921).
 - **One call's questions keep its order** (#1079). Claude Code's `AskUserQuestion`, opencode's
   `question` and Codex's `request_user_input` ask several questions at once, and the CLI posts one
   card for each. Their `createdAt` is the call's time plus each question's index in milliseconds,

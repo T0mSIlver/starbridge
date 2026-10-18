@@ -176,12 +176,4 @@ class JoinApprovalTest {
         assertEquals(2, approvals)
         assertNotNull(directories.verify(entries, account, null).members[browser.id])
     }
-
-    private fun until(pred: () -> Boolean) {
-        val end = System.currentTimeMillis() + 10_000
-        while (!pred()) {
-            check(System.currentTimeMillis() < end) { "timed out" }
-            Thread.sleep(10)
-        }
-    }
 }

@@ -1,8 +1,10 @@
+/* A line with no break point (a token, a hash) breaks anywhere rather than widen the pane (#1906). */
 .context {
   display: flex;
   flex-direction: column;
   gap: var(--s2);
   min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 /* Each line is a block, so a line per option reads as one; bold is the only emphasis. */

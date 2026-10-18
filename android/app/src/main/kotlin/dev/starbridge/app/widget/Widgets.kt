@@ -1,6 +1,7 @@
 package dev.starbridge.app.widget
 
 import android.appwidget.AppWidgetManager
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.graphics.Paint
@@ -34,7 +35,6 @@ import androidx.glance.appwidget.action.actionStartActivity
 import androidx.glance.appwidget.appWidgetBackground
 import androidx.glance.appwidget.cornerRadius
 import androidx.glance.appwidget.provideContent
-import androidx.glance.appwidget.updateAll
 import androidx.glance.background
 import androidx.glance.color.ColorProvider
 import androidx.glance.color.DynamicThemeColorProviders
@@ -560,10 +560,18 @@ private fun Live(content: @Composable (Store, Prefs) -> Unit) {
     content(app.store(), app.prefs())
 }
 
-/** Draws both widgets again, each on its own: one that fails must not keep the other from its update. */
-suspend fun redrawWidgets(context: Context) {
-    runCatching { QuestionsWidget().updateAll(context) }.onFailure { if (it is CancellationException) throw it }
-    runCatching { QuotasWidget().updateAll(context) }.onFailure { if (it is CancellationException) throw it }
+/**
+ * Draws both widgets again, each on its own: one that fails must not keep the other from its update.
+ * Each draws the widgets Android places for its receiver (#1930). Glance's `updateAll` finds them by
+ * the widget class's name, and R8 merges the two classes into one, so a Quotas widget drew Needs you.
+ */
+suspend fun redrawWidgets(context: Context, update: suspend (GlanceAppWidget, Int) -> Unit = { widget, id ->
+    widget.update(context, GlanceAppWidgetManager(context).getGlanceIdBy(id))
+}) {
+    val manager = AppWidgetManager.getInstance(context)
+    for (receiver in listOf(QuestionsWidgetReceiver(), QuotasWidgetReceiver())) runCatching {
+        manager.getAppWidgetIds(ComponentName(context, receiver::class.java)).forEach { update(receiver.glanceAppWidget, it) }
+    }.onFailure { if (it is CancellationException) throw it }
 }
 
 /**

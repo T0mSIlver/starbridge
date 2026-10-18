@@ -142,6 +142,26 @@ unix("answered at the keyboard first, the card is settled elsewhere (#951)", asy
 });
 
 unix(
+  "answered at the keyboard while the card's post is in flight, it is settled elsewhere (#1913)",
+  async () => {
+    const d = daemon([THREAD]);
+    const ctx = await machine(d.home);
+    // The server stores the card but its reply does not come back before the keyboard answers.
+    server.lostReplies.push("POST /items");
+    const race = hookCodexQuestion(ctx, PRE_TOOL_USE, true);
+    await until(async () => (await server.opened("decision")).length === 1, 10_000);
+    d.send({ method: "serverRequest/resolved", params: { threadId: THREAD, requestId: 0 } });
+    await race;
+    const [card] = await server.opened("decision");
+    await until(async () => (await server.opened("settled")).length === 1);
+    expect(await server.opened("settled")).toMatchObject([
+      { itemId: card?.id, outcome: "elsewhere" },
+    ]);
+    d.stop();
+  },
+);
+
+unix(
   "a thread the daemon has not loaded, a secret, or no daemon leaves the picker alone (#951)",
   async () => {
     // `codex exec` runs its thread outside the daemon: resuming it there would load it.

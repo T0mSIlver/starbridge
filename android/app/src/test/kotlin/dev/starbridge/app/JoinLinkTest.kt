@@ -87,11 +87,7 @@ class JoinLinkTest {
         assertEquals(link, store.joinLink.value)
         // Signed out, the link goes with the setup it came in, and later setups never see it.
         store.signOut()
-        val end = System.currentTimeMillis() + 10_000
-        while (store.phase.value != Phase.SignedOut) {
-            check(System.currentTimeMillis() < end) { "timed out" }
-            Thread.sleep(10)
-        }
+        until { store.phase.value == Phase.SignedOut }
         assertEquals(null, store.joinLink.value)
         // Offered outside that setup, it is not kept.
         store.offerJoinLink(link)

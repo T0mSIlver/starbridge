@@ -109,19 +109,11 @@ class QuietSyncTest {
 
         // A pull while the quiet sync still runs shows at once, then waits its turn.
         store.refresh()
-        waitUntil { store.busy.value }
+        until { store.busy.value }
         release.release()
         assertNotNull(arrived.poll(10, TimeUnit.SECONDS))
         assertTrue(store.busy.value)
         release.release()
-        waitUntil { !store.busy.value }
-    }
-
-    private fun waitUntil(condition: () -> Boolean) {
-        val end = System.currentTimeMillis() + 10_000
-        while (!condition()) {
-            check(System.currentTimeMillis() < end) { "timed out" }
-            Thread.sleep(20)
-        }
+        until { !store.busy.value }
     }
 }
