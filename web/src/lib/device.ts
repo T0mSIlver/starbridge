@@ -1,28 +1,21 @@
-// Everything this browser does as a device: setup, pairing, recovery, reading and answering.
-// Components import this module dynamically, so libsodium and the protocol code load after the
-// first paint. Every read of the directory replays the chain against the pin kept in IndexedDB.
+// Everything this browser does as a device: setup, the session, pairing and recovery. Each kind
+// of item (decisions, prompts, quotas, runs, join requests) lives in kinds/, on the chain and keys
+// of kinds/core.ts, and is re-exported here. Components import this module dynamically, so
+// libsodium and the protocol code load after the first paint. Every read of the directory replays
+// the chain against the pin kept in IndexedDB.
 import {
-  activeMembers,
-  addEntryAsync,
-  approverKeys,
   bindMessage,
   checkCode,
   checkJoined,
   codeFromLink,
-  type Decision,
   type Directory,
   DirectoryEntry,
-  type DirectoryHead,
-  entryHash,
-  forgetHeads,
   formatPairingCode,
-  fromB64,
   generateRecoverySeed,
   genesisEntryAsync,
   type Held,
   claimHash as hashClaim,
   type JoinKeys,
-  joinApproval,
   joinCommitment,
   joinerKeys,
   joinRequest,
@@ -31,15 +24,10 @@ import {
   newJoinId,
   newJoinKeyPair,
   newPairingCode,
-  noteHead,
-  openAsync,
-  openImages,
   openJoinApproval,
-  openJoinRequest,
   openPairingApproval,
   openPairingRequest,
   type PairingCode,
-  type Permission,
   ProtocolError,
   pairingApproval,
   pairingLink,
@@ -56,48 +44,48 @@ import {
   recoveryKeyPair,
   recoverySeedFromKey,
   revokeEntryAsync,
-  type SealedItem,
-  type Settled,
-  type ShownImage,
   type SignedEnvelope,
-  type Snooze,
-  sealAsync,
   toB64,
   verifyDirectory,
-  visible,
-  type Waiting,
-  withheldBy,
 } from "@starbridge/protocol";
-import { ApiError, api, backoff, lastPage, type Stored } from "./api";
-import { generateDeviceKeys, sealOpener, signer } from "./crypto/keys";
+import { ApiError, api } from "./api";
+import { generateDeviceKeys, signer } from "./crypto/keys";
 import { desktop } from "./desktop";
-import { type Kept, merge } from "./kept";
+import {
+  append,
+  appendMember,
+  type Ctx,
+  heldRemoval,
+  me,
+  now,
+  pinTo,
+  randomId,
+  refresh,
+  reverify,
+  stopWaiting,
+  trusted,
+  Unanchored,
+} from "./kinds/core";
+import { retrying } from "./kinds/joins";
 import { otherServer } from "./otherServer";
 import { signedOut } from "./signedOut";
 import * as store from "./store";
-import type {
-  Device,
-  InboxItem,
-  JoinAsk,
-  JoinView,
-  PairingRequest,
-  PromptItem,
-  PromptReply,
-  QuotaCardData,
-  Reply,
-  RunItem,
-  Decision as ShownDecision,
-} from "./types";
+import type { Device, PairingRequest } from "./types";
 
+export { type Ctx, heldText, reverify, stopWaiting, Withheld } from "./kinds/core";
+export * from "./kinds/decisions";
+// By name: `retrying` stays inside, shared with the joining side here.
+export {
+  type Comparison,
+  compareJoin,
+  refuseJoin,
+  retryDelay,
+  watchJoins,
+} from "./kinds/joins";
+export * from "./kinds/prompts";
+export * from "./kinds/quotas";
+export * from "./kinds/runs";
 export { ApiError };
-
-/** A device of a verified directory, signed in and bound to this browser's keys. */
-export interface Ctx {
-  account: string;
-  device: store.DeviceRecord;
-  dir: Directory;
-  entries: SignedEnvelope[];
-}
 
 export type Boot =
   /**
@@ -119,12 +107,6 @@ export type Boot =
    */
   | { state: "held"; account: string; text: string; revoked?: { id: string; name: string } }
   | { state: "ready"; ctx: Ctx };
-
-const now = () => new Date().toISOString();
-
-function randomId(prefix: string): string {
-  return prefix + toB64(crypto.getRandomValues(new Uint8Array(12)));
-}
 
 /** A default device name from the user agent, such as "Firefox on Mac". */
 export function defaultName(): string {
@@ -155,49 +137,6 @@ export function defaultName(): string {
   return os ? `${browser} on ${os}` : browser;
 }
 
-/** Moves the pin to a verified chain; refuses one that does not extend the stored pin. */
-function pinTo(account: string, entries: SignedEnvelope[], dir: Directory): Promise<void> {
-  return store.extendPin(account, { length: dir.length, head: dir.head }, (n) => {
-    const e = entries[n - 1];
-    return e ? entryHash(e.body) : undefined;
-  });
-}
-
-/** A browser with no pin was served a chain that nothing it holds anchors. */
-class Unanchored extends Error {}
-
-/**
- * Fetches the chain, replays it against the pin, and moves the pin forward. Without a pin, only
- * a genesis this browser's device signed anchors the chain (a first device cut off before it
- * pinned): any other the server could have made, listing keys it relayed (#354).
- */
-async function trusted(
-  account: string,
-  read?: SignedEnvelope[],
-): Promise<{ dir: Directory; entries: SignedEnvelope[] }> {
-  for (let attempt = 0; ; attempt++) {
-    const entries = (attempt === 0 && read) || (await api.directory());
-    const pin = await store.get("pin", account);
-    if (!pin && !signedGenesis(account, entries[0], await store.get("device", account)))
-      throw new Unanchored("no pin anchors this directory");
-    const dir = verifyDirectory(entries, { account, ...(pin ? { pin } : {}) });
-    // A chain that drops this browser while a machine's head shows it cut short holds, and is not
-    // pinned: the full chain need not extend it (#1779).
-    const mine = await store.get("device", account);
-    const entry = mine && dir.members.get(mine.id);
-    if (entry && !entry.active && (await heldRemoval(account, { dir, entries })))
-      return { dir, entries };
-    try {
-      await pinTo(account, entries, dir);
-      return { dir, entries };
-    } catch (e) {
-      // The service worker or another tab pinned a longer chain meanwhile: read it again.
-      if (e instanceof store.StalePin && attempt < 2) continue;
-      throw e;
-    }
-  }
-}
-
 function registration() {
   return (
     navigator.serviceWorker?.getRegistration("/").catch(() => undefined) ??
@@ -212,22 +151,6 @@ function registration() {
 async function closeNotifications(): Promise<void> {
   const reg = await registration();
   for (const n of (await reg?.getNotifications().catch(() => [])) ?? []) n.close();
-}
-
-/** Whether `entry`, once verified as entry 0, is a genesis this browser's own device signed. */
-function signedGenesis(
-  account: string,
-  entry: SignedEnvelope | undefined,
-  device?: store.DeviceRecord,
-): boolean {
-  if (!device || entry?.signer !== device.id) return false;
-  try {
-    return (
-      verifyDirectory([entry], { account }).members.get(device.id)?.member.signPk === device.signPk
-    );
-  } catch {
-    return false;
-  }
 }
 
 export async function boot(): Promise<Boot> {
@@ -319,14 +242,6 @@ export async function boot(): Promise<Boot> {
     return { state: "join", account, stale: true };
   }
   return { state: "ready", ctx: { account, device, ...verified } };
-}
-
-/** A head a machine signed that the chain dropping this browser lacks (#1779). */
-async function heldRemoval(
-  account: string,
-  chain: { dir: Directory; entries: SignedEnvelope[] },
-): Promise<Held | undefined> {
-  return withheldBy((await store.get("heads", account)) ?? {}, chain.dir, chain.entries);
 }
 
 const memberName = (dir: Directory, id: string) => dir.members.get(id)?.member.name ?? id;
@@ -682,134 +597,6 @@ export async function startDigitJoin(account: string, name: string): Promise<Dig
   };
 }
 
-/**
- * Runs a join call again after a network or server failure, until the join expires or `signal`
- * aborts. Giving up would drop the ephemeral key, and the server takes one key per side.
- */
-async function retrying<T>(
-  expiresAt: string,
-  signal: AbortSignal,
-  call: () => Promise<T>,
-): Promise<T> {
-  for (;;) {
-    try {
-      return await call();
-    } catch (e) {
-      const transient = !(e instanceof ApiError) || e.status >= 500 || e.status === 429;
-      if (signal.aborted || !transient) throw e;
-      if (Date.parse(expiresAt) < Date.now()) throw new Error("The request expired.");
-      await new Promise((r) => setTimeout(r, retryDelay.ms));
-    }
-  }
-}
-
-/** How long a failed join call waits before its next try; tests shorten it. */
-export const retryDelay = { ms: 3_000 };
-
-function toAsk(view: JoinView): JoinAsk | undefined {
-  try {
-    const body = openJoinRequest(view.request);
-    return {
-      id: view.id,
-      name: body.name,
-      at: body.at,
-      ...(view.approver ? { approver: view.approver } : {}),
-      view,
-    };
-  } catch {
-    return undefined;
-  }
-}
-
-/** Calls `onChange` with the account's open join requests until `signal` aborts. */
-export async function watchJoins(signal: AbortSignal, onChange: (asks: JoinAsk[]) => void) {
-  await ready;
-  let cursor = "0";
-  while (!signal.aborted) {
-    try {
-      const page = await api.joins(cursor, 25, signal);
-      cursor = page.cursor;
-      onChange(page.joins.flatMap((v) => toAsk(v) ?? []));
-    } catch {
-      if (signal.aborted) return;
-      // At most every 5 s, and not before the server's backoff ends (#332).
-      await new Promise((r) => setTimeout(r, Math.max(5_000, backoff.until - Date.now())));
-    }
-  }
-}
-
-/** Digits this device derived for a join request, and what approving it does. */
-export interface Comparison {
-  digits: string;
-  approve: (ctx: Ctx) => Promise<Ctx>;
-}
-
-/**
- * Takes the request as listed: posts this device's key, waits for the joining device to reveal
- * its key, and checks the reveal against the commitment listed before this key went out.
- */
-export async function compareJoin(
-  ctx: Ctx,
-  ask: JoinAsk,
-  signal: AbortSignal,
-): Promise<Comparison> {
-  await ready;
-  const { request, commitment } = ask.view;
-  const body = openJoinRequest(request);
-  if (body.account !== ctx.account) throw new ProtocolError("wrong-account", body.account);
-  if (body.join !== ask.id) throw new ProtocolError("id-mismatch", "join");
-  const eph = newJoinKeyPair();
-  const claimed = (await api.claimJoin(ask.id, toB64(eph.publicKey), ctx.device.id)).join;
-  let after = claimed.version - 1;
-  let keys: JoinKeys;
-  try {
-    for (;;) {
-      const { join } = await retrying(claimed.expiresAt, signal, () =>
-        api.join(ask.id, after, 25, signal),
-      );
-      after = join.version;
-      if (join.state === "cancelled") throw new Error(`${body.name} cancelled the request.`);
-      if (join.joinerKey) {
-        keys = approverKeys({ mine: eph, joinerKey: join.joinerKey, request, commitment });
-        break;
-      }
-      if (Date.parse(join.expiresAt) < Date.now()) throw new Error("The request expired.");
-    }
-  } finally {
-    eph.privateKey.fill(0);
-  }
-  const member: Member = {
-    id: body.id,
-    role: "device",
-    name: body.name,
-    boxPk: body.boxPk,
-    signPk: body.signPk,
-  };
-  return {
-    digits: keys.digits,
-    approve: async (current) => {
-      const next = await appendMember(current, member);
-      const approval = joinApproval(
-        {
-          v: 1,
-          join: ask.id,
-          account: current.account,
-          length: next.dir.length,
-          head: next.dir.head,
-          approver: current.device.id,
-        },
-        keys,
-      );
-      await api.approveJoin(ask.id, approval);
-      return next;
-    },
-  };
-}
-
-export function refuseJoin(id: string): Promise<void> {
-  return api.cancelJoin(id);
-}
-
 /** A code this device shows as a QR, for a new phone to scan; the phone posts under it. */
 export interface ShownCode {
   code: string;
@@ -851,62 +638,6 @@ export async function deviceContext(account: string): Promise<Ctx | undefined> {
   const entry = verified.dir.members.get(device.id);
   if (!entry?.active || entry.member.signPk !== device.signPk) return undefined;
   return { account, device, ...verified };
-}
-
-async function refresh(ctx: Ctx): Promise<Ctx> {
-  return { ...ctx, ...(await trusted(ctx.account)) };
-}
-
-const me = (ctx: Ctx) => ({
-  id: ctx.device.id,
-  sign: signer(ctx.device.keys),
-  openSeal: sealOpener(ctx.device.keys, fromB64(ctx.device.boxPk)),
-});
-
-/** Appends an entry this device signed, after checking locally that the chain accepts it. */
-async function append(ctx: Ctx, make: (dir: Directory) => Promise<SignedEnvelope>): Promise<Ctx> {
-  let fresh = await refresh(ctx);
-  for (let attempt = 0; ; attempt++) {
-    const entry = await make(fresh.dir);
-    const dir = verifyDirectory([...fresh.entries, entry], { account: ctx.account });
-    try {
-      await api.append(entry);
-    } catch (e) {
-      // Another device appended first: replay and sign again on top of it.
-      if (e instanceof ApiError && e.code === "not-next" && attempt < 2) {
-        fresh = await refresh(fresh);
-        continue;
-      }
-      throw e;
-    }
-    const entries = [...fresh.entries, entry];
-    try {
-      await pinTo(ctx.account, entries, dir);
-    } catch (e) {
-      // The entry is on the server and a longer chain was pinned meanwhile: carry on from it,
-      // so the caller (an approval) still finishes.
-      if (e instanceof store.StalePin) return refresh(fresh);
-      throw e;
-    }
-    return { ...fresh, dir, entries };
-  }
-}
-
-/**
- * Adds a member to approve, unless the directory already holds it with these keys: an approval
- * retried after its post failed reuses the entry the first try appended.
- */
-async function appendMember(ctx: Ctx, member: Member): Promise<Ctx> {
-  const fresh = await refresh(ctx);
-  const held = fresh.dir.members.get(member.id);
-  if (
-    held?.active &&
-    held.member.role === member.role &&
-    held.member.boxPk === member.boxPk &&
-    held.member.signPk === member.signPk
-  )
-    return fresh;
-  return append(fresh, (dir) => addEntryAsync(dir, me(fresh), member, now()));
 }
 
 export function devices(ctx: Ctx): Device[] {
@@ -1163,764 +894,4 @@ async function forget(account: string): Promise<void> {
   await store.del("current");
   // Last: a push the service worker was still opening finds no keys now.
   await closeNotifications();
-}
-
-// --- Decisions ------------------------------------------------------------------------------
-
-export interface Inbox {
-  items: InboxItem[];
-  cursor?: string;
-  /** Items that failed to open or verify, and why. */
-  rejected: { id: string; error: string }[];
-  /**
-   * Items signed by a member this directory does not hold yet: one paired after the last
-   * read. They are tried again on the next load, after the directory is read again.
-   */
-  retry?: Stored[];
-  /** The latest waiting state each machine posted, by `<machine>/<decision id>` (#122). */
-  waits?: Record<string, Pick<Waiting, "state" | "at">>;
-  /** The owner's latest snooze of each decision, from any device, by decision id (#571). */
-  snoozes?: Record<string, Pick<Snooze, "until" | "at">>;
-}
-
-/** The server picks what it lists: an item of another kind is refused before it is opened. */
-function expectKind<K extends SealedItem["kind"]>(item: SealedItem, kind: K) {
-  if (item.kind !== kind)
-    throw new ProtocolError("wrong-kind", `${item.kind} where ${kind} was due`);
-  return item as SealedItem & { kind: K };
-}
-
-/**
- * The server holds back directory entries a machine has seen: no machine's item counts (#362).
- * `revoked`: the member a `revoke` entry names, whose heads the owner can tell this browser to
- * forget once they say they made that revocation (#813).
- */
-export class Withheld extends Error {
-  constructor(
-    message: string,
-    readonly revoked?: string,
-  ) {
-    super(message);
-  }
-}
-
-/**
- * Forgets the directory heads member `id` signed, on the owner's word that they
- * revoked it, and keeps none of them again: no revocation ends a hold by itself, since a revoked
- * device can forge one on a fork (#813). Ids are never reused, so the list only grows by the
- * members the owner revokes.
- */
-export async function stopWaiting(ctx: Pick<Ctx, "account">, id: string): Promise<void> {
-  // First, so a read noting heads meanwhile either sees it or has its head deleted below.
-  await store.update("forgotten", ctx.account, (old = []) =>
-    old.includes(id) ? old : [...old, id],
-  );
-  await store.update("heads", ctx.account, (old) => {
-    const heads = { ...old };
-    forgetHeads(heads, id);
-    return heads;
-  });
-}
-
-/**
- * Opens a machine's item and keeps the directory head it signed, the longest per machine.
- */
-async function openMachine<K extends SealedItem["kind"]>(
-  ctx: Ctx,
-  item: SealedItem,
-  kind: K,
-): ReturnType<typeof openAsync<K>> {
-  const opened = await openAsync(expectKind(item, kind), me(ctx), ctx.dir);
-  const head = (opened.body as { dir?: DirectoryHead }).dir;
-  // Read with the heads: a read that began before the owner stopped waiting must not bring back
-  // a head they told this browser to forget (#813).
-  if (head)
-    await store.updateWith("heads", ctx.account, "forgotten", (old, forgotten = []) => {
-      const heads = { ...old };
-      if (!forgotten.includes(opened.signer.id))
-        noteHead(heads, opened.signer.id, head, ctx.entries);
-      return heads;
-    });
-  return opened;
-}
-
-/**
- * Throws `Withheld` while a head a machine active in this browser's chain signed is missing
- * from it. Loaders call it once they kept the heads of what they opened, so the item that shows
- * the gap holds back the others it came with. It reads the directory once more first: a machine
- * may only have signed an entry made on another device since this page read it.
- */
-async function hold(ctx: Ctx): Promise<void> {
-  const heads = (await store.get("heads", ctx.account)) ?? {};
-  if (!withheldBy(heads, ctx.dir, ctx.entries)) return;
-  const fresh = await refresh(ctx);
-  // Read again: the owner may have stopped waiting while the directory loaded.
-  const now = (await store.get("heads", ctx.account)) ?? {};
-  const held = withheldBy(now, fresh.dir, fresh.entries);
-  if (held) throw new Withheld(heldText(fresh.dir, held), held.revoked?.id);
-}
-
-/**
- * Names the machine whose head shows the gap. A head whose member a `revoke` entry names says who
- * revoked it, since the owner alone can tell whether they did or a revoked device forged it on a
- * fork (#813).
- */
-export function heldText(dir: Directory, held: Held): string {
-  const name = (id: string) => dir.members.get(id)?.member.name ?? id;
-  const machine = name(held.id);
-  const seen = `The server is holding back changes to your devices that ${machine} has seen.`;
-  if (held.revoked) {
-    const { id, by, at } = held.revoked;
-    return `${seen} ${name(by)} revoked ${name(id)} on ${at.slice(0, 10)}. If you did not, the server may be hiding that ${name(by)} was revoked. Nothing from your machines shows until this clears.`;
-  }
-  return `${seen} Nothing from your machines shows until it sends them. If this does not clear, revoke ${machine}.`;
-}
-
-/** How each item a settled notice closed was closed, by item id, with the time it closed. */
-type Closings = Map<string, { notice: Settled; at: string }>;
-
-async function openDecision(
-  ctx: Ctx,
-  s: Stored,
-  sent: store.SentAnswers,
-  closings: Closings = new Map(),
-): Promise<InboxItem> {
-  const { signer: machine, body } = await openMachine(ctx, s.item, "decision");
-  const reply = sent[body.id];
-  const closing = closings.get(`${machine.id}/${body.id}`);
-  const notice = closing?.notice;
-  const answeredBy = notice && wonBy(ctx, notice, body as Decision);
-  // Any other notice that closed it arrived in the same write, so it carries the same time; a
-  // later one, after a device's answer, closed nothing.
-  const settled =
-    notice && notice.outcome !== "device" && closing.at === s.answeredAt
-      ? notice.outcome
-      : undefined;
-  // Listed without its blobs (#1382): the images wait, at their size, until they are shown.
-  const pending = !!body.images?.length && !s.item.blobs;
-  return {
-    // Each image opens from its blob, sealed once for every device (#685).
-    decision: {
-      ...body,
-      ...(body.images
-        ? {
-            images: pending
-              ? body.images.map(({ key: _, hash: __, ...image }) => ({ ...image, data: "" }))
-              : openImages(s.item, body.images),
-          }
-        : {}),
-    } as ShownDecision,
-    ...(pending ? { imagesPending: true as const } : {}),
-    machine,
-    ...(s.answeredAt ? { answeredAt: s.answeredAt } : {}),
-    ...(settled ? { settled } : {}),
-    ...(settled === "withdrawn" && notice?.reason ? { reason: notice.reason } : {}),
-    ...(answeredBy ? { answeredBy } : {}),
-    ...(reply ? { reply: replyOf(reply) } : {}),
-  };
-}
-
-/**
- * Another device's answer the asking machine took, from its settled notice (#330): undefined for
- * any other notice, or one naming this browser.
- */
-function wonBy(ctx: Ctx, notice: Settled, d: Omit<Decision, "images">): InboxItem["answeredBy"] {
-  const by = notice.outcome === "device" ? notice.device : undefined;
-  if (!by || by === ctx.device.id) return undefined;
-  // A device's notice with neither choice nor text applied a Done, on a decision that takes one
-  // (#539).
-  const reply: Reply | undefined =
-    notice.choice !== undefined
-      ? { choice: notice.choice }
-      : notice.text !== undefined
-        ? { text: notice.text }
-        : d.answerIn
-          ? { done: true }
-          : undefined;
-  return reply && { device: ctx.dir.members.get(by)?.member.name ?? by, reply };
-}
-
-/** The reply alone, without the time a sent answer is stored with. */
-function replyOf(r: Reply): Reply {
-  if ("choice" in r) return { choice: r.choice };
-  if ("text" in r) return { text: r.text };
-  return { done: true };
-}
-
-/** Opens a decision a push carried (or named, when it did not fit). */
-export async function openPushedDecision(ctx: Ctx, item: SealedItem): Promise<InboxItem> {
-  const sent = (await store.get("answers", ctx.account)) ?? {};
-  const opened = await openDecision(ctx, { item, cursor: "", receivedAt: "" }, sent);
-  await hold(ctx);
-  return opened;
-}
-
-/**
- * Reads the directory again and checks this device is still in it; undefined once revoked. Run
- * before each load, so items from members paired elsewhere since boot verify.
- */
-export async function reverify(ctx: Ctx): Promise<Ctx | undefined> {
-  const fresh = await refresh(ctx);
-  const self = fresh.dir.members.get(ctx.device.id);
-  return self?.active ? fresh : undefined;
-}
-
-/**
- * Reads decisions after `inbox.cursor` and merges them in: answered ones come back answered.
- * With `keep`, what the server lists is kept sealed in this browser, and a read with no cursor
- * starts from what is kept rather than from the first item (#1380).
- */
-export async function loadInbox(
-  ctx: Ctx,
-  inbox: Inbox = { items: [], rejected: [] },
-  opts: {
-    keep?: boolean;
-    /**
-     * Given the kept questions the server lists open, once they are opened and before the
-     * answered ones: a load shows what needs the owner first (#1458).
-     */
-    early?: (inbox: Inbox) => void;
-  } = {},
-): Promise<Inbox> {
-  // The kept items, and the decisions the server holds open now: those settle which kept
-  // questions it dropped, and whether what is kept still matches the server at all.
-  let kept: Kept | undefined;
-  let open: Set<string> | undefined;
-  if (opts.keep && inbox.cursor === undefined) {
-    const had = await store.get("kept", ctx.account);
-    if (had?.device === ctx.device.id) {
-      open = new Set();
-      let at: string | undefined;
-      for (;;) {
-        const page = await api.items("decision", at, { open: true });
-        for (const s of page.items) open.add(s.item.id);
-        at = page.cursor;
-        if (lastPage(page)) break;
-      }
-      kept = had;
-    }
-  }
-  const sent = (await store.get("answers", ctx.account)) ?? {};
-  // Decisions opened before a machine was revoked no longer verify: drop them.
-  const byId = new Map(
-    inbox.items
-      .filter((i) => ctx.dir.members.get(i.machine.id)?.active)
-      .map((i) => [i.decision.id, i]),
-  );
-  const rejected = [...inbox.rejected];
-  const retry: Stored[] = [];
-  // A settled notice lists before the decision it closed, which moved past it.
-  const closings: Closings = new Map();
-  const waits = { ...inbox.waits };
-  const snoozes = { ...inbox.snoozes };
-  const take = async (s: Stored, again: boolean) => {
-    if (s.item.kind === "snooze") {
-      // Only tells until when the owner put a decision off: one that fails costs that alone.
-      try {
-        const z = await openSnooze(ctx, s.item);
-        const had = snoozes[z.decisionId];
-        if (!had || Date.parse(had.at) < Date.parse(z.at))
-          snoozes[z.decisionId] = { until: z.until, at: z.at };
-      } catch {}
-      return;
-    }
-    if (s.item.kind === "waiting") {
-      // Only tells whether the agent waits: one that fails to open costs that and nothing else.
-      try {
-        const { signer, body } = await openMachine(ctx, s.item, "waiting");
-        const w = body as Waiting;
-        const key = `${signer.id}/${w.decisionId}`;
-        const had = waits[key];
-        if (!had || had.at < w.at) waits[key] = { state: w.state, at: w.at };
-      } catch {}
-      return;
-    }
-    if (s.item.kind === "settled") {
-      // Only tells how a decision closed: one that fails to open costs that and nothing else.
-      try {
-        const { signer, body } = await openMachine(ctx, s.item, "settled");
-        // Keyed by machine: a notice closes only the machine's own items (#362).
-        closings.set(`${signer.id}/${body.itemId}`, { notice: body, at: s.receivedAt });
-      } catch {}
-      return;
-    }
-    try {
-      const item = await openDecision(ctx, s, sent, closings);
-      byId.set(item.decision.id, item);
-    } catch (e) {
-      // A revoked machine's old decisions no longer verify; nothing to show or warn about.
-      if (e instanceof ProtocolError && e.code === "revoked-signer") return;
-      if (e instanceof ProtocolError && e.code === "unknown-signer" && !again) {
-        retry.push(s);
-        return;
-      }
-      if (!rejected.some((r) => r.id === s.item.id))
-        rejected.push({ id: s.item.id, error: e instanceof Error ? e.message : String(e) });
-    }
-  };
-  // Only the machine that asked can say its agent waits on the question.
-  const shown = () =>
-    [...byId.values()].map((i) => {
-      const w = waits[`${i.machine.id}/${i.decision.id}`];
-      const z = snoozes[i.decision.id];
-      const { waitingSince: _, snoozedUntil: __, ...rest } = i;
-      return {
-        ...rest,
-        ...(w?.state === "waiting" ? { waitingSince: w.at } : {}),
-        // Back now ends at its own time, read before this browser's clock, which may run behind.
-        ...(z && Date.parse(z.until) > Date.parse(z.at) ? { snoozedUntil: z.until } : {}),
-      };
-    });
-  // What tells an open question's state first, then the questions, then the answered ones.
-  const first = (s: Stored) =>
-    s.item.kind === "waiting" ||
-    s.item.kind === "snooze" ||
-    (s.item.kind === "decision" && !s.answeredAt && !!open?.has(s.item.id));
-  const keptItems = kept?.items ?? [];
-  if (opts.early && open && open.size > 0) {
-    for (const s of keptItems) if (first(s)) await take(s, false);
-    if (byId.size > 0) {
-      // Never past a hold: while the server withholds entries, no machine's item shows (#362).
-      await hold(ctx);
-      opts.early({
-        items: shown(),
-        rejected: [...rejected],
-        waits: { ...waits },
-        snoozes: { ...snoozes },
-      });
-    }
-    for (const s of keptItems) if (!first(s)) await take(s, false);
-  } else for (const s of keptItems) await take(s, false);
-  for (const s of inbox.retry ?? []) await take(s, true);
-  let cursor = inbox.cursor ?? kept?.cursor;
-  const read: Stored[] = [];
-  for (;;) {
-    const page = await api.items("decision,settled,waiting,snooze", cursor, {
-      openBlobs: opts.keep,
-    });
-    for (const s of page.items) await take(s, false);
-    if (opts.keep) read.push(...page.items);
-    cursor = page.cursor;
-    if (lastPage(page)) break;
-  }
-  const drop = new Set<string>();
-  if (kept && open) {
-    const listed = new Set(read.filter((s) => s.item.kind === "decision").map((s) => s.item.id));
-    const held = new Set(
-      kept.items.filter((s) => s.item.kind === "decision").map((s) => s.item.id),
-    );
-    // An open question neither kept nor listed after the cursor: the server is not the one
-    // these were kept from (restored, or reset). Read it all again.
-    if ([...open].some((id) => !held.has(id) && !listed.has(id))) {
-      await store.del("kept", ctx.account);
-      return loadInbox(ctx, inbox, opts);
-    }
-    // Kept open, not open on the server and not listed since, so not answered either: the
-    // server dropped it (PROTOCOL.md, Limits). One listed since came after the open list.
-    for (const s of kept.items)
-      if (
-        s.item.kind === "decision" &&
-        !s.answeredAt &&
-        !open.has(s.item.id) &&
-        !listed.has(s.item.id)
-      ) {
-        drop.add(s.item.id);
-        byId.delete(s.item.id);
-      }
-  }
-  // The machine names the winner after the answer, so its notice often lists without the
-  // decision, which an earlier read already holds.
-  for (const [key, { notice }] of closings) {
-    const item = byId.get(notice.itemId);
-    const answeredBy = item && wonBy(ctx, notice, item.decision);
-    if (item && answeredBy && !item.reply && key === `${item.machine.id}/${notice.itemId}`)
-      byId.set(notice.itemId, { ...item, answeredBy });
-  }
-  const items = shown();
-  await noteSnoozes(
-    ctx,
-    Object.entries(snoozes).map(([decisionId, z]) => ({ decisionId, at: z.at })),
-  );
-  await hold(ctx);
-  if (opts.keep && (read.length > 0 || drop.size > 0) && cursor !== undefined) {
-    const at = cursor;
-    await store.update("kept", ctx.account, (had) => ({
-      device: ctx.device.id,
-      cursor: at,
-      items: merge(had?.device === ctx.device.id ? had.items : [], read, drop),
-    }));
-  }
-  return { items, cursor, rejected, retry, waits, snoozes } satisfies Inbox;
-}
-
-/**
- * The images of a decision listed without them (#1382), fetched with the item and checked
- * against the hashes its signed body holds; kept with the item, so they download once.
- */
-export async function loadImages(ctx: Ctx, id: string): Promise<ShownImage[]> {
-  // Each blob opens against the body this browser kept, from the same machine: never refs the
-  // server sends now under that id (#1472).
-  const kept = (await store.get("kept", ctx.account))?.items.find(
-    (k) => k.item.kind === "decision" && k.item.id === id,
-  );
-  if (!kept) throw new Error("this question is not kept here");
-  const was = await openMachine(ctx, kept.item, "decision");
-  const s = await api.item(id);
-  const { signer, body } = await openMachine(ctx, s.item, "decision");
-  if (body.id !== id || signer.id !== was.signer.id)
-    throw new Error("the server sent another question");
-  const images = openImages(s.item, (was.body as Decision).images);
-  const blobs = s.item.blobs;
-  // Kept for this device only; gone meanwhile, an empty record reads from the start next time.
-  if (blobs && (await store.get("kept", ctx.account))?.device === ctx.device.id)
-    await store.update("kept", ctx.account, (had) => ({
-      device: ctx.device.id,
-      cursor: had?.cursor ?? "",
-      items: (had?.items ?? []).map((k) =>
-        k.item.kind === "decision" && k.item.id === id ? { ...k, item: { ...k.item, blobs } } : k,
-      ),
-    }));
-  return images;
-}
-
-/** Signs the answer and seals it to the machine that asked, which must still be active. */
-export async function answer(ctx: Ctx, item: InboxItem, reply: Reply): Promise<string> {
-  const fresh = await refresh(ctx);
-  await hold(fresh);
-  const machine = fresh.dir.members.get(item.machine.id);
-  if (!machine?.active) throw new Error(`${item.machine.name} was revoked`);
-  const answeredAt = now();
-  const sealed = await sealAsync(
-    "answer",
-    {
-      v: 1,
-      id: randomId("a_"),
-      decisionId: item.decision.id,
-      to: machine.member.id,
-      answeredAt,
-      ...reply,
-      // Lets the machine notice a server holding back entries, such as a revocation.
-      dir: { length: fresh.dir.length, head: fresh.dir.head },
-    },
-    me(fresh),
-    [machine.member],
-  );
-  await api.post(sealed);
-  // The page and the service worker may both answer: merge into the record, never overwrite it.
-  await store.update("answers", ctx.account, (sent) => ({
-    ...sent,
-    [item.decision.id]: { ...reply, answeredAt },
-  }));
-  return answeredAt;
-}
-
-/**
- * Keeps the latest snooze time this browser knows per decision, for the service worker (#571).
- * Returns whether `latest` holds no newer one than each given.
- */
-export async function noteSnoozes(
-  ctx: Pick<Ctx, "account">,
-  seen: { decisionId: string; at: string }[],
-): Promise<boolean> {
-  let newest = true;
-  await store.update("snoozes", ctx.account, (old) => {
-    const next = { ...old };
-    for (const z of seen) {
-      const had = next[z.decisionId];
-      if (had && Date.parse(had) > Date.parse(z.at)) newest = false;
-      else next[z.decisionId] = z.at;
-    }
-    return next;
-  });
-  return newest;
-}
-
-/** Opens a snooze another device, or this one, sealed to this browser (#571). */
-export async function openSnooze(ctx: Ctx, item: SealedItem): Promise<Snooze> {
-  const { body } = await openAsync(expectKind(item, "snooze"), me(ctx), ctx.dir);
-  return body as Snooze;
-}
-
-/**
- * Puts the question off until `until` (#571), or brings it back with a time already passed:
- * sealed to the machine that asked, so its agent hears of it when it would block, and to every
- * active device, this one included, so each one hides it.
- */
-export async function snooze(ctx: Ctx, item: InboxItem, until: string): Promise<Snooze> {
-  const fresh = await refresh(ctx);
-  await hold(fresh);
-  const machine = fresh.dir.members.get(item.machine.id);
-  if (!machine?.active) throw new Error(`${item.machine.name} was revoked`);
-  const to = [machine.member, ...activeMembers(fresh.dir, "device")];
-  const body: Snooze = {
-    v: 1,
-    id: randomId("z_"),
-    decisionId: item.decision.id,
-    to: to.map((m) => m.id),
-    until,
-    at: now(),
-    dir: { length: fresh.dir.length, head: fresh.dir.head },
-  };
-  await api.post(await sealAsync("snooze", body, me(fresh), to));
-  await noteSnoozes(ctx, [body]);
-  return body;
-}
-
-// --- Permission prompts -------------------------------------------------------------------
-
-async function openPermission(
-  ctx: Ctx,
-  s: Stored,
-  sent: Record<string, PromptReply & { answeredAt: string }>,
-): Promise<PromptItem> {
-  const { signer: machine, body } = await openMachine(ctx, s.item, "permission");
-  const reply = sent[body.id];
-  const p = body as Permission;
-  return {
-    // What the owner reads shows bidi and invisible characters as escapes (#357).
-    permission: {
-      ...p,
-      summary: visible(p.summary),
-      ...(p.description !== undefined ? { description: visible(p.description) } : {}),
-      suggestions: p.suggestions.map((g) => ({ ...g, rule: visible(g.rule) })),
-    },
-    machine,
-    receivedAt: s.receivedAt,
-    ...(s.answeredAt ? { answeredAt: s.answeredAt } : {}),
-    ...(reply ? { reply: stripTime(reply) } : {}),
-  };
-}
-
-const stripTime = ({ answeredAt: _, ...reply }: PromptReply & { answeredAt: string }) =>
-  reply as PromptReply;
-
-/** Opens a permission prompt a push carried (or named). */
-export async function openPushedPermission(ctx: Ctx, item: SealedItem): Promise<PromptItem> {
-  const sent = (await store.get("promptAnswers", ctx.account)) ?? {};
-  const opened = await openPermission(ctx, { item, cursor: "", receivedAt: "" }, sent);
-  await hold(ctx);
-  return opened;
-}
-
-/** Opens a waiting notice, with the machine that signed it. */
-export async function openWaiting(ctx: Ctx, item: SealedItem) {
-  const { signer, body } = await openMachine(ctx, item, "waiting");
-  return { machine: signer.id, waiting: body as Waiting };
-}
-
-/** Opens a settled notice, with the machine that signed it. */
-export async function openSettled(ctx: Ctx, item: SealedItem) {
-  const { signer, body } = await openMachine(ctx, item, "settled");
-  return { machine: signer.id, settled: body as Settled };
-}
-
-/**
- * Settled notices after `cursor`, keyed by "machine/permission id". Without one, the read starts
- * at the kept inbox's cursor (#1380) rather than at the first notice the server holds: a notice
- * before it closed a prompt the server no longer lists open, which the page never shows (#1455).
- */
-export async function loadSettled(ctx: Ctx, cursor?: string) {
-  const out = new Map<string, Settled>();
-  let at = cursor;
-  if (at === undefined) {
-    const kept = await store.get("kept", ctx.account);
-    // A prompt open now that lists at or before that cursor: a reset or restored server, whose
-    // notices may sit below it too, or one open since before the kept read. Read them all.
-    const open =
-      kept?.device === ctx.device.id &&
-      (await api.items("permission", undefined, { open: true })).items;
-    if (open && !open.some((s) => Number(s.cursor) <= Number(kept.cursor))) at = kept.cursor;
-  }
-  for (;;) {
-    const page = await api.items("settled", at);
-    for (const s of page.items) {
-      try {
-        const { machine, settled } = await openSettled(ctx, s.item);
-        out.set(`${machine}/${settled.itemId}`, settled);
-      } catch {}
-    }
-    at = page.cursor;
-    if (lastPage(page)) {
-      await hold(ctx);
-      return { settled: out, cursor: at };
-    }
-  }
-}
-
-/** Reads every page of `kinds` from the start, opening what verifies. */
-async function readAll<T>(
-  kinds: string,
-  opts: { open?: boolean },
-  take: (s: Stored) => Promise<T>,
-): Promise<T[]> {
-  const out: T[] = [];
-  let cursor: string | undefined;
-  for (;;) {
-    const page = await api.items(kinds, cursor, opts);
-    for (const s of page.items) {
-      try {
-        out.push(await take(s));
-      } catch {
-        // A prompt that fails to verify is never shown: it could ask to allow anything.
-      }
-    }
-    cursor = page.cursor;
-    if (lastPage(page)) return out;
-  }
-}
-
-/** The prompts waiting now, whose answer window is still open. */
-export async function loadPrompts(ctx: Ctx): Promise<PromptItem[]> {
-  const sent = (await store.get("promptAnswers", ctx.account)) ?? {};
-  const open = await readAll("permission", { open: true }, (s) => openPermission(ctx, s, sent));
-  await hold(ctx);
-  return open;
-}
-
-/** The last 7 days of prompts, with how each ended (the server keeps a week). */
-export async function loadPromptLog(ctx: Ctx): Promise<PromptItem[]> {
-  const sent = (await store.get("promptAnswers", ctx.account)) ?? {};
-  const permissions = await readAll("permission", {}, (s) => openPermission(ctx, s, sent));
-  const settled = await readAll("settled", {}, (s) => openMachine(ctx, s.item, "settled"));
-  // A notice counts only from the machine that asked.
-  const byId = new Map(settled.map((x) => [`${x.signer.id}/${x.body.itemId}`, x.body]));
-  await hold(ctx);
-  return permissions.map((p) => {
-    const st = byId.get(`${p.machine.id}/${p.permission.id}`);
-    return st ? { ...p, settled: st as Settled } : p;
-  });
-}
-
-/**
- * Signs the answer, bound to the prompt's id and input hash, and seals it to the machine that
- * asked, which must still be active.
- */
-export async function answerPermission(
-  ctx: Ctx,
-  item: PromptItem,
-  reply: PromptReply,
-): Promise<string> {
-  const fresh = await refresh(ctx);
-  await hold(fresh);
-  const machine = fresh.dir.members.get(item.machine.id);
-  if (!machine?.active) throw new Error(`${item.machine.name} was revoked`);
-  const answeredAt = now();
-  const sealed = await sealAsync(
-    "permission-answer",
-    {
-      v: 1,
-      id: randomId("pa_"),
-      permissionId: item.permission.id,
-      to: machine.member.id,
-      answeredAt,
-      inputHash: item.permission.inputHash,
-      ...reply,
-      // Lets the machine notice a server holding back entries, such as a revocation.
-      dir: { length: fresh.dir.length, head: fresh.dir.head },
-    },
-    me(fresh),
-    [machine.member],
-  );
-  await api.post(sealed);
-  await store.update("promptAnswers", ctx.account, (sent) => ({
-    ...sent,
-    [item.permission.id]: { ...reply, answeredAt },
-  }));
-  return answeredAt;
-}
-
-// --- Quotas ---------------------------------------------------------------------------------
-
-export interface Quotas {
-  cards: QuotaCardData[];
-  takenAt?: string;
-  /** Providers CodexBar failed for with no windows to keep (#450). */
-  errors: { provider: string; machine?: string; error: string }[];
-  rejected: { id: string; error: string }[];
-}
-
-export async function loadQuotas(ctx: Ctx): Promise<Quotas> {
-  const out: Quotas = { cards: [], errors: [], rejected: [] };
-  const stored = await api.quota();
-  const machines = activeMembers(ctx.dir, "machine").length;
-  for (const s of stored) {
-    let opened: Awaited<ReturnType<typeof openAsync<"quota">>>;
-    try {
-      opened = await openMachine(ctx, s.item, "quota");
-    } catch (e) {
-      out.rejected.push({ id: s.item.id, error: e instanceof Error ? e.message : String(e) });
-      continue;
-    }
-    const { signer: machine, body } = opened;
-    if (!out.takenAt || body.takenAt > out.takenAt) out.takenAt = body.takenAt;
-    for (const p of body.providers) {
-      // A failure with windows is said on their group; one with nothing to show, on a group of
-      // its own.
-      if (p.error && p.windows.length === 0)
-        out.errors.push({
-          provider: p.provider,
-          ...(machines > 1 ? { machine: machine.name } : {}),
-          error: p.error,
-        });
-      const stale = p.error
-        ? { updatedAt: p.updatedAt ?? body.takenAt, error: p.error }
-        : undefined;
-      for (const w of p.windows) {
-        const alerts = body.alerts.filter((a) => a.provider === p.provider && a.window === w.id);
-        // The card's state follows the pace alert; "low" only notifies.
-        const alert = alerts.find((a) => a.kind !== "low");
-        out.cards.push({
-          provider: p.provider,
-          ...(machines > 1 ? { machine: machine.name } : {}),
-          window: w,
-          ...(alert ? { alert } : {}),
-          alerts,
-          snapshot: body.id,
-          ...(stale ? { stale } : {}),
-        });
-      }
-    }
-  }
-  await hold(ctx);
-  return out;
-}
-
-// --- Runs -----------------------------------------------------------------------------------
-
-export interface Runs {
-  items: RunItem[];
-  rejected: { id: string; error: string }[];
-}
-
-/** Drops a run from the server, so every device stops showing it (#827). */
-export async function dismissRun(ctx: Ctx, id: string): Promise<void> {
-  await hold(ctx);
-  try {
-    await api.deleteItem(id);
-  } catch (e) {
-    // Already gone: the sweep or another device dropped it.
-    if (!(e instanceof ApiError && e.status === 404)) throw e;
-  }
-}
-
-/** Every stored run: the server keeps the latest update of each, for a day. */
-export async function loadRuns(ctx: Ctx): Promise<Runs> {
-  const out: Runs = { items: [], rejected: [] };
-  let cursor: string | undefined;
-  for (;;) {
-    const page = await api.items("run", cursor);
-    for (const s of page.items) {
-      try {
-        const { signer, body } = await openMachine(ctx, s.item, "run");
-        out.items.push({ run: body, machine: signer.name });
-      } catch (e) {
-        if (e instanceof ProtocolError && e.code === "revoked-signer") continue;
-        out.rejected.push({ id: s.item.id, error: e instanceof Error ? e.message : String(e) });
-      }
-    }
-    cursor = page.cursor;
-    if (lastPage(page)) break;
-  }
-  await hold(ctx);
-  return out;
 }

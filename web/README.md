@@ -29,6 +29,13 @@ then runs the X25519 step in WebCrypto and the rest with libsodium (`src/lib/cry
 Other browsers fall back to raw libsodium keys in IndexedDB. libsodium and the protocol code load
 after the first paint.
 
+## Device code
+
+`src/lib/device.ts` is the browser as a device: setup, the session, pairing and recovery. Each
+kind of item (decisions, prompts, quotas, runs, join requests) has its own module in
+`src/lib/kinds/`, built on the verified chain and keys in `kinds/core.ts`, and `device.ts`
+re-exports them.
+
 ## Service worker
 
 `bun run sw` bundles `src/sw/sw.ts` to `public/sw.js`; `dev` and `build` run it first. The worker
