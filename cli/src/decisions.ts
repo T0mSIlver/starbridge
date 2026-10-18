@@ -548,8 +548,13 @@ export async function postWaiting(
     last = a.waiting.at;
   });
   // Devices keep the latest `at`, in whole seconds: a flip within the second of the last one
-  // goes a second later, or they would keep the last one (#1982).
-  const at = iso(new Date(Math.max(ctx.now().getTime(), Date.parse(last ?? "") + 1000 || 0)));
+  // waits for the next second, or they would keep the last one (#1982). It waits rather than
+  // stamping ahead of the clock, which a device compares with the owner's snoozes and shows as
+  // how long the agent has waited.
+  const next = Date.parse(last ?? "") + 1000 || 0;
+  const early = next - ctx.now().getTime();
+  if (early > 0) await new Promise((r) => setTimeout(r, Math.min(early, 1000)));
+  const at = iso(new Date(Math.max(ctx.now().getTime(), next)));
   const dir = await refreshDirectory(ctx, s);
   const to = devices(ctx, dir);
   const body = {
