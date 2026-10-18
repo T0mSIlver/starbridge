@@ -1375,6 +1375,45 @@ test.skipIf(WINDOWS)(
   },
 );
 
+test("uninstall turns lingering off only when setup turned it on (#2040)", async () => {
+  const m = await machine();
+  m.ctx.env.FAKE_LINGER = "no";
+  await startAgent(m.ctx);
+  await setup(m.sys, { yes: true, noAgents: true, noQuota: true, readyTimeoutMs: 2_000 });
+  expect(m.calls()).toContain("loginctl enable-linger");
+  m.ctx.lines.length = 0;
+  expect(await uninstall(m.sys, { purge: true })).toBe(0);
+  expect(m.calls()).toContain("loginctl disable-linger");
+  expect(m.ctx.lines).toContain(
+    "Turned off lingering (`loginctl disable-linger`), which setup turned on.",
+  );
+
+  // A failed disable-linger says how to do it by hand, and a later uninstall tries again.
+  const failing = await machine("desk");
+  failing.ctx.env.FAKE_LINGER = "no";
+  await startAgent(failing.ctx);
+  await setup(failing.sys, { yes: true, noAgents: true, noQuota: true, readyTimeoutMs: 2_000 });
+  failing.ctx.env.PATH = [join(failing.home, "failbin"), failing.ctx.env.PATH].join(delimiter);
+  mkdirSync(join(failing.home, "failbin"));
+  fakeCommand(
+    join(failing.home, "failbin", "loginctl"),
+    "#!/bin/sh\necho 'Access denied' >&2\nexit 1\n",
+  );
+  failing.ctx.lines.length = 0;
+  expect(await uninstall(failing.sys, {})).toBe(0);
+  expect(failing.ctx.lines).toContain(
+    "Could not turn off lingering, which setup turned on: Access denied. Run `loginctl disable-linger` to turn it off.",
+  );
+  expect(failing.ctx.store.state().lingerEnabled).toBe(true);
+
+  // Lingering that was on before setup stays on.
+  const before = await machine("laptop");
+  await startAgent(before.ctx);
+  await setup(before.sys, { yes: true, noAgents: true, noQuota: true, readyTimeoutMs: 2_000 });
+  expect(await uninstall(before.sys, { purge: true })).toBe(0);
+  expect(before.calls().filter((c) => /linger$/.test(c))).toEqual([]);
+});
+
 test("uninstall keeps the keys when systemd cannot stop the agent", async () => {
   const m = await machine();
   await startAgent(m.ctx);
@@ -1603,12 +1642,14 @@ test("on Windows, setup registers a logon task that runs the agent headless, and
       .slice(before)
       .some((c) => c.startsWith("powershell Start-")),
   ).toBe(false);
+  writeFileSync(join(local, "starbridge", "agent.log"), "agent output\n");
 
   m.ctx.lines.length = 0;
   expect(await uninstall(sys, { purge: true })).toBe(0);
   expect(m.ctx.lines).toContain("Stopped and removed the agent service.");
   expect(calls().some((c) => c.startsWith("powershell Unregister-ScheduledTask"))).toBe(true);
   expect(existsSync(path)).toBe(false);
+  expect(existsSync(join(local, "starbridge", "agent.log"))).toBe(false);
 });
 
 test("on macOS, setup loads a launchd agent that runs the agent, and uninstall unloads it", async () => {
@@ -1636,11 +1677,17 @@ test("on macOS, setup loads a launchd agent that runs the agent, and uninstall u
       .some((c) => c.startsWith("launchctl bootstrap")),
   ).toBe(false);
 
+  // What launchd wrote for the agent (#2041).
+  const log = join(m.home, "Library/Logs/starbridge-agent.log");
+  mkdirSync(dirname(log), { recursive: true });
+  writeFileSync(log, "agent output\n");
   m.ctx.lines.length = 0;
   expect(await uninstall(sys, { purge: true })).toBe(0);
   expect(m.ctx.lines).toContain("Stopped and removed the agent service.");
   expect(lc()).toContain("launchctl bootout gui/501/run.starbridge.agent");
   expect(existsSync(path)).toBe(false);
+  expect(existsSync(log)).toBe(false);
+  expect(readdirSync(dirname(log))).toEqual([]);
 });
 
 test.each([

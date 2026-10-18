@@ -198,6 +198,8 @@ export interface State {
   alerts?: Record<string, string>;
   /** Each provider's last windows read without an error, and when, for the rounds CodexBar fails. */
   quotas?: Record<string, LastQuota>;
+  /** Setup turned systemd lingering on (#2040): uninstall turns it off again. */
+  lingerEnabled?: boolean;
 }
 
 export interface LastQuota {
