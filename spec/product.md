@@ -83,4 +83,5 @@ crossing it: a question or an answer (#1366). It replaced a space elevator (#32)
 could not name. Stars and letter marks were ruled out, stars as a cliché of AI tools. The name stands on the mark's baseline in every lockup.
 Beacon (#49): soft black and neutral greys, and amber as the only accent, meaning "needs you".
 Provider colours are CodexBar's, adjusted per scheme only as far as 3:1 contrast needs (#72).
+Text tokens reach 4.5:1 on every ground, `fg3` hints included, and `line-strong` borders 3:1; a disabled control fades instead of using `fg3` (#1939, #1940).
 Tokens, type and components: `DESIGN.md`.

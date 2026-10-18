@@ -192,6 +192,7 @@
 .send:disabled {
   background: none;
   color: var(--fg3);
+  opacity: 0.5;
 }
 
 /* After `.send`, which it overrides. */

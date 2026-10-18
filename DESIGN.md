@@ -11,10 +11,10 @@ colors:
     surface: "#ffffff"
     surface2: "#ebebeb"
     line: "#e0e0e0"
-    line-strong: "#c6c6c6"
+    line-strong: "#878787"
     fg: "#121212"
     fg2: "#595959"
-    fg3: "#8c8c8c"
+    fg3: "#6a6a6a"
     accent: "#965700"
     accent-hi: "#7a4600"
     on-accent: "#ffffff"
@@ -35,10 +35,10 @@ colors:
     surface: "#171717"
     surface2: "#232323"
     line: "#2a2a2a"
-    line-strong: "#3b3b3b"
+    line-strong: "#6d6d6d"
     fg: "#f1f1f1"
     fg2: "#a3a3a3"
-    fg3: "#6a6a6a"
+    fg3: "#8a8a8a"
     accent: "#f5a83b"
     accent-hi: "#ffc067"
     on-accent: "#1c1100"
@@ -413,7 +413,7 @@ progress tracks and loading indicators, dialogs, snackbars, the window behind
 them, the splash from the next cold start (Android 13 and later) and the
 notification's accent (Android 12 to 15; 16 tints notifications itself).
 `info` follows as `onSurfaceVariant`, and `fg3`, which has no Material role,
-is `onSurfaceVariant` at 72% over the ground.
+is `onSurfaceVariant` at 85% over the ground.
 
 Only these stay fixed under both settings: the amber (`accent`, `accent-hi`,
 `on-accent`, `accent-soft`), the quota states (`ok`, `warn`, `bad` and their
@@ -422,8 +422,9 @@ fills. So amber still means "needs you", quota states keep their meaning, and
 a provider keeps its colour. The launcher icon keeps its own colours; its
 monochrome layer lets Android draw the themed icon. A unit test checks the
 fixed colours against warm, cool and low-chroma wallpapers in light and dark:
-4.5:1 for text, 3:1 for fills and marks, and 3:1 for `fg3`, as the tokens'
-own `fg3` reaches about 3.3:1.
+4.5:1 for text, `fg3` included, and 3:1 for fills and marks. The tokens'
+own `fg3` reaches 4.5:1 and `line-strong` 3:1 on `bg`, `surface` and `surface2`, which web and Android
+tests check.
 
 The web app uses the same faces and tokens with web components, dense: a left
 rail (Inbox, Quotas, Settings) that becomes a bottom bar under 600 px, list
@@ -753,12 +754,15 @@ phone top bar) is unchanged.
 | `bg` | page ground |
 | `surface`, `surface2` | cards, the rail and the navigation bar; inset areas, tracks, the selected row, the active nav pill |
 | `line`, `line-strong` | dividers; outlined buttons and inputs |
-| `fg`, `fg2`, `fg3` | text and the pace tick; secondary text; hints, disabled, the progress stop mark |
+| `fg`, `fg2`, `fg3` | text and the pace tick; secondary text; hints, the progress stop mark |
 | `accent`, `on-accent`, `accent-soft` | the beacon; text on it; its tint behind an item or a prompt's tile |
 | `ok`, `warn`, `bad` (+ `-soft`) | quota pace as a word: on pace (grey), headroom unused (amber), will run out or ran out (red, also the overrun's cap and a destructive confirm) |
 | `info` (+ `-soft`) | neutral device states, with a word |
 | `providers` | a quota bar's fill and its hatched overrun |
 | `scrim` | behind a dialog |
+
+`fg3` is a real hint, 4.5:1 on every ground, so it no longer marks a disabled control: a disabled
+control fades (web 50%, iPhone and Android 38%) and keeps its colours (#1939).
 
 | Type role | Material role | Use |
 |---|---|---|

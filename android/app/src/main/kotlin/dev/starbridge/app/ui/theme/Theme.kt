@@ -164,7 +164,7 @@ internal fun wallpaper(c: StarbridgeColors, m: ColorScheme): Pair<StarbridgeColo
     lineStrong = m.outline,
     fg = m.onSurface,
     fg2 = m.onSurfaceVariant,
-    fg3 = m.onSurfaceVariant.copy(alpha = 0.72f).compositeOver(m.surface),
+    fg3 = m.onSurfaceVariant.copy(alpha = 0.85f).compositeOver(m.surface),
     info = m.onSurfaceVariant,
     infoSoft = m.onSurfaceVariant.copy(alpha = c.infoSoft.alpha),
 ) to m.copy(

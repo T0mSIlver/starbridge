@@ -346,8 +346,8 @@ const MARK = `<svg class="mark" width="20" height="20" viewBox="29.25 24.75 49.5
 
 // DESIGN.md's tokens as the status page's Ledger look uses them, light then dark.
 const CSS = `@font-face{font-family:"Google Sans Flex";src:url(fonts/google-sans-flex.woff2) format("woff2");font-weight:1 1000;font-display:swap}
-:root{--bg:#f4f4f4;--surface:#fff;--surface2:#ebebeb;--line:#e0e0e0;--fg:#121212;--fg2:#595959;--fg3:#8c8c8c;--accent:#965700;--sans:"Google Sans Flex","Roboto Flex",system-ui,-apple-system,sans-serif;color-scheme:light dark}
-@media (prefers-color-scheme:dark){:root{--bg:#0c0c0c;--surface:#171717;--surface2:#232323;--line:#2a2a2a;--fg:#f1f1f1;--fg2:#a3a3a3;--fg3:#6a6a6a;--accent:#f5a83b}}
+:root{--bg:#f4f4f4;--surface:#fff;--surface2:#ebebeb;--line:#e0e0e0;--fg:#121212;--fg2:#595959;--fg3:#6a6a6a;--accent:#965700;--sans:"Google Sans Flex","Roboto Flex",system-ui,-apple-system,sans-serif;color-scheme:light dark}
+@media (prefers-color-scheme:dark){:root{--bg:#0c0c0c;--surface:#171717;--surface2:#232323;--line:#2a2a2a;--fg:#f1f1f1;--fg2:#a3a3a3;--fg3:#8a8a8a;--accent:#f5a83b}}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--fg);font:400 16px/24px var(--sans);-webkit-font-smoothing:antialiased}
 a{color:inherit;text-underline-offset:3px;text-decoration-color:var(--fg3)}
