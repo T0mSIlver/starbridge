@@ -223,6 +223,20 @@ class AnswerQueueTest {
     }
 
     @Test
+    fun anAnswerHasItsWorkerScheduledBeforeItsRequestLeaves() {
+        setUp()
+        gate = CountDownLatch(1)
+        val store = store()
+        val sending = scope.async { store.sendFromNotification("d_ship", "Ship", null) }
+        runBlocking { withTimeout(5_000) { while (disk.saved()!!.outbox.isEmpty()) delay(10) } }
+        // Were the app killed now, mid-request, the worker would send the saved answer.
+        assertEquals(1, wakes)
+        gate.countDown()
+        assertEquals(Sent.Answered("Ship"), runBlocking { sending.await() })
+        assertEquals(1, wakes)
+    }
+
+    @Test
     fun aDoubleTapOnANotificationAnswerSendsOnceAndReportsItSent() {
         setUp()
         val store = store()
