@@ -341,8 +341,9 @@
   run ends when its process exits, is killed with its process group on a timeout or past 1 MB of
   output, and yields at most 20 providers with 20 extra windows each, without control characters.
 - **The state file forgets what the server forgot** (#2017). A question the machine asked, with its
-  answer, options and session title, leaves `state.json` 30 days after it was asked (`RETENTION_DAYS.month`),
-  or 7 days after `settle` closed it (37 days from the same time when its answer is unread, and never while its post or settled notice is owed), in the same write that updates the state: the server deletes
+  answer, options and session title, leaves `state.json` 37 days after it was asked (`RETENTION_DAYS.month` plus `week`: a
+  device may answer on day 29, and the server keeps that answer 7 days),
+  or 7 days after `settle` closed it, and never while its post or settled notice is owed, in the same write that updates the state: the server deletes
   it then, and a plaintext history that outlives the server's copy is a privacy cost with no reader.
   The machine's name defaults to the host name and goes to the server unencrypted, which
   `cli/README.md` says.

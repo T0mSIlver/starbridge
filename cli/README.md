@@ -183,8 +183,11 @@ through it when it runs (`STARBRIDGE_NO_AGENT=1` bypasses it).
 Keys and state live in `~/.config/starbridge` (or `$XDG_CONFIG_HOME/starbridge`, or
 `$STARBRIDGE_CONFIG_DIR`), readable only by you. They hold this machine's private keys and token,
 and in `state.json` each question it asked, in plain text: the question, its options, the answer,
-and the asking session's title and project. The CLI deletes a question and its answer 30 days
-after it was asked, or 7 days after `starbridge settle` closed it, as the hosted server does. A question whose answer nothing has read yet stays 37 days, and a question still being posted or settled stays until it is.
+and the asking session's title and project. The CLI deletes a question and its answer 37 days
+after it was asked, or 7 days after `starbridge settle` closed it. The hosted server drops a
+question after 30 days and keeps an answer for 7 days after it came, so the extra 7 days cover an
+answer fetched late. A question still being posted, or whose settled notice has not reached the
+server, stays until it does.
 `starbridge uninstall` asks before it deletes the keys and state.
 
 ### What the server sees of this machine

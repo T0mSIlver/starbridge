@@ -21,34 +21,30 @@ test("the state forgets a question once the server has, with its answer (#2017)"
   const month = RETENTION_DAYS.month;
   const week = RETENTION_DAYS.week;
   store.updateState((st) => {
-    st.asked.old = ask(ago(month + 1));
+    // Past the month and the week an answer that came on the last day is kept: gone.
+    st.asked.old = ask(ago(month + week + 1));
     st.answers.old = { answer: { text: "yes" } as never, seen: true };
+    // A device answered on day 29, this machine fetches it on day 31: still here.
+    st.asked.late = ask(ago(month + 2));
     st.asked.recent = ask(ago(month - 1));
     st.answers.recent = { answer: { text: "no" } as never, seen: false };
     st.asked.settledOld = ask(ago(month - 1), { settled: true, settledAt: ago(week + 1) });
     st.asked.settledNew = ask(ago(month - 1), { settled: true, settledAt: ago(week - 1) });
-    st.asked.posting = ask(ago(month + 5), { posting: true });
-    // Still owed to the server or to the agent: kept past the cutoff.
+    st.asked.posting = ask(ago(month + week + 5), { posting: true });
+    // Its settled notice has not reached the server: kept past the cutoff.
     st.asked.unposted = ask(ago(month + 5), {
       settled: true,
       settledAt: ago(week + 5),
       unposted: true,
     });
-    st.asked.unread = ask(ago(month + week - 1));
-    st.answers.unread = { answer: { text: "late" } as never, seen: false };
-    st.asked.unannounced = ask(ago(month + 2));
-    st.asked.unreadOld = ask(ago(month + week + 1));
-    st.answers.unreadOld = { answer: { text: "lost" } as never, seen: false };
-    st.answers.unannounced = { answer: { text: "x" } as never, seen: true, announce: true };
   });
   const st = store.state();
   expect(Object.keys(st.asked).sort()).toEqual([
+    "late",
     "posting",
     "recent",
     "settledNew",
-    "unannounced",
     "unposted",
-    "unread",
   ]);
-  expect(Object.keys(st.answers).sort()).toEqual(["recent", "unannounced", "unread"]);
+  expect(Object.keys(st.answers)).toEqual(["recent"]);
 });
