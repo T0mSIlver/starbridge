@@ -23,6 +23,9 @@ jobs:
   promote:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    # The starbridge.run environment requires the owner's approval, so a promotion waits for it
+    # here as each prod deploy does (#2009).
+    environment: starbridge.run
     permissions:
       # The tag and the marketplace branch.
       contents: write
