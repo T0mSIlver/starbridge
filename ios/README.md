@@ -66,8 +66,13 @@ xcodebuild -project Starbridge.xcodeproj -scheme Starbridge -destination "platfo
 `FirstDeviceTests` sets up the first device, recovers on a second iPhone, then deletes the account,
 and `InboxTests` plays a machine whose question, prompt and run the app lists and answers, online
 and offline, then deletes the account.
-They run when the test process gets a self-hosted server with no device yet, started from the repository root with
-`PORT=18731 DB_PATH=/tmp/sb.db OWNER_TOKEN=test-owner-token-16 bun run server/src/main.ts`:
+They run when the test process gets a self-hosted server with no device yet. The suite signs in as
+the owner more than the 10 a minute the server allows, so raise that first, then start the server, both from the repository root:
+
+```bash
+DB_PATH=/tmp/sb.db bun run server/src/main.ts limits set ownerSignIns 1000/60
+PORT=18731 DB_PATH=/tmp/sb.db OWNER_TOKEN=test-owner-token-16 bun run server/src/main.ts
+```
 
 ```bash
 TEST_RUNNER_STARBRIDGE_TEST_SERVER=http://localhost:18731 TEST_RUNNER_STARBRIDGE_TEST_OWNER_TOKEN=test-owner-token-16 xcodebuild -project Starbridge.xcodeproj -scheme Starbridge -destination "platform=iOS Simulator,name=iPhone 16" test

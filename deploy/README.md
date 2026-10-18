@@ -209,9 +209,10 @@ and start `umami`.
 
 `https://demo.starbridge.run` lets Play reviewers try the app (`spec/hosted.md`): the server with
 `DEMO=1` and the demo program (`demo/`) in one container, Compose project `starbridge-demo`, on
-sb-staging's `127.0.0.1:8090`, behind staging's Caddy (`demo/demo.caddy`), with no volume, so each
-restart is a fresh account. Each staging deploy whose round trip passed rebuilds it from that
-checkout (`deploy/host/demo.sh`), and restarts it only when its image changed; a failed demo
+sb-staging's `127.0.0.1:8090`, behind staging's Caddy (`demo/demo.caddy`). Its account outlasts
+restarts and redeploys on the project's `data` volume; the Logs command below with `down -v` in
+place of `logs` drops it, and `setup.sh` then starts a fresh account. Each staging deploy whose
+round trip passed rebuilds it from that checkout (`deploy/host/demo.sh`), and restarts it only when its image changed; a failed demo
 deploy is printed but blocks nothing. `deploy/demo/setup.sh` gives it its owner token from
 `~/.config/starbridge/secrets/demo-owner-token`, and starts it. Logs:
 `ssh sb-staging sudo docker compose -p starbridge-demo -f /opt/starbridge-staging/deploy/demo/compose.yaml logs`

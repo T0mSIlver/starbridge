@@ -1,0 +1,925 @@
+Third-party software in the Starbridge Android app
+
+Each library is used under the licence named below.
+
+androidx.activity:activity
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/activity
+
+androidx.activity:activity-compose
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/activity
+
+androidx.activity:activity-ktx
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/activity
+
+androidx.annotation:annotation
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/annotation
+
+androidx.annotation:annotation-experimental
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/annotation
+
+androidx.annotation:annotation-jvm
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/annotation
+
+androidx.appcompat:appcompat
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/appcompat
+
+androidx.appcompat:appcompat-resources
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/appcompat
+
+androidx.arch.core:core-common
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/arch-core
+
+androidx.arch.core:core-runtime
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/arch-core
+
+androidx.autofill:autofill
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx
+
+androidx.biometric:biometric
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/biometric
+
+androidx.browser:browser
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/browser
+
+androidx.collection:collection
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/collection
+
+androidx.collection:collection-jvm
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/collection
+
+androidx.collection:collection-ktx
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/collection
+
+androidx.compose.animation:animation
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/compose-animation
+
+androidx.compose.animation:animation-android
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/compose-animation
+
+androidx.compose.animation:animation-core
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/compose-animation
+
+androidx.compose.animation:animation-core-android
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/compose-animation
+
+androidx.compose.foundation:foundation
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/compose-foundation
+
+androidx.compose.foundation:foundation-android
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/compose-foundation
+
+androidx.compose.foundation:foundation-layout
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/compose-foundation
+
+androidx.compose.foundation:foundation-layout-android
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/compose-foundation
+
+androidx.compose.material3.adaptive:adaptive
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/compose-material3-adaptive
+
+androidx.compose.material3.adaptive:adaptive-android
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/compose-material3-adaptive
+
+androidx.compose.material3.adaptive:adaptive-layout
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/compose-material3-adaptive
+
+androidx.compose.material3.adaptive:adaptive-layout-android
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/compose-material3-adaptive
+
+androidx.compose.material3.adaptive:adaptive-navigation
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/compose-material3-adaptive
+
+androidx.compose.material3.adaptive:adaptive-navigation-android
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/compose-material3-adaptive
+
+androidx.compose.material3.adaptive:adaptive-navigation3
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/compose-material3-adaptive
+
+androidx.compose.material3.adaptive:adaptive-navigation3-android
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/compose-material3-adaptive
+
+androidx.compose.material3:material3
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/compose-material3
+
+androidx.compose.material3:material3-adaptive-navigation-suite
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/compose-material3
+
+androidx.compose.material3:material3-adaptive-navigation-suite-android
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/compose-material3
+
+androidx.compose.material3:material3-android
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/compose-material3
+
+androidx.compose.material3:material3-ripple
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/compose-material3
+
+androidx.compose.material3:material3-ripple-android
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/compose-material3
+
+androidx.compose.material:material-icons-core
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/compose-material
+
+androidx.compose.material:material-icons-core-android
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/compose-material
+
+androidx.compose.material:material-icons-extended
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/compose-material
+
+androidx.compose.material:material-icons-extended-android
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/compose-material
+
+androidx.compose.material:material-ripple
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/compose-material
+
+androidx.compose.material:material-ripple-android
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/compose-material
+
+androidx.compose.runtime:runtime
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/compose-runtime
+
+androidx.compose.runtime:runtime-android
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/compose-runtime
+
+androidx.compose.runtime:runtime-annotation
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/compose-runtime
+
+androidx.compose.runtime:runtime-annotation-android
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/compose-runtime
+
+androidx.compose.runtime:runtime-retain
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/compose-runtime
+
+androidx.compose.runtime:runtime-retain-android
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/compose-runtime
+
+androidx.compose.runtime:runtime-saveable
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/compose-runtime
+
+androidx.compose.runtime:runtime-saveable-android
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/compose-runtime
+
+androidx.compose.ui:ui
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/compose-ui
+
+androidx.compose.ui:ui-android
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/compose-ui
+
+androidx.compose.ui:ui-geometry
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/compose-ui
+
+androidx.compose.ui:ui-geometry-android
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/compose-ui
+
+androidx.compose.ui:ui-graphics
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/compose-ui
+
+androidx.compose.ui:ui-graphics-android
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/compose-ui
+
+androidx.compose.ui:ui-text
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/compose-ui
+
+androidx.compose.ui:ui-text-android
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/compose-ui
+
+androidx.compose.ui:ui-tooling-preview
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/compose-ui
+
+androidx.compose.ui:ui-tooling-preview-android
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/compose-ui
+
+androidx.compose.ui:ui-unit
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/compose-ui
+
+androidx.compose.ui:ui-unit-android
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/compose-ui
+
+androidx.compose.ui:ui-util
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/compose-ui
+
+androidx.compose.ui:ui-util-android
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/compose-ui
+
+androidx.compose:compose-bom
+  Apache-2.0
+  https://developer.android.com/jetpack
+
+androidx.concurrent:concurrent-futures
+  Apache-2.0
+  https://developer.android.com/topic/libraries/architecture/index.html
+
+androidx.concurrent:concurrent-futures-ktx
+  Apache-2.0
+  https://developer.android.com/topic/libraries/architecture/index.html
+
+androidx.core:core
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/core
+
+androidx.core:core-ktx
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/core
+
+androidx.core:core-remoteviews
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/core
+
+androidx.core:core-splashscreen
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/core
+
+androidx.core:core-viewtree
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/core
+
+androidx.credentials:credentials
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/credentials
+
+androidx.credentials:credentials-play-services-auth
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/credentials
+
+androidx.cursoradapter:cursoradapter
+  Apache-2.0
+  http://developer.android.com/tools/extras/support-library.html
+
+androidx.customview:customview
+  Apache-2.0
+  http://developer.android.com/tools/extras/support-library.html
+
+androidx.customview:customview-poolingcontainer
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/customview
+
+androidx.datastore:datastore
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/datastore
+
+androidx.datastore:datastore-android
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/datastore
+
+androidx.datastore:datastore-core
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/datastore
+
+androidx.datastore:datastore-core-android
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/datastore
+
+androidx.datastore:datastore-core-okio
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/datastore
+
+androidx.datastore:datastore-core-okio-jvm
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/datastore
+
+androidx.datastore:datastore-preferences
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/datastore
+
+androidx.datastore:datastore-preferences-android
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/datastore
+
+androidx.datastore:datastore-preferences-core
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/datastore
+
+androidx.datastore:datastore-preferences-core-android
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/datastore
+
+androidx.datastore:datastore-preferences-external-protobuf
+  BSD-3-Clause
+  https://developer.android.com/jetpack/androidx/releases/datastore
+
+androidx.datastore:datastore-preferences-proto
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/datastore
+
+androidx.documentfile:documentfile
+  Apache-2.0
+  http://developer.android.com/tools/extras/support-library.html
+
+androidx.drawerlayout:drawerlayout
+  Apache-2.0
+  http://developer.android.com/tools/extras/support-library.html
+
+androidx.emoji2:emoji2
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/emoji2
+
+androidx.emoji2:emoji2-views-helper
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/emoji2
+
+androidx.exifinterface:exifinterface
+  Apache-2.0
+  http://developer.android.com/tools/extras/support-library.html
+
+androidx.fragment:fragment
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/fragment
+
+androidx.glance:glance
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/glance
+
+androidx.glance:glance-appwidget
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/glance
+
+androidx.glance:glance-appwidget-external-protobuf
+  BSD-3-Clause
+  https://developer.android.com/jetpack/androidx/releases/glance
+
+androidx.glance:glance-appwidget-proto
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/glance
+
+androidx.graphics:graphics-path
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/graphics
+
+androidx.graphics:graphics-shapes
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/graphics
+
+androidx.graphics:graphics-shapes-android
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/graphics
+
+androidx.hilt:hilt-lifecycle-viewmodel
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/hilt
+
+androidx.hilt:hilt-lifecycle-viewmodel-compose
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/hilt
+
+androidx.interpolator:interpolator
+  Apache-2.0
+  http://developer.android.com/tools/extras/support-library.html
+
+androidx.legacy:legacy-support-core-utils
+  Apache-2.0
+  http://developer.android.com/tools/extras/support-library.html
+
+androidx.lifecycle:lifecycle-common
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/lifecycle
+
+androidx.lifecycle:lifecycle-common-java8
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/lifecycle
+
+androidx.lifecycle:lifecycle-common-jvm
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/lifecycle
+
+androidx.lifecycle:lifecycle-livedata
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/lifecycle
+
+androidx.lifecycle:lifecycle-livedata-core
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/lifecycle
+
+androidx.lifecycle:lifecycle-livedata-core-ktx
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/lifecycle
+
+androidx.lifecycle:lifecycle-process
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/lifecycle
+
+androidx.lifecycle:lifecycle-runtime
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/lifecycle
+
+androidx.lifecycle:lifecycle-runtime-android
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/lifecycle
+
+androidx.lifecycle:lifecycle-runtime-compose
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/lifecycle
+
+androidx.lifecycle:lifecycle-runtime-compose-android
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/lifecycle
+
+androidx.lifecycle:lifecycle-runtime-ktx
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/lifecycle
+
+androidx.lifecycle:lifecycle-runtime-ktx-android
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/lifecycle
+
+androidx.lifecycle:lifecycle-service
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/lifecycle
+
+androidx.lifecycle:lifecycle-viewmodel
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/lifecycle
+
+androidx.lifecycle:lifecycle-viewmodel-android
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/lifecycle
+
+androidx.lifecycle:lifecycle-viewmodel-compose
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/lifecycle
+
+androidx.lifecycle:lifecycle-viewmodel-compose-android
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/lifecycle
+
+androidx.lifecycle:lifecycle-viewmodel-ktx
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/lifecycle
+
+androidx.lifecycle:lifecycle-viewmodel-navigation3
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/lifecycle
+
+androidx.lifecycle:lifecycle-viewmodel-navigation3-android
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/lifecycle
+
+androidx.lifecycle:lifecycle-viewmodel-savedstate
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/lifecycle
+
+androidx.lifecycle:lifecycle-viewmodel-savedstate-android
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/lifecycle
+
+androidx.loader:loader
+  Apache-2.0
+  http://developer.android.com/tools/extras/support-library.html
+
+androidx.localbroadcastmanager:localbroadcastmanager
+  Apache-2.0
+  http://developer.android.com/tools/extras/support-library.html
+
+androidx.navigation3:navigation3-runtime
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/navigation3
+
+androidx.navigation3:navigation3-runtime-android
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/navigation3
+
+androidx.navigation3:navigation3-ui
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/navigation3
+
+androidx.navigation3:navigation3-ui-android
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/navigation3
+
+androidx.navigationevent:navigationevent
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/navigationevent
+
+androidx.navigationevent:navigationevent-android
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/navigationevent
+
+androidx.navigationevent:navigationevent-compose
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/navigationevent
+
+androidx.navigationevent:navigationevent-compose-android
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/navigationevent
+
+androidx.print:print
+  Apache-2.0
+  http://developer.android.com/tools/extras/support-library.html
+
+androidx.profileinstaller:profileinstaller
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/profileinstaller
+
+androidx.resourceinspection:resourceinspection-annotation
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/resourceinspection
+
+androidx.room:room-common
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/room
+
+androidx.room:room-common-jvm
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/room
+
+androidx.room:room-runtime
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/room
+
+androidx.room:room-runtime-android
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/room
+
+androidx.savedstate:savedstate
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/savedstate
+
+androidx.savedstate:savedstate-android
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/savedstate
+
+androidx.savedstate:savedstate-compose
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/savedstate
+
+androidx.savedstate:savedstate-compose-android
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/savedstate
+
+androidx.savedstate:savedstate-ktx
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/savedstate
+
+androidx.sqlite:sqlite
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/sqlite
+
+androidx.sqlite:sqlite-android
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/sqlite
+
+androidx.sqlite:sqlite-framework
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/sqlite
+
+androidx.sqlite:sqlite-framework-android
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/sqlite
+
+androidx.startup:startup-runtime
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/startup
+
+androidx.tracing:tracing
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/tracing
+
+androidx.tracing:tracing-ktx
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/tracing
+
+androidx.vectordrawable:vectordrawable
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx
+
+androidx.vectordrawable:vectordrawable-animated
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx
+
+androidx.versionedparcelable:versionedparcelable
+  Apache-2.0
+  http://developer.android.com/tools/extras/support-library.html
+
+androidx.viewpager:viewpager
+  Apache-2.0
+  http://developer.android.com/tools/extras/support-library.html
+
+androidx.window:window
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/window
+
+androidx.window:window-core
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/window
+
+androidx.window:window-core-android
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/window
+
+androidx.work:work-runtime
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/work
+
+androidx.work:work-runtime-ktx
+  Apache-2.0
+  https://developer.android.com/jetpack/androidx/releases/work
+
+com.google.android.datatransport:transport-api
+  Apache-2.0
+
+com.google.android.datatransport:transport-backend-cct
+  Apache-2.0
+
+com.google.android.datatransport:transport-runtime
+  Apache-2.0
+
+com.google.android.gms:play-services-auth
+  Android-SDK-terms
+
+com.google.android.gms:play-services-auth-api-phone
+  Android-SDK-terms
+
+com.google.android.gms:play-services-auth-base
+  Android-SDK-terms
+
+com.google.android.gms:play-services-auth-blockstore
+  Android-SDK-terms
+
+com.google.android.gms:play-services-base
+  Android-SDK-terms
+
+com.google.android.gms:play-services-basement
+  Android-SDK-terms
+
+com.google.android.gms:play-services-cloud-messaging
+  Android-SDK-terms
+
+com.google.android.gms:play-services-code-scanner
+  ML-Kit-terms
+
+com.google.android.gms:play-services-fido
+  Android-SDK-terms
+
+com.google.android.gms:play-services-identity-credentials
+  Android-SDK-terms
+
+com.google.android.gms:play-services-stats
+  Android-SDK-terms
+
+com.google.android.gms:play-services-tasks
+  Android-SDK-terms
+
+com.google.android.libraries.identity.googleid:googleid
+  Android-SDK-terms
+
+com.google.android.odml:image
+  Android-SDK-terms
+
+com.google.code.findbugs:jsr305
+  Apache-2.0
+  http://findbugs.sourceforge.net/
+
+com.google.code.gson:gson
+  Apache-2.0
+
+com.google.crypto.tink:tink
+  Apache-2.0
+  http://github.com/tink-crypto/tink-java
+
+com.google.dagger:dagger
+  Apache-2.0
+  https://github.com/google/dagger
+
+com.google.dagger:dagger-lint-aar
+  Apache-2.0
+  https://github.com/google/dagger
+
+com.google.dagger:hilt-android
+  Apache-2.0
+  https://github.com/google/dagger
+
+com.google.dagger:hilt-core
+  Apache-2.0
+  https://github.com/google/dagger
+
+com.google.errorprone:error_prone_annotations
+  Apache-2.0
+
+com.google.firebase:firebase-annotations
+  Apache-2.0
+
+com.google.firebase:firebase-common
+  Apache-2.0
+
+com.google.firebase:firebase-components
+  Apache-2.0
+
+com.google.firebase:firebase-datatransport
+  Apache-2.0
+
+com.google.firebase:firebase-encoders
+  Apache-2.0
+
+com.google.firebase:firebase-encoders-json
+  Apache-2.0
+
+com.google.firebase:firebase-encoders-proto
+  Apache-2.0
+
+com.google.firebase:firebase-iid-interop
+  Android-SDK-terms
+
+com.google.firebase:firebase-installations
+  Apache-2.0
+
+com.google.firebase:firebase-installations-interop
+  Apache-2.0
+
+com.google.firebase:firebase-measurement-connector
+  Android-SDK-terms
+
+com.google.firebase:firebase-messaging
+  Apache-2.0
+
+com.google.guava:listenablefuture
+  Apache-2.0
+  https://github.com/google/guava
+
+com.google.mlkit:barcode-scanning-common
+  ML-Kit-terms
+
+com.google.mlkit:common
+  ML-Kit-terms
+
+com.google.mlkit:vision-common
+  ML-Kit-terms
+
+com.google.protobuf:protobuf-java
+  BSD-3-Clause
+  https://developers.google.com/protocol-buffers/
+
+com.google.zxing:core
+  Apache-2.0
+  https://github.com/zxing/zxing
+
+com.goterl:lazysodium-android
+  MPL
+  https://github.com/terl/lazysodium-android
+
+com.squareup.okhttp3:okhttp
+  Apache-2.0
+  https://lysine.dev/okhttp/
+
+com.squareup.okhttp3:okhttp-android
+  Apache-2.0
+  https://lysine.dev/okhttp/
+
+com.squareup.okio:okio
+  Apache-2.0
+  https://github.com/lysine-dev/okio/
+
+com.squareup.okio:okio-jvm
+  Apache-2.0
+  https://github.com/lysine-dev/okio/
+
+jakarta.inject:jakarta.inject-api
+  Apache-2.0
+  https://github.com/eclipse-ee4j/injection-api
+
+javax.inject:javax.inject
+  Apache-2.0
+  http://code.google.com/p/atinject/
+
+net.java.dev.jna:jna
+  LGPL-2.1 AND Apache-2.0
+  https://github.com/java-native-access/jna
+
+org.jetbrains.kotlin:kotlin-android-extensions-runtime
+  Apache-2.0
+  https://kotlinlang.org/
+
+org.jetbrains.kotlin:kotlin-parcelize-runtime
+  Apache-2.0
+  https://kotlinlang.org/
+
+org.jetbrains.kotlin:kotlin-stdlib
+  Apache-2.0
+  https://kotlinlang.org/
+
+org.jetbrains.kotlin:kotlin-stdlib-common
+  Apache-2.0
+  https://kotlinlang.org/
+
+org.jetbrains.kotlin:kotlin-stdlib-jdk7
+  Apache-2.0
+  https://kotlinlang.org/
+
+org.jetbrains.kotlin:kotlin-stdlib-jdk8
+  Apache-2.0
+  https://kotlinlang.org/
+
+org.jetbrains.kotlinx:kotlinx-coroutines-android
+  Apache-2.0
+  https://github.com/Kotlin/kotlinx.coroutines
+
+org.jetbrains.kotlinx:kotlinx-coroutines-bom
+  Apache-2.0
+  https://github.com/Kotlin/kotlinx.coroutines
+
+org.jetbrains.kotlinx:kotlinx-coroutines-core
+  Apache-2.0
+  https://github.com/Kotlin/kotlinx.coroutines
+
+org.jetbrains.kotlinx:kotlinx-coroutines-core-jvm
+  Apache-2.0
+  https://github.com/Kotlin/kotlinx.coroutines
+
+org.jetbrains.kotlinx:kotlinx-coroutines-play-services
+  Apache-2.0
+  https://github.com/Kotlin/kotlinx.coroutines
+
+org.jetbrains.kotlinx:kotlinx-serialization-bom
+  Apache-2.0
+  https://github.com/Kotlin/kotlinx.serialization
+
+org.jetbrains.kotlinx:kotlinx-serialization-core
+  Apache-2.0
+  https://github.com/Kotlin/kotlinx.serialization
+
+org.jetbrains.kotlinx:kotlinx-serialization-core-jvm
+  Apache-2.0
+  https://github.com/Kotlin/kotlinx.serialization
+
+org.jetbrains.kotlinx:kotlinx-serialization-json
+  Apache-2.0
+  https://github.com/Kotlin/kotlinx.serialization
+
+org.jetbrains.kotlinx:kotlinx-serialization-json-jvm
+  Apache-2.0
+  https://github.com/Kotlin/kotlinx.serialization
+
+org.jetbrains:annotations
+  Apache-2.0
+  https://github.com/JetBrains/java-annotations
+
+org.jspecify:jspecify
+  Apache-2.0
+  http://jspecify.org/
+
+org.unifiedpush.android:connector
+  Apache-2.0
+  https://unifiedpush.org/developers/android/

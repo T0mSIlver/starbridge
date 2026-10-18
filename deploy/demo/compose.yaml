@@ -1,6 +1,6 @@
 # The demo server for Play reviewers (#423), at https://demo.starbridge.run. A project of its
-# own, apart from prod's: `sudo docker compose -p starbridge-demo -f /opt/starbridge/deploy/demo/compose.yaml`.
-# Every prod deploy builds it from prod's checkout (deploy/host/apply.sh, #1016).
+# own on sb-staging: `sudo docker compose -p starbridge-demo -f /opt/starbridge-staging/deploy/demo/compose.yaml`.
+# Each staging deploy rebuilds it from its checkout (deploy/host/demo.sh, #1557).
 services:
   demo:
     build:
@@ -17,13 +17,17 @@ services:
       # Pushes go through prod's relay, as on any self-hosted server: the app shows new items
       # on a push. The relay counts them in prod's daily usage rows.
       RELAY_URL: https://starbridge.run
-    # No volume: the database and the demo machine's keys live here and go with each restart.
-    tmpfs:
-      - /tmp:uid=1000,gid=1000,mode=700,size=64m
+    # The database, the demo device's keys and the demo machine, kept across restarts and
+    # redeploys so phones set up before them stay in the account (#2049).
+    volumes:
+      - data:/data
     mem_limit: 384m
-    # Prod's Caddy reaches it here (deploy/Caddyfile).
+    # Staging's Caddy reaches it here (demo.caddy).
     ports:
       - "127.0.0.1:8090:8080"
     logging:
       driver: json-file
       options: { max-size: 10m, max-file: "3" }
+
+volumes:
+  data:

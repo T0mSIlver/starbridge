@@ -30,7 +30,7 @@ The device list is a signed hash chain that every client pins, so the server can
 its own or roll back a revocation unseen.
 
 The server sees your GitHub numeric id, device and machine ids, public keys, the names you give
-devices and machines, and push tokens. For each item, it sees its kind, id, sender, recipients,
+devices and machines (a machine's name defaults to its host name), and push tokens. For each item, it sees its kind, id, sender, recipients,
 the item it answers, its size and times, and when a snoozed question comes back. It can hold items
 back or drop them.
 

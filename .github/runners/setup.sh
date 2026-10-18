@@ -10,14 +10,27 @@ here=$(dirname "$(readlink -f "$0")")
 RUNNER_VERSION=2.338.0
 RUNNER_SHA256=af4b794c1bc41d73d40535e3fe092a39f9679cd8d965954c2aca25a05ca41d32
 NODE_VERSION=24.18.0
+# From https://nodejs.org/dist/v$NODE_VERSION/SHASUMS256.txt, whose detached signature (SHASUMS256.txt.sig)
+# checks against a key in https://github.com/nodejs/release-keys/blob/main/keys.list. Change both together.
+NODE_SHA256=55aa7153f9d88f28d765fcdad5ae6945b5c0f98a36881703817e4c450fa76742
+# Docker's apt signing key, from https://docs.docker.com/engine/install/debian/.
+DOCKER_KEY_FPR=9DC858229FC7DD38854AE2D88D81803C0EBFCD88
 export DEBIAN_FRONTEND=noninteractive
 
 # Docker from Docker's own repository.
 if [ ! -f /etc/apt/sources.list.d/docker.sources ]; then
   apt-get update -q
-  apt-get install -yq ca-certificates curl
+  apt-get install -yq ca-certificates curl gpg
   install -m 0755 -d /etc/apt/keyrings
-  curl -fsSL https://download.docker.com/linux/debian/gpg -o /etc/apt/keyrings/docker.asc
+  curl -fsSL https://download.docker.com/linux/debian/gpg -o /etc/apt/keyrings/docker.asc.part
+  # Exactly one primary key, and it is Docker's.
+  fprs=$(gpg --show-keys --with-colons /etc/apt/keyrings/docker.asc.part | awk -F: '$1=="pub"{p=1; next} $1=="fpr"&&p{print $10; p=0}')
+  if [ "$fprs" != "$DOCKER_KEY_FPR" ]; then
+    echo "setup.sh: Docker's apt key has fingerprint '$fprs', not $DOCKER_KEY_FPR" >&2
+    rm -f /etc/apt/keyrings/docker.asc.part
+    exit 1
+  fi
+  mv /etc/apt/keyrings/docker.asc.part /etc/apt/keyrings/docker.asc
   . /etc/os-release
   printf 'Types: deb\nURIs: https://download.docker.com/linux/debian\nSuites: %s\nComponents: stable\nSigned-By: /etc/apt/keyrings/docker.asc\n' \
     "$VERSION_CODENAME" > /etc/apt/sources.list.d/docker.sources
@@ -28,8 +41,11 @@ apt-get install -yq docker-ce docker-ce-cli containerd.io docker-buildx-plugin d
 
 # Node for the steps that run the box's own.
 if [ "$(/usr/local/bin/node -v 2>/dev/null)" != "v$NODE_VERSION" ]; then
-  curl -fsSL "https://nodejs.org/dist/v$NODE_VERSION/node-v$NODE_VERSION-linux-x64.tar.xz" |
-    tar xJ -C /usr/local --strip-components=1 --exclude=CHANGELOG.md --exclude=LICENSE --exclude=README.md
+  node_tar=$(mktemp)
+  curl -fsSL -o "$node_tar" "https://nodejs.org/dist/v$NODE_VERSION/node-v$NODE_VERSION-linux-x64.tar.xz"
+  echo "$NODE_SHA256  $node_tar" | sha256sum -c - || { rm -f "$node_tar"; exit 1; }
+  tar xJf "$node_tar" -C /usr/local --strip-components=1 --exclude=CHANGELOG.md --exclude=LICENSE --exclude=README.md
+  rm -f "$node_tar"
 fi
 
 # The jobs' user: in the docker group, no sudo.
