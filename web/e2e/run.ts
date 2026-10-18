@@ -1339,6 +1339,12 @@ async function main() {
       .filter({ hasText: retried })
       .waitFor({ state: "attached", timeout: 30_000 });
 
+    step("the same announcement twice in a row is read out again (#1942)");
+    const repeated = cli("repeated", retry, machineHome);
+    const [againId] = await repeated.waitFor(/d_[\w-]+/);
+    for (let i = 0; i < 60 && (await heardCount(retried)) < 2; i++) await page.waitForTimeout(500);
+    if ((await heardCount(retried)) < 2)
+      throw new Error("a repeated announcement did not reach the status line again");
     step("the status line is announced with a question open on a narrow screen (#1942)");
     await page.setViewportSize({ width: 390, height: 844 });
     await page
@@ -1368,12 +1374,6 @@ async function main() {
       .waitFor({ state: "attached", timeout: 30_000 });
     await page.setViewportSize(DESKTOP);
 
-    step("the same announcement twice in a row is read out again (#1942)");
-    const repeated = cli("repeated", retry, machineHome);
-    const [againId] = await repeated.waitFor(/d_[\w-]+/);
-    for (let i = 0; i < 60 && (await heardCount(retried)) < 2; i++) await page.waitForTimeout(500);
-    if ((await heardCount(retried)) < 2)
-      throw new Error("a repeated announcement did not reach the status line again");
     for (const id of [narrowId, againId])
       if (
         (await cli(
