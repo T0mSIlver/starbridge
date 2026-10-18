@@ -298,6 +298,10 @@ extension Store {
     }
 
     func syncDecisions() async throws {
+        // Read first: a question posted after this read is not kept here yet, so none is dropped.
+        var listedOpen: Set<String>?
+        if checkOpen { listedOpen = try await openDecisions() }
+        let kept = Set(saved.decisions.map(\.id))
         var cursor = saved.cursor
         var byId = Dictionary(saved.decisions.map { ($0.id, $0) }, uniquingKeysWith: { $1 })
         // How each item a settled notice closed was closed, with the time: the notice lists before
@@ -355,12 +359,35 @@ extension Store {
         for (from, w) in waits { if let d = byId[w.decisionId], let u = waited(d, from: from, w) { byId[w.decisionId] = u } }
         for z in snoozes { if let d = byId[z.decisionId], let u = snoozed(d, z) { byId[z.decisionId] = u } }
         for (from, n) in wins { if let d = byId[n.itemId], let u = won(d, from: from, n) { byId[n.itemId] = u } }
+        // Still open here after this read, but no longer on the server: dropped, as by retention.
+        var gone: Set<String> = []
+        if let listedOpen {
+            let sending = Set(saved.outbox.map(\.decisionId))
+            gone = Set(byId.values.filter { d in
+                kept.contains(d.id) && !listedOpen.contains(d.id) && !sending.contains(d.id) && d.answeredAt == nil && d.answer == nil && d.settled == nil
+            }.map(\.id))
+            for id in gone { byId.removeValue(forKey: id) }
+        }
         var s = saved
         s.cursor = cursor
         // As instants: whole-second and millisecond stamps sort differently as text (#1079).
         s.decisions = Array(Dates.byInstant(Array(byId.values)) { $0.body.createdAt }.suffix(500))
         persist(s)
         SavedImage.prune(keeping: s.decisions)
+        if listedOpen != nil { checkOpen = false }
+        if !gone.isEmpty { await Notify.removeDelivered(about: gone) }
+    }
+
+    /** The ids of the decisions the server holds open for this iPhone. */
+    private func openDecisions() async throws -> Set<String> {
+        var ids: Set<String> = []
+        var at = ""
+        while true {
+            let page = try await api().items("decision", after: at, openBlobs: true, open: true)
+            for listed in page.items { ids.insert(listed.item.id) }
+            at = page.cursor
+            if page.last { return ids }
+        }
     }
 
     /**
@@ -694,6 +721,8 @@ extension Store {
             var s = saved
             s.outbox.removeAll { $0.decisionId == q.decisionId }
             persist(s)
+            // Its question may be gone from the server: the next sync checks (#1980).
+            if e.status == 404 { checkOpen = true }
             return .failed(describe(e))
         } catch let e as URLError {
             // No route or no name: the request never left. Anything else may have reached the server.
