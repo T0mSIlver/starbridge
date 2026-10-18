@@ -1559,10 +1559,11 @@ class ServerStore(
             // snooze goes a second later, or the machine and the other devices keep the snooze (#1981).
             val last = saved.decisions.find { it.body.id == id }?.snoozedAt
             val at = listOfNotNull(Instant.parse(now()), instant(last)?.plusSeconds(1)?.truncatedTo(ChronoUnit.SECONDS)).max().toString()
-            // Back now, as Undo is, goes at its own `at`, which every client reads as back now
-            // (PROTOCOL.md, "Snoozing"): the tap's instant is ahead of the clock the inbox keeps,
-            // so the question stayed under Snoozed until that clock next ticked.
-            val sent = if (until.isAfter(Instant.now())) until else Instant.parse(at)
+            // Back now, as Undo is, goes no later than its own `at`, which every client reads as
+            // back now (PROTOCOL.md, "Snoozing"): the tap's instant is ahead of the clock the
+            // inbox keeps, so the question stayed under Snoozed until that clock next ticked. Nor
+            // later than now: the server pushes a return at a future `until` (#1981).
+            val sent = Instant.now().let { now -> if (until.isAfter(now)) until else minOf(now, Instant.parse(at)) }
             val body = buildJsonObject {
                 put("v", 1)
                 put("id", newId("z_"))
