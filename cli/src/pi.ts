@@ -93,7 +93,9 @@ export function piAgentDir(env: Ctx["env"]): string {
   const home = env.HOME || homedir();
   const dir = env.PI_CODING_AGENT_DIR;
   if (!dir) return join(home, ".pi", "agent");
-  return dir === "~" || dir.startsWith("~/") ? join(home, dir.slice(1)) : dir;
+  if (dir === "~") return home;
+  const tilde = dir.startsWith("~/") || (process.platform === "win32" && dir.startsWith("~\\"));
+  return tilde ? join(home, dir.slice(2)) : dir;
 }
 
 /** Where `pi install git:github.com/T0mSIlver/starbridge@<tag>` puts the Starbridge skill. */
