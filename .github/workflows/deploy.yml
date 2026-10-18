@@ -284,19 +284,20 @@ jobs:
 
   # starbridge.run's environment waits for the owner's approval (#2009), and the release waits for
   # the deploy up to 12 hours (#2076). This job sends the owner a Starbridge card with the run's
-  # link as the deploy starts waiting, and `settle` closes it when the run ends. It reads the
+  # link as the deploy starts waiting, and closes it once the deploy job starts or ends: the same job
+  # does both, as `settle` needs the state that `ask` leaves in the runner's config folder. It reads the
   # CI_CARD_MACHINE secret of the `ci-card` environment, a Starbridge machine of its own (docs/ci.md,
   # "Approval cards"); without it the job only prints the link. It holds no key to anything else,
   # and a failed card never stops the deploy.
-  ask:
+  card:
     if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # Waits as long as the release does for the deploy (release.yml).
+    timeout-minutes: 740
     permissions:
+      actions: read
       contents: read
     environment: ci-card
-    outputs:
-      id: ${{ steps.ask.outputs.id }}
     steps:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
@@ -327,11 +328,32 @@ jobs:
             context="$context The release gives up waiting 12 hours after this deploy started, at about $(date -u -d '+12 hours' '+%H:%M UTC'), and publishes nothing."
           fi
           context="$context Approve it on the run page, linked here; this card does not approve it, and closes when the run ends."
-          npm install -g starbridge >/dev/null 2>&1 || { echo "::warning::starbridge did not install: no card sent."; exit 0; }
+          # `next` is the newest rc: the latest final may predate STARBRIDGE_MACHINE.
+          npm install -g starbridge@next >/dev/null 2>&1 || { echo "::warning::starbridge did not install: no card sent."; exit 0; }
           id=$(starbridge ask --waiting --project starbridge --link "$run_url" \
             --question "Approve the prod deploy of ${name:-$short}?" \
             --context "$context" --option Approved --option "Not now") || { echo "::warning::The card was not sent."; exit 0; }
-          echo "id=$id" >> "$GITHUB_OUTPUT"
+          echo "ID=$id" >> "$GITHUB_ENV"
+      # The deploy job waits for the review, then runs: its status says which. A rejected or
+      # cancelled one ends too, and the card closes either way.
+      - name: Close the card when the deploy starts or ends
+        if: env.ID != ''
+        timeout-minutes: 735
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STARBRIDGE_MACHINE: ${{ secrets.CI_CARD_MACHINE }}
+        run: |
+          for _ in $(seq 1 1500); do
+            job=$(curl -fsS -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' \
+              "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/jobs?per_page=100" |
+              jq -r '[.jobs[] | select(.name == "deploy")][0] | "\(.status) \(.conclusion)"') || job=
+            case $job in
+              "in_progress "*) starbridge settle "$ID" --outcome elsewhere || true; exit 0 ;;
+              "completed success") starbridge settle "$ID" --outcome elsewhere || true; exit 0 ;;
+              "completed "*) starbridge settle "$ID" --outcome withdrawn --reason "The deploy ended: ${job#completed }" || true; exit 0 ;;
+            esac
+            sleep 30
+          done
 
   # starbridge.run, by dispatch only: release.yml for each rc tag, the owner for a hotfix. It waits
   # for the commit's `staging` status, up to an hour, as an rc tag can follow its merge by minutes,
@@ -422,29 +444,3 @@ jobs:
           printf '%s\n' "$SMOKE_KNOWN_HOSTS" > "$RUNNER_TEMP/smoke-known-hosts"
           ssh -i "$RUNNER_TEMP/smoke-key" -o IdentitiesOnly=yes -o UserKnownHostsFile="$RUNNER_TEMP/smoke-known-hosts" \
             -o StrictHostKeyChecking=yes -o ConnectTimeout=20 -o ServerAliveInterval=15 "$SMOKE_TARGET"
-
-  # Closes the card when the run ends, approved or not: the owner's approval happens on the run
-  # page, which the card cannot see.
-  settle:
-    needs: [ask, deploy]
-    if: ${{ always() && needs.ask.outputs.id != '' }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    permissions: {}
-    environment: ci-card
-    steps:
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: 24
-      - env:
-          STARBRIDGE_MACHINE: ${{ secrets.CI_CARD_MACHINE }}
-          ID: ${{ needs.ask.outputs.id }}
-          RESULT: ${{ needs.deploy.result }}
-        run: |
-          case $ID in *[!A-Za-z0-9_-]* | "") exit 0 ;; esac
-          npm install -g starbridge >/dev/null 2>&1 || exit 0
-          if [ "$RESULT" = success ]; then
-            starbridge settle "$ID" --outcome elsewhere --reason "Approved and deployed" || true
-          else
-            starbridge settle "$ID" --outcome withdrawn --reason "The deploy ended: $RESULT" || true
-          fi

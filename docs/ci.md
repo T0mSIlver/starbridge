@@ -132,13 +132,12 @@ behind it: the required status, and no admin bypass on any environment.
 ## Approval cards
 
 The `starbridge.run` environment waits for the maintainer's review before a deploy runs, and an
-rc's release waits up to 12 hours for the deploy. When `deploy.yml` is dispatched, its `ask` job
-posts a Starbridge card, "Approve the prod deploy of v1.2.3-rc.1?", with the run's link; its
-`settle` job closes the card when the run ends. The card does not approve anything: the review
-is on the run's page.
+rc's release waits up to 12 hours for the deploy. When `deploy.yml` is dispatched, its `card` job
+posts a Starbridge card, "Approve the prod deploy of v1.2.3-rc.1?", with the run's link; the same job closes it once the deploy job starts or ends. The card does
+not approve anything: the review is on the run's page.
 
-The jobs use a machine of their own, "GitHub Actions", whose identity is the `CI_CARD_MACHINE`
-secret of the `ci-card` environment, which only main can read. Without the secret the `ask` job
+The job uses a machine of their own, "GitHub Actions", whose identity is the `CI_CARD_MACHINE`
+secret of the `ci-card` environment, which only main can read. Without the secret the `card` job
 prints the link and sends nothing. Pull requests never run it. The maintainer sets it up once, on
 a machine with the CLI, with no value on a command line or in a shell history:
 
