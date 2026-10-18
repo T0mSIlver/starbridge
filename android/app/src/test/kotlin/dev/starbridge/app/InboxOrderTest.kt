@@ -3,6 +3,7 @@ package dev.starbridge.app
 import dev.starbridge.app.data.Decision
 import dev.starbridge.app.data.Prompt
 import dev.starbridge.app.data.Source
+import dev.starbridge.app.ui.inbox.needYou
 import dev.starbridge.app.ui.inbox.openQuestions
 import dev.starbridge.app.ui.inbox.shownPrompts
 import org.junit.Assert.assertEquals
@@ -37,5 +38,14 @@ class InboxOrderTest {
     @Test
     fun promptsOldestFirst() {
         assertEquals(listOf("a", "b"), shownPrompts(listOf(prompt("b", 5), prompt("a", 0)), now).map { it.id })
+    }
+
+    // #1963: the Inbox tab badge is the app icon's count, as on web and iOS.
+    @Test
+    fun needYouCountsWaitingPromptsAndOpenQuestionsButNotSnoozedOrEnded() {
+        val questions = (1..4).map { question("q$it", it.toLong()) }
+        val snoozed = question("zz", 9).copy(snoozedUntil = now.plusSeconds(3600))
+        val ended = prompt("ended", 3).copy(ended = "Allowed once", endedAt = now.minusSeconds(5))
+        assertEquals(5, needYou(questions + snoozed, listOf(prompt("p", 0), ended), now))
     }
 }
