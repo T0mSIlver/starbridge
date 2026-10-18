@@ -7,12 +7,14 @@ on:
       - "android/**"
       - "packages/protocol/vectors/**"
       - "demo/smoke/**"
+      - "scripts/licenses/**"
       - ".github/workflows/android.yml"
   pull_request:
     paths:
       - "android/**"
       - "packages/protocol/vectors/**"
       - "demo/smoke/**"
+      - "scripts/licenses/**"
       - ".github/workflows/android.yml"
   workflow_dispatch:
 
@@ -76,6 +78,20 @@ jobs:
         # No daemon and an in-process Kotlin compiler: nothing stays in memory after the build on
         # a shared self-hosted runner.
         run: ./gradlew --no-daemon --console=plain -Pkotlin.compiler.execution.strategy=in-process assembleRelease
+
+      # The runtime classpath's licences against scripts/licenses/allow.json: a copyleft, vendor-terms
+      # or unnamed licence not listed there fails (#2024). The notices the APK ships are generated from
+      # the same list, so a library added or dropped changes that file in the same pull request.
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.2
+      - name: Licences
+        run: |
+          ./gradlew --no-daemon --console=plain -Pkotlin.compiler.execution.strategy=in-process :app:runtimeModules
+          bun ../scripts/licenses/licenses.ts check android app/build/licenses/runtime-modules.txt
+          bun ../scripts/licenses/licenses.ts notices android app/build/licenses/runtime-modules.txt > "$RUNNER_TEMP/notices.txt"
+          diff -u app/src/main/assets/third-party-notices.txt "$RUNNER_TEMP/notices.txt" ||
+            { echo "::error::Update android/app/src/main/assets/third-party-notices.txt: ./gradlew :app:runtimeModules, then bun scripts/licenses/licenses.ts notices android app/build/licenses/runtime-modules.txt"; exit 1; }
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:

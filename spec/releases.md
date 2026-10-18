@@ -402,3 +402,11 @@ the window's screens in light and dark from its end-to-end run (#1846). No model
   image drops npm, which it never runs. osv-scanner reads the lockfiles weekly and reports every
   finding. Each scan keeps one issue open while it finds something and closes it once a run finds
   nothing. Dependabot's alerts cover the Gradle catalog, which osv-scanner cannot read.
+- **Licences** (#2024). CI fails when a runtime dependency, npm (`ci.yml`) or the Android release
+  classpath (`android.yml`), has a licence that is not permissive (MIT, Apache-2.0, ISC, BSD, 0BSD, CC0 and
+  the like) unless `scripts/licenses/allow.json` lists the package with that same licence and a
+  reason, so a Dependabot bump that adds copyleft, CC-BY, vendor terms or an unnamed licence is
+  seen. An allowed package that changes licence fails again. The web and server images carry the
+  licence texts of their dependencies (`THIRD-PARTY-NOTICES.txt`, generated in the image build),
+  and the Android app a list of its libraries and licences in its assets, which `android.yml`
+  checks is current. The desktop app and the CLI carry none yet.

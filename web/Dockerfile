@@ -10,6 +10,9 @@ RUN npm install -g --silent "$(node -p 'require("./package.json").packageManager
 COPY packages/protocol/package.json packages/protocol/
 COPY web/package.json web/
 RUN pnpm install --frozen-lockfile --filter @starbridge/web...
+# What the image ships, with its licence texts (scripts/licenses/licenses.ts, #2024).
+COPY scripts/licenses/licenses.ts scripts/licenses/licenses.ts
+RUN mkdir -p /out && bun scripts/licenses/licenses.ts notices npm @starbridge/web > /out/THIRD-PARTY-NOTICES.txt
 COPY packages/protocol packages/protocol
 COPY web web
 # Served at /install.sh and /install.ps1 (web/src/app/install.*/route.ts).
@@ -30,6 +33,7 @@ WORKDIR /app
 COPY --from=build /src/web/.next/standalone ./
 COPY --from=build /src/web/.next/static web/.next/static
 COPY --from=build /src/web/public web/public
+COPY --from=build /out/THIRD-PARTY-NOTICES.txt ./
 # As in server/Dockerfile: Debian's fixes, never from the build cache. npm and corepack go: the
 # server runs on node alone, and their dependencies' vulnerabilities would fail scan.yml.
 ARG REVISION=unknown
