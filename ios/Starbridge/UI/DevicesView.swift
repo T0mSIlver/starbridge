@@ -90,14 +90,18 @@ private struct MemberRow: View {
     let info: DeviceInfo
     let now: Date
     let onRevoke: () -> Void
-    /** The symbol's column, which grows with it so a large text size keeps it inside the row (#1947). */
+    /**
+     The symbol's column grows with it, both up to the first accessibility size, so the symbol stays in
+     its row and the name keeps the room it needs at the largest sizes (#1947).
+     */
     @ScaledMetric private var symbolWidth: CGFloat = 28
 
     var body: some View {
         HStack(spacing: Tokens.Spacing.s4) {
             Image(systemName: memberSymbol(row, client: info.clients[row.id]))
                 .scaledFont(size: 20)
-                .frame(width: symbolWidth)
+                .dynamicTypeSize(...DynamicTypeSize.accessibility1)
+                .frame(width: min(symbolWidth, 46))
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
                 Text(row.name).type(Tokens.Typography.body)

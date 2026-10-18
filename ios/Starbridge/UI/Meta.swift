@@ -80,7 +80,10 @@ struct MetaRow: View {
 
     var body: some View {
         HStack(spacing: 6) {
-            Image(systemName: machineSymbol(source.machineKind)).scaledFont(size: 14).accessibilityHidden(true)
+            // Up to the first accessibility size: past it the symbol would take the machine's name's room.
+            Image(systemName: machineSymbol(source.machineKind)).scaledFont(size: 14)
+                .dynamicTypeSize(...DynamicTypeSize.accessibility1)
+                .accessibilityHidden(true)
             Text([source.machine, source.project].filter { !$0.isEmpty }.joined(separator: " · "))
                 .lineLimit(1)
                 .truncationMode(.middle)
