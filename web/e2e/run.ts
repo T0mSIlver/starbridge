@@ -1294,21 +1294,83 @@ async function main() {
       .waitFor();
 
     step("a withdrawn decision shows the agent's reason in History (#1008)");
-    const moot = cli(
-      "moot",
-      [
-        ...["ask", "--question", "Retry the flaky upload test?", "--option", "Retry"],
-        ...["--option", "Skip", "--project", "starbridge"],
-      ],
-      machineHome,
-    );
+    // Every time a status line takes the text, so a repeat the page does not re-announce shows.
+    await page.evaluate(() => {
+      const heard: string[] = [];
+      (window as unknown as { heard: string[] }).heard = heard;
+      new MutationObserver((records) => {
+        const seen = new Set<Element>();
+        for (const r of records) {
+          const el = (r.target instanceof Element ? r.target : r.target.parentElement)?.closest(
+            '[role="status"]',
+          );
+          if (el?.textContent && !seen.has(el)) {
+            seen.add(el);
+            heard.push(el.textContent);
+          }
+        }
+      }).observe(document.body, { childList: true, characterData: true, subtree: true });
+    });
+    const heardCount = (text: RegExp) =>
+      page.evaluate(
+        ([src]) =>
+          (window as unknown as { heard: string[] }).heard.filter((x) => new RegExp(src).test(x))
+            .length,
+        [text.source],
+      );
+    const retry = [
+      ...["ask", "--question", "Retry the flaky upload test?", "--option", "Retry"],
+      ...["--option", "Skip", "--project", "starbridge"],
+    ];
+    const moot = cli("moot", retry, machineHome);
     const [mootId] = await moot.waitFor(/d_[\w-]+/);
     if ((await moot.exited) !== 0) throw new Error("ask failed");
     // A question arriving in an open page is announced by a polite status (#1942).
+    const retried = /^New question from .*: Retry the flaky upload test\?$/;
     await page
       .getByRole("status")
-      .filter({ hasText: /^New question from .*: Retry the flaky upload test\?$/ })
+      .filter({ hasText: retried })
       .waitFor({ state: "attached", timeout: 30_000 });
+
+    step("the status line is announced with a question open on a narrow screen (#1942)");
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page
+      .locator("button[data-id]")
+      .nth(3)
+      .click({ position: { x: 80, y: 12 } });
+    await page.getByRole("button", { name: /Back/ }).waitFor();
+    const narrow = cli(
+      "narrow",
+      [
+        "ask",
+        "--question",
+        "Is the narrow status mounted?",
+        "--option",
+        "Yes",
+        "--project",
+        "starbridge",
+      ],
+      machineHome,
+    );
+    const [narrowId] = await narrow.waitFor(/d_[\w-]+/);
+    await page
+      .getByRole("status")
+      .filter({ hasText: /^New question from .*: Is the narrow status mounted\?$/ })
+      .waitFor({ state: "attached", timeout: 30_000 });
+    await page.setViewportSize(DESKTOP);
+
+    step("the same announcement twice in a row is read out again (#1942)");
+    const repeated = cli("repeated", retry, machineHome);
+    const [againId] = await repeated.waitFor(/d_[\w-]+/);
+    for (let i = 0; i < 60 && (await heardCount(retried)) < 2; i++) await page.waitForTimeout(500);
+    if ((await heardCount(retried)) < 2)
+      throw new Error("a repeated announcement did not reach the status line again");
+    for (const id of [narrowId, againId])
+      if (
+        (await cli("close", ["settle", id as string, "--outcome", "withdrawn"], machineHome)
+          .exited) !== 0
+      )
+        throw new Error("settle --outcome withdrawn failed");
     const reason = "Fixed it myself after rereading the logs";
     const withdraw = cli(
       "withdraw",
@@ -1837,6 +1899,16 @@ async function main() {
     await page.getByLabel("Find").fill("rebase");
     await shoot(page, "inbox-search");
     await page.getByLabel("Find").fill("");
+    step("a prompt already open when the page loads is not announced (#1942)");
+    await page.reload();
+    await page
+      .getByText(/^git push --force-with-lease/)
+      .first()
+      .waitFor({ timeout: 30_000 });
+    await page.waitForTimeout(1_500);
+    const early = await page.getByRole("status").allTextContents();
+    if (early.some((x) => /^(New |\d+ new )/.test(x)))
+      throw new Error(`a prompt listed at load was announced: ${early.join(" | ")}`);
     await page.getByRole("link", { name: "Quotas" }).click();
     await page.locator("article").first().waitFor();
     await shoot(page, "quotas-machines");

@@ -103,6 +103,8 @@ export type Store = {
   inbox: Inbox;
   /** The inbox came back once since boot: until then, an empty one means nothing yet. */
   inboxLoaded: boolean;
+  /** The open permission prompts came back once since boot: the ones listed then are not news. */
+  promptsLoaded: boolean;
   quotas?: Quotas;
   runs?: Runs;
   /** Runs boot again, after sign-in, setup, pairing or recovery. */
@@ -189,6 +191,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, [unsent]);
   useEffect(() => dropClosedDrafts(inbox.items), [inbox]);
   const [inboxLoaded, setInboxLoaded] = useState(false);
+  const [promptsLoaded, setPromptsLoaded] = useState(false);
   const [pushed, setPushed] = useState(false);
   const [quotas, setQuotas] = useState<Quotas>();
   const [withheld, setWithheld] = useState<Store["withheld"]>();
@@ -245,6 +248,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     inboxRef.current = { items: [], rejected: [] };
     setInbox(inboxRef.current);
     setPrompts([]);
+    setPromptsLoaded(false);
     setPromptLog(undefined);
     setQuotas(undefined);
     setRuns(undefined);
@@ -483,6 +487,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       };
       return [...open, ...closed].map(withNotice);
     });
+    setPromptsLoaded(true);
   }, [current, holding]);
 
   const fetchQuotas = useCallback(async () => {
@@ -865,6 +870,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         boot,
         inbox: shownInbox,
         inboxLoaded,
+        promptsLoaded,
         quotas,
         runs,
         reload,

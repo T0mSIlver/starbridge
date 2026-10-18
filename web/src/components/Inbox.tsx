@@ -99,6 +99,7 @@ export function Inbox() {
   const {
     inbox,
     inboxLoaded,
+    promptsLoaded,
     prompts,
     runs,
     promptLog,
@@ -184,25 +185,40 @@ export function Inbox() {
     if (wide && selected && picked !== selected) setPicked(selected);
   }, [wide, selected, picked]);
 
-  // Announces what arrived since the last list: the first list this page loads is not news.
-  const [arrived, setArrived] = useState("");
+  // Announces what arrived since the last list: the first full list this page loads, questions and
+  // permission prompts both, is not news. A live region ignores text it already holds, so the
+  // text clears first and a repeat is read out again.
+  const [arrived, setArrived] = useState({ text: "", n: 0 });
+  const [announced, setAnnounced] = useState("");
   const heard = useRef<Set<string>>(null);
   const waiting = all.filter((e) => e.type !== "run");
   const waitingKey = waiting.map((e) => e.id).join(" ");
   // biome-ignore lint/correctness/useExhaustiveDependencies: `waiting` changes with `waitingKey`
   useEffect(() => {
-    if (!inboxLoaded) return;
+    if (!inboxLoaded || !promptsLoaded) return;
     const before = heard.current;
     heard.current = new Set(waiting.map((e) => e.id));
     const fresh = before ? waiting.filter((e) => !before.has(e.id)) : [];
     const [one] = fresh;
     if (!one) return;
-    setArrived(
+    const text =
       fresh.length > 1
         ? `${fresh.length} new questions`
-        : `New ${one.type === "prompt" ? "permission request" : "question"} from ${one.machine}: ${label(one)}`,
-    );
-  }, [waitingKey, inboxLoaded]);
+        : `New ${one.type === "prompt" ? "permission request" : "question"} from ${one.machine}: ${label(one)}`;
+    setArrived((was) => ({ text, n: was.n + 1 }));
+  }, [waitingKey, inboxLoaded, promptsLoaded]);
+  useEffect(() => {
+    setAnnounced("");
+    if (!arrived.n) return;
+    const timer = setTimeout(() => setAnnounced(arrived.text), 50);
+    return () => clearTimeout(timer);
+  }, [arrived]);
+  // Mounted in every layout: an open question replaces the list on a narrow screen.
+  const status = (
+    <div className="sr-only" role="status">
+      {announced}
+    </div>
+  );
 
   const latest = useRef({ ids, selected, wide });
   latest.current = { ids, selected, wide };
@@ -552,10 +568,6 @@ export function Inbox() {
         </h2>
         <ViewMenu grouping={grouping} setGrouping={setGrouping} />
       </header>
-      {/* A polite status, read out when a question arrives in a page that is open (#1942). */}
-      <div className="sr-only" role="status">
-        {arrived}
-      </div>
       <RecoveryBanner />
       <PushBanner />
       {inbox.rejected.length > 0 && (
@@ -640,6 +652,7 @@ export function Inbox() {
   if (!wide && opened) {
     return (
       <div className={s.single}>
+        {status}
         <PhoneBar title="Inbox" back={closeItem} always />
         <div className={`m-enter ${s.openDetail}`}>
           {detail(opened) ?? (resolved && <p className={`t-small ${s.empty}`}>Answered</p>)}
@@ -650,6 +663,7 @@ export function Inbox() {
   if (!wide)
     return (
       <div className={s.single}>
+        {status}
         <PhoneBar
           title="Inbox"
           view={<ViewMenu grouping={grouping} setGrouping={setGrouping} icon />}
@@ -658,7 +672,7 @@ export function Inbox() {
       </div>
     );
   return (
-    <Panes list={list}>
+    <Panes list={list} status={status}>
       <section className={s.detail} aria-label="Selected">
         {detail(selected) ?? (noMachine && <NoMachine />)}
       </section>
@@ -691,7 +705,15 @@ const DETAIL_MIN = 400;
 const ASIDE_FROM = 1400;
 
 /** The wide layout: list, open item and Quota windows, with edges the owner drags (#173). */
-function Panes({ list, children }: { list: React.ReactNode; children: React.ReactNode }) {
+function Panes({
+  list,
+  status,
+  children,
+}: {
+  list: React.ReactNode;
+  status: React.ReactNode;
+  children: React.ReactNode;
+}) {
   const [listPref, setList] = usePref("listWidth");
   const [asidePref, setAside] = usePref("asideWidth");
   const vw = useWindowWidth();
@@ -708,6 +730,7 @@ function Panes({ list, children }: { list: React.ReactNode; children: React.Reac
   return (
     <div className={`${s.panes} ${quotas ? "" : s.noAside}`} style={style}>
       <h1 className="sr-only">Inbox</h1>
+      {status}
       {list}
       <Resizer
         label="Inbox width"
