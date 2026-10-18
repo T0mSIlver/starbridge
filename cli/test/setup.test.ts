@@ -2,6 +2,7 @@ import { afterEach, beforeEach, expect, setDefaultTimeout, test } from "bun:test
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
+  chmodSync,
   copyFileSync,
   existsSync,
   mkdirSync,
@@ -583,6 +584,23 @@ test.skipIf(WINDOWS)(
     await installPiPackage(m.sys);
     expect(m.calls()).toContain(`pi install ${PI_PACKAGE}`);
     expect(readdirSync(parent)).toEqual([`starbridge.starbridge-${process.ppid}`]);
+  },
+);
+
+test.skipIf(WINDOWS)(
+  "a leftover setup cannot remove still leaves Pi to install (#2039)",
+  async () => {
+    const m = await machine();
+    const parent = join(m.home, ".pi/agent/git/github.com/T0mSIlver");
+    mkdirSync(join(parent, "starbridge.starbridge-999999999", "locked"), { recursive: true });
+    // Read-only: neither the leftover nor a new checkout can go there.
+    chmodSync(parent, 0o555);
+    try {
+      await installPiPackage(m.sys);
+    } finally {
+      chmodSync(parent, 0o755);
+    }
+    expect(m.calls()).toContain(`pi install ${PI_PACKAGE}`);
   },
 );
 

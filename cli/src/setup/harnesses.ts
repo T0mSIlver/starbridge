@@ -188,15 +188,15 @@ async function prefetchPiPackage(sys: Sys) {
   if (existsSync(dir)) return;
   const ref = COMMIT ?? `refs/tags/v${VERSION}`;
   const part = `${dir}.starbridge-${process.pid}`;
-  // What an interrupted setup left beside it; another setup's fetch still running stays.
-  const parent = dirname(dir);
-  if (existsSync(parent))
-    for (const f of readdirSync(parent)) {
-      const pid = /^starbridge\.starbridge-(\d+)$/.exec(f)?.[1];
-      if (pid && !alive(Number(pid))) rmSync(join(parent, f), { recursive: true, force: true });
-    }
   const git = (...args: string[]) => run(sys, "git", ["-C", part, ...args], { timeoutMs: 300_000 });
   try {
+    // What an interrupted setup left beside it; another setup's fetch still running stays.
+    const parent = dirname(dir);
+    if (existsSync(parent))
+      for (const f of readdirSync(parent)) {
+        const pid = /^starbridge\.starbridge-(\d+)$/.exec(f)?.[1];
+        if (pid && !alive(Number(pid))) rmSync(join(parent, f), { recursive: true, force: true });
+      }
     rmSync(part, { recursive: true, force: true });
     mkdirSync(part, { recursive: true });
     // What Pi writes on a first clone, so a Pi folder kept in git ignores its checkouts.
@@ -213,7 +213,10 @@ async function prefetchPiPackage(sys: Sys) {
     }
     renameSync(part, dir);
   } catch {
-    rmSync(part, { recursive: true, force: true });
+    // Nothing here may stop `pi install`, which clones by itself.
+    try {
+      rmSync(part, { recursive: true, force: true });
+    } catch {}
   }
 }
 
