@@ -62,9 +62,6 @@ importers:
       '@types/bun':
         specifier: ^1.4.3
         version: 1.4.3
-      '@types/libsodium-wrappers':
-        specifier: ^0.8.2
-        version: 0.8.2
       playwright:
         specifier: 1.64.1
         version: 1.64.1
@@ -147,9 +144,6 @@ importers:
       '@types/bun':
         specifier: ^1.4.3
         version: 1.4.3
-      '@types/libsodium-wrappers':
-        specifier: ^0.8.2
-        version: 0.8.2
       typescript:
         specifier: ^7.0.2
         version: 7.0.2
@@ -221,9 +215,6 @@ importers:
       '@types/bun':
         specifier: ^1.4.3
         version: 1.4.3
-      '@types/libsodium-wrappers':
-        specifier: ^0.8.2
-        version: 0.8.2
       '@types/node':
         specifier: ^26.6.5
         version: 26.6.5
@@ -644,10 +635,6 @@ packages:
 
   '@types/keyv@3.1.4':
     resolution: {integrity: sha512-BQ5aZNSCpj7D6K2ksrRCTmKRLEpnPvWDiLPfoGyhZ++8YtiK9d/3DBKPJgry359X/P1PfruyYwvnvwFjuEiEIg==}
-
-  '@types/libsodium-wrappers@0.8.2':
-    resolution: {integrity: sha512-+2IDfSULPUskSjIYfZl9suIUsIE5PXwoKZiE/j0MZWd+M9nEGvJDsk/ztMZKNhL1lBL+1CaypW0dQSjqPW2dMg==}
-    deprecated: This is a stub types definition. libsodium-wrappers provides its own type definitions, so you do not need this installed.
 
   '@types/ms@2.1.0':
     resolution: {integrity: sha512-GsCCIZDE/p3i96vtEqx+7dBUGXrc7zeSK3wwPHIaRThS+9OhWIXRqzs4d6k1SVU8g91DrNRWxWUGhp5KXQb2VA==}
@@ -2261,10 +2248,6 @@ snapshots:
   '@types/keyv@3.1.4':
     dependencies:
       '@types/node': 26.6.5
-
-  '@types/libsodium-wrappers@0.8.2':
-    dependencies:
-      libsodium-wrappers: 0.8.4
 
   '@types/ms@2.1.0': {}
 

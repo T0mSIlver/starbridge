@@ -59,11 +59,12 @@ test("/v1/demo exists only on a demo server", async () => {
   expect((await (await makeServer({ demo: true })).app.request("/v1/demo")).status).toBe(200);
 });
 
-test("a demo server keeps reviewers to its own machine, and its pairings fit its tmpfs", () => {
+test("a demo server keeps reviewers to its own machine", () => {
   const config = configFromEnv({ ...DEMO, MAX_MACHINES: "5" });
   expect(config.maxMachines).toBe(1);
-  const compose = readFileSync(join(import.meta.dir, "../../deploy/demo/compose.yaml"), "utf8");
-  const tmpfs = Number(/size=(\d+)m/.exec(compose)?.[1]) * 1024 * 1024;
-  // About 4 KB each (limits.ts), with room left for the rest of the database and its WAL.
-  expect(config.limits.pendingPairings * 4096).toBeLessThan(tmpfs / 2);
+});
+
+test("a demo server keeps 200 testers' phones signed in, not 50", () => {
+  expect(configFromEnv(DEMO).limits.sessions).toBe(200);
+  expect(configFromEnv({ ...DEMO, DEMO: "" }).limits.sessions).toBe(50);
 });

@@ -10,6 +10,9 @@ RUN npm install -g --silent "$(node -p 'require("./package.json").packageManager
 COPY packages/protocol/package.json packages/protocol/
 COPY server/package.json server/
 RUN pnpm install --frozen-lockfile --filter @starbridge/server...
+# What the image ships, with its licence texts (scripts/licenses/licenses.ts, #2024).
+COPY scripts/licenses/licenses.ts scripts/licenses/licenses.ts
+RUN mkdir -p /out && bun scripts/licenses/licenses.ts notices npm @starbridge/server > /out/THIRD-PARTY-NOTICES.txt
 COPY packages/protocol packages/protocol
 COPY server server
 RUN bun build server/src/main.ts --target bun --outfile /out/server.js
@@ -17,6 +20,7 @@ RUN bun build server/src/main.ts --target bun --outfile /out/server.js
 FROM oven/bun:1.4.2-slim@sha256:cb3bbbb08e13a4a2ff400f24c7a2a1d5efa83f6ef8544d52d95a519631e2fc61
 WORKDIR /app
 COPY --from=build /out/server.js .
+COPY --from=build /out/THIRD-PARTY-NOTICES.txt ./
 # Debian's fixes since the base image was published: scan.yml fails on a high or critical
 # vulnerability that has one. REVISION differs on every commit, so this layer is never reused
 # from the build cache.

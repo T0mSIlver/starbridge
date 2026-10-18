@@ -162,14 +162,18 @@
   a recovery key, so `demo.starbridge.run` is a self-hosted server with an owner token, and
   `demo/` is its first device and machine. It approves every join by digits without comparing,
   so a reviewer walks the same screens as a real second phone. The server refuses `DEMO=1` beside
-  a starbridge.run `PUBLIC_URL`, GitHub sign-in or relay mode. A restart is a fresh account.
-  A reviewer who deletes the account, or revokes the demo's device or machine, restarts it
-  (#1740).
+  a starbridge.run `PUBLIC_URL`, GitHub sign-in or relay mode. Its database, its device's keys
+  and its machine live on a volume, and a restart goes on with the same account, since a fresh
+  one turned every phone set up before it into "This phone belongs to another account" (#2049).
+  It starts a fresh account only when the old one is past repair: a reviewer deleted it or revoked
+  the demo's device (#1740), or its directory holds 180 entries, about 175 phones, since the
+  directory only grows. A revoked machine is paired again. The question a restart left open is
+  withdrawn, so one stays open. The server's retention drops answered questions and old runs as
+  on any server, so the account does not grow with time.
   It runs on sb-staging, as a project of its own beside staging (#1557), so prod carries one service
   less and prod's releases never restart it. Each staging deploy whose round trip passed rebuilds it
   from that commit of main, which serves every release from the minimum up: deployed by hand, it
   once fell behind prod and rejected the apps' item kinds, so reviewers saw an empty inbox (#1016).
-  It restarts only when its image changed, so a reviewer's account survives deploys that leave its
-  code alone. Caddy counts
+  It restarts only when its image changed. Caddy counts
   its `/v1/*` per address as prod's, and it caps machines at its own and pending pairings at
-  5,000, what its 64 MB tmpfs holds, since reviewers share one account and one container.
+  5,000, about 20 MB, since reviewers share one account and one container.

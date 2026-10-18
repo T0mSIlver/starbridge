@@ -182,6 +182,34 @@ dependencies {
     androidTestImplementation(libs.androidx.test.junit)
 }
 
+/**
+ * The modules the release APK's runtime classpath resolves to, as `group:name:version` lines, for
+ * `scripts/licenses.ts`, which reads their POMs from Gradle's cache (#2024).
+ */
+tasks.register("runtimeModules") {
+    val root = configurations.getByName("releaseRuntimeClasspath").incoming.resolutionResult.rootComponent
+    val out = layout.buildDirectory.file("licenses/runtime-modules.txt")
+    outputs.file(out)
+    // The classpath is an input Gradle cannot see here: run every time rather than keep a stale list.
+    outputs.upToDateWhen { false }
+    doLast {
+        val seen = sortedSetOf<String>()
+        val visited = mutableSetOf<org.gradle.api.artifacts.result.ResolvedComponentResult>()
+        val todo = ArrayDeque(listOf(root.get()))
+        while (todo.isNotEmpty()) {
+            val component = todo.removeFirst()
+            if (!visited.add(component)) continue
+            val id = component.moduleVersion
+            if (component.id is org.gradle.api.artifacts.component.ModuleComponentIdentifier && id != null) {
+                seen += "${id.group}:${id.name}:${id.version}"
+            }
+            component.dependencies.filterIsInstance<org.gradle.api.artifacts.result.ResolvedDependencyResult>()
+                .forEach { todo.add(it.selected) }
+        }
+        out.get().asFile.apply { parentFile.mkdirs() }.writeText(seen.joinToString("\n", postfix = "\n"))
+    }
+}
+
 class Keystore(val file: File, val password: String, val alias: String)
 
 /**

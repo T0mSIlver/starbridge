@@ -3,7 +3,7 @@
  * demo device, runs the agent with a scripted CodexBar for quota windows, keeps one question
  * open and a run going.
  */
-import { mkdirSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { Broken, type DemoDevice } from "./device";
 
@@ -57,6 +57,16 @@ export const QUESTIONS: Question[] = [
   },
 ];
 
+/** What tells the CLI it runs in an agent's session (cli/src/decisions/source.ts, bindSession). */
+const SESSION_VARS = [
+  "CLAUDE_CODE_SESSION_ID",
+  "CODEX_THREAD_ID",
+  "PI_SESSION_ID",
+  "STARBRIDGE_OPENCODE_SESSION",
+  "ANTIGRAVITY_CONVERSATION_ID",
+  "CURSOR_CONVERSATION_ID",
+];
+
 /** Twelve minutes, then three idle: finished runs stay few, so the question stays in view. */
 const RUN = ["sh", "-c", 'for i in $(seq 1 12); do echo "[$i/12] e2e suite"; sleep 60; done'];
 
@@ -74,11 +84,14 @@ export class DemoMachine {
   private spawn(args: string[], stdout: "pipe" | "inherit" = "inherit", cwd?: string) {
     const child = Bun.spawn([...this.opts.cli, ...args], {
       cwd,
-      // HOME too: the agent installs agent integrations (the Codex skill) under it.
+      // HOME too: the agent installs agent integrations (the Codex skill) under it. No agent's
+      // session ids: in one, `ask --session demo-…` would ask as that session instead.
       env: {
-        ...process.env,
+        ...Object.fromEntries(
+          Object.entries(process.env).filter(([k]) => !SESSION_VARS.includes(k)),
+        ),
         HOME: this.opts.dir,
-        STARBRIDGE_CONFIG_DIR: join(this.opts.dir, "starbridge"),
+        STARBRIDGE_CONFIG_DIR: this.config,
       },
       stdout,
       stderr: "inherit",
@@ -90,6 +103,31 @@ export class DemoMachine {
 
   stop() {
     for (const c of this.children) c.kill();
+  }
+
+  private get config() {
+    return join(this.opts.dir, "starbridge");
+  }
+
+  /** The id this machine paired as, kept across restarts in its directory (#2049). */
+  pairedAs(): string | undefined {
+    const file = join(this.config, "machine.json");
+    return existsSync(file)
+      ? (JSON.parse(readFileSync(file, "utf8")) as { id: string }).id
+      : undefined;
+  }
+
+  /**
+   * Drops the CLI's lock a killed container left: its holder's pid may be alive again in the
+   * next one, and every state write would wait on it.
+   */
+  dropLock(): void {
+    rmSync(join(this.config, ".lock"), { force: true });
+  }
+
+  /** Drops a pairing the account no longer holds, before pairing again. */
+  forget(): void {
+    rmSync(this.opts.dir, { recursive: true, force: true });
   }
 
   /** `starbridge pair`, approved by the demo device. */
@@ -134,6 +172,24 @@ export class DemoMachine {
 
   /** Keeps one question open: posts the next a few seconds after each answer. */
   async questions(signal: AbortSignal): Promise<void> {
+    // The questions a restart left open would stay beside the next one. `--session` also posts
+    // again a withdrawal saved here that never reached the server.
+    for (const project of new Set(QUESTIONS.map((q) => q.project)))
+      for (let tries = 1; ; tries++) {
+        if (signal.aborted) return;
+        const code = await this.spawn([
+          "settle",
+          "--session",
+          `demo-${project}`,
+          "--outcome",
+          "withdrawn",
+          "--reason",
+          "The demo server restarted",
+        ]).exited;
+        if (code === 0) break;
+        if (tries === 3) throw new Broken(`withdrawing demo-${project}'s questions failed`);
+        await Bun.sleep(10_000);
+      }
     let failures = 0;
     for (let i = 0; !signal.aborted; i++) {
       const q = QUESTIONS[i % QUESTIONS.length] as Question;
@@ -156,7 +212,7 @@ export class DemoMachine {
         q.session,
       ]).exited;
       if (signal.aborted) return;
-      // A revoked machine fails every ask: start over with a fresh account.
+      // A revoked machine fails every ask: stop, and the next start pairs it again.
       failures = code === 0 ? 0 : failures + 1;
       if (failures >= 3) throw new Broken("three questions in a row failed");
       await Bun.sleep((code === 0 ? (this.opts.nextQuestionAfter ?? 5) : 10) * 1000);
@@ -185,4 +241,27 @@ export class DemoMachine {
       await Bun.sleep(180_000);
     }
   }
+}
+
+/**
+ * Goes on with the account and machine a restart left in `data` (#2049): the device resumes or
+ * starts a fresh account, and the machine pairs again unless its pairing still holds.
+ */
+export async function resumeDemo(
+  device: DemoDevice,
+  machine: DemoMachine,
+  data: string,
+): Promise<"fresh" | "resumed"> {
+  // Nothing else runs yet: a lock is a dead process's.
+  machine.dropLock();
+  const how = await device.resume(join(data, "device.json"));
+  const paired = machine.pairedAs();
+  if (how === "resumed" && paired && (await device.directory()).members.get(paired)?.active)
+    device.machine = paired;
+  else {
+    await device.revokeMachines();
+    machine.forget();
+    await machine.pair();
+  }
+  return how;
 }

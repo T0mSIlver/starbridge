@@ -1,14 +1,18 @@
 /**
- * The demo program for Play reviewers (#423), beside a demo server (DEMO=1) on an empty
- * database. It exits when the demo breaks, and its container restarts with a fresh account.
+ * The demo program for Play reviewers (#423), beside a demo server (DEMO=1). It goes on with the
+ * account it saved in DEMO_DATA, so phones set up before a restart stay in it (#2049), and exits
+ * when the demo breaks; its container then restarts, on a fresh account only when the old one
+ * is past repair.
  */
+import { join } from "node:path";
 import { DemoDevice } from "./device";
-import { DemoMachine } from "./machine";
+import { DemoMachine, resumeDemo } from "./machine";
 
 const env = process.env;
 const server = env.DEMO_SERVER ?? "http://127.0.0.1:8080";
 const ownerToken = env.OWNER_TOKEN;
 if (!ownerToken) throw new Error("OWNER_TOKEN is not set");
+const data = env.DEMO_DATA ?? "/data";
 
 const device = new DemoDevice(server, ownerToken);
 // The server starts beside this program.
@@ -21,18 +25,17 @@ for (let i = 0; ; i++) {
   if (i === 60) throw new Error(`${server} is not up`);
   await Bun.sleep(500);
 }
-await device.createAccount();
 const machine = new DemoMachine(
   {
     cli: (env.DEMO_CLI ?? "bun /app/starbridge.js").split(" "),
     server,
-    dir: env.DEMO_DIR ?? "/tmp/demo-machine",
+    dir: join(data, "machine"),
     codexbar: env.DEMO_CODEXBAR ?? "/app/codexbar",
   },
   device,
 );
-await machine.pair();
-console.log(`demo ready: account ${device.account}`);
+const how = await resumeDemo(device, machine, data);
+console.log(`demo ready: ${how} account ${device.account}`);
 
 const stop = new AbortController();
 try {

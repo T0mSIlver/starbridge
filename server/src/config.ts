@@ -251,7 +251,7 @@ export function configFromEnv(env: Env = process.env): Config {
   if (config.demo) {
     checkDemo(config);
     config.maxMachines = DEMO_MACHINES;
-    config.limits = { ...config.limits, pendingPairings: DEMO_PAIRINGS };
+    config.limits = { ...config.limits, pendingPairings: DEMO_PAIRINGS, sessions: DEMO_SESSIONS };
   }
   if (config.ownerToken) checkOwnerToken(config);
   for (const [name, minimum] of Object.entries(config.minimumReleases))
@@ -278,11 +278,13 @@ function checkOwnerToken(config: Config): void {
 
 /**
  * A demo server's caps. Its machine is the demo program's, and reviewers share its account, so
- * none of them adds one whose items every other reviewer would see. Its database lives in a
- * 64 MB tmpfs (deploy/demo/compose.yaml), which pairings at about 4 KB each must not fill.
+ * none of them adds one whose items every other reviewer would see. Pending pairings, about 4 KB
+ * each, stay under 20 MB of its database. Testers' phones share the account for weeks, so it keeps
+ * 200 sessions, its directory's size, before a new sign-in ends the oldest phone's.
  */
 const DEMO_MACHINES = 1;
 const DEMO_PAIRINGS = 5_000;
+const DEMO_SESSIONS = 200;
 
 /**
  * A demo server approves every join, so it must never be the hosted one: prod sets

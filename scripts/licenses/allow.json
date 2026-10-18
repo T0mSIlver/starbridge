@@ -1,0 +1,50 @@
+{
+  "npm": {
+    "@img/sharp-libvips-*": {
+      "license": "LGPL-3.0-or-later",
+      "reason": "Next's image optimiser loads libvips as its own prebuilt shared library, unmodified; the notice and licence text ship in the web image."
+    },
+    "web-push": {
+      "license": "MPL-2.0",
+      "reason": "File-level copyleft; used unmodified from npm, so only its notice is owed."
+    },
+    "caniuse-lite": {
+      "license": "CC-BY-4.0",
+      "reason": "Browser-support data that browserslist reads; attribution only, given in the notices."
+    }
+  },
+  "android": {
+    "com.goterl:lazysodium-android": {
+      "license": "MPL",
+      "reason": "File-level copyleft; used unmodified from Maven, so only its notice is owed."
+    },
+    "net.java.dev.jna:jna": {
+      "license": "LGPL-2.1 AND Apache-2.0",
+      "reason": "Dual-licensed LGPL-2.1 or Apache-2.0 (the POM lists both); used unmodified as its own AAR, under the Apache-2.0 option."
+    },
+    "com.google.android.gms:play-services-code-scanner": {
+      "license": "ML-Kit-terms",
+      "reason": "Google's scanner runs in Play services; it is under ML Kit's terms of service, not an open licence."
+    },
+    "com.google.android.gms:*": {
+      "license": "Android-SDK-terms",
+      "reason": "Google Play services client libraries (sign-in, credentials, FCM): Google's Android SDK terms, not an open licence."
+    },
+    "com.google.android.libraries.identity.googleid:*": {
+      "license": "Android-SDK-terms",
+      "reason": "Google's Credential Manager helper, under the Android SDK terms."
+    },
+    "com.google.android.odml:*": {
+      "license": "Android-SDK-terms",
+      "reason": "A Google ML image type that ML Kit's scanner needs, under the Android SDK terms."
+    },
+    "com.google.firebase:*": {
+      "license": "Android-SDK-terms",
+      "reason": "Firebase Cloud Messaging's client, for push; under the Android SDK terms."
+    },
+    "com.google.mlkit:*": {
+      "license": "ML-Kit-terms",
+      "reason": "ML Kit's barcode scanning core, under ML Kit's terms of service."
+    }
+  }
+}

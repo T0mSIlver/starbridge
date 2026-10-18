@@ -2,11 +2,14 @@
  * The demo account's first device. It approves the demo machine's pairing and every join by
  * digits without comparing them, so a Play reviewer gets in with the owner token alone (#423).
  */
+
+import { existsSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import {
   addEntry,
   approverKeys,
   bindMessage,
   type Directory,
+  fromB64,
   generateMemberKeys,
   generateRecoverySeed,
   genesisEntry,
@@ -22,12 +25,14 @@ import {
   publicKeys,
   ready,
   recoveryKeyPair,
+  revokeEntry,
+  type SignedEnvelope,
   toB64,
   verifyDirectory,
 } from "@starbridge/protocol";
 import sodium from "libsodium-wrappers";
 
-/** The program stops, and its container restarts with a fresh account, past this many entries. */
+/** The program stops, and starts over with a fresh account, past this many entries. */
 export const FULL_DIRECTORY = 180;
 
 export class HttpError extends Error {
@@ -59,6 +64,13 @@ interface JoinView {
 
 const now = () => `${new Date().toISOString().slice(0, 19)}Z`;
 
+/** What the demo keeps on its volume to go on with its account after a restart (#2049). */
+interface Saved {
+  account: string;
+  box: { publicKey: string; privateKey: string };
+  sign: { publicKey: string; privateKey: string };
+}
+
 export class DemoDevice {
   readonly id = "demo-owner";
   /** Made once libsodium is ready, in `createAccount`. */
@@ -69,6 +81,8 @@ export class DemoDevice {
   machine?: string;
   /** Directory appends, one at a time: two at once would both name the same next entry. */
   private appends: Promise<unknown> = Promise.resolve();
+  /** Where `resume` keeps the account and this device's keys. */
+  private saved?: string;
 
   constructor(
     readonly server: string,
@@ -123,6 +137,11 @@ export class DemoDevice {
     // a new, empty account, and the demo starts over in a fresh container.
     const { account } = await this.call<{ account: string }>("GET", "/me", undefined, false);
     if (account !== this.account) throw new Broken("the demo account was deleted");
+    await this.bind();
+  }
+
+  /** Binds the session to this device, as the genesis entry binds the first one. */
+  private async bind(): Promise<void> {
     const { nonce } = await this.call<{ nonce: string }>("GET", "/auth/challenge");
     const sig = sodium.crypto_sign_detached(
       bindMessage(this.account, this.id, nonce),
@@ -134,7 +153,6 @@ export class DemoDevice {
   /** Signs in with the owner token and creates the account's keys; the recovery key is dropped. */
   async createAccount(): Promise<void> {
     await ready;
-    this.keys = generateMemberKeys();
     if (this.demo) await this.checkDemo();
     await this.signIn();
     // An owner-token session is never bound to a member, so /me can't tell whether the account
@@ -142,7 +160,14 @@ export class DemoDevice {
     const { entries } = await this.call<{ entries: unknown[] }>("GET", "/directory");
     if (entries.length > 0)
       throw new Error("the account already has keys: start on an empty database");
+    await this.genesis();
+  }
+
+  private async genesis(): Promise<void> {
+    this.keys = generateMemberKeys();
     this.account = (await this.call<{ account: string }>("GET", "/me")).account;
+    // Saved first: keys the server has but the volume lost would force a new account.
+    this.save();
     const seed = generateRecoverySeed();
     const entry = genesisEntry({
       account: this.account,
@@ -153,6 +178,58 @@ export class DemoDevice {
     });
     seed.fill(0);
     await this.call("POST", "/directory", { entry });
+  }
+
+  /**
+   * Goes on with the account saved at `path` (#2049), so the phones set up before a restart stay
+   * in it. Starts a fresh account when there is none, or when it is past repair: deleted, this
+   * device revoked, its keys lost or its directory full. "fresh" or "resumed".
+   */
+  async resume(path: string): Promise<"fresh" | "resumed"> {
+    await ready;
+    this.saved = path;
+    if (this.demo) await this.checkDemo();
+    await this.signIn();
+    const { entries } = await this.call<{ entries: unknown[] }>("GET", "/directory");
+    const { account } = await this.call<{ account: string }>("GET", "/me");
+    const saved = existsSync(path) ? (JSON.parse(readFileSync(path, "utf8")) as Saved) : undefined;
+    if (entries.length > 0 && saved?.account === account) {
+      this.account = account;
+      const pair = (k: Saved["box"]) => ({
+        publicKey: fromB64(k.publicKey),
+        privateKey: fromB64(k.privateKey),
+      });
+      this.keys = { box: pair(saved.box), sign: pair(saved.sign) };
+      const dir = await this.directory();
+      if (dir.members.get(this.id)?.active && dir.length < FULL_DIRECTORY) {
+        await this.bind();
+        return "resumed";
+      }
+      this.log(
+        `starting over: ${dir.length >= FULL_DIRECTORY ? `the directory holds ${dir.length} entries` : `${this.id} was revoked`}`,
+      );
+    } else if (entries.length > 0) this.log("starting over: the account's keys are not saved here");
+    if (entries.length > 0) {
+      await this.deleteAccount();
+      await this.signIn();
+    }
+    await this.genesis();
+    return "fresh";
+  }
+
+  private save(): void {
+    if (!this.saved) return;
+    const pair = (k: { publicKey: Uint8Array; privateKey: Uint8Array }) => ({
+      publicKey: toB64(k.publicKey),
+      privateKey: toB64(k.privateKey),
+    });
+    const saved: Saved = {
+      account: this.account,
+      box: pair(this.keys.box),
+      sign: pair(this.keys.sign),
+    };
+    writeFileSync(`${this.saved}.tmp`, JSON.stringify(saved), { mode: 0o600 });
+    renameSync(`${this.saved}.tmp`, this.saved);
   }
 
   /** Deletes the account with every device, machine and session, as Settings' Delete account. */
@@ -174,15 +251,32 @@ export class DemoDevice {
    * device appended an entry (a revocation) in between.
    */
   private add(member: Member): Promise<{ length: number; head: string }> {
+    return this.append((dir, signer) => {
+      if (dir.length >= FULL_DIRECTORY)
+        throw new Broken(`the directory holds ${dir.length} entries`);
+      return addEntry(dir, signer, member, now());
+    });
+  }
+
+  /** Revokes every active machine: one the demo can no longer run takes the account's only slot. */
+  async revokeMachines(): Promise<void> {
+    for (const [id, m] of (await this.directory()).members)
+      if (m.active && m.member.role === "machine") {
+        await this.append((dir, signer) => revokeEntry(dir, signer, id, now()));
+        this.log(`revoked the machine ${id}`);
+      }
+  }
+
+  private append(
+    entry: (dir: Directory, signer: { id: string; signKey: Uint8Array }) => SignedEnvelope,
+  ): Promise<{ length: number; head: string }> {
     const next = this.appends.then(async () => {
       for (let attempt = 0; ; attempt++) {
         const dir = await this.directory();
-        if (dir.length >= FULL_DIRECTORY)
-          throw new Broken(`the directory holds ${dir.length} entries`);
         const signer = { id: this.id, signKey: this.keys.sign.privateKey };
         try {
           return await this.call<{ length: number; head: string }>("POST", "/directory", {
-            entry: addEntry(dir, signer, member, now()),
+            entry: entry(dir, signer),
           });
         } catch (e) {
           if (!(e instanceof HttpError && e.status === 409 && attempt < 3)) throw e;

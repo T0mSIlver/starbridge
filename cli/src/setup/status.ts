@@ -44,7 +44,7 @@ export function latestLine(ctx: Ctx): string {
   if (!latest) return "Latest: not checked yet (the agent reads it once a day)";
   const newer = newerRelease(ctx);
   return newer
-    ? `Latest: ${newer}, checked ${latest.checkedAt}: run ${updateCommand(installKind())}`
+    ? `Latest: ${newer}, checked ${latest.checkedAt}: run ${updateCommand(installKind(), newer)}`
     : `Latest: ${latest.version}, checked ${latest.checkedAt}`;
 }
 
@@ -55,7 +55,7 @@ export function latestLine(ctx: Ctx): string {
 export function updateLines(ctx: Ctx, install: InstallKind): string[] {
   const lines = [
     install.kind !== "binary"
-      ? `Updates: through ${install.kind} (${MANAGED[install.kind].update})`
+      ? `Updates: through ${install.kind} (${MANAGED[install.kind].update(VERSION)})`
       : autoOn(ctx, install)
         ? "Updates: automatic (`starbridge config updates off`)"
         : ctx.store.agentConfig().updates?.auto === false
