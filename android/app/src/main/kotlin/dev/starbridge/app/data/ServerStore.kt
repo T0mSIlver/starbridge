@@ -1617,7 +1617,10 @@ class ServerStore(
         }
         val queued = QueuedAnswer(id, choice ?: text ?: doneText(page!!), envelopes.seal("answer", body, me.id, signKey, listOf(machine)), at = at)
         persist(saved.copy(outbox = saved.outbox + queued))
-        return post(queued)
+        // Scheduled before the request leaves: were the app killed mid-request, the saved answer
+        // still has a sender (#1979). The run waits for the lock this holds, then finds it sent.
+        wakeWhenOnline()
+        return post(queued, wake = false)
     }
 
     /**
