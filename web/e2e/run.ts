@@ -954,6 +954,11 @@ async function main() {
       await replyClear(page, reply, () =>
         page.locator("[data-row]", { hasText: LAYOUTS }).first().locator("button[data-id]").click(),
       );
+      // A pasted reply stops at the server's 4000 characters, as on Android (#1921).
+      await reply.fill("x".repeat(4001));
+      const capped = (await reply.inputValue()).length;
+      if (capped !== 4000) throw new Error(`a 4001-character reply holds ${capped} characters`);
+      await reply.fill("");
       await reply.pressSequentially("Phone layout");
       await reply.press("Shift+Enter");
       await reply.pressSequentially("on narrow screens");
