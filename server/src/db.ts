@@ -296,12 +296,17 @@ export const NOT_ADDITIVE: ReadonlySet<number> = new Set([1]);
 /** The `user_version` this server brings a database to. */
 export const SCHEMA_VERSION = MIGRATIONS.length;
 
+const BUSY_TIMEOUT_MS = 5000;
+
 export function openDb(path: string): Database {
   if (path !== ":memory:") mkdirSync(dirname(path), { recursive: true });
   const db = new Database(path, { strict: true });
   db.run("PRAGMA journal_mode = WAL");
   db.run("PRAGMA foreign_keys = ON");
-  db.run("PRAGMA busy_timeout = 5000");
+  db.run(`PRAGMA busy_timeout = ${BUSY_TIMEOUT_MS}`);
+  // Zero deleted rows' bytes in the file, so a deleted account leaves nothing behind beyond the
+  // backups /privacy names (#2015). The WAL still holds the frames that wrote them: truncateWal.
+  db.run("PRAGMA secure_delete = ON");
   // Transactions begin IMMEDIATE, taking the write lock first, so they wait under busy_timeout
   // while another connection writes. A deferred one that reads before it writes gets SQLITE_BUSY
   // at once in WAL mode (#628).
@@ -334,6 +339,22 @@ export function refuses(db: Database, known: number): string | null {
     db.query("SELECT 1 FROM additive_migrations WHERE version = ?").get(at);
   if (recorded) return null;
   return `the database is at schema ${at}, newer than this server's ${known}${at === known + 1 ? " by a migration that is not additive" : ""}: run the release that wrote it, or restore a backup`;
+}
+
+/**
+ * Checkpoints the WAL and empties it, dropping the frames that still hold deleted rows' bytes,
+ * which secure_delete cannot reach (#2015). It does not wait: a reader such as the nightly
+ * backup's `VACUUM INTO` would hold the event loop for the busy timeout. False when a reader or
+ * writer kept it from finishing; the caller tries again later.
+ */
+export function truncateWal(db: Database): boolean {
+  db.run("PRAGMA busy_timeout = 0");
+  try {
+    const { busy } = db.query("PRAGMA wal_checkpoint(TRUNCATE)").get() as { busy: number };
+    return busy === 0;
+  } finally {
+    db.run(`PRAGMA busy_timeout = ${BUSY_TIMEOUT_MS}`);
+  }
 }
 
 /**

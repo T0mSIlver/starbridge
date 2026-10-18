@@ -10,7 +10,7 @@ import { AppSignIns } from "./appSignIns";
 import { SESSION_COOKIE } from "./auth";
 import { clientVersion } from "./clients";
 import type { Config } from "./config";
-import { openDb } from "./db";
+import { openDb, truncateWal } from "./db";
 import type { Deps, Env } from "./env";
 import { Funnel } from "./funnel";
 import { applyOverrides } from "./overrides";
@@ -97,10 +97,20 @@ export async function createApp(config: Config, fetchFn: typeof fetch = fetch) {
     deps.watch.rotate();
   };
   setInterval(watchMinute, 60_000).unref();
+  // Within the hour of the sweep, deleted rows leave the WAL too (#2015); a reader keeps it, so try
+  // each minute until it goes.
+  const emptyWal = (tries = 30) => {
+    if (!truncateWal(db) && tries > 1)
+      setTimeout(
+        housekeep(() => emptyWal(tries - 1)),
+        60_000,
+      ).unref();
+  };
   // The sweep deletes in batches and lets requests in between (#585).
   const hourly = () =>
     sweepStorage(db, config.limits)
       .then(() => closeDays(db))
+      .then(() => emptyWal())
       .catch((e) => {
         if (!diskFull(e)) throw e;
       });

@@ -1,9 +1,17 @@
 import { Database } from "bun:sqlite";
 import { expect, test } from "bun:test";
-import { mkdtempSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { MIGRATIONS, migrate, NOT_ADDITIVE, openDb, refuses, SCHEMA_VERSION } from "../src/db";
+import {
+  MIGRATIONS,
+  migrate,
+  NOT_ADDITIVE,
+  openDb,
+  refuses,
+  SCHEMA_VERSION,
+  truncateWal,
+} from "../src/db";
 import { OLD_MIGRATIONS } from "./fixtures/migrations-v1-v6";
 
 const version = (db: Database) =>
@@ -175,4 +183,36 @@ test("every migration not listed in NOT_ADDITIVE only adds (#1555)", () => {
 test("openDb records the additive migrations it runs from V11 on (#1555)", () => {
   const db = openDb(join(mkdtempSync(join(tmpdir(), "sb-db-")), "db.sqlite"));
   expect(db.query("SELECT version FROM additive_migrations").all()).toContainEqual({ version: 11 });
+});
+
+test("a deleted row's bytes leave the database file and its WAL", () => {
+  const path = join(mkdtempSync(join(tmpdir(), "sb-db-")), "s.db");
+  const db = openDb(path);
+  const marker = "secure-delete-marker-2015";
+  db.run("CREATE TABLE t (v TEXT)");
+  db.run("INSERT INTO t VALUES (?)", [marker.repeat(200)]);
+  db.run("DELETE FROM t");
+  expect(truncateWal(db)).toBe(true);
+  for (const file of [path, `${path}-wal`]) {
+    if (existsSync(file)) expect(readFileSync(file).includes(marker)).toBe(false);
+  }
+  db.close();
+});
+
+test("the WAL checkpoint reports a reader that holds it instead of waiting for it", () => {
+  const path = join(mkdtempSync(join(tmpdir(), "sb-db-")), "s.db");
+  const db = openDb(path);
+  db.run("CREATE TABLE t (v TEXT)");
+  db.run("INSERT INTO t VALUES ('a')");
+  const reader = new Database(path);
+  reader.run("BEGIN");
+  reader.query("SELECT * FROM t").all();
+  db.run("INSERT INTO t VALUES ('b')");
+  const started = performance.now();
+  expect(truncateWal(db)).toBe(false);
+  expect(performance.now() - started).toBeLessThan(1000);
+  reader.run("COMMIT");
+  expect(truncateWal(db)).toBe(true);
+  reader.close();
+  db.close();
 });

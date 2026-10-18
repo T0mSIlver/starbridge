@@ -83,6 +83,10 @@
   before a new server that migrates further than the database's `user_version` starts, or when
   either number can't be read, and keeps the last two (#586) for 7 days at most, as the nightly
   copies, so deleted data leaves backups within the 2 weeks /privacy promises (#721).
+- **Deleted rows** (#2015). The server opens its database with `secure_delete` on, so a deleted
+  row's bytes are zeroed in the file rather than left in free pages until reused, and the hourly
+  sweep ends with a truncating WAL checkpoint, which drops the WAL frames that wrote them: within
+  the hour only the backups keep deleted data, for the 2 weeks /privacy promises.
 - **Migration rehearsal** (#1543). Each night sb-staging runs main's newest server on a copy of
   prod's schema, filled with synthetic users and items to the 2 GB cap, and alerts the owner when its
   migrations take over the 30 s or leave a schema other than its own (`evals/migrate/`). It also
