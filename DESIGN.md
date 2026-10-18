@@ -629,6 +629,8 @@ links and the rail go from `fg2` to `fg`; filled buttons go one tone lighter
 **Focus.** Keyboard focus only (`:focus-visible`): a 2 px `fg` ring, 2 px
 out, following the element's corners. Not amber, which means "needs you".
 Inputs show focus by their own border instead.
+The inbox splitter is the exception: it has no corners to ring, so keyboard
+focus draws its line in `accent`, 5 px wide (hover: `line-strong`, 3 px).
 
 **Loading.** Nothing flashes blank, and nothing shows up only to be
 replaced. While boot decides which screen to show, the page is plain `bg`.

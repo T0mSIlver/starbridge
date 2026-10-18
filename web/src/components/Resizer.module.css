@@ -15,9 +15,14 @@
   transition: background var(--t-fast);
 }
 
-.edge:hover::after,
-.edge:focus-visible::after {
+.edge:hover::after {
   background: var(--line-strong);
+}
+
+/* Keyboard focus only: the line turns accent and widens, so it differs from hover (#1974). */
+.edge:focus-visible::after {
+  inset: 0 2px;
+  background: var(--accent);
 }
 
 .edge:focus-visible {
