@@ -29,8 +29,10 @@ FROM oven/bun:1.4.2-slim@sha256:cb3bbbb08e13a4a2ff400f24c7a2a1d5efa83f6ef8544d52
 WORKDIR /app
 COPY --from=build /out/ ./
 COPY deploy/demo/start.sh deploy/demo/codexbar ./
+# The database, the demo device's keys and the demo machine live in /data, a volume in
+# compose.yaml, so the account outlasts restarts (#2049). A new volume takes this owner.
+RUN install -d -o bun -g bun -m 700 /data
 USER bun
-# The database lives in /tmp, a tmpfs in compose.yaml: each start is a fresh account.
-ENV PORT=8080 DB_PATH=/tmp/demo/starbridge.db DEMO=1 DEMO_DIR=/tmp/demo/machine
+ENV PORT=8080 DB_PATH=/data/starbridge.db DEMO=1 DEMO_DATA=/data
 EXPOSE 8080
 CMD ["/app/start.sh"]
