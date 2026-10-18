@@ -208,6 +208,43 @@ test("a revocation the server withholds stops counting once another device answe
   expect(ctx.errors.at(-1)).toContain("revoked");
 });
 
+test("an answer held while the directory is behind outlasts any number of snoozes (#1976)", async () => {
+  const { ctx, laptop, ids, answer, delivered, serve, known } = await withholding();
+  const machine = (await server.directory()).members.get(ctx.store.machine()?.id as string)?.member;
+  if (!machine) throw new Error("no machine");
+  await laptopAppends(laptop, (dir) =>
+    revokeEntry(dir, { id: laptop.id, signKey: laptop.keys.sign.privateKey }, "phone", now()),
+  );
+  const full = await laptopChain(laptop);
+  const head = { length: full.length, head: full.head };
+  serve(known);
+  try {
+    answer(laptop, ids[0], "No", head);
+    await poll(ctx, session(ctx), { cursor: ctx.store.state().cursor, seconds: 1, shared: true });
+    expect(ctx.errors.at(-1)).toContain("holding back directory entries");
+    // The laptop snoozes another question again and again, each read in a later poll.
+    for (let i = 0; i < 101; i++) {
+      const body = {
+        v: 1,
+        id: `z_${crypto.randomUUID()}`,
+        decisionId: ids[1],
+        to: [machine.id],
+        until: new Date(Date.now() + 3_600_000).toISOString(),
+        at: now(),
+        dir: head,
+      } satisfies Snooze;
+      server.inject(
+        seal("snooze", body, { id: laptop.id, signKey: laptop.keys.sign.privateKey }, [machine]),
+      );
+    }
+    await poll(ctx, session(ctx), { cursor: ctx.store.state().cursor, seconds: 1, shared: true });
+  } finally {
+    serve(undefined);
+  }
+  // Served in full: the held answer counts.
+  expect(await delivered()).toEqual([ids[0]]);
+});
+
 test("a snooze's signed head shows a withheld revocation too (#571)", async () => {
   const { ctx, laptop, ids, serve, known } = await withholding();
   const machine = (await server.directory()).members.get(ctx.store.machine()?.id as string)?.member;
