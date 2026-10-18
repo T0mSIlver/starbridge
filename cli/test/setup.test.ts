@@ -1295,6 +1295,24 @@ test("uninstall turns lingering off only when setup turned it on (#2040)", async
     "Turned off lingering (`loginctl disable-linger`), which setup turned on.",
   );
 
+  // A failed disable-linger says how to do it by hand, and a later uninstall tries again.
+  const failing = await machine("desk");
+  failing.ctx.env.FAKE_LINGER = "no";
+  await startAgent(failing.ctx);
+  await setup(failing.sys, { yes: true, noAgents: true, noQuota: true, readyTimeoutMs: 2_000 });
+  failing.ctx.env.PATH = [join(failing.home, "failbin"), failing.ctx.env.PATH].join(delimiter);
+  mkdirSync(join(failing.home, "failbin"));
+  fakeCommand(
+    join(failing.home, "failbin", "loginctl"),
+    "#!/bin/sh\necho 'Access denied' >&2\nexit 1\n",
+  );
+  failing.ctx.lines.length = 0;
+  expect(await uninstall(failing.sys, {})).toBe(0);
+  expect(failing.ctx.lines).toContain(
+    "Could not turn off lingering, which setup turned on: Access denied. Run `loginctl disable-linger` to turn it off.",
+  );
+  expect(failing.ctx.store.state().lingerEnabled).toBe(true);
+
   // Lingering that was on before setup stays on.
   const before = await machine("laptop");
   await startAgent(before.ctx);
