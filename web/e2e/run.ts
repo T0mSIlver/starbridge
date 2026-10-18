@@ -1369,8 +1369,11 @@ async function main() {
       throw new Error("a repeated announcement did not reach the status line again");
     for (const id of [narrowId, againId])
       if (
-        (await cli("close", ["settle", id as string, "--outcome", "withdrawn"], machineHome)
-          .exited) !== 0
+        (await cli(
+          "close",
+          ["settle", id as string, "--outcome", "withdrawn", "--reason", "Asked to test"],
+          machineHome,
+        ).exited) !== 0
       )
         throw new Error("settle --outcome withdrawn failed");
     const reason = "Fixed it myself after rereading the logs";
