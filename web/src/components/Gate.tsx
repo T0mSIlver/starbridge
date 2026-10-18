@@ -130,6 +130,10 @@ export function SignIn({
   const own = ownChosen || off;
   const [token, setToken] = useState("");
   const { busy, error, run } = useAction();
+  // The owner token signs in without leaving the page, and the boot after it needs the keys.
+  useEffect(() => {
+    if (own) load().catch(() => {});
+  }, [own]);
   useEffect(() => {
     if (refused) send("error-screen", { screen: "sign-in-refused" });
     else if (failed) send("error-screen", { screen: "sign-in-failed" });
