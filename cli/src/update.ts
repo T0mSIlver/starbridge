@@ -21,13 +21,19 @@ import { installedService, kind, restartTask } from "./setup/service";
 import { defaults, makeSys, otherCopies } from "./setup/sys";
 import { VERSION } from "./version";
 
+/**
+ * How a brew or npm install updates to release `to`, and how it is removed. npm serves release
+ * candidates under `next` and finals under `latest` (release.yml): an rc install that `latest`
+ * would take back to the last final stays on `next` (#2038).
+ */
 export const MANAGED = {
   brew: {
-    update: "brew upgrade starbridge, then starbridge setup --refresh",
+    update: (_to: string) => "brew upgrade starbridge, then starbridge setup --refresh",
     remove: "brew uninstall starbridge",
   },
   npm: {
-    update: "npm i -g starbridge@latest, then starbridge setup --refresh",
+    update: (to: string) =>
+      `npm i -g starbridge@${to.includes("-") ? "next" : "latest"}, then starbridge setup --refresh`,
     remove: "npm rm -g starbridge",
   },
 };
@@ -151,7 +157,9 @@ async function updateSelf(
   pubkey: string,
 ): Promise<string | undefined> {
   if (install.kind !== "binary") {
-    ctx.out(`starbridge was installed with ${install.kind}: run ${MANAGED[install.kind].update}`);
+    ctx.out(
+      `starbridge was installed with ${install.kind}: run ${MANAGED[install.kind].update(VERSION)}`,
+    );
     return undefined;
   }
   const releases = ctx.env.STARBRIDGE_RELEASES_URL ?? RELEASES_URL;

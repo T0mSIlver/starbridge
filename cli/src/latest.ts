@@ -84,9 +84,9 @@ export function newerRelease(ctx: Ctx): string | undefined {
   }
 }
 
-/** How this install updates: brew and npm through their manager, as `update` says. */
-export function updateCommand(install: InstallKind): string {
-  return install.kind === "binary" ? "`starbridge update`" : MANAGED[install.kind].update;
+/** How this install updates to release `to`: brew and npm through their manager, as `update` says. */
+export function updateCommand(install: InstallKind, to: string): string {
+  return install.kind === "binary" ? "`starbridge update`" : MANAGED[install.kind].update(to);
 }
 
 /**
@@ -98,7 +98,7 @@ export function updateLine(ctx: Ctx, install: () => InstallKind): string | undef
     if (!updateCheckOn(ctx)) return undefined;
     const latest = newerRelease(ctx);
     if (!latest) return undefined;
-    return `Starbridge ${latest} is out (you have ${VERSION}): run ${updateCommand(install())}`;
+    return `Starbridge ${latest} is out (you have ${VERSION}): run ${updateCommand(install(), latest)}`;
   } catch {
     return undefined;
   }
