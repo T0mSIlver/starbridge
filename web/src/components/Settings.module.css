@@ -100,7 +100,7 @@
   color: var(--fg3);
 }
 
-.off {
+.off .rowText {
   opacity: 0.5;
 }
 

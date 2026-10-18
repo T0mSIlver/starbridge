@@ -63,7 +63,7 @@ export function Row({
   children?: React.ReactNode;
   /** A hint, in the quietest text. */
   muted?: boolean;
-  /** A setting that does nothing until something else is on: faded like a disabled control. */
+  /** A setting that does nothing until something else is on: its text fades like a disabled control, its switch stays live. */
   off?: boolean;
 }) {
   return (
