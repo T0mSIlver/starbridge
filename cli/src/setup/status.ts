@@ -60,7 +60,7 @@ export function updateLines(ctx: Ctx, install: InstallKind): string[] {
         ? "Updates: automatic (`starbridge config updates off`)"
         : ctx.store.agentConfig().updates?.auto === false
           ? "Updates: off (`starbridge config updates on`)"
-          : "Updates: off while the update check is",
+          : "Updates: off while the update check is off (`starbridge config update-check on`)",
   ];
   let r: UpdateRecord;
   try {
