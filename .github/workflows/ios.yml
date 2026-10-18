@@ -142,6 +142,9 @@ jobs:
           # The tests delete the account after each run that sets one up, more than the 3 an hour
           # one address may.
           DB_PATH="$RUNNER_TEMP/starbridge.db" bun run src/main.ts limits set accountDeletes 100/3600
+          # The suite signs in as the one owner account more than the 10 a minute one address may,
+          # and a test that waited the limit out timed out on a slow answer (#1915).
+          DB_PATH="$RUNNER_TEMP/starbridge.db" bun run src/main.ts limits set ownerSignIns 1000/60
           PORT=18731 DB_PATH="$RUNNER_TEMP/starbridge.db" OWNER_TOKEN=ci-owner-token-ios bun run src/main.ts > "$RUNNER_TEMP/server.log" 2>&1 &
           for _ in $(seq 30); do curl -fs localhost:18731/healthz && exit 0; sleep 1; done
           cat "$RUNNER_TEMP/server.log"; exit 1
