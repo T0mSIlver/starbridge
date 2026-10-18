@@ -1360,6 +1360,22 @@ test("a decision whose post lost its reply is withdrawn, so its card does not st
   ]);
 });
 
+test("a waiting flip within the same second as the last one carries a later time (#1982)", async () => {
+  const ctx = await paired(server);
+  expect(await run([...ASK, "--session", "s"], ctx)).toBe(0);
+  const id = ctx.lines.at(-1) as string;
+  const at = new Date("2026-10-18T10:00:00.200Z");
+  ctx.now = () => at;
+  const last = async () => (await server.opened("waiting")).find((w) => w.decisionId === id);
+  expect(await run(["waiting", id], ctx)).toBe(0);
+  const first = await last();
+  expect(await run(["working", id], ctx)).toBe(0);
+  const second = await last();
+  expect(second?.state).toBe("working");
+  // Devices keep the update with the latest `at`: an equal one would leave them on `waiting`.
+  expect(Date.parse(second?.at ?? "")).toBeGreaterThan(Date.parse(first?.at ?? ""));
+});
+
 test("an answer the agent reads before the question's post replies still counts (#1975)", async () => {
   const ctx = await paired(server);
   const s = session(ctx);

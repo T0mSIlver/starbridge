@@ -115,7 +115,7 @@ export interface State {
        */
       body?: Decision;
       /** The decision's waiting state as last posted, under the one id it keeps. */
-      waiting?: { id: string; state: Waiting["state"] };
+      waiting?: { id: string; state: Waiting["state"]; at?: string };
       /**
        * The owner's latest snooze (#571): no answer before `until`. `told` once `wait` said so;
        * a newer snooze is told again.

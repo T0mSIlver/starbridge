@@ -36,12 +36,22 @@ export async function postWaiting(
   if ((asked.waiting?.state ?? "working") === state) return false;
   // The id is kept before the first post, so a lost reply or a second process reuses it.
   let waitingId = "";
+  let last: string | undefined;
   ctx.store.updateState((st) => {
     const a = st.asked[id];
     if (!a) return;
     a.waiting ??= { id: `w_${randomBytes(12).toString("base64url")}`, state: "working" };
     waitingId = a.waiting.id;
+    last = a.waiting.at;
   });
+  // Devices keep the latest `at`, in whole seconds: a flip within the second of the last one
+  // waits for the next second, or they would keep the last one (#1982). It waits rather than
+  // stamping ahead of the clock, which a device compares with the owner's snoozes and shows as
+  // how long the agent has waited.
+  const next = Date.parse(last ?? "") + 1000 || 0;
+  const early = next - ctx.now().getTime();
+  if (early > 0) await new Promise((r) => setTimeout(r, Math.min(early, 1000)));
+  const at = iso(new Date(Math.max(ctx.now().getTime(), next)));
   const dir = await refreshDirectory(ctx, s);
   const to = devices(ctx, dir);
   const body = {
@@ -49,7 +59,7 @@ export async function postWaiting(
     id: waitingId,
     decisionId: id,
     to: to.map((d) => d.id),
-    at: iso(ctx.now()),
+    at,
     state,
     dir: signedHead(dir),
   } satisfies Waiting;
@@ -64,7 +74,7 @@ export async function postWaiting(
   }
   ctx.store.updateState((st) => {
     const a = st.asked[id];
-    if (a) a.waiting = { id: body.id, state };
+    if (a) a.waiting = { id: body.id, state, at };
   });
   return true;
 }
