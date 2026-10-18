@@ -324,7 +324,17 @@ export function Inbox() {
   const snoozeQuestion = async (item: InboxItem, until: Date) => {
     await snooze(item, until.toISOString());
     if (until.getTime() <= Date.now()) return;
-    leave(item.decision.id);
+    const next = leave(item.decision.id);
+    // Its Snooze button leaves with the card, and focus with it: it goes to the next question's
+    // row, else to the Snoozed head the question went under, so a keyboard user keeps their place
+    // (#1943).
+    requestAnimationFrame(() => {
+      const at = document.activeElement;
+      if (at && at !== document.body && at.isConnected) return;
+      const list = listRef.current;
+      const row = next ? list?.querySelector<HTMLElement>(`[data-id="${CSS.escape(next)}"]`) : null;
+      (row ?? list?.querySelector<HTMLElement>('[data-head="snoozed"]'))?.focus();
+    });
   };
   const answerOne = async (item: PromptItem, reply: Parameters<typeof answerPrompt>[1]) => {
     await answerPrompt(item, reply);

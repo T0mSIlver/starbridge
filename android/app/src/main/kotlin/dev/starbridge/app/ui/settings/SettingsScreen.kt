@@ -400,10 +400,10 @@ private fun Line(content: @Composable RowScope.() -> Unit) {
 }
 
 /** The alerts a window can pick, in the table's column order (#914). */
-private val ALERT_COLUMNS = listOf("runs-out" to "Runs out", "low-50" to "50% left", "low-20" to "20% left", "unused-headroom" to "Unused")
+private val ALERT_COLUMNS = QuotaAlerts.LABELS
 
-/** The columns' names over the table, a word or two a line so four fit a phone. */
-private val ALERT_HEADS = listOf(listOf("Runs", "out"), listOf("50%", "left"), listOf("20%", "left"), listOf("Unused"))
+/** The columns' names over the table, a word a line so four fit a phone. */
+private val ALERT_HEADS = ALERT_COLUMNS.map { (_, label) -> label.split(" ") }
 
 /** A column of the alerts table: a checkbox's tap area, and room for "Unused" at a large font. */
 private val alertColumn = 56.dp

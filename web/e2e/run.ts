@@ -2209,11 +2209,39 @@ async function main() {
     }
     if (wide) await pageB.setViewportSize(wide);
     if (!(await selected(pageB).count())) await probe(pageB).click();
-    await selected(pageB).getByRole("button", { name: "Snooze", exact: true }).click();
-    await pageB.getByRole("button", { name: /^1 hour/ }).click();
+    const opener = selected(pageB).getByRole("button", { name: "Snooze", exact: true });
+    step("Esc closes Snooze's times and focus returns to its button (#1943)");
+    await opener.click();
+    await pageB.getByRole("dialog", { name: "Snooze until" }).waitFor();
+    await pageB.keyboard.press("Escape");
+    await pageB.getByRole("dialog", { name: "Snooze until" }).waitFor({ state: "detached" });
+    if (!(await opener.evaluate((b) => b === document.activeElement)))
+      throw new Error("focus did not return to the Snooze button after Esc");
+    // Picked from the keyboard, as Esc: the card and its Snooze button leave, so focus goes to the
+    // next question's row, else to the Snoozed head, never to the page. Nothing else is open here.
+    step("picking a snooze time moves focus to the inbox list, not the page (#1943)");
+    await opener.press("Enter");
+    await pageB.getByRole("button", { name: /^1 hour/ }).press("Enter");
     const snoozedAt = Date.now();
     // It leaves Needs you on both, for the collapsed Snoozed group, and its notification closes.
     await probe(pageB).waitFor({ state: "detached", timeout: 10_000 });
+    const focused = async () =>
+      pageB.evaluate(() => {
+        const a = document.activeElement as HTMLElement | null;
+        const list = document.querySelector('section[aria-label="Inbox"]');
+        return {
+          onHead: !!a && !!list?.contains(a) && a.dataset.head === "snoozed",
+          what: a ? a.outerHTML.slice(0, 80) : "nothing",
+        };
+      });
+    let landed = await focused();
+    for (let i = 0; i < 20 && !landed.onHead; i++) {
+      await pageB.waitForTimeout(100);
+      landed = await focused();
+    }
+    console.log(`  focus after the snooze: ${landed.what}`);
+    if (!landed.onHead)
+      throw new Error(`focus is not on the Snoozed head after a snooze: ${landed.what}`);
     await pageB.getByRole("button", { name: /^Snoozed\s*1/ }).waitFor();
     for (let i = 0; i < 50 && (await probes(pageB)).length > 0; i++)
       await pageB.waitForTimeout(200);

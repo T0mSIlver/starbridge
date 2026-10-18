@@ -32,7 +32,6 @@ import androidx.compose.material3.SwipeToDismissBox
 import androidx.compose.material3.SwipeToDismissBoxState
 import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.rememberModalBottomSheetState
-import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.graphics.Shape
@@ -242,7 +241,9 @@ private const val SWIPE_ARMS = 0.4f
  */
 @Composable
 fun SwipeToSnooze(shape: Shape, onSwipe: () -> Unit, modifier: Modifier = Modifier, content: @Composable () -> Unit) {
-    val state = rememberSwipeToDismissBoxState(positionalThreshold = { it * SWIPE_ARMS })
+    // Not saved with the list item: a card Undo brings back would return swiped, which Material
+    // reports as one more dismiss, and it would snooze itself again (#1998).
+    val state = remember { SwipeToDismissBoxState(SwipeToDismissBoxValue.Settled, positionalThreshold = { it * SWIPE_ARMS }) }
     val scope = rememberCoroutineScope()
     // One lambda for the card's life: Material re-runs a new one while the card still sits
     // swiped, which would snooze twice.

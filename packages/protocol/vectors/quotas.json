@@ -1,0 +1,407 @@
+{
+  "note": "How every client reads a quota window (#1904): quotaCourse(pace, unusedAlert), quotaState({course, runsOutAt, resetsAt}, now) and its QUOTA_STATE_WORDS, quotaRunningOut, and arrangeQuotas(windows, {order, hidden, runningOutFirst}) by machine name. Each client formats the time after \"Ran out\" and \"Will run out\".",
+  "now": "2026-10-12T10:00:00Z",
+  "words": {
+    "reset": "Window reset",
+    "unknown": "Too early to tell",
+    "ran-out": "Ran out",
+    "out": "Will run out",
+    "unused": "Headroom unused",
+    "ok": "On pace"
+  },
+  "state": [
+    {
+      "name": "on pace",
+      "pace": {
+        "stage": "on-track",
+        "expectedUsedPercent": 40,
+        "deltaPercent": 10,
+        "projectedUsedPercent": 90,
+        "willLastToReset": true,
+        "runsOutAt": null
+      },
+      "resetsAt": "2026-10-12T12:00:00Z",
+      "unusedAlert": false,
+      "expect": {
+        "course": "even",
+        "state": "ok",
+        "word": "On pace",
+        "runningOut": false
+      }
+    },
+    {
+      "name": "headroom unused: the uploader raised the alert",
+      "pace": {
+        "stage": "behind",
+        "expectedUsedPercent": 40,
+        "deltaPercent": 10,
+        "projectedUsedPercent": 90,
+        "willLastToReset": true,
+        "runsOutAt": null
+      },
+      "unusedAlert": true,
+      "resetsAt": "2026-10-12T10:30:00Z",
+      "expect": {
+        "course": "unused",
+        "state": "unused",
+        "word": "Headroom unused",
+        "runningOut": false
+      }
+    },
+    {
+      "name": "behind without the alert is on pace",
+      "pace": {
+        "stage": "behind",
+        "expectedUsedPercent": 40,
+        "deltaPercent": 10,
+        "projectedUsedPercent": 90,
+        "willLastToReset": true,
+        "runsOutAt": null
+      },
+      "resetsAt": "2026-10-12T10:30:00Z",
+      "unusedAlert": false,
+      "expect": {
+        "course": "even",
+        "state": "ok",
+        "word": "On pace",
+        "runningOut": false
+      }
+    },
+    {
+      "name": "will run out",
+      "pace": {
+        "stage": "ahead",
+        "expectedUsedPercent": 40,
+        "deltaPercent": 10,
+        "projectedUsedPercent": 130,
+        "willLastToReset": false,
+        "runsOutAt": "2026-10-12T11:00:00Z"
+      },
+      "resetsAt": "2026-10-12T12:00:00Z",
+      "unusedAlert": false,
+      "expect": {
+        "course": "runs-out",
+        "state": "out",
+        "word": "Will run out",
+        "runningOut": true
+      }
+    },
+    {
+      "name": "ran out",
+      "pace": {
+        "stage": "ahead",
+        "expectedUsedPercent": 40,
+        "deltaPercent": 10,
+        "projectedUsedPercent": 130,
+        "willLastToReset": false,
+        "runsOutAt": "2026-10-12T09:00:00Z"
+      },
+      "resetsAt": "2026-10-12T12:00:00Z",
+      "unusedAlert": false,
+      "expect": {
+        "course": "runs-out",
+        "state": "ran-out",
+        "word": "Ran out",
+        "runningOut": true
+      }
+    },
+    {
+      "name": "ran out this very second",
+      "pace": {
+        "stage": "ahead",
+        "expectedUsedPercent": 40,
+        "deltaPercent": 10,
+        "projectedUsedPercent": 130,
+        "willLastToReset": false,
+        "runsOutAt": "2026-10-12T10:00:00Z"
+      },
+      "resetsAt": "2026-10-12T12:00:00Z",
+      "unusedAlert": false,
+      "expect": {
+        "course": "runs-out",
+        "state": "ran-out",
+        "word": "Ran out",
+        "runningOut": true
+      }
+    },
+    {
+      "name": "no pace yet",
+      "pace": null,
+      "resetsAt": "2026-10-12T12:00:00Z",
+      "unusedAlert": false,
+      "expect": {
+        "course": "unknown",
+        "state": "unknown",
+        "word": "Too early to tell",
+        "runningOut": false
+      }
+    },
+    {
+      "name": "too early in the window",
+      "pace": {
+        "stage": "unknown",
+        "expectedUsedPercent": 40,
+        "deltaPercent": 10,
+        "projectedUsedPercent": 90,
+        "willLastToReset": true,
+        "runsOutAt": null
+      },
+      "resetsAt": "2026-10-12T12:00:00Z",
+      "unusedAlert": false,
+      "expect": {
+        "course": "unknown",
+        "state": "unknown",
+        "word": "Too early to tell",
+        "runningOut": false
+      }
+    },
+    {
+      "name": "runs out with no time is too early to tell",
+      "pace": {
+        "stage": "ahead",
+        "expectedUsedPercent": 40,
+        "deltaPercent": 10,
+        "projectedUsedPercent": 130,
+        "willLastToReset": false,
+        "runsOutAt": null
+      },
+      "resetsAt": "2026-10-12T12:00:00Z",
+      "unusedAlert": false,
+      "expect": {
+        "course": "unknown",
+        "state": "unknown",
+        "word": "Too early to tell",
+        "runningOut": false
+      }
+    },
+    {
+      "name": "the reset passed: window reset, whatever the pace",
+      "pace": {
+        "stage": "ahead",
+        "expectedUsedPercent": 40,
+        "deltaPercent": 10,
+        "projectedUsedPercent": 130,
+        "willLastToReset": false,
+        "runsOutAt": "2026-10-12T09:00:00Z"
+      },
+      "resetsAt": "2026-10-12T09:30:00Z",
+      "unusedAlert": false,
+      "expect": {
+        "course": "runs-out",
+        "state": "reset",
+        "word": "Window reset",
+        "runningOut": false
+      }
+    },
+    {
+      "name": "the reset is now",
+      "pace": {
+        "stage": "on-track",
+        "expectedUsedPercent": 40,
+        "deltaPercent": 10,
+        "projectedUsedPercent": 90,
+        "willLastToReset": true,
+        "runsOutAt": null
+      },
+      "resetsAt": "2026-10-12T10:00:00Z",
+      "unusedAlert": false,
+      "expect": {
+        "course": "even",
+        "state": "reset",
+        "word": "Window reset",
+        "runningOut": false
+      }
+    },
+    {
+      "name": "no reset time",
+      "pace": {
+        "stage": "ahead",
+        "expectedUsedPercent": 40,
+        "deltaPercent": 10,
+        "projectedUsedPercent": 130,
+        "willLastToReset": false,
+        "runsOutAt": "2026-10-12T11:00:00Z"
+      },
+      "resetsAt": null,
+      "unusedAlert": false,
+      "expect": {
+        "course": "runs-out",
+        "state": "out",
+        "word": "Will run out",
+        "runningOut": true
+      }
+    }
+  ],
+  "arrange": {
+    "windows": [
+      {
+        "id": "claude laptop 5-hour",
+        "provider": "claude",
+        "machine": "laptop",
+        "pace": {
+          "stage": "on-track",
+          "expectedUsedPercent": 40,
+          "deltaPercent": 10,
+          "projectedUsedPercent": 90,
+          "willLastToReset": true,
+          "runsOutAt": null
+        },
+        "resetsAt": "2026-10-12T12:00:00Z"
+      },
+      {
+        "id": "claude devbox 5-hour",
+        "provider": "claude",
+        "machine": "devbox",
+        "pace": {
+          "stage": "on-track",
+          "expectedUsedPercent": 40,
+          "deltaPercent": 10,
+          "projectedUsedPercent": 90,
+          "willLastToReset": true,
+          "runsOutAt": null
+        },
+        "resetsAt": "2026-10-12T12:00:00Z"
+      },
+      {
+        "id": "claude devbox Weekly",
+        "provider": "claude",
+        "machine": "devbox",
+        "pace": {
+          "stage": "ahead",
+          "expectedUsedPercent": 40,
+          "deltaPercent": 10,
+          "projectedUsedPercent": 130,
+          "willLastToReset": false,
+          "runsOutAt": "2026-10-12T11:00:00Z"
+        },
+        "resetsAt": "2026-10-15T12:00:00Z"
+      },
+      {
+        "id": "codex Weekly",
+        "provider": "codex",
+        "pace": {
+          "stage": "ahead",
+          "expectedUsedPercent": 40,
+          "deltaPercent": 10,
+          "projectedUsedPercent": 130,
+          "willLastToReset": false,
+          "runsOutAt": "2026-10-12T11:00:00Z"
+        },
+        "resetsAt": "2026-10-15T12:00:00Z"
+      },
+      {
+        "id": "zai 5-hour",
+        "provider": "zai",
+        "pace": {
+          "stage": "on-track",
+          "expectedUsedPercent": 40,
+          "deltaPercent": 10,
+          "projectedUsedPercent": 90,
+          "willLastToReset": true,
+          "runsOutAt": null
+        },
+        "resetsAt": "2026-10-12T12:00:00Z"
+      },
+      {
+        "id": "gemini Daily",
+        "provider": "gemini",
+        "pace": {
+          "stage": "ahead",
+          "expectedUsedPercent": 40,
+          "deltaPercent": 10,
+          "projectedUsedPercent": 130,
+          "willLastToReset": false,
+          "runsOutAt": "2026-10-12T07:00:00Z"
+        },
+        "resetsAt": "2026-10-12T09:00:00Z"
+      },
+      {
+        "id": "mistral Monthly",
+        "provider": "mistral",
+        "pace": {
+          "stage": "ahead",
+          "expectedUsedPercent": 40,
+          "deltaPercent": 10,
+          "projectedUsedPercent": 130,
+          "willLastToReset": false,
+          "runsOutAt": "2026-10-12T11:00:00Z"
+        },
+        "resetsAt": "2026-10-30T00:00:00Z"
+      }
+    ],
+    "cases": [
+      {
+        "name": "running out first, then by provider in the uploader's order",
+        "order": [],
+        "hidden": [
+          "mistral"
+        ],
+        "runningOutFirst": true,
+        "expect": [
+          "claude devbox Weekly",
+          "codex Weekly",
+          "claude devbox 5-hour",
+          "claude laptop 5-hour",
+          "zai 5-hour",
+          "gemini Daily"
+        ]
+      },
+      {
+        "name": "running out first, then the order set",
+        "order": [
+          "zai",
+          "gemini"
+        ],
+        "hidden": [
+          "mistral"
+        ],
+        "runningOutFirst": true,
+        "expect": [
+          "claude devbox Weekly",
+          "codex Weekly",
+          "zai 5-hour",
+          "gemini Daily",
+          "claude devbox 5-hour",
+          "claude laptop 5-hour"
+        ]
+      },
+      {
+        "name": "the order set holds for every window when running out first is off",
+        "order": [
+          "zai",
+          "gemini"
+        ],
+        "hidden": [
+          "mistral"
+        ],
+        "runningOutFirst": false,
+        "expect": [
+          "zai 5-hour",
+          "gemini Daily",
+          "claude devbox 5-hour",
+          "claude devbox Weekly",
+          "claude laptop 5-hour",
+          "codex Weekly"
+        ]
+      },
+      {
+        "name": "a provider set in the order but absent is skipped",
+        "order": [
+          "openai",
+          "codex"
+        ],
+        "hidden": [],
+        "runningOutFirst": false,
+        "expect": [
+          "codex Weekly",
+          "claude devbox 5-hour",
+          "claude devbox Weekly",
+          "claude laptop 5-hour",
+          "zai 5-hour",
+          "gemini Daily",
+          "mistral Monthly"
+        ]
+      }
+    ]
+  }
+}
