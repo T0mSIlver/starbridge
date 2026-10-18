@@ -2,8 +2,8 @@
 # deploy/test/trace.sh BEFORE [AFTER]: what the deploy scripts of two commits would run on each box,
 # and the diff. AFTER defaults to the working tree. For prod and staging, it runs each version's
 # apply.sh as a first deploy, then the deploy command it installed on a newer commit, then a
-# rollback, and again with Docker failing the first `compose up` as in #1663; then server-env.sh
-# and push-secrets.sh. Every command that reaches past the box's files (docker, git, curl, ssh,
+# rollback, and again with Docker failing the first `compose up` as in #1663; then server-env.sh,
+# push-secrets.sh and setup-actions-deploy.sh. Every command that reaches past the box's files (docker, git, curl, ssh,
 # systemctl and the like) is a stub that logs its arguments; the box's own folders are a copy of
 # /etc and empty /opt, /usr/local/sbin, /run, /var/lib, /var/backups and /var/log in a throwaway
 # mount namespace, so nothing touches this machine or a real box. Needs unprivileged user namespaces and overlayfs (Linux). It prints the
@@ -58,7 +58,7 @@ stub git <<'EOF'
 [ "$1" = -C ] && shift 2
 case $1 in
 init) mkdir -p "${@: -1}" ;;
-rev-parse) echo "$R1" ;;
+rev-parse) if [ "${2:-}" = --show-toplevel ]; then echo "$TOP"; else echo "$R1"; fi ;;
 archive) tar -C "$TREES/$TREE" -cf - . ;;
 esac
 EOF
@@ -240,6 +240,30 @@ for p in prod prod-named staging staging-wrong; do
   sed -i "s|$W|W|g" "$W/push-$p-before" "$W/push-$p-after"
   diff -u "$W/push-$p-before" "$W/push-$p-after" || true
 done
+
+# setup-actions-deploy.sh (staging/setup.sh before), run by hand once per box: its scp and ssh
+# commands, the remote script among them, before and after.
+for d in "" staging/; do echo "ssh-ed25519 AAAAfake${d%/} actions" > "$H/.config/starbridge/secrets/${d}actions-deploy-key.pub"; done
+echo fake-github-deploy-key > "$H/.config/starbridge/secrets/github-deploy-key"
+setup() { # NAME TREE SCRIPT ARGS...
+  local name=$1 tree=$2
+  shift 2
+  : > "$W/setup-$name"
+  (cd "$W/trees/$tree" && env HOME="$H" TOP="$W/trees/$tree" TRACE="$W/setup-$name" PATH="$W/stubs:$PATH" sh "$@" < /dev/null) >> "$W/setup-$name" 2>&1 ||
+    echo "exit $?" >> "$W/setup-$name"
+  sed -i -E -e "s|$W|W|g" -e 's|/tmp/tmp\.[A-Za-z0-9]+|TMP|g' "$W/setup-$name"
+}
+setup prod-before before deploy/setup-actions-deploy.sh
+setup prod-after after deploy/setup-actions-deploy.sh
+setup prod-named-after after deploy/setup-actions-deploy.sh prod
+setup staging-before before deploy/staging/setup.sh
+setup staging-after after deploy/setup-actions-deploy.sh staging
+for b in prod staging; do
+  echo "######## setup-actions-deploy.sh, $b: before vs after"
+  diff -u "$W/setup-$b-before" "$W/setup-$b-after" || true
+done
+echo "######## setup-actions-deploy.sh: no argument vs prod"
+diff -u "$W/setup-prod-after" "$W/setup-prod-named-after" && echo same
 
 # The command each box's deploy runs next: what apply.sh installed, after.
 for box in prod staging; do
