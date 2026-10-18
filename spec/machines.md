@@ -20,6 +20,16 @@
   (#1757). `ask --input` sets no delivery route or session kind (`codex`, `antigravity`,
   `extensionAnswers`, `headless`, `held`, `picker`, `subagent`): those come from the asking
   process's environment, since an agent writes the file.
+- **One agent per config folder** (#1966). Two homes of one user share `$XDG_RUNTIME_DIR`, so a
+  test home's `uninstall` once posted 8 cards through the owner's agent, as his machine. The
+  default folder's socket there is `agent-<key>.sock`, the key hashed from the folder's path, and
+  a client sends its key, which an agent of another folder refuses (421), in case an address
+  still collides. A client that `$STARBRIDGE_AGENT_SOCKET` sent is served as before. Across the
+  upgrade nothing listens on the old `agent.sock`: a mod or extension from before, or a new one
+  whose agent has not restarted yet, finds no agent and answers through the CLI until
+  `starbridge update` has moved both, since an agent that also listened there would serve the
+  other home's old clients again. A new agent does not start while an older one serves its
+  machine on `agent.sock`, so one machine never runs two agents.
 - **On Windows** (#552) the agent listens on loopback TCP with a per-start token in `agent.port`
   in the config directory (PROTOCOL.md, "Local agent API"). A named pipe was the other choice:
   libuv creates one with the default DACL, which lets other users open it for reading, and Bun's

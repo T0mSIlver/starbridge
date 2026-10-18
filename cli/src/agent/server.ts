@@ -19,7 +19,7 @@ import {
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
 import { userInfo } from "node:os";
-import { dirname } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { ProtocolError } from "@starbridge/protocol";
 import { ApiError, Unreachable } from "../api";
 import { type Ctx, iso, UsageError } from "../context";
@@ -28,6 +28,8 @@ import { VERSION } from "../version";
 import {
   API,
   API_HEADER,
+  CONFIG_HEADER,
+  configKey,
   dropPortFile,
   type ErrorBody,
   isPortFile,
@@ -210,6 +212,7 @@ export class Agent implements Hub {
     const owner = unprobed && this.longSocket() ? socketOwner(this.socket) : undefined;
     if (owner !== undefined && owner !== process.pid && processAlive(owner))
       throw new UsageError(`an agent already runs on ${this.socket} (pid ${owner})`);
+    await this.refuseOlderAgent();
     const dir = dirname(this.socket);
     mkdirSync(dir, { recursive: true, mode: 0o700 });
     if (dir === this.ctx.store.dir || dir.endsWith("/starbridge")) chmodSync(dir, 0o700);
@@ -231,6 +234,28 @@ export class Agent implements Hub {
     this.log(`starbridge agent ${VERSION} listening on ${this.socket}`);
     if (!isPortFile(this.socket) && tooLong(this.socket))
       this.log(`${tooLong(this.socket)}: the starbridge commands cannot reach this agent`);
+  }
+
+  /**
+   * Refuses to start while an agent from before #1966 serves this machine on the shared
+   * `agent.sock` beside this socket, so an upgrade never runs two agents of one machine. It
+   * answers without the config header's check, and its status names its machine.
+   */
+  private async refuseOlderAgent() {
+    if (!/^agent-[0-9a-f]{16}\.sock$/.test(basename(this.socket))) return;
+    const mine = this.ctx.store.machine()?.id;
+    if (!mine) return;
+    const legacy = join(dirname(this.socket), "agent.sock");
+    let other: Status | undefined;
+    try {
+      other = await new AgentClient(legacy).call<Status>("GET", "/v1/status", undefined, 2_000);
+    } catch {
+      return;
+    }
+    if (other?.machine?.id === mine)
+      throw new UsageError(
+        `an agent of this machine already runs on ${legacy} (pid ${other.pid}): stop it first`,
+      );
   }
 
   private async listenUnix(server: Server) {
@@ -349,6 +374,14 @@ export class Agent implements Hub {
     };
     const fail = (status: number, body: ErrorBody) => send(status, body);
     if (!proven) return fail(401, { error: "unauthorized" });
+    // A client that worked out this address from another config folder must not act as this
+    // machine (#1966).
+    const key = req.headers[CONFIG_HEADER];
+    if (key !== undefined && key !== configKey(this.ctx.store.dir))
+      return fail(421, {
+        error: "other-config",
+        detail: `the agent on ${this.socket} serves another config folder, ${this.ctx.store.dir}`,
+      });
     const api = Number(req.headers[API_HEADER]);
     if (!Number.isInteger(api) || api < MIN_API || api > API) {
       const tooOld = Number.isInteger(api) && api > API;
