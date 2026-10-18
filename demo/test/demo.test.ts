@@ -19,16 +19,22 @@ import {
   toB64,
   verifyDirectory,
 } from "@starbridge/protocol";
-import { makeServer } from "@starbridge/server/test-support";
-import { Broken, DemoDevice } from "../src/device";
+import { DEFAULT_LIMITS, makeServer } from "@starbridge/server/test-support";
+import { Broken, DemoDevice, FULL_DIRECTORY } from "../src/device";
 import { DemoMachine, QUESTIONS, resumeDemo } from "../src/machine";
 
 const TOKEN = "owner-secret";
 const ROOT = join(import.meta.dir, "..", "..");
 
-/** A server on `dbPath`, by default in memory; `port` 0 picks one. */
-async function serve(demo: boolean, dbPath = ":memory:", port = 0) {
-  const { app } = await makeServer({ demo, ownerToken: TOKEN, dbPath });
+/** A server on `dbPath`, by default in memory; `port` 0 picks one. A demo one holds one machine. */
+async function serve(demo: boolean, dbPath = ":memory:", port = 0, limits = DEFAULT_LIMITS) {
+  const { app } = await makeServer({
+    demo,
+    ownerToken: TOKEN,
+    dbPath,
+    limits,
+    ...(demo ? { maxMachines: 1 } : {}),
+  });
   const http = Bun.serve({ port, fetch: (req, server) => app.fetch(req, { server }) });
   return { url: `http://localhost:${http.port}`, port: http.port, stop: () => http.stop(true) };
 }
@@ -325,3 +331,28 @@ for (const [broken, act] of [
     const dir = await second.device.directory();
     expect(dir.members.get(second.device.machine as string)?.active).toBe(true);
   }, 60_000);
+
+test("a restart once the directory is full starts a fresh account", async () => {
+  const MIN = 60_000;
+  const s = await serve(true, ":memory:", 0, {
+    ...DEFAULT_LIMITS,
+    ownerSignIns: [1000, MIN],
+    joins: [1000, MIN],
+    directoryAppends: [1000, 60 * MIN],
+    // Past 50, each sign-in would end the oldest phone's session.
+    sessions: 1000,
+  });
+  cleanup.push(s.stop);
+  const data = mkdtempSync(join(tmpdir(), "starbridge-demo-"));
+  const first = await boot(s.url, data);
+  for (let i = 0; (await first.device.directory()).length < FULL_DIRECTORY; i++)
+    await joinByDigits(s.url, `phone-${i}`).catch((e) => {
+      throw new Error(`join ${i}: ${e.message}`);
+    });
+  first.stop.abort();
+  first.machine.stop();
+  const second = await boot(s.url, data);
+  expect(second.how).toBe("fresh");
+  expect(second.device.account).not.toBe(first.device.account);
+  expect((await second.device.directory()).length).toBe(2);
+}, 240_000);
