@@ -24,6 +24,7 @@ import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
 import java.io.IOException
 import java.time.Instant
+import java.time.temporal.ChronoUnit
 
 /** An answer this phone has yet to hand the server, and when it was given; null for one queued before #895. */
 private data class Tap(val answer: String, val at: Instant?)
@@ -390,13 +391,21 @@ internal class DecisionKind(
             // To the machine that asked, so its agent hears when it would block, and to every
             // active device, this one included, so each one hides it.
             val to = listOf(machine) + dir.members.values.filter { it.active && it.member.role == "device" }.map { it.member }
-            val at = now()
+            // The latest `at`, in whole seconds, wins everywhere: an Undo within the second of its
+            // snooze goes a second later, or the machine and the other devices keep the snooze (#1981).
+            val last = saved.decisions.find { it.body.id == id }?.snoozedAt
+            val at = listOfNotNull(Instant.parse(now()), instant(last)?.plusSeconds(1)?.truncatedTo(ChronoUnit.SECONDS)).max().toString()
+            // Back now, as Undo is, goes no later than its own `at`, which every client reads as
+            // back now (PROTOCOL.md, "Snoozing"): the tap's instant is ahead of the clock the
+            // inbox keeps, so the question stayed under Snoozed until that clock next ticked. Nor
+            // later than now: the server pushes a return at a future `until` (#1981).
+            val sent = Instant.now().let { now -> if (until.isAfter(now)) until else minOf(now, Instant.parse(at)) }
             val body = buildJsonObject {
                 put("v", 1)
                 put("id", newId("z_"))
                 put("decisionId", id)
                 putJsonArray("to") { to.forEach { add(it.id) } }
-                put("until", until.toString())
+                put("until", sent.toString())
                 put("at", at)
                 putJsonObject("dir") { put("length", dir.length); put("head", dir.head) }
             }
@@ -411,7 +420,7 @@ internal class DecisionKind(
                 notice.value = "No connection. Not snoozed."
                 return@run
             }
-            persist(saved.copy(decisions = saved.decisions.map { if (it.body.id == id) it.copy(snoozedUntil = until.toString(), snoozedAt = at) else it }))
+            persist(saved.copy(decisions = saved.decisions.map { if (it.body.id == id) it.copy(snoozedUntil = sent.toString(), snoozedAt = at) else it }))
             if (until.isAfter(Instant.now())) alerts.cancel(id)
         }
     }
