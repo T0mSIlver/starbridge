@@ -20,7 +20,14 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { Browser, BrowserContext, BrowserContextOptions, Locator, Page } from "playwright";
+import type {
+  Browser,
+  BrowserContext,
+  BrowserContextOptions,
+  Locator,
+  Page,
+  Route,
+} from "playwright";
 import { layoutProblems, type Problem, zoomText } from "./layout.ts";
 import {
   boot,
@@ -1905,6 +1912,12 @@ async function main() {
     await shoot(page, "inbox-search");
     await page.getByLabel("Find").fill("");
     step("a prompt already open when the page loads is not announced (#1942)");
+    // The prompts come back after the questions, as they do on a slow link.
+    const slowPrompts = async (route: Route) => {
+      await new Promise((done) => setTimeout(done, 2_000));
+      await route.fallback();
+    };
+    await page.route(/\/v1\/items\?kind=permission&open=1/, slowPrompts);
     await page.reload();
     await page
       .getByText(/^git push --force-with-lease/)
@@ -1914,6 +1927,7 @@ async function main() {
     const early = await page.getByRole("status").allTextContents();
     if (early.some((x) => /^(New |\d+ new )/.test(x)))
       throw new Error(`a prompt listed at load was announced: ${early.join(" | ")}`);
+    await page.unroute(/\/v1\/items\?kind=permission&open=1/, slowPrompts);
     await page.getByRole("link", { name: "Quotas" }).click();
     await page.locator("article").first().waitFor();
     await shoot(page, "quotas-machines");
