@@ -163,6 +163,16 @@ function piFailure(r: Awaited<ReturnType<typeof pi>>): string {
   return reason?.trim() ?? failure(r);
 }
 
+/** Whether process `pid` runs: signal 0 checks without sending; EPERM means another user's. */
+function alive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (e) {
+    return (e as NodeJS.ErrnoException).code === "EPERM";
+  }
+}
+
 /** Where Pi keeps its checkout of this repository (Pi's own layout for a `git:` source). */
 const piCheckout = (sys: Home) =>
   join(piAgentDir(sys), "git", "github.com", "T0mSIlver", "starbridge");
@@ -178,12 +188,13 @@ async function prefetchPiPackage(sys: Sys) {
   if (existsSync(dir)) return;
   const ref = COMMIT ?? `refs/tags/v${VERSION}`;
   const part = `${dir}.starbridge-${process.pid}`;
-  // What an interrupted setup left beside it.
+  // What an interrupted setup left beside it; another setup's fetch still running stays.
   const parent = dirname(dir);
   if (existsSync(parent))
-    for (const f of readdirSync(parent))
-      if (f.startsWith("starbridge.starbridge-"))
-        rmSync(join(parent, f), { recursive: true, force: true });
+    for (const f of readdirSync(parent)) {
+      const pid = /^starbridge\.starbridge-(\d+)$/.exec(f)?.[1];
+      if (pid && !alive(Number(pid))) rmSync(join(parent, f), { recursive: true, force: true });
+    }
   const git = (...args: string[]) => run(sys, "git", ["-C", part, ...args], { timeoutMs: 300_000 });
   try {
     rmSync(part, { recursive: true, force: true });

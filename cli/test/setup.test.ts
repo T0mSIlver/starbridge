@@ -566,6 +566,26 @@ test.skipIf(WINDOWS)(
   },
 );
 
+test.skipIf(WINDOWS)(
+  "a failed Pi prefetch leaves nothing behind and Pi installs as before (#2039)",
+  async () => {
+    const m = await machine();
+    const parent = join(m.home, ".pi/agent/git/github.com/T0mSIlver");
+    mkdirSync(parent, { recursive: true });
+    // Left by an interrupted setup whose process is gone, and by one still fetching (a live pid).
+    mkdirSync(join(parent, "starbridge.starbridge-999999999"));
+    mkdirSync(join(parent, `starbridge.starbridge-${process.ppid}`));
+    // GitHub, as the test's git config sends it, has no such repository.
+    writeFileSync(
+      join(m.home, ".gitconfig"),
+      `[url "file://${slashes(join(m.home, "missing"))}"]\n\tinsteadOf = https://github.com/T0mSIlver/starbridge\n`,
+    );
+    await installPiPackage(m.sys);
+    expect(m.calls()).toContain(`pi install ${PI_PACKAGE}`);
+    expect(readdirSync(parent)).toEqual([`starbridge.starbridge-${process.ppid}`]);
+  },
+);
+
 test("a failed agent install says why and how to retry, and setup goes on (#750)", async () => {
   const m = await machine();
   m.ctx.env.PATH = [join(m.home, "bin"), m.ctx.env.PATH].join(delimiter);
