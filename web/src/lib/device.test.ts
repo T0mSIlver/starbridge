@@ -31,6 +31,7 @@ import { api } from "./api";
 import * as device from "./device";
 import { closedByPhrase, outcomeText } from "./outcome";
 import * as store from "./store";
+import { ACCOUNT_STORAGE_KEYS } from "./stored";
 import type { InboxItem, JoinView } from "./types";
 
 let live: LiveServer;
@@ -1168,7 +1169,22 @@ test("signing out closes the notifications (#311)", async () => {
   const mine = (await device.deviceContext(ctx.account)) as device.Ctx;
   shown.open = 3;
   shown.closed = 0;
-  await device.signOut(mine);
+  // What the browser keeps in localStorage: the account's quota settings and alert history go with
+  // the keys, the display prefs stay (#2014).
+  const kept = new Map<string, string>([["starbridge:prefs", '{"v":1,"theme":"dark"}']]);
+  for (const key of Object.values(ACCOUNT_STORAGE_KEYS)) kept.set(key, '{"v":1}');
+  const g = globalThis as Record<string, unknown>;
+  g.localStorage = {
+    getItem: (k: string) => kept.get(k) ?? null,
+    setItem: (k: string, v: string) => kept.set(k, v),
+    removeItem: (k: string) => kept.delete(k),
+  };
+  try {
+    await device.signOut(mine);
+    expect([...kept.keys()]).toEqual(["starbridge:prefs"]);
+  } finally {
+    delete g.localStorage;
+  }
   expect(shown.closed).toBe(3);
   // Closed after the keys went, so a push the service worker was opening finds none.
   expect(shown.keys).toBe(false);
