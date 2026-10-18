@@ -165,6 +165,13 @@ class ServerStore(
     private var watchJob: Job? = null
     private var pollJob: Job? = null
 
+    /**
+     * The next sync reads which questions the server holds open, and drops the open ones kept here
+     * that it no longer lists, as the web does: once a run, and after an answer found its question
+     * gone (#1980).
+     */
+    @Volatile private var checkOpen = true
+
     /** A push reached this app since it started: the server can deliver, so nothing polls (#445). */
     @Volatile private var pushed = false
 
@@ -1058,6 +1065,9 @@ class ServerStore(
     }
 
     private suspend fun syncDecisions() {
+        // Read first: a question posted after this read is not kept here yet, so none is dropped.
+        val listedOpen = if (checkOpen) openDecisions() else null
+        val kept = saved.decisions.map { it.body.id }.toSet()
         var cursor = saved.cursor
         val byId = saved.decisions.associateBy { it.body.id }.toMutableMap()
         // How each item a settled notice closed was closed, with the time: the notice lists before
@@ -1121,7 +1131,32 @@ class ServerStore(
             }
         }
         for ((from, n) in wins) byId[n.itemId]?.let { d -> won(d, from, n)?.let { byId[n.itemId] = it } }
+        // Still open here after this read, but no longer on the server: dropped, as by retention.
+        if (listedOpen != null) {
+            val sending = saved.outbox.map { it.decisionId }.toSet()
+            val gone = byId.values.filter { d ->
+                val id = d.body.id
+                id in kept && id !in listedOpen && id !in sending && d.answeredAt == null && d.answer == null && d.settled == null
+            }.map { it.body.id }
+            for (id in gone) {
+                byId.remove(id)
+                alerts.cancel(id)
+            }
+        }
         persist(saved.copy(cursor = cursor, decisions = byId.values.sortedBy { it.body.createdAt }.takeLast(500)))
+        if (listedOpen != null) checkOpen = false
+    }
+
+    /** The ids of the decisions the server holds open for this device. */
+    private suspend fun openDecisions(): Set<String> {
+        val ids = mutableSetOf<String>()
+        var at = ""
+        while (true) {
+            val page = api().items("decision", at, openBlobs = true, open = true)
+            page.items.forEach { ids += it.item.id }
+            at = page.cursor
+            if (page.last) return ids
+        }
     }
 
     /**
@@ -1656,6 +1691,8 @@ class ServerStore(
                 }
                 else -> {
                     persist(saved.copy(outbox = saved.outbox.filter { it.decisionId != q.decisionId }))
+                    // Its question may be gone from the server: the next sync checks (#1980).
+                    if (e.status == 404) checkOpen = true
                     Sent.Failed(describe(e))
                 }
             }

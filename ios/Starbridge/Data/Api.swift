@@ -292,10 +292,11 @@ struct Api {
      * A page of items of `kinds` after `cursor`, 100 or 4 MB at most (PROTOCOL.md, "Items"). With
      * `openBlobs`, an answered decision lists without its images, which `item(_:)` gives (#1382).
      */
-    func items(_ kinds: String, after cursor: String, openBlobs: Bool = false) async throws -> ItemsPage {
+    func items(_ kinds: String, after cursor: String, openBlobs: Bool = false, open: Bool = false) async throws -> ItemsPage {
         var q = URLComponents()
         q.queryItems = [URLQueryItem(name: "kind", value: kinds), URLQueryItem(name: "after", value: cursor)]
         if openBlobs { q.queryItems?.append(URLQueryItem(name: "blobs", value: "open")) }
+        if open { q.queryItems?.append(URLQueryItem(name: "open", value: "1")) }
         let body = try await call("GET", "/items?" + (q.percentEncodedQuery ?? "")).1
         guard let list = try field(body, "items").array else { throw ProtocolError(.badSchema, "items is not a list") }
         // One item this app cannot read never hides the rest.

@@ -282,8 +282,8 @@ class Api(private val http: OkHttpClient, private val server: String, private va
     }
 
     /** With [openBlobs], an answered decision lists without its images, which [item] gives (#1382). */
-    suspend fun items(kind: String, after: String, openBlobs: Boolean = false): ItemPage {
-        val page = call("GET", "/items?kind=$kind&after=$after" + if (openBlobs) "&blobs=open" else "").second!!.jsonObject
+    suspend fun items(kind: String, after: String, openBlobs: Boolean = false, open: Boolean = false): ItemPage {
+        val page = call("GET", "/items?kind=$kind&after=$after" + (if (openBlobs) "&blobs=open" else "") + (if (open) "&open=1" else "")).second!!.jsonObject
         return ItemPage(
             listedItems(page.getValue("items")),
             page["cursor"]?.jsonPrimitive?.content ?: "",
