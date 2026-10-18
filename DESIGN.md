@@ -15,16 +15,16 @@ colors:
     fg: "#121212"
     fg2: "#595959"
     fg3: "#6a6a6a"
-    accent: "#965700"
+    accent: "#8f5300"
     accent-hi: "#7a4600"
     on-accent: "#ffffff"
-    accent-soft: "#9657001a"
+    accent-soft: "#8f53001a"
     ok: "#595959"
     ok-soft: "#5959591a"
-    warn: "#965700"
-    warn-soft: "#9657001a"
-    bad: "#b8322a"
-    bad-soft: "#b8322a1a"
+    warn: "#8f5300"
+    warn-soft: "#8f53001a"
+    bad: "#b23029"
+    bad-soft: "#b230291a"
     info: "#595959"
     info-soft: "#5959591a"
     scrim: "#00000066"
@@ -423,8 +423,9 @@ a provider keeps its colour. The launcher icon keeps its own colours; its
 monochrome layer lets Android draw the themed icon. A unit test checks the
 fixed colours against warm, cool and low-chroma wallpapers in light and dark:
 4.5:1 for text, `fg3` included, and 3:1 for fills and marks. The tokens'
-own `fg3` reaches 4.5:1 and `line-strong` 3:1 on `bg`, `surface` and `surface2`, which web and Android
-tests check.
+own `fg3` reaches 4.5:1 and `line-strong` 3:1 on `bg`, `surface` and `surface2`, and `accent`,
+`warn` and `bad` reach 4.5:1 as text on their `-soft` tints over those grounds (#2042); web and
+Android tests check them.
 
 The web app uses the same faces and tokens with web components, dense: a left
 rail (Inbox, Quotas, Settings) that becomes a bottom bar under 600 px, list

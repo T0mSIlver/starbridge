@@ -4,7 +4,9 @@ import { resolve } from "node:path";
 
 // DESIGN.md's tokens, which every client is generated from: `fg3`, the hint tier, is text and
 // needs 4.5:1 (WCAG AA) on the three grounds; `line-strong` borders a field or a button and
-// needs 3:1 (WCAG 1.4.11) against them (#1939, #1940).
+// needs 3:1 (WCAG 1.4.11) against them (#1939, #1940). `accent`, `warn` and `bad` also read as
+// text on their `-soft` tint over each ground, which is where a banner or a row puts them: 4.5:1
+// (#2042).
 const design = /^---\n([\s\S]*?)\n---\n/.exec(
   readFileSync(resolve(import.meta.dir, "../../../DESIGN.md"), "utf8"),
 );
@@ -18,6 +20,20 @@ function luminance(hex: string): number {
     return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
   }) as [number, number, number];
   return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+// A token's colour with its `#rrggbbaa` alpha laid over a ground.
+function over(tint: string, ground: string): string {
+  const a = Number.parseInt(tint.slice(7, 9), 16) / 255;
+  return `#${[1, 3, 5]
+    .map((i) => {
+      const f = Number.parseInt(tint.slice(i, i + 2), 16);
+      const g = Number.parseInt(ground.slice(i, i + 2), 16);
+      return Math.round(f * a + g * (1 - a))
+        .toString(16)
+        .padStart(2, "0");
+    })
+    .join("")}`;
 }
 
 function ratio(a: string, b: string): number {
@@ -35,6 +51,12 @@ describe("token contrast", () => {
       test(`${scheme} line-strong on ${ground} reaches 3:1`, () => {
         expect(ratio(c["line-strong"] as string, c[ground] as string)).toBeGreaterThanOrEqual(3);
       });
+      for (const token of ["accent", "warn", "bad"]) {
+        test(`${scheme} ${token} on its tint over ${ground} reaches 4.5:1`, () => {
+          const tint = over(c[`${token}-soft`] as string, c[ground] as string);
+          expect(ratio(c[token] as string, tint)).toBeGreaterThanOrEqual(4.5);
+        });
+      }
     }
   }
 });

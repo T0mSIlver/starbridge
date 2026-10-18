@@ -55,7 +55,7 @@ struct Palette {
     static func of(_ scheme: ColorScheme) -> Palette {
         scheme == .dark
             ? Palette(card: Color(hex: 0x171717), amber: Color(hex: 0xF5A83B, opacity: 0x1F), fg: Color(hex: 0xF1F1F1), fg2: Color(hex: 0xA3A3A3), accent: Color(hex: 0xF5A83B))
-            : Palette(card: Color(hex: 0xFFFFFF), amber: Color(hex: 0x965700, opacity: 0x1A), fg: Color(hex: 0x121212), fg2: Color(hex: 0x595959), accent: Color(hex: 0x965700))
+            : Palette(card: Color(hex: 0xFFFFFF), amber: Color(hex: 0x8F5300, opacity: 0x1A), fg: Color(hex: 0x121212), fg2: Color(hex: 0x595959), accent: Color(hex: 0x8F5300))
     }
 }
 
