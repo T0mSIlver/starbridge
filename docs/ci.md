@@ -161,6 +161,11 @@ scp -r .github/runners sb-hp:gh-runner-setup
 ssh sb-hp sudo bash gh-runner-setup/setup.sh 2
 ```
 
+The script checks each download: the runner and Node tarballs against a SHA-256 pinned in it, and
+Docker's apt key against Docker's fingerprint. To bump a version, change its hash in the same
+commit; Node's comes from the version's `SHASUMS256.txt`, signed by a key in
+[nodejs/release-keys](https://github.com/nodejs/release-keys/blob/main/keys.list).
+
 A new box also needs a line in `BOXES` in `feed.sh`, with its SSH host, name prefix and labels.
 Then reinstall the feeder on the machine with the `gh` login:
 
