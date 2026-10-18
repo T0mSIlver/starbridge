@@ -178,7 +178,10 @@ jobs:
       - run: pnpm test
       # A copyleft, attribution, vendor-terms or unnamed licence among the runtime dependencies fails
       # unless scripts/licenses/allow.json lists it with a reason (#2024). Android's runs in android.yml.
+      # pnpm reads package metadata from the store the install used.
       - run: bun scripts/licenses/licenses.ts check npm
+        env:
+          pnpm_config_store_dir: ${{ runner.tool_cache }}/pnpm-store
 
   # The whole product on one machine (web/e2e/run.ts), in three parts side by side, each with its
   # own server and browser (E2E_SHARD). Each screenshot also fails on layout breakage: a page wider

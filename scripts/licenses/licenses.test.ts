@@ -2,7 +2,15 @@ import { expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { androidNotices, judge, mavenLicense, type Pkg, permissive, readPom } from "./licenses";
+import {
+  androidNotices,
+  judge,
+  mavenLicense,
+  type Pkg,
+  permissive,
+  readPom,
+  validateAllow,
+} from "./licenses";
 
 const pkg = (name: string, license: string): Pkg => ({ name, version: "1.0.0", license, url: "" });
 const any = (license: string) => permissive(license);
@@ -83,4 +91,15 @@ test("a POM without licences takes its parent's, and the notices leave versions 
   expect(
     androidNotices([{ name: "g:child", version: "2", license: "MIT", url: "https://child" }]),
   ).not.toContain("2");
+});
+
+test("an allow-list entry without a reason is a problem, so it cannot let a package through unexplained", () => {
+  const ok = { license: "MPL-2.0", reason: "r" };
+  expect(validateAllow({ npm: { a: ok }, android: {} })).toEqual([]);
+  expect(
+    validateAllow({
+      npm: { a: { ...ok, reason: " " } },
+      android: { b: { license: "", reason: "r" } },
+    }),
+  ).toHaveLength(2);
 });

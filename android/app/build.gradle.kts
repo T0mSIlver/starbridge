@@ -190,6 +190,8 @@ tasks.register("runtimeModules") {
     val root = configurations.getByName("releaseRuntimeClasspath").incoming.resolutionResult.rootComponent
     val out = layout.buildDirectory.file("licenses/runtime-modules.txt")
     outputs.file(out)
+    // The classpath is an input Gradle cannot see here: run every time rather than keep a stale list.
+    outputs.upToDateWhen { false }
     doLast {
         val seen = sortedSetOf<String>()
         val visited = mutableSetOf<org.gradle.api.artifacts.result.ResolvedComponentResult>()

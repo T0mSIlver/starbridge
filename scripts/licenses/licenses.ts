@@ -188,7 +188,7 @@ export function parseNpm(json: string): Pkg[] {
 async function npmPackages(filter?: string): Promise<Pkg[]> {
   const cmd = [
     "pnpm",
-    ...(filter ? ["--filter", filter] : []),
+    ...(filter ? ["--filter", `${filter}...`] : []),
     "licenses",
     "list",
     "--prod",
@@ -280,7 +280,23 @@ function androidPackages(modulesFile: string): Pkg[] {
 // Output ----------------------------------------------------------------------------------------
 
 const allowFile = join(dirname(import.meta.path), "allow.json");
-const loadAllow = (): AllowList => JSON.parse(readFileSync(allowFile, "utf8"));
+export function validateAllow(list: AllowList): string[] {
+  return (["npm", "android"] as const).flatMap((kind) =>
+    Object.entries(list[kind] ?? {})
+      .filter(([, e]) => !e?.license?.trim() || !e?.reason?.trim())
+      .map(([name]) => `allow.json: ${kind} "${name}" needs a licence and a reason`),
+  );
+}
+
+const loadAllow = (): AllowList => {
+  const list: AllowList = JSON.parse(readFileSync(allowFile, "utf8"));
+  const problems = validateAllow(list);
+  if (problems.length) {
+    for (const problem of problems) console.log(`::error::${problem}`);
+    process.exit(1);
+  }
+  return list;
+};
 
 function report(
   kind: string,
