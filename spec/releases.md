@@ -254,7 +254,7 @@
   settings file per box (`deploy/host/prod.env`, `deploy/staging/staging.env`), since copies drifted
   and the same fix landed four times (#1663, #1675, #1953).
   The deploy waits for the owner's review on the `starbridge.run` environment (#2009), so the
-  release waits for it up to 12 hours, not 2, and the dispatch posts the owner a card with the run's
+  release waits for it up to 12 hours, not 2, and ends its wait when the deploy run does, and the dispatch posts the owner a card with the run's
   link; the card does not approve, a review stays the one gate (#2076).
 - **Rollback** (#1520, #1828). `rollback.yml`, dispatched with a box and a commit, redeploys a
   commit that box ran before, so prod rolls back without the owner's full-sudo key, which was the

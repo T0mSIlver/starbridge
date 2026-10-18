@@ -1,5 +1,8 @@
 name: deploy
 
+# A dispatched run is named for its commit, which release.yml's wait finds it by (#2076).
+run-name: ${{ inputs.sha && format('deploy {0}', inputs.sha) || github.event.workflow_run.display_title || 'deploy' }}
+
 # Two ways in (#1538). A merge to main, once CI passes, goes to staging (staging.starbridge.run):
 # the images are built, staging deploys them and runs a round trip, and the commit gets the status
 # `staging`. starbridge.run takes a commit only by dispatch, `gh workflow run deploy.yml -f

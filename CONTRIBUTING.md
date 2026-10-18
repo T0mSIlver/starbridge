@@ -78,7 +78,7 @@ everyone by promotion, unchanged:
 | iPhone app | TestFlight | TestFlight |
 
 Main deploys to staging only. An rc tag deploys its commit to starbridge.run, once staging passed
-it, and the release waits up to 12 hours until starbridge.run runs it, as the deploy waits for the maintainer's review ([a card](docs/ci.md#approval-cards) links it); a final deploys nothing, as starbridge.run
+it, and the release waits up to 12 hours until starbridge.run runs it (or fails when the deploy run ends without success), as the deploy waits for the maintainer's review ([a card](docs/ci.md#approval-cards) links it); a final deploys nothing, as starbridge.run
 already runs its rc. A hotfix between rcs: `gh workflow run deploy.yml -f sha=<commit>`, a commit
 of main that staging passed.
 

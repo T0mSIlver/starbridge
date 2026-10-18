@@ -32,9 +32,10 @@ permissions:
 jobs:
   version:
     runs-on: ${{ vars.TRUSTED_RUNNER && fromJSON(vars.TRUSTED_RUNNER) || 'ubuntu-latest' }}
-    # The wait for starbridge.run below is limited to 12 hours: the deploy waits for the owner's
-    # approval (#2009), who gets a card (#2076).
-    timeout-minutes: 740
+    # The wait for starbridge.run below is limited to 12 hours on a self-hosted runner and to 5 h 50 min on
+    # GitHub's, which ends every job at 6 hours (TRUSTED_RUNNER unset): the deploy waits for the
+    # owner's approval (#2009), who gets a card (#2076).
+    timeout-minutes: ${{ vars.TRUSTED_RUNNER && 740 || 359 }}
     # An rc dispatches deploy.yml.
     permissions:
       actions: write
@@ -83,22 +84,37 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ steps.v.outputs.version }}
         run: |
+          # The wait below tells this dispatch's run from an earlier one by its start.
+          echo "DISPATCHED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
           curl -fsS -X POST -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' \
             "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/actions/workflows/deploy.yml/dispatches" \
             -d "$(jq -n --arg sha "$(git rev-parse HEAD)" --arg v "$VERSION" '{ref: "main", inputs: {sha: $sha, version: $v}}')"
       - if: startsWith(github.ref, 'refs/tags/v')
         name: starbridge.run runs this release's commit
-        timeout-minutes: 720
+        timeout-minutes: ${{ vars.TRUSTED_RUNNER && 720 || 355 }}
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ steps.v.outputs.version }}
+          LIMIT_MINUTES: ${{ vars.TRUSTED_RUNNER && 715 || 350 }}
         run: |
           case $VERSION in
             *-rc.*) want=$(git rev-parse HEAD) ;;
             *) want=$(git rev-parse "$(git tag -l "v$VERSION-rc.*" --sort=-v:refname | head -n1)^{commit}") ;;
           esac
-          # A failed poll waits like any other: the step's timeout is the limit.
+          # A failed poll waits like any other: the limit ends the wait with its own message, a little
+          # before the step's timeout.
           while :; do
+            [ $SECONDS -lt $((LIMIT_MINUTES * 60)) ] || { echo "starbridge.run did not run $want within $LIMIT_MINUTES minutes"; exit 1; }
+            # An rc's deploy run that ended without success (failed, rejected or cancelled) will not
+            # deploy: fail now rather than at the limit (run-name in deploy.yml names its commit).
+            case $VERSION in *-rc.*)
+              ended=$(curl -fsS -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' \
+                "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/actions/workflows/deploy.yml/runs?event=workflow_dispatch&per_page=30" |
+                jq -r --arg t "deploy $want" --arg since "$DISPATCHED_AT" \
+                  '[.workflow_runs[] | select(.display_title == $t and .created_at >= $since)] | sort_by(.created_at) | last
+                   | select(.status == "completed" and .conclusion != "success") | "\(.conclusion) \(.html_url)"') || ended=
+              if [ -n "$ended" ]; then echo "The deploy run ended: $ended"; exit 1; fi ;;
+            esac
             got=$(curl -fsS --retry 5 --retry-all-errors -D - -o /dev/null https://starbridge.run/healthz |
               tr -d '\r' | awk -F': ' 'tolower($1) == "x-starbridge-revision" { print $2 }') || got=
             case $got in *[!0-9a-f]*) got= ;; esac
