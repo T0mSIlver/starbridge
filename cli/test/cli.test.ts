@@ -20,7 +20,7 @@ import { run } from "../src/cli";
 import { session } from "../src/context";
 import { DONE_LINE, poll, postDecision, typedBreaks } from "../src/decisions";
 import { piAllow, piPermissionConfig } from "../src/pi";
-import { configCommand, offerPiChain } from "../src/settings";
+import { configCommand, piChainStep } from "../src/settings";
 import { agentAddress, approveAndConfirm, FAKE_CODEXBAR, paired, testCtx, until } from "./helpers";
 
 let server: LiveServer;
@@ -1079,7 +1079,7 @@ test("config turns permission prompts on and off", async () => {
   expect(await run(["config", "permissions", "maybe"], ctx)).toBe(1);
 });
 
-test("permissions on offers to name the Starbridge link in pi-permission-system's chain", async () => {
+test("permissions on names the Starbridge link in pi-permission-system's chain", async () => {
   const ctx = await paired(server);
   const home = mkdtempSync(join(tmpdir(), "starbridge-pi-home-"));
   const dir = join(home, ".pi", "agent", "extensions", "pi-permission-system");
@@ -1094,22 +1094,15 @@ test("permissions on offers to name the Starbridge link in pi-permission-system'
   );
   expect(JSON.parse(readFileSync(file, "utf8")).authorizerChain).toEqual(["judge"]);
 
-  const no = { confirm: async () => false, text: async (_q: string, d: string) => d };
-  await offerPiChain(ctx, no);
-  expect(JSON.parse(readFileSync(file, "utf8")).authorizerChain).toEqual(["judge"]);
-  await offerPiChain(ctx, { ...no, confirm: async () => true });
+  // With a terminal, the yes to permission prompts names it, with no question of its own (#2130).
+  piChainStep(ctx, true);
   expect(JSON.parse(readFileSync(file, "utf8"))).toEqual({
     permission: { bash: "ask" },
     authorizerChain: ["judge", "starbridge"],
   });
-  // Named already: nothing to ask.
+  // Named already: nothing to say.
   const before = ctx.lines.length;
-  await offerPiChain(ctx, {
-    ...no,
-    confirm: async () => {
-      throw new Error("asked");
-    },
-  });
+  piChainStep(ctx, true);
   expect(ctx.lines.length).toBe(before);
 });
 
