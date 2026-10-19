@@ -17,7 +17,7 @@ import { DEFAULT_SERVER, pair } from "../pair";
 import { permissionsEnabled } from "../permissions";
 import { pushOnce } from "../quota";
 import { installKind } from "../release";
-import { rememberMachineKind } from "../settings";
+import { permissionsOn, rememberMachineKind, setPermissions } from "../settings";
 import { VERSION } from "../version";
 import {
   AGENT_IDS,
@@ -60,7 +60,7 @@ import {
   unavailable,
   withInstalledPlaces,
 } from "./service";
-import { otherCopies, type Sys } from "./sys";
+import { defaults, otherCopies, type Sys } from "./sys";
 import { withdrawRevokeCards } from "./uninstall";
 
 export interface SetupOpts {
@@ -282,6 +282,7 @@ export async function setup(sys: Sys, opts: SetupOpts): Promise<number> {
   if (machine) rememberMachineKind(ctx);
 
   const { done: agents, next } = opts.noAgents ? { done: [], next: [] } : await agentsStep(sys);
+  await permissionsStep(sys, opts, agents);
 
   const configBefore = JSON.stringify(ctx.store.agentConfig());
   const quota = await quotaStep(sys, opts, machine !== undefined);
@@ -387,6 +388,27 @@ async function agentsStep(sys: Sys): Promise<{ done: AgentId[]; next: string[] }
       `– No agent found (${Object.values(AGENTS).join(", ")}): rerun setup after installing one`,
     );
   return { done, next };
+}
+
+/**
+ * Asks whether to send permission prompts to the devices, Enter saying no (#2111, owner's card
+ * d_brief-treat-uphold): for one agent in its default mode, they block it more often than
+ * questions do. Asked once, when an agent that can send them has Starbridge (Cursor cannot,
+ * #957); a kept answer, or `config permissions`, settles it. `--yes` and no terminal leave it unset.
+ */
+async function permissionsStep(sys: Sys, opts: SetupOpts, agents: AgentId[]) {
+  const { ctx, prompt } = sys;
+  if (opts.yes || prompt === defaults || ctx.store.agentConfig().permissions !== undefined) return;
+  if (!agents.some((id) => id !== "cursor")) return;
+  section(ctx, "Permission prompts");
+  ctx.out("  When an agent stops to ask permission, your devices can answer it too.");
+  if (await prompt.confirm("  Send permission prompts to your devices?", false)) {
+    await permissionsOn(ctx, prompt);
+    ctx.out("✓ Sends permission prompts to your devices");
+  } else {
+    setPermissions(ctx, false);
+    ctx.out("– Permission prompts stay in the terminal");
+  }
 }
 
 /** `setup --agent <name>`: Starbridge in that one agent, also when `uninstall --agent` took it out. */
