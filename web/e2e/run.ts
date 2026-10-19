@@ -425,22 +425,28 @@ async function foldKeepsHead(page: Page, head: Locator) {
   if ((await head.count()) !== 1) throw new Error(`a toggled section lost its head: ${head}`);
 }
 
-async function shoot(page: Page, name: string) {
-  // Firefox drops a browser's push subscription now and then (docs/ci.md, "Evidence"), which puts
-  // the Turn on notifications banner on this screen; turn it on again, as the run did at first.
+/**
+ * Firefox drops a browser's push subscription now and then (docs/ci.md, "Evidence"), which puts
+ * the Turn on notifications banner on a screen; turn it on again, as the run did at first.
+ */
+async function pushBack(page: Page) {
   const banner = page.getByRole("button", { name: "Turn on notifications" });
-  if (EVIDENCE && pushOn.has(page) && (await banner.isVisible())) {
-    await banner.click();
-    await banner.waitFor({ state: "detached", timeout: 15_000 }).catch(() => {});
-  }
+  if (!EVIDENCE || !pushOn.has(page) || !(await banner.isVisible())) return;
+  await banner.click();
+  await banner.waitFor({ state: "detached", timeout: 15_000 }).catch(() => {});
+}
+
+async function shoot(page: Page, name: string) {
   for (const [size, viewport, text] of SIZES)
     for (const scheme of ["light", "dark"] as const) {
       await page.setViewportSize(viewport);
       // Without motion, so no row is caught sliding over another.
       await page.emulateMedia({ colorScheme: scheme, reducedMotion: "reduce" });
       await page.waitForTimeout(150);
+      await pushBack(page);
       const unzoom = text > 1 ? await zoomText(page, text) : undefined;
       await fitsLayout(page, `${name} ${scheme}${unzoom ? " text 200%" : ""}`);
+      await pushBack(page);
       // Firefox draws the phone layout's fixed bottom bar mid-page in a full-page capture.
       await capture(
         page,

@@ -158,7 +158,19 @@ async function shoot(app: ElectronApplication, page: Page, stop: string) {
       // The page repaints its background and the app's colours on the change.
       await new Promise((r) => setTimeout(r, 500));
       const file = join(dir, `${stop}-${scheme}`);
-      await page.screenshot({ path: `${file}.png` });
+      // Some runs still paint a 773 px window although the page and the window say 800: a shot
+      // of another size is nudged to the size again and taken again.
+      for (let tries = 1; ; tries++) {
+        const png = await page.screenshot({ path: `${file}.png` });
+        if (png.readUInt32BE(20) === 800 || tries === 5) break;
+        await app.evaluate(({ BrowserWindow }) => {
+          const w = BrowserWindow.getAllWindows().find((x) => x.getTitle() === "Starbridge");
+          w?.setMenuBarVisibility(false);
+          w?.setContentSize(1200, 801);
+          w?.setContentSize(1200, 800);
+        });
+        await new Promise((r) => setTimeout(r, 500));
+      }
       writeFileSync(`${file}.json`, JSON.stringify(await volatile(page, false)));
     }
   } finally {
