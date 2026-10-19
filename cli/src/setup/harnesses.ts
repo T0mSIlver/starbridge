@@ -27,15 +27,17 @@ import { codexPluginDir, refreshCodexPluginFiles } from "./codex-plugin";
 import { cursorHooksPath, cursorSkillDir, cursorState, installCursorFiles } from "./cursor";
 import { markedSkill, marker, ours } from "./marker";
 import plugin from "./opencode-files.js";
-import { removedLine, removeWritten } from "./remove";
+import { pruneEmpty, removedLine, removeWritten } from "./remove";
 import { failure, run, type Sys, which } from "./sys";
 
 /** What the Codex skill steps need: the agent has no prompt. */
 type Home = Pick<Sys, "ctx" | "home">;
 
 /** `$CODEX_HOME/skills/starbridge`, which Codex reads skills from. */
+const codexHome = (sys: Home) => sys.ctx.env.CODEX_HOME || join(sys.home, ".codex");
+
 export function codexSkillDir(sys: Home): string {
-  return join(sys.ctx.env.CODEX_HOME || join(sys.home, ".codex"), "skills", "starbridge");
+  return join(codexHome(sys), "skills", "starbridge");
 }
 
 export function hasCodex(sys: Sys): boolean {
@@ -80,7 +82,7 @@ export function installCodexSkill(sys: Home) {
 export function removeCodexSkill(sys: Sys): string | undefined {
   const dir = codexSkillDir(sys);
   if (!ours(readText(join(dir, "SKILL.md")))) return undefined;
-  return removedLine(dir, removeWritten(dir, ["SKILL.md"]));
+  return removedLine(dir, removeWritten(dir, ["SKILL.md"], codexHome(sys)));
 }
 
 /**
@@ -93,7 +95,7 @@ prefix_rule(pattern = ["starbridge", ["ask", "waiting", "working", "wait"]], dec
 `;
 
 export function codexRulePath(sys: Home): string {
-  return join(sys.ctx.env.CODEX_HOME || join(sys.home, ".codex"), "rules", "starbridge.rules");
+  return join(codexHome(sys), "rules", "starbridge.rules");
 }
 
 export function codexRule(sys: Home): FileState {
@@ -111,6 +113,7 @@ export function installCodexRule(sys: Home) {
 export function removeCodexRule(sys: Home): boolean {
   if (!ours(readText(codexRulePath(sys)))) return false;
   rmSync(codexRulePath(sys), { force: true });
+  pruneEmpty(dirname(codexRulePath(sys)), codexHome(sys));
   return true;
 }
 
@@ -332,11 +335,12 @@ export function removeOpencode(sys: Home): string[] {
     const files = Object.keys(opencodeFiles())
       .filter((path) => path.startsWith(`${folder}/`))
       .map((path) => path.slice(folder.length + 1));
-    done.push(removedLine(join(dir, folder), removeWritten(join(dir, folder), files)));
+    done.push(removedLine(join(dir, folder), removeWritten(join(dir, folder), files, dir)));
   };
   if (ours(read(SKILL_FILE))) remove("skills/starbridge");
   if (ours(read(ENTRY_FILE))) {
     rmSync(join(dir, ENTRY_FILE), { force: true });
+    pruneEmpty(dirname(join(dir, ENTRY_FILE)), dir);
     done.push(`Removed ${join(dir, ENTRY_FILE)}.`);
   }
   // An entry the owner wrote stays, and so does the code it loads.
@@ -434,7 +438,10 @@ export function removeAntigravity(sys: Home): string | undefined {
   const state = antigravityState(sys);
   if (state === "missing" || state === "foreign") return undefined;
   const dir = antigravityDir(sys);
-  return removedLine(dir, removeWritten(dir, Object.keys(antigravityFiles())));
+  return removedLine(
+    dir,
+    removeWritten(dir, Object.keys(antigravityFiles()), join(sys.home, ".gemini")),
+  );
 }
 
 /**

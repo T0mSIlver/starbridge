@@ -9,6 +9,7 @@ import { dropPortFile, readPortFile, type Status, socketPath } from "../agent/ap
 import { AgentClient } from "../agent/client";
 import { processAlive } from "../platform";
 import { marker, ours } from "./marker";
+import { pruneEmpty } from "./remove";
 import { failure, run, type Sys } from "./sys";
 
 const UNIT = "starbridge-agent.service";
@@ -449,6 +450,8 @@ export async function removeService(sys: Sys): Promise<boolean> {
   } else if (kind(sys) === "systemd") {
     await stopUnit(sys, UNIT);
     rmSync(path, { force: true });
+    // ~/.config/systemd/user and ~/.config/systemd, when setup made them for the unit (#2098).
+    pruneEmpty(dirname(path), join(sys.home, ".config"));
     await systemctl(sys, "daemon-reload");
   } else {
     const r = await launchctl(sys, "bootout", `gui/${sys.uid}/${LABEL}`);

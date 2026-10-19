@@ -973,9 +973,9 @@ test("uninstall removes the service and plugins, asks the devices to revoke, kee
   expect(m.calls()).toContain("codex plugin remove starbridge@starbridge-cli");
   expect(existsSync(join(m.home, ".codex/starbridge"))).toBe(false);
   expect(m.calls()).toContain(`pi remove ${PI_PACKAGE}`);
-  expect(readdirSync(join(m.home, ".config/opencode")).sort()).toEqual(["plugins", "skills"]);
-  expect(readdirSync(join(m.home, ".config/opencode/plugins"))).toEqual([]);
-  expect(readdirSync(join(m.home, ".cursor/skills"))).toEqual([]);
+  // The folders setup made for its files go with them (#2098).
+  expect(readdirSync(join(m.home, ".config/opencode"))).toEqual([]);
+  expect(readdirSync(join(m.home, ".cursor"))).not.toContain("skills");
   expect(existsSync(join(m.home, ".cursor/cli-config.json"))).toBe(false);
   expect(existsSync(join(m.home, ".cursor/hooks.json"))).toBe(false);
   expect(JSON.parse(readFileSync(pps, "utf8"))).toEqual({
@@ -1848,6 +1848,7 @@ test("Antigravity gets the plugin with the rule, the skill and the allow hook (#
   expect(JSON.parse(readFileSync(agySettings, "utf8")).permissions.allow).toEqual(["command(ls)"]);
   // Turned off in Antigravity, its hook no longer narrows the entries: setup leaves them out.
   const agyConfig = join(m.home, ".gemini/config/config.json");
+  mkdirSync(dirname(agyConfig), { recursive: true });
   writeFileSync(agyConfig, JSON.stringify({ plugins: { starbridge: { enabled: false } } }));
   await setup(m.sys, { yes: true, noQuota: true, noService: true, agent: "antigravity" });
   expect(JSON.parse(readFileSync(agySettings, "utf8")).permissions.allow).toEqual(["command(ls)"]);
