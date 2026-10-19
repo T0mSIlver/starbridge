@@ -18,11 +18,22 @@ export function keeper(em: Emulator, adbPath: string, dir: string | undefined, p
   if (shots) mkdirSync(shots, { recursive: true });
   const time = new RegExp(TIME, "i");
   let noticed = false;
+  let logged = false;
 
   /** The status bar's clock, battery and signal fixed, and its notification icons hidden. */
   async function demoMode() {
     if (!shots) return;
     await em.shell("settings put global sysui_demo_allowed 1");
+    if (!logged) {
+      logged = true;
+      // For the next run to read: two runs of one tree have differed by the status bar's height.
+      for (const cmd of [
+        "cmd overlay list | grep -i -E 'cutout|navbar|statusbar'",
+        "dumpsys display | grep -i -E 'cutout|mBaseDisplayInfo' | head -5",
+        "wm size; wm density",
+      ])
+        console.log(`[evidence] ${cmd}\n${await em.shell(cmd).catch((e) => String(e))}`);
+    }
     for (const extras of [
       "-e command enter",
       "-e command clock -e hhmm 1200",
@@ -107,11 +118,18 @@ export function keeper(em: Emulator, adbPath: string, dir: string | undefined, p
   }
 
   /** The screen as it is, in light then dark, as `<profile>-<name>-<scheme>.png`. */
-  async function keep(name: string, schemes: ("light" | "dark")[] = ["light", "dark"]) {
+  async function keep(
+    name: string,
+    schemes: ("light" | "dark")[] = ["light", "dark"],
+    // Puts the screen back after a change of scheme, which restarts the launcher and closes
+    // its drawer on some runs.
+    prepare?: () => Promise<void>,
+  ) {
     if (!shots) return;
     for (const scheme of schemes) {
       await em.shell(`cmd uimode night ${scheme === "dark" ? "yes" : "no"}`);
       await Bun.sleep(1500);
+      await prepare?.();
       await capture(join(shots, `${profile}-${name}-${scheme}`));
     }
     await em.shell("cmd uimode night no");
@@ -145,7 +163,7 @@ export function keeper(em: Emulator, adbPath: string, dir: string | undefined, p
       await Bun.sleep(1000);
     };
     await drawer();
-    await keep("apps");
+    await keep("apps", ["light", "dark"], drawer);
     const shapes = (await em.shell("cmd overlay list"))
       .split("\n")
       .map((l) => /com\.android\.theme\.icon\.(\w+)/.exec(l)?.[1])
@@ -154,7 +172,7 @@ export function keeper(em: Emulator, adbPath: string, dir: string | undefined, p
       await em.shell(`cmd overlay enable-exclusive --category com.android.theme.icon.${shape}`);
       await Bun.sleep(2000);
       await drawer();
-      await keep(`apps-${shape}`, ["light"]);
+      await keep(`apps-${shape}`, ["light"], drawer);
     }
     if (shapes.length)
       for (const line of (await em.shell("cmd overlay list")).split("\n"))
