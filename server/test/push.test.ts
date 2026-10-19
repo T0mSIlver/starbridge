@@ -88,6 +88,7 @@ beforeAll(async () => {
       }
       if (url.pathname === "/wp/gone") return new Response("", { status: 410 });
       if (url.pathname.startsWith("/wp/forbidden")) return new Response("", { status: 403 });
+      if (url.pathname.startsWith("/wp/unauthorized")) return new Response("", { status: 401 });
       if (url.pathname.startsWith("/slow/")) {
         // Holds the request for 400 ms, or until the server gives up on it.
         await new Promise((r) => {
@@ -387,17 +388,22 @@ test("Web Push direct: the browser decrypts the payload; VAPID signs the request
   expect(seen).toEqual([]);
 });
 
-test("a Web Push service's 403, another key's subscription, drops it; a distributor's stays (#567)", async () => {
-  const { s, acct, devbox } = await setup(vapidConfig());
-  const browser = browserSubscription("forbidden-browser");
-  const up = browserSubscription("forbidden-ntfy");
-  for (const body of [browser.target, { ...up.target, type: "unifiedpush" as const }])
-    await s.call("POST", "/v1/push/subscriptions", { token: acct.device.token, body });
-  await postDecision(s, acct, devbox, "d1");
-  await s.deps.push.idle();
-  const left = s.deps.db.query("SELECT type FROM push_subscriptions").all();
-  expect(left).toEqual([{ type: "unifiedpush" }]);
-});
+// Another key's subscription: FCM and Apple answer 403, Mozilla's autopush and Windows' WNS 401.
+for (const [status, path] of [
+  [403, "forbidden"],
+  [401, "unauthorized"],
+] as const)
+  test(`a Web Push service's ${status}, another key's subscription, drops it; a distributor's stays (#567, #2083)`, async () => {
+    const { s, acct, devbox } = await setup(vapidConfig());
+    const browser = browserSubscription(`${path}-browser`);
+    const up = browserSubscription(`${path}-ntfy`);
+    for (const body of [browser.target, { ...up.target, type: "unifiedpush" as const }])
+      await s.call("POST", "/v1/push/subscriptions", { token: acct.device.token, body });
+    await postDecision(s, acct, devbox, "d1");
+    await s.deps.push.idle();
+    const left = s.deps.db.query("SELECT type FROM push_subscriptions").all();
+    expect(left).toEqual([{ type: "unifiedpush" }]);
+  });
 
 test("UnifiedPush goes straight to the distributor, encrypted when it has keys", async () => {
   const { s, acct, devbox } = await setup({});

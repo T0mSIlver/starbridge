@@ -504,12 +504,13 @@ export class Push {
       if (n) this.hostFlights.set(host, n);
       else this.hostFlights.delete(host);
     }
+    // 404 and 410: the subscription expired or was dropped (RFC 8030, section 5; every service).
     if (status === 404 || status === 410) return "gone";
-    // A push service refuses a VAPID signature whose key didn't make the subscription with 403
-    // (RFC 8292, section 4.2; Chrome's FCM does; Firefox's autopush answers 404). The browser
-    // subscribes again with the server's key when its page next opens (#567). A distributor's 403
-    // is its own access control, so a UnifiedPush target stays.
-    if (status === 403 && vapid) return "gone";
+    // A VAPID key that didn't make the subscription: FCM and Apple answer 403 (RFC 8292, section
+    // 4.2; Apple's reason is VapidPkHashMismatch), Mozilla's autopush 401 (errno 109) and Windows'
+    // WNS 401 (#2083). The browser subscribes again with the server's key when its page next opens
+    // (#567). A distributor's 401 or 403 is its own access control, so a UnifiedPush target stays.
+    if ((status === 401 || status === 403) && vapid) return "gone";
     return status >= 200 && status < 300 ? "ok" : "failed";
   }
 
