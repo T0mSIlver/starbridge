@@ -425,6 +425,11 @@ class ScreenshotTest(private val dark: Boolean) {
 
     @Test fun setupSelfHosted() = capture("setup-self-hosted") { Phone(null, 0) { SetupScreen(Phase.SignedOut, "https://starbridge.example.com", false, setupActions, {}) } }
 
+    // A phone set up in another account: the failure stays under the fields, the way out under the actions.
+    @Test fun setupSelfHostedRefused() = capture("setup-self-hosted-refused") {
+        Phone(null, 0) { SetupScreen(Phase.SignedOut, "https://demo.starbridge.run", false, setupActions, {}, keepsKeys = true, error = "This phone belongs to another account than the one you signed in to. Sign in with the account you set it up with, or sign out and remove its keys to set it up again.") }
+    }
+
     @Test fun setupJoinDigits() = capture("setup-join-digits") { Phone(null, 0) { SetupScreen(Phase.JoiningByDigits("042917"), "https://starbridge.run", false, setupActions, {}) } }
 
     @Test fun addDeviceQr() = capture("add-device-qr") {

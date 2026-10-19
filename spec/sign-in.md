@@ -5,6 +5,10 @@
   minute and the token is the whole owner account, and with one at all while `PUBLIC_URL` is
   starbridge.run, where it would be one more way into an account (#1720, from an internal
   audit on 2026-10-14).
+- Owner-token sign-in signs in from the keyboard's own key, and a failure stays under the
+  fields in the app's words ("Wrong owner token.", "No Starbridge server at <host>.") until the
+  owner types again: a snackbar went by under the keyboard and a Play tester saw nothing
+  (#2084). An address without a scheme gets https://, as a browser reads it.
 - **Sign in with Apple** (#1411). App Store guideline 4.8 asks an app that signs in with GitHub
   to offer a login that keeps the email private too; websites are not bound. GitHub stays the
   main sign-in everywhere, and Apple shows only where it must: on the iPhone, GitHub's button

@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
@@ -50,6 +51,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.lifecycle.ViewModel
@@ -108,6 +111,7 @@ class SetupViewModel @Inject constructor(private val store: Store) : ViewModel()
         signOut = store::signOut,
         deleteAccount = store::deleteAccount,
         dropJoinLink = { store.offerJoinLink(null) },
+        dismissError = store::dismissNotice,
     )
     val joinLink = store.joinLink
 }
@@ -130,6 +134,8 @@ class SetupActions(
     val confirmDigits: () -> Unit = {},
     val deleteAccount: () -> Unit = {},
     val dropJoinLink: () -> Unit = {},
+    /** Clears the sign-in failure on screen. */
+    val dismissError: () -> Unit = {},
 )
 
 /**
@@ -137,9 +143,9 @@ class SetupActions(
  * are the fallback), or, on an empty account, create its keys and show the recovery key once.
  */
 @Composable
-fun SetupScreen(phase: Phase, server: String, busy: Boolean, actions: SetupActions, openUrl: (String) -> Unit, modifier: Modifier = Modifier, keepsKeys: Boolean = false, joinLink: String? = null) {
+fun SetupScreen(phase: Phase, server: String, busy: Boolean, actions: SetupActions, openUrl: (String) -> Unit, modifier: Modifier = Modifier, keepsKeys: Boolean = false, joinLink: String? = null, error: String? = null) {
     when (phase) {
-        Phase.SignedOut -> SignIn(server, busy, actions, openUrl, modifier, keepsKeys)
+        Phase.SignedOut -> SignIn(server, busy, actions, openUrl, modifier, keepsKeys, error)
         is Phase.NoDevice -> if (phase.accountExists) Join(busy, actions, modifier, joinLink) else FirstDevice(busy, actions, modifier)
         is Phase.Joining -> Waiting("Approve this phone", if (phase.scanned) "Approve it on the device that shows the QR code." else "Type this code on a device you already use: ${phase.code}", null, actions.cancelJoin, modifier)
         is Phase.JoiningByDigits -> when {
@@ -210,13 +216,19 @@ private fun Tile(sym: Sym) {
 }
 
 @Composable
-private fun SignIn(server: String, busy: Boolean, actions: SetupActions, openUrl: (String) -> Unit, modifier: Modifier, keepsKeys: Boolean) {
+private fun SignIn(server: String, busy: Boolean, actions: SetupActions, openUrl: (String) -> Unit, modifier: Modifier, keepsKeys: Boolean, error: String?) {
     var selfHosted by rememberSaveable { mutableStateOf(server != BuildConfig.DEFAULT_SERVER) }
     var url by rememberSaveable { mutableStateOf(server) }
     // Not saveable: the token would reach the saved instance state, which Android may keep on disk.
     var token by remember { mutableStateOf("") }
     if (selfHosted) SecureWindow()
     var others by rememberSaveable { mutableStateOf(false) }
+    val keyboard = LocalSoftwareKeyboardController.current
+    val canSignIn = url.isNotBlank() && token.isNotBlank() && !busy
+    // The keyboard goes, so the button's progress and the outcome show.
+    val signIn = { keyboard?.hide(); actions.dismissError(); actions.ownerToken(url, token) }
+    // Typing again clears the last failure.
+    val edited = { if (error != null) actions.dismissError() }
     Step(
         modifier,
         top = {
@@ -225,25 +237,35 @@ private fun SignIn(server: String, busy: Boolean, actions: SetupActions, openUrl
                 Column(Modifier.padding(start = Spacing.s4, end = Spacing.s4, top = Spacing.s8), verticalArrangement = Arrangement.spacedBy(Spacing.s3)) {
                     TextField(
                         value = url,
-                        onValueChange = { url = it },
+                        onValueChange = { url = it; edited() },
                         label = { Text("Server") },
                         singleLine = true,
                         textStyle = StarbridgeTheme.type.machine,
                         colors = fieldColors(),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, autoCorrectEnabled = false),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, autoCorrectEnabled = false, imeAction = ImeAction.Next),
                         modifier = Modifier.fillMaxWidth(),
                     )
                     TextField(
                         value = token,
-                        onValueChange = { token = it },
+                        onValueChange = { token = it; edited() },
                         label = { Text("Owner token") },
                         singleLine = true,
                         visualTransformation = PasswordVisualTransformation(),
                         colors = fieldColors(),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, autoCorrectEnabled = false),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, autoCorrectEnabled = false, imeAction = ImeAction.Go),
+                        keyboardActions = KeyboardActions(onGo = { if (canSignIn) signIn() }),
                         modifier = Modifier.fillMaxWidth(),
                     )
                 }
+            }
+            // Under the fields, where the keyboard leaves it in view, until the owner types or tries again.
+            error?.let {
+                Text(
+                    it,
+                    style = StarbridgeTheme.type.small,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(start = Spacing.s4, end = Spacing.s4, top = Spacing.s3).semantics { liveRegion = LiveRegionMode.Polite },
+                )
             }
         },
         bottom = {
@@ -275,7 +297,7 @@ private fun SignIn(server: String, busy: Boolean, actions: SetupActions, openUrl
                 }
                 Link("Use your own server") { selfHosted = true }
             } else {
-                Primary("Sign in", busy, enabled = url.isNotBlank() && token.isNotBlank()) { actions.ownerToken(url, token) }
+                Primary("Sign in", busy, enabled = url.isNotBlank() && token.isNotBlank(), onClick = signIn)
                 OutlinedButton(onClick = { openUrl(actions.gitHub(url)) }, enabled = url.isNotBlank() && !busy, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
                     Text("Sign in with GitHub on this server", style = StarbridgeTheme.type.action)
                 }
