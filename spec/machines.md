@@ -162,14 +162,19 @@
   whose new hook runs only once trusted, it says at the end that Codex will ask, with the
   commands, so nothing mid-output reads as a prompt. Claude Code and Pi, whose installs run for seconds, first print
   `installing…` (#773). It still asks before installing CodexBar, a
-  third-party binary (with #748, only when no other machine sends quotas), which providers to
-  send, whether to linger, and whether to send a test decision. It asks once whether to send
-  permission prompts, Enter saying no (#2111, card d_brief-treat-uphold): for one agent in its
-  default mode they block it more often than questions do, and they stay opt-in. It asks only
-  when an agent that can send them (all but Cursor) has Starbridge, never again once answered,
-  and not with `--yes` or without a terminal.
-  Presence stays off and unasked; the summary names `starbridge config permissions on` while
-  prompts are off, on a desktop or
+  third-party binary (with #748, only when no other machine sends quotas), and whether to send
+  quotas when another machine already does. It asks once whether to send permission prompts,
+  Enter saying no (#2111, card d_brief-treat-uphold): for one agent in its default mode they
+  block it more often than questions do, and they stay opt-in. It asks that only when an agent
+  that can send them (all but Cursor) has Starbridge, never again once answered, and not with
+  `--yes` or without a terminal. It no longer asks which providers to send (every one that
+  works, or the ones sent before; `--providers` picks others), whether to linger (on, and
+  uninstall turns it off), whether to add the CLI to the PATH (added, and uninstall removes it)
+  or whether to send a test question (sent; Ctrl-C skips): each was an Enter that nearly
+  everyone pressed (#2121, cards d_still-salute-police and d_embrace-stamp-mom). A new machine
+  with CodexBar asks only the pairing check and the permission prompts question. Presence stays
+  off and unasked; the summary names `starbridge config permissions on` while prompts are off, on
+  a desktop or
   laptop `starbridge config presence on`, `starbridge status`,
   `starbridge uninstall --agent <name>` and `starbridge uninstall`. With no terminal every
   question takes its default, so nothing waits on input. A failed install prints its reason and

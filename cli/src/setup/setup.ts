@@ -302,12 +302,8 @@ export async function setup(sys: Sys, opts: SetupOpts): Promise<number> {
   const upload = machine && quota && quota.providers.length > 0 ? quota : undefined;
   if (upload || (machine && !opts.yes)) section(ctx, "Test");
   if (upload) await firstUpload(ctx, upload);
-  if (
-    machine &&
-    !opts.yes &&
-    (await prompt.confirm("  Send a test decision to your devices?", true))
-  )
-    await testDecision(ctx, machine.name);
+  // Sent without asking (#2121): nearly everyone said yes, and Ctrl-C skips it.
+  if (machine && !opts.yes) await testDecision(ctx, machine.name);
 
   section(
     ctx,
@@ -536,9 +532,9 @@ async function codexbarStep(
     if (broken.length > 0)
       ctx.out(`  Sending ${broken.join(", ")} although CodexBar could not read them now`);
   } else {
-    const preselected = prior?.length ? works.filter((p) => prior.includes(p)) : works;
-    const known = new Set([...probes.map((p) => p.provider), ...list.map((p) => p.provider)]);
-    providers = await pickProviders(sys, preselected, known);
+    // Without asking (#2121, card d_embrace-stamp-mom): the ones it sent before that still work,
+    // else every one that works. `--providers` picks others.
+    providers = prior?.length ? works.filter((p) => prior.includes(p)) : works;
   }
   const q: Quota = {
     ...cfg.quota,
@@ -552,6 +548,7 @@ async function codexbarStep(
       ? `✓ Sends ${providers.join(", ")} every ${q.interval}`
       : "– Sends no quotas",
   );
+  if (!opts.providers) ctx.out("  To send others: starbridge setup --providers <a,b>");
   return q;
 }
 
@@ -586,26 +583,8 @@ export function probeLines(sys: Sys, probes: Probe[]): string[] {
   });
 }
 
-async function pickProviders(
-  sys: Sys,
-  preselected: string[],
-  known: Set<string>,
-): Promise<string[]> {
-  while (true) {
-    const a = await sys.prompt.text(
-      "  Providers to send, comma-separated (none for no quotas):",
-      preselected.length > 0 ? preselected.join(",") : "none",
-    );
-    if (a.trim().toLowerCase() === "none") return [];
-    const picked = [...new Set(a.split(/[\s,]+/).filter(Boolean))];
-    const unknown = picked.filter((p) => !known.has(p));
-    if (unknown.length === 0) return picked;
-    sys.ctx.out(`  Not a CodexBar provider here: ${unknown.join(", ")}`);
-  }
-}
-
 async function serviceStep(sys: Sys, opts: SetupOpts, configChanged: boolean) {
-  const { ctx, prompt } = sys;
+  const { ctx } = sys;
   section(ctx, "Background service");
   const why = await unavailable(sys);
   if (why) {
@@ -639,13 +618,14 @@ async function serviceStep(sys: Sys, opts: SetupOpts, configChanged: boolean) {
   if (!status) ctx.out("  The agent did not answer yet: starbridge status shows its state");
   else if (status.machine && !status.server.reachable)
     ctx.out(`✗ The server is not reachable: ${status.server.lastError ?? "no answer yet"}`);
+  // Without asking (#2121, card d_embrace-stamp-mom); uninstall turns it off again (#2040).
   if ((await lingering(sys)) === false) {
-    if (
-      await prompt.confirm("  Keep it running after you log out (loginctl enable-linger)?", true)
-    ) {
-      const err = await enableLinger(sys);
-      ctx.out(err ? `✗ loginctl enable-linger failed: ${err}` : "✓ Runs after logout");
-    } else ctx.out("– Stops when your last login session ends");
+    const err = await enableLinger(sys);
+    ctx.out(
+      err
+        ? `✗ loginctl enable-linger failed: ${err}`
+        : "✓ Runs after logout (loginctl enable-linger; uninstall turns it off)",
+    );
   }
 }
 
@@ -707,7 +687,7 @@ async function testDecision(ctx: Ctx, name: string) {
     session: "",
   };
   const opts = { wait: true, timeout: "10m" };
-  ctx.out("  Sent. Answer it on any of your devices (Ctrl-C skips)…");
+  ctx.out("  Sent a test question to your devices. Answer it there (Ctrl-C skips)…");
   // `ask` prints the decision's id first, kept to withdraw the card on Ctrl-C (#613), then the
   // answer line agents read; the owner sees neither, only what they answered.
   let id: string | undefined;
@@ -736,12 +716,13 @@ async function testDecision(ctx: Ctx, name: string) {
     );
   } catch (e) {
     if (!(e instanceof Interrupted)) {
-      ctx.out(`✗ The test decision failed: ${(e as Error).message}`);
+      ctx.out(`✗ The test question failed: ${(e as Error).message}`);
       return;
     }
     code = EXIT_INTERRUPTED;
   }
-  if (code === 2) ctx.out("✗ No answer within 10 minutes");
+  if (code === 2)
+    ctx.out("✗ No answer within 10 minutes: starbridge status shows where it stopped");
   if (code !== EXIT_INTERRUPTED) return;
   // Cut while it was being sent: `ask` withdrew it already (#1289).
   if (!id) {

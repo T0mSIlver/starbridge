@@ -67,7 +67,7 @@ starbridge.run, or [host your own](../server/README.md).
    ([what setup does](../cli/README.md#what-setup-does)). CodexBar is optional: setup asks before
    installing it, and everything but quotas works without it.
 
-4. **Answer the test question** that setup offers to send. If nothing arrives, run
+4. **Answer the test question** that setup sends. If nothing arrives, run
    `starbridge status`. To send one again later:
 
    ```bash
