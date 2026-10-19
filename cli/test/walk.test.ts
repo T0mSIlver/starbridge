@@ -16,6 +16,7 @@ import {
   readdirSync,
   readFileSync,
   readlinkSync,
+  rmSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -319,10 +320,11 @@ describe.skipIf(process.platform !== "linux")("a new user's walk", () => {
   let releasesUrl: string;
   let installSh: string;
   let tarball: string;
+  let dist: string;
 
   beforeAll(async () => {
     server = await LiveServer.start();
-    const dist = mkdtempSync(join(tmpdir(), "starbridge-walk-release-"));
+    dist = mkdtempSync(join(tmpdir(), "starbridge-walk-release-"));
     const asset = platformAsset();
     const built = Bun.spawnSync([
       process.execPath,
@@ -378,6 +380,9 @@ describe.skipIf(process.platform !== "linux")("a new user's walk", () => {
       if (agentRunning(o)) process.kill(Number(readFileSync(join(o.state, "agent.pid"), "utf8")));
     server?.stop();
     releases?.stop(true);
+    // Each holds a compiled binary of about 100 MB.
+    for (const dir of [dist, ...owners.map((o) => o.root)])
+      if (dir) rmSync(dir, { recursive: true, force: true });
   });
 
   test("curl | sh, setup, the first card, uninstall", async () => {
