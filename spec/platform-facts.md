@@ -37,15 +37,12 @@ What the code relies on, with the versions checked.
   `PermissionDenied`. When the keyboard answers Yes first the hook gets no signal; Esc or No sends
   it SIGTERM. Every `PreToolUse` deny shows as a red "hook error". In cloud sessions only repo hooks
   run, and environment variables are readable by the agent.
-- **T3 Code** (0.1.1-nightly.20261018, Claude Code 2.1.301, Agent SDK 0.3.276): runs Claude
-  Code through the SDK's `query()` with streaming input, so the process stays up between turns,
-  with `CLAUDE_CODE_ENTRYPOINT=sdk-ts`, `--allowedTools mcp__t3-code__*` and the user's
-  settings, plugins and mods; its commands get `CLAUDE_CODE_SESSION_ATTENDED=0`. A turn a
-  plugin's `$.prompt.submit` starts shows in the thread as "Background activity updated". When
-  a `PermissionRequest` hook decides, the SDK aborts T3's `canUseTool` request and the call
-  runs, but T3 keeps its approval open, blocking the composer, until it is tapped, which then
-  does nothing more; a hook's answer to `AskUserQuestion` closes T3's question. Checked
-  2026-10-19 with a scripted model (#2100).
+- **Agent SDK** (0.3.276, Claude Code 2.1.301): a `query()` given a string prompt closes the
+  process's input after its first result, so Claude Code ends with that turn; one given a stream
+  of prompts keeps it open until the stream ends. Both run with `CLAUDE_CODE_ENTRYPOINT=sdk-ts`
+  unless the host sets one, and with the same arguments, and their commands get
+  `CLAUDE_CODE_SESSION_ATTENDED=0`. The mod's `turn.complete` fires at each turn's end, and a
+  turn its `$.prompt.submit` starts runs in the open session (#2100).
 - **Codex** (CLI 0.160): the TUI runs sessions in a shared app-server daemon; `codex queue --thread
   <id> --message <text>` starts a turn in an idle session or runs next in a busy one, and starts
   the daemon itself. It takes the message only as an argument and refuses sub-agent threads. An

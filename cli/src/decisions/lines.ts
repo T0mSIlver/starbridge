@@ -24,8 +24,8 @@ export function delivery(
   modSeen: boolean,
 ): Delivery {
   if (input.agent === "antigravity") return input.antigravity && reachable ? "prompt" : "wait";
-  // The mod runs its loop only in a session that stays open (#863), so a seen mod outweighs
-  // `headless`, which T3 Code's SDK sessions carry as `claude -p` does (#2100). Only the mod
+  // The mod runs its loop only in a session that stays open (#863, #2100), so a seen mod
+  // outweighs `headless`, which Agent SDK sessions carry as `claude -p` does. Only the mod
   // names a subagent, so one runs in this session (#1702).
   if (input.agent === "claude-code" || input.agent === "cursor")
     return modSeen || (!input.headless && !!input.subagent) ? "prompt" : "wait";
