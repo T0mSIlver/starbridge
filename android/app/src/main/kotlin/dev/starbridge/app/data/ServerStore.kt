@@ -434,8 +434,6 @@ class ServerStore(
     override fun receiveSignIn(redirect: String) = run {
         if (phase.value != Phase.SignedOut) return@run
         val verifier = secrets.signInVerifier ?: return@run
-        // The sign-in screen keeps its last failure until another try, which ends it.
-        notice.value = null
         // The state is the challenge this sign-in sent: a link from another sign-in is not this
         // phone's, and leaves the pending one alone.
         val challenge = SignIn.challenge(verifier)
@@ -444,6 +442,8 @@ class ServerStore(
             is SignIn.Redirect.Denied -> if (r.state == challenge) throw IllegalStateException("Sign-in didn't finish. Sign in again.") else return@run
             null -> return@run
         }
+        // This phone's own sign-in: a new try, which ends the last failure on the sign-in screen.
+        notice.value = null
         persist(newSecrets = secrets.copy(signInVerifier = null))
         val session = try {
             Api(http, saved.server, null).appSession(link.code, verifier)
