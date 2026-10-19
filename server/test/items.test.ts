@@ -385,6 +385,8 @@ test("blobs=open lists an answered decision without its images, which its id sti
     [waits.id, 1],
     [done.id, 0],
   ]);
+  // None: which questions are open, without their images (#2097).
+  expect(await list("&open=1&blobs=none")).toEqual([[waits.id, 0]]);
   const one = await s.call("GET", `/v1/items/${done.id}`, { token: phone.token });
   expect(one.json.item.blobs).toEqual([blob]);
   expect((await s.call("GET", "/v1/items?blobs=1", { token: phone.token })).status).toBe(400);
