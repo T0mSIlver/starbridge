@@ -26,6 +26,7 @@ test("on a port file, the mod reaches the agent at the port the file names (#128
       write: async () => {},
       stat: async () => undefined,
     },
+    plugin: { name: "starbridge-mod", root: "/m" },
     process: { run: async () => ({ exitCode: 0, stdout: "4242\n", stderr: "" }) },
     http: {
       fetch: async (url: string) => {
@@ -44,6 +45,54 @@ test("on a port file, the mod reaches the agent at the port the file names (#128
   expect(fetched[0]).toBe("http://127.0.0.1:47213/v1/status");
 });
 
+test("an Agent SDK session calls the agent only once its first turn ends; `claude -p` never (#2100)", async () => {
+  const run = async (entrypoint: string) => {
+    const { register } = (await import(REGISTER)) as {
+      register: (on: (event: string, h: Handler) => void) => void;
+    };
+    const handlers = new Map<string, Handler>();
+    register((event, h) => handlers.set(event, h));
+    const fetched: string[] = [];
+    const env: Record<string, string> = {
+      STARBRIDGE_AGENT_SOCKET: "/sb/agent.sock",
+      HOME: "/sb",
+      CLAUDE_CODE_ENTRYPOINT: entrypoint,
+    };
+    const $ = {
+      env: { get: async (name: string) => env[name] },
+      fs: { read: async () => "", write: async () => {}, stat: async () => undefined },
+      plugin: { name: "starbridge-mod", root: "/m" },
+      process: { run: async () => ({ exitCode: 0, stdout: "", stderr: "" }) },
+      http: {
+        fetch: async (url: string) => {
+          fetched.push(url);
+          return { status: 503, headers: {}, text: "" };
+        },
+      },
+      ui: { log: () => {}, status: () => {} },
+      clock: { now: () => Date.now(), sleep: () => new Promise<void>(() => {}) },
+      prompt: { submit: () => {} },
+      session: { id: async () => "s1", cwd: async () => "/work" },
+    };
+    await handlers.get("session.start")?.($, { isInteractive: false }, async () => undefined);
+    await Bun.sleep(100);
+    const atStart = fetched.length;
+    // A subagent's end is not the session's turn.
+    await handlers.get("turn.complete")?.($, { agentId: "a1" }, async () => undefined);
+    await Bun.sleep(100);
+    const afterSubagent = fetched.length;
+    await handlers.get("turn.complete")?.($, { turnId: "t1" }, async () => undefined);
+    const by = Date.now() + 2000;
+    while (fetched.length === 0 && Date.now() < by) await Bun.sleep(20);
+    await handlers.get("session.end")?.($, { reason: "other" }, async () => undefined);
+    return { atStart, afterSubagent, afterTurn: fetched.length };
+  };
+  const sdk = await run("sdk-ts");
+  expect([sdk.atStart, sdk.afterSubagent]).toEqual([0, 0]);
+  expect(sdk.afterTurn).toBeGreaterThan(0);
+  expect(await run("sdk-cli")).toEqual({ atStart: 0, afterSubagent: 0, afterTurn: 0 });
+});
+
 test("mid-turn, the main agent's next tool result carries an answer marked waiting, and the turn's end submits nothing (#1484)", async () => {
   const { register } = (await import(REGISTER)) as {
     register: (on: (event: string, h: Handler) => void) => void;
@@ -58,6 +107,7 @@ test("mid-turn, the main agent's next tool result carries an answer marked waiti
   const $ = {
     env: { get: async (name: string) => env[name] },
     fs: { read: async () => "", write: async () => {}, stat: async () => undefined },
+    plugin: { name: "starbridge-mod", root: "/m" },
     process: { run: async () => ({ exitCode: 0, stdout: "", stderr: "" }) },
     http: {
       fetch: async (url: string) => {
@@ -130,6 +180,7 @@ test("an answer queued behind a typed prompt when the process exits comes back o
         get: async (ref: { key: string }) => ({ value: state.get(ref.key), version: 0 }),
         set: async (ref: { key: string }, value: unknown) => void state.set(ref.key, value),
       },
+      plugin: { name: "starbridge-mod", root: "/m" },
       process: { run: async () => ({ exitCode: 0, stdout: "", stderr: "" }) },
       http: {
         fetch: async (url: string) => {
@@ -200,6 +251,7 @@ test("a subagent's question is tagged with its id, and its answer goes to it, ev
   const $ = {
     env: { get: async (name: string) => env[name] },
     fs: { read: async () => "", write: async () => {}, stat: async () => undefined },
+    plugin: { name: "starbridge-mod", root: "/m" },
     process: { run: async () => ({ exitCode: 0, stdout: "", stderr: "" }) },
     http: {
       fetch: async (url: string) => {
@@ -294,6 +346,7 @@ test("an answer a subagent got after its last tool round goes to the parent once
       set: async ({ key }: { key: string }, value: string) => void state.set(key, value),
     },
     agent: { list: async () => [{ id: "a1", status }] },
+    plugin: { name: "starbridge-mod", root: "/m" },
     process: { run: async () => ({ exitCode: 0, stdout: "", stderr: "" }) },
     http: {
       fetch: async (url: string) => {

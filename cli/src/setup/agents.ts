@@ -70,6 +70,7 @@ import {
   removePlugins,
   settingsPath,
 } from "./plugins";
+import { desktopReaches, installRemotePlugin, removeRemotePlugin } from "./remote-plugin";
 import { defaults, type Sys } from "./sys";
 
 /** Each agent by the name `--agent` takes, with the name it goes by. */
@@ -227,6 +228,11 @@ async function installClaude(sys: Sys): Promise<Outcome> {
   if (foreign)
     return { mark: "–", text: "skipped", notes: [...notes, `Not installed: ${foreign}.`] };
   if (pluginsStale(sys, state)) await installPlugins(sys, state);
+  // Claude desktop's sessions here over SSH may get hookless copies of its computer's plugins.
+  if (desktopReaches(sys)) {
+    const note = await installRemotePlugin(sys);
+    if (note) notes.push(note);
+  }
   if (autoUpdate(sys) === false && !enableAutoUpdate(sys))
     notes.push("Could not turn on the plugins' auto-update.");
   let allowed = missingAllow(ALLOW.claude, sys).length === 0;
@@ -381,6 +387,7 @@ export async function removeAgent(sys: Sys, id: AgentId): Promise<string[]> {
   const done: string[] = [];
   switch (id) {
     case "claude": {
+      done.push(...removeRemotePlugin(sys));
       if (!hasClaude(sys)) break;
       const state = await pluginState(sys);
       if (typeof state !== "string") done.push(...(await removePlugins(sys, state)));

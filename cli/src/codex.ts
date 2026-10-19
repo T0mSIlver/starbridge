@@ -23,14 +23,16 @@ export interface CodexSession {
 /**
  * Where the asking Codex session runs, read from the environment Codex gives its commands.
  * Undefined for a `codex exec` session: `codex queue` accepts a message for it, but nothing runs
- * that message once exec has returned.
+ * that message once exec has returned. Undefined too for a thread another app-server client
+ * started, such as T3 Code: it runs its own app-server, so the daemon would load the thread and
+ * run the answer's turn where that client never shows it (#2101).
  */
 export function codexSession(env: Ctx["env"]): CodexSession | undefined {
   const home = codexHome(env);
   const bin = which(env, "codex");
   if (!home || !bin) return undefined;
-  if (env.CODEX_THREAD_ID && codexThread(home, env.CODEX_THREAD_ID)?.origin === "exec")
-    return undefined;
+  const origin = env.CODEX_THREAD_ID ? codexThread(home, env.CODEX_THREAD_ID)?.origin : undefined;
+  if (origin === "exec" || origin === "app") return undefined;
   return { home, bin };
 }
 
@@ -108,15 +110,16 @@ export function trustedCodex(ctx: Ctx, s: CodexSession): CodexSession | undefine
 
 /**
  * How Codex started thread `id`, from the first line of its rollout: `origin` "exec" for
- * `codex exec`, "interactive" for the TUI or an IDE, and `root`, the thread of the session it
- * belongs to (`session_id`), when that is another thread, as for a sub-agent. Undefined when the
- * rollout is not found. Thread ids are UUIDv7, so the id dates the `sessions/YYYY/MM/DD` folder
- * (local time) the rollout is in.
+ * `codex exec`, "tui" for the TUI, whose threads run in the shared daemon, "app" for any other
+ * client of its own app-server, such as T3 Code (originator `T3 Code`, #2101); and `root`, the
+ * thread of the session it belongs to (`session_id`), when that is another thread, as for a
+ * sub-agent. Undefined when the rollout is not found. Thread ids are UUIDv7, so the id dates the
+ * `sessions/YYYY/MM/DD` folder (local time) the rollout is in.
  */
 export function codexThread(
   home: string,
   id: string,
-): { origin: "exec" | "interactive"; root?: string } | undefined {
+): { origin: "exec" | "tui" | "app"; root?: string } | undefined {
   const ms = Number.parseInt(id.replace(/-/g, "").slice(0, 12), 16);
   if (!Number.isFinite(ms)) return undefined;
   for (const offset of [0, -1, 1]) {
@@ -149,7 +152,12 @@ export function codexThread(
     if (origin === undefined && source === undefined) return undefined;
     const root = /"session_id":"([0-9a-f-]{36})"/.exec(text)?.[1];
     return {
-      origin: source === "exec" || origin === "codex_exec" ? "exec" : "interactive",
+      origin:
+        source === "exec" || origin === "codex_exec"
+          ? "exec"
+          : origin === "codex-tui" || origin === undefined
+            ? "tui"
+            : "app",
       ...(root && root !== id ? { root } : {}),
     };
   }

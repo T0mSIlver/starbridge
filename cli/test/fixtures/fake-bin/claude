@@ -32,7 +32,7 @@ case "$1 $2" in
     for f in "$s"/plugin-*; do
       [ -f "$f" ] || continue
       id=${f##*/plugin-}; enabled=true; [ -f "$s/disabled-$id" ] && enabled=false
-      printf '%s{"id":"%s","scope":"user","enabled":%s,"version":"0.2.0"}' "$sep" "$id" "$enabled"; sep=','
+      printf '%s{"id":"%s","scope":"user","enabled":%s,"version":"0.2.0","installPath":"%s"}' "$sep" "$id" "$enabled" "$(printf '%s' "$s/cache/$id" | sed 's/\\/\\\\/g')"; sep=','
     done
     echo ']' ;;
   "install "*) touch "$s/plugin-$2" ;;
