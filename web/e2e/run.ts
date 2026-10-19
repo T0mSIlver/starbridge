@@ -514,6 +514,8 @@ async function orderAcrossClients(page: Page, pageB: Page, home: string) {
     await p.reload();
     await row(p).waitFor({ timeout: 30_000 });
     await p.getByRole("button", { name: /^Order probe/ }).waitFor({ timeout: 30_000 });
+    if (await p.getByRole("button", { name: /^Waiting for you.*Order probe/ }).count())
+      throw new Error("a browser kept the agent waiting after it went back to work");
   }
 
   step("answered on one browser while the other is offline: back online, it shows the answer");

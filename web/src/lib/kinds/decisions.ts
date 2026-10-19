@@ -365,11 +365,19 @@ export async function answer(ctx: Ctx, item: InboxItem, reply: Reply): Promise<s
 }
 
 /**
- * A kept snooze, which before #2103 kept only its time. Its `until` unknown, it reads as the latest
- * possible, so the same snooze, pushed again at its time, wins the tie and is noted whole.
+ * The latest snooze kept of `id` in the `snoozes` record. Its `until` is kept beside it, for the
+ * time it was written with; a time a page from before #2103 wrote has none, and reads as the
+ * latest possible, so the same snooze, pushed again at its time, wins the tie and is noted whole.
  */
-export const keptSnooze = (v: string | { at: string; until: string } | undefined) =>
-  typeof v === "string" ? { at: v, until: "9999-12-31T23:59:59.999Z" } : v;
+export function keptSnooze(
+  record: Record<string, string> | undefined,
+  id: string,
+): { at: string; until: string } | undefined {
+  const at = record?.[id];
+  if (!at) return undefined;
+  const [tieAt, until] = (record?.[`until:${id}`] ?? "").split(" ");
+  return { at, until: tieAt === at && until ? until : "9999-12-31T23:59:59.999Z" };
+}
 
 /**
  * Keeps the latest snooze this browser knows per decision, for the service worker (#571) and
@@ -383,9 +391,12 @@ export async function noteSnoozes(
   await store.update("snoozes", ctx.account, (old) => {
     const next = { ...old };
     for (const z of seen) {
-      const had = keptSnooze(next[z.decisionId]);
-      if (laterSnooze(had, z)) next[z.decisionId] = { at: z.at, until: z.until };
-      else if (had && laterSnooze(z, had)) newest = false;
+      const had = keptSnooze(next, z.decisionId);
+      if (laterSnooze(had, z)) {
+        // The time stays where pages from before #2103 read and compare it.
+        next[z.decisionId] = z.at;
+        next[`until:${z.decisionId}`] = `${z.at} ${z.until}`;
+      } else if (had && laterSnooze(z, had)) newest = false;
     }
     return next;
   });
@@ -411,7 +422,7 @@ export async function snooze(ctx: Ctx, item: InboxItem, until: string): Promise<
   const to = [machine.member, ...activeMembers(fresh.dir, "device")];
   // Past the latest snooze of it this browser knows, read after the directory's await: one a
   // phone stamped a second ahead, or from a clock that runs ahead, would win over it (#2103).
-  const last = keptSnooze((await store.get("snoozes", ctx.account))?.[item.decision.id]);
+  const last = keptSnooze(await store.get("snoozes", ctx.account), item.decision.id);
   const body: Snooze = {
     v: 1,
     id: randomId("z_"),

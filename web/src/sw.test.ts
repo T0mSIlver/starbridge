@@ -301,7 +301,9 @@ test("a snooze kept before #2103, its time only, still notifies when it comes ba
   );
   await push(payload({ ...z, re: "d_legacy", wakeAt: until }, { wakeAt: until, due: true }));
   expect(shows).toBe(before + 1);
-  expect((await store.get("snoozes", ctx.account))?.d_legacy).toEqual({ at, until });
+  const kept = await store.get("snoozes", ctx.account);
+  // The time stays a string where a page from before #2103 compares it; the tie data sits beside.
+  expect([kept?.d_legacy, kept?.["until:d_legacy"]]).toEqual([at, `${at} ${until}`]);
 });
 
 test("a question whose item cannot be read shows the placeholder, which tapped opens the inbox (#1363)", async () => {
