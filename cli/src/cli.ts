@@ -34,6 +34,7 @@ import {
 } from "./decisions";
 import { hookAskUser, hookCursorSession, hookPermission, hookQuestion, hookSettle } from "./hook";
 import { updateLine } from "./latest";
+import { hookNextStep, hookPrompt } from "./next-step";
 import { pair, sendConfirm } from "./pair";
 import { pushOnce, quotaPush } from "./quota";
 import { installKind, ReleaseError } from "./release";
@@ -218,6 +219,12 @@ const HELP = `starbridge: post decisions to your devices, report runs, upload qu
   starbridge hook ask-user
       For Claude Code's PreToolUse hook on AskUserQuestion, from older plugins: prints
       nothing, so the picker opens and hook permission races it.
+
+  starbridge hook next-step --agent claude-code
+  starbridge hook prompt --agent claude-code
+      For Claude Code's PostToolUse hook on Claude desktop's next-step box and its
+      UserPromptSubmit hook: hook JSON on stdin. A box that asks becomes a question on your
+      devices for that session; the session's next prompt settles it.
 
   starbridge hook question --agent opencode|pi|antigravity|codex
       For the Starbridge opencode plugin and Pi extension, on each call of opencode's question
@@ -719,6 +726,8 @@ async function dispatch(argv: string[], ctx: Ctx): Promise<number> {
         if (sub === "permission") return await hookPermission(ctx, readText("-"), values);
         if (sub === "settle") return await hookSettle(ctx, readText("-"), values);
         if (sub === "ask-user") return hookAskUser();
+        if (sub === "next-step") return await hookNextStep(ctx, readText("-"));
+        if (sub === "prompt") return await hookPrompt(ctx, readText("-"));
         if (sub === "question")
           return values.agent === "codex"
             ? await hookCodexQuestion(ctx, readText("-"), values.race === true)
@@ -729,7 +738,7 @@ async function dispatch(argv: string[], ctx: Ctx): Promise<number> {
         if (sub === "stop") return await hookStop(ctx, readText("-"), values);
         if (sub === "pre-invocation") return hookPreInvocation(ctx, readText("-"), values);
         throw new UsageError(
-          "usage: starbridge hook permission|settle --agent claude-code|codex, starbridge hook ask-user, starbridge hook question --agent opencode|pi|codex|antigravity, starbridge hook session --agent cursor, or starbridge hook pre-tool|stop|pre-invocation --agent antigravity",
+          "usage: starbridge hook permission|settle --agent claude-code|codex, starbridge hook ask-user, starbridge hook next-step|prompt --agent claude-code, starbridge hook question --agent opencode|pi|codex|antigravity, starbridge hook session --agent cursor, or starbridge hook pre-tool|stop|pre-invocation --agent antigravity",
         );
       }
       case "update": {
