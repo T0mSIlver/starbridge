@@ -58,6 +58,22 @@ export function rememberMachineKind(ctx: Ctx): MachineKind {
   return kind;
 }
 
+/**
+ * Adds to what the state says Starbridge added to pi-permission-system's config. The first
+ * record on a machine whose config named the Starbridge link already, set up by a release before
+ * the record, also takes the rules that were there as Starbridge's, as uninstall did then.
+ */
+function recordPiAdded(ctx: Ctx, r: ReturnType<typeof allowPiRules>) {
+  ctx.store.updateState((s) => {
+    const legacy = s.piAdded === undefined && r.chained;
+    const rules = { ...s.piAdded?.rules };
+    for (const from of legacy ? [r.added, r.had] : [r.added])
+      for (const [surface, patterns] of Object.entries(from.rules ?? {}))
+        rules[surface] = [...new Set([...(rules[surface] ?? []), ...patterns])];
+    s.piAdded = { rules };
+  });
+}
+
 export function setPermissions(ctx: Ctx, enabled: boolean) {
   const config = ctx.store.agentConfig();
   ctx.store.saveAgentConfig({ ...config, permissions: { enabled } });
@@ -68,15 +84,20 @@ export function setPermissions(ctx: Ctx, enabled: boolean) {
  * does without presence, and offers to send Pi's and to let the starbridge commands through.
  */
 export async function permissionsOn(ctx: Ctx, prompt: Prompt | undefined) {
+  // The yes covers Pi too (#2130, card d_sound-jeans-argue): no question of its own. Without a
+  // terminal, it says what to add instead.
+  const write = prompt !== undefined;
   setPermissions(ctx, true);
   // Codex's dialog opens only once the hook lets go: without presence it waits for the devices.
   if (which(ctx.env, "codex") && !ctx.store.agentConfig().presence?.enabled)
     ctx.out(
       "Codex: its prompts wait up to 10 minutes for your devices before Codex asks in the terminal. `starbridge config presence on` sends them to the terminal while you're at this machine.",
     );
-  await offerPiChain(ctx, prompt);
-  // pi-permission-system is often installed after setup, which then had no rules to add.
-  await offerPiAllow(ctx, prompt, true);
+  // The rules first: they read whether the link was there before anything wrote it, which tells
+  // an older release's rules from the owner's (recordPiAdded). pi-permission-system is often
+  // installed after setup, which then had no rules to add.
+  piAllowStep(ctx, write, true);
+  piChainStep(ctx, write);
 }
 
 /**
@@ -84,7 +105,7 @@ export async function permissionsOn(ctx: Ctx, prompt: Prompt | undefined) {
  * `authorizerChain`, which only its owner may do: the link decides nothing until named there.
  * Without a terminal to ask on, it says which line to add instead.
  */
-export async function offerPiChain(ctx: Ctx, prompt: Prompt | undefined) {
+export function piChainStep(ctx: Ctx, write: boolean) {
   const { state, file } = piChain(ctx.env);
   if (state === "chained") return;
   if (state === "absent") {
@@ -95,19 +116,14 @@ export async function offerPiChain(ctx: Ctx, prompt: Prompt | undefined) {
     return;
   }
   const how = `add "${PI_LINK}" to "authorizerChain" in ${file}`;
-  if (state === "unreadable" || !prompt) {
+  if (state === "unreadable" || !write) {
     ctx.out(`Pi: to send pi-permission-system's prompts too, ${how}.`);
     return;
   }
-  if (
-    await prompt.confirm(
-      `Also send Pi's permission prompts (pi-permission-system)? This adds "${PI_LINK}" to "authorizerChain" in ${file}.`,
-      true,
-    )
-  ) {
-    chainPiLink(file);
-    ctx.out(`Pi: pi-permission-system now asks Starbridge first (${file}).`);
-  } else ctx.out(`Pi: its prompts stay in Pi; to send them later, ${how}.`);
+  chainPiLink(file);
+  ctx.out(
+    `Pi: pi-permission-system now asks Starbridge first (${file}); \`starbridge uninstall\` takes out what it added.`,
+  );
 }
 
 /**
@@ -117,7 +133,7 @@ export async function offerPiChain(ctx: Ctx, prompt: Prompt | undefined) {
  * the line saying they are there already. Without a terminal to ask on, it says what to add
  * instead.
  */
-export async function offerPiAllow(ctx: Ctx, prompt: Prompt | undefined, quiet = false) {
+export function piAllowStep(ctx: Ctx, write: boolean, quiet = false) {
   const { state, file, plain } = piAllow(ctx.env);
   if (state === "absent") return;
   const how = `add ${piRulesText(ctx.env)} to "permission" and "${PI_LINK}" to "authorizerChain" in ${file}`;
@@ -137,26 +153,18 @@ export async function offerPiAllow(ctx: Ctx, prompt: Prompt | undefined, quiet =
       );
     return;
   }
-  if (state === "unreadable" || !prompt) {
+  if (state === "unreadable" || !write) {
     ctx.out(`Pi: to read the skill and run the starbridge commands without a prompt, ${how}.`);
     return;
   }
-  if (
-    await prompt.confirm(
-      `Let Pi read the Starbridge skill and run \`starbridge ask\`, \`waiting\`, \`working\`, \`wait\` and \`settle\` without a pi-permission-system prompt? This adds rules to "permission" and "${PI_LINK}" to "authorizerChain" in ${file}${permissionsEnabled(ctx) ? ", which also sends Pi's other permission prompts to your devices" : ""}.`,
-      true,
-    )
-  ) {
-    try {
-      allowPiRules(ctx.env);
-      ctx.out(`Pi: allowed them in ${file}.`);
-    } catch (e) {
-      ctx.out(`Pi: could not write ${file}: ${(e as Error).message}`);
-    }
-  } else
+  try {
+    recordPiAdded(ctx, allowPiRules(ctx.env));
     ctx.out(
-      `Pi: pi-permission-system will ask before each \`starbridge ask\`; to allow them later, ${how}.`,
+      `Pi: allowed the starbridge commands and named Starbridge in "authorizerChain" in ${file}; \`starbridge uninstall\` takes out what it added.`,
     );
+  } catch (e) {
+    ctx.out(`Pi: could not write ${file}: ${(e as Error).message}`);
+  }
 }
 
 const USAGE =

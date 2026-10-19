@@ -72,17 +72,29 @@ export function piChain(env: Ctx["env"]): {
   }
 }
 
-/** Appends the Starbridge link to pi-permission-system's `authorizerChain`, keeping the rest. */
-export function chainPiLink(file: string) {
+/**
+ * The piRules patterns Starbridge added to pi-permission-system's config, by surface, kept in the
+ * state so uninstall takes out only those (#2130).
+ */
+export interface PiAdded {
+  rules?: Record<string, string[]>;
+}
+
+/**
+ * Appends the Starbridge link to pi-permission-system's `authorizerChain`, keeping the rest.
+ * Returns whether it added it.
+ */
+export function chainPiLink(file: string): boolean {
   let config: Record<string, unknown> = {};
   if (existsSync(file)) config = JSON.parse(readFileSync(file, "utf8")) as Record<string, unknown>;
   const chain = Array.isArray(config.authorizerChain) ? config.authorizerChain : [];
-  if (chain.includes(PI_LINK)) return;
+  if (chain.includes(PI_LINK)) return false;
   mkdirSync(dirname(file), { recursive: true });
   replaceFile(
     file,
     `${JSON.stringify({ ...config, authorizerChain: [...chain, PI_LINK] }, null, 2)}\n`,
   );
+  return true;
 }
 /**
  * Pi's agent folder: `PI_CODING_AGENT_DIR` with a leading `~` expanded, as Pi does (#2039), else
@@ -211,33 +223,49 @@ export function piBashDenies(env: Ctx["env"]): boolean {
  * set to a plain `allow` needs none, and one set to another plain level stays as it is
  * (plainLevel).
  */
-export function allowPiRules(env: Ctx["env"]) {
+export function allowPiRules(env: Ctx["env"]): {
+  added: PiAdded;
+  /** The patterns that were there already, and whether the link was. */
+  had: PiAdded;
+  chained: boolean;
+} {
   const file = piPermissionConfig(env);
   const config = readConfig(file) ?? {};
   const permission = isObject(config.permission) ? { ...config.permission } : {};
+  const added: Record<string, string[]> = {};
+  const had: Record<string, string[]> = {};
   for (const [surface, patterns] of Object.entries(piRules(env))) {
     if (permission[surface] === "allow" || plainLevel(permission[surface])) continue;
     const rules = isObject(permission[surface]) ? { ...permission[surface] } : {};
+    const fresh = patterns.filter((p) => rules[p] !== "allow");
+    if (fresh.length > 0) added[surface] = fresh;
+    const old = patterns.filter((p) => rules[p] === "allow");
+    if (old.length > 0) had[surface] = old;
     for (const p of patterns) delete rules[p];
     for (const p of patterns) rules[p] = "allow";
     permission[surface] = rules;
   }
   writeConfig(file, { ...config, permission });
-  chainPiLink(file);
+  const chained = !chainPiLink(file);
+  return { added: { rules: added }, had: { rules: had }, chained };
 }
 
 /**
  * Takes out what setup and `config permissions on` added to pi-permission-system's config: the
  * Starbridge link in `authorizerChain` and the piRules, dropping a list, map or file they leave
- * empty. Returns whether it changed the file.
+ * empty. With `added`, recorded when they were added, only those rules: one the owner had stays
+ * (#2130); without it, from a release before the record, every one. Returns whether it changed
+ * the file.
  */
-export function removePiEntries(env: Ctx["env"]): boolean {
+export function removePiEntries(env: Ctx["env"], added?: PiAdded): boolean {
   const file = piPermissionConfig(env);
   if (!existsSync(file)) return false;
   const config = readConfig(file);
   if (!config) return false;
   let changed = false;
   const chain = config.authorizerChain;
+  // The link always goes: it names the extension in Starbridge's Pi package, which uninstall
+  // removes, so pi-permission-system would be left calling a link that is gone.
   if (Array.isArray(chain) && chain.includes(PI_LINK)) {
     const rest = chain.filter((l) => l !== PI_LINK);
     if (rest.length > 0) config.authorizerChain = rest;
@@ -246,7 +274,7 @@ export function removePiEntries(env: Ctx["env"]): boolean {
   }
   const permission = config.permission;
   if (isObject(permission)) {
-    for (const [surface, patterns] of Object.entries(piRules(env))) {
+    for (const [surface, patterns] of Object.entries(added ? (added.rules ?? {}) : piRules(env))) {
       const rules = permission[surface];
       if (!isObject(rules)) continue;
       for (const p of patterns)
