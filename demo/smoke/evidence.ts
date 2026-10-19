@@ -41,7 +41,9 @@ export function keeper(em: Emulator, adbPath: string, dir: string | undefined, p
           );
           const inset =
             (
-              await em.shell("dumpsys display | grep -o 'cutout DisplayCutout{insets=[^)]*)'")
+              await em
+                .shell("dumpsys display | grep -o 'cutout DisplayCutout{insets=[^)]*)'")
+                .catch(() => "")
             ).trim() || "none";
           if (!on || inset !== last) since = Date.now();
           else if (Date.now() - since >= 3000) break;
@@ -53,7 +55,7 @@ export function keeper(em: Emulator, adbPath: string, dir: string | undefined, p
         "cmd overlay list | grep -i -E 'cutout'",
         "dumpsys display | grep -o 'cutout DisplayCutout{insets=[^)]*)'",
       ])
-        console.log(`[evidence] ${cmd}\n${await em.shell(cmd).catch((e) => String(e))}`);
+        console.log(`[evidence] ${cmd}\n${await em.shell(cmd).catch(() => "(none)")}`);
     }
     for (const extras of [
       "-e command enter",
