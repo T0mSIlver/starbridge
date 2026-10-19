@@ -7,6 +7,7 @@ import { CLIENT } from "../lib/api";
 import {
   answer,
   deviceContext,
+  keptSnooze,
   noteSnoozes,
   openPushedDecision,
   openPushedPermission,
@@ -204,8 +205,9 @@ async function onPush(text: string, seen: Shown): Promise<void> {
     if (answered.has(`${account}/${waiting.decisionId}`)) return;
     // A flip signed before the question's latest snooze, delivered late, is stale: the server
     // pushes none while a snooze is pending, and the snooze's return notifies on its own (#1280).
-    const snoozed = (await store.get("snoozes", account as string))?.[waiting.decisionId];
-    if (snoozed && Date.parse(waiting.at) < Date.parse(snoozed)) return;
+    const snoozed = keptSnooze(await store.get("snoozes", account as string), waiting.decisionId);
+    // order-ok: a waiting flip against a snooze, two kinds, not two updates of one.
+    if (snoozed && Date.parse(waiting.at) < Date.parse(snoozed.at)) return;
     const res = await fetch(`/v1/items/${encodeURIComponent(waiting.decisionId)}`, {
       headers: CLIENT,
     });

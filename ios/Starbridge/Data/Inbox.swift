@@ -66,7 +66,7 @@ struct SavedDecision: Codable, Equatable {
     /** Until when the owner put it off; none after Back now, whose time is its own (#571). */
     var snoozed: Date? {
         guard isOpen, let until = snoozedUntil.flatMap(Dates.parse) else { return nil }
-        if let at = snoozedAt.flatMap(Dates.parse), until <= at { return nil }
+        if let at = snoozedAt.flatMap(Dates.parse), until <= at { return nil } // order-ok: Back now, until against its own at
         return until > Date() ? until : nil
     }
 }
@@ -296,6 +296,30 @@ extension Heads {
         for h in saved {
             if let json = try? JSON.parse(h.head), let head = try? DirectoryHead(json: json) { self[h.id] = head }
         }
+    }
+}
+
+/**
+ * Which of two updates of one decision every client keeps, whatever order they arrive in: a push
+ * and a poll bring them in different orders on different devices. The web, the CLI and Android
+ * apply the same rule; packages/protocol/vectors/rules.json, "order", holds its cases (#2103).
+ */
+enum Order {
+    /** The later instant wins, and on equal instants the earlier `until`, so a question shows rather than hides. */
+    static func laterSnooze(keptAt: String?, keptUntil: String?, at: String, until: String) -> Bool {
+        guard let next = Dates.parse(at) else { return false }
+        guard let kept = keptAt.flatMap(Dates.parse) else { return true }
+        if kept != next { return next > kept }
+        guard let a = keptUntil.flatMap(Dates.parse), let b = Dates.parse(until) else { return false }
+        return b < a
+    }
+
+    /** The later instant wins, and on equal instants `waiting`, which tells the owner the agent is blocked. */
+    static func laterWaiting(keptAt: String?, keptState: String?, at: String, state: String) -> Bool {
+        guard let next = Dates.parse(at) else { return false }
+        guard let kept = keptAt.flatMap(Dates.parse) else { return true }
+        if kept != next { return next > kept }
+        return state == "waiting" && keptState != "waiting"
     }
 }
 

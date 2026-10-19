@@ -227,7 +227,8 @@ enum Notify {
 
     /** When a snooze newer than `z` puts the question off until, from what the app saved; nil when `z` is the latest. */
     static func laterSnooze(than z: Snooze, _ saved: SavedDecision?) -> Date? {
-        guard let saved, let at = saved.snoozedAt.flatMap(Dates.parse), let mine = Dates.parse(z.at), at > mine,
+        guard let saved, let at = saved.snoozedAt, let kept = saved.snoozedUntil,
+              Order.laterSnooze(keptAt: z.at, keptUntil: z.until, at: at, until: kept),
               let until = saved.snoozed, until > Date() else { return nil }
         return until
     }

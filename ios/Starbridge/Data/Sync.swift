@@ -427,20 +427,18 @@ extension Store {
         return c
     }
 
-    /** `d` with the agent's waiting state, when `w` is from the machine that asked and later than the one kept. */
+    /** `d` with the agent's waiting state, when `w` is from the machine that asked and wins over the one kept (#2103). */
     private func waited(_ d: SavedDecision, from: String, _ w: Waiting) -> SavedDecision? {
-        guard d.from == from, let at = Dates.parse(w.at) else { return nil }
-        if let kept = d.waitingAt.flatMap(Dates.parse), kept >= at { return nil }
+        guard d.from == from, Order.laterWaiting(keptAt: d.waitingAt, keptState: d.waiting, at: w.at, state: w.state) else { return nil }
         var u = d
         u.waiting = w.state
         u.waitingAt = w.at
         return u
     }
 
-    /** `d` with the owner's snooze, when it is later than the one kept; the latest wins, from any device. */
+    /** `d` with the owner's snooze, when it wins over the one kept, from any device (#2103). */
     private func snoozed(_ d: SavedDecision, _ z: Snooze) -> SavedDecision? {
-        guard let at = Dates.parse(z.at) else { return nil }
-        if let kept = d.snoozedAt.flatMap(Dates.parse), kept >= at { return nil }
+        guard Order.laterSnooze(keptAt: d.snoozedAt, keptUntil: d.snoozedUntil, at: z.at, until: z.until) else { return nil }
         var u = d
         u.snoozedUntil = z.until
         u.snoozedAt = z.at

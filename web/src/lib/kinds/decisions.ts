@@ -3,6 +3,8 @@
 import {
   activeMembers,
   type Decision,
+  laterSnooze,
+  laterWaiting,
   openAsync,
   openImages,
   ProtocolError,
@@ -11,6 +13,7 @@ import {
   type ShownImage,
   type Snooze,
   sealAsync,
+  snoozeStamp,
   type Waiting,
 } from "@starbridge/protocol";
 import { ApiError, api, lastPage, type Stored } from "../api";
@@ -205,8 +208,7 @@ export async function loadInbox(
       // Only tells until when the owner put a decision off: one that fails costs that alone.
       try {
         const z = await openSnooze(ctx, s.item);
-        const had = snoozes[z.decisionId];
-        if (!had || Date.parse(had.at) < Date.parse(z.at))
+        if (laterSnooze(snoozes[z.decisionId], z))
           snoozes[z.decisionId] = { until: z.until, at: z.at };
       } catch {}
       return;
@@ -217,8 +219,7 @@ export async function loadInbox(
         const { signer, body } = await openMachine(ctx, s.item, "waiting");
         const w = body as Waiting;
         const key = `${signer.id}/${w.decisionId}`;
-        const had = waits[key];
-        if (!had || had.at < w.at) waits[key] = { state: w.state, at: w.at };
+        if (laterWaiting(waits[key], w)) waits[key] = { state: w.state, at: w.at };
       } catch {}
       return;
     }
@@ -327,7 +328,7 @@ export async function loadInbox(
   const items = shown();
   await noteSnoozes(
     ctx,
-    Object.entries(snoozes).map(([decisionId, z]) => ({ decisionId, at: z.at })),
+    Object.entries(snoozes).map(([decisionId, z]) => ({ decisionId, at: z.at, until: z.until })),
   );
   await hold(ctx);
   if (opts.keep && kept) holdKeptSealed(ctx.account, kept.items);
@@ -402,20 +403,38 @@ export async function answer(ctx: Ctx, item: InboxItem, reply: Reply): Promise<s
 }
 
 /**
- * Keeps the latest snooze time this browser knows per decision, for the service worker (#571).
- * Returns whether `latest` holds no newer one than each given.
+ * The latest snooze kept of `id` in the `snoozes` record. Its `until` is kept beside it, for the
+ * time it was written with; a time a page from before #2103 wrote has none, and reads as the
+ * latest possible, so the same snooze, pushed again at its time, wins the tie and is noted whole.
+ */
+export function keptSnooze(
+  record: Record<string, string> | undefined,
+  id: string,
+): { at: string; until: string } | undefined {
+  const at = record?.[id];
+  if (!at) return undefined;
+  const [tieAt, until] = (record?.[`until:${id}`] ?? "").split(" ");
+  return { at, until: tieAt === at && until ? until : "9999-12-31T23:59:59.999Z" };
+}
+
+/**
+ * Keeps the latest snooze this browser knows per decision, for the service worker (#571) and
+ * the next snooze's time. Returns whether each given is the latest, or the same as it.
  */
 export async function noteSnoozes(
   ctx: Pick<Ctx, "account">,
-  seen: { decisionId: string; at: string }[],
+  seen: { decisionId: string; at: string; until: string }[],
 ): Promise<boolean> {
   let newest = true;
   await store.update("snoozes", ctx.account, (old) => {
     const next = { ...old };
     for (const z of seen) {
-      const had = next[z.decisionId];
-      if (had && Date.parse(had) > Date.parse(z.at)) newest = false;
-      else next[z.decisionId] = z.at;
+      const had = keptSnooze(next, z.decisionId);
+      if (laterSnooze(had, z)) {
+        // The time stays where pages from before #2103 read and compare it.
+        next[z.decisionId] = z.at;
+        next[`until:${z.decisionId}`] = `${z.at} ${z.until}`;
+      } else if (had && laterSnooze(z, had)) newest = false;
     }
     return next;
   });
@@ -439,13 +458,16 @@ export async function snooze(ctx: Ctx, item: InboxItem, until: string): Promise<
   const machine = fresh.dir.members.get(item.machine.id);
   if (!machine?.active) throw new Error(`${item.machine.name} was revoked`);
   const to = [machine.member, ...activeMembers(fresh.dir, "device")];
+  // Past the latest snooze of it this browser knows, read after the directory's await: one a
+  // phone stamped a second ahead, or from a clock that runs ahead, would win over it (#2103).
+  const last = keptSnooze(await store.get("snoozes", ctx.account), item.decision.id);
   const body: Snooze = {
     v: 1,
     id: randomId("z_"),
     decisionId: item.decision.id,
     to: to.map((m) => m.id),
     until,
-    at: now(),
+    at: snoozeStamp(Date.now(), last?.at),
     dir: { length: fresh.dir.length, head: fresh.dir.head },
   };
   await api.post(await sealAsync("snooze", body, me(fresh), to));

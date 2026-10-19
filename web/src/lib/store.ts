@@ -43,8 +43,9 @@ type Records = {
    */
   forgotten: string[];
   /**
-   * The signed time of the latest snooze this browser knows of each decision (#571): a return
-   * pushed for an older one shows nothing.
+   * The latest snooze this browser knows of each decision (#571): a return pushed for an older
+   * one shows nothing. Its signed time by decision id; since #2103, under `until:<id>`, that
+   * snooze's "<at> <until>", which breaks a tie. Pages from before read and write the times only.
    */
   snoozes: Record<string, string>;
   /** The inbox's items as listed, still sealed, and the cursor after them (#1380). */

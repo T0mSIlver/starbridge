@@ -461,11 +461,76 @@ async function keepEvidence(error?: unknown) {
 }
 
 /**
- * What a reload of an inbox with a kept history may cost before its open question shows (#2097):
- * a 4x slower CPU took 8.5 s when a load read the directory 5 times and opened the whole history
- * first (#1450). The open question must show while the rest of the inbox still loads, after one
- * read of the directory, and without downloading again the images this browser keeps.
+ * The same-second and late cases that kept coming back as bugs (#2103): which snooze or waiting
+ * state wins must not depend on which client sent it, its clock, or what arrived first. Browser
+ * `pageB`'s clock runs 30 s ahead, as a phone's may, or as a snooze Android or iOS stamps a second
+ * ahead of the last one; `page` is right. The CLI is the machine.
  */
+async function orderAcrossClients(page: Page, pageB: Page, home: string) {
+  step(
+    "a snooze from a clock ahead, then Back now within its lead: every client shows it back (#2103)",
+  );
+  const ask = cli(
+    "order-ask",
+    [
+      ...["ask", "--question", "Order probe: tag the release?", "--option", "Tag"],
+      ...["--option", "Wait", "--project", "starbridge", "--session", "e2e"],
+    ],
+    home,
+  );
+  const [id] = await ask.waitFor(/d_[\w-]+/);
+  if ((await ask.exited) !== 0) throw new Error("ask for the order probe failed");
+  const row = (p: Page) => p.locator(`button[data-id="${id}"]`);
+  const selected = (p: Page) => p.locator('section[aria-label="Selected"]');
+  await pageB.clock.setSystemTime(new Date(Date.now() + 30_000));
+  await pageB.reload();
+  await row(pageB).click({ timeout: 30_000 });
+  await selected(pageB).getByRole("button", { name: "Snooze", exact: true }).click();
+  await pageB.getByRole("button", { name: /^1 hour/ }).click();
+  await row(pageB).waitFor({ state: "detached", timeout: 10_000 });
+  // The first browser learns of that snooze, then brings the question back at once.
+  await page.reload();
+  await page.getByRole("button", { name: /^Snoozed\s*1/ }).click({ timeout: 30_000 });
+  await row(page).click({ timeout: 30_000 });
+  await selected(page).getByRole("button", { name: "Back now" }).click();
+  const backAt = Date.now();
+  await page.getByRole("button", { name: /^Snoozed\s*1/ }).waitFor({ state: "detached" });
+  if (Date.now() - backAt > 25_000) console.log("  Back now took longer than the clock's lead");
+  // The machine keeps Back now: `waiting` says nothing about a snooze.
+  const waiting = cli("order-waiting", ["waiting", id as string], home);
+  if ((await waiting.exited) !== 0) throw new Error("waiting on the order probe failed");
+  if (/Snoozed d_/.test(waiting.output()))
+    throw new Error(`the machine kept the earlier snooze over Back now: ${waiting.output()}`);
+  await pageB.reload();
+  await row(pageB).waitFor({ timeout: 30_000 });
+
+  step(
+    "waiting, then working within a second: every client shows the agent working (#1982, #2103)",
+  );
+  // Right after `waiting` above, as an agent that blocks and then goes on would.
+  const working = cli("order-working", ["working", id as string], home);
+  if ((await working.exited) !== 0) throw new Error("working on the order probe failed");
+  for (const p of [page, pageB]) {
+    await p.reload();
+    await row(p).waitFor({ timeout: 30_000 });
+    await p.getByRole("button", { name: /^Order probe/ }).waitFor({ timeout: 30_000 });
+    if (await p.getByRole("button", { name: /^Waiting for you.*Order probe/ }).count())
+      throw new Error("a browser kept the agent waiting after it went back to work");
+  }
+
+  step("answered on one browser while the other is offline: back online, it shows the answer");
+  await pageB.context().setOffline(true);
+  const wait = cli("order-wait", ["wait", id as string, "--timeout", "60s"], home);
+  await row(page).click();
+  await selected(page).getByRole("button", { name: /^Tag/ }).click();
+  await wait.waitFor(/Answer to d_\S+ \(Order probe: tag the release\?\): Tag/);
+  if ((await wait.exited) !== 0) throw new Error("wait on the order probe failed");
+  await pageB.context().setOffline(false);
+  await pageB.clock.setSystemTime(new Date());
+  await pageB.reload();
+  await row(pageB).waitFor({ state: "detached", timeout: 30_000 });
+}
+
 /** The kept inbox's records in this browser's IndexedDB: the lists and their images (#2097). */
 async function keptRecords(page: Page): Promise<string[]> {
   return page.evaluate(async () => {
@@ -483,6 +548,12 @@ async function keptRecords(page: Page): Promise<string[]> {
   });
 }
 
+/**
+ * What a reload of an inbox with a kept history may cost before its open question shows (#2097):
+ * a 4x slower CPU took 8.5 s when a load read the directory 5 times and opened the whole history
+ * first (#1450). The open question must show while the rest of the inbox still loads, after one
+ * read of the directory, and without downloading again the images this browser keeps.
+ */
 async function loadBudget(page: Page) {
   step("a reload shows the open question first, within its budget of requests (#2097)");
   const BUDGET = { requests: 16, directory: 1, kb: 96 };
@@ -2437,6 +2508,7 @@ async function main() {
     await probe(page).waitFor({ timeout: 30_000 });
     await probe(page).click();
     await selected(page).getByRole("button", { name: /^Ship/ }).click();
+    await orderAcrossClients(page, pageB, machineHome);
   }
   if (SHARD === "snooze") return;
   // Its notifications are on once the snooze ran.
