@@ -88,11 +88,12 @@
   one. A self-hoster's distributor on another port goes in `ALLOW_PRIVATE_PUSH_ENDPOINTS`.
 - A server's VAPID key can change, as when a self-hoster leaves the relay for their own keys
   (#567). Each page boot compares the browser's subscription key with the server's and subscribes
-  again when they differ. The server drops a Web Push subscription its push service refuses with
-  403, as RFC 8292 has it for a key mismatch; a UnifiedPush 403 is the distributor's access control
-  and keeps the target. The cost: a 403 for another reason, such as a server clock hours off, drops
-  the account's browser subscriptions too, and each comes back only when its page opens. Those
-  pushes were failing anyway.
+  again when they differ. The server drops a Web Push subscription its push service refuses as signed
+  by another key: 403 from FCM and Apple, as RFC 8292 has it, and 401 from Mozilla and Windows
+  (#2083). A UnifiedPush 401 or 403 is the distributor's access control and keeps the target. The
+  cost: each service answers the same status for any bad signature, so one for another reason,
+  such as a server clock hours off, drops the account's browser subscriptions too, and each comes
+  back only when its page opens. Those pushes were failing anyway.
 - **Notifications on this device** (#943). With the desktop app on a Mac, Brave's service worker
   went on notifying too, so every question came twice, and the only ways out were the browser's
   site settings or revoking the browser. Settings → Notifications on the web and in the desktop
