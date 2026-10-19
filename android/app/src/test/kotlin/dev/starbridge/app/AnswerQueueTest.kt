@@ -114,7 +114,9 @@ class AnswerQueueTest {
     @Volatile private var gate = CountDownLatch(0)
     /** What the server replies to a POST. */
     @Volatile private var reply = { MockResponse(201, Headers.headersOf("content-type", "application/json"), "{}") }
-    private var wakes = 0
+    @Volatile private var wakes = 0
+    /** How many answers the outbox on disk held at each wake. */
+    private val outboxAtWake = CopyOnWriteArrayList<Int>()
     private val disk = Disk(Files.createTempDirectory("starbridge").toFile(), object : Vault {
         override fun wrap(plain: ByteArray) = plain
         override fun unwrap(wrapped: ByteArray) = wrapped
@@ -192,7 +194,10 @@ class AnswerQueueTest {
         .addInterceptor { chain -> if (offline) throw UnknownHostException("no network") else chain.proceed(chain.request()) }
         .build()
 
-    private fun store() = ServerStore(disk, client, sodium, envelopes, directories, Pairings(sodium), Joins(sodium), alerts, "Phone", "", false, scope) { wakes++ }
+    private fun store() = ServerStore(disk, client, sodium, envelopes, directories, Pairings(sodium), Joins(sodium), alerts, "Phone", "", false, scope) {
+        outboxAtWake += disk.saved()?.outbox?.size ?: 0
+        wakes++
+    }
 
     @Test
     fun anAnswerTappedOfflineWaitsAndIsSentOnceWhenTheNetworkIsBack() {
@@ -229,8 +234,10 @@ class AnswerQueueTest {
         val store = store()
         val sending = scope.async { store.sendFromNotification("d_ship", "Ship", null) }
         runBlocking { withTimeout(5_000) { while (disk.saved()!!.outbox.isEmpty()) delay(10) } }
-        // Were the app killed now, mid-request, the worker would send the saved answer.
+        // Were the app killed now, mid-request, or just after the save, the worker would send
+        // the saved answer: it was scheduled before the outbox held it (#2091).
         assertEquals(1, wakes)
+        assertEquals(listOf(0), outboxAtWake)
         gate.countDown()
         assertEquals(Sent.Answered("Ship"), runBlocking { sending.await() })
         assertEquals(1, wakes)

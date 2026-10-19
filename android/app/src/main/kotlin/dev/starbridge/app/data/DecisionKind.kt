@@ -495,10 +495,12 @@ internal class DecisionKind(
             directory?.let { d -> putJsonObject("dir") { put("length", d.length); put("head", d.head) } }
         }
         val queued = QueuedAnswer(id, choice ?: text ?: doneText(page!!), envelopes.seal("answer", body, me.id, signKey, listOf(machine)), at = at)
-        persist(saved.copy(outbox = saved.outbox + queued))
-        // Scheduled before the request leaves: were the app killed mid-request, the saved answer
-        // still has a sender (#1979). The run waits for the lock this holds, then finds it sent.
+        // Scheduled before the answer is saved, and so before its request leaves: were the app
+        // killed at any point after the save, the saved answer still has a sender (#1979, #2091).
+        // The run waits for the lock this holds, then finds it sent, or finds nothing if the save
+        // failed.
         wakeWhenOnline()
+        persist(saved.copy(outbox = saved.outbox + queued))
         return post(queued, wake = false)
     }
 
