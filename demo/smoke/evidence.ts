@@ -17,6 +17,7 @@ export function keeper(em: Emulator, adbPath: string, dir: string | undefined, p
   const shots = dir ? join(dir, "shots") : undefined;
   if (shots) mkdirSync(shots, { recursive: true });
   const time = new RegExp(TIME, "i");
+  let noticed = false;
 
   /** The status bar's clock, battery and signal fixed, and its notification icons hidden. */
   async function demoMode() {
@@ -46,11 +47,17 @@ export function keeper(em: Emulator, adbPath: string, dir: string | undefined, p
    * same, so no inset, fade or scroll is caught half way. Two runs of one tree differed by these.
    */
   async function still(): Promise<Buffer> {
-    for (let i = 0; i < 20; i++) {
-      const xml = await em.adb("exec-out", "uiautomator", "dump", "/dev/tty").catch(() => "");
-      if (!xml.includes("Google push is not available")) break;
-      await Bun.sleep(1000);
+    const snackbar = async () =>
+      (await em.adb("exec-out", "uiautomator", "dump", "/dev/tty").catch(() => "")).includes(
+        "Google push is not available",
+      );
+    // It shows some seconds after sign-in and goes by itself; the first shot waits for it to
+    // come, the others only for it to go.
+    if (!noticed) {
+      noticed = true;
+      for (let i = 0; i < 15 && !(await snackbar()); i++) await Bun.sleep(1000);
     }
+    for (let i = 0; i < 20 && (await snackbar()); i++) await Bun.sleep(1000);
     let last = await screen();
     for (let i = 0; i < 8; i++) {
       await Bun.sleep(700);
@@ -64,8 +71,13 @@ export function keeper(em: Emulator, adbPath: string, dir: string | undefined, p
   async function capture(file: string) {
     // Demo mode ends when the system UI restarts, as it can on a change of night mode.
     await demoMode();
-    writeFileSync(`${file}.png`, await still());
-    const xml = await em.adb("exec-out", "uiautomator", "dump", "/dev/tty").catch(() => "");
+    let xml = "";
+    for (let tries = 0; tries < 3; tries++) {
+      writeFileSync(`${file}.png`, await still());
+      xml = await em.adb("exec-out", "uiautomator", "dump", "/dev/tty").catch(() => "");
+      // A snackbar that came while the screen held still: shoot again once it has gone.
+      if (!xml.includes("Google push is not available")) break;
+    }
     writeFileSync(`${file}.xml`, xml);
     const rects = [...xml.matchAll(/<node [^>]*>/g)].flatMap(([n]) => {
       const text = / text="([^"]*)"/.exec(n)?.[1] ?? "";
@@ -103,11 +115,21 @@ export function keeper(em: Emulator, adbPath: string, dir: string | undefined, p
   async function launcher() {
     if (!shots) return;
     const drawer = async () => {
-      await em.shell("input keyevent KEYCODE_HOME");
-      await Bun.sleep(1000);
-      const size = /(\d+)x(\d+)/.exec(await em.shell("wm size")) ?? [];
-      const [w, h] = [Number(size[1] ?? 1080), Number(size[2] ?? 2400)];
-      await em.shell(`input swipe ${w >> 1} ${Math.round(h * 0.85)} ${w >> 1} ${h >> 3} 300`);
+      // A swipe now and then opens nothing, which left the home screen in the shot: swipe again
+      // until the drawer's "All apps" heading is on screen.
+      for (let attempt = 1; ; attempt++) {
+        await em.shell("input keyevent KEYCODE_HOME");
+        await Bun.sleep(1000);
+        const size = /(\d+)x(\d+)/.exec(await em.shell("wm size")) ?? [];
+        const [w, h] = [Number(size[1] ?? 1080), Number(size[2] ?? 2400)];
+        await em.shell(`input swipe ${w >> 1} ${Math.round(h * 0.85)} ${w >> 1} ${h >> 3} 300`);
+        try {
+          await em.see("All apps", 6);
+          break;
+        } catch (e) {
+          if (attempt === 4) throw e;
+        }
+      }
       await em.see("Starbridge", 15).catch(() => undefined);
       await Bun.sleep(1000);
     };
