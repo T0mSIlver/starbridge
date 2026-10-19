@@ -163,13 +163,18 @@
   commands, so nothing mid-output reads as a prompt. Claude Code and Pi, whose installs run for seconds, first print
   `installing…` (#773). It still asks before installing CodexBar, a
   third-party binary (with #748, only when no other machine sends quotas), and whether to send
-  quotas when another machine already does. It no longer asks which providers to send (every
-  one that works, or the ones sent before; `--providers` picks others), whether to linger (on,
-  and uninstall turns it off), whether to add the CLI to the PATH (added, and uninstall removes
-  it) or whether to send a test question (sent; Ctrl-C skips): each was an Enter that nearly
+  quotas when another machine already does. It asks once whether to send permission prompts,
+  Enter saying no (#2111, card d_brief-treat-uphold): for one agent in its default mode they
+  block it more often than questions do, and they stay opt-in. It asks that only when an agent
+  that can send them (all but Cursor) has Starbridge, never again once answered, and not with
+  `--yes` or without a terminal. It no longer asks which providers to send (every one that
+  works, or the ones sent before; `--providers` picks others), whether to linger (on, and
+  uninstall turns it off), whether to add the CLI to the PATH (added, and uninstall removes it)
+  or whether to send a test question (sent; Ctrl-C skips): each was an Enter that nearly
   everyone pressed (#2121, cards d_still-salute-police and d_embrace-stamp-mom). A new machine
-  with CodexBar asks only the pairing check. Permission prompts and presence
-  stay off and unasked; the summary names `starbridge config permissions on`, on a desktop or
+  with CodexBar asks only the pairing check and the permission prompts question. Presence stays
+  off and unasked; the summary names `starbridge config permissions on` while prompts are off, on
+  a desktop or
   laptop `starbridge config presence on`, `starbridge status`,
   `starbridge uninstall --agent <name>` and `starbridge uninstall`. With no terminal every
   question takes its default, so nothing waits on input. A failed install prints its reason and
@@ -208,7 +213,10 @@
   installed (#538). An owner who
   deletes the line keeps the file. Setup and uninstall remove only the files they write, then a
   folder left empty: a file the owner put beside them, such as a skill's `references/`, stays,
-  and uninstall says so (#1324). A settings file of another tool that setup or uninstall edits is
+  and uninstall says so (#1324). The empty parents go too, up to the tool's own folder (`~/.codex`,
+  `~/.cursor`, `~/.config` for the unit, `~/.local` for the binary), so a fresh HOME ends as it
+  began (#2098); `cli/test/walk.test.ts` checks that, and that the owner's settings keep their keys
+  in order. A settings file of another tool that setup or uninstall edits is
   rewritten through a temporary file and a rename, keeping its mode and any symbolic link to it, so
   a crash never leaves it half written (#1749). A settings or hooks file that uninstall's edits leave holding
   nothing, such as an allow list setup created, is deleted rather than left as `{}`: an empty file
