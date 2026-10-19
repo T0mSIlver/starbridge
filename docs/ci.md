@@ -66,6 +66,8 @@ and every build checks each dependency against `android/gradle/verification-meta
 
 ## Evidence
 
+(determinism run: docs only)
+
 In CI the web end-to-end run keeps evidence (`EVIDENCE` in `web/e2e/run.ts`): every screenshot at 360, 768 and 1280 px in light and dark, a
 Playwright trace per browser, and `manifest.json`, the steps it drove and its result. Each part
 uploads it as `evidence-<part>-<tree>`, or `evidence-<part>-failed`.
