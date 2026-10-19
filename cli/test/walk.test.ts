@@ -56,6 +56,12 @@ const OWNER_FILES: Record<string, string> = {
     2,
   )}\n`,
   ".cursor/mine.sh": "#!/bin/sh\n",
+  // pi-permission-system with a rule of the owner's that setup also adds (#2130).
+  ".pi/agent/extensions/pi-permission-system/config.json": `${JSON.stringify(
+    { permission: { skill: { starbridge: "allow" } }, authorizerChain: ["judge"] },
+    null,
+    2,
+  )}\n`,
   ".pi/agent/settings.json": JSON.stringify({ packages: ["npm:pi-mine"] }, null, 2),
   ".gemini/antigravity/mcp_config.json": `${JSON.stringify({ mcpServers: {} }, null, 2)}\n`,
   ".local/share/mine.txt": "mine\n",
@@ -303,6 +309,8 @@ function expectSetUp(
   expect(out).toContain("Starbridge is set up.");
   expect(out).toContain("✓ You answered Yes");
   expect(out).not.toContain("✗");
+  // Setup let the starbridge commands through pi-permission-system (#2130).
+  expect(out).toContain('named Starbridge in "authorizerChain"');
   for (const agent of ["Claude Code", "Codex", "Pi", "opencode", "Cursor", "Antigravity"])
     expect(out).toMatch(new RegExp(`✓ ${agent}\\b`));
   expect(agentRunning(o)).toBe(true);

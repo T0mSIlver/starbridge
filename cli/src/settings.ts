@@ -12,7 +12,6 @@ import {
   allowPiRules,
   chainPiLink,
   PI_LINK,
-  type PiAdded,
   piAllow,
   piBashDenies,
   piChain,
@@ -59,13 +58,18 @@ export function rememberMachineKind(ctx: Ctx): MachineKind {
   return kind;
 }
 
-/** Adds `added` to what the state says Starbridge added to pi-permission-system's config. */
-function recordPiAdded(ctx: Ctx, added: PiAdded) {
+/**
+ * Adds to what the state says Starbridge added to pi-permission-system's config. The first
+ * record on a machine whose config named the Starbridge link already, set up by a release before
+ * the record, also takes the rules that were there as Starbridge's, as uninstall did then.
+ */
+function recordPiAdded(ctx: Ctx, r: ReturnType<typeof allowPiRules>) {
   ctx.store.updateState((s) => {
-    const was = s.piAdded ?? {};
-    const rules = { ...was.rules };
-    for (const [surface, patterns] of Object.entries(added.rules ?? {}))
-      rules[surface] = [...new Set([...(rules[surface] ?? []), ...patterns])];
+    const legacy = s.piAdded === undefined && r.chained;
+    const rules = { ...s.piAdded?.rules };
+    for (const from of legacy ? [r.added, r.had] : [r.added])
+      for (const [surface, patterns] of Object.entries(from.rules ?? {}))
+        rules[surface] = [...new Set([...(rules[surface] ?? []), ...patterns])];
     s.piAdded = { rules };
   });
 }

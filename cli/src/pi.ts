@@ -223,23 +223,31 @@ export function piBashDenies(env: Ctx["env"]): boolean {
  * set to a plain `allow` needs none, and one set to another plain level stays as it is
  * (plainLevel).
  */
-export function allowPiRules(env: Ctx["env"]): PiAdded {
+export function allowPiRules(env: Ctx["env"]): {
+  added: PiAdded;
+  /** The patterns that were there already, and whether the link was. */
+  had: PiAdded;
+  chained: boolean;
+} {
   const file = piPermissionConfig(env);
   const config = readConfig(file) ?? {};
   const permission = isObject(config.permission) ? { ...config.permission } : {};
   const added: Record<string, string[]> = {};
+  const had: Record<string, string[]> = {};
   for (const [surface, patterns] of Object.entries(piRules(env))) {
     if (permission[surface] === "allow" || plainLevel(permission[surface])) continue;
     const rules = isObject(permission[surface]) ? { ...permission[surface] } : {};
     const fresh = patterns.filter((p) => rules[p] !== "allow");
     if (fresh.length > 0) added[surface] = fresh;
+    const old = patterns.filter((p) => rules[p] === "allow");
+    if (old.length > 0) had[surface] = old;
     for (const p of patterns) delete rules[p];
     for (const p of patterns) rules[p] = "allow";
     permission[surface] = rules;
   }
   writeConfig(file, { ...config, permission });
-  chainPiLink(file);
-  return { rules: added };
+  const chained = !chainPiLink(file);
+  return { added: { rules: added }, had: { rules: had }, chained };
 }
 
 /**
