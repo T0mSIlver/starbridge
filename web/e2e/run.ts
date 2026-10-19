@@ -493,6 +493,7 @@ async function main() {
     for (const [path, name] of [
       ["/docs", "docs"],
       ["/docs/tell-your-agents", "docs-tell-your-agents"],
+      ["/docs/t3-code", "docs-t3-code"],
       ["/privacy", "privacy"],
       ["/terms", "terms"],
       ["/no-such-page", "not-found"],
@@ -504,6 +505,7 @@ async function main() {
       "/docs",
       "/docs/cli",
       "/docs/tell-your-agents",
+      "/docs/t3-code",
       "/docs/self-host",
       "/docs/faq",
       "/sample",

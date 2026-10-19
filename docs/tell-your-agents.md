@@ -3,7 +3,8 @@
 Setup gives every harness the same rules: the agent asks you through Starbridge for decisions
 that are yours, and wraps the commands that block you in `starbridge run`. Anything else goes in
 [your own rules](#your-own-rules), which Starbridge never writes to.
-[Terms](index.md#terms) defines harness, agent and question picker.
+[Terms](index.md#terms) defines harness, agent and question picker. For sessions that T3 Code
+runs, see [Starbridge with T3 Code](t3-code.md).
 
 <a id="what-each-agent-supports"></a>
 
