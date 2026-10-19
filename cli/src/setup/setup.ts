@@ -49,6 +49,7 @@ import { installPiPackage, PI_PACKAGE, piPackage, refreshFiles } from "./harness
 import { ours } from "./marker";
 import { pathStep, recordSelf } from "./path";
 import { PLUGINS, pluginState, pluginsStale } from "./plugins";
+import { desktopReaches, remotePluginCurrent } from "./remote-plugin";
 import {
   enableLinger,
   installedService,
@@ -144,14 +145,17 @@ export async function refresh(sys: Sys): Promise<string[]> {
   return done;
 }
 
-/** Whether Claude Code's plugins are ours but not at this release's commit. */
+/**
+ * Whether Claude Code's plugins are ours but not at this release's commit, or Claude desktop
+ * reaches this machine and the starbridge-remote plugin is missing or older (#2107).
+ */
 async function claudeStale(sys: Sys): Promise<boolean> {
   const state = await pluginState(sys);
   return (
     typeof state !== "string" &&
     !state.foreign &&
     PLUGINS.some((p) => state.plugins[p]) &&
-    pluginsStale(sys, state)
+    (pluginsStale(sys, state) || (desktopReaches(sys) && !remotePluginCurrent(sys)))
   );
 }
 

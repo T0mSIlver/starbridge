@@ -18,6 +18,13 @@ import { findCodexbar, listProviders, probe } from "./codexbar";
 import { cursorState } from "./cursor";
 import { antigravityState, codexSkill, opencodeState, PI_PACKAGE, piPackage } from "./harnesses";
 import { autoUpdate, hasClaude, PLUGINS, pluginState } from "./plugins";
+import {
+  desktopReaches,
+  REMOTE_PLUGIN,
+  remotePluginCurrent,
+  remotePluginDir,
+  remotePluginLoaded,
+} from "./remote-plugin";
 import { lingering, serviceState } from "./service";
 import { probeLines } from "./setup";
 import { otherCopies, type Sys } from "./sys";
@@ -148,7 +155,9 @@ export async function status(sys: Sys): Promise<number> {
       if (copies.length > 0) {
         out(`    ${hooklessLine(copies)}`);
         out(
-          "    A session started in a terminal on this machine runs the mod, and so does a Claude desktop session started once Claude Code on that computer has no Starbridge plugins.",
+          remotePluginLoaded(sys)
+            ? `    The ${REMOTE_PLUGIN} plugin stands in for them from the next session Claude desktop starts.`
+            : "    `starbridge setup --refresh` adds a plugin that stands in for them, from the next session Claude desktop starts.",
         );
       }
     }
@@ -205,6 +214,10 @@ export async function status(sys: Sys): Promise<number> {
           `  ${pid}: ${x ? `${x.version ?? "installed"}${x.enabled ? "" : ", disabled"}` : "not installed"}`,
         );
       }
+      if (desktopReaches(sys) || remotePluginLoaded(sys))
+        out(
+          `  ${REMOTE_PLUGIN}: ${remotePluginCurrent(sys) ? `loaded from ${remotePluginDir(sys)}` : remotePluginLoaded(sys) ? "outdated (`starbridge setup --refresh` rebuilds it)" : "not loaded (`starbridge setup --refresh` adds it)"}`,
+        );
     } else if (id === "codex") {
       const state = codexSkill(sys);
       out(

@@ -1,0 +1,10 @@
+#!/bin/sh
+# Stands in for loginctl in the install walk: lingering starts off and stays as the last call set it.
+echo "loginctl $*" >>"$FAKE_LOG"
+mkdir -p "$FAKE_STATE"
+case "$1" in
+  show-user) echo "Linger=$(cat "$FAKE_STATE/linger" 2>/dev/null || echo no)" ;;
+  enable-linger) echo yes >"$FAKE_STATE/linger" ;;
+  disable-linger) echo no >"$FAKE_STATE/linger" ;;
+  *) exit 1 ;;
+esac
