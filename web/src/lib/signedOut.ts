@@ -6,6 +6,8 @@ import * as store from "./store";
 export async function signedOut(
   refused?: string,
 ): Promise<{ state: "signed-out"; known: boolean; refused?: string }> {
+  // Off the load's path: images a tab from before #2097 left when it signed out (#2097).
+  store.sweepBlobs().catch(() => {});
   const last = await store.get("current");
   return {
     state: "signed-out",

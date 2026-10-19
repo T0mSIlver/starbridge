@@ -156,6 +156,9 @@ async function closeNotifications(): Promise<void> {
 }
 
 export async function boot(): Promise<Boot> {
+  // Off the load's path: images a tab from before #2097 left when it signed out. Signed out,
+  // `signedOut` sweeps them.
+  store.sweepBlobs().catch(() => {});
   let me: Awaited<ReturnType<typeof api.me>>;
   try {
     me = await api.me();
@@ -170,8 +173,6 @@ export async function boot(): Promise<Boot> {
   }
   await ready;
   const { account } = me;
-  // Off the load's path: what an older tab's sign-out left behind (#2097).
-  store.sweepBlobs().catch(() => {});
   await store.put("current", account);
   let device = await store.get("device", account);
   const entries = await api.directory();
