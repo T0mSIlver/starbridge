@@ -586,6 +586,8 @@ async function main() {
   await page.getByRole("heading", { name: "Inbox" }).waitFor();
   // No machine yet: the inbox says how to add one (#610).
   await page.getByRole("heading", { name: "Add a machine" }).waitFor();
+  // The banner follows once the page has checked the push subscription, as the next step uses it.
+  await page.getByRole("button", { name: "Turn on notifications" }).waitFor();
   await shoot(page, "inbox-empty");
   step("the app's skip link leads past the rail (#1944)");
   await skipToContent(page);
