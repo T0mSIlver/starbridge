@@ -31,6 +31,13 @@ What the code relies on, with the versions checked.
   `user`, and absent for Claude Desktop's names. The transcript is
   `~/.claude/projects/<cwd, each other character a dash>/<sessionId>.jsonl`; a user line typed by
   a person has no `isMeta` or `isCompactSummary` and no `origin.kind` other than `human`.
+- **Claude desktop's next-step box** (2.42304.2, Claude Code 2.1.299, #2118): its sessions get
+  the `ccd_turn` server's `wrap_up` and `update_plan` tools, `wrap_up` named in
+  `CLAUDE_CODE_TERMINAL_MCP_TOOLS`. `wrap_up` takes `recap`, `ask` and `actions` (`label`,
+  `message`); with `ask` it answers "Shown in the next-step box. The box ends your turn", and a
+  click arrives as a prompt of `origin.kind` `human`. A plugin's `PostToolUse` hook matches it
+  as for any MCP tool, and `UserPromptSubmit` fires for the next prompt; hooks get
+  `CLAUDE_CODE_SESSION_ID` (2.1.301, with a stdio server of that name).
 - **Claude Code hooks** (2.1.289): `PermissionRequest` waits up to 600 s and races the dialog. It
   fires under `--dangerously-skip-permissions` for `ask` rules and for Remote Control's `--print
   --sdk-url` children, not for auto mode's classifier blocks, which reach hooks only as

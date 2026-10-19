@@ -378,7 +378,10 @@ test("a call that ran and failed settles its prompt too: the plugin runs the che
   const hooks = JSON.parse(
     readFileSync(join(import.meta.dir, "../../plugin/hooks/hooks.json"), "utf8"),
   ).hooks;
-  expect(hooks.PostToolUseFailure).toEqual(hooks.PostToolUse);
+  // Less the next-step box's entry (#2118), which only a call that ran posts.
+  expect(hooks.PostToolUseFailure).toEqual(
+    hooks.PostToolUse.filter((g: { matcher?: string }) => g.matcher !== "mcp__ccd_turn__wrap_up"),
+  );
 });
 
 test("the mark counts only unsettled prompts that have not expired (#517)", () => {

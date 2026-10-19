@@ -91,6 +91,7 @@ export async function postDecision(
         ...(input.extensionAnswers && decision.source.session ? { extensionAnswers: true } : {}),
         ...(input.held ? { held: true } : {}),
         ...(input.picker ? { picker: input.picker } : {}),
+        ...(input.nextStep ? { nextStep: input.nextStep } : {}),
         ...(input.subagent && decision.source.session && !input.held
           ? { subagent: input.subagent }
           : {}),
