@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { PNG } from "pngjs";
-import { difference, parts } from "./evidence.ts";
+import { compare, difference, parts, screens } from "./evidence.ts";
 
 /** A 10 × 10 white PNG with the given pixels black. */
 function png(black: [number, number][] = [], width = 10): Buffer {
@@ -35,4 +35,31 @@ test("finds a part whether its artifact sits in a subfolder or alone in the fold
   writeFileSync(join(several, "x", "manifest.json"), manifest);
   expect(parts(alone).map((p) => p.manifest.shard)).toEqual(["app"]);
   expect(parts(several).map((p) => p.manifest.shard)).toEqual(["app"]);
+});
+
+test("the changed screens come largest first, one entry per screen", () => {
+  const dir = mkdtempSync(join(tmpdir(), "evidence-"));
+  const write = (name: string, black: [number, number][]) => {
+    const f = join(dir, name);
+    writeFileSync(f, png(black));
+    return f;
+  };
+  const many: [number, number][] = [...Array(30).keys()].map((i) => [i % 10, Math.floor(i / 10)]);
+  const base = new Map([
+    ["a-phone-light.png", write("a1.png", [])],
+    ["a-phone-dark.png", write("a2.png", [])],
+    ["b-tablet-light.png", write("b1.png", [])],
+  ]);
+  const pr = new Map([
+    ["a-phone-light.png", write("a3.png", [[1, 1]])],
+    ["a-phone-dark.png", write("a4.png", [[1, 1]])],
+    ["b-tablet-light.png", write("b2.png", many)],
+  ]);
+  const changes = compare(pr, base);
+  expect(changes.map((c) => c.name)).toEqual([
+    "b-tablet-light.png",
+    "a-phone-dark.png",
+    "a-phone-light.png",
+  ]);
+  expect(screens(changes)).toBe("`b` 1, `a` 2");
 });

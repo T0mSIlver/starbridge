@@ -32,16 +32,46 @@ export function keeper(em: Emulator, adbPath: string, dir: string | undefined, p
       await em.shell(`am broadcast -a com.android.systemui.demo ${extras}`);
   }
 
-  async function capture(file: string) {
-    const p = Bun.spawn([adbPath, "exec-out", "screencap", "-p"], {
-      stdout: Bun.file(`${file}.png`),
-    });
+  /** The screen's pixels, as the emulator draws them now. */
+  async function screen(): Promise<Buffer> {
+    const p = Bun.spawn([adbPath, "exec-out", "screencap", "-p"], { stdout: "pipe" });
+    const png = Buffer.from(await new Response(p.stdout).arrayBuffer());
     await p.exited;
+    return png;
+  }
+
+  /**
+   * Waits for the screen to hold still, then returns it: the snackbar that says Google push is
+   * missing (the run's APK has no Firebase) has gone, and two screenshots 700 ms apart are the
+   * same, so no inset, fade or scroll is caught half way. Two runs of one tree differed by these.
+   */
+  async function still(): Promise<Buffer> {
+    for (let i = 0; i < 20; i++) {
+      const xml = await em.adb("exec-out", "uiautomator", "dump", "/dev/tty").catch(() => "");
+      if (!xml.includes("Google push is not available")) break;
+      await Bun.sleep(1000);
+    }
+    let last = await screen();
+    for (let i = 0; i < 8; i++) {
+      await Bun.sleep(700);
+      const now = await screen();
+      if (now.equals(last)) return now;
+      last = now;
+    }
+    return last;
+  }
+
+  async function capture(file: string) {
+    // Demo mode ends when the system UI restarts, as it can on a change of night mode.
+    await demoMode();
+    writeFileSync(`${file}.png`, await still());
     const xml = await em.adb("exec-out", "uiautomator", "dump", "/dev/tty").catch(() => "");
     writeFileSync(`${file}.xml`, xml);
     const rects = [...xml.matchAll(/<node [^>]*>/g)].flatMap(([n]) => {
       const text = / text="([^"]*)"/.exec(n)?.[1] ?? "";
-      if (!time.test(text)) return [];
+      // The launcher's Clock icon shows the time on its face.
+      const face = /content-desc="Clock"/.test(n) || text === "Clock";
+      if (!time.test(text) && !face) return [];
       const [x1, y1, x2, y2] = (/bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"/.exec(n) ?? [])
         .slice(1)
         .map(Number) as [number, number, number, number];

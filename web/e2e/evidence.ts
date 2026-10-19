@@ -147,7 +147,8 @@ export function compare(pr: Map<string, string>, base: Map<string, string>): Cha
     }
   }
   for (const name of base.keys()) if (!pr.has(name)) out.push({ name, kind: "gone" });
-  return out.sort((a, b) => a.name.localeCompare(b.name));
+  // The pairs that differ most first, so the cut at SHOWN drops the faintest.
+  return out.sort((a, b) => (b.share ?? 1) - (a.share ?? 1) || a.name.localeCompare(b.name));
 }
 
 type Context = {
@@ -158,6 +159,22 @@ type Context = {
   /** Where the pushed pairs are served, ending in a slash; none when nothing was pushed. */
   images?: string;
 };
+
+/**
+ * The changed screens by name, one entry for a screen's sizes and colour schemes, with how many
+ * pairs changed: a change in the page itself shows in all of them, a flicker in one or two.
+ */
+export function screens(changes: Change[]): string {
+  const by = new Map<string, number>();
+  for (const c of changes) {
+    const screen = c.name
+      .replace(/\.png$/, "")
+      .replace(/-(light|dark)$/, "")
+      .replace(/-(phone|tablet|desktop|wide|table-edge)$/, "");
+    by.set(screen, (by.get(screen) ?? 0) + 1);
+  }
+  return [...by].map(([name, n]) => `\`${name}\` ${n}`).join(", ");
+}
 
 /** The comment's text. */
 export function render(
@@ -200,6 +217,7 @@ export function render(
       `Against ${at}: ${count("changed")} changed, ${count("new")} new, ${count("gone")} gone, of ${total} screenshots.`,
       "",
     );
+    lines.push(`Screens: ${screens(changes)}.`, "");
     const shown = changes.filter((c) => c.kind !== "gone").slice(0, SHOWN);
     if (ctx.images && shown.length) {
       lines.push("| Screen | Before | After |", "|---|---|---|");

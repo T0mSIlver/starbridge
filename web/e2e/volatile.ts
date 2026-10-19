@@ -11,6 +11,8 @@ export const TIME = [
   "\\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\\w*\\.?\\s\\d{1,2}\\b",
   "\\b\\d+\\s?(min|h|days?|s)\\b",
   "\\bnow\\b",
+  // A reset or an answer says "tomorrow" or "today" by the time of day, which moves the text.
+  "\\b(today|tomorrow|yesterday)\\b",
 ].join("|");
 
 /** Runs in the page, so it carries everything it uses. */

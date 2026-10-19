@@ -147,7 +147,10 @@ async function shoot(app: ElectronApplication, page: Page, stop: string) {
   mkdirSync(dir, { recursive: true });
   try {
     for (const scheme of ["light", "dark"] as const) {
-      await page.emulateMedia({ colorScheme: scheme });
+      // Without motion, and the pointer in a corner: under xvfb the pointer sits mid-screen, over
+      // the sign-in button in some runs, which draws its hover colour or the fade to it.
+      await page.emulateMedia({ colorScheme: scheme, reducedMotion: "reduce" });
+      await page.mouse.move(0, 799);
       await page.waitForFunction(
         (dark) => matchMedia("(prefers-color-scheme: dark)").matches === dark,
         scheme === "dark",
@@ -159,7 +162,7 @@ async function shoot(app: ElectronApplication, page: Page, stop: string) {
       writeFileSync(`${file}.json`, JSON.stringify(await volatile(page, false)));
     }
   } finally {
-    await page.emulateMedia({ colorScheme: "light" });
+    await page.emulateMedia({ colorScheme: "light", reducedMotion: "no-preference" });
   }
 }
 
