@@ -406,10 +406,26 @@ describe.skipIf(process.platform !== "linux")("a new user's walk", () => {
     const install = await onTerminal(server, ["sh", "-c", 'sh <"$0"', installSh], o.env);
     expect(install.code).toBe(0);
     expect(install.screen).toContain(`Installed starbridge ${VERSION}`);
+    // Setup's PATH step is the one instruction for the PATH (#2116).
+    expect(install.screen).not.toContain("for example in ~/.profile");
     expectSetUp(o, install);
     // #2098: install.sh made ~/.local/bin, which the binary leaves empty.
     await expectUninstalled(o, join(o.home, ".local/bin/starbridge"), { known: [".local/bin"] });
   }, 180_000);
+
+  test("without a terminal, install.sh names the command that runs setup (#2116)", async () => {
+    const o = newOwner(server, releasesUrl);
+    const r = Bun.spawn(["sh", installSh], {
+      env: o.env,
+      cwd: o.home,
+      stdin: "ignore",
+      stdout: "pipe",
+    });
+    const [out] = await Promise.all([new Response(r.stdout).text(), r.exited]);
+    const bin = join(o.home, ".local/bin/starbridge");
+    expect(out).toEndWith(`Next: run ${bin} setup --server ${server.url}\n`);
+    expect(out).not.toContain("to your PATH");
+  }, 60_000);
 
   test("npm i -g, setup, the first card, uninstall, npm rm -g", async () => {
     const o = newOwner(server, releasesUrl);
