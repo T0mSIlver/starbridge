@@ -303,6 +303,11 @@ function expectSetUp(o: Owner, setup: { code: number | null; screen: string; ste
     expect(out).toMatch(new RegExp(`✓ ${agent}\\b`));
   expect(agentRunning(o)).toBe(true);
   expect(readFileSync(join(o.state, "linger"), "utf8").trim()).toBe("yes");
+  // Enter keeps permission prompts off (#2111).
+  expect(setup.steps.map((s) => s.prompt)).toContain(
+    "Send permission prompts to your devices? [y/N]",
+  );
+  expect(out).toContain("– Permission prompts stay in the terminal");
 }
 
 /**

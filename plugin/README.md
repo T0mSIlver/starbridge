@@ -14,7 +14,7 @@ posts the question to your devices too: each question shows at the keyboard and
 on your devices at once, and the first answer wins.
 
 It also sends this machine's permission prompts to your devices, once you turn
-that on with `starbridge config permissions on` (off by default): `PermissionRequest` runs
+that on (off by default; setup asks, and `starbridge config permissions on` turns it on later): `PermissionRequest` runs
 `starbridge hook permission`, and `PostToolUse`, `PostToolUseFailure`,
 `PermissionDenied`, `Stop` and `SessionEnd` run `starbridge hook settle`, which lets the waiting prompt go
 when the keyboard answers first. While it is off, both exit at once.

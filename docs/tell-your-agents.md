@@ -30,7 +30,7 @@ waits with `starbridge wait` before it ends its turn.
 ² While the agent works, your answer reaches it at its next tool call. In Antigravity and Cursor,
 it comes once the turn ends.
 
-³ Off until you run `starbridge config permissions on` on the machine. Your devices can then
+³ Off until you say yes when `starbridge setup` asks, or run `starbridge config permissions on` on the machine. Your devices can then
 allow a call once or deny it.
 
 ⁴ One line per answer, in the order you answered, rather than one prompt per answer, each starting

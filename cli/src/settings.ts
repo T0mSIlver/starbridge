@@ -58,9 +58,25 @@ export function rememberMachineKind(ctx: Ctx): MachineKind {
   return kind;
 }
 
-function setPermissions(ctx: Ctx, enabled: boolean) {
+export function setPermissions(ctx: Ctx, enabled: boolean) {
   const config = ctx.store.agentConfig();
   ctx.store.saveAgentConfig({ ...config, permissions: { enabled } });
+}
+
+/**
+ * Turns permission prompts on, for `config permissions on` and setup's question: says what Codex
+ * does without presence, and offers to send Pi's and to let the starbridge commands through.
+ */
+export async function permissionsOn(ctx: Ctx, prompt: Prompt | undefined) {
+  setPermissions(ctx, true);
+  // Codex's dialog opens only once the hook lets go: without presence it waits for the devices.
+  if (which(ctx.env, "codex") && !ctx.store.agentConfig().presence?.enabled)
+    ctx.out(
+      "Codex: its prompts wait up to 10 minutes for your devices before Codex asks in the terminal. `starbridge config presence on` sends them to the terminal while you're at this machine.",
+    );
+  await offerPiChain(ctx, prompt);
+  // pi-permission-system is often installed after setup, which then had no rules to add.
+  await offerPiAllow(ctx, prompt, true);
 }
 
 /**
@@ -156,17 +172,8 @@ export async function configCommand(ctx: Ctx, args: string[], prompt?: Prompt): 
   if (extra.length > 0 || (key !== undefined && value === undefined)) throw new UsageError(USAGE);
   if (key === "permissions") {
     if (value !== "on" && value !== "off") throw new UsageError(USAGE);
-    setPermissions(ctx, value === "on");
-    if (value === "on") {
-      // Codex's dialog opens only once the hook lets go: without presence it waits for the devices.
-      if (which(ctx.env, "codex") && !ctx.store.agentConfig().presence?.enabled)
-        ctx.out(
-          "Codex: its prompts wait up to 10 minutes for your devices before Codex asks in the terminal. `starbridge config presence on` sends them to the terminal while you're at this machine.",
-        );
-      await offerPiChain(ctx, prompt);
-      // pi-permission-system is often installed after setup, which then had no rules to add.
-      await offerPiAllow(ctx, prompt, true);
-    }
+    if (value === "on") await permissionsOn(ctx, prompt);
+    else setPermissions(ctx, false);
   } else if (key === "presence") {
     if (value !== "on" && value !== "off") throw new UsageError(USAGE);
     const config = ctx.store.agentConfig();
