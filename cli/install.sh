@@ -327,7 +327,7 @@ if [ -z "${STARBRIDGE_NO_SETUP:-}" ] && "$DIR/starbridge" --help | grep -q '^  s
   if [ -r /dev/tty ] && (: </dev/tty) 2>/dev/null; then
     "$DIR/starbridge" setup ${server:+--server "$server"} </dev/tty
   else
-    echo "Next: run $self setup${server:+ --server $server}"
+    printf 'Next: run %s setup%s\n' "$self" "${server:+ --server $server}"
   fi
 elif [ "$self" != starbridge ]; then
   echo "Add $DIR to your PATH, for example in ~/.profile: export PATH=\"$DIR:\$PATH\""

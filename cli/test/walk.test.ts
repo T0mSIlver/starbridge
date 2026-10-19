@@ -429,6 +429,20 @@ describe.skipIf(process.platform !== "linux")("a new user's walk", () => {
     const quoted = await run({ ...o.env, STARBRIDGE_INSTALL_DIR: dir });
     const ran = Bun.spawnSync(["sh", "-c", `${quoted?.[1]} --version`], { env: o.env });
     expect(ran.stdout.toString()).toBe(`starbridge ${VERSION}\n`);
+    // A backslash too: dash's echo would read `\n` in it.
+    const odd = await run({ ...o.env, STARBRIDGE_INSTALL_DIR: join(o.home, "my\\newbin") });
+    expect(Bun.spawnSync(["sh", "-c", `${odd?.[1]} --version`], { env: o.env }).exitCode).toBe(0);
+    // On the PATH already, it is just `starbridge`.
+    const onPath = await run({ ...o.env, PATH: `${join(o.home, ".local/bin")}:${o.env.PATH}` });
+    expect(onPath?.[1]).toBe("starbridge");
+    // With no setup to follow, the PATH hint stays.
+    const r = Bun.spawn(["sh", installSh], {
+      env: { ...o.env, STARBRIDGE_NO_SETUP: "1" },
+      stdin: "ignore",
+      stdout: "pipe",
+    });
+    const [out] = await Promise.all([new Response(r.stdout).text(), r.exited]);
+    expect(out).toContain(`Add ${join(o.home, ".local/bin")} to your PATH`);
   }, 60_000);
 
   test("npm i -g, setup, the first card, uninstall, npm rm -g", async () => {
