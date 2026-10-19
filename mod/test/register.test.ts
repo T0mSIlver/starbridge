@@ -61,6 +61,7 @@ test("an Agent SDK session calls the agent only once its first turn ends; `claud
     const $ = {
       env: { get: async (name: string) => env[name] },
       fs: { read: async () => "", write: async () => {}, stat: async () => undefined },
+      plugin: { name: "starbridge-mod", root: "/m" },
       process: { run: async () => ({ exitCode: 0, stdout: "", stderr: "" }) },
       http: {
         fetch: async (url: string) => {
