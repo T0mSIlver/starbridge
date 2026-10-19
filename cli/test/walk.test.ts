@@ -75,22 +75,7 @@ const AGENTS_LEAVE = {
  * What the walk finds left today, until its issue is fixed. The walk fails as soon as one is no
  * longer left, so the fix takes it off this list.
  */
-const KNOWN = {
-  // #2098
-  left: [
-    ".codex/rules",
-    ".codex/skills",
-    ".config/opencode/plugins",
-    ".config/opencode/skills",
-    ".config/systemd",
-    ".config/systemd/user",
-    ".cursor/skills",
-    ".gemini/config",
-    ".gemini/config/plugins",
-  ],
-  // #2098: `permissions` moved to the end.
-  changed: [".claude/settings.json"],
-};
+const KNOWN = { left: [] as string[], changed: [] as string[] };
 
 type Snapshot = Map<string, string>;
 
@@ -294,7 +279,11 @@ function agentRunning(o: Owner): boolean {
 }
 
 /** Setup's checks once it ran: paired, in each agent, the agent up, the test card answered. */
-function expectSetUp(o: Owner, setup: { code: number | null; screen: string; steps: Step[] }) {
+function expectSetUp(
+  o: Owner,
+  setup: { code: number | null; screen: string; steps: Step[] },
+  permissions = false,
+) {
   const out = setup.screen;
   expect(out).toContain("Starbridge is set up.");
   expect(out).toContain("✓ You answered Yes");
@@ -303,6 +292,15 @@ function expectSetUp(o: Owner, setup: { code: number | null; screen: string; ste
     expect(out).toMatch(new RegExp(`✓ ${agent}\\b`));
   expect(agentRunning(o)).toBe(true);
   expect(readFileSync(join(o.state, "linger"), "utf8").trim()).toBe("yes");
+  // Asked once (#2111): Enter keeps permission prompts off, y turns them on.
+  expect(setup.steps.map((s) => s.prompt)).toContain(
+    "Send permission prompts to your devices? [y/N]",
+  );
+  expect(out).toContain(
+    permissions
+      ? "✓ Sends permission prompts to your devices"
+      : "– Permission prompts stay in the terminal",
+  );
 }
 
 /**
@@ -406,10 +404,43 @@ describe.skipIf(process.platform !== "linux")("a new user's walk", () => {
     const install = await onTerminal(server, ["sh", "-c", 'sh <"$0"', installSh], o.env);
     expect(install.code).toBe(0);
     expect(install.screen).toContain(`Installed starbridge ${VERSION}`);
+    // Setup's PATH step is the one instruction for the PATH (#2116).
+    expect(install.screen).not.toContain("for example in ~/.profile");
     expectSetUp(o, install);
-    // #2098: install.sh made ~/.local/bin, which the binary leaves empty.
-    await expectUninstalled(o, join(o.home, ".local/bin/starbridge"), { known: [".local/bin"] });
+    await expectUninstalled(o, join(o.home, ".local/bin/starbridge"));
   }, 180_000);
+
+  test("without a terminal, install.sh names the command that runs setup (#2116)", async () => {
+    const o = newOwner(server, releasesUrl);
+    const run = async (env: Record<string, string>) => {
+      const r = Bun.spawn(["sh", installSh], { env, cwd: o.home, stdin: "ignore", stdout: "pipe" });
+      const [out] = await Promise.all([new Response(r.stdout).text(), r.exited]);
+      expect(out).not.toContain("to your PATH");
+      return /^Next: run (.+) setup --server (\S+)$/m.exec(out);
+    };
+    const next = await run(o.env);
+    expect(next?.[1]).toBe(join(o.home, ".local/bin/starbridge"));
+    expect(next?.[2]).toBe(server.url);
+    // A folder with a space and a quote: the command still runs as printed.
+    const dir = join(o.home, "my bin's");
+    const quoted = await run({ ...o.env, STARBRIDGE_INSTALL_DIR: dir });
+    const ran = Bun.spawnSync(["sh", "-c", `${quoted?.[1]} --version`], { env: o.env });
+    expect(ran.stdout.toString()).toBe(`starbridge ${VERSION}\n`);
+    // A backslash too: dash's echo would read `\n` in it.
+    const odd = await run({ ...o.env, STARBRIDGE_INSTALL_DIR: join(o.home, "my\\newbin") });
+    expect(Bun.spawnSync(["sh", "-c", `${odd?.[1]} --version`], { env: o.env }).exitCode).toBe(0);
+    // On the PATH already, it is just `starbridge`.
+    const onPath = await run({ ...o.env, PATH: `${join(o.home, ".local/bin")}:${o.env.PATH}` });
+    expect(onPath?.[1]).toBe("starbridge");
+    // With no setup to follow, the PATH hint stays.
+    const r = Bun.spawn(["sh", installSh], {
+      env: { ...o.env, STARBRIDGE_NO_SETUP: "1" },
+      stdin: "ignore",
+      stdout: "pipe",
+    });
+    const [out] = await Promise.all([new Response(r.stdout).text(), r.exited]);
+    expect(out).toContain(`Add ${join(o.home, ".local/bin")} to your PATH`);
+  }, 60_000);
 
   test("npm i -g, setup, the first card, uninstall, npm rm -g", async () => {
     const o = newOwner(server, releasesUrl);
@@ -426,9 +457,17 @@ describe.skipIf(process.platform !== "linux")("a new user's walk", () => {
     const installed = npm(["install", "-g", tarball]);
     expect(installed.stderr.toString()).not.toContain("ERR");
     expect(installed.exitCode).toBe(0);
-    const setup = await onTerminal(server, ["starbridge", "setup", "--server", server.url], o.env);
+    const setup = await onTerminal(server, ["starbridge", "setup", "--server", server.url], o.env, [
+      [/Send permission prompts/, "y"],
+    ]);
     expect(setup.code).toBe(0);
-    expectSetUp(o, setup);
+    expectSetUp(o, setup, true);
+    const config = Bun.spawnSync(["starbridge", "config"], { env: o.env, cwd: o.home });
+    expect(config.stdout.toString()).toMatch(/^permissions +on$/m);
+    // A second setup keeps the answer and asks nothing about it.
+    const again = await onTerminal(server, ["starbridge", "setup"], o.env);
+    expect(again.code).toBe(0);
+    expect(again.steps.map((s) => s.prompt).join("\n")).not.toContain("permission prompts");
     const r = await expectUninstalled(o, "starbridge", {
       after: () => expect(npm(["rm", "-g", "starbridge"]).exitCode).toBe(0),
       // npm's own folders in its prefix stay, as after any global package.

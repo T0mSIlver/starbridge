@@ -306,18 +306,29 @@ mv -f "$tmp/$asset" "$DIR/.starbridge.new"
 mv -f "$DIR/.starbridge.new" "$DIR/starbridge"
 echo "Installed $("$DIR/starbridge" --version) to $DIR/starbridge"
 
+# The command that runs it: by its path while $DIR is not on the PATH yet, shell-quoted when the
+# path holds a space or another character the shell would read.
+self=starbridge
 case :$PATH: in
   *:"$DIR":*) ;;
-  *) echo "Add $DIR to your PATH, for example in ~/.profile: export PATH=\"$DIR:\$PATH\"" ;;
+  *)
+    case $DIR in
+      *[!A-Za-z0-9_./-]*) self="'$(printf '%s' "$DIR/starbridge" | sed "s/'/'\\\\''/g")'" ;;
+      *) self=$DIR/starbridge ;;
+    esac
+    ;;
 esac
 
-# Run setup from the terminal, since stdin is this script under curl | sh.
+# Run setup from the terminal, since stdin is this script under curl | sh. Setup's PATH step
+# puts $DIR on the PATH, so only an install without setup says how (#2116).
 server=$SERVER
 [ -z "${STARBRIDGE_SERVER:-}" ] || server=
 if [ -z "${STARBRIDGE_NO_SETUP:-}" ] && "$DIR/starbridge" --help | grep -q '^  starbridge setup'; then
   if [ -r /dev/tty ] && (: </dev/tty) 2>/dev/null; then
     "$DIR/starbridge" setup ${server:+--server "$server"} </dev/tty
   else
-    echo "Next: run starbridge setup${server:+ --server $server}"
+    printf 'Next: run %s setup%s\n' "$self" "${server:+ --server $server}"
   fi
+elif [ "$self" != starbridge ]; then
+  echo "Add $DIR to your PATH, for example in ~/.profile: export PATH=\"$DIR:\$PATH\""
 fi

@@ -339,7 +339,8 @@ line, the safe side: at worst a prompt repeats an answer the agent already read.
 ## Permission prompts
 
 Off by default (#124): the Claude app already shows prompts for Remote Control sessions, and the
-gain is every session, machine and agent in one place. `starbridge config permissions on|off`.
+gain is every session, machine and agent in one place. Setup asks once, Enter saying no (#2111);
+`starbridge config permissions on|off` changes it.
 
 **Cursor prompts are impossible today** (#957). Cursor's `beforeShellExecution`, `beforeMCPExecution`
 and `preToolUse` hooks may answer `allow`, `deny` or `ask`, but `cursor-agent` 2026.10.01 honours

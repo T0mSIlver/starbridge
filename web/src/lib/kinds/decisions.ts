@@ -16,7 +16,7 @@ import {
   snoozeStamp,
   type Waiting,
 } from "@starbridge/protocol";
-import { api, lastPage, type Stored } from "../api";
+import { ApiError, api, lastPage, type Stored } from "../api";
 import { type Kept, merge } from "../kept";
 import * as store from "../store";
 import type { InboxItem, Reply, Decision as ShownDecision } from "../types";
@@ -122,6 +122,25 @@ export async function openPushedDecision(ctx: Ctx, item: SealedItem): Promise<In
  * With `keep`, what the server lists is kept sealed in this browser, and a read with no cursor
  * starts from what is kept rather than from the first item (#1380).
  */
+/**
+ * The sealed decisions the last load kept, by account and id: showing one's images opens them
+ * against it without reading the whole kept list again (#2097).
+ */
+const keptSealed = new Map<string, Stored>();
+const sealedKey = (account: string, id: string) => `${account}/${id}`;
+
+/** Forgets what the last loads kept of `account`: on sign-out, revocation, or a reset server. */
+export function forgetKeptSealed(account: string) {
+  for (const k of keptSealed.keys()) if (k.startsWith(sealedKey(account, ""))) keptSealed.delete(k);
+}
+
+/** Holds exactly the kept list's decisions of `account`, so a trimmed one goes too. */
+function holdKeptSealed(account: string, items: Stored[]) {
+  forgetKeptSealed(account);
+  for (const s of items)
+    if (s.item.kind === "decision") keptSealed.set(sealedKey(account, s.item.id), s);
+}
+
 export async function loadInbox(
   ctx: Ctx,
   inbox: Inbox = { items: [], rejected: [] },
@@ -144,12 +163,31 @@ export async function loadInbox(
       open = new Set();
       let at: string | undefined;
       for (;;) {
-        const page = await api.items("decision", at, { open: true });
+        // Only the ids count: the kept copies hold the questions and their images (#2097). A
+        // server from before blobs=none refuses it, and lists them with their images instead.
+        const page = await api.items("decision", at, { open: true, noBlobs: true }).catch((e) => {
+          if (e instanceof ApiError && e.status === 400 && e.code === "bad-request")
+            return api.items("decision", at, { open: true });
+          throw e;
+        });
         for (const s of page.items) open.add(s.item.id);
         at = page.cursor;
         if (lastPage(page)) break;
       }
-      kept = had;
+      // The open questions show with their images; an answered one's open when it is shown.
+      const blobs = await store.keptBlobs(
+        ctx.account,
+        had.items
+          .filter((k) => k.item.kind === "decision" && !k.answeredAt && !k.item.blobs)
+          .map((k) => k.item.id),
+      );
+      kept = {
+        ...had,
+        items: had.items.map((k) => {
+          const b = k.item.kind === "decision" ? blobs.get(k.item.id) : undefined;
+          return b ? { ...k, item: { ...k.item, blobs: b } } : k;
+        }),
+      };
     }
   }
   const sent = (await store.get("answers", ctx.account)) ?? {};
@@ -263,6 +301,7 @@ export async function loadInbox(
     // these were kept from (restored, or reset). Read it all again.
     if ([...open].some((id) => !held.has(id) && !listed.has(id))) {
       await store.del("kept", ctx.account);
+      forgetKeptSealed(ctx.account);
       return loadInbox(ctx, inbox, opts);
     }
     // Kept open, not open on the server and not listed since, so not answered either: the
@@ -292,13 +331,15 @@ export async function loadInbox(
     Object.entries(snoozes).map(([decisionId, z]) => ({ decisionId, at: z.at, until: z.until })),
   );
   await hold(ctx);
+  if (opts.keep && kept) holdKeptSealed(ctx.account, kept.items);
   if (opts.keep && (read.length > 0 || drop.size > 0) && cursor !== undefined) {
     const at = cursor;
-    await store.update("kept", ctx.account, (had) => ({
-      device: ctx.device.id,
-      cursor: at,
-      items: merge(had?.device === ctx.device.id ? had.items : [], read, drop),
-    }));
+    let items: Stored[] = [];
+    await store.update("kept", ctx.account, (had) => {
+      items = merge(had?.device === ctx.device.id ? had.items : [], read, drop);
+      return { device: ctx.device.id, cursor: at, items };
+    });
+    holdKeptSealed(ctx.account, items);
   }
   return { items, cursor, rejected, retry, waits, snoozes } satisfies Inbox;
 }
@@ -310,26 +351,23 @@ export async function loadInbox(
 export async function loadImages(ctx: Ctx, id: string): Promise<ShownImage[]> {
   // Each blob opens against the body this browser kept, from the same machine: never refs the
   // server sends now under that id (#1472).
-  const kept = (await store.get("kept", ctx.account))?.items.find(
-    (k) => k.item.kind === "decision" && k.item.id === id,
-  );
+  const kept =
+    keptSealed.get(sealedKey(ctx.account, id)) ??
+    (await store.get("kept", ctx.account))?.items.find(
+      (k) => k.item.kind === "decision" && k.item.id === id,
+    );
   if (!kept) throw new Error("this question is not kept here");
   const was = await openMachine(ctx, kept.item, "decision");
+  const local = kept.item.blobs ?? (await store.keptBlobs(ctx.account, [id])).get(id);
+  if (local) return openImages({ ...kept.item, blobs: local }, (was.body as Decision).images);
   const s = await api.item(id);
   const { signer, body } = await openMachine(ctx, s.item, "decision");
   if (body.id !== id || signer.id !== was.signer.id)
     throw new Error("the server sent another question");
   const images = openImages(s.item, (was.body as Decision).images);
   const blobs = s.item.blobs;
-  // Kept for this device only; gone meanwhile, an empty record reads from the start next time.
-  if (blobs && (await store.get("kept", ctx.account))?.device === ctx.device.id)
-    await store.update("kept", ctx.account, (had) => ({
-      device: ctx.device.id,
-      cursor: had?.cursor ?? "",
-      items: (had?.items ?? []).map((k) =>
-        k.item.kind === "decision" && k.item.id === id ? { ...k, item: { ...k.item, blobs } } : k,
-      ),
-    }));
+  // Kept while this device keeps the question, read again when the images are written.
+  if (blobs) await store.keepBlobs(ctx.account, ctx.device.id, id, blobs);
   return images;
 }
 
