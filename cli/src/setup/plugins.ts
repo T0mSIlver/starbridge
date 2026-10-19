@@ -62,7 +62,9 @@ export function hasClaude(sys: Sys): boolean {
   return which(sys.ctx.env, "claude") !== undefined;
 }
 
-function claudeDir(sys: Pick<Sys, "ctx" | "home">) {
+export type Home = Pick<Sys, "ctx" | "home">;
+
+export function claudeDir(sys: Home) {
   return sys.ctx.env.CLAUDE_CONFIG_DIR || join(sys.home, ".claude");
 }
 
@@ -126,8 +128,8 @@ export interface PluginState {
    * repository.
    */
   foreign?: string;
-  /** Installed at user scope, with whether each is enabled. */
-  plugins: Record<string, { enabled: boolean; version?: string } | undefined>;
+  /** Installed at user scope, with whether each is enabled and its folder. */
+  plugins: Record<string, { enabled: boolean; version?: string; installPath?: string } | undefined>;
 }
 
 /** The state, or why `claude` gave none: missing, too old or not answering. */
@@ -138,6 +140,7 @@ export async function pluginState(sys: Sys): Promise<PluginState | string> {
     scope: string;
     enabled: boolean;
     version?: string;
+    installPath?: string;
   }>(sys, "plugin", "list");
   if (typeof markets === "string" || typeof installed === "string") {
     const old = await claudeTooOld(sys, true);
@@ -147,7 +150,11 @@ export async function pluginState(sys: Sys): Promise<PluginState | string> {
   for (const id of PLUGINS) {
     const p = installed.find((x) => x.id === id && x.scope === "user");
     plugins[id] = p
-      ? { enabled: p.enabled, ...(p.version ? { version: p.version } : {}) }
+      ? {
+          enabled: p.enabled,
+          ...(p.version ? { version: p.version } : {}),
+          ...(p.installPath ? { installPath: p.installPath } : {}),
+        }
       : undefined;
   }
   const ours = markets.find((m) => m.name === MARKETPLACE);
@@ -288,12 +295,12 @@ type Settings = Record<string, unknown> & {
   extraKnownMarketplaces?: Record<string, Record<string, unknown>>;
 };
 
-export function settingsPath(sys: Pick<Sys, "ctx" | "home">) {
+export function settingsPath(sys: Home) {
   return join(claudeDir(sys), "settings.json");
 }
 
 /** User settings; undefined when the file is missing, does not parse or is no object (#1335). */
-function readSettings(sys: Sys): Settings | undefined {
+export function readSettings(sys: Home): Settings | undefined {
   try {
     const v = JSON.parse(readFileSync(settingsPath(sys), "utf8")) as unknown;
     return v && typeof v === "object" && !Array.isArray(v) ? (v as Settings) : undefined;
@@ -302,7 +309,7 @@ function readSettings(sys: Sys): Settings | undefined {
   }
 }
 
-function writeSettings(sys: Sys, s: Settings) {
+export function writeSettings(sys: Home, s: Settings) {
   replaceFile(settingsPath(sys), `${JSON.stringify(s, null, 2)}\n`);
 }
 

@@ -31,6 +31,18 @@ What the code relies on, with the versions checked.
   `user`, and absent for Claude Desktop's names. The transcript is
   `~/.claude/projects/<cwd, each other character a dash>/<sessionId>.jsonl`; a user line typed by
   a person has no `isMeta` or `isCompactSummary` and no `origin.kind` other than `human`.
+- **Claude Code plugins of one name** (2.1.299 and 2.1.301, #2107): `--plugin-dir` folders come
+  before `CLAUDE_CODE_PLUGIN_DIRS` ones (read from the process or the user settings' `env`), and
+  either replaces the installed plugin of its name whole. Between such folders, the first gives the
+  skills, and the first that has hooks gives the hooks, so a hookless copy first leaves a later
+  one's hooks running; but a later one's hooks module is refused ("another plugin of that name
+  loads first"), and so is a plugin of the name in `~/.claude/skills/<name>`. Claude desktop's
+  sessions read `CLAUDE_CODE_PLUGIN_DIRS` from the user settings, and set
+  `CLAUDE_CODE_ENTRYPOINT=claude-desktop`; over SSH also `CLAUDE_SSH_DAEMON_CHILD=1`. A hook gets
+  `CLAUDE_PID`; a mod's `$.process.run` child has Claude Code as its parent. A hooks module calls
+  `on("<event>", hook)` with the event written out and spells `$` only as `$.noun...` at the call:
+  a module that spreads arguments into `on` does not load. A plugin's `hooks.json` may hold both
+  `hooks` and `modules`.
 - **Claude desktop's next-step box** (2.42304.2, Claude Code 2.1.299, #2118): its sessions get
   the `ccd_turn` server's `wrap_up` and `update_plan` tools, `wrap_up` named in
   `CLAUDE_CODE_TERMINAL_MCP_TOOLS`. `wrap_up` takes `recap`, `ask` and `actions` (`label`,
@@ -42,7 +54,9 @@ What the code relies on, with the versions checked.
   fires under `--dangerously-skip-permissions` for `ask` rules and for Remote Control's `--print
   --sdk-url` children, not for auto mode's classifier blocks, which reach hooks only as
   `PermissionDenied`. When the keyboard answers Yes first the hook gets no signal; Esc or No sends
-  it SIGTERM. Every `PreToolUse` deny shows as a red "hook error". In cloud sessions only repo hooks
+  it SIGTERM. In an SDK session with `--permission-prompt-tool=stdio`, as Claude desktop runs, a
+  hook's allow sends the host `control_cancel_request` for its open `can_use_tool` request, which
+  closes its `AskUserQuestion` picker (2.1.299, 2.1.301). Every `PreToolUse` deny shows as a red "hook error". In cloud sessions only repo hooks
   run, and environment variables are readable by the agent.
 - **Agent SDK** (0.3.276, Claude Code 2.1.301): a `query()` given a string prompt closes the
   process's input after its first result, so Claude Code ends with that turn; one given a stream
