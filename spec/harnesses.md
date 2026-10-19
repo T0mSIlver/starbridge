@@ -382,7 +382,11 @@ the Cursor IDE, which this machine does not run.
   settle the session's prompts. Codex rejects `updatedPermissions` from this hook, so devices
   offer Allow once and Deny. A Codex `apply_patch` shows the files it touches.
 - **Pi** (#232, #288), through pi-permission-system's authorizer chain: the link `starbridge`,
-  once the owner names it in `authorizerChain`. A link cannot allow for the session, so devices
+  once it is named in `authorizerChain`. Setup adds it when pi-permission-system is installed, and
+  a yes to permission prompts (setup's question or `config permissions on`) adds it with no Pi
+  question of its own (#2130, card d_sound-jeans-argue). Uninstall takes the link out, since it
+  names an extension uninstall removes, and only the rules setup recorded adding: one the owner
+  had stays. A link cannot allow for the session, so devices
   offer Allow and Deny. Asks on the `path` and `external_directory` families stay at the keyboard,
   since pi-permission-system drops a link's allow there. The devices see the whole command line
   an Allow runs, not only the command of it that asked (#488). While the devices hold the prompt

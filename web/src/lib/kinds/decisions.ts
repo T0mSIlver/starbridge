@@ -3,6 +3,8 @@
 import {
   activeMembers,
   type Decision,
+  laterSnooze,
+  laterWaiting,
   openAsync,
   openImages,
   ProtocolError,
@@ -11,9 +13,10 @@ import {
   type ShownImage,
   type Snooze,
   sealAsync,
+  snoozeStamp,
   type Waiting,
 } from "@starbridge/protocol";
-import { api, lastPage, type Stored } from "../api";
+import { ApiError, api, lastPage, type Stored } from "../api";
 import { type Kept, merge } from "../kept";
 import * as store from "../store";
 import type { InboxItem, Reply, Decision as ShownDecision } from "../types";
@@ -119,6 +122,25 @@ export async function openPushedDecision(ctx: Ctx, item: SealedItem): Promise<In
  * With `keep`, what the server lists is kept sealed in this browser, and a read with no cursor
  * starts from what is kept rather than from the first item (#1380).
  */
+/**
+ * The sealed decisions the last load kept, by account and id: showing one's images opens them
+ * against it without reading the whole kept list again (#2097).
+ */
+const keptSealed = new Map<string, Stored>();
+const sealedKey = (account: string, id: string) => `${account}/${id}`;
+
+/** Forgets what the last loads kept of `account`: on sign-out, revocation, or a reset server. */
+export function forgetKeptSealed(account: string) {
+  for (const k of keptSealed.keys()) if (k.startsWith(sealedKey(account, ""))) keptSealed.delete(k);
+}
+
+/** Holds exactly the kept list's decisions of `account`, so a trimmed one goes too. */
+function holdKeptSealed(account: string, items: Stored[]) {
+  forgetKeptSealed(account);
+  for (const s of items)
+    if (s.item.kind === "decision") keptSealed.set(sealedKey(account, s.item.id), s);
+}
+
 export async function loadInbox(
   ctx: Ctx,
   inbox: Inbox = { items: [], rejected: [] },
@@ -141,12 +163,31 @@ export async function loadInbox(
       open = new Set();
       let at: string | undefined;
       for (;;) {
-        const page = await api.items("decision", at, { open: true });
+        // Only the ids count: the kept copies hold the questions and their images (#2097). A
+        // server from before blobs=none refuses it, and lists them with their images instead.
+        const page = await api.items("decision", at, { open: true, noBlobs: true }).catch((e) => {
+          if (e instanceof ApiError && e.status === 400 && e.code === "bad-request")
+            return api.items("decision", at, { open: true });
+          throw e;
+        });
         for (const s of page.items) open.add(s.item.id);
         at = page.cursor;
         if (lastPage(page)) break;
       }
-      kept = had;
+      // The open questions show with their images; an answered one's open when it is shown.
+      const blobs = await store.keptBlobs(
+        ctx.account,
+        had.items
+          .filter((k) => k.item.kind === "decision" && !k.answeredAt && !k.item.blobs)
+          .map((k) => k.item.id),
+      );
+      kept = {
+        ...had,
+        items: had.items.map((k) => {
+          const b = k.item.kind === "decision" ? blobs.get(k.item.id) : undefined;
+          return b ? { ...k, item: { ...k.item, blobs: b } } : k;
+        }),
+      };
     }
   }
   const sent = (await store.get("answers", ctx.account)) ?? {};
@@ -167,8 +208,7 @@ export async function loadInbox(
       // Only tells until when the owner put a decision off: one that fails costs that alone.
       try {
         const z = await openSnooze(ctx, s.item);
-        const had = snoozes[z.decisionId];
-        if (!had || Date.parse(had.at) < Date.parse(z.at))
+        if (laterSnooze(snoozes[z.decisionId], z))
           snoozes[z.decisionId] = { until: z.until, at: z.at };
       } catch {}
       return;
@@ -179,8 +219,7 @@ export async function loadInbox(
         const { signer, body } = await openMachine(ctx, s.item, "waiting");
         const w = body as Waiting;
         const key = `${signer.id}/${w.decisionId}`;
-        const had = waits[key];
-        if (!had || had.at < w.at) waits[key] = { state: w.state, at: w.at };
+        if (laterWaiting(waits[key], w)) waits[key] = { state: w.state, at: w.at };
       } catch {}
       return;
     }
@@ -262,6 +301,7 @@ export async function loadInbox(
     // these were kept from (restored, or reset). Read it all again.
     if ([...open].some((id) => !held.has(id) && !listed.has(id))) {
       await store.del("kept", ctx.account);
+      forgetKeptSealed(ctx.account);
       return loadInbox(ctx, inbox, opts);
     }
     // Kept open, not open on the server and not listed since, so not answered either: the
@@ -288,16 +328,18 @@ export async function loadInbox(
   const items = shown();
   await noteSnoozes(
     ctx,
-    Object.entries(snoozes).map(([decisionId, z]) => ({ decisionId, at: z.at })),
+    Object.entries(snoozes).map(([decisionId, z]) => ({ decisionId, at: z.at, until: z.until })),
   );
   await hold(ctx);
+  if (opts.keep && kept) holdKeptSealed(ctx.account, kept.items);
   if (opts.keep && (read.length > 0 || drop.size > 0) && cursor !== undefined) {
     const at = cursor;
-    await store.update("kept", ctx.account, (had) => ({
-      device: ctx.device.id,
-      cursor: at,
-      items: merge(had?.device === ctx.device.id ? had.items : [], read, drop),
-    }));
+    let items: Stored[] = [];
+    await store.update("kept", ctx.account, (had) => {
+      items = merge(had?.device === ctx.device.id ? had.items : [], read, drop);
+      return { device: ctx.device.id, cursor: at, items };
+    });
+    holdKeptSealed(ctx.account, items);
   }
   return { items, cursor, rejected, retry, waits, snoozes } satisfies Inbox;
 }
@@ -309,26 +351,23 @@ export async function loadInbox(
 export async function loadImages(ctx: Ctx, id: string): Promise<ShownImage[]> {
   // Each blob opens against the body this browser kept, from the same machine: never refs the
   // server sends now under that id (#1472).
-  const kept = (await store.get("kept", ctx.account))?.items.find(
-    (k) => k.item.kind === "decision" && k.item.id === id,
-  );
+  const kept =
+    keptSealed.get(sealedKey(ctx.account, id)) ??
+    (await store.get("kept", ctx.account))?.items.find(
+      (k) => k.item.kind === "decision" && k.item.id === id,
+    );
   if (!kept) throw new Error("this question is not kept here");
   const was = await openMachine(ctx, kept.item, "decision");
+  const local = kept.item.blobs ?? (await store.keptBlobs(ctx.account, [id])).get(id);
+  if (local) return openImages({ ...kept.item, blobs: local }, (was.body as Decision).images);
   const s = await api.item(id);
   const { signer, body } = await openMachine(ctx, s.item, "decision");
   if (body.id !== id || signer.id !== was.signer.id)
     throw new Error("the server sent another question");
   const images = openImages(s.item, (was.body as Decision).images);
   const blobs = s.item.blobs;
-  // Kept for this device only; gone meanwhile, an empty record reads from the start next time.
-  if (blobs && (await store.get("kept", ctx.account))?.device === ctx.device.id)
-    await store.update("kept", ctx.account, (had) => ({
-      device: ctx.device.id,
-      cursor: had?.cursor ?? "",
-      items: (had?.items ?? []).map((k) =>
-        k.item.kind === "decision" && k.item.id === id ? { ...k, item: { ...k.item, blobs } } : k,
-      ),
-    }));
+  // Kept while this device keeps the question, read again when the images are written.
+  if (blobs) await store.keepBlobs(ctx.account, ctx.device.id, id, blobs);
   return images;
 }
 
@@ -364,20 +403,38 @@ export async function answer(ctx: Ctx, item: InboxItem, reply: Reply): Promise<s
 }
 
 /**
- * Keeps the latest snooze time this browser knows per decision, for the service worker (#571).
- * Returns whether `latest` holds no newer one than each given.
+ * The latest snooze kept of `id` in the `snoozes` record. Its `until` is kept beside it, for the
+ * time it was written with; a time a page from before #2103 wrote has none, and reads as the
+ * latest possible, so the same snooze, pushed again at its time, wins the tie and is noted whole.
+ */
+export function keptSnooze(
+  record: Record<string, string> | undefined,
+  id: string,
+): { at: string; until: string } | undefined {
+  const at = record?.[id];
+  if (!at) return undefined;
+  const [tieAt, until] = (record?.[`until:${id}`] ?? "").split(" ");
+  return { at, until: tieAt === at && until ? until : "9999-12-31T23:59:59.999Z" };
+}
+
+/**
+ * Keeps the latest snooze this browser knows per decision, for the service worker (#571) and
+ * the next snooze's time. Returns whether each given is the latest, or the same as it.
  */
 export async function noteSnoozes(
   ctx: Pick<Ctx, "account">,
-  seen: { decisionId: string; at: string }[],
+  seen: { decisionId: string; at: string; until: string }[],
 ): Promise<boolean> {
   let newest = true;
   await store.update("snoozes", ctx.account, (old) => {
     const next = { ...old };
     for (const z of seen) {
-      const had = next[z.decisionId];
-      if (had && Date.parse(had) > Date.parse(z.at)) newest = false;
-      else next[z.decisionId] = z.at;
+      const had = keptSnooze(next, z.decisionId);
+      if (laterSnooze(had, z)) {
+        // The time stays where pages from before #2103 read and compare it.
+        next[z.decisionId] = z.at;
+        next[`until:${z.decisionId}`] = `${z.at} ${z.until}`;
+      } else if (had && laterSnooze(z, had)) newest = false;
     }
     return next;
   });
@@ -401,13 +458,16 @@ export async function snooze(ctx: Ctx, item: InboxItem, until: string): Promise<
   const machine = fresh.dir.members.get(item.machine.id);
   if (!machine?.active) throw new Error(`${item.machine.name} was revoked`);
   const to = [machine.member, ...activeMembers(fresh.dir, "device")];
+  // Past the latest snooze of it this browser knows, read after the directory's await: one a
+  // phone stamped a second ahead, or from a clock that runs ahead, would win over it (#2103).
+  const last = keptSnooze(await store.get("snoozes", ctx.account), item.decision.id);
   const body: Snooze = {
     v: 1,
     id: randomId("z_"),
     decisionId: item.decision.id,
     to: to.map((m) => m.id),
     until,
-    at: now(),
+    at: snoozeStamp(Date.now(), last?.at),
     dir: { length: fresh.dir.length, head: fresh.dir.head },
   };
   await api.post(await sealAsync("snooze", body, me(fresh), to));

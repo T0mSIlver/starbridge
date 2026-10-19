@@ -2070,3 +2070,18 @@ test("where Claude desktop starts sessions over SSH, setup loads starbridge-remo
   expect(existsSync(dir)).toBe(false);
   expect(dirs()).toBe(own);
 });
+
+test("uninstall leaves the Pi rules the owner had, also when run again (#2130)", async () => {
+  const m = await machine();
+  const pps = join(m.home, ".pi/agent/extensions/pi-permission-system/config.json");
+  mkdirSync(dirname(pps), { recursive: true });
+  writeFileSync(pps, JSON.stringify({ permission: { skill: { starbridge: "allow" } } }));
+  await setup(m.sys, { yes: true, noQuota: true, noService: true });
+  expect(JSON.parse(readFileSync(pps, "utf8")).authorizerChain).toEqual(["starbridge"]);
+  for (let i = 0; i < 2; i++) {
+    await uninstallAgent(m.sys, "pi");
+    expect(JSON.parse(readFileSync(pps, "utf8"))).toEqual({
+      permission: { skill: { starbridge: "allow" } },
+    });
+  }
+});

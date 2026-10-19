@@ -1,0 +1,5 @@
+#!/bin/sh
+# Stands in for launchctl in the install walk, running the plist's job as launchd would.
+echo "launchctl $*" >>"$FAKE_LOG"
+mkdir -p "$FAKE_STATE"
+exec bun "$(dirname "$0")/../walk-service.ts" launchctl "$@"

@@ -92,7 +92,10 @@
   does; it learns only that some question was put off until then. Permission prompts and runs
   can't be snoozed: a prompt's answer window is 10 minutes and the keyboard already takes it.
   Agent-suggested times and event snoozes ("until the run ends") were dropped: a snooze is when
-  the owner has time; when the agent needs the answer is its waiting state.
+  the owner has time; when the agent needs the answer is its waiting state. Which snooze stands
+  is one rule every client applies, the later time and on a tie the earlier `until`, and a device
+  stamps its snooze past the last one it knows (#2103): each client compared times its own way,
+  so the same-second Undo and late pushes came back as bugs on one client after another.
 - **Who won a race** (#330). Answers are sealed only to the asking machine, so once it accepts one
   it posts a `settled` notice with the device and its choice or text, sealed to every device. The
   losing device then says "Answered on Pixel: Later".

@@ -24,7 +24,6 @@ import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
 import java.io.IOException
 import java.time.Instant
-import java.time.temporal.ChronoUnit
 
 /** An answer this phone has yet to hand the server, and when it was given; null for one queued before #895. */
 private data class Tap(val answer: String, val at: Instant?)
@@ -307,10 +306,9 @@ internal class DecisionKind(
         return d
     }
 
-    /** [d] with the owner's snooze [z], or null when an earlier or equal one is kept already. */
+    /** [d] with the owner's snooze [z], or null when the one kept wins over it (#2103). */
     private fun snoozed(d: SavedDecision, z: Snooze): SavedDecision? {
-        val at = instant(z.at) ?: return null
-        if (d.snoozedAt != null && instant(d.snoozedAt)?.isBefore(at) == false) return null
+        if (!laterSnooze(d.snoozedAt, d.snoozedUntil, z.at, z.until)) return null
         return d.copy(snoozedUntil = z.until, snoozedAt = z.at)
     }
 
@@ -327,8 +325,7 @@ internal class DecisionKind(
 
     private fun wait(d: SavedDecision, from: String, w: Waiting): SavedDecision? {
         if (d.from != from) return null
-        val at = instant(w.at) ?: return null
-        if (d.waitingAt != null && instant(d.waitingAt)?.isBefore(at) == false) return null
+        if (!laterWaiting(d.waitingAt, d.waiting, w.at, w.state)) return null
         return d.copy(waiting = w.state, waitingAt = w.at)
     }
 
@@ -429,7 +426,7 @@ internal class DecisionKind(
             // The latest `at`, in whole seconds, wins everywhere: an Undo within the second of its
             // snooze goes a second later, or the machine and the other devices keep the snooze (#1981).
             val last = saved.decisions.find { it.body.id == id }?.snoozedAt
-            val at = listOfNotNull(Instant.parse(now()), instant(last)?.plusSeconds(1)?.truncatedTo(ChronoUnit.SECONDS)).max().toString()
+            val at = snoozeStamp(Instant.parse(now()), last)
             // Back now, as Undo is, goes no later than its own `at`, which every client reads as
             // back now (PROTOCOL.md, "Snoozing"): the tap's instant is ahead of the clock the
             // inbox keeps, so the question stayed under Snoozed until that clock next ticked. Nor

@@ -7,9 +7,9 @@ import { existsSync } from "node:fs";
 import { join, resolve } from "node:path";
 import type { Ctx } from "../context";
 import { permissionsEnabled } from "../permissions";
-import { piPermissionConfig, removePiEntries } from "../pi";
+import { piChain, piPermissionConfig, removePiEntries } from "../pi";
 import { which } from "../platform";
-import { offerPiAllow, offerPiChain } from "../settings";
+import { piAllowStep, piChainStep } from "../settings";
 import { ALLOW, type AllowList, addAllow, missingAllow, removeAllow } from "./allow";
 import {
   CODEX_PLUGIN,
@@ -71,7 +71,7 @@ import {
   settingsPath,
 } from "./plugins";
 import { desktopReaches, installRemotePlugin, removeRemotePlugin } from "./remote-plugin";
-import { defaults, type Sys } from "./sys";
+import type { Sys } from "./sys";
 
 /** Each agent by the name `--agent` takes, with the name it goes by. */
 export const AGENTS = {
@@ -310,9 +310,9 @@ async function installPi(sys: Sys): Promise<Outcome> {
   // pi-permission-system's rules for the skill and the commands, when it is installed.
   const notes: string[] = [];
   const quiet: Ctx = { ...sys.ctx, out: (line) => notes.push(line.replace(/^Pi: /, "")) };
-  await offerPiAllow(quiet, defaults, true);
+  piAllowStep(quiet, true, true);
   // With permission prompts on, pi-permission-system asks Starbridge first.
-  if (permissionsEnabled(sys.ctx)) await offerPiChain(quiet, defaults);
+  if (permissionsEnabled(sys.ctx)) piChainStep(quiet, true);
   return { mark: "✓", text: "package installed", notes };
 }
 
@@ -426,7 +426,15 @@ export async function removeAgent(sys: Sys, id: AgentId): Promise<string[]> {
         }
       const config = piPermissionConfig(sys.ctx.env);
       try {
-        if (removePiEntries(sys.ctx.env)) done.push(`Removed Starbridge's entries from ${config}.`);
+        if (removePiEntries(sys.ctx.env, sys.ctx.store.state().piAdded))
+          done.push(`Removed Starbridge's entries from ${config}.`);
+        // Taken out: an empty record, so a later uninstall removes nothing more. One without a
+        // record would take the owner's own rules for Starbridge's (#2130). A config it could not
+        // read keeps the record for the next try.
+        if (piChain(sys.ctx.env).state !== "unreadable")
+          sys.ctx.store.updateState((s) => {
+            s.piAdded = {};
+          });
       } catch (e) {
         done.push(`Could not remove Starbridge's entries from ${config}: ${(e as Error).message}`);
       }

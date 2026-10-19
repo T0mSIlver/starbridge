@@ -6,6 +6,9 @@ import dev.starbridge.app.data.ROW_INPUT_MAX
 import dev.starbridge.app.data.RETRY_FOR_MS
 import dev.starbridge.app.data.Source
 import dev.starbridge.app.data.SwipeSnooze
+import dev.starbridge.app.data.laterSnooze
+import dev.starbridge.app.data.laterWaiting
+import dev.starbridge.app.data.snoozeStamp
 import dev.starbridge.app.protocol.ANSWER_TEXT_MAX
 import dev.starbridge.app.protocol.BLOB_MAX
 import dev.starbridge.app.ui.inbox.SNOOZE_MAX
@@ -70,6 +73,24 @@ class ClientRulesTest {
         }
         for (c in snooze.getValue("morning").jsonArray.map { it.jsonObject }) {
             assertEquals(c.str("now"), local(c.str("morning")), SwipeSnooze.Morning.until(local(c.str("now")), zone))
+        }
+    }
+
+    @Test fun order() {
+        val order = rules.getValue("order").jsonObject
+        for (c in order.getValue("snooze").jsonArray.map { it.jsonObject }) {
+            val kept = c["kept"]?.jsonObject
+            val next = c.getValue("next").jsonObject
+            assertEquals(c.str("name"), c.getValue("later").jsonPrimitive.boolean, laterSnooze(kept?.str("at"), kept?.str("until"), next.str("at"), next.str("until")))
+        }
+        for (c in order.getValue("waiting").jsonArray.map { it.jsonObject }) {
+            val kept = c["kept"]?.jsonObject
+            val next = c.getValue("next").jsonObject
+            assertEquals(c.str("name"), c.getValue("later").jsonPrimitive.boolean, laterWaiting(kept?.str("at"), kept?.str("state"), next.str("at"), next.str("state")))
+        }
+        // The app stamps whole seconds.
+        for (c in order.getValue("stamp").jsonArray.map { it.jsonObject }) {
+            assertEquals(c.str("name"), c.str("seconds"), snoozeStamp(Instant.parse(c.str("now")), c["last"]?.jsonPrimitive?.content))
         }
     }
 

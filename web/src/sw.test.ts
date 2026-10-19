@@ -279,6 +279,33 @@ test("a snooze's first push that comes after its return leaves the question up, 
   expect(notes.map((n) => n.tag)).toEqual(["d:d_order"]);
 });
 
+test("a snooze kept before #2103, its time only, still notifies when it comes back", async () => {
+  const d = decision("d_legacy");
+  live.inject(d);
+  notes = [];
+  const before = shows;
+  const now = Date.now();
+  const at = new Date(now - 6 * 60_000).toISOString();
+  const until = new Date(now - 60_000).toISOString();
+  // As noteSnoozes kept it before #2103, from this snooze's first push.
+  await store.put("snoozes", { d_legacy: at }, ctx.account);
+  const { id, boxPk } = ctx.device;
+  const z = seal(
+    "snooze",
+    { v: 1, id: "z_legacy", decisionId: "d_legacy", to: ["m_devbox", id], until, at },
+    { id: "phone", signKey: live.owner.device.keys.sign.privateKey },
+    [
+      { id: "m_devbox", boxPk: publicKeys(mKeys).boxPk },
+      { id, boxPk },
+    ],
+  );
+  await push(payload({ ...z, re: "d_legacy", wakeAt: until }, { wakeAt: until, due: true }));
+  expect(shows).toBe(before + 1);
+  const kept = await store.get("snoozes", ctx.account);
+  // The time stays a string where a page from before #2103 compares it; the tie data sits beside.
+  expect([kept?.d_legacy, kept?.["until:d_legacy"]]).toEqual([at, `${at} ${until}`]);
+});
+
 test("a question whose item cannot be read shows the placeholder, which tapped opens the inbox (#1363)", async () => {
   notes = [];
   // Too big to carry its box, and gone from the server: the fetch fails.

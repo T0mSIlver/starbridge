@@ -43,8 +43,9 @@ type Records = {
    */
   forgotten: string[];
   /**
-   * The signed time of the latest snooze this browser knows of each decision (#571): a return
-   * pushed for an older one shows nothing.
+   * The latest snooze this browser knows of each decision (#571): a return pushed for an older
+   * one shows nothing. Its signed time by decision id; since #2103, under `until:<id>`, that
+   * snooze's "<at> <until>", which breaks a tie. Pages from before read and write the times only.
    */
   snoozes: Record<string, string>;
   /** The inbox's items as listed, still sealed, and the cursor after them (#1380). */
@@ -152,7 +153,104 @@ export async function put<K extends keyof Records>(
 }
 
 export async function del(kind: keyof Records, account = ""): Promise<void> {
-  await run("readwrite", (s) => s.delete(key(kind, account)));
+  await transact((s) => {
+    s.delete(key(kind, account));
+    // The kept list's images go with it.
+    if (kind === "kept") s.delete(blobRange(account));
+  });
+}
+
+/**
+ * The images of a kept decision, apart from the kept list (#2097): a load reads only those it
+ * shows, and a write of the list no longer rewrites every image it holds. `update("kept")` moves
+ * them here, so the list it stores carries none.
+ */
+const blobKey = (account: string, id: string) => `blobs:${account}:${id}`;
+const blobRange = (account: string) =>
+  IDBKeyRange.bound(`blobs:${account}:`, `blobs:${account}:\uffff`);
+
+/** Writes `next` as the kept list: its blobs to their own records, and drops those it lost. */
+function putKept(s: IDBObjectStore, account: string, old: Kept | undefined, next: Kept) {
+  const held = new Set<string>();
+  const items = next.items.map((k) => {
+    if (k.item.kind !== "decision") return k;
+    held.add(k.item.id);
+    if (!k.item.blobs) return k;
+    s.put(k.item.blobs, blobKey(account, k.item.id));
+    const { blobs: _, ...item } = k.item;
+    return { ...k, item };
+  });
+  for (const k of old?.items ?? [])
+    if (k.item.kind === "decision" && !held.has(k.item.id)) s.delete(blobKey(account, k.item.id));
+  s.put({ ...next, items }, key("kept", account));
+}
+
+/**
+ * Deletes the image records of every account this browser no longer keeps a list for: a page
+ * from before #2097, still open in another tab, signs out deleting only the list.
+ */
+export async function sweepBlobs(): Promise<void> {
+  await transact((s, step) => {
+    const req = s.getAllKeys(IDBKeyRange.bound("blobs:", "blobs:\uffff"));
+    req.onsuccess = step(() => {
+      const accounts = new Set(
+        (req.result as string[]).map((k) => k.slice("blobs:".length, k.indexOf(":", 6))),
+      );
+      for (const account of accounts) {
+        const kept = s.count(key("kept", account));
+        kept.onsuccess = step(() => {
+          if (kept.result === 0) s.delete(blobRange(account));
+        });
+      }
+    });
+  });
+}
+
+/** The kept images of each of `ids` that has them. */
+export async function keptBlobs(account: string, ids: string[]): Promise<Map<string, string[]>> {
+  const out = new Map<string, string[]>();
+  if (ids.length === 0) return out;
+  const d = await db();
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const tx = d.transaction(STORE, "readonly");
+      const st = tx.objectStore(STORE);
+      for (const id of ids) {
+        const req = st.get(blobKey(account, id));
+        req.onsuccess = () => {
+          if (req.result) out.set(id, req.result as string[]);
+        };
+      }
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+      tx.onabort = () => reject(tx.error);
+    });
+  } finally {
+    d.close();
+  }
+  return out;
+}
+
+/** Keeps a decision's images fetched on show, while device `device` still keeps the decision. */
+export async function keepBlobs(
+  account: string,
+  device: string,
+  id: string,
+  blobs: string[],
+): Promise<void> {
+  await transact((s, step) =>
+    signedIn(s, step, "kept", account, () => {
+      const req = s.get(key("kept", account));
+      req.onsuccess = step(() => {
+        const kept = req.result as Kept | undefined;
+        if (
+          kept?.device === device &&
+          kept.items.some((k) => k.item.kind === "decision" && k.item.id === id)
+        )
+          s.put(blobs, blobKey(account, id));
+      });
+    }),
+  );
 }
 
 /** Thrown when another context pinned a longer chain meanwhile: read the directory again. */
@@ -229,9 +327,12 @@ export async function update<K extends keyof Records>(
   await transact((s, step) =>
     signedIn(s, step, kind, account, () => {
       const req = s.get(key(kind, account));
-      req.onsuccess = step(() =>
-        s.put(change(req.result as Records[K] | undefined), key(kind, account)),
-      );
+      req.onsuccess = step(() => {
+        const old = req.result as Records[K] | undefined;
+        const next = change(old);
+        if (kind === "kept") putKept(s, account, old as Kept | undefined, next as Kept);
+        else s.put(next, key(kind, account));
+      });
     }),
   );
 }

@@ -28,6 +28,7 @@ import {
 
 import type { AgyRoute } from "./antigravity";
 import type { CodexSession } from "./codex";
+import type { PiAdded } from "./pi";
 /** `$STARBRIDGE_CONFIG_DIR`, else `$XDG_CONFIG_HOME/starbridge`, else `~/.config/starbridge`. */
 export function configDir(env: Record<string, string | undefined>): string {
   if (env.STARBRIDGE_CONFIG_DIR) return env.STARBRIDGE_CONFIG_DIR;
@@ -226,6 +227,8 @@ export interface State {
   quotas?: Record<string, LastQuota>;
   /** Setup turned systemd lingering on (#2040): uninstall turns it off again. */
   lingerEnabled?: boolean;
+  /** What Starbridge added to pi-permission-system's config (#2130): uninstall takes out that. */
+  piAdded?: PiAdded;
 }
 
 export interface LastQuota {
