@@ -15,3 +15,4 @@ time, add the cheapest check that fails on it (a type, a lint, a test) and its r
 | A page, route or screen that no issue asked for | none yet |
 | A status claim in a PR or issue without the run, file or screenshot behind it | none yet |
 | Times shown with AM/PM in a 24-hour locale such as French | desktop only: `desktop/test/unit/clock.test.ts` |
+| Setup or uninstall leaving files, folders, a service or lingering behind, or changing the owner's own agent settings (#2040, #2041, #2098) | Linux: `cli/test/walk.test.ts` installs with install.sh and with npm, sets up every agent, answers the first card and uninstalls in a fresh HOME, then compares HOME with what it was |

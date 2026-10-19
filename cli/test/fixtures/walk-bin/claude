@@ -1,0 +1,9 @@
+#!/bin/sh
+# Stands in for Claude Code in the install walk: the tests' fake, but `plugin marketplace remove`
+# also takes the marketplace out of settings.json, leaving `"extraKnownMarketplaces": {}` as
+# Claude Code 2.1 does.
+"$(dirname "$0")/../fake-bin/claude" "$@" || exit
+[ "$1 $2 $3" = "plugin marketplace remove" ] || exit 0
+settings="$HOME/.claude/settings.json"
+[ -f "$settings" ] || exit 0
+bun -e 'const f=process.argv.at(-1);const fs=require("fs");const s=JSON.parse(fs.readFileSync(f,"utf8"));delete s.extraKnownMarketplaces?.starbridge;fs.writeFileSync(f,JSON.stringify(s,null,2))' "$settings"

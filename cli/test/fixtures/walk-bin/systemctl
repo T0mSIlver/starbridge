@@ -1,0 +1,7 @@
+#!/bin/sh
+# Stands in for `systemctl --user` in the install walk, running the unit as the user manager would:
+# `restart` starts its ExecStart with its Environment lines, `disable --now` stops it and waits.
+echo "systemctl $*" >>"$FAKE_LOG"
+[ "$1" = --user ] && shift
+mkdir -p "$FAKE_STATE"
+exec bun "$(dirname "$0")/../walk-systemd.ts" "$@"
