@@ -18,9 +18,11 @@ line, the safe side: at worst a prompt repeats an answer the agent already read.
 | Harness | Delivery |
 |---|---|
 | Claude Code: terminal, desktop app's Code tab, IDEs | The mod (`mod/`) long-polls the local agent's socket in 25 s cycles and submits each answer with `$.prompt.submit`; during a turn, it goes with the next tool result instead (#1484, #1584) |
+| Claude Code in an app that runs it through the Agent SDK and keeps the session open (such as T3 Code) | The mod, from the session's second turn; in the first, `wait` (#2100) |
 | `claude -p`, Agent SDK scripts | `wait`: the run ends with its last turn, so the mod starts no loop there (#321) |
 | Codex TUI | The local agent runs `codex queue --thread <id>`; the message only says to run `starbridge wait <id>`, since other local users can read process arguments (#274). Retried each minute, 30 times. During a turn, the answer goes in with the daemon's `turn/steer` instead, answer and all (#1486, #1584) |
 | `codex exec` | `wait`: nothing runs a queued message once exec returns. The thread's rollout tells exec apart (#245) |
+| Codex in an app that runs its own `codex app-server` | `wait`: the daemon would load the thread and run the answer's turn where that app never shows it. The rollout's `originator`, `codex-tui` for the TUI, tells them apart (#2101) |
 | Pi TUI and RPC | The Pi extension (`mod/pi`) calls `pi.sendUserMessage(text, { deliverAs: "steer" })`: a busy session takes it after its current tool calls (#232, #1584) |
 | opencode TUI and `serve` | The opencode plugin (`mod/opencode`) calls `client.session.promptAsync`, one loop per session (#300); a busy session takes it at its next step (#1484) |
 | Claude Code subagents | The mod sends the answer to the subagent that asked with `$.session.send` (#1702) |
@@ -103,8 +105,15 @@ line, the safe side: at worst a prompt repeats an answer the agent already read.
   the prompt, and says no both for `claude -p` and for sessions a host such as Claude desktop's
   Code tab or an IDE runs through the SDK. The mod tells them apart by `CLAUDE_CODE_ENTRYPOINT`:
   it starts its loop in an interactive session, or one whose entry point is set and is not
-  `sdk-cli` (`claude -p`), `sdk-ts` or `sdk-py` (Agent SDK scripts). A loop in a run that ends
-  early costs nothing, since `ask` still prints the `wait` line for an unattended session.
+  `sdk-cli` (`claude -p`), `sdk-ts` or `sdk-py` (Agent SDK scripts). An app may also run Claude
+  Code through the SDK for a person, and keep the session open between turns: nothing at the
+  start tells it from a script, but the SDK closes a script's input after its first result, so
+  only a session a host keeps open has a second turn. So an `sdk-ts` or `sdk-py` session starts
+  its loop when its first turn ends (#2100). `ask` promises a prompt whenever the session's mod
+  was seen, even with `CLAUDE_CODE_SESSION_ATTENDED=0`, which SDK sessions carry as `claude -p`
+  does: a question asked once the loop runs comes from a turn the host kept the session for. One
+  asked in the first turn still gets the `wait` line. A script that streams several prompts and
+  then stops may still miss an answer promised in its later turns.
   `starbridge status` run from a session whose mod never called says so.
 - **Claude desktop on another machine** (#1428, #2107). Claude desktop starts a session over SSH
   with `--plugin-dir` copies of the plugins installed on the computer it runs on, synced without
@@ -285,6 +294,16 @@ line, the safe side: at worst a prompt repeats an answer the agent already read.
   commas, so a label with a comma in it stays one. A number card asked again after `hook
   settle` closed the picker is settled as answered elsewhere at once, since no answer can reach
   the picker. A multi-select question still shows one card with a typed reply.
+- Claude desktop's next-step box (#2118): a session the desktop app runs may end its turn with
+  `mcp__ccd_turn__wrap_up` (`recap`, and optionally `ask` with `actions` of `label` and
+  `message`), which the app shows as a box with one button per action; a click sends that
+  action's `message` as the next prompt. The owner took such boxes for cards that never came. So
+  the plugin's `PostToolUse` hook on the tool posts a box that asks as a card for the session,
+  already waiting: `ask` the question, `recap` before it, the labels its options, and the answer
+  comes back as a prompt like any card's. The session's next prompt, a click in the box or
+  anything typed, settles it `elsewhere` (`UserPromptSubmit`, started only while the config
+  folder's `next-steps-open` names the session); the turn's own end leaves it open, since the box
+  ended the turn on the question. A box without `ask` posts nothing.
 - opencode (#345): each `question` call becomes one Starbridge question per question, already
   waiting, and the answers go back into the call through `POST /question/{id}/reply`. The first
   answer, on a device or at the keyboard, wins; the other side is settled `elsewhere`. A question

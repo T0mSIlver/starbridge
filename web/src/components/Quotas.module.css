@@ -49,7 +49,7 @@
 
   .head {
     display: flex;
-    align-items: baseline;
+    align-items: center;
     gap: var(--s3);
     margin-bottom: var(--s6);
   }
@@ -183,6 +183,5 @@
     width: var(--s8);
     height: var(--s8);
     margin: calc(-1 * var(--s2)) calc(-1 * var(--s2)) calc(-1 * var(--s2)) 0;
-    align-self: center;
   }
 }

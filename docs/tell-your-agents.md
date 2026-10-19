@@ -39,11 +39,14 @@ a turn. In Codex, a queued message names the questions and the agent reads each 
 
 ### Claude Code
 
-**Question picker.** Starbridge races `AskUserQuestion`.
+**Question picker.** Starbridge races `AskUserQuestion`, and Claude desktop's next-step box when
+it asks a question. Your next message in the session closes the box's card.
 
 **Answers.** They come back through the Starbridge mod, in Claude Code 2.1.287 or later, in the
-terminal, the desktop app, IDEs and Remote Control. Agent SDK scripts count as headless. A
-subagent's question comes back to that subagent, which picks it up even after it finished.
+terminal, the desktop app, IDEs and Remote Control. In an app that runs Claude Code through the
+Agent SDK, they come back from a session's second turn; in its first turn, and in Agent SDK
+scripts, the agent waits. A subagent's question comes back to that subagent, which picks it up
+even after it finished.
 
 **Permission prompts.** Starbridge races them. Your devices also offer "this session" or "always"
 when Claude Code does.

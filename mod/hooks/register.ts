@@ -15,7 +15,7 @@ import { Handover } from "./handover.ts";
 import { configDir, Poller } from "./poller.ts";
 import { Sent, sessionElsewhere } from "./sent.ts";
 import { forParent, tagAsk, toSubagents, untagAsk } from "./subagent.ts";
-import { Switch, wantsLoop } from "./switch.ts";
+import { Switch, wantsLoop, wantsLoopAfterTurn } from "./switch.ts";
 
 /**
  * Starts the answer loop in each session a person keeps open (`wantsLoop`): through the machine's agent when it runs
@@ -71,194 +71,206 @@ export const register: Register = (on) => {
     return replaced;
   };
 
+  /** Starts the loop of an Agent SDK session once its first turn has ended (#2100). */
+  let afterTurn: (() => Promise<void>) | undefined;
+
   on("session.start", async ($, e, next) => {
     if (!(await acts($.plugin.name, $.plugin.root, (a, i) => $.process.run(a, i)))) return next(e);
     handover.ended();
     const started = await next(e);
-    if (!wantsLoop(e.isInteractive, await $.env.get("CLAUDE_CODE_ENTRYPOINT"))) return started;
-    // The new loop takes over the lines the old one submitted and has not confirmed yet, so it
-    // confirms them rather than submitting them again (#1337).
-    const before = loop;
-    void before?.stop();
-    const env = {
-      STARBRIDGE_AGENT_SOCKET: await $.env.get("STARBRIDGE_AGENT_SOCKET"),
-      STARBRIDGE_CONFIG_DIR: await $.env.get("STARBRIDGE_CONFIG_DIR"),
-      STARBRIDGE_NO_AGENT: await $.env.get("STARBRIDGE_NO_AGENT"),
-      CLAUDE_CONFIG_DIR: await $.env.get("CLAUDE_CONFIG_DIR"),
-      XDG_CONFIG_HOME: await $.env.get("XDG_CONFIG_HOME"),
-      XDG_RUNTIME_DIR: await $.env.get("XDG_RUNTIME_DIR"),
-      HOME: await $.env.get("HOME"),
-      USERPROFILE: await $.env.get("USERPROFILE"),
-      OS: await $.env.get("OS"),
-    };
-    const dir = configDir(env);
-    const { socket, config } = await agentAddress(env);
-    const base = config ? { ...HEADERS, [CONFIG_HEADER]: config } : HEADERS;
-    // Kept across a hot reload, and new in each process (sent.ts); undefined on a build that
-    // lacks `$.state`.
-    const proc = { plugin: "starbridge-mod", key: "process" } as const;
-    let token: string | undefined;
-    try {
-      token = (await $.state.get(proc)).value;
-      if (!token) {
-        token = crypto.randomUUID();
-        await $.state.set(proc, token);
-      }
-    } catch {
-      token = undefined;
-    }
-    const fetch = async (method: string, path: string, body?: unknown) => {
-      const headers = body === undefined ? base : { ...base, "content-type": "application/json" };
-      const init = { method, ...(body === undefined ? {} : { body: JSON.stringify(body) }) };
-      let r: Awaited<ReturnType<typeof $.http.fetch>>;
-      if (isPortFile(socket)) {
-        // Read each call: the agent writes a new port and token each time it starts.
-        const t = portTarget(await $.fs.read(socket));
-        const runs =
-          t &&
-          (await pidRuns(t.pid, env.OS === "Windows_NT", (argv) =>
-            $.process.run(argv, { timeoutMs: 10_000 }),
-          ));
-        if (!t || !runs) throw new Error(`no agent on ${socket}`);
-        const signed = await signCall(t.token);
-        r = await $.http.fetch(`http://127.0.0.1:${t.port}${path}`, {
-          ...init,
-          headers: { ...headers, ...signed.headers },
-        });
-        if (r.headers[PROOF_HEADER] !== signed.expect)
-          throw new Error(`no agent on ${socket}: the port answers without its proof`);
-      } else
-        r = await $.http.fetch(`http://agent${path}`, { ...init, socketPath: socket, headers });
-      return { status: r.status, text: r.text };
-    };
-    const log = (text: string) => $.ui.log(text, { to: "debug" });
-    const status = (text: string | undefined) => $.ui.status(text);
-    const sessionId = () => $.session.id();
-    const now = () => $.clock.now();
-    const sleep = (ms: number) => $.clock.sleep(ms);
-    const records = new Sent(
-      {
-        sessionId,
-        read: async (path) => ((await $.fs.exists(path)) ? $.fs.read(path) : undefined),
-        write: (path, text) => $.fs.write(path, text),
-        now,
-        submit: (text) => track($.prompt.submit({ text })),
-        elsewhere: async (session) => {
-          // Claude Code's own pid, as the parent of the shell it runs; Windows has no `sh`.
-          if (env.OS === "Windows_NT") return false;
-          const own = Number(
-            (await $.process.run(["sh", "-c", "echo $PPID"], { timeoutMs: 10_000 })).stdout.trim(),
-          );
-          if (!own) return false;
-          return sessionElsewhere(
-            session,
-            own,
-            { list: (path) => $.fs.list(path), read: (path) => $.fs.read(path) },
-            `${env.CLAUDE_CONFIG_DIR || `${env.HOME}/.claude`}/sessions`,
-            (pid) => pidRuns(pid, false, (argv) => $.process.run(argv, { timeoutMs: 10_000 })),
-          );
-        },
-        log,
-      },
-      dir,
-      token,
-    );
-    sent = records;
-    /** Whether subagent `agentId` runs now; when unsure, it does. */
-    const running = async (agentId: string) => {
-      try {
-        const status = (await $.agent.list()).find((a) => a.id === agentId)?.status;
-        return status === undefined || ["pending", "running", "waiting"].includes(status);
-      } catch {
-        return true;
-      }
-    };
-    // A subagent's answers go to it, whatever the main agent does (#1702).
-    const submit = async (lines: Line[]) => {
-      const me = await sessionId();
-      const { taken, rest } = await toSubagents(
-        lines,
-        async (agentId, group, text) => {
-          const send = () => $.session.send({ to: { agentId }, text });
-          // A subagent that ended is resumed with the message as its prompt, which its transcript
-          // keeps; one that runs holds it in memory until its next tool round.
-          if (!(await running(agentId))) return send();
-          return records.toAgent(
-            agentId,
-            group.map((l) => forParent(l, agentId)),
-            send,
-            () => running(agentId),
-          );
-        },
-        log,
-        failed,
-      );
-      // A /clear or /resume during the sends: the rest waits, unconfirmed, for session `me`.
-      if (rest.length > 0 && (await sessionId()) !== me) return taken;
-      const parent =
-        rest.length > 0 ? await handover.submit(rest, (left) => records.send(left)) : [];
-      return [...taken, ...parent];
-    };
-    const starting = () => waiting > 0;
-    loop = new Switch(
-      {
-        // The CLI honours STARBRIDGE_NO_AGENT too, so the CLI path then reaches the server itself.
-        agentUp: async () =>
-          !env.STARBRIDGE_NO_AGENT && (await fetch("GET", "/v1/status")).status < 300,
-        agent: (unconfirmed) =>
-          new AgentLoop(
-            {
-              sessionId,
-              cwd: () => $.session.cwd(),
-              fetch,
-              now,
-              sleep,
-              submit,
-              starting,
-              status,
-              log,
-            },
-            unconfirmed,
-          ),
-        poller: (unconfirmed) =>
-          new Poller(
-            {
-              sessionId,
-              run: (argv, timeoutMs) => $.process.run(argv, { timeoutMs }),
-              read: (path) => $.fs.read(path),
-              write: (path, text) => $.fs.write(path, text),
-              mtime: async (path) => (await $.fs.stat(path).catch(() => undefined))?.mtimeMs,
-              // The mod's host reads no owner or mode: find does, as plugin/hooks/cli.sh. Windows
-              // has no `sh`, and keeps owners in ACLs: there, as `ownedFile`, a file.
-              owned: async (path) =>
-                env.OS === "Windows_NT"
-                  ? (await $.fs.stat(path).catch(() => undefined))?.kind === "file"
-                  : (
-                      await $.process
-                        .run(["sh", "-c", OWNED, "sh", path], { timeoutMs: 10_000 })
-                        .catch(() => undefined)
-                    )?.exitCode === 0,
-              now,
-              sleep,
-              submit,
-              starting,
-              status,
-              log,
-            },
-            dir,
-            undefined,
-            undefined,
-            unconfirmed,
-          ),
-        sleep,
-        clearStatus: () => status(undefined),
-        log,
-      },
-      undefined,
-      before?.unconfirmed,
-    );
-    void records.recover().catch((e) => log(`starbridge: ${(e as Error).message}`));
+    const entrypoint = await $.env.get("CLAUDE_CODE_ENTRYPOINT");
+    afterTurn = undefined;
+    if (wantsLoop(e.isInteractive, entrypoint)) await begin();
+    else if (!loop && wantsLoopAfterTurn(e.isInteractive, entrypoint)) afterTurn = begin;
     return started;
+
+    /** Starts the session's answer loop, replacing the one a hot reload left. */
+    async function begin() {
+      // The new loop takes over the lines the old one submitted and has not confirmed yet, so it
+      // confirms them rather than submitting them again (#1337).
+      const before = loop;
+      void before?.stop();
+      const env = {
+        STARBRIDGE_AGENT_SOCKET: await $.env.get("STARBRIDGE_AGENT_SOCKET"),
+        STARBRIDGE_CONFIG_DIR: await $.env.get("STARBRIDGE_CONFIG_DIR"),
+        STARBRIDGE_NO_AGENT: await $.env.get("STARBRIDGE_NO_AGENT"),
+        CLAUDE_CONFIG_DIR: await $.env.get("CLAUDE_CONFIG_DIR"),
+        XDG_CONFIG_HOME: await $.env.get("XDG_CONFIG_HOME"),
+        XDG_RUNTIME_DIR: await $.env.get("XDG_RUNTIME_DIR"),
+        HOME: await $.env.get("HOME"),
+        USERPROFILE: await $.env.get("USERPROFILE"),
+        OS: await $.env.get("OS"),
+      };
+      const dir = configDir(env);
+      const { socket, config } = await agentAddress(env);
+      const base = config ? { ...HEADERS, [CONFIG_HEADER]: config } : HEADERS;
+      // Kept across a hot reload, and new in each process (sent.ts); undefined on a build that
+      // lacks `$.state`.
+      const proc = { plugin: "starbridge-mod", key: "process" } as const;
+      let token: string | undefined;
+      try {
+        token = (await $.state.get(proc)).value;
+        if (!token) {
+          token = crypto.randomUUID();
+          await $.state.set(proc, token);
+        }
+      } catch {
+        token = undefined;
+      }
+      const fetch = async (method: string, path: string, body?: unknown) => {
+        const headers = body === undefined ? base : { ...base, "content-type": "application/json" };
+        const init = { method, ...(body === undefined ? {} : { body: JSON.stringify(body) }) };
+        let r: Awaited<ReturnType<typeof $.http.fetch>>;
+        if (isPortFile(socket)) {
+          // Read each call: the agent writes a new port and token each time it starts.
+          const t = portTarget(await $.fs.read(socket));
+          const runs =
+            t &&
+            (await pidRuns(t.pid, env.OS === "Windows_NT", (argv) =>
+              $.process.run(argv, { timeoutMs: 10_000 }),
+            ));
+          if (!t || !runs) throw new Error(`no agent on ${socket}`);
+          const signed = await signCall(t.token);
+          r = await $.http.fetch(`http://127.0.0.1:${t.port}${path}`, {
+            ...init,
+            headers: { ...headers, ...signed.headers },
+          });
+          if (r.headers[PROOF_HEADER] !== signed.expect)
+            throw new Error(`no agent on ${socket}: the port answers without its proof`);
+        } else
+          r = await $.http.fetch(`http://agent${path}`, { ...init, socketPath: socket, headers });
+        return { status: r.status, text: r.text };
+      };
+      const log = (text: string) => $.ui.log(text, { to: "debug" });
+      const status = (text: string | undefined) => $.ui.status(text);
+      const sessionId = () => $.session.id();
+      const now = () => $.clock.now();
+      const sleep = (ms: number) => $.clock.sleep(ms);
+      const records = new Sent(
+        {
+          sessionId,
+          read: async (path) => ((await $.fs.exists(path)) ? $.fs.read(path) : undefined),
+          write: (path, text) => $.fs.write(path, text),
+          now,
+          submit: (text) => track($.prompt.submit({ text })),
+          elsewhere: async (session) => {
+            // Claude Code's own pid, as the parent of the shell it runs; Windows has no `sh`.
+            if (env.OS === "Windows_NT") return false;
+            const own = Number(
+              (
+                await $.process.run(["sh", "-c", "echo $PPID"], { timeoutMs: 10_000 })
+              ).stdout.trim(),
+            );
+            if (!own) return false;
+            return sessionElsewhere(
+              session,
+              own,
+              { list: (path) => $.fs.list(path), read: (path) => $.fs.read(path) },
+              `${env.CLAUDE_CONFIG_DIR || `${env.HOME}/.claude`}/sessions`,
+              (pid) => pidRuns(pid, false, (argv) => $.process.run(argv, { timeoutMs: 10_000 })),
+            );
+          },
+          log,
+        },
+        dir,
+        token,
+      );
+      sent = records;
+      /** Whether subagent `agentId` runs now; when unsure, it does. */
+      const running = async (agentId: string) => {
+        try {
+          const status = (await $.agent.list()).find((a) => a.id === agentId)?.status;
+          return status === undefined || ["pending", "running", "waiting"].includes(status);
+        } catch {
+          return true;
+        }
+      };
+      // A subagent's answers go to it, whatever the main agent does (#1702).
+      const submit = async (lines: Line[]) => {
+        const me = await sessionId();
+        const { taken, rest } = await toSubagents(
+          lines,
+          async (agentId, group, text) => {
+            const send = () => $.session.send({ to: { agentId }, text });
+            // A subagent that ended is resumed with the message as its prompt, which its transcript
+            // keeps; one that runs holds it in memory until its next tool round.
+            if (!(await running(agentId))) return send();
+            return records.toAgent(
+              agentId,
+              group.map((l) => forParent(l, agentId)),
+              send,
+              () => running(agentId),
+            );
+          },
+          log,
+          failed,
+        );
+        // A /clear or /resume during the sends: the rest waits, unconfirmed, for session `me`.
+        if (rest.length > 0 && (await sessionId()) !== me) return taken;
+        const parent =
+          rest.length > 0 ? await handover.submit(rest, (left) => records.send(left)) : [];
+        return [...taken, ...parent];
+      };
+      const starting = () => waiting > 0;
+      loop = new Switch(
+        {
+          // The CLI honours STARBRIDGE_NO_AGENT too, so the CLI path then reaches the server itself.
+          agentUp: async () =>
+            !env.STARBRIDGE_NO_AGENT && (await fetch("GET", "/v1/status")).status < 300,
+          agent: (unconfirmed) =>
+            new AgentLoop(
+              {
+                sessionId,
+                cwd: () => $.session.cwd(),
+                fetch,
+                now,
+                sleep,
+                submit,
+                starting,
+                status,
+                log,
+              },
+              unconfirmed,
+            ),
+          poller: (unconfirmed) =>
+            new Poller(
+              {
+                sessionId,
+                run: (argv, timeoutMs) => $.process.run(argv, { timeoutMs }),
+                read: (path) => $.fs.read(path),
+                write: (path, text) => $.fs.write(path, text),
+                mtime: async (path) => (await $.fs.stat(path).catch(() => undefined))?.mtimeMs,
+                // The mod's host reads no owner or mode: find does, as plugin/hooks/cli.sh. Windows
+                // has no `sh`, and keeps owners in ACLs: there, as `ownedFile`, a file.
+                owned: async (path) =>
+                  env.OS === "Windows_NT"
+                    ? (await $.fs.stat(path).catch(() => undefined))?.kind === "file"
+                    : (
+                        await $.process
+                          .run(["sh", "-c", OWNED, "sh", path], { timeoutMs: 10_000 })
+                          .catch(() => undefined)
+                      )?.exitCode === 0,
+                now,
+                sleep,
+                submit,
+                starting,
+                status,
+                log,
+              },
+              dir,
+              undefined,
+              undefined,
+              unconfirmed,
+            ),
+          sleep,
+          clearStatus: () => status(undefined),
+          log,
+        },
+        undefined,
+        before?.unconfirmed,
+      );
+      void records.recover().catch((e) => log(`starbridge: ${(e as Error).message}`));
+    }
   });
 
   // A subagent's run raises no `turn.start`; its `turn.complete` and tool calls carry its `agentId`.
@@ -286,6 +298,10 @@ export const register: Register = (on) => {
       })().catch(() => undefined);
     } else {
       handover.ended();
+      // An SDK session that a host keeps past its first turn gets its loop now (#2100).
+      const start = afterTurn;
+      afterTurn = undefined;
+      if (start && !loop) await start();
       // After a `/resume`, or a submit that failed.
       void sent?.recover().catch(() => undefined);
     }

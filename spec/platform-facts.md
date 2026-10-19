@@ -43,6 +43,13 @@ What the code relies on, with the versions checked.
   `on("<event>", hook)` with the event written out and spells `$` only as `$.noun...` at the call:
   a module that spreads arguments into `on` does not load. A plugin's `hooks.json` may hold both
   `hooks` and `modules`.
+- **Claude desktop's next-step box** (2.42304.2, Claude Code 2.1.299, #2118): its sessions get
+  the `ccd_turn` server's `wrap_up` and `update_plan` tools, `wrap_up` named in
+  `CLAUDE_CODE_TERMINAL_MCP_TOOLS`. `wrap_up` takes `recap`, `ask` and `actions` (`label`,
+  `message`); with `ask` it answers "Shown in the next-step box. The box ends your turn", and a
+  click arrives as a prompt of `origin.kind` `human`. A plugin's `PostToolUse` hook matches it
+  as for any MCP tool, and `UserPromptSubmit` fires for the next prompt; hooks get
+  `CLAUDE_CODE_SESSION_ID` (2.1.301, with a stdio server of that name).
 - **Claude Code hooks** (2.1.289): `PermissionRequest` waits up to 600 s and races the dialog. It
   fires under `--dangerously-skip-permissions` for `ask` rules and for Remote Control's `--print
   --sdk-url` children, not for auto mode's classifier blocks, which reach hooks only as
@@ -51,10 +58,18 @@ What the code relies on, with the versions checked.
   hook's allow sends the host `control_cancel_request` for its open `can_use_tool` request, which
   closes its `AskUserQuestion` picker (2.1.299, 2.1.301). Every `PreToolUse` deny shows as a red "hook error". In cloud sessions only repo hooks
   run, and environment variables are readable by the agent.
+- **Agent SDK** (0.3.276, Claude Code 2.1.301): a `query()` given a string prompt closes the
+  process's input after its first result, so Claude Code ends with that turn; one given a stream
+  of prompts keeps it open until the stream ends. Both run with `CLAUDE_CODE_ENTRYPOINT=sdk-ts`
+  unless the host sets one, and with the same arguments, and their commands get
+  `CLAUDE_CODE_SESSION_ATTENDED=0`. The mod's `turn.complete` fires at each turn's end, and a
+  turn its `$.prompt.submit` starts runs in the open session (#2100).
 - **Codex** (CLI 0.160): the TUI runs sessions in a shared app-server daemon; `codex queue --thread
   <id> --message <text>` starts a turn in an idle session or runs next in a busy one, and starts
   the daemon itself. It takes the message only as an argument and refuses sub-agent threads. An
-  exec thread's rollout has `originator: codex_exec`. A thread's title is its last
+  exec thread's rollout has `originator: codex_exec`, a TUI thread's `codex-tui`, and a thread
+  an app starts on its own `codex app-server` that app's name; the TUI's and such an app's both
+  say `source: vscode` (0.163). A thread's title is its last
   `thread_name` in `$CODEX_HOME/session_index.jsonl`, which Codex appends to on each rename, so
   Codex cards and prompts carry it as the other agents' do (#952). `PermissionRequest` runs before the
   approval dialog and blocks it; any deny among its hooks wins, else the last allow, else the
