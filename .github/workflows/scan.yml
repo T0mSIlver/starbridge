@@ -154,9 +154,11 @@ jobs:
           persist-credentials: false
       - id: scan
         run: |
-          # Exit 1 means it found something, 128 that it found no lockfile.
+          # Exit 1 means it found something, 128 that it found no lockfile. --config applies the
+          # root osv-scanner.toml to every lockfile: by default a lockfile reads only the one in
+          # its own folder, so the ignores missed android/gradle/ (#2088).
           code=0
-          docker run --rm -v "$PWD:/src:ro" "$OSV_SCANNER" scan source -r --format json /src \
+          docker run --rm -v "$PWD:/src:ro" "$OSV_SCANNER" scan source -r --config /src/osv-scanner.toml --format json /src \
             > "$RUNNER_TEMP/osv.json" || code=$?
           [ "$code" -le 1 ] || exit "$code"
           .github/scan-report.sh osv < "$RUNNER_TEMP/osv.json" > "$RUNNER_TEMP/osv.md"
