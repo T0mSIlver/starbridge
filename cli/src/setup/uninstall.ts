@@ -3,7 +3,7 @@
  * revoke the machine, and asks before it deletes the keys. CodexBar stays.
  */
 import { existsSync, realpathSync, rmSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { withAgent } from "../agent/client";
 import { askVia } from "../agent/commands";
 import type { Ctx } from "../context";
@@ -22,6 +22,7 @@ import {
 } from "./agents";
 import { findCodexbar } from "./codexbar";
 import { removePathLines } from "./path";
+import { pruneEmpty } from "./remove";
 import { removeService, undoLinger } from "./service";
 import type { Sys } from "./sys";
 
@@ -145,6 +146,14 @@ export async function uninstall(sys: Sys, opts: UninstallOpts): Promise<number> 
       for (const file of removePathLines(sys, pathFor(sys.platform).dirname(opts.install.path)))
         ctx.out(`Removed the PATH line setup added to ${file}.`);
     removeBinary(ctx, opts.install);
+    // install.sh made ~/.local/bin when there was none (#2098); Windows deletes the binary later.
+    const bin = join(sys.home, ".local", "bin");
+    if (
+      sys.platform !== "win32" &&
+      opts.install.kind === "binary" &&
+      dirname(opts.install.path) === bin
+    )
+      pruneEmpty(bin, join(sys.home, ".local"));
   }
   return stopped ? 0 : 1;
 }

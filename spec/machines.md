@@ -203,7 +203,10 @@
   installed (#538). An owner who
   deletes the line keeps the file. Setup and uninstall remove only the files they write, then a
   folder left empty: a file the owner put beside them, such as a skill's `references/`, stays,
-  and uninstall says so (#1324). A settings file of another tool that setup or uninstall edits is
+  and uninstall says so (#1324). The empty parents go too, up to the tool's own folder (`~/.codex`,
+  `~/.cursor`, `~/.config` for the unit, `~/.local` for the binary), so a fresh HOME ends as it
+  began (#2098); `cli/test/walk.test.ts` checks that, and that the owner's settings keep their keys
+  in order. A settings file of another tool that setup or uninstall edits is
   rewritten through a temporary file and a rename, keeping its mode and any symbolic link to it, so
   a crash never leaves it half written (#1749). A settings or hooks file that uninstall's edits leave holding
   nothing, such as an allow list setup created, is deleted rather than left as `{}`: an empty file

@@ -1,21 +1,43 @@
 import { existsSync, readdirSync, rmdirSync, rmSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join, relative } from "node:path";
 import { replaceFile } from "../replace";
 
 /**
  * Removes `files`, paths inside `dir` that setup writes, then each folder they leave empty, `dir`
- * last. A file the owner put there stays, with its folders (#1324). Returns those files.
+ * last, then its parents up to `root` (`pruneEmpty`). A file the owner put there stays, with its
+ * folders (#1324). Returns those files.
  */
-export function removeWritten(dir: string, files: string[]): string[] {
+export function removeWritten(dir: string, files: string[], root?: string): string[] {
   for (const file of files) rmSync(join(dir, file), { force: true });
-  if (!existsSync(dir)) return [];
+  if (!existsSync(dir)) {
+    if (root) pruneEmpty(dirname(dir), root);
+    return [];
+  }
   prune(dir);
+  if (root) pruneEmpty(dirname(dir), root);
   return existsSync(dir)
     ? readdirSync(dir, { recursive: true, withFileTypes: true })
         .filter((e) => !e.isDirectory())
         .map((e) => join(e.parentPath, e.name))
         .sort()
     : [];
+}
+
+/**
+ * Removes `dir`, then each parent, while it is empty and inside `root`, which stays: the folders
+ * setup made for its files in an agent's folder, such as `~/.codex/skills` (#2098).
+ */
+export function pruneEmpty(dir: string, root: string): void {
+  for (let d = dir; ; d = dirname(d)) {
+    const rel = relative(root, d);
+    if (rel === "" || rel.startsWith("..") || dirname(d) === d) return;
+    try {
+      if (readdirSync(d).length > 0) return;
+      rmdirSync(d);
+    } catch {
+      return;
+    }
+  }
 }
 
 function prune(dir: string) {
@@ -39,16 +61,24 @@ export function withoutAllow(
   s: { permissions?: object },
   rules: readonly string[],
 ): Record<string, unknown> | undefined {
-  const { permissions, ...rest } = s as Record<string, unknown> & {
-    permissions?: Record<string, unknown>;
-  };
+  const { permissions } = s as { permissions?: Record<string, unknown> };
   const allow = permissions?.allow;
   if (!permissions || !Array.isArray(allow)) return undefined;
   const kept = allow.filter((r) => !rules.includes(r as string));
   if (kept.length === allow.length) return undefined;
   const { allow: _, ...others } = permissions;
-  if (kept.length > 0) return { ...rest, permissions: { ...others, allow: kept } };
-  return Object.keys(others).length > 0 ? { ...rest, permissions: others } : rest;
+  const left =
+    kept.length > 0
+      ? Object.fromEntries(
+          Object.entries(permissions).map(([k, v]) => [k, k === "allow" ? kept : v]),
+        )
+      : others;
+  // The owner's keys stay in their order (#2098).
+  return Object.fromEntries(
+    Object.entries(s).flatMap(([k, v]) =>
+      k !== "permissions" ? [[k, v]] : Object.keys(left).length > 0 ? [[k, left]] : [],
+    ),
+  );
 }
 
 /**

@@ -23,6 +23,7 @@ import {
   removeCodexSkill,
   removeOpencode,
 } from "../src/setup/harnesses";
+import { pruneEmpty, withoutAllow } from "../src/setup/remove";
 import { defaults, type Sys } from "../src/setup/sys";
 import { testCtx } from "./helpers";
 
@@ -161,3 +162,29 @@ test.skipIf(process.platform === "win32")(
     }
   },
 );
+
+test("pruneEmpty removes empty folders up to its root, which stays, and nothing past it (#2098)", () => {
+  const root = mkdtempSync(join(tmpdir(), "starbridge-prune-"));
+  mkdirSync(join(root, "agent/skills/starbridge"), { recursive: true });
+  mkdirSync(join(root, "agent/rules"), { recursive: true });
+  pruneEmpty(join(root, "agent/skills/starbridge"), join(root, "agent"));
+  expect(existsSync(join(root, "agent/skills"))).toBe(false);
+  expect(existsSync(join(root, "agent/rules"))).toBe(true);
+  // A folder with a file in it stays, and so do its parents; a root outside `dir` changes nothing.
+  mine(join(root, "agent/rules/mine.rules"));
+  pruneEmpty(join(root, "agent/rules"), join(root, "agent"));
+  pruneEmpty(join(root, "other"), join(root, "agent"));
+  expect(existsSync(join(root, "agent/rules/mine.rules"))).toBe(true);
+  rmSync(join(root, "agent/rules"), { recursive: true });
+  pruneEmpty(join(root, "agent"), join(root, "agent"));
+  expect(existsSync(join(root, "agent"))).toBe(true);
+});
+
+test("withoutAllow keeps the owner's keys in their order (#2098)", () => {
+  const s = { model: "opus", permissions: { allow: ["mine", "ours"], deny: [] }, hooks: {} };
+  expect(JSON.stringify(withoutAllow(s, ["ours"]))).toBe(
+    JSON.stringify({ model: "opus", permissions: { allow: ["mine"], deny: [] }, hooks: {} }),
+  );
+  const only = { a: 1, permissions: { allow: ["ours"] }, b: 2 };
+  expect(JSON.stringify(withoutAllow(only, ["ours"]))).toBe(JSON.stringify({ a: 1, b: 2 }));
+});
