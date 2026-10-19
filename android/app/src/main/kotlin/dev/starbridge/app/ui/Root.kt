@@ -8,7 +8,9 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Badge
@@ -175,6 +177,9 @@ internal fun Notices(
     return host
 }
 
+/** No notice: the sign-in screen shows its own. */
+private val none: StateFlow<String?> = MutableStateFlow(null)
+
 @Composable
 fun Setup(phase: Phase, notice: StateFlow<String?>, dismiss: () -> Unit, openUrl: (String) -> Unit) {
     val vm: SetupViewModel = hiltViewModel()
@@ -182,9 +187,13 @@ fun Setup(phase: Phase, notice: StateFlow<String?>, dismiss: () -> Unit, openUrl
     val server by vm.server.collectAsStateWithLifecycle()
     val keepsKeys by vm.keepsKeys.collectAsStateWithLifecycle()
     val joinLink by vm.joinLink.collectAsStateWithLifecycle()
-    val host = Notices(notice, dismiss)
+    // Signed out, a failure stays under the sign-in fields: a snackbar would go by under the keyboard.
+    val signedOut = phase == Phase.SignedOut
+    val error by notice.collectAsStateWithLifecycle()
+    val host = Notices(if (signedOut) none else notice, dismiss)
     Scaffold(snackbarHost = { SnackbarHost(host) }) { padding ->
-        SetupScreen(phase, server, busy, vm.actions, openUrl, Modifier.padding(padding), keepsKeys, joinLink)
+        // The step's actions stay above the keyboard.
+        SetupScreen(phase, server, busy, vm.actions, openUrl, Modifier.padding(padding).consumeWindowInsets(padding).imePadding(), keepsKeys, joinLink, error.takeIf { signedOut })
     }
 }
 

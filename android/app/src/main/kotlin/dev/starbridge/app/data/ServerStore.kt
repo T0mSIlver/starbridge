@@ -55,8 +55,10 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.encodeToJsonElement
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import java.io.IOException
+import java.net.SocketTimeoutException
 import java.net.URI
 import java.time.Instant
 import java.time.temporal.ChronoUnit
@@ -410,7 +412,8 @@ class ServerStore(
 
     // --- Signing in and setting up ------------------------------------------------
 
-    private fun normalize(server: String) = server.trim().trimEnd('/').ifEmpty { defaultServer }
+    /** The address as typed, with https:// when it names none, as a browser reads it. */
+    private fun normalize(server: String) = server.trim().trimEnd('/').ifEmpty { defaultServer }.let { if ("://" in it) it else "https://$it" }
 
     override fun gitHubSignInUrl(server: String): String {
         val verifier = SignIn.newVerifier()
@@ -439,6 +442,8 @@ class ServerStore(
             is SignIn.Redirect.Denied -> if (r.state == challenge) throw IllegalStateException("Sign-in didn't finish. Sign in again.") else return@run
             null -> return@run
         }
+        // This phone's own sign-in: a new try, which ends the last failure on the sign-in screen.
+        notice.value = null
         persist(newSecrets = secrets.copy(signInVerifier = null))
         val session = try {
             Api(http, saved.server, null).appSession(link.code, verifier)
@@ -449,8 +454,30 @@ class ServerStore(
     }
 
     override fun signInWithOwnerToken(server: String, token: String) = run {
-        persist(saved.copy(server = normalize(server)))
-        afterSignIn(Api(http, saved.server, null).ownerSignIn(token.trim()))
+        notice.value = null
+        val address = normalize(server)
+        if (address.toHttpUrlOrNull() == null) throw IllegalStateException("That server address isn't valid.")
+        persist(saved.copy(server = address))
+        val session = try {
+            Api(http, saved.server, null).ownerSignIn(token.trim())
+        } catch (e: Exception) {
+            throw IllegalStateException(ownerTokenRefusal(e) ?: throw e)
+        }
+        afterSignIn(session)
+    }
+
+    /**
+     * Why the server took no owner token, in the owner's words, or null when [explain] already
+     * says it: a Play tester saw "unauthenticated: wrong owner token" go by and no more (2026-10-19).
+     */
+    private fun ownerTokenRefusal(e: Exception): String? = when {
+        e is ApiException && e.status == 401 -> "Wrong owner token."
+        e is ApiException && e.error == "not-configured" -> "${host()} doesn't take an owner token."
+        // A 4xx without Starbridge's JSON, or a reply that holds no session: another website.
+        e is ApiException && e.status in 400..499 && e.error.startsWith("http-") -> "No Starbridge server at ${host()}."
+        e is NullPointerException || e is IllegalArgumentException || e is NoSuchElementException -> "No Starbridge server at ${host()}."
+        e is SocketTimeoutException -> "${host()} didn't answer in time."
+        else -> null
     }
 
     /** Checks the session with the server before keeping it. */
