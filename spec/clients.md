@@ -73,7 +73,8 @@
   "Show older" at History's end; Find searches every row. An answered question's images
   download when they come on screen in its detail (Tom, 2026-10-12, #1382): History rows show
   none, so a long history costs no image the owner does not open. The server lists answered
-  questions without them (`blobs=open`), and the browser keeps them once fetched.
+  questions without them (`blobs=open`), and the browser keeps them once fetched, each image
+  apart from the kept list so a load reads only those it shows (#2097).
 - **Closed sections wait at the bottom** (#662, #682). Closed, History sits at the bottom of a
   short inbox and Snoozed just above it, out of the way; opened, each glides up under the items
   and its rows fade in. Opening Snoozed leaves History at the bottom.

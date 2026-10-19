@@ -460,6 +460,88 @@ async function keepEvidence(error?: unknown) {
   writeFileSync(join(EVIDENCE, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`);
 }
 
+/**
+ * What a reload of an inbox with a kept history may cost before its open question shows (#2097):
+ * a 4x slower CPU took 8.5 s when a load read the directory 5 times and opened the whole history
+ * first (#1450). The open question must show while the rest of the inbox still loads, after one
+ * read of the directory, and without downloading again the images this browser keeps.
+ */
+async function loadBudget(page: Page) {
+  step("a reload shows the open question first, within its budget of requests (#2097)");
+  const BUDGET = { requests: 16, directory: 1, kb: 96 };
+  const open = page.getByText("Merge #19 (server) before the web PR rebases?").first();
+  await page.goto(ORIGIN);
+  await open.waitFor({ timeout: 30_000 });
+  let release = () => {};
+  const held = new Promise<void>((done) => {
+    release = done;
+  });
+  // The rest of the inbox waits until the open question shows.
+  const rest = /\/v1\/items\?kind=decision,settled,waiting,snooze&after=/;
+  const hold = async (route: Route) => {
+    await Promise.race([held, new Promise((done) => setTimeout(done, 20_000))]);
+    await route.fallback();
+  };
+  await page.route(rest, hold);
+  const reads: { url: string; bytes: Promise<number> }[] = [];
+  const seen = (r: import("playwright").Request) => {
+    if (!r.url().includes("/v1/")) return;
+    reads.push({
+      url: r.url().replace(ORIGIN, ""),
+      bytes: r
+        .response()
+        .then(async (res) => (res ? (await res.body()).length : 0))
+        .catch(() => 0),
+    });
+  };
+  page.on("request", seen);
+  const t0 = Date.now();
+  await page.reload();
+  await open.waitFor({ timeout: 15_000 }).catch(() => {
+    throw new Error("the open question waited for the rest of the inbox to load (#1458)");
+  });
+  const ms = Date.now() - t0;
+  page.off("request", seen);
+  const before = [...reads];
+  release();
+  await page.unroute(rest, hold);
+  const sizes = await Promise.all(before.map((r) => r.bytes));
+  const kb = Math.round(sizes.reduce((a, b) => a + b, 0) / 1024);
+  const directory = before.filter((r) => r.url.startsWith("/v1/directory")).length;
+  console.log(
+    `load budget: shown in ${ms} ms after ${before.length} requests, ${kb} KB, ${directory} directory reads`,
+  );
+  const over = [
+    before.length > BUDGET.requests && `${before.length} requests (budget ${BUDGET.requests})`,
+    directory > BUDGET.directory && `${directory} directory reads (budget ${BUDGET.directory})`,
+    kb > BUDGET.kb && `${kb} KB (budget ${BUDGET.kb})`,
+  ].filter(Boolean);
+  if (over.length > 0)
+    throw new Error(
+      `a reload before the open question shows: ${over.join(", ")}\n${before.map((r, i) => `${r.url} ${sizes[i]} B`).join("\n")}`,
+    );
+  // The kept list holds no image: each sits in its own record, read when shown (#2097).
+  const inline = await page.evaluate(async () => {
+    const db: IDBDatabase = await new Promise((done, fail) => {
+      const q = indexedDB.open("starbridge");
+      q.onsuccess = () => done(q.result);
+      q.onerror = () => fail(q.error);
+    });
+    const all: unknown[] = await new Promise((done) => {
+      const q = db
+        .transaction("kv")
+        .objectStore("kv")
+        .getAll(IDBKeyRange.bound("kept:", "kept:\uffff"));
+      q.onsuccess = () => done(q.result);
+    });
+    db.close();
+    return (all as { items: { item: { blobs?: string[] } }[] }[])
+      .flatMap((k) => k.items)
+      .filter((k) => k.item.blobs).length;
+  });
+  if (inline > 0) throw new Error(`the kept list holds ${inline} items' images`);
+}
+
 async function main() {
   mkdirSync(AUDIT ?? SHOTS, { recursive: true });
 
@@ -2015,6 +2097,7 @@ async function main() {
     await shoot(page, "settings-full");
     prompt.kill();
     longRun.proc.kill();
+    await loadBudget(page);
   }
   if (SHARD === "inbox") return;
 

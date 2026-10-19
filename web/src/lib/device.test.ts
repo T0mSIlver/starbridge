@@ -602,10 +602,13 @@ test("an answered question lists without its images, which load once shown and s
     expect(await device.loadImages(fresh, "d_pictured")).toEqual([
       { type: "image/png", width: 4, height: 3, data: toB64(bytes) },
     ]);
-    // The next load opens them from what this browser kept, with no fetch.
+    // The next load leaves them closed until shown, and they open from what this browser kept,
+    // apart from the kept list, with no fetch (#2097).
     const [again] = (await device.loadInbox(fresh, undefined, keep)).items;
-    expect(again?.imagesPending).toBeUndefined();
-    expect(again?.decision.images?.[0]?.data).toBe(toB64(bytes));
+    expect(again?.imagesPending).toBe(true);
+    expect(await device.loadImages(fresh, "d_pictured")).toEqual([
+      { type: "image/png", width: 4, height: 3, data: toB64(bytes) },
+    ]);
     expect(fetched).toEqual(["/v1/items/d_pictured"]);
     // Under a kept question's id, the server sends one naming another image, signed by the same
     // machine: its blob opens against the kept refs only, so nothing shows (#1472).
@@ -641,6 +644,72 @@ test("an answered question lists without its images, which load once shown and s
     globalThis.fetch = (async (input: string, init?: RequestInit) =>
       input === "/v1/items/d_swap" ? Response.json(sent) : swapServed(input, init)) as typeof fetch;
     expect(await device.loadImages(fresh, "d_swap")).toEqual([]);
+  } finally {
+    globalThis.fetch = served;
+    await store.del("kept", ctx.account);
+  }
+});
+
+test("a kept open question shows with its images, kept apart from the list (#2097)", async () => {
+  const at = "2026-10-06T12:00:00Z";
+  const { keys, member: machine } = asker as NonNullable<typeof asker>;
+  const fresh = (await device.deviceContext(ctx.account)) as device.Ctx;
+  const { id, boxPk } = fresh.device;
+  const bytes = new Uint8Array(300).map((_, i) => (i * 3) % 251);
+  const { blob, ref } = sealImage(bytes);
+  const item = {
+    ...seal(
+      "decision",
+      {
+        v: 1,
+        id: "d_open_pictured",
+        to: [id],
+        createdAt: at,
+        question: "Ship this one?",
+        context: "",
+        options: ["Yes", "No"],
+        recommended: "Yes",
+        images: [{ type: "image/png" as const, width: 4, height: 3, ...ref }],
+        source: { machine: "asks", project: "p", session: "s" },
+      },
+      { id: machine.id, signKey: keys.sign.privateKey },
+      [{ id, boxPk }],
+    ),
+    blobs: [blob],
+  };
+  const stored = { item, cursor: "1", receivedAt: at };
+  const asked: string[] = [];
+  const served = globalThis.fetch;
+  globalThis.fetch = (async (input: string, init?: RequestInit) => {
+    if (!input.startsWith("/v1/items")) return served(input, init);
+    asked.push(input);
+    const q = new URL(input, "http://x").searchParams;
+    if (q.get("open")) {
+      const { blobs: _, ...bare } = item;
+      return Response.json({ items: [{ ...stored, item: bare }], cursor: "1" });
+    }
+    if (Number(q.get("after") ?? 0) >= 1) return Response.json({ items: [], cursor: "1" });
+    return Response.json({ items: [stored], cursor: "1" });
+  }) as typeof fetch;
+  const shown = { type: "image/png" as const, width: 4, height: 3, data: toB64(bytes) };
+  try {
+    await device.loadInbox(fresh, undefined, { keep: true });
+    expect((await store.get("kept", ctx.account))?.items[0]?.item.blobs).toBeUndefined();
+    asked.length = 0;
+    let early: device.Inbox | undefined;
+    const { items } = await device.loadInbox(fresh, undefined, {
+      keep: true,
+      early: (e) => {
+        early = e;
+      },
+    });
+    expect(early?.items[0]?.decision.images).toEqual([shown]);
+    expect(items[0]?.decision.images).toEqual([shown]);
+    // Which questions are open, without their images; nothing fetched by id.
+    expect(asked).toEqual([
+      "/v1/items?kind=decision&open=1&blobs=none",
+      "/v1/items?kind=decision,settled,waiting,snooze&after=1&blobs=open",
+    ]);
   } finally {
     globalThis.fetch = served;
     await store.del("kept", ctx.account);

@@ -304,6 +304,10 @@ export function AppProvider({
       visiting.current = false;
       ctxSet.current++;
       setBoot(b);
+      // The pollers that start as boot ends use the directory boot just read and verified, rather
+      // than read it again before the inbox shows (#2097).
+      if (b.state === "ready")
+        shareRead(currentRead, ctxSet.current, Promise.resolve(b.ctx), 3_000);
       // Signed out, revoked or broken: nothing decrypted stays behind the page that says so.
       if (b.state !== "ready") {
         forget();
@@ -422,18 +426,13 @@ export function AppProvider({
   // Pollers start together: those that ask while a read of the directory runs share it, unless
   // a boot or a write of this page's own set the context since it started (each read the
   // directory after it), or it has run 10 s: one that hangs leaves the next ask a read of its own.
-  const currentRead = useRef<{ set: number; read: Promise<Ctx | undefined> }>(undefined);
+  const currentRead = useRef<SharedRead>(undefined);
   const current = useCallback(() => {
     const shared = currentRead.current;
     if (shared && shared.set === ctxSet.current) return shared.read;
     const read = current1();
-    const mine = { set: ctxSet.current, read };
-    const drop = () => {
-      if (currentRead.current === mine) currentRead.current = undefined;
-    };
-    currentRead.current = mine;
+    const drop = shareRead(currentRead, ctxSet.current, read, 10_000);
     read.finally(drop).catch(() => {});
-    setTimeout(drop, 10_000);
     return read;
   }, [current1]);
 
@@ -929,4 +928,25 @@ export function useDevice(): Ctx {
   const { boot } = useApp();
   if (boot.state !== "ready") throw new Error("useDevice before the device is ready");
   return boot.ctx;
+}
+
+type SharedRead = { set: number; read: Promise<Ctx | undefined> };
+
+/**
+ * Lets the pollers that ask for the directory within `ms` share `read`, while no boot or write of
+ * the page's own sets the context (`set`). Returns what ends the share early.
+ */
+function shareRead(
+  slot: { current: SharedRead | undefined },
+  set: number,
+  read: Promise<Ctx | undefined>,
+  ms: number,
+) {
+  const mine = { set, read };
+  const drop = () => {
+    if (slot.current === mine) slot.current = undefined;
+  };
+  slot.current = mine;
+  setTimeout(drop, ms);
+  return drop;
 }

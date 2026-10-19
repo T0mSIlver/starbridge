@@ -326,11 +326,18 @@ export const api = {
   cancelJoin: (id: string) => call<void>("DELETE", `/joins/${encodeURIComponent(id)}`),
 
   deleteItem: (id: string) => call<void>("DELETE", `/items/${encodeURIComponent(id)}`),
-  /** `openBlobs`: answered decisions come without their images (#1382). */
-  items: (kind: string, after?: string, opts: { open?: boolean; openBlobs?: boolean } = {}) =>
+  /**
+   * `openBlobs`: answered decisions come without their images (#1382); `noBlobs`: every item
+   * comes without them, for a read that needs only which items are listed (#2097).
+   */
+  items: (
+    kind: string,
+    after?: string,
+    opts: { open?: boolean; openBlobs?: boolean; noBlobs?: boolean } = {},
+  ) =>
     call<ItemsPage>(
       "GET",
-      `/items?kind=${kind}${after ? `&after=${encodeURIComponent(after)}` : ""}${opts.open ? "&open=1" : ""}${opts.openBlobs ? "&blobs=open" : ""}`,
+      `/items?kind=${kind}${after ? `&after=${encodeURIComponent(after)}` : ""}${opts.open ? "&open=1" : ""}${opts.noBlobs ? "&blobs=none" : opts.openBlobs ? "&blobs=open" : ""}`,
     ),
   item: (id: string) => call<Stored>("GET", `/items/${encodeURIComponent(id)}`),
   quota: async () => (await call<{ items: Stored[] }>("GET", "/quota")).items,

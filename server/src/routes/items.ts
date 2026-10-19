@@ -638,13 +638,14 @@ itemRoutes.get("/items", requireCaller("paired-device"), (c) => {
   const caller = c.var.caller;
   const open = c.req.query("open") === "1";
   const blobs = c.req.query("blobs");
-  if (blobs !== undefined && blobs !== "open")
-    fail(400, "bad-request", "blobs is open or left out");
+  if (blobs !== undefined && blobs !== "open" && blobs !== "none")
+    fail(400, "bad-request", "blobs is open, none or left out");
   const reads = readWindow(c);
   const listed = list(c.var.db, caller.account, memberOf(caller), kinds, from, {
     openOnly: open,
     openBlobs: !!blobs,
-    blobRoom: reads.left,
+    // None: a device that only needs which items are listed, such as the open ones it keeps.
+    blobRoom: blobs === "none" ? 0 : reads.left,
   });
   reads.charge(listed.bytes);
   return c.json(page(listed, from));
