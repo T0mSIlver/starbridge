@@ -129,6 +129,35 @@ A pull request with nothing in those folders gets the status as success on its n
 change. `.github/owner-gates.sh` (print-only; `--apply` changes them) sets the repository settings
 behind it: the required status, and no admin bypass on any environment.
 
+## Approval cards
+
+The `starbridge.run` environment waits for the maintainer's review before a deploy runs, and an
+rc's release waits up to 12 hours for the deploy (5 h 50 min on GitHub's runners, which end a job at 6 hours), and fails as soon as the deploy run ends without success. When `deploy.yml` is dispatched, its `card` job
+posts a Starbridge card, "Approve the prod deploy of v1.2.3-rc.1?", with the run's link; the same job closes it once the deploy job starts or ends, or after 6 hours, the longest a GitHub runner lives. The card does
+not approve anything: the review is on the run's page.
+
+The job uses a machine of their own, "GitHub Actions", whose identity is the `CI_CARD_MACHINE`
+secret of the `ci-card` environment, which only main can read. Without the secret the `card` job
+prints the link and sends nothing. Pull requests never run it. The maintainer sets it up once, on
+a machine with the CLI, with no value on a command line or in a shell history:
+
+```bash
+export STARBRIDGE_CONFIG_DIR=$(mktemp -d)
+starbridge pair --name "GitHub Actions"
+starbridge machine export > "$STARBRIDGE_CONFIG_DIR/line"
+gh api -X PUT repos/T0mSIlver/starbridge/environments/ci-card \
+  -F 'deployment_branch_policy[protected_branches]=false' \
+  -F 'deployment_branch_policy[custom_branch_policies]=true' -F can_admins_bypass=false
+gh api -X POST repos/T0mSIlver/starbridge/environments/ci-card/deployment-branch-policies \
+  -f name=main -f type=branch
+gh secret set CI_CARD_MACHINE --env ci-card < "$STARBRIDGE_CONFIG_DIR/line"
+shred -u "$STARBRIDGE_CONFIG_DIR/line"
+rm -rf "$STARBRIDGE_CONFIG_DIR"
+```
+
+`machine export` prints the machine's private keys, so only the maintainer runs it. To revoke the
+machine, remove "GitHub Actions" under Devices and delete the secret.
+
 ## How a runner works
 
 - The setup files are in [`.github/runners`](../.github/runners). Each box runs one systemd unit

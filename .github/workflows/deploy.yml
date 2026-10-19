@@ -1,5 +1,8 @@
 name: deploy
 
+# A dispatched run is named for its commit, which release.yml's wait finds it by (#2076).
+run-name: ${{ inputs.sha && format('deploy {0}', inputs.sha) || github.event.workflow_run.display_title || 'deploy' }}
+
 # Two ways in (#1538). A merge to main, once CI passes, goes to staging (staging.starbridge.run):
 # the images are built, staging deploys them and runs a round trip, and the commit gets the status
 # `staging`. starbridge.run takes a commit only by dispatch, `gh workflow run deploy.yml -f
@@ -17,6 +20,9 @@ on:
       sha:
         description: The commit to deploy to starbridge.run, 40 hex characters; it must have passed on staging
         required: true
+      version:
+        description: The release this deploys, for the approval card; release.yml sets it, a hotfix leaves it out
+        required: false
 
 permissions: {}
 
@@ -278,6 +284,90 @@ jobs:
             "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/statuses/$REV" \
             -d "$(jq -n --arg u "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
               '{context: "staging", state: "success", description: "Deployed to staging; round trip passed", target_url: $u}')" >/dev/null
+
+  # starbridge.run's environment waits for the owner's approval (#2009), and the release waits for
+  # the deploy up to 12 hours (#2076). This job sends the owner a Starbridge card with the run's
+  # link as the deploy starts waiting, and closes it once the deploy job starts or ends: the same job
+  # does both, as `settle` needs the state that `ask` leaves in the runner's config folder. It reads the
+  # CI_CARD_MACHINE secret of the `ci-card` environment, a Starbridge machine of its own (docs/ci.md,
+  # "Approval cards"); without it the job only prints the link. It holds no key to anything else,
+  # and a failed card never stops the deploy.
+  card:
+    if: github.event_name == 'workflow_dispatch'
+    # A failed card must not fail the run, which release.yml reads to end its wait.
+    continue-on-error: true
+    runs-on: ubuntu-latest
+    # GitHub's runners end every job at 6 hours, so the card closes by then at the latest.
+    timeout-minutes: 360
+    permissions:
+      actions: read
+      contents: read
+    environment: ci-card
+    steps:
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+      - id: ask
+        env:
+          STARBRIDGE_MACHINE: ${{ secrets.CI_CARD_MACHINE }}
+          GH_TOKEN: ${{ github.token }}
+          REV: ${{ inputs.sha }}
+          VERSION: ${{ inputs.version }}
+          # release.yml's limit on the runner it picked.
+          WAIT_MINUTES: ${{ vars.TRUSTED_RUNNER && 715 || 350 }}
+        run: |
+          run_url=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID
+          echo "starbridge.run waits for your approval: $run_url"
+          if [ -z "$STARBRIDGE_MACHINE" ]; then
+            echo "::notice::No CI_CARD_MACHINE secret in the ci-card environment: no card sent."
+            exit 0
+          fi
+          # The inputs go into text, not a shell: only a full commit id and a release number pass.
+          case $REV in *[!0-9a-f]* | "") exit 0 ;; esac
+          [ ${#REV} -eq 40 ] || exit 0
+          printf '%s' "$VERSION" | grep -Eqx '([0-9]+\.[0-9]+\.[0-9]+(-rc\.[0-9]+)?)?' || VERSION=
+          short=$(printf '%.7s' "$REV")
+          subject=$(curl -fsS -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' \
+            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/commits/$REV" | jq -r '.commit.message | split("\n")[0]') || subject=
+          name=${VERSION:+v$VERSION}
+          context="Ships ${name:+$name, }commit $short${subject:+: $subject}."
+          if [ -n "$VERSION" ]; then
+            context="$context The release gives up waiting at about $(date -u -d "+$WAIT_MINUTES minutes" '+%H:%M UTC') and publishes nothing."
+          fi
+          context="$context Approve it on the run page, linked here; this card does not approve it, and closes when the run ends."
+          # `next` is the newest rc: the latest final may predate STARBRIDGE_MACHINE.
+          npm install -g starbridge@next >/dev/null 2>&1 || { echo "::warning::starbridge did not install: no card sent."; exit 0; }
+          id=$(starbridge ask --waiting --project starbridge --link "$run_url" \
+            --question "Approve the prod deploy of ${name:-$short}?" \
+            --context "$context" --option Approved --option "Not now") || { echo "::warning::The card was not sent."; exit 0; }
+          echo "ID=$id" >> "$GITHUB_ENV"
+      # The deploy job waits for the review, then runs: its status says which. A rejected or
+      # cancelled one ends too, and the card closes either way.
+      - name: Close the card when the deploy starts or ends
+        if: env.ID != ''
+        timeout-minutes: 355
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STARBRIDGE_MACHINE: ${{ secrets.CI_CARD_MACHINE }}
+        run: |
+          for _ in $(seq 1 650); do
+            job=$(curl -fsS -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' \
+              "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/jobs?per_page=100" |
+              jq -r '[.jobs[] | select(.name == "deploy")][0] | "\(.status) \(.conclusion)"') || job=
+            case $job in
+              "in_progress "*) starbridge settle "$ID" --outcome elsewhere || true; exit 0 ;;
+              "completed success") starbridge settle "$ID" --outcome elsewhere || true; exit 0 ;;
+              "completed "*) starbridge settle "$ID" --outcome withdrawn --reason "The deploy ended: ${job#completed }" || true; exit 0 ;;
+            esac
+            sleep 30
+          done
+          starbridge settle "$ID" --outcome withdrawn --reason "Six hours passed; the deploy may still wait on its run page" || true
+      # Cancelling the run while it waits ends this job too.
+      - name: Close the card when the run is cancelled
+        if: cancelled() && env.ID != ''
+        env:
+          STARBRIDGE_MACHINE: ${{ secrets.CI_CARD_MACHINE }}
+        run: starbridge settle "$ID" --outcome withdrawn --reason "The run was cancelled" || true
 
   # starbridge.run, by dispatch only: release.yml for each rc tag, the owner for a hotfix. It waits
   # for the commit's `staging` status, up to an hour, as an rc tag can follow its merge by minutes,
