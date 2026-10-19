@@ -278,6 +278,16 @@ line, the safe side: at worst a prompt repeats an answer the agent already read.
   commas, so a label with a comma in it stays one. A number card asked again after `hook
   settle` closed the picker is settled as answered elsewhere at once, since no answer can reach
   the picker. A multi-select question still shows one card with a typed reply.
+- Claude desktop's next-step box (#2118): a session the desktop app runs may end its turn with
+  `mcp__ccd_turn__wrap_up` (`recap`, and optionally `ask` with `actions` of `label` and
+  `message`), which the app shows as a box with one button per action; a click sends that
+  action's `message` as the next prompt. The owner took such boxes for cards that never came. So
+  the plugin's `PostToolUse` hook on the tool posts a box that asks as a card for the session,
+  already waiting: `ask` the question, `recap` before it, the labels its options, and the answer
+  comes back as a prompt like any card's. The session's next prompt, a click in the box or
+  anything typed, settles it `elsewhere` (`UserPromptSubmit`, started only while the config
+  folder's `next-steps-open` names the session); the turn's own end leaves it open, since the box
+  ended the turn on the question. A box without `ask` posts nothing.
 - opencode (#345): each `question` call becomes one Starbridge question per question, already
   waiting, and the answers go back into the call through `POST /question/{id}/reply`. The first
   answer, on a device or at the keyboard, wins; the other side is settled `elsewhere`. A question

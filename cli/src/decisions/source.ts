@@ -35,6 +35,8 @@ export interface AskInput {
   held?: boolean;
   /** Asked for Claude Code's open `AskUserQuestion` picker in this session (#848). */
   picker?: string;
+  /** Asked for the next-step box Claude desktop showed in this Claude Code session (#2118). */
+  nextStep?: string;
   /**
    * The Claude Code subagent that asks, from `STARBRIDGE_CLAUDE_AGENT`, which the mod sets for a
    * subagent's `starbridge ask` (#1702): the mod sends the answer to that subagent.
