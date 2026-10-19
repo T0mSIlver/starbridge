@@ -25,8 +25,9 @@ function plugin(root: string, dir: string, name: string, hooks: boolean): string
 async function remote(args: string[], name: string): Promise<{ code: number; ran: boolean }> {
   const root = mkdtempSync(join(tmpdir(), "starbridge-remote-"));
   writeFileSync(join(root, "script.sh"), `echo "$1" > "${root}/ran"; cat >> "${root}/ran"\n`);
-  // Stands in for Claude Code: a process whose arguments are those it runs with.
-  const claude = Bun.spawn(["/bin/sh", "-c", "sleep 30", "claude", ...args]);
+  // Stands in for Claude Code: a process whose arguments are those it runs with. A last command
+  // after sleep keeps a shell such as macOS bash from exec-ing it in its place.
+  const claude = Bun.spawn(["/bin/sh", "-c", "sleep 30; exit", "claude", ...args]);
   try {
     const r = Bun.spawnSync(["/bin/sh", SCRIPT, name, join(root, "script.sh"), "arg"], {
       env: bareEnv({ PATH: SYSTEM_PATH, CLAUDE_PID: String(claude.pid) }),
