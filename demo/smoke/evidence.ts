@@ -126,19 +126,20 @@ export function keeper(em: Emulator, adbPath: string, dir: string | undefined, p
     if (!shots) return;
     const drawer = async () => {
       // A swipe now and then opens nothing, which left the home screen in the shot: swipe again
-      // until the drawer's "All apps" heading is on screen.
-      for (let attempt = 1; ; attempt++) {
+      // until the launcher's app list is on screen, three times at most.
+      for (let attempt = 1; attempt <= 3; attempt++) {
         await em.shell("input keyevent KEYCODE_HOME");
         await Bun.sleep(1000);
         const size = /(\d+)x(\d+)/.exec(await em.shell("wm size")) ?? [];
         const [w, h] = [Number(size[1] ?? 1080), Number(size[2] ?? 2400)];
         await em.shell(`input swipe ${w >> 1} ${Math.round(h * 0.85)} ${w >> 1} ${h >> 3} 300`);
-        try {
-          await em.see("All apps", 6);
-          break;
-        } catch (e) {
-          if (attempt === 4) throw e;
+        let open = false;
+        for (let i = 0; i < 8 && !open; i++) {
+          const xml = await em.adb("exec-out", "uiautomator", "dump", "/dev/tty").catch(() => "");
+          open = xml.includes("id/apps_list_view");
+          if (!open) await Bun.sleep(1000);
         }
+        if (open) break;
       }
       await em.see("Starbridge", 15).catch(() => undefined);
       await Bun.sleep(1000);
