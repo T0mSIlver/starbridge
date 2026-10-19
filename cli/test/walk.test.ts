@@ -1,10 +1,11 @@
 /**
- * The path a new user takes, end to end (#2096) and #2119: install.sh installs the compiled binary from a
- * signed release, `starbridge setup` runs on a terminal with every agent it can fake, pairs with a
+ * The path a new user takes, end to end (#2096, #2119): install.sh installs the compiled binary
+ * from a signed release, `starbridge setup` runs on a terminal with every agent it can fake, pairs with a
  * server and gets its test card answered from the phone, then `starbridge uninstall` takes it all
  * out. The walk checks that nothing setup wrote is left, that every file the owner had is byte for
  * byte as before, and that the agent and lingering are off again. The npm package walks the same
- * path. A throwaway HOME with its own XDG_RUNTIME_DIR, so nothing reaches this machine's agent.
+ * path. Linux and macOS, each with its own service manager faked. A throwaway HOME with its own
+ * XDG_RUNTIME_DIR, so nothing reaches this machine's agent.
  */
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { createHash } from "node:crypto";
