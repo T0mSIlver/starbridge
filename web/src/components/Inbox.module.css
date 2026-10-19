@@ -109,7 +109,7 @@
 }
 
 .empty {
-  padding: var(--s8) var(--s4);
+  padding: calc(var(--s8) + 1px) var(--s4);
   color: var(--fg2);
   text-align: center;
 }
