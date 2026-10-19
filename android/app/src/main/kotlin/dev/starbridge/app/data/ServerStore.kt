@@ -434,6 +434,8 @@ class ServerStore(
     override fun receiveSignIn(redirect: String) = run {
         if (phase.value != Phase.SignedOut) return@run
         val verifier = secrets.signInVerifier ?: return@run
+        // The sign-in screen keeps its last failure until another try, which ends it.
+        notice.value = null
         // The state is the challenge this sign-in sent: a link from another sign-in is not this
         // phone's, and leaves the pending one alone.
         val challenge = SignIn.challenge(verifier)
@@ -452,6 +454,7 @@ class ServerStore(
     }
 
     override fun signInWithOwnerToken(server: String, token: String) = run {
+        notice.value = null
         val address = normalize(server)
         if (address.toHttpUrlOrNull() == null) throw IllegalStateException("That server address isn't valid.")
         persist(saved.copy(server = address))

@@ -123,4 +123,19 @@ class OwnerTokenSignInTest {
         until { !store.busy.value && store.notice.value != null }
         assertEquals("That server address isn't valid.", store.notice.value)
     }
+
+    @Test fun aNewTryEndsTheLastFailure() {
+        http.enqueue(json(401, """{"error":"unauthenticated"}"""))
+        http.enqueue(json(200, """{"session":"s"}"""))
+        http.enqueue(json(200, """{"account":"acct","member":null,"role":"device"}"""))
+        http.enqueue(json(200, """{"entries":[]}"""))
+        http.start()
+        val store = store()
+        store.signInWithOwnerToken(http.url("/").toString(), "wrong")
+        until { !store.busy.value && store.notice.value != null }
+        store.signInWithOwnerToken(http.url("/").toString(), "token")
+        until { store.phase.value is dev.starbridge.app.data.Phase.NoDevice }
+        // Gone, so it doesn't follow the owner to the next screen as a snackbar.
+        assertEquals(null, store.notice.value)
+    }
 }
