@@ -15,4 +15,6 @@ time, add the cheapest check that fails on it (a type, a lint, a test) and its r
 | A page, route or screen that no issue asked for | none yet |
 | A status claim in a PR or issue without the run, file or screenshot behind it | none yet |
 | Times shown with AM/PM in a 24-hour locale such as French | desktop only: `desktop/test/unit/clock.test.ts` |
-| Setup or uninstall leaving files, folders, a service or lingering behind, or changing the owner's own agent settings (#2040, #2041, #2098) | Linux: `cli/test/walk.test.ts` installs with install.sh and with npm, sets up every agent, answers the first card and uninstalls in a fresh HOME, then compares HOME with what it was |
+| Uninstall missing something setup did: a file, a folder, the service, its log, lingering, a PATH line (#1494, #2040, #2041, #2098) | `cli/test/walk.test.ts` on Linux and macOS: installs with install.sh and with npm in a fresh HOME, sets up every agent, answers the first card, uninstalls, then compares HOME with what it was |
+| Setup or uninstall changing or deleting the owner's own files in an agent's folder (#1324, #1493, #2098) | the same walk, whose HOME starts with the owner's settings, hooks and files inside Starbridge's folders, and must end with each byte for byte (JSON keys in order) |
+| A terminal question that hangs under `curl \| sh` on macOS (#1882, #2036) | `cli/test/tty-prompt.test.ts`, and the walk, which answers every setup question on a pseudo-terminal on macOS too |

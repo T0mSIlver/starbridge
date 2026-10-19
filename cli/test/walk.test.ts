@@ -1,5 +1,5 @@
 /**
- * The path a new user takes, end to end (#2096): install.sh installs the compiled binary from a
+ * The path a new user takes, end to end (#2096) and #2119: install.sh installs the compiled binary from a
  * signed release, `starbridge setup` runs on a terminal with every agent it can fake, pairs with a
  * server and gets its test card answered from the phone, then `starbridge uninstall` takes it all
  * out. The walk checks that nothing setup wrote is left, that every file the owner had is byte for
@@ -28,6 +28,7 @@ import { signer } from "./fake-releases";
 import { FAKE_BIN } from "./helpers";
 
 const CLI = join(import.meta.dir, "..");
+const LINUX = process.platform === "linux";
 const WALK_BIN = join(import.meta.dir, "fixtures", "walk-bin");
 
 /** Files an owner already has before installing Starbridge, which must come out unchanged. */
@@ -50,11 +51,23 @@ const OWNER_FILES: Record<string, string> = {
     'model = "gpt-6.1-sol"\n\n[projects."/home/me/work"]\ntrust_level = "trusted"\n',
   ".codex/AGENTS.md": "Be brief.\n",
   ".config/opencode/opencode.json": `${JSON.stringify({ theme: "tokyonight" }, null, 2)}\n`,
+  // An entry of the owner's that runs a script of Starbridge's folder stays theirs (#1493).
   ".cursor/hooks.json": `${JSON.stringify(
-    { version: 1, hooks: { stop: [{ command: "./mine.sh" }] } },
+    {
+      version: 1,
+      hooks: {
+        stop: [{ command: "./mine.sh" }],
+        sessionStart: [
+          { command: "sh ~/.cursor/starbridge/cli.sh hook session --agent cursor -v" },
+        ],
+      },
+    },
     null,
     2,
   )}\n`,
+  // Files of the owner's inside folders setup writes into stay, with their folders (#1324).
+  ".codex/skills/starbridge/references/mine.md": "# Mine\n",
+  ".config/opencode/starbridge/notes.md": "mine\n",
   ".cursor/mine.sh": "#!/bin/sh\n",
   ".pi/agent/settings.json": JSON.stringify({ packages: ["npm:pi-mine"] }, null, 2),
   ".gemini/antigravity/mcp_config.json": `${JSON.stringify({ mcpServers: {} }, null, 2)}\n`,
@@ -79,7 +92,6 @@ const KNOWN = {
   // #2098
   left: [
     ".codex/rules",
-    ".codex/skills",
     ".config/opencode/plugins",
     ".config/opencode/skills",
     ".config/systemd",
@@ -275,6 +287,7 @@ function newOwner(server: LiveServer, releases: string): Owner {
     // npm's own cache and Bun's stay out of HOME: they are npm's and Bun's, not Starbridge's.
     npm_config_cache: join(root, "npm-cache"),
     BUN_INSTALL_CACHE_DIR: join(root, "bun-cache"),
+    BUN_RUNTIME_TRANSPILER_CACHE_PATH: "0",
   };
   const owner = { root, home, state, env, server, before: snapshot(home) };
   owners.push(owner);
@@ -302,7 +315,7 @@ function expectSetUp(o: Owner, setup: { code: number | null; screen: string; ste
   for (const agent of ["Claude Code", "Codex", "Pi", "opencode", "Cursor", "Antigravity"])
     expect(out).toMatch(new RegExp(`✓ ${agent}\\b`));
   expect(agentRunning(o)).toBe(true);
-  expect(readFileSync(join(o.state, "linger"), "utf8").trim()).toBe("yes");
+  if (LINUX) expect(readFileSync(join(o.state, "linger"), "utf8").trim()).toBe("yes");
 }
 
 /**
@@ -320,8 +333,10 @@ async function expectUninstalled(
   expect(r.screen).toContain("Stopped and removed the agent service.");
   after();
   expect(agentRunning(o)).toBe(false);
-  expect(existsSync(join(o.state, "enabled"))).toBe(false);
-  expect(readFileSync(join(o.state, "linger"), "utf8").trim()).toBe("no");
+  if (LINUX) {
+    expect(existsSync(join(o.state, "enabled"))).toBe(false);
+    expect(readFileSync(join(o.state, "linger"), "utf8").trim()).toBe("no");
+  }
   expect(leftovers(o.before, snapshot(o.home), theirs)).toEqual({
     left: [...KNOWN.left, ...known].sort(),
     changed: KNOWN.changed,
@@ -329,7 +344,8 @@ async function expectUninstalled(
   return r;
 }
 
-describe.skipIf(process.platform !== "linux")("a new user's walk", () => {
+// Windows installs with install.ps1, and has no pty for the walk.
+describe.skipIf(!LINUX && process.platform !== "darwin")("a new user's walk", () => {
   let server: LiveServer;
   let releases: ReturnType<typeof Bun.serve>;
   let releasesUrl: string;
