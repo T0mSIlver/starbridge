@@ -735,8 +735,8 @@ shows whether its agent is blocked on it: working on other things, or waiting fo
 
 - `waiting` `{v, id, decisionId, to, at, state: "working" | "waiting"}`: the machine posts it
   under one id per decision and re-posts it under that id whenever the agent flips the state,
-  until the decision is answered or settled. Devices keep the update with the latest `at`; a
-  decision without one is `working`.
+  until the decision is answered or settled. Devices keep the update with the latest `at`,
+  compared as instants, and on equal instants `waiting`; a decision without one is `working`.
 - Each flip pushes: to `waiting` it notifies once more, and back to `working` it lets a device
   move or quiet the question's notification without a sound. A repeated state posts nothing.
 - A decision asked already waiting is posted `quiet` and its `waiting` item pushes, so the one
@@ -753,8 +753,11 @@ nothing.
 
 - `snooze` `{v, id, decisionId, to, until, at, dir?}`: a device signs it, under a new id each
   time, and seals it to the machine that asked and to every active device, so each one hides the
-  decision. The latest `at`, compared as instants, wins, whichever device sent it. `until` at or
-  before `at` brings the decision back now. The server cannot read `at`, so it keeps each snooze
+  decision. The latest `at`, compared as instants, wins, whichever device sent it, and on equal
+  instants the earlier `until`, so every client keeps the same one whichever order they arrive in
+  (#2103). A device stamps `at` past the latest snooze of the decision it knows, as its clock or
+  another device's may run ahead (`snoozeStamp`). `until` at or before `at` brings the decision
+  back now. The server cannot read `at`, so it keeps each snooze
   (at most 50 per decision), and a replayed id is 409 `duplicate-id`.
 - The item's `wakeAt` hint repeats `until`, so the server learns that some decision was put off
   until then, and nothing else. At each snooze's `wakeAt` it pushes that snooze once more to
