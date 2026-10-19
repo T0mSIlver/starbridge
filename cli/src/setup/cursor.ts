@@ -219,7 +219,7 @@ export function removeCursorFiles(sys: Home): string[] {
     const files = Object.keys(cursorFiles(sys))
       .map((path) => relative(dir, path))
       .filter((path) => !path.startsWith("..") && !isAbsolute(path));
-    done.push(removedLine(dir, removeWritten(dir, files)));
+    done.push(removedLine(dir, removeWritten(dir, files, cursorHome(sys))));
   };
   if (ours(readText(join(cursorSkillDir(sys), "SKILL.md")))) remove(cursorSkillDir(sys));
   const file = readHooks(sys);

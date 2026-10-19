@@ -75,22 +75,7 @@ const AGENTS_LEAVE = {
  * What the walk finds left today, until its issue is fixed. The walk fails as soon as one is no
  * longer left, so the fix takes it off this list.
  */
-const KNOWN = {
-  // #2098
-  left: [
-    ".codex/rules",
-    ".codex/skills",
-    ".config/opencode/plugins",
-    ".config/opencode/skills",
-    ".config/systemd",
-    ".config/systemd/user",
-    ".cursor/skills",
-    ".gemini/config",
-    ".gemini/config/plugins",
-  ],
-  // #2098: `permissions` moved to the end.
-  changed: [".claude/settings.json"],
-};
+const KNOWN = { left: [] as string[], changed: [] as string[] };
 
 type Snapshot = Map<string, string>;
 
@@ -407,8 +392,7 @@ describe.skipIf(process.platform !== "linux")("a new user's walk", () => {
     expect(install.code).toBe(0);
     expect(install.screen).toContain(`Installed starbridge ${VERSION}`);
     expectSetUp(o, install);
-    // #2098: install.sh made ~/.local/bin, which the binary leaves empty.
-    await expectUninstalled(o, join(o.home, ".local/bin/starbridge"), { known: [".local/bin"] });
+    await expectUninstalled(o, join(o.home, ".local/bin/starbridge"));
   }, 180_000);
 
   test("npm i -g, setup, the first card, uninstall, npm rm -g", async () => {
