@@ -36,6 +36,12 @@ function browser() {
   return { ecdh, p256dh: ecdh.getPublicKey(), auth: randomBytes(16) };
 }
 
+/** Node drops a private scalar's leading zero bytes; a JWK `d` keeps all 32. */
+function scalar(ecdh: ReturnType<typeof createECDH>) {
+  const k = ecdh.getPrivateKey();
+  return Buffer.concat([Buffer.alloc(32 - k.length), k]);
+}
+
 /** Plaintext sizes from empty to the largest one record holds. */
 const sizes = [0, 1, 15, 16, 17, 100, 1000, 3072, 3993, 4000, 4078, 4079];
 
@@ -113,7 +119,7 @@ test("RFC 8291's decryption reads what http_ece encrypts, at every size", async 
       salt: randomBytes(16).toString("base64url"),
       authSecret: ua.auth.toString("base64url"),
     });
-    const back = await decrypt(new Uint8Array(out), ua.ecdh.getPrivateKey(), ua.p256dh, ua.auth);
+    const back = await decrypt(new Uint8Array(out), scalar(ua.ecdh), ua.p256dh, ua.auth);
     expect(Buffer.from(back).equals(plain)).toBe(true);
   }
 });
