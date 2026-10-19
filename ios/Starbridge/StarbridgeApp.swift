@@ -43,8 +43,9 @@ struct Root: View {
         }
     }
 
+    /** Signed out, the sign-in screen shows the notice under its fields instead (#2085). */
     private var showsNotice: Binding<Bool> {
-        Binding(get: { store.notice != nil && (store.tooOld == nil || store.phase == .signedOut) }, set: { if !$0 { store.notice = nil } })
+        Binding(get: { store.notice != nil && store.tooOld == nil && store.phase != .signedOut }, set: { if !$0 { store.notice = nil } })
     }
 }
 

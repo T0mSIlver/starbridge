@@ -295,11 +295,24 @@ final class Store {
 
     // --- Signing in ---------------------------------------------------------------
 
+    /** The address as typed, with https:// when it names none, as a browser reads it. */
     private func normalize(_ server: String) -> String {
         var s = server.trimmingCharacters(in: .whitespacesAndNewlines)
         while s.hasSuffix("/") { s.removeLast() }
-        return s.isEmpty ? Self.defaultServer : s
+        if s.isEmpty { return Self.defaultServer }
+        return s.contains("://") ? s : "https://" + s
     }
+
+    /** An http or https address with a host and no spaces, which iOS's URL would otherwise escape. */
+    private static func isAddress(_ server: String) -> Bool {
+        guard !server.contains(where: \.isWhitespace), let c = URLComponents(string: server),
+              let scheme = c.scheme?.lowercased(), scheme == "https" || scheme == "http",
+              let host = c.host, !host.isEmpty else { return false }
+        return true
+    }
+
+    /** The server's host name, for a sign-in failure to name it. */
+    private var host: String { URLComponents(string: saved.server)?.host ?? saved.server }
 
     /** Starts a sign-in with GitHub on `server`: the page to open in the browser. */
     func gitHubSignInURL(server: String) -> URL? {
@@ -317,16 +330,21 @@ final class Store {
      * redirect with no sign-in pending is ignored. The code works once, whatever the outcome.
      */
     func receiveSignIn(_ link: URL) async {
+        // Checked before run(), which clears the notice: only this iPhone's own sign-in is a new
+        // try that ends the last failure on the sign-in screen (#2085).
+        guard phase == .signedOut, let verifier = secrets.signInVerifier else { return }
+        // The state is the challenge this sign-in sent: a link from another sign-in leaves this one alone.
+        let challenge = SignIn.challenge(verifier)
+        let code: String?
+        switch SignIn.redirect(link) {
+        case let .code(c, state) where state == challenge: code = c
+        case let .denied(state) where state == challenge: code = nil
+        default: return
+        }
         await run { [self] in
-            guard phase == .signedOut, let verifier = secrets.signInVerifier else { return }
-            // The state is the challenge this sign-in sent: a link from another sign-in leaves this one alone.
-            let challenge = SignIn.challenge(verifier)
-            let code: String
-            switch SignIn.redirect(link) {
-            case let .code(c, state) where state == challenge: code = c
-            case let .denied(state) where state == challenge: throw Notice(message: "GitHub sign-in didn't finish. Sign in again.")
-            default: return
-            }
+            // Read again: another sign-in may have started before this one's turn came.
+            guard phase == .signedOut, secrets.signInVerifier == verifier else { return }
+            guard let code else { throw Notice(message: "GitHub sign-in didn't finish. Sign in again.") }
             var k = secrets
             k.signInVerifier = nil
             persist(nil, k)
@@ -369,10 +387,35 @@ final class Store {
 
     func signInWithOwnerToken(server: String, token: String) async {
         await run { [self] in
+            let address = normalize(server)
+            guard Self.isAddress(address) else { throw Notice(message: "That server address isn't valid.") }
             var s = saved
-            s.server = normalize(server)
+            s.server = address
             persist(s)
-            try await afterSignIn(api().ownerSignIn(token: token.trimmingCharacters(in: .whitespacesAndNewlines)))
+            let session: String
+            do {
+                session = try await api().ownerSignIn(token: token.trimmingCharacters(in: .whitespacesAndNewlines))
+            } catch {
+                if let why = ownerTokenRefusal(error) { throw Notice(message: why) }
+                throw error
+            }
+            try await afterSignIn(session)
+        }
+    }
+
+    /**
+     * Why the server took no owner token, in the owner's words, or nil when describe() already
+     * says it: a Play tester saw "unauthenticated: wrong owner token" go by and no more (#2084).
+     */
+    private func ownerTokenRefusal(_ error: Error) -> String? {
+        switch error {
+        case let e as ApiError where e.status == 401: "Wrong owner token."
+        case let e as ApiError where e.error == "not-configured": "\(host) doesn't take an owner token."
+        // A 4xx without Starbridge's JSON, or a reply that holds no session: another website.
+        case let e as ApiError where (400..<500).contains(e.status) && e.error == nil: "No Starbridge server at \(host)."
+        case let e as ProtocolError where e.code == .badSchema: "No Starbridge server at \(host)."
+        case let e as URLError where e.code == .timedOut: "\(host) didn't answer in time."
+        default: nil
         }
     }
 

@@ -227,6 +227,11 @@ private struct SignInStep: View {
     @State private var nonce = ""
     @State private var server = ""
     @State private var token = ""
+    @FocusState private var focus: Field?
+
+    private enum Field { case server, token }
+
+    private var canSignIn: Bool { !store.busy && !server.isEmpty && !token.isEmpty }
 
     var body: some View {
         Step {
@@ -236,16 +241,36 @@ private struct SignInStep: View {
             if selfHosted {
                 VStack(spacing: Tokens.Spacing.s3) {
                     Filled(label: "Server") {
-                        TextField("Server", text: $server, prompt: Text("https://starbridge.example.com"))
+                        TextField("Server", text: edited($server), prompt: Text("https://starbridge.example.com"))
                             .keyboardType(.URL)
                             .textContentType(.URL)
+                            .focused($focus, equals: .server)
+                            .submitLabel(.next)
+                            .onSubmit { focus = .token }
                     }
-                    Filled(label: "Owner token") { SecureField("Owner token", text: $token) }
+                    Filled(label: "Owner token") {
+                        SecureField("Owner token", text: edited($token))
+                            .focused($focus, equals: .token)
+                            .submitLabel(.go)
+                            .onSubmit { if canSignIn { signIn() } }
+                    }
                 }
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
                 .padding(.horizontal, Tokens.Spacing.s4)
                 .padding(.top, Tokens.Spacing.s8)
+            }
+            // Under the fields, where the keyboard leaves it in view, until the owner types or
+            // tries again: an alert went by as the keyboard closed (#2085).
+            if let notice = store.notice {
+                Text(notice)
+                    .type(Tokens.Typography.small)
+                    .foregroundStyle(Tokens.Colors.bad.color)
+                    .padding(.horizontal, Tokens.Spacing.s4)
+                    .padding(.top, Tokens.Spacing.s3)
+                    // A new failure is a new view, so VoiceOver reads each one.
+                    .id(notice)
+                    .onAppear { AccessibilityNotification.Announcement(notice).post() }
             }
         } bottom: {
             if !selfHosted {
@@ -264,15 +289,29 @@ private struct SignInStep: View {
                     if server.isEmpty { server = store.saved.server == Store.defaultServer ? "" : store.saved.server }
                 }
             } else {
-                Button("Sign in") { Task { await store.signInWithOwnerToken(server: server, token: token) } }
+                Button("Sign in", action: signIn)
                     .primaryButton(busy: store.busy)
-                    .disabled(store.busy || server.isEmpty || token.isEmpty)
+                    .disabled(!canSignIn)
                 Button("Sign in with GitHub on this server") { gitHub(server) }
                     .secondaryButton()
                     .disabled(store.busy || server.isEmpty)
                 LinkButton(text: "Use starbridge.run") { selfHosted = false }
             }
         }
+    }
+
+    /** The keyboard goes, so the button's progress and the outcome show. */
+    private func signIn() {
+        focus = nil
+        Task { await store.signInWithOwnerToken(server: server, token: token) }
+    }
+
+    /** Typing again clears the last failure. */
+    private func edited(_ text: Binding<String>) -> Binding<String> {
+        Binding(get: { text.wrappedValue }, set: {
+            text.wrappedValue = $0
+            if store.notice != nil { store.notice = nil }
+        })
     }
 
     /** Asks Apple for no name and no email: the account is Apple's user id alone (spec/sign-in.md). */
