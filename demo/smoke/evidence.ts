@@ -89,6 +89,16 @@ export function keeper(em: Emulator, adbPath: string, dir: string | undefined, p
         .map(Number) as [number, number, number, number];
       return [{ x: x1, y: y1, width: x2 - x1, height: y2 - y1 }];
     });
+    // A tablet's app drawer is a sheet over the home screen, whose clock widget and date move:
+    // only the sheet is compared.
+    const sheet = /id\/bottom_sheet_background"[^>]*bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"/.exec(
+      xml,
+    );
+    if (sheet) {
+      const [x1, , x2] = sheet.slice(1).map(Number) as [number, number, number, number];
+      rects.push({ x: 0, y: 0, width: x1, height: 100_000 });
+      rects.push({ x: x2, y: 0, width: 100_000, height: 100_000 });
+    }
     // The status bar: demo mode fixes its clock in the shade but not always above an app, and the
     // shade's header shows the date.
     const density = Number(/(\d+)\s*$/.exec((await em.shell("wm density")).trim())?.[1] ?? 420);
