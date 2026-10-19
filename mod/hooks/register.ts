@@ -15,7 +15,7 @@ import { Handover } from "./handover.ts";
 import { configDir, Poller } from "./poller.ts";
 import { Sent, sessionElsewhere } from "./sent.ts";
 import { forParent, tagAsk, toSubagents, untagAsk } from "./subagent.ts";
-import { Switch, wantsLoop } from "./switch.ts";
+import { ownArgs, SDK_ENTRYPOINTS, Switch, wantsLoop } from "./switch.ts";
 
 /**
  * Starts the answer loop in each session a person keeps open (`wantsLoop`): through the machine's agent when it runs
@@ -53,7 +53,15 @@ export const register: Register = (on) => {
   on("session.start", async ($, e, next) => {
     handover.ended();
     const started = await next(e);
-    if (!wantsLoop(e.isInteractive, await $.env.get("CLAUDE_CODE_ENTRYPOINT"))) return started;
+    const entrypoint = await $.env.get("CLAUDE_CODE_ENTRYPOINT");
+    // Only an SDK session needs its command line, to tell a host such as T3 Code from a script.
+    const args =
+      !e.isInteractive &&
+      SDK_ENTRYPOINTS.has(entrypoint ?? "") &&
+      (await $.env.get("OS")) !== "Windows_NT"
+        ? await ownArgs((argv) => $.process.run(argv, { timeoutMs: 10_000 }))
+        : undefined;
+    if (!wantsLoop(e.isInteractive, entrypoint, args)) return started;
     // The new loop takes over the lines the old one submitted and has not confirmed yet, so it
     // confirms them rather than submitting them again (#1337).
     const before = loop;

@@ -1354,6 +1354,20 @@ test("ask promises a prompt only once the agent has seen this session's mod (#53
   expect(c.errors.at(-1)).toContain("run `starbridge wait");
 });
 
+test("a session T3 Code runs, unattended to Claude Code, gets a prompt once its mod is seen (#2100)", async () => {
+  const { socket } = await machine();
+  const c = client(socket);
+  // T3 Code runs Claude Code through the Agent SDK, which marks it unattended, as `claude -p`.
+  c.env.CLAUDECODE = "1";
+  c.env.CLAUDE_CODE_SESSION_ATTENDED = "0";
+  await ask(c, "--session", "s-t3");
+  expect(c.errors.at(-1)).toContain("run `starbridge wait");
+  // The mod runs its loop there, as it never does in `claude -p` or a one-shot SDK script.
+  await session(socket, "s-t3").events();
+  await ask(c, "--session", "s-t3");
+  expect(c.errors.at(-1)).toBe("The answer will come back into this session as a new prompt.");
+});
+
 test("through the agent, wait --no-mark leaves the decision as it was (#603)", async () => {
   const { socket } = await machine();
   const c = client(socket);

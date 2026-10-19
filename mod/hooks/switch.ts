@@ -11,14 +11,52 @@ import type { Poller } from "./poller.ts";
 /** Entry points of a run that ends with its last turn: `claude -p` and Agent SDK scripts. */
 const ONE_SHOT = new Set(["sdk-cli", "sdk-ts", "sdk-py"]);
 
+/** The Agent SDK's entry points, which a host may also run for a person (#2100). */
+export const SDK_ENTRYPOINTS = new Set(["sdk-ts", "sdk-py"]);
+
+/**
+ * T3 Code's MCP tools, which it allows in every Claude Code session it runs: all of them
+ * (`mcp__t3-code__*`), or the read-only ones by name.
+ */
+const T3_CODE_TOOLS = /(?:^|[\s,])mcp__t3-code__/;
+
 /**
  * Whether a session gets an answer loop: one under the REPL, or one a host such as Claude
  * desktop's Code tab or an IDE keeps open for a person (#863). The engine calls those not
  * interactive, as it does a `claude -p` run, so the host's `CLAUDE_CODE_ENTRYPOINT` tells them
- * apart; a run with none set is `claude -p`'s own.
+ * apart; a run with none set is `claude -p`'s own. T3 Code runs Claude Code through the Agent
+ * SDK and sets no entry point of its own, but keeps the session open between turns and shows a
+ * turn a plugin starts, so a session whose arguments (`args`, the Claude Code process's command
+ * line) allow T3 Code's tools gets one too (#2100).
  */
-export function wantsLoop(isInteractive: boolean, entrypoint: string | undefined): boolean {
-  return isInteractive || (!!entrypoint && !ONE_SHOT.has(entrypoint));
+export function wantsLoop(
+  isInteractive: boolean,
+  entrypoint: string | undefined,
+  args?: string,
+): boolean {
+  if (isInteractive) return true;
+  if (!entrypoint) return false;
+  if (!ONE_SHOT.has(entrypoint)) return true;
+  return SDK_ENTRYPOINTS.has(entrypoint) && !!args && T3_CODE_TOOLS.test(args);
+}
+
+/**
+ * The command line of the Claude Code process, the parent of the shell `run` starts; undefined
+ * when it cannot be read. Linux has `/proc`, macOS only `ps`.
+ */
+export async function ownArgs(
+  run: (argv: string[]) => Promise<{ exitCode: number; stdout: string }>,
+): Promise<string | undefined> {
+  try {
+    const r = await run([
+      "sh",
+      "-c",
+      `tr '\\0' ' ' < /proc/$PPID/cmdline 2>/dev/null || ps -ww -o args= -p $PPID`,
+    ]);
+    return r.exitCode === 0 && r.stdout.trim() ? r.stdout : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 export interface Paths {

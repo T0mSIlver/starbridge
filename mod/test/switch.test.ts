@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { joinLines } from "../hooks/agent.ts";
 import { type Host, Poller, type Timing } from "../hooks/poller.ts";
-import { Switch, wantsLoop } from "../hooks/switch.ts";
+import { ownArgs, Switch, wantsLoop } from "../hooks/switch.ts";
 
 test("a session a host keeps open gets the loop; a run that ends with its turn does not (#863)", () => {
   expect(wantsLoop(true, undefined)).toBe(true);
@@ -10,6 +10,45 @@ test("a session a host keeps open gets the loop; a run that ends with its turn d
   expect(wantsLoop(false, "claude-vscode")).toBe(true);
   for (const oneShot of ["sdk-cli", "sdk-ts", "sdk-py", undefined])
     expect(wantsLoop(false, oneShot)).toBe(false);
+});
+
+test("T3 Code's SDK sessions get the loop, by T3's tools in Claude Code's arguments (#2100)", () => {
+  // As T3 Code 0.1.1 starts Claude Code, cut down.
+  const t3 =
+    "/usr/bin/claude --output-format stream-json --verbose --input-format stream-json --permission-prompt-tool stdio --allowedTools mcp__t3-code__* --tools default --session-id=5d5fb086";
+  expect(wantsLoop(false, "sdk-ts", t3)).toBe(true);
+  // A read-only T3 session allows its read-only tools by name.
+  expect(
+    wantsLoop(false, "sdk-ts", "claude --allowedTools Read,mcp__t3-code__t3_thread_list"),
+  ).toBe(true);
+  // A script's session, even one that names another server's tools, ends with its last turn.
+  const script =
+    "claude --output-format stream-json --input-format stream-json --allowedTools mcp__other__x";
+  expect(wantsLoop(false, "sdk-ts", script)).toBe(false);
+  expect(wantsLoop(false, "sdk-ts", undefined)).toBe(false);
+  // `claude -p` never, whatever it allows.
+  expect(wantsLoop(false, "sdk-cli", t3)).toBe(false);
+  expect(wantsLoop(false, undefined, t3)).toBe(false);
+});
+
+test("ownArgs reads the Claude Code process's command line, and gives up on a failed read", async () => {
+  expect(await ownArgs(async () => ({ exitCode: 0, stdout: "claude --verbose \n" }))).toBe(
+    "claude --verbose \n",
+  );
+  expect(await ownArgs(async () => ({ exitCode: 1, stdout: "" }))).toBeUndefined();
+  expect(
+    await ownArgs(async () => {
+      throw new Error("no sh");
+    }),
+  ).toBeUndefined();
+  // The real thing on this machine: the parent of the shell is this test's process.
+  if (process.platform !== "win32") {
+    const real = await ownArgs(async (argv) => {
+      const p = Bun.spawnSync(argv);
+      return { exitCode: p.exitCode ?? 1, stdout: p.stdout.toString() };
+    });
+    expect(real).toContain("bun");
+  }
 });
 
 const FAST: Timing = {
