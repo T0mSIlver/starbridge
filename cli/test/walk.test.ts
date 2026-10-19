@@ -1,10 +1,11 @@
 /**
- * The path a new user takes, end to end (#2096): install.sh installs the compiled binary from a
- * signed release, `starbridge setup` runs on a terminal with every agent it can fake, pairs with a
+ * The path a new user takes, end to end (#2096, #2119): install.sh installs the compiled binary
+ * from a signed release, `starbridge setup` runs on a terminal with every agent it can fake, pairs with a
  * server and gets its test card answered from the phone, then `starbridge uninstall` takes it all
  * out. The walk checks that nothing setup wrote is left, that every file the owner had is byte for
  * byte as before, and that the agent and lingering are off again. The npm package walks the same
- * path. A throwaway HOME with its own XDG_RUNTIME_DIR, so nothing reaches this machine's agent.
+ * path. Linux and macOS, each with its own service manager faked. A throwaway HOME with its own
+ * XDG_RUNTIME_DIR, so nothing reaches this machine's agent.
  */
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { createHash } from "node:crypto";
@@ -17,6 +18,7 @@ import {
   readFileSync,
   readlinkSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -28,6 +30,7 @@ import { signer } from "./fake-releases";
 import { FAKE_BIN } from "./helpers";
 
 const CLI = join(import.meta.dir, "..");
+const LINUX = process.platform === "linux";
 const WALK_BIN = join(import.meta.dir, "fixtures", "walk-bin");
 
 /** Files an owner already has before installing Starbridge, which must come out unchanged. */
@@ -50,11 +53,23 @@ const OWNER_FILES: Record<string, string> = {
     'model = "gpt-6.1-sol"\n\n[projects."/home/me/work"]\ntrust_level = "trusted"\n',
   ".codex/AGENTS.md": "Be brief.\n",
   ".config/opencode/opencode.json": `${JSON.stringify({ theme: "tokyonight" }, null, 2)}\n`,
+  // An entry of the owner's that runs a script of Starbridge's folder stays theirs (#1493).
   ".cursor/hooks.json": `${JSON.stringify(
-    { version: 1, hooks: { stop: [{ command: "./mine.sh" }] } },
+    {
+      version: 1,
+      hooks: {
+        stop: [{ command: "./mine.sh" }],
+        sessionStart: [
+          { command: "sh ~/.cursor/starbridge/cli.sh hook session --agent cursor -v" },
+        ],
+      },
+    },
     null,
     2,
   )}\n`,
+  // Files of the owner's inside folders setup writes into stay, with their folders (#1324).
+  ".codex/skills/starbridge/references/mine.md": "# Mine\n",
+  ".config/opencode/starbridge/notes.md": "mine\n",
   ".cursor/mine.sh": "#!/bin/sh\n",
   ".pi/agent/settings.json": JSON.stringify({ packages: ["npm:pi-mine"] }, null, 2),
   ".gemini/antigravity/mcp_config.json": `${JSON.stringify({ mcpServers: {} }, null, 2)}\n`,
@@ -212,6 +227,8 @@ async function onTerminal(
 
 interface Owner {
   root: string;
+  /** XDG_RUNTIME_DIR, where the agent's socket is. */
+  runtime: string;
   home: string;
   /** The fakes' state: the agent's pid, whether its unit is enabled, lingering. */
   state: string;
@@ -225,10 +242,18 @@ const owners: Owner[] = [];
 /** A throwaway owner: HOME with their own files, private runtime dir, the fakes on the PATH. */
 function newOwner(server: LiveServer, releases: string): Owner {
   const root = mkdtempSync(join(tmpdir(), "starbridge-walk-"));
+  // HOME through a symbolic link, as /var is on macOS and some home folders are (#2134).
+  mkdirSync(join(root, "real-home"));
+  symlinkSync(join(root, "real-home"), join(root, "home"));
   const home = join(root, "home", "walker");
-  const runtime = join(root, "run");
+  // Short: a unix socket's path must fit in 104 bytes on macOS, whose temp folder is long.
+  const runtime = mkdtempSync("/tmp/sbw-");
   const state = join(root, "fake-state");
   for (const d of [home, runtime, state]) mkdirSync(d, { recursive: true, mode: 0o700 });
+  // Folders every Mac has, which launchd's plist and log go in.
+  if (!LINUX)
+    for (const d of ["Library/LaunchAgents", "Library/Logs"])
+      mkdirSync(join(home, d), { recursive: true });
   for (const [path, text] of Object.entries(OWNER_FILES)) {
     mkdirSync(dirname(join(home, path)), { recursive: true });
     writeFileSync(join(home, path), text);
@@ -260,8 +285,9 @@ function newOwner(server: LiveServer, releases: string): Owner {
     // npm's own cache and Bun's stay out of HOME: they are npm's and Bun's, not Starbridge's.
     npm_config_cache: join(root, "npm-cache"),
     BUN_INSTALL_CACHE_DIR: join(root, "bun-cache"),
+    BUN_RUNTIME_TRANSPILER_CACHE_PATH: "0",
   };
-  const owner = { root, home, state, env, server, before: snapshot(home) };
+  const owner = { root, runtime, home, state, env, server, before: snapshot(home) };
   owners.push(owner);
   return owner;
 }
@@ -287,11 +313,13 @@ function expectSetUp(
   const out = setup.screen;
   expect(out).toContain("Starbridge is set up.");
   expect(out).toContain("✓ You answered Yes");
+  // The agent the service started answers on its socket.
+  expect(out).not.toContain("The agent did not answer yet");
   expect(out).not.toContain("✗");
   for (const agent of ["Claude Code", "Codex", "Pi", "opencode", "Cursor", "Antigravity"])
     expect(out).toMatch(new RegExp(`✓ ${agent}\\b`));
   expect(agentRunning(o)).toBe(true);
-  expect(readFileSync(join(o.state, "linger"), "utf8").trim()).toBe("yes");
+  if (LINUX) expect(readFileSync(join(o.state, "linger"), "utf8").trim()).toBe("yes");
   // Asked once (#2111): Enter keeps permission prompts off, y turns them on.
   expect(setup.steps.map((s) => s.prompt)).toContain(
     "Send permission prompts to your devices? [y/N]",
@@ -318,8 +346,10 @@ async function expectUninstalled(
   expect(r.screen).toContain("Stopped and removed the agent service.");
   after();
   expect(agentRunning(o)).toBe(false);
-  expect(existsSync(join(o.state, "enabled"))).toBe(false);
-  expect(readFileSync(join(o.state, "linger"), "utf8").trim()).toBe("no");
+  if (LINUX) {
+    expect(existsSync(join(o.state, "enabled"))).toBe(false);
+    expect(readFileSync(join(o.state, "linger"), "utf8").trim()).toBe("no");
+  }
   expect(leftovers(o.before, snapshot(o.home), theirs)).toEqual({
     left: [...KNOWN.left, ...known].sort(),
     changed: KNOWN.changed,
@@ -327,7 +357,8 @@ async function expectUninstalled(
   return r;
 }
 
-describe.skipIf(process.platform !== "linux")("a new user's walk", () => {
+// Windows installs with install.ps1, and has no pty for the walk.
+describe.skipIf(!LINUX && process.platform !== "darwin")("a new user's walk", () => {
   let server: LiveServer;
   let releases: ReturnType<typeof Bun.serve>;
   let releasesUrl: string;
@@ -394,7 +425,7 @@ describe.skipIf(process.platform !== "linux")("a new user's walk", () => {
     server?.stop();
     releases?.stop(true);
     // Each holds a compiled binary of about 100 MB.
-    for (const dir of [dist, ...owners.map((o) => o.root)])
+    for (const dir of [dist, ...owners.flatMap((o) => [o.root, o.runtime])])
       if (dir) rmSync(dir, { recursive: true, force: true });
   });
 

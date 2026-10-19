@@ -147,11 +147,20 @@ export async function uninstall(sys: Sys, opts: UninstallOpts): Promise<number> 
         ctx.out(`Removed the PATH line setup added to ${file}.`);
     removeBinary(ctx, opts.install);
     // install.sh made ~/.local/bin when there was none (#2098); Windows deletes the binary later.
+    // The binary's path is a real path, and HOME may run through a link, as /var does on macOS
+    // (#2134), so the two compare as real paths.
     const bin = join(sys.home, ".local", "bin");
+    const real = (p: string) => {
+      try {
+        return realpathSync(p);
+      } catch {
+        return p;
+      }
+    };
     if (
       sys.platform !== "win32" &&
       opts.install.kind === "binary" &&
-      dirname(opts.install.path) === bin
+      dirname(opts.install.path) === real(bin)
     )
       pruneEmpty(bin, join(sys.home, ".local"));
   }

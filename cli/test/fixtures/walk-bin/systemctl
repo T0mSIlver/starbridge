@@ -4,4 +4,4 @@
 echo "systemctl $*" >>"$FAKE_LOG"
 [ "$1" = --user ] && shift
 mkdir -p "$FAKE_STATE"
-exec bun "$(dirname "$0")/../walk-systemd.ts" "$@"
+exec bun "$(dirname "$0")/../walk-service.ts" systemctl "$@"
