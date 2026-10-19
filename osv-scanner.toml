@@ -1,4 +1,6 @@
 # Read by the weekly lockfile scan (.github/workflows/scan.yml) for every lockfile in the repo.
+# The scan passes this file with --config, so an osv-scanner.toml in a subfolder is ignored:
+# add ignores here.
 
 [[IgnoredVulns]]
 id = "GHSA-hp3w-g68c-fv3c"
