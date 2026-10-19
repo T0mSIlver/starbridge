@@ -1,0 +1,25 @@
+#!/bin/sh
+# Stands in for Pi in the install walk, as Pi 1.2 keeps a git package: `pi install git:…` clones
+# it under ~/.pi/agent/git, beside the .gitignore Pi writes there, unless a checkout is there
+# already; `pi remove` deletes the checkout and the folders it leaves empty, but not the .gitignore.
+echo "pi $*" >>"$FAKE_LOG"
+root="$HOME/.pi/agent/git"
+settings="$HOME/.pi/agent/settings.json"
+case "$2" in
+  git:*) src=${2#git:}; checkout="$root/${src%@*}" ;;
+  *) exit 1 ;;
+esac
+case "$1" in
+  install)
+    mkdir -p "$root"
+    [ -f "$root/.gitignore" ] || printf '*\n!.gitignore\n' >"$root/.gitignore"
+    [ -d "$checkout" ] || { mkdir -p "$checkout" && echo cloned >"$checkout/README.md"; } ;;
+  remove)
+    rm -rf "$checkout"
+    d=$(dirname "$checkout")
+    while [ "$d" != "$root" ] && rmdir "$d" 2>/dev/null; do d=$(dirname "$d"); done ;;
+  *) exit 1 ;;
+esac
+# The packages list in settings.json, which knows a git package by its repository without the @ref.
+[ -f "$settings" ] || echo '{}' >"$settings"
+bun -e 'const [f,op,src]=process.argv.slice(-3);const fs=require("fs");const s=JSON.parse(fs.readFileSync(f,"utf8"));const id=x=>x.replace(/@[^/@]*$/,"");const p=(s.packages??[]).filter(x=>id(x)!==id(src));if(op==="install")p.push(src);s.packages=p;fs.writeFileSync(f,JSON.stringify(s,null,2))' "$settings" "$1" "$2"

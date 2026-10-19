@@ -42,6 +42,22 @@ export function configDir(env: Record<string, string | undefined>): string {
 export const PROMPTS_OPEN = "permissions-open";
 
 /**
+ * The file `plugin/hooks/prompt.sh` reads before it starts the CLI on a Claude Code prompt: the
+ * sessions with a next-step card open (#2118), one per line, written with the state.
+ */
+export const NEXT_STEPS_OPEN = "next-steps-open";
+
+/** What `NEXT_STEPS_OPEN` holds for state `s`. */
+export function nextStepsMark(s: State): string {
+  const sessions = new Set(
+    Object.entries(s.asked)
+      .filter(([id, a]) => a.nextStep && !a.settled && !s.answers[id])
+      .map(([, a]) => a.nextStep as string),
+  );
+  return [...sessions].map((x) => `${x}\n`).join("");
+}
+
+/**
  * The file in the config folder that holds this CLI's absolute path, one line, for the hooks and
  * plugins that start it when their PATH lacks it (`plugin/hooks/cli.sh`, the mod; #612).
  */
@@ -175,6 +191,11 @@ export interface State {
        * number the hook asks again after that is settled, not left open (#2061).
        */
       pickerClosed?: boolean;
+      /**
+       * Asked for the next-step box Claude desktop showed in this Claude Code session (#2118):
+       * settled when the session's next prompt comes.
+       */
+      nextStep?: string;
     }
   >;
   /**
@@ -558,6 +579,14 @@ export class Store {
   private markPromptsOpen(s: State) {
     const mark = promptsMark(s);
     if (this.readMark() !== mark) writeFileSync(this.path(PROMPTS_OPEN), mark, { mode: 0o600 });
+    const steps = nextStepsMark(s);
+    let was: string | undefined;
+    try {
+      was = readFileSync(this.path(NEXT_STEPS_OPEN), "utf8");
+    } catch {}
+    // Written once a card was asked for a box, and kept in step after.
+    if (was !== undefined ? was !== steps : steps !== "")
+      writeFileSync(this.path(NEXT_STEPS_OPEN), steps, { mode: 0o600 });
   }
 }
 
