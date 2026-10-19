@@ -40,9 +40,9 @@ What the code relies on, with the versions checked.
 - **Codex** (CLI 0.160): the TUI runs sessions in a shared app-server daemon; `codex queue --thread
   <id> --message <text>` starts a turn in an idle session or runs next in a busy one, and starts
   the daemon itself. It takes the message only as an argument and refuses sub-agent threads. An
-  exec thread's rollout has `originator: codex_exec`, a TUI thread's `codex-tui` and a T3 Code
-  thread's `T3 Code` (Codex 0.163; T3 Code runs its own `codex app-server` over stdio, and its
-  rollouts, like the TUI's, say `source: vscode`). A thread's title is its last
+  exec thread's rollout has `originator: codex_exec`, a TUI thread's `codex-tui`, and a thread
+  an app starts on its own `codex app-server` that app's name; the TUI's and such an app's both
+  say `source: vscode` (0.163). A thread's title is its last
   `thread_name` in `$CODEX_HOME/session_index.jsonl`, which Codex appends to on each rename, so
   Codex cards and prompts carry it as the other agents' do (#952). `PermissionRequest` runs before the
   approval dialog and blocks it; any deny among its hooks wins, else the last allow, else the
