@@ -11,14 +11,30 @@ import type { Poller } from "./poller.ts";
 /** Entry points of a run that ends with its last turn: `claude -p` and Agent SDK scripts. */
 const ONE_SHOT = new Set(["sdk-cli", "sdk-ts", "sdk-py"]);
 
+/** The Agent SDK's entry points, which a host may also run for a person (#2100). */
+export const SDK_ENTRYPOINTS = new Set(["sdk-ts", "sdk-py"]);
+
 /**
- * Whether a session gets an answer loop: one under the REPL, or one a host such as Claude
- * desktop's Code tab or an IDE keeps open for a person (#863). The engine calls those not
- * interactive, as it does a `claude -p` run, so the host's `CLAUDE_CODE_ENTRYPOINT` tells them
- * apart; a run with none set is `claude -p`'s own.
+ * Whether a session gets an answer loop from its start: one under the REPL, or one a host such
+ * as Claude desktop's Code tab or an IDE keeps open for a person (#863). The engine calls those
+ * not interactive, as it does a `claude -p` run, so the host's `CLAUDE_CODE_ENTRYPOINT` tells
+ * them apart; a run with none set is `claude -p`'s own.
  */
 export function wantsLoop(isInteractive: boolean, entrypoint: string | undefined): boolean {
   return isInteractive || (!!entrypoint && !ONE_SHOT.has(entrypoint));
+}
+
+/**
+ * Whether a session gets its loop once its first turn has ended: an Agent SDK session, which a
+ * script ends with that turn but a host can keep open for more (#2100). A question asked in a
+ * later turn proves the host kept it, so promising it a prompt is safe; one asked in the first
+ * turn still gets the `wait` line.
+ */
+export function wantsLoopAfterTurn(
+  isInteractive: boolean,
+  entrypoint: string | undefined,
+): boolean {
+  return !isInteractive && SDK_ENTRYPOINTS.has(entrypoint ?? "");
 }
 
 export interface Paths {

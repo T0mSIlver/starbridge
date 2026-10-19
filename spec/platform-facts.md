@@ -44,6 +44,12 @@ What the code relies on, with the versions checked.
   `PermissionDenied`. When the keyboard answers Yes first the hook gets no signal; Esc or No sends
   it SIGTERM. Every `PreToolUse` deny shows as a red "hook error". In cloud sessions only repo hooks
   run, and environment variables are readable by the agent.
+- **Agent SDK** (0.3.276, Claude Code 2.1.301): a `query()` given a string prompt closes the
+  process's input after its first result, so Claude Code ends with that turn; one given a stream
+  of prompts keeps it open until the stream ends. Both run with `CLAUDE_CODE_ENTRYPOINT=sdk-ts`
+  unless the host sets one, and with the same arguments, and their commands get
+  `CLAUDE_CODE_SESSION_ATTENDED=0`. The mod's `turn.complete` fires at each turn's end, and a
+  turn its `$.prompt.submit` starts runs in the open session (#2100).
 - **Codex** (CLI 0.160): the TUI runs sessions in a shared app-server daemon; `codex queue --thread
   <id> --message <text>` starts a turn in an idle session or runs next in a busy one, and starts
   the daemon itself. It takes the message only as an argument and refuses sub-agent threads. An
