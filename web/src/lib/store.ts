@@ -184,6 +184,27 @@ function putKept(s: IDBObjectStore, account: string, old: Kept | undefined, next
   s.put({ ...next, items }, key("kept", account));
 }
 
+/**
+ * Deletes the image records of every account this browser no longer keeps a list for: a page
+ * from before #2097, still open in another tab, signs out deleting only the list.
+ */
+export async function sweepBlobs(): Promise<void> {
+  await transact((s, step) => {
+    const req = s.getAllKeys(IDBKeyRange.bound("blobs:", "blobs:\uffff"));
+    req.onsuccess = step(() => {
+      const accounts = new Set(
+        (req.result as string[]).map((k) => k.slice("blobs:".length, k.indexOf(":", 6))),
+      );
+      for (const account of accounts) {
+        const kept = s.count(key("kept", account));
+        kept.onsuccess = step(() => {
+          if (kept.result === 0) s.delete(blobRange(account));
+        });
+      }
+    });
+  });
+}
+
 /** The kept images of each of `ids` that has them. */
 export async function keptBlobs(account: string, ids: string[]): Promise<Map<string, string[]>> {
   const out = new Map<string, string[]>();

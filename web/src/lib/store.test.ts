@@ -124,3 +124,33 @@ test("the kept list stores its images apart, and they go with their decision (#2
   await store.del("kept", "kb");
   expect((await store.keptBlobs("kb", ["a", "c"])).size).toBe(0);
 });
+
+test("images an older page's sign-out left behind go at the next load (#2097)", async () => {
+  await store.put("device", device, "ks");
+  const d = (id: string) =>
+    ({
+      item: { kind: "decision", id, blobs: [id] },
+      cursor: id,
+      receivedAt: "",
+    }) as unknown as Kept["items"][number];
+  for (const account of ["ks", "gone"]) {
+    await store.put("device", { ...device, account }, account);
+    await store.update("kept", account, () => ({ device: "d1", cursor: "1", items: [d("a")] }));
+  }
+  // As the page before #2097 signed out: the list goes, its images stay.
+  await store.del("device", "gone");
+  const raw = await new Promise<IDBDatabase>((done) => {
+    const q = indexedDB.open("starbridge");
+    q.onsuccess = () => done(q.result);
+  });
+  await new Promise((done) => {
+    const tx = raw.transaction("kv", "readwrite");
+    tx.objectStore("kv").delete("kept:gone");
+    tx.oncomplete = done;
+  });
+  raw.close();
+  expect((await store.keptBlobs("gone", ["a"])).size).toBe(1);
+  await store.sweepBlobs();
+  expect((await store.keptBlobs("gone", ["a"])).size).toBe(0);
+  expect((await store.keptBlobs("ks", ["a"])).size).toBe(1);
+});

@@ -170,6 +170,8 @@ export async function boot(): Promise<Boot> {
   }
   await ready;
   const { account } = me;
+  // Off the load's path: what an older tab's sign-out left behind (#2097).
+  store.sweepBlobs().catch(() => {});
   await store.put("current", account);
   let device = await store.get("device", account);
   const entries = await api.directory();

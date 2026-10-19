@@ -466,6 +466,23 @@ async function keepEvidence(error?: unknown) {
  * first (#1450). The open question must show while the rest of the inbox still loads, after one
  * read of the directory, and without downloading again the images this browser keeps.
  */
+/** The kept inbox's records in this browser's IndexedDB: the lists and their images (#2097). */
+async function keptRecords(page: Page): Promise<string[]> {
+  return page.evaluate(async () => {
+    const db: IDBDatabase = await new Promise((done, fail) => {
+      const q = indexedDB.open("starbridge");
+      q.onsuccess = () => done(q.result);
+      q.onerror = () => fail(q.error);
+    });
+    const keys: IDBValidKey[] = await new Promise((done) => {
+      const q = db.transaction("kv").objectStore("kv").getAllKeys();
+      q.onsuccess = () => done(q.result);
+    });
+    db.close();
+    return keys.map(String).filter((k) => /^(kept|blobs):/.test(k));
+  });
+}
+
 async function loadBudget(page: Page) {
   step("a reload shows the open question first, within its budget of requests (#2097)");
   const BUDGET = { requests: 16, directory: 1, kb: 96 };
@@ -540,6 +557,18 @@ async function loadBudget(page: Page) {
       .filter((k) => k.item.blobs).length;
   });
   if (inline > 0) throw new Error(`the kept list holds ${inline} items' images`);
+  // A server from before blobs=none refuses it: the page reads the open list with images instead.
+  const old = /\/v1\/items\?kind=decision&open=1&blobs=none/;
+  const refuse = (route: Route) =>
+    route.fulfill({
+      status: 400,
+      contentType: "application/json",
+      body: JSON.stringify({ error: "bad-request", detail: "blobs is open or left out" }),
+    });
+  await page.route(old, refuse);
+  await page.reload();
+  await open.waitFor({ timeout: 15_000 });
+  await page.unroute(old, refuse);
 }
 
 async function main() {
@@ -2612,6 +2641,9 @@ async function main() {
     .waitFor({ timeout: 30_000 });
   if ((await pageB.evaluate(NOTIFICATIONS)).length > 0)
     throw new Error("a revoked browser still shows notifications");
+  const keptRevoked = await keptRecords(pageB);
+  if (keptRevoked.length > 0)
+    throw new Error(`a revoked browser kept its inbox: ${keptRevoked.slice(0, 5).join(", ")}`);
   await page.emulateMedia({ colorScheme: "light" });
   await shoot(page, "devices");
 
@@ -2716,6 +2748,9 @@ async function main() {
   );
   if (left.join() !== "starbridge:prefs")
     throw new Error(`signing out left these localStorage keys: ${left.join(", ")}`);
+  const keptLeft = await keptRecords(pageC);
+  if (keptLeft.length > 0)
+    throw new Error(`signing out left the kept inbox: ${keptLeft.slice(0, 5).join(", ")}`);
 
   step("delete the account: typed confirmation, then a new sign-in starts a new account (#1104)");
   const d = await context({ permissions: ["notifications"] });
