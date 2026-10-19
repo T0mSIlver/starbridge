@@ -611,6 +611,43 @@ test.skipIf(WINDOWS)(
 );
 
 test.skipIf(WINDOWS)(
+  "a Codex thread T3 Code runs is told to wait, and nothing is queued into the daemon (#2101)",
+  async () => {
+    const { ctx, socket } = await machine();
+    const codex = await codexHome();
+    trustCodex(ctx, codex.env.CODEX_HOME);
+    // T3 Code runs its own app-server, whose rollout names it; the TUI's daemon listens too.
+    const thread = "01a15583-6a63-74b2-873d-d800b7671593";
+    const day = new Date(Number.parseInt(thread.replace(/-/g, "").slice(0, 12), 16));
+    const dir = join(
+      codex.env.CODEX_HOME,
+      "sessions",
+      String(day.getFullYear()),
+      String(day.getMonth() + 1).padStart(2, "0"),
+      String(day.getDate()).padStart(2, "0"),
+    );
+    mkdirSync(dir, { recursive: true });
+    const meta = { id: thread, session_id: thread, originator: "T3 Code", source: "vscode" };
+    writeFileSync(
+      join(dir, `rollout-x-${thread}.jsonl`),
+      `${JSON.stringify({ type: "session_meta", payload: meta })}\n`,
+    );
+    const c = testCtx({ STARBRIDGE_AGENT_SOCKET: socket, ...codex.env, CODEX_THREAD_ID: thread });
+    try {
+      const id = await ask(c, "--project", "p");
+      expect(c.errors.at(-1)).toContain("run `starbridge wait");
+      await server.answer(id, { choice: "Merge" });
+      expect(await run(["wait", id, "--timeout", "10s"], c)).toBe(0);
+      expect(c.lines.at(-1)).toBe(`Answer to ${id} (Merge #12 now?): Merge`);
+      // The daemon would have loaded the thread and run the answer's turn out of T3's sight.
+      expect(existsSync(codex.log)).toBe(false);
+    } finally {
+      await codex.close();
+    }
+  },
+);
+
+test.skipIf(WINDOWS)(
   "ask --input chooses neither the codex the agent runs nor what kind of session asks",
   async () => {
     const { ctx, socket } = await machine();

@@ -22,6 +22,7 @@ line, the safe side: at worst a prompt repeats an answer the agent already read.
 | `claude -p`, Agent SDK scripts | `wait`: the run ends with its last turn, so the mod starts no loop there (#321) |
 | Codex TUI | The local agent runs `codex queue --thread <id>`; the message only says to run `starbridge wait <id>`, since other local users can read process arguments (#274). Retried each minute, 30 times. During a turn, the answer goes in with the daemon's `turn/steer` instead, answer and all (#1486, #1584) |
 | `codex exec` | `wait`: nothing runs a queued message once exec returns. The thread's rollout tells exec apart (#245) |
+| Codex in an app that runs its own `codex app-server` | `wait`: the daemon would load the thread and run the answer's turn where that app never shows it. The rollout's `originator`, `codex-tui` for the TUI, tells them apart (#2101) |
 | Pi TUI and RPC | The Pi extension (`mod/pi`) calls `pi.sendUserMessage(text, { deliverAs: "steer" })`: a busy session takes it after its current tool calls (#232, #1584) |
 | opencode TUI and `serve` | The opencode plugin (`mod/opencode`) calls `client.session.promptAsync`, one loop per session (#300); a busy session takes it at its next step (#1484) |
 | Claude Code subagents | The mod sends the answer to the subagent that asked with `$.session.send` (#1702) |
