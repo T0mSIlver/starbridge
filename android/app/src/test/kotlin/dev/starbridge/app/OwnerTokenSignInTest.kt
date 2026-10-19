@@ -138,4 +138,10 @@ class OwnerTokenSignInTest {
         // Gone, so it doesn't follow the owner to the next screen as a snackbar.
         assertEquals(null, store.notice.value)
     }
+
+    @Test fun gitHubOnAServerWithoutASchemeGoesToHttps() {
+        // Self-hosted GitHub sign-in reads the address the same way.
+        val url = store().gitHubSignInUrl("demo.example.com/")
+        assertEquals(true, url.startsWith("https://demo.example.com/v1/auth/github?"))
+    }
 }
