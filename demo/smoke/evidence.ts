@@ -31,7 +31,23 @@ export function keeper(em: Emulator, adbPath: string, dir: string | undefined, p
       // the emulator's own cutout overlay gives each boot the same display.
       if (profile === "phone") {
         await em.shell("cmd overlay enable com.android.internal.display.cutout.emulation.emu01");
-        await Bun.sleep(3000);
+        // It takes a while to reach the display: wait until the overlay is on and the cutout's
+        // inset has held the same for 3 s.
+        let last = "";
+        let since = Date.now();
+        for (let i = 0; i < 40; i++) {
+          const on = /\[x\] com\.android\.internal\.display\.cutout\.emulation\.emu01/.test(
+            await em.shell("cmd overlay list"),
+          );
+          const inset =
+            (
+              await em.shell("dumpsys display | grep -o 'cutout DisplayCutout{insets=[^)]*)'")
+            ).trim() || "none";
+          if (!on || inset !== last) since = Date.now();
+          else if (Date.now() - since >= 3000) break;
+          last = inset;
+          await Bun.sleep(1000);
+        }
       }
       for (const cmd of [
         "cmd overlay list | grep -i -E 'cutout'",
@@ -84,7 +100,7 @@ export function keeper(em: Emulator, adbPath: string, dir: string | undefined, p
     return last;
   }
 
-  async function capture(file: string) {
+  async function capture(file: string, prepare?: () => Promise<void>, expect?: string) {
     // Demo mode ends when the system UI restarts, as it can on a change of night mode.
     await demoMode();
     let xml = "";
@@ -92,7 +108,13 @@ export function keeper(em: Emulator, adbPath: string, dir: string | undefined, p
       writeFileSync(`${file}.png`, await still());
       xml = await em.adb("exec-out", "uiautomator", "dump", "/dev/tty").catch(() => "");
       // A snackbar that came while the screen held still: shoot again once it has gone.
-      if (!xml.includes("Google push is not available")) break;
+      if (xml.includes("Google push is not available")) continue;
+      // The screen that was set up is gone (the launcher's drawer closed): set it up again.
+      if (expect && !xml.includes(expect) && prepare) {
+        await prepare();
+        continue;
+      }
+      break;
     }
     writeFileSync(`${file}.xml`, xml);
     const rects = [...xml.matchAll(/<node [^>]*>/g)].flatMap(([n]) => {
@@ -129,13 +151,14 @@ export function keeper(em: Emulator, adbPath: string, dir: string | undefined, p
     // Puts the screen back after a change of scheme, which restarts the launcher and closes
     // its drawer on some runs.
     prepare?: () => Promise<void>,
+    expect?: string,
   ) {
     if (!shots) return;
     for (const scheme of schemes) {
       await em.shell(`cmd uimode night ${scheme === "dark" ? "yes" : "no"}`);
       await Bun.sleep(1500);
       await prepare?.();
-      await capture(join(shots, `${profile}-${name}-${scheme}`));
+      await capture(join(shots, `${profile}-${name}-${scheme}`), prepare, expect);
     }
     await em.shell("cmd uimode night no");
     await Bun.sleep(1000);
@@ -174,7 +197,7 @@ export function keeper(em: Emulator, adbPath: string, dir: string | undefined, p
       await Bun.sleep(1000);
     };
     await drawer();
-    await keep("apps", ["light", "dark"], drawer);
+    await keep("apps", ["light", "dark"], drawer, "id/apps_list_view");
     const shapes = (await em.shell("cmd overlay list"))
       .split("\n")
       .map((l) => /com\.android\.theme\.icon\.(\w+)/.exec(l)?.[1])
@@ -183,7 +206,7 @@ export function keeper(em: Emulator, adbPath: string, dir: string | undefined, p
       await em.shell(`cmd overlay enable-exclusive --category com.android.theme.icon.${shape}`);
       await Bun.sleep(2000);
       await drawer();
-      await keep(`apps-${shape}`, ["light"], drawer);
+      await keep(`apps-${shape}`, ["light"], drawer, "id/apps_list_view");
     }
     if (shapes.length)
       for (const line of (await em.shell("cmd overlay list")).split("\n"))
