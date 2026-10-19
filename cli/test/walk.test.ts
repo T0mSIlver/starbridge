@@ -415,16 +415,20 @@ describe.skipIf(process.platform !== "linux")("a new user's walk", () => {
 
   test("without a terminal, install.sh names the command that runs setup (#2116)", async () => {
     const o = newOwner(server, releasesUrl);
-    const r = Bun.spawn(["sh", installSh], {
-      env: o.env,
-      cwd: o.home,
-      stdin: "ignore",
-      stdout: "pipe",
-    });
-    const [out] = await Promise.all([new Response(r.stdout).text(), r.exited]);
-    const bin = join(o.home, ".local/bin/starbridge");
-    expect(out).toEndWith(`Next: run ${bin} setup --server ${server.url}\n`);
-    expect(out).not.toContain("to your PATH");
+    const run = async (env: Record<string, string>) => {
+      const r = Bun.spawn(["sh", installSh], { env, cwd: o.home, stdin: "ignore", stdout: "pipe" });
+      const [out] = await Promise.all([new Response(r.stdout).text(), r.exited]);
+      expect(out).not.toContain("to your PATH");
+      return /^Next: run (.+) setup --server (\S+)$/m.exec(out);
+    };
+    const next = await run(o.env);
+    expect(next?.[1]).toBe(join(o.home, ".local/bin/starbridge"));
+    expect(next?.[2]).toBe(server.url);
+    // A folder with a space and a quote: the command still runs as printed.
+    const dir = join(o.home, "my bin's");
+    const quoted = await run({ ...o.env, STARBRIDGE_INSTALL_DIR: dir });
+    const ran = Bun.spawnSync(["sh", "-c", `${quoted?.[1]} --version`], { env: o.env });
+    expect(ran.stdout.toString()).toBe(`starbridge ${VERSION}\n`);
   }, 60_000);
 
   test("npm i -g, setup, the first card, uninstall, npm rm -g", async () => {

@@ -306,10 +306,17 @@ mv -f "$tmp/$asset" "$DIR/.starbridge.new"
 mv -f "$DIR/.starbridge.new" "$DIR/starbridge"
 echo "Installed $("$DIR/starbridge" --version) to $DIR/starbridge"
 
-# The command that runs it, by its path while $DIR is not on the PATH yet.
+# The command that runs it: by its path while $DIR is not on the PATH yet, shell-quoted when the
+# path holds a space or another character the shell would read.
+self=starbridge
 case :$PATH: in
-  *:"$DIR":*) self=starbridge ;;
-  *) self=$DIR/starbridge ;;
+  *:"$DIR":*) ;;
+  *)
+    case $DIR in
+      *[!A-Za-z0-9_./-]*) self="'$(printf '%s' "$DIR/starbridge" | sed "s/'/'\\\\''/g")'" ;;
+      *) self=$DIR/starbridge ;;
+    esac
+    ;;
 esac
 
 # Run setup from the terminal, since stdin is this script under curl | sh. Setup's PATH step
