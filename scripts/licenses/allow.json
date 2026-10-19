@@ -4,10 +4,6 @@
       "license": "LGPL-3.0-or-later",
       "reason": "Next's image optimiser loads libvips as its own prebuilt shared library, unmodified; the notice and licence text ship in the web image."
     },
-    "web-push": {
-      "license": "MPL-2.0",
-      "reason": "File-level copyleft; used unmodified from npm, so only its notice is owed."
-    },
     "caniuse-lite": {
       "license": "CC-BY-4.0",
       "reason": "Browser-support data that browserslist reads; attribution only, given in the notices."

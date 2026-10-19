@@ -2,7 +2,6 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { createECDH, randomBytes } from "node:crypto";
 import { type Decision, type QuotaSnapshot, type Run, seal } from "@starbridge/protocol";
 import * as ece from "http_ece";
-import webpush from "web-push";
 import { createApp } from "../src/app";
 import { type Config, configFromEnv, privatePushHosts } from "../src/config";
 import { DEFAULT_LIMITS } from "../src/limits";
@@ -32,7 +31,14 @@ let fake: ReturnType<typeof Bun.serve>;
 const seen: Seen[] = [];
 let rsa: CryptoKeyPair;
 let pem: string;
-const vapid = webpush.generateVAPIDKeys();
+const vapid = await (async () => {
+  const pair = (await crypto.subtle.generateKey({ name: "ECDSA", namedCurve: "P-256" }, true, [
+    "sign",
+  ])) as CryptoKeyPair;
+  const raw = await crypto.subtle.exportKey("raw", pair.publicKey);
+  const { d } = await crypto.subtle.exportKey("jwk", pair.privateKey);
+  return { publicKey: Buffer.from(raw).toString("base64url"), privateKey: d as string };
+})();
 const base = () => `http://localhost:${fake.port}`;
 
 beforeAll(async () => {
@@ -371,7 +377,14 @@ test("Web Push direct: the browser decrypts the payload; VAPID signs the request
   expect(req?.headers.get("authorization")).toStartWith(`vapid t=`);
   expect(req?.headers.get("authorization")).toContain(`k=${vapid.publicKey}`);
   expect(JSON.parse(browser.decrypt(req?.body as Buffer)).box).toBe(d.boxes[0]?.box);
+  // The JWT's audience is the push service's origin, its port included.
+  const jwt = (req?.headers.get("authorization") ?? "").split(".")[1] ?? "";
+  expect(JSON.parse(Buffer.from(jwt, "base64url").toString()).aud).toBe(base());
   expect((await s.call("GET", "/v1/push/vapid")).json).toEqual({ publicKey: vapid.publicKey });
+  // A payload past one 4096-byte record fails before any request.
+  seen.length = 0;
+  expect(await s.deps.push.send(browser.target, "é".repeat(2040))).toBe("failed");
+  expect(seen).toEqual([]);
 });
 
 test("a Web Push service's 403, another key's subscription, drops it; a distributor's stays (#567)", async () => {

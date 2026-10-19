@@ -42,7 +42,7 @@ secrets() {
   umask 077
   [ -e "$LOAD_DIR/fcm.pem" ] ||
     openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out "$LOAD_DIR/fcm.pem" 2>/dev/null
-  # A P-256 pair as web-push makes it, in Bun's container, so the host needs no Bun.
+  # A VAPID P-256 pair (public point, private scalar), in Bun's container, so the host needs no Bun.
   [ -e "$LOAD_DIR/vapid.json" ] ||
     docker run --rm $bun_image bun -e '
 const k = await crypto.subtle.generateKey({ name: "ECDH", namedCurve: "P-256" }, true, ["deriveBits"]);
