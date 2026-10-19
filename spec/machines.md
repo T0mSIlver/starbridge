@@ -163,8 +163,13 @@
   commands, so nothing mid-output reads as a prompt. Claude Code and Pi, whose installs run for seconds, first print
   `installing…` (#773). It still asks before installing CodexBar, a
   third-party binary (with #748, only when no other machine sends quotas), which providers to
-  send, whether to linger, and whether to send a test decision. Permission prompts and presence
-  stay off and unasked; the summary names `starbridge config permissions on`, on a desktop or
+  send, whether to linger, and whether to send a test decision. It asks once whether to send
+  permission prompts, Enter saying no (#2111, card d_brief-treat-uphold): for one agent in its
+  default mode they block it more often than questions do, and they stay opt-in. It asks only
+  when an agent that can send them (all but Cursor) has Starbridge, never again once answered,
+  and not with `--yes` or without a terminal.
+  Presence stays off and unasked; the summary names `starbridge config permissions on` while
+  prompts are off, on a desktop or
   laptop `starbridge config presence on`, `starbridge status`,
   `starbridge uninstall --agent <name>` and `starbridge uninstall`. With no terminal every
   question takes its default, so nothing waits on input. A failed install prints its reason and

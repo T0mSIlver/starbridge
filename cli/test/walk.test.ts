@@ -279,7 +279,11 @@ function agentRunning(o: Owner): boolean {
 }
 
 /** Setup's checks once it ran: paired, in each agent, the agent up, the test card answered. */
-function expectSetUp(o: Owner, setup: { code: number | null; screen: string; steps: Step[] }) {
+function expectSetUp(
+  o: Owner,
+  setup: { code: number | null; screen: string; steps: Step[] },
+  permissions = false,
+) {
   const out = setup.screen;
   expect(out).toContain("Starbridge is set up.");
   expect(out).toContain("✓ You answered Yes");
@@ -288,6 +292,15 @@ function expectSetUp(o: Owner, setup: { code: number | null; screen: string; ste
     expect(out).toMatch(new RegExp(`✓ ${agent}\\b`));
   expect(agentRunning(o)).toBe(true);
   expect(readFileSync(join(o.state, "linger"), "utf8").trim()).toBe("yes");
+  // Asked once (#2111): Enter keeps permission prompts off, y turns them on.
+  expect(setup.steps.map((s) => s.prompt)).toContain(
+    "Send permission prompts to your devices? [y/N]",
+  );
+  expect(out).toContain(
+    permissions
+      ? "✓ Sends permission prompts to your devices"
+      : "– Permission prompts stay in the terminal",
+  );
 }
 
 /**
@@ -444,9 +457,17 @@ describe.skipIf(process.platform !== "linux")("a new user's walk", () => {
     const installed = npm(["install", "-g", tarball]);
     expect(installed.stderr.toString()).not.toContain("ERR");
     expect(installed.exitCode).toBe(0);
-    const setup = await onTerminal(server, ["starbridge", "setup", "--server", server.url], o.env);
+    const setup = await onTerminal(server, ["starbridge", "setup", "--server", server.url], o.env, [
+      [/Send permission prompts/, "y"],
+    ]);
     expect(setup.code).toBe(0);
-    expectSetUp(o, setup);
+    expectSetUp(o, setup, true);
+    const config = Bun.spawnSync(["starbridge", "config"], { env: o.env, cwd: o.home });
+    expect(config.stdout.toString()).toMatch(/^permissions +on$/m);
+    // A second setup keeps the answer and asks nothing about it.
+    const again = await onTerminal(server, ["starbridge", "setup"], o.env);
+    expect(again.code).toBe(0);
+    expect(again.steps.map((s) => s.prompt).join("\n")).not.toContain("permission prompts");
     const r = await expectUninstalled(o, "starbridge", {
       after: () => expect(npm(["rm", "-g", "starbridge"]).exitCode).toBe(0),
       // npm's own folders in its prefix stay, as after any global package.

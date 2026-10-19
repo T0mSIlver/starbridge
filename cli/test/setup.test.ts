@@ -1963,6 +1963,52 @@ test("an update's refresh replaces the old settle allow entries even when nothin
   expect(readFileSync(agy, "utf8")).not.toContain("settle");
 });
 
+test("setup asks once whether to send permission prompts, Enter saying no (#2111)", async () => {
+  const asking = (m: Awaited<ReturnType<typeof machine>>, answer?: boolean) => {
+    const asked: string[] = [];
+    m.sys.prompt = {
+      ...defaults,
+      confirm: async (q, def) => {
+        asked.push(q);
+        if (q.includes("test decision")) return false;
+        return q.includes("permission prompts") && answer !== undefined ? answer : def;
+      },
+    };
+    return asked;
+  };
+  const opts = { noService: true, noQuota: true, readyTimeoutMs: 1_000 };
+  const question = "  Send permission prompts to your devices?";
+
+  // Enter keeps them off, and the answer is kept: the next setup does not ask.
+  const m = await machine();
+  let asked = asking(m);
+  await setup(m.sys, opts);
+  expect(asked).toContain(question);
+  expect(m.ctx.store.agentConfig().permissions).toEqual({ enabled: false });
+  expect(m.ctx.lines).toContain("– Permission prompts stay in the terminal");
+  asked = asking(m, true);
+  await setup(m.sys, opts);
+  expect(asked).not.toContain(question);
+  expect(m.ctx.store.agentConfig().permissions).toEqual({ enabled: false });
+
+  // A yes turns them on.
+  const yes = await machine("box2");
+  asking(yes, true);
+  await setup(yes.sys, opts);
+  expect(yes.ctx.store.agentConfig().permissions).toEqual({ enabled: true });
+  expect(yes.ctx.lines).toContain("✓ Sends permission prompts to your devices");
+
+  // `--yes`, and no agent to send them, ask nothing and decide nothing.
+  const quiet = await machine("box3");
+  await setup(quiet.sys, { ...opts, yes: true });
+  expect(quiet.ctx.store.agentConfig().permissions).toBeUndefined();
+  const none = await machine("box4");
+  asked = asking(none);
+  await setup(none.sys, { ...opts, noAgents: true });
+  expect(asked).not.toContain(question);
+  expect(none.ctx.store.agentConfig().permissions).toBeUndefined();
+});
+
 test("where Claude desktop starts sessions over SSH, setup loads starbridge-remote from the installed plugins, and uninstall takes it out (#2107)", async () => {
   const m = await machine();
   const root = join(import.meta.dir, "../..");
