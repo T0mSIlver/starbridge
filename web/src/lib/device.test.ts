@@ -716,6 +716,82 @@ test("a kept open question shows with its images, kept apart from the list (#209
   }
 });
 
+test("a kept list from before #2097, images inline, still shows them and is split at its next write", async () => {
+  const at = "2026-10-06T12:00:00Z";
+  const { keys, member: machine } = asker as NonNullable<typeof asker>;
+  const fresh = (await device.deviceContext(ctx.account)) as device.Ctx;
+  const { id, boxPk } = fresh.device;
+  const bytes = new Uint8Array(200).map((_, i) => (i * 5) % 251);
+  const { blob, ref } = sealImage(bytes);
+  const asked = (qid: string, answered: boolean, cursor: string) => ({
+    item: {
+      ...seal(
+        "decision",
+        {
+          v: 1,
+          id: qid,
+          to: [id],
+          createdAt: at,
+          question: `Old ${qid}?`,
+          context: "",
+          options: ["Yes", "No"],
+          recommended: "Yes",
+          images: [{ type: "image/png" as const, width: 4, height: 3, ...ref }],
+          source: { machine: "asks", project: "p", session: "s" },
+        },
+        { id: machine.id, signKey: keys.sign.privateKey },
+        [{ id, boxPk }],
+      ),
+      blobs: [blob],
+    },
+    cursor,
+    receivedAt: at,
+    ...(answered ? { answeredAt: at } : {}),
+  });
+  const open = asked("d_old_open", false, "1");
+  const done = asked("d_old_done", true, "2");
+  // As the page before #2097 wrote it: one record, every image inside.
+  await store.put("kept", { device: id, cursor: "2", items: [open, done] }, ctx.account);
+  const later = asked("d_old_later", true, "3");
+  const fetched: string[] = [];
+  const served = globalThis.fetch;
+  globalThis.fetch = (async (input: string, init?: RequestInit) => {
+    if (!input.startsWith("/v1/items")) return served(input, init);
+    fetched.push(input);
+    const q = new URL(input, "http://x").searchParams;
+    if (q.get("open")) return Response.json({ items: [open], cursor: "1" });
+    if (q.get("after") === "2") return Response.json({ items: [later], cursor: "3" });
+    return Response.json({ items: [], cursor: q.get("after") ?? "0" });
+  }) as typeof fetch;
+  const shown = [{ type: "image/png" as const, width: 4, height: 3, data: toB64(bytes) }];
+  try {
+    const { items } = await device.loadInbox(fresh, undefined, { keep: true });
+    const byId = new Map(items.map((i) => [i.decision.id, i]));
+    expect(byId.get("d_old_open")?.decision.images).toEqual(shown);
+    expect(byId.get("d_old_done")?.decision.images).toEqual(shown);
+    // The write that kept the new question split the old list: no image inside it now.
+    const kept = await store.get("kept", ctx.account);
+    expect(kept?.items.map((k) => [k.item.id, !!k.item.blobs])).toEqual([
+      ["d_old_open", false],
+      ["d_old_done", false],
+      ["d_old_later", false],
+    ]);
+    expect([...(await store.keptBlobs(ctx.account, ["d_old_open", "d_old_done"])).keys()]).toEqual([
+      "d_old_open",
+      "d_old_done",
+    ]);
+    expect(await device.loadImages(fresh, "d_old_done")).toEqual(shown);
+    expect(fetched.some((u) => u.startsWith("/v1/items/"))).toBe(false);
+    // Signed out, nothing kept in memory opens it either.
+    await store.del("kept", ctx.account);
+    device.forgetKeptSealed(ctx.account);
+    await expect(device.loadImages(fresh, "d_old_done")).rejects.toThrow("not kept here");
+  } finally {
+    globalThis.fetch = served;
+    await store.del("kept", ctx.account);
+  }
+});
+
 test("a join by digits counts the approval only once this browser's owner confirms the digits (#355)", async () => {
   const record = (await store.get("device", ctx.account)) as store.DeviceRecord;
   const pin = await store.get("pin", ctx.account);
