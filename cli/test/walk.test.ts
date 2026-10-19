@@ -185,7 +185,8 @@ async function onTerminal(
   });
   const end = Date.now() + limitMs;
   while (!exited && Date.now() < end) {
-    for (const m of screen.matchAll(/Pairing code: (\S+)/g)) {
+    // Whole lines only: a chunk can end mid-code.
+    for (const m of screen.matchAll(/Pairing code: (\S+)\n/g)) {
       const code = m[1] as string;
       if (approved.has(code)) continue;
       approved.add(code);
