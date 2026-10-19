@@ -4,6 +4,7 @@ import { createHash } from "node:crypto";
 import {
   chmodSync,
   copyFileSync,
+  cpSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -1959,4 +1960,44 @@ test("an update's refresh replaces the old settle allow entries even when nothin
   expect(readFileSync(m.settings, "utf8")).toContain("Bash(starbridge settle d_*)");
   expect(readFileSync(cursor, "utf8")).not.toContain("settle");
   expect(readFileSync(agy, "utf8")).not.toContain("settle");
+});
+
+test("where Claude desktop starts sessions over SSH, setup loads starbridge-remote from the installed plugins, and uninstall takes it out (#2107)", async () => {
+  const m = await machine();
+  const root = join(import.meta.dir, "../..");
+  const cache = join(m.home, "fake-state", "cache");
+  cpSync(join(root, "plugin"), join(cache, "starbridge@starbridge"), { recursive: true });
+  cpSync(join(root, "mod/hooks"), join(cache, "starbridge-mod@starbridge/hooks"), {
+    recursive: true,
+  });
+  // The owner's own plugin folders stay, and ours goes after them.
+  const own = join(m.home, "mods", "guard");
+  writeFileSync(m.settings, JSON.stringify({ env: { CLAUDE_CODE_PLUGIN_DIRS: own } }));
+  expect(await setup(m.sys, { agent: "claude" })).toBe(0);
+  const dir = join(m.home, ".claude", "starbridge-remote");
+  expect(existsSync(dir)).toBe(false);
+
+  // Claude desktop keeps its runs and plugin copies here once it has reached the machine.
+  mkdirSync(join(m.home, ".claude", "remote"));
+  const claudeLine = (lines: string[]) => lines.some((l) => l.startsWith("✓ Claude Code"));
+  expect(claudeLine(await refresh(m.sys))).toBe(true);
+  const manifest = JSON.parse(readFileSync(join(dir, ".claude-plugin/plugin.json"), "utf8"));
+  expect(manifest).toMatchObject({ name: "starbridge-remote", version: VERSION });
+  const hooks = JSON.parse(readFileSync(join(dir, "hooks/hooks.json"), "utf8"));
+  expect(hooks.modules).toEqual(["./register.ts"]);
+  const root$ = "$" + "{CLAUDE_PLUGIN_ROOT}";
+  expect(hooks.hooks.SessionStart[0].hooks[0].command).toBe(
+    `sh "${root$}/hooks/remote.sh" starbridge "${root$}/hooks/session-start.sh"`,
+  );
+  for (const f of ["cli.sh", "remote.sh", "rule.md", "register.ts", "agent.ts"])
+    expect(existsSync(join(dir, "hooks", f))).toBe(true);
+  const dirs = () => JSON.parse(readFileSync(m.settings, "utf8")).env?.CLAUDE_CODE_PLUGIN_DIRS;
+  expect(dirs()).toBe([own, dir].join(delimiter));
+  // A second run changes nothing.
+  expect(claudeLine(await refresh(m.sys))).toBe(false);
+  expect(dirs()).toBe([own, dir].join(delimiter));
+
+  await uninstallAgent(m.sys, "claude");
+  expect(existsSync(dir)).toBe(false);
+  expect(dirs()).toBe(own);
 });
