@@ -66,7 +66,7 @@ struct SavedDecision: Codable, Equatable {
     /** Until when the owner put it off; none after Back now, whose time is its own (#571). */
     var snoozed: Date? {
         guard isOpen, let until = snoozedUntil.flatMap(Dates.parse) else { return nil }
-        if let at = snoozedAt.flatMap(Dates.parse), until <= at { return nil }
+        if let at = snoozedAt.flatMap(Dates.parse), until <= at { return nil } // order-ok: Back now, until against its own at
         return until > Date() ? until : nil
     }
 }

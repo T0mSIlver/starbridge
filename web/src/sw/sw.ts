@@ -208,6 +208,7 @@ async function onPush(text: string, seen: Shown): Promise<void> {
     const snoozed = keptSnooze(
       (await store.get("snoozes", account as string))?.[waiting.decisionId],
     );
+    // order-ok: a waiting flip against a snooze, two kinds, not two updates of one.
     if (snoozed && Date.parse(waiting.at) < Date.parse(snoozed.at)) return;
     const res = await fetch(`/v1/items/${encodeURIComponent(waiting.decisionId)}`, {
       headers: CLIENT,

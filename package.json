@@ -3,7 +3,7 @@
   "private": true,
   "packageManager": "pnpm@11.25.0",
   "scripts": {
-    "test": "pnpm -r --if-present test && bun test ./design ./scripts/licenses",
+    "test": "pnpm -r --if-present test && bun test ./design ./scripts/licenses ./scripts/checks",
     "typecheck": "pnpm -r --if-present typecheck",
     "lint": "pnpm -r --if-present lint",
     "prepare": "node -e \"process.env.CI || require('node:fs').existsSync('.githooks/install.mjs') && import('./.githooks/install.mjs')\""
