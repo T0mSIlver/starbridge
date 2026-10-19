@@ -132,3 +132,11 @@ test("on a machine an earlier release set up, the first record takes Starbridge'
   removePiEntries(h.env, ctx.store.state().piAdded);
   expect(existsSync(h.file)).toBe(false);
 });
+
+test("a rule the owner had, with no link yet, stays theirs when prompts are turned on (#2130)", async () => {
+  const h = home({ permission: { skill: { starbridge: "allow" } } });
+  const ctx = testCtx(h.env);
+  expect(await configCommand(ctx, ["permissions", "on"], defaults)).toBe(0);
+  removePiEntries(h.env, ctx.store.state().piAdded);
+  expect(h.read()).toEqual({ permission: { skill: { starbridge: "allow" } } });
+});

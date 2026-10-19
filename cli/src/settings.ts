@@ -93,9 +93,11 @@ export async function permissionsOn(ctx: Ctx, prompt: Prompt | undefined) {
     ctx.out(
       "Codex: its prompts wait up to 10 minutes for your devices before Codex asks in the terminal. `starbridge config presence on` sends them to the terminal while you're at this machine.",
     );
-  piChainStep(ctx, write);
-  // pi-permission-system is often installed after setup, which then had no rules to add.
+  // The rules first: they read whether the link was there before anything wrote it, which tells
+  // an older release's rules from the owner's (recordPiAdded). pi-permission-system is often
+  // installed after setup, which then had no rules to add.
   piAllowStep(ctx, write, true);
+  piChainStep(ctx, write);
 }
 
 /**
