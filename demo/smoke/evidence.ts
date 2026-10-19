@@ -147,7 +147,14 @@ export function keeper(em: Emulator, adbPath: string, dir: string | undefined, p
    */
   async function launcher() {
     if (!shots) return;
+    const isOpen = async () =>
+      (await em.adb("exec-out", "uiautomator", "dump", "/dev/tty").catch(() => "")).includes(
+        "id/apps_list_view",
+      );
     const drawer = async () => {
+      // Already open, as after a scheme change that did not restart the launcher: pressing Home
+      // now would close it while the swipe reopens it.
+      if (await isOpen()) return;
       // A swipe now and then opens nothing, which left the home screen in the shot: swipe again
       // until the launcher's app list is on screen, three times at most.
       for (let attempt = 1; attempt <= 3; attempt++) {
@@ -158,8 +165,7 @@ export function keeper(em: Emulator, adbPath: string, dir: string | undefined, p
         await em.shell(`input swipe ${w >> 1} ${Math.round(h * 0.85)} ${w >> 1} ${h >> 3} 300`);
         let open = false;
         for (let i = 0; i < 8 && !open; i++) {
-          const xml = await em.adb("exec-out", "uiautomator", "dump", "/dev/tty").catch(() => "");
-          open = xml.includes("id/apps_list_view");
+          open = await isOpen();
           if (!open) await Bun.sleep(1000);
         }
         if (open) break;
