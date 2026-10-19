@@ -364,9 +364,12 @@ export async function answer(ctx: Ctx, item: InboxItem, reply: Reply): Promise<s
   return answeredAt;
 }
 
-/** A kept snooze, which before #2103 kept only its time. */
+/**
+ * A kept snooze, which before #2103 kept only its time. Its `until` unknown, it reads as the latest
+ * possible, so the same snooze, pushed again at its time, wins the tie and is noted whole.
+ */
 export const keptSnooze = (v: string | { at: string; until: string } | undefined) =>
-  typeof v === "string" ? { at: v, until: v } : v;
+  typeof v === "string" ? { at: v, until: "9999-12-31T23:59:59.999Z" } : v;
 
 /**
  * Keeps the latest snooze this browser knows per decision, for the service worker (#571) and
