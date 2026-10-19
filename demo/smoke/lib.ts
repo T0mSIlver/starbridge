@@ -191,7 +191,8 @@ export function emulator(adbPath: string, out: string) {
       step(`sign-in attempt ${attempt} failed; typing the token again`);
     }
     step("join by digits");
-    await tap("Compare digits");
+    // The whole label: on a demo server the hint above it names "Compare digits" too (#2089).
+    await tap("Can't scan? Compare digits");
     await tap("They match", 60);
     await see("Inbox", 60);
   }

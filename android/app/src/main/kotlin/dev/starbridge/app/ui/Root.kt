@@ -186,6 +186,7 @@ fun Setup(phase: Phase, notice: StateFlow<String?>, dismiss: () -> Unit, openUrl
     val busy by vm.busy.collectAsStateWithLifecycle()
     val server by vm.server.collectAsStateWithLifecycle()
     val keepsKeys by vm.keepsKeys.collectAsStateWithLifecycle()
+    val demo by vm.demo.collectAsStateWithLifecycle()
     val joinLink by vm.joinLink.collectAsStateWithLifecycle()
     // Signed out, a failure stays under the sign-in fields: a snackbar would go by under the keyboard.
     val signedOut = phase == Phase.SignedOut
@@ -193,7 +194,7 @@ fun Setup(phase: Phase, notice: StateFlow<String?>, dismiss: () -> Unit, openUrl
     val host = Notices(if (signedOut) none else notice, dismiss)
     Scaffold(snackbarHost = { SnackbarHost(host) }) { padding ->
         // The step's actions stay above the keyboard.
-        SetupScreen(phase, server, busy, vm.actions, openUrl, Modifier.padding(padding).consumeWindowInsets(padding).imePadding(), keepsKeys, joinLink, error.takeIf { signedOut })
+        SetupScreen(phase, server, busy, vm.actions, openUrl, Modifier.padding(padding).consumeWindowInsets(padding).imePadding(), keepsKeys, joinLink, error.takeIf { signedOut }, demo)
     }
 }
 

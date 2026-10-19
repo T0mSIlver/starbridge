@@ -53,6 +53,11 @@ private struct Step<Top: View, Bottom: View>: View {
     }
 }
 
+enum SetupCopy {
+    /** How a tester joins a demo server, which approves the iPhone by itself (#2089, Tom's pick). */
+    static let demoJoin = "This demo approves your iPhone by itself: tap Compare digits, then They match."
+}
+
 private struct Title: View {
     let text: String
 
@@ -381,6 +386,8 @@ private struct JoinStep: View {
     private var join: some View {
         Step {
             Title(text: "Add this iPhone")
+            // A demo server approves every join itself: a tester has no other device to scan (#2089).
+            if store.demo { Lede(text: SetupCopy.demoJoin).padding(.bottom, Tokens.Spacing.s4) }
             Tile(symbol: "qrcode")
         } bottom: {
             Button {

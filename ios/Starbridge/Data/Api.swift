@@ -181,6 +181,15 @@ struct Api {
         try string(await call("POST", "/auth/owner", ["token": .string(token)]).1, "session")
     }
 
+    /** Whether the server is a demo server (`GET /v1/demo`); any other server answers 404. */
+    func demo() async throws -> Bool {
+        do {
+            return try await call("GET", "/demo").1?["demo"]?.bool == true
+        } catch let e as ApiError where e.status == 404 {
+            return false
+        }
+    }
+
     func me() async throws -> Me {
         let body = try await call("GET", "/me").1
         return Me(account: try string(body, "account"), member: body?["member"]?.string)
