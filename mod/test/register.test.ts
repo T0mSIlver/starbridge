@@ -26,6 +26,7 @@ test("on a port file, the mod reaches the agent at the port the file names (#128
       write: async () => {},
       stat: async () => undefined,
     },
+    plugin: { name: "starbridge-mod", root: "/m" },
     process: { run: async () => ({ exitCode: 0, stdout: "4242\n", stderr: "" }) },
     http: {
       fetch: async (url: string) => {
@@ -58,6 +59,7 @@ test("mid-turn, the main agent's next tool result carries an answer marked waiti
   const $ = {
     env: { get: async (name: string) => env[name] },
     fs: { read: async () => "", write: async () => {}, stat: async () => undefined },
+    plugin: { name: "starbridge-mod", root: "/m" },
     process: { run: async () => ({ exitCode: 0, stdout: "", stderr: "" }) },
     http: {
       fetch: async (url: string) => {
@@ -130,6 +132,7 @@ test("an answer queued behind a typed prompt when the process exits comes back o
         get: async (ref: { key: string }) => ({ value: state.get(ref.key), version: 0 }),
         set: async (ref: { key: string }, value: unknown) => void state.set(ref.key, value),
       },
+      plugin: { name: "starbridge-mod", root: "/m" },
       process: { run: async () => ({ exitCode: 0, stdout: "", stderr: "" }) },
       http: {
         fetch: async (url: string) => {
@@ -200,6 +203,7 @@ test("a subagent's question is tagged with its id, and its answer goes to it, ev
   const $ = {
     env: { get: async (name: string) => env[name] },
     fs: { read: async () => "", write: async () => {}, stat: async () => undefined },
+    plugin: { name: "starbridge-mod", root: "/m" },
     process: { run: async () => ({ exitCode: 0, stdout: "", stderr: "" }) },
     http: {
       fetch: async (url: string) => {
@@ -294,6 +298,7 @@ test("an answer a subagent got after its last tool round goes to the parent once
       set: async ({ key }: { key: string }, value: string) => void state.set(key, value),
     },
     agent: { list: async () => [{ id: "a1", status }] },
+    plugin: { name: "starbridge-mod", root: "/m" },
     process: { run: async () => ({ exitCode: 0, stdout: "", stderr: "" }) },
     http: {
       fetch: async (url: string) => {

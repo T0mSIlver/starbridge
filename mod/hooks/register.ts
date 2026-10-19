@@ -32,6 +32,9 @@ import { Switch, wantsLoop } from "./switch.ts";
 const OWNED =
   '[ -n "$(find -L "$1" -prune -type f \\( -user "$(id -u)" -o -user 0 \\) ! -perm -020 ! -perm -002 2>/dev/null)" ]';
 
+/** `$.process.run`, as `acts` calls it. */
+type Run = (argv: string[], init: { timeoutMs: number }) => Promise<{ exitCode: number | null }>;
+
 export const register: Register = (on) => {
   let loop: Switch | undefined;
   /** Prompts submitted whose turn has not started. */
@@ -49,8 +52,27 @@ export const register: Register = (on) => {
   const failed = new Set<string>();
   /** When each subagent's last tool call ended: a message sent before then, it has read. */
   const roundEnded = new Map<string, number>();
+  /**
+   * Whether this copy acts. Setup builds the starbridge-remote plugin from this one on a machine
+   * Claude desktop reaches over SSH (#2107): there it acts only in a session whose starbridge-mod
+   * is a copy Claude desktop synced without hooks from its own computer, which replaces this
+   * machine's; elsewhere each hook hands on, and the installed starbridge-mod runs alone.
+   * `remote.sh` tells the two apart from Claude Code's arguments, which never change.
+   */
+  let replaced: Promise<boolean> | undefined;
+  const acts = (plugin: string, root: string, run: Run) => {
+    if (plugin !== "starbridge-remote") return true;
+    replaced ??= run(["sh", `${root}/hooks/remote.sh`, "starbridge-mod"], {
+      timeoutMs: 10_000,
+    }).then(
+      (r) => r.exitCode === 0,
+      () => false,
+    );
+    return replaced;
+  };
 
   on("session.start", async ($, e, next) => {
+    if (!(await acts($.plugin.name, $.plugin.root, (a, i) => $.process.run(a, i)))) return next(e);
     handover.ended();
     const started = await next(e);
     if (!wantsLoop(e.isInteractive, await $.env.get("CLAUDE_CODE_ENTRYPOINT"))) return started;
@@ -240,13 +262,15 @@ export const register: Register = (on) => {
   });
 
   // A subagent's run raises no `turn.start`; its `turn.complete` and tool calls carry its `agentId`.
-  on("turn.start", async (_$, e, next) => {
+  on("turn.start", async ($, e, next) => {
+    if (!(await acts($.plugin.name, $.plugin.root, (a, i) => $.process.run(a, i)))) return next(e);
     handover.started();
     await sent?.started(e.text).catch(() => undefined);
     return next(e);
   });
 
   on("turn.complete", async ($, e, next) => {
+    if (!(await acts($.plugin.name, $.plugin.root, (a, i) => $.process.run(a, i)))) return next(e);
     const r = await next(e);
     if (e.agentId !== undefined) {
       const agent = e.agentId;
@@ -269,6 +293,7 @@ export const register: Register = (on) => {
   });
 
   on("tool.call", async ($, e, next) => {
+    if (!(await acts($.plugin.name, $.plugin.root, (a, i) => $.process.run(a, i)))) return next(e);
     if (e.agentId !== undefined) {
       const agent = e.agentId;
       // A new round: the subagent read every message sent before its last one ended.
@@ -294,6 +319,7 @@ export const register: Register = (on) => {
   // The tag `tool.call` adds is not the subagent's, so the rules judge the command it wrote: where
   // they would ask about the tagged one, the verdict on the untagged one stands (#1702).
   on("tool.check", async ($, e, next) => {
+    if (!(await acts($.plugin.name, $.plugin.root, (a, i) => $.process.run(a, i)))) return next(e);
     const verdict = await next(e);
     const input = e.input as { command?: unknown } | undefined;
     if (verdict.decision !== "ask" || verdict.hook !== undefined) return verdict;
@@ -306,7 +332,8 @@ export const register: Register = (on) => {
 
   // After a /clear or a /resume the process goes on under another session id, with no
   // `session.start`, and the loop reads the id each step. Only the end of the process stops it.
-  on("session.end", async (_$, e, next) => {
+  on("session.end", async ($, e, next) => {
+    if (!(await acts($.plugin.name, $.plugin.root, (a, i) => $.process.run(a, i)))) return next(e);
     handover.ended();
     if (e.reason !== "clear" && e.reason !== "resume") {
       await loop?.end();

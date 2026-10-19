@@ -106,12 +106,19 @@ line, the safe side: at worst a prompt repeats an answer the agent already read.
   `sdk-cli` (`claude -p`), `sdk-ts` or `sdk-py` (Agent SDK scripts). A loop in a run that ends
   early costs nothing, since `ask` still prints the `wait` line for an unattended session.
   `starbridge status` run from a session whose mod never called says so.
-- **Claude desktop on another machine** (#1428). Claude desktop starts a session over SSH with
-  `--plugin-dir` copies of the plugins installed on the computer it runs on, synced without
+- **Claude desktop on another machine** (#1428, #2107). Claude desktop starts a session over SSH
+  with `--plugin-dir` copies of the plugins installed on the computer it runs on, synced without
   `hooks/`, and a `--plugin-dir` plugin replaces the installed one of its name. So where both
-  computers have Starbridge, neither the mod nor the starbridge plugin's hooks run in that
-  session. `ask`'s `wait` line and `status` name the hookless copies, read from the arguments of
-  the process Claude Code's session record names, since nothing in the session can say it.
+  computers have Starbridge, neither the mod nor the starbridge plugin's hooks would run in that
+  session. On a machine whose Claude Code folder has `remote/` (Claude desktop's runs and copies),
+  setup builds `starbridge-remote` from the two installed plugins' `hooks/` and loads it through
+  `CLAUDE_CODE_PLUGIN_DIRS` in the user settings: a name no copy takes, since a same-named plugin
+  from there loses its hooks module to the copy. Its hooks run through `remote.sh` and its mod
+  checks the plugin's name, so both act only where the plugin is such a hookless copy, read from
+  Claude Code's arguments; elsewhere the installed plugins act alone, and each hook runs once.
+  It is not installed on the computer Claude desktop runs on, whose own copy would shadow it the
+  same way. Without it, `ask`'s `wait` line and `status` name the hookless copies, read from the
+  arguments of the process Claude Code's session record names.
 - **Which harness asked** (#319, #320). Harnesses pass their variables to processes they start, so
   `ask` takes Codex, Pi or opencode over Claude Code when both are set, unless Claude Code runs as `claude
   -p`, the only way Codex and Pi start it. A Codex sub-agent asks under its root thread, since
