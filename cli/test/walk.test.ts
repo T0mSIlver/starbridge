@@ -18,6 +18,7 @@ import {
   readFileSync,
   readlinkSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -241,6 +242,9 @@ const owners: Owner[] = [];
 /** A throwaway owner: HOME with their own files, private runtime dir, the fakes on the PATH. */
 function newOwner(server: LiveServer, releases: string): Owner {
   const root = mkdtempSync(join(tmpdir(), "starbridge-walk-"));
+  // HOME through a symbolic link, as /var is on macOS and some home folders are (#2134).
+  mkdirSync(join(root, "real-home"));
+  symlinkSync(join(root, "real-home"), join(root, "home"));
   const home = join(root, "home", "walker");
   // Short: a unix socket's path must fit in 104 bytes on macOS, whose temp folder is long.
   const runtime = mkdtempSync("/tmp/sbw-");
