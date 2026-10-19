@@ -158,6 +158,11 @@ class ServerStore(
     override val push = MutableStateFlow(PushSetting(saved.pushType, fcmAvailable, emptyList(), false))
     override val server = MutableStateFlow(saved.server)
     override val keepsKeys = MutableStateFlow(false)
+    override val demo = MutableStateFlow(false)
+    /** The server that said it is a demo: [demo] holds only while it is the saved one. */
+    @Volatile private var demoServer: String? = null
+    /** The server last asked, so each is asked once, however the phone reached Add this phone. */
+    @Volatile private var demoAsked: String? = null
     override val busy = MutableStateFlow(false)
     override val tooOld = MutableStateFlow<String?>(null)
     private val reach = Reach(scope)
@@ -276,6 +281,7 @@ class ServerStore(
 
     private fun publish() {
         keepsKeys.value = saved.me != null && saved.pin != null
+        demo.value = demoServer != null && demoServer == saved.server
         phase.value = when {
             secrets.session == null -> Phase.SignedOut
             saved.joining != null -> Phase.Joining(saved.joining!!, saved.joiningScanned)
@@ -290,6 +296,9 @@ class ServerStore(
         // An offered pairing link belongs to the setup it arrived in: a join, a recovery or a
         // sign-out ends it, so it never resurfaces in another account's or server's setup.
         if ((phase.value as? Phase.NoDevice)?.accountExists != true) joinLink.value = null
+        // Add this phone asks its server once whether it is a demo: after a sign-in, at launch, or
+        // back from a cancelled join (#2089).
+        else if (demoAsked != saved.server) checkDemo()
         server.value = saved.server
         push.value = push.value.copy(type = saved.pushType, registered = saved.push?.type == saved.pushType)
         // While the server holds back entries a machine has seen, no machine's item shows (#362).
@@ -523,6 +532,27 @@ class ServerStore(
         val exists = fresh.directory(0).isNotEmpty()
         persist(newSecrets = Secrets(session = session))
         persist(saved.copy(account = me.account, accountExists = exists, me = null, pin = null, entries = emptyList(), heads = emptyMap()))
+    }
+
+    /**
+     * Asks the server whether it is a demo, for the hint on Add this phone. Only a hint: a failed
+     * ask leaves it off, and it never shows for another server.
+     */
+    private fun checkDemo() {
+        val server = saved.server
+        demoAsked = server
+        scope.launch {
+            val answer = try {
+                Api(http, server, null).demo()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.w("Starbridge", "demo check failed: $e")
+                false
+            }
+            if (answer) demoServer = server else if (demoServer == server) demoServer = null
+            demo.value = demoServer != null && demoServer == saved.server
+        }
     }
 
     private fun newMember(): DirectoryMember {

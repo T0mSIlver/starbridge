@@ -21,7 +21,7 @@ joins (`DemoDevice.approveJoins`, which `android.ts` starts).
 
 - `signInAndJoin(server, ownerToken)`: starts the activity, taps "Use your own
   server", `replace("Server", …)`, `replace("Owner token", …)`, BACK to close the
-  keyboard, taps "Sign in", then "Compare digits" and "They match", and waits for
+  keyboard, taps "Sign in", then "Can't scan? Compare digits" and "They match", and waits for
   "Inbox". Result: the steps `join by digits` and `approved <model> (digits …)`.
 
 ## Gotchas

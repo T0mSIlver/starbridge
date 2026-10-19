@@ -36,6 +36,12 @@ final class Store {
     private(set) var saved: Saved
     private(set) var secrets: Secrets
     private(set) var busy = false
+    /** The server that said it is a demo, which approves every join by digits itself (#2089). */
+    private var demoServer: String?
+    /** The server last asked, so each is asked once. */
+    private var demoAsked: String?
+    /** The saved server is a demo: never another server's answer. */
+    var demo: Bool { demoServer != nil && demoServer == saved.server }
     var notice: String?
     /** Answers tapped and not yet in the outbox, by decision id: the card leaves at the tap (#895). */
     var tapped: [String: String] = [:]
@@ -156,6 +162,7 @@ final class Store {
         }
         if saved.joining != nil { waitForApproval() }
         if saved.digitJoin != nil { waitForDigitJoin() }
+        askDemo()
     }
 
     var phase: Phase {
@@ -192,6 +199,7 @@ final class Store {
         }
         if let newSecrets { secrets = newSecrets }
         showBadge()
+        askDemo()
     }
 
     /**
@@ -215,6 +223,15 @@ final class Store {
             if let newSaved { saved = newSaved }
             notice = describe(error)
         }
+        askDemo()
+    }
+
+    /**
+     * Add this iPhone asks its server once whether it is a demo: after a sign-in, at launch, or
+     * back from a cancelled join (#2089).
+     */
+    private func askDemo() {
+        if case .noDevice(accountExists: true) = phase, demoAsked != saved.server { checkDemo() }
     }
 
     /** Runs one step the owner asked for, showing it busy and its failure as a notice. */
@@ -413,6 +430,21 @@ final class Store {
         s.account = me.account
         s.accountExists = exists
         persist(s, Secrets(session: session))
+    }
+
+    /**
+     * Asks the server whether it is a demo, for the hint on Add this iPhone. Only a hint: a failed
+     * ask leaves it off, and it never shows for another server.
+     */
+    func checkDemo() {
+        let server = saved.server
+        demoAsked = server
+        let api = Api(server: server, session: nil, http: http)
+        Task { [weak self] in
+            let answer = (try? await api.demo()) ?? false
+            guard let self else { return }
+            if answer { self.demoServer = server } else if self.demoServer == server { self.demoServer = nil }
+        }
     }
 
     /** Asks the server again whether the account has a device, after one was set up elsewhere. */

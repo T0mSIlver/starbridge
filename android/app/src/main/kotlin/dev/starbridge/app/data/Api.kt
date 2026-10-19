@@ -213,6 +213,13 @@ class Api(private val http: OkHttpClient, private val server: String, private va
 
     suspend fun me(): Me = get("/me")
 
+    /** Whether the server is a demo server (`GET /v1/demo`); any other server answers 404. */
+    suspend fun demo(): Boolean = try {
+        call("GET", "/demo").second?.jsonObject?.get("demo")?.jsonPrimitive?.booleanOrNull == true
+    } catch (e: ApiException) {
+        if (e.status == 404) false else throw e
+    }
+
     suspend fun directory(from: Int): List<JsonElement> =
         call("GET", "/directory?from=$from").second!!.jsonObject.getValue("entries").let { ProtocolJson.decodeFromJsonElement(it) }
 
