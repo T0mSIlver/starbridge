@@ -98,4 +98,30 @@ class DemoHintTest {
         Thread.sleep(200)
         assertEquals(false, store.demo.value)
     }
+
+    /** Launched on Add this phone, as after a join cancelled in an earlier run, it asks too. */
+    @Test fun aLaunchOnAddThisPhoneAsks() {
+        http.enqueue(json("""{"demo":true}"""))
+        http.start()
+        val sodium = Sodium(LazySodiumJava(SodiumJava()))
+        val envelopes = Envelopes(sodium)
+        val disk = Disk(tmp.newFolder(), object : Vault {
+            override fun wrap(plain: ByteArray) = plain
+            override fun unwrap(wrapped: ByteArray) = wrapped
+        })
+        disk.save(Saved(http.url("/").toString().trimEnd('/'), account = "acct", accountExists = true))
+        disk.save(dev.starbridge.app.data.Secrets(session = "s"))
+        val alerts = object : Alerts {
+            override fun decision(decision: Decision, silent: Boolean) {}
+            override fun cancel(id: String) {}
+            override fun join(id: String, name: String) {}
+            override fun prompt(prompt: Prompt) {}
+            override fun cancelPrompt(prompt: Prompt) {}
+            override fun run(run: Run) {}
+        }
+        val store = ServerStore(disk, OkHttpClient(), sodium, envelopes, Directories(sodium, envelopes), Pairings(sodium), Joins(sodium), alerts, "Phone", "https://starbridge.run", false, scope)
+        assertEquals(Phase.NoDevice(accountExists = true), store.phase.value)
+        until { store.demo.value }
+        assertEquals("/v1/demo", http.takeRequest().url.encodedPath)
+    }
 }
