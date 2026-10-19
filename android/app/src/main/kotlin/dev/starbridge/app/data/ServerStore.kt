@@ -159,8 +159,8 @@ class ServerStore(
     override val server = MutableStateFlow(saved.server)
     override val keepsKeys = MutableStateFlow(false)
     override val demo = MutableStateFlow(false)
-    /** The server [demo] speaks of. */
-    @Volatile private var demoOf: String? = null
+    /** The server that said it is a demo: [demo] holds only while it is the saved one. */
+    @Volatile private var demoServer: String? = null
     override val busy = MutableStateFlow(false)
     override val tooOld = MutableStateFlow<String?>(null)
     private val reach = Reach(scope)
@@ -280,6 +280,7 @@ class ServerStore(
 
     private fun publish() {
         keepsKeys.value = saved.me != null && saved.pin != null
+        demo.value = demoServer != null && demoServer == saved.server
         phase.value = when {
             secrets.session == null -> Phase.SignedOut
             saved.joining != null -> Phase.Joining(saved.joining!!, saved.joiningScanned)
@@ -532,12 +533,10 @@ class ServerStore(
 
     /**
      * Asks the server whether it is a demo, for the hint on Add this phone. Only a hint: a failed
-     * ask leaves it off, and another server's answer never lands.
+     * ask leaves it off, and it never shows for another server.
      */
     private fun checkDemo() {
         val server = saved.server
-        if (demoOf != server) demo.value = false
-        demoOf = server
         scope.launch {
             val answer = try {
                 Api(http, server, null).demo()
@@ -547,7 +546,8 @@ class ServerStore(
                 Log.w("Starbridge", "demo check failed: $e")
                 false
             }
-            if (saved.server == server) demo.value = answer
+            if (answer) demoServer = server else if (demoServer == server) demoServer = null
+            demo.value = demoServer != null && demoServer == saved.server
         }
     }
 

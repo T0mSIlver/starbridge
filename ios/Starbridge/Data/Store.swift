@@ -36,10 +36,10 @@ final class Store {
     private(set) var saved: Saved
     private(set) var secrets: Secrets
     private(set) var busy = false
-    /** The server is a demo, which approves every join by digits itself (#2089). */
-    private(set) var demo = false
-    /** The server [demo] speaks of. */
-    private var demoOf: String?
+    /** The server that said it is a demo, which approves every join by digits itself (#2089). */
+    private var demoServer: String?
+    /** The saved server is a demo: never another server's answer. */
+    var demo: Bool { demoServer != nil && demoServer == saved.server }
     var notice: String?
     /** Answers tapped and not yet in the outbox, by decision id: the card leaves at the tap (#895). */
     var tapped: [String: String] = [:]
@@ -423,16 +423,15 @@ final class Store {
 
     /**
      * Asks the server whether it is a demo, for the hint on Add this iPhone. Only a hint: a failed
-     * ask leaves it off, and another server's answer never lands.
+     * ask leaves it off, and it never shows for another server.
      */
     func checkDemo() {
         let server = saved.server
-        if demoOf != server { demo = false }
-        demoOf = server
         let api = Api(server: server, session: nil, http: http)
         Task { [weak self] in
             let answer = (try? await api.demo()) ?? false
-            if let self, self.saved.server == server { self.demo = answer }
+            guard let self else { return }
+            if answer { self.demoServer = server } else if self.demoServer == server { self.demoServer = nil }
         }
     }
 

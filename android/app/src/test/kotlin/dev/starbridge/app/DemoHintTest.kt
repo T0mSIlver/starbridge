@@ -88,6 +88,9 @@ class DemoHintTest {
     @Test fun aDemoServerSaysSo() {
         val store = signIn(json("""{"demo":true}"""))
         until { store.demo.value }
+        // Another server, even before it is asked, is no demo.
+        store.gitHubSignInUrl("https://other.example.com")
+        assertEquals(false, store.demo.value)
     }
 
     @Test fun anyOtherServerDoesNot() {
