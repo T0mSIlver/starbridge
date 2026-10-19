@@ -391,9 +391,43 @@ describe.skipIf(process.platform !== "linux")("a new user's walk", () => {
     const install = await onTerminal(server, ["sh", "-c", 'sh <"$0"', installSh], o.env);
     expect(install.code).toBe(0);
     expect(install.screen).toContain(`Installed starbridge ${VERSION}`);
+    // Setup's PATH step is the one instruction for the PATH (#2116).
+    expect(install.screen).not.toContain("for example in ~/.profile");
     expectSetUp(o, install);
     await expectUninstalled(o, join(o.home, ".local/bin/starbridge"));
   }, 180_000);
+
+  test("without a terminal, install.sh names the command that runs setup (#2116)", async () => {
+    const o = newOwner(server, releasesUrl);
+    const run = async (env: Record<string, string>) => {
+      const r = Bun.spawn(["sh", installSh], { env, cwd: o.home, stdin: "ignore", stdout: "pipe" });
+      const [out] = await Promise.all([new Response(r.stdout).text(), r.exited]);
+      expect(out).not.toContain("to your PATH");
+      return /^Next: run (.+) setup --server (\S+)$/m.exec(out);
+    };
+    const next = await run(o.env);
+    expect(next?.[1]).toBe(join(o.home, ".local/bin/starbridge"));
+    expect(next?.[2]).toBe(server.url);
+    // A folder with a space and a quote: the command still runs as printed.
+    const dir = join(o.home, "my bin's");
+    const quoted = await run({ ...o.env, STARBRIDGE_INSTALL_DIR: dir });
+    const ran = Bun.spawnSync(["sh", "-c", `${quoted?.[1]} --version`], { env: o.env });
+    expect(ran.stdout.toString()).toBe(`starbridge ${VERSION}\n`);
+    // A backslash too: dash's echo would read `\n` in it.
+    const odd = await run({ ...o.env, STARBRIDGE_INSTALL_DIR: join(o.home, "my\\newbin") });
+    expect(Bun.spawnSync(["sh", "-c", `${odd?.[1]} --version`], { env: o.env }).exitCode).toBe(0);
+    // On the PATH already, it is just `starbridge`.
+    const onPath = await run({ ...o.env, PATH: `${join(o.home, ".local/bin")}:${o.env.PATH}` });
+    expect(onPath?.[1]).toBe("starbridge");
+    // With no setup to follow, the PATH hint stays.
+    const r = Bun.spawn(["sh", installSh], {
+      env: { ...o.env, STARBRIDGE_NO_SETUP: "1" },
+      stdin: "ignore",
+      stdout: "pipe",
+    });
+    const [out] = await Promise.all([new Response(r.stdout).text(), r.exited]);
+    expect(out).toContain(`Add ${join(o.home, ".local/bin")} to your PATH`);
+  }, 60_000);
 
   test("npm i -g, setup, the first card, uninstall, npm rm -g", async () => {
     const o = newOwner(server, releasesUrl);
