@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { joinLines } from "../hooks/agent.ts";
 import { type Host, Poller, type Timing } from "../hooks/poller.ts";
-import { Switch, wantsLoop } from "../hooks/switch.ts";
+import { Switch, wantsLoop, wantsLoopAfterTurn } from "../hooks/switch.ts";
 
 test("a session a host keeps open gets the loop; a run that ends with its turn does not (#863)", () => {
   expect(wantsLoop(true, undefined)).toBe(true);
@@ -10,6 +10,16 @@ test("a session a host keeps open gets the loop; a run that ends with its turn d
   expect(wantsLoop(false, "claude-vscode")).toBe(true);
   for (const oneShot of ["sdk-cli", "sdk-ts", "sdk-py", undefined])
     expect(wantsLoop(false, oneShot)).toBe(false);
+});
+
+test("an Agent SDK session gets the loop once its first turn ends; `claude -p` never (#2100)", () => {
+  for (const sdk of ["sdk-ts", "sdk-py"]) {
+    expect(wantsLoop(false, sdk)).toBe(false);
+    expect(wantsLoopAfterTurn(false, sdk)).toBe(true);
+  }
+  for (const other of ["sdk-cli", undefined, "claude-desktop"])
+    expect(wantsLoopAfterTurn(false, other)).toBe(false);
+  expect(wantsLoopAfterTurn(true, "sdk-ts")).toBe(false);
 });
 
 const FAST: Timing = {

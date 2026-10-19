@@ -39,17 +39,26 @@ a turn. In Codex, a queued message names the questions and the agent reads each 
 
 ### Claude Code
 
-**Question picker.** Starbridge races `AskUserQuestion`.
+**Question picker.** Starbridge races `AskUserQuestion`, and Claude desktop's next-step box when
+it asks a question. Your next message in the session closes the box's card.
 
 **Answers.** They come back through the Starbridge mod, in Claude Code 2.1.287 or later, in the
-terminal, the desktop app, IDEs and Remote Control. Agent SDK scripts count as headless. A
-subagent's question comes back to that subagent, which picks it up even after it finished.
+terminal, the desktop app, IDEs and Remote Control. In an app that runs Claude Code through the
+Agent SDK, they come back from a session's second turn; in its first turn, and in Agent SDK
+scripts, the agent waits. A subagent's question comes back to that subagent, which picks it up
+even after it finished.
 
 **Permission prompts.** Starbridge races them. Your devices also offer "this session" or "always"
 when Claude Code does.
 
 Only prompts Claude Code still shows reach your devices: in auto mode, its default, it settles
 most calls itself.
+
+**Claude desktop over SSH.** When Claude desktop runs a session on another machine, it gives that
+session its own computer's plugins, without their hooks, in place of that machine's. Setup on a
+machine Claude desktop has reached adds a `starbridge-remote` plugin that stands in for them, so
+Starbridge can stay installed on both. On a machine Claude desktop reaches only later,
+`starbridge setup --refresh` adds it.
 
 ### Codex
 
@@ -127,7 +136,7 @@ Starbridge from one, until `starbridge setup --agent <name>`. A later setup, or
 
 | Harness | What | Where |
 |---|---|---|
-| Claude Code | The Starbridge plugin (rules, skill, hooks) and the Starbridge [mod](https://code.claude.com/docs/en/plugins/mods/overview), code that runs inside Claude Code and brings your answer back | Claude Code's plugins, at user scope, from the marketplace in `~/.claude/starbridge-marketplace` |
+| Claude Code | The Starbridge plugin (rules, skill, hooks) and the Starbridge [mod](https://code.claude.com/docs/en/plugins/mods/overview), code that runs inside Claude Code and brings your answer back. On a machine Claude desktop reaches over SSH, also `starbridge-remote`, their hooks and mod under another name | Claude Code's plugins, at user scope, from the marketplace in `~/.claude/starbridge-marketplace`; `~/.claude/starbridge-remote`, named in `CLAUDE_CODE_PLUGIN_DIRS` in `~/.claude/settings.json` |
 | Codex | The skill, and the Starbridge Codex plugin (rules, permission prompts) from a local marketplace | `~/.codex/skills/starbridge` (or under `$CODEX_HOME`), `~/.codex/starbridge` |
 | Pi | The Starbridge Pi package (skill, rules, the extension that brings your answer back) | Pi's packages, at the commit of the CLI's release |
 | opencode | The skill, and the Starbridge plugin (rules, answers, permission prompts) | `~/.config/opencode/skills/starbridge`, `~/.config/opencode/plugins/starbridge.ts`, `~/.config/opencode/starbridge/` |
