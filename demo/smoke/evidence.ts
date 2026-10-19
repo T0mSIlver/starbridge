@@ -26,11 +26,16 @@ export function keeper(em: Emulator, adbPath: string, dir: string | undefined, p
     await em.shell("settings put global sysui_demo_allowed 1");
     if (!logged) {
       logged = true;
-      // For the next run to read: two runs of one tree have differed by the status bar's height.
+      // The emulator boots with the phone's camera cutout in some runs and without it in others,
+      // which moves every app screen by the status bar's height (136 px against 63). Turning on
+      // the emulator's own cutout overlay gives each boot the same display.
+      if (profile === "phone") {
+        await em.shell("cmd overlay enable com.android.internal.display.cutout.emulation.emu01");
+        await Bun.sleep(3000);
+      }
       for (const cmd of [
-        "cmd overlay list | grep -i -E 'cutout|navbar|statusbar'",
-        "dumpsys display | grep -i -E 'cutout|mBaseDisplayInfo' | head -5",
-        "wm size; wm density",
+        "cmd overlay list | grep -i -E 'cutout'",
+        "dumpsys display | grep -o 'cutout DisplayCutout{insets=[^)]*)'",
       ])
         console.log(`[evidence] ${cmd}\n${await em.shell(cmd).catch((e) => String(e))}`);
     }
