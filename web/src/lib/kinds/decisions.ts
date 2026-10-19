@@ -126,6 +126,18 @@ export async function openPushedDecision(ctx: Ctx, item: SealedItem): Promise<In
 const keptSealed = new Map<string, Stored>();
 const sealedKey = (account: string, id: string) => `${account}/${id}`;
 
+/** Forgets what the last loads kept of `account`: on sign-out, revocation, or a reset server. */
+export function forgetKeptSealed(account: string) {
+  for (const k of keptSealed.keys()) if (k.startsWith(sealedKey(account, ""))) keptSealed.delete(k);
+}
+
+/** Holds exactly the kept list's decisions of `account`, so a trimmed one goes too. */
+function holdKeptSealed(account: string, items: Stored[]) {
+  forgetKeptSealed(account);
+  for (const s of items)
+    if (s.item.kind === "decision") keptSealed.set(sealedKey(account, s.item.id), s);
+}
+
 export async function loadInbox(
   ctx: Ctx,
   inbox: Inbox = { items: [], rejected: [] },
@@ -288,8 +300,7 @@ export async function loadInbox(
     // these were kept from (restored, or reset). Read it all again.
     if ([...open].some((id) => !held.has(id) && !listed.has(id))) {
       await store.del("kept", ctx.account);
-      for (const k of keptSealed.keys())
-        if (k.startsWith(sealedKey(ctx.account, ""))) keptSealed.delete(k);
+      forgetKeptSealed(ctx.account);
       return loadInbox(ctx, inbox, opts);
     }
     // Kept open, not open on the server and not listed since, so not answered either: the
@@ -319,17 +330,15 @@ export async function loadInbox(
     Object.entries(snoozes).map(([decisionId, z]) => ({ decisionId, at: z.at })),
   );
   await hold(ctx);
-  if (opts.keep)
-    for (const s of [...keptItems, ...read])
-      if (s.item.kind === "decision") keptSealed.set(sealedKey(ctx.account, s.item.id), s);
-  for (const id of drop) keptSealed.delete(sealedKey(ctx.account, id));
+  if (opts.keep && kept) holdKeptSealed(ctx.account, kept.items);
   if (opts.keep && (read.length > 0 || drop.size > 0) && cursor !== undefined) {
     const at = cursor;
-    await store.update("kept", ctx.account, (had) => ({
-      device: ctx.device.id,
-      cursor: at,
-      items: merge(had?.device === ctx.device.id ? had.items : [], read, drop),
-    }));
+    let items: Stored[] = [];
+    await store.update("kept", ctx.account, (had) => {
+      items = merge(had?.device === ctx.device.id ? had.items : [], read, drop);
+      return { device: ctx.device.id, cursor: at, items };
+    });
+    holdKeptSealed(ctx.account, items);
   }
   return { items, cursor, rejected, retry, waits, snoozes } satisfies Inbox;
 }

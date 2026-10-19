@@ -66,6 +66,7 @@ import {
   trusted,
   Unanchored,
 } from "./kinds/core";
+import { forgetKeptSealed } from "./kinds/decisions";
 import { retrying } from "./kinds/joins";
 import { otherServer } from "./otherServer";
 import { signedOut } from "./signedOut";
@@ -234,6 +235,7 @@ export async function boot(): Promise<Boot> {
     await (await reg?.pushManager.getSubscription())?.unsubscribe().catch(() => {});
     for (const kind of ["device", "answers", "promptAnswers", "kept"] as const)
       await store.del(kind, account);
+    forgetKeptSealed(account);
     await closeNotifications();
     return { state: "revoked", account, name: device.name, by: removedBy(verified, device.id) };
   }
@@ -892,6 +894,7 @@ async function forget(account: string): Promise<void> {
   const reg = await registration();
   await (await reg?.pushManager.getSubscription())?.unsubscribe().catch(() => {});
   for (const kind of store.ACCOUNT_KINDS) await store.del(kind, account);
+  forgetKeptSealed(account);
   await store.del("current");
   // Not in a service worker, which has no localStorage; a browser that blocks storage throws on
   // the read itself.
