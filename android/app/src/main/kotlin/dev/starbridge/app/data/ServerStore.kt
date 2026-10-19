@@ -158,6 +158,9 @@ class ServerStore(
     override val push = MutableStateFlow(PushSetting(saved.pushType, fcmAvailable, emptyList(), false))
     override val server = MutableStateFlow(saved.server)
     override val keepsKeys = MutableStateFlow(false)
+    override val demo = MutableStateFlow(false)
+    /** The server [demo] speaks of. */
+    @Volatile private var demoOf: String? = null
     override val busy = MutableStateFlow(false)
     override val tooOld = MutableStateFlow<String?>(null)
     private val reach = Reach(scope)
@@ -244,6 +247,7 @@ class ServerStore(
         publish()
         if (saved.joining != null) waitForApproval()
         if (saved.digitJoin != null) waitForDigitJoin()
+        if ((phase.value as? Phase.NoDevice)?.accountExists == true) checkDemo()
         scope.launch { network.collect(reach::network) }
         scope.launch { reach.status.collect { connection.value = Reach.words(it, host()) } }
     }
@@ -523,6 +527,28 @@ class ServerStore(
         val exists = fresh.directory(0).isNotEmpty()
         persist(newSecrets = Secrets(session = session))
         persist(saved.copy(account = me.account, accountExists = exists, me = null, pin = null, entries = emptyList(), heads = emptyMap()))
+        if (exists) checkDemo()
+    }
+
+    /**
+     * Asks the server whether it is a demo, for the hint on Add this phone. Only a hint: a failed
+     * ask leaves it off, and another server's answer never lands.
+     */
+    private fun checkDemo() {
+        val server = saved.server
+        if (demoOf != server) demo.value = false
+        demoOf = server
+        scope.launch {
+            val answer = try {
+                Api(http, server, null).demo()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.w("Starbridge", "demo check failed: $e")
+                false
+            }
+            if (saved.server == server) demo.value = answer
+        }
     }
 
     private fun newMember(): DirectoryMember {

@@ -391,7 +391,8 @@ entry>".
 Base path `/v1`. JSON bodies. Errors are `{error, detail?}` with an HTTP status; protocol
 errors use the codes in `packages/protocol/src/sodium.ts`. Outside `/v1`, `GET /healthz`
 answers anyone with `ok`; `/healthz/backup` and `/healthz/disk` answer `ok`, or 503 when the
-last backup is stale or the disk runs low.
+last backup is stale or the disk runs low. `GET /v1/demo` answers `{demo: true}` on a demo server
+(`DEMO=1`, spec/hosted.md) and 404 on any other; the apps only show a hint on joining from it.
 
 Every request names its client and release in `starbridge-client: <name>/<version>`, `name`
 one of `cli`, `android`, `web`, `mod`, `desktop` (the desktop app's page) and `ios` (the iPhone app), `version` MAJOR.MINOR.PATCH with an optional

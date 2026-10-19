@@ -96,6 +96,7 @@ class SetupViewModel @Inject constructor(private val store: Store) : ViewModel()
     val busy = store.busy
     val server = store.server
     val keepsKeys = store.keepsKeys
+    val demo = store.demo
     val actions = SetupActions(
         gitHub = store::gitHubSignInUrl,
         apple = store::appleSignInUrl,
@@ -143,10 +144,10 @@ class SetupActions(
  * are the fallback), or, on an empty account, create its keys and show the recovery key once.
  */
 @Composable
-fun SetupScreen(phase: Phase, server: String, busy: Boolean, actions: SetupActions, openUrl: (String) -> Unit, modifier: Modifier = Modifier, keepsKeys: Boolean = false, joinLink: String? = null, error: String? = null) {
+fun SetupScreen(phase: Phase, server: String, busy: Boolean, actions: SetupActions, openUrl: (String) -> Unit, modifier: Modifier = Modifier, keepsKeys: Boolean = false, joinLink: String? = null, error: String? = null, demo: Boolean = false) {
     when (phase) {
         Phase.SignedOut -> SignIn(server, busy, actions, openUrl, modifier, keepsKeys, error)
-        is Phase.NoDevice -> if (phase.accountExists) Join(busy, actions, modifier, joinLink) else FirstDevice(busy, actions, modifier)
+        is Phase.NoDevice -> if (phase.accountExists) Join(busy, actions, modifier, joinLink, demo) else FirstDevice(busy, actions, modifier)
         is Phase.Joining -> Waiting("Approve this phone", if (phase.scanned) "Approve it on the device that shows the QR code." else "Type this code on a device you already use: ${phase.code}", null, actions.cancelJoin, modifier)
         is Phase.JoiningByDigits -> when {
             phase.digits != null && !phase.matched -> Waiting("Compare digits", "Does your other device show the same digits?", phase.digits, actions.cancelJoin, modifier, onMatch = actions.confirmDigits)
@@ -311,7 +312,7 @@ private fun SignIn(server: String, busy: Boolean, actions: SetupActions, openUrl
 
 /** The account has devices: this phone scans one's QR code, or compares digits with it. */
 @Composable
-private fun Join(busy: Boolean, actions: SetupActions, modifier: Modifier, joinLink: String? = null) {
+private fun Join(busy: Boolean, actions: SetupActions, modifier: Modifier, joinLink: String? = null, demo: Boolean = false) {
     var recovering by rememberSaveable { mutableStateOf(false) }
     var deleting by rememberSaveable { mutableStateOf(false) }
     var scanError by rememberSaveable { mutableStateOf<String?>(null) }
@@ -321,7 +322,11 @@ private fun Join(busy: Boolean, actions: SetupActions, modifier: Modifier, joinL
     else Step(
         modifier,
         top = {
-            Title("Add this phone", Modifier.padding(start = Spacing.s4, top = 48.dp, bottom = Spacing.s6))
+            Column(Modifier.padding(start = Spacing.s4, end = Spacing.s4, top = 48.dp, bottom = Spacing.s6), verticalArrangement = Arrangement.spacedBy(Spacing.s3)) {
+                Title("Add this phone")
+                // A demo server approves every join itself: a tester has no other device to scan (#2089).
+                if (demo) Text(DEMO_JOIN, style = StarbridgeTheme.type.body, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
             Tile(Sym.Qr)
             scanError?.let { Text(it, style = StarbridgeTheme.type.small, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(Spacing.s4)) }
         },
@@ -357,6 +362,9 @@ private fun Join(busy: Boolean, actions: SetupActions, modifier: Modifier, joinL
         )
     }
 }
+
+/** How a tester joins a demo server, which approves the phone by itself (#2089, Tom's pick). */
+internal const val DEMO_JOIN = "This demo approves your phone by itself: tap Compare digits, then They match."
 
 /**
  * Why deleting is the way out for someone with no device and no recovery key (#1117): no one

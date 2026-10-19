@@ -421,6 +421,9 @@ class ScreenshotTest(private val dark: Boolean) {
 
     @Test fun setupJoinChoose() = capture("setup-join-choose") { Phone(null, 0) { SetupScreen(Phase.NoDevice(accountExists = true), "https://starbridge.run", false, setupActions, {}) } }
 
+    // A demo server approves the phone by itself; the screen says how (#2089).
+    @Test fun setupJoinDemo() = capture("setup-join-demo") { Phone(null, 0) { SetupScreen(Phase.NoDevice(accountExists = true), "https://demo.starbridge.run", false, setupActions, {}, demo = true) } }
+
     @Test fun setupJoinAsking() = capture("setup-join-asking") { Phone(null, 0) { SetupScreen(Phase.JoiningByDigits(null), "https://starbridge.run", false, setupActions, {}) } }
 
     @Test fun setupSelfHosted() = capture("setup-self-hosted") { Phone(null, 0) { SetupScreen(Phase.SignedOut, "https://starbridge.example.com", false, setupActions, {}) } }

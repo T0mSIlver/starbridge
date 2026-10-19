@@ -5,6 +5,8 @@ import XCTest
 final class Scripted: URLProtocol, @unchecked Sendable {
     nonisolated(unsafe) static var replies: [(Int, [String: String])] = []
     nonisolated(unsafe) static var requests = 0
+    /** The body of a 200, when set. */
+    nonisolated(unsafe) static var body: String?
 
     override class func canInit(with request: URLRequest) -> Bool { true }
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
@@ -14,7 +16,7 @@ final class Scripted: URLProtocol, @unchecked Sendable {
         let (status, headers) = Scripted.replies.isEmpty ? (200, [:]) : Scripted.replies.removeFirst()
         let response = HTTPURLResponse(url: request.url!, statusCode: status, httpVersion: "HTTP/1.1", headerFields: headers)!
         client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
-        client?.urlProtocol(self, didLoad: Data((status == 200 ? #"{"account":"a_1"}"# : #"{"error":"busy"}"#).utf8))
+        client?.urlProtocol(self, didLoad: Data((status == 200 ? Scripted.body ?? #"{"account":"a_1"}"# : #"{"error":"busy"}"#).utf8))
         client?.urlProtocolDidFinishLoading(self)
     }
 
@@ -31,10 +33,22 @@ final class ApiTests: XCTestCase {
         api = Api(server: "https://example.test", session: "sb_1", http: URLSession(configuration: config))
         Scripted.replies = []
         Scripted.requests = 0
+        Scripted.body = nil
         Api.limitedUntil.withLock { $0 = .distantPast }
     }
 
     override func tearDown() { Api.limitedUntil.withLock { $0 = .distantPast } }
+
+    /** Add this iPhone says how to join only on a server that says it is a demo (#2089). */
+    func testOnlyADemoServerIsADemo() async throws {
+        Scripted.body = #"{"demo":true}"#
+        let demo = try await api.demo()
+        XCTAssertTrue(demo)
+        Scripted.body = nil
+        Scripted.replies = [(404, [:])]
+        let other = try await api.demo()
+        XCTAssertFalse(other)
+    }
 
     func testA503IsRetriedQuietly() async throws {
         Scripted.replies = [(503, [:]), (502, [:])]

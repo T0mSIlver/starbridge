@@ -28,6 +28,8 @@ interface Store {
     val server: StateFlow<String>
     /** Signed out with its keys kept: sign-in offers to sign out, which removes them (#808). */
     val keepsKeys: StateFlow<Boolean> get() = MutableStateFlow(false)
+    /** The server is a demo, which approves every join by digits itself (#2089). */
+    val demo: StateFlow<Boolean> get() = MutableStateFlow(false)
     /** A setup step or a sync is running. */
     val busy: StateFlow<Boolean>
     /**
