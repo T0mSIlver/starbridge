@@ -3338,6 +3338,121 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
         { now: "2026-10-12T22:00", morning: "2026-10-13T09:00" },
       ],
     },
+    // Which of two updates of one decision a client keeps, whichever arrives first (#2103):
+    // `later` says whether `next` replaces `kept`. Times compare as instants, never as text.
+    order: {
+      snooze: [
+        {
+          name: "a later at wins",
+          kept: { at: "2026-10-12T10:00:00Z", until: "2026-10-12T11:00:00Z" },
+          next: { at: "2026-10-12T10:00:01Z", until: "2026-10-12T10:00:01Z" },
+          later: true,
+        },
+        {
+          name: "an earlier at loses",
+          kept: { at: "2026-10-12T10:00:01Z", until: "2026-10-12T10:00:01Z" },
+          next: { at: "2026-10-12T10:00:00.900Z", until: "2026-10-12T11:00:00Z" },
+          later: false,
+        },
+        {
+          name: "fractional seconds compare as instants",
+          kept: { at: "2026-10-12T10:00:00Z", until: "2026-10-12T11:00:00Z" },
+          next: { at: "2026-10-12T10:00:00.500Z", until: "2026-10-12T10:00:00.500Z" },
+          later: true,
+        },
+        {
+          name: "equal instants: the earlier until wins",
+          kept: { at: "2026-10-12T10:00:00Z", until: "2026-10-12T11:00:00Z" },
+          next: { at: "2026-10-12T10:00:00.000Z", until: "2026-10-12T10:00:00Z" },
+          later: true,
+        },
+        {
+          name: "equal instants: a later until loses",
+          kept: { at: "2026-10-12T10:00:00Z", until: "2026-10-12T10:00:00Z" },
+          next: { at: "2026-10-12T10:00:00Z", until: "2026-10-12T11:00:00Z" },
+          later: false,
+        },
+        {
+          name: "the same snooze again changes nothing",
+          kept: { at: "2026-10-12T10:00:00Z", until: "2026-10-12T11:00:00Z" },
+          next: { at: "2026-10-12T10:00:00Z", until: "2026-10-12T11:00:00Z" },
+          later: false,
+        },
+        {
+          name: "nothing kept",
+          next: { at: "2026-10-12T10:00:00Z", until: "2026-10-12T11:00:00Z" },
+          later: true,
+        },
+      ],
+      waiting: [
+        {
+          name: "a later at wins",
+          kept: { at: "2026-10-12T10:00:00Z", state: "waiting" },
+          next: { at: "2026-10-12T10:00:01Z", state: "working" },
+          later: true,
+        },
+        {
+          name: "an earlier at loses",
+          kept: { at: "2026-10-12T10:00:01Z", state: "working" },
+          next: { at: "2026-10-12T10:00:00Z", state: "waiting" },
+          later: false,
+        },
+        {
+          name: "fractional seconds compare as instants",
+          kept: { at: "2026-10-12T10:00:00Z", state: "waiting" },
+          next: { at: "2026-10-12T10:00:00.500Z", state: "working" },
+          later: true,
+        },
+        {
+          name: "equal instants: waiting wins",
+          kept: { at: "2026-10-12T10:00:00Z", state: "working" },
+          next: { at: "2026-10-12T10:00:00Z", state: "waiting" },
+          later: true,
+        },
+        {
+          name: "equal instants: working loses",
+          kept: { at: "2026-10-12T10:00:00Z", state: "waiting" },
+          next: { at: "2026-10-12T10:00:00Z", state: "working" },
+          later: false,
+        },
+        {
+          name: "nothing kept",
+          next: { at: "2026-10-12T10:00:00Z", state: "working" },
+          later: true,
+        },
+      ],
+      // The at a device stamps on a snooze it sends at `now`, `last` the latest one it knows:
+      // past `last`, in whole seconds or milliseconds as the client stamps them.
+      stamp: [
+        {
+          name: "no snooze known",
+          now: "2026-10-12T10:00:00.400Z",
+          seconds: "2026-10-12T10:00:00Z",
+          millis: "2026-10-12T10:00:00.400Z",
+        },
+        {
+          name: "an older one",
+          now: "2026-10-12T10:00:05.400Z",
+          last: "2026-10-12T10:00:00Z",
+          seconds: "2026-10-12T10:00:05Z",
+          millis: "2026-10-12T10:00:05.400Z",
+        },
+        {
+          name: "one in the same second",
+          now: "2026-10-12T10:00:00.700Z",
+          last: "2026-10-12T10:00:00.300Z",
+          seconds: "2026-10-12T10:00:01Z",
+          millis: "2026-10-12T10:00:00.700Z",
+        },
+        {
+          name: "one stamped ahead",
+          now: "2026-10-12T10:00:00.700Z",
+          last: "2026-10-12T10:00:01Z",
+          seconds: "2026-10-12T10:00:02Z",
+          millis: "2026-10-12T10:00:01.001Z",
+        },
+      ],
+    },
     // A question's options, the agent's recommended one first (#191), compared by code points. A
     // question with options always names one.
     options: [

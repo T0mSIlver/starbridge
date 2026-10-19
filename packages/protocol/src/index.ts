@@ -9,6 +9,7 @@ export * from "./join";
 export * from "./keys";
 export * from "./links";
 export * from "./notifications";
+export * from "./order";
 export * from "./pace";
 export * from "./pairing";
 export * from "./permission";
