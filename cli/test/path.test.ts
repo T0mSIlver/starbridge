@@ -13,7 +13,7 @@ import { delimiter, join as hostJoin, posix } from "node:path";
 import { CLI_PATH } from "../src/config";
 import { pathStep, recordSelf, removePathLines } from "../src/setup/path";
 import { defaults, type Prompt, type Sys } from "../src/setup/sys";
-import { bareEnv, SYSTEM_PATH, sh, slashes, testCtx } from "./helpers";
+import { bareEnv, SYSTEM_PATH, sh, slashes, type TestCtx, testCtx } from "./helpers";
 
 // A Mac's paths, which the files on any host take: Windows reads forward slashes too.
 const { join } = posix;
@@ -54,7 +54,7 @@ test("the PATH step adds the install folder to zsh's startup file once, and ends
   expect(readFileSync(join(s.home, ".zshrc"), "utf8")).toBe(zshrc);
 });
 
-test("the PATH step says nothing when the folder is on the PATH, and the line to add when declined (#612)", async () => {
+test("the PATH step says nothing when the folder is on the PATH, and adds it without asking when it is not (#612, #2121)", async () => {
   expect(
     await pathStep(
       sys({ PATH: ["/opt/homebrew/bin", "/usr/bin"].join(delimiter) }, [
@@ -62,13 +62,21 @@ test("the PATH step says nothing when the folder is on the PATH, and the line to
       ]),
     ),
   ).toEqual([]);
-  const no = { ...defaults, confirm: async () => false };
-  const s = sys({ SHELL: "/bin/bash", PATH: "/usr/bin" }, [], no);
-  const lines = await pathStep({ ...s, self: [join(s.home, ".local/bin/starbridge")] });
-  expect(lines).toEqual([
-    "One more step: `starbridge` is not on your PATH. Add this line to ~/.profile:",
-    '  export PATH="$HOME/.local/bin:$PATH"',
-  ]);
+  const asked: string[] = [];
+  const s = sys({ SHELL: "/bin/bash", PATH: "/usr/bin" }, [], {
+    ...defaults,
+    confirm: async (q) => !!asked.push(q),
+  });
+  const bin = join(s.home, ".local/bin");
+  const lines = await pathStep({ ...s, self: [join(bin, "starbridge")] });
+  expect(asked).toEqual([]);
+  expect((s.ctx as TestCtx).lines).toContain(
+    `Added ${bin} to your PATH in ~/.profile (uninstall removes it).`,
+  );
+  expect(readFileSync(join(s.home, ".profile"), "utf8")).toContain(
+    'export PATH="$HOME/.local/bin:$PATH"',
+  );
+  expect(lines[0]).toStartWith("One more step: `starbridge` is not on this terminal's PATH yet.");
   expect(existsSync(join(s.home, ".bash_profile"))).toBe(false);
 });
 

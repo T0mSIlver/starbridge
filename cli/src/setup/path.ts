@@ -145,14 +145,14 @@ function shellProfile(sys: Sys, dir: string): { file: string; line: string } {
 }
 
 /**
- * When the binary's folder is not on the PATH, offers to add it to the shell's startup file.
+ * When the binary's folder is not on the PATH, adds it to the shell's startup file.
  * Returns the lines setup ends with, after everything else, so they stay on screen: what to run
  * in this terminal, or what to add by hand.
  */
 export async function pathStep(sys: Sys): Promise<string[]> {
   const dir = missingDir(sys);
   if (!dir) return [];
-  const { ctx, prompt } = sys;
+  const { ctx } = sys;
   ctx.out("");
   ctx.out("PATH");
   if (sys.platform === "win32") {
@@ -169,18 +169,14 @@ export async function pathStep(sys: Sys): Promise<string[]> {
   const has = [dir, line, ...(rest ? [`$HOME${rest}`, `\${HOME}${rest}`, `~${rest}`] : [])].some(
     (spelled) => text.includes(spelled),
   );
-  if (!has && (await prompt.confirm(`Add ${dir} to your PATH in ${shown}?`, true))) {
+  // Without asking: nearly everyone said yes (#2121, card d_still-salute-police).
+  if (!has) {
     mkdirSync(dirname(file), { recursive: true });
     appendFileSync(
       file,
       `${text === "" || text.endsWith("\n") ? "" : "\n"}\n${PATH_MARK}\n${line}\n`,
     );
-    ctx.out(`Added \`${line}\` to ${shown}.`);
-  } else if (!has) {
-    return [
-      `One more step: \`starbridge\` is not on your PATH. Add this line to ${shown}:`,
-      `  ${line}`,
-    ];
+    ctx.out(`Added ${dir} to your PATH in ${shown} (uninstall removes it).`);
   }
   return [
     "One more step: `starbridge` is not on this terminal's PATH yet. Open a new terminal, or run:",

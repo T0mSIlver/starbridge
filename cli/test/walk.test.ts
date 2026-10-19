@@ -194,7 +194,7 @@ async function onTerminal(
       await server.approve(code);
     }
     // Setup prints that it sent the card just before it does.
-    if (!answeredCard && /Answer it on any of your devices/.test(screen)) {
+    if (!answeredCard && /Answer it there/.test(screen)) {
       const open = await server.opened("decision", "&open=1");
       const card = open.find((d) => /^Does Starbridge reach you/.test(d.question));
       if (card) {
@@ -301,6 +301,8 @@ function expectSetUp(o: Owner, setup: { code: number | null; screen: string; ste
   expect(out).not.toContain("✗");
   for (const agent of ["Claude Code", "Codex", "Pi", "opencode", "Cursor", "Antigravity"])
     expect(out).toMatch(new RegExp(`✓ ${agent}\\b`));
+  // The one question left on a new machine with CodexBar (#2121): the pairing check.
+  expect(setup.steps.map((s) => s.prompt)).toEqual(["Same code? [Y/n]"]);
   expect(agentRunning(o)).toBe(true);
   expect(readFileSync(join(o.state, "linger"), "utf8").trim()).toBe("yes");
 }
@@ -331,6 +333,7 @@ async function expectUninstalled(
 
 describe.skipIf(process.platform !== "linux")("a new user's walk", () => {
   let server: LiveServer;
+  let npmServer: LiveServer;
   let releases: ReturnType<typeof Bun.serve>;
   let releasesUrl: string;
   let installSh: string;
@@ -339,6 +342,7 @@ describe.skipIf(process.platform !== "linux")("a new user's walk", () => {
 
   beforeAll(async () => {
     server = await LiveServer.start();
+    npmServer = await LiveServer.start();
     dist = mkdtempSync(join(tmpdir(), "starbridge-walk-release-"));
     const asset = platformAsset();
     const built = Bun.spawnSync([
@@ -394,6 +398,7 @@ describe.skipIf(process.platform !== "linux")("a new user's walk", () => {
     for (const o of owners)
       if (agentRunning(o)) process.kill(Number(readFileSync(join(o.state, "agent.pid"), "utf8")));
     server?.stop();
+    npmServer?.stop();
     releases?.stop(true);
     // Each holds a compiled binary of about 100 MB.
     for (const dir of [dist, ...owners.map((o) => o.root)])
@@ -412,7 +417,9 @@ describe.skipIf(process.platform !== "linux")("a new user's walk", () => {
   }, 180_000);
 
   test("npm i -g, setup, the first card, uninstall, npm rm -g", async () => {
-    const o = newOwner(server, releasesUrl);
+    // An account of its own: on the first walk's, setup would ask whether to send quotas from
+    // a second machine.
+    const o = newOwner(npmServer, releasesUrl);
     const prefix = join(o.home, ".npm-global");
     o.env.npm_config_prefix = prefix;
     o.env.PATH = `${join(prefix, "bin")}:${o.env.PATH}`;
@@ -426,7 +433,11 @@ describe.skipIf(process.platform !== "linux")("a new user's walk", () => {
     const installed = npm(["install", "-g", tarball]);
     expect(installed.stderr.toString()).not.toContain("ERR");
     expect(installed.exitCode).toBe(0);
-    const setup = await onTerminal(server, ["starbridge", "setup", "--server", server.url], o.env);
+    const setup = await onTerminal(
+      npmServer,
+      ["starbridge", "setup", "--server", npmServer.url],
+      o.env,
+    );
     expect(setup.code).toBe(0);
     expectSetUp(o, setup);
     const r = await expectUninstalled(o, "starbridge", {

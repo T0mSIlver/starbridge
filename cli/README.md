@@ -40,11 +40,13 @@ A rerun repairs only what is missing.
 2. Installs Starbridge in each harness it finds
    ([What setup installs](../docs/tell-your-agents.md#what-setup-installs)). A failed install
    prints the command that retries it.
-3. Finds CodexBar, or asks to install it (Linux and macOS), then asks which providers' quotas to
-   upload. When another machine of your account already sends quotas, it asks first.
+3. Finds CodexBar, or asks to install it (Linux and macOS), then uploads the quotas of every
+   provider it can read (`--providers` picks others). When another machine of your account
+   already sends quotas, it asks first.
 4. Installs and starts the background service: a systemd user unit, a launchd agent, or a
-   Windows Scheduled Task.
-5. Offers to send a test question to your devices.
+   Windows Scheduled Task. On Linux it turns on lingering so the service runs after you log out.
+5. Adds the CLI to your PATH when it isn't there yet.
+6. Sends a test question to your devices (Ctrl-C skips it).
 
 | Flag | Effect |
 |---|---|

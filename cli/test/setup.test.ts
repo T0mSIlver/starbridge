@@ -166,6 +166,27 @@ async function machine(name?: string) {
   return { ctx, sys, home, units, settings, calls };
 }
 
+/**
+ * Runs `setup` and answers its test question from the phone, as the owner does: setup sends it
+ * without asking (#2121).
+ */
+async function answeringTest<T>(setup: Promise<T>): Promise<T> {
+  let done = false;
+  const answered = new Set<string>();
+  void setup.finally(() => {
+    done = true;
+  });
+  while (!done) {
+    for (const d of await server.opened("decision", "&open=1"))
+      if (d.question.startsWith("Does Starbridge reach you") && !answered.has(d.id)) {
+        answered.add(d.id);
+        await server.answer(d.id, { choice: "Yes" });
+      }
+    await Bun.sleep(20);
+  }
+  return setup;
+}
+
 /** Starts the agent in-process, as the fake systemctl's `restart` would. */
 async function startAgent(ctx: TestCtx) {
   const agent = makeAgent(ctx);
@@ -304,7 +325,7 @@ test("setup --yes installs the agent, the plugins and the skills, and uploads a 
   const [snap] = await server.opened("quota");
   expect(snap?.providers.map((p) => p.provider)).toEqual(["codex", "zai"]);
   expect(out).toContain("✓ Sent a first quota snapshot: 2 providers");
-  // --yes sends no test decision: nobody is there to answer it.
+  // --yes sends no test question: nobody is there to answer it.
   expect(await server.opened("decision")).toEqual([]);
 });
 
@@ -330,18 +351,20 @@ test("a second setup changes nothing", async () => {
     "---\n# Written by starbridge 0.9.0; `starbridge uninstall` removes it.\nname: starbridge\n---\nold\n",
   );
   const asked: string[] = [];
-  await setup(
-    {
-      ...m.sys,
-      prompt: {
-        ...m.sys.prompt,
-        confirm: async (q) => {
-          asked.push(q);
-          return false;
+  await answeringTest(
+    setup(
+      {
+        ...m.sys,
+        prompt: {
+          ...m.sys.prompt,
+          confirm: async (q) => {
+            asked.push(q);
+            return false;
+          },
         },
       },
-    },
-    { readyTimeoutMs: 2_000 },
+      { readyTimeoutMs: 2_000 },
+    ),
   );
   expect(asked.filter((q) => /Starbridge|skill|plugin/.test(q))).toEqual([]);
   expect(readFileSync(join(m.home, ".codex/skills/starbridge/SKILL.md"), "utf8")).not.toContain(
@@ -424,7 +447,9 @@ test("a machine the server no longer lists: setup offers to pair again, else sto
       confirm: async (q) => (q.includes("Pair this machine again") ? yes : false),
     };
     // Another server named, and the switch to it declined: pairing again stays on this one.
-    const done = setup(m.sys, { noQuota: true, noService: true, server: "http://127.0.0.1:9" });
+    const done = answeringTest(
+      setup(m.sys, { noQuota: true, noService: true, server: "http://127.0.0.1:9" }),
+    );
     if (yes) {
       await until(() => m.ctx.lines.some((l) => l.startsWith("Pairing code: ")));
       await approveAndConfirm(server, m.ctx);
@@ -1061,13 +1086,12 @@ for (const [how, shows] of [
   ["answered", "✓ You answered Yes"],
   ["snoozed", "Snoozed until"],
 ] as const)
-  test(`the test decision, ${how}, prints what the owner did, not its id`, async () => {
+  test(`the test question, ${how}, prints what the owner did, not its id`, async () => {
     const m = await machine();
     const sys: Sys = {
       ...m.sys,
       prompt: {
         ...m.sys.prompt,
-        confirm: async (q) => q.trim().startsWith("Send a test decision"),
       },
     };
     const done = setup(sys, { noQuota: true, noAgents: true, noService: true });
@@ -1081,13 +1105,12 @@ for (const [how, shows] of [
     expect(out).not.toContain(id);
   });
 
-test("Ctrl-C at the test decision withdraws it from the devices (#613)", async () => {
+test("Ctrl-C at the test question withdraws it from the devices (#613)", async () => {
   const m = await machine();
   const stop = new AbortController();
   m.ctx.signal = stop.signal;
   const sys: Sys = {
     ...m.sys,
-    prompt: { ...m.sys.prompt, confirm: async (q) => q.trim().startsWith("Send a test decision") },
   };
   const done = setup(sys, { noQuota: true, noAgents: true, noService: true });
   // Sent, and waiting for its answer: a Ctrl-C while it is still being sent is ask's to withdraw.
