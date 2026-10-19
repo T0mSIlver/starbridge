@@ -95,8 +95,7 @@ const KNOWN = {
     ".codex/rules",
     ".config/opencode/plugins",
     ".config/opencode/skills",
-    ".config/systemd",
-    ".config/systemd/user",
+    ...(LINUX ? [".config/systemd", ".config/systemd/user"] : []),
     ".cursor/skills",
     ".gemini/config",
     ".gemini/config/plugins",
@@ -257,6 +256,10 @@ function newOwner(server: LiveServer, releases: string): Owner {
   const runtime = join(root, "run");
   const state = join(root, "fake-state");
   for (const d of [home, runtime, state]) mkdirSync(d, { recursive: true, mode: 0o700 });
+  // Folders every Mac has, which launchd's plist and log go in.
+  if (!LINUX)
+    for (const d of ["Library/LaunchAgents", "Library/Logs"])
+      mkdirSync(join(home, d), { recursive: true });
   for (const [path, text] of Object.entries(OWNER_FILES)) {
     mkdirSync(dirname(join(home, path)), { recursive: true });
     writeFileSync(join(home, path), text);
