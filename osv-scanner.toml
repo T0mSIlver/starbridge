@@ -1,4 +1,6 @@
-# Read by the weekly lockfile scan (.github/workflows/scan.yml).
+# Read by the weekly lockfile scan (.github/workflows/scan.yml) for every lockfile in the repo.
+# The scan passes this file with --config, so an osv-scanner.toml in a subfolder is ignored:
+# add ignores here.
 
 [[IgnoredVulns]]
 id = "GHSA-hp3w-g68c-fv3c"
@@ -8,4 +10,4 @@ reason = "sprintf-js (no fixed version) comes only from the optional roarr, pull
 [[IgnoredVulns]]
 id = "GHSA-r937-wjx7-w2jp"
 ignoreUntil = 2027-01-19
-reason = "kotlin-gradle-plugin 2.4.10 is the one Gradle 9.8.1 embeds for buildSrc, and 2.2.10 is only read as AGP's dependency metadata (the build resolves 2.4.21); the fix is in 2.4.20, so it goes when a Gradle release embeds that. Build-time only, ships in no APK; the flaw is unsafe deserialization of Gradle build cache metadata, which needs write access to a cache the build reads (#2068)."
+reason = "kotlin-gradle-plugin 2.4.10 is the one Gradle 9.8.1 embeds for buildSrc, and 2.2.10 is only read as AGP's dependency metadata (the build resolves 2.4.21); the fix is in 2.4.20, so it goes when a Gradle release embeds that. Build-time only, ships in no APK; the flaw is unsafe deserialization of KAPT's incremental cache (fix commit bf51df6, KT-86604), and the app runs KSP, never KAPT (#2068, #2088)."
