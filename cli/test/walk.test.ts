@@ -239,6 +239,8 @@ async function onTerminal(
 
 interface Owner {
   root: string;
+  /** XDG_RUNTIME_DIR, where the agent's socket is. */
+  runtime: string;
   home: string;
   /** The fakes' state: the agent's pid, whether its unit is enabled, lingering. */
   state: string;
@@ -253,7 +255,8 @@ const owners: Owner[] = [];
 function newOwner(server: LiveServer, releases: string): Owner {
   const root = mkdtempSync(join(tmpdir(), "starbridge-walk-"));
   const home = join(root, "home", "walker");
-  const runtime = join(root, "run");
+  // Short: a unix socket's path must fit in 104 bytes on macOS, whose temp folder is long.
+  const runtime = mkdtempSync("/tmp/sbw-");
   const state = join(root, "fake-state");
   for (const d of [home, runtime, state]) mkdirSync(d, { recursive: true, mode: 0o700 });
   // Folders every Mac has, which launchd's plist and log go in.
@@ -293,7 +296,7 @@ function newOwner(server: LiveServer, releases: string): Owner {
     BUN_INSTALL_CACHE_DIR: join(root, "bun-cache"),
     BUN_RUNTIME_TRANSPILER_CACHE_PATH: "0",
   };
-  const owner = { root, home, state, env, server, before: snapshot(home) };
+  const owner = { root, runtime, home, state, env, server, before: snapshot(home) };
   owners.push(owner);
   return owner;
 }
@@ -315,6 +318,8 @@ function expectSetUp(o: Owner, setup: { code: number | null; screen: string; ste
   const out = setup.screen;
   expect(out).toContain("Starbridge is set up.");
   expect(out).toContain("✓ You answered Yes");
+  // The agent the service started answers on its socket.
+  expect(out).not.toContain("The agent did not answer yet");
   expect(out).not.toContain("✗");
   for (const agent of ["Claude Code", "Codex", "Pi", "opencode", "Cursor", "Antigravity"])
     expect(out).toMatch(new RegExp(`✓ ${agent}\\b`));
@@ -416,7 +421,7 @@ describe.skipIf(!LINUX && process.platform !== "darwin")("a new user's walk", ()
     server?.stop();
     releases?.stop(true);
     // Each holds a compiled binary of about 100 MB.
-    for (const dir of [dist, ...owners.map((o) => o.root)])
+    for (const dir of [dist, ...owners.flatMap((o) => [o.root, o.runtime])])
       if (dir) rmSync(dir, { recursive: true, force: true });
   });
 
