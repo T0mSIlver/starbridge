@@ -23,9 +23,10 @@ test("a Codex rollout tells exec from the TUI, and a sub-agent from its root thr
   write("01a10e79-d026-74b2-99a0-461327bcb7d9", "codex_exec", "exec");
   write("01a10e7a-4828-7533-8389-55fca2e32225", "codex-tui", "cli");
   expect(codexThread(home, "01a10e79-d026-74b2-99a0-461327bcb7d9")).toEqual({ origin: "exec" });
-  expect(codexThread(home, "01a10e7a-4828-7533-8389-55fca2e32225")).toEqual({
-    origin: "interactive",
-  });
+  expect(codexThread(home, "01a10e7a-4828-7533-8389-55fca2e32225")).toEqual({ origin: "tui" });
+  // T3 Code runs its own app-server, which writes its name; its source mimics an IDE's.
+  write("01a15583-6a63-74b2-873d-d800b7671593", "T3 Code", "vscode");
+  expect(codexThread(home, "01a15583-6a63-74b2-873d-d800b7671593")).toEqual({ origin: "app" });
   expect(codexThread(home, "01a10e7b-0000-7000-8000-000000000000")).toBeUndefined();
 
   // A sub-agent's answer goes to its root thread: `codex queue` refuses sub-agent threads.
