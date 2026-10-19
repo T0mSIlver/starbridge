@@ -7,7 +7,7 @@ import { existsSync } from "node:fs";
 import { join, resolve } from "node:path";
 import type { Ctx } from "../context";
 import { permissionsEnabled } from "../permissions";
-import { piPermissionConfig, removePiEntries } from "../pi";
+import { piChain, piPermissionConfig, removePiEntries } from "../pi";
 import { which } from "../platform";
 import { piAllowStep, piChainStep } from "../settings";
 import { ALLOW, type AllowList, addAllow, missingAllow, removeAllow } from "./allow";
@@ -428,9 +428,13 @@ export async function removeAgent(sys: Sys, id: AgentId): Promise<string[]> {
       try {
         if (removePiEntries(sys.ctx.env, sys.ctx.store.state().piAdded))
           done.push(`Removed Starbridge's entries from ${config}.`);
-        sys.ctx.store.updateState((s) => {
-          delete s.piAdded;
-        });
+        // Taken out: an empty record, so a later uninstall removes nothing more. One without a
+        // record would take the owner's own rules for Starbridge's (#2130). A config it could not
+        // read keeps the record for the next try.
+        if (piChain(sys.ctx.env).state !== "unreadable")
+          sys.ctx.store.updateState((s) => {
+            s.piAdded = {};
+          });
       } catch (e) {
         done.push(`Could not remove Starbridge's entries from ${config}: ${(e as Error).message}`);
       }
