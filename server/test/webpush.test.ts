@@ -42,6 +42,10 @@ function scalar(ecdh: ReturnType<typeof createECDH>) {
   return Buffer.concat([Buffer.alloc(32 - k.length), k]);
 }
 
+function subscriptionKeys(ua: ReturnType<typeof browser>) {
+  return { p256dh: ua.p256dh.toString("base64url"), auth: ua.auth.toString("base64url") };
+}
+
 /** Plaintext sizes from empty to the largest one record holds. */
 const sizes = [0, 1, 15, 16, 17, 100, 1000, 3072, 3993, 4000, 4078, 4079];
 
@@ -191,6 +195,15 @@ test("a push request has web-push's headers", async () => {
   const claims = (req.headers.Authorization as string).split(".")[1] as string;
   expect(JSON.parse(Buffer.from(claims, "base64url").toString()).aud).toBe(
     "https://push.example:8443",
+  );
+  const defaultPort = await generateRequestDetails(
+    { endpoint: "https://push.example:443/x", keys: subscriptionKeys(ua) },
+    "hello",
+    { TTL: 60, urgency: "high", vapidDetails: { ...keys, subject: "https://example.com" } },
+  );
+  const defaultClaims = (defaultPort.headers.Authorization as string).split(".")[1] as string;
+  expect(JSON.parse(Buffer.from(defaultClaims, "base64url").toString()).aud).toBe(
+    "https://push.example",
   );
   const noVapid = await generateRequestDetails(
     { endpoint: "https://push.example/x", keys: { p256dh: "BAD!", auth: "x" } },
