@@ -1,4 +1,11 @@
-import { type Directory, open, ProtocolError, parseWith, SealedItem } from "@starbridge/protocol";
+import {
+  type Directory,
+  laterSnooze,
+  open,
+  ProtocolError,
+  parseWith,
+  SealedItem,
+} from "@starbridge/protocol";
 import type { State } from "../config";
 import type { Ctx, Session } from "../context";
 
@@ -17,8 +24,8 @@ export function acceptSnooze(raw: unknown, s: Session, dir: Directory, st: State
   );
   const decision = st.asked[body.decisionId];
   if (!decision?.to.includes(signer.id)) return;
-  const kept = decision.snooze;
-  if (kept && Date.parse(kept.at) >= Date.parse(body.at)) return;
+  // The rule every client applies, so a tie keeps the same snooze here as on the devices (#2103).
+  if (!laterSnooze(decision.snooze, body)) return;
   decision.snooze = { until: body.until, at: body.at };
 }
 

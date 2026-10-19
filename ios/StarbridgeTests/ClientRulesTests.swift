@@ -63,6 +63,23 @@ final class ClientRulesTests: XCTestCase {
         }
     }
 
+    func testOrder() {
+        let order = rules["order"]!
+        for c in order["snooze"]!.array! {
+            let kept = c["kept"], next = c["next"]!
+            XCTAssertEqual(Order.laterSnooze(keptAt: kept?["at"]?.string, keptUntil: kept?["until"]?.string, at: next["at"]!.string!, until: next["until"]!.string!), c["later"]!.bool!, c["name"]!.string!)
+        }
+        for c in order["waiting"]!.array! {
+            let kept = c["kept"], next = c["next"]!
+            XCTAssertEqual(Order.laterWaiting(keptAt: kept?["at"]?.string, keptState: kept?["state"]?.string, at: next["at"]!.string!, state: next["state"]!.string!), c["later"]!.bool!, c["name"]!.string!)
+        }
+        // The app stamps whole seconds.
+        for c in order["stamp"]!.array! {
+            let now = Dates.parse(c["now"]!.string!)!
+            XCTAssertEqual(SnoozeStamps.of(until: now.addingTimeInterval(3600), last: c["last"]?.string, now: now).at, c["seconds"]!.string!, c["name"]!.string!)
+        }
+    }
+
     func testOptionsRecommendedFirst() throws {
         for c in rules["options"]!.array! {
             var body: JSONObject = [
