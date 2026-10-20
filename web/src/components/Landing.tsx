@@ -183,12 +183,13 @@ export function Landing({
               Sign in
             </button>
           )}
-          <a href="#install" className={`t-action ${ui.btn} ${ui.lg}`}>
-            Install the CLI
-          </a>
+          {/* In the order the steps happen: an account, a device, then a machine to pair (#2141). */}
           <a href="#get-the-app" className={`t-action ${ui.btn} ${ui.lg}`}>
             <Icon name="phone" size={18} />
             Get the app
+          </a>
+          <a href="#install" className={`t-action ${ui.btn} ${ui.lg}`}>
+            Install the CLI
           </a>
         </div>
         <p className={`t-meta ${s.faint}`}>
