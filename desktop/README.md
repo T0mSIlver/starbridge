@@ -86,8 +86,9 @@ workflow when one is blown. The window loads a stand-in page there, so the netwo
 numbers. The Mac Mini column is main 12df3fee on the owner's Mac Mini (2026-10-09), with the same
 script: a real Mac uses more memory than the runner, so its budget is 400 MB, while CI gates at
 350 MB (owner's call, keeping the updater's ~23 MB). The runner column spans 104 runs from
-2026-10-08 to 10-11; a job on a slow runner takes about twice as long throughout, so the time budgets
-sit just above the slowest run (#1119).
+2026-10-08 to 10-11, except the warm open's; a job on a slow runner takes about twice as long
+throughout, so the cold start budget sits just above the slowest run (#1119), and the warm open's
+1.6 times above it (#2136).
 
 | | Budget | Runner | Mac Mini M2 |
 |---|---|---|---|
