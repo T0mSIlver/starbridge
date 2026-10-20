@@ -467,6 +467,38 @@
       ]
     },
     {
+      "name": "an older snooze's return after a newer one's rings nothing",
+      "steps": [
+        {
+          "push": {
+            "kind": "decision",
+            "id": "d1"
+          },
+          "effect": "ring"
+        },
+        {
+          "push": {
+            "kind": "snooze",
+            "id": "d1",
+            "at": "2026-10-12T10:00:05Z",
+            "until": "2026-10-12T11:00:00Z",
+            "due": true
+          },
+          "effect": "ring"
+        },
+        {
+          "push": {
+            "kind": "snooze",
+            "id": "d1",
+            "at": "2026-10-12T10:00:00Z",
+            "until": "2026-10-12T11:00:00Z",
+            "due": true
+          },
+          "effect": "none"
+        }
+      ]
+    },
+    {
       "name": "the same waiting flip pushed twice rings once",
       "steps": [
         {
