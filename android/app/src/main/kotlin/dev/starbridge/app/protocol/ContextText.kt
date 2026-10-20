@@ -19,7 +19,7 @@ internal const val WS = "\\t\\n\\u000B\\f\\r \\u00A0\\u1680\\u2000-\\u200A\\u202
 
 // Leftmost match wins; at one position, code before a link before bold before a bare URL.
 private val INLINE = Regex(
-    "`([^`\\n]+)`|\\[([^\\]\\n]+)\\]\\((https?://[^$WS)]+)\\)|\\*\\*(?=[^$WS])([^\\n]*?[^$WS])\\*\\*|(https?://[^$WS<>]+)",
+    "`([^`\\n]+)`|\\[([^\\]\\n]+)\\]\\((https://[^$WS)]+)\\)|\\*\\*(?=[^$WS])([^\\n]*?[^$WS])\\*\\*|(https://[^$WS<>]+)",
 )
 // JavaScript's `.`: anything but its four line terminators; Java's also stops at U+0085.
 private const val DOT = "[^\\n\\r\\u2028\\u2029]"
@@ -48,12 +48,13 @@ private fun inline(text: String, bold: Boolean = false): List<Span> {
         val g = m.groups
         when {
             g[1] != null -> push(Span(g[1]!!.value, code = true))
-            g[2] != null && g[3] != null -> push(Span(g[2]!!.value, href = g[3]!!.value))
+            // The agent's words show only where a link chip would: on GitHub and a Claude artifact.
+            g[2] != null && g[3] != null -> push(Span(linkChip(g[3]!!.value, g[2]!!.value).label, href = g[3]!!.value))
             g[4] != null -> inline(g[4]!!.value, bold = true).forEach(::push)
             else -> {
                 val url = m.value.replace(URL_TAIL, "")
                 end = start + url.length
-                push(Span(url.replaceFirst(Regex("^https?://"), ""), href = url))
+                push(Span(url.replaceFirst(Regex("^https://"), ""), href = url))
             }
         }
         // A trimmed tail goes back to the text after it.

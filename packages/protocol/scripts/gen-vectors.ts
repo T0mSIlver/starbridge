@@ -1633,6 +1633,11 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
       "Markdown link",
       "Read [the PR](https://github.com/acme/shop/pull/41) first; [no](javascript:x) stays.",
     ],
+    [
+      "a link's words show only on GitHub and a Claude artifact",
+      "[github.com/acme/app/pull/12](https://evil.example/x) and [the plan](https://claude.ai/artifact/abc) and [the wiki](https://github.com/acme/app/wiki)",
+    ],
+    ["http is no link", "[docs](http://docs.example/a) and http://docs.example/b stay as typed."],
     ["fenced code", "Before:\n```bash\n  make build\n\n  make e2e\n```\nAfter."],
     ["unclosed fence", "Error:\n```\nTypeError: x is undefined"],
     ["empty fence", "```\n```\nText"],
@@ -1886,10 +1891,10 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
       expect: { label: "example.com" },
     },
     {
-      name: "another host with a title",
+      name: "another host with a title: host and path",
       url: "https://play.google.com/console/u/1/developers/1/app/2/publishing",
       title: "Play Console",
-      expect: { label: "Play Console · play.google.com" },
+      expect: { label: "play.google.com/console/u/1/developers/…" },
     },
     {
       name: "a long path is clipped",
@@ -2011,24 +2016,30 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
       expect: { icon: "pull", label: "i#1" },
     },
     { name: "empty host: as written", url: "https://%", expect: { label: "https://%" } },
-    // A title on another host than GitHub's is followed by the host (#1722).
+    // A title shows only on GitHub and a Claude artifact; another host shows itself (#1722, #2203).
     {
       name: "a GitHub reference as the title of another host",
       url: "https://evil.example/pull/123",
       title: "starbridge#123",
-      expect: { label: "starbridge#123 · evil.example" },
+      expect: { label: "evil.example/pull/123" },
     },
     {
-      name: "a long title gives way to the host",
-      url: "https://docs.example.com/guide",
-      title: "A very long title that would push the host out of the chip",
-      expect: { label: "A very long title th… · docs.example.com" },
+      name: "a host dressed as GitHub's shows whole",
+      url: "https://github.com.evil.example/T0mSIlver/starbridge/pull/1",
+      title: "#1",
+      expect: { label: "github.com.evil.example/T0mSIlver/starb…" },
     },
     {
-      name: "a long host keeps its end",
-      url: "https://github.com.a-very-long-subdomain-chain.evil.example/x",
-      title: "Docs",
-      expect: { label: "Docs · …-subdomain-chain.evil.example" },
+      name: "a GitHub page's title with a bidi override gives way to its path",
+      url: "https://github.com/T0mSIlver/starbridge/wiki",
+      title: "Release notes\u202e",
+      expect: { icon: "github", label: "T0mSIlver/starbridge/wiki" },
+    },
+    {
+      name: "an artifact's title with a zero-width space gives way",
+      url: "https://claude.ai/artifact/abc",
+      title: "Plan\u200b",
+      expect: { icon: "artifact", label: "Claude artifact" },
     },
     {
       name: "a title with a bidi override gives way to host and path",
