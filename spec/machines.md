@@ -250,7 +250,9 @@
   once quotes and backslashes are removed and that the Pi check (`mod/hooks/own.ts`) rejects,
   since `"starbridge" ask` and `star""bridge ask` may pass an entry too (internal audit
   2026-10-14), and for one it accepts sets `BypassSandbox`:
-  `--sandbox` hides the home folder and the network (#959). Every command passes that hook, so a
+  `--sandbox` hides the home folder and the network (#959). A line that hands `ask` a file
+  (`--context-file`, `--input`, `--image`) gets `force_ask` instead (#2191): outside the sandbox
+  it could read any file the owner can and show it on every device. Every command passes that hook, so a
   shell check starts the CLI only for one that names `starbridge`, quotes and backslashes removed. Since only that hook narrows
   the entries, setup adds them only while the plugin there is Starbridge's and turned on, and takes
   them out otherwise. The app and the IDE keep their settings elsewhere; setup adds nothing there. `starbridge run` is left out,
