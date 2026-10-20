@@ -1,7 +1,10 @@
 // A decision's context as every client shows it (#969): the small Markdown subset agents may rely
 // on, parsed once here and ported to Kotlin, with packages/protocol/vectors/context.json keeping
-// the two in step. Anything outside the subset shows as typed. It imports nothing, so the web's
-// service worker takes it from "@starbridge/protocol/context" without the crypto.
+// the two in step. Anything outside the subset shows as typed. It imports only links.ts, which
+// imports nothing, so the web's service worker takes it from "@starbridge/protocol/context"
+// without the crypto.
+
+import { linkChip } from "./links";
 
 /** A run of text with one style: code, bold, a link, or plain. Bold may wrap code or a link. */
 export type Span = { text: string; code?: true; bold?: true; href?: string };
@@ -16,9 +19,10 @@ export type Block =
   | { kind: "number"; marker: string; spans: Span[] }
   | { kind: "code"; text: string };
 
-// Leftmost match wins; at one position, code before a link before bold before a bare URL.
+// Leftmost match wins; at one position, code before a link before bold before a bare URL. Links
+// are https only, as link chips are.
 const INLINE =
-  /`([^`\n]+)`|\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)|\*\*(?=\S)([^\n]*?\S)\*\*|(https?:\/\/[^\s<>]+)/g;
+  /`([^`\n]+)`|\[([^\]\n]+)\]\((https:\/\/[^\s)]+)\)|\*\*(?=\S)([^\n]*?\S)\*\*|(https:\/\/[^\s<>]+)/g;
 // What ends a sentence rather than a URL: "see https://x.dev/a." links https://x.dev/a.
 const URL_TAIL = /[.,;:!?'")\]]+$/;
 
@@ -39,12 +43,15 @@ function inline(text: string, bold = false): Span[] {
     let end = start + m[0].length;
     push({ text: text.slice(at, start) });
     if (m[1] !== undefined) push({ text: m[1], code: true });
-    else if (m[2] !== undefined && m[3] !== undefined) push({ text: m[2], href: m[3] });
+    // The agent's words show only where a link chip would show them: on GitHub and a Claude
+    // artifact. Elsewhere the link reads as its host and path, so no label hides where it goes.
+    else if (m[2] !== undefined && m[3] !== undefined)
+      push({ text: linkChip({ url: m[3], title: m[2] }).label, href: m[3] });
     else if (m[4] !== undefined) for (const s of inline(m[4], true)) push(s);
     else {
       const url = m[0].replace(URL_TAIL, "");
       end = start + url.length;
-      push({ text: url.replace(/^https?:\/\//, ""), href: url });
+      push({ text: url.replace(/^https:\/\//, ""), href: url });
     }
     // A trimmed tail goes back to the text after it.
     at = end;

@@ -14,6 +14,7 @@
   "include": [
     "../cli/src/text.d.ts",
     "hooks/poller.ts",
+    "hooks/address.ts",
     "hooks/agent.ts",
     "hooks/switch.ts",
     "hooks/handover.ts",

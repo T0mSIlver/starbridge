@@ -855,6 +855,20 @@ final class Store {
 
     // --- Signing out --------------------------------------------------------------
 
+    /** Set once an install has launched, in defaults an uninstall deletes. */
+    static let installedKey = "dev.starbridge.installed"
+
+    /**
+     * iOS keeps Keychain items when the app is deleted. On an install's first launch with no saved
+     * state, the keys a deleted install left go, so deleting the app signs it out for good
+     * (security audit 2026-10-20). An update keeps its saved state, and with it its keys.
+     */
+    static func forgetAfterReinstall(vault: Vault = KeychainVault(), disk: Disk = .standard, defaults: UserDefaults = .standard) {
+        guard !defaults.bool(forKey: installedKey) else { return }
+        if !FileManager.default.fileExists(atPath: disk.url.path) { try? vault.wipe() }
+        defaults.set(true, forKey: installedKey)
+    }
+
     func wipe() {
         joinTask?.cancel()
         joinTask = nil
@@ -886,8 +900,16 @@ final class Store {
         removalHold = nil
         removalHeldRevoked = nil
         quotasListed = false
+        // Every copy goes, those set aside after an unreadable launch too, even while `locked`
+        // kept this run from writing (security audit 2026-10-20).
+        var left: [String] = []
+        do { try vault.wipe() } catch { left.append("\(error)") }
+        do { try disk.wipe() } catch { left.append(error.localizedDescription) }
+        if left.isEmpty { locked = nil }
         persist(Saved(server: saved.server), Secrets())
+        if !left.isEmpty { notice = "Signed out, but this iPhone couldn’t delete all it kept (\(left.joined(separator: "; "))). Deleting the app removes the rest." }
         try? FileManager.default.removeItem(at: SavedImage.directory)
+        NotifiedFile.standard.delete()
         // The property's observer stores the defaults, so the keys go after it.
         quotaSettings = QuotaSettings()
         QuotaSettings.forget()
@@ -906,11 +928,22 @@ final class Store {
         }
     }
 
+    /** What the sign-out dialog adds while answers wait to be sent (#2155); empty when none do. */
+    nonisolated static func unsentWarning(_ unsent: Int) -> String {
+        switch unsent {
+        case 0: ""
+        case 1: " 1 answer isn't sent yet: it's sent first if the server can be reached, else it's lost."
+        default: " \(unsent) answers aren't sent yet: they're sent first if the server can be reached, else they're lost."
+        }
+    }
+
     /** Leaves the account: removes this iPhone from the devices unless it is the last one. */
     func signOut() async {
         joinTask?.cancel()
         busy = true
         defer { busy = false }
+        // Answers still in the outbox go first: the wipe below drops them (#2155).
+        if phase == .ready, !saved.outbox.isEmpty { _ = try? await serial { try await self.flush() } }
         if phase == .ready, let me = saved.me {
             do {
                 let fetched = try await api().directory(from: saved.entries.count)

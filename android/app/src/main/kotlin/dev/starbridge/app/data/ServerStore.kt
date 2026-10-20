@@ -146,6 +146,7 @@ class ServerStore(
     override val phase = MutableStateFlow<Phase>(Phase.SignedOut)
     override val joinLink = MutableStateFlow<String?>(null)
     override val decisions: StateFlow<List<Decision>> get() = decisionKind.shown
+    override val unsent = MutableStateFlow(0)
     override val prompts: StateFlow<List<Prompt>> get() = promptKind.shown
     override val windows: StateFlow<List<QuotaWindow>> get() = quotaKind.windows
     override val quotaFailures: StateFlow<List<QuotaFailure>> get() = quotaKind.failures
@@ -280,6 +281,8 @@ class ServerStore(
     }
 
     private fun publish() {
+        // From the outbox itself: a hold or a revoked machine empties the shown list, not it.
+        unsent.value = saved.outbox.size
         keepsKeys.value = saved.me != null && saved.pin != null
         demo.value = demoServer != null && demoServer == saved.server
         phase.value = when {
@@ -405,7 +408,7 @@ class ServerStore(
         joinJob?.cancel()
         showJob?.cancel()
         for (kind in kinds) kind.wipe()
-        disk.wipe()
+        val wiped = disk.wipe()
         alerts.forget()
         pendingPush = null
         confirmedPush = null
@@ -416,7 +419,7 @@ class ServerStore(
         pendingCheckKey = null
         approval.value = Approval.Idle
         publish()
-        notice.value = message
+        notice.value = if (wiped) message else "Signed out, but this phone couldn’t delete everything it kept. Clearing the app’s data removes the rest."
     }
 
     // --- Signing in and setting up ------------------------------------------------
@@ -1150,8 +1153,10 @@ class ServerStore(
             kinds.find { kind in it.pushes }?.onPush(kind, id, p)
             return@withLock
         }
-        // Nothing in this push is verified, so it only takes the notification down; what
-        // was answered is read from the server's signed items on the next sync.
+        // Nothing in this push is verified, so it only takes the notification down, and keeps
+        // a late push of the item from ringing (#2151); what was answered is read from the
+        // server's signed items on the next sync.
+        persist(saved.notifying(id, NotifyEvent.Closed).first)
         if (!promptKind.cancelNotification(id)) alerts.cancel(id)
         if (inFront) {
             try {
@@ -1538,6 +1543,8 @@ class ServerStore(
 
     /** Removes this phone from the directory, ends the session and forgets every key. */
     override fun signOut() = run {
+        // Answers still in the outbox go first: the wipe below drops them (#2155).
+        if (phase.value == Phase.Ready && saved.outbox.isNotEmpty()) decisionKind.flushBeforeSignOut()
         if (phase.value == Phase.Ready) {
             runCatching {
                 syncDirectory()

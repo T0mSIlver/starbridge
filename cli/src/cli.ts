@@ -18,13 +18,16 @@ import { hookCodexQuestion } from "./codex-question";
 import { exportMachine, MachineEnvError, StateFileError } from "./config";
 import { type Ctx, UsageError } from "./context";
 import {
+  ASK_CONTENT_FIELDS,
   ASK_LIMITS,
+  type AskContent,
   type AskInput,
   answers,
   answersAll,
   ask,
   decisionsOpen,
   named,
+  pickFields,
   resolveSource,
   settle,
   setWaiting,
@@ -328,25 +331,15 @@ function readJson(path: string): unknown {
 }
 
 /**
- * Fields `ask` takes only from the asking process's environment, never from `--input`: where an
- * answer is delivered and what kind of session asks. The agent runs a Codex route's `codex` and
- * sends to an Antigravity route, so a file an agent writes must not choose them.
+ * `ask --input`'s JSON: the question's content (`ASK_CONTENT_FIELDS`) and nothing else. Where an
+ * answer is delivered and what kind of session asks come from the asking process's environment.
  */
-const SESSION_FIELDS = [
-  "codex",
-  "antigravity",
-  "extensionAnswers",
-  "headless",
-  "held",
-  "picker",
-  "subagent",
-] as const;
-
-/** `ask --input`'s JSON, without the fields only the environment gives. */
-function fromInputFile(json: unknown): AskInput & { default?: unknown } {
-  const input = { ...(json as Record<string, unknown>) };
-  for (const k of SESSION_FIELDS) delete input[k];
-  return input as AskInput & { default?: unknown };
+function fromInputFile(json: unknown): AskContent & { default?: unknown } {
+  const given = typeof json === "object" && json !== null ? (json as { default?: unknown }) : {};
+  return {
+    ...pickFields(json, ASK_CONTENT_FIELDS),
+    ...(given.default !== undefined ? { default: given.default } : {}),
+  };
 }
 
 /** A `wait` whose agent stopped and stayed away goes on at the server (#548). */
@@ -448,7 +441,7 @@ async function dispatch(argv: string[], ctx: Ctx): Promise<number> {
             timeout: { type: "string" },
           },
         });
-        const fromJson: AskInput & { default?: unknown } = v.input
+        const fromJson: AskContent & { default?: unknown } = v.input
           ? fromInputFile(readJson(v.input))
           : {};
         if (fromJson.default !== undefined)

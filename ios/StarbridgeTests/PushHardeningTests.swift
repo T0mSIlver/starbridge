@@ -110,6 +110,9 @@ final class PushHardeningTests: XCTestCase {
         XCTAssertTrue(replay.actions.isEmpty)
         XCTAssertEqual(replay.category, "")
         XCTAssertTrue(replay.quiet)
+        // And it adds nothing to the app icon's count.
+        XCTAssertEqual(replay.counts, false)
+        XCTAssertEqual(Notify.badge(replay, saved: f.saved), 0)
         // A question this iPhone never saved is new: it keeps its buttons.
         f.saved.decisions = []
         XCTAssertEqual(Notify.closed(shown, saved: f.saved), shown)

@@ -348,10 +348,26 @@ function namesStarbridge(line: string): boolean {
 }
 
 /**
+ * Whether a line passes `ask` a file to read: `--context-file`, `--input` or `--image`, quotes
+ * and backslashes removed as the shell would. Outside the sandbox, which hides the home folder,
+ * that file could be any the owner can read, and its words would land on every device (security
+ * audit 2026-10-20).
+ */
+function readsFile(line: string): boolean {
+  // The shell drops a backslash-newline and expands a glob, so `--inp\<newline>ut` and `--inpu?`
+  // (beside a file named `--input`) both reach `ask` as `--input`.
+  const bare = line.replace(/\\\n/g, "").replace(/['"\\]/g, "");
+  return (
+    /(^|\s)--(context-file|input|image)(=|\s|$)/.test(bare) || /(^|\s)-[^\s]*[*?[\]]/.test(bare)
+  );
+}
+
+/**
  * `starbridge hook pre-tool --agent antigravity`, on the plugin's `PreToolUse` for
  * `run_command` (#959). The allow entries setup adds to `agy`'s settings skip the prompt; this
  * hook narrows them. A line that is one of those commands alone runs outside `--sandbox`, which
- * has no network and hides the home folder. Any other line that names starbridge, once quotes
+ * has no network and hides the home folder, unless it hands `ask` a file to read. Any other line
+ * that names starbridge, once quotes
  * and backslashes are removed, such as `LD_PRELOAD=… starbridge ask` or `"starbridge" ask`, gets
  * the prompt back (`force_ask`), since an allow entry may pass it. `agy` ignores a hook's
  * `allow` otherwise. Prints nothing for any other call.
@@ -372,8 +388,16 @@ export function hookPreTool(ctx: Ctx, text: string, opts: { agent?: string }): n
     // Once only: a hello that fails leaves the prompts at the keyboard, not the session stuck.
     markConversation(ctx, input.conversationId as string);
     ctx.out(JSON.stringify({ decision: "deny", reason: `${NUDGE} Then run this command again.` }));
-  } else if (ownCommand(line))
+  } else if (ownCommand(line) && !readsFile(line))
     ctx.out(JSON.stringify({ decision: "allow", overwrite: { BypassSandbox: true } }));
+  else if (ownCommand(line))
+    ctx.out(
+      JSON.stringify({
+        decision: "force_ask",
+        reason:
+          "Starbridge reads the file this command names outside the sandbox, so it needs your OK. Pass the text with --context instead to skip the prompt.",
+      }),
+    );
   else if (namesStarbridge(line))
     ctx.out(
       JSON.stringify({

@@ -21,9 +21,8 @@ import {
   setRemoved,
 } from "./agents";
 import { findCodexbar } from "./codexbar";
-import { removePathLines } from "./path";
+import { PATH_LINE, SERVICE } from "./integrations";
 import { pruneEmpty } from "./remove";
-import { removeService, undoLinger } from "./service";
 import type { Sys } from "./sys";
 
 export interface UninstallOpts {
@@ -95,22 +94,9 @@ export async function uninstall(sys: Sys, opts: UninstallOpts): Promise<number> 
     }
   }
 
-  let stopped = true;
-  try {
-    ctx.out(
-      (await removeService(sys))
-        ? "Stopped and removed the agent service."
-        : "No agent service installed.",
-    );
-  } catch (e) {
-    stopped = false;
-    ctx.out(`Could not stop the agent service, so it stays: ${(e as Error).message}`);
-  }
-
-  if (stopped) {
-    const linger = await undoLinger(sys);
-    if (linger) ctx.out(linger);
-  }
+  const service = await SERVICE.remove(sys);
+  for (const line of service.lines) ctx.out(line);
+  const { stopped } = service;
 
   for (const id of AGENT_IDS) for (const line of await removeAgent(sys, id)) ctx.out(line);
   // A later setup installs Starbridge in every agent again.
@@ -143,8 +129,8 @@ export async function uninstall(sys: Sys, opts: UninstallOpts): Promise<number> 
   // The binary goes last, and only once nothing runs it any more; the PATH line with it.
   if (opts.install && stopped) {
     if (opts.install.kind === "binary")
-      for (const file of removePathLines(sys, pathFor(sys.platform).dirname(opts.install.path)))
-        ctx.out(`Removed the PATH line setup added to ${file}.`);
+      for (const line of PATH_LINE.remove(sys, pathFor(sys.platform).dirname(opts.install.path)))
+        ctx.out(line);
     removeBinary(ctx, opts.install);
     // install.sh made ~/.local/bin when there was none (#2098); Windows deletes the binary later.
     // The binary's path is a real path, and HOME may run through a link, as /var does on macOS

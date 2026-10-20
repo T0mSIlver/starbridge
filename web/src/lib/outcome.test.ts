@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import type { Settled } from "@starbridge/protocol";
-import { promptOutcome } from "./outcome";
+import { answerPlace, promptOutcome } from "./outcome";
 import type { PromptItem } from "./types";
 
 const prompt = (more: Partial<PromptItem>) =>
@@ -32,4 +32,14 @@ test("a prompt says how and where it was answered", () => {
       name,
     ),
   ).toEqual({ outcome: "Timed out: left to the keyboard", by: "" });
+});
+
+test("Answer in shows the agent's title only on GitHub and a Claude artifact", () => {
+  expect(answerPlace({ url: "https://evil.example/doc", title: "Design doc" })).toBe(
+    "evil.example/doc",
+  );
+  expect(answerPlace({ url: "https://claude.ai/artifact/abc", title: "Design doc" })).toBe(
+    "Design doc",
+  );
+  expect(answerPlace({ url: "https://claude.ai/artifact/abc" })).toBe("the artifact");
 });

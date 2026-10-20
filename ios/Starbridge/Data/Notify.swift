@@ -24,6 +24,13 @@ struct Shown: Equatable, Sendable {
     var badge: Int?
     /** The MAC that ties the buttons to these words (`Notify.seal`); nil without buttons. */
     var seal: String?
+    /** The push as the shared rule takes it (#2151); nil for one the rule leaves alone. */
+    var event: NotifyEvent?
+    /**
+     * Whether the app icon's count takes this item; nil goes by `quiet`. A repeat the rule quiets
+     * still needs the owner (#2154).
+     */
+    var counts: Bool?
 }
 
 /** A delivered notification as a button press hands it back: its words, its category and its seal. */
@@ -175,7 +182,8 @@ enum Notify {
     /** Where the owner answers a decision with `answerIn`: "the artifact" for a Claude one, as on Android and the web. */
     static func place(_ page: DecisionLink) -> String {
         let chip = linkChip(url: page.url, title: page.title)
-        return page.title ?? (chip.icon == .artifact ? "the artifact" : chip.label)
+        // The chip's text: the agent's title only on GitHub and a Claude artifact, as web's answerPlace.
+        return chip.icon == .artifact && chip.label == "Claude artifact" ? "the artifact" : chip.label
     }
 
     /**
@@ -262,7 +270,9 @@ enum Notify {
         guard let item, let opened = open(item) else { return nil }
         switch opened.body {
         case let d as Decision:
-            return decision(d)
+            var shown = decision(d)
+            shown.event = .asked
+            return shown
         case is Permission:
             guard let saved = try? SavedPrompt(from: item.from, text: opened.bodyText, answeredAt: nil) else { return nil }
             return permission(saved)
@@ -272,6 +282,7 @@ enum Notify {
                   fetched.from == item.from else { return nil }
             var shown = decision(d, prefix: w.state == "waiting" ? "Waiting for you" : nil)
             shown.quiet = w.state != "waiting"
+            shown.event = .flip(at: w.at, state: w.state)
             return shown
         case let z as Snooze:
             guard let fetched = try? await fetch(z.decisionId), fetched.id == z.decisionId, let d = open(fetched)?.body as? Decision else { return nil }
@@ -283,7 +294,9 @@ enum Notify {
                 shown.quiet = true
                 return shown
             }
-            return decision(d, prefix: "Back from snooze")
+            var shown = decision(d, prefix: "Back from snooze")
+            shown.event = .back(at: z.at, due: p["due"]?.bool ?? true)
+            return shown
         default:
             return nil
         }
@@ -300,8 +313,8 @@ enum Notify {
     /**
      * The notification service extension's work: what a push's notification says, from the keys
      * and the pinned directory the app keeps in their shared app group, with its buttons
-     * registered; nil keeps the placeholder. Reads, never writes. Logs what it did, how long it
-     * took and the process's memory against the 24 MB limit.
+     * registered; nil keeps the placeholder. It writes only `notified.json`, what pushes did
+     * (#2151). Logs what it did, how long it took and the process's memory against the 24 MB limit.
      */
     static func rewrite(_ p: JSON?) async -> Shown? {
         let log = Logger(subsystem: "dev.starbridge.ios", category: "notifications")
@@ -311,14 +324,46 @@ enum Notify {
             return nil
         }
         let api = Api(server: saved.server, session: secrets.session)
-        var shown = await shown(p, saved: saved, secrets: secrets) { id in try await api.item(id).item }
-        if let item = shown { shown = closed(item, saved: saved) }
+        var shown = await opened(p, saved: saved, secrets: secrets, book: .standard) { id in try await api.item(id).item }
         if let item = shown { shown?.badge = badge(item, saved: saved) }
         if let item = shown, !item.actions.isEmpty, let key = sealingKey(secrets) { shown?.seal = seal(item, key: key) }
         if let shown, !shown.actions.isEmpty { await register(shown.category, shown.actions) }
         await followPreviews()
         log.info("\(p["kind"]?.string ?? "?", privacy: .public) \(shown == nil ? "kept the placeholder" : "shown", privacy: .public) in \(Int(Date().timeIntervalSince(start) * 1000)) ms, \(footprint() / 1_048_576) MB")
         return shown
+    }
+
+    /**
+     * What a push's notification says, after the shared rule (#2151) and the app's saved state
+     * had their say; nil keeps the placeholder.
+     */
+    static func opened(_ p: JSON, saved: Saved, secrets: Secrets, book: NotifiedFile, fetch: (String) async throws -> SealedItem?) async -> Shown? {
+        guard var item = await shown(p, saved: saved, secrets: secrets, fetch: fetch) else { return nil }
+        if let event = item.event {
+            let (kept, effect) = book.step(item.item, event, known: saved.decisions.first { $0.id == item.item }, member: saved.me?.id)
+            item = noted(item, effect, closed: kept.closed)
+            // A flip already on its way when the owner snoozed the question.
+            if case .flip = event, let until = saved.decisions.first(where: { $0.id == item.item })?.snoozed, until > Date().addingTimeInterval(wakeSkew) {
+                item.quiet = true
+            }
+        }
+        return closed(item, saved: saved)
+    }
+
+    /**
+     * `shown` as the shared rule's effect leaves it (#2151): an extension cannot drop an alert,
+     * so a push that should change nothing shows quiet, and one about a question a push closed
+     * keeps no buttons either.
+     */
+    static func noted(_ shown: Shown, _ effect: NotifyEffect, closed: Bool) -> Shown {
+        var s = shown
+        s.counts = !closed && !shown.quiet
+        s.quiet = effect != .ring
+        if closed {
+            s.actions = []
+            s.category = ""
+        }
+        return s
     }
 
     /**
@@ -334,6 +379,7 @@ enum Notify {
         s.actions = []
         s.category = ""
         s.quiet = true
+        s.counts = false
         return s
     }
 
@@ -347,7 +393,7 @@ enum Notify {
         let all: (String) -> Bool = { _ in true }
         var open = Set(saved.openDecisions(sending: Set(saved.outbox.map(\.decisionId)), active: all).map(\.id))
         open.formUnion(saved.openPrompts(active: all).map(\.id))
-        if !shown.quiet { open.insert(shown.item) }
+        if shown.counts ?? !shown.quiet { open.insert(shown.item) }
         return open.count
     }
 

@@ -1,7 +1,6 @@
 import type { Database } from "bun:sqlite";
 import { Hono } from "hono";
-import { deleteCookie } from "hono/cookie";
-import { randomToken, requireCaller, SESSION_COOKIE } from "../auth";
+import { deleteSessionCookie, randomToken, requireCaller } from "../auth";
 import type { Deps, Env } from "../env";
 import { ipKey, rateLimit } from "../limits";
 import { forgetChallenges } from "./bind";
@@ -110,6 +109,6 @@ accountRoutes.delete("/account", requireCaller("device"), (c) => {
   rateLimit(c, `delete-account:${ipKey(c)}`, c.var.config.limits.accountDeletes);
   const waits = deleteAccount(c.var.db, account);
   if (waits) forgetAccount(c.var, account, waits);
-  deleteCookie(c, SESSION_COOKIE, { path: "/" });
+  deleteSessionCookie(c);
   return c.body(null, 204);
 });

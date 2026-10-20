@@ -122,6 +122,22 @@ final class AnswerRetryTests: XCTestCase {
         // The reads after it failed, and say so.
         XCTAssertNotNil(store.notice)
     }
+
+    /** Sign-out wipes the outbox with the keys: it sends what waits first (#2155). */
+    func testSigningOutSendsAnAnswerThatWaitsFirst() async throws {
+        let store = try await store()
+        AnswerServer.posts = [nil]
+        store.answer("d_one", choice: "Wait", text: nil)
+        try await until { store.notice != nil }
+        store.answerRetry?.cancel()
+        try await until { store.answerRetry == nil }
+        XCTAssertEqual(store.saved.outbox.map(\.decisionId), ["d_one"])
+        XCTAssertEqual(Store.unsentWarning(store.saved.outbox.count), " 1 answer isn't sent yet: it's sent first if the server can be reached, else it's lost.")
+
+        await store.signOut()
+        XCTAssertEqual(AnswerServer.posted, 2)
+        XCTAssertNil(store.saved.me)
+    }
 }
 
 /** Back now within the second of a snooze reaches every device and the machine (#1991). */

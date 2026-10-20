@@ -203,7 +203,10 @@
   decoded, it moves to `saved.json.unreadable-<time>`, the keychain item's secrets move to a second
   item with the same tag, and the app starts signed out and says so. A file it cannot read at all,
   as before the first unlock, or cannot move stays, and the app writes nothing until a launch can
-  (#1159). Quota settings write their defaults, so a later default never changes a saved choice. The
+  (#1159). Sign-out and account deletion delete those copies too, on Android with the Keystore
+  key that wraps them, and on the iPhone even in a run that writes nothing; a failure says so
+  (#2195). iOS keeps Keychain items when the app is deleted, so the first launch of an install with
+  no saved state deletes the items a deleted install left: deleting the app signs it out. Quota settings write their defaults, so a later default never changes a saved choice. The
   web writes `v` into its localStorage values and leaves a newer format alone; a damaged one, or one
   without `v`, is replaced at the next change, since it holds only display choices. IndexedDB's own
   version is the records' format, and sign-out removes every record kind of the account.

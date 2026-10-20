@@ -6,12 +6,14 @@ import { HTTPException } from "hono/http-exception";
 import { z } from "zod";
 import { AppleRefused } from "../apple";
 import {
+  cookieName,
   createSession,
+  deleteSessionCookie,
   fail,
   randomToken,
   requireCaller,
-  SESSION_COOKIE,
   safeEqual,
+  setSessionCookie,
 } from "../auth";
 import type { Env } from "../env";
 import { json } from "../http";
@@ -41,14 +43,8 @@ function startApp(c: Context<Env>, challenge: string): void {
   // Counted, as a flood of starts would fill the starts kept and refuse the next ones a cookie.
   rateLimit(c, `app-start:${ipKey(c)}`, c.var.config.limits.githubCallbacks);
   const token = randomToken("");
-  if (!c.var.appSignIns.start(challenge, token)) return;
-  setCookie(c, APP_COOKIE, token, {
-    httpOnly: true,
-    secure: c.var.config.secureCookies,
-    sameSite: "Lax",
-    path: "/v1/auth",
-    maxAge: 3600,
-  });
+  if (!c.var.appSignIns.start(challenge, token, ipKey(c, 48))) return;
+  setStateCookie(c, APP_COOKIE, token);
 }
 
 /**
@@ -57,10 +53,11 @@ function startApp(c: Context<Env>, challenge: string): void {
  */
 function passApp(c: Context<Env>, code: string, state: string): void {
   // Only the first code back binds, and only from the browser that started the sign-in.
-  const cookie = getCookie(c, APP_COOKIE);
+  const cookie = getCookie(c, cookieName(c, APP_COOKIE));
   const bound = cookie !== undefined && c.var.appSignIns.takeStartToken(state, cookie);
-  if (bound) deleteCookie(c, APP_COOKIE, { path: "/v1/auth" });
-  if (!c.var.appSignIns.passed(code, state, bound))
+  if (bound)
+    deleteCookie(c, cookieName(c, APP_COOKIE), { path: "/", secure: c.var.config.secureCookies });
+  if (!c.var.appSignIns.passed(code, state, bound, ipKey(c, 48)))
     fail(400, "bad-state", "sign-in came from elsewhere; start again in the app");
 }
 
@@ -70,14 +67,42 @@ function newAccountId(): string {
 
 export const authRoutes = new Hono<Env>();
 
-function setSessionCookie(c: Parameters<typeof setCookie>[0], token: string, secure: boolean) {
-  setCookie(c, SESSION_COOKIE, token, {
+/**
+ * A sign-in's short-lived cookie, on path `/` as the `__Host-` name needs (`cookieName`). A
+ * sign-in started before that name came in fails once and starts again.
+ */
+function setStateCookie(c: Context<Env>, name: string, value: string): void {
+  // On http the name is the same as before, and a cookie left on its old path would come first.
+  deleteLegacy(c, name);
+  setCookie(c, cookieName(c, name), value, {
     httpOnly: true,
-    secure,
+    secure: c.var.config.secureCookies,
     sameSite: "Lax",
     path: "/",
-    maxAge: 365 * 86_400,
+    // Long enough to make a GitHub account, or pass 2FA or device verification (#616).
+    maxAge: 3600,
   });
+}
+
+/** A sign-in's cookie, read once: it goes as it is read. */
+function takeStateCookie(c: Context<Env>, name: string): string | undefined {
+  const value = getCookie(c, cookieName(c, name));
+  deleteCookie(c, cookieName(c, name), { path: "/", secure: c.var.config.secureCookies });
+  deleteLegacy(c, name);
+  return value;
+}
+
+/** The paths sign-in cookies had before they moved to `/` with the `__Host-` name. */
+const LEGACY_PATHS: Record<string, string> = {
+  sb_oauth: "/v1/auth/github",
+  sb_apple: "/v1/auth/apple",
+  sb_app: "/v1/auth",
+};
+
+/** Clears a sign-in cookie a release before set on its old path, which an hour would expire. */
+function deleteLegacy(c: Context<Env>, name: string): void {
+  const path = LEGACY_PATHS[name];
+  if (path && getCookie(c, name) !== undefined) deleteCookie(c, name, { path });
 }
 
 /** The sign-in methods this server offers, so the page shows only those (#670). */
@@ -108,7 +133,7 @@ function callbackUrl(publicUrl: string, app: boolean, provider = "github"): stri
  * catches the redirect. The challenge is the app's state too, which the app checks.
  */
 authRoutes.get("/auth/github", (c) => {
-  const { github, publicUrl, secureCookies } = c.var.config;
+  const { github, publicUrl } = c.var.config;
   const app = c.req.query("app") === "1";
   if (!github) {
     if (app) fail(404, "not-configured", "GitHub sign-in is off on this server");
@@ -129,14 +154,7 @@ authRoutes.get("/auth/github", (c) => {
   } else {
     const state = randomToken("");
     url.searchParams.set("state", state);
-    setCookie(c, STATE_COOKIE, state, {
-      httpOnly: true,
-      secure: secureCookies,
-      sameSite: "Lax",
-      path: "/v1/auth/github",
-      // Long enough to make a GitHub account, or pass 2FA or device verification (#616).
-      maxAge: 3600,
-    });
+    setStateCookie(c, STATE_COOKIE, state);
   }
   return c.redirect(url.toString());
 });
@@ -219,12 +237,10 @@ function accountFor(
  * start again (#616): `declined` on GitHub, `expired` (or not matched to this browser), or `failed`.
  */
 authRoutes.get("/auth/github/callback", async (c) => {
-  const { secureCookies } = c.var.config;
   rateLimit(c, `github:${ipKey(c)}`, c.var.config.limits.githubCallbacks);
   const back = (why: "declined" | "expired" | "failed" | "paused" | "limited") =>
     c.redirect(`/?signin=${why}`);
-  const state = getCookie(c, STATE_COOKIE);
-  deleteCookie(c, STATE_COOKIE, { path: "/v1/auth/github" });
+  const state = takeStateCookie(c, STATE_COOKIE);
   const code = c.req.query("code");
   if (c.req.query("error")) return back("declined");
   if (!state || !code || !safeEqual(state, c.req.query("state") ?? "")) return back("expired");
@@ -238,8 +254,7 @@ authRoutes.get("/auth/github/callback", async (c) => {
     if (!(e instanceof HTTPException)) console.error(`GitHub sign-in: ${e}`);
     return back("failed");
   }
-  const token = createSession(c.var.db, account, c.var.config.limits.sessions);
-  setSessionCookie(c, token, secureCookies);
+  setSessionCookie(c, createSession(c.var.db, account, c.var.config.limits.sessions));
   return c.redirect("/");
 });
 
@@ -399,7 +414,7 @@ authRoutes.post("/auth/apple/session", async (c) => {
  * answers with a plain redirect the state cookie (SameSite=Lax) comes back with.
  */
 authRoutes.get("/auth/apple", (c) => {
-  const { apple, publicUrl, secureCookies } = c.var.config;
+  const { apple, publicUrl } = c.var.config;
   rateLimit(c, `apple-start:${ipKey(c)}`, c.var.config.limits.appleSignIns);
   const app = c.req.query("app") === "1";
   if (!apple?.servicesId) {
@@ -411,14 +426,7 @@ authRoutes.get("/auth/apple", (c) => {
     fail(400, "bad-request", "app sign-in needs challenge, the S256 PKCE challenge");
   const state = app ? challenge : randomToken("");
   if (app) startApp(c, challenge);
-  else
-    setCookie(c, APPLE_STATE_COOKIE, state, {
-      httpOnly: true,
-      secure: secureCookies,
-      sameSite: "Lax",
-      path: "/v1/auth/apple",
-      maxAge: 3600,
-    });
+  else setStateCookie(c, APPLE_STATE_COOKIE, state);
   const url = new URL(`${apple.url}/auth/authorize`);
   url.searchParams.set("client_id", apple.servicesId);
   url.searchParams.set("redirect_uri", callbackUrl(publicUrl, app, "apple"));
@@ -433,12 +441,11 @@ authRoutes.get("/auth/apple", (c) => {
 
 /** The page's Apple sign-in comes back, as GitHub's does, with the same `signin` failures. */
 authRoutes.get("/auth/apple/callback", async (c) => {
-  const { publicUrl, secureCookies } = c.var.config;
+  const { publicUrl } = c.var.config;
   rateLimit(c, `apple:${ipKey(c)}`, c.var.config.limits.appleSignIns);
   const back = (why: "declined" | "expired" | "failed" | "paused" | "limited") =>
     c.redirect(`/?signin=${why}`);
-  const state = getCookie(c, APPLE_STATE_COOKIE);
-  deleteCookie(c, APPLE_STATE_COOKIE, { path: "/v1/auth/apple" });
+  const state = takeStateCookie(c, APPLE_STATE_COOKIE);
   const code = c.req.query("code") ?? "";
   if (c.req.query("error")) return back("declined");
   if (!state || !APPLE_CODE.test(code) || !safeEqual(state, c.req.query("state") ?? ""))
@@ -451,11 +458,7 @@ authRoutes.get("/auth/apple/callback", async (c) => {
     if (e instanceof HTTPException && e.status === 429) return back("limited");
     return back("failed");
   }
-  setSessionCookie(
-    c,
-    createSession(c.var.db, account, c.var.config.limits.sessions),
-    secureCookies,
-  );
+  setSessionCookie(c, createSession(c.var.db, account, c.var.config.limits.sessions));
   return c.redirect("/");
 });
 
@@ -477,7 +480,7 @@ authRoutes.get("/auth/apple/callback/app", (c) => {
 
 /** Self-hosted sign-in with OWNER_TOKEN; the session also comes back for the Android app. */
 authRoutes.post("/auth/owner", async (c) => {
-  const { ownerToken, secureCookies } = c.var.config;
+  const { ownerToken } = c.var.config;
   if (!ownerToken) fail(404, "not-configured", "owner sign-in is off on this server");
   rateLimit(c, `owner:${ipKey(c)}`, c.var.config.limits.ownerSignIns);
   const { token } = await json(c, z.object({ token: z.string().max(1000) }));
@@ -495,15 +498,32 @@ authRoutes.post("/auth/owner", async (c) => {
       new Date().toISOString(),
     );
   const session = createSession(db, account, c.var.config.limits.sessions);
-  setSessionCookie(c, session, secureCookies);
+  setSessionCookie(c, session);
   return c.json({ session });
 });
 
+/**
+ * Signs this device out. Its push subscriptions go with its last session (security audit
+ * 2026-10-20): the push service would otherwise keep getting its items, sealed, until the client
+ * unsubscribed, which a client that lost its storage never does.
+ */
 authRoutes.post("/auth/logout", requireCaller("device"), (c) => {
   const caller = c.var.caller;
+  const db = c.var.db;
   if (caller.role === "device")
-    c.var.db.query("DELETE FROM sessions WHERE token_hash = ?").run(caller.session);
-  deleteCookie(c, SESSION_COOKIE, { path: "/" });
+    db.transaction(() => {
+      db.query("DELETE FROM sessions WHERE token_hash = ?").run(caller.session);
+      if (caller.member === null) return;
+      const left = db
+        .query("SELECT 1 FROM sessions WHERE account_id = ? AND member_id = ?")
+        .get(caller.account, caller.member);
+      if (!left)
+        db.query("DELETE FROM push_subscriptions WHERE account_id = ? AND member_id = ?").run(
+          caller.account,
+          caller.member,
+        );
+    })();
+  deleteSessionCookie(c);
   return c.body(null, 204);
 });
 

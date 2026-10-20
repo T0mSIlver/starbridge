@@ -8,6 +8,7 @@ import {
   mkdtempSync,
   readFileSync,
   realpathSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -662,6 +663,22 @@ describe("update", () => {
       updated: { at: expect.any(String), from: VERSION, to: "99.0.0" },
     });
   });
+
+  test.skipIf(WINDOWS)(
+    "writes the new binary as a new file, never through a link planted at its name",
+    async () => {
+      release = fakeReleases("99.0.0");
+      const path = installed();
+      const elsewhere = join(dir, "elsewhere");
+      writeFileSync(elsewhere, "untouched");
+      symlinkSync(elsewhere, join(dirname(path), `.starbridge.new.${process.pid}`));
+      expect(await update(ctx(), { kind: "binary", path }, release.pubkey)).toBe(0);
+      expect(readFileSync(elsewhere, "utf8")).toBe("untouched");
+      expect(spawnSync(path, ["--version"], { encoding: "utf8" }).stdout).toBe(
+        "starbridge 99.0.0\n",
+      );
+    },
+  );
 
   test("updates the Starbridge plugins Claude Code has, from the home directory (#762)", async () => {
     release = fakeReleases("99.0.0");

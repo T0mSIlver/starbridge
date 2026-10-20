@@ -424,3 +424,72 @@ test("a cross-site form post carrying the cookie is refused", async () => {
   expect(res.status).toBe(403);
   expect((await s.call("GET", "/v1/me", { token })).status).toBe(200);
 });
+
+test("logout drops the device's push subscriptions with its last session (N6)", async () => {
+  const s = await makeServer();
+  const acct = await setupAccount(s, "phone");
+  const db = s.deps.db;
+  const subscribe = (member: string) =>
+    db
+      .query(
+        "INSERT INTO push_subscriptions (id, account_id, member_id, type, endpoint, created_at) VALUES (?, ?, ?, 'fcm', ?, ?)",
+      )
+      .run(`ps_${member}`, acct.id, member, `tok-${member}`, new Date().toISOString());
+  subscribe("phone");
+  subscribe("other");
+  expect((await s.call("POST", "/v1/auth/logout", { token: acct.device.token })).status).toBe(204);
+  const left = db
+    .query("SELECT member_id FROM push_subscriptions WHERE account_id = ?")
+    .all(acct.id) as { member_id: string }[];
+  expect(left.map((r) => r.member_id)).toEqual(["other"]);
+});
+
+/** A server on https, whose cookies take the `__Host-` name. */
+const secure = () =>
+  makeServer({ ...githubConfig(), publicUrl: "https://sb.example", secureCookies: true });
+
+test("on https the session and sign-in cookies take the __Host- name (L7)", async () => {
+  const s = await secure();
+  const start = await s.app.request("/v1/auth/github");
+  const state = start.headers.get("set-cookie") ?? "";
+  expect(state).toMatch(/^__Host-sb_oauth=[^;]+;.*Path=\/;.*Secure/);
+  const res = await githubSignIn(s, 42);
+  const set = res.headers.get("set-cookie") ?? "";
+  expect(set).toMatch(/__Host-sb_session=sbs_[^;]+;.*Path=\/;.*Secure/);
+  const token = /__Host-sb_session=([^;]+)/.exec(set)?.[1] ?? "";
+  const me = await s.app.request("/v1/me", { headers: { cookie: `__Host-sb_session=${token}` } });
+  expect(me.status).toBe(200);
+});
+
+test("on https a bare sb_session counts only without a __Host- one, and moves to it (L7)", async () => {
+  const s = await secure();
+  const mine = await signIn(s);
+  const theirs = await signIn(s);
+  const account = async (cookie: string) => {
+    const res = await s.app.request("/v1/me", { headers: { cookie } });
+    return {
+      json: (await res.json()) as { account: string },
+      setCookie: res.headers.get("set-cookie") ?? "",
+    };
+  };
+  const me = (await s.call("GET", "/v1/me", { token: mine })).json.account;
+  // A cookie a sibling subdomain set loses to this host's own.
+  const both = await account(`sb_session=${theirs}; __Host-sb_session=${mine}`);
+  expect(both.json.account).toBe(me);
+  expect(both.setCookie).toBe("");
+  // A session from before the prefix still works, once, and moves over.
+  const old = await account(`sb_session=${mine}`);
+  expect(old.json.account).toBe(me);
+  expect(old.setCookie).toContain(`__Host-sb_session=${mine}`);
+  expect(old.setCookie).toMatch(/sb_session=;.*Max-Age=0/);
+});
+
+test("on http, a sign-in cookie left on its old path is cleared when a sign-in starts", async () => {
+  const s = await makeServer(githubConfig());
+  const start = await s.app.request("/v1/auth/github", { headers: { cookie: "sb_oauth=old" } });
+  const set = start.headers.getSetCookie();
+  expect(set.some((c) => /^sb_oauth=;.*Path=\/v1\/auth\/github/.test(c))).toBe(true);
+  expect(
+    set.some((c) => /^sb_oauth=[^;]+; .*Path=\/;/.test(c) && !c.startsWith("sb_oauth=;")),
+  ).toBe(true);
+});

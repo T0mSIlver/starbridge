@@ -42,6 +42,12 @@ function unitDir(sys: Sys) {
   return join(sys.home, ".config/systemd/user");
 }
 
+/** The unit, plist or task XML setup writes, and the agent's log beside it. */
+export function serviceFiles(sys: Sys): string[] {
+  const path = servicePath(sys);
+  return path ? [path, ...(kind(sys) === "systemd" ? [] : [agentLog(sys)])] : [];
+}
+
 function servicePath(sys: Sys): string | undefined {
   const k = kind(sys);
   if (k === "systemd") return join(unitDir(sys), UNIT);

@@ -1,0 +1,8 @@
+{
+  "note": "Days each retention period lasts on the hosted server (RETENTION_DAYS): the clients keep prompts for a week and runs for a day by these.",
+  "days": {
+    "day": 1,
+    "week": 7,
+    "month": 30
+  }
+}

@@ -138,6 +138,8 @@ extension Store {
     func backgroundPush(_ userInfo: [AnyHashable: Any]) async {
         guard let p = Notify.payload(userInfo), let id = Notify.item(p) else { return }
         if Notify.closes(p) { await Self.removeDelivered(about: id) }
+        // A push of the question that comes later rings nothing (#2151).
+        if ["answered", "settled"].contains(p["kind"]?.string) { NotifiedFile.standard.step(id, .closed, member: saved.me?.id) }
         try? await serial { try await self.sync() }
     }
 }
@@ -159,7 +161,11 @@ enum AnswerRefresh {
 
 /** Routes notifications for the app: pushes, taps and buttons. */
 final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
-    lazy var store = Store(deviceName: UIDevice.current.name)
+    lazy var store: Store = {
+        // Before the store reads the keys, whichever asks for it first.
+        Store.forgetAfterReinstall()
+        return Store(deviceName: UIDevice.current.name)
+    }()
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
         UNUserNotificationCenter.current().delegate = self

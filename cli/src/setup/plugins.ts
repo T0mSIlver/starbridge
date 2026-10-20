@@ -15,7 +15,7 @@ export const PLUGINS = [`starbridge@${MARKETPLACE}`, `starbridge-mod@${MARKETPLA
  * The folder setup writes the marketplace into, from this binary: Claude Code installs the plugins
  * from it, never from the repository's default branch, which a push changes for every machine.
  */
-function marketplaceDir(sys: Sys): string {
+export function marketplaceDir(sys: Home): string {
   return join(claudeDir(sys), "starbridge-marketplace");
 }
 

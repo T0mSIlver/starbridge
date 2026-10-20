@@ -15,6 +15,7 @@ import {
   computePace,
   contextText,
   DEFAULT_QUOTA_ALERTS,
+  endsPairingCode,
   forgetHeads,
   formatPairingCode,
   fromB64,
@@ -42,6 +43,7 @@ import {
   quotaCourse,
   quotaRunningOut,
   quotaState,
+  RETENTION_DAYS,
   readable,
   readRecoveryKey,
   ready,
@@ -88,6 +90,7 @@ const V = {
   links: await load("links.json"),
   quotaAlerts: await load("quota-alerts.json"),
   quotas: await load("quotas.json"),
+  retention: await load("retention.json"),
   schemas: await load("schemas.json"),
 };
 
@@ -191,6 +194,11 @@ describe("pairing.json", () => {
     expect(verifyCheckProof(entries, id, `${key.slice(1)}0`, proof)).toBe(false);
     expect(verifyCheckProof(entries.slice(0, 2), id, key, proof)).toBe(false);
   });
+  for (const c of v.lastGroup as { code: string; typed: string; expect: boolean }[]) {
+    test(`last group ${JSON.stringify(c.typed)} of ${c.code}`, () => {
+      expect(endsPairingCode(parsePairingCode(c.code), c.typed)).toBe(c.expect);
+    });
+  }
   for (const c of v.parse) {
     test(`parse ${c.input}`, () => {
       let got: string;
@@ -337,6 +345,10 @@ describe("links.json", () => {
     test(c.name, () =>
       expect(linkChip({ url: c.url, title: c.title }, c.project)).toEqual(c.expect),
     );
+});
+
+describe("retention.json", () => {
+  test("the days of each period", () => expect(V.retention.days).toEqual(RETENTION_DAYS));
 });
 
 describe("quota-alerts.json", () => {

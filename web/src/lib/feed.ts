@@ -1,5 +1,6 @@
 // The inbox as one feed (DESIGN.md, "Rules"): runs, then what needs the owner, then History.
 // Pure, so the order has tests.
+import { RETENTION_DAYS } from "@starbridge/protocol";
 import { closedAt, closedByPhrase, outcomeText } from "./outcome";
 import { shownRuns } from "./runs";
 import { isSnoozed } from "./snooze";
@@ -137,8 +138,8 @@ export function history(
 const sameDay = (a: Date, b: Date) => a.toDateString() === b.toDateString();
 
 /** How many of `past` closed today, in the device's zone. */
-/** History lists the last 7 days, the server's own; older rows, kept in this browser, wait. */
-const RECENT_DAYS = 7;
+/** History lists the last week, the server's own; older rows, kept in this browser, wait. */
+const RECENT_DAYS = RETENTION_DAYS.week;
 export const isRecent = (p: Past, now: number) =>
   now - Date.parse(p.closed) < RECENT_DAYS * 86_400_000;
 

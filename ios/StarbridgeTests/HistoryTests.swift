@@ -23,6 +23,7 @@ final class HistoryTests: XCTestCase {
         let store = Store(vault: MemoryVault(), disk: Disk(url: dir.appendingPathComponent("saved.json")), deviceName: "Test iPhone")
         XCTAssertEqual(HistoryText.how(try settledElsewhere([:]), store), "Answered · at the keyboard")
         let paged = try settledElsewhere(["answerIn": ["url": "https://example.test/review", "title": "the review page"]])
-        XCTAssertEqual(HistoryText.how(paged, store), "Answered in the review page · by the agent")
+        // Another host than GitHub or a Claude artifact reads as itself, never the agent's title (#2203).
+        XCTAssertEqual(HistoryText.how(paged, store), "Answered in example.test/review · by the agent")
     }
 }
