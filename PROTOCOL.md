@@ -797,7 +797,8 @@ waits a little, and goes only if nothing answered it meanwhile.
   posted while the account is present and its `pushHold` is not 0. Its push goes at once to the
   devices that are themselves present, and waits for the others while the account stays present,
   then `pushHold` seconds from when it stopped (#1003); never less than `pushHold` seconds from
-  the post. Present again before then, it waits again. A re-seal's new devices join the same hold.
+  the post. Present again before then, it waits again. It never waits more than 30 minutes past
+  that earliest time (#2189), whoever stays present. A re-seal's new devices join the same hold.
 - **When the hold ends**, within a few seconds, the server pushes the item to the
   devices it held it from, if it is still open, each item once, all those waiting together: a permission unanswered, a decision, or a
   `waiting` item's decision, unanswered and not snoozed. The hold is stored with the item, so a

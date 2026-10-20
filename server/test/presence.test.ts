@@ -9,7 +9,7 @@ import {
   seal,
   type Waiting,
 } from "@starbridge/protocol";
-import { Presence, releaseHolds } from "../src/presence";
+import { HOLD_CAP_MS, Presence, releaseHolds } from "../src/presence";
 import { wakeSnoozes } from "../src/snooze";
 import {
   type Account,
@@ -156,6 +156,23 @@ test("while a page is present, the other devices' push waits until the owner lea
   sent = [];
   release(60_000);
   expect(sent).toEqual([]);
+});
+
+test("a source that never stops saying present holds a push no longer than the cap (L4)", async () => {
+  await present(devbox);
+  const d = decision();
+  await post(devbox, d);
+  const due = Date.parse((await heldUntil(phone, d.id)) ?? "");
+  sent = [];
+  // Still beating at each check: held until the cap past its due time, then pushed.
+  const at = (ms: number) => due + ms - Date.now();
+  s.deps.presence.beat(acct.id, devbox.id, true, due + HOLD_CAP_MS - 1000);
+  release(at(HOLD_CAP_MS - 1));
+  expect(sent).toEqual([]);
+  s.deps.presence.beat(acct.id, devbox.id, true, due + HOLD_CAP_MS);
+  release(at(HOLD_CAP_MS));
+  // Only the machine was present: every device was held, and every one rings.
+  expect(pushed()).toEqual([[[phone.id, web.id], "decision", d.id]]);
 });
 
 test("coming back before the hold runs out holds again, until the last screen is left", async () => {

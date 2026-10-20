@@ -142,7 +142,9 @@
   timed a walk away from the wrong moment. Coming back within the hold time holds again. What
   bounds a hold is each source's own reading, input in the last minute, so a Mac left unlocked
   stops holding a minute after its last key; a source that says present wrongly (#990) holds
-  until it stops. Only the push waits, never the item: every device lists it at once, and a held card
+  until it stops, or 30 minutes at most (#2189): any paired machine may say present, and one that
+  never stops would otherwise keep every phone silent. A question left that long at a screen
+  rings the phone anyway. Only the push waits, never the item: every device lists it at once, and a held card
   looks like any other, since the owner chose no state that flips while they look. With no presence
   signal, which is every older client, pushes go at once as before. The server reads presence as
   one bit per source, in memory, since the hold is all it is for: no idle time, lock state or
