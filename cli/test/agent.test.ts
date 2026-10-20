@@ -451,12 +451,13 @@ test("the agent refuses bad requests with the CLI's own messages", async () => {
 // Windows uploads no quotas: CodexBar has no build there (spec/product.md, "Platforms").
 test.skipIf(WINDOWS)("the agent uploads quotas on its timer", async () => {
   const { agent } = await machine({ providers: ["claude", "codex"], interval: "1s" });
-  await until(async () => (await server.opened("quota")).length >= 1, 10_000);
+  const status = () => new AgentClient(agent.socket).call<Status>("GET", "/v1/status");
+  // The agent records lastPostAt once the server's answer is back, a moment after the server
+  // stored the snapshot, so the test waits on the agent rather than on the server (#2126).
+  await until(async () => (await status()).quota.lastPostAt !== undefined, 10_000);
   const [snap] = await server.opened("quota");
   expect(snap?.providers.map((p) => p.provider)).toEqual(["claude", "codex"]);
-  const status = await new AgentClient(agent.socket).call<Status>("GET", "/v1/status");
-  expect(status.quota.providers).toEqual(["claude", "codex"]);
-  expect(status.quota.lastPostAt).toBeDefined();
+  expect((await status()).quota.providers).toEqual(["claude", "codex"]);
 });
 
 /** A device's call to the server. */
