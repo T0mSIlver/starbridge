@@ -434,16 +434,27 @@ try {
         ),
       "the failed load",
     );
-    await offline.evaluate(() => {
-      const g = globalThis as { tray?: Electron.Tray; menu?: Electron.Menu };
-      g.tray?.emit("right-click");
-      g.menu?.items[1]?.click();
-    });
+    // The app may have painted its icon before the patch above: a theme change paints it again.
     await until(
       () =>
-        offline.evaluate(({ BrowserWindow }) =>
-          BrowserWindow.getAllWindows().some((w) => w.getTitle() === "Server"),
-        ),
+        offline.evaluate(({ nativeTheme }) => {
+          const g = globalThis as { tray?: Electron.Tray };
+          if (!g.tray) nativeTheme.emit("updated");
+          return !!g.tray;
+        }),
+      "the menu bar icon",
+    );
+    // Clicked until the window shows: the failed load's URL can show before the app has marked
+    // the load failed, and Settings… then goes to the page instead (#2211).
+    await until(
+      () =>
+        offline.evaluate(({ BrowserWindow }) => {
+          if (BrowserWindow.getAllWindows().some((w) => w.getTitle() === "Server")) return true;
+          const g = globalThis as { tray?: Electron.Tray; menu?: Electron.Menu };
+          g.tray?.emit("right-click");
+          g.menu?.items[1]?.click();
+          return false;
+        }),
       "the server window",
     );
     // Sized to its content (#1613): shown, with nothing to scroll and nothing cut off.
