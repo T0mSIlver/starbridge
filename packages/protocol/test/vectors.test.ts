@@ -42,6 +42,7 @@ import {
   quotaCourse,
   quotaRunningOut,
   quotaState,
+  RETENTION_DAYS,
   readable,
   readRecoveryKey,
   ready,
@@ -88,6 +89,7 @@ const V = {
   links: await load("links.json"),
   quotaAlerts: await load("quota-alerts.json"),
   quotas: await load("quotas.json"),
+  retention: await load("retention.json"),
   schemas: await load("schemas.json"),
 };
 
@@ -337,6 +339,10 @@ describe("links.json", () => {
     test(c.name, () =>
       expect(linkChip({ url: c.url, title: c.title }, c.project)).toEqual(c.expect),
     );
+});
+
+describe("retention.json", () => {
+  test("the days of each period", () => expect(V.retention.days).toEqual(RETENTION_DAYS));
 });
 
 describe("quota-alerts.json", () => {

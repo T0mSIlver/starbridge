@@ -510,7 +510,7 @@ extension Store {
             }
         }
         // A week of prompts, the log's span, as the server keeps.
-        let weekAgo = Date().addingTimeInterval(-7 * 86_400)
+        let weekAgo = Date().addingTimeInterval(-Double(Retention.week) * 86_400)
         var s = saved
         s.promptCursor = cursor
         s.prompts = Dates.byInstant(byId.values.filter { Dates.parse($0.body.createdAt).map { $0 > weekAgo } ?? true }) { $0.body.createdAt }
@@ -573,7 +573,7 @@ extension Store {
                 held[u.id] = u
             }
         }
-        let dayAgo = Date().addingTimeInterval(-86_400)
+        let dayAgo = Date().addingTimeInterval(-Double(Retention.day) * 86_400)
         var s = saved
         s.runs = held.values.filter { $0.lastNews > dayAgo }.sorted { $0.body.startedAt < $1.body.startedAt }
         s.dismissedRuns = saved.dismissedRuns.filter { id, at in held[id] == nil && (Dates.parse(at) ?? .distantPast) > dayAgo }

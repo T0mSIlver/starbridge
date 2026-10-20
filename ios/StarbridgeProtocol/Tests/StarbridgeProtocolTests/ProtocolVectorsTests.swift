@@ -12,7 +12,8 @@ private let vectorsDir = URL(fileURLWithPath: #filePath)
 /** The vector files these tests read; `testEveryVectorFileIsRead` keeps it whole. */
 private let READ: Set<String> = [
     "context.json", "directory.json", "envelopes.json", "heads.json", "images.json", "join.json",
-    "keys.json", "links.json", "pairing.json", "quota-alerts.json", "quotas.json", "schemas.json",
+    "keys.json", "links.json", "pairing.json", "quota-alerts.json", "quotas.json", "retention.json",
+    "schemas.json",
 ]
 
 /** Vector files only the machine's code runs: the local agent computes pace and alerts (#1147). */
@@ -256,6 +257,14 @@ final class ProtocolVectorsTests: XCTestCase {
             }
             XCTAssertEqual(got, c.str("expect"), c.str("name"))
         }
+    }
+
+    func testRetention() throws {
+        let days = try vectors("retention.json")["days"]!
+        XCTAssertEqual(days["day"]!.number, Double(Retention.day))
+        XCTAssertEqual(days["week"]!.number, Double(Retention.week))
+        XCTAssertEqual(days["month"]!.number, Double(Retention.month))
+        XCTAssertEqual(days.object?.count, 3)
     }
 
     func testLinks() throws {

@@ -26,6 +26,7 @@ import dev.starbridge.app.protocol.contextText
 import dev.starbridge.app.protocol.parseContext
 import dev.starbridge.app.protocol.parseSealedItem
 import dev.starbridge.app.protocol.SignedEnvelope
+import dev.starbridge.app.protocol.Retention
 import dev.starbridge.app.protocol.Sodium
 import dev.starbridge.app.protocol.fromB64
 import dev.starbridge.app.protocol.parseBody
@@ -70,7 +71,8 @@ import java.io.File
 /** The vector files these tests read; [ProtocolVectorsTest.everyVectorFileIsRead] keeps it whole. */
 private val READ = setOf(
     "context.json", "directory.json", "envelopes.json", "heads.json", "images.json", "join.json",
-    "keys.json", "links.json", "pairing.json", "quota-alerts.json", "quotas.json", "schemas.json",
+    "keys.json", "links.json", "pairing.json", "quota-alerts.json", "quotas.json", "retention.json",
+    "schemas.json",
 )
 
 /** Vector files only the machine's code runs: the local agent computes pace and alerts (#1147). */
@@ -422,6 +424,12 @@ class ProtocolVectorsTest {
         org.junit.Assert.assertThrows(IllegalArgumentException::class.java) {
             envelopes.seal("answer", body, "phone", key("phone", "signSk"), listOf(machine, browser))
         }
+    }
+
+    // retention.json: the days of each retention period.
+    @Test fun retention() {
+        val days = load("retention.json").getValue("days").jsonObject
+        assertEquals(mapOf("day" to Retention.DAY, "week" to Retention.WEEK, "month" to Retention.MONTH), days.mapValues { it.value.jsonPrimitive.content.toLong() })
     }
 
     // links.json (#1577): a link chip's icon and text in every client.
