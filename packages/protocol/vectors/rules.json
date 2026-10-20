@@ -293,6 +293,273 @@
       }
     ]
   },
+  "notify": [
+    {
+      "name": "a question rings once, pushed twice",
+      "steps": [
+        {
+          "push": {
+            "kind": "decision",
+            "id": "d1"
+          },
+          "rings": true
+        },
+        {
+          "push": {
+            "kind": "decision",
+            "id": "d1"
+          },
+          "rings": false
+        }
+      ]
+    },
+    {
+      "name": "a question pushed after its answer stays silent",
+      "steps": [
+        {
+          "push": {
+            "kind": "answered",
+            "id": "d1"
+          },
+          "rings": false
+        },
+        {
+          "push": {
+            "kind": "decision",
+            "id": "d1"
+          },
+          "rings": false
+        }
+      ]
+    },
+    {
+      "name": "an answer still counts after a restart",
+      "steps": [
+        {
+          "push": {
+            "kind": "answered",
+            "id": "d1"
+          },
+          "rings": false
+        },
+        {
+          "restart": true
+        },
+        {
+          "push": {
+            "kind": "decision",
+            "id": "d1"
+          },
+          "rings": false
+        }
+      ]
+    },
+    {
+      "name": "a waiting flip after the answer stays silent",
+      "steps": [
+        {
+          "push": {
+            "kind": "decision",
+            "id": "d1"
+          },
+          "rings": true
+        },
+        {
+          "push": {
+            "kind": "answered",
+            "id": "d1"
+          },
+          "rings": false
+        },
+        {
+          "push": {
+            "kind": "waiting",
+            "id": "d1",
+            "at": "2026-10-12T10:00:01Z",
+            "state": "waiting"
+          },
+          "rings": false
+        }
+      ]
+    },
+    {
+      "name": "a snooze's return after the answer stays silent",
+      "steps": [
+        {
+          "push": {
+            "kind": "decision",
+            "id": "d1"
+          },
+          "rings": true
+        },
+        {
+          "push": {
+            "kind": "snooze",
+            "id": "d1",
+            "at": "2026-10-12T10:00:00Z",
+            "until": "2026-10-12T11:00:00Z",
+            "due": false
+          },
+          "rings": false
+        },
+        {
+          "push": {
+            "kind": "answered",
+            "id": "d1"
+          },
+          "rings": false
+        },
+        {
+          "push": {
+            "kind": "snooze",
+            "id": "d1",
+            "at": "2026-10-12T10:00:00Z",
+            "until": "2026-10-12T11:00:00Z",
+            "due": true
+          },
+          "rings": false
+        }
+      ]
+    },
+    {
+      "name": "a snooze's return pushed twice rings once",
+      "steps": [
+        {
+          "push": {
+            "kind": "decision",
+            "id": "d1"
+          },
+          "rings": true
+        },
+        {
+          "push": {
+            "kind": "snooze",
+            "id": "d1",
+            "at": "2026-10-12T10:00:00Z",
+            "until": "2026-10-12T11:00:00Z",
+            "due": false
+          },
+          "rings": false
+        },
+        {
+          "push": {
+            "kind": "snooze",
+            "id": "d1",
+            "at": "2026-10-12T10:00:00Z",
+            "until": "2026-10-12T11:00:00Z",
+            "due": true
+          },
+          "rings": true
+        },
+        {
+          "restart": true
+        },
+        {
+          "push": {
+            "kind": "snooze",
+            "id": "d1",
+            "at": "2026-10-12T10:00:00Z",
+            "until": "2026-10-12T11:00:00Z",
+            "due": true
+          },
+          "rings": false
+        }
+      ]
+    },
+    {
+      "name": "the same waiting flip pushed twice rings once",
+      "steps": [
+        {
+          "push": {
+            "kind": "decision",
+            "id": "d1"
+          },
+          "rings": true
+        },
+        {
+          "push": {
+            "kind": "waiting",
+            "id": "d1",
+            "at": "2026-10-12T10:00:01Z",
+            "state": "waiting"
+          },
+          "rings": true
+        },
+        {
+          "restart": true
+        },
+        {
+          "push": {
+            "kind": "waiting",
+            "id": "d1",
+            "at": "2026-10-12T10:00:01Z",
+            "state": "waiting"
+          },
+          "rings": false
+        }
+      ]
+    },
+    {
+      "name": "an older flip after a newer one changes nothing",
+      "steps": [
+        {
+          "push": {
+            "kind": "decision",
+            "id": "d1"
+          },
+          "rings": true
+        },
+        {
+          "push": {
+            "kind": "waiting",
+            "id": "d1",
+            "at": "2026-10-12T10:00:02Z",
+            "state": "waiting"
+          },
+          "rings": true
+        },
+        {
+          "push": {
+            "kind": "waiting",
+            "id": "d1",
+            "at": "2026-10-12T10:00:01Z",
+            "state": "working"
+          },
+          "rings": false
+        },
+        {
+          "push": {
+            "kind": "waiting",
+            "id": "d1",
+            "at": "2026-10-12T10:00:03Z",
+            "state": "waiting"
+          },
+          "rings": false
+        }
+      ]
+    },
+    {
+      "name": "a flip that comes before its question shows it",
+      "steps": [
+        {
+          "push": {
+            "kind": "waiting",
+            "id": "d1",
+            "at": "2026-10-12T10:00:01Z",
+            "state": "working"
+          },
+          "rings": true
+        },
+        {
+          "push": {
+            "kind": "decision",
+            "id": "d1"
+          },
+          "rings": false
+        }
+      ]
+    }
+  ],
   "options": [
     {
       "name": "recommended moves first",

@@ -69,6 +69,15 @@
   it. The extension shows no button for an item the app's saved state says is answered, so a
   replayed push cannot offer to answer it again, and it clears the badge the placeholder carried
   when it keeps the placeholder.
+- **A push rings once, and never for a closed question** (#2151). Pushes arrive late, twice
+  or out of order, and a browser stops its idle service worker, so each client remembers, across
+  a restart, the questions `answered` and settled pushes closed, the last waiting flip it applied
+  and the snooze return it rang for. A question, flip or return pushed after its question closed
+  rings nothing; a repeat rings nothing; an older flip changes nothing; a flip that reaches the
+  device before its question shows the question and rings. A closed-question hint only keeps a
+  notification down, which a hostile server could do anyway by not pushing. `rules.json`'s
+  `notify` cases hold every client to this; the iPhone's notification extension cannot drop an
+  alert, so there a closed question's late push shows quiet and without buttons.
 - Caps (#27, #36, #37): 10 subscriptions a device, 30 an account; 4 pushes in flight and 200
   waiting per account, 10 s each. A push connects to the exact address that passed the
   private-range check, and is sent only if its subscription and device are still active (#260).

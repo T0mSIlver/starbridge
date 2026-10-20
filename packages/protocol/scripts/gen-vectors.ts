@@ -3453,6 +3453,12 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
         },
       ],
     },
+    // What a push about one question may ring on a device, as it arrives late, twice or out of
+    // order (#2151). Each case feeds its steps, in order, through the client's own push handler;
+    // `rings` says whether that step sounds. `id` is always the question's: a waiting flip or a
+    // snooze names it inside its own item. `restart` is the app or the service worker starting
+    // again, so what a device must remember survives it.
+    notify: notifyCases(),
     // A question's options, the agent's recommended one first (#191), compared by code points. A
     // question with options always names one.
     options: [
@@ -3505,4 +3511,102 @@ if (import.meta.main) {
   for (const [name, value] of Object.entries(await buildVectors())) {
     await Bun.write(new URL(name, dir), render(value));
   }
+}
+
+/** A push in a `notify` case; `id` is the question's. */
+type NotifyPush =
+  | { kind: "decision" | "answered"; id: string }
+  | { kind: "waiting"; id: string; at: string; state: "waiting" | "working" }
+  | { kind: "snooze"; id: string; at: string; until: string; due: boolean };
+type NotifyStep = { push: NotifyPush; rings: boolean } | { restart: true };
+
+/** The `notify` cases of rules.json (#2151). */
+function notifyCases(): { name: string; steps: NotifyStep[] }[] {
+  const asked: NotifyPush = { kind: "decision", id: "d1" };
+  const answered: NotifyPush = { kind: "answered", id: "d1" };
+  const flip = (at: string, state: "waiting" | "working"): NotifyPush => ({
+    kind: "waiting",
+    id: "d1",
+    at: `2026-10-12T10:00:0${at}Z`,
+    state,
+  });
+  const snooze = (due: boolean): NotifyPush => ({
+    kind: "snooze",
+    id: "d1",
+    at: "2026-10-12T10:00:00Z",
+    until: "2026-10-12T11:00:00Z",
+    due,
+  });
+  return [
+    {
+      name: "a question rings once, pushed twice",
+      steps: [
+        { push: asked, rings: true },
+        { push: asked, rings: false },
+      ],
+    },
+    {
+      name: "a question pushed after its answer stays silent",
+      steps: [
+        { push: answered, rings: false },
+        { push: asked, rings: false },
+      ],
+    },
+    {
+      name: "an answer still counts after a restart",
+      steps: [{ push: answered, rings: false }, { restart: true }, { push: asked, rings: false }],
+    },
+    {
+      name: "a waiting flip after the answer stays silent",
+      steps: [
+        { push: asked, rings: true },
+        { push: answered, rings: false },
+        { push: flip("1", "waiting"), rings: false },
+      ],
+    },
+    {
+      name: "a snooze's return after the answer stays silent",
+      steps: [
+        { push: asked, rings: true },
+        { push: snooze(false), rings: false },
+        { push: answered, rings: false },
+        { push: snooze(true), rings: false },
+      ],
+    },
+    {
+      name: "a snooze's return pushed twice rings once",
+      steps: [
+        { push: asked, rings: true },
+        { push: snooze(false), rings: false },
+        { push: snooze(true), rings: true },
+        { restart: true },
+        { push: snooze(true), rings: false },
+      ],
+    },
+    {
+      name: "the same waiting flip pushed twice rings once",
+      steps: [
+        { push: asked, rings: true },
+        { push: flip("1", "waiting"), rings: true },
+        { restart: true },
+        { push: flip("1", "waiting"), rings: false },
+      ],
+    },
+    {
+      name: "an older flip after a newer one changes nothing",
+      steps: [
+        { push: asked, rings: true },
+        { push: flip("2", "waiting"), rings: true },
+        { push: flip("1", "working"), rings: false },
+        { push: flip("3", "waiting"), rings: false },
+      ],
+    },
+    {
+      name: "a flip that comes before its question shows it",
+      steps: [
+        { push: flip("1", "working"), rings: true },
+        { push: asked, rings: false },
+      ],
+    },
+  ];
 }
