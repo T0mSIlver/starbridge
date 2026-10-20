@@ -155,3 +155,10 @@
     width: min(400px, calc(100vw - 2 * var(--s4)));
   }
 }
+
+/* The last group of a linked device's code (#2183): its label above the field. */
+.last {
+  display: grid;
+  gap: var(--s2);
+  margin-top: var(--s2);
+}

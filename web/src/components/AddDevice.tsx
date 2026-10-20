@@ -36,6 +36,10 @@ export function AddDevice() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
   const [done, setDone] = useState<PairOutcome>();
+  /** The request came by a pairing link: a device's waits for its code's last group (#2183). */
+  const [byLink, setByLink] = useState(false);
+  /** What the owner typed of the code a linked device shows. */
+  const [last, setLast] = useState("");
   const cancelShown = useRef<() => void>(undefined);
   /** The code of the last pairing link this tab opened. */
   const latest = useRef<string>(undefined);
@@ -65,6 +69,7 @@ export function AddDevice() {
           setShown(undefined);
           // A request from the QR code replaces the result of a typed code approved meanwhile.
           setDone(undefined);
+          setByLink(false);
           setReq(r);
         },
         (e) => {
@@ -87,7 +92,10 @@ export function AddDevice() {
       setShown(undefined);
       setDone(undefined);
       setReq(undefined);
-      setCode(fromLink);
+      // Not in the field: a device's code is what the owner types to approve it (#2183).
+      setCode("");
+      setByLink(true);
+      setLast("");
       latest.current = fromLink;
       run(async () => {
         const r = await (await load()).readPairing(fromLink);
@@ -109,7 +117,25 @@ export function AddDevice() {
     setDone(outcome);
     setReq(undefined);
     setCode("");
+    setByLink(false);
+    setLast("");
   };
+  // A phone or browser from a link: anyone can send one, so the owner proves the new device is in
+  // front of them by typing the last group of the code it shows, which the link's sender can't
+  // show them (#2183). A machine's terminal asks for its check code after.
+  const typing = !!req && byLink && req.role === "device";
+  const [matches, setMatches] = useState(false);
+  useEffect(() => {
+    let current = true;
+    setMatches(false);
+    if (typing && req)
+      load().then((d) => {
+        if (current) setMatches(d.lastGroupMatches(req.code, last));
+      });
+    return () => {
+      current = false;
+    };
+  }, [typing, req, last]);
 
   return (
     <>
@@ -140,17 +166,35 @@ export function AddDevice() {
                   ? `Let ${req.name} post decisions and quotas?`
                   : `Let ${req.name} read and answer as a device?`}
               </h2>
-              <p className={`t-small ${p.dim}`}>
-                {req.role === "machine"
-                  ? `Approve only if you just ran starbridge setup or pair on ${req.name}.`
-                  : `Approve only if ${req.name} scanned or showed this code.`}
-              </p>
+              {typing ? (
+                <div className={p.last}>
+                  <label className={`t-small ${p.dim}`} htmlFor="pairing-last">
+                    Type the last 4 characters of the code {req.name} shows.
+                  </label>
+                  <input
+                    id="pairing-last"
+                    className={`t-snippet ${p.input}`}
+                    autoComplete="off"
+                    spellCheck={false}
+                    maxLength={9}
+                    placeholder="XXXX"
+                    value={last}
+                    onChange={(e) => setLast(e.target.value)}
+                  />
+                </div>
+              ) : (
+                <p className={`t-small ${p.dim}`}>
+                  {req.role === "machine"
+                    ? `Approve only if you just ran starbridge setup or pair on ${req.name}.`
+                    : `Approve only if ${req.name} scanned or showed this code.`}
+                </p>
+              )}
             </div>
             <div className={p.actions}>
               <button
                 type="button"
                 className={`t-label ${ui.btn} ${ui.rec}`}
-                disabled={busy}
+                disabled={busy || (typing && !matches)}
                 onClick={() =>
                   run(async () => {
                     const device = await load();
@@ -250,6 +294,7 @@ export function AddDevice() {
           onSubmit={(e) => {
             e.preventDefault();
             setDone(undefined);
+            setByLink(false);
             run(async () => setReq(await (await load()).readPairing(code)));
           }}
         >

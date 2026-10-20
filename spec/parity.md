@@ -42,7 +42,7 @@ Android's and iOS's tests read, so a change to one fails the others until they f
 | Inbox with no machine (install command, then pair it from there) | yes (#610; open the link setup prints, or Type a code instead, #1367, #2140) | yes (#610; Scan a QR code and Type a code instead, #1367, #2140) | yes (as web) | yes (#1370; Scan a QR code and Type a code instead, as Android) |
 | Pairing: show QR for a new phone | yes | yes | yes | yes (#1239) |
 | Pairing: scan a QR | no (no scanner in web) | yes (Play services code scanner) | no (as web) | yes (VisionKit: to join this iPhone, #1105; a machine's or another device's code in Devices, with the check key, #1239) |
-| Pairing: link (`/pair#code`) | yes | yes (App Link) | no (the link opens the web page in the browser; the `starbridge://pair` link of CLIs before 0.1.1 is gone, #1628) | not yet (the link opens the web page until the app claims it, #1115; the `starbridge://pair` link of CLIs before 0.1.1 is gone, #1628) |
+| Pairing: link (`/pair#code`); a phone or browser by link waits for its code's last group, typed (#2183) | yes | yes (App Link) | no (the link opens the web page in the browser; the `starbridge://pair` link of CLIs before 0.1.1 is gone, #1628) | not yet (the link opens the web page until the app claims it, #1115; the `starbridge://pair` link of CLIs before 0.1.1 is gone, #1628) |
 | Pairing: typed code | yes | yes | yes | yes (#1239) |
 | Pairing: approve a join by digits (Compare digits) | yes | yes | yes (as web) | yes (#1158: over any screen while the app is in front; the notification opens the app) |
 | After an answer, the next open card opens | yes (beside the list; under 1100 px only with a mouse, #1432) | no (touch: the inbox comes back) | yes (as web) | no (touch, as Android) |

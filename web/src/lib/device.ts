@@ -10,6 +10,7 @@ import {
   codeFromLink,
   type Directory,
   DirectoryEntry,
+  endsPairingCode,
   formatPairingCode,
   generateRecoverySeed,
   genesisEntryAsync,
@@ -684,6 +685,15 @@ function checkOf(entries: unknown[], id: string): { check?: string } {
     return { check: checkCode(entries, id) };
   } catch {
     return {};
+  }
+}
+
+/** Whether `typed` is the last group of the pairing code `code` (#2183). */
+export function lastGroupMatches(code: string, typed: string): boolean {
+  try {
+    return endsPairingCode(codeFromLink(code), typed);
+  } catch {
+    return false;
   }
 }
 

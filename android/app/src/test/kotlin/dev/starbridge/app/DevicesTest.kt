@@ -6,6 +6,8 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTextClearance
+import androidx.compose.ui.test.performTextInput
 import dev.starbridge.app.data.Approval
 import dev.starbridge.app.data.Kind
 import dev.starbridge.app.ui.devices.PairLinkScreen
@@ -73,6 +75,28 @@ class DevicesTest {
         assertEquals(0, approved)
         compose.onNodeWithText("Approve", useUnmergedTree = true).performClick()
         compose.onAllNodesWithText("Approve", useUnmergedTree = true).get(1).performClick()
+        assertEquals(1, approved)
+    }
+
+    /** A phone or browser by link: Approve waits for the last group of the code it shows (#2183). */
+    @Test fun aDeviceByLinkWaitsForTheLastGroupOfItsCode() {
+        var approved = 0
+        val code = "0123-4567-89AB-CDEF-GHJK-MN01"
+        compose.setContent {
+            StarbridgeTheme {
+                PairLinkScreen(Approval.Found("Pixel 9", Kind.Device, code), DeviceActions({}, { approved++ }, {}, {}, {}))
+            }
+        }
+        // The link carries the code: the screen doesn't show what to type.
+        compose.onAllNodesWithText(code, substring = true).assertCountEquals(0)
+        compose.onNodeWithText("Type the last 4 characters of the code Pixel 9 shows.").assertIsDisplayed()
+        compose.onNodeWithText("Last 4 characters").performTextInput("ghjk")
+        compose.onNodeWithText("Approve", useUnmergedTree = true).performClick()
+        assertEquals(0, approved)
+        compose.onNodeWithText("ghjk").performTextClearance()
+        compose.onNodeWithText("Last 4 characters").performTextInput("mnoi")
+        compose.onNodeWithText("Approve", useUnmergedTree = true).performClick()
+        // No second confirm: the typed group is the proof.
         assertEquals(1, approved)
     }
 }

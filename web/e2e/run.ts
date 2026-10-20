@@ -2241,7 +2241,7 @@ async function main() {
   }
   if (SHARD === "inbox") return;
 
-  step("add a second browser by pairing code");
+  step("add a second browser by its pairing link, typing its code's last group (#2183)");
   const b = await context({ permissions: ["notifications"] });
   await watchCsp(b);
   const pageB = await signIn(b);
@@ -2282,10 +2282,17 @@ async function main() {
     .getByRole("link", { name: "Settings" })
     .click();
   await follow(page, page.getByRole("link", { name: "Add a device" }), "/settings/devices/add");
-  await page.getByLabel("Pair a machine or device").fill(codeB);
-  await page.getByRole("button", { name: "Check code" }).click();
+  // By its link, as a phone's camera opens it: Approve waits for the last group of the code the
+  // new browser shows, which a link from anyone else can't show the owner (#2183).
+  await page.goto(`${ORIGIN}/pair#${codeB}`);
   await page.getByText(/read and answer as a device/).waitFor();
-  await page.getByRole("button", { name: "Approve" }).click();
+  const approve = page.getByRole("button", { name: "Approve" });
+  const last = page.getByLabel(/^Type the last 4 characters of the code/);
+  await last.fill(codeB.slice(-9, -5));
+  if (await approve.isEnabled()) throw new Error("Approve took the wrong group of a linked code");
+  await last.fill(codeB.slice(-4).toLowerCase());
+  await shoot(page, "pair-device-link");
+  await approve.click();
   await pageB.getByRole("heading", { name: "Inbox" }).waitFor({ timeout: 30_000 });
   await pageB.getByRole("button", { name: "Turn on notifications" }).waitFor();
   await shoot(pageB, "inbox-banner");
