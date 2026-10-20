@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 import os
 import StarbridgeProtocol
@@ -21,6 +22,29 @@ struct Shown: Equatable, Sendable {
     var actions: [NotificationAction] = []
     /** The app icon's count with this item in it (#1603); nil leaves the badge as it is. */
     var badge: Int?
+    /** The MAC that ties the buttons to these words (`Notify.seal`); nil without buttons. */
+    var seal: String?
+}
+
+/** A delivered notification as a button press hands it back: its words, its category and its seal. */
+struct Delivered: Sendable {
+    var title: String
+    var subtitle: String
+    var body: String
+    var category: String
+    var seal: String?
+
+    init(title: String, subtitle: String, body: String, category: String, seal: String?) {
+        self.title = title
+        self.subtitle = subtitle
+        self.body = body
+        self.category = category
+        self.seal = seal
+    }
+
+    init(_ content: UNNotificationContent) {
+        self.init(title: content.title, subtitle: content.subtitle, body: content.body, category: content.categoryIdentifier, seal: content.userInfo[Notify.sealKey] as? String)
+    }
 }
 
 /** A notification button, as the category registers it. */
@@ -62,17 +86,55 @@ enum Notify {
     }
 
     /**
-     * Whether a notification's button may act on item `id` with the category the notification
-     * carries: an answer needs the question's own (`d.<id>`), Deny the prompt's. A push's category
-     * is the server's to name until the extension rewrites it, so a tap never answers a question the
-     * notification does not belong to. A plain tap and Allow only open the item.
+     * Whether a notification's button may act on item `id`: an answer needs the question's own
+     * category (`d.<id>`) and a seal this iPhone made over the words shown, Deny the prompt's
+     * category. The server holds the APNs key and may send an alert the extension never rewrites,
+     * with a question's category under words of its own choosing (security audit 2026-10-20), so
+     * only a notification the extension built from the opened question answers it. A plain tap
+     * and Allow only open the item; Deny fetches the prompt before it acts.
      */
-    static func accepts(_ action: String, category: String, item id: String) -> Bool {
+    static func accepts(_ action: String, _ delivered: Delivered, item id: String, key: SymmetricKey?) -> Bool {
         switch action {
-        case "reply", "page", _ where action.hasPrefix(optionPrefix): category.unicodeScalars.elementsEqual(Notify.category(id).unicodeScalars)
-        case "deny": category == "permission"
+        case "reply", "page", _ where action.hasPrefix(optionPrefix):
+            delivered.category.unicodeScalars.elementsEqual(Notify.category(id).unicodeScalars) && sealed(delivered, item: id, key: key)
+        case "deny": delivered.category == "permission"
         default: true
         }
+    }
+
+    /** Where the extension puts a notification's seal, beside `p` in its `userInfo`. */
+    static let sealKey = "seal"
+
+    /**
+     * The key notifications are sealed with: derived from this iPhone's box secret key, which
+     * never leaves the iPhone, so the server can't make a seal. Nil without keys.
+     */
+    static func sealingKey(_ secrets: Secrets) -> SymmetricKey? {
+        guard let sk = secrets.boxSk.flatMap({ try? fromB64($0) }), sk.count == 32 else { return nil }
+        return HKDF<SHA256>.deriveKey(inputKeyMaterial: SymmetricKey(data: sk), info: Data("starbridge/ios/notification-seal/v1".utf8), outputByteCount: 32)
+    }
+
+    /** What a seal covers: the item, its category and the words shown, each length-prefixed. */
+    private static func sealed(item: String, category: String, title: String, subtitle: String, body: String) -> Data {
+        var out = Data()
+        for field in [item, category, title, subtitle, body] {
+            let bytes = Data(field.utf8)
+            withUnsafeBytes(of: UInt32(bytes.count).bigEndian) { out.append(contentsOf: $0) }
+            out.append(bytes)
+        }
+        return out
+    }
+
+    /** `shown`'s seal under `key`, base64. */
+    static func seal(_ shown: Shown, key: SymmetricKey) -> String {
+        let mac = HMAC<SHA256>.authenticationCode(for: sealed(item: shown.item, category: shown.category, title: shown.title, subtitle: shown.subtitle, body: shown.body), using: key)
+        return Data(mac).base64EncodedString()
+    }
+
+    /** Whether `delivered` carries this iPhone's seal over item `id` and the words it shows. */
+    static func sealed(_ delivered: Delivered, item id: String, key: SymmetricKey?) -> Bool {
+        guard let key, let seal = delivered.seal, let mac = Data(base64Encoded: seal) else { return false }
+        return HMAC<SHA256>.isValidAuthenticationCode(mac, authenticating: sealed(item: id, category: delivered.category, title: delivered.title, subtitle: delivered.subtitle, body: delivered.body), using: key)
     }
 
     /** The decision or permission a payload is about: its own id, or the one its `re` names. */
@@ -250,6 +312,7 @@ enum Notify {
         var shown = await shown(p, saved: saved, secrets: secrets) { id in try await api.item(id).item }
         if let item = shown { shown = closed(item, saved: saved) }
         if let item = shown { shown?.badge = badge(item, saved: saved) }
+        if let item = shown, !item.actions.isEmpty, let key = sealingKey(secrets) { shown?.seal = seal(item, key: key) }
         if let shown, !shown.actions.isEmpty { await register(shown.category, shown.actions) }
         await followPreviews()
         log.info("\(p["kind"]?.string ?? "?", privacy: .public) \(shown == nil ? "kept the placeholder" : "shown", privacy: .public) in \(Int(Date().timeIntervalSince(start) * 1000)) ms, \(footprint() / 1_048_576) MB")
@@ -360,6 +423,9 @@ enum Notify {
         content.subtitle = shown.subtitle
         content.body = shown.body
         content.categoryIdentifier = shown.category
+        var info = content.userInfo
+        info[sealKey] = shown.seal
+        content.userInfo = info
         if let badge = shown.badge { content.badge = NSNumber(value: badge) }
         if shown.quiet {
             content.sound = nil
