@@ -105,7 +105,7 @@ jobs:
               .github/scan-report.sh trivy-blocking "$name" < "$RUNNER_TEMP/$image.json" >> "$RUNNER_TEMP/blocking.md"
             done
           done
-          echo "Findings go to the image-scan issue in T0mSIlver/starbridge-security." >> "$GITHUB_STEP_SUMMARY"
+          echo "Fixable high and critical findings go to the image-scan issue in T0mSIlver/starbridge-security." >> "$GITHUB_STEP_SUMMARY"
       # Reads the findings from a file: an env value from a step output would print in the log.
       - name: Open, update or close the issue in starbridge-security
         if: ${{ !cancelled() && steps.rev.outputs.revs }}

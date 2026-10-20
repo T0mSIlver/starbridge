@@ -400,7 +400,7 @@ the window's screens in light and dark from its end-to-end run (#1846). No model
   starbridge.run and staging serve, as their `/healthz` names them, after every deploy run that
   was not skipped and weekly, since advisories appear after a build. Not the deploy run's own commit, which can be
   newer than the one it deployed (#1560). A high or critical vulnerability with a fixed version fails the run; the
-  rest are folded under them in the issue, since an advisory without a fix gives nothing to do. Both images
+  rest are folded under them in its issue, and with no fixable one go nowhere, since an advisory without a fix gives nothing to do. Both images
   take Debian's updates at build time, on a layer the commit id keeps out of the build cache, and the web
   image drops npm, which it never runs. osv-scanner reads the lockfiles weekly and reports every
   finding. Each scan keeps one issue open while it finds something and closes it once a run finds
