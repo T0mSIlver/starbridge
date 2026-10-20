@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { imageSrc } from "./attachments";
-import { closedBy, closedByPhrase, outcomeText } from "./outcome";
+import { closedByPhrase, outcomeText } from "./outcome";
 import type { InboxItem } from "./types";
 
 // A 1x1 PNG, base64url with "-" and "_" where base64 has "+" and "/".
@@ -21,13 +21,12 @@ test("a decision answered elsewhere closes when its agent settles it", () => {
   } as InboxItem["decision"];
   const settled = { decision, answeredAt: "2026-10-05T11:30:00Z" } as InboxItem;
   expect(outcomeText(settled)).toBe("Answered in the artifact");
-  expect(closedBy(settled)).toBe("The agent");
+  expect(closedByPhrase(settled)).toBe("by the agent");
   const plain = { decision: { ...decision, answerIn: undefined } } as InboxItem;
   // Withdrawn by the agent, not answered by another device.
   const withdrawn = { ...plain, answeredAt: "2026-10-05T11:30:00Z", settled: "withdrawn" as const };
   expect(outcomeText(withdrawn)).toBe("Withdrawn");
-  expect(closedBy(withdrawn)).toBe("The agent");
-  expect(closedBy({ ...withdrawn, settled: undefined })).toBe("Another device");
+  expect(closedByPhrase({ ...withdrawn, settled: undefined })).toBe("on another device");
   // Its reason takes the place of "by the agent" (#1008).
   expect(closedByPhrase(withdrawn)).toBe("by the agent");
   const why = "Fixed it myself after rereading the logs";
@@ -42,5 +41,4 @@ test("a question answered in the agent's own picker says the keyboard, not the a
   } as InboxItem;
   expect(outcomeText(item)).toBe("Answered");
   expect(closedByPhrase(item)).toBe("at the keyboard");
-  expect(closedBy(item)).toBe("The keyboard");
 });
