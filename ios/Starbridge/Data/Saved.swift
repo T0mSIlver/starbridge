@@ -212,15 +212,28 @@ struct NotifiedFile {
         (try? JSONDecoder().decode(Book.self, from: Data(contentsOf: url))) ?? Book()
     }
 
-    /** Runs `event` about question `id` through the rule and keeps what it leaves; the effect. */
+    /**
+     * Runs `event` about question `id` through the rule and keeps what it leaves; the effect.
+     * `known` is the question as the app saved it, when it did: a question the inbox listed is
+     * not news, and a flip a sync read counts as the last one applied.
+     */
     @discardableResult
-    func step(_ id: String, _ event: NotifyEvent) -> (Notified, NotifyEffect) {
+    func step(_ id: String, _ event: NotifyEvent, known: SavedDecision? = nil) -> (Notified, NotifyEffect) {
         var out = (Notified(), NotifyEffect.none)
         var failed: NSError?
         NSFileCoordinator().coordinate(writingItemAt: url, options: .forMerging, error: &failed) { url in
             let file = NotifiedFile(url: url)
             var book = file.load()
-            out = Order.notifyStep(book.notified[id] ?? Notified(), event)
+            var remembered = book.notified[id] ?? Notified()
+            if let known {
+                remembered.rang = true
+                if let at = known.waitingAt, let state = known.waiting,
+                   Order.laterWaiting(keptAt: remembered.waitingAt, keptState: remembered.waiting, at: at, state: state) {
+                    remembered.waitingAt = at
+                    remembered.waiting = state
+                }
+            }
+            out = Order.notifyStep(remembered, event)
             book.notified[id] = out.0
             book.order = book.order.filter { $0 != id } + [id]
             for gone in book.order.dropLast(Self.max) { book.notified[gone] = nil }

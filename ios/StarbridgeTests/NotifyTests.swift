@@ -273,4 +273,28 @@ final class NotifyTests: XCTestCase {
             }
         }
     }
+
+    /** A flip a sync read counts as the last one: a push back to waiting after it rings (#2154). */
+    func testAFlipASyncReadCountsForTheNextPush() async throws {
+        var f = try NotifyFixture()
+        let question = try f.decision("d_s")
+        let book = NotifiedFile(url: FileManager.default.temporaryDirectory.appendingPathComponent("notified-\(UUID().uuidString).json"))
+        defer { book.delete() }
+        let flip = { (at: String, state: String) in
+            try f.seal(.waiting, ["v": 1, "id": .string("w_\(at.suffix(3).filter(\.isNumber))"), "decisionId": "d_s", "to": [.string(f.phone.id)], "at": .string(at), "state": .string(state)])
+        }
+        _ = await Notify.opened(f.payload(question), saved: f.saved, secrets: f.secrets, book: book) { _ in question }
+        _ = await Notify.opened(f.payload(try flip("2026-10-12T10:00:01Z", "waiting")), saved: f.saved, secrets: f.secrets, book: book) { _ in question }
+        // The app's sync read the agent's flip back to working; no push brought it.
+        let body: JSON = [
+            "v": 1, "id": "d_s", "to": [.string(f.phone.id)], "createdAt": .string(Dates.format(Date())), "question": "Merge the inbox PR?",
+            "context": "", "options": ["Merge", "Wait"], "recommended": "Wait", "source": NotifyFixture.source,
+        ]
+        var kept = try SavedDecision(from: f.machine.id, text: body.text, answeredAt: nil)
+        kept.waiting = "working"
+        kept.waitingAt = "2026-10-12T10:00:02Z"
+        f.saved.decisions = [kept]
+        let shown = await Notify.opened(f.payload(try flip("2026-10-12T10:00:03Z", "waiting")), saved: f.saved, secrets: f.secrets, book: book) { _ in question }
+        XCTAssertEqual(shown?.quiet, false)
+    }
 }

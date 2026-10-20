@@ -269,7 +269,7 @@ enum Notify {
     static func opened(_ p: JSON, saved: Saved, secrets: Secrets, book: NotifiedFile, fetch: (String) async throws -> SealedItem?) async -> Shown? {
         guard var item = await shown(p, saved: saved, secrets: secrets, fetch: fetch) else { return nil }
         if let event = item.event {
-            let (kept, effect) = book.step(item.item, event)
+            let (kept, effect) = book.step(item.item, event, known: saved.decisions.first { $0.id == item.item })
             item = noted(item, effect, closed: kept.closed)
             // A flip already on its way when the owner snoozed the question.
             if case .flip = event, let until = saved.decisions.first(where: { $0.id == item.item })?.snoozed, until > Date().addingTimeInterval(wakeSkew) {
