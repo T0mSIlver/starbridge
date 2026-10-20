@@ -1,29 +1,38 @@
 "use client";
 
 import { useState } from "react";
+import { desktop } from "@/lib/desktop";
 import { Mark } from "./icons";
 import s from "./Setup.module.css";
 import ui from "./ui.module.css";
 
 // First-device setup: the recovery key is shown here once and never again
-// (spec/keys-and-trust.md).
+// (spec/keys-and-trust.md), with the name this device signs into the account (#2139).
 export function Setup({
-  device,
+  name,
+  onName,
   recoveryKey,
+  unsaved,
   onContinue,
 }: {
-  device: string;
+  name: string;
+  onName: (name: string) => void;
   recoveryKey: string;
-  /** Posts the account's first entry: until it succeeds, a reload shows a new key. */
+  /** A page closed before its key was saved: this key is a new one. */
+  unsaved: boolean;
+  /** Signs and posts the account's first entry: until it succeeds, a reload shows a new key. */
   onContinue: () => Promise<void>;
 }) {
   const [saved, setSaved] = useState(false);
   const [copied, setCopied] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
+  // The first try signs the name in, and a retry posts that same entry: the name is set then.
+  const [tried, setTried] = useState(false);
 
   const proceed = async () => {
     setBusy(true);
+    setTried(true);
     setError(undefined);
     try {
       await onContinue();
@@ -45,9 +54,9 @@ export function Setup({
 
   return (
     <FirstRunPage>
-      <p className={`t-meta ${s.dim}`}>First device: {device}</p>
       <h1 className="t-heading">Save your recovery key</h1>
       <p className={`t-small ${s.lede}`}>
+        {unsaved && "The page closed before you saved the last key, so that key was never used. "}
         Keep this key in a password manager or on paper. If you lose every device, it adds a new
         one. This is the only time it is shown.
       </p>
@@ -60,17 +69,18 @@ export function Setup({
       <button type="button" className={`t-label ${ui.btn}`} onClick={copy}>
         {copied ? "Copied" : "Copy the key"}
       </button>
+      <NameField value={name} onChange={onName} disabled={tried} />
       <label className={`t-small ${s.confirm}`}>
         <input type="checkbox" checked={saved} onChange={(e) => setSaved(e.target.checked)} />
-        <span>I wrote this key down somewhere safe, away from this device.</span>
+        <span>I stored this key</span>
       </label>
       <button
         type="button"
         className={`t-label ${ui.btn} ${ui.lg} ${ui.fill} ${s.go}`}
-        disabled={!saved || busy}
+        disabled={!saved || busy || !name.trim()}
         onClick={proceed}
       >
-        {busy ? "Creating the account…" : error ? "Try again" : "Continue"}
+        {busy ? "Creating the account…" : error ? "Try again" : "Create the account"}
       </button>
       {error && (
         <p className={`t-small ${s.error}`} role="alert">
@@ -78,6 +88,33 @@ export function Setup({
         </p>
       )}
     </FirstRunPage>
+  );
+}
+
+/** This device's name in the account, prefilled with its browser or app (Gate.tsx). */
+export function NameField({
+  value,
+  onChange,
+  disabled = false,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <div className={s.field}>
+      <label className={`t-meta ${s.dim}`} htmlFor="device-name">
+        {desktop ? "Name this app" : "Name this browser"}
+      </label>
+      <input
+        id="device-name"
+        className={`t-body ${s.input}`}
+        value={value}
+        maxLength={100}
+        disabled={disabled}
+        onChange={(e) => onChange(e.target.value)}
+      />
+    </div>
   );
 }
 

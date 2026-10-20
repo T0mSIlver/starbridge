@@ -325,51 +325,68 @@ async function newDevice(account: string, name: string) {
   return { record, member };
 }
 
-/** A first device whose keys, genesis entry and recovery key exist, not yet on the server. */
+/** A first device whose keys and recovery key exist, not yet on the server. */
 export interface FirstDevice {
   recoveryKey: string;
-  /** Posts the genesis; safe to call again after a failure, with the same keys and entry. */
-  commit: () => Promise<void>;
+  /**
+   * Signs the genesis with this device's name, then posts it. Safe to call again after a
+   * failure: the retry reuses the entry signed first, name included.
+   */
+  commit: (name: string) => Promise<void>;
 }
 
 /**
- * Makes this browser's keys and the account's genesis entry. The recovery seed is dropped once
- * the key exists, so the key is shown before `commit`, which runs once the owner says it is
- * saved: a page closed before that posts no genesis, and boot offers a new key (#328). A retry
- * of `commit` reuses this object rather than making new keys.
+ * Makes this browser's keys and the recovery key, shown before `commit`, which runs once the
+ * owner says it is saved and signs the account's genesis with the name typed beside it (#2139).
+ * A page closed before that posts no genesis, and boot offers a new key (#328). The recovery
+ * key pair stays in memory until the genesis is signed: no longer than the key stays on screen.
  */
 export async function prepareFirstDevice(account: string, name: string): Promise<FirstDevice> {
   await ready;
-  const { record, member } = await newDevice(account, name);
+  const { record } = await newDevice(account, name);
   const seed = crypto.getRandomValues(new Uint8Array(16));
   const recovery = recoveryKeyPair(seed);
-  let entry: SignedEnvelope;
   let shown: string;
   try {
-    entry = await genesisEntryAsync({
-      account,
-      device: member,
-      sign: signer(record.keys),
-      recovery,
-      at: now(),
-    });
     shown = recoveryKey(seed);
   } finally {
     seed.fill(0);
-    recovery.privateKey.fill(0);
   }
-  const dir = verifyDirectory([entry], { account });
   // Another tab posted its genesis since this page offered a key: its keys are the account's.
   if ((await store.get("device", account))?.posted)
     throw new Error("Another tab set up this account. Reload.");
   await store.put("device", record, account);
-  const commit = async () => {
+  let signed: { entry: SignedEnvelope; dir: Directory; named: store.DeviceRecord } | undefined;
+  const sign = async (typed: string) => {
+    const named = { ...record, name: typed };
+    const member: Member = {
+      id: named.id,
+      role: "device",
+      name: typed,
+      boxPk: named.boxPk,
+      signPk: named.signPk,
+    };
+    const entry = await genesisEntryAsync({
+      account,
+      device: member,
+      sign: signer(named.keys),
+      recovery,
+      at: now(),
+    });
+    const dir = verifyDirectory([entry], { account });
+    // Signed once: a retry reuses this entry, so the key has nothing left to sign.
+    recovery.privateKey.fill(0);
+    return { entry, dir, named };
+  };
+  const commit = async (typed: string) => {
     // Another tab's boot drops these keys as never used, or its setup replaces them: posting
     // now would make an account whose device keys no browser holds.
     const held = await store.get("device", account);
     if (held?.id !== record.id || held.signPk !== record.signPk)
       throw new Error("Another tab started the setup over, so this key was never used. Reload.");
-    await store.put("device", { ...record, posted: true }, account);
+    signed ??= await sign(typed);
+    const { entry, dir, named } = signed;
+    await store.put("device", { ...named, posted: true }, account);
     try {
       await api.append(entry);
     } catch (e) {

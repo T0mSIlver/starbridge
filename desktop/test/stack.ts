@@ -346,16 +346,15 @@ try {
     await app.evaluate(({ app }, link) => {
       app.emit("open-url", { preventDefault() {} }, link);
     }, next);
-    await page.getByText("This app creates your account's keys.").waitFor();
+    // The keys are made as the screen opens: the recovery key and the name show together (#2139).
+    await page.getByTestId("recovery-key").waitFor();
     await shoot(app, page, "keys");
     assert.match(
       await page.getByLabel("Name this app").inputValue(),
       /^Starbridge on (Mac|Linux)$/,
     );
-    await page.getByRole("button", { name: "Create the keys" }).click();
-    await page.getByRole("heading", { name: "Save your recovery key" }).waitFor();
-    await page.getByLabel(/I wrote this key down/).check();
-    await page.getByRole("button", { name: "Continue" }).click();
+    await page.getByLabel(/I stored this key/).check();
+    await page.getByRole("button", { name: "Create the account" }).click();
     // No machine yet, so the inbox says how to add one; its own heading depends on the window's
     // width, which differs between runners.
     await page.getByRole("heading", { name: "Add a machine" }).waitFor();

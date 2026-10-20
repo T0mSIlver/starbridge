@@ -76,6 +76,13 @@
   BLAKE2b-256 of `"starbridge/v1/recovery-seed" NUL seed` stretches it to an Ed25519 seed. It is not
   shown as words: a new site that shows 12 words and later asks for them back looks like
   seed-phrase phishing, and Chrome flagged starbridge.run for it. No page says "seed" or "phrase".
+- **A first device opens on its recovery key** (#2139, card d_genius-body-merry). Its keys are
+  made as the screen opens, with no "Create the keys" step: 2 taps (tick "I stored this key",
+  then the button) instead of 3, on every client. The web and the desktop app keep the name
+  field on that screen, under the key, and sign the account's first entry with it at "Create the
+  account": the name is signed in and nothing renames a device. The recovery key pair stays in
+  memory until then, no longer than the key itself stays on screen. Every client's box reads "I
+  stored this key", which a password manager's save fits as well as paper.
 - **The recovery key can be copied or saved to a password manager, never screenshotted** (#817).
   Android's key screens block screenshots, screen sharing and the recents thumbnail
   (`FLAG_SECURE`): a screenshot lands in the photo library and its cloud backup, where nobody

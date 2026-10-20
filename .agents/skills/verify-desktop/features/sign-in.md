@@ -9,7 +9,7 @@ keys and its recovery key.
 
 - `server`: "Use your own server" opens the app's own Server window.
 - `browser`: the sign-in leaves for the browser (`shell.openExternal`).
-- `keys`: "Name this app", "Create the keys", the recovery key, "Continue".
+- `keys`: the recovery key, "Name this app", "I stored this key", "Create the account".
 
 ## How to get to it (user POV)
 
@@ -25,8 +25,8 @@ Preconditions: the stack up (the first steps of the file).
 - The test plays the browser: it takes the URL from `g.outside`, follows the
   redirects with a cookie jar until a `starbridge:` link, and hands it to the app
   with `app.emit("open-url", …)`.
-- Then: "This app creates your account's keys.", "Create the keys", "Save your
-  recovery key", the checkbox, "Continue", and the inbox says "Add a machine".
+- Then: "Save your recovery key" with the key and "Name this app", the checkbox,
+  "Create the account", and the inbox says "Add a machine".
 
 ## Gotchas
 
