@@ -2066,6 +2066,11 @@ test("where Claude desktop starts sessions over SSH, setup loads starbridge-remo
   expect(claudeLine(await refresh(m.sys))).toBe(false);
   expect(dirs()).toBe([own, dir].join(delimiter));
 
+  // A plugin built before the inventory existed is rebuilt once, and gets one.
+  rmSync(join(dir, ".claude-plugin", "written.json"));
+  expect(claudeLine(await refresh(m.sys))).toBe(true);
+  expect(existsSync(join(dir, ".claude-plugin", "written.json"))).toBe(true);
+
   // A file the owner put in the folder survives a rebuild and an uninstall; Starbridge's go.
   const mine = join(dir, "notes.txt");
   writeFileSync(mine, "mine");

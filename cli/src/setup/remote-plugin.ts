@@ -152,13 +152,18 @@ export function writeRemotePlugin(sys: Home, roots: { starbridge: string; mod: s
   rmSync(next, { recursive: true, force: true });
 }
 
-/** Whether the plugin is loaded and was built by this release. */
+/** Whether the plugin is loaded and was built by this release, with its inventory. */
 export function remotePluginCurrent(sys: Home): boolean {
   try {
     const m = JSON.parse(
       readFileSync(join(remotePluginDir(sys), ".claude-plugin", "plugin.json"), "utf8"),
     ) as { version?: unknown };
-    return m.version === VERSION && remotePluginLoaded(sys);
+    // A plugin built without the inventory is rebuilt once, so uninstall knows its files.
+    return (
+      m.version === VERSION &&
+      existsSync(join(remotePluginDir(sys), INVENTORY)) &&
+      remotePluginLoaded(sys)
+    );
   } catch {
     return false;
   }
