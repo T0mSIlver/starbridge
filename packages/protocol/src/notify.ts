@@ -11,7 +11,7 @@ export type Notified = {
   rang?: true;
   /** The last waiting flip applied. */
   waiting?: { at: string; state: "waiting" | "working" };
-  /** The `at` of the snooze whose return sounded. */
+  /** The `at` of the latest snooze whose return sounded. */
   back?: string;
 };
 
@@ -47,7 +47,9 @@ export function notifyStep(
     const ring = flip.state === "waiting" && kept.waiting?.state !== "waiting";
     return { kept: next, effect: ring ? "ring" : "quiet" };
   }
-  // A snooze's first push hides the question, which the client does; its return rings once.
-  if (!event.due || kept.back === event.at) return { kept, effect: "none" };
+  // A snooze's first push hides the question, which the client does. Its return rings once, and
+  // an older snooze's return, after a newer one's, not at all.
+  if (!event.due || (kept.back && !(Date.parse(event.at) > Date.parse(kept.back))))
+    return { kept, effect: "none" };
   return { kept: { ...kept, back: event.at, rang: true }, effect: "ring" };
 }
