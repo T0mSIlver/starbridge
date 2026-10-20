@@ -12,24 +12,30 @@ import {
   seal,
 } from "@starbridge/protocol";
 import { LiveServer } from "@starbridge/server/test-support";
+import rules from "../../packages/protocol/vectors/rules.json";
 import { api } from "./lib/api";
 import * as device from "./lib/device";
 import * as store from "./lib/store";
 
-type Note = { title: string; tag: string; close(): void };
+type Note = { title: string; tag: string; data?: unknown; close(): void };
 type Listener = (e: { data?: { text(): string }; waitUntil(p: Promise<unknown>): void }) => void;
 const listeners = new Map<string, Listener>();
 /** The notifications up, as the browser keeps them: one per tag. */
 let notes: Note[] = [];
 /** How many times the worker showed a notification. */
 let shows = 0;
+/** How many of those sounded, as a browser decides: a new tag, or `renotify`, and not `silent`. */
+let rings = 0;
+/** Set to make the browser refuse the next notification. */
+let refuseNext = false;
 const errors: string[] = [];
 /** This browser's push service: Chrome's unless a test sets Safari's. */
 let endpoint = "https://fcm.googleapis.com/fcm/send/x";
-function note(title: string, tag: string): Note {
+function note(title: string, tag: string, data?: unknown): Note {
   const n: Note = {
     title,
     tag,
+    data,
     close: () => {
       notes = notes.filter((x) => x !== n);
     },
@@ -40,9 +46,17 @@ Object.assign(globalThis, {
   self: {
     addEventListener: (type: string, f: Listener) => listeners.set(type, f),
     registration: {
-      showNotification: async (title: string, o: { tag?: string } = {}) => {
+      showNotification: async (
+        title: string,
+        o: { tag?: string; renotify?: boolean; silent?: boolean; data?: unknown } = {},
+      ) => {
+        if (refuseNext && o.tag?.startsWith("d:")) {
+          refuseNext = false;
+          throw new Error("refused");
+        }
         shows++;
-        notes = [...notes.filter((n) => n.tag !== o.tag), note(title, o.tag ?? "")];
+        if (!o.silent && (o.renotify || !notes.some((n) => n.tag === o.tag))) rings++;
+        notes = [...notes.filter((n) => n.tag !== o.tag), note(title, o.tag ?? "", o.data)];
       },
       getNotifications: async (o: { tag?: string } = {}) =>
         notes.filter((n) => o.tag === undefined || n.tag === o.tag),
@@ -328,4 +342,97 @@ test("on Safari, a push with nothing to show still shows a quiet notification (#
   } finally {
     endpoint = "https://fcm.googleapis.com/fcm/send/x";
   }
+});
+
+type Step =
+  | { restart: true }
+  | {
+      effect: "ring" | "quiet" | "none";
+      push:
+        | { kind: "decision" }
+        | { kind: "answered" }
+        | { kind: "waiting"; at: string; state: "waiting" | "working" }
+        | { kind: "snooze"; at: string; until: string; due: boolean };
+    };
+
+// rules.json's notify cases (#2151): what a late, repeated or reordered push does. A restart
+// loads the worker again, as a browser does after stopping it when idle.
+test.each(rules.notify.map((c, i) => [c.name, c, i] as const))("notify: %s", async (_, c, i) => {
+  const id = `d_notify${i}`;
+  live.inject(decision(id));
+  notes = [];
+  const { id: me, boxPk } = ctx.device;
+  let n = 0;
+  for (const step of c.steps as unknown as Step[]) {
+    if ("restart" in step) {
+      await import(`${worker}?restart=${i}`);
+      continue;
+    }
+    const p = step.push;
+    const before = [shows, rings];
+    if (p.kind === "decision") await push(payload(decision(id)));
+    else if (p.kind === "answered") await push({ v: 1, kind: "answered", id });
+    else if (p.kind === "waiting")
+      await push(
+        payload(
+          fromMachine(
+            "waiting",
+            { id: `w_${i}_${n++}`, decisionId: id, at: p.at, state: p.state },
+            id,
+          ),
+        ),
+      );
+    else {
+      const z = seal(
+        "snooze",
+        { v: 1, id: `z_${i}`, decisionId: id, to: ["m_devbox", me], until: p.until, at: p.at },
+        { id: "phone", signKey: live.owner.device.keys.sign.privateKey },
+        [
+          { id: "m_devbox", boxPk: publicKeys(mKeys).boxPk },
+          { id: me, boxPk },
+        ],
+      );
+      await push(payload({ ...z, re: id, wakeAt: p.until }, { wakeAt: p.until, due: p.due }));
+    }
+    const effect = rings > before[1] ? "ring" : shows > before[0] ? "quiet" : "none";
+    expect(`${p.kind} ${effect}`).toBe(`${p.kind} ${step.effect}`);
+  }
+});
+
+test("a question whose notification failed to show shows when its push comes again (#2152)", async () => {
+  const d = decision("d_refused");
+  live.inject(d);
+  notes = [];
+  refuseNext = true;
+  await push(payload(d));
+  // The placeholder stood in for it.
+  expect(notes.map((n) => [n.tag, n.title])).toEqual([["d:d_refused", "Starbridge"]]);
+  const before = rings;
+  await push(payload(d));
+  expect(notes.map((n) => [n.tag, n.title])).toEqual([["d:d_refused", "Question d_refused"]]);
+  // The placeholder sounded already: the question takes its place quietly.
+  expect(rings).toBe(before);
+});
+
+test("records an earlier release kept stay as they were; the pushes' own goes beside them (#2152)", async () => {
+  const id = "d_upgrade";
+  live.inject(decision(id));
+  notes = [];
+  // What the release before kept for the account: a snooze, as noteSnoozes stores it, and no
+  // `pushed` record.
+  const snoozes = { ...(await store.get("snoozes", ctx.account)), d_other: "2026-10-11T12:00:00Z" };
+  await store.put("snoozes", snoozes, ctx.account);
+  const answers = await store.get("answers", ctx.account);
+  const before = rings;
+  await push(payload(decision(id)));
+  await import(`${worker}?restart=upgrade`);
+  await push({ v: 1, kind: "answered", id });
+  await push(payload(decision(id)));
+  expect(rings - before).toBe(1);
+  expect(await store.get("snoozes", ctx.account)).toEqual(snoozes);
+  expect(await store.get("answers", ctx.account)).toEqual(answers);
+  expect(JSON.parse((await store.get("pushed", ctx.account))?.[id] ?? "{}")).toEqual({
+    rang: true,
+    closed: true,
+  });
 });

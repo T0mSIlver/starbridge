@@ -3468,6 +3468,12 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
         },
       ],
     },
+    // What a push about one question does to its notification, as it arrives late, twice or out
+    // of order (#2151): `notifyStep`'s rule, which each client runs with what it remembers.
+    // `effect` is `ring` (shows it with a sound), `quiet` (updates it silently) or `none`. `id` is always the question's: a waiting flip or a
+    // snooze names it inside its own item. `restart` is the app or the service worker starting
+    // again, so what a device must remember survives it.
+    notify: notifyCases(),
     // A question's options, the agent's recommended one first (#191), compared by code points. A
     // question with options always names one.
     options: [
@@ -3526,4 +3532,123 @@ if (import.meta.main) {
   for (const [name, value] of Object.entries(await buildVectors())) {
     await Bun.write(new URL(name, dir), render(value));
   }
+}
+
+/** A push in a `notify` case; `id` is the question's. */
+type NotifyPush =
+  | { kind: "decision" | "answered"; id: string }
+  | { kind: "waiting"; id: string; at: string; state: "waiting" | "working" }
+  | { kind: "snooze"; id: string; at: string; until: string; due: boolean };
+type NotifyStep = { push: NotifyPush; effect: "ring" | "quiet" | "none" } | { restart: true };
+
+/** The `notify` cases of rules.json (#2151). */
+function notifyCases(): { name: string; steps: NotifyStep[] }[] {
+  const asked: NotifyPush = { kind: "decision", id: "d1" };
+  const answered: NotifyPush = { kind: "answered", id: "d1" };
+  const flip = (at: string, state: "waiting" | "working"): NotifyPush => ({
+    kind: "waiting",
+    id: "d1",
+    at: `2026-10-12T10:00:0${at}Z`,
+    state,
+  });
+  const snooze = (due: boolean, at = "2026-10-12T10:00:00Z"): NotifyPush => ({
+    kind: "snooze",
+    id: "d1",
+    at,
+    until: "2026-10-12T11:00:00Z",
+    due,
+  });
+  return [
+    {
+      name: "a question rings once, pushed twice",
+      steps: [
+        { push: asked, effect: "ring" },
+        { push: asked, effect: "none" },
+      ],
+    },
+    {
+      name: "a question pushed after its answer stays silent",
+      steps: [
+        { push: answered, effect: "none" },
+        { push: asked, effect: "none" },
+      ],
+    },
+    {
+      name: "an answer still counts after a restart",
+      steps: [
+        { push: answered, effect: "none" },
+        { restart: true },
+        { push: asked, effect: "none" },
+      ],
+    },
+    {
+      name: "a waiting flip after the answer stays silent",
+      steps: [
+        { push: asked, effect: "ring" },
+        { push: answered, effect: "none" },
+        { push: flip("1", "waiting"), effect: "none" },
+      ],
+    },
+    {
+      name: "a snooze's return after the answer stays silent",
+      steps: [
+        { push: asked, effect: "ring" },
+        { push: snooze(false), effect: "none" },
+        { push: answered, effect: "none" },
+        { push: snooze(true), effect: "none" },
+      ],
+    },
+    {
+      name: "a snooze's return pushed twice rings once",
+      steps: [
+        { push: asked, effect: "ring" },
+        { push: snooze(false), effect: "none" },
+        { push: snooze(true), effect: "ring" },
+        { restart: true },
+        { push: snooze(true), effect: "none" },
+      ],
+    },
+    {
+      name: "an older snooze's return after a newer one's rings nothing",
+      steps: [
+        { push: asked, effect: "ring" },
+        { push: snooze(true, "2026-10-12T10:00:05Z"), effect: "ring" },
+        { push: snooze(true), effect: "none" },
+      ],
+    },
+    {
+      name: "the same waiting flip pushed twice rings once",
+      steps: [
+        { push: asked, effect: "ring" },
+        { push: flip("1", "waiting"), effect: "ring" },
+        { restart: true },
+        { push: flip("1", "waiting"), effect: "none" },
+      ],
+    },
+    {
+      name: "an older flip after a newer one changes nothing",
+      steps: [
+        { push: asked, effect: "ring" },
+        { push: flip("2", "waiting"), effect: "ring" },
+        { push: flip("1", "working"), effect: "none" },
+        { push: flip("3", "waiting"), effect: "quiet" },
+      ],
+    },
+    {
+      name: "a flip back to working is quiet, and the next to waiting rings",
+      steps: [
+        { push: asked, effect: "ring" },
+        { push: flip("1", "waiting"), effect: "ring" },
+        { push: flip("2", "working"), effect: "quiet" },
+        { push: flip("3", "waiting"), effect: "ring" },
+      ],
+    },
+    {
+      name: "a flip that comes before its question shows it",
+      steps: [
+        { push: flip("1", "working"), effect: "ring" },
+        { push: asked, effect: "none" },
+      ],
+    },
+  ];
 }

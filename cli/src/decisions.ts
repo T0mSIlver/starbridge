@@ -43,7 +43,15 @@ export {
   snoozeTime,
   takeSnooze,
 } from "./decisions/snooze";
-export { type AskInput, bindSession, resolveSource } from "./decisions/source";
+export {
+  ASK_CONTENT_FIELDS,
+  ASK_ROUTE_FIELDS,
+  type AskContent,
+  type AskInput,
+  bindSession,
+  pickFields,
+  resolveSource,
+} from "./decisions/source";
 export {
   ackLines,
   answers,

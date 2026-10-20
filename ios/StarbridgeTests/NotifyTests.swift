@@ -52,6 +52,13 @@ struct NotifyFixture {
         return try seal(.decision, body)
     }
 
+    /** A file for what pushes did, beside a `saved.json` that holds `saved`, as in the app group. */
+    static func book(_ saved: Saved) throws -> NotifiedFile {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("notified-\(UUID().uuidString)")
+        try Disk(url: dir.appendingPathComponent("saved.json")).save(saved)
+        return NotifiedFile(url: dir.appendingPathComponent("notified.json"))
+    }
+
     /** The push payload `p` as the server sends it to APNs: the item's hints and this iPhone's box. */
     func payload(_ item: SealedItem, box: Bool = true) -> JSON {
         var p: JSONObject = ["v": 1, "kind": .string(item.kind.rawValue), "id": .string(item.id), "from": .string(item.from)]
@@ -59,6 +66,18 @@ struct NotifyFixture {
         if let wakeAt = item.wakeAt { p["wakeAt"] = .string(wakeAt) }
         if box { p["box"] = .string(item.boxes[0].box) }
         return .object(p)
+    }
+}
+
+/** A step's push in rules.json's notify cases, as the rule takes it. */
+enum NotifyRulesCase {
+    static func event(_ p: JSON) -> NotifyEvent {
+        switch p["kind"]!.string! {
+        case "decision": .asked
+        case "answered": .closed
+        case "waiting": .flip(at: p["at"]!.string!, state: p["state"]!.string!)
+        default: .back(at: p["at"]!.string!, due: p["due"]!.bool!)
+        }
     }
 }
 
@@ -220,5 +239,93 @@ final class NotifyTests: XCTestCase {
         XCTAssertTrue(question.actions.last is UNTextInputNotificationAction)
         XCTAssertEqual(locked.first { $0.identifier == "permission" }?.actions.map(\.options), prompt.actions.map(\.options))
         XCTAssertNil(Notify.following(locked, locked: true))
+    }
+
+    /**
+     * rules.json's notify cases through the extension's work (#2151), its book in a file of the
+     * test's own; an `answered` push goes where the app's background push sends it. The extension
+     * cannot drop an alert, so a step the rule leaves alone shows quiet: what counts is the sound.
+     */
+    func testTheNotifyCases() async throws {
+        let url = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .appendingPathComponent("../../packages/protocol/vectors/rules.json").standardizedFileURL
+        let rules = try JSON.parse(String(decoding: try Data(contentsOf: url), as: UTF8.self))
+        let f = try NotifyFixture()
+        let phoneSign = SecretKey(try fromB64(f.secrets.signSk!))
+        for (n, c) in rules["notify"]!.array!.enumerated() {
+            let id = "d_n\(n)"
+            let question = try f.decision(id)
+            let book = try NotifyFixture.book(f.saved)
+            defer { book.delete() }
+            for (i, step) in c["steps"]!.array!.enumerated() {
+                guard let p = step["push"] else { continue }
+                let pushed: SealedItem
+                switch p["kind"]!.string! {
+                case "answered":
+                    book.step(id, .closed, member: f.saved.me?.id)
+                    continue
+                case "decision":
+                    pushed = question
+                case "waiting":
+                    pushed = try f.seal(.waiting, ["v": 1, "id": .string("w_\(n)_\(i)"), "decisionId": .string(id), "to": [.string(f.phone.id)], "at": p["at"]!, "state": p["state"]!])
+                default:
+                    // A snooze's first push is a background push: the extension never sees it.
+                    guard p["due"]!.bool! else { continue }
+                    pushed = try f.seal(.snooze, ["v": 1, "id": .string("z_\(n)"), "decisionId": .string(id), "to": [.string(f.phone.id)], "until": p["until"]!, "at": p["at"]!], by: f.phone, key: phoneSign)
+                }
+                var payload = f.payload(pushed)
+                if case var .object(o) = payload, p["due"] != nil { o["due"] = p["due"]!; payload = .object(o) }
+                let shown = await Notify.opened(payload, saved: f.saved, secrets: f.secrets, book: book) { _ in question }
+                XCTAssertEqual(shown?.quiet == false, step["effect"]!.string! == "ring", "\(c["name"]!.string!), step \(i)")
+            }
+        }
+    }
+
+    /** A flip a sync read counts as the last one: a push back to waiting after it rings (#2154). */
+    func testAFlipASyncReadCountsForTheNextPush() async throws {
+        var f = try NotifyFixture()
+        let question = try f.decision("d_s")
+        let book = try NotifyFixture.book(f.saved)
+        defer { book.delete() }
+        let flip = { (at: String, state: String) in
+            try f.seal(.waiting, ["v": 1, "id": .string("w_\(at.suffix(3).filter(\.isNumber))"), "decisionId": "d_s", "to": [.string(f.phone.id)], "at": .string(at), "state": .string(state)])
+        }
+        _ = await Notify.opened(f.payload(question), saved: f.saved, secrets: f.secrets, book: book) { _ in question }
+        _ = await Notify.opened(f.payload(try flip("2026-10-12T10:00:01Z", "waiting")), saved: f.saved, secrets: f.secrets, book: book) { _ in question }
+        // The app's sync read the agent's flip back to working; no push brought it.
+        let body: JSON = [
+            "v": 1, "id": "d_s", "to": [.string(f.phone.id)], "createdAt": .string(Dates.format(Date())), "question": "Merge the inbox PR?",
+            "context": "", "options": ["Merge", "Wait"], "recommended": "Wait", "source": NotifyFixture.source,
+        ]
+        var kept = try SavedDecision(from: f.machine.id, text: body.text, answeredAt: nil)
+        kept.waiting = "working"
+        kept.waitingAt = "2026-10-12T10:00:02Z"
+        f.saved.decisions = [kept]
+        let shown = await Notify.opened(f.payload(try flip("2026-10-12T10:00:03Z", "waiting")), saved: f.saved, secrets: f.secrets, book: book) { _ in question }
+        XCTAssertEqual(shown?.quiet, false)
+    }
+
+    /** A repeat the rule quiets still counts on the app icon: the question still needs the owner (#2154). */
+    func testAQuietRepeatStillCountsOnTheBadge() async throws {
+        let f = try NotifyFixture()
+        let question = try f.decision("d_b")
+        let book = try NotifyFixture.book(f.saved)
+        defer { book.delete() }
+        let shownFirst = await Notify.opened(f.payload(question), saved: f.saved, secrets: f.secrets, book: book) { _ in question }
+        let shownAgain = await Notify.opened(f.payload(question), saved: f.saved, secrets: f.secrets, book: book) { _ in question }
+        let first = try XCTUnwrap(shownFirst)
+        let again = try XCTUnwrap(shownAgain)
+        XCTAssertEqual([first.quiet, again.quiet], [false, true])
+        XCTAssertEqual([Notify.badge(first, saved: f.saved), Notify.badge(again, saved: f.saved)], [1, 1])
+    }
+
+    /** A push that resumes after a sign-out keeps nothing: the account it came for is gone (#2154). */
+    func testAPushAfterSignOutKeepsNothing() throws {
+        let f = try NotifyFixture()
+        let book = try NotifyFixture.book(Saved(server: f.saved.server))
+        defer { book.delete() }
+        let (_, effect) = book.step("d_gone", .asked, member: f.saved.me?.id)
+        XCTAssertEqual(effect, .none)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: book.url.path))
     }
 }

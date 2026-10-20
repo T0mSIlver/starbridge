@@ -888,6 +888,7 @@ final class Store {
         quotasListed = false
         persist(Saved(server: saved.server), Secrets())
         try? FileManager.default.removeItem(at: SavedImage.directory)
+        NotifiedFile.standard.delete()
         // The property's observer stores the defaults, so the keys go after it.
         quotaSettings = QuotaSettings()
         QuotaSettings.forget()
@@ -906,11 +907,22 @@ final class Store {
         }
     }
 
+    /** What the sign-out dialog adds while answers wait to be sent (#2155); empty when none do. */
+    nonisolated static func unsentWarning(_ unsent: Int) -> String {
+        switch unsent {
+        case 0: ""
+        case 1: " 1 answer isn't sent yet: it's sent first if the server can be reached, else it's lost."
+        default: " \(unsent) answers aren't sent yet: they're sent first if the server can be reached, else they're lost."
+        }
+    }
+
     /** Leaves the account: removes this iPhone from the devices unless it is the last one. */
     func signOut() async {
         joinTask?.cancel()
         busy = true
         defer { busy = false }
+        // Answers still in the outbox go first: the wipe below drops them (#2155).
+        if phase == .ready, !saved.outbox.isEmpty { _ = try? await serial { try await self.flush() } }
         if phase == .ready, let me = saved.me {
             do {
                 let fetched = try await api().directory(from: saved.entries.count)
