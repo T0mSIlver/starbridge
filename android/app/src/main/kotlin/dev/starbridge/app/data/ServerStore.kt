@@ -408,7 +408,7 @@ class ServerStore(
         joinJob?.cancel()
         showJob?.cancel()
         for (kind in kinds) kind.wipe()
-        disk.wipe()
+        val wiped = disk.wipe()
         alerts.forget()
         pendingPush = null
         confirmedPush = null
@@ -419,7 +419,7 @@ class ServerStore(
         pendingCheckKey = null
         approval.value = Approval.Idle
         publish()
-        notice.value = message
+        notice.value = if (wiped) message else "Signed out, but this phone couldn’t delete everything it kept. Clearing the app’s data removes the rest."
     }
 
     // --- Signing in and setting up ------------------------------------------------
