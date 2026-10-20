@@ -1,6 +1,7 @@
 package dev.starbridge.app.data
 
 import kotlinx.serialization.Serializable
+import java.time.Instant
 
 // What a push about one question does to its notification, whatever order pushes arrive in and
 // however often (#2151): packages/protocol/src/notify.ts's `notifyStep`, which the web and iOS
@@ -9,7 +10,7 @@ import kotlinx.serialization.Serializable
 /**
  * What this phone remembers of the pushes about one question: [closed] by an `answered` or
  * settled push (unverified, so it only keeps notifications down), [rang] once, the last waiting
- * flip applied, and the `at` of the snooze whose return rang.
+ * flip applied, and the `at` of the latest snooze whose return rang.
  */
 @Serializable
 data class Notified(
@@ -44,7 +45,8 @@ internal fun notifyStep(kept: Notified, event: NotifyEvent): Pair<Notified, Noti
         else -> kept.copy(waitingAt = event.at, waiting = event.state) to
             if (event.state == "waiting" && kept.waiting != "waiting") NotifyEffect.Ring else NotifyEffect.Quiet
     }
-    event is NotifyEvent.Return -> if (!event.due || kept.back == event.at) kept to NotifyEffect.None
+    // Its return rings once, and an older snooze's return, after a newer one's, not at all.
+    event is NotifyEvent.Return -> if (!event.due || (kept.back != null && instant(event.at)?.isAfter(instant(kept.back) ?: Instant.MAX) != true)) kept to NotifyEffect.None
         else kept.copy(back = event.at, rang = true) to NotifyEffect.Ring
     else -> kept to NotifyEffect.None
 }
