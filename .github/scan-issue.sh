@@ -16,12 +16,13 @@ if [ -n "$found" ]; then
   body=$(printf '%s Last seen %s.\n\n%s\n\nRun: %s\n' "$intro" "$now" "$found" "$run")
   if [ -z "$issue" ]; then
     gh label create "$label" --color D93F0B --description "Opened and closed by scan.yml" 2>/dev/null || true
-    gh issue create --label "$label" --title "$title" --body "$body"
+    # gh's stdout names the issue; a public log must not show a private one opening or closing.
+    gh issue create --label "$label" --title "$title" --body "$body" > /dev/null
   else
     # Editing the body sends no email; only opening and closing do.
-    gh issue edit "$issue" --body "$body"
+    gh issue edit "$issue" --body "$body" > /dev/null
   fi
   [ "$fail" != fail ] || exit 1
 elif [ -n "$issue" ]; then
-  gh issue close "$issue" --comment "Nothing found at $now: $run"
+  gh issue close "$issue" --comment "Nothing found at $now: $run" > /dev/null
 fi
