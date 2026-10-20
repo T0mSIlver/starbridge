@@ -49,10 +49,9 @@ type Records = {
    */
   snoozes: Record<string, string>;
   /**
-   * What the service worker's pushes already did to each question (#2151), so a late, repeated
-   * or reordered push rings nothing after a restart: `closed:<id>` once an answered or settled
-   * push closed it, `rang:<id>` once it rang, `waiting:<id>` the last flip applied ("<at>
-   * <state>"), `back:<id>` the snooze whose return rang (its at). Oldest entries go first.
+   * What pushes did to each question (#2151), so a late, repeated or reordered push rings
+   * nothing after the service worker restarts: by decision id, its `Notified` as JSON. Oldest
+   * questions go first.
    */
   pushed: Record<string, string>;
   /** The inbox's items as listed, still sealed, and the cursor after them (#1380). */

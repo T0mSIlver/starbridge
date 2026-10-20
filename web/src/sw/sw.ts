@@ -2,7 +2,13 @@
 // The service worker: opens Web Push payloads (PROTOCOL.md, "Push") with this browser's device
 // key, verifies them against the pinned directory, and shows the decision with its options as
 // notification actions where the browser supports them. Built to public/sw.js by `bun run sw`.
-import { laterWaiting, type SealedItem } from "@starbridge/protocol";
+import {
+  type Notified,
+  type NotifyEffect,
+  type NotifyEvent,
+  notifyStep,
+  type SealedItem,
+} from "@starbridge/protocol";
 import { CLIENT } from "../lib/api";
 import {
   answer,
@@ -45,35 +51,43 @@ const tag = (decisionId: string) => `d:${decisionId}`;
 /** A permission prompt's notification; "answered" names the prompt, so both tags close. */
 const promptTag = (permissionId: string) => `p:${permissionId}`;
 
-/** How many entries the `pushed` record keeps; each question takes up to four. */
-const PUSHED_MAX = 400;
+/** How many questions the `pushed` record keeps. */
+const PUSHED_MAX = 300;
 
-/** What pushes already did to the account's questions (#2151), kept across restarts. */
-async function pushed(account: string): Promise<Record<string, string>> {
-  return (await store.get("pushed", account)) ?? {};
+/** What pushes did to question `id` (#2151), kept across restarts. */
+async function notified(account: string, id: string): Promise<Notified> {
+  try {
+    return JSON.parse((await store.get("pushed", account))?.[id] ?? "{}") as Notified;
+  } catch {
+    return {};
+  }
 }
 
-/** Notes `entries` in the `pushed` record, newest last, dropping the oldest past its cap. */
-async function remember(account: string, entries: Record<string, string>): Promise<void> {
+/**
+ * Runs a push about question `id` through the clients' shared rule (#2151) and keeps what it
+ * leaves, newest last, dropping the oldest questions past the cap. Nothing changes, and the
+ * effect is `none`, once this browser is no longer a device of the account.
+ */
+async function step(
+  account: string,
+  id: string,
+  event: NotifyEvent,
+): Promise<{ effect: NotifyEffect; kept: Notified }> {
+  let out: { effect: NotifyEffect; kept: Notified } = { effect: "none", kept: {} };
   await store.update("pushed", account, (old) => {
+    let kept: Notified = {};
+    try {
+      kept = JSON.parse(old?.[id] ?? "{}") as Notified;
+    } catch {}
+    out = notifyStep(kept, event);
     const next = { ...old };
-    for (const [k, v] of Object.entries(entries)) {
-      delete next[k];
-      next[k] = v;
-    }
+    delete next[id];
+    next[id] = JSON.stringify(out.kept);
     const keys = Object.keys(next);
     for (const k of keys.slice(0, Math.max(0, keys.length - PUSHED_MAX))) delete next[k];
     return next;
   });
-}
-
-/** The last waiting flip applied to a question, from its `pushed` entry. */
-function keptWaiting(
-  memory: Record<string, string>,
-  id: string,
-): { at: string; state: "waiting" | "working" } | undefined {
-  const [at, state] = (memory[`waiting:${id}`] ?? "").split(" ");
-  return at && (state === "waiting" || state === "working") ? { at, state } : undefined;
+  return out;
 }
 
 self.addEventListener("install", () => self.skipWaiting());
@@ -142,7 +156,7 @@ async function onPush(text: string, seen: Shown): Promise<void> {
   if (payload.kind === "answered") {
     // Answered elsewhere: the question is settled, so its notification goes, and a push of it
     // that comes later, after a restart too, rings nothing (#2151).
-    if (account) await remember(account, { [`closed:${payload.id}`]: "1" });
+    if (account) await step(account, payload.id, { kind: "answered" });
     for (const t of [tag(payload.id), promptTag(payload.id)])
       for (const n of await self.registration.getNotifications({ tag: t })) n.close();
     return;
@@ -186,16 +200,17 @@ async function onPush(text: string, seen: Shown): Promise<void> {
 
   if (payload.kind === "decision") {
     const opened = await openPushedDecision(ctx, item);
-    // Shown already, by this push delivered before or by a flip that came first (#2151).
-    if ((await pushed(ctx.account))[`rang:${payload.id}`]) return;
-    if (!answeredAt && !opened.reply) await showDecision(seen, ctx.account, opened, "new");
+    if (answeredAt || opened.reply) return;
+    // Rings once: not again for a push delivered twice, or after a flip that came first.
+    const { effect } = await step(ctx.account, payload.id, { kind: "decision" });
+    if (effect !== "none") await showDecision(seen, ctx.account, opened, effect);
   } else if (payload.kind === "permission") {
     const opened = await openPushedPermission(ctx, item);
     if (!answeredAt && !opened.reply) await showPrompt(seen, account as string, opened);
   } else if (payload.kind === "settled") {
     // Checked like any item, so a forged notice cannot clear a real prompt.
     const { settled } = await openSettled(ctx, item);
-    await remember(ctx.account, { [`closed:${settled.itemId}`]: "1" });
+    await step(ctx.account, settled.itemId, { kind: "answered" });
     // It may close a prompt or a decision.
     for (const t of [tag(settled.itemId), promptTag(settled.itemId)])
       for (const n of await self.registration.getNotifications({ tag: t })) n.close();
@@ -218,9 +233,7 @@ async function onPush(text: string, seen: Shown): Promise<void> {
           n.close();
       return;
     }
-    const memory = await pushed(ctx.account);
-    // Closed, or its return rang already: a push delivered twice rings once (#2151).
-    if (memory[`closed:${z.decisionId}`] || memory[`back:${z.decisionId}`] === z.at) return;
+    if ((await notified(ctx.account, z.decisionId)).closed) return;
     const res = await fetch(`/v1/items/${encodeURIComponent(z.decisionId)}`, { headers: CLIENT });
     // A question that can't be read now still needs the owner: the placeholder shows.
     if (!res.ok) throw new Error(`the question read ${res.status}`);
@@ -228,18 +241,22 @@ async function onPush(text: string, seen: Shown): Promise<void> {
     if (stored.answeredAt) return;
     const opened = await openPushedDecision(ctx, stored.item);
     if (opened.reply) return;
-    const waits = keptWaiting(memory, z.decisionId)?.state === "waiting";
-    if (await showDecision(seen, ctx.account, opened, "again", { waiting: waits, back: true }))
-      await remember(ctx.account, { [`back:${z.decisionId}`]: z.at });
+    // Once per return: the same push delivered twice rings once.
+    const { effect, kept } = await step(ctx.account, z.decisionId, {
+      kind: "snooze",
+      at: z.at,
+      due: true,
+    });
+    if (effect !== "none")
+      await showDecision(seen, ctx.account, opened, effect, {
+        waiting: kept.waiting?.state === "waiting",
+        back: true,
+      });
   } else if (payload.kind === "waiting") {
     // The agent ran out of other work: notify once more, in place of the question's notification.
     // Back to working, the notification loses its waiting line without a sound (#191).
     const { machine, waiting } = await openWaiting(ctx, item);
-    const memory = await pushed(ctx.account);
-    if (memory[`closed:${waiting.decisionId}`]) return;
-    // The same flip again, or one older than the last applied, changes nothing (#2151).
-    const kept = keptWaiting(memory, waiting.decisionId);
-    if (!laterWaiting(kept, waiting)) return;
+    if ((await notified(ctx.account, waiting.decisionId)).closed) return;
     // A flip signed before the question's latest snooze, delivered late, is stale: the server
     // pushes none while a snooze is pending, and the snooze's return notifies on its own (#1280).
     const snoozed = keptSnooze(await store.get("snoozes", account as string), waiting.decisionId);
@@ -254,18 +271,18 @@ async function onPush(text: string, seen: Shown): Promise<void> {
     const opened = await openPushedDecision(ctx, stored.item);
     // Only the machine that asked can say its agent waits on the question.
     if (opened.machine.id !== machine || opened.reply) return;
-    const waits = waiting.state === "waiting";
-    // A question first heard of through its flip rings as new; after that only a flip to
-    // waiting rings, and back to working the notification loses its waiting line quietly.
-    const ring = !memory[`rang:${waiting.decisionId}`]
-      ? "new"
-      : waits && kept?.state !== "waiting"
-        ? "again"
-        : "quiet";
-    await showDecision(seen, ctx.account, opened, ring, { waiting: waits });
-    await remember(ctx.account, {
-      [`waiting:${waiting.decisionId}`]: `${waiting.at} ${waiting.state}`,
+    // A flip to waiting rings, back to working the notification loses its waiting line
+    // quietly (#191); a repeated or older flip changes nothing, and one that comes before its
+    // question shows it, ringing.
+    const { effect } = await step(ctx.account, waiting.decisionId, {
+      kind: "waiting",
+      at: waiting.at,
+      state: waiting.state,
     });
+    if (effect !== "none")
+      await showDecision(seen, ctx.account, opened, effect, {
+        waiting: waiting.state === "waiting",
+      });
   }
 }
 
@@ -279,7 +296,7 @@ function maxActions(): number {
  * opened it were deleted since, by a sign-out the push raced (#311).
  */
 async function moot(account: string, id: string): Promise<boolean> {
-  return !!(await pushed(account))[`closed:${id}`] || !(await store.get("device", account));
+  return !!(await notified(account, id)).closed || !(await store.get("device", account));
 }
 
 /**
@@ -290,18 +307,14 @@ async function moot(account: string, id: string): Promise<boolean> {
  */
 const WAKE_SKEW_MS = 2 * 60_000;
 
-/**
- * Shows the question: `new` sounds unless its notification is up, `again` sounds even then (a
- * flip to waiting, or its snooze is over, #571), `quiet` replaces it without a sound. Returns
- * whether it showed.
- */
+/** Shows the question, with a sound or replacing its notification quietly (`notifyStep`). */
 async function showDecision(
   seen: Shown,
   account: string,
   item: InboxItem,
-  ring: "new" | "again" | "quiet",
+  effect: "ring" | "quiet",
   { waiting = false, back = false }: { waiting?: boolean; back?: boolean } = {},
-): Promise<boolean> {
+): Promise<void> {
   const done = () => moot(account, item.decision.id);
   const d = item.decision;
   const note = questionNote(item, { waiting, back });
@@ -322,21 +335,19 @@ async function showDecision(
   } = {
     body: note.body,
     tag: tag(d.id),
-    renotify: ring === "again",
-    silent: ring === "quiet",
+    renotify: effect === "ring",
+    silent: effect === "quiet",
     requireInteraction: true,
     // The account it belongs to: an action answers for that account only, whichever is current
     // when it is tapped (#274).
     data: { account, item, options },
     actions,
   };
-  if (await done()) return false;
+  if (await done()) return;
   await show(seen, note.title, options_);
-  await remember(account, { [`rang:${d.id}`]: "1" });
   // An answered push, or a sign-out, may have closed nothing while this one was still opening.
   if (await done())
     for (const n of await self.registration.getNotifications({ tag: tag(d.id) })) n.close();
-  return true;
 }
 
 /**

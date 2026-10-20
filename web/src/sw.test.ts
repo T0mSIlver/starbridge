@@ -340,7 +340,7 @@ test("on Safari, a push with nothing to show still shows a quiet notification (#
 type Step =
   | { restart: true }
   | {
-      rings: boolean;
+      effect: "ring" | "quiet" | "none";
       push:
         | { kind: "decision" }
         | { kind: "answered" }
@@ -348,7 +348,7 @@ type Step =
         | { kind: "snooze"; at: string; until: string; due: boolean };
     };
 
-// rules.json's notify cases (#2151): what a late, repeated or reordered push may ring. A restart
+// rules.json's notify cases (#2151): what a late, repeated or reordered push does. A restart
 // loads the worker again, as a browser does after stopping it when idle.
 test.each(rules.notify.map((c, i) => [c.name, c, i] as const))("notify: %s", async (_, c, i) => {
   const id = `d_notify${i}`;
@@ -362,7 +362,7 @@ test.each(rules.notify.map((c, i) => [c.name, c, i] as const))("notify: %s", asy
       continue;
     }
     const p = step.push;
-    const before = rings;
+    const before = [shows, rings];
     if (p.kind === "decision") await push(payload(decision(id)));
     else if (p.kind === "answered") await push({ v: 1, kind: "answered", id });
     else if (p.kind === "waiting")
@@ -387,6 +387,7 @@ test.each(rules.notify.map((c, i) => [c.name, c, i] as const))("notify: %s", asy
       );
       await push(payload({ ...z, re: id, wakeAt: p.until }, { wakeAt: p.until, due: p.due }));
     }
-    expect([p.kind, rings > before]).toEqual([p.kind, step.rings]);
+    const effect = rings > before[1] ? "ring" : shows > before[0] ? "quiet" : "none";
+    expect(`${p.kind} ${effect}`).toBe(`${p.kind} ${step.effect}`);
   }
 });
