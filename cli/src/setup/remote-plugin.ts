@@ -84,13 +84,26 @@ function filesUnder(dir: string): string[] {
     .sort();
 }
 
-/** What setup wrote into `dir` last time; a plugin built before the inventory has its two fixed files. */
+/**
+ * What a plugin built without the inventory holds: the files the build before it wrote (#2115),
+ * the hooks of the two plugins at the time included.
+ */
+const BEFORE_INVENTORY = [
+  join(".claude-plugin", "plugin.json"),
+  ...[
+    ...["hooks.json", "cli.sh", "prompt.sh", "remote.sh", "rule.md", "session-start.sh"],
+    ...["settle.sh", "agent.ts", "handover.ts", "node.ts", "own.ts", "poller.ts", "register.ts"],
+    ...["sent.ts", "state.d.ts", "subagent.ts", "switch.ts"],
+  ].map((f) => join("hooks", f)),
+];
+
+/** What setup wrote into `dir` last time; a plugin built before the inventory has `BEFORE_INVENTORY`. */
 function written(dir: string): string[] {
   try {
     const v = JSON.parse(readFileSync(join(dir, INVENTORY), "utf8")) as unknown;
     if (Array.isArray(v) && v.every((f) => typeof f === "string")) return [...v, INVENTORY];
   } catch {}
-  return [join("hooks", "hooks.json"), join(".claude-plugin", "plugin.json"), INVENTORY];
+  return [...BEFORE_INVENTORY, INVENTORY];
 }
 
 /**

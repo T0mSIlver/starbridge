@@ -2031,6 +2031,35 @@ test("setup asks once whether to send permission prompts, Enter saying no (#2111
   expect(none.ctx.store.agentConfig().permissions).toBeUndefined();
 });
 
+test("uninstall removes every file the previous release built into starbridge-remote, and keeps the owner's (#2166)", async () => {
+  const m = await machine();
+  const dir = join(m.home, ".claude", "starbridge-remote");
+  mkdirSync(join(dir, ".claude-plugin"), { recursive: true });
+  mkdirSync(join(dir, "hooks"));
+  writeFileSync(
+    join(dir, ".claude-plugin", "plugin.json"),
+    JSON.stringify({ name: "starbridge-remote", version: "0.1.8-rc.5" }),
+  );
+  // The previous release's build: no written.json, 6 plugin hooks files and 10 mod ones.
+  const hooks = [
+    ...["hooks.json", "cli.sh", "prompt.sh", "remote.sh", "rule.md", "session-start.sh"],
+    ...["settle.sh", "agent.ts", "handover.ts", "node.ts", "own.ts", "poller.ts", "register.ts"],
+    ...["sent.ts", "state.d.ts", "subagent.ts", "switch.ts"],
+  ];
+  for (const f of hooks) writeFileSync(join(dir, "hooks", f), "old");
+  writeFileSync(join(dir, "notes.txt"), "mine");
+  writeFileSync(join(dir, "hooks", "mine.sh"), "mine");
+  writeFileSync(m.settings, JSON.stringify({ env: { CLAUDE_CODE_PLUGIN_DIRS: dir } }));
+  mkdirSync(join(m.home, ".claude", "remote"));
+
+  await uninstallAgent(m.sys, "claude");
+  expect(readdirSync(dir, { recursive: true }).sort()).toEqual([
+    "hooks",
+    "hooks/mine.sh",
+    "notes.txt",
+  ]);
+});
+
 test("where Claude desktop starts sessions over SSH, setup loads starbridge-remote from the installed plugins, and uninstall takes it out (#2107)", async () => {
   const m = await machine();
   const root = join(import.meta.dir, "../..");
