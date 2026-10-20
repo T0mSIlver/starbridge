@@ -313,6 +313,7 @@ enum Notify {
         s.actions = []
         s.category = ""
         s.quiet = true
+        s.counts = false
         return s
     }
 
