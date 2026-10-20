@@ -377,7 +377,9 @@ extension Order {
             if !kept.rang { return (next, .ring) }
             return (next, state == "waiting" && kept.waiting != "waiting" ? .ring : .quiet)
         case let .back(at, due):
-            if !due || kept.back == at { return (kept, .none) }
+            // Its return rings once, and an older snooze's return, after a newer one's, not at all.
+            if !due { return (kept, .none) }
+            if let back = kept.back, !(Dates.parse(at).map { a in Dates.parse(back).map { a > $0 } ?? false } ?? false) { return (kept, .none) }
             next.back = at
             next.rang = true
             return (next, .ring)
