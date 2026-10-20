@@ -160,9 +160,11 @@ enum AnswerRefresh {
 /** Routes notifications for the app: pushes, taps and buttons. */
 final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
     lazy var store = Store(deviceName: UIDevice.current.name)
+    private let snapshotCover = SnapshotCover()
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
         UNUserNotificationCenter.current().delegate = self
+        snapshotCover.install()
         let store = store
         BGTaskScheduler.shared.register(forTaskWithIdentifier: AnswerRefresh.id, using: .main) { task in
             // Handed over on the main queue, where the turn runs and ends.
