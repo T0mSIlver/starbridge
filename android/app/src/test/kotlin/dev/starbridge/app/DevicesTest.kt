@@ -99,4 +99,21 @@ class DevicesTest {
         // No second confirm: the typed group is the proof.
         assertEquals(1, approved)
     }
+
+    /** A code typed on the link screen is one the owner handled: no last group to type (#2183). */
+    @Test fun aCodeTypedOnTheLinkScreenNeedsNoLastGroup() {
+        var approved = 0
+        val code = "0123-4567-89AB-CDEF-GHJK-MN01"
+        var approval by mutableStateOf<Approval>(Approval.Idle)
+        compose.setContent {
+            StarbridgeTheme {
+                PairLinkScreen(approval, DeviceActions({ approval = Approval.Found("Pixel 9", Kind.Device, code) }, { approved++ }, {}, {}, {}))
+            }
+        }
+        compose.onNodeWithText("Pairing code").performTextInput(code)
+        compose.onNodeWithText("Check code").performClick()
+        compose.onAllNodesWithText("Last 4 characters").assertCountEquals(0)
+        compose.onNodeWithText("Approve", useUnmergedTree = true).performClick()
+        assertEquals(1, approved)
+    }
 }

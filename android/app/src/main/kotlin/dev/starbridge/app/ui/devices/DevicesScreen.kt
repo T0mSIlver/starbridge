@@ -214,15 +214,21 @@ fun AddDeviceScreen(
  * A phone or browser is approved only once the owner types the last group of the code it shows,
  * which the link's sender can't show them (#2183); a machine's Approve first asks "Approve <name>
  * from this link?", and its terminal then asks for the check code. The code to type and the QR
- * code to scan have no such step, since the owner handled them.
+ * code typed or scanned on this screen has no such step, since the owner handled it. A QR code
+ * this screen shows keeps the step: the link's request and the shown code's look the same.
  */
 @Composable
 fun PairLinkScreen(approval: Approval, actions: DeviceActions, modifier: Modifier = Modifier, onBack: () -> Unit = {}) {
     var confirming by rememberSaveable { mutableStateOf(false) }
     val found = approval as? Approval.Found
     val approve = { if (found?.kind == Kind.Machine) confirming = true else actions.approve() }
-    val linked = DeviceActions(actions.lookUp, approve, { confirming = false; actions.close() }, actions.revoke, actions.showCode)
-    AddDeviceScreen(approval, linked, modifier, onBack, linked = true)
+    // What the owner typed or scanned on this screen: a request for that code needs no extra step.
+    var handled by rememberSaveable { mutableStateOf<String?>(null) }
+    val linked = DeviceActions({ handled = it; actions.lookUp(it) }, approve, { confirming = false; actions.close() }, actions.revoke, actions.showCode)
+    val viaCard = found != null && handled?.let { h ->
+        runCatching { parsePairingCode(h) == parsePairingCode(found.code) }.getOrDefault(false)
+    } == true
+    AddDeviceScreen(approval, linked, modifier, onBack, linked = !viaCard)
     if (confirming && found != null) {
         AlertDialog(
             onDismissRequest = { confirming = false },

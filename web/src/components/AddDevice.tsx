@@ -295,6 +295,10 @@ export function AddDevice() {
             e.preventDefault();
             setDone(undefined);
             setByLink(false);
+            // The request a link brought goes, found or not, and a link read still in flight is
+            // dropped: neither may reach Approve without the typed group (#2183).
+            setReq(undefined);
+            latest.current = "";
             run(async () => setReq(await (await load()).readPairing(code)));
           }}
         >
