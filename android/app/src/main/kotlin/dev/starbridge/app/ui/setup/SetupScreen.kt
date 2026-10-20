@@ -91,6 +91,7 @@ import dev.starbridge.app.ui.Sym
 import dev.starbridge.app.ui.Symbol
 import javax.inject.Inject
 import dev.starbridge.app.ui.busyAs
+import kotlinx.coroutines.delay
 
 @HiltViewModel
 class SetupViewModel @Inject constructor(private val store: Store) : ViewModel() {
@@ -413,15 +414,15 @@ fun UpdateRequired(minimum: String, current: String, installer: Installer, updat
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun FirstDevice(busy: Boolean, actions: SetupActions, modifier: Modifier) {
-    var started by rememberSaveable { mutableStateOf(false) }
-    // busy rises a moment after the call: a try has run once it was seen.
-    var ran by remember { mutableStateOf(false) }
+    // A try has run once busy was seen, or a second after the call, in case it rose and fell
+    // between two frames. Saved, so a failed try stays failed across recreation; each entry to
+    // the screen, a recreation included, tries again.
+    var ran by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(busy) { if (busy) ran = true }
     LaunchedEffect(Unit) {
-        if (!started) {
-            started = true
-            actions.firstDevice()
-        }
+        actions.firstDevice()
+        delay(1_000)
+        ran = true
     }
     val failed = ran && !busy
     Step(

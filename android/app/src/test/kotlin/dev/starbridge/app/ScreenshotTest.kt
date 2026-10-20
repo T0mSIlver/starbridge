@@ -415,7 +415,7 @@ class ScreenshotTest(private val dark: Boolean) {
         Phone(null, 0) { SetupScreen(Phase.SignedOut, "https://starbridge.run", false, setupActions, {}) }
     }
 
-    @Test fun setupFirstDevice() = capture("setup-first-device", before = { compose.mainClock.autoAdvance = false; repeat(70) { compose.mainClock.advanceTimeByFrame() } }) { Phone(null, 0) { SetupScreen(Phase.NoDevice(accountExists = false), "https://starbridge.run", false, setupActions, {}) } }
+    @Test fun setupFirstDevice() = capture("setup-first-device", before = { compose.mainClock.autoAdvance = false; repeat(40) { compose.mainClock.advanceTimeByFrame() } }) { Phone(null, 0) { SetupScreen(Phase.NoDevice(accountExists = false), "https://starbridge.run", false, setupActions, {}) } }
 
     @Test fun setupJoin() = capture("setup-join") { Phone(null, 0) { SetupScreen(Phase.Joining("7KQ2-M9XD-4TPV-HB3N-R8CE-WY6F"), "https://starbridge.run", false, setupActions, {}) } }
 
