@@ -80,6 +80,15 @@ public struct PairingCode: Equatable, Sendable {
         return PairingCode(String(chars))
     }
 
+    /**
+     * Whether `typed` is this code's last group, read as `parse` reads a code. A device request that
+     * came by link is approved only once the owner types it from the new device's screen (#2183).
+     */
+    public func ends(with typed: String) -> Bool {
+        let chars = Crockford.normalize(typed)
+        return chars.count == 4 && String(chars) == String(secret.suffix(4))
+    }
+
     /** A code typed by hand, or read from a scanned pairing link: the part after `#` if any. */
     public static func fromLink(_ text: String) throws -> PairingCode {
         if let hash = text.firstIndex(of: "#") { return try parse(String(text[text.index(after: hash)...])) }

@@ -172,6 +172,10 @@ final class ProtocolVectorsTests: XCTestCase {
         XCTAssertFalse(Pairings.verifyCheckProof(entries, id: id, key: String(key.dropFirst()) + "0", proof: proof))
         XCTAssertFalse(Pairings.verifyCheckProof(Array(entries.prefix(2)), id: id, key: key, proof: proof))
 
+        for c in v["lastGroup"]!.items {
+            XCTAssertEqual(try PairingCode.parse(c.str("code")).ends(with: c.str("typed")), c["expect"]!.bool!, c.str("typed"))
+        }
+
         for c in v["parse"]!.items {
             let got = (try? PairingCode.parse(c.str("input")).formatted) ?? code { _ = try PairingCode.parse(c.str("input")) }
             XCTAssertEqual(got, c.str("expect"), c.str("input"))

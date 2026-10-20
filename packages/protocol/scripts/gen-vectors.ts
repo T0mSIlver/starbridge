@@ -21,6 +21,7 @@ import {
   DEFAULT_QUOTA_ALERTS,
   type Directory,
   encodeCrockford,
+  endsPairingCode,
   entryHash,
   forgetHeads,
   formatPairingCode,
@@ -1281,6 +1282,19 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
       { input: "0123\u00854567 89ab cdef ghjk mnpq", expect: "bad-encoding" },
       { input: "0123-4567-89AB-CDEF-GHJK-MNPU", expect: "bad-encoding" },
       { input: "0123-4567", expect: "bad-encoding" },
+    ],
+    lastGroup: [
+      {
+        note: "endsPairingCode(code, typed): the code's last group, read as parse reads a code (#2183)",
+        code: formatPairingCode(code),
+        typed: code.secret.slice(-4).toLowerCase(),
+        expect: endsPairingCode(code, code.secret.slice(-4).toLowerCase()),
+      },
+      { code: "0123-4567-89AB-CDEF-GHJK-MN01", typed: " mn-oi ", expect: true },
+      { code: "0123-4567-89AB-CDEF-GHJK-MN01", typed: "GHJK", expect: false },
+      { code: "0123-4567-89AB-CDEF-GHJK-MN01", typed: "MN0", expect: false },
+      { code: "0123-4567-89AB-CDEF-GHJK-MN01", typed: "KMN01", expect: false },
+      { code: "0123-4567-89AB-CDEF-GHJK-MN01", typed: "", expect: false },
     ],
     links: [
       {
