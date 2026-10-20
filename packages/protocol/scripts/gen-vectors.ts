@@ -59,6 +59,7 @@ import {
   quotaRunningOut,
   quotaState,
   RECOVERY,
+  RETENTION_DAYS,
   ready,
   recoverEntry,
   recoveryConfirmEntry,
@@ -3477,8 +3478,14 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
     ],
   };
 
+  const retention = {
+    note: "Days each retention period lasts on the hosted server (RETENTION_DAYS): the clients keep prompts for a week and runs for a day by these.",
+    days: RETENTION_DAYS,
+  };
+
   return {
     "heads.json": heads,
+    "retention.json": retention,
     "images.json": images,
     "keys.json": keys,
     "directory.json": directory,

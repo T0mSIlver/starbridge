@@ -8,6 +8,13 @@
  * CLI-driven loop, until one does.
  */
 
+import {
+  agentSocket,
+  CONFIG_HEADER,
+  isPortFile,
+  portTarget,
+  configKey as sharedConfigKey,
+} from "./address.ts";
 import { configDir } from "./poller.ts";
 
 /** The agent API revision this mod speaks, sent in the `starbridge-api` header. */
@@ -81,26 +88,21 @@ const AGENT_TIMING: AgentTiming = {
 const hex = (bytes: Uint8Array) => [...bytes].map((b) => b.toString(16).padStart(2, "0")).join("");
 
 /**
- * The CLI's `configKey` (cli/src/agent/api.ts) of config folder `dir`: the first 16 hex digits of
- * the SHA-256 of its path, with runs of `/` as one, no trailing `/`, and on Windows `\` as `/`.
- * Sent as `CONFIG_HEADER`, so an agent of another config folder refuses the call (#1966).
+ * The `configKey` of config folder `dir` (address.ts), hashed with WebCrypto, the one SHA-256 the
+ * mod's host offers. Sent as `CONFIG_HEADER`, so an agent of another config folder refuses the
+ * call (#1966).
  */
-export async function configKey(dir: string, windows = false): Promise<string> {
-  const path = (windows ? dir.replace(/\\/g, "/") : dir)
-    .replace(/\/+/g, "/")
-    .replace(/(.)\/$/, "$1");
-  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(path));
-  return hex(new Uint8Array(digest)).slice(0, 16);
+export function configKey(dir: string, windows = false): Promise<string> {
+  return sharedConfigKey(dir, windows, async (text) =>
+    hex(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text)))),
+  );
 }
 
-export const CONFIG_HEADER = "starbridge-config";
+export { CONFIG_HEADER, isPortFile, portTarget };
 
 /**
- * Where the agent listens, as the CLI's `socketPath` (cli/src/agent/api.ts) works it out:
- * `$STARBRIDGE_AGENT_SOCKET`; on Windows (`OS=Windows_NT`) the port file `agent.port` in the
- * config directory; for the default config directory
- * `$XDG_RUNTIME_DIR/starbridge/agent-<configKey>.sock` when that is set; else `agent.sock` in the
- * config directory. `config` is the key to send, undefined when `$STARBRIDGE_AGENT_SOCKET` names
+ * Where the agent listens (`agentSocket` in address.ts), with the config folder from `$HOME`
+ * (`configDir`). `config` is the key to send, undefined when `$STARBRIDGE_AGENT_SOCKET` names
  * the agent.
  */
 export async function agentAddress(env: {
@@ -112,38 +114,13 @@ export async function agentAddress(env: {
   USERPROFILE?: string;
   OS?: string;
 }): Promise<{ socket: string; config?: string }> {
-  const dir = configDir(env);
   if (env.STARBRIDGE_AGENT_SOCKET) return { socket: env.STARBRIDGE_AGENT_SOCKET };
-  const config = await configKey(dir, env.OS === "Windows_NT");
-  if (env.OS === "Windows_NT") return { socket: `${dir}/agent.port`, config };
+  const windows = env.OS === "Windows_NT";
+  const path = configDir(env);
+  const config = await configKey(path, windows);
   const standard = configDir({ ...env, STARBRIDGE_CONFIG_DIR: undefined });
-  if (env.XDG_RUNTIME_DIR && dir === standard)
-    return { socket: `${env.XDG_RUNTIME_DIR}/starbridge/agent-${config}.sock`, config };
-  return { socket: `${dir}/agent.sock`, config };
-}
-
-/**
- * An address ending in `.port` names the file where an agent on loopback TCP wrote its port and
- * its token, which calls prove they hold without sending it (the CLI's `PortFile` and `proof`).
- */
-export const isPortFile = (address: string) => address.endsWith(".port");
-
-/**
- * The port, the token and the agent's pid in port file `text`; undefined when it is not one, as
- * the CLI's `readPortFile` reads it.
- */
-export function portTarget(text: string): { port: number; token: string; pid: number } | undefined {
-  try {
-    const f = JSON.parse(text) as { port?: unknown; token?: unknown; pid?: unknown };
-    if (
-      Number.isInteger(f.port) &&
-      typeof f.token === "string" &&
-      f.token.length >= 32 &&
-      Number.isInteger(f.pid)
-    )
-      return { port: f.port as number, token: f.token, pid: f.pid as number };
-  } catch {}
-  return undefined;
+  const join = (...parts: string[]) => parts.join("/");
+  return { socket: agentSocket(env, { path, standard, key: config }, windows, join), config };
 }
 
 /**

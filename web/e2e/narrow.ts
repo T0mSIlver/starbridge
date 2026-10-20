@@ -124,9 +124,8 @@ async function main() {
     await page.getByRole("button", { name: "Sign in", exact: true }).first().click();
     await page.getByLabel("Owner token").fill(TOKEN);
     await page.getByRole("button", { name: "Sign in", exact: true }).click();
-    await page.getByRole("button", { name: "Create the keys" }).click();
-    await page.getByLabel(/I wrote this key down/).check({ force: true });
-    await page.getByRole("button", { name: "Continue" }).click();
+    await page.getByLabel(/I stored this key/).check({ force: true });
+    await page.getByRole("button", { name: "Create the account" }).click();
     await page.getByRole("heading", { name: "Inbox" }).waitFor();
 
     // A machine, paired from Add a device, asks the question.

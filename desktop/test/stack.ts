@@ -12,54 +12,25 @@
 // each stop in light and dark, beside each screenshot the boxes of what changes from run to run
 // (web/e2e/volatile.ts), and manifest.json, the steps driven and the result.
 import assert from "node:assert/strict";
-import { type ChildProcess, spawn, spawnSync } from "node:child_process";
-import { cpSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { join } from "node:path";
 import { type ElectronApplication, _electron as electron, type Page } from "playwright";
+import {
+  boot,
+  cli,
+  followSignIn,
+  ORIGIN,
+  ROOT,
+  shutdown,
+  step,
+  steps,
+  tmp,
+} from "../../web/e2e/stack.ts";
 import { volatile } from "../../web/e2e/volatile.ts";
-import { freePorts } from "./ports.ts";
 
-const ROOT = resolve(import.meta.dirname, "../..");
 const DESKTOP = join(ROOT, "desktop");
-const WEB = join(ROOT, "web");
 const VERSION = JSON.parse(readFileSync(join(DESKTOP, "package.json"), "utf8")).version;
-const tmp = mkdtempSync(join(tmpdir(), "starbridge-desktop-stack-"));
-const children: ChildProcess[] = [];
-
-const PORTS = await freePorts(["web", "server", "github", "push"]);
-const ORIGIN = `http://localhost:${PORTS.web}`;
-const SERVER = `http://localhost:${PORTS.server}`;
-
-function start(name: string, cmd: string, args: string[], env: object = {}) {
-  const p = spawn(cmd, args, {
-    cwd: ROOT,
-    env: { ...process.env, ...env },
-    stdio: ["ignore", "pipe", "pipe"],
-  });
-  children.push(p);
-  let out = "";
-  const feed = (chunk: Buffer) => {
-    out += chunk.toString();
-    for (const line of chunk.toString().split("\n"))
-      if (line.trim()) console.log(`[${name}] ${line}`);
-  };
-  p.stdout.on("data", feed);
-  p.stderr.on("data", feed);
-  const exited = new Promise<number>((r) => p.on("exit", (code) => r(code ?? -1)));
-  return {
-    exited,
-    kill: () => p.kill(),
-    waitFor: (re: RegExp, ms = 30_000) =>
-      until(async () => out.match(re), `${name}: ${re}`, ms) as Promise<RegExpMatchArray>,
-  };
-}
-
-const cli = (name: string, args: string[], home: string) =>
-  start(name, "bun", ["run", join(ROOT, "cli/src/main.ts"), ...args], {
-    STARBRIDGE_CONFIG_DIR: home,
-    STARBRIDGE_SERVER: SERVER,
-  });
 
 async function until<T>(f: () => Promise<T>, what: string, ms = 30_000): Promise<NonNullable<T>> {
   const end = Date.now() + ms;
@@ -72,12 +43,6 @@ async function until<T>(f: () => Promise<T>, what: string, ms = 30_000): Promise
 }
 
 const EVIDENCE = process.env.EVIDENCE;
-const steps: string[] = [];
-
-function step(text: string) {
-  steps.push(text);
-  console.log(`\n== ${text}`);
-}
 
 function manifest(error?: unknown) {
   if (!EVIDENCE) return;
@@ -221,37 +186,7 @@ type Watched = {
 
 try {
   step("services, server, web");
-  const services = start("services", "bun", [join(WEB, "e2e/services.ts")], {
-    GITHUB_PORT: PORTS.github,
-    PUSH_PORT: PORTS.push,
-  });
-  await services.waitFor(/"event":"ready"/);
-  const server = start("server", "bun", ["run", "server/src/main.ts"], {
-    PORT: PORTS.server,
-    DB_PATH: join(tmp, "starbridge.db"),
-    PUBLIC_URL: ORIGIN,
-    GITHUB_CLIENT_ID: "stub",
-    GITHUB_CLIENT_SECRET: "stub",
-    GITHUB_AUTHORIZE_URL: `http://localhost:${PORTS.github}/login/oauth/authorize`,
-    GITHUB_TOKEN_URL: `http://localhost:${PORTS.github}/login/oauth/access_token`,
-    GITHUB_API_URL: `http://localhost:${PORTS.github}`,
-  });
-  await server.waitFor(/starbridge server on port/);
-  const built = spawnSync("bun", ["run", "build"], {
-    cwd: WEB,
-    env: { ...process.env, STARBRIDGE_SERVER: SERVER },
-    stdio: "inherit",
-  });
-  if (built.status) throw new Error("web build failed");
-  const standalone = join(WEB, ".next/standalone/web");
-  cpSync(join(WEB, ".next/static"), join(standalone, ".next/static"), { recursive: true });
-  cpSync(join(WEB, "public"), join(standalone, "public"), { recursive: true });
-  const web = start("web", "node", [join(standalone, "server.js")], {
-    STARBRIDGE_SERVER: SERVER,
-    PORT: String(PORTS.web),
-    HOSTNAME: "127.0.0.1",
-  });
-  await web.waitFor(/Ready|started server/i);
+  await boot({ push: false });
 
   step("the app opens the server's page");
   const app = await electron.launch({
@@ -327,35 +262,26 @@ try {
     await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
     // The app sends the sign-in to the browser; this run plays the browser, following redirects
     // through GitHub and the server until the starbridge://auth link the browser would open.
-    let next = await until(
+    const next = await until(
       async () => (await main((g) => g.outside)).find((u) => u.includes("/v1/auth/github?app=1")),
       "the sign-in sent to the browser",
     );
     // The browser keeps the server's cookie from the start to the callback, which binds the
     // sign-in's return to it.
-    const jar = new Map<string, string>();
-    while (!next.startsWith("starbridge:")) {
-      const at = new URL(next).origin;
-      const res = await fetch(next, { redirect: "manual", headers: { cookie: jar.get(at) ?? "" } });
-      const set = res.headers.get("set-cookie");
-      if (set) jar.set(at, set.split(";")[0] ?? "");
-      const location = res.headers.get("location");
-      assert.ok(location, `${next} answered ${res.status} without a redirect`);
-      next = new URL(location, next).toString();
-    }
+    const back = await followSignIn(next);
+    assert.ok(back.at.startsWith("starbridge:"), `${back.at} answered ${back.status}`);
     await app.evaluate(({ app }, link) => {
       app.emit("open-url", { preventDefault() {} }, link);
-    }, next);
-    await page.getByText("This app creates your account's keys.").waitFor();
+    }, back.at);
+    // The keys are made as the screen opens: the recovery key and the name show together (#2139).
+    await page.getByTestId("recovery-key").waitFor();
     await shoot(app, page, "keys");
     assert.match(
       await page.getByLabel("Name this app").inputValue(),
       /^Starbridge on (Mac|Linux)$/,
     );
-    await page.getByRole("button", { name: "Create the keys" }).click();
-    await page.getByRole("heading", { name: "Save your recovery key" }).waitFor();
-    await page.getByLabel(/I wrote this key down/).check();
-    await page.getByRole("button", { name: "Continue" }).click();
+    await page.getByLabel(/I stored this key/).check();
+    await page.getByRole("button", { name: "Create the account" }).click();
     // No machine yet, so the inbox says how to add one; its own heading depends on the window's
     // width, which differs between runners.
     await page.getByRole("heading", { name: "Add a machine" }).waitFor();
@@ -602,5 +528,5 @@ try {
     await app.close();
   }
 } finally {
-  for (const c of children) c.kill();
+  shutdown();
 }

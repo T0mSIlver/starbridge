@@ -31,17 +31,6 @@ function replyText(reply: Reply, d: Decision): string {
   return d.answerIn ? `Answered in ${answerPlace(d.answerIn)}` : "Answered";
 }
 
-/**
- * Who closed it: this browser, another device, the keyboard (the harness's own picker or
- * terminal, #865), or the agent (withdrawn, or for another page).
- */
-export function closedBy(item: InboxItem): string {
-  if (item.reply) return "This browser";
-  if (item.answeredBy) return item.answeredBy.device;
-  if (atKeyboard(item)) return "The keyboard";
-  return item.settled || item.decision.answerIn ? "The agent" : "Another device";
-}
-
 const allowed = {
   once: "Allowed once",
   session: "Allowed for this session",

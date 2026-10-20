@@ -8,21 +8,23 @@
 // --client chrome runs the same switch in Playwright's Chromium, for the web's numbers.
 // (After `pnpm --filter @starbridge/desktop build`; under xvfb-run on Linux.)
 import assert from "node:assert/strict";
-import { type ChildProcess, spawn, spawnSync } from "node:child_process";
-import {
-  cpSync,
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readdirSync,
-  readFileSync,
-  writeFileSync,
-} from "node:fs";
+import { cpSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { connect, createServer, type Socket } from "node:net";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { join } from "node:path";
 import { parseArgs } from "node:util";
 import { chromium, _electron as electron, type Page } from "playwright";
+import {
+  boot,
+  buildWeb,
+  followSignIn,
+  cli as machine,
+  PORTS,
+  ROOT,
+  serveWeb,
+  shutdown,
+  tmp,
+} from "../../web/e2e/stack.ts";
 import { freePorts } from "./ports.ts";
 
 const { values: opts } = parseArgs({
@@ -41,21 +43,12 @@ const { values: opts } = parseArgs({
   },
 });
 const RTT = Number(opts.rtt);
-const ROOT = resolve(import.meta.dirname, "../..");
 const DESKTOP = join(ROOT, "desktop");
-const WEB = join(ROOT, "web");
-const tmp = mkdtempSync(join(tmpdir(), "starbridge-desktop-switch-"));
-const children: ChildProcess[] = [];
 
-const free = await freePorts(["web", "proxy", "github", "push"]);
-const PORTS = {
-  ...free,
-  proxy: opts.port ? Number(opts.port) : free.proxy,
-  // Fixed: the built page proxies /v1 to the address it was built with (SKIP_WEB_BUILD).
-  server: 47211,
-};
-const ORIGIN = `http://localhost:${PORTS.proxy}`;
-const SERVER = `http://localhost:${PORTS.server}`;
+const PROXY = opts.port ? Number(opts.port) : (await freePorts(["proxy"])).proxy;
+const ORIGIN = `http://localhost:${PROXY}`;
+// Fixed: the built page proxies /v1 to the address it was built with (SKIP_WEB_BUILD).
+const SERVER = `http://localhost:47211`;
 
 /** Holds each chunk half the round trip in each direction, in order. */
 function latencyProxy(listen: number, to: number, rtt: number) {
@@ -78,34 +71,8 @@ function latencyProxy(listen: number, to: number, rtt: number) {
   return s;
 }
 
-function start(name: string, cmd: string, args: string[], env: object = {}) {
-  const p = spawn(cmd, args, {
-    cwd: ROOT,
-    env: { ...process.env, ...env },
-    stdio: ["ignore", "pipe", "pipe"],
-  });
-  children.push(p);
-  let out = "";
-  const feed = (chunk: Buffer) => {
-    out += chunk.toString();
-  };
-  p.stdout.on("data", feed);
-  p.stderr.on("data", feed);
-  const exited = new Promise<number>((r) => p.on("exit", (code) => r(code ?? -1)));
-  return {
-    exited,
-    kill: () => p.kill("SIGKILL"),
-    output: () => out,
-    waitFor: (re: RegExp, ms = 60_000) =>
-      until(async () => out.match(re), `${name}: ${re}\n${out}`, ms) as Promise<RegExpMatchArray>,
-  };
-}
-
 const cli = (name: string, args: string[], home: string) =>
-  start(name, "bun", ["run", join(ROOT, "cli/src/main.ts"), ...args], {
-    STARBRIDGE_CONFIG_DIR: home,
-    STARBRIDGE_SERVER: SERVER,
-  });
+  machine(name, args, home, { server: SERVER, quiet: true });
 
 async function until<T>(f: () => Promise<T>, what: string, ms = 30_000): Promise<NonNullable<T>> {
   const end = Date.now() + ms;
@@ -223,74 +190,21 @@ async function time(page: Page, tab: string, heading: string): Promise<Switch> {
 
 /** Signs in the web's way, outside any window, and returns the session cookie. */
 async function webSession(): Promise<string> {
-  const jar = new Map<string, string>();
-  let next = `${ORIGIN}/v1/auth/github`;
-  for (let i = 0; i < 10 && (next.includes("/v1/auth/") || next.includes("/login/oauth")); i++) {
-    const res = await fetch(next, {
-      redirect: "manual",
-      headers: { cookie: [...jar].map(([k, v]) => `${k}=${v}`).join("; ") },
-    });
-    for (const c of res.headers.getSetCookie()) {
-      const [kv] = c.split(";");
-      const [k, v] = (kv ?? "").split("=");
-      if (k) jar.set(k, v ?? "");
-    }
-    next = new URL(res.headers.get("location") ?? "/", next).toString();
-  }
-  const session = jar.get("sb_session");
+  const { cookies } = await followSignIn(`${ORIGIN}/v1/auth/github`);
+  const session = cookies.get(ORIGIN)?.get("sb_session");
   assert.ok(session, "no session cookie from the sign-in");
   return session;
 }
 
 try {
-  const proxy = latencyProxy(PORTS.proxy, PORTS.web, RTT);
-  const services = start("services", "bun", [join(WEB, "e2e/services.ts")], {
-    GITHUB_PORT: PORTS.github,
-    PUSH_PORT: PORTS.push,
+  const proxy = latencyProxy(PROXY, PORTS.web, RTT);
+  let { web } = await boot({
+    origin: ORIGIN,
+    serverPort: 47211,
+    push: false,
+    build: !process.env.SKIP_WEB_BUILD,
+    quiet: true,
   });
-  await services.waitFor(/"event":"ready"/);
-  const server = start("server", "bun", ["run", "server/src/main.ts"], {
-    PORT: PORTS.server,
-    DB_PATH: join(tmp, "starbridge.db"),
-    PUBLIC_URL: ORIGIN,
-    GITHUB_CLIENT_ID: "stub",
-    GITHUB_CLIENT_SECRET: "stub",
-    GITHUB_AUTHORIZE_URL: `http://localhost:${PORTS.github}/login/oauth/authorize`,
-    GITHUB_TOKEN_URL: `http://localhost:${PORTS.github}/login/oauth/access_token`,
-    GITHUB_API_URL: `http://localhost:${PORTS.github}`,
-  });
-  await server.waitFor(/starbridge server on port/);
-  const standalone = join(WEB, ".next/standalone/web");
-  if (!process.env.SKIP_WEB_BUILD || !existsSync(standalone)) {
-    const built = spawnSync("bun", ["run", "build"], {
-      cwd: WEB,
-      env: { ...process.env, STARBRIDGE_SERVER: SERVER },
-      stdio: "inherit",
-    });
-    if (built.status) throw new Error("web build failed");
-    cpSync(join(WEB, ".next/static"), join(standalone, ".next/static"), { recursive: true });
-    cpSync(join(WEB, "public"), join(standalone, "public"), { recursive: true });
-  }
-  const buildWeb = () => {
-    const built = spawnSync("bun", ["run", "build"], {
-      cwd: WEB,
-      env: { ...process.env, STARBRIDGE_SERVER: SERVER },
-      stdio: "ignore",
-    });
-    if (built.status) throw new Error("web build failed");
-    cpSync(join(WEB, ".next/static"), join(standalone, ".next/static"), { recursive: true });
-    cpSync(join(WEB, "public"), join(standalone, "public"), { recursive: true });
-  };
-  const serveWeb = async () => {
-    const web = start("web", "node", [join(standalone, "server.js")], {
-      STARBRIDGE_SERVER: SERVER,
-      PORT: String(PORTS.web),
-      HOSTNAME: "127.0.0.1",
-    });
-    await web.waitFor(/Ready|started server/i);
-    return web;
-  };
-  let web = await serveWeb();
 
   let page: Page;
   let close: () => Promise<void>;
@@ -345,7 +259,7 @@ try {
       .boundingBox();
     assert.ok(box);
     await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
-    let next = await until(
+    const next = await until(
       async () =>
         (
           (await app.evaluate(() => (globalThis as unknown as { outside: string[] }).outside)) ?? []
@@ -354,28 +268,19 @@ try {
     );
     // The browser keeps the server's cookie from the start to the callback, which binds the
     // sign-in's return to it.
-    const jar = new Map<string, string>();
-    while (!next.startsWith("starbridge:")) {
-      const at = new URL(next).origin;
-      const res = await fetch(next, { redirect: "manual", headers: { cookie: jar.get(at) ?? "" } });
-      const set = res.headers.get("set-cookie");
-      if (set) jar.set(at, set.split(";")[0] ?? "");
-      const location = res.headers.get("location");
-      assert.ok(location, `${next} answered ${res.status} without a redirect`);
-      next = new URL(location, next).toString();
-    }
+    const back = await followSignIn(next);
+    assert.ok(back.at.startsWith("starbridge:"), `${back.at} answered ${back.status}`);
     await app.evaluate(({ app }, link) => {
       app.emit("open-url", { preventDefault() {} }, link);
-    }, next);
+    }, back.at);
     close = () => app.close();
     hide = () => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.hide());
     show = () => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.show());
   }
   page.on("console", (m) => m.type() === "error" && console.log(`[page] ${m.text()}`));
   try {
-    await page.getByRole("button", { name: "Create the keys" }).click();
-    await page.getByLabel(/I wrote this key down/).check();
-    await page.getByRole("button", { name: "Continue" }).click();
+    await page.getByLabel(/I stored this key/).check();
+    await page.getByRole("button", { name: "Create the account" }).click();
     await page.getByRole("heading", { name: "Add a machine" }).waitFor();
 
     const machine = join(tmp, "machine");
@@ -445,10 +350,10 @@ try {
       );
     }
     if (opts.deploy) {
-      web.kill();
+      web.proc.kill("SIGKILL");
       await web.exited;
-      buildWeb();
-      web = await serveWeb();
+      buildWeb(SERVER, true);
+      web = await serveWeb(SERVER, true);
       await new Promise((r) => setTimeout(r, 1000));
       if (hide && show) {
         // Closed to the menu bar, the page finds the new build and loads it (web: freshBuild.ts).
@@ -483,10 +388,11 @@ try {
     if (opts.json)
       writeFileSync(opts.json, JSON.stringify({ client: opts.client, rtt: RTT, rounds }, null, 2));
   } finally {
-    await page.screenshot({ path: join(tmp, "last.png") }).catch(() => {});
+    // Outside the run's folder, which shutdown deletes.
+    await page.screenshot({ path: join(tmpdir(), "starbridge-switch-last.png") }).catch(() => {});
     await close();
     proxy.close();
   }
 } finally {
-  for (const c of children) c.kill();
+  shutdown();
 }
