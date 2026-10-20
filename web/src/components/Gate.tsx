@@ -14,7 +14,7 @@ import { Grouped } from "./Grouped";
 import { AppleLogo, Icon } from "./icons";
 import { Landing } from "./Landing";
 import { QrCode } from "./QrCode";
-import { FirstRunPage, Setup } from "./Setup";
+import { FirstRunPage, NameField, Setup } from "./Setup";
 import s from "./Setup.module.css";
 import ui from "./ui.module.css";
 
@@ -48,23 +48,6 @@ function Error_({ error }: { error?: string }) {
       {error}
     </p>
   ) : null;
-}
-
-function NameField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-  return (
-    <div className={s.field}>
-      <label className={`t-meta ${s.dim}`} htmlFor="device-name">
-        {desktop ? "Name this app" : "Name this browser"}
-      </label>
-      <input
-        id="device-name"
-        className={`t-body ${s.input}`}
-        value={value}
-        maxLength={100}
-        onChange={(e) => onChange(e.target.value)}
-      />
-    </div>
-  );
 }
 
 function useDefaultName(initial = ""): [string, (v: string) => void] {
@@ -210,48 +193,61 @@ export function SignIn({
   );
 }
 
-/** Shown only when the account has no device yet: this browser makes its keys. */
+/**
+ * Shown only when the account has no device yet: this browser makes its keys as the screen opens,
+ * and the recovery key shows at once, with the name to sign in beside it (#2139).
+ */
 function FirstDevice({ account, unsaved }: { account: string; unsaved?: string }) {
   const { reload } = useApp();
-  const [name, setName] = useDefaultName(unsaved);
   const [prepared, setPrepared] = useState<PreparedDevice>();
-  const { busy, error, run } = useAction();
+  const [name, setName] = useState(unsaved ?? "");
+  const { error, run } = useAction();
+  // Once: a second run would replace the keys behind the key on screen.
+  const started = useRef(false);
+  const prepare = () =>
+    run(async () => {
+      const d = await load();
+      const initial = unsaved || d.defaultName();
+      setName((n) => n || initial);
+      setPrepared(await d.prepareFirstDevice(account, initial));
+    });
+  // biome-ignore lint/correctness/useExhaustiveDependencies: makes the keys once, on open
+  useEffect(() => {
+    if (started.current) return;
+    started.current = true;
+    void prepare();
+  }, []);
   if (prepared)
     return (
       <Setup
-        device={name}
+        name={name}
+        onName={setName}
         recoveryKey={prepared.recoveryKey}
+        unsaved={!!unsaved}
         // The genesis goes to the server only now, so a reload before this shows a new key.
         onContinue={async () => {
-          await prepared.commit();
+          await prepared.commit(name.trim());
           await reload();
         }}
       />
     );
   return (
     <FirstRunPage>
-      <h1 className="t-heading">Set up your account</h1>
-      <p className={`t-small ${s.lede}`}>
-        {unsaved
-          ? "The page closed before you saved the recovery key, so that key was never used. Create the keys again for a new one."
-          : desktop
-            ? "This app creates your account's keys."
-            : "This browser creates your account's keys."}
-      </p>
-      <NameField value={name} onChange={setName} />
-      <button
-        type="button"
-        className={`t-label ${ui.btn} ${ui.lg} ${ui.fill} ${s.go}`}
-        disabled={busy || !name.trim()}
-        onClick={() =>
-          run(async () =>
-            setPrepared(await (await load()).prepareFirstDevice(account, name.trim())),
-          )
-        }
-      >
-        {busy ? "Creating the keys…" : error ? "Try again" : "Create the keys"}
-      </button>
-      <Error_ error={error} />
+      <h1 className="t-heading">Save your recovery key</h1>
+      {error ? (
+        <>
+          <Error_ error={error} />
+          <button
+            type="button"
+            className={`t-label ${ui.btn} ${ui.lg} ${ui.fill} ${s.go}`}
+            onClick={prepare}
+          >
+            Try again
+          </button>
+        </>
+      ) : (
+        <p className={`t-small ${s.lede}`}>Creating the keys…</p>
+      )}
     </FirstRunPage>
   );
 }

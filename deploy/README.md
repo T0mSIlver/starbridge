@@ -130,8 +130,9 @@ waits for that job and runs only when it passed.
 
 1. As root: `ssh root@starbridge.run sh -s < deploy/host/setup.sh`. It installs Docker, git,
    sqlite3 and unattended-upgrades (with reboots at 04:00), adds `deploy` with root's SSH keys,
-   and turns password login off. Once it has checked that `deploy` can log in and use sudo, it
-   turns root login off too. Keep that session open until `ssh deploy@starbridge.run sudo true`
+   and turns password login, agent forwarding and every TCP forward but the one to Umami's
+   dashboard off. Once it has checked that `deploy` can log in and use sudo, it lets only
+   `deploy` log in. Keep that session open until `ssh deploy@starbridge.run sudo true`
    works from a second terminal; if `deploy` breaks, Hetzner's rescue system still reaches the box. Run it again later
    as `ssh deploy@starbridge.run sudo sh -s < deploy/host/setup.sh`.
 2. `deploy/push-secrets.sh` copies the secrets from `~/.config/starbridge/secrets` to

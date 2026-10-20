@@ -110,7 +110,7 @@ export function ReplaceRecoveryKey() {
                   checked={saved}
                   onChange={(e) => setSaved(e.target.checked)}
                 />
-                <span>I wrote this key down somewhere safe, away from this device.</span>
+                <span>I stored this key</span>
               </label>
               <button
                 type="button"

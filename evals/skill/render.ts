@@ -94,9 +94,8 @@ try {
   const page = await (await browser.newContext({ viewport: { width: 1280, height: 900 } })).newPage();
   await page.goto(ORIGIN);
   await page.getByRole("link", { name: /^(Sign in|Continue) with GitHub$/ }).first().click();
-  await page.getByRole("button", { name: "Create the keys" }).click();
-  await page.getByLabel(/I wrote this key down/).check();
-  await page.getByRole("button", { name: "Continue" }).click();
+  await page.getByLabel(/I stored this key/).check();
+  await page.getByRole("button", { name: "Create the account" }).click();
   await page.getByRole("heading", { name: "Inbox" }).waitFor();
 
   const pair = cli(["pair", "--name", "devbox"]);

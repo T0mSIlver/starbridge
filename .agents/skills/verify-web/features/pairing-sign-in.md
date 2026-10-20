@@ -8,7 +8,7 @@ code. A browser that signs in again binds to its device without pairing.
 
 ## Sub-features
 
-- `first-device`: Create the keys, save the recovery key, Continue.
+- `first-device`: the recovery key and the name on one screen, I stored this key, Create the account.
 - `pair-machine`: `starbridge pair --name N`, Add a device, Check code,
   Approve, then `starbridge pair --confirm` on the machine.
 - `pair-browser`: a second browser shows a code and QR; the first approves.
