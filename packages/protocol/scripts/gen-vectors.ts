@@ -3530,10 +3530,10 @@ function notifyCases(): { name: string; steps: NotifyStep[] }[] {
     at: `2026-10-12T10:00:0${at}Z`,
     state,
   });
-  const snooze = (due: boolean): NotifyPush => ({
+  const snooze = (due: boolean, at = "2026-10-12T10:00:00Z"): NotifyPush => ({
     kind: "snooze",
     id: "d1",
-    at: "2026-10-12T10:00:00Z",
+    at,
     until: "2026-10-12T11:00:00Z",
     due,
   });
@@ -3584,6 +3584,14 @@ function notifyCases(): { name: string; steps: NotifyStep[] }[] {
         { push: snooze(false), effect: "none" },
         { push: snooze(true), effect: "ring" },
         { restart: true },
+        { push: snooze(true), effect: "none" },
+      ],
+    },
+    {
+      name: "an older snooze's return after a newer one's rings nothing",
+      steps: [
+        { push: asked, effect: "ring" },
+        { push: snooze(true, "2026-10-12T10:00:05Z"), effect: "ring" },
         { push: snooze(true), effect: "none" },
       ],
     },
