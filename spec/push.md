@@ -69,6 +69,17 @@
   it. The extension shows no button for an item the app's saved state says is answered, so a
   replayed push cannot offer to answer it again, and it clears the badge the placeholder carried
   when it keeps the placeholder.
+- **A push rings once, and never for a closed question** (#2151). Pushes arrive late, twice
+  or out of order, and a browser stops its idle service worker, so each client keeps, per
+  question and across a restart, what pushes did to it, and runs each push through one rule,
+  `notifyStep` (`packages/protocol/src/notify.ts`, ported to Kotlin and Swift): a question, flip
+  or return pushed after an `answered` or settled push rings nothing; a repeat rings nothing; an
+  older flip changes nothing; a flip that reaches the device before its question shows the
+  question and rings. Each client used its own checks before, and each got a different case
+  wrong. A closed hint is unverified, so it only keeps notifications down, which a hostile server
+  could do anyway by not pushing; verified answer state stays apart. `rules.json`'s `notify`
+  cases hold every client to the rule. The iPhone's notification extension cannot drop an alert,
+  so there a closed question's late push shows quiet and without buttons.
 - Caps (#27, #36, #37): 10 subscriptions a device, 30 an account; 4 pushes in flight and 200
   waiting per account, 10 s each. A push connects to the exact address that passed the
   private-range check, and is sent only if its subscription and device are still active (#260).
