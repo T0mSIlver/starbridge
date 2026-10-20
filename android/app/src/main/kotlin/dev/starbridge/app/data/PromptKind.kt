@@ -1,5 +1,6 @@
 package dev.starbridge.app.data
 
+import dev.starbridge.app.protocol.Retention
 import dev.starbridge.app.protocol.SealedItem
 import dev.starbridge.app.protocol.Settled
 import dev.starbridge.app.protocol.takeCodePoints
@@ -120,7 +121,7 @@ internal class PromptKind(
 
     /** Keeps a week of prompts, the log's span, as the server does. */
     private fun keep(byId: Map<String, SavedPrompt>, cursor: String = saved.promptCursor) {
-        val weekAgo = Instant.now().minus(7, ChronoUnit.DAYS)
+        val weekAgo = Instant.now().minus(Retention.WEEK, ChronoUnit.DAYS)
         val kept = byId.values.filter { instant(it.body.createdAt)?.isAfter(weekAgo) != false }.sortedBy { it.body.createdAt }
         persist(saved.copy(promptCursor = cursor, prompts = kept))
     }

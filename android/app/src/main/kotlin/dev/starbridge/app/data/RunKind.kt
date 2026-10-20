@@ -1,5 +1,6 @@
 package dev.starbridge.app.data
 
+import dev.starbridge.app.protocol.Retention
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.serialization.json.JsonObject
 import java.io.IOException
@@ -75,7 +76,7 @@ internal class RunKind(private val core: Core) : ItemKind {
             if (wins) held[u.body.id] = u
             wins && !(fromSync && h == null && exited)
         }
-        val dayAgo = Instant.now().minus(java.time.Duration.ofDays(1))
+        val dayAgo = Instant.now().minus(java.time.Duration.ofDays(Retention.DAY))
         core.persist(
             saved.copy(
                 runs = held.values.filter { toUi(it).lastNews > dayAgo }.sortedBy { it.body.startedAt },
