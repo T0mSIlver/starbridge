@@ -236,4 +236,27 @@ class NotifyRulesTest {
             }
         }
     }
+
+    /** A flip a sync read counts as the last one: a push back to waiting after it rings (#2153). */
+    @Test
+    fun aFlipASyncReadCountsForTheNextPush() {
+        serve()
+        val disk = Disk(tmp.newFolder(), object : Vault {
+            override fun wrap(plain: ByteArray) = plain
+            override fun unwrap(wrapped: ByteArray) = wrapped
+        })
+        val store0 = store(disk.also {
+            it.save(Saved(http.url("/").toString().trimEnd('/'), account = account, accountExists = true, me = phone, pin = Pin(dir.length, dir.head), entries = entries.toList()))
+            it.save(Secrets(session = "s", boxPk = toB64(boxKeys.public), boxSk = toB64(boxKeys.secret), signPk = toB64(signKeys.public), signSk = toB64(signKeys.secret)))
+        })
+        runBlocking { store0.onPush(payload(buildJsonObject { put("kind", "decision") })) }
+        runBlocking { store0.onPush(payload(buildJsonObject { put("kind", "waiting"); put("at", "2026-10-12T10:00:01Z"); put("state", "waiting") })) }
+        // A sync read the agent's flip back to working; no push brought it.
+        val synced = disk.saved()!!.let { s -> s.copy(decisions = s.decisions.map { it.copy(waiting = "working", waitingAt = "2026-10-12T10:00:02Z") }) }
+        disk.save(synced)
+        val store = store(disk)
+        val before = rings
+        runBlocking { store.onPush(payload(buildJsonObject { put("kind", "waiting"); put("at", "2026-10-12T10:00:03Z"); put("state", "waiting") })) }
+        assertEquals(before + 1, rings)
+    }
 }

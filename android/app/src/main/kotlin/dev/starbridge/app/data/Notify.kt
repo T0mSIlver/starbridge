@@ -54,9 +54,22 @@ internal fun notifyStep(kept: Notified, event: NotifyEvent): Pair<Notified, Noti
 /** How many questions [Saved.notified] keeps. */
 const val NOTIFIED_MAX = 300
 
-/** [Saved] after a push about question [id], and what its notification does. */
-internal fun Saved.notifying(id: String, event: NotifyEvent): Pair<Saved, NotifyEffect> {
-    val (kept, effect) = notifyStep(notified[id] ?: Notified(), event)
+/**
+ * [Saved] after a push about question [id], and what its notification does. [known] is the
+ * question as this phone kept it before the push, when it did: what syncs read of it counts too.
+ */
+internal fun Saved.notifying(id: String, event: NotifyEvent, known: SavedDecision? = null): Pair<Saved, NotifyEffect> {
+    var remembered = notified[id] ?: Notified()
+    // A question a sync listed was in the inbox: a push about it is not the first the owner hears.
+    if (known != null) remembered = remembered.copy(rang = true)
+    // A flip a sync read, never pushed, counts as the last one applied: it is verified, and
+    // later than what the pushes left.
+    val at = known?.waitingAt
+    val state = known?.waiting
+    if (at != null && state != null && laterWaiting(remembered.waitingAt, remembered.waiting, at, state)) {
+        remembered = remembered.copy(waitingAt = at, waiting = state)
+    }
+    val (kept, effect) = notifyStep(remembered, event)
     val next = notified - id + (id to kept)
     return copy(notified = next.entries.toList().takeLast(NOTIFIED_MAX).associate { it.key to it.value }) to effect
 }

@@ -667,12 +667,13 @@ internal class DecisionKind(
                 val (from, body) = open(item) ?: return
                 body as Waiting
                 if (saved.notified[body.decisionId]?.closed == true) return
+                val kept = saved.decisions.find { it.body.id == body.decisionId }
                 val d = saved.decisions.find { it.body.id == body.decisionId } ?: fetchDecision(body.decisionId) ?: return
                 val updated = wait(d, from, body) ?: return
                 // To waiting rings, back to working moves the notification quietly; a flip that
                 // comes before its question rings as the question (#2151).
                 val (next, effect) = saved.copy(decisions = saved.decisions.map { if (it === d) updated else it })
-                    .notifying(d.body.id, NotifyEvent.Flip(body.at, body.state))
+                    .notifying(d.body.id, NotifyEvent.Flip(body.at, body.state), known = kept)
                 persist(next)
                 if (effect != NotifyEffect.None && d.answeredAt == null && d.answer == null && saved.outbox.none { it.decisionId == d.body.id } && !isSnoozed(d)) {
                     alerts.decision(toUi(updated), silent = effect == NotifyEffect.Quiet)
