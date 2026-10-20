@@ -409,3 +409,26 @@ test("a question whose notification failed to show shows when its push comes aga
   await push(payload(d));
   expect(notes.map((n) => [n.tag, n.title])).toEqual([["d:d_refused", "Question d_refused"]]);
 });
+
+test("records an earlier release kept stay as they were; the pushes' own goes beside them (#2152)", async () => {
+  const id = "d_upgrade";
+  live.inject(decision(id));
+  notes = [];
+  // What the release before kept for the account: a snooze, as noteSnoozes stores it, and no
+  // `pushed` record.
+  const snoozes = { ...(await store.get("snoozes", ctx.account)), d_other: "2026-10-11T12:00:00Z" };
+  await store.put("snoozes", snoozes, ctx.account);
+  const answers = await store.get("answers", ctx.account);
+  const before = rings;
+  await push(payload(decision(id)));
+  await import(`${worker}?restart=upgrade`);
+  await push({ v: 1, kind: "answered", id });
+  await push(payload(decision(id)));
+  expect(rings - before).toBe(1);
+  expect(await store.get("snoozes", ctx.account)).toEqual(snoozes);
+  expect(await store.get("answers", ctx.account)).toEqual(answers);
+  expect(JSON.parse((await store.get("pushed", ctx.account))?.[id] ?? "{}")).toEqual({
+    rang: true,
+    closed: true,
+  });
+});
