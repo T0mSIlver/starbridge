@@ -616,6 +616,12 @@ internal class DecisionKind(
         }
     }
 
+    /**
+     * Under the lock, before a sign-out wipes the outbox: sends what it holds, so an answer the
+     * owner gave is not dropped with the keys (#2155). False while some still wait.
+     */
+    internal suspend fun flushBeforeSignOut(): Boolean = runCatching { flushQueued() }.getOrDefault(false)
+
     private suspend fun flushQueued(): Boolean {
         if (phase.value != Phase.Ready) return true
         return try {

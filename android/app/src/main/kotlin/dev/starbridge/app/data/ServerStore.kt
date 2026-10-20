@@ -1538,6 +1538,8 @@ class ServerStore(
 
     /** Removes this phone from the directory, ends the session and forgets every key. */
     override fun signOut() = run {
+        // Answers still in the outbox go first: the wipe below drops them (#2155).
+        if (phase.value == Phase.Ready && saved.outbox.isNotEmpty()) decisionKind.flushBeforeSignOut()
         if (phase.value == Phase.Ready) {
             runCatching {
                 syncDirectory()

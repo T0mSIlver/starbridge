@@ -414,6 +414,7 @@ fun Main(decisions: List<Decision>, prompts: List<Prompt>, notice: StateFlow<Str
                         val allowUnseen by vm.allowUnseen.collectAsStateWithLifecycle()
                         val pushHold by vm.pushHold.collectAsStateWithLifecycle()
                         val held by vm.quotasHeld.collectAsStateWithLifecycle()
+                        val unsent by vm.unsent.collectAsStateWithLifecycle()
                         LaunchedEffect(Unit) { vm.loadPushHold() }
                         SettingsScreen(
                             windows, quota, members.size, colours, push, server,
@@ -424,6 +425,7 @@ fun Main(decisions: List<Decision>, prompts: List<Prompt>, notice: StateFlow<Str
                             notificationsOff = notificationsOff,
                             pushHold = pushHold,
                             quotas = held,
+                            unsent = unsent,
                         )
                     }
                     entry<AlertsKey> {
