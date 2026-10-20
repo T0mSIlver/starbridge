@@ -26,7 +26,9 @@
   failed sign-in, or on "Use your own server".
 - **Landing: devices, then machines** (#1232). "Get the app" comes before the install box: a new
   user signs in on a device first (the first device shows the recovery key), then installs on each
-  machine that runs agents. One card per device, three of equal size (Android, iPhone, Mac app) and
+  machine that runs agents. The hero's buttons follow the same order: Sign in with GitHub, Get the
+  app, Install the CLI, and the header keeps its Sign in for people coming back (#2141, card
+  d_genius-body-merry). One card per device, three of equal size (Android, iPhone, Mac app) and
   no browser card, since the hero already signs in. Each card holds the platform, the minimum
   version a visitor could fail without, and the actions; no subtitles. Android has two buttons
   (the APK, Obtainium) and the Play testing links. No copy says "signed".
