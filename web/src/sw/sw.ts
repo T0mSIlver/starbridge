@@ -72,14 +72,18 @@ async function step(
   account: string,
   id: string,
   event: NotifyEvent,
-): Promise<{ effect: NotifyEffect; kept: Notified }> {
-  let out: { effect: NotifyEffect; kept: Notified } = { effect: "none", kept: {} };
+): Promise<{ effect: NotifyEffect; kept: Notified; before: Notified }> {
+  let out: { effect: NotifyEffect; kept: Notified; before: Notified } = {
+    effect: "none",
+    kept: {},
+    before: {},
+  };
   await store.update("pushed", account, (old) => {
     let kept: Notified = {};
     try {
       kept = JSON.parse(old?.[id] ?? "{}") as Notified;
     } catch {}
-    out = notifyStep(kept, event);
+    out = { ...notifyStep(kept, event), before: kept };
     const next = { ...old };
     delete next[id];
     next[id] = JSON.stringify(out.kept);
@@ -88,6 +92,48 @@ async function step(
     return next;
   });
   return out;
+}
+
+/** The pushes of each question under way here, one at a time: "account/id" to the last. */
+const turns = new Map<string, Promise<unknown>>();
+
+/** Runs `f` after the question's push before it, whether that one failed or not. */
+function inTurn(key: string, f: () => Promise<void>): Promise<void> {
+  const run = (turns.get(key) ?? Promise.resolve()).catch(() => {}).then(f);
+  turns.set(key, run);
+  run
+    .finally(() => {
+      if (turns.get(key) === run) turns.delete(key);
+    })
+    .catch(() => {});
+  return run;
+}
+
+/**
+ * Runs a push about the question through the rule and shows what it says, one push of the
+ * question at a time, so two that overlap don't both sound. A show that fails puts back what the
+ * question's record was, so the push delivered again shows it.
+ */
+async function notifyQuestion(
+  seen: Shown,
+  account: string,
+  item: InboxItem,
+  event: NotifyEvent,
+  note: (kept: Notified) => { waiting?: boolean; back?: boolean } = () => ({}),
+): Promise<void> {
+  const id = item.decision.id;
+  await inTurn(`${account}/${id}`, async () => {
+    const { effect, kept, before } = await step(account, id, event);
+    if (effect === "none") return;
+    try {
+      await showDecision(seen, account, item, effect, note(kept));
+    } catch (e) {
+      await store.update("pushed", account, (old) =>
+        old?.[id] === JSON.stringify(kept) ? { ...old, [id]: JSON.stringify(before) } : (old ?? {}),
+      );
+      throw e;
+    }
+  });
 }
 
 self.addEventListener("install", () => self.skipWaiting());
@@ -202,8 +248,7 @@ async function onPush(text: string, seen: Shown): Promise<void> {
     const opened = await openPushedDecision(ctx, item);
     if (answeredAt || opened.reply) return;
     // Rings once: not again for a push delivered twice, or after a flip that came first.
-    const { effect } = await step(ctx.account, payload.id, { kind: "decision" });
-    if (effect !== "none") await showDecision(seen, ctx.account, opened, effect);
+    await notifyQuestion(seen, ctx.account, opened, { kind: "decision" });
   } else if (payload.kind === "permission") {
     const opened = await openPushedPermission(ctx, item);
     if (!answeredAt && !opened.reply) await showPrompt(seen, account as string, opened);
@@ -242,16 +287,16 @@ async function onPush(text: string, seen: Shown): Promise<void> {
     const opened = await openPushedDecision(ctx, stored.item);
     if (opened.reply) return;
     // Once per return: the same push delivered twice rings once.
-    const { effect, kept } = await step(ctx.account, z.decisionId, {
-      kind: "snooze",
-      at: z.at,
-      due: true,
-    });
-    if (effect !== "none")
-      await showDecision(seen, ctx.account, opened, effect, {
+    await notifyQuestion(
+      seen,
+      ctx.account,
+      opened,
+      { kind: "snooze", at: z.at, due: true },
+      (kept) => ({
         waiting: kept.waiting?.state === "waiting",
         back: true,
-      });
+      }),
+    );
   } else if (payload.kind === "waiting") {
     // The agent ran out of other work: notify once more, in place of the question's notification.
     // Back to working, the notification loses its waiting line without a sound (#191).
@@ -274,15 +319,17 @@ async function onPush(text: string, seen: Shown): Promise<void> {
     // A flip to waiting rings, back to working the notification loses its waiting line
     // quietly (#191); a repeated or older flip changes nothing, and one that comes before its
     // question shows it, ringing.
-    const { effect } = await step(ctx.account, waiting.decisionId, {
-      kind: "waiting",
-      at: waiting.at,
-      state: waiting.state,
-    });
-    if (effect !== "none")
-      await showDecision(seen, ctx.account, opened, effect, {
-        waiting: waiting.state === "waiting",
-      });
+    await notifyQuestion(
+      seen,
+      ctx.account,
+      opened,
+      {
+        kind: "waiting",
+        at: waiting.at,
+        state: waiting.state,
+      },
+      () => ({ waiting: waiting.state === "waiting" }),
+    );
   }
 }
 
@@ -335,7 +382,8 @@ async function showDecision(
   } = {
     body: note.body,
     tag: tag(d.id),
-    renotify: effect === "ring",
+    // The placeholder this push showed while late sounded already.
+    renotify: effect === "ring" && seen.placeholder !== tag(d.id),
     silent: effect === "quiet",
     requireInteraction: true,
     // The account it belongs to: an action answers for that account only, whichever is current

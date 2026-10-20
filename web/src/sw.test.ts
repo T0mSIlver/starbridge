@@ -26,6 +26,8 @@ let notes: Note[] = [];
 let shows = 0;
 /** How many of those sounded, as a browser decides: a new tag, or `renotify`, and not `silent`. */
 let rings = 0;
+/** Set to make the browser refuse the next notification. */
+let refuseNext = false;
 const errors: string[] = [];
 /** This browser's push service: Chrome's unless a test sets Safari's. */
 let endpoint = "https://fcm.googleapis.com/fcm/send/x";
@@ -47,6 +49,10 @@ Object.assign(globalThis, {
         title: string,
         o: { tag?: string; renotify?: boolean; silent?: boolean } = {},
       ) => {
+        if (refuseNext && o.tag?.startsWith("d:")) {
+          refuseNext = false;
+          throw new Error("refused");
+        }
         shows++;
         if (!o.silent && (o.renotify || !notes.some((n) => n.tag === o.tag))) rings++;
         notes = [...notes.filter((n) => n.tag !== o.tag), note(title, o.tag ?? "")];
@@ -390,4 +396,16 @@ test.each(rules.notify.map((c, i) => [c.name, c, i] as const))("notify: %s", asy
     const effect = rings > before[1] ? "ring" : shows > before[0] ? "quiet" : "none";
     expect(`${p.kind} ${effect}`).toBe(`${p.kind} ${step.effect}`);
   }
+});
+
+test("a question whose notification failed to show shows when its push comes again (#2152)", async () => {
+  const d = decision("d_refused");
+  live.inject(d);
+  notes = [];
+  refuseNext = true;
+  await push(payload(d));
+  // The placeholder stood in for it.
+  expect(notes.map((n) => [n.tag, n.title])).toEqual([["d:d_refused", "Starbridge"]]);
+  await push(payload(d));
+  expect(notes.map((n) => [n.tag, n.title])).toEqual([["d:d_refused", "Question d_refused"]]);
 });
