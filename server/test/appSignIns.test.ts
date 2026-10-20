@@ -59,6 +59,17 @@ test("a flood from many addresses fills the maps, and a new address still signs 
   expect(s.start("after", "t", flooder(0), T0 + APP_SIGN_IN_MS)).toBe(true);
 });
 
+test("a flood never drops a person's live code, whoever asks for room", () => {
+  const s = new AppSignIns();
+  expect(s.passed("victim", "theirs", true, "203.0.113.9", T0)).toBe(true);
+  for (let i = 0; i < MAX - 1; i++) s.passed(`code${i}`, `c${i}`, false, flooder(i), T0);
+  // Fresh addresses keep asking: room comes from the flood, never the person's code.
+  for (let i = 0; i < 2 * PER_ADDRESS; i++)
+    s.passed(`late${i}`, `l${i}`, false, `198.51.100.${i}`, T0 + 1);
+  expect(s.challengeOf("victim", T0 + 1)).toMatchObject({ challenge: "theirs" });
+  expect(s.passed("victim", "attackers", false, "192.0.2.1", T0 + 1)).toBe(false);
+});
+
 test("a full map never drops a live code for an address that keeps as many", () => {
   const s = new AppSignIns();
   for (let i = 0; i < MAX; i++) s.passed(`code${i}`, `c${i}`, false, flooder(i), T0);

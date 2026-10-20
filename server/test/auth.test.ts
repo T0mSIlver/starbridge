@@ -483,3 +483,13 @@ test("on https a bare sb_session counts only without a __Host- one, and moves to
   expect(old.setCookie).toContain(`__Host-sb_session=${mine}`);
   expect(old.setCookie).toMatch(/sb_session=;.*Max-Age=0/);
 });
+
+test("on http, a sign-in cookie left on its old path is cleared when a sign-in starts", async () => {
+  const s = await makeServer(githubConfig());
+  const start = await s.app.request("/v1/auth/github", { headers: { cookie: "sb_oauth=old" } });
+  const set = start.headers.getSetCookie();
+  expect(set.some((c) => /^sb_oauth=;.*Path=\/v1\/auth\/github/.test(c))).toBe(true);
+  expect(
+    set.some((c) => /^sb_oauth=[^;]+; .*Path=\/;/.test(c) && !c.startsWith("sb_oauth=;")),
+  ).toBe(true);
+});

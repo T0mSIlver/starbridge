@@ -72,6 +72,8 @@ export const authRoutes = new Hono<Env>();
  * sign-in started before that name came in fails once and starts again.
  */
 function setStateCookie(c: Context<Env>, name: string, value: string): void {
+  // On http the name is the same as before, and a cookie left on its old path would come first.
+  deleteLegacy(c, name);
   setCookie(c, cookieName(c, name), value, {
     httpOnly: true,
     secure: c.var.config.secureCookies,
@@ -86,7 +88,21 @@ function setStateCookie(c: Context<Env>, name: string, value: string): void {
 function takeStateCookie(c: Context<Env>, name: string): string | undefined {
   const value = getCookie(c, cookieName(c, name));
   deleteCookie(c, cookieName(c, name), { path: "/", secure: c.var.config.secureCookies });
+  deleteLegacy(c, name);
   return value;
+}
+
+/** The paths sign-in cookies had before they moved to `/` with the `__Host-` name. */
+const LEGACY_PATHS: Record<string, string> = {
+  sb_oauth: "/v1/auth/github",
+  sb_apple: "/v1/auth/apple",
+  sb_app: "/v1/auth",
+};
+
+/** Clears a sign-in cookie a release before set on its old path, which an hour would expire. */
+function deleteLegacy(c: Context<Env>, name: string): void {
+  const path = LEGACY_PATHS[name];
+  if (path && getCookie(c, name) !== undefined) deleteCookie(c, name, { path });
 }
 
 /** The sign-in methods this server offers, so the page shows only those (#670). */

@@ -8,12 +8,19 @@ const MAX = 10_000;
  * in a few times in 10 minutes, and a flood from one address stops at its own share.
  */
 export const PER_ADDRESS = 50;
+/**
+ * Entries of an address that keeps this many or fewer are never dropped to make room: a person's
+ * sign-in in progress stays, whatever a flood from elsewhere does, so a code they passed keeps
+ * the challenge the trade checks it against.
+ */
+const KEPT_ALWAYS = 5;
 
 /**
  * Entries each charged to the address that made them (security audit 2026-10-20): one address
  * keeps at most `PER_ADDRESS`, and a full map makes room by dropping the oldest entry of the
- * address that keeps the most, so a flood from many addresses drops its own entries before
- * anyone else's. Insertion order is age order, which `sweep` relies on.
+ * address that keeps the most, when that is more than the asking address keeps and more than
+ * `KEPT_ALWAYS`. So a flood from many addresses drops its own entries, never a person's.
+ * Insertion order is age order, which `sweep` relies on.
  */
 class Charged<V extends { at: number }> implements Iterable<[string, V]> {
   private items = new Map<string, { value: V; address: string }>();
@@ -46,7 +53,7 @@ class Charged<V extends { at: number }> implements Iterable<[string, V]> {
     if (this.items.size >= this.max) {
       let most: Set<string> | undefined;
       for (const keys of this.byAddress.values()) if (!most || keys.size > most.size) most = keys;
-      if (!most || most.size <= mine) return false;
+      if (!most || most.size <= Math.max(mine, KEPT_ALWAYS)) return false;
       const oldest = most.values().next().value;
       if (oldest !== undefined) this.delete(oldest);
     }
