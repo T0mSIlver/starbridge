@@ -15,6 +15,7 @@ import {
   computePace,
   contextText,
   DEFAULT_QUOTA_ALERTS,
+  endsPairingCode,
   forgetHeads,
   formatPairingCode,
   fromB64,
@@ -193,6 +194,11 @@ describe("pairing.json", () => {
     expect(verifyCheckProof(entries, id, `${key.slice(1)}0`, proof)).toBe(false);
     expect(verifyCheckProof(entries.slice(0, 2), id, key, proof)).toBe(false);
   });
+  for (const c of v.lastGroup as { code: string; typed: string; expect: boolean }[]) {
+    test(`last group ${JSON.stringify(c.typed)} of ${c.code}`, () => {
+      expect(endsPairingCode(parsePairingCode(c.code), c.typed)).toBe(c.expect);
+    });
+  }
   for (const c of v.parse) {
     test(`parse ${c.input}`, () => {
       let got: string;

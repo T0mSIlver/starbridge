@@ -70,6 +70,39 @@
       "expect": "bad-encoding"
     }
   ],
+  "lastGroup": [
+    {
+      "note": "endsPairingCode(code, typed): the code's last group, read as parse reads a code (#2183)",
+      "code": "008J-4CT4-ANK7-F24S-NAXW-SQFE",
+      "typed": "sqfe",
+      "expect": true
+    },
+    {
+      "code": "0123-4567-89AB-CDEF-GHJK-MN01",
+      "typed": " mn-oi ",
+      "expect": true
+    },
+    {
+      "code": "0123-4567-89AB-CDEF-GHJK-MN01",
+      "typed": "GHJK",
+      "expect": false
+    },
+    {
+      "code": "0123-4567-89AB-CDEF-GHJK-MN01",
+      "typed": "MN0",
+      "expect": false
+    },
+    {
+      "code": "0123-4567-89AB-CDEF-GHJK-MN01",
+      "typed": "KMN01",
+      "expect": false
+    },
+    {
+      "code": "0123-4567-89AB-CDEF-GHJK-MN01",
+      "typed": "",
+      "expect": false
+    }
+  ],
   "links": [
     {
       "note": "pairingLink(server, code); codeFromLink takes what follows #, or the whole text",
