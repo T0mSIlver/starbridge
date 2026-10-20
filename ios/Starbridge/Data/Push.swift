@@ -138,6 +138,8 @@ extension Store {
     func backgroundPush(_ userInfo: [AnyHashable: Any]) async {
         guard let p = Notify.payload(userInfo), let id = Notify.item(p) else { return }
         if Notify.closes(p) { await Self.removeDelivered(about: id) }
+        // A push of the question that comes later rings nothing (#2151).
+        if ["answered", "settled"].contains(p["kind"]?.string) { NotifiedFile.standard.step(id, .closed) }
         try? await serial { try await self.sync() }
     }
 }

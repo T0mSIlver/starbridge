@@ -62,6 +62,18 @@ struct NotifyFixture {
     }
 }
 
+/** A step's push in rules.json's notify cases, as the rule takes it. */
+enum NotifyRulesCase {
+    static func event(_ p: JSON) -> NotifyEvent {
+        switch p["kind"]!.string! {
+        case "decision": .asked
+        case "answered": .closed
+        case "waiting": .flip(at: p["at"]!.string!, state: p["state"]!.string!)
+        default: .back(at: p["at"]!.string!, due: p["due"]!.bool!)
+        }
+    }
+}
+
 /** What a notification says once the service extension opens its box (#1137). */
 final class NotifyTests: XCTestCase {
     func testAQuestionShowsItsWordsAndItsButtons() async throws {
@@ -220,5 +232,45 @@ final class NotifyTests: XCTestCase {
         XCTAssertTrue(question.actions.last is UNTextInputNotificationAction)
         XCTAssertEqual(locked.first { $0.identifier == "permission" }?.actions.map(\.options), prompt.actions.map(\.options))
         XCTAssertNil(Notify.following(locked, locked: true))
+    }
+
+    /**
+     * rules.json's notify cases through the extension's work (#2151), its book in a file of the
+     * test's own; an `answered` push goes where the app's background push sends it. The extension
+     * cannot drop an alert, so a step the rule leaves alone shows quiet: what counts is the sound.
+     */
+    func testTheNotifyCases() async throws {
+        let url = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .appendingPathComponent("../../packages/protocol/vectors/rules.json").standardizedFileURL
+        let rules = try JSON.parse(String(decoding: try Data(contentsOf: url), as: UTF8.self))
+        let f = try NotifyFixture()
+        let phoneSign = SecretKey(try fromB64(f.secrets.signSk!))
+        for (n, c) in rules["notify"]!.array!.enumerated() {
+            let id = "d_n\(n)"
+            let question = try f.decision(id)
+            let book = NotifiedFile(url: FileManager.default.temporaryDirectory.appendingPathComponent("notified-\(UUID().uuidString).json"))
+            defer { book.delete() }
+            for (i, step) in c["steps"]!.array!.enumerated() {
+                guard let p = step["push"] else { continue }
+                let pushed: SealedItem
+                switch p["kind"]!.string! {
+                case "answered":
+                    book.step(id, .closed)
+                    continue
+                case "decision":
+                    pushed = question
+                case "waiting":
+                    pushed = try f.seal(.waiting, ["v": 1, "id": .string("w_\(n)_\(i)"), "decisionId": .string(id), "to": [.string(f.phone.id)], "at": p["at"]!, "state": p["state"]!])
+                default:
+                    // A snooze's first push is a background push: the extension never sees it.
+                    guard p["due"]!.bool! else { continue }
+                    pushed = try f.seal(.snooze, ["v": 1, "id": .string("z_\(n)"), "decisionId": .string(id), "to": [.string(f.phone.id)], "until": p["until"]!, "at": p["at"]!], by: f.phone, key: phoneSign)
+                }
+                var payload = f.payload(pushed)
+                if case var .object(o) = payload, p["due"] != nil { o["due"] = p["due"]!; payload = .object(o) }
+                let shown = await Notify.opened(payload, saved: f.saved, secrets: f.secrets, book: book) { _ in question }
+                XCTAssertEqual(shown?.quiet == false, step["effect"]!.string! == "ring", "\(c["name"]!.string!), step \(i)")
+            }
+        }
     }
 }

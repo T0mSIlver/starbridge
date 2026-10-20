@@ -33,8 +33,9 @@ in the planning repo's `research/ios-app.md`).
   notification service extension (`Notifications/`) rewrites from the sealed box: the question,
   its machine and repo, up to 3 options with the agent's default first, and Reply. It reads the
   keys and the pinned directory from the app group `group.dev.starbridge.ios`, which is also the
-  keychain item's access group, and writes no state: it only registers each question's buttons
-  and sets the notification's badge. A button answers through the outbox in the
+  keychain item's access group. It registers each question's buttons, sets the notification's
+  badge, and keeps what each push did in `notified.json` beside `saved.json`, which the app also
+  writes when an answer closes a question, so a late or repeated push rings once (#2151). A button answers through the outbox in the
   background; a prompt's Deny answers there, its Allow opens the prompt. The simulator skips
   service extensions for `simctl push`, so `NotificationServiceTests` drives the extension's work
   (`Notify.rewrite`) against the shared keychain and app group instead.

@@ -189,6 +189,57 @@ struct Disk {
     }
 }
 
+/**
+ * What pushes did to each question (#2151), as JSON beside `saved.json` in the app group: the
+ * notification extension writes what it rang, the app what `answered` and settled pushes closed.
+ * Both go through a file coordinator, since the two processes write it.
+ */
+struct NotifiedFile {
+    let url: URL
+
+    static let standard = NotifiedFile(url: Disk.standard.url.deletingLastPathComponent().appendingPathComponent("notified.json"))
+
+    /** How many questions it keeps, the oldest dropped first. */
+    static let max = 300
+
+    struct Book: Codable, Equatable {
+        /** Question ids, oldest first. */
+        var order: [String] = []
+        var notified: [String: Notified] = [:]
+    }
+
+    func load() -> Book {
+        (try? JSONDecoder().decode(Book.self, from: Data(contentsOf: url))) ?? Book()
+    }
+
+    /** Runs `event` about question `id` through the rule and keeps what it leaves; the effect. */
+    @discardableResult
+    func step(_ id: String, _ event: NotifyEvent) -> (Notified, NotifyEffect) {
+        var out = (Notified(), NotifyEffect.none)
+        var failed: NSError?
+        NSFileCoordinator().coordinate(writingItemAt: url, options: .forMerging, error: &failed) { url in
+            let file = NotifiedFile(url: url)
+            var book = file.load()
+            out = Order.notifyStep(book.notified[id] ?? Notified(), event)
+            book.notified[id] = out.0
+            book.order = book.order.filter { $0 != id } + [id]
+            for gone in book.order.dropLast(Self.max) { book.notified[gone] = nil }
+            book.order = Array(book.order.suffix(Self.max))
+            try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try? JSONEncoder().encode(book).write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+            var values = URLResourceValues()
+            values.isExcludedFromBackup = true
+            var target = url
+            try? target.setResourceValues(values)
+        }
+        return out
+    }
+
+    func delete() {
+        try? FileManager.default.removeItem(at: url)
+    }
+}
+
 extension Saved {
     /** Questions still to answer: not answered, not snoozed, not sent from this iPhone (`sending`), from a member still `active`. */
     func openDecisions(sending: Set<String>, active: (String) -> Bool) -> [SavedDecision] {
