@@ -12,6 +12,7 @@ import {
   seal,
 } from "@starbridge/protocol";
 import { LiveServer } from "@starbridge/server/test-support";
+import rules from "../../packages/protocol/vectors/rules.json";
 import { api } from "./lib/api";
 import * as device from "./lib/device";
 import * as store from "./lib/store";
@@ -23,6 +24,8 @@ const listeners = new Map<string, Listener>();
 let notes: Note[] = [];
 /** How many times the worker showed a notification. */
 let shows = 0;
+/** How many of those sounded, as a browser decides: a new tag, or `renotify`, and not `silent`. */
+let rings = 0;
 const errors: string[] = [];
 /** This browser's push service: Chrome's unless a test sets Safari's. */
 let endpoint = "https://fcm.googleapis.com/fcm/send/x";
@@ -40,8 +43,12 @@ Object.assign(globalThis, {
   self: {
     addEventListener: (type: string, f: Listener) => listeners.set(type, f),
     registration: {
-      showNotification: async (title: string, o: { tag?: string } = {}) => {
+      showNotification: async (
+        title: string,
+        o: { tag?: string; renotify?: boolean; silent?: boolean } = {},
+      ) => {
         shows++;
+        if (!o.silent && (o.renotify || !notes.some((n) => n.tag === o.tag))) rings++;
         notes = [...notes.filter((n) => n.tag !== o.tag), note(title, o.tag ?? "")];
       },
       getNotifications: async (o: { tag?: string } = {}) =>
@@ -327,5 +334,59 @@ test("on Safari, a push with nothing to show still shows a quiet notification (#
     expect(notes.map((n) => [n.tag, n.title])).toEqual([["quiet", "Starbridge"]]);
   } finally {
     endpoint = "https://fcm.googleapis.com/fcm/send/x";
+  }
+});
+
+type Step =
+  | { restart: true }
+  | {
+      rings: boolean;
+      push:
+        | { kind: "decision" }
+        | { kind: "answered" }
+        | { kind: "waiting"; at: string; state: "waiting" | "working" }
+        | { kind: "snooze"; at: string; until: string; due: boolean };
+    };
+
+// rules.json's notify cases (#2151): what a late, repeated or reordered push may ring. A restart
+// loads the worker again, as a browser does after stopping it when idle.
+test.each(rules.notify.map((c, i) => [c.name, c, i] as const))("notify: %s", async (_, c, i) => {
+  const id = `d_notify${i}`;
+  live.inject(decision(id));
+  notes = [];
+  const { id: me, boxPk } = ctx.device;
+  let n = 0;
+  for (const step of c.steps as unknown as Step[]) {
+    if ("restart" in step) {
+      await import(`${worker}?restart=${i}`);
+      continue;
+    }
+    const p = step.push;
+    const before = rings;
+    if (p.kind === "decision") await push(payload(decision(id)));
+    else if (p.kind === "answered") await push({ v: 1, kind: "answered", id });
+    else if (p.kind === "waiting")
+      await push(
+        payload(
+          fromMachine(
+            "waiting",
+            { id: `w_${i}_${n++}`, decisionId: id, at: p.at, state: p.state },
+            id,
+          ),
+        ),
+      );
+    else {
+      const z = seal(
+        "snooze",
+        { v: 1, id: `z_${i}`, decisionId: id, to: ["m_devbox", me], until: p.until, at: p.at },
+        { id: "phone", signKey: live.owner.device.keys.sign.privateKey },
+        [
+          { id: "m_devbox", boxPk: publicKeys(mKeys).boxPk },
+          { id: me, boxPk },
+        ],
+      );
+      await push(payload({ ...z, re: id, wakeAt: p.until }, { wakeAt: p.until, due: p.due }));
+    }
+    expect([p.kind, rings > before]).toEqual([p.kind, step.rings]);
   }
 });

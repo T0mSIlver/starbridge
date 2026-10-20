@@ -48,6 +48,13 @@ type Records = {
    * snooze's "<at> <until>", which breaks a tie. Pages from before read and write the times only.
    */
   snoozes: Record<string, string>;
+  /**
+   * What the service worker's pushes already did to each question (#2151), so a late, repeated
+   * or reordered push rings nothing after a restart: `closed:<id>` once an answered or settled
+   * push closed it, `rang:<id>` once it rang, `waiting:<id>` the last flip applied ("<at>
+   * <state>"), `back:<id>` the snooze whose return rang (its at). Oldest entries go first.
+   */
+  pushed: Record<string, string>;
   /** The inbox's items as listed, still sealed, and the cursor after them (#1380). */
   kept: Kept;
 };
@@ -64,6 +71,7 @@ const PER_ACCOUNT: Record<Exclude<keyof Records, "current">, true> = {
   heads: true,
   forgotten: true,
   snoozes: true,
+  pushed: true,
   kept: true,
 };
 export const ACCOUNT_KINDS = Object.keys(PER_ACCOUNT) as Exclude<keyof Records, "current">[];
@@ -120,6 +128,7 @@ const SIGNED_IN = new Set<keyof Records>([
   "heads",
   "forgotten",
   "snoozes",
+  "pushed",
   "kept",
 ]);
 
