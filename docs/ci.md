@@ -78,14 +78,24 @@ change from run to run. The job pushes up to 24 changed pairs to the `pr-shots` 
 `verify/<pr>/<sha>/`, and writes or updates one comment on the pull request, marked
 `<!-- starbridge-evidence -->`.
 
-Some screens change from run to run on their own, so a change there alone is not the pull
-request's:
+The comment lists the changed screens by name, with the number of sizes and colour schemes each
+changed in, and shows the largest differences first. A change in the page shows in all of a
+screen's sizes, a flicker in one or two.
 
-- the inbox's full screen (`inbox-full-*`) shows the Turn on notifications banner when Firefox
-  drops the first browser's push subscription;
-- `quotas-machines-*` lists its two machines, whose windows are the same, in either order;
-- a quota's run-out line says "tomorrow at" or not by the time of day, and can wrap to a second
-  line, which moves the rows below it.
+A screenshot is made steady before it is shot, so that two runs of one tree match:
+
+- the clock of a quota screen (`quotas-*`, `inbox-aside-*`) is held at the instant the fake
+  CodexBar's windows were made for, so the pace marker and "On pace" do not follow how long the
+  run took to get there;
+- a first browser whose push subscription Firefox dropped turns it on again before a shot, so the
+  Turn on notifications banner is not on the inbox's screens by chance;
+- "today", "tomorrow" and "yesterday" are left out of the comparison with the times beside them;
+- the desktop window is shot without motion and with the pointer in a corner, since under xvfb it
+  can sit over the sign-in button and draw its hover colour.
+
+Some screens still change on their own: `quotas-machines-*` lists its two machines, whose windows
+are the same, in either order, and a quota's run-out line can wrap to a second line, since the
+digits of its time differ in width, which moves the rows below it.
 
 A pull request that touches `android/` or `demo/smoke/` gets the same for the Android app, in its
 own comment marked `<!-- starbridge-evidence android -->` (`android.yml`). The release smoke
@@ -94,7 +104,7 @@ own comment marked `<!-- starbridge-evidence android -->` (`android.yml`). The r
 shows its notification and opens the card, and fails on a crash in logcat. A pull request's APK has made-up Firebase values (a build with no `google-services.json`), which Google refuses, so the app never gets an FCM token; the emulator job sets `NO_FIREBASE` and the smoke puts a made-up token on the app's device in the server's database. The release smoke leaves it unset and needs the app to register itself. `ANSWER=<option>` makes the smoke also tap that option on the card and read the answer on the machine's side (the verify-android skill uses it; CI and the release leave it unset). It keeps each stop in
 light and dark (`<profile>-<stop>-<scheme>.png`) with its UI dump, the notification shade in light
 only, and the app drawer with our icon beside the stock apps', again in light under each icon shape
-the system image offers as an overlay. The comparison leaves out the status bar and the times on screen. Each profile
+the system image offers as an overlay. The comparison leaves out the status bar, the times on screen and the launcher's Clock icon, whose face shows the time. The phone emulator boots with the camera cutout in some runs and without it in others, which moves every screen by the status bar's height, so the run turns on the emulator's own cutout overlay first. Before each shot it enters the status bar's demo mode again, waits for the "Google push is not available" snackbar to go, sets the app drawer up again if a change of scheme closed it, and takes the shot once two screenshots 700 ms apart match, so no inset or fade is caught half way. A tablet's drawer is a sheet over the home screen, whose clock widget moves, so only the sheet is compared. Each profile
 uploads `android-evidence-<profile>-<tree>`; the changed pairs go under
 `verify/<pr>/<sha>/android/` on `pr-shots`.
 

@@ -147,7 +147,10 @@ async function shoot(app: ElectronApplication, page: Page, stop: string) {
   mkdirSync(dir, { recursive: true });
   try {
     for (const scheme of ["light", "dark"] as const) {
-      await page.emulateMedia({ colorScheme: scheme });
+      // Without motion, and the pointer in a corner: under xvfb the pointer sits mid-screen, over
+      // the sign-in button in some runs, which draws its hover colour or the fade to it.
+      await page.emulateMedia({ colorScheme: scheme, reducedMotion: "reduce" });
+      await page.mouse.move(0, 799);
       await page.waitForFunction(
         (dark) => matchMedia("(prefers-color-scheme: dark)").matches === dark,
         scheme === "dark",
@@ -155,11 +158,23 @@ async function shoot(app: ElectronApplication, page: Page, stop: string) {
       // The page repaints its background and the app's colours on the change.
       await new Promise((r) => setTimeout(r, 500));
       const file = join(dir, `${stop}-${scheme}`);
-      await page.screenshot({ path: `${file}.png` });
+      // Some runs still paint a 773 px window although the page and the window say 800: a shot
+      // of another size is nudged to the size again and taken again.
+      for (let tries = 1; ; tries++) {
+        const png = await page.screenshot({ path: `${file}.png` });
+        if (png.readUInt32BE(20) === 800 || tries === 5) break;
+        await app.evaluate(({ BrowserWindow }) => {
+          const w = BrowserWindow.getAllWindows().find((x) => x.getTitle() === "Starbridge");
+          w?.setMenuBarVisibility(false);
+          w?.setContentSize(1200, 801);
+          w?.setContentSize(1200, 800);
+        });
+        await new Promise((r) => setTimeout(r, 500));
+      }
       writeFileSync(`${file}.json`, JSON.stringify(await volatile(page, false)));
     }
   } finally {
-    await page.emulateMedia({ colorScheme: "light" });
+    await page.emulateMedia({ colorScheme: "light", reducedMotion: "no-preference" });
   }
 }
 

@@ -64,6 +64,15 @@ const runs = (shard: string) => !SHARD || SHARD === shard;
 /** The artifact two steps answer a question in. */
 const ARTIFACT = "https://claude.ai/artifact/Xq7pLm2VnR4tBz9KcW1sYd";
 
+/**
+ * The instant the quota fixtures were made for: a quota screen is shot with the page's clock
+ * there, so the pace marker and its "On pace" or "Headroom unused" do not follow how long the
+ * run took to get to the shot.
+ */
+let dataNow: number | undefined;
+/** The first browser's pages that turned Web Push on, so a dropped subscription is turned on again. */
+const pushOn = new WeakSet<Page>();
+
 /** When the CodexBar fixtures in cli/test/fixtures/codexbar were recorded. */
 const RECORDED = Date.parse("2026-10-04T19:09:00Z");
 
@@ -72,7 +81,8 @@ const RECORDED = Date.parse("2026-10-04T19:09:00Z");
  * with their recorded dates, which windows run out depended on the day (#902).
  */
 function fakeCodexbar(): string {
-  const shift = Date.now() - RECORDED;
+  dataNow = Date.now();
+  const shift = dataNow - RECORDED;
   const dir = join(tmp, "codexbar-fixture");
   mkdirSync(join(dir, "codexbar"), { recursive: true });
   const fixtures = join(ROOT, "cli/test/fixtures");
@@ -363,6 +373,17 @@ async function replyClear(page: Page, reply: Locator, reopen: () => Promise<void
  * run to run go beside it (volatile.ts).
  */
 async function capture(target: Page | Locator, path: string, fullPage = false) {
+  const quota = EVIDENCE && dataNow !== undefined && /\/(quotas-|inbox-aside)/.test(path);
+  const clockPage = "page" in target ? target.page() : target;
+  if (quota) await clockPage.clock.setFixedTime(dataNow as number);
+  try {
+    await capture1(target, path, fullPage);
+  } finally {
+    if (quota) await clockPage.clock.setSystemTime(Date.now());
+  }
+}
+
+async function capture1(target: Page | Locator, path: string, fullPage: boolean) {
   if (EVIDENCE) {
     const page = "page" in target ? target.page() : target;
     const box = "page" in target ? await target.boundingBox() : { x: 0, y: 0 };
@@ -404,6 +425,17 @@ async function foldKeepsHead(page: Page, head: Locator) {
   if ((await head.count()) !== 1) throw new Error(`a toggled section lost its head: ${head}`);
 }
 
+/**
+ * Firefox drops a browser's push subscription now and then (docs/ci.md, "Evidence"), which puts
+ * the Turn on notifications banner on a screen; turn it on again, as the run did at first.
+ */
+async function pushBack(page: Page) {
+  const banner = page.getByRole("button", { name: "Turn on notifications" });
+  if (!EVIDENCE || !pushOn.has(page) || !(await banner.isVisible())) return;
+  await banner.click();
+  await banner.waitFor({ state: "detached", timeout: 15_000 }).catch(() => {});
+}
+
 async function shoot(page: Page, name: string) {
   for (const [size, viewport, text] of SIZES)
     for (const scheme of ["light", "dark"] as const) {
@@ -411,8 +443,10 @@ async function shoot(page: Page, name: string) {
       // Without motion, so no row is caught sliding over another.
       await page.emulateMedia({ colorScheme: scheme, reducedMotion: "reduce" });
       await page.waitForTimeout(150);
+      await pushBack(page);
       const unzoom = text > 1 ? await zoomText(page, text) : undefined;
       await fitsLayout(page, `${name} ${scheme}${unzoom ? " text 200%" : ""}`);
+      await pushBack(page);
       // Firefox draws the phone layout's fixed bottom bar mid-page in a full-page capture.
       await capture(
         page,
@@ -734,6 +768,8 @@ async function main() {
   await page.getByRole("heading", { name: "Inbox" }).waitFor();
   // No machine yet: the inbox says how to add one (#610).
   await page.getByRole("heading", { name: "Add a machine" }).waitFor();
+  // The banner follows once the page has checked the push subscription, as the next step uses it.
+  await page.getByRole("button", { name: "Turn on notifications" }).waitFor();
   await shoot(page, "inbox-empty");
   step("the app's skip link leads past the rail (#1944)");
   await skipToContent(page);
@@ -742,6 +778,7 @@ async function main() {
   await page.getByRole("button", { name: "Turn on notifications" }).click();
   await services.waitFor(/"event":"subscribed"/);
   await page.getByRole("button", { name: "Turn on notifications" }).waitFor({ state: "detached" });
+  pushOn.add(page);
 
   step("approve `starbridge pair` from the empty inbox's Add a device (#1367)");
   const machineHome = join(tmp, "machine");
@@ -1930,6 +1967,7 @@ async function main() {
       d.setHours(h, m, 0, 0);
       return d.toISOString().replace(/\.\d+Z$/, "Z");
     };
+    dataNow = Date.now();
     const longResets = [
       {
         provider: "e2e",

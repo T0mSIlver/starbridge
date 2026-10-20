@@ -17,11 +17,46 @@ export function keeper(em: Emulator, adbPath: string, dir: string | undefined, p
   const shots = dir ? join(dir, "shots") : undefined;
   if (shots) mkdirSync(shots, { recursive: true });
   const time = new RegExp(TIME, "i");
+  let noticed = false;
+  let logged = false;
 
   /** The status bar's clock, battery and signal fixed, and its notification icons hidden. */
   async function demoMode() {
     if (!shots) return;
     await em.shell("settings put global sysui_demo_allowed 1");
+    if (!logged) {
+      logged = true;
+      // The emulator boots with the phone's camera cutout in some runs and without it in others,
+      // which moves every app screen by the status bar's height (136 px against 63). Turning on
+      // the emulator's own cutout overlay gives each boot the same display.
+      if (profile === "phone") {
+        await em.shell("cmd overlay enable com.android.internal.display.cutout.emulation.emu01");
+        // It takes a while to reach the display: wait until the overlay is on and the cutout's
+        // inset has held the same for 3 s.
+        let last = "";
+        let since = Date.now();
+        for (let i = 0; i < 40; i++) {
+          const on = /\[x\] com\.android\.internal\.display\.cutout\.emulation\.emu01/.test(
+            await em.shell("cmd overlay list"),
+          );
+          const inset =
+            (
+              await em
+                .shell("dumpsys display | grep -o 'cutout DisplayCutout{insets=[^)]*)'")
+                .catch(() => "")
+            ).trim() || "none";
+          if (!on || inset !== last) since = Date.now();
+          else if (Date.now() - since >= 3000) break;
+          last = inset;
+          await Bun.sleep(1000);
+        }
+      }
+      for (const cmd of [
+        "cmd overlay list | grep -i -E 'cutout'",
+        "dumpsys display | grep -o 'cutout DisplayCutout{insets=[^)]*)'",
+      ])
+        console.log(`[evidence] ${cmd}\n${await em.shell(cmd).catch(() => "(none)")}`);
+    }
     for (const extras of [
       "-e command enter",
       "-e command clock -e hhmm 1200",
@@ -32,21 +67,78 @@ export function keeper(em: Emulator, adbPath: string, dir: string | undefined, p
       await em.shell(`am broadcast -a com.android.systemui.demo ${extras}`);
   }
 
-  async function capture(file: string) {
-    const p = Bun.spawn([adbPath, "exec-out", "screencap", "-p"], {
-      stdout: Bun.file(`${file}.png`),
-    });
+  /** The screen's pixels, as the emulator draws them now. */
+  async function screen(): Promise<Buffer> {
+    const p = Bun.spawn([adbPath, "exec-out", "screencap", "-p"], { stdout: "pipe" });
+    const png = Buffer.from(await new Response(p.stdout).arrayBuffer());
     await p.exited;
-    const xml = await em.adb("exec-out", "uiautomator", "dump", "/dev/tty").catch(() => "");
+    return png;
+  }
+
+  /**
+   * Waits for the screen to hold still, then returns it: the snackbar that says Google push is
+   * missing (the run's APK has no Firebase) has gone, and two screenshots 700 ms apart are the
+   * same, so no inset, fade or scroll is caught half way. Two runs of one tree differed by these.
+   */
+  async function still(): Promise<Buffer> {
+    const snackbar = async () =>
+      (await em.adb("exec-out", "uiautomator", "dump", "/dev/tty").catch(() => "")).includes(
+        "Google push is not available",
+      );
+    // It shows some seconds after sign-in and goes by itself; the first shot waits for it to
+    // come, the others only for it to go.
+    if (!noticed) {
+      noticed = true;
+      for (let i = 0; i < 15 && !(await snackbar()); i++) await Bun.sleep(1000);
+    }
+    for (let i = 0; i < 20 && (await snackbar()); i++) await Bun.sleep(1000);
+    let last = await screen();
+    for (let i = 0; i < 8; i++) {
+      await Bun.sleep(700);
+      const now = await screen();
+      if (now.equals(last)) return now;
+      last = now;
+    }
+    return last;
+  }
+
+  async function capture(file: string, prepare?: () => Promise<void>, expect?: string) {
+    // Demo mode ends when the system UI restarts, as it can on a change of night mode.
+    await demoMode();
+    let xml = "";
+    for (let tries = 0; tries < 3; tries++) {
+      writeFileSync(`${file}.png`, await still());
+      xml = await em.adb("exec-out", "uiautomator", "dump", "/dev/tty").catch(() => "");
+      // A snackbar that came while the screen held still: shoot again once it has gone.
+      if (xml.includes("Google push is not available")) continue;
+      // The screen that was set up is gone (the launcher's drawer closed): set it up again.
+      if (expect && !xml.includes(expect) && prepare) {
+        await prepare();
+        continue;
+      }
+      break;
+    }
     writeFileSync(`${file}.xml`, xml);
     const rects = [...xml.matchAll(/<node [^>]*>/g)].flatMap(([n]) => {
       const text = / text="([^"]*)"/.exec(n)?.[1] ?? "";
-      if (!time.test(text)) return [];
+      // The launcher's Clock icon shows the time on its face.
+      const face = /content-desc="Clock"/.test(n) || text === "Clock";
+      if (!time.test(text) && !face) return [];
       const [x1, y1, x2, y2] = (/bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"/.exec(n) ?? [])
         .slice(1)
         .map(Number) as [number, number, number, number];
       return [{ x: x1, y: y1, width: x2 - x1, height: y2 - y1 }];
     });
+    // A tablet's app drawer is a sheet over the home screen, whose clock widget and date move:
+    // only the sheet is compared.
+    const sheet = /id\/bottom_sheet_background"[^>]*bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"/.exec(
+      xml,
+    );
+    if (sheet) {
+      const [x1, , x2] = sheet.slice(1).map(Number) as [number, number, number, number];
+      rects.push({ x: 0, y: 0, width: x1, height: 100_000 });
+      rects.push({ x: x2, y: 0, width: 100_000, height: 100_000 });
+    }
     // The status bar: demo mode fixes its clock in the shade but not always above an app, and the
     // shade's header shows the date.
     const density = Number(/(\d+)\s*$/.exec((await em.shell("wm density")).trim())?.[1] ?? 420);
@@ -55,12 +147,20 @@ export function keeper(em: Emulator, adbPath: string, dir: string | undefined, p
   }
 
   /** The screen as it is, in light then dark, as `<profile>-<name>-<scheme>.png`. */
-  async function keep(name: string, schemes: ("light" | "dark")[] = ["light", "dark"]) {
+  async function keep(
+    name: string,
+    schemes: ("light" | "dark")[] = ["light", "dark"],
+    // Puts the screen back after a change of scheme, which restarts the launcher and closes
+    // its drawer on some runs.
+    prepare?: () => Promise<void>,
+    expect?: string,
+  ) {
     if (!shots) return;
     for (const scheme of schemes) {
       await em.shell(`cmd uimode night ${scheme === "dark" ? "yes" : "no"}`);
       await Bun.sleep(1500);
-      await capture(join(shots, `${profile}-${name}-${scheme}`));
+      await prepare?.();
+      await capture(join(shots, `${profile}-${name}-${scheme}`), prepare, expect);
     }
     await em.shell("cmd uimode night no");
     await Bun.sleep(1000);
@@ -72,17 +172,34 @@ export function keeper(em: Emulator, adbPath: string, dir: string | undefined, p
    */
   async function launcher() {
     if (!shots) return;
+    const isOpen = async () =>
+      (await em.adb("exec-out", "uiautomator", "dump", "/dev/tty").catch(() => "")).includes(
+        "id/apps_list_view",
+      );
     const drawer = async () => {
-      await em.shell("input keyevent KEYCODE_HOME");
-      await Bun.sleep(1000);
-      const size = /(\d+)x(\d+)/.exec(await em.shell("wm size")) ?? [];
-      const [w, h] = [Number(size[1] ?? 1080), Number(size[2] ?? 2400)];
-      await em.shell(`input swipe ${w >> 1} ${Math.round(h * 0.85)} ${w >> 1} ${h >> 3} 300`);
+      // Already open, as after a scheme change that did not restart the launcher: pressing Home
+      // now would close it while the swipe reopens it.
+      if (await isOpen()) return;
+      // A swipe now and then opens nothing, which left the home screen in the shot: swipe again
+      // until the launcher's app list is on screen, three times at most.
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        await em.shell("input keyevent KEYCODE_HOME");
+        await Bun.sleep(1000);
+        const size = /(\d+)x(\d+)/.exec(await em.shell("wm size")) ?? [];
+        const [w, h] = [Number(size[1] ?? 1080), Number(size[2] ?? 2400)];
+        await em.shell(`input swipe ${w >> 1} ${Math.round(h * 0.85)} ${w >> 1} ${h >> 3} 300`);
+        let open = false;
+        for (let i = 0; i < 8 && !open; i++) {
+          open = await isOpen();
+          if (!open) await Bun.sleep(1000);
+        }
+        if (open) break;
+      }
       await em.see("Starbridge", 15).catch(() => undefined);
       await Bun.sleep(1000);
     };
     await drawer();
-    await keep("apps");
+    await keep("apps", ["light", "dark"], drawer, "id/apps_list_view");
     const shapes = (await em.shell("cmd overlay list"))
       .split("\n")
       .map((l) => /com\.android\.theme\.icon\.(\w+)/.exec(l)?.[1])
@@ -91,7 +208,7 @@ export function keeper(em: Emulator, adbPath: string, dir: string | undefined, p
       await em.shell(`cmd overlay enable-exclusive --category com.android.theme.icon.${shape}`);
       await Bun.sleep(2000);
       await drawer();
-      await keep(`apps-${shape}`, ["light"]);
+      await keep(`apps-${shape}`, ["light"], drawer, "id/apps_list_view");
     }
     if (shapes.length)
       for (const line of (await em.shell("cmd overlay list")).split("\n"))
