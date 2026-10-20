@@ -15,6 +15,8 @@ final class LinkChipsTests: XCTestCase {
         XCTAssertEqual(Notify.place(try link("https://claude.ai/artifact/abc")), "the artifact")
         XCTAssertEqual(Notify.place(try link("https://claude.ai/artifact/abc", "Mockups")), "Mockups")
         XCTAssertEqual(Notify.place(try link("https://example.com/vote")), "example.com/vote")
+        // Another host's title never shows: only GitHub and a Claude artifact get the agent's words.
+        XCTAssertEqual(Notify.place(try link("https://example.com/vote", "Design doc")), "example.com/vote")
     }
 }
 

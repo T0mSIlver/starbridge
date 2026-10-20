@@ -118,7 +118,8 @@ enum Notify {
     /** Where the owner answers a decision with `answerIn`: "the artifact" for a Claude one, as on Android and the web. */
     static func place(_ page: DecisionLink) -> String {
         let chip = linkChip(url: page.url, title: page.title)
-        return page.title ?? (chip.icon == .artifact ? "the artifact" : chip.label)
+        // The chip's text: the agent's title only on GitHub and a Claude artifact, as web's answerPlace.
+        return chip.icon == .artifact && chip.label == "Claude artifact" ? "the artifact" : chip.label
     }
 
     /**

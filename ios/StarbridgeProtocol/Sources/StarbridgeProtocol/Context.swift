@@ -61,9 +61,8 @@ private func hasPrefix(_ s: Scalars, _ at: Int, _ p: String) -> Bool {
 
 /** "http://" or "https://" at `at`: its length, or nil. */
 private func scheme(_ s: Scalars, _ at: Int) -> Int? {
-    if hasPrefix(s, at, "https://") { return 8 }
-    if hasPrefix(s, at, "http://") { return 7 }
-    return nil
+    // https only, as link chips are.
+    hasPrefix(s, at, "https://") ? 8 : nil
 }
 
 private enum Inline {
@@ -84,7 +83,7 @@ private func match(_ s: Scalars, _ i: Int) -> (Inline, Int)? {
         while j < s.count, s[j] != "`", s[j] != "\n" { j += 1 }
         if j > i + 1, j < s.count, s[j] == "`" { return (.code(string(s[i + 1..<j])), j + 1) }
     }
-    // \[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)
+    // \[([^\]\n]+)\]\((https:\/\/[^\s)]+)\)
     if s[i] == "[" {
         var j = i + 1
         while j < s.count, s[j] != "]", s[j] != "\n" { j += 1 }
@@ -103,7 +102,7 @@ private func match(_ s: Scalars, _ i: Int) -> (Inline, Int)? {
             k += 1
         }
     }
-    // https?:\/\/[^\s<>]+
+    // https:\/\/[^\s<>]+
     if let n = scheme(s, i) {
         var k = i + n
         while k < s.count, !isSpace(s[k]), s[k] != "<", s[k] != ">" { k += 1 }
@@ -136,7 +135,8 @@ private func inline(_ text: String, bold: Bool = false) -> [Span] {
         push(Span(string(s[at..<i])))
         switch m {
         case .code(let t): push(Span(t, code: true))
-        case .link(let t, let href): push(Span(t, href: href))
+        // The agent's words show only where a link chip would: on GitHub and a Claude artifact.
+        case .link(let t, let href): push(Span(linkChip(url: href, title: t).label, href: href))
         case .bold(let inner): inline(inner, bold: true).forEach(push)
         case .url(let raw):
             // What ends a sentence rather than a URL: "see https://x.dev/a." links https://x.dev/a.

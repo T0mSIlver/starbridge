@@ -1,11 +1,14 @@
 import { type DecisionLink, linkChip } from "@starbridge/protocol";
 import type { Decision, InboxItem, PromptItem, Reply } from "./types";
 
-/** Where the owner answers a decision with `answerIn`: "the artifact" for a Claude one. */
+/**
+ * Where the owner answers a decision with `answerIn`: its link chip's text, so the agent's title
+ * shows only on GitHub and a Claude artifact, else the host and path; "the artifact" for an
+ * untitled Claude one.
+ */
 export function answerPlace(link: DecisionLink): string {
-  if (link.title) return link.title;
   const chip = linkChip(link);
-  return chip.icon === "artifact" ? "the artifact" : chip.label;
+  return chip.icon === "artifact" && chip.label === "Claude artifact" ? "the artifact" : chip.label;
 }
 
 /** When the decision stopped waiting for the owner: answered, or settled by its agent. */

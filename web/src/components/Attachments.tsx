@@ -124,7 +124,7 @@ export function Links({ d }: { d: Decision }) {
             href={l.url}
             target="_blank"
             rel="noopener noreferrer"
-            title={l.title ?? l.url}
+            title={l.url}
           >
             {chip.icon && <LinkGlyph icon={chip.icon} />}
             <span className="t-label">{chip.label}</span>
