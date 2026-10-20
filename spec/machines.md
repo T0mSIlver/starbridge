@@ -18,7 +18,7 @@
   never a path a client sends, and for a Codex session's answer only the `codex` setup recorded
   with its `CODEX_HOME` (`starbridge update` records it again), for that home or the agent's own
   (#1757). `ask --input` sets no delivery route or session kind (`codex`, `antigravity`,
-  `extensionAnswers`, `headless`, `held`, `picker`, `subagent`): those come from the asking
+  `extensionAnswers`, `headless`, `held`, `nextStep`, `picker`, `subagent`): those come from the asking
   process's environment, since an agent writes the file.
 - **One agent per config folder** (#1966). Two homes of one user share `$XDG_RUNTIME_DIR`, so a
   test home's `uninstall` once posted 8 cards through the owner's agent, as his machine. The
