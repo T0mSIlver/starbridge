@@ -75,6 +75,9 @@ class MainActivity : ComponentActivity() {
         // The bars' icons follow the system's light or dark mode, as the theme does.
         enableEdgeToEdge(SystemBarStyle.auto(Color.TRANSPARENT, Color.TRANSPARENT), SystemBarStyle.auto(Color.TRANSPARENT, Color.TRANSPARENT))
         super.onCreate(savedInstanceState)
+        // Recents shows the app without a screenshot of the inbox or a question (security audit
+        // 2026-10-20), as the iPhone's app switcher does. Android 12 has no such switch.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) setRecentsScreenshotEnabled(false)
         // A recreated activity (rotation, or the process restored) gets its launch intent again,
         // which was handled the first time.
         if (savedInstanceState == null) handle(intent)

@@ -93,7 +93,11 @@
   the app never clears the key by itself, since the owner copies it to paste it elsewhere. The
   same screens, the owner-token field, and every screen that shows a pairing QR code, code or
   digits are `FLAG_SECURE` too (#1755), and a typed token or key is never `rememberSaveable`,
-  which Android may write to disk. Save to password manager goes through Credential Manager, not
+  which Android may write to disk. The rest of the app stays out of the app switcher too (#2197):
+  on the iPhone a window over every other, sheets included, covers the app once it is in the
+  background, where iOS takes its snapshot, and not when only a system alert or Notification
+  Center covers it; Android 13 and later show no recents screenshot of the app, while the owner's
+  own screenshots still work. Save to password manager goes through Credential Manager, not
   the share sheet: Google Password Manager takes no shared text and Bitwarden turns it into a
   Send, while a saved password reaches all three of Google's, Bitwarden and 1Password. Without
   either, owners had no way to save the key but typing it out. The web already had Copy.
