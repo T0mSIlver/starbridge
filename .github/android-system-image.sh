@@ -10,16 +10,20 @@ IMAGE='system-images;android-36;google_apis;x86_64'
 TRIES=${TRIES:-3}
 DIR="${ANDROID_HOME:?}/${IMAGE//;//}"
 
+# The runner's SDK has sdkmanager off the PATH; the action finds it the same way.
+sdkmanager=$(command -v sdkmanager || echo "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager")
+[ -x "$sdkmanager" ] || { echo "android-system-image.sh: no sdkmanager at $sdkmanager" >&2; exit 1; }
+
 # installed: sdkmanager lists the image and its files are there. A failed unpack leaves a warning on
 # stdout and may exit 0, so the files are what counts.
 installed() {
   [ -s "$DIR/system.img" ] && [ -s "$DIR/package.xml" ] \
-    && sdkmanager --list_installed 2>/dev/null | grep -qF "$IMAGE"
+    && "$sdkmanager" --list_installed 2>/dev/null | grep -qF "$IMAGE"
 }
 
-yes | sdkmanager --licenses > /dev/null || true
+yes | "$sdkmanager" --licenses > /dev/null || true
 for try in $(seq "$TRIES"); do
-  sdkmanager --install "$IMAGE" --channel=0 > /dev/null || true
+  "$sdkmanager" --install "$IMAGE" --channel=0 > /dev/null || true
   if installed; then
     echo "android-system-image.sh: $IMAGE installed on try $try"
     exit 0
