@@ -83,6 +83,15 @@
   (#569). Dogfood builds sign with the release key instead, opted into by a gitignored
   `local.properties` line on the maintainer's machine and refused under CI; other debug builds keep
   the debug key, and their sign-in falls back to the `starbridge://auth` button.
+- **Cookies and sign-ins in flight** (#2186, from the security audit of 2026-10-20). On https
+  the session and sign-in state cookies are `__Host-` names, which only this very host can set:
+  a page on a sibling subdomain (stats.starbridge.run runs third-party code) could otherwise set
+  a session cookie for the parent domain and sign the owner's browser into another account. A
+  session from before keeps working: a bare `sb_session` counts only without a `__Host-` one
+  and moves to it on its first request, so nobody signs in again. The app sign-ins in progress
+  are kept per address, 50 an IPv4 address or IPv6 /48, and a full table drops the oldest entry
+  of the address that keeps most, so a flood from many addresses cannot fail everyone's app
+  sign-in. Signing out drops the device's push subscriptions with its last session.
 - **Account deletion** (#1104). App Store guideline 5.1.1(v) requires an app that makes accounts
   to delete them from inside the app, and Play asks the same, so Settings on the web page (and
   so the desktop app) and on Android has Delete account, which works once the owner types

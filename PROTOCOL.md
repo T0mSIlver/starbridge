@@ -405,7 +405,9 @@ request without the header, or with one the server cannot read, is served.
 ### Auth
 
 - **Devices** sign in with GitHub (hosted) or the owner token from the server's environment
-  (self-hosted). The web page holds an HTTP-only session cookie; Android sends
+  (self-hosted). The web page holds an HTTP-only session cookie, `__Host-sb_session` on https
+  and `sb_session` on http (#2186); on https a bare `sb_session` counts only without a
+  `__Host-` one, and the server moves it to the new name. Android sends
   `Authorization: Bearer <session>`. A session belongs to an account and, once paired, to one
   device member id. A device that signs in again binds the new session by signing a nonce with
   its signing key: `bindMessage` in `packages/protocol`, `"starbridge/v1/bind"` NUL account
@@ -464,11 +466,11 @@ request without the header, or with one the server cannot read, is served.
 | `GET /auth/apple/callback` | anyone | finish the page's, as `/auth/github/callback`, with the same `signin` failures |
 | `GET /auth/apple/callback/app` | anyone | an app's: redirect to `<APP_REDIRECT_URI>?code=<code>&state=<state>`, or Apple's `error` instead of the code; 400 `bad-state` without them |
 | `GET /auth/github/callback/app` | anyone | the browser got the app's sign-in: redirect to `<APP_REDIRECT_URI>?code=<code>&state=<state>`, or GitHub's `error` instead of the code; 400 `bad-state` without them |
-| `POST /auth/app/session` | the app | `{code, verifier}`: GitHub's code, or Apple's (with dots) whose identity token's nonce is the verifier's challenge → `{session}`; 400 `bad-code` when GitHub refuses the code (unknown, used, expired or not this verifier's), or when the code came back through `/auth/github/callback/app` or `/auth/apple/callback/app` with a state that is not the verifier's challenge, or, from the Mac app (`starbridge-client: desktop/…`), when it did not come back through either with the `sb_app` cookie, a random token the server keeps with the challenge, that the first start of its challenge set in that browser; 403 `signups-paused` while sign-ups are paused, or the server lists who may sign up and omits this GitHub user, and the user has no account |
+| `POST /auth/app/session` | the app | `{code, verifier}`: GitHub's code, or Apple's (with dots) whose identity token's nonce is the verifier's challenge → `{session}`; 400 `bad-code` when GitHub refuses the code (unknown, used, expired or not this verifier's), or when the code came back through `/auth/github/callback/app` or `/auth/apple/callback/app` with a state that is not the verifier's challenge, or, from the Mac app (`starbridge-client: desktop/…`), when it did not come back through either with the `sb_app` cookie (`__Host-sb_app` on https), a random token the server keeps with the challenge, that the first start of its challenge set in that browser; 403 `signups-paused` while sign-ups are paused, or the server lists who may sign up and omits this GitHub user, and the user has no account |
 | `GET /auth/app/signed-in?state=<challenge>` | device | `{signedIn}`: true once the app whose challenge this is traded its code for a session of the caller's account (#943); the server keeps each challenge's account 10 minutes, in memory |
 | `POST /auth/apple/session` | the iPhone app | `{identityToken, code, nonce}` → `{session}`; 400 `bad-code` when Apple refuses the token or the code (another app's, expired, replayed, the nonce not the token's); 403 `signups-paused` as GitHub's; 404 `not-configured` without the team's key; 502 `apple` when Apple can't be reached |
 | `POST /auth/owner` | anyone | self-hosted: `{token}` against `OWNER_TOKEN`; sets the session and returns `{session}` |
-| `POST /auth/logout` | device | end the session |
+| `POST /auth/logout` | device | end the session; with the device's last session, its push subscriptions go too (#2186) |
 | `DELETE /account` | device, paired or not | delete the caller's account and everything the server holds for it: directory, members, sessions and revoked ones, machine tokens, items, push subscriptions, joins and pairings; 204. The account's Apple refresh token is revoked at Apple after the reply. Its waits end at once: for answers, quotas and the account's joins with 401, for one join (`GET /joins/:id`) and a pairing result with 404, as the rows are gone; and a wait for a pairing request at the end of its wait, and the cookie is cleared. Today's usage events keep their counts under a random subject (#1104) |
 | `GET /auth/challenge` | device | `{nonce, expiresInSeconds}`: one nonce per session, single use, 5 minutes; asking again returns the outstanding one |
 | `POST /auth/bind` | device | `{member, sig}`: binds the session to that active device when `sig` checks against its signing key; 400 `no-challenge`, 401 `bad-signature`, 404 for no such active device, 409 `already-paired` when the session holds another device |

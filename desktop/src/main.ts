@@ -679,6 +679,14 @@ function setBlocked(b: boolean): void {
 }
 
 /**
+ * The server's session cookie (server/src/auth.ts, `cookieName`): `__Host-sb_session` on https,
+ * which no sibling subdomain can set, the bare name on http or from a session started before.
+ */
+const SESSION_COOKIES = ["__Host-sb_session", "sb_session"];
+const sessionCookie = (origin: string) =>
+  origin.startsWith("https:") ? "__Host-sb_session" : "sb_session";
+
+/**
  * Electron asks macOS to allow notifications the first time it touches them, which was the first
  * question: shown while macOS still asked, it reached only the window. So the app asks once
  * the page has a session (its sign-in, in the browser or the page), after a line saying why.
@@ -687,7 +695,7 @@ function askNotificationsAfterSignIn(ses: Electron.Session): void {
   if (process.platform !== "darwin" || settings.notificationsAsked) return;
   const host = new URL(origin).hostname;
   const isSession = (c: Electron.Cookie) =>
-    c.name === "sb_session" && c.domain?.replace(/^\./, "") === host;
+    SESSION_COOKIES.includes(c.name) && c.domain?.replace(/^\./, "") === host;
   const onChange = (_e: unknown, c: Electron.Cookie, _cause: string, removed: boolean) => {
     if (!removed && isSession(c)) ask();
   };
@@ -714,9 +722,9 @@ function askNotificationsAfterSignIn(ses: Electron.Session): void {
     else win?.once("show", go);
   };
   ses.cookies.on("changed", onChange);
-  ses.cookies.get({ url: origin, name: "sb_session" }).then(
+  ses.cookies.get({ url: origin }).then(
     (c) => {
-      if (c.length > 0) ask();
+      if (c.some(isSession)) ask();
     },
     () => {},
   );
@@ -844,7 +852,7 @@ async function finishSignIn(
       if (res.ok && typeof token === "string") {
         await session.fromPartition("persist:starbridge").cookies.set({
           url: origin,
-          name: "sb_session",
+          name: sessionCookie(origin),
           value: token,
           httpOnly: true,
           secure: origin.startsWith("https:"),
