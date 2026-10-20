@@ -437,10 +437,14 @@ private struct FirstDeviceStep: View {
         Step {
             Title(text: "Your recovery key")
             if !tried || store.busy {
-                HStack(spacing: Tokens.Spacing.s4) {
+                HStack(spacing: Tokens.Spacing.s3) {
                     ProgressView()
-                    Lede(text: "Creating the keys")
+                    Text("Creating the keys")
+                        .type(Tokens.Typography.body)
+                        .foregroundStyle(Tokens.Colors.fg2.color)
                 }
+                .padding(.horizontal, Tokens.Spacing.s4)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
         } bottom: {
             if tried && !store.busy {
