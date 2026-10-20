@@ -170,9 +170,12 @@ async function updateSelf(
   }
   const bytes = await downloadVerified(latest, platformAsset(), { releases, pubkey });
   // Written next to the binary, then renamed over it: a running copy keeps its old inode. One
-  // name per process, so an update the agent started and one a person ran never share it.
+  // name per process, so an update the agent started and one a person ran never share it. Made
+  // new (`wx`), never opened through what is already there: in a folder others can write, a link
+  // planted at that name would point the write elsewhere.
   const next = join(dirname(install.path), `.starbridge.new.${process.pid}`);
-  writeFileSync(next, bytes, { mode: 0o755 });
+  rmSync(next, { force: true });
+  writeFileSync(next, bytes, { mode: 0o755, flag: "wx" });
   chmodSync(next, 0o755);
   replaceBinary(next, install.path);
   ctx.out(`Updated starbridge ${VERSION} to ${latest} in ${install.path}.`);
