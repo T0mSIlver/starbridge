@@ -17,10 +17,10 @@ import { createInterface } from "node:readline";
 const DESKTOP = resolve(import.meta.dirname, "..");
 
 // From GitHub's macos-15 runner (arm64), packaged. A whole job can land on a slow runner, every
-// launch up to twice as long: cold medians of 433–889 ms in 16 runs on 2026-10-20 to 10-21, 272–982 ms in
-// 104 runs 2026-10-08 to 10-11, and 1270 ms once (#2180, #1119). Such a run is slow throughout, so
-// the cold start is budgeted as a ratio to a span the app does not own (`coldRatio`), which slows
-// with it. The warm budget's numbers are on `warmMs`.
+// launch up to twice as long: cold medians of 433–889 ms in 16 runs on 2026-10-20 to 10-21,
+// 272–982 ms in 104 runs 2026-10-08 to 10-11, and 1270 ms once (#2180, #1119). Such a run is slow
+// throughout, so the cold start is budgeted as a ratio to a span the app does not own
+// (`coldRatio`), which slows with it. The warm budget's numbers are on `warmMs`.
 export const BUDGETS = {
   /**
    * Process start to the window's first painted frame over process start to the app's first line
