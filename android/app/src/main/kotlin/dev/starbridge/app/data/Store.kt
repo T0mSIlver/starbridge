@@ -7,6 +7,8 @@ import kotlinx.coroutines.flow.StateFlow
 interface Store {
     val phase: StateFlow<Phase>
     val decisions: StateFlow<List<Decision>>
+    /** Answers in the outbox, which a sign-out that can't reach the server drops (#2155). */
+    val unsent: StateFlow<Int> get() = MutableStateFlow(0)
     /** Permission prompts of the last week, waiting ones included (#57). */
     val prompts: StateFlow<List<Prompt>>
     val windows: StateFlow<List<QuotaWindow>>

@@ -1,9 +1,5 @@
 package dev.starbridge.app.ui.settings
 
-import androidx.lifecycle.viewModelScope
-import kotlinx.coroutines.flow.SharingStarted
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.stateIn
 import androidx.compose.ui.layout.SubcomposeLayout
 import androidx.compose.ui.text.style.TextOverflow
 import android.content.ClipData
@@ -128,7 +124,7 @@ class SettingsViewModel @Inject constructor(private val store: Store, private va
     fun deleteAccount() = store.deleteAccount()
 
     /** Answers this phone gave that the server has yet to take: sign-out sends them first, or drops them (#2155). */
-    val unsent = store.decisions.map { all -> all.count { it.sending } }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0)
+    val unsent = store.unsent
 }
 
 /** What the settings page changes, and where its rows lead. */

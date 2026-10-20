@@ -211,6 +211,8 @@ class AnswerQueueTest {
         // The tap's own attempt has given up: only the outbox holds the answer now.
         runBlocking { withTimeout(30_000) { while (store.notice.value?.startsWith("No connection") != true) delay(10) } }
         assertEquals(0, posted.size)
+        // What the sign-out dialog warns of, read from the outbox.
+        assertEquals(1, store.unsent.value)
         offline = false
         store.signOut()
         runBlocking { withTimeout(5_000) { while (store.phase.value == Phase.Ready) delay(10) } }
