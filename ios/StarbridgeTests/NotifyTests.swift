@@ -52,6 +52,13 @@ struct NotifyFixture {
         return try seal(.decision, body)
     }
 
+    /** A file for what pushes did, beside a `saved.json` that holds `saved`, as in the app group. */
+    static func book(_ saved: Saved) throws -> NotifiedFile {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("notified-\(UUID().uuidString)")
+        try Disk(url: dir.appendingPathComponent("saved.json")).save(saved)
+        return NotifiedFile(url: dir.appendingPathComponent("notified.json"))
+    }
+
     /** The push payload `p` as the server sends it to APNs: the item's hints and this iPhone's box. */
     func payload(_ item: SealedItem, box: Bool = true) -> JSON {
         var p: JSONObject = ["v": 1, "kind": .string(item.kind.rawValue), "id": .string(item.id), "from": .string(item.from)]
@@ -248,14 +255,14 @@ final class NotifyTests: XCTestCase {
         for (n, c) in rules["notify"]!.array!.enumerated() {
             let id = "d_n\(n)"
             let question = try f.decision(id)
-            let book = NotifiedFile(url: FileManager.default.temporaryDirectory.appendingPathComponent("notified-\(UUID().uuidString).json"))
+            let book = try NotifyFixture.book(f.saved)
             defer { book.delete() }
             for (i, step) in c["steps"]!.array!.enumerated() {
                 guard let p = step["push"] else { continue }
                 let pushed: SealedItem
                 switch p["kind"]!.string! {
                 case "answered":
-                    book.step(id, .closed)
+                    book.step(id, .closed, member: f.saved.me?.id)
                     continue
                 case "decision":
                     pushed = question
@@ -278,7 +285,7 @@ final class NotifyTests: XCTestCase {
     func testAFlipASyncReadCountsForTheNextPush() async throws {
         var f = try NotifyFixture()
         let question = try f.decision("d_s")
-        let book = NotifiedFile(url: FileManager.default.temporaryDirectory.appendingPathComponent("notified-\(UUID().uuidString).json"))
+        let book = try NotifyFixture.book(f.saved)
         defer { book.delete() }
         let flip = { (at: String, state: String) in
             try f.seal(.waiting, ["v": 1, "id": .string("w_\(at.suffix(3).filter(\.isNumber))"), "decisionId": "d_s", "to": [.string(f.phone.id)], "at": .string(at), "state": .string(state)])
@@ -296,5 +303,29 @@ final class NotifyTests: XCTestCase {
         f.saved.decisions = [kept]
         let shown = await Notify.opened(f.payload(try flip("2026-10-12T10:00:03Z", "waiting")), saved: f.saved, secrets: f.secrets, book: book) { _ in question }
         XCTAssertEqual(shown?.quiet, false)
+    }
+
+    /** A repeat the rule quiets still counts on the app icon: the question still needs the owner (#2154). */
+    func testAQuietRepeatStillCountsOnTheBadge() async throws {
+        let f = try NotifyFixture()
+        let question = try f.decision("d_b")
+        let book = try NotifyFixture.book(f.saved)
+        defer { book.delete() }
+        let shownFirst = await Notify.opened(f.payload(question), saved: f.saved, secrets: f.secrets, book: book) { _ in question }
+        let shownAgain = await Notify.opened(f.payload(question), saved: f.saved, secrets: f.secrets, book: book) { _ in question }
+        let first = try XCTUnwrap(shownFirst)
+        let again = try XCTUnwrap(shownAgain)
+        XCTAssertEqual([first.quiet, again.quiet], [false, true])
+        XCTAssertEqual([Notify.badge(first, saved: f.saved), Notify.badge(again, saved: f.saved)], [1, 1])
+    }
+
+    /** A push that resumes after a sign-out keeps nothing: the account it came for is gone (#2154). */
+    func testAPushAfterSignOutKeepsNothing() throws {
+        let f = try NotifyFixture()
+        let book = try NotifyFixture.book(Saved(server: f.saved.server))
+        defer { book.delete() }
+        let (_, effect) = book.step("d_gone", .asked, member: f.saved.me?.id)
+        XCTAssertEqual(effect, .none)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: book.url.path))
     }
 }

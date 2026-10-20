@@ -139,7 +139,7 @@ extension Store {
         guard let p = Notify.payload(userInfo), let id = Notify.item(p) else { return }
         if Notify.closes(p) { await Self.removeDelivered(about: id) }
         // A push of the question that comes later rings nothing (#2151).
-        if ["answered", "settled"].contains(p["kind"]?.string) { NotifiedFile.standard.step(id, .closed) }
+        if ["answered", "settled"].contains(p["kind"]?.string) { NotifiedFile.standard.step(id, .closed, member: saved.me?.id) }
         try? await serial { try await self.sync() }
     }
 }

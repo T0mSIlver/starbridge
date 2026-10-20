@@ -215,13 +215,17 @@ struct NotifiedFile {
     /**
      * Runs `event` about question `id` through the rule and keeps what it leaves; the effect.
      * `known` is the question as the app saved it, when it did: a question the inbox listed is
-     * not news, and a flip a sync read counts as the last one applied.
+     * not news, and a flip a sync read counts as the last one applied. `member` is this
+     * iPhone's id in the account the push came for: once `saved.json` beside the file no longer
+     * says so, as after a sign-out the push raced, nothing is kept and the effect is `none`.
      */
     @discardableResult
-    func step(_ id: String, _ event: NotifyEvent, known: SavedDecision? = nil) -> (Notified, NotifyEffect) {
+    func step(_ id: String, _ event: NotifyEvent, known: SavedDecision? = nil, member: String?) -> (Notified, NotifyEffect) {
         var out = (Notified(), NotifyEffect.none)
         var failed: NSError?
         NSFileCoordinator().coordinate(writingItemAt: url, options: .forMerging, error: &failed) { url in
+            // Sign-out deletes this file through a coordinator too, after it wrote `saved.json`.
+            guard let member, Disk(url: url.deletingLastPathComponent().appendingPathComponent("saved.json")).load()?.me?.id == member else { return }
             let file = NotifiedFile(url: url)
             var book = file.load()
             var remembered = book.notified[id] ?? Notified()
@@ -249,7 +253,10 @@ struct NotifiedFile {
     }
 
     func delete() {
-        try? FileManager.default.removeItem(at: url)
+        var failed: NSError?
+        NSFileCoordinator().coordinate(writingItemAt: url, options: .forDeleting, error: &failed) { url in
+            try? FileManager.default.removeItem(at: url)
+        }
     }
 }
 

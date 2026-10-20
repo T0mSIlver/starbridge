@@ -23,6 +23,11 @@ struct Shown: Equatable, Sendable {
     var badge: Int?
     /** The push as the shared rule takes it (#2151); nil for one the rule leaves alone. */
     var event: NotifyEvent?
+    /**
+     * Whether the app icon's count takes this item; nil goes by `quiet`. A repeat the rule quiets
+     * still needs the owner (#2154).
+     */
+    var counts: Bool?
 }
 
 /** A notification button, as the category registers it. */
@@ -269,7 +274,7 @@ enum Notify {
     static func opened(_ p: JSON, saved: Saved, secrets: Secrets, book: NotifiedFile, fetch: (String) async throws -> SealedItem?) async -> Shown? {
         guard var item = await shown(p, saved: saved, secrets: secrets, fetch: fetch) else { return nil }
         if let event = item.event {
-            let (kept, effect) = book.step(item.item, event, known: saved.decisions.first { $0.id == item.item })
+            let (kept, effect) = book.step(item.item, event, known: saved.decisions.first { $0.id == item.item }, member: saved.me?.id)
             item = noted(item, effect, closed: kept.closed)
             // A flip already on its way when the owner snoozed the question.
             if case .flip = event, let until = saved.decisions.first(where: { $0.id == item.item })?.snoozed, until > Date().addingTimeInterval(wakeSkew) {
@@ -286,6 +291,7 @@ enum Notify {
      */
     static func noted(_ shown: Shown, _ effect: NotifyEffect, closed: Bool) -> Shown {
         var s = shown
+        s.counts = !closed && !shown.quiet
         s.quiet = effect != .ring
         if closed {
             s.actions = []
@@ -320,7 +326,7 @@ enum Notify {
         let all: (String) -> Bool = { _ in true }
         var open = Set(saved.openDecisions(sending: Set(saved.outbox.map(\.decisionId)), active: all).map(\.id))
         open.formUnion(saved.openPrompts(active: all).map(\.id))
-        if !shown.quiet { open.insert(shown.item) }
+        if shown.counts ?? !shown.quiet { open.insert(shown.item) }
         return open.count
     }
 
