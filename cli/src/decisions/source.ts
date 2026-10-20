@@ -14,7 +14,8 @@ import { OPENCODE_ANSWERS, OPENCODE_SESSION, OPENCODE_TITLE } from "../opencode"
 import { PI_ANSWERS, piSessionTitle } from "../pi";
 import { projectName } from "../project";
 
-export interface AskInput {
+/** What a question says and where it goes: the part of an ask a file or a flag may give. */
+export interface AskContent {
   question?: string;
   context?: string;
   options?: string[];
@@ -23,30 +24,6 @@ export interface AskInput {
   waiting?: boolean;
   /** The coding agent asking; default: Claude Code, Codex, Pi or opencode when it runs the command. */
   agent?: Agent;
-  /** Where a Codex session runs: its `CODEX_HOME` and the `codex` that answers reach it with. */
-  codex?: CodexSession;
-  /** Where an interactive Antigravity conversation's language server takes its answer. */
-  antigravity?: AgyRoute;
-  /** A Pi or opencode session whose Starbridge extension or plugin submits answers into it. */
-  extensionAnswers?: boolean;
-  /** A `claude -p` session: the mod starts no loop there, so nothing submits answers. */
-  headless?: boolean;
-  /** For a hook that waits for the answer itself (`hook question`): no session gets it. */
-  held?: boolean;
-  /** Asked for Claude Code's open `AskUserQuestion` picker in this session (#848). */
-  picker?: string;
-  /** Asked for the next-step box Claude desktop showed in this Claude Code session (#2118). */
-  nextStep?: string;
-  /**
-   * The Claude Code subagent that asks, from `STARBRIDGE_CLAUDE_AGENT`, which the mod sets for a
-   * subagent's `starbridge ask` (#1702): the mod sends the answer to that subagent.
-   */
-  subagent?: string;
-  /**
-   * When one of several questions from one tool call was asked: the call's time plus its index in
-   * milliseconds, so every inbox lists them together in the call's order (#1079).
-   */
-  askedAt?: Date;
   project?: string;
   session?: string;
   sessionTitle?: string;
@@ -57,6 +34,89 @@ export interface AskInput {
   links?: (string | DecisionLink)[];
   /** The page the owner answers on instead of Starbridge; the decision then has no options. */
   answerIn?: string | DecisionLink;
+}
+
+/**
+ * Where an answer is delivered and what kind of session asks: the asking command's environment
+ * gives them (`resolveSource`) and sends them to the local agent, so a file an agent writes must
+ * not choose them.
+ */
+export interface AskRoute {
+  /** Where a Codex session runs: its `CODEX_HOME` and the `codex` that answers reach it with. */
+  codex?: CodexSession;
+  /** Where an interactive Antigravity conversation's language server takes its answer. */
+  antigravity?: AgyRoute;
+  /** A Pi or opencode session whose Starbridge extension or plugin submits answers into it. */
+  extensionAnswers?: boolean;
+  /** A `claude -p` session: the mod starts no loop there, so nothing submits answers. */
+  headless?: boolean;
+  /**
+   * The Claude Code subagent that asks, from `STARBRIDGE_CLAUDE_AGENT`, which the mod sets for a
+   * subagent's `starbridge ask` (#1702): the mod sends the answer to that subagent.
+   */
+  subagent?: string;
+}
+
+/** What only a hook of this process sets, posting without the agent. */
+export interface AskHost {
+  /** For a hook that waits for the answer itself (`hook question`): no session gets it. */
+  held?: boolean;
+  /** Asked for Claude Code's open `AskUserQuestion` picker in this session (#848). */
+  picker?: string;
+  /** Asked for the next-step box Claude desktop showed in this Claude Code session (#2118). */
+  nextStep?: string;
+  /**
+   * When one of several questions from one tool call was asked: the call's time plus its index in
+   * milliseconds, so every inbox lists them together in the call's order (#1079).
+   */
+  askedAt?: Date;
+}
+
+export type AskInput = AskContent & AskRoute & AskHost;
+
+/**
+ * The entry points that take an ask from outside this process, each taking only the fields it
+ * names (`pickFields`), so a field added to `AskHost` or `AskRoute` is closed to them until one
+ * lists it. `satisfies` checks each name is a field; `Complete` that the list leaves none out.
+ */
+export const ASK_CONTENT_FIELDS = [
+  "question",
+  "context",
+  "options",
+  "recommended",
+  "waiting",
+  "agent",
+  "project",
+  "session",
+  "sessionTitle",
+  "sessionLinks",
+  "images",
+  "links",
+  "answerIn",
+] as const satisfies readonly (keyof AskContent)[];
+export const ASK_ROUTE_FIELDS = [
+  "codex",
+  "antigravity",
+  "extensionAnswers",
+  "headless",
+  "subagent",
+] as const satisfies readonly (keyof AskRoute)[];
+
+type Complete<T, L extends readonly PropertyKey[]> = [Exclude<keyof T, L[number]>] extends [never]
+  ? true
+  : never;
+export const _contentComplete: Complete<AskContent, typeof ASK_CONTENT_FIELDS> = true;
+export const _routeComplete: Complete<AskRoute, typeof ASK_ROUTE_FIELDS> = true;
+
+/** `json`'s fields among `fields`, as they are; nothing else. */
+export function pickFields<K extends keyof AskInput>(
+  json: unknown,
+  fields: readonly K[],
+): Pick<AskInput, K> {
+  const from = typeof json === "object" && json !== null ? (json as Record<string, unknown>) : {};
+  const out: Record<string, unknown> = {};
+  for (const k of fields) if (k in from) out[k] = from[k];
+  return out as Pick<AskInput, K>;
 }
 
 /**
