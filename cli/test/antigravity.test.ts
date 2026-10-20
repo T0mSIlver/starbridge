@@ -80,6 +80,9 @@ test("a line that hands ask a file to read stays in the sandbox, or asks the own
     "starbridge ask --question ok --image /home/u/secret.png",
     `starbridge ask --question ok "--context-file" /etc/passwd`,
     `starbridge ask --question ok --con"text-fi"le /etc/passwd`,
+    "starbridge ask --question ok --inp\\\nut /etc/passwd",
+    "starbridge ask --question ok --inpu? /etc/passwd",
+    "starbridge ask --question ok --inpu[t] /etc/passwd",
   ])
     expect([line, decide(line)]).toEqual([line, "force_ask"]);
 });

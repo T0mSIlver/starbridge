@@ -354,7 +354,12 @@ function namesStarbridge(line: string): boolean {
  * audit 2026-10-20).
  */
 function readsFile(line: string): boolean {
-  return /(^|\s)--(context-file|input|image)(=|\s|$)/.test(line.replace(/['"\\]/g, ""));
+  // The shell drops a backslash-newline and expands a glob, so `--inp\<newline>ut` and `--inpu?`
+  // (beside a file named `--input`) both reach `ask` as `--input`.
+  const bare = line.replace(/\\\n/g, "").replace(/['"\\]/g, "");
+  return (
+    /(^|\s)--(context-file|input|image)(=|\s|$)/.test(bare) || /(^|\s)-[^\s]*[*?[\]]/.test(bare)
+  );
 }
 
 /**
