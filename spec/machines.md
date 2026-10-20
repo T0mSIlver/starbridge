@@ -17,9 +17,11 @@
   nor Node exposes `SO_PEERCRED`. The local agent runs only the CodexBar binary its own config names,
   never a path a client sends, and for a Codex session's answer only the `codex` setup recorded
   with its `CODEX_HOME` (`starbridge update` records it again), for that home or the agent's own
-  (#1757). `ask --input` sets no delivery route or session kind (`codex`, `antigravity`,
-  `extensionAnswers`, `headless`, `held`, `picker`, `subagent`): those come from the asking
-  process's environment, since an agent writes the file.
+  (#1757). `ask --input` takes only a question's own fields (`ASK_CONTENT_FIELDS`): the delivery
+  route and session kind (`codex`, `antigravity`, `extensionAnswers`, `headless`, `subagent`) come
+  from the asking process's environment, since an agent writes the file, and the agent's route
+  takes those and no other (`held`, `picker` and `nextStep` are set only by hooks). A new field is
+  closed to both until a list names it (#2158).
 - **One agent per config folder** (#1966). Two homes of one user share `$XDG_RUNTIME_DIR`, so a
   test home's `uninstall` once posted 8 cards through the owner's agent, as his machine. The
   default folder's socket there is `agent-<key>.sock`, the key hashed from the folder's path, and
