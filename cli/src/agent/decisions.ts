@@ -79,9 +79,9 @@ export class Decisions implements Feature {
         const input = (req.body as { input?: unknown } | undefined)?.input;
         if (typeof input !== "object" || input === null)
           throw new HttpError(400, "bad-request", "post {input: {question, ...}}");
-        // Only a hook that waits for its own answer holds a question or names a picker, and it
-        // posts without the agent: a client's word for either is dropped.
-        const { held: _held, picker: _picker, ...ask } = input as AskInput;
+        // Only a hook posts a held question, names a picker or opens a next-step card, and it
+        // posts without the agent: a client's word for any of them is dropped.
+        const { held: _held, picker: _picker, nextStep: _nextStep, ...ask } = input as AskInput;
         // The asking process knows its directory; the agent's would name the wrong project.
         if (typeof ask.project !== "string")
           throw new HttpError(400, "bad-request", "input.project is required");

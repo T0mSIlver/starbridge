@@ -338,6 +338,7 @@ const SESSION_FIELDS = [
   "extensionAnswers",
   "headless",
   "held",
+  "nextStep",
   "picker",
   "subagent",
 ] as const;

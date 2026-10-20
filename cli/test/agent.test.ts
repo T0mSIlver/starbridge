@@ -666,6 +666,7 @@ test.skipIf(WINDOWS)(
         codex: { home: codex.env.CODEX_HOME, bin: other },
         held: true,
         picker: "t1",
+        nextStep: "t1",
         extensionAnswers: true,
       }),
     );
@@ -673,7 +674,8 @@ test.skipIf(WINDOWS)(
     try {
       const id = await ask(c, "--input", file, "--project", "p");
       const asked = ctx.store.state().asked[id];
-      expect([asked?.held, asked?.picker, asked?.extensionAnswers]).toEqual([
+      expect([asked?.held, asked?.picker, asked?.nextStep, asked?.extensionAnswers]).toEqual([
+        undefined,
         undefined,
         undefined,
         undefined,
@@ -710,6 +712,7 @@ test.skipIf(WINDOWS)(
           session: "t1",
           codex: { home, bin: other },
           held: true,
+          nextStep: "t1",
         },
       });
     try {
@@ -717,6 +720,7 @@ test.skipIf(WINDOWS)(
       const away = await post(elsewhere);
       expect(away.delivery).toBe("wait");
       expect(ctx.store.state().asked[away.id]?.held).toBeUndefined();
+      expect(ctx.store.state().asked[away.id]?.nextStep).toBeUndefined();
       // The recorded home, however spelled: the recorded codex runs for the recorded spelling,
       // never the binary or the path the route names.
       const home = await post(join(codex.env.CODEX_HOME, "x", ".."));
