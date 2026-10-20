@@ -24,7 +24,13 @@ const DESKTOP = resolve(import.meta.dirname, "..");
 export const BUDGETS = {
   /** Process start to the window's first painted frame, median of the launches after the first. */
   coldMs: 1000,
-  /** Showing the hidden window to its next frame, as from the menu bar, median of `OPENS`. */
+  /**
+   * Showing the hidden window to its next frame, as from the menu bar, median of `OPENS`, timed
+   * in the page. Timed in the main process until #2136, it counted the page's answer coming
+   * back, 9 ms at the median and up to 36 ms on GitHub's runner: two runs of 183 (2026-10-11
+   * to 10-20) went over 80 that way. Timed in the page, 15 runs on 2026-10-20 had medians of
+   * 26–50 ms (median 39), so 80 sits 1.6 times above the slowest.
+   */
   warmMs: 80,
   /**
    * All processes' working sets, idle with the page loaded. 350 MB is the runner's gate; a real
