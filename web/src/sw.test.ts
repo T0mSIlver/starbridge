@@ -17,7 +17,7 @@ import { api } from "./lib/api";
 import * as device from "./lib/device";
 import * as store from "./lib/store";
 
-type Note = { title: string; tag: string; close(): void };
+type Note = { title: string; tag: string; data?: unknown; close(): void };
 type Listener = (e: { data?: { text(): string }; waitUntil(p: Promise<unknown>): void }) => void;
 const listeners = new Map<string, Listener>();
 /** The notifications up, as the browser keeps them: one per tag. */
@@ -31,10 +31,11 @@ let refuseNext = false;
 const errors: string[] = [];
 /** This browser's push service: Chrome's unless a test sets Safari's. */
 let endpoint = "https://fcm.googleapis.com/fcm/send/x";
-function note(title: string, tag: string): Note {
+function note(title: string, tag: string, data?: unknown): Note {
   const n: Note = {
     title,
     tag,
+    data,
     close: () => {
       notes = notes.filter((x) => x !== n);
     },
@@ -47,7 +48,7 @@ Object.assign(globalThis, {
     registration: {
       showNotification: async (
         title: string,
-        o: { tag?: string; renotify?: boolean; silent?: boolean } = {},
+        o: { tag?: string; renotify?: boolean; silent?: boolean; data?: unknown } = {},
       ) => {
         if (refuseNext && o.tag?.startsWith("d:")) {
           refuseNext = false;
@@ -55,7 +56,7 @@ Object.assign(globalThis, {
         }
         shows++;
         if (!o.silent && (o.renotify || !notes.some((n) => n.tag === o.tag))) rings++;
-        notes = [...notes.filter((n) => n.tag !== o.tag), note(title, o.tag ?? "")];
+        notes = [...notes.filter((n) => n.tag !== o.tag), note(title, o.tag ?? "", o.data)];
       },
       getNotifications: async (o: { tag?: string } = {}) =>
         notes.filter((n) => o.tag === undefined || n.tag === o.tag),
@@ -406,8 +407,11 @@ test("a question whose notification failed to show shows when its push comes aga
   await push(payload(d));
   // The placeholder stood in for it.
   expect(notes.map((n) => [n.tag, n.title])).toEqual([["d:d_refused", "Starbridge"]]);
+  const before = rings;
   await push(payload(d));
   expect(notes.map((n) => [n.tag, n.title])).toEqual([["d:d_refused", "Question d_refused"]]);
+  // The placeholder sounded already: the question takes its place quietly.
+  expect(rings).toBe(before);
 });
 
 test("records an earlier release kept stay as they were; the pushes' own goes beside them (#2152)", async () => {

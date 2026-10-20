@@ -171,9 +171,13 @@ async function showFallback(text: string, why: Unshown, seen: Shown): Promise<vo
 
 /** Shows a notification for the push `seen` tracks. */
 async function show(seen: Shown, title: string, options: NotificationOptions): Promise<void> {
-  // The placeholder this push showed while late sounded already: replacing it sounds no more.
-  // Read here, after every await, since the late timer may have shown it meanwhile.
-  const quiet = seen.placeholder === options.tag ? { renotify: false } : {};
+  // A placeholder up under this tag sounded already, this push's while it was late or one an
+  // earlier push left when its show failed: replacing it sounds no more. Read here, after every
+  // await, since the late timer may have shown it meanwhile. A placeholder carries no item.
+  const up = options.tag ? await self.registration.getNotifications({ tag: options.tag }) : [];
+  const placeholder =
+    seen.placeholder === options.tag || up.some((n) => !(n.data as { item?: unknown })?.item);
+  const quiet = placeholder ? { renotify: false } : {};
   await self.registration.showNotification(title, { ...options, ...quiet });
   // The placeholder this push showed while late goes, unless this one replaced it. Safari keeps
   // one under 30 s old.
