@@ -21,10 +21,7 @@ import opencodeRule from "../../../plugin/rules/opencode.md" with { type: "text"
 import skill from "../../../plugin/skills/starbridge/SKILL.md" with { type: "text" };
 import { piAgentDir } from "../pi";
 import { COMMIT, VERSION } from "../version";
-import { ALLOW, removeAllow } from "./allow";
 import agyFiles from "./antigravity-files.js";
-import { codexPluginDir, refreshCodexPluginFiles } from "./codex-plugin";
-import { cursorHooksPath, cursorSkillDir, cursorState, installCursorFiles } from "./cursor";
 import { markedSkill, marker, ours } from "./marker";
 import plugin from "./opencode-files.js";
 import { pruneEmpty, removedLine, removeWritten } from "./remove";
@@ -34,7 +31,7 @@ import { failure, run, type Sys, which } from "./sys";
 type Home = Pick<Sys, "ctx" | "home">;
 
 /** `$CODEX_HOME/skills/starbridge`, which Codex reads skills from. */
-const codexHome = (sys: Home) => sys.ctx.env.CODEX_HOME || join(sys.home, ".codex");
+export const codexHome = (sys: Home) => sys.ctx.env.CODEX_HOME || join(sys.home, ".codex");
 
 export function codexSkillDir(sys: Home): string {
   return join(codexHome(sys), "skills", "starbridge");
@@ -262,7 +259,7 @@ function opencodeFiles(): Record<string, string> {
 }
 
 /** Every file setup writes into opencode's folder as it is now, to tell whether a write changed one. */
-function opencodeSnapshot(sys: Home): string {
+export function opencodeSnapshot(sys: Home): string {
   const dir = opencodeDir(sys);
   return JSON.stringify(Object.keys(opencodeFiles()).map((path) => readIn(dir, path) ?? null));
 }
@@ -442,49 +439,4 @@ export function removeAntigravity(sys: Home): string | undefined {
     dir,
     removeWritten(dir, Object.keys(antigravityFiles()), join(sys.home, ".gemini")),
   );
-}
-
-/**
- * Brings the Codex skill, rule and plugin script, opencode's skill and plugin and the
- * Antigravity plugin to this release's version,
- * where setup wrote them (they carry its marker); it adds nothing. Returns what it did.
- */
-export function refreshFiles(sys: Home): string[] {
-  const done: string[] = [];
-  const step = (what: string, fn: () => unknown) => {
-    try {
-      fn();
-      done.push(`Updated ${what}.`);
-    } catch (e) {
-      done.push(`Could not update ${what}: ${(e as Error).message}`);
-    }
-  };
-  const skillFile = join(codexSkillDir(sys), "SKILL.md");
-  if (codexSkill(sys) === "outdated") step(skillFile, () => installCodexSkill(sys));
-  if (codexRule(sys) === "outdated") step(codexRulePath(sys), () => installCodexRule(sys));
-  try {
-    if (refreshCodexPluginFiles(sys)) done.push(`Updated ${codexPluginDir(sys)}.`);
-  } catch (e) {
-    done.push(`Could not update ${codexPluginDir(sys)}: ${(e as Error).message}`);
-  }
-  if (cursorState(sys) === "outdated")
-    step(`the Cursor skill and hooks in ${dirname(dirname(cursorSkillDir(sys)))}`, () => {
-      if (!installCursorFiles(sys)) throw new Error(`${cursorHooksPath(sys)} cannot be read`);
-    });
-  // Files someone else wrote keep it outdated: only a write that changed something counts.
-  if (opencodeState(sys) === "outdated") {
-    const before = opencodeSnapshot(sys);
-    step(`the opencode skill and plugin in ${opencodeDir(sys)}`, () => installOpencode(sys, true));
-    if (opencodeSnapshot(sys) === before && done.at(-1)?.startsWith("Updated")) done.pop();
-  }
-  if (antigravityState(sys) === "outdated")
-    step(antigravityDir(sys), () => installAntigravity(sys));
-  // The entries pass more than the commands once no hook of ours narrows them.
-  const agy = antigravityState(sys);
-  if (
-    (agy === "foreign" || (agy !== "missing" && antigravityDisabled(sys))) &&
-    removeAllow(ALLOW.antigravity, sys)
-  )
-    done.push(`Removed the starbridge allow entries from ${agySettingsPath(sys)}.`);
-  return done;
 }

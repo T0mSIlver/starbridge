@@ -2,7 +2,7 @@ import { appendFileSync, mkdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname } from "node:path";
 import { type Ctx, parseDuration } from "../context";
-import { refreshFiles } from "../setup/harnesses";
+import { refreshFiles } from "../setup/agents";
 import { Antigravity } from "./antigravity";
 import { socketPath } from "./api";
 import { AutoUpdate } from "./autoupdate";
