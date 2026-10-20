@@ -10,6 +10,7 @@
 import assert from "node:assert/strict";
 import { cpSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { connect, createServer, type Socket } from "node:net";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parseArgs } from "node:util";
 import { chromium, _electron as electron, type Page } from "playwright";
@@ -388,7 +389,8 @@ try {
     if (opts.json)
       writeFileSync(opts.json, JSON.stringify({ client: opts.client, rtt: RTT, rounds }, null, 2));
   } finally {
-    await page.screenshot({ path: join(tmp, "last.png") }).catch(() => {});
+    // Outside the run's folder, which shutdown deletes.
+    await page.screenshot({ path: join(tmpdir(), "starbridge-switch-last.png") }).catch(() => {});
     await close();
     proxy.close();
   }
