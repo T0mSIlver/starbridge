@@ -31,10 +31,15 @@ echo 'deploy ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/deploy
 chmod 440 /etc/sudoers.d/deploy
 visudo -cq
 
-# Keys only. sshd takes the first value it reads, and this file sorts before cloud-init's.
+# Keys only. sshd takes the first value it reads, and this file sorts before cloud-init's. Of
+# forwarding, only the tunnel to Umami's dashboard (README.md, "Analytics"); none for agents.
 cat > /etc/ssh/sshd_config.d/10-starbridge.conf <<'CONF'
 PasswordAuthentication no
 KbdInteractiveAuthentication no
+MaxAuthTries 3
+AllowAgentForwarding no
+AllowTcpForwarding local
+PermitOpen 127.0.0.1:3001
 CONF
 sshd -t
 systemctl reload ssh
@@ -44,11 +49,11 @@ install -d -m 700 /var/backups/starbridge
 install -d -m 755 /opt/starbridge
 
 # Root login goes last, once what a login as `deploy` needs is in place: a key, sudo, and sshd
-# taking its key. This file sorts before cloud-init's too.
+# taking its key. Then only `deploy` logs in. This file sorts before cloud-init's too.
 [ -s /home/deploy/.ssh/authorized_keys ] || { echo "setup.sh: deploy has no SSH key; root login stays on" >&2; exit 1; }
 su -s /bin/sh deploy -c 'sudo -n true' || { echo "setup.sh: deploy cannot use sudo; root login stays on" >&2; exit 1; }
 sshd -T -C user=deploy,host=localhost,addr=127.0.0.1 | grep -qx 'pubkeyauthentication yes' ||
   { echo "setup.sh: sshd refuses keys for deploy; root login stays on" >&2; exit 1; }
-echo 'PermitRootLogin no' > /etc/ssh/sshd_config.d/11-starbridge-root.conf
+printf 'PermitRootLogin no\nAllowUsers deploy\n' > /etc/ssh/sshd_config.d/11-starbridge-root.conf
 sshd -t
 systemctl reload ssh
