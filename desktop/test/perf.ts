@@ -30,6 +30,9 @@ export const BUDGETS = {
    * 7 sits 1.3 times above the slowest run; the app's own part (the ratio less 1, 3.6–4.3 in those
    * runs) can grow 1.4 times before it fails even on the slowest of them, and 1.6 times on a
    * typical one, on any runner.
+   * The ratio assumes a runner slow throughout, as a host with a slower CPU is. Eight busy
+   * processes on the runner's cores are not that: they starve the renderer more than the main
+   * process, and gave ratios of 8.6 and 10.8 (#2180).
    */
   coldRatio: 7,
   /**
