@@ -244,10 +244,18 @@ class Disk(private val dir: File, private val vault: Vault) {
     fun secrets(): Secrets = read("secrets.bin", Secrets.serializer()) { it.v }.getOrNull() ?: Secrets()
     fun save(secrets: Secrets) = write("secrets.bin", Secrets.serializer(), secrets)
 
-    fun wipe() {
-        File(dir, "state.bin").delete()
-        File(dir, "secrets.bin").delete()
-        File(dir, IMAGES).deleteRecursively()
+    /**
+     * Signing out: both files go with every copy of them, half-written ones and those set aside
+     * at [load] (security audit 2026-10-20), and the vault's key, so a copy that could not be
+     * deleted never reads again. False when a file stayed or the key could not go.
+     */
+    fun wipe(): Boolean {
+        val copies = dir.listFiles { f -> f.name.startsWith("state.bin") || f.name.startsWith("secrets.bin") }.orEmpty()
+        var all = copies.map { it.delete() }.all { it }
+        all = File(dir, IMAGES).let { !it.exists() || it.deleteRecursively() } && all
+        all = runCatching { vault.forget() }.isSuccess && all
+        if (!all) Log.w("Starbridge", "sign-out left a saved file or the vault key behind")
+        return all
     }
 
     /**
