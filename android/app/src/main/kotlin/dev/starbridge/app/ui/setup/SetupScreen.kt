@@ -2,6 +2,7 @@ package dev.starbridge.app.ui.setup
 
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import android.view.WindowManager
 import androidx.activity.compose.LocalActivity
 import dev.starbridge.app.protocol.RecoveryKeys
@@ -90,6 +91,7 @@ import dev.starbridge.app.ui.Sym
 import dev.starbridge.app.ui.Symbol
 import javax.inject.Inject
 import dev.starbridge.app.ui.busyAs
+import kotlinx.coroutines.delay
 
 @HiltViewModel
 class SetupViewModel @Inject constructor(private val store: Store) : ViewModel() {
@@ -405,20 +407,38 @@ fun UpdateRequired(minimum: String, current: String, installer: Installer, updat
     )
 }
 
-/** An empty account: this phone creates its keys. */
+/**
+ * An empty account: this phone makes its keys as the screen opens, and the recovery key follows
+ * (#2139). Try again only once a try has run and failed.
+ */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun FirstDevice(busy: Boolean, actions: SetupActions, modifier: Modifier) {
+    // A try has run once busy was seen, or a second after the call, in case it rose and fell
+    // between two frames. Saved, so a failed try stays failed across recreation; each entry to
+    // the screen, a recreation included, tries again.
+    var ran by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(busy) { if (busy) ran = true }
+    LaunchedEffect(Unit) {
+        actions.firstDevice()
+        delay(1_000)
+        ran = true
+    }
+    val failed = ran && !busy
     Step(
         modifier,
         top = {
             Column(Modifier.padding(start = Spacing.s4, end = Spacing.s4, top = 48.dp, bottom = Spacing.s6), verticalArrangement = Arrangement.spacedBy(Spacing.s3)) {
-                Title("Set up your account")
-                Text("This phone creates your account's keys.", style = StarbridgeTheme.type.body, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Title("Your recovery key")
+                if (!failed) Row(verticalAlignment = Alignment.CenterVertically) {
+                    LoadingIndicator(Modifier.size(40.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Spacer(Modifier.width(Spacing.s4))
+                    Text("Creating the keys", style = StarbridgeTheme.type.body, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
             }
-            Tile(Sym.Key)
         },
         bottom = {
-            Primary("Create the keys", busy, onClick = actions.firstDevice)
+            if (failed) Primary("Try again", busy, onClick = actions.firstDevice)
             Link("Sign out", actions.signOut)
         },
     )

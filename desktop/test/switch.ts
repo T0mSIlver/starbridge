@@ -279,9 +279,8 @@ try {
   }
   page.on("console", (m) => m.type() === "error" && console.log(`[page] ${m.text()}`));
   try {
-    await page.getByRole("button", { name: "Create the keys" }).click();
-    await page.getByLabel(/I wrote this key down/).check();
-    await page.getByRole("button", { name: "Continue" }).click();
+    await page.getByLabel(/I stored this key/).check();
+    await page.getByRole("button", { name: "Create the account" }).click();
     await page.getByRole("heading", { name: "Add a machine" }).waitFor();
 
     const machine = join(tmp, "machine");

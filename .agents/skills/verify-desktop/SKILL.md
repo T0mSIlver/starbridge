@@ -69,7 +69,7 @@ there and delete it afterwards) and add steps where the app is in the state you
 need:
 
 - `page`: the window's page (`app.firstWindow()`). Select by role and label:
-  `page.getByRole("button", { name: "Create the keys" })`.
+  `page.getByRole("button", { name: "Create the account" })`.
 - `main(g => …)`: runs in the app's main process against what the test records
   in place of the OS: `g.shown` (notifications, with `title`, `actions`,
   `hasReply`), `g.closed`, `g.tips` (the menu bar's tooltips), `g.outside` (what
