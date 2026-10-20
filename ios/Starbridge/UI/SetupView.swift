@@ -425,21 +425,34 @@ extension JoinStep {
     }
 }
 
-/** An empty account: this iPhone creates its keys. */
+/**
+ * An empty account: this iPhone makes its keys as the screen opens, and the recovery key follows
+ * (#2139). Try again only once a try has run and failed.
+ */
 private struct FirstDeviceStep: View {
     let store: Store
+    @State private var tried = false
 
     var body: some View {
         Step {
-            Title(text: "Set up your account")
-            Lede(text: "This iPhone creates your account's keys.")
-                .padding(.bottom, Tokens.Spacing.s6)
-            Tile(symbol: "key")
+            Title(text: "Your recovery key")
+            if !tried || store.busy {
+                HStack(spacing: Tokens.Spacing.s4) {
+                    ProgressView()
+                    Lede(text: "Creating the keys")
+                }
+            }
         } bottom: {
-            Button("Create the keys") { Task { await store.setUpFirstDevice() } }
-                .primaryButton(busy: store.busy)
-                .disabled(store.busy)
+            if tried && !store.busy {
+                Button("Try again") { Task { await store.setUpFirstDevice() } }
+                    .primaryButton(busy: store.busy)
+            }
             LinkButton(text: "Sign out") { Task { await store.signOut() } }
+        }
+        .task {
+            guard !tried else { return }
+            await store.setUpFirstDevice()
+            tried = true
         }
     }
 }

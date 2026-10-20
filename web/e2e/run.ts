@@ -745,14 +745,12 @@ async function main() {
   step("sign in with GitHub (stub) and set up the first device");
   const page = await signIn(a);
   failPage = page;
-  await page.getByRole("button", { name: "Create the keys" }).click();
   await page.getByRole("heading", { name: "Save your recovery key" }).waitFor();
   const unsaved = ((await page.getByTestId("recovery-key").textContent()) ?? "").trim();
 
   step("a reload before the key is saved offers a new key, not the inbox (#328)");
   await page.reload();
   await page.getByText(/so that key was never used/).waitFor();
-  await page.getByRole("button", { name: "Create the keys" }).click();
   await page.getByRole("heading", { name: "Save your recovery key" }).waitFor();
   const key = ((await page.getByTestId("recovery-key").textContent()) ?? "").trim();
   if (key === unsaved) throw new Error("expected a new recovery key after the reload");
@@ -763,8 +761,8 @@ async function main() {
     throw new Error("the first-run page's brand link is outside a header landmark");
   await page.setViewportSize({ width: 1280, height: 860 });
   await page.emulateMedia({ colorScheme: "light" });
-  await page.getByLabel(/I wrote this key down/).check();
-  await page.getByRole("button", { name: "Continue" }).click();
+  await page.getByLabel(/I stored this key/).check();
+  await page.getByRole("button", { name: "Create the account" }).click();
   await page.getByRole("heading", { name: "Inbox" }).waitFor();
   // No machine yet: the inbox says how to add one (#610).
   await page.getByRole("heading", { name: "Add a machine" }).waitFor();
@@ -2636,7 +2634,7 @@ async function main() {
   if (newKey === key || !/^([0-9A-Z]{4}){7}$/.test(newKey))
     throw new Error(`expected a new recovery key, got: ${newKey}`);
   await shoot(page, "recovery-key-new");
-  await page.getByLabel(/I wrote this key down/).check();
+  await page.getByLabel(/I stored this key/).check();
   await page.getByRole("button", { name: "Save the new key" }).click();
   await page.getByRole("heading", { name: "Recovery key replaced" }).waitFor();
   await pageB.goto(ORIGIN);
@@ -2905,7 +2903,7 @@ async function main() {
   await pageD.goto(ORIGIN);
   await pageD.getByRole("link", { name: SIGN_IN }).click();
   // The same GitHub user gets an account with no devices, not the deleted one's recovery screen.
-  await pageD.getByRole("heading", { name: "Set up your account" }).waitFor({ timeout: 30_000 });
+  await pageD.getByRole("heading", { name: "Save your recovery key" }).waitFor({ timeout: 30_000 });
 }
 
 try {
