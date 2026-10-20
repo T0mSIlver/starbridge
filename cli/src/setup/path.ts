@@ -90,6 +90,20 @@ function pathLines(dir: string, home: string): { sh: string; fish: string } {
   };
 }
 
+/** Every shell startup file `pathStep` may add its line to, and uninstall takes it out of. */
+export function startupFiles(sys: Sys): string[] {
+  if (sys.platform === "win32") return [];
+  const { join } = pathFor(sys.platform);
+  const home = sys.home;
+  return [
+    ...new Set([
+      join(sys.ctx.env.ZDOTDIR || home, ".zshrc"),
+      ...[".bashrc", ".bash_profile", ".bash_login", ".profile"].map((f) => join(home, f)),
+      join(home, ".config", "fish", "config.fish"),
+    ]),
+  ];
+}
+
 /**
  * Takes the marker and the line `pathStep` wrote for `dir` out of each shell's startup file, with
  * the blank line before, while the line is exactly as setup wrote it; removes a file left empty
@@ -97,13 +111,8 @@ function pathLines(dir: string, home: string): { sh: string; fish: string } {
  */
 export function removePathLines(sys: Sys, dir: string): string[] {
   if (sys.platform === "win32") return [];
-  const { join } = pathFor(sys.platform);
   const home = sys.home;
-  const files = new Set([
-    join(sys.ctx.env.ZDOTDIR || home, ".zshrc"),
-    ...[".bashrc", ".bash_profile", ".bash_login", ".profile"].map((f) => join(home, f)),
-    join(home, ".config", "fish", "config.fish"),
-  ]);
+  const files = startupFiles(sys);
   const { sh, fish } = pathLines(dir, home);
   // And the lines of releases before #1749, which quoted no folder.
   const shown = dir.startsWith(`${home}/`) ? `$HOME${dir.slice(home.length)}` : dir;

@@ -25,16 +25,15 @@ import {
   type AgentId,
   agentLine,
   found,
+  HARNESSES,
   installAgent,
-  installed,
   migrateAllowEntries,
   progressLine,
-  recordCodex,
+  refreshFiles,
   removedAgents,
   setRemoved,
   UNDER,
 } from "./agents";
-import { codexPlugin } from "./codex-plugin";
 import {
   type Found,
   findCodexbar,
@@ -45,11 +44,8 @@ import {
   probe,
   probeSet,
 } from "./codexbar";
-import { installPiPackage, PI_PACKAGE, piPackage, refreshFiles } from "./harnesses";
 import { ours } from "./marker";
 import { pathStep, recordSelf } from "./path";
-import { PLUGINS, pluginState, pluginsStale } from "./plugins";
-import { desktopReaches, remotePluginCurrent } from "./remote-plugin";
 import {
   enableLinger,
   installedService,
@@ -106,26 +102,16 @@ export async function refresh(sys: Sys): Promise<string[]> {
   recordSelf(sys);
   const done = [...refreshFiles(sys), ...migrateAllowEntries(sys)];
   const removed = removedAgents(sys.ctx);
-  // Codex installed before setup recorded its binary gets it here, as each update moves it.
-  if (!removed.includes("codex")) recordCodex(sys);
+  for (const id of AGENT_IDS) if (!removed.includes(id)) HARNESSES[id].record?.(sys);
   for (const id of AGENT_IDS) {
-    if (removed.includes(id) || !found(sys, id)) continue;
-    // The Pi package is pinned to a release tag, so an installed one at another tag moves (#1417).
-    if (id === "pi" && piPackage(sys) !== undefined && piPackage(sys) !== PI_PACKAGE) {
-      try {
-        await installPiPackage(sys);
-        done.push(`Updated the Pi package to v${VERSION}.`);
-      } catch (e) {
-        done.push(`Could not update the Pi package to v${VERSION}: ${(e as Error).message}`);
-      }
+    const harness = HARNESSES[id];
+    if (removed.includes(id) || !harness.found(sys)) continue;
+    const updated = await harness.update?.(sys);
+    if (updated) {
+      done.push(...updated);
       continue;
     }
-    // Codex installed before its plugin (#949), or with an older one, gets it here; Claude Code's
-    // plugins move to this release's commit (#1768).
-    const stale =
-      (id === "codex" && ["missing", "outdated"].includes(codexPlugin(sys))) ||
-      (id === "claude" && (await claudeStale(sys)));
-    if (!stale && (await installed(sys, id))) continue;
+    if (!(await harness.stale?.(sys)) && (await harness.installed(sys))) continue;
     const r = await installAgent(sys, id);
     done.push(
       agentLine(r.mark, id, r.text),
@@ -143,20 +129,6 @@ export async function refresh(sys: Sys): Promise<string[]> {
       done.push(`Could not restart the agent: ${(e as Error).message}`);
     }
   return done;
-}
-
-/**
- * Whether Claude Code's plugins are ours but not at this release's commit, or Claude desktop
- * reaches this machine and the starbridge-remote plugin is missing or older (#2107).
- */
-async function claudeStale(sys: Sys): Promise<boolean> {
-  const state = await pluginState(sys);
-  return (
-    typeof state !== "string" &&
-    !state.foreign &&
-    PLUGINS.some((p) => state.plugins[p]) &&
-    (pluginsStale(sys, state) || (desktopReaches(sys) && !remotePluginCurrent(sys)))
-  );
 }
 
 function trimServer(server: string): string {
