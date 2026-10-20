@@ -302,14 +302,14 @@
             "kind": "decision",
             "id": "d1"
           },
-          "rings": true
+          "effect": "ring"
         },
         {
           "push": {
             "kind": "decision",
             "id": "d1"
           },
-          "rings": false
+          "effect": "none"
         }
       ]
     },
@@ -321,14 +321,14 @@
             "kind": "answered",
             "id": "d1"
           },
-          "rings": false
+          "effect": "none"
         },
         {
           "push": {
             "kind": "decision",
             "id": "d1"
           },
-          "rings": false
+          "effect": "none"
         }
       ]
     },
@@ -340,7 +340,7 @@
             "kind": "answered",
             "id": "d1"
           },
-          "rings": false
+          "effect": "none"
         },
         {
           "restart": true
@@ -350,7 +350,7 @@
             "kind": "decision",
             "id": "d1"
           },
-          "rings": false
+          "effect": "none"
         }
       ]
     },
@@ -362,14 +362,14 @@
             "kind": "decision",
             "id": "d1"
           },
-          "rings": true
+          "effect": "ring"
         },
         {
           "push": {
             "kind": "answered",
             "id": "d1"
           },
-          "rings": false
+          "effect": "none"
         },
         {
           "push": {
@@ -378,7 +378,7 @@
             "at": "2026-10-12T10:00:01Z",
             "state": "waiting"
           },
-          "rings": false
+          "effect": "none"
         }
       ]
     },
@@ -390,7 +390,7 @@
             "kind": "decision",
             "id": "d1"
           },
-          "rings": true
+          "effect": "ring"
         },
         {
           "push": {
@@ -400,14 +400,14 @@
             "until": "2026-10-12T11:00:00Z",
             "due": false
           },
-          "rings": false
+          "effect": "none"
         },
         {
           "push": {
             "kind": "answered",
             "id": "d1"
           },
-          "rings": false
+          "effect": "none"
         },
         {
           "push": {
@@ -417,7 +417,7 @@
             "until": "2026-10-12T11:00:00Z",
             "due": true
           },
-          "rings": false
+          "effect": "none"
         }
       ]
     },
@@ -429,7 +429,7 @@
             "kind": "decision",
             "id": "d1"
           },
-          "rings": true
+          "effect": "ring"
         },
         {
           "push": {
@@ -439,7 +439,7 @@
             "until": "2026-10-12T11:00:00Z",
             "due": false
           },
-          "rings": false
+          "effect": "none"
         },
         {
           "push": {
@@ -449,7 +449,7 @@
             "until": "2026-10-12T11:00:00Z",
             "due": true
           },
-          "rings": true
+          "effect": "ring"
         },
         {
           "restart": true
@@ -462,7 +462,7 @@
             "until": "2026-10-12T11:00:00Z",
             "due": true
           },
-          "rings": false
+          "effect": "none"
         }
       ]
     },
@@ -474,7 +474,7 @@
             "kind": "decision",
             "id": "d1"
           },
-          "rings": true
+          "effect": "ring"
         },
         {
           "push": {
@@ -483,7 +483,7 @@
             "at": "2026-10-12T10:00:01Z",
             "state": "waiting"
           },
-          "rings": true
+          "effect": "ring"
         },
         {
           "restart": true
@@ -495,7 +495,7 @@
             "at": "2026-10-12T10:00:01Z",
             "state": "waiting"
           },
-          "rings": false
+          "effect": "none"
         }
       ]
     },
@@ -507,7 +507,7 @@
             "kind": "decision",
             "id": "d1"
           },
-          "rings": true
+          "effect": "ring"
         },
         {
           "push": {
@@ -516,7 +516,7 @@
             "at": "2026-10-12T10:00:02Z",
             "state": "waiting"
           },
-          "rings": true
+          "effect": "ring"
         },
         {
           "push": {
@@ -525,7 +525,7 @@
             "at": "2026-10-12T10:00:01Z",
             "state": "working"
           },
-          "rings": false
+          "effect": "none"
         },
         {
           "push": {
@@ -534,7 +534,46 @@
             "at": "2026-10-12T10:00:03Z",
             "state": "waiting"
           },
-          "rings": false
+          "effect": "quiet"
+        }
+      ]
+    },
+    {
+      "name": "a flip back to working is quiet, and the next to waiting rings",
+      "steps": [
+        {
+          "push": {
+            "kind": "decision",
+            "id": "d1"
+          },
+          "effect": "ring"
+        },
+        {
+          "push": {
+            "kind": "waiting",
+            "id": "d1",
+            "at": "2026-10-12T10:00:01Z",
+            "state": "waiting"
+          },
+          "effect": "ring"
+        },
+        {
+          "push": {
+            "kind": "waiting",
+            "id": "d1",
+            "at": "2026-10-12T10:00:02Z",
+            "state": "working"
+          },
+          "effect": "quiet"
+        },
+        {
+          "push": {
+            "kind": "waiting",
+            "id": "d1",
+            "at": "2026-10-12T10:00:03Z",
+            "state": "waiting"
+          },
+          "effect": "ring"
         }
       ]
     },
@@ -548,14 +587,14 @@
             "at": "2026-10-12T10:00:01Z",
             "state": "working"
           },
-          "rings": true
+          "effect": "ring"
         },
         {
           "push": {
             "kind": "decision",
             "id": "d1"
           },
-          "rings": false
+          "effect": "none"
         }
       ]
     }
