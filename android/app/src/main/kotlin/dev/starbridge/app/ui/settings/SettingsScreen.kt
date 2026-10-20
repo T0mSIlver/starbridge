@@ -122,6 +122,9 @@ class SettingsViewModel @Inject constructor(private val store: Store, private va
     fun setPushHold(seconds: Int) = store.setPushHold(seconds)
     fun signOut() = store.signOut()
     fun deleteAccount() = store.deleteAccount()
+
+    /** Answers this phone gave that the server has yet to take: sign-out sends them first, or drops them (#2155). */
+    val unsent = store.unsent
 }
 
 /** What the settings page changes, and where its rows lead. */
@@ -161,6 +164,8 @@ fun SettingsScreen(
     quotas: Boolean = true,
     /** The build's version, copied by its row (#1892). */
     version: String = BuildConfig.VERSION_NAME,
+    /** Answers not sent yet, which a sign-out that can't reach the server drops (#2155). */
+    unsent: Int = 0,
 ) {
     val context = LocalContext.current
     var signingOut by rememberSaveable { mutableStateOf(false) }
@@ -271,7 +276,7 @@ fun SettingsScreen(
     if (signingOut) {
         Confirm(
             title = "Sign out?",
-            text = "This phone deletes its keys and is removed from your devices. Your other devices and machines keep working. If it's your only device, you'll need your recovery key to sign in again.",
+            text = "This phone deletes its keys and is removed from your devices. Your other devices and machines keep working. If it's your only device, you'll need your recovery key to sign in again." + unsentWarning(unsent),
             action = "Sign out",
             onConfirm = { actions.signOut(); signingOut = false },
             onDismiss = { signingOut = false },
@@ -580,3 +585,9 @@ private fun <T> SegmentButtons(choices: List<Pair<T, String>>, selected: T, onSe
     if (stacked) Column(verticalArrangement = Arrangement.spacedBy(Spacing.s2)) { buttons() } else Row(horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween)) { buttons() }
 }
 
+/** What the sign-out dialog adds while answers wait to be sent (#2155); empty when none do. */
+internal fun unsentWarning(unsent: Int): String = when (unsent) {
+    0 -> ""
+    1 -> " 1 answer isn't sent yet: it's sent first if the server can be reached, else it's lost."
+    else -> " $unsent answers aren't sent yet: they're sent first if the server can be reached, else they're lost."
+}

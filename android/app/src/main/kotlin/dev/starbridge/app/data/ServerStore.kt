@@ -146,6 +146,7 @@ class ServerStore(
     override val phase = MutableStateFlow<Phase>(Phase.SignedOut)
     override val joinLink = MutableStateFlow<String?>(null)
     override val decisions: StateFlow<List<Decision>> get() = decisionKind.shown
+    override val unsent = MutableStateFlow(0)
     override val prompts: StateFlow<List<Prompt>> get() = promptKind.shown
     override val windows: StateFlow<List<QuotaWindow>> get() = quotaKind.windows
     override val quotaFailures: StateFlow<List<QuotaFailure>> get() = quotaKind.failures
@@ -280,6 +281,8 @@ class ServerStore(
     }
 
     private fun publish() {
+        // From the outbox itself: a hold or a revoked machine empties the shown list, not it.
+        unsent.value = saved.outbox.size
         keepsKeys.value = saved.me != null && saved.pin != null
         demo.value = demoServer != null && demoServer == saved.server
         phase.value = when {
@@ -1538,6 +1541,8 @@ class ServerStore(
 
     /** Removes this phone from the directory, ends the session and forgets every key. */
     override fun signOut() = run {
+        // Answers still in the outbox go first: the wipe below drops them (#2155).
+        if (phase.value == Phase.Ready && saved.outbox.isNotEmpty()) decisionKind.flushBeforeSignOut()
         if (phase.value == Phase.Ready) {
             runCatching {
                 syncDirectory()
