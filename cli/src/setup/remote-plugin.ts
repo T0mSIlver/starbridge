@@ -14,11 +14,10 @@ import {
   mkdirSync,
   readdirSync,
   readFileSync,
-  renameSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
-import { delimiter, join, resolve } from "node:path";
+import { delimiter, join, relative, resolve } from "node:path";
 import { VERSION } from "../version";
 import {
   claudeDir,
@@ -28,9 +27,12 @@ import {
   readSettings,
   writeSettings,
 } from "./plugins";
+import { removedLine, removeWritten } from "./remove";
 import type { Sys } from "./sys";
 
 export const REMOTE_PLUGIN = "starbridge-remote";
+/** The plugin's files setup wrote, relative to its folder: what a refresh or uninstall removes. */
+const INVENTORY = join(".claude-plugin", "written.json");
 const DIRS_VAR = "CLAUDE_CODE_PLUGIN_DIRS";
 /** Every command of the starbridge plugin's hooks starts so; the remote plugin's go through remote.sh. */
 // biome-ignore lint/suspicious/noTemplateCurlyInString: Claude Code expands it in the hook's command.
@@ -72,6 +74,23 @@ export function remoteHooks(starbridge: HooksFile): HooksFile {
       }),
     }));
   return { hooks, modules: ["./register.ts"] };
+}
+
+/** Every file under `dir`, relative to it. */
+function filesUnder(dir: string): string[] {
+  return readdirSync(dir, { recursive: true, withFileTypes: true })
+    .filter((e) => !e.isDirectory())
+    .map((e) => relative(dir, join(e.parentPath, e.name)))
+    .sort();
+}
+
+/** What setup wrote into `dir` last time; a plugin built before the inventory has its two fixed files. */
+function written(dir: string): string[] {
+  try {
+    const v = JSON.parse(readFileSync(join(dir, INVENTORY), "utf8")) as unknown;
+    if (Array.isArray(v) && v.every((f) => typeof f === "string")) return [...v, INVENTORY];
+  } catch {}
+  return [join("hooks", "hooks.json"), join(".claude-plugin", "plugin.json"), INVENTORY];
 }
 
 /**
@@ -118,8 +137,11 @@ export function writeRemotePlugin(sys: Home, roots: { starbridge: string; mod: s
       2,
     )}\n`,
   );
-  rmSync(dir, { recursive: true, force: true });
-  renameSync(next, dir);
+  writeFileSync(join(next, INVENTORY), `${JSON.stringify(filesUnder(next), null, 2)}\n`);
+  // Only the files setup wrote last time go: a file the owner put in the folder stays.
+  removeWritten(dir, written(dir));
+  cpSync(next, dir, { recursive: true, force: true });
+  rmSync(next, { recursive: true, force: true });
 }
 
 /** Whether the plugin is loaded and was built by this release. */
@@ -187,7 +209,8 @@ export function loadRemotePlugin(sys: Home): boolean {
 }
 
 /**
- * Takes the plugin's folder out of `CLAUDE_CODE_PLUGIN_DIRS`, leaving the others, and deletes it.
+ * Takes the plugin's folder out of `CLAUDE_CODE_PLUGIN_DIRS`, leaving the others, and deletes the
+ * files setup wrote in it.
  * Returns what it did, one line each.
  */
 export function removeRemotePlugin(sys: Home): string[] {
@@ -204,8 +227,8 @@ export function removeRemotePlugin(sys: Home): string[] {
     done.push(`Took ${dir} out of ${DIRS_VAR}.`);
   }
   if (existsSync(dir)) {
-    rmSync(dir, { recursive: true, force: true });
-    done.push(`Removed the ${REMOTE_PLUGIN} plugin.`);
+    const kept = removeWritten(dir, written(dir));
+    done.push(kept.length === 0 ? `Removed the ${REMOTE_PLUGIN} plugin.` : removedLine(dir, kept));
   }
   return done;
 }

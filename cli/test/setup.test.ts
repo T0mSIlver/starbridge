@@ -2066,8 +2066,27 @@ test("where Claude desktop starts sessions over SSH, setup loads starbridge-remo
   expect(claudeLine(await refresh(m.sys))).toBe(false);
   expect(dirs()).toBe([own, dir].join(delimiter));
 
+  // A file the owner put in the folder survives a rebuild and an uninstall; Starbridge's go.
+  const mine = join(dir, "notes.txt");
+  writeFileSync(mine, "mine");
+  const inventory = join(dir, ".claude-plugin", "written.json");
+  writeFileSync(join(dir, "hooks", "stale.sh"), "old");
+  writeFileSync(
+    inventory,
+    JSON.stringify([...JSON.parse(readFileSync(inventory, "utf8")), "hooks/stale.sh"]),
+  );
+  writeFileSync(
+    join(dir, ".claude-plugin", "plugin.json"),
+    JSON.stringify({ name: "starbridge-remote", version: "0.0.0" }),
+  );
+  expect(claudeLine(await refresh(m.sys))).toBe(true);
+  expect(readFileSync(mine, "utf8")).toBe("mine");
+  expect(existsSync(join(dir, "hooks", "stale.sh"))).toBe(false);
+  expect(existsSync(join(dir, "hooks", "remote.sh"))).toBe(true);
+
   await uninstallAgent(m.sys, "claude");
-  expect(existsSync(dir)).toBe(false);
+  expect(readFileSync(mine, "utf8")).toBe("mine");
+  expect(readdirSync(dir)).toEqual(["notes.txt"]);
   expect(dirs()).toBe(own);
 });
 
