@@ -3453,9 +3453,9 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
         },
       ],
     },
-    // What a push about one question may ring on a device, as it arrives late, twice or out of
-    // order (#2151). Each case feeds its steps, in order, through the client's own push handler;
-    // `rings` says whether that step sounds. `id` is always the question's: a waiting flip or a
+    // What a push about one question does to its notification, as it arrives late, twice or out
+    // of order (#2151): `notifyStep`'s rule, which each client runs with what it remembers.
+    // `effect` is `ring` (shows it with a sound), `quiet` (updates it silently) or `none`. `id` is always the question's: a waiting flip or a
     // snooze names it inside its own item. `restart` is the app or the service worker starting
     // again, so what a device must remember survives it.
     notify: notifyCases(),
@@ -3518,7 +3518,7 @@ type NotifyPush =
   | { kind: "decision" | "answered"; id: string }
   | { kind: "waiting"; id: string; at: string; state: "waiting" | "working" }
   | { kind: "snooze"; id: string; at: string; until: string; due: boolean };
-type NotifyStep = { push: NotifyPush; rings: boolean } | { restart: true };
+type NotifyStep = { push: NotifyPush; effect: "ring" | "quiet" | "none" } | { restart: true };
 
 /** The `notify` cases of rules.json (#2151). */
 function notifyCases(): { name: string; steps: NotifyStep[] }[] {
@@ -3541,71 +3541,84 @@ function notifyCases(): { name: string; steps: NotifyStep[] }[] {
     {
       name: "a question rings once, pushed twice",
       steps: [
-        { push: asked, rings: true },
-        { push: asked, rings: false },
+        { push: asked, effect: "ring" },
+        { push: asked, effect: "none" },
       ],
     },
     {
       name: "a question pushed after its answer stays silent",
       steps: [
-        { push: answered, rings: false },
-        { push: asked, rings: false },
+        { push: answered, effect: "none" },
+        { push: asked, effect: "none" },
       ],
     },
     {
       name: "an answer still counts after a restart",
-      steps: [{ push: answered, rings: false }, { restart: true }, { push: asked, rings: false }],
+      steps: [
+        { push: answered, effect: "none" },
+        { restart: true },
+        { push: asked, effect: "none" },
+      ],
     },
     {
       name: "a waiting flip after the answer stays silent",
       steps: [
-        { push: asked, rings: true },
-        { push: answered, rings: false },
-        { push: flip("1", "waiting"), rings: false },
+        { push: asked, effect: "ring" },
+        { push: answered, effect: "none" },
+        { push: flip("1", "waiting"), effect: "none" },
       ],
     },
     {
       name: "a snooze's return after the answer stays silent",
       steps: [
-        { push: asked, rings: true },
-        { push: snooze(false), rings: false },
-        { push: answered, rings: false },
-        { push: snooze(true), rings: false },
+        { push: asked, effect: "ring" },
+        { push: snooze(false), effect: "none" },
+        { push: answered, effect: "none" },
+        { push: snooze(true), effect: "none" },
       ],
     },
     {
       name: "a snooze's return pushed twice rings once",
       steps: [
-        { push: asked, rings: true },
-        { push: snooze(false), rings: false },
-        { push: snooze(true), rings: true },
+        { push: asked, effect: "ring" },
+        { push: snooze(false), effect: "none" },
+        { push: snooze(true), effect: "ring" },
         { restart: true },
-        { push: snooze(true), rings: false },
+        { push: snooze(true), effect: "none" },
       ],
     },
     {
       name: "the same waiting flip pushed twice rings once",
       steps: [
-        { push: asked, rings: true },
-        { push: flip("1", "waiting"), rings: true },
+        { push: asked, effect: "ring" },
+        { push: flip("1", "waiting"), effect: "ring" },
         { restart: true },
-        { push: flip("1", "waiting"), rings: false },
+        { push: flip("1", "waiting"), effect: "none" },
       ],
     },
     {
       name: "an older flip after a newer one changes nothing",
       steps: [
-        { push: asked, rings: true },
-        { push: flip("2", "waiting"), rings: true },
-        { push: flip("1", "working"), rings: false },
-        { push: flip("3", "waiting"), rings: false },
+        { push: asked, effect: "ring" },
+        { push: flip("2", "waiting"), effect: "ring" },
+        { push: flip("1", "working"), effect: "none" },
+        { push: flip("3", "waiting"), effect: "quiet" },
+      ],
+    },
+    {
+      name: "a flip back to working is quiet, and the next to waiting rings",
+      steps: [
+        { push: asked, effect: "ring" },
+        { push: flip("1", "waiting"), effect: "ring" },
+        { push: flip("2", "working"), effect: "quiet" },
+        { push: flip("3", "waiting"), effect: "ring" },
       ],
     },
     {
       name: "a flip that comes before its question shows it",
       steps: [
-        { push: flip("1", "working"), rings: true },
-        { push: asked, rings: false },
+        { push: flip("1", "working"), effect: "ring" },
+        { push: asked, effect: "none" },
       ],
     },
   ];
