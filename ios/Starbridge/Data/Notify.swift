@@ -111,7 +111,9 @@ enum Notify {
      */
     static func sealingKey(_ secrets: Secrets) -> SymmetricKey? {
         guard let sk = secrets.boxSk.flatMap({ try? fromB64($0) }), sk.count == 32 else { return nil }
-        return HKDF<SHA256>.deriveKey(inputKeyMaterial: SymmetricKey(data: sk), info: Data("starbridge/ios/notification-seal/v1".utf8), outputByteCount: 32)
+        // HMAC of a fixed label under the secret key: a key of its own for this one use.
+        let mac = HMAC<SHA256>.authenticationCode(for: Data("starbridge/ios/notification-seal/v1".utf8), using: SymmetricKey(data: sk))
+        return SymmetricKey(data: Data(mac))
     }
 
     /** What a seal covers: the item, its category and the words shown, each length-prefixed. */
