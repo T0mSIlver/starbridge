@@ -101,6 +101,7 @@ jobs:
                 image --quiet --platform linux/amd64 --scanners vuln --format json \
                 "ghcr.io/t0msilver/starbridge-$image:$rev" > "$RUNNER_TEMP/$image.json"
               name="$image at ${rev:0:8} ($where)"
+              .github/scan-report.sh trivy "$name" < "$RUNNER_TEMP/$image.json" >> "$RUNNER_TEMP/all.md"
               .github/scan-report.sh trivy-blocking "$name" < "$RUNNER_TEMP/$image.json" >> "$RUNNER_TEMP/blocking.md"
             done
           done
@@ -114,6 +115,8 @@ jobs:
           OUTCOME: ${{ steps.scan.outcome }}
         run: |
           found=$(cat "$RUNNER_TEMP/blocking.md" 2>/dev/null || true)
+          # The rest of what Trivy found, folded under the fixable findings.
+          [ -z "$found" ] || found=$(printf '%s\n\n<details><summary>Everything Trivy found</summary>\n\n%s\n</details>' "$found" "$(cat "$RUNNER_TEMP/all.md")")
           [ "$OUTCOME" = success ] || found="The scan itself failed; see the run."
           .github/scan-issue.sh image-scan "Image scan: fixable high or critical vulnerabilities" \
             "Trivy found these in the images starbridge.run and staging serve. Rebuilding the image picks up Debian's fixes; a package's fix needs a dependency update." "$found" fail
