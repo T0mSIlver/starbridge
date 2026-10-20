@@ -86,13 +86,14 @@ workflow when one is blown. The window loads a stand-in page there, so the netwo
 numbers. The Mac Mini column is main 12df3fee on the owner's Mac Mini (2026-10-09), with the same
 script: a real Mac uses more memory than the runner, so its budget is 400 MB, while CI gates at
 350 MB (owner's call, keeping the updater's ~23 MB). The runner column spans 104 runs from
-2026-10-08 to 10-11; a job on a slow runner takes about twice as long throughout, so the time budgets
-sit just above the slowest run (#1119).
+2026-10-08 to 10-11, except the warm open's; a job on a slow runner takes about twice as long
+throughout, so the cold start budget sits just above the slowest run (#1119), and the warm open's
+1.6 times above it (#2136).
 
 | | Budget | Runner | Mac Mini M2 |
 |---|---|---|---|
 | Cold start: process start to the window's first painted frame (median of 13 launches after a first) | 1000 ms | 272–982 ms, median 452 | 258–260 ms |
-| Warm open: the hidden window to its next frame, as from the menu bar (median of 9) | 80 ms | 7–72 ms, median 29 | 15 ms |
+| Warm open: the hidden window to its next frame, as from the menu bar, timed in the page (median of 9) | 80 ms | 26–50 ms, median 39 (15 runs, 2026-10-20, #2136) | 15 ms (timed in the main process, 2026-10-09) |
 | Idle memory: every process's working set, page loaded | 350 MB on the runner, 400 MB on a Mac | 304–310 MB | 371–378 MB |
 | Download: the largest DMG | 140 MB | 133–134 MB | 134 MB |
 | Tab switch: click to the frame painting the new page, warm, with no request for the page (`test/stack.ts`) | 100 ms | 29–33 ms | 26–40 ms, behind a 55 ms round trip; 80–97 ms before (#1072) |

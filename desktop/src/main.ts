@@ -591,12 +591,16 @@ function showWindow(): void {
   // After the window: bringing the Dock icon back is slow, and the window need not wait for it.
   app.dock?.show();
   paintBadge();
-  // From the click to the next frame the page draws: how fast a warm open feels.
+  // From the click to the next frame the page draws: how fast a warm open feels. The page reads
+  // the time on the clock both processes share, so the answer's trip back here, the noisiest
+  // part on a shared runner and no part of the open, is not counted (#2136).
   if (timing && win.webContents.getURL())
     win.webContents
-      .executeJavaScript("new Promise((r) => requestAnimationFrame(() => r(1)))")
-      .then(() => {
-        mark("opened", { ms: Math.round(performance.now() - from) });
+      .executeJavaScript(
+        "new Promise((r) => requestAnimationFrame(() => r(performance.timeOrigin + performance.now())))",
+      )
+      .then((at: number) => {
+        mark("opened", { ms: Math.round(at - performance.timeOrigin - from) });
         // Hidden again, so the next launch of test/perf.ts measures a warm open too.
         setTimeout(() => win?.hide(), 300);
       })

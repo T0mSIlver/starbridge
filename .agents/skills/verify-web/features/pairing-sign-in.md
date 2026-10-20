@@ -18,7 +18,7 @@ code. A browser that signs in again binds to its device without pairing.
 ## How to get to it (user POV)
 
 - The landing page's "Sign in with GitHub".
-- The empty inbox's "Add a device"; Settings, Devices, Add a device.
+- The empty inbox's "Type a code instead"; Settings, Devices, Add a device.
 - A pairing link `/pair#<code>` printed by `starbridge pair`.
 
 ## Driving it with drive.ts

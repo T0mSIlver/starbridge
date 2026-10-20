@@ -1113,14 +1113,14 @@ function NoMachine() {
     <div className={s.noMachine}>
       <h2 className="t-heading">Add a machine</h2>
       <p className={`t-small ${s.noMachineText}`}>
-        Install Starbridge on each machine that runs your agents, then enter the pairing code from
-        your terminal.
+        Install Starbridge on each machine that runs your agents. Setup prints a link: open it and
+        approve the machine.
       </p>
       <InstallBox setup />
-      {/* Where the pairing code goes, one tap away (#1367). */}
+      {/* Where the pairing code goes, one tap away (#1367), for a link that opens elsewhere (#2140). */}
       <div>
         <Link href="/settings/devices/add?machine" className={`t-meta ${ui.btn} ${ui.sm}`}>
-          Add a device
+          Type a code instead
         </Link>
       </div>
       <p className={`t-small ${s.noMachineText}`}>

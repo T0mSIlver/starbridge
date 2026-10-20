@@ -78,7 +78,7 @@ try {
   const home = join(tmp, "machine");
   const pair = cli("pair", ["pair", "--name", "devbox"], home);
   const code = (await pair.waitFor(/Pairing code: (\S+)/))[1] as string;
-  await p.getByRole("link", { name: "Add a device" }).click();
+  await p.getByRole("link", { name: "Type a code instead" }).click();
   await p.getByLabel("Pair a machine or device").fill(code);
   await p.getByRole("button", { name: "Check code" }).click();
   await p.getByRole("button", { name: "Approve" }).click();

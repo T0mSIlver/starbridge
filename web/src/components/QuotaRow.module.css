@@ -52,10 +52,12 @@
   white-space: nowrap;
 }
 
-/* A long state and its reset share a narrow column by wrapping, the reset kept right (#168). */
+/* A long state and its reset share a narrow column by wrapping, the reset kept right (#168).
+   Every digit as wide as the next, so whether they wrap does not hang on the time (#2135). */
 .bottom {
   flex-wrap: wrap;
   row-gap: 0;
+  font-variant-numeric: tabular-nums;
 }
 
 .reset {
@@ -190,6 +192,12 @@
   .groupComfy .top,
   .groupComfy .bottom {
     display: contents;
+  }
+
+  /* Its own columns keep the table from wrapping, and tabular digits would need a wider reset
+     column than "Monthly credits" leaves at 1280 px (#2135). */
+  .groupComfy .bottom {
+    font-variant-numeric: normal;
   }
 
   .groupComfy .row > *,
