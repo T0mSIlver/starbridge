@@ -60,3 +60,26 @@ test("a language server's address counts only on loopback, at a port a server ca
   ])
     expect([a, onLoopback(a)]).toEqual([a, false]);
 });
+
+test("a line that hands ask a file to read stays in the sandbox, or asks the owner (L3)", () => {
+  const ctx = testCtx();
+  const decide = (line: string) => {
+    ctx.lines.length = 0;
+    hookPreTool(
+      ctx,
+      JSON.stringify({ toolCall: { name: "run_command", args: { CommandLine: line } } }),
+      { agent: "antigravity" },
+    );
+    return (JSON.parse(ctx.lines[0] ?? "{}") as { decision?: string }).decision;
+  };
+  expect(decide("starbridge ask --question ok --option ok --context 'see the log'")).toBe("allow");
+  for (const line of [
+    "starbridge ask --question ok --option ok --context-file /home/u/.ssh/id_ed25519",
+    "starbridge ask --question ok --context-file=~/.aws/credentials",
+    "starbridge ask --input ~/.config/x.json",
+    "starbridge ask --question ok --image /home/u/secret.png",
+    `starbridge ask --question ok "--context-file" /etc/passwd`,
+    `starbridge ask --question ok --con"text-fi"le /etc/passwd`,
+  ])
+    expect([line, decide(line)]).toEqual([line, "force_ask"]);
+});
