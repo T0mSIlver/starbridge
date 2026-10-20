@@ -194,6 +194,12 @@
     display: contents;
   }
 
+  /* Its own columns keep the table from wrapping, and tabular digits would need a wider reset
+     column than "Monthly credits" leaves at 1280 px (#2135). */
+  .groupComfy .bottom {
+    font-variant-numeric: normal;
+  }
+
   .groupComfy .row > *,
   .groupComfy .top > *,
   .groupComfy .bottom > * {

@@ -338,7 +338,7 @@ size:
   settings-label-narrow: 160 # the same from 1100 px; under it, each name sits over its box
   quota-provider: 200 # the provider's column on the Quotas table
   quota-table-from: 840 # the Quotas page's own width from which it is one table
-  quota-reset: 136 # the Quotas table's reset column: its longest time, "tomorrow 10:59 PM" in tabular digits, fits (#2135)
+  quota-reset: 128 # the Quotas table's reset column: its longest time, "tomorrow 10:59 PM", fits
   # Quota meters. The pace tick and the overrun's red cap stand `s1` beyond
   # the track on each side; the overrun is hatched at -45°, `tick`-wide
   # stripes every `hatch`.

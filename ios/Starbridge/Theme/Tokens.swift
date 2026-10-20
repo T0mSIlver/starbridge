@@ -167,7 +167,7 @@ enum Tokens {
         static let settingsLabelNarrow: CGFloat = 160
         static let quotaProvider: CGFloat = 200
         static let quotaTableFrom: CGFloat = 840
-        static let quotaReset: CGFloat = 136
+        static let quotaReset: CGFloat = 128
         static let track: CGFloat = 10
         static let trackDense: CGFloat = 6
         static let tick: CGFloat = 2
