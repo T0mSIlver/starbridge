@@ -799,7 +799,7 @@ struct NoMachine: View {
                 Label("Scan a QR code", systemImage: "qrcode.viewfinder")
             }
             .primaryButton()
-            Button("Other ways to add a device", action: addDevice)
+            Button("Type a code instead", action: addDevice)
                 .type(Tokens.Typography.action)
                 .frame(minHeight: Tokens.Sizes.tap)
             Link("Windows, Homebrew and npm", destination: URL(string: "https://starbridge.run/docs")!)

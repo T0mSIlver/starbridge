@@ -525,7 +525,7 @@ private fun NoMachine(install: String, onScan: (String) -> Unit, onAddDevice: ()
             Text("Scan a QR code", style = StarbridgeTheme.type.action)
         }
         TextButton(onClick = onAddDevice, modifier = Modifier.heightIn(min = Sizes.tap)) {
-            Text("Other ways to add a device", style = StarbridgeTheme.type.action)
+            Text("Type a code instead", style = StarbridgeTheme.type.action)
         }
         TextButton(onClick = { openLink(context, INSTALL_DOCS) }, modifier = Modifier.heightIn(min = Sizes.tap)) {
             Text("Windows, Homebrew and npm", style = StarbridgeTheme.type.action)
