@@ -140,7 +140,15 @@ export function writeRemotePlugin(sys: Home, roots: { starbridge: string; mod: s
   writeFileSync(join(next, INVENTORY), `${JSON.stringify(filesUnder(next), null, 2)}\n`);
   // Only the files setup wrote last time go: a file the owner put in the folder stays.
   removeWritten(dir, written(dir));
-  cpSync(next, dir, { recursive: true, force: true });
+  // The manifest goes last: `remotePluginCurrent` reads its version, so an interrupted copy
+  // leaves a plugin the next setup rebuilds.
+  const manifest = join(".claude-plugin", "plugin.json");
+  cpSync(next, dir, {
+    recursive: true,
+    force: true,
+    filter: (from) => relative(next, from) !== manifest,
+  });
+  cpSync(join(next, manifest), join(dir, manifest), { force: true });
   rmSync(next, { recursive: true, force: true });
 }
 
