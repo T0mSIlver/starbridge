@@ -153,6 +153,8 @@ data class Saved(
      * machine, which then asks nothing: Devices shows them no check code (#1329).
      */
     val scannedMachines: List<String> = emptyList(),
+    /** What pushes did to each question, by id, newest last ([notifyStep], #2151). */
+    val notified: Map<String, Notified> = emptyMap(),
 )
 
 /**

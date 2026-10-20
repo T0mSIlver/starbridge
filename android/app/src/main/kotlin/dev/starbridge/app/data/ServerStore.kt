@@ -1150,8 +1150,10 @@ class ServerStore(
             kinds.find { kind in it.pushes }?.onPush(kind, id, p)
             return@withLock
         }
-        // Nothing in this push is verified, so it only takes the notification down; what
-        // was answered is read from the server's signed items on the next sync.
+        // Nothing in this push is verified, so it only takes the notification down, and keeps
+        // a late push of the item from ringing (#2151); what was answered is read from the
+        // server's signed items on the next sync.
+        persist(saved.notifying(id, NotifyEvent.Closed).first)
         if (!promptKind.cancelNotification(id)) alerts.cancel(id)
         if (inFront) {
             try {

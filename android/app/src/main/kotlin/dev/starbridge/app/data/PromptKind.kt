@@ -115,7 +115,9 @@ internal class PromptKind(
         val byId = saved.prompts.associateBy { it.body.id }.toMutableMap()
         val added = take(item, answeredAt, byId)
         keep(byId)
-        if (added != null && added.answeredAt == null) alerts.prompt(toUi(added))
+        // A notice for a prompt this phone has not seen yet: its push may still come (#2151).
+        if (kind == "settled") (open(item)?.body as? Settled)?.let { persist(saved.notifying(it.itemId, NotifyEvent.Closed).first) }
+        if (added != null && added.answeredAt == null && saved.notified[added.body.id]?.closed != true) alerts.prompt(toUi(added))
     }
 
     /** Keeps a week of prompts, the log's span, as the server does. */

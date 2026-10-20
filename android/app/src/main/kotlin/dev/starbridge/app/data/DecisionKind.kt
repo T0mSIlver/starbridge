@@ -644,7 +644,8 @@ internal class DecisionKind(
     override suspend fun onPush(kind: String, id: String, push: JsonObject) {
         when (kind) {
             "decision" -> {
-                if (saved.decisions.any { it.body.id == id }) return
+                // Kept already, or closed by a push that came first (#2151).
+                if (saved.decisions.any { it.body.id == id } || saved.notified[id]?.closed == true) return
                 // Fetched later than the push: another device may have answered meanwhile.
                 val (item, answeredAt) = core.pushed("decision", id, push)
                 // A machine paired since the last sync is not in the cached chain yet.
@@ -652,7 +653,10 @@ internal class DecisionKind(
                 val (from, _, text) = open(item) ?: return
                 val saved1 = saved(item, SavedDecision(from, text, answeredAt))
                 persist(saved.copy(decisions = saved.decisions + saved1))
-                if (answeredAt == null) alerts.decision(toUi(saved1))
+                if (answeredAt != null) return
+                val (next, effect) = saved.notifying(id, NotifyEvent.Asked)
+                persist(next)
+                if (effect == NotifyEffect.Ring) alerts.decision(toUi(saved1))
             }
             "waiting" -> {
                 // Pushed when the agent flips: to waiting re-notifies once, back to working moves
@@ -662,11 +666,16 @@ internal class DecisionKind(
                 core.catchUp(item)
                 val (from, body) = open(item) ?: return
                 body as Waiting
+                if (saved.notified[body.decisionId]?.closed == true) return
                 val d = saved.decisions.find { it.body.id == body.decisionId } ?: fetchDecision(body.decisionId) ?: return
                 val updated = wait(d, from, body) ?: return
-                persist(saved.copy(decisions = saved.decisions.map { if (it === d) updated else it }))
-                if (d.answeredAt == null && d.answer == null && saved.outbox.none { it.decisionId == d.body.id } && !isSnoozed(d) && (d.waiting == "waiting") != (updated.waiting == "waiting")) {
-                    alerts.decision(toUi(updated), silent = updated.waiting != "waiting")
+                // To waiting rings, back to working moves the notification quietly; a flip that
+                // comes before its question rings as the question (#2151).
+                val (next, effect) = saved.copy(decisions = saved.decisions.map { if (it === d) updated else it })
+                    .notifying(d.body.id, NotifyEvent.Flip(body.at, body.state))
+                persist(next)
+                if (effect != NotifyEffect.None && d.answeredAt == null && d.answer == null && saved.outbox.none { it.decisionId == d.body.id } && !isSnoozed(d)) {
+                    alerts.decision(toUi(updated), silent = effect == NotifyEffect.Quiet)
                 }
             }
             "snooze" -> {
@@ -692,7 +701,12 @@ internal class DecisionKind(
                     // Near or past its time, its return showed the question or will, maybe by a
                     // server clock ahead of this one: cancelling would hide it.
                     if (Instant.now().isBefore(until.minus(WAKE_SKEW))) alerts.cancel(body.decisionId)
-                } else if (updated.answeredAt == null && updated.answer == null) alerts.back(toUi(updated))
+                } else if (updated.answeredAt == null && updated.answer == null) {
+                    // Once per return: the same push delivered again rings nothing (#2151).
+                    val (next, effect) = saved.notifying(body.decisionId, NotifyEvent.Return(body.at, due = true))
+                    persist(next)
+                    if (effect == NotifyEffect.Ring) alerts.back(toUi(updated))
+                }
             }
         }
     }
