@@ -21,7 +21,10 @@ import dev.starbridge.app.ui.theme.StarbridgeTheme
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import dev.starbridge.app.ui.devices.sameCode
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -115,5 +118,14 @@ class DevicesTest {
         compose.onAllNodesWithText("Last 4 characters").assertCountEquals(0)
         compose.onNodeWithText("Approve", useUnmergedTree = true).performClick()
         assertEquals(1, approved)
+    }
+
+    /** A scanned QR hands over the whole link; a typed code, the bare code (#2183). */
+    @Test fun aScannedLinkOrTypedCodeNamesTheCodeItIs() {
+        val code = "0123-4567-89AB-CDEF-GHJK-MN01"
+        assertTrue(sameCode("https://starbridge.run/pair#$code", code))
+        assertTrue(sameCode("0123456789abcdefghjkmn01", code))
+        assertFalse(sameCode("https://starbridge.run/pair#0123-4567-89AB-CDEF-GHJK-MN02", code))
+        assertFalse(sameCode("not a code", code))
     }
 }
