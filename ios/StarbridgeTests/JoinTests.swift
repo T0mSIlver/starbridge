@@ -14,6 +14,10 @@ final class MemoryVault: Vault, @unchecked Sendable {
         aside[tag] = secrets
         secrets = Secrets()
     }
+    func wipe() throws {
+        secrets = Secrets()
+        aside = [:]
+    }
 }
 
 /**

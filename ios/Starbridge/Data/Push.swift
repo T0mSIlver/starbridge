@@ -159,7 +159,11 @@ enum AnswerRefresh {
 
 /** Routes notifications for the app: pushes, taps and buttons. */
 final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
-    lazy var store = Store(deviceName: UIDevice.current.name)
+    lazy var store: Store = {
+        // Before the store reads the keys, whichever asks for it first.
+        Store.forgetAfterReinstall()
+        return Store(deviceName: UIDevice.current.name)
+    }()
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
         UNUserNotificationCenter.current().delegate = self

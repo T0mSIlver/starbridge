@@ -25,6 +25,8 @@ protocol Vault {
     func save(_ secrets: Secrets) throws
     /** Keeps the secrets under `tag` and empties the item: they go with a saved state set aside. */
     func setAside(_ tag: String) throws
+    /** Deletes the secrets and every copy set aside: signing out, or a reinstall's first launch. */
+    func wipe() throws
 }
 
 struct VaultError: Error, CustomStringConvertible {
@@ -103,6 +105,16 @@ struct KeychainVault: Vault {
             status = SecItemAdd(query.merging(attributes) { $1 } as CFDictionary, nil)
         }
         guard status == errSecSuccess else { throw VaultError(status: status) }
+    }
+
+    /**
+     * Every item of this service, in whichever access group: the secrets, the copies set aside
+     * (`secrets.unreadable-<tag>`) and an earlier build's outside the group.
+     */
+    func wipe() throws {
+        let q: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service]
+        let status = SecItemDelete(q as CFDictionary)
+        guard status == errSecSuccess || status == errSecItemNotFound else { throw VaultError(status: status) }
     }
 
     func setAside(_ tag: String) throws {

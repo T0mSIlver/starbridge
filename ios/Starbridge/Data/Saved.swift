@@ -179,6 +179,16 @@ struct Disk {
         }
     }
 
+    /** Deletes the saved state and every copy set aside as `saved.json.unreadable-<tag>`. */
+    func wipe() throws {
+        let dir = url.deletingLastPathComponent()
+        let name = url.lastPathComponent
+        let names = (try? FileManager.default.contentsOfDirectory(atPath: dir.path)) ?? []
+        for n in names where n == name || n.hasPrefix(name + ".unreadable-") {
+            try FileManager.default.removeItem(at: dir.appendingPathComponent(n))
+        }
+    }
+
     func save(_ saved: Saved) throws {
         try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         try JSONEncoder().encode(saved).write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
