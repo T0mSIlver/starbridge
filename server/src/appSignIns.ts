@@ -52,7 +52,7 @@ class Charged<V extends { at: number }> implements Iterable<[string, V]> {
     if (mine >= PER_ADDRESS) return false;
     if (this.items.size >= this.max) {
       let most: Set<string> | undefined;
-      for (const keys of this.byAddress.values()) if (!most || keys.size > most.size) most = keys;
+      for (const keys of this.byAddress.values()) if (!most || keys.size >= most.size) most = keys;
       if (!most || most.size <= Math.max(mine, KEPT_ALWAYS)) return false;
       const oldest = most.values().next().value;
       if (oldest !== undefined) this.delete(oldest);

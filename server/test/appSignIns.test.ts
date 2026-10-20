@@ -49,14 +49,33 @@ test("a flood from many addresses fills the maps, and a new address still signs 
   expect(s.start("late", "t", "1.2.3.4", T0 + 1)).toBe(true);
   expect(s.passed("code-late", "late", false, "1.2.3.4", T0 + 1)).toBe(true);
   expect(s.challengeOf("code-late", T0 + 1)).toMatchObject({ challenge: "late" });
-  // The flood's oldest entry made the room.
-  expect(s.challengeOf("code0", T0 + 1)).toBeUndefined();
+  // Addresses tie at the most: the newest one's oldest entry made the room, not the earliest's.
+  const newest = Math.floor((MAX - 1) / PER_ADDRESS) * PER_ADDRESS;
+  expect(s.challengeOf(`code${newest}`, T0 + 1)).toBeUndefined();
+  expect(s.challengeOf("code0", T0 + 1)).toMatchObject({ challenge: "c0" });
   expect(s.challengeOf("code1", T0 + 1)).toMatchObject({ challenge: "c1" });
   // A flooding address gets no more for itself.
   expect(s.start("again", "t", flooder(PER_ADDRESS), T0 + 1)).toBe(false);
   s.sweep(T0 + APP_SIGN_IN_MS);
   expect(s.challengeOf("code1", T0 + APP_SIGN_IN_MS)).toBeUndefined();
   expect(s.start("after", "t", flooder(0), T0 + APP_SIGN_IN_MS)).toBe(true);
+});
+
+test("an address above the always-kept share, ahead of a flood that ties it, keeps its code", () => {
+  const s = new AppSignIns();
+  for (let i = 0; i < 6; i++) s.passed(`p${i}`, `pc${i}`, false, "203.0.113.7", T0);
+  // The flood's addresses keep 6 each, as many as the person does.
+  for (let i = 0; i < MAX - 6; i++)
+    s.passed(
+      `code${i}`,
+      `c${i}`,
+      false,
+      `10.1.${Math.floor(i / 6 / 256)}.${Math.floor(i / 6) % 256}`,
+      T0,
+    );
+  expect(s.start("late", "t", "1.2.3.4", T0 + 1)).toBe(true);
+  expect(s.passed("code-late", "late", false, "1.2.3.4", T0 + 1)).toBe(true);
+  expect(s.challengeOf("p0", T0 + 1)).toMatchObject({ challenge: "pc0" });
 });
 
 test("a flood never drops a person's live code, whoever asks for room", () => {
