@@ -888,6 +888,7 @@ final class Store {
         quotasListed = false
         persist(Saved(server: saved.server), Secrets())
         try? FileManager.default.removeItem(at: SavedImage.directory)
+        NotifiedFile.standard.delete()
         // The property's observer stores the defaults, so the keys go after it.
         quotaSettings = QuotaSettings()
         QuotaSettings.forget()

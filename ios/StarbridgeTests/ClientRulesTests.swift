@@ -80,6 +80,22 @@ final class ClientRulesTests: XCTestCase {
         }
     }
 
+    /** notify.ts's rule, step by step; a restart is a round trip through JSON (#2151). */
+    func testNotify() throws {
+        for c in rules["notify"]!.array! {
+            var kept = Notified()
+            for (i, step) in c["steps"]!.array!.enumerated() {
+                if step["restart"] != nil {
+                    kept = try JSONDecoder().decode(Notified.self, from: JSONEncoder().encode(kept))
+                    continue
+                }
+                let (next, effect) = Order.notifyStep(kept, NotifyRulesCase.event(step["push"]!))
+                XCTAssertEqual(effect.rawValue, step["effect"]!.string!, "\(c["name"]!.string!), step \(i)")
+                kept = next
+            }
+        }
+    }
+
     func testOptionsRecommendedFirst() throws {
         for c in rules["options"]!.array! {
             var body: JSONObject = [
