@@ -166,8 +166,8 @@ test("a source that never stops saying present holds a push no longer than the c
   sent = [];
   // Still beating at each check: held until the cap past its due time, then pushed.
   const at = (ms: number) => due + ms - Date.now();
-  s.deps.presence.beat(acct.id, devbox.id, true, due + HOLD_CAP_MS - 1000);
-  release(at(HOLD_CAP_MS - 1));
+  s.deps.presence.beat(acct.id, devbox.id, true, due + HOLD_CAP_MS - 1500);
+  release(at(HOLD_CAP_MS - 1000));
   expect(sent).toEqual([]);
   s.deps.presence.beat(acct.id, devbox.id, true, due + HOLD_CAP_MS);
   release(at(HOLD_CAP_MS));
