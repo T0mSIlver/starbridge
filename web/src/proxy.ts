@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { cacheOrigin, DESKTOP_COOKIE, SESSION_COOKIE } from "@/lib/landing";
+import { cacheOrigin, DESKTOP_COOKIE, hasSession } from "@/lib/landing";
 
 /**
  * The page's Content-Security-Policy, with a fresh nonce for each request. Next reads the nonce
@@ -49,7 +49,7 @@ function landing(request: NextRequest) {
   // Signed in: the app. Back from a failed sign-in: its reason. The desktop app: sign-in. A client
   // navigation: Next's data.
   if (
-    request.cookies.has(SESSION_COOKIE) ||
+    hasSession(request.cookies) ||
     request.cookies.has(DESKTOP_COOKIE) ||
     request.nextUrl.searchParams.has("signin")
   )

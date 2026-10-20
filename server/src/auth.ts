@@ -2,12 +2,48 @@ import type { Database } from "bun:sqlite";
 import { timingSafeEqual } from "node:crypto";
 import { CLIENT_HEADER, type ClientName, parseClientHeader, toB64 } from "@starbridge/protocol";
 import type { Context, MiddlewareHandler } from "hono";
-import { getCookie } from "hono/cookie";
+import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import { HTTPException } from "hono/http-exception";
 import type { Env } from "./env";
 
 export const SESSION_COOKIE = "sb_session";
 const SESSION_DAYS = 365;
+
+/**
+ * A cookie's name on this server: `__Host-` first on https, a name a browser takes only from this
+ * very host, Secure and on path `/`, so no sibling subdomain can set it (security audit
+ * 2026-10-20). A server on plain http keeps the bare name, which a browser refuses the prefix for.
+ */
+export function cookieName(c: Context<Env>, name: string): string {
+  return c.var.config.secureCookies ? `__Host-${name}` : name;
+}
+
+/**
+ * The session token a request's cookie carries. The bare `sb_session` of a session started before
+ * the `__Host-` name counts only when no `__Host-` one came, and `requireCaller` moves it over.
+ */
+export function cookieSession(c: Context<Env>): { token: string; bare: boolean } | undefined {
+  const named = getCookie(c, cookieName(c, SESSION_COOKIE));
+  if (named) return { token: named, bare: false };
+  const bare = getCookie(c, SESSION_COOKIE);
+  return bare ? { token: bare, bare: true } : undefined;
+}
+
+export function setSessionCookie(c: Context<Env>, token: string): void {
+  setCookie(c, cookieName(c, SESSION_COOKIE), token, {
+    httpOnly: true,
+    secure: c.var.config.secureCookies,
+    sameSite: "Lax",
+    path: "/",
+    maxAge: SESSION_DAYS * 86_400,
+  });
+}
+
+/** Signs this browser out: both names go, the bare one of an older session too. */
+export function deleteSessionCookie(c: Context<Env>): void {
+  deleteCookie(c, cookieName(c, SESSION_COOKIE), { path: "/", secure: c.var.config.secureCookies });
+  if (c.var.config.secureCookies) deleteCookie(c, SESSION_COOKIE, { path: "/" });
+}
 
 export type Caller =
   | {
@@ -82,7 +118,7 @@ function clientName(c: Context): ClientName | undefined {
 export function identify(c: Context<Env>): Caller | undefined {
   const db = c.var.db;
   const sent = bearer(c);
-  const token = sent ?? getCookie(c, SESSION_COOKIE);
+  const token = sent ?? cookieSession(c)?.token;
   if (!token) return undefined;
   const hash = hashToken(token);
   if (token.startsWith("sbm_")) {
@@ -133,7 +169,7 @@ export function setSuspended(db: Database, account: string, on: boolean): boolea
 
 /** The caller's session belonged to a device the directory has since revoked. */
 function wasRevoked(c: Context<Env>): boolean {
-  const token = bearer(c) ?? getCookie(c, SESSION_COOKIE);
+  const token = bearer(c) ?? cookieSession(c)?.token;
   if (!token) return false;
   return !!c.var.db
     .query("SELECT 1 FROM revoked_sessions WHERE token_hash = ? AND expires_at >= ?")
@@ -163,6 +199,14 @@ export function requireCaller(...needs: Need[]): MiddlewareHandler<Env> {
     // already given; they write nothing. Its devices are untouched, so the owner can still
     // answer, settle and revoke (#785).
     refuseSuspended(c, caller);
+    // A session started before the `__Host-` name moves to it, once, and the bare cookie goes.
+    if (caller.role === "device" && !bearer(c) && c.var.config.secureCookies) {
+      const cookie = cookieSession(c);
+      if (cookie?.bare) {
+        setSessionCookie(c, cookie.token);
+        deleteCookie(c, SESSION_COOKIE, { path: "/" });
+      }
+    }
     c.set("caller", caller);
     c.var.usage.seen(caller, c.var.client);
     await next();
