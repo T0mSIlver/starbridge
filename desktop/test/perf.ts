@@ -16,14 +16,30 @@ import { createInterface } from "node:readline";
 
 const DESKTOP = resolve(import.meta.dirname, "..");
 
-// From GitHub's macos-15 runner (arm64), packaged, 104 runs 2026-10-08 to 10-11: cold medians
-// 272–982 ms (median 452, 95th percentile 685). A whole job can land on a slow runner, every
-// launch about twice as long: 8eb7902a, a version bump, measured 982 ms (#1119). The cold budget
-// sits just above the slowest run: a typical run fails once cold start grows 2.2 times. The warm
-// budget's numbers are on `warmMs`.
+// From GitHub's macos-15 runner (arm64), packaged. A whole job can land on a slow runner, every
+// launch up to twice as long: cold medians of 433–889 ms in 16 runs on 2026-10-20 to 10-21, 272–982 ms in
+// 104 runs 2026-10-08 to 10-11, and 1270 ms once (#2180, #1119). Such a run is slow throughout, so
+// the cold start is budgeted as a ratio to a span the app does not own (`coldRatio`), which slows
+// with it. The warm budget's numbers are on `warmMs`.
 export const BUDGETS = {
-  /** Process start to the window's first painted frame, median of the launches after the first. */
-  coldMs: 1000,
+  /**
+   * Process start to the window's first painted frame over process start to the app's first line
+   * (the `main` mark: Electron's own boot and the bundle's load), median of the launches after
+   * the first. Both spans stretch with the runner, so the ratio holds: 4.56–5.32 over 16 runs
+   * whose cold medians ran 433–889 ms (2.05 times apart), where the `main` mark ran 80–219 ms.
+   * 7 sits 1.3 times above the slowest run; the app's own part (the ratio less 1, 3.6–4.3 in those
+   * runs) can grow 1.4 times before it fails even on the slowest of them, and 1.6 times on a
+   * typical one, on any runner.
+   */
+  coldRatio: 7,
+  /**
+   * Process start to the first painted frame, median of the launches after the first. What the
+   * ratio cannot see is Electron's boot and the bundle's load getting slower, since `main` is
+   * their yardstick: this ceiling, 2.2 times the slowest of 16 runs and 1.6 times the slowest of
+   * 94 earlier ones, catches those once they are large. Before #2180 it was 1000, and a run on a
+   * slow runner failed it (1270 ms) with nothing in the app changed.
+   */
+  coldMs: 2000,
   /**
    * Showing the hidden window to its next frame, as from the menu bar, median of `OPENS`, timed
    * in the page. Timed in the main process until #2136, it counted the page's answer coming
@@ -100,12 +116,16 @@ function launch(dir: string) {
 const median = (xs: number[]) => [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)] as number;
 
 const cold: number[] = [];
+const coldRatios: number[] = [];
 const warm: number[] = [];
 let memory = 0;
 for (let i = 0; i < RUNS; i++) {
   const dir = mkdtempSync(join(tmpdir(), "sb-perf-"));
   const run = launch(dir);
-  cold.push((await run.next("painted")).at);
+  const painted = (await run.next("painted")).at;
+  cold.push(painted);
+  // `main` is printed before `painted`, so it is in the marks by now.
+  coldRatios.push(painted / (run.marks.find((m) => m.name === "main")?.at ?? Number.NaN));
   if (i === 0) {
     // Hidden a second after loading; a second launch hands over and shows it.
     await new Promise((r) => setTimeout(r, 1_500));
@@ -135,12 +155,13 @@ const downloadMb = Math.max(
 );
 
 const result = {
+  coldRatio: Math.round(median(coldRatios.slice(1)) * 100) / 100,
   coldMs: median(cold.slice(1)),
   warmMs: median(warm),
   memoryMb: memory,
   downloadMb,
 };
-console.log(JSON.stringify({ result, budgets: BUDGETS, cold, warm, dmgs }));
+console.log(JSON.stringify({ result, budgets: BUDGETS, cold, coldRatios, warm, dmgs }));
 for (const [k, budget] of Object.entries(BUDGETS)) {
   const got = result[k as keyof typeof result];
   if (k === "downloadMb" && dmgs.length === 0) continue;
