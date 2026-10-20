@@ -120,8 +120,8 @@
   iPhone (#1370); on the web, which has no scanner, the text says to open the link setup prints
   and approve, 2 taps against 4 and Enter by code (#2140, card d_genius-body-merry). Then Type a
   code instead on every client, for a link that opens elsewhere. Each opens the
-  same Add a device as Devices, with the same words. `starbridge pair` prints the link before the
-  QR code and the code. Android's text says to scan the QR code from
+  same Add a device as Devices, with the same words. `starbridge pair` prints the link right under the
+  pairing code, before the QR code. Android's text says to scan the QR code from
   the terminal: a tester pointed his camera at it, which reads no app's code (#795), then had to
   find the scanner under Settings, then Devices. The text gives only the instruction (owner's
   rule): the screen needs no why.
