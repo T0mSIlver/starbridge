@@ -88,10 +88,11 @@ export async function pair(
   // The first line is part of the CLI's contract (CONTRACT.md); the link sits alone on its line
   // so it does not wrap in an 80-column terminal.
   ctx.out(`Pairing code: ${formatPairingCode(code)}`);
+  // The link first: opened in a signed-in browser, it pairs with one tap (#2140).
+  ctx.out(`  Open  ${link}`);
   // Text with no scheme, which a camera hands to no app: only the app's scanner reads the check key.
-  ctx.out("  Scan this with the Starbridge app:");
+  ctx.out("  Or scan this with the Starbridge app:");
   for (const line of terminalQr(machineQrText(server, code, checkKey))) ctx.out(line);
-  ctx.out(`  No app? Open  ${link}`);
   ctx.out(
     "  Or type the code under Add a device in the app or web page. It expires in 10 minutes.",
   );

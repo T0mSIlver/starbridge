@@ -780,11 +780,15 @@ async function main() {
   await page.getByRole("button", { name: "Turn on notifications" }).waitFor({ state: "detached" });
   pushOn.add(page);
 
-  step("approve `starbridge pair` from the empty inbox's Add a device (#1367)");
+  step("approve `starbridge pair` from the empty inbox's Type a code instead (#1367, #2140)");
   const machineHome = join(tmp, "machine");
   const pair = cli("pair", ["pair", "--name", "devbox"], machineHome);
   const code = (await pair.waitFor(/Pairing code: (\S+)/))[1] as string;
-  await follow(page, page.getByRole("link", { name: "Add a device" }), "/settings/devices/add");
+  await follow(
+    page,
+    page.getByRole("link", { name: "Type a code instead" }),
+    "/settings/devices/add",
+  );
   await page.getByLabel("Pair a machine or device").fill(code);
   await page.getByRole("button", { name: "Check code" }).click();
   await page.getByRole("button", { name: "Approve" }).click();

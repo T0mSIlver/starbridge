@@ -117,8 +117,11 @@
 - **The empty inbox pairs the first machine** (#610, #1367). While the account has no machine,
   the inbox shows "Add a machine" with the install command in place of "Nothing needs you", and
   under it the way to pair the machine that setup then shows: Scan a QR code on Android and the
-  iPhone (#1370), then Other ways to add a device, and Add a device on the web, which has no scanner. Each opens the
-  same Add a device as Devices, with the same words. Android's text says to scan the QR code from
+  iPhone (#1370); on the web, which has no scanner, the text says to open the link setup prints
+  and approve, 2 taps against 4 and Enter by code (#2140, card d_genius-body-merry). Then Type a
+  code instead on every client, for a link that opens elsewhere. Each opens the
+  same Add a device as Devices, with the same words. `starbridge pair` prints the link before the
+  QR code and the code. Android's text says to scan the QR code from
   the terminal: a tester pointed his camera at it, which reads no app's code (#795), then had to
   find the scanner under Settings, then Devices. The text gives only the instruction (owner's
   rule): the screen needs no why.
