@@ -9,6 +9,7 @@ on:
       - "demo/smoke/**"
       - "scripts/licenses/**"
       - ".github/workflows/android.yml"
+      - ".github/android-system-image.sh"
   pull_request:
     paths:
       - "android/**"
@@ -16,6 +17,7 @@ on:
       - "demo/smoke/**"
       - "scripts/licenses/**"
       - ".github/workflows/android.yml"
+      - ".github/android-system-image.sh"
   workflow_dispatch:
 
 concurrency:
@@ -222,6 +224,9 @@ jobs:
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
+      # Installs the system image, again when the download is corrupt (#2181).
+      - name: Install the system image
+        run: .github/android-system-image.sh
       - uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
         timeout-minutes: 15
         env:
