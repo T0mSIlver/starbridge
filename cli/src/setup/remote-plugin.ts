@@ -11,13 +11,14 @@
 import {
   cpSync,
   existsSync,
+  lstatSync,
   mkdirSync,
   readdirSync,
   readFileSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
-import { delimiter, isAbsolute, join, relative, resolve } from "node:path";
+import { delimiter, dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { VERSION } from "../version";
 import {
   claudeDir,
@@ -97,6 +98,36 @@ const BEFORE_INVENTORY = [
   ].map((f) => join("hooks", f)),
 ];
 
+/**
+ * The first of `dir` and the folders between it and each of `files` that is a symlink, else
+ * undefined: setup writes and removes nothing through a link the owner made (#2160).
+ */
+function linkIn(dir: string, files: string[]): string | undefined {
+  const isLink = (p: string) => {
+    try {
+      return lstatSync(p).isSymbolicLink();
+    } catch {
+      return false;
+    }
+  };
+  if (isLink(dir)) return dir;
+  for (const file of files)
+    for (let d = dirname(join(dir, file)); d !== dir && d !== dirname(d); d = dirname(d))
+      if (isLink(d)) return d;
+  return undefined;
+}
+
+/** The symlink that stops setup from rebuilding or removing the plugin, if the owner made one. */
+export function remotePluginLink(sys: Home): string | undefined {
+  const dir = remotePluginDir(sys);
+  return linkIn(dir, [...written(dir), join("hooks", "x"), join(".claude-plugin", "x")]);
+}
+
+/** What to say, and do, about a link `remotePluginLink` found. */
+export function linkAdvice(link: string): string {
+  return `${link} is a symbolic link, and Starbridge writes and removes nothing through one. Replace it with a real folder or delete it, then run \`starbridge setup --refresh\``;
+}
+
 /** Whether `file` is a path strictly inside `dir`. */
 function inside(dir: string, file: string): boolean {
   const rel = relative(dir, resolve(dir, file));
@@ -121,6 +152,8 @@ function written(dir: string): string[] {
  */
 export function writeRemotePlugin(sys: Home, roots: { starbridge: string; mod: string }) {
   const dir = remotePluginDir(sys);
+  const link = remotePluginLink(sys);
+  if (link) throw new Error(linkAdvice(link));
   const parts = [join(roots.starbridge, "hooks"), join(roots.mod, "hooks")];
   for (const need of [
     join(parts[0] as string, "remote.sh"),
@@ -260,7 +293,10 @@ export function removeRemotePlugin(sys: Home): string[] {
     writeSettings(sys, s);
     done.push(`Took ${dir} out of ${DIRS_VAR}.`);
   }
-  if (existsSync(dir)) {
+  const link = remotePluginLink(sys);
+  if (link) {
+    done.push(`Left ${dir} as it is: ${linkAdvice(link)}.`);
+  } else if (existsSync(dir)) {
     const kept = removeWritten(dir, written(dir));
     done.push(kept.length === 0 ? `Removed the ${REMOTE_PLUGIN} plugin.` : removedLine(dir, kept));
   }

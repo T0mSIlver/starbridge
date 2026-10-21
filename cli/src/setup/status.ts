@@ -20,9 +20,11 @@ import { antigravityState, codexSkill, opencodeState, PI_PACKAGE, piPackage } fr
 import { autoUpdate, hasClaude, PLUGINS, pluginState } from "./plugins";
 import {
   desktopReaches,
+  linkAdvice,
   REMOTE_PLUGIN,
   remotePluginCurrent,
   remotePluginDir,
+  remotePluginLink,
   remotePluginLoaded,
 } from "./remote-plugin";
 import { lingering, serviceState } from "./service";
@@ -216,7 +218,7 @@ export async function status(sys: Sys): Promise<number> {
       }
       if (desktopReaches(sys) || remotePluginLoaded(sys))
         out(
-          `  ${REMOTE_PLUGIN}: ${remotePluginCurrent(sys) ? `loaded from ${remotePluginDir(sys)}` : remotePluginLoaded(sys) ? "outdated (`starbridge setup --refresh` rebuilds it)" : "not loaded (`starbridge setup --refresh` adds it)"}`,
+          `  ${REMOTE_PLUGIN}: ${remotePluginLink(sys) ? linkAdvice(remotePluginLink(sys) as string) : remotePluginCurrent(sys) ? `loaded from ${remotePluginDir(sys)}` : remotePluginLoaded(sys) ? "outdated (`starbridge setup --refresh` rebuilds it)" : "not loaded (`starbridge setup --refresh` adds it)"}`,
         );
     } else if (id === "codex") {
       const state = codexSkill(sys);

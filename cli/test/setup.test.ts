@@ -56,6 +56,7 @@ import {
 import { markedSkill } from "../src/setup/marker";
 import opencodeFiles from "../src/setup/opencode-files.js";
 import { marketplaceText } from "../src/setup/plugins";
+import { remotePluginLink, writeRemotePlugin } from "../src/setup/remote-plugin";
 import {
   installService,
   removeService,
@@ -2094,6 +2095,46 @@ test("uninstall does not follow a symlink the owner put in starbridge-remote (#2
 
   await uninstallAgent(m.sys, "claude");
   expect(readFileSync(join(elsewhere, "remote.sh"), "utf8")).toBe("mine");
+});
+
+test("uninstall and refresh leave starbridge-remote alone when it, or a folder in it, is a symlink (#2166)", async () => {
+  const root = join(import.meta.dir, "../..");
+  const roots = { starbridge: join(root, "plugin"), mod: join(root, "mod") };
+  const plugin = (m: Awaited<ReturnType<typeof machine>>) =>
+    join(m.home, ".claude", "starbridge-remote");
+  const owner = (m: Awaited<ReturnType<typeof machine>>) => {
+    mkdirSync(join(m.home, ".claude", "remote"));
+    const elsewhere = join(m.home, "elsewhere");
+    mkdirSync(join(elsewhere, "hooks"), { recursive: true });
+    writeFileSync(join(elsewhere, "hooks", "remote.sh"), "mine");
+    return elsewhere;
+  };
+
+  // The folder itself is a link to the owner's own: its files carry Starbridge's names.
+  const a = await machine();
+  const target = owner(a);
+  symlinkSync(target, plugin(a), "junction");
+  writeFileSync(a.settings, JSON.stringify({ env: { CLAUDE_CODE_PLUGIN_DIRS: plugin(a) } }));
+  expect(() => writeRemotePlugin(a.sys, roots)).toThrow("symbolic link");
+  await uninstallAgent(a.sys, "claude");
+  expect(readFileSync(join(target, "hooks", "remote.sh"), "utf8")).toBe("mine");
+  expect(readdirSync(join(target, "hooks"))).toEqual(["remote.sh"]);
+  expect(a.ctx.lines.join("\n")).toContain("is a symbolic link");
+  expect(remotePluginLink(a.sys)).toBe(plugin(a));
+
+  // A folder in it is a link: a refresh would write through it, an uninstall would delete through it.
+  const b = await machine();
+  const elsewhere = owner(b);
+  mkdirSync(join(plugin(b), ".claude-plugin"), { recursive: true });
+  symlinkSync(join(elsewhere, "hooks"), join(plugin(b), "hooks"), "junction");
+  writeFileSync(
+    join(plugin(b), ".claude-plugin", "written.json"),
+    JSON.stringify(["hooks/remote.sh"]),
+  );
+  expect(() => writeRemotePlugin(b.sys, roots)).toThrow("symbolic link");
+  await uninstallAgent(b.sys, "claude");
+  expect(readFileSync(join(elsewhere, "hooks", "remote.sh"), "utf8")).toBe("mine");
+  expect(readdirSync(join(elsewhere, "hooks"))).toEqual(["remote.sh"]);
 });
 
 test("where Claude desktop starts sessions over SSH, setup loads starbridge-remote from the installed plugins, and uninstall takes it out (#2107)", async () => {
