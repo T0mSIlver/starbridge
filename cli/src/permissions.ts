@@ -135,23 +135,28 @@ const AUTH_HEADER = new RegExp(
 const URL_PASSWORD = /\b([a-z][a-z0-9+.-]*:\/\/[A-Za-z0-9_.~%!*+-]*:)[A-Za-z0-9_.~%!*+=,-]+@/gi;
 
 /**
- * Where a secret's value names a place: `user@host`, `user@host:path`, `user@host/path`, as scp,
- * rsync, git and a URL's authority read them. The secret is the part before the `@`; from it on,
- * the value says where the command sends or fetches, which the owner must read, since
- * `git push https://TOKEN=[redacted] --all` could go anywhere (security audit 2026-10-21). A host
- * is dotted, or `localhost`: a password holding an `@` keeps its tail hidden.
+ * Where a secret's value names a place, `user@host:path` or a URL's authority, the secret is
+ * the part before its `@` and the rest says where the command sends or fetches, which the owner
+ * must read: `git push https://TOKEN=[redacted] --all` could go anywhere (security audit
+ * 2026-10-21). scp, rsync, git and a URL take the last `@` before the first `/` as the split, and
+ * nothing after that `/` can be an `@` in a user, so this is where the host starts, whatever it
+ * looks like: an alias, a bare name, a decimal or IPv6 address. A password holding an `@` shows
+ * its tail to the owner's own devices, which costs less than a hidden host.
  */
-const LOCATOR = /@(?:(?:[A-Za-z0-9-]+\.)+[A-Za-z0-9-]+|localhost)(?::[0-9]{1,5})?(?:[:/]|$)/;
+function placeStart(value: string): number {
+  const slash = value.indexOf("/");
+  return value.lastIndexOf("@", slash < 0 ? value.length : slash);
+}
 
 /**
- * `value`, quoted or not, with its secret redacted and a place it names kept (`LOCATOR`); a value
- * that names none goes whole, quotes included, as before.
+ * `value`, quoted or not, with its secret redacted and a place it names kept (`placeStart`); a
+ * value that names none goes whole, quotes included, as before.
  */
 function redactedValue(value: string): string {
   const quote = value[0] === '"' || value[0] === "'" ? value[0] : "";
   const inner = quote ? value.slice(1, -1) : value;
-  const at = inner.search(LOCATOR);
-  return at > 0 ? `${quote}${REDACTED}${inner.slice(at)}${quote}` : REDACTED;
+  const at = placeStart(inner);
+  return at >= 0 ? `${quote}${REDACTED}${inner.slice(at)}${quote}` : REDACTED;
 }
 
 /**
