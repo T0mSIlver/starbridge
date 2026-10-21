@@ -138,6 +138,8 @@ extension Store {
     func backgroundPush(_ userInfo: [AnyHashable: Any]) async {
         guard let p = Notify.payload(userInfo), let id = Notify.item(p) else { return }
         if Notify.closes(p) { await Self.removeDelivered(about: id) }
+        // A push of the question that comes later rings nothing (#2151).
+        if ["answered", "settled"].contains(p["kind"]?.string) { NotifiedFile.standard.step(id, .closed, member: saved.me?.id) }
         try? await serial { try await self.sync() }
     }
 }
@@ -159,7 +161,11 @@ enum AnswerRefresh {
 
 /** Routes notifications for the app: pushes, taps and buttons. */
 final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
-    lazy var store = Store(deviceName: UIDevice.current.name)
+    lazy var store: Store = {
+        // Before the store reads the keys, whichever asks for it first.
+        Store.forgetAfterReinstall()
+        return Store(deviceName: UIDevice.current.name)
+    }()
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
         UNUserNotificationCenter.current().delegate = self
@@ -191,14 +197,15 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
     }
 
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
-        guard let p = Notify.payload(response.notification.request.content.userInfo), let id = Notify.item(p) else { return }
-        // A button answers only the question whose own category carries it: a push can't point a tap at another.
-        guard Notify.accepts(response.actionIdentifier, category: response.notification.request.content.categoryIdentifier, item: id) else { return }
+        let content = response.notification.request.content
+        guard let p = Notify.payload(content.userInfo), let id = Notify.item(p) else { return }
         let text = (response as? UNTextInputNotificationResponse)?.userText
-        await handle(response.actionIdentifier, id: id, kind: p["kind"]?.string, text: text)
+        await handle(response.actionIdentifier, id: id, kind: p["kind"]?.string, text: text, delivered: Delivered(content))
     }
 
-    private func handle(_ action: String, id: String, kind: String?, text: String?) async {
+    private func handle(_ action: String, id: String, kind: String?, text: String?, delivered: Delivered) async {
+        // A button answers only the question this iPhone built the notification from: a push can't point a tap at another.
+        guard Notify.accepts(action, delivered, item: id, key: Notify.sealingKey(store.secrets)) else { return }
         switch action {
         case "reply":
             let text = text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""

@@ -42,6 +42,27 @@ class DiskTest {
     }
 
     @Test
+    fun wipeDeletesEveryCopyAndTheVaultKey() {
+        // Set aside at an unreadable launch, half written, and current: sign-out takes them all (L5).
+        val dir = Files.createTempDirectory("starbridge").toFile()
+        var forgot = false
+        val vault = object : Vault {
+            override fun wrap(plain: ByteArray) = plain
+            override fun unwrap(wrapped: ByteArray) = wrapped
+            override fun forget() { forgot = true }
+        }
+        val disk = Disk(dir, vault)
+        disk.save(Saved("https://starbridge.run"))
+        disk.save(Secrets(session = "s"))
+        for (name in listOf("state.bin.unreadable-1", "secrets.bin.unreadable-1", "secrets.bin.tmp")) File(dir, name).writeText("x")
+        disk.putImage("i_1", byteArrayOf(1))
+        File(dir, "other").writeText("not ours")
+        assertTrue(disk.wipe())
+        assertEquals(listOf("other"), dir.listFiles()!!.map { it.name })
+        assertTrue(forgot)
+    }
+
+    @Test
     fun keepsTheSignedTextWithFieldsThisAppDoesNotKnow() {
         // A newer machine's field survives a save: a later app reads it from the same record (#476).
         val text = """{"v":1,"id":"d_1","to":["phone"],"createdAt":"2026-10-06T10:00:00Z","question":"Ship?","context":"","options":["Yes","No"],"recommended":"Yes","source":{"machine":"devbox","project":"p","session":"s"},"later":{"x":1}}"""

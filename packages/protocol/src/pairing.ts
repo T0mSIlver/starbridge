@@ -78,6 +78,17 @@ export function parsePairingCode(text: string): PairingCode {
 }
 
 /**
+ * Whether `typed` is the last group of `code`, read as `parsePairingCode` reads a code: any case,
+ * no dashes or spaces, O for 0, I and L for 1. A device request that came by link is approved only
+ * once the owner types it from the new device's screen, which a link's sender can't show them
+ * (#2183).
+ */
+export function endsPairingCode(code: PairingCode, typed: string): boolean {
+  const chars = typed.toUpperCase().replace(/[\s-]/g, "").replace(/O/g, "0").replace(/[IL]/g, "1");
+  return chars.length === 4 && chars === code.secret.slice(-4);
+}
+
+/**
  * The link `starbridge pair` prints, and a device's QR code carries: `<server>/pair#<code>`.
  * Opened in a browser, it shows the web page with the code filled in; the fragment never reaches
  * the server.

@@ -39,13 +39,16 @@ test("a key shown but not yet saved posts nothing, and another tab's start-over 
   const first = await device.prepareFirstDevice(account, "Tab A");
   // Another tab, or this one reloaded, finds no account yet and offers a new key.
   expect(await device.boot()).toEqual({ state: "first-device", account, unsaved: "Tab A" });
-  await expect(first.commit()).rejects.toThrow("Another tab started the setup over");
+  await expect(first.commit("Tab A")).rejects.toThrow("Another tab started the setup over");
   expect(await api.directory()).toHaveLength(0);
 
   const second = await device.prepareFirstDevice(account, "Tab B");
   expect(second.recoveryKey).not.toBe(first.recoveryKey);
-  await second.commit();
+  // The name typed beside the key, not the one the key was made with, is signed in (#2139).
+  await second.commit("Work laptop");
   expect((await device.boot()).state).toBe("ready");
+  expect((await store.get("device", account))?.name).toBe("Work laptop");
+  expect(JSON.stringify(await api.directory())).toContain("Work laptop");
 });
 
 test("a first device cut off before it pinned keeps its keys when the server lists no devices (#371)", async () => {

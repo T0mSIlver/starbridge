@@ -30,7 +30,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import mockwebserver3.MockResponse
+import mockwebserver3.Dispatcher
 import mockwebserver3.MockWebServer
+import mockwebserver3.RecordedRequest
 import okhttp3.OkHttpClient
 import org.junit.After
 import org.junit.rules.TemporaryFolder
@@ -60,7 +62,12 @@ class JoinLinkTest {
     }
 
     @Test fun anOfferedLinkEndsWithTheSetupItCameIn() {
-        http.enqueue(MockResponse(200, okhttp3.Headers.headersOf("content-type", "application/json"), "{}"))
+        // Every call gets an answer: the demo check (#2089) and the sign-out's logout both reach
+        // the server, and a second call left unanswered held sign-out 10 s (#2143).
+        http.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest) =
+                MockResponse(200, okhttp3.Headers.headersOf("content-type", "application/json"), "{}")
+        }
         http.start()
         val sodium = Sodium(LazySodiumJava(SodiumJava()))
         val envelopes = Envelopes(sodium)

@@ -3,7 +3,7 @@
 // server, the built web page, the real CLI and Firefox.
 import { type ChildProcess, spawn, spawnSync } from "node:child_process";
 import { generateKeyPairSync } from "node:crypto";
-import { cpSync, mkdtempSync, rmSync } from "node:fs";
+import { cpSync, existsSync, mkdtempSync, rmSync } from "node:fs";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -64,7 +64,7 @@ export function start(
   name: string,
   cmd: string,
   args: string[],
-  opts: { cwd?: string; env?: object } = {},
+  opts: { cwd?: string; env?: object; quiet?: boolean } = {},
 ) {
   const p = spawn(cmd, args, {
     cwd: opts.cwd ?? ROOT,
@@ -77,7 +77,8 @@ export function start(
   const feed = (chunk: Buffer) => {
     const text = chunk.toString();
     out += text;
-    for (const line of text.split("\n")) if (line.trim()) console.log(`[${name}] ${line}`);
+    if (!opts.quiet)
+      for (const line of text.split("\n")) if (line.trim()) console.log(`[${name}] ${line}`);
     for (const w of [...waiters]) {
       const m = out.match(w.re);
       if (m) {
@@ -115,10 +116,19 @@ export function start(
   };
 }
 
-/** The real CLI, as a machine whose config lives in `home`. */
-export function cli(name: string, args: string[], home: string) {
+/** The real CLI, as a machine whose config lives in `home`, on the server at `server`. */
+export function cli(
+  name: string,
+  args: string[],
+  home: string,
+  opts: { server?: string; quiet?: boolean } = {},
+) {
   return start(name, "bun", ["run", join(ROOT, "cli/src/main.ts"), ...args], {
-    env: { STARBRIDGE_CONFIG_DIR: home, STARBRIDGE_SERVER: `http://localhost:${PORTS.server}` },
+    env: {
+      STARBRIDGE_CONFIG_DIR: home,
+      STARBRIDGE_SERVER: opts.server ?? `http://localhost:${PORTS.server}`,
+    },
+    quiet: opts.quiet,
   });
 }
 
@@ -135,50 +145,116 @@ const vapid = (() => {
   return { publicKey: point.toString("base64url"), privateKey: d ?? "" };
 })();
 
-/** Starts the stand-ins, the server on a fresh database and the built web page. */
-export async function boot() {
+export interface BootOptions {
+  /** The origin the server puts in its links: the web page's own, or a proxy in front of it. */
+  origin?: string;
+  /** The server's port, when it must not change between runs (desktop/test/switch.ts). */
+  serverPort?: number;
+  /** Gives the server Web Push keys, as the web's run needs; the desktop's runs go without. */
+  push?: boolean;
+  /** Builds the web page first; false serves the last build when there is one. */
+  build?: boolean;
+  /** Keeps the processes' output off the console. */
+  quiet?: boolean;
+}
+
+/** The web page built against `server`, laid out as web/Dockerfile copies it. */
+export function buildWeb(server: string, quiet = false) {
+  if (
+    spawnSync("bun", ["run", "build"], {
+      cwd: WEB,
+      env: { ...process.env, STARBRIDGE_SERVER: server },
+      stdio: quiet ? "ignore" : "inherit",
+    }).status
+  )
+    throw new Error("web build failed");
+  cpSync(join(WEB, ".next/static"), join(STANDALONE, ".next/static"), { recursive: true });
+  cpSync(join(WEB, "public"), join(STANDALONE, "public"), { recursive: true });
+}
+
+const STANDALONE = join(WEB, ".next/standalone/web");
+
+/** Serves the built web page on `PORTS.web`, sending `/v1` to `server`. */
+export async function serveWeb(server: string, quiet = false) {
+  await free(PORTS.web);
+  const web = start("web", "node", [join(STANDALONE, "server.js")], {
+    env: { STARBRIDGE_SERVER: server, PORT: String(PORTS.web), HOSTNAME: "127.0.0.1" },
+    quiet,
+  });
+  await web.waitFor(/Ready|started server/i);
+  return web;
+}
+
+/**
+ * Starts the stand-ins, the server on a fresh database and the built web page: the one setup
+ * of the whole product the web's run and the desktop's runs share.
+ */
+export async function boot(opts: BootOptions = {}) {
+  const { quiet } = opts;
   await free(PORTS.github, PORTS.push);
   const services = start("services", "bun", [join(WEB, "e2e/services.ts")], {
     env: { GITHUB_PORT: PORTS.github, PUSH_PORT: PORTS.push },
+    quiet,
   });
   await services.waitFor(/"event":"ready"/);
-  await free(PORTS.server);
+  const port = opts.serverPort ?? PORTS.server;
+  if (port === PORTS.server) await free(PORTS.server);
   const server = start("server", "bun", ["run", "server/src/main.ts"], {
     env: {
-      PORT: PORTS.server,
+      PORT: port,
       DB_PATH: join(tmp, "starbridge.db"),
-      PUBLIC_URL: ORIGIN,
+      PUBLIC_URL: opts.origin ?? ORIGIN,
       GITHUB_CLIENT_ID: "stub",
       GITHUB_CLIENT_SECRET: "stub",
       GITHUB_AUTHORIZE_URL: `http://localhost:${PORTS.github}/login/oauth/authorize`,
       GITHUB_TOKEN_URL: `http://localhost:${PORTS.github}/login/oauth/access_token`,
       GITHUB_API_URL: `http://localhost:${PORTS.github}`,
-      VAPID_PUBLIC_KEY: vapid.publicKey,
-      VAPID_PRIVATE_KEY: vapid.privateKey,
-      VAPID_SUBJECT: "mailto:e2e@starbridge.invalid",
-      ALLOW_PRIVATE_PUSH_ENDPOINTS: "1",
+      ...(opts.push === false
+        ? {}
+        : {
+            VAPID_PUBLIC_KEY: vapid.publicKey,
+            VAPID_PRIVATE_KEY: vapid.privateKey,
+            VAPID_SUBJECT: "mailto:e2e@starbridge.invalid",
+            ALLOW_PRIVATE_PUSH_ENDPOINTS: "1",
+          }),
     },
+    quiet,
   });
   await server.waitFor(/starbridge server on port/);
-  const env = { STARBRIDGE_SERVER: `http://localhost:${PORTS.server}` };
-  if (
-    spawnSync("bun", ["run", "build"], {
-      cwd: WEB,
-      env: { ...process.env, ...env },
-      stdio: "inherit",
-    }).status
-  )
-    throw new Error("web build failed");
-  // The standalone server, laid out as web/Dockerfile copies it.
-  const standalone = join(WEB, ".next/standalone/web");
-  cpSync(join(WEB, ".next/static"), join(standalone, ".next/static"), { recursive: true });
-  cpSync(join(WEB, "public"), join(standalone, "public"), { recursive: true });
-  await free(PORTS.web);
-  const web = start("web", "node", [join(standalone, "server.js")], {
-    env: { ...env, PORT: String(PORTS.web), HOSTNAME: "127.0.0.1" },
-  });
-  await web.waitFor(/Ready|started server/i);
-  return { services, server, web };
+  const url = `http://localhost:${port}`;
+  if (opts.build !== false || !existsSync(join(STANDALONE, "server.js"))) buildWeb(url);
+  const web = await serveWeb(url, quiet);
+  return { services, server, web, url };
+}
+
+/**
+ * Plays the owner's browser through a sign-in from `url`: follows each redirect, sending each
+ * origin the cookies it set, as a browser does, until a response that is not a redirect or a
+ * link a browser hands to an app, such as `starbridge://auth`. Returns where it stopped, the
+ * last status and the cookies by origin.
+ */
+export async function followSignIn(url: string) {
+  const jar = new Map<string, Map<string, string>>();
+  let at = url;
+  let status = 0;
+  for (let hops = 0; hops < 20 && /^https?:/.test(at); hops++) {
+    const origin = new URL(at).origin;
+    const cookies = jar.get(origin) ?? new Map<string, string>();
+    jar.set(origin, cookies);
+    const res = await fetch(at, {
+      redirect: "manual",
+      headers: { cookie: [...cookies].map(([k, v]) => `${k}=${v}`).join("; ") },
+    });
+    status = res.status;
+    for (const c of res.headers.getSetCookie()) {
+      const [k = "", ...v] = (c.split(";")[0] ?? "").split("=");
+      if (k.trim()) cookies.set(k.trim(), v.join("="));
+    }
+    const location = res.headers.get("location");
+    if (!location) break;
+    at = new URL(location, at).toString();
+  }
+  return { at, status, cookies: jar };
 }
 
 export async function browser() {

@@ -12,6 +12,9 @@ import javax.crypto.spec.GCMParameterSpec
 interface Vault {
     fun wrap(plain: ByteArray): ByteArray
     fun unwrap(wrapped: ByteArray): ByteArray
+
+    /** Deletes the key: nothing it wrapped reads again, wherever a copy is left. The next wrap makes a new one. */
+    fun forget() {}
 }
 
 /**
@@ -34,6 +37,10 @@ class KeystoreVault : Vault {
                 .build(),
         )
         return generator.generateKey()
+    }
+
+    override fun forget() {
+        KeyStore.getInstance("AndroidKeyStore").apply { load(null) }.deleteEntry(alias)
     }
 
     /** The blob's format: this byte, the IV's length, the IV, then the ciphertext and its tag. */

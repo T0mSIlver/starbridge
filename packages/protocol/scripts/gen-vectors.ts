@@ -21,6 +21,7 @@ import {
   DEFAULT_QUOTA_ALERTS,
   type Directory,
   encodeCrockford,
+  endsPairingCode,
   entryHash,
   forgetHeads,
   formatPairingCode,
@@ -59,6 +60,7 @@ import {
   quotaRunningOut,
   quotaState,
   RECOVERY,
+  RETENTION_DAYS,
   ready,
   recoverEntry,
   recoveryConfirmEntry,
@@ -1281,6 +1283,19 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
       { input: "0123-4567-89AB-CDEF-GHJK-MNPU", expect: "bad-encoding" },
       { input: "0123-4567", expect: "bad-encoding" },
     ],
+    lastGroup: [
+      {
+        note: "endsPairingCode(code, typed): the code's last group, read as parse reads a code (#2183)",
+        code: formatPairingCode(code),
+        typed: code.secret.slice(-4).toLowerCase(),
+        expect: endsPairingCode(code, code.secret.slice(-4).toLowerCase()),
+      },
+      { code: "0123-4567-89AB-CDEF-GHJK-MN01", typed: " mn-oi ", expect: true },
+      { code: "0123-4567-89AB-CDEF-GHJK-MN01", typed: "GHJK", expect: false },
+      { code: "0123-4567-89AB-CDEF-GHJK-MN01", typed: "MN0", expect: false },
+      { code: "0123-4567-89AB-CDEF-GHJK-MN01", typed: "KMN01", expect: false },
+      { code: "0123-4567-89AB-CDEF-GHJK-MN01", typed: "", expect: false },
+    ],
     links: [
       {
         note: "pairingLink(server, code); codeFromLink takes what follows #, or the whole text",
@@ -1632,6 +1647,11 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
       "Markdown link",
       "Read [the PR](https://github.com/acme/shop/pull/41) first; [no](javascript:x) stays.",
     ],
+    [
+      "a link's words show only on GitHub and a Claude artifact",
+      "[github.com/acme/app/pull/12](https://evil.example/x) and [the plan](https://claude.ai/artifact/abc) and [the wiki](https://github.com/acme/app/wiki)",
+    ],
+    ["http is no link", "[docs](http://docs.example/a) and http://docs.example/b stay as typed."],
     ["fenced code", "Before:\n```bash\n  make build\n\n  make e2e\n```\nAfter."],
     ["unclosed fence", "Error:\n```\nTypeError: x is undefined"],
     ["empty fence", "```\n```\nText"],
@@ -1885,10 +1905,10 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
       expect: { label: "example.com" },
     },
     {
-      name: "another host with a title",
+      name: "another host with a title: host and path",
       url: "https://play.google.com/console/u/1/developers/1/app/2/publishing",
       title: "Play Console",
-      expect: { label: "Play Console · play.google.com" },
+      expect: { label: "play.google.com/console/u/1/developers/…" },
     },
     {
       name: "a long path is clipped",
@@ -2010,24 +2030,30 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
       expect: { icon: "pull", label: "i#1" },
     },
     { name: "empty host: as written", url: "https://%", expect: { label: "https://%" } },
-    // A title on another host than GitHub's is followed by the host (#1722).
+    // A title shows only on GitHub and a Claude artifact; another host shows itself (#1722, #2203).
     {
       name: "a GitHub reference as the title of another host",
       url: "https://evil.example/pull/123",
       title: "starbridge#123",
-      expect: { label: "starbridge#123 · evil.example" },
+      expect: { label: "evil.example/pull/123" },
     },
     {
-      name: "a long title gives way to the host",
-      url: "https://docs.example.com/guide",
-      title: "A very long title that would push the host out of the chip",
-      expect: { label: "A very long title th… · docs.example.com" },
+      name: "a host dressed as GitHub's shows whole",
+      url: "https://github.com.evil.example/T0mSIlver/starbridge/pull/1",
+      title: "#1",
+      expect: { label: "github.com.evil.example/T0mSIlver/starb…" },
     },
     {
-      name: "a long host keeps its end",
-      url: "https://github.com.a-very-long-subdomain-chain.evil.example/x",
-      title: "Docs",
-      expect: { label: "Docs · …-subdomain-chain.evil.example" },
+      name: "a GitHub page's title with a bidi override gives way to its path",
+      url: "https://github.com/T0mSIlver/starbridge/wiki",
+      title: "Release notes\u202e",
+      expect: { icon: "github", label: "T0mSIlver/starbridge/wiki" },
+    },
+    {
+      name: "an artifact's title with a zero-width space gives way",
+      url: "https://claude.ai/artifact/abc",
+      title: "Plan\u200b",
+      expect: { icon: "artifact", label: "Claude artifact" },
     },
     {
       name: "a title with a bidi override gives way to host and path",
@@ -3453,6 +3479,12 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
         },
       ],
     },
+    // What a push about one question does to its notification, as it arrives late, twice or out
+    // of order (#2151): `notifyStep`'s rule, which each client runs with what it remembers.
+    // `effect` is `ring` (shows it with a sound), `quiet` (updates it silently) or `none`. `id` is always the question's: a waiting flip or a
+    // snooze names it inside its own item. `restart` is the app or the service worker starting
+    // again, so what a device must remember survives it.
+    notify: notifyCases(),
     // A question's options, the agent's recommended one first (#191), compared by code points. A
     // question with options always names one.
     options: [
@@ -3477,8 +3509,14 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
     ],
   };
 
+  const retention = {
+    note: "Days each retention period lasts on the hosted server (RETENTION_DAYS): the clients keep prompts for a week and runs for a day by these.",
+    days: RETENTION_DAYS,
+  };
+
   return {
     "heads.json": heads,
+    "retention.json": retention,
     "images.json": images,
     "keys.json": keys,
     "directory.json": directory,
@@ -3505,4 +3543,123 @@ if (import.meta.main) {
   for (const [name, value] of Object.entries(await buildVectors())) {
     await Bun.write(new URL(name, dir), render(value));
   }
+}
+
+/** A push in a `notify` case; `id` is the question's. */
+type NotifyPush =
+  | { kind: "decision" | "answered"; id: string }
+  | { kind: "waiting"; id: string; at: string; state: "waiting" | "working" }
+  | { kind: "snooze"; id: string; at: string; until: string; due: boolean };
+type NotifyStep = { push: NotifyPush; effect: "ring" | "quiet" | "none" } | { restart: true };
+
+/** The `notify` cases of rules.json (#2151). */
+function notifyCases(): { name: string; steps: NotifyStep[] }[] {
+  const asked: NotifyPush = { kind: "decision", id: "d1" };
+  const answered: NotifyPush = { kind: "answered", id: "d1" };
+  const flip = (at: string, state: "waiting" | "working"): NotifyPush => ({
+    kind: "waiting",
+    id: "d1",
+    at: `2026-10-12T10:00:0${at}Z`,
+    state,
+  });
+  const snooze = (due: boolean, at = "2026-10-12T10:00:00Z"): NotifyPush => ({
+    kind: "snooze",
+    id: "d1",
+    at,
+    until: "2026-10-12T11:00:00Z",
+    due,
+  });
+  return [
+    {
+      name: "a question rings once, pushed twice",
+      steps: [
+        { push: asked, effect: "ring" },
+        { push: asked, effect: "none" },
+      ],
+    },
+    {
+      name: "a question pushed after its answer stays silent",
+      steps: [
+        { push: answered, effect: "none" },
+        { push: asked, effect: "none" },
+      ],
+    },
+    {
+      name: "an answer still counts after a restart",
+      steps: [
+        { push: answered, effect: "none" },
+        { restart: true },
+        { push: asked, effect: "none" },
+      ],
+    },
+    {
+      name: "a waiting flip after the answer stays silent",
+      steps: [
+        { push: asked, effect: "ring" },
+        { push: answered, effect: "none" },
+        { push: flip("1", "waiting"), effect: "none" },
+      ],
+    },
+    {
+      name: "a snooze's return after the answer stays silent",
+      steps: [
+        { push: asked, effect: "ring" },
+        { push: snooze(false), effect: "none" },
+        { push: answered, effect: "none" },
+        { push: snooze(true), effect: "none" },
+      ],
+    },
+    {
+      name: "a snooze's return pushed twice rings once",
+      steps: [
+        { push: asked, effect: "ring" },
+        { push: snooze(false), effect: "none" },
+        { push: snooze(true), effect: "ring" },
+        { restart: true },
+        { push: snooze(true), effect: "none" },
+      ],
+    },
+    {
+      name: "an older snooze's return after a newer one's rings nothing",
+      steps: [
+        { push: asked, effect: "ring" },
+        { push: snooze(true, "2026-10-12T10:00:05Z"), effect: "ring" },
+        { push: snooze(true), effect: "none" },
+      ],
+    },
+    {
+      name: "the same waiting flip pushed twice rings once",
+      steps: [
+        { push: asked, effect: "ring" },
+        { push: flip("1", "waiting"), effect: "ring" },
+        { restart: true },
+        { push: flip("1", "waiting"), effect: "none" },
+      ],
+    },
+    {
+      name: "an older flip after a newer one changes nothing",
+      steps: [
+        { push: asked, effect: "ring" },
+        { push: flip("2", "waiting"), effect: "ring" },
+        { push: flip("1", "working"), effect: "none" },
+        { push: flip("3", "waiting"), effect: "quiet" },
+      ],
+    },
+    {
+      name: "a flip back to working is quiet, and the next to waiting rings",
+      steps: [
+        { push: asked, effect: "ring" },
+        { push: flip("1", "waiting"), effect: "ring" },
+        { push: flip("2", "working"), effect: "quiet" },
+        { push: flip("3", "waiting"), effect: "ring" },
+      ],
+    },
+    {
+      name: "a flip that comes before its question shows it",
+      steps: [
+        { push: flip("1", "working"), effect: "ring" },
+        { push: asked, effect: "none" },
+      ],
+    },
+  ];
 }

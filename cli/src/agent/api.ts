@@ -6,6 +6,12 @@
 import { createHash } from "node:crypto";
 import { readFileSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
+import {
+  agentSocket,
+  type PortFile,
+  portTarget,
+  configKey as sharedConfigKey,
+} from "../../../mod/hooks/address";
 import { configDir } from "../config";
 
 /**
@@ -20,65 +26,25 @@ export const API_HEADER = "starbridge-api";
 /** Longest `wait` the agent holds a request: under the 30 s the mod's host allows a call. */
 export const MAX_HOLD_SECONDS = 25;
 
-/**
- * The header a client sends with its config folder's `configKey` when it worked out the agent's
- * address from that folder. The agent answers 421 `other-config` when the key is not its own
- * (#1966), so a client never acts as another configuration's machine; a client that sends none,
- * as one named by `$STARBRIDGE_AGENT_SOCKET` or one older than this header, is served.
- */
-export const CONFIG_HEADER = "starbridge-config";
+export { CONFIG_HEADER, isPortFile, type PortFile } from "../../../mod/hooks/address";
 
-/**
- * A short key for config folder `dir`: the first 16 hex digits of the SHA-256 of its path, with
- * runs of `/` as one, no trailing `/`, and on Windows `\` as `/`, so the mod, which builds the
- * path from `$HOME` by hand, gets the same key (mod/hooks/agent.ts). Elsewhere `\` is a
- * character of a name, and two folders must not share a key.
- */
+const sha256 = (text: string) => createHash("sha256").update(text).digest("hex");
+
+/** The `configKey` of config folder `dir` (mod/hooks/address.ts). */
 export function configKey(dir: string, platform: NodeJS.Platform = process.platform): string {
-  const path = (platform === "win32" ? dir.replace(/\\/g, "/") : dir)
-    .replace(/\/+/g, "/")
-    .replace(/(.)\/$/, "$1");
-  return createHash("sha256").update(path).digest("hex").slice(0, 16);
+  return sharedConfigKey(dir, platform === "win32", sha256);
 }
 
-/**
- * Where the agent listens. `$STARBRIDGE_AGENT_SOCKET` wins. On Windows, the port file
- * `agent.port` in the config directory (`PortFile`). Elsewhere, for the default config directory,
- * `$XDG_RUNTIME_DIR/starbridge/agent-<configKey>.sock` when that is set (Linux), else
- * `agent.sock` in the config directory: macOS caps socket paths at 104 bytes, and its config path
- * stays short. The key keeps two homes of one user, which share `$XDG_RUNTIME_DIR`, on their own
- * agents (#1966). Any other config directory (`$STARBRIDGE_CONFIG_DIR`, tests) keeps its socket
- * inside it.
- */
+/** Where the agent of config folder `storeDir` listens (`agentSocket` in mod/hooks/address.ts). */
 export function socketPath(
   env: Record<string, string | undefined>,
   storeDir: string,
   platform: NodeJS.Platform = process.platform,
 ): string {
-  if (env.STARBRIDGE_AGENT_SOCKET) return env.STARBRIDGE_AGENT_SOCKET;
-  if (platform === "win32") return join(storeDir, "agent.port");
   const standard = configDir({ ...env, STARBRIDGE_CONFIG_DIR: undefined });
-  if (env.XDG_RUNTIME_DIR && storeDir === standard)
-    return join(env.XDG_RUNTIME_DIR, "starbridge", `agent-${configKey(storeDir, platform)}.sock`);
-  return join(storeDir, "agent.sock");
+  const key = configKey(storeDir, platform);
+  return agentSocket(env, { path: storeDir, standard, key }, platform === "win32", join);
 }
-
-/**
- * Where an agent on loopback TCP listens, in the file its address names (#552). Node and Bun take
- * a socket path on Windows as a named pipe, which other local users can open, so there the agent
- * listens on 127.0.0.1 and writes this file into the config directory, which only its user can
- * read. `token`, new at each start, never crosses the wire: a call carries a fresh nonce and
- * `proof(token, "client", nonce)`, and the agent answers with `proof(token, "agent", nonce)`, so
- * a process that took the port after the agent stopped learns nothing it can use and cannot
- * answer. An address ending in `.port` names such a file on any platform.
- */
-export interface PortFile {
-  port: number;
-  token: string;
-  pid: number;
-}
-
-export const isPortFile = (address: string) => address.endsWith(".port");
 
 export const NONCE_HEADER = "starbridge-nonce";
 export const PROOF_HEADER = "starbridge-proof";
@@ -94,16 +60,10 @@ export function proof(token: string, role: "client" | "agent", nonce: string): s
 /** The port file at `path`, or undefined when it is missing or not one. */
 export function readPortFile(path: string): PortFile | undefined {
   try {
-    const f = JSON.parse(readFileSync(path, "utf8")) as Partial<PortFile>;
-    if (
-      Number.isInteger(f.port) &&
-      typeof f.token === "string" &&
-      f.token.length >= 32 &&
-      Number.isInteger(f.pid)
-    )
-      return f as PortFile;
-  } catch {}
-  return undefined;
+    return portTarget(readFileSync(path, "utf8"));
+  } catch {
+    return undefined;
+  }
 }
 
 /**

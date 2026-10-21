@@ -16,11 +16,12 @@ data class LinkChip(val icon: LinkIcon?, val label: String)
 /**
  * A link's chip (#971, #1577). A GitHub pull request, issue or discussion reads "#123", a release
  * its tag, a commit its short hash, each led by the repo when it isn't [project], the session's;
- * the icon says what the number is, so the agent's title gives way. Any other link reads as its
- * title, else: a GitHub file its name, a run "Actions run", another GitHub page its path, a
- * Claude artifact "Claude artifact", anything else its host and path. A title on any other
- * host than GitHub's and a Claude artifact's, whose icons name the site, is followed by the
- * host, so an agent cannot dress another site as a GitHub reference (#1722); a link that can't be read shows as written, whatever its title.
+ * the icon says what the number is, so the agent's title gives way. Another GitHub page and a
+ * Claude artifact read as the agent's title, else a GitHub file its name, a run "Actions run",
+ * another GitHub page its path, an artifact "Claude artifact". Any other host shows its host and
+ * path, never the agent's title: only those two sites, whose icons name them, get a chip in the
+ * agent's words, so no title dresses another site as one of them (#1722, #2203). A title with
+ * hidden or reordering characters counts as none. A link that can't be read shows as written.
  */
 fun linkChip(url: String, title: String?, project: String = ""): LinkChip {
     val parts = parseUrl(url) ?: return LinkChip(null, clip(url))
@@ -30,23 +31,11 @@ fun linkChip(url: String, title: String?, project: String = ""): LinkChip {
         val sep = if (gh.ref.startsWith("#")) "" else " "
         return LinkChip(gh.icon, clip(if (same) gh.ref else gh.repo + sep + gh.ref))
     }
-    if (gh != null) return LinkChip(gh.icon, title ?: clip(gh.text))
+    val shown = title?.takeIf { it.isNotEmpty() && !hidden(it) }
+    if (gh != null) return LinkChip(gh.icon, shown ?: clip(gh.text))
     val host = parts.host.removePrefix("www.")
-    val titled = if (title != null && !hidden(title)) withHost(title, host) else ""
-    if (parts.host == "claude.ai" && ARTIFACT.matches(parts.path)) return LinkChip(LinkIcon.Artifact, title ?: "Claude artifact")
-    return LinkChip(null, titled.ifEmpty { clip(host + if (parts.path == "/") "" else parts.path) })
-}
-
-/**
- * "Title · host" in 40 code points: the host keeps its end, which names the site, and at most 30
- * points; the title takes the rest. An empty title gives "", and the chip falls back to its own
- * text.
- */
-private fun withHost(title: String, host: String): String {
-    val points = host.codePointCount(0, host.length)
-    val shown = if (points > 30) "…" + host.substring(host.offsetByCodePoints(0, points - 29)) else host
-    val room = 40 - 3 - shown.codePointCount(0, shown.length)
-    return if (title.isEmpty()) "" else clip(title, room) + " · " + shown
+    if (parts.host == "claude.ai" && ARTIFACT.matches(parts.path)) return LinkChip(LinkIcon.Artifact, shown ?: "Claude artifact")
+    return LinkChip(null, clip(host + if (parts.path == "/") "" else parts.path))
 }
 
 private val GITHUB_HOSTS = setOf("github.com", "www.github.com")

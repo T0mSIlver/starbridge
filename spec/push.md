@@ -64,11 +64,24 @@
   for the app decides whether it shows.
 - **The iPhone treats a push as a hint** (#1756). A payload whose `id`, `re` or `kind` is not
   plain words (`[A-Za-z0-9_-]{1,64}`, `[a-z-]{1,32}`) is dropped, since the id joins a request
-  path. A notification's button acts only when its category is the question's own (`d.<id>`; a
-  prompt's Deny needs `permission`): the server names the category until the extension rewrites
-  it. The extension shows no button for an item the app's saved state says is answered, so a
+  path. A notification's button answers only when its category is the question's own (`d.<id>`)
+  and it carries the extension's seal, an HMAC over the item, category and words shown under a key
+  derived from this iPhone's box secret key (#2184): the server writes the alert, and one the
+  extension never rewrites could put a question's buttons under the server's words. A prompt's
+  Deny needs only `permission`, since the app fetches the prompt before denying. The extension shows no button for an item the app's saved state says is answered, so a
   replayed push cannot offer to answer it again, and it clears the badge the placeholder carried
   when it keeps the placeholder.
+- **A push rings once, and never for a closed question** (#2151). Pushes arrive late, twice
+  or out of order, and a browser stops its idle service worker, so each client keeps, per
+  question and across a restart, what pushes did to it, and runs each push through one rule,
+  `notifyStep` (`packages/protocol/src/notify.ts`, ported to Kotlin and Swift): a question, flip
+  or return pushed after an `answered` or settled push rings nothing; a repeat rings nothing; an
+  older flip changes nothing; a flip that reaches the device before its question shows the
+  question and rings. Each client used its own checks before, and each got a different case
+  wrong. A closed hint is unverified, so it only keeps notifications down, which a hostile server
+  could do anyway by not pushing; verified answer state stays apart. `rules.json`'s `notify`
+  cases hold every client to the rule. The iPhone's notification extension cannot drop an alert,
+  so there a closed question's late push shows quiet and without buttons.
 - Caps (#27, #36, #37): 10 subscriptions a device, 30 an account; 4 pushes in flight and 200
   waiting per account, 10 s each. A push connects to the exact address that passed the
   private-range check, and is sent only if its subscription and device are still active (#260).

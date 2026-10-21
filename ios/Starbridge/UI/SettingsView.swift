@@ -167,7 +167,7 @@ struct SettingsView: View {
             Button("Sign out", role: .destructive) { Task { await store.signOut() } }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("This iPhone deletes its keys and is removed from your devices. Your other devices and machines keep working. If it's your only device, you'll need your recovery key to sign in again.")
+            Text("This iPhone deletes its keys and is removed from your devices. Your other devices and machines keep working. If it's your only device, you'll need your recovery key to sign in again." + Store.unsentWarning(store.saved.outbox.count))
         }
         .deleteAccount(store: store, isPresented: $deleting, text: DeleteAccount.paired)
     }

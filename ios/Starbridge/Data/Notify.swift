@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 import os
 import StarbridgeProtocol
@@ -21,6 +22,36 @@ struct Shown: Equatable, Sendable {
     var actions: [NotificationAction] = []
     /** The app icon's count with this item in it (#1603); nil leaves the badge as it is. */
     var badge: Int?
+    /** The MAC that ties the buttons to these words (`Notify.seal`); nil without buttons. */
+    var seal: String?
+    /** The push as the shared rule takes it (#2151); nil for one the rule leaves alone. */
+    var event: NotifyEvent?
+    /**
+     * Whether the app icon's count takes this item; nil goes by `quiet`. A repeat the rule quiets
+     * still needs the owner (#2154).
+     */
+    var counts: Bool?
+}
+
+/** A delivered notification as a button press hands it back: its words, its category and its seal. */
+struct Delivered: Sendable {
+    var title: String
+    var subtitle: String
+    var body: String
+    var category: String
+    var seal: String?
+
+    init(title: String, subtitle: String, body: String, category: String, seal: String?) {
+        self.title = title
+        self.subtitle = subtitle
+        self.body = body
+        self.category = category
+        self.seal = seal
+    }
+
+    init(_ content: UNNotificationContent) {
+        self.init(title: content.title, subtitle: content.subtitle, body: content.body, category: content.categoryIdentifier, seal: content.userInfo[Notify.sealKey] as? String)
+    }
 }
 
 /** A notification button, as the category registers it. */
@@ -62,17 +93,57 @@ enum Notify {
     }
 
     /**
-     * Whether a notification's button may act on item `id` with the category the notification
-     * carries: an answer needs the question's own (`d.<id>`), Deny the prompt's. A push's category
-     * is the server's to name until the extension rewrites it, so a tap never answers a question the
-     * notification does not belong to. A plain tap and Allow only open the item.
+     * Whether a notification's button may act on item `id`: an answer needs the question's own
+     * category (`d.<id>`) and a seal this iPhone made over the words shown, Deny the prompt's
+     * category. The server holds the APNs key and may send an alert the extension never rewrites,
+     * with a question's category under words of its own choosing (security audit 2026-10-20), so
+     * only a notification the extension built from the opened question answers it. A plain tap
+     * and Allow only open the item; Deny fetches the prompt before it acts.
      */
-    static func accepts(_ action: String, category: String, item id: String) -> Bool {
+    static func accepts(_ action: String, _ delivered: Delivered, item id: String, key: SymmetricKey?) -> Bool {
         switch action {
-        case "reply", "page", _ where action.hasPrefix(optionPrefix): category.unicodeScalars.elementsEqual(Notify.category(id).unicodeScalars)
-        case "deny": category == "permission"
+        case "reply", "page", _ where action.hasPrefix(optionPrefix):
+            delivered.category.unicodeScalars.elementsEqual(Notify.category(id).unicodeScalars) && sealed(delivered, item: id, key: key)
+        case "deny": delivered.category == "permission"
         default: true
         }
+    }
+
+    /** Where the extension puts a notification's seal, beside `p` in its `userInfo`. */
+    static let sealKey = "seal"
+
+    /**
+     * The key notifications are sealed with: derived from this iPhone's box secret key, which
+     * never leaves the iPhone, so the server can't make a seal. Nil without keys.
+     */
+    static func sealingKey(_ secrets: Secrets) -> SymmetricKey? {
+        guard let sk = secrets.boxSk.flatMap({ try? fromB64($0) }), sk.count == 32 else { return nil }
+        // HMAC of a fixed label under the secret key: a key of its own for this one use.
+        let mac = HMAC<SHA256>.authenticationCode(for: Data("starbridge/ios/notification-seal/v1".utf8), using: SymmetricKey(data: sk))
+        return SymmetricKey(data: Data(mac))
+    }
+
+    /** What a seal covers: the item, its category and the words shown, each length-prefixed. */
+    private static func sealed(item: String, category: String, title: String, subtitle: String, body: String) -> Data {
+        var out = Data()
+        for field in [item, category, title, subtitle, body] {
+            let bytes = Data(field.utf8)
+            withUnsafeBytes(of: UInt32(bytes.count).bigEndian) { out.append(contentsOf: $0) }
+            out.append(bytes)
+        }
+        return out
+    }
+
+    /** `shown`'s seal under `key`, base64. */
+    static func seal(_ shown: Shown, key: SymmetricKey) -> String {
+        let mac = HMAC<SHA256>.authenticationCode(for: sealed(item: shown.item, category: shown.category, title: shown.title, subtitle: shown.subtitle, body: shown.body), using: key)
+        return Data(mac).base64EncodedString()
+    }
+
+    /** Whether `delivered` carries this iPhone's seal over item `id` and the words it shows. */
+    static func sealed(_ delivered: Delivered, item id: String, key: SymmetricKey?) -> Bool {
+        guard let key, let seal = delivered.seal, let mac = Data(base64Encoded: seal) else { return false }
+        return HMAC<SHA256>.isValidAuthenticationCode(mac, authenticating: sealed(item: id, category: delivered.category, title: delivered.title, subtitle: delivered.subtitle, body: delivered.body), using: key)
     }
 
     /** The decision or permission a payload is about: its own id, or the one its `re` names. */
@@ -111,7 +182,8 @@ enum Notify {
     /** Where the owner answers a decision with `answerIn`: "the artifact" for a Claude one, as on Android and the web. */
     static func place(_ page: DecisionLink) -> String {
         let chip = linkChip(url: page.url, title: page.title)
-        return page.title ?? (chip.icon == .artifact ? "the artifact" : chip.label)
+        // The chip's text: the agent's title only on GitHub and a Claude artifact, as web's answerPlace.
+        return chip.icon == .artifact && chip.label == "Claude artifact" ? "the artifact" : chip.label
     }
 
     /**
@@ -198,7 +270,9 @@ enum Notify {
         guard let item, let opened = open(item) else { return nil }
         switch opened.body {
         case let d as Decision:
-            return decision(d)
+            var shown = decision(d)
+            shown.event = .asked
+            return shown
         case is Permission:
             guard let saved = try? SavedPrompt(from: item.from, text: opened.bodyText, answeredAt: nil) else { return nil }
             return permission(saved)
@@ -208,6 +282,7 @@ enum Notify {
                   fetched.from == item.from else { return nil }
             var shown = decision(d, prefix: w.state == "waiting" ? "Waiting for you" : nil)
             shown.quiet = w.state != "waiting"
+            shown.event = .flip(at: w.at, state: w.state)
             return shown
         case let z as Snooze:
             guard let fetched = try? await fetch(z.decisionId), fetched.id == z.decisionId, let d = open(fetched)?.body as? Decision else { return nil }
@@ -219,7 +294,9 @@ enum Notify {
                 shown.quiet = true
                 return shown
             }
-            return decision(d, prefix: "Back from snooze")
+            var shown = decision(d, prefix: "Back from snooze")
+            shown.event = .back(at: z.at, due: p["due"]?.bool ?? true)
+            return shown
         default:
             return nil
         }
@@ -236,8 +313,8 @@ enum Notify {
     /**
      * The notification service extension's work: what a push's notification says, from the keys
      * and the pinned directory the app keeps in their shared app group, with its buttons
-     * registered; nil keeps the placeholder. Reads, never writes. Logs what it did, how long it
-     * took and the process's memory against the 24 MB limit.
+     * registered; nil keeps the placeholder. It writes only `notified.json`, what pushes did
+     * (#2151). Logs what it did, how long it took and the process's memory against the 24 MB limit.
      */
     static func rewrite(_ p: JSON?) async -> Shown? {
         let log = Logger(subsystem: "dev.starbridge.ios", category: "notifications")
@@ -247,13 +324,46 @@ enum Notify {
             return nil
         }
         let api = Api(server: saved.server, session: secrets.session)
-        var shown = await shown(p, saved: saved, secrets: secrets) { id in try await api.item(id).item }
-        if let item = shown { shown = closed(item, saved: saved) }
+        var shown = await opened(p, saved: saved, secrets: secrets, book: .standard) { id in try await api.item(id).item }
         if let item = shown { shown?.badge = badge(item, saved: saved) }
+        if let item = shown, !item.actions.isEmpty, let key = sealingKey(secrets) { shown?.seal = seal(item, key: key) }
         if let shown, !shown.actions.isEmpty { await register(shown.category, shown.actions) }
         await followPreviews()
         log.info("\(p["kind"]?.string ?? "?", privacy: .public) \(shown == nil ? "kept the placeholder" : "shown", privacy: .public) in \(Int(Date().timeIntervalSince(start) * 1000)) ms, \(footprint() / 1_048_576) MB")
         return shown
+    }
+
+    /**
+     * What a push's notification says, after the shared rule (#2151) and the app's saved state
+     * had their say; nil keeps the placeholder.
+     */
+    static func opened(_ p: JSON, saved: Saved, secrets: Secrets, book: NotifiedFile, fetch: (String) async throws -> SealedItem?) async -> Shown? {
+        guard var item = await shown(p, saved: saved, secrets: secrets, fetch: fetch) else { return nil }
+        if let event = item.event {
+            let (kept, effect) = book.step(item.item, event, known: saved.decisions.first { $0.id == item.item }, member: saved.me?.id)
+            item = noted(item, effect, closed: kept.closed)
+            // A flip already on its way when the owner snoozed the question.
+            if case .flip = event, let until = saved.decisions.first(where: { $0.id == item.item })?.snoozed, until > Date().addingTimeInterval(wakeSkew) {
+                item.quiet = true
+            }
+        }
+        return closed(item, saved: saved)
+    }
+
+    /**
+     * `shown` as the shared rule's effect leaves it (#2151): an extension cannot drop an alert,
+     * so a push that should change nothing shows quiet, and one about a question a push closed
+     * keeps no buttons either.
+     */
+    static func noted(_ shown: Shown, _ effect: NotifyEffect, closed: Bool) -> Shown {
+        var s = shown
+        s.counts = !closed && !shown.quiet
+        s.quiet = effect != .ring
+        if closed {
+            s.actions = []
+            s.category = ""
+        }
+        return s
     }
 
     /**
@@ -269,6 +379,7 @@ enum Notify {
         s.actions = []
         s.category = ""
         s.quiet = true
+        s.counts = false
         return s
     }
 
@@ -282,7 +393,7 @@ enum Notify {
         let all: (String) -> Bool = { _ in true }
         var open = Set(saved.openDecisions(sending: Set(saved.outbox.map(\.decisionId)), active: all).map(\.id))
         open.formUnion(saved.openPrompts(active: all).map(\.id))
-        if !shown.quiet { open.insert(shown.item) }
+        if shown.counts ?? !shown.quiet { open.insert(shown.item) }
         return open.count
     }
 
@@ -360,6 +471,9 @@ enum Notify {
         content.subtitle = shown.subtitle
         content.body = shown.body
         content.categoryIdentifier = shown.category
+        var info = content.userInfo
+        info[sealKey] = shown.seal
+        content.userInfo = info
         if let badge = shown.badge { content.badge = NSNumber(value: badge) }
         if shown.quiet {
             content.sound = nil

@@ -76,6 +76,13 @@
   BLAKE2b-256 of `"starbridge/v1/recovery-seed" NUL seed` stretches it to an Ed25519 seed. It is not
   shown as words: a new site that shows 12 words and later asks for them back looks like
   seed-phrase phishing, and Chrome flagged starbridge.run for it. No page says "seed" or "phrase".
+- **A first device opens on its recovery key** (#2139, card d_genius-body-merry). Its keys are
+  made as the screen opens, with no "Create the keys" step: 2 taps (tick "I stored this key",
+  then the button) instead of 3, on every client. The web and the desktop app keep the name
+  field on that screen, under the key, and sign the account's first entry with it at "Create the
+  account": the name is signed in and nothing renames a device. The recovery key pair stays in
+  memory until then, no longer than the key itself stays on screen. Every client's box reads "I
+  stored this key", which a password manager's save fits as well as paper.
 - **The recovery key can be copied or saved to a password manager, never screenshotted** (#817).
   Android's key screens block screenshots, screen sharing and the recents thumbnail
   (`FLAG_SECURE`): a screenshot lands in the photo library and its cloud backup, where nobody
@@ -196,7 +203,10 @@
   decoded, it moves to `saved.json.unreadable-<time>`, the keychain item's secrets move to a second
   item with the same tag, and the app starts signed out and says so. A file it cannot read at all,
   as before the first unlock, or cannot move stays, and the app writes nothing until a launch can
-  (#1159). Quota settings write their defaults, so a later default never changes a saved choice. The
+  (#1159). Sign-out and account deletion delete those copies too, on Android with the Keystore
+  key that wraps them, and on the iPhone even in a run that writes nothing; a failure says so
+  (#2195). iOS keeps Keychain items when the app is deleted, so the first launch of an install with
+  no saved state deletes the items a deleted install left: deleting the app signs it out. Quota settings write their defaults, so a later default never changes a saved choice. The
   web writes `v` into its localStorage values and leaves a newer format alone; a damaged one, or one
   without `v`, is replaced at the next change, since it holds only display choices. IndexedDB's own
   version is the records' format, and sign-out removes every record kind of the account.

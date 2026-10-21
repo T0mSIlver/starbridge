@@ -12,22 +12,10 @@ import { newerRelease, updateCheckOn, updateCommand } from "../latest";
 import { type InstallKind, installKind } from "../release";
 import { MANAGED } from "../update";
 import { VERSION } from "../version";
-import { AGENT_IDS, AGENTS, found as agentFound, installed, removedAgents } from "./agents";
-import { codexPlugin, codexPluginDir } from "./codex-plugin";
+import { AGENT_IDS, AGENTS, HARNESSES, removedAgents } from "./agents";
 import { findCodexbar, listProviders, probe } from "./codexbar";
-import { cursorState } from "./cursor";
-import { antigravityState, codexSkill, opencodeState, PI_PACKAGE, piPackage } from "./harnesses";
-import { autoUpdate, hasClaude, PLUGINS, pluginState } from "./plugins";
-import {
-  desktopReaches,
-  linkAdvice,
-  REMOTE_PLUGIN,
-  remotePluginCurrent,
-  remotePluginDir,
-  remotePluginLink,
-  remotePluginLoaded,
-} from "./remote-plugin";
-import { lingering, serviceState } from "./service";
+import { SERVICE } from "./integrations";
+import { REMOTE_PLUGIN, remotePluginLoaded } from "./remote-plugin";
 import { probeLines } from "./setup";
 import { otherCopies, type Sys } from "./sys";
 
@@ -165,14 +153,7 @@ export async function status(sys: Sys): Promise<number> {
     }
   }
 
-  const svc = await serviceState(sys);
-  out(
-    svc.installed
-      ? `Service: ${svc.state}${svc.enabled === undefined ? "" : svc.enabled ? ", enabled" : ", not enabled"}`
-      : "Service: not installed",
-  );
-  if ((await lingering(sys)) === false)
-    out("  Lingering is off: the agent stops when your last login session ends.");
+  for (const line of await SERVICE.status(sys)) out(line);
 
   const cfg = ctx.store.agentConfig().quota;
   const found = findCodexbar(sys, cfg?.codexbar);
@@ -186,70 +167,18 @@ export async function status(sys: Sys): Promise<number> {
     for (const line of probeLines(sys, await probe(found.path, cfg.providers, list))) out(line);
   }
 
-  if (!hasClaude(sys)) out("Claude Code: not on the PATH");
   const removed = removedAgents(ctx);
   for (const id of AGENT_IDS) {
-    if (!agentFound(sys, id)) continue;
+    const harness = HARNESSES[id];
+    if (!harness.found(sys)) {
+      for (const line of harness.absent?.(sys) ?? []) out(line);
+      continue;
+    }
     if (removed.includes(id)) {
       out(`${AGENTS[id]}: left out (\`starbridge setup --agent ${id}\` brings it back)`);
       continue;
     }
-    // Claude Code's state costs two `claude` runs: read once, and its own error shown as is.
-    const claude = id === "claude" ? await pluginState(sys) : undefined;
-    if (typeof claude === "string") {
-      out(`Claude Code: ${claude}`);
-      continue;
-    }
-    const isIn = claude ? PLUGINS.every((pid) => claude.plugins[pid]) : await installed(sys, id);
-    // An agent installed after setup: nothing installs in the background (#750).
-    if (!isIn) {
-      out(`${AGENTS[id]} found, Starbridge not installed: run \`starbridge setup --refresh\``);
-      continue;
-    }
-    if (claude) {
-      out(
-        `Claude Code marketplace: ${claude.marketplace ? "added" : "not added"}${autoUpdate(sys) ? ", auto-update on" : ""}`,
-      );
-      for (const pid of PLUGINS) {
-        const x = claude.plugins[pid];
-        out(
-          `  ${pid}: ${x ? `${x.version ?? "installed"}${x.enabled ? "" : ", disabled"}` : "not installed"}`,
-        );
-      }
-      if (desktopReaches(sys) || remotePluginLoaded(sys))
-        out(
-          `  ${REMOTE_PLUGIN}: ${remotePluginLink(sys) ? linkAdvice(remotePluginLink(sys) as string) : remotePluginCurrent(sys) ? `loaded from ${remotePluginDir(sys)}` : remotePluginLoaded(sys) ? "outdated (`starbridge setup --refresh` rebuilds it)" : "not loaded (`starbridge setup --refresh` adds it)"}`,
-        );
-    } else if (id === "codex") {
-      const state = codexSkill(sys);
-      out(
-        `Codex skill: ${state === "current" ? "installed" : state === "outdated" ? "outdated (`starbridge setup --refresh` updates it)" : "another skill named starbridge"}`,
-      );
-      const plugin = codexPlugin(sys);
-      out(
-        `Codex plugin: ${plugin === "current" ? "installed" : plugin === "foreign" ? `not managed by starbridge (${codexPluginDir(sys)})` : `${plugin} (\`starbridge setup --refresh\` installs it)`}`,
-      );
-    } else if (id === "pi") {
-      const pi = piPackage(sys);
-      out(
-        `Pi package: ${pi === PI_PACKAGE ? "installed" : `${pi} (\`starbridge setup --refresh\` moves it to v${VERSION})`}`,
-      );
-    } else if (id === "cursor") {
-      const state = cursorState(sys);
-      out(
-        `Cursor skill: ${state === "current" ? "installed" : state === "outdated" ? "outdated (`starbridge setup --refresh` updates it)" : "another skill named starbridge"}`,
-      );
-    } else if (id === "antigravity") {
-      const state = antigravityState(sys);
-      out(
-        `Antigravity plugin: ${state === "current" ? "installed" : state === "outdated" ? "outdated (`starbridge setup --refresh` updates it)" : "another plugin named starbridge"}`,
-      );
-    } else {
-      const state = opencodeState(sys);
-      out(
-        `opencode skill and plugin: ${state === "current" ? "installed" : state === "outdated" ? "outdated (`starbridge setup --refresh` updates them)" : "not managed by starbridge (another skill or plugin named starbridge)"}`,
-      );
-    }
+    for (const line of await harness.status(sys)) out(line);
   }
   return 0;
 }

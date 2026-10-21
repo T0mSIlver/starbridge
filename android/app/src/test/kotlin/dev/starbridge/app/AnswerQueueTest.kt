@@ -32,6 +32,8 @@ import dev.starbridge.app.data.ApiException
 import dev.starbridge.app.data.limitedUntil
 import dev.starbridge.app.data.Decision
 import dev.starbridge.app.data.Disk
+import dev.starbridge.app.data.Phase
+import dev.starbridge.app.ui.settings.unsentWarning
 import dev.starbridge.app.data.Prompt
 import dev.starbridge.app.data.Run
 import dev.starbridge.app.data.Saved
@@ -197,6 +199,32 @@ class AnswerQueueTest {
     private fun store() = ServerStore(disk, client, sodium, envelopes, directories, Pairings(sodium), Joins(sodium), alerts, "Phone", "", false, scope) {
         outboxAtWake += disk.saved()?.outbox?.size ?: 0
         wakes++
+    }
+
+    /** Sign-out wipes the outbox with the keys: it sends what waits first (#2155). */
+    @Test
+    fun signingOutSendsAnAnswerThatWaitsFirst() {
+        setUp()
+        offline = true
+        val store = store()
+        store.answer("d_ship", "Hold", null)
+        // The tap's own attempt has given up: only the outbox holds the answer now.
+        runBlocking { withTimeout(30_000) { while (store.notice.value?.startsWith("No connection") != true) delay(10) } }
+        assertEquals(0, posted.size)
+        // What the sign-out dialog warns of, read from the outbox.
+        assertEquals(1, store.unsent.value)
+        offline = false
+        store.signOut()
+        runBlocking { withTimeout(5_000) { while (store.phase.value == Phase.Ready) delay(10) } }
+        assertEquals(1, posted.size)
+        assertTrue(posted.single().contains("\"re\":\"d_ship\""))
+    }
+
+    @Test
+    fun theSignOutDialogSaysWhatAnUnsentAnswerRisks() {
+        assertEquals("", unsentWarning(0))
+        assertEquals(" 1 answer isn't sent yet: it's sent first if the server can be reached, else it's lost.", unsentWarning(1))
+        assertTrue(unsentWarning(2).startsWith(" 2 answers aren't sent yet"))
     }
 
     @Test

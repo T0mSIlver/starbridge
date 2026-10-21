@@ -20,11 +20,12 @@ export type LinkChip = { icon?: LinkIcon; label: string };
 /**
  * A link's chip (#971, #1577). A GitHub pull request, issue or discussion reads "#123", a release
  * its tag, a commit its short hash, each led by the repo when it isn't `project`, the session's;
- * the icon says what the number is, so the agent's title gives way. Any other link reads as its
- * title, else: a GitHub file its name, a run "Actions run", another GitHub page its path, a
- * Claude artifact "Claude artifact", anything else its host and path. A title on any other
- * host than GitHub's and a Claude artifact's, whose icons name the site, is followed by the
- * host, so an agent cannot dress another site as a GitHub reference (#1722); a link that can't be read shows as written, whatever its title.
+ * the icon says what the number is, so the agent's title gives way. Another GitHub page and a
+ * Claude artifact read as the agent's title, else a GitHub file its name, a run "Actions run",
+ * another GitHub page its path, an artifact "Claude artifact". Any other host shows its host and
+ * path, never the agent's title: only those two sites, whose icons name them, get a chip in the
+ * agent's words, so no title dresses another site as one of them (#1722, #2203). A title with
+ * hidden or reordering characters counts as none. A link that can't be read shows as written.
  */
 export function linkChip(link: { url: string; title?: string }, project = ""): LinkChip {
   const url = parseUrl(link.url);
@@ -35,24 +36,12 @@ export function linkChip(link: { url: string; title?: string }, project = ""): L
     const sep = gh.ref.startsWith("#") ? "" : " ";
     return { icon: gh.icon, label: clip(same ? gh.ref : `${gh.repo}${sep}${gh.ref}`) };
   }
-  if (gh) return { icon: gh.icon, label: link.title ?? clip(gh.text) };
+  const title = link.title && !hidden(link.title) ? link.title : undefined;
+  if (gh) return { icon: gh.icon, label: title ?? clip(gh.text) };
   const host = url.host.replace(/^www\./, "");
-  const titled = link.title !== undefined && !hidden(link.title) ? withHost(link.title, host) : "";
   if (url.host === "claude.ai" && ARTIFACT.test(url.path))
-    return { icon: "artifact", label: link.title ?? "Claude artifact" };
-  return { label: titled || clip(`${host}${url.path === "/" ? "" : url.path}`) };
-}
-
-/**
- * "Title · host" in 40 code points: the host keeps its end, which names the site, and at most 30
- * points; the title takes the rest. A title with hidden or reordering characters, or none, gives
- * "", and the chip falls back to its own text.
- */
-function withHost(title: string, host: string): string {
-  const points = Array.from(host);
-  const shown = points.length > 30 ? `…${points.slice(-29).join("")}` : host;
-  const room = 40 - 3 - Array.from(shown).length;
-  return title ? `${clip(title, room)} · ${shown}` : "";
+    return { icon: "artifact", label: title ?? "Claude artifact" };
+  return { label: clip(`${host}${url.path === "/" ? "" : url.path}`) };
 }
 
 const GITHUB_HOSTS = new Set(["github.com", "www.github.com"]);

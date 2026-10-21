@@ -179,6 +179,16 @@ struct Disk {
         }
     }
 
+    /** Deletes the saved state and every copy set aside as `saved.json.unreadable-<tag>`. */
+    func wipe() throws {
+        let dir = url.deletingLastPathComponent()
+        let name = url.lastPathComponent
+        let names = (try? FileManager.default.contentsOfDirectory(atPath: dir.path)) ?? []
+        for n in names where n == name || n.hasPrefix(name + ".unreadable-") {
+            try FileManager.default.removeItem(at: dir.appendingPathComponent(n))
+        }
+    }
+
     func save(_ saved: Saved) throws {
         try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         try JSONEncoder().encode(saved).write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
@@ -186,6 +196,77 @@ struct Disk {
         values.isExcludedFromBackup = true
         var target = url
         try target.setResourceValues(values)
+    }
+}
+
+/**
+ * What pushes did to each question (#2151), as JSON beside `saved.json` in the app group: the
+ * notification extension writes what it rang, the app what `answered` and settled pushes closed.
+ * Both go through a file coordinator, since the two processes write it.
+ */
+struct NotifiedFile {
+    let url: URL
+
+    static let standard = NotifiedFile(url: Disk.standard.url.deletingLastPathComponent().appendingPathComponent("notified.json"))
+
+    /** How many questions it keeps, the oldest dropped first. */
+    static let max = 300
+
+    struct Book: Codable, Equatable {
+        /** Question ids, oldest first. */
+        var order: [String] = []
+        var notified: [String: Notified] = [:]
+    }
+
+    func load() -> Book {
+        (try? JSONDecoder().decode(Book.self, from: Data(contentsOf: url))) ?? Book()
+    }
+
+    /**
+     * Runs `event` about question `id` through the rule and keeps what it leaves; the effect.
+     * `known` is the question as the app saved it, when it did: a question the inbox listed is
+     * not news, and a flip a sync read counts as the last one applied. `member` is this
+     * iPhone's id in the account the push came for: once `saved.json` beside the file no longer
+     * says so, as after a sign-out the push raced, nothing is kept and the effect is `none`.
+     */
+    @discardableResult
+    func step(_ id: String, _ event: NotifyEvent, known: SavedDecision? = nil, member: String?) -> (Notified, NotifyEffect) {
+        var out = (Notified(), NotifyEffect.none)
+        var failed: NSError?
+        NSFileCoordinator().coordinate(writingItemAt: url, options: .forMerging, error: &failed) { url in
+            // Sign-out deletes this file through a coordinator too, after it wrote `saved.json`.
+            guard let member, Disk(url: url.deletingLastPathComponent().appendingPathComponent("saved.json")).load()?.me?.id == member else { return }
+            let file = NotifiedFile(url: url)
+            var book = file.load()
+            var remembered = book.notified[id] ?? Notified()
+            if let known {
+                remembered.rang = true
+                if let at = known.waitingAt, let state = known.waiting,
+                   Order.laterWaiting(keptAt: remembered.waitingAt, keptState: remembered.waiting, at: at, state: state) {
+                    remembered.waitingAt = at
+                    remembered.waiting = state
+                }
+            }
+            out = Order.notifyStep(remembered, event)
+            book.notified[id] = out.0
+            book.order = book.order.filter { $0 != id } + [id]
+            for gone in book.order.dropLast(Self.max) { book.notified[gone] = nil }
+            book.order = Array(book.order.suffix(Self.max))
+            try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try? JSONEncoder().encode(book).write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+            var values = URLResourceValues()
+            values.isExcludedFromBackup = true
+            var target = url
+            try? target.setResourceValues(values)
+        }
+        return out
+    }
+
+    func delete() {
+        var failed: NSError?
+        NSFileCoordinator().coordinate(writingItemAt: url, options: .forDeleting, error: &failed) { url in
+            try? FileManager.default.removeItem(at: url)
+        }
     }
 }
 

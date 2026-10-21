@@ -3,11 +3,10 @@ import { dirname, join } from "node:path";
 import { ready } from "@starbridge/protocol";
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
-import { getCookie } from "hono/cookie";
 import { HTTPException } from "hono/http-exception";
 import { Apple } from "./apple";
 import { AppSignIns } from "./appSignIns";
-import { SESSION_COOKIE } from "./auth";
+import { cookieSession } from "./auth";
 import { clientVersion } from "./clients";
 import type { Config } from "./config";
 import { openDb, truncateWal } from "./db";
@@ -156,7 +155,7 @@ export async function createApp(config: Config, fetchFn: typeof fetch = fetch) {
   app.use(async (c, next) => {
     const unsafe = !["GET", "HEAD", "OPTIONS"].includes(c.req.method);
     const sent = c.req.header("origin");
-    if (unsafe && getCookie(c, SESSION_COOKIE) && sent !== undefined && sent !== origin)
+    if (unsafe && cookieSession(c) && sent !== undefined && sent !== origin)
       return c.json({ error: "forbidden", detail: "cross-site request" }, 403);
     await next();
   });

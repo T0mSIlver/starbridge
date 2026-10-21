@@ -49,8 +49,9 @@ fun Link.label(project: String = ""): String = linkChip(url, title, project).lab
 
 /** Where the owner answers a decision with `answerIn`: "the artifact" for a Claude one. */
 fun Link.place(): String {
+    // The chip's text: the agent's title only on GitHub and a Claude artifact, as web's answerPlace.
     val chip = linkChip(url, title)
-    return title ?: if (chip.icon == LinkIcon.Artifact) "the artifact" else chip.label
+    return if (chip.icon == LinkIcon.Artifact && chip.label == "Claude artifact") "the artifact" else chip.label
 }
 
 private const val CLAUDE_APP = "com.anthropic.claude"

@@ -42,6 +42,11 @@ internal class QuotaKind(private val core: Core) : ItemKind {
 
     override suspend fun onPush(kind: String, id: String, push: JsonObject) = sync()
 
+    /** The next account's Quotas tab waits for its own read, as on iOS and the web. */
+    override fun wipe() {
+        listed = false
+    }
+
     private fun notices(q: SavedQuota): List<QuotaNotice> {
         val now = Instant.now()
         val labels = q.body.providers.flatMap { p -> p.windows.map { "${p.provider}/${it.id}" to it.label.ifBlank { it.id } } }.toMap()

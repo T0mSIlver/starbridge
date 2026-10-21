@@ -1,7 +1,16 @@
 import type { Metadata } from "next";
 
-/** The server's session cookie (server/src/auth.ts): a request without it is a visitor's. */
-export const SESSION_COOKIE = "sb_session";
+/**
+ * The server's session cookie (server/src/auth.ts, `cookieName`): `__Host-sb_session` on https,
+ * the bare name on http or from a session started before the prefix. A request with neither is a
+ * visitor's.
+ */
+const SESSION_COOKIES = ["__Host-sb_session", "sb_session"];
+
+/** Whether a request's cookies hold a session, which makes it no visitor's. */
+export function hasSession(jar: { has(name: string): boolean }): boolean {
+  return SESSION_COOKIES.some((name) => jar.has(name));
+}
 
 /**
  * Set by the desktop app in its own window (desktop/src/main.ts): its signed-out page is sign-in,

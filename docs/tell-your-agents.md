@@ -154,7 +154,9 @@ run without a permission prompt; in Claude Code and Pi, `settle <id>` too, and i
 - `agy`: `~/.gemini/antigravity-cli/settings.json`, outside `--sandbox`. The Antigravity app and
   IDE still ask the first time.
 
-In Pi and `agy`, they apply only when the command is that alone. `starbridge run` still asks,
+In Pi and `agy`, they apply only when the command is that alone. In `agy`, an `ask` that reads a
+file (`--context-file`, `--input` or `--image`) asks too, since it would read it outside the
+sandbox. `starbridge run` still asks,
 since the command it wraps can be anything.
 
 ## Your own rules

@@ -332,11 +332,11 @@
       }
     },
     {
-      "name": "another host with a title",
+      "name": "another host with a title: host and path",
       "url": "https://play.google.com/console/u/1/developers/1/app/2/publishing",
       "title": "Play Console",
       "expect": {
-        "label": "Play Console · play.google.com"
+        "label": "play.google.com/console/u/1/developers/…"
       }
     },
     {
@@ -525,23 +525,33 @@
       "url": "https://evil.example/pull/123",
       "title": "starbridge#123",
       "expect": {
-        "label": "starbridge#123 · evil.example"
+        "label": "evil.example/pull/123"
       }
     },
     {
-      "name": "a long title gives way to the host",
-      "url": "https://docs.example.com/guide",
-      "title": "A very long title that would push the host out of the chip",
+      "name": "a host dressed as GitHub's shows whole",
+      "url": "https://github.com.evil.example/T0mSIlver/starbridge/pull/1",
+      "title": "#1",
       "expect": {
-        "label": "A very long title th… · docs.example.com"
+        "label": "github.com.evil.example/T0mSIlver/starb…"
       }
     },
     {
-      "name": "a long host keeps its end",
-      "url": "https://github.com.a-very-long-subdomain-chain.evil.example/x",
-      "title": "Docs",
+      "name": "a GitHub page's title with a bidi override gives way to its path",
+      "url": "https://github.com/T0mSIlver/starbridge/wiki",
+      "title": "Release notes‮",
       "expect": {
-        "label": "Docs · …-subdomain-chain.evil.example"
+        "icon": "github",
+        "label": "T0mSIlver/starbridge/wiki"
+      }
+    },
+    {
+      "name": "an artifact's title with a zero-width space gives way",
+      "url": "https://claude.ai/artifact/abc",
+      "title": "Plan​",
+      "expect": {
+        "icon": "artifact",
+        "label": "Claude artifact"
       }
     },
     {

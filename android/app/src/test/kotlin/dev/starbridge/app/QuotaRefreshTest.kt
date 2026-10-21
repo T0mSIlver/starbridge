@@ -5,6 +5,7 @@ import com.goterl.lazysodium.SodiumJava
 import dev.starbridge.app.data.Alerts
 import dev.starbridge.app.data.Decision
 import dev.starbridge.app.data.Disk
+import dev.starbridge.app.data.Phase
 import dev.starbridge.app.data.Prompt
 import dev.starbridge.app.data.Run
 import dev.starbridge.app.data.Saved
@@ -125,6 +126,34 @@ class QuotaRefreshTest {
         }
         refreshAndWait(store)
         assertEquals(listOf("zai"), store.windows.value.map { it.provider })
+    }
+
+    @Test
+    fun signingOutForgetsThatQuotasWereListed() {
+        // Listed but not openable, so only the flag keeps the Quotas tab: the next account must not inherit it.
+        val unopenable = buildJsonObject {
+            put("items", buildJsonArray {
+                add(buildJsonObject {
+                    put("item", buildJsonObject {
+                        put("v", 1); put("kind", "quota"); put("id", "q_new"); put("from", "m_box")
+                        put("boxes", buildJsonArray { add(buildJsonObject { put("to", "phone"); put("box", "AAAA") }) })
+                    })
+                    put("cursor", "1"); put("receivedAt", "2026-10-06T12:05:00Z")
+                })
+            })
+        }
+        val store = readyStore { path ->
+            when (path) {
+                "/v1/quota/ask" -> MockResponse(404, okhttp3.Headers.headersOf(), "")
+                "/v1/quota" -> json(unopenable)
+                else -> null
+            }
+        }
+        refreshAndWait(store)
+        assertEquals(true, store.quotasHeld.value)
+        store.signOut()
+        until("sign-out never ended") { store.phase.value == Phase.SignedOut }
+        assertEquals(false, store.quotasHeld.value)
     }
 
     @Test

@@ -323,6 +323,72 @@ enum Order {
     }
 }
 
+/**
+ * What this iPhone remembers of the pushes about one question (#2151): closed by an `answered`
+ * or settled push (unverified, so it only keeps notifications down), rang once, the last
+ * waiting flip applied, and the `at` of the snooze whose return rang.
+ */
+struct Notified: Codable, Equatable, Sendable {
+    var closed = false
+    var rang = false
+    var waitingAt: String?
+    var waiting: String?
+    var back: String?
+}
+
+/** A push about a question, as the iPhone opened it. */
+enum NotifyEvent: Equatable, Sendable {
+    case asked
+    case closed
+    case flip(at: String, state: String)
+    case back(at: String, due: Bool)
+}
+
+/** What a push does: shows the question with a sound, updates it without one, or nothing. */
+enum NotifyEffect: String, Sendable {
+    case ring, quiet, none
+}
+
+extension Order {
+    /**
+     * What a push about one question does to its notification, whatever order pushes arrive in
+     * and however often: packages/protocol/src/notify.ts's `notifyStep`, which the web and
+     * Android apply too; rules.json, "notify", holds its cases (#2151).
+     */
+    static func notifyStep(_ kept: Notified, _ event: NotifyEvent) -> (Notified, NotifyEffect) {
+        var next = kept
+        if event == .closed {
+            next.closed = true
+            return (next, .none)
+        }
+        if kept.closed { return (kept, .none) }
+        switch event {
+        case .asked:
+            if kept.rang { return (kept, .none) }
+            next.rang = true
+            return (next, .ring)
+        case let .flip(at, state):
+            // The same flip again, or one older than the last applied, changes nothing.
+            guard laterWaiting(keptAt: kept.waitingAt, keptState: kept.waiting, at: at, state: state) else { return (kept, .none) }
+            next.waitingAt = at
+            next.waiting = state
+            next.rang = true
+            // Its first push is a flip: the owner has not heard of the question yet.
+            if !kept.rang { return (next, .ring) }
+            return (next, state == "waiting" && kept.waiting != "waiting" ? .ring : .quiet)
+        case let .back(at, due):
+            // Its return rings once, and an older snooze's return, after a newer one's, not at all.
+            if !due { return (kept, .none) }
+            if let back = kept.back, !(Dates.parse(at).map { a in Dates.parse(back).map { a > $0 } ?? false } ?? false) { return (kept, .none) }
+            next.back = at
+            next.rang = true
+            return (next, .ring)
+        case .closed:
+            return (next, .none)
+        }
+    }
+}
+
 enum Dates {
     static func parse(_ text: String) -> Date? {
         let f = ISO8601DateFormatter()

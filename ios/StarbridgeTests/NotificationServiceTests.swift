@@ -44,6 +44,9 @@ final class NotificationServiceTests: XCTestCase {
         XCTAssertEqual(shown?.title, "Merge the inbox PR?")
         XCTAssertEqual(shown?.subtitle, "devbox · starbridge")
         XCTAssertEqual(shown?.categoryIdentifier, "d.d_19")
+        // The rewritten notification carries this iPhone's seal: its buttons answer d_19.
+        let delivered = Delivered(try XCTUnwrap(shown))
+        XCTAssertTrue(Notify.accepts("o:Merge", delivered, item: "d_19", key: Notify.sealingKey(f.secrets)))
         let categories = await UNUserNotificationCenter.current().notificationCategories()
         XCTAssertEqual(categories.first { $0.identifier == "d.d_19" }?.actions.map(\.title), ["Wait", "Merge", "Close", "Reply"])
     }

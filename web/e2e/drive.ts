@@ -70,9 +70,8 @@ try {
   step("sign in with GitHub (stub) and set up the first device");
   await p.goto(ORIGIN);
   await p.getByRole("link", { name: /^(Sign in|Continue) with GitHub$/ }).click();
-  await p.getByRole("button", { name: "Create the keys" }).click();
-  await p.getByLabel(/I wrote this key down/).check();
-  await p.getByRole("button", { name: "Continue" }).click();
+  await p.getByLabel(/I stored this key/).check();
+  await p.getByRole("button", { name: "Create the account" }).click();
   await p.getByRole("heading", { name: "Inbox" }).waitFor();
 
   step("pair a machine named devbox");

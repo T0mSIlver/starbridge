@@ -415,7 +415,9 @@ class ScreenshotTest(private val dark: Boolean) {
         Phone(null, 0) { SetupScreen(Phase.SignedOut, "https://starbridge.run", false, setupActions, {}) }
     }
 
-    @Test fun setupFirstDevice() = capture("setup-first-device") { Phone(null, 0) { SetupScreen(Phase.NoDevice(accountExists = false), "https://starbridge.run", false, setupActions, {}) } }
+    @Test fun setupFirstDevice() = capture("setup-first-device", before = { compose.mainClock.autoAdvance = false; repeat(40) { compose.mainClock.advanceTimeByFrame() } }) { Phone(null, 0) { SetupScreen(Phase.NoDevice(accountExists = false), "https://starbridge.run", false, setupActions, {}) } }
+    // A try that ran and failed: past a second with busy never seen, Try again shows (#2139).
+    @Test fun setupFirstDeviceFailed() = capture("setup-first-device-failed", before = { compose.mainClock.autoAdvance = false; repeat(80) { compose.mainClock.advanceTimeByFrame() } }) { Phone(null, 0) { SetupScreen(Phase.NoDevice(accountExists = false), "https://starbridge.run", false, setupActions, {}) } }
 
     @Test fun setupJoin() = capture("setup-join") { Phone(null, 0) { SetupScreen(Phase.Joining("7KQ2-M9XD-4TPV-HB3N-R8CE-WY6F"), "https://starbridge.run", false, setupActions, {}) } }
 

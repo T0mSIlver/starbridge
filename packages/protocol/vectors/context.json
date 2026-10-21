@@ -277,7 +277,7 @@
               "text": "Read "
             },
             {
-              "text": "the PR",
+              "text": "shop#41",
               "href": "https://github.com/acme/shop/pull/41"
             },
             {
@@ -286,7 +286,52 @@
           ]
         }
       ],
-      "plain": "Read the PR first; [no](javascript:x) stays."
+      "plain": "Read shop#41 first; [no](javascript:x) stays."
+    },
+    {
+      "name": "a link's words show only on GitHub and a Claude artifact",
+      "text": "[github.com/acme/app/pull/12](https://evil.example/x) and [the plan](https://claude.ai/artifact/abc) and [the wiki](https://github.com/acme/app/wiki)",
+      "blocks": [
+        {
+          "kind": "line",
+          "spans": [
+            {
+              "text": "evil.example/x",
+              "href": "https://evil.example/x"
+            },
+            {
+              "text": " and "
+            },
+            {
+              "text": "the plan",
+              "href": "https://claude.ai/artifact/abc"
+            },
+            {
+              "text": " and "
+            },
+            {
+              "text": "the wiki",
+              "href": "https://github.com/acme/app/wiki"
+            }
+          ]
+        }
+      ],
+      "plain": "evil.example/x and the plan and the wiki"
+    },
+    {
+      "name": "http is no link",
+      "text": "[docs](http://docs.example/a) and http://docs.example/b stay as typed.",
+      "blocks": [
+        {
+          "kind": "line",
+          "spans": [
+            {
+              "text": "[docs](http://docs.example/a) and http://docs.example/b stay as typed."
+            }
+          ]
+        }
+      ],
+      "plain": "[docs](http://docs.example/a) and http://docs.example/b stay as typed."
     },
     {
       "name": "fenced code",

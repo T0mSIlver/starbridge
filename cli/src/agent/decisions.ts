@@ -16,7 +16,8 @@ import {
 } from "../codex";
 import { type Ctx, iso, session, UsageError } from "../context";
 import {
-  type AskInput,
+  ASK_CONTENT_FIELDS,
+  ASK_ROUTE_FIELDS,
   ackLines,
   answerLine,
   deliverable,
@@ -24,6 +25,7 @@ import {
   dropRevokedNow,
   MOD_SEEN_MS,
   observedAnswers,
+  pickFields,
   poll,
   postDecision,
   postWaiting,
@@ -79,9 +81,9 @@ export class Decisions implements Feature {
         const input = (req.body as { input?: unknown } | undefined)?.input;
         if (typeof input !== "object" || input === null)
           throw new HttpError(400, "bad-request", "post {input: {question, ...}}");
-        // Only a hook that waits for its own answer holds a question or names a picker, and it
-        // posts without the agent: a client's word for either is dropped.
-        const { held: _held, picker: _picker, ...ask } = input as AskInput;
+        // A hook posts a held question, names a picker or opens a next-step card without the
+        // agent: a client's word for those, or any other field, is dropped.
+        const ask = pickFields(input, [...ASK_CONTENT_FIELDS, ...ASK_ROUTE_FIELDS]);
         // The asking process knows its directory; the agent's would name the wrong project.
         if (typeof ask.project !== "string")
           throw new HttpError(400, "bad-request", "input.project is required");
