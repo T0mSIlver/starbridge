@@ -127,7 +127,9 @@
   cannot test guesses for a short redacted value. A shell command is redacted as a command line:
   never a command word, and a value never across a line break, since Allow runs the command the
   owner reads; a command that redaction would still change that way, or that does not fit whole,
-  stays at the keyboard (#1724).
+  stays at the keyboard (#1724). A value that names a place (`user@host:path`, a URL's authority)
+  keeps the place and hides only the secret before its `@`: `git push https://TOKEN=[redacted]`
+  hid where a repository went (security audit 2026-10-21).
 - **Title and command** (#805). A prompt's title is what the agent says the call does (Claude
   Code's `description`), else the tool, on every surface; the command shows under it in a dark
   terminal block. Allow covers the command, never the description: the agent writes the

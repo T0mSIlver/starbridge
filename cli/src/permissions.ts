@@ -135,6 +135,26 @@ const AUTH_HEADER = new RegExp(
 const URL_PASSWORD = /\b([a-z][a-z0-9+.-]*:\/\/[A-Za-z0-9_.~%!*+-]*:)[A-Za-z0-9_.~%!*+=,-]+@/gi;
 
 /**
+ * Where a secret's value names a place: `user@host`, `user@host:path`, `user@host/path`, as scp,
+ * rsync, git and a URL's authority read them. The secret is the part before the `@`; from it on,
+ * the value says where the command sends or fetches, which the owner must read, since
+ * `git push https://TOKEN=[redacted] --all` could go anywhere (security audit 2026-10-21). A host
+ * is dotted, or `localhost`: a password holding an `@` keeps its tail hidden.
+ */
+const LOCATOR = /@(?:(?:[A-Za-z0-9-]+\.)+[A-Za-z0-9-]+|localhost)(?::[0-9]{1,5})?(?:[:/]|$)/;
+
+/**
+ * `value`, quoted or not, with its secret redacted and a place it names kept (`LOCATOR`); a value
+ * that names none goes whole, quotes included, as before.
+ */
+function redactedValue(value: string): string {
+  const quote = value[0] === '"' || value[0] === "'" ? value[0] : "";
+  const inner = quote ? value.slice(1, -1) : value;
+  const at = inner.search(LOCATOR);
+  return at > 0 ? `${quote}${REDACTED}${inner.slice(at)}${quote}` : REDACTED;
+}
+
+/**
  * Removes secrets from one string. With `shell`, the string is a shell command and no command
  * word is redacted: a device's Allow runs what it shows, so `[redacted] -rf ~` must not hide
  * what runs.
@@ -179,7 +199,7 @@ export function redactText(text: string, shell = false): string {
   pass(
     ASSIGNMENT,
     (m) => (m[1] as string).length + (m[2] as string).length,
-    (m) => `${m[1]}${m[2]}${REDACTED}`,
+    (m) => `${m[1]}${m[2]}${redactedValue(m[3] as string)}`,
   );
   return out;
 }
