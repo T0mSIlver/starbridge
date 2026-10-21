@@ -100,7 +100,14 @@ export class Decisions implements Feature {
             ask.session,
             ask.agent === "cursor" ? Number.POSITIVE_INFINITY : MOD_SEEN_MS,
           );
-        return { id: decision.id, delivery: delivery(ask, reachable, mod) };
+        const d = delivery(ask, reachable, mod);
+        // A Codex session told to wait gets nothing queued into it, as promised (#2182): its
+        // daemon was down at the ask, and `codex queue` would reach it once it came back.
+        if (d === "wait" && ask.codex)
+          this.ctx.store.updateState((st) => {
+            delete st.asked[decision.id]?.codex;
+          });
+        return { id: decision.id, delivery: d };
       },
     },
     {

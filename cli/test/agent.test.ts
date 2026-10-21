@@ -737,6 +737,64 @@ test.skipIf(WINDOWS)(
   },
 );
 
+// What ask promises a Codex session is the route its answer takes (#2182): a promised prompt is
+// queued once, a promised wait queues nothing. Each row: the daemon, the home, how Codex started
+// the thread, and the promise.
+for (const [name, row] of [
+  ["the TUI's daemon listens", { daemon: true, trusted: true, app: false, prompt: true }],
+  ["the daemon is down at the ask", { daemon: false, trusted: true, app: false, prompt: false }],
+  ["another CODEX_HOME", { daemon: true, trusted: false, app: false, prompt: false }],
+  ["T3 Code runs the thread", { daemon: true, trusted: true, app: true, prompt: false }],
+] as const)
+  test.skipIf(WINDOWS)(
+    `a Codex session's answer takes the route ask promised: ${name}`,
+    async () => {
+      const { ctx, socket } = await machine();
+      const codex = await codexHome();
+      if (!row.daemon) await codex.close();
+      if (row.trusted) trustCodex(ctx, codex.env.CODEX_HOME);
+      const thread = "01a15583-6a63-74b2-873d-d800b7671593";
+      if (row.app) {
+        const day = new Date(Number.parseInt(thread.replace(/-/g, "").slice(0, 12), 16));
+        const dir = join(
+          codex.env.CODEX_HOME,
+          "sessions",
+          String(day.getFullYear()),
+          String(day.getMonth() + 1).padStart(2, "0"),
+          String(day.getDate()).padStart(2, "0"),
+        );
+        mkdirSync(dir, { recursive: true });
+        const meta = { id: thread, session_id: thread, originator: "T3 Code", source: "vscode" };
+        writeFileSync(
+          join(dir, `rollout-x-${thread}.jsonl`),
+          `${JSON.stringify({ type: "session_meta", payload: meta })}\n`,
+        );
+      }
+      const c = testCtx({ STARBRIDGE_AGENT_SOCKET: socket, ...codex.env, CODEX_THREAD_ID: thread });
+      try {
+        const id = await ask(c, "--project", "p");
+        expect(c.errors.at(-1) === PROMPT).toBe(row.prompt);
+        await server.answer(id, { choice: "Merge" });
+        const log = () => (existsSync(codex.log) ? readFileSync(codex.log, "utf8") : "");
+        if (row.prompt) {
+          // The daemon never answers a steer, so the agent queues after 5 s (#1584).
+          await until(() => log().endsWith("\n"), 15_000);
+        } else {
+          await until(() => ctx.store.state().answers[id] !== undefined, 10_000);
+          // A delivery starts as the answer comes in; give it the time a queue takes above.
+          await Bun.sleep(row.daemon ? 6_000 : 1_000);
+        }
+        expect(
+          log()
+            .split("\n")
+            .filter((l) => l.includes(id)),
+        ).toHaveLength(row.prompt ? 1 : 0);
+      } finally {
+        if (row.daemon) await codex.close();
+      }
+    },
+  );
+
 /**
  * A Codex home whose daemon speaks the control socket's protocol: the thread's latest turn has
  * `status`, and `steered` holds each `turn/steer` it took. Its `codex` logs as `codexHome`'s.
