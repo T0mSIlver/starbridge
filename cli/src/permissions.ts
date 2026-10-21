@@ -144,6 +144,9 @@ const URL_PASSWORD = /\b([a-z][a-z0-9+.-]*:\/\/[A-Za-z0-9_.~%!*+-]*:)[A-Za-z0-9_
  * (`TOKEN=https://u@host/r`) is split after its `scheme://`. A password holding an `@` shows
  * its tail to the owner's own devices, which costs less than a hidden host.
  */
+/** Text ending in a URL's `scheme://`: what follows is its authority. */
+const SCHEME_END = /[A-Za-z][A-Za-z0-9+.-]*:\/\/$/;
+
 function placeStart(value: string): number {
   const scheme = /^[A-Za-z][A-Za-z0-9+.-]*:\/\//.exec(value)?.[0].length ?? 0;
   const slash = value.indexOf("/", scheme);
@@ -153,7 +156,7 @@ function placeStart(value: string): number {
 /**
  * `value`, quoted or not, with its secret redacted and a place it names kept (`placeStart`); a
  * value that names none goes whole, quotes included, as before. With `authority`, the name sits
- * right after a `scheme://`, so a value with no `@` is the host itself (`https://KEY=a.evil.com/x`
+ * right after a URL's `scheme://` (a bare `//`, as in a doubled path slash, is not one), so a value with no `@` is the host itself (`https://KEY=a.evil.com/x`
  * fetches from the host `KEY=a.evil.com`, where a resolver takes `=`): it holds no secret and goes
  * whole, and a user before the host still hides.
  */
@@ -216,7 +219,7 @@ export function redactText(text: string, shell = false): string {
   pass(
     ASSIGNMENT,
     (m) => (m[1] as string).length + (m[2] as string).length,
-    (m, before) => `${m[1]}${m[2]}${redactedValue(m[3] as string, before.endsWith("//"))}`,
+    (m, before) => `${m[1]}${m[2]}${redactedValue(m[3] as string, SCHEME_END.test(before))}`,
   );
   return out;
 }
