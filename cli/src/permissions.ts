@@ -147,6 +147,13 @@ const URL_PASSWORD = /\b([a-z][a-z0-9+.-]*:\/\/[A-Za-z0-9_.~%!*+-]*:)[A-Za-z0-9_
 /** Text ending in a URL's `scheme://`: what follows is its authority. */
 const SCHEME_END = /[A-Za-z][A-Za-z0-9+.-]*:\/\/$/;
 
+/**
+ * Whether `before` ends in a `scheme://`. Tested on its tail only: unanchored on the left, the
+ * pattern walks a long run of letters from every start, quadratic on a command with a blob.
+ */
+const endsInScheme = (before: string) =>
+  before.endsWith("://") && SCHEME_END.test(before.slice(-64));
+
 function placeStart(value: string): number {
   const scheme = /^[A-Za-z][A-Za-z0-9+.-]*:\/\//.exec(value)?.[0].length ?? 0;
   const slash = value.indexOf("/", scheme);
@@ -219,7 +226,7 @@ export function redactText(text: string, shell = false): string {
   pass(
     ASSIGNMENT,
     (m) => (m[1] as string).length + (m[2] as string).length,
-    (m, before) => `${m[1]}${m[2]}${redactedValue(m[3] as string, SCHEME_END.test(before))}`,
+    (m, before) => `${m[1]}${m[2]}${redactedValue(m[3] as string, endsInScheme(before))}`,
   );
   return out;
 }
