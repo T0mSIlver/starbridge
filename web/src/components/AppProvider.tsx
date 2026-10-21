@@ -17,6 +17,7 @@ import { desktopState } from "@/lib/desktopState";
 import type { Boot, Ctx, Inbox, Quotas, Runs } from "@/lib/device";
 import { dropClosedDrafts } from "@/lib/drafts";
 import { newestWins } from "@/lib/newest";
+import { itemPage } from "@/lib/notes";
 import { openItem } from "@/lib/opened";
 import { AnsweredFirst } from "@/lib/outcome";
 import { usePref } from "@/lib/prefs";
@@ -52,6 +53,12 @@ const DESKTOP_TICK_MS = 15_000;
  * rather than fail (a captive portal, a dead route) don't pile up before the backoff starts.
  */
 /** Closes notifications the inbox shows no longer need the owner (#1363). */
+/** Opens the item a notification was about: in place on the inbox, else by loading its page. */
+function openNoted(id: string): void {
+  if (location.pathname === "/") openItem(id);
+  else location.assign(itemPage(id));
+}
+
 function closeStaleNotifications(inbox: Inbox): void {
   (async () => {
     const reg = await navigator.serviceWorker?.getRegistration("/").catch(() => undefined);
@@ -598,6 +605,7 @@ export function AppProvider({
     refreshPrompts().catch(() => {});
     const onMessage = (e: MessageEvent) => {
       if (e.data?.type === "starbridge:push-error") console.error("push:", e.data.error);
+      if (e.data?.type === "starbridge:open" && typeof e.data.id === "string") openNoted(e.data.id);
       if (e.data?.type !== "starbridge:push") return;
       setPushed(true);
       if (["decision", "permission", "waiting"].includes(e.data.kind)) chimeForNew();
@@ -845,10 +853,7 @@ export function AppProvider({
         n.report();
       }),
     );
-    desktop.onOpen((id) => {
-      if (location.pathname === "/") openItem(id);
-      else location.assign(`/?item=${encodeURIComponent(id)}`);
-    });
+    desktop.onOpen(openNoted);
   }, []);
 
   const dismissRun = useCallback(

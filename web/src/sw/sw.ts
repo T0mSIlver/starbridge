@@ -22,7 +22,7 @@ import {
   openWaiting,
   Withheld,
 } from "../lib/device";
-import { promptNote, questionNote } from "../lib/notes";
+import { itemPage, promptNote, questionNote } from "../lib/notes";
 import { answerPlace } from "../lib/outcome";
 import { applePush, fallback, openPush, type Shown, type Unshown } from "../lib/pushFallback";
 import * as store from "../lib/store";
@@ -417,13 +417,17 @@ async function showPrompt(seen: Shown, account: string, item: PromptItem): Promi
     body: note.body,
     tag: promptTag(p.id),
     requireInteraction: true,
+    // No `item`: a notification without one passes for a placeholder (`show`).
+    data: { account, id: p.id },
   });
   if (await done())
     for (const n of await self.registration.getNotifications({ tag: promptTag(p.id) })) n.close();
 }
 
 async function onClick(n: Notification, action: string): Promise<void> {
-  const data = n.data as { account?: string; item?: InboxItem; options?: string[] } | undefined;
+  const data = n.data as
+    | { account?: string; item?: InboxItem; options?: string[]; id?: string }
+    | undefined;
   const choice = action.startsWith("o") ? data?.options?.[Number(action.slice(1))] : undefined;
   if (data?.item && data.account && choice !== undefined) {
     const reply: Reply = { choice };
@@ -447,8 +451,12 @@ async function onClick(n: Notification, action: string): Promise<void> {
     await self.clients.openWindow(page.url);
     return;
   }
+  // The click opens the item it is about, as the apps' do, not just the inbox (#2218).
+  const id = data?.item?.decision.id ?? data?.id;
   const windows = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
   const open = windows[0];
-  if (open) await open.focus();
-  else await self.clients.openWindow("/");
+  if (open) {
+    await open.focus();
+    if (id) open.postMessage({ type: "starbridge:open", id });
+  } else await self.clients.openWindow(itemPage(id));
 }
