@@ -12,6 +12,7 @@ import {
   readFileSync,
   readlinkSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -2077,6 +2078,22 @@ test("uninstall ignores an inventory that names a file outside starbridge-remote
   await uninstallAgent(m.sys, "claude");
   expect(readFileSync(outside, "utf8")).toBe("mine");
   expect(readFileSync(join(dir, "notes.txt"), "utf8")).toBe("mine");
+});
+
+test("uninstall does not follow a symlink the owner put in starbridge-remote (#2166)", async () => {
+  const m = await machine();
+  const dir = join(m.home, ".claude", "starbridge-remote");
+  const elsewhere = join(m.home, "elsewhere");
+  mkdirSync(join(dir, ".claude-plugin"), { recursive: true });
+  mkdirSync(elsewhere);
+  writeFileSync(join(elsewhere, "remote.sh"), "mine");
+  symlinkSync(elsewhere, join(dir, "hooks"), "junction");
+  writeFileSync(join(dir, ".claude-plugin", "written.json"), JSON.stringify(["hooks/remote.sh"]));
+  writeFileSync(m.settings, JSON.stringify({ env: { CLAUDE_CODE_PLUGIN_DIRS: dir } }));
+  mkdirSync(join(m.home, ".claude", "remote"));
+
+  await uninstallAgent(m.sys, "claude");
+  expect(readFileSync(join(elsewhere, "remote.sh"), "utf8")).toBe("mine");
 });
 
 test("where Claude desktop starts sessions over SSH, setup loads starbridge-remote from the installed plugins, and uninstall takes it out (#2107)", async () => {

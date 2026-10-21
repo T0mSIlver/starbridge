@@ -1,5 +1,5 @@
-import { existsSync, readdirSync, rmdirSync, rmSync } from "node:fs";
-import { dirname, join, relative } from "node:path";
+import { existsSync, readdirSync, realpathSync, rmdirSync, rmSync } from "node:fs";
+import { dirname, isAbsolute, join, relative } from "node:path";
 import { replaceFile } from "../replace";
 
 /**
@@ -8,7 +8,7 @@ import { replaceFile } from "../replace";
  * folders (#1324). Returns those files.
  */
 export function removeWritten(dir: string, files: string[], root?: string): string[] {
-  for (const file of files) rmSync(join(dir, file), { force: true });
+  for (const file of files) if (stays(dir, file)) rmSync(join(dir, file), { force: true });
   if (!existsSync(dir)) {
     if (root) pruneEmpty(dirname(dir), root);
     return [];
@@ -21,6 +21,17 @@ export function removeWritten(dir: string, files: string[], root?: string): stri
         .map((e) => join(e.parentPath, e.name))
         .sort()
     : [];
+}
+
+/** Whether `file`'s folder, once symlinks are followed, is still inside `dir`: a link the owner made stays unfollowed. */
+function stays(dir: string, file: string): boolean {
+  try {
+    const real = realpathSync(dirname(join(dir, file)));
+    const rel = relative(realpathSync(dir), real);
+    return !rel.startsWith("..") && !isAbsolute(rel);
+  } catch {
+    return true;
+  }
 }
 
 /**
