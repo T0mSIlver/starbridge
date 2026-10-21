@@ -18,5 +18,15 @@
     "skills": [
       "./plugin/skills"
     ]
-  }
+  },
+  "workspaces": [
+    "packages/*",
+    "server",
+    "cli",
+    "mod",
+    "web",
+    "demo",
+    "deploy/watch",
+    "desktop"
+  ]
 }

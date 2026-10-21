@@ -11,14 +11,14 @@
 import {
   cpSync,
   existsSync,
+  lstatSync,
   mkdirSync,
   readdirSync,
   readFileSync,
-  renameSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
-import { delimiter, join, resolve } from "node:path";
+import { delimiter, dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { VERSION } from "../version";
 import {
   claudeDir,
@@ -28,9 +28,12 @@ import {
   readSettings,
   writeSettings,
 } from "./plugins";
+import { removedLine, removeWritten } from "./remove";
 import type { Sys } from "./sys";
 
 export const REMOTE_PLUGIN = "starbridge-remote";
+/** The plugin's files setup wrote, relative to its folder: what a refresh or uninstall removes. */
+const INVENTORY = join(".claude-plugin", "written.json");
 const DIRS_VAR = "CLAUDE_CODE_PLUGIN_DIRS";
 /** Every command of the starbridge plugin's hooks starts so; the remote plugin's go through remote.sh. */
 // biome-ignore lint/suspicious/noTemplateCurlyInString: Claude Code expands it in the hook's command.
@@ -74,6 +77,74 @@ export function remoteHooks(starbridge: HooksFile): HooksFile {
   return { hooks, modules: ["./register.ts"] };
 }
 
+/** Every file under `dir`, relative to it. */
+function filesUnder(dir: string): string[] {
+  return readdirSync(dir, { recursive: true, withFileTypes: true })
+    .filter((e) => !e.isDirectory())
+    .map((e) => relative(dir, join(e.parentPath, e.name)))
+    .sort();
+}
+
+/**
+ * What a plugin built without the inventory holds: the files the build before it wrote (#2115),
+ * the hooks of the two plugins at the time included.
+ */
+const BEFORE_INVENTORY = [
+  join(".claude-plugin", "plugin.json"),
+  ...[
+    ...["hooks.json", "cli.sh", "prompt.sh", "remote.sh", "rule.md", "session-start.sh"],
+    ...["settle.sh", "agent.ts", "handover.ts", "node.ts", "own.ts", "poller.ts", "register.ts"],
+    ...["sent.ts", "state.d.ts", "subagent.ts", "switch.ts"],
+  ].map((f) => join("hooks", f)),
+];
+
+/**
+ * The first of `dir` and the folders between it and each of `files` that is a symlink, else
+ * undefined: setup writes and removes nothing through a link the owner made (#2160).
+ */
+function linkIn(dir: string, files: string[]): string | undefined {
+  const isLink = (p: string) => {
+    try {
+      return lstatSync(p).isSymbolicLink();
+    } catch {
+      return false;
+    }
+  };
+  if (isLink(dir)) return dir;
+  for (const file of files)
+    for (let d = dirname(join(dir, file)); d !== dir && d !== dirname(d); d = dirname(d))
+      if (isLink(d)) return d;
+  return undefined;
+}
+
+/** The symlink that stops setup from rebuilding or removing the plugin, if the owner made one. */
+export function remotePluginLink(sys: Home): string | undefined {
+  const dir = remotePluginDir(sys);
+  return linkIn(dir, [...written(dir), join("hooks", "x"), join(".claude-plugin", "x")]);
+}
+
+/** What to say, and do, about a link `remotePluginLink` found. */
+export function linkAdvice(link: string): string {
+  return `${link} is a symbolic link, and Starbridge writes and removes nothing through one. Replace it with a real folder or delete it, then run \`starbridge setup --refresh\``;
+}
+
+/** Whether `file` is a path strictly inside `dir`. */
+function inside(dir: string, file: string): boolean {
+  const rel = relative(dir, resolve(dir, file));
+  return rel !== "" && !rel.startsWith("..") && !isAbsolute(rel);
+}
+
+/** What setup wrote into `dir` last time; a plugin built before the inventory has `BEFORE_INVENTORY`. */
+function written(dir: string): string[] {
+  try {
+    const v = JSON.parse(readFileSync(join(dir, INVENTORY), "utf8")) as unknown;
+    // An entry that leaves the folder is not setup's: the inventory is then as good as missing.
+    if (Array.isArray(v) && v.every((f) => typeof f === "string" && inside(dir, f)))
+      return [...v, INVENTORY];
+  } catch {}
+  return [...BEFORE_INVENTORY, INVENTORY];
+}
+
 /**
  * Builds the plugin from the installed plugins' folders, replacing the one there: their `hooks/`
  * files in one folder, which neither shares a name in but `hooks.json`. Throws when either lacks
@@ -81,6 +152,8 @@ export function remoteHooks(starbridge: HooksFile): HooksFile {
  */
 export function writeRemotePlugin(sys: Home, roots: { starbridge: string; mod: string }) {
   const dir = remotePluginDir(sys);
+  const link = remotePluginLink(sys);
+  if (link) throw new Error(linkAdvice(link));
   const parts = [join(roots.starbridge, "hooks"), join(roots.mod, "hooks")];
   for (const need of [
     join(parts[0] as string, "remote.sh"),
@@ -118,17 +191,33 @@ export function writeRemotePlugin(sys: Home, roots: { starbridge: string; mod: s
       2,
     )}\n`,
   );
-  rmSync(dir, { recursive: true, force: true });
-  renameSync(next, dir);
+  writeFileSync(join(next, INVENTORY), `${JSON.stringify(filesUnder(next), null, 2)}\n`);
+  // Only the files setup wrote last time go: a file the owner put in the folder stays.
+  removeWritten(dir, written(dir));
+  // The manifest goes last: `remotePluginCurrent` reads its version, so an interrupted copy
+  // leaves a plugin the next setup rebuilds.
+  const manifest = join(".claude-plugin", "plugin.json");
+  cpSync(next, dir, {
+    recursive: true,
+    force: true,
+    filter: (from) => relative(next, from) !== manifest,
+  });
+  cpSync(join(next, manifest), join(dir, manifest), { force: true });
+  rmSync(next, { recursive: true, force: true });
 }
 
-/** Whether the plugin is loaded and was built by this release. */
+/** Whether the plugin is loaded and was built by this release, with its inventory. */
 export function remotePluginCurrent(sys: Home): boolean {
   try {
     const m = JSON.parse(
       readFileSync(join(remotePluginDir(sys), ".claude-plugin", "plugin.json"), "utf8"),
     ) as { version?: unknown };
-    return m.version === VERSION && remotePluginLoaded(sys);
+    // A plugin built without the inventory is rebuilt once, so uninstall knows its files.
+    return (
+      m.version === VERSION &&
+      existsSync(join(remotePluginDir(sys), INVENTORY)) &&
+      remotePluginLoaded(sys)
+    );
   } catch {
     return false;
   }
@@ -187,7 +276,8 @@ export function loadRemotePlugin(sys: Home): boolean {
 }
 
 /**
- * Takes the plugin's folder out of `CLAUDE_CODE_PLUGIN_DIRS`, leaving the others, and deletes it.
+ * Takes the plugin's folder out of `CLAUDE_CODE_PLUGIN_DIRS`, leaving the others, and deletes the
+ * files setup wrote in it.
  * Returns what it did, one line each.
  */
 export function removeRemotePlugin(sys: Home): string[] {
@@ -203,9 +293,12 @@ export function removeRemotePlugin(sys: Home): string[] {
     writeSettings(sys, s);
     done.push(`Took ${dir} out of ${DIRS_VAR}.`);
   }
-  if (existsSync(dir)) {
-    rmSync(dir, { recursive: true, force: true });
-    done.push(`Removed the ${REMOTE_PLUGIN} plugin.`);
+  const link = remotePluginLink(sys);
+  if (link) {
+    done.push(`Left ${dir} as it is: ${linkAdvice(link)}.`);
+  } else if (existsSync(dir)) {
+    const kept = removeWritten(dir, written(dir));
+    done.push(kept.length === 0 ? `Removed the ${REMOTE_PLUGIN} plugin.` : removedLine(dir, kept));
   }
   return done;
 }

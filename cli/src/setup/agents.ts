@@ -84,9 +84,11 @@ import {
 import {
   desktopReaches,
   installRemotePlugin,
+  linkAdvice,
   REMOTE_PLUGIN,
   remotePluginCurrent,
   remotePluginDir,
+  remotePluginLink,
   remotePluginLoaded,
   removeRemotePlugin,
 } from "./remote-plugin";
@@ -449,7 +451,7 @@ const claude: Harness = {
     }
     if (desktopReaches(sys) || remotePluginLoaded(sys))
       lines.push(
-        `  ${REMOTE_PLUGIN}: ${remotePluginCurrent(sys) ? `loaded from ${remotePluginDir(sys)}` : remotePluginLoaded(sys) ? "outdated (`starbridge setup --refresh` rebuilds it)" : "not loaded (`starbridge setup --refresh` adds it)"}`,
+        `  ${REMOTE_PLUGIN}: ${remotePluginLink(sys) ? linkAdvice(remotePluginLink(sys) as string) : remotePluginCurrent(sys) ? `loaded from ${remotePluginDir(sys)}` : remotePluginLoaded(sys) ? "outdated (`starbridge setup --refresh` rebuilds it)" : "not loaded (`starbridge setup --refresh` adds it)"}`,
       );
     return lines;
   },

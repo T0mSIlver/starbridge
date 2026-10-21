@@ -12,6 +12,7 @@ import {
   readFileSync,
   readlinkSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -55,6 +56,7 @@ import {
 import { markedSkill } from "../src/setup/marker";
 import opencodeFiles from "../src/setup/opencode-files.js";
 import { marketplaceText } from "../src/setup/plugins";
+import { remotePluginLink, writeRemotePlugin } from "../src/setup/remote-plugin";
 import {
   installService,
   removeService,
@@ -2031,6 +2033,110 @@ test("setup asks once whether to send permission prompts, Enter saying no (#2111
   expect(none.ctx.store.agentConfig().permissions).toBeUndefined();
 });
 
+test("uninstall removes every file the previous release built into starbridge-remote, and keeps the owner's (#2166)", async () => {
+  const m = await machine();
+  const dir = join(m.home, ".claude", "starbridge-remote");
+  mkdirSync(join(dir, ".claude-plugin"), { recursive: true });
+  mkdirSync(join(dir, "hooks"));
+  writeFileSync(
+    join(dir, ".claude-plugin", "plugin.json"),
+    JSON.stringify({ name: "starbridge-remote", version: "0.1.8-rc.5" }),
+  );
+  // The previous release's build: no written.json, 6 plugin hooks files and 10 mod ones.
+  const hooks = [
+    ...["hooks.json", "cli.sh", "prompt.sh", "remote.sh", "rule.md", "session-start.sh"],
+    ...["settle.sh", "agent.ts", "handover.ts", "node.ts", "own.ts", "poller.ts", "register.ts"],
+    ...["sent.ts", "state.d.ts", "subagent.ts", "switch.ts"],
+  ];
+  for (const f of hooks) writeFileSync(join(dir, "hooks", f), "old");
+  writeFileSync(join(dir, "notes.txt"), "mine");
+  writeFileSync(join(dir, "hooks", "mine.sh"), "mine");
+  writeFileSync(m.settings, JSON.stringify({ env: { CLAUDE_CODE_PLUGIN_DIRS: dir } }));
+  mkdirSync(join(m.home, ".claude", "remote"));
+
+  await uninstallAgent(m.sys, "claude");
+  expect(readdirSync(dir, { recursive: true }).sort()).toEqual([
+    "hooks",
+    join("hooks", "mine.sh"),
+    "notes.txt",
+  ]);
+});
+
+test("uninstall ignores an inventory that names a file outside starbridge-remote (#2166)", async () => {
+  const m = await machine();
+  const dir = join(m.home, ".claude", "starbridge-remote");
+  mkdirSync(join(dir, ".claude-plugin"), { recursive: true });
+  const outside = join(m.home, ".claude", "settings-mine.json");
+  writeFileSync(outside, "mine");
+  writeFileSync(join(dir, "notes.txt"), "mine");
+  writeFileSync(
+    join(dir, ".claude-plugin", "written.json"),
+    JSON.stringify(["../settings-mine.json", "notes.txt"]),
+  );
+  writeFileSync(m.settings, JSON.stringify({ env: { CLAUDE_CODE_PLUGIN_DIRS: dir } }));
+  mkdirSync(join(m.home, ".claude", "remote"));
+
+  await uninstallAgent(m.sys, "claude");
+  expect(readFileSync(outside, "utf8")).toBe("mine");
+  expect(readFileSync(join(dir, "notes.txt"), "utf8")).toBe("mine");
+});
+
+test("uninstall does not follow a symlink the owner put in starbridge-remote (#2166)", async () => {
+  const m = await machine();
+  const dir = join(m.home, ".claude", "starbridge-remote");
+  const elsewhere = join(m.home, "elsewhere");
+  mkdirSync(join(dir, ".claude-plugin"), { recursive: true });
+  mkdirSync(elsewhere);
+  writeFileSync(join(elsewhere, "remote.sh"), "mine");
+  symlinkSync(elsewhere, join(dir, "hooks"), "junction");
+  writeFileSync(join(dir, ".claude-plugin", "written.json"), JSON.stringify(["hooks/remote.sh"]));
+  writeFileSync(m.settings, JSON.stringify({ env: { CLAUDE_CODE_PLUGIN_DIRS: dir } }));
+  mkdirSync(join(m.home, ".claude", "remote"));
+
+  await uninstallAgent(m.sys, "claude");
+  expect(readFileSync(join(elsewhere, "remote.sh"), "utf8")).toBe("mine");
+});
+
+test("uninstall and refresh leave starbridge-remote alone when it, or a folder in it, is a symlink (#2166)", async () => {
+  const root = join(import.meta.dir, "../..");
+  const roots = { starbridge: join(root, "plugin"), mod: join(root, "mod") };
+  const plugin = (m: Awaited<ReturnType<typeof machine>>) =>
+    join(m.home, ".claude", "starbridge-remote");
+  const owner = (m: Awaited<ReturnType<typeof machine>>) => {
+    mkdirSync(join(m.home, ".claude", "remote"));
+    const elsewhere = join(m.home, "elsewhere");
+    mkdirSync(join(elsewhere, "hooks"), { recursive: true });
+    writeFileSync(join(elsewhere, "hooks", "remote.sh"), "mine");
+    return elsewhere;
+  };
+
+  // The folder itself is a link to the owner's own: its files carry Starbridge's names.
+  const a = await machine();
+  const target = owner(a);
+  symlinkSync(target, plugin(a), "junction");
+  writeFileSync(a.settings, JSON.stringify({ env: { CLAUDE_CODE_PLUGIN_DIRS: plugin(a) } }));
+  expect(() => writeRemotePlugin(a.sys, roots)).toThrow("symbolic link");
+  await uninstallAgent(a.sys, "claude");
+  expect(readFileSync(join(target, "hooks", "remote.sh"), "utf8")).toBe("mine");
+  expect(readdirSync(join(target, "hooks"))).toEqual(["remote.sh"]);
+  expect(a.ctx.lines.join("\n")).toContain("is a symbolic link");
+  expect(remotePluginLink(a.sys)).toBe(plugin(a));
+
+  // A folder in it is a link: a refresh would write through it, an uninstall would delete through it.
+  const b = await machine();
+  const elsewhere = owner(b);
+  mkdirSync(join(plugin(b), ".claude-plugin"), { recursive: true });
+  symlinkSync(join(elsewhere, "hooks"), join(plugin(b), "hooks"), "junction");
+  writeFileSync(
+    join(plugin(b), ".claude-plugin", "written.json"),
+    JSON.stringify(["hooks/remote.sh"]),
+  );
+  expect(() => writeRemotePlugin(b.sys, roots)).toThrow("symbolic link");
+  await uninstallAgent(b.sys, "claude");
+  expect(readFileSync(join(elsewhere, "hooks", "remote.sh"), "utf8")).toBe("mine");
+  expect(readdirSync(join(elsewhere, "hooks"))).toEqual(["remote.sh"]);
+});
+
 test("where Claude desktop starts sessions over SSH, setup loads starbridge-remote from the installed plugins, and uninstall takes it out (#2107)", async () => {
   const m = await machine();
   const root = join(import.meta.dir, "../..");
@@ -2066,8 +2172,32 @@ test("where Claude desktop starts sessions over SSH, setup loads starbridge-remo
   expect(claudeLine(await refresh(m.sys))).toBe(false);
   expect(dirs()).toBe([own, dir].join(delimiter));
 
+  // A plugin built before the inventory existed is rebuilt once, and gets one.
+  rmSync(join(dir, ".claude-plugin", "written.json"));
+  expect(claudeLine(await refresh(m.sys))).toBe(true);
+  expect(existsSync(join(dir, ".claude-plugin", "written.json"))).toBe(true);
+
+  // A file the owner put in the folder survives a rebuild and an uninstall; Starbridge's go.
+  const mine = join(dir, "notes.txt");
+  writeFileSync(mine, "mine");
+  const inventory = join(dir, ".claude-plugin", "written.json");
+  writeFileSync(join(dir, "hooks", "stale.sh"), "old");
+  writeFileSync(
+    inventory,
+    JSON.stringify([...JSON.parse(readFileSync(inventory, "utf8")), "hooks/stale.sh"]),
+  );
+  writeFileSync(
+    join(dir, ".claude-plugin", "plugin.json"),
+    JSON.stringify({ name: "starbridge-remote", version: "0.0.0" }),
+  );
+  expect(claudeLine(await refresh(m.sys))).toBe(true);
+  expect(readFileSync(mine, "utf8")).toBe("mine");
+  expect(existsSync(join(dir, "hooks", "stale.sh"))).toBe(false);
+  expect(existsSync(join(dir, "hooks", "remote.sh"))).toBe(true);
+
   await uninstallAgent(m.sys, "claude");
-  expect(existsSync(dir)).toBe(false);
+  expect(readFileSync(mine, "utf8")).toBe("mine");
+  expect(readdirSync(dir)).toEqual(["notes.txt"]);
   expect(dirs()).toBe(own);
 });
 
