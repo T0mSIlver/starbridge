@@ -2055,7 +2055,7 @@ test("uninstall removes every file the previous release built into starbridge-re
   await uninstallAgent(m.sys, "claude");
   expect(readdirSync(dir, { recursive: true }).sort()).toEqual([
     "hooks",
-    "hooks/mine.sh",
+    join("hooks", "mine.sh"),
     "notes.txt",
   ]);
 });
