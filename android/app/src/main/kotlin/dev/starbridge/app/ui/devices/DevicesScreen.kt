@@ -217,9 +217,8 @@ internal fun sameCode(text: String, code: String): Boolean =
  * Add a device, opened by a pairing link (#611). A link comes from outside the app, from anyone.
  * A phone or browser is approved only once the owner types the last group of the code it shows,
  * which the link's sender can't show them (#2183); a machine's Approve first asks "Approve <name>
- * from this link?", and its terminal then asks for the check code. The code to type and the QR
- * code typed or scanned on this screen has no such step, since the owner handled it. A QR code
- * this screen shows keeps the step: the link's request and the shown code's look the same.
+ * from this link?", and its terminal then asks for the check code. A code typed or scanned on
+ * this screen, or a QR code it shows, has no such step, since the owner handled it.
  */
 @Composable
 fun PairLinkScreen(approval: Approval, actions: DeviceActions, modifier: Modifier = Modifier, onBack: () -> Unit = {}) {
@@ -228,8 +227,10 @@ fun PairLinkScreen(approval: Approval, actions: DeviceActions, modifier: Modifie
     val approve = { if (found?.kind == Kind.Machine) confirming = true else actions.approve() }
     // What the owner typed or scanned on this screen: a request for that code needs no extra step.
     var handled by rememberSaveable { mutableStateOf<String?>(null) }
-    val linked = DeviceActions({ handled = it; actions.lookUp(it) }, approve, { confirming = false; actions.close() }, actions.revoke, actions.showCode)
-    val viaCard = found != null && handled?.let { sameCode(it, found.code) } == true
+    // A QR code this phone shows is one the owner handled too: the new phone shows no code to type.
+    var shown by rememberSaveable { mutableStateOf(false) }
+    val linked = DeviceActions({ handled = it; shown = false; actions.lookUp(it) }, approve, { confirming = false; actions.close() }, actions.revoke, { shown = true; actions.showCode() })
+    val viaCard = found != null && (shown || handled?.let { sameCode(it, found.code) } == true)
     AddDeviceScreen(approval, linked, modifier, onBack, linked = !viaCard)
     if (confirming && found != null) {
         AlertDialog(
