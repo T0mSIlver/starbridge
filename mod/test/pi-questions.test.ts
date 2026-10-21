@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { dialogAnswers, questionnaires } from "../pi/questions.ts";
+import { answerEntries, dialogAnswers, questionnaires } from "../pi/questions.ts";
 
 /** A questionnaire as rpiv-ask-user-question 2.12.0's `rpiv:ask-user:prompt` carries it. */
 const DB = {
@@ -26,10 +26,12 @@ const SESSION = { id: "s1", cwd: "/work/shop" };
  * Pi's shared `ui` with the package's dialog: `custom` resolves when the dialog's `done` is
  * called, as Pi's does. `ui` is undefined for Pi's RPC mode, where no `custom` dialog opens.
  */
-function harness(out: string, rpc = false) {
+function harness(out: string, rpc = false, verdict?: (data: unknown) => unknown) {
   const sent: { stdin: string; signal: AbortSignal }[] = [];
   const submitted: string[] = [];
   const closed: unknown[] = [];
+  const emitted: { event: string; data: unknown }[] = [];
+  const notified: string[] = [];
   const ui: { custom?: (factory: unknown, options?: unknown) => unknown } = {
     custom: (factory) =>
       new Promise((resolve) => {
@@ -44,11 +46,21 @@ function harness(out: string, rpc = false) {
     hook: (stdin, signal) =>
       new Promise((resolve) => {
         sent.push({ stdin, signal });
-        release = () => resolve(out);
+        const before = release;
+        release = () => {
+          before();
+          resolve(out);
+        };
         signal.addEventListener("abort", () => resolve(""));
       }),
     submit: (t) => submitted.push(t),
-    notify: () => {},
+    notify: (t) => notified.push(t),
+    // The package's answer channel replies inside the emit, as 2.13.9 does.
+    emit: (event, data) => {
+      emitted.push({ event, data });
+      const v = verdict?.(data);
+      if (v) q.result(v);
+    },
   });
   /** The package's tool: the prompt event, then its dialog. */
   const ask = (questions: unknown[]) => {
@@ -58,7 +70,25 @@ function harness(out: string, rpc = false) {
     if (!rpc) void ui.custom?.(() => ({}), {});
     return done;
   };
-  return { q, ask, sent, submitted, closed, release: () => release() };
+  /** The package from 2.13.9: its prompt names the tool call, and it opens its own dialog. */
+  const askById = (questions: unknown[], toolCallId: string) => {
+    q.watch(ui);
+    const done = q.prompt({ questions, toolCallId }, SESSION);
+    q.blocked({ active: true, toolCallId });
+    if (!rpc) void ui.custom?.(() => ({}), {});
+    return done;
+  };
+  return {
+    q,
+    ask,
+    askById,
+    sent,
+    submitted,
+    closed,
+    emitted,
+    notified,
+    release: () => release(),
+  };
 }
 
 const tick = () => new Promise((r) => setTimeout(r, 0));
@@ -164,4 +194,83 @@ test("a dialog another extension opens, with no questionnaire announced, is left
   h.q.watch(ui);
   const factory = () => "mine";
   expect(ui.custom(factory)).toBe(factory);
+});
+
+const accept = (data: unknown) => ({
+  ok: true,
+  requestId: (data as { requestId: string }).requestId,
+});
+const refuse = (code: string) => (data: unknown) => ({
+  ok: false,
+  code,
+  requestId: (data as { requestId: string }).requestId,
+});
+
+test("from 2.13.9, a device's answer goes in by the questionnaire's tool call id (#1516)", async () => {
+  const h = harness(JSON.stringify({ answers: [["Postgres"], ["Lint", "Tests"]] }), false, accept);
+  const done = h.askById([DB, CHECKS], "call-1");
+  await tick();
+  h.release();
+  await done;
+  expect(h.emitted).toEqual([
+    {
+      event: "rpiv:ask-user:answer",
+      data: {
+        toolCallId: "call-1",
+        requestId: "starbridge-1",
+        answers: [
+          { questionIndex: 0, optionIndexes: [1] },
+          { questionIndex: 1, optionIndexes: [0, 1] },
+        ],
+      },
+    },
+  ]);
+  // The package closes its own dialog: none is closed here, and nothing follows up.
+  expect(h.closed).toEqual([]);
+  expect(h.submitted).toEqual([]);
+  expect(h.notified).toEqual([]);
+});
+
+test("two questionnaires open at once each get their own answer (#1516)", async () => {
+  const h = harness(JSON.stringify({ answers: [["Postgres"]] }), false, accept);
+  const first = h.askById([DB], "call-1");
+  await tick();
+  const second = h.askById([DB], "call-2");
+  await tick();
+  h.release();
+  await Promise.all([first, second]);
+  expect(h.emitted.map((e) => (e.data as { toolCallId: string }).toolCallId).sort()).toEqual([
+    "call-1",
+    "call-2",
+  ]);
+  expect(h.submitted).toEqual([]);
+});
+
+test("an answer the package refuses: a closed questionnaire is left, RPC gets a follow-up, a misfit says so", async () => {
+  for (const [code, submitted, notified] of [
+    ["not_found", 0, 0],
+    // The follow-up says when the agent gets it; a misfit also says the answer did not go in.
+    ["unsupported_host", 1, 1],
+    ["invalid_answer", 1, 2],
+  ] as const) {
+    const h = harness(JSON.stringify({ answers: [["Postgres"]] }), false, refuse(code));
+    const done = h.askById([DB], "call-1");
+    await tick();
+    h.release();
+    await done;
+    expect([code, h.submitted.length, h.notified.length]).toEqual([code, submitted, notified]);
+  }
+});
+
+test("answers as the package's event takes them: labels pick, the rest is typed text", () => {
+  expect(answerEntries([DB, CHECKS], [["Use SQLite"], ["Lint", "Docs"]])).toEqual([
+    { questionIndex: 0, text: "Use SQLite" },
+    { questionIndex: 1, optionIndexes: [0], text: "Docs" },
+  ]);
+  expect(answerEntries([DB], [["Postgres", "Redis (Recommended)"]])).toEqual([
+    { questionIndex: 0, text: "Postgres, Redis (Recommended)" },
+  ]);
+  expect(answerEntries([CHECKS], [["Tests", "Tests"]])).toEqual([
+    { questionIndex: 0, optionIndexes: [1] },
+  ]);
 });
