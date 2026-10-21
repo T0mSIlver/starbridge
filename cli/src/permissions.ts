@@ -140,23 +140,29 @@ const URL_PASSWORD = /\b([a-z][a-z0-9+.-]*:\/\/[A-Za-z0-9_.~%!*+-]*:)[A-Za-z0-9_
  * must read: `git push https://TOKEN=[redacted] --all` could go anywhere (security audit
  * 2026-10-21). scp, rsync, git and a URL take the last `@` before the first `/` as the split, and
  * nothing after that `/` can be an `@` in a user, so this is where the host starts, whatever it
- * looks like: an alias, a bare name, a decimal or IPv6 address. A password holding an `@` shows
+ * looks like: an alias, a bare name, a decimal or IPv6 address. A value that is itself a URL
+ * (`TOKEN=https://u@host/r`) is split after its `scheme://`. A password holding an `@` shows
  * its tail to the owner's own devices, which costs less than a hidden host.
  */
 function placeStart(value: string): number {
-  const slash = value.indexOf("/");
+  const scheme = /^[A-Za-z][A-Za-z0-9+.-]*:\/\//.exec(value)?.[0].length ?? 0;
+  const slash = value.indexOf("/", scheme);
   return value.lastIndexOf("@", slash < 0 ? value.length : slash);
 }
 
 /**
  * `value`, quoted or not, with its secret redacted and a place it names kept (`placeStart`); a
- * value that names none goes whole, quotes included, as before.
+ * value that names none goes whole, quotes included, as before. With `authority`, the name sits
+ * right after a `scheme://`, so a value with no `@` is the host itself (`https://KEY=a.evil.com/x`
+ * fetches from the host `KEY=a.evil.com`, where a resolver takes `=`): it holds no secret and goes
+ * whole, and a user before the host still hides.
  */
-function redactedValue(value: string): string {
+function redactedValue(value: string, authority: boolean): string {
   const quote = value[0] === '"' || value[0] === "'" ? value[0] : "";
   const inner = quote ? value.slice(1, -1) : value;
   const at = placeStart(inner);
-  return at >= 0 ? `${quote}${REDACTED}${inner.slice(at)}${quote}` : REDACTED;
+  if (at < 0) return authority ? value : REDACTED;
+  return `${quote}${REDACTED}${inner.slice(at)}${quote}`;
 }
 
 /**
@@ -174,7 +180,11 @@ export function redactText(text: string, shell = false): string {
   });
   // Replaces each match of `re` whose secret, from `skip` characters into the match, is no
   // command word of the text as it stands.
-  const pass = (re: RegExp, skip: (m: string[]) => number, to: (m: string[]) => string) => {
+  const pass = (
+    re: RegExp,
+    skip: (m: string[]) => number,
+    to: (m: string[], before: string) => string,
+  ) => {
     const words = shell ? commandWords(out) : [];
     out = out.replace(re, (...args: unknown[]) => {
       // The arguments are the match, its groups, then its offset and the whole text.
@@ -182,7 +192,9 @@ export function redactText(text: string, shell = false): string {
       const at = args[args.length - 2] as number;
       const from = at + skip(m);
       const end = at + (m[0] as string).length;
-      return words.some((w) => w.start < end && from < w.end) ? (m[0] as string) : to(m);
+      return words.some((w) => w.start < end && from < w.end)
+        ? (m[0] as string)
+        : to(m, (args[args.length - 1] as string).slice(0, at));
     });
   };
   for (const p of SECRET_PATTERNS)
@@ -204,7 +216,7 @@ export function redactText(text: string, shell = false): string {
   pass(
     ASSIGNMENT,
     (m) => (m[1] as string).length + (m[2] as string).length,
-    (m) => `${m[1]}${m[2]}${redactedValue(m[3] as string)}`,
+    (m, before) => `${m[1]}${m[2]}${redactedValue(m[3] as string, before.endsWith("//"))}`,
   );
   return out;
 }
