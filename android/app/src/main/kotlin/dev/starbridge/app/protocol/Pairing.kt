@@ -54,6 +54,16 @@ fun parsePairingCode(text: String): PairingCode {
 }
 
 /**
+ * Whether [typed] is this code's last group, read as [parsePairingCode] reads a code. A device
+ * request that came by link is approved only once the owner types it from the new device's screen,
+ * which a link's sender can't show them (#2183).
+ */
+fun PairingCode.endsWith(typed: String): Boolean {
+    val chars = typed.uppercase().replace(Regex("[$WS-]"), "").replace('O', '0').replace(Regex("[IL]"), "1")
+    return chars.length == 4 && chars == secret.takeLast(4)
+}
+
+/**
  * The link a QR code carries: `<server>/pair#<code>`. Opened in a browser, it shows the web page
  * with the code filled in; the fragment never reaches the server.
  */

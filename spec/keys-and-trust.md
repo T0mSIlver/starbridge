@@ -29,6 +29,17 @@
   code from Add a device instead. A pairing link that opens the Android app before it has joined
   asks "Add this phone with this link?" first: joining makes the phone's keys and replaces a join
   or recovery under way, so it starts only from the owner's tap, as a scan does.
+- **A device by link proves it is in front of the owner** (#2183, owner's pick on card
+  d_time-absent-cement over comparing digits). Anyone can open a pairing without an account and
+  send the owner its `/pair#<code>` link; one Approve then gave the sender every item and every
+  permission prompt. So a phone or browser that reaches Approve through a link, on the web or
+  Android, is approved only once the owner types the last group of the code it shows
+  (`endsPairingCode`, `vectors/pairing.json`'s `lastGroup`), and the page hides the code the link
+  carried. The sender can't show the owner that screen; the honest case, a phone's camera opening a
+  new browser's QR code, has it in front of them. Machines keep plain links, since their terminal
+  asks for the check code; a typed code, the app's own scanner and digits need no step, as the
+  owner handled them. Comparing digits instead would have removed the camera path and made the new
+  device sign in first.
 - **A machine's check code** (#795). A pairing code that reaches a browser lets a hostile server
   approve the machine into a chain it controls, which no device in that chain can expose. The
   check code, 80 bits of a hash of the machine's `add` entry, tells the chains apart. It covers the

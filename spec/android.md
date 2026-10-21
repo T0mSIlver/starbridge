@@ -18,9 +18,10 @@
   with notification access can send a button's intent itself (#274). An owner who hides content
   on the lock screen expects the locked phone to take no answers either; one who shows it reads and
   answers there. The setting is read at each post and each answer.
-- **A pairing link asks before it approves** (#1755). `/pair` opens Add a device with the code
-  looked up, and Approve asks "Approve <name> from this link?": a link comes from anyone, while a
-  typed code or a scanned QR code the owner handled.
+- **A pairing link asks before it approves** (#1755, #2183). `/pair` opens Add a device with the
+  code looked up. A machine's Approve asks "Approve <name> from this link?"; a phone's or browser's
+  waits for the last group of the code it shows, typed (spec/keys-and-trust.md). A link comes from
+  anyone, while a typed code, a scanned QR code or a QR code this phone shows the owner handled.
 - **A push is a hint, not a fact** (#1755). Its `id` and `kind` must be plain words
   (`[A-Za-z0-9_-]{1,64}`, `[a-z-]{1,32}`) or it is dropped, since the id joins a request path. An
   `answered` push only closes the notification: nothing in it is verified, so the item's state

@@ -1,5 +1,8 @@
 package dev.starbridge.app.ui.devices
 
+import dev.starbridge.app.protocol.endsWith
+import dev.starbridge.app.protocol.codeFromLink
+import dev.starbridge.app.protocol.parsePairingCode
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -198,23 +201,39 @@ fun AddDeviceScreen(
     modifier: Modifier = Modifier,
     onBack: () -> Unit = {},
     otherWaysToPair: @Composable ColumnScope.() -> Unit = { QrWays(onScan = actions.lookUp, onShow = actions.showCode) },
+    /** The request came by a pairing link: a device's is approved only once its code's last group is typed (#2183). */
+    linked: Boolean = false,
 ) {
     Page("Add a device", modifier, onBack = onBack, titleGap = Spacing.s4) {
-        item { PairCard(approval, actions, otherWaysToPair) }
+        item { PairCard(approval, actions, otherWaysToPair, linked) }
     }
 }
 
+/** Whether [text], typed or scanned (a bare code or a pairing link), names [code]. */
+internal fun sameCode(text: String, code: String): Boolean =
+    runCatching { codeFromLink(text) == parsePairingCode(code) }.getOrDefault(false)
+
 /**
- * Add a device, opened by a pairing link (#611). A link comes from outside the app, from anyone,
- * so Approve first asks "Approve <name> from this link?"; the code to type and the QR code to scan
- * have no such step, since the owner handled them.
+ * Add a device, opened by a pairing link (#611). A link comes from outside the app, from anyone.
+ * A phone or browser is approved only once the owner types the last group of the code it shows,
+ * which the link's sender can't show them (#2183); a machine's Approve first asks "Approve <name>
+ * from this link?", and its terminal then asks for the check code. A code typed or scanned on
+ * this screen, or a QR code it shows, has no such step, since the owner handled it.
  */
 @Composable
 fun PairLinkScreen(approval: Approval, actions: DeviceActions, modifier: Modifier = Modifier, onBack: () -> Unit = {}) {
     var confirming by rememberSaveable { mutableStateOf(false) }
     val found = approval as? Approval.Found
-    val linked = DeviceActions(actions.lookUp, { confirming = true }, { confirming = false; actions.close() }, actions.revoke, actions.showCode)
-    AddDeviceScreen(approval, linked, modifier, onBack)
+    val approve = { if (found?.kind == Kind.Machine) confirming = true else actions.approve() }
+    // What the owner typed or scanned on this screen: a request for that code needs no extra step.
+    var handled by rememberSaveable { mutableStateOf<String?>(null) }
+    // A QR code this phone shows is one the owner handled too: the new phone shows no code to type.
+    // Only a request for that very code is exempt; the link's own request never is.
+    var shownCode by rememberSaveable { mutableStateOf<String?>(null) }
+    LaunchedEffect(approval) { (approval as? Approval.Showing)?.let { shownCode = it.code } }
+    val linked = DeviceActions({ handled = it; actions.lookUp(it) }, approve, { confirming = false; actions.close() }, actions.revoke, actions.showCode)
+    val viaCard = found != null && listOfNotNull(handled, shownCode).any { sameCode(it, found.code) }
+    AddDeviceScreen(approval, linked, modifier, onBack, linked = !viaCard)
     if (confirming && found != null) {
         AlertDialog(
             onDismissRequest = { confirming = false },
@@ -264,9 +283,11 @@ fun Confirm(title: String, text: String, action: String, onConfirm: () -> Unit, 
  */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun PairCard(approval: Approval, actions: DeviceActions, otherWays: @Composable ColumnScope.() -> Unit = {}) {
+fun PairCard(approval: Approval, actions: DeviceActions, otherWays: @Composable ColumnScope.() -> Unit = {}, linked: Boolean = false) {
     val colors = StarbridgeTheme.colors
     var code by rememberSaveable { mutableStateOf("") }
+    // The last group of a linked device's code, as the owner reads it off its screen (#2183).
+    var last by rememberSaveable(approval is Approval.Found) { mutableStateOf("") }
     // The approved code is spent: the card offers the next pairing with an empty field.
     LaunchedEffect(approval is Approval.Done) { if (approval is Approval.Done) code = "" }
     Panel(Modifier.fillMaxWidth()) {
@@ -288,23 +309,39 @@ fun PairCard(approval: Approval, actions: DeviceActions, otherWays: @Composable 
                             style = StarbridgeTheme.type.body,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
-                        Text(f.code, style = StarbridgeTheme.type.machine, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        // As on the web: who may be approved (#1377).
-                        Text(
-                            if (f.kind == Kind.Machine) "Approve only if you just ran starbridge setup or pair on ${f.name}." else "Approve only if ${f.name} scanned or showed this code.",
-                            style = StarbridgeTheme.type.small,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
+                        val typing = linked && f.kind == Kind.Device
+                        if (typing) {
+                            // The link carries the code: showing it would show what to type.
+                            Text("Type the last 4 characters of the code ${f.name} shows.", style = StarbridgeTheme.type.body, color = MaterialTheme.colorScheme.onSurface)
+                            TextField(
+                                value = last,
+                                onValueChange = { last = it.take(9) },
+                                label = { Text("Last 4 characters") },
+                                singleLine = true,
+                                textStyle = StarbridgeTheme.type.machine,
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                        } else {
+                            Text(f.code, style = StarbridgeTheme.type.machine, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            // As on the web: who may be approved (#1377).
+                            Text(
+                                if (f.kind == Kind.Machine) "Approve only if you just ran starbridge setup or pair on ${f.name}." else "Approve only if ${f.name} scanned or showed this code.",
+                                style = StarbridgeTheme.type.small,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        val matches = !typing || runCatching { parsePairingCode(f.code).endsWith(last) }.getOrDefault(false)
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Button(
                                 onClick = actions.approve,
-                                enabled = state is Approval.Found,
-                                colors = ButtonDefaults.buttonColors(
+                                enabled = state is Approval.Found && matches,
+                                // Busy keeps its colours; waiting for the last group looks off.
+                                colors = if (state is Approval.Approving) ButtonDefaults.buttonColors(
                                     containerColor = colors.accent,
                                     contentColor = colors.onAccent,
                                     disabledContainerColor = colors.accent,
                                     disabledContentColor = colors.onAccent,
-                                ),
+                                ) else ButtonDefaults.buttonColors(containerColor = colors.accent, contentColor = colors.onAccent),
                                 modifier = Modifier.weight(1f).heightIn(min = Sizes.tap).busyAs("Approve", state is Approval.Approving),
                             ) {
                                 if (state is Approval.Approving) LoadingIndicator(Modifier.size(Spacing.s6), color = colors.onAccent)

@@ -6,6 +6,11 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTextClearance
+import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.StateRestorationTester
+import androidx.compose.ui.test.runComposeUiTest
 import dev.starbridge.app.data.Approval
 import dev.starbridge.app.data.Kind
 import dev.starbridge.app.ui.devices.PairLinkScreen
@@ -19,7 +24,10 @@ import dev.starbridge.app.ui.theme.StarbridgeTheme
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import dev.starbridge.app.ui.devices.sameCode
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -74,5 +82,104 @@ class DevicesTest {
         compose.onNodeWithText("Approve", useUnmergedTree = true).performClick()
         compose.onAllNodesWithText("Approve", useUnmergedTree = true).get(1).performClick()
         assertEquals(1, approved)
+    }
+
+    /** A phone or browser by link: Approve waits for the last group of the code it shows (#2183). */
+    @Test fun aDeviceByLinkWaitsForTheLastGroupOfItsCode() {
+        var approved = 0
+        val code = "0123-4567-89AB-CDEF-GHJK-MN01"
+        compose.setContent {
+            StarbridgeTheme {
+                PairLinkScreen(Approval.Found("Pixel 9", Kind.Device, code), DeviceActions({}, { approved++ }, {}, {}, {}))
+            }
+        }
+        // The link carries the code: the screen doesn't show what to type.
+        compose.onAllNodesWithText(code, substring = true).assertCountEquals(0)
+        compose.onNodeWithText("Type the last 4 characters of the code Pixel 9 shows.").assertIsDisplayed()
+        compose.onNodeWithText("Last 4 characters").performTextInput("ghjk")
+        compose.onNodeWithText("Approve", useUnmergedTree = true).performClick()
+        assertEquals(0, approved)
+        compose.onNodeWithText("ghjk").performTextClearance()
+        compose.onNodeWithText("Last 4 characters").performTextInput("mnoi")
+        compose.onNodeWithText("Approve", useUnmergedTree = true).performClick()
+        // No second confirm: the typed group is the proof.
+        assertEquals(1, approved)
+    }
+
+    /** The group the owner typed survives the activity being recreated, as a rotation does (#2183). */
+    @OptIn(ExperimentalTestApi::class)
+    @Test fun theTypedLastGroupSurvivesRecreation() = runComposeUiTest {
+        var approved = 0
+        val code = "0123-4567-89AB-CDEF-GHJK-MN01"
+        val restoration = StateRestorationTester(this)
+        restoration.setContent {
+            StarbridgeTheme {
+                PairLinkScreen(Approval.Found("Pixel 9", Kind.Device, code), DeviceActions({}, { approved++ }, {}, {}, {}))
+            }
+        }
+        onNodeWithText("Last 4 characters").performTextInput("mn01")
+        restoration.emulateSaveAndRestore()
+        onNodeWithText("Approve", useUnmergedTree = true).performClick()
+        assertEquals(1, approved)
+    }
+
+    /** A code typed on the link screen is one the owner handled: no last group to type (#2183). */
+    @Test fun aCodeTypedOnTheLinkScreenNeedsNoLastGroup() {
+        var approved = 0
+        val code = "0123-4567-89AB-CDEF-GHJK-MN01"
+        var approval by mutableStateOf<Approval>(Approval.Idle)
+        compose.setContent {
+            StarbridgeTheme {
+                PairLinkScreen(approval, DeviceActions({ approval = Approval.Found("Pixel 9", Kind.Device, code) }, { approved++ }, {}, {}, {}))
+            }
+        }
+        compose.onNodeWithText("Pairing code").performTextInput(code)
+        compose.onNodeWithText("Check code").performClick()
+        compose.onAllNodesWithText("Last 4 characters").assertCountEquals(0)
+        compose.onNodeWithText("Approve", useUnmergedTree = true).performClick()
+        assertEquals(1, approved)
+    }
+
+    /** A QR code this phone shows from the link screen: the new phone shows no code to type (#2183). */
+    @Test fun aQrCodeShownOnTheLinkScreenNeedsNoLastGroup() {
+        var approved = 0
+        val code = "0123-4567-89AB-CDEF-GHJK-MN01"
+        var approval by mutableStateOf<Approval>(Approval.Idle)
+        compose.setContent {
+            StarbridgeTheme {
+                PairLinkScreen(approval, DeviceActions({}, { approved++ }, {}, {}, { approval = Approval.Showing(code, "https://starbridge.run/pair#$code") }))
+            }
+        }
+        compose.onNodeWithText("Show a QR code for a new phone").performClick()
+        compose.waitForIdle()
+        approval = Approval.Found("Pixel 9", Kind.Device, code)
+        compose.onAllNodesWithText("Last 4 characters").assertCountEquals(0)
+        compose.onNodeWithText("Approve", useUnmergedTree = true).performClick()
+        assertEquals(1, approved)
+    }
+
+    /** A request for another code than the one this phone shows keeps the gate, however the taps went (#2183). */
+    @Test fun aLinkRequestIsGatedWhileAQrCodeIsShown() {
+        val qr = "0123-4567-89AB-CDEF-GHJK-MN01"
+        val link = "7KQ2-M9XD-4TPV-HB3N-R8CE-WY6F"
+        var approval by mutableStateOf<Approval>(Approval.Checking)
+        compose.setContent {
+            StarbridgeTheme {
+                PairLinkScreen(approval, DeviceActions({}, {}, {}, {}, { approval = Approval.Showing(qr, "https://starbridge.run/pair#$qr") }))
+            }
+        }
+        compose.onNodeWithText("Show a QR code for a new phone").performClick()
+        // The link's lookup answers late, under its own code.
+        approval = Approval.Found("Pixel 9", Kind.Device, link)
+        compose.onNodeWithText("Last 4 characters").assertIsDisplayed()
+    }
+
+    /** A scanned QR hands over the whole link; a typed code, the bare code (#2183). */
+    @Test fun aScannedLinkOrTypedCodeNamesTheCodeItIs() {
+        val code = "0123-4567-89AB-CDEF-GHJK-MN01"
+        assertTrue(sameCode("https://starbridge.run/pair#$code", code))
+        assertTrue(sameCode("0123456789abcdefghjkmn01", code))
+        assertFalse(sameCode("https://starbridge.run/pair#0123-4567-89AB-CDEF-GHJK-MN02", code))
+        assertFalse(sameCode("not a code", code))
     }
 }

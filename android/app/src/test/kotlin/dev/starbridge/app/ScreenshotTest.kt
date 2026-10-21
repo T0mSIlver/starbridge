@@ -23,6 +23,7 @@ import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.unit.Density
 import com.github.takahirom.roborazzi.captureRoboImage
 import dev.starbridge.app.data.Approval
+import dev.starbridge.app.data.Kind
 import dev.starbridge.app.data.Phase
 import dev.starbridge.app.data.Comparison
 import dev.starbridge.app.data.JoinAsk
@@ -402,6 +403,10 @@ class ScreenshotTest(private val dark: Boolean) {
     }) { Phone(null, 0) { SetupScreen(Phase.NoDevice(accountExists = true), "https://starbridge.run", false, setupActions, {}) } }
 
     @Test fun addDeviceFound() = capture("add-device-found") { Phone(null, 0) { AddDeviceScreen(fake.approval, deviceActions) } }
+    /** A phone by pairing link: the owner types the last group of its code (#2183). */
+    @Test fun addDeviceByLink() = capture("add-device-by-link") {
+        Phone(null, 0) { AddDeviceScreen(Approval.Found("Pixel 9", Kind.Device, "7KQ2-M9XD-4TPV-HB3N-R8CE-WY6F"), deviceActions, linked = true) }
+    }
 
     @Test fun updateRequiredPlay() = capture("update-required-play") { Phone(null, 0) { UpdateRequired("1.2.0", "1.0.3", Installer.Play, update = {}) } }
 

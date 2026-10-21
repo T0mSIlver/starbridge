@@ -1,5 +1,6 @@
 package dev.starbridge.app
 
+import dev.starbridge.app.protocol.endsWith
 import com.goterl.lazysodium.LazySodiumJava
 import com.goterl.lazysodium.SodiumJava
 import dev.starbridge.app.protocol.Images
@@ -218,6 +219,10 @@ class ProtocolVectorsTest {
         val check = v.getValue("check").jsonObject
         assertEquals(check.str("expect"), pairings.checkCode(check.getValue("entries").jsonArray.toList(), check.str("id")))
         assertEquals(check.str("proof"), pairings.checkProof(check.getValue("entries").jsonArray.toList(), check.str("id"), check.str("key")))
+
+        for (case in v.getValue("lastGroup").jsonArray.map { it.jsonObject }) {
+            assertEquals(case.str("typed"), case.getValue("expect").jsonPrimitive.boolean, parsePairingCode(case.str("code")).endsWith(case.str("typed")))
+        }
 
         for (case in v.getValue("parse").jsonArray.map { it.jsonObject }) {
             val got = try {
