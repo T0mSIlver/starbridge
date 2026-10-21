@@ -17,7 +17,7 @@ import {
   rmSync,
   writeFileSync,
 } from "node:fs";
-import { delimiter, join, relative, resolve } from "node:path";
+import { delimiter, isAbsolute, join, relative, resolve } from "node:path";
 import { VERSION } from "../version";
 import {
   claudeDir,
@@ -97,11 +97,19 @@ const BEFORE_INVENTORY = [
   ].map((f) => join("hooks", f)),
 ];
 
+/** Whether `file` is a path strictly inside `dir`. */
+function inside(dir: string, file: string): boolean {
+  const rel = relative(dir, resolve(dir, file));
+  return rel !== "" && !rel.startsWith("..") && !isAbsolute(rel);
+}
+
 /** What setup wrote into `dir` last time; a plugin built before the inventory has `BEFORE_INVENTORY`. */
 function written(dir: string): string[] {
   try {
     const v = JSON.parse(readFileSync(join(dir, INVENTORY), "utf8")) as unknown;
-    if (Array.isArray(v) && v.every((f) => typeof f === "string")) return [...v, INVENTORY];
+    // An entry that leaves the folder is not setup's: the inventory is then as good as missing.
+    if (Array.isArray(v) && v.every((f) => typeof f === "string" && inside(dir, f)))
+      return [...v, INVENTORY];
   } catch {}
   return [...BEFORE_INVENTORY, INVENTORY];
 }

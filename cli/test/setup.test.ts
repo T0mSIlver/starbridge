@@ -2060,6 +2060,25 @@ test("uninstall removes every file the previous release built into starbridge-re
   ]);
 });
 
+test("uninstall ignores an inventory that names a file outside starbridge-remote (#2166)", async () => {
+  const m = await machine();
+  const dir = join(m.home, ".claude", "starbridge-remote");
+  mkdirSync(join(dir, ".claude-plugin"), { recursive: true });
+  const outside = join(m.home, ".claude", "settings-mine.json");
+  writeFileSync(outside, "mine");
+  writeFileSync(join(dir, "notes.txt"), "mine");
+  writeFileSync(
+    join(dir, ".claude-plugin", "written.json"),
+    JSON.stringify(["../settings-mine.json", "notes.txt"]),
+  );
+  writeFileSync(m.settings, JSON.stringify({ env: { CLAUDE_CODE_PLUGIN_DIRS: dir } }));
+  mkdirSync(join(m.home, ".claude", "remote"));
+
+  await uninstallAgent(m.sys, "claude");
+  expect(readFileSync(outside, "utf8")).toBe("mine");
+  expect(readFileSync(join(dir, "notes.txt"), "utf8")).toBe("mine");
+});
+
 test("where Claude desktop starts sessions over SSH, setup loads starbridge-remote from the installed plugins, and uninstall takes it out (#2107)", async () => {
   const m = await machine();
   const root = join(import.meta.dir, "../..");
