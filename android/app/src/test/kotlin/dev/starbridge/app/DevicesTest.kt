@@ -147,28 +147,30 @@ class DevicesTest {
         var approval by mutableStateOf<Approval>(Approval.Idle)
         compose.setContent {
             StarbridgeTheme {
-                PairLinkScreen(approval, DeviceActions({}, { approved++ }, {}, {}, { approval = Approval.Found("Pixel 9", Kind.Device, code) }))
+                PairLinkScreen(approval, DeviceActions({}, { approved++ }, {}, {}, { approval = Approval.Showing(code, "https://starbridge.run/pair#$code") }))
             }
         }
         compose.onNodeWithText("Show a QR code for a new phone").performClick()
+        compose.waitForIdle()
+        approval = Approval.Found("Pixel 9", Kind.Device, code)
         compose.onAllNodesWithText("Last 4 characters").assertCountEquals(0)
         compose.onNodeWithText("Approve", useUnmergedTree = true).performClick()
         assertEquals(1, approved)
     }
 
-    /** A QR code shown while the link's own lookup is still out must not exempt the link's request (#2183). */
-    @Test fun aQrCodeShownDuringTheLinkLookupDoesNotExemptTheLink() {
-        var approved = 0
-        val code = "0123-4567-89AB-CDEF-GHJK-MN01"
+    /** A request for another code than the one this phone shows keeps the gate, however the taps went (#2183). */
+    @Test fun aLinkRequestIsGatedWhileAQrCodeIsShown() {
+        val qr = "0123-4567-89AB-CDEF-GHJK-MN01"
+        val link = "7KQ2-M9XD-4TPV-HB3N-R8CE-WY6F"
         var approval by mutableStateOf<Approval>(Approval.Checking)
         compose.setContent {
             StarbridgeTheme {
-                PairLinkScreen(approval, DeviceActions({}, { approved++ }, {}, {}, {}))
+                PairLinkScreen(approval, DeviceActions({}, {}, {}, {}, { approval = Approval.Showing(qr, "https://starbridge.run/pair#$qr") }))
             }
         }
         compose.onNodeWithText("Show a QR code for a new phone").performClick()
-        // The link's lookup answers after the tap.
-        approval = Approval.Found("Pixel 9", Kind.Device, code)
+        // The link's lookup answers late, under its own code.
+        approval = Approval.Found("Pixel 9", Kind.Device, link)
         compose.onNodeWithText("Last 4 characters").assertIsDisplayed()
     }
 
