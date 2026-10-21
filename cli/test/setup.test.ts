@@ -1716,6 +1716,17 @@ test("on macOS, setup loads a launchd agent that runs the agent, and uninstall u
   expect(readdirSync(dirname(log))).toEqual([]);
 });
 
+test("on macOS, uninstall returns once launchd has removed the job (#2208)", async () => {
+  const m = await machine();
+  await startAgent(m.ctx);
+  const sys: Sys = { ...m.sys, platform: "darwin", arch: "arm64", uid: 501 };
+  expect(await setup(sys, { yes: true, readyTimeoutMs: 2_000 })).toBe(0);
+  // launchd keeps listing a booted-out job for a while, as it did on CI.
+  m.ctx.env.FAKE_LAUNCHD_LINGER = "3";
+  expect(await removeService(sys)).toBe(true);
+  expect((await serviceState(sys)).state).toBe("not loaded");
+});
+
 test.each([
   ["waits until bootout has removed the job", { FAKE_LAUNCHD_LINGER: "2" }],
   ["tries again when launchd refuses a bootstrap with error 5", { FAKE_LAUNCHD_REFUSE: "1" }],

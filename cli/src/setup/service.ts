@@ -342,8 +342,7 @@ const BOOTSTRAP_TRIES = 3;
 async function relaunch(sys: Sys, path: string) {
   const job = `gui/${sys.uid}/${LABEL}`;
   await launchctl(sys, "bootout", job);
-  for (let i = 0; i < GONE_TRIES && (await launchctl(sys, "print", job))?.code === 0; i++)
-    await sys.ctx.sleep(GONE_MS);
+  await untilGone(sys, job);
   await launchctl(sys, "enable", job);
   for (let tries = 1; ; tries++) {
     const r = await launchctl(sys, "bootstrap", `gui/${sys.uid}`, path);
@@ -352,6 +351,12 @@ async function relaunch(sys: Sys, path: string) {
     if (!busy || tries >= BOOTSTRAP_TRIES) throw new Error(`launchctl bootstrap: ${failure(r)}`);
     await sys.ctx.sleep(GONE_MS * 4);
   }
+}
+
+/** Waits, up to 10 s, until launchd no longer lists `job` after a bootout. */
+async function untilGone(sys: Sys, job: string) {
+  for (let i = 0; i < GONE_TRIES && (await launchctl(sys, "print", job))?.code === 0; i++)
+    await sys.ctx.sleep(GONE_MS);
 }
 
 /** Why the service cannot be installed here, or undefined when it can. */
@@ -460,10 +465,13 @@ export async function removeService(sys: Sys): Promise<boolean> {
     pruneEmpty(dirname(path), join(sys.home, ".config"));
     await systemctl(sys, "daemon-reload");
   } else {
-    const r = await launchctl(sys, "bootout", `gui/${sys.uid}/${LABEL}`);
+    const job = `gui/${sys.uid}/${LABEL}`;
+    const r = await launchctl(sys, "bootout", job);
     // 3 and 113: not loaded, so nothing runs.
     if (r?.code !== 0 && r?.code !== 3 && r?.code !== 113)
       throw new Error(`launchctl bootout: ${failure(r)}`);
+    // So that status, or a setup run next, does not find the job still going away (#2208).
+    if (r?.code === 0) await untilGone(sys, job);
     rmSync(path, { force: true });
     removeLog(sys);
   }
