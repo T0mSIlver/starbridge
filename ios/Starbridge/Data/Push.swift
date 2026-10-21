@@ -197,14 +197,15 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
     }
 
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
-        guard let p = Notify.payload(response.notification.request.content.userInfo), let id = Notify.item(p) else { return }
-        // A button answers only the question whose own category carries it: a push can't point a tap at another.
-        guard Notify.accepts(response.actionIdentifier, category: response.notification.request.content.categoryIdentifier, item: id) else { return }
+        let content = response.notification.request.content
+        guard let p = Notify.payload(content.userInfo), let id = Notify.item(p) else { return }
         let text = (response as? UNTextInputNotificationResponse)?.userText
-        await handle(response.actionIdentifier, id: id, kind: p["kind"]?.string, text: text)
+        await handle(response.actionIdentifier, id: id, kind: p["kind"]?.string, text: text, delivered: Delivered(content))
     }
 
-    private func handle(_ action: String, id: String, kind: String?, text: String?) async {
+    private func handle(_ action: String, id: String, kind: String?, text: String?, delivered: Delivered) async {
+        // A button answers only the question this iPhone built the notification from: a push can't point a tap at another.
+        guard Notify.accepts(action, delivered, item: id, key: Notify.sealingKey(store.secrets)) else { return }
         switch action {
         case "reply":
             let text = text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
