@@ -323,13 +323,17 @@ line, the safe side: at worst a prompt repeats an answer the agent already read.
 - Pi has no built-in ask tool. Most Pi users add `ask_user_question` from
   @juicesharp/rpiv-ask-user-question (#966), whose `rpiv:ask-user:prompt` event posts each
   question, already waiting, as opencode's do. The tool returning, whoever answered, settles the
-  questions still open as answered elsewhere. The package takes no answer from outside
-  (juicesharp/rpiv-mono#207 proposes it, and its maintainer merges little), so the Pi extension
-  wraps `ctx.ui.custom`, which Pi shares among extensions, and keeps the `done` of the dialog the
-  package opens right after its `rpiv:ask-user:blocked` event: a device answer closes it as a
-  keyboard submit does. Arming on that event, not on the prompt, leaves other extensions' dialogs
-  alone. Where no such
-  dialog opens (Pi's RPC mode), the answer reaches the agent as a follow-up message once the
+  questions still open as answered elsewhere. From 2.13.9 the package takes an answer on its
+  `rpiv:ask-user:answer` event (juicesharp/rpiv-mono#207), keyed by the `toolCallId` its prompt
+  event now carries, so the Pi extension sends a device answer that way: questionnaires open at
+  once each get their own, and the verdict on `rpiv:ask-user:answer-result` says whether it took
+  (#1516). A verdict of `not_found` means the questionnaire closed meanwhile, so nothing follows.
+  A prompt without `toolCallId` is an older release, which takes no answer from outside: the
+  extension wraps `ctx.ui.custom`, which Pi shares among extensions, and keeps the `done` of the
+  dialog the package opens right after its `rpiv:ask-user:blocked` event, so a device answer
+  closes it as a keyboard submit does. Arming on that event, not on the prompt, leaves other
+  extensions' dialogs alone. Where neither works (Pi's RPC mode, `unsupported_host`, or an answer
+  the package refused), the answer reaches the agent as a follow-up message once the
   questionnaire closes at the keyboard.
 - Antigravity (#962): each `ask_question` call becomes one Starbridge question per question,
   through `hook question` as opencode's, and the answers go back into the waiting step through

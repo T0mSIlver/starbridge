@@ -44,7 +44,7 @@ import {
   permissionsService,
   type Verdict,
 } from "./permissions.ts";
-import { BLOCKED_EVENT, PROMPT_EVENT, questionnaires, TOOL } from "./questions.ts";
+import { BLOCKED_EVENT, PROMPT_EVENT, questionnaires, RESULT_EVENT, TOOL } from "./questions.ts";
 
 interface Ctx {
   hasUI: boolean;
@@ -74,7 +74,10 @@ interface PiApi {
   ): void;
   on(event: "tool_execution_end", handler: (e: { toolName: string }, ctx: Ctx) => unknown): void;
   sendUserMessage(text: string, options?: { deliverAs?: "steer" | "followUp" }): void;
-  events: { on(channel: string, handler: (data: unknown) => void): () => void };
+  events: {
+    on(channel: string, handler: (data: unknown) => void): () => void;
+    emit(channel: string, data: unknown): void;
+  };
 }
 
 /** Set for the session's commands while answers come back into it (cli/src/pi.ts). */
@@ -143,6 +146,7 @@ export default function starbridge(pi: PiApi) {
       }
     },
     notify: (text) => current?.ui.notify(text, "info"),
+    emit: (event, data) => pi.events.emit(event, data),
   });
 
   pi.events.on(PROMPT_EVENT, (data) => {
@@ -153,6 +157,7 @@ export default function starbridge(pi: PiApi) {
     asked.prompt(data, { id: ctx.sessionManager.getSessionId(), cwd: ctx.cwd }).catch(() => {});
   });
   pi.events.on(BLOCKED_EVENT, (data) => asked.blocked(data));
+  pi.events.on(RESULT_EVENT, (data) => asked.result(data));
 
   // Whoever answered, or on any error, the questionnaire is over once its tool returns.
   pi.on("tool_execution_end", (e) => {

@@ -134,11 +134,14 @@ machine is not paired or the server does not answer, and after 570 s.
 With rpiv-ask-user-question installed, each of its questionnaires
 (`rpiv:ask-user:prompt`) runs `starbridge hook question --agent pi`, as
 opencode's questions do (below). The `ask_user_question` tool returning stops
-the CLI, which settles the questions still open. The extension wraps Pi's
+the CLI, which settles the questions still open. From the package's 2.13.9, a
+device's answers go in on `rpiv:ask-user:answer`, keyed by the questionnaire's
+`toolCallId`, and the package's verdict on `rpiv:ask-user:answer-result` says
+whether they took (#1516). With an older release, the extension wraps Pi's
 shared `ctx.ui.custom` to keep the `done` of the dialog the package opens right
-after `rpiv:ask-user:blocked`, so a device's
-answers close it as a keyboard submit does; in Pi's RPC mode they come as a
-follow-up message once the questionnaire closes.
+after `rpiv:ask-user:blocked`, so a device's answers close it as a keyboard
+submit does. In Pi's RPC mode, or when the package refuses the answer, they come
+as a follow-up message once the questionnaire closes.
 
 ## opencode
 
