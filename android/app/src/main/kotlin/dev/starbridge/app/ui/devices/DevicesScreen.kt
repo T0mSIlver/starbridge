@@ -1,6 +1,5 @@
 package dev.starbridge.app.ui.devices
 
-import androidx.compose.runtime.remember
 import dev.starbridge.app.protocol.endsWith
 import dev.starbridge.app.protocol.codeFromLink
 import dev.starbridge.app.protocol.parsePairingCode
@@ -285,7 +284,7 @@ fun PairCard(approval: Approval, actions: DeviceActions, otherWays: @Composable 
     val colors = StarbridgeTheme.colors
     var code by rememberSaveable { mutableStateOf("") }
     // The last group of a linked device's code, as the owner reads it off its screen (#2183).
-    var last by remember(approval is Approval.Found) { mutableStateOf("") }
+    var last by rememberSaveable(approval is Approval.Found) { mutableStateOf("") }
     // The approved code is spent: the card offers the next pairing with an empty field.
     LaunchedEffect(approval is Approval.Done) { if (approval is Approval.Done) code = "" }
     Panel(Modifier.fillMaxWidth()) {

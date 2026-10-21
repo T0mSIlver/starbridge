@@ -8,6 +8,9 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextClearance
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.StateRestorationTester
+import androidx.compose.ui.test.runComposeUiTest
 import dev.starbridge.app.data.Approval
 import dev.starbridge.app.data.Kind
 import dev.starbridge.app.ui.devices.PairLinkScreen
@@ -100,6 +103,23 @@ class DevicesTest {
         compose.onNodeWithText("Last 4 characters").performTextInput("mnoi")
         compose.onNodeWithText("Approve", useUnmergedTree = true).performClick()
         // No second confirm: the typed group is the proof.
+        assertEquals(1, approved)
+    }
+
+    /** The group the owner typed survives the activity being recreated, as a rotation does (#2183). */
+    @OptIn(ExperimentalTestApi::class)
+    @Test fun theTypedLastGroupSurvivesRecreation() = runComposeUiTest {
+        var approved = 0
+        val code = "0123-4567-89AB-CDEF-GHJK-MN01"
+        val restoration = StateRestorationTester(this)
+        restoration.setContent {
+            StarbridgeTheme {
+                PairLinkScreen(Approval.Found("Pixel 9", Kind.Device, code), DeviceActions({}, { approved++ }, {}, {}, {}))
+            }
+        }
+        onNodeWithText("Last 4 characters").performTextInput("mn01")
+        restoration.emulateSaveAndRestore()
+        onNodeWithText("Approve", useUnmergedTree = true).performClick()
         assertEquals(1, approved)
     }
 
