@@ -156,6 +156,22 @@ class DevicesTest {
         assertEquals(1, approved)
     }
 
+    /** A QR code shown while the link's own lookup is still out must not exempt the link's request (#2183). */
+    @Test fun aQrCodeShownDuringTheLinkLookupDoesNotExemptTheLink() {
+        var approved = 0
+        val code = "0123-4567-89AB-CDEF-GHJK-MN01"
+        var approval by mutableStateOf<Approval>(Approval.Checking)
+        compose.setContent {
+            StarbridgeTheme {
+                PairLinkScreen(approval, DeviceActions({}, { approved++ }, {}, {}, {}))
+            }
+        }
+        compose.onNodeWithText("Show a QR code for a new phone").performClick()
+        // The link's lookup answers after the tap.
+        approval = Approval.Found("Pixel 9", Kind.Device, code)
+        compose.onNodeWithText("Last 4 characters").assertIsDisplayed()
+    }
+
     /** A scanned QR hands over the whole link; a typed code, the bare code (#2183). */
     @Test fun aScannedLinkOrTypedCodeNamesTheCodeItIs() {
         val code = "0123-4567-89AB-CDEF-GHJK-MN01"

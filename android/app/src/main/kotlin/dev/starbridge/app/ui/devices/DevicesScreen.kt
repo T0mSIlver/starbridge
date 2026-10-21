@@ -209,6 +209,9 @@ fun AddDeviceScreen(
     }
 }
 
+/** Whether no lookup or request is in flight. */
+private fun Approval.settled() = this is Approval.Idle || this is Approval.Failed || this is Approval.Done
+
 /** Whether [text], typed or scanned (a bare code or a pairing link), names [code]. */
 internal fun sameCode(text: String, code: String): Boolean =
     runCatching { codeFromLink(text) == parsePairingCode(code) }.getOrDefault(false)
@@ -228,8 +231,9 @@ fun PairLinkScreen(approval: Approval, actions: DeviceActions, modifier: Modifie
     // What the owner typed or scanned on this screen: a request for that code needs no extra step.
     var handled by rememberSaveable { mutableStateOf<String?>(null) }
     // A QR code this phone shows is one the owner handled too: the new phone shows no code to type.
+    // Only when no lookup is in flight: the link's own request must not inherit it.
     var shown by rememberSaveable { mutableStateOf(false) }
-    val linked = DeviceActions({ handled = it; shown = false; actions.lookUp(it) }, approve, { confirming = false; actions.close() }, actions.revoke, { shown = true; actions.showCode() })
+    val linked = DeviceActions({ handled = it; shown = false; actions.lookUp(it) }, approve, { confirming = false; actions.close() }, actions.revoke, { if (approval.settled()) shown = true; actions.showCode() })
     val viaCard = found != null && (shown || handled?.let { sameCode(it, found.code) } == true)
     AddDeviceScreen(approval, linked, modifier, onBack, linked = !viaCard)
     if (confirming && found != null) {
