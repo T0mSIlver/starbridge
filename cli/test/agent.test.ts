@@ -280,11 +280,31 @@ test("a wait whose agent stays away goes on at the server (#548)", async () => {
   await Bun.sleep(300);
   await agent.stop();
   speed = 1000;
-  await until(() => ctx.errors.some((e) => e.includes("waiting at the server")));
+  // What the CLI said instead, when it never says this (#2144).
+  await until(() => ctx.errors.some((e) => e.includes("waiting at the server"))).catch((e) => {
+    throw new Error(`${e.message}; the CLI said: ${ctx.errors.join(" | ")}`);
+  });
   speed = 1;
   await server.answer(id, { choice: "Wait" });
   expect(await done).toBe(0);
   expect(ctx.lines.at(-1)).toBe(`Answer to ${id} (Merge #12 now?): Wait`);
+});
+
+test("a stopping agent withdraws its port file before its port closes (#2144)", async () => {
+  const ctx = await paired(server);
+  ctx.env.STARBRIDGE_CODEXBAR = FAKE_CODEXBAR;
+  const socket = join(ctx.store.dir, "agent.port");
+  const agent = makeAgent(ctx, { socket });
+  await agent.start();
+  agents.push(agent);
+  expect(existsSync(socket)).toBe(true);
+  const stopped = agent.stop();
+  // Gone before the port closes, so a client that reads it now finds no agent at once.
+  expect(existsSync(socket)).toBe(false);
+  expect(await rejection(new AgentClient(socket).call("GET", "/v1/status"))).toBeInstanceOf(
+    NoAgent,
+  );
+  await stopped;
 });
 
 test("a wait whose agent stopped still ends at its timeout (#548)", async () => {

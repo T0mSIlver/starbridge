@@ -346,12 +346,14 @@ export class Agent implements Hub {
     const server = this.server;
     this.server = undefined;
     if (server) {
+      // The port file goes before the port closes: a client that reads it after dials a closed
+      // port, which Windows refuses only after about 2 s of retries (#2144). One another agent
+      // wrote since stays.
+      if (this.token) dropPortFile(this.socket, this.token);
       const closed = new Promise<void>((resolve) => server.close(() => resolve()));
       server.closeAllConnections();
       await closed;
-      // A port file another agent wrote since stays.
-      if (this.token) dropPortFile(this.socket, this.token);
-      else if (!this.longSocket() || socketOwner(this.socket) === process.pid)
+      if (!this.token && (!this.longSocket() || socketOwner(this.socket) === process.pid))
         try {
           if (this.longSocket()) unlinkSync(`${this.socket}.pid`);
           unlinkSync(this.socket);
