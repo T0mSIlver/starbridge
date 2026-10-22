@@ -197,7 +197,8 @@ jobs:
       matrix:
         shard: [inbox, snooze, devices]
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # Room for a slow mirror's 10-minute install below and the part's 8 minutes.
+    timeout-minutes: 20
     # actions: the tested step reads artifacts and runs; pull-requests: it finds the merged one.
     permissions:
       contents: read
@@ -283,9 +284,11 @@ jobs:
         with:
           path: ~/.cache/ms-playwright
           key: ${{ steps.browsers.outputs.key }}
+      # --with-deps installs the system packages from Ubuntu's mirror, which at times sends
+      # them at ~40 KB/s: 5 minutes timed out on main twice on 22 Oct (#1806). It takes ~20 s.
       - if: steps.scope.outputs.run == 'true'
         run: pnpm --filter @starbridge/web exec playwright install --with-deps firefox
-        timeout-minutes: 5
+        timeout-minutes: 10
       # A part takes up to ~4 min, the snooze's 2-minute wait for its time included. At 7 the
       # watchdog prints what is still running and stops it.
       - if: steps.scope.outputs.run == 'true'
