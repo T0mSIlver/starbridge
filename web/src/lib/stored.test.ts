@@ -31,7 +31,12 @@ test("every localStorage key of the app is listed as account data, or is the dis
   walk(join(import.meta.dir, ".."));
   // Message types of the service worker are not storage keys.
   for (const key of found) {
-    if (key === "starbridge:prefs" || key.startsWith("starbridge:push")) continue;
+    if (
+      key === "starbridge:prefs" ||
+      key.startsWith("starbridge:push") ||
+      key === "starbridge:open"
+    )
+      continue;
     expect(listed.has(key), `${key} holds account data? add it to ACCOUNT_STORAGE_KEYS`).toBe(true);
   }
 });

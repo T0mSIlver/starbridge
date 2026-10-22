@@ -78,7 +78,8 @@
   the desktop app, which notifies from its inbox and prompts and so reads them while hidden (#886).
 - **Notifications.** The service worker shows one per question and closes it once answered (on Safari the page closes it; spec/push.md, #1363). Its
   actions answer only for the account it was shown for (#274). Signing out, revocation or adopting
-  new keys closes them all (#311).
+  new keys closes them all (#311). A click opens the question or prompt it is about, in the open
+  tab or a new one, as the apps' do; the placeholder opens the inbox (#2218).
 - **Sound**: off by default. The page plays it when a push reaches it, since a service worker
   cannot play audio, so it needs an open page and this browser's notifications: while they are
   off the switch shows off, and turning it on asks for them first (#1061). A closed web app

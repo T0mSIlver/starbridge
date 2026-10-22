@@ -36,3 +36,11 @@ export function promptNote(item: PromptItem): { title: string; body: string } {
     body: `${p.source.machine} · ${p.source.project}\n${p.summary}`,
   };
 }
+
+/**
+ * The page a click on an item's notification opens: the item itself, which `?item=` opens in a
+ * page that loads (lib/opened.ts), and the inbox when the notification names none.
+ */
+export function itemPage(id: string | undefined): string {
+  return id ? `/?item=${encodeURIComponent(id)}` : "/";
+}
