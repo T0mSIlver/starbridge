@@ -400,11 +400,14 @@ the window's screens in light and dark from its end-to-end run (#1846). No model
   starbridge.run and staging serve, as their `/healthz` names them, after every deploy run that
   was not skipped and weekly, since advisories appear after a build. Not the deploy run's own commit, which can be
   newer than the one it deployed (#1560). A high or critical vulnerability with a fixed version fails the run; the
-  rest are listed in its summary, since an advisory without a fix gives nothing to do. Both images
+  rest are folded under them in its issue, and with no fixable one go nowhere, since an advisory without a fix gives nothing to do. Both images
   take Debian's updates at build time, on a layer the commit id keeps out of the build cache, and the web
   image drops npm, which it never runs. osv-scanner reads the lockfiles weekly and reports every
   finding. Each scan keeps one issue open while it finds something and closes it once a run finds
-  nothing. Dependabot's alerts cover the Gradle catalog, which osv-scanner cannot read. The tools
+  nothing. The image and lockfile scans keep theirs in the private T0mSIlver/starbridge-security
+  repository and write no finding to this public repository's run summaries or logs, since a public
+  list of prod's open vulnerabilities saves an attacker the work (#2205). Their token,
+  `SECURITY_ISSUES_TOKEN`, writes issues there only; without it the run fails rather than post here. Dependabot's alerts cover the Gradle catalog, which osv-scanner cannot read. The tools
   pinned by hand (the two scanners, the runner, Node, minisign, swift-sodium's commit) are in no file
   Dependabot reads, so the same weekly run compares each with its latest release and keeps a
   `tool-pins` issue open while one trails (#2026).
