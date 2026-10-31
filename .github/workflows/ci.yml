@@ -277,14 +277,15 @@ jobs:
       # ~/.cache/apt-archives and installs from there whatever still matches the mirror's index.
       # Pull requests restore what main saved and save nothing, so they never evict main's
       # Gradle cache; the key names the Playwright version, the browsers this part installs and
-      # the runner image, whose own packages decide which ones apt needs; an older image's entry
-      # still serves what has not changed.
+      # the runner image, whose own packages decide which ones apt needs. An older build of the
+      # same Ubuntu still serves what has not changed; another Ubuntu never does, since its
+      # browsers link against libraries that one lacks (WebKit wanted libicudata.so.74 on 26).
       - id: browsers
         if: steps.scope.outputs.run == 'true'
         run: |
-          prefix="playwright-${{ runner.os }}-$(jq -r .devDependencies.playwright web/package.json)-${{ matrix.shard == 'devices' && 'firefox-webkit' || 'firefox' }}-"
+          prefix="playwright-${{ runner.os }}-${ImageOS:-}-$(jq -r .devDependencies.playwright web/package.json)-${{ matrix.shard == 'devices' && 'firefox-webkit' || 'firefox' }}-"
           echo "prefix=$prefix" >> "$GITHUB_OUTPUT"
-          echo "key=$prefix${ImageOS:-}-${ImageVersion:-}" >> "$GITHUB_OUTPUT"
+          echo "key=$prefix${ImageVersion:-}" >> "$GITHUB_OUTPUT"
       - if: steps.scope.outputs.run == 'true'
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
