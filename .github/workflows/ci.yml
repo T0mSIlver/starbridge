@@ -272,17 +272,33 @@ jobs:
         run: pnpm install --frozen-lockfile
         timeout-minutes: 5
       # Playwright's browsers, from GitHub's cache: the download once took over 5 minutes (#1916).
+      # So are the system packages --with-deps installs: Ubuntu's mirror sends them to some runners
+      # at ~40 KB/s, and 52 MB then takes 20 minutes (#1806). apt keeps what it downloads in
+      # ~/.cache/apt-archives and installs from there whatever still matches the mirror's index.
       # Pull requests restore what main saved and save nothing, so they never evict main's
-      # Gradle cache; the key names the Playwright version and the browsers this part installs.
+      # Gradle cache; the key names the Playwright version, the browsers this part installs and
+      # the runner image, whose own packages decide which ones apt needs. An older build of the
+      # same Ubuntu still serves what has not changed; another Ubuntu never does, since its
+      # browsers link against libraries that one lacks (WebKit wanted libicudata.so.74 on 26).
       - id: browsers
         if: steps.scope.outputs.run == 'true'
         run: |
-          echo "key=playwright-${{ runner.os }}-$(jq -r .devDependencies.playwright web/package.json)-${{ matrix.shard == 'devices' && 'firefox-webkit' || 'firefox' }}" >> "$GITHUB_OUTPUT"
+          prefix="playwright-${{ runner.os }}-${ImageOS:-}-$(jq -r .devDependencies.playwright web/package.json)-${{ matrix.shard == 'devices' && 'firefox-webkit' || 'firefox' }}-"
+          echo "prefix=$prefix" >> "$GITHUB_OUTPUT"
+          echo "key=$prefix${ImageVersion:-}" >> "$GITHUB_OUTPUT"
       - if: steps.scope.outputs.run == 'true'
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          path: ~/.cache/ms-playwright
+          path: |
+            ~/.cache/ms-playwright
+            ~/.cache/apt-archives/*.deb
           key: ${{ steps.browsers.outputs.key }}
+          restore-keys: ${{ steps.browsers.outputs.prefix }}
+      - if: steps.scope.outputs.run == 'true'
+        run: |
+          mkdir -p ~/.cache/apt-archives/partial
+          printf 'Dir::Cache::Archives "%s/";\nBinary::apt::APT::Keep-Downloaded-Packages "true";\n' ~/.cache/apt-archives |
+            sudo tee /etc/apt/apt.conf.d/99starbridge-archives
       - if: steps.scope.outputs.run == 'true'
         run: pnpm --filter @starbridge/web exec playwright install --with-deps firefox
         timeout-minutes: 5
@@ -308,7 +324,9 @@ jobs:
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         continue-on-error: true
         with:
-          path: ~/.cache/ms-playwright
+          path: |
+            ~/.cache/ms-playwright
+            ~/.cache/apt-archives/*.deb
           key: ${{ steps.browsers.outputs.key }}
       # What a later merge of the same tree looks up (the tested step above). It holds the commit
       # that passed; overwrite, since a re-run attempt uploads it again.
