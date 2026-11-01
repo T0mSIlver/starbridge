@@ -1,8 +1,8 @@
 # The demo server for Play reviewers (#423): the server and the demo program in one image.
 # Build from the repository root: docker build -f deploy/demo/Dockerfile .
-FROM oven/bun:1.4.2@sha256:9114c058aeae42162ee16dd5084b95fe9473970bb6bcb5b232ab1630f0546895 AS bun
+FROM oven/bun:1.4.4@sha256:1d22548f177f4ff38e0c15baa3c2c46c6c2060ba2d1bc573bb4720b407548f1d AS bun
 
-FROM node:26-slim@sha256:193fe51b64e77981119c98c2002c9e32a70e2f006fb4d25068ce0558998917f0 AS build
+FROM node:26-slim@sha256:e4db4c914bf8ad241bd24804fc25d272d89bad97e68cdc8a1414862790a02c39 AS build
 COPY --from=bun /usr/local/bin/bun /usr/local/bin/bun
 WORKDIR /src
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
@@ -25,7 +25,7 @@ RUN bun build server/src/main.ts --target bun --outfile /out/server.js \
  && bun build demo/src/main.ts --target bun --outfile /out/demo.js \
  && bun build demo/src/codexbar.ts --target bun --outfile /out/codexbar.js
 
-FROM oven/bun:1.4.2-slim@sha256:cb3bbbb08e13a4a2ff400f24c7a2a1d5efa83f6ef8544d52d95a519631e2fc61
+FROM oven/bun:1.4.4-slim@sha256:1846adf22496bd711036aae8be147e57bdebbaea2e5264e3e0b5af1db187d9a4
 WORKDIR /app
 COPY --from=build /out/ ./
 COPY deploy/demo/start.sh deploy/demo/codexbar ./
