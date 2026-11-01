@@ -1,27 +1,27 @@
 [versions]
-agp = "9.4.1"
+agp = "9.5.0"
 kotlin = "2.4.21"
 compose-bom = "2026.09.00"
-material3 = "1.5.0-beta01"
+material3 = "1.5.0-beta02"
 activity = "1.13.0"
 core-splashscreen = "1.2.0"
 junit = "4.13.2"
 androidx-test-runner = "1.7.0"
 androidx-test-junit = "1.3.0"
 robolectric = "4.17"
-roborazzi = "1.76.0"
+roborazzi = "1.77.0"
 ksp = "2.3.12"
 hilt = "2.60.1"
 hilt-androidx = "1.4.0"
 lifecycle = "2.11.0"
-serialization = "1.11.0"
+serialization = "1.12.0"
 navigation3 = "1.2.0"
 lazysodium = "5.2.0"
 jna = "5.19.1"
 adaptive = "1.4.0-alpha03"
-okhttp = "5.5.0"
+okhttp = "5.5.1"
 browser = "1.10.0"
-firebase-messaging = "26.0.0"
+firebase-messaging = "26.0.1"
 unifiedpush = "3.3.5"
 coroutines = "1.11.0"
 code-scanner = "16.1.0"
@@ -51,7 +51,7 @@ androidx-test-junit = { group = "androidx.test.ext", name = "junit", version.ref
 robolectric = { group = "org.robolectric", name = "robolectric", version.ref = "robolectric" }
 # Robolectric 4.17's Android for SDK 36, the only one the tests run (#1910). A new Robolectric
 # names another: its tests then fail with "Unable to locate dependency" and the version it wants.
-robolectric-android-all = { group = "org.robolectric", name = "android-all-instrumented", version = "16-robolectric-13921718-i7" }
+robolectric-android-all = { group = "org.robolectric", name = "android-all-instrumented", version = "17-robolectric-15733970-i7" }
 roborazzi = { group = "io.github.takahirom.roborazzi", name = "roborazzi", version.ref = "roborazzi" }
 roborazzi-compose = { group = "io.github.takahirom.roborazzi", name = "roborazzi-compose", version.ref = "roborazzi" }
 roborazzi-junit-rule = { group = "io.github.takahirom.roborazzi", name = "roborazzi-junit-rule", version.ref = "roborazzi" }
