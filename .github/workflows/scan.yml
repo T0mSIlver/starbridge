@@ -4,7 +4,9 @@ name: scan
 # starbridge.run and staging serve, after every deploy run that was not skipped and weekly, since new advisories come
 # out after a build. osv-scanner reads the lockfiles weekly, and pinned-tools.sh compares the tools pinned by
 # hand with their latest release (#2026). Each keeps
-# one issue open while it finds something, and closes it once a run finds nothing.
+# one issue open while it finds something, and closes it once a run finds nothing. The two
+# vulnerability scans keep theirs in the private T0mSIlver/starbridge-security repository, and keep
+# their findings out of this public repository's run summaries and logs (#2205).
 on:
   workflow_run:
     workflows: [deploy]
@@ -31,10 +33,9 @@ env:
   OSV_SCANNER: ghcr.io/google/osv-scanner:v2.7.0@sha256:4f3b7e2c64b9d38a5febc5a7e4a3dfef1d1362f726dea7a2ef4762b46469fcd0
 
 jobs:
-  # Fails on a high or critical vulnerability that has a fixed version; lists the rest in the
-  # run's summary. A finding without a fix has nothing to act on yet.
-  # Trivy gets the job's token to pull the images, so this job's token cannot write issues; the
-  # report job below does that.
+  # Fails on a high or critical vulnerability that has a fixed version. A finding without a fix
+  # has nothing to act on yet. Trivy gets the job's token to pull the images; only the last step
+  # sees SECURITY_ISSUES_TOKEN, which writes issues in starbridge-security and nothing else.
   images:
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -43,10 +44,6 @@ jobs:
     permissions:
       contents: read
       packages: read
-    outputs:
-      revs: ${{ steps.rev.outputs.revs }}
-      outcome: ${{ steps.scan.outcome }}
-      blocking: ${{ steps.scan.outputs.blocking }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -104,38 +101,25 @@ jobs:
                 image --quiet --platform linux/amd64 --scanners vuln --format json \
                 "ghcr.io/t0msilver/starbridge-$image:$rev" > "$RUNNER_TEMP/$image.json"
               name="$image at ${rev:0:8} ($where)"
-              .github/scan-report.sh trivy "$name" < "$RUNNER_TEMP/$image.json" >> "$GITHUB_STEP_SUMMARY"
+              .github/scan-report.sh trivy "$name" < "$RUNNER_TEMP/$image.json" >> "$RUNNER_TEMP/all.md"
               .github/scan-report.sh trivy-blocking "$name" < "$RUNNER_TEMP/$image.json" >> "$RUNNER_TEMP/blocking.md"
             done
           done
-          {
-            echo "blocking<<EOF"
-            cat "$RUNNER_TEMP/blocking.md"
-            echo "EOF"
-          } >> "$GITHUB_OUTPUT"
-
-  images-report:
-    needs: images
-    if: ${{ !cancelled() && needs.images.outputs.revs }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    permissions:
-      contents: read
-      issues: write
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          sparse-checkout: .github
-      - name: Open, update or close the issue
+          echo "Fixable high and critical findings go to the image-scan issue in T0mSIlver/starbridge-security." >> "$GITHUB_STEP_SUMMARY"
+      # Reads the findings from a file: an env value from a step output would print in the log.
+      - name: Open, update or close the issue in starbridge-security
+        if: ${{ !cancelled() && steps.rev.outputs.revs }}
         env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-          OUTCOME: ${{ needs.images.outputs.outcome }}
-          FOUND: ${{ needs.images.outputs.blocking }}
+          GH_TOKEN: ${{ secrets.SECURITY_ISSUES_TOKEN }}
+          GH_REPO: T0mSIlver/starbridge-security
+          OUTCOME: ${{ steps.scan.outcome }}
         run: |
-          [ "$OUTCOME" = success ] || FOUND="The scan itself failed; see the run."
+          found=$(cat "$RUNNER_TEMP/blocking.md" 2>/dev/null || true)
+          # The rest of what Trivy found, folded under the fixable findings.
+          [ -z "$found" ] || found=$(printf '%s\n\n<details><summary>Everything Trivy found</summary>\n\n%s\n</details>' "$found" "$(cat "$RUNNER_TEMP/all.md")")
+          [ "$OUTCOME" = success ] || found="The scan itself failed; see the run."
           .github/scan-issue.sh image-scan "Image scan: fixable high or critical vulnerabilities" \
-            "Trivy found these in the images starbridge.run and staging serve. Rebuilding the image picks up Debian's fixes; a package's fix needs a dependency update." "$FOUND" fail
+            "Trivy found these in the images starbridge.run and staging serve. Rebuilding the image picks up Debian's fixes; a package's fix needs a dependency update." "$found" fail
 
   # Weekly, and by hand. Reports every finding: a lockfile entry with a fix is a dependency
   # update to make, one without is to watch. Dependabot's alerts cover the Gradle catalog, which
@@ -146,7 +130,6 @@ jobs:
     timeout-minutes: 10
     permissions:
       contents: read
-      issues: write
     steps:
       # No token in .git/config: the scanner's container reads the checkout.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -162,23 +145,18 @@ jobs:
             > "$RUNNER_TEMP/osv.json" || code=$?
           [ "$code" -le 1 ] || exit "$code"
           .github/scan-report.sh osv < "$RUNNER_TEMP/osv.json" > "$RUNNER_TEMP/osv.md"
-          cat "$RUNNER_TEMP/osv.md" >> "$GITHUB_STEP_SUMMARY"
-          {
-            echo "found<<EOF"
-            cat "$RUNNER_TEMP/osv.md"
-            echo "EOF"
-          } >> "$GITHUB_OUTPUT"
-      - name: Open, update or close the issue
+          echo "Findings go to the dependency-scan issue in T0mSIlver/starbridge-security." >> "$GITHUB_STEP_SUMMARY"
+      - name: Open, update or close the issue in starbridge-security
         if: ${{ !cancelled() }}
         env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ secrets.SECURITY_ISSUES_TOKEN }}
+          GH_REPO: T0mSIlver/starbridge-security
           OUTCOME: ${{ steps.scan.outcome }}
-          FOUND: ${{ steps.scan.outputs.found }}
         run: |
-          [ "$OUTCOME" = success ] || FOUND="The scan itself failed; see the run."
+          found=$(cat "$RUNNER_TEMP/osv.md" 2>/dev/null || true)
+          [ "$OUTCOME" = success ] || found="The scan itself failed; see the run."
           .github/scan-issue.sh dependency-scan "Lockfile scan: known vulnerabilities" \
-            "osv-scanner found these in the lockfiles at $GITHUB_SHA." "$FOUND"
+            "osv-scanner found these in the lockfiles at $GITHUB_SHA." "$found"
 
   # Weekly, and by hand. Dependabot reads none of these pins: the scanners' images above, the
   # runner and Node in .github/runners/setup.sh, minisign in release.yml and swift-sodium's commit.

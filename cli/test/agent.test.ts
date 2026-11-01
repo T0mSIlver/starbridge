@@ -280,7 +280,14 @@ test("a wait whose agent stays away goes on at the server (#548)", async () => {
   await Bun.sleep(300);
   await agent.stop();
   speed = 1000;
-  await until(() => ctx.errors.some((e) => e.includes("waiting at the server")));
+  const fast = Date.now();
+  // What the CLI said instead, and how far its clock ran, when it never says this (#2144).
+  await until(() => ctx.errors.some((e) => e.includes("waiting at the server"))).catch((e) => {
+    const ran = Date.now() - fast;
+    throw new Error(
+      `${e.message} ${ran} ms after the clock sped up; the CLI said: ${ctx.errors.join(" | ")}`,
+    );
+  });
   speed = 1;
   await server.answer(id, { choice: "Wait" });
   expect(await done).toBe(0);
