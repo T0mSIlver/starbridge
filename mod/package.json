@@ -11,10 +11,10 @@
     "e2e": "bun e2e/run.ts"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.5.15",
+    "@biomejs/biome": "^2.6.4",
     "@starbridge/protocol": "workspace:*",
     "@starbridge/server": "workspace:*",
-    "@types/bun": "^1.4.3",
+    "@types/bun": "^1.4.4",
     "typescript": "^7.0.2"
   }
 }
