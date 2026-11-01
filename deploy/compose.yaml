@@ -73,7 +73,7 @@ services:
   # tracker script and collect endpoint under /stats; the dashboard is on 127.0.0.1:3001 only,
   # for the owner through an SSH tunnel.
   umami:
-    image: ghcr.io/umami-software/umami:3.4.0@sha256:85909afc45bdcda1917394594a087421fdbb05610fded0fa9f6fb861abb2f367
+    image: ghcr.io/umami-software/umami:3.4.1@sha256:e69d1a7932e9dab0fc523edc7be1f3a53f3c261f57856fc2167ae74a8fc022e8
     restart: unless-stopped
     init: true
     # DATABASE_URL and APP_SECRET, made once by deploy/host/umami-env.sh.
@@ -92,7 +92,7 @@ services:
     logging: *logging
 
   umami-db:
-    image: postgres:18-alpine@sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873
+    image: postgres:18-alpine@sha256:10a5c69a83035ab5239f5620d708520e8b28f5aa1f2b20143e6024532edadfb5
     restart: unless-stopped
     environment:
       POSTGRES_DB: umami
