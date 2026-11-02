@@ -11,7 +11,8 @@
  *
  * opencode gives commands no session id, so the plugin sets STARBRIDGE_OPENCODE_SESSION and
  * STARBRIDGE_OPENCODE_TITLE for them (cli/src/opencode.ts), and STARBRIDGE_OPENCODE_ANSWERS while
- * answers come back, which they cannot in `opencode run`: it exits once the session is idle.
+ * answers come back, which they cannot in `opencode run`: it exits once the session is idle. Nor
+ * in a server T3 Code started, whose threads never show a turn the plugin starts (`underT3`).
  *
  * Each permission prompt goes to `starbridge hook permission --agent opencode`, which does
  * nothing while `starbridge config permissions` is off. opencode's dialog stays up meanwhile, and
@@ -27,6 +28,8 @@
  * config folder with the repository's layout, and opencode loads it with Bun. The types below are
  * the part of opencode's plugin API it uses, so it needs no dependency on opencode.
  */
+
+import { spawnSync } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
 import { readFileSync } from "node:fs";
 import {
@@ -150,6 +153,38 @@ function rule(): string | undefined {
  */
 export function isRun(argv: string[]): boolean {
   return argv.slice(2).includes("run");
+}
+
+/**
+ * Whether T3 Code started this opencode server. T3 shows a session's events only during a turn it
+ * started, so an answer the plugin submits runs where its thread never shows it; such a session
+ * gets `wait` instead, as Codex does under T3 (#2101). T3's desktop app gives its server, and so
+ * opencode, `T3CODE_` variables; `t3 serve` gives none, but is opencode's parent. A false yes only
+ * costs a `wait`, the safe side.
+ */
+export function underT3(
+  env: Record<string, string | undefined>,
+  parent: string | undefined,
+): boolean {
+  if (Object.keys(env).some((k) => k.startsWith("T3CODE_"))) return true;
+  if (!parent) return false;
+  return /^t3(\.exe)?$/i.test(parent.split(/[\\/]/).pop() ?? "") || parent.includes("T3 Code");
+}
+
+/** This process's parent's executable, or undefined where it can't be read. */
+function parentCommand(): string | undefined {
+  try {
+    if (process.platform === "linux")
+      return readFileSync(`/proc/${process.ppid}/cmdline`, "utf8").split("\0")[0];
+    if (process.platform === "darwin") {
+      const r = spawnSync("ps", ["-o", "comm=", "-p", String(process.ppid)], {
+        encoding: "utf8",
+        timeout: 2_000,
+      });
+      return r.status === 0 ? r.stdout.trim() : undefined;
+    }
+  } catch {}
+  return undefined;
 }
 
 /**
@@ -322,7 +357,7 @@ async function pruneClaims(dir: string, now: number) {
 
 async function server({ client, directory }: Input) {
   const text = rule();
-  const answers = !isRun(process.argv);
+  const answers = !isRun(process.argv) && !underT3(process.env, parentCommand());
   const env: Record<string, string | undefined> = process.env;
   const dir = configDir(env);
   const { socket, config } = await agentAddress(env);

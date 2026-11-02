@@ -25,6 +25,7 @@ line, the safe side: at worst a prompt repeats an answer the agent already read.
 | Codex in an app that runs its own `codex app-server` | `wait`: the daemon would load the thread and run the answer's turn where that app never shows it. The rollout's `originator`, `codex-tui` for the TUI, tells them apart (#2101) |
 | Pi TUI and RPC | The Pi extension (`mod/pi`) calls `pi.sendUserMessage(text, { deliverAs: "steer" })`: a busy session takes it after its current tool calls (#232, #1584) |
 | opencode TUI and `serve` | The opencode plugin (`mod/opencode`) calls `client.session.promptAsync`, one loop per session (#300); a busy session takes it at its next step (#1484) |
+| opencode in a server T3 Code starts | `wait`: T3 shows a session's events only in a turn it started, so a submitted answer would run where its thread never shows it. The plugin tells it apart by T3's `T3CODE_` variables or a `t3` parent (#ISSUE) |
 | Claude Code subagents | The mod sends the answer to the subagent that asked with `$.session.send` (#1702) |
 | `pi -p`, `opencode run`, other harnesses' subagents | `wait` |
 | Antigravity, interactive | The local agent sends the answer to the conversation's language server, at the address and token `ask` saw, with `SendUserCascadeMessage` run when idle. Retried each minute, 30 times (#961) |

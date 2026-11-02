@@ -16,6 +16,7 @@ import plugin, {
   hookInput,
   isRun,
   submitted,
+  underT3,
   waitingSessions,
 } from "../opencode/starbridge.ts";
 
@@ -26,6 +27,19 @@ test("only `opencode run` counts as run, whatever flags come first", () => {
   // The TUI's plugins run in a worker that sees no command.
   expect(isRun(["/usr/bin/opencode", "/$bunfs/root/src/cli/tui/worker.js"])).toBe(false);
   expect(isRun([...exe, "serve", "--port", "4096"])).toBe(false);
+});
+
+test("a server T3 Code started counts as T3's: its desktop app's variables, or `t3` as the parent", () => {
+  expect(
+    underT3({ T3CODE_CLI_PATH: "/Applications/T3 Code.app/Contents/Resources/t3" }, undefined),
+  ).toBe(true);
+  expect(underT3({}, "/home/me/.t3/runtime/versions/0.1.6/t3")).toBe(true);
+  expect(underT3({}, "C:\\Users\\me\\t3.exe")).toBe(true);
+  expect(underT3({}, "/Applications/T3 Code.app/Contents/MacOS/T3 Code")).toBe(true);
+  // The TUI, `opencode serve` from a shell, and an unreadable parent are not.
+  expect(underT3({ HOME: "/home/me" }, "/usr/bin/zsh")).toBe(false);
+  expect(underT3({}, "/usr/bin/opencode")).toBe(false);
+  expect(underT3({}, undefined)).toBe(false);
 });
 
 test("after a restart, the sessions told to expect their answer as a prompt, with a question open or an answer undelivered, get a loop", () => {

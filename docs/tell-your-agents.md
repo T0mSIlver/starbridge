@@ -99,7 +99,8 @@ and `external_directory` rules stay at the keyboard.
 typed reply on your devices.
 
 **Answers.** They come back through the Starbridge opencode plugin, in the TUI and
-`opencode serve`.
+`opencode serve`. In a server T3 Code starts, the agent waits for the answer in its turn, since
+T3 shows no turn the plugin starts.
 
 **Permission prompts.** Starbridge races them. `opencode run` rejects every prompt itself, so none
 reaches your devices.
