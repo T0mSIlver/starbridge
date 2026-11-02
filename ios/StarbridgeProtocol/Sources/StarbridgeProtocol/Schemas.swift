@@ -481,6 +481,8 @@ public struct Decision: ItemBody, Equatable {
     public let replies: Bool?
     /** With `answerIn`: the machine takes a Done answer. */
     public let done: Bool?
+    /** The owner may pick more than one option and answer with `choices` (#2064). */
+    public let multiple: Bool?
     public let dir: DirectoryHead?
 
     public var recipients: [String] { to }
@@ -510,8 +512,10 @@ public struct Decision: ItemBody, Equatable {
         answerIn = try f.optional("answerIn").map { try DecisionLink(Fields($0, "answerIn")) }
         replies = try f.optTrue("replies")
         done = try f.optTrue("done")
+        multiple = try f.optTrue("multiple")
         dir = try optDir(f)
         try schema(options.count != 1, "options: 0 or 2 to 4")
+        try schema(multiple == nil || !options.isEmpty, "multiple needs options")
         // By code points, as JavaScript compares: Swift's == would equate "é" and "e\u{301}".
         let points = options.map { Array($0.unicodeScalars) }
         try schema(Set(points).count == options.count, "options must be distinct")
@@ -534,9 +538,21 @@ public struct Decision: ItemBody, Equatable {
         o.put("answerIn", answerIn?.json)
         o.put("replies", replies.map(JSON.bool))
         o.put("done", done.map(JSON.bool))
+        o.put("multiple", multiple.map(JSON.bool))
         o.put("dir", dir?.json)
         return .object(o)
     }
+}
+
+/** A multi-select answer's picks (`Choices` in schemas.ts): 1 to 4 options, each once. */
+private func optChoices(_ f: Fields) throws -> [String]? {
+    guard try f.optArray("choices") != nil else { return nil }
+    let choices = try f.strings("choices")
+    try schema((1...4).contains(choices.count), "choices")
+    for c in choices { try checkLength(c, 1, 100, "choice") }
+    // By code points, as JavaScript compares, like a decision's options.
+    try schema(Set(choices.map { Array($0.unicodeScalars) }).count == choices.count, "choices must be distinct")
+    return choices
 }
 
 public struct Answer: ItemBody, Equatable {
@@ -546,6 +562,8 @@ public struct Answer: ItemBody, Equatable {
     public let to: String
     public let answeredAt: String
     public let choice: String?
+    /** The options picked on a `multiple` decision, each once. */
+    public let choices: [String]?
     public let text: String?
     /** The owner answered on the decision's `answerIn` page. */
     public let done: Bool?
@@ -561,15 +579,17 @@ public struct Answer: ItemBody, Equatable {
         to = try f.id("to")
         answeredAt = try f.time("answeredAt")
         choice = try f.optText("choice", 0, 100)
+        choices = try optChoices(f)
         text = try f.optText("text", 0, ANSWER_TEXT_MAX)
         done = try f.optTrue("done")
         dir = try optDir(f)
-        try schema([choice != nil, text != nil, done != nil].filter { $0 }.count == 1, "exactly one of choice, text and done")
+        try schema([choice != nil, choices != nil, text != nil, done != nil].filter { $0 }.count == 1, "exactly one of choice, choices, text and done")
     }
 
     public var json: JSON {
         var o: JSONObject = ["v": 1, "id": .string(id), "decisionId": .string(decisionId), "to": .string(to), "answeredAt": .string(answeredAt)]
         o.put("choice", choice.map(JSON.string))
+        o.put("choices", choices.map { JSON($0) })
         o.put("text", text.map(JSON.string))
         o.put("done", done.map(JSON.bool))
         o.put("dir", dir?.json)
@@ -714,6 +734,7 @@ public struct Settled: ItemBody, Equatable {
     public let device: String?
     /** With outcome "device" on a decision: the answer it applied. */
     public let choice: String?
+    public let choices: [String]?
     public let text: String?
     public let dir: DirectoryHead?
     /** With outcome "device" on a permission: what that device answered. */
@@ -734,14 +755,15 @@ public struct Settled: ItemBody, Equatable {
         if let outcome { try schema(SETTLED_OUTCOMES.contains(outcome), "outcome") }
         device = try f.optId("device")
         choice = try f.optText("choice", 0, 100)
+        choices = try optChoices(f)
         text = try f.optText("text", 0, ANSWER_TEXT_MAX)
         dir = try optDir(f)
         behavior = try f.optString("behavior")
         if let behavior { try schema(behavior == "allow" || behavior == "deny", "behavior") }
         reason = try f.optText("reason", 1, SETTLED_REASON_MAX)
         if let reason { try schema(!reason.unicodeScalars.contains { $0 == "\n" || $0 == "\r" }, "reason: one line") }
-        try schema(device != nil || (choice == nil && text == nil), "choice and text come only with a device's outcome")
-        try schema(choice == nil || text == nil, "at most one of choice and text")
+        try schema(device != nil || (choice == nil && choices == nil && text == nil), "choice, choices and text come only with a device's outcome")
+        try schema([choice != nil, choices != nil, text != nil].filter { $0 }.count <= 1, "at most one of choice, choices and text")
         try schema((outcome == "device") == (device != nil), "device is set exactly when outcome is device")
         try schema(behavior == nil || outcome == "device", "behavior comes only with a device's outcome")
         try schema(reason == nil || outcome == "withdrawn", "reason comes only with outcome withdrawn")
@@ -752,6 +774,7 @@ public struct Settled: ItemBody, Equatable {
         o.put("outcome", outcome.map(JSON.string))
         o.put("device", device.map(JSON.string))
         o.put("choice", choice.map(JSON.string))
+        o.put("choices", choices.map { JSON($0) })
         o.put("text", text.map(JSON.string))
         o.put("dir", dir?.json)
         o.put("behavior", behavior.map(JSON.string))

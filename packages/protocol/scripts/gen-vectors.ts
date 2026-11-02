@@ -2628,6 +2628,14 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
         valid: true,
       },
       { name: "done without answerIn", body: { ...decisionBody, done: true }, valid: false },
+      // Multi-select (#2064): checkboxes over the options; a reader that does not know it taps one.
+      { name: "multiple", body: { ...decisionBody, multiple: true }, valid: true },
+      { name: "multiple false", body: { ...decisionBody, multiple: false }, valid: false },
+      {
+        name: "multiple without options",
+        body: { ...decisionBody, options: [], recommended: undefined, multiple: true },
+        valid: false,
+      },
       {
         name: "answered in an artifact and with options",
         body: { ...decisionBody, answerIn: artifact },
@@ -2658,6 +2666,34 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
       {
         name: "done false",
         body: { ...answerBody, choice: undefined, done: false },
+        valid: false,
+      },
+      // Multi-select (#2064): the picks, each once, 1 to 4 of them.
+      {
+        name: "choices",
+        body: { ...answerBody, choice: undefined, choices: ["Yes", "No"] },
+        valid: true,
+      },
+      { name: "choice and choices", body: { ...answerBody, choices: ["Yes"] }, valid: false },
+      {
+        name: "choices and text",
+        body: { ...answerBody, choice: undefined, choices: ["Yes"], text: "and text" },
+        valid: false,
+      },
+      { name: "no choices", body: { ...answerBody, choice: undefined, choices: [] }, valid: false },
+      {
+        name: "five choices",
+        body: { ...answerBody, choice: undefined, choices: ["A", "B", "C", "D", "E"] },
+        valid: false,
+      },
+      {
+        name: "a choice twice",
+        body: { ...answerBody, choice: undefined, choices: ["Yes", "Yes"] },
+        valid: false,
+      },
+      {
+        name: "an empty choice among choices",
+        body: { ...answerBody, choice: undefined, choices: ["Yes", ""] },
         valid: false,
       },
       ...withHead(answerBody),
@@ -2764,6 +2800,22 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
     ],
     settled: [
       { name: "by a device", body: settledBody, valid: true },
+      // A multi-select answer the machine took (#2064), shown on every device.
+      {
+        name: "a device's choices",
+        body: { ...settledBody, itemId: "dec_1", choices: ["Yes", "No"] },
+        valid: true,
+      },
+      {
+        name: "a device's choices and text",
+        body: { ...settledBody, itemId: "dec_1", choices: ["Yes"], text: "and text" },
+        valid: false,
+      },
+      {
+        name: "choices at the keyboard",
+        body: { ...settledBody, outcome: "keyboard", device: undefined, choices: ["Yes"] },
+        valid: false,
+      },
       ...withHead(settledBody),
       {
         name: "a device's deny on a permission",

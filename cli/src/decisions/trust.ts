@@ -15,7 +15,10 @@ import type { State } from "../config";
 import { type Ctx, refreshDirectory, type Session, session, withheld } from "../context";
 
 /** What `checkAnswer` reads of a decision this machine asked. */
-type Asked = Pick<State["asked"][string], "options" | "settled" | "answerIn" | "done" | "to">;
+type Asked = Pick<
+  State["asked"][string],
+  "options" | "settled" | "answerIn" | "done" | "to" | "body"
+>;
 
 /**
  * Checks an answer item: sealed to this machine, signed by an active device that the decision was
@@ -54,6 +57,13 @@ export function checkAnswer(
   // schema already holds an answer to exactly one of the two.
   if (body.choice !== undefined && !decision.options.includes(body.choice))
     throw new ProtocolError("bad-schema", "choice is not one of the options");
+  // Several picks only where the decision offered them (#2064), each one of its options.
+  if (body.choices !== undefined) {
+    if (!decision.body?.multiple)
+      throw new ProtocolError("bad-schema", `${body.decisionId} takes one choice`);
+    if (!body.choices.every((c) => decision.options.includes(c)))
+      throw new ProtocolError("bad-schema", "a choice is not one of the options");
+  }
   return body;
 }
 

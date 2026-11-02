@@ -578,10 +578,14 @@ directory append ends its open waits. So the machine's agent re-reads the direct
 device joins and posts a fresh snapshot sealed to it, and posts one when a device asks.
 A machine checks that an answer's `decisionId` is one it asked, still open, and with
 `answerIn` exactly when the answer is `done`, that its signer is one of the devices the decision was sealed to, and that its
-`choice`, if any, is one of the decision's options. It never delivers an answer to a decision it
-settled, even one it accepted before, since the server could have held it back until then. An answer carries one of `choice`, `text` and `done`: a decision with options that sets
+`choice`, if any, is one of the decision's options. It takes `choices` only for a decision that
+sets `multiple: true`, and only when each is one of its options. It never delivers an answer to a decision it
+settled, even one it accepted before, since the server could have held it back until then. An answer carries one of `choice`, `choices`, `text` and `done`: a decision with options that sets
 `replies: true` also takes a typed `text` reply, which clients offer as "Reply" under the
-options. For permission answers, see below.
+options. A decision with options sets `multiple: true` when more than one can apply, and its
+answer may carry `choices`, 1 to 4 distinct options, in place of one `choice`. Clients that
+predate the field ignore it and send one `choice` or a typed reply, which a machine still takes.
+For permission answers, see below.
 
 ### Push
 
@@ -845,7 +849,7 @@ first answer wins.
   "once" | "session" | "project", inputHash, message?}`: a deny is for this call only and may
   carry a message to the agent; an allow carries none.
 - `settled` `{v, id, itemId, to, at, outcome?: "keyboard" | "timeout" | "device" | "elsewhere" |
-  "withdrawn", device?, behavior?: "allow" | "deny", choice?, text?, reason?}` closes any item its machine
+  "withdrawn", device?, behavior?: "allow" | "deny", choice?, choices?, text?, reason?}` closes any item its machine
   posted, a permission or a decision. For a permission, `keyboard` covers any answer outside
   Starbridge (terminal, Desktop, the Claude app) and `device` names the device whose answer the
   machine applied, with `behavior` saying whether it allowed or denied; `behavior` comes with no
@@ -853,7 +857,7 @@ first answer wins.
   `elsewhere` means it was answered outside Starbridge and `withdrawn` that the agent no longer
   needs it, with the agent's `reason` why: one line of at most 120 characters, under no other
   outcome (#1284); `device`, posted once the machine accepts a device's answer, names that device and
-  repeats its `choice` or `text`, neither for a Done. An answer is sealed only to the machine, so this notice is how
+  repeats its `choice`, `choices` or `text`, none of them for a Done. An answer is sealed only to the machine, so this notice is how
   the other devices learn which answer won, for instance when two answered at once. Devices
   show it after the decision is answered, whenever it arrives; clients that predate the two
   fields ignore them.
