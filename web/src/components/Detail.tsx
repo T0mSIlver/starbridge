@@ -247,6 +247,16 @@ export function QuestionDetail({
       ) : d.answerIn ? (
         <div className={s.actions}>
           <AnswerElsewhere page={d.answerIn} />
+          {d.done && (
+            <button
+              type="button"
+              className={`t-label ${ui.btn}`}
+              disabled={sending}
+              onClick={() => send({ done: true })}
+            >
+              Done
+            </button>
+          )}
         </div>
       ) : paired ? (
         <Picks
@@ -314,16 +324,6 @@ export function QuestionDetail({
       <SessionLine source={d.source} agent={agentOf(d)}>
         {!closed && (
           <div className={s.quiet}>
-            {d.answerIn && d.done && (
-              <button
-                type="button"
-                className={`t-small ${s.link} ${s.reply}`}
-                disabled={sending}
-                onClick={() => send({ done: true })}
-              >
-                Done
-              </button>
-            )}
             {snoozed && (
               <button
                 type="button"
