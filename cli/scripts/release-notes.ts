@@ -92,13 +92,33 @@ function git(...args: string[]): string {
   return r.stdout;
 }
 
-async function prBody(repo: string, pr: number, token: string): Promise<string> {
-  const res = await fetch(`https://api.github.com/repos/${repo}/pulls/${pr}`, {
-    headers: { authorization: `Bearer ${token}`, accept: "application/vnd.github+json" },
-  });
-  if (res.status === 404) return "";
-  if (!res.ok) throw new Error(`pull request #${pr}: HTTP ${res.status}`);
-  return ((await res.json()) as { body: string | null }).body ?? "";
+/**
+ * A pull request's body, or "" when it does not exist. GitHub's API answers 503 for minutes at a
+ * time during an incident, which failed 0.1.8-rc.7's release twice, so a 5xx, a 429 or a network
+ * error is retried with a growing wait before the release fails.
+ */
+export async function prBody(
+  repo: string,
+  pr: number,
+  token: string,
+  get: typeof fetch = fetch,
+  waits: number[] = [2_000, 5_000, 15_000, 30_000, 60_000],
+): Promise<string> {
+  for (let attempt = 0; ; attempt++) {
+    const res = await get(`https://api.github.com/repos/${repo}/pulls/${pr}`, {
+      headers: { authorization: `Bearer ${token}`, accept: "application/vnd.github+json" },
+    }).catch((e: unknown) => String(e));
+    if (typeof res !== "string") {
+      if (res.status === 404) return "";
+      if (res.ok) return ((await res.json()) as { body: string | null }).body ?? "";
+    }
+    const failure = typeof res === "string" ? res : `HTTP ${res.status}`;
+    const transient = typeof res === "string" || res.status >= 500 || res.status === 429;
+    const wait = waits[attempt];
+    if (!transient || wait === undefined) throw new Error(`pull request #${pr}: ${failure}`);
+    console.error(`pull request #${pr}: ${failure}, retrying in ${wait / 1000}s`);
+    await new Promise((r) => setTimeout(r, wait));
+  }
 }
 
 if (import.meta.main) {
