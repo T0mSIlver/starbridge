@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { baseTag, parseNotes, prNumber, render } from "../scripts/release-notes";
+import { baseTag, parseNotes, prBody, prNumber, render } from "../scripts/release-notes";
 
 const TAGS = ["v0.1.2", "v0.1.3-rc.1", "v0.1.3", "v0.1.4-rc.1", "v0.1.4-rc.2", "v0.1.4-rc.3"];
 
@@ -95,4 +95,21 @@ test("the body has a section per product with notes, in a fixed order, then ever
 
 </details>
 `);
+});
+
+test("a pull request lookup retries GitHub's 5xx and network errors, and fails on the rest", async () => {
+  const replies = (...r: (number | Error)[]) =>
+    (async () => {
+      const next = r.shift();
+      if (next instanceof Error) throw next;
+      return new Response(JSON.stringify({ body: "notes" }), { status: next });
+    }) as unknown as typeof fetch;
+  expect(await prBody("o/r", 1, "t", replies(503, new Error("reset"), 200), [0, 0])).toBe("notes");
+  expect(await prBody("o/r", 1, "t", replies(404), [0])).toBe("");
+  await expect(prBody("o/r", 1, "t", replies(503, 503), [0])).rejects.toThrow(
+    "pull request #1: HTTP 503",
+  );
+  await expect(prBody("o/r", 1, "t", replies(401, 200), [0])).rejects.toThrow(
+    "pull request #1: HTTP 401",
+  );
 });
