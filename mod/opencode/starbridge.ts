@@ -158,7 +158,7 @@ export function isRun(argv: string[]): boolean {
 /**
  * Whether T3 Code started this opencode server. T3 shows a session's events only during a turn it
  * started, so an answer the plugin submits runs where its thread never shows it; such a session
- * gets `wait` instead, as Codex does under T3 (#2101). T3's desktop app gives its server, and so
+ * gets `wait` instead, as Codex does under T3 (#2101, #2237). T3's desktop app gives its server, and so
  * opencode, `T3CODE_` variables; `t3 serve` gives none, but is opencode's parent. A false yes only
  * costs a `wait`, the safe side.
  */
