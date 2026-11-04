@@ -12,6 +12,9 @@ import type { AskInput } from "./source";
 
 /**
  * - `mod`: Claude Code's mod, or Cursor's hooks, take it from the agent's session events.
+ * - `turn`: Claude Code's mod in a `claude -p` run, which ends with its turn (#2258): it hands
+ *   the answer in with the next tool result while the run works, and submits no prompt, since
+ *   none would run. So `ask` promises none: after the run, only `wait` brings the answer.
  * - `extension`: the Pi extension or the opencode plugin take it the same way.
  * - `codex`: the agent steers it into the Codex session, or queues it there.
  * - `agy`: the agent sends it to the Antigravity conversation's language server; the Stop hook
@@ -22,6 +25,7 @@ import type { AskInput } from "./source";
  */
 export type Route =
   | { kind: "mod" }
+  | { kind: "turn" }
   | { kind: "extension" }
   | { kind: "codex"; codex: CodexSession }
   | { kind: "agy"; antigravity: AgyRoute }
@@ -33,6 +37,8 @@ export interface Observed {
   reachable: boolean;
   /** A mod polled for this session lately (for Cursor: its conversation is open). */
   modSeen: boolean;
+  /** That mod's hello said `headless`: a `claude -p` run (#2258). */
+  headless?: boolean;
   /** This agent can send to the T3 Code thread the ask names (`t3 thread send`). */
   t3: boolean;
 }
@@ -60,6 +66,7 @@ export function routeFor(
       // outweighs `headless`, which Agent SDK sessions carry as `claude -p` does. Only the mod
       // names a subagent, so one runs in this session (#1702).
       if (!(seen.modSeen || (!input.headless && !!input.subagent))) return undefined;
+      if (seen.modSeen && seen.headless) return { kind: "turn" };
       // T3 carries a Claude Code session's answer only behind its mod (#2244).
       return t3 && input.agent === "claude-code" && seen.modSeen
         ? { kind: "t3", t3: { thread: t3, mod: true } }

@@ -97,6 +97,8 @@ export interface Hub {
   log(line: string): void;
   /** Whether session `id`'s client called within `ms`: its mod is there to take a prompt. */
   seen(id: string, ms: number): boolean;
+  /** Whether session `id`'s mod said it runs in `claude -p`, which ends with its turn (#2258). */
+  headless?(id: string): boolean;
 }
 
 const SESSION_ID = /^[A-Za-z0-9_.:-]{1,200}$/;
@@ -493,10 +495,12 @@ export class Agent implements Hub {
   }
 
   seen(id: string, ms: number): boolean {
-    const s = this.sessions.get(id);
-    // A run that ends with its turn hands answers only into that turn: it submits no prompt (#2258).
-    if (!s || s.headless) return false;
-    return this.ctx.now().getTime() - Date.parse(s.lastSeenAt) <= ms;
+    const at = this.sessions.get(id)?.lastSeenAt;
+    return at !== undefined && this.ctx.now().getTime() - Date.parse(at) <= ms;
+  }
+
+  headless(id: string): boolean {
+    return this.sessions.get(id)?.headless === true;
   }
 
   private async hello(req: Request) {

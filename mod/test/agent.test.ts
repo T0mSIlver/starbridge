@@ -318,8 +318,8 @@ test("a `claude -p` run takes an answer at its next tool call, submits no prompt
     submit: (lines) => handover.submit(lines, () => []),
   });
   await until(() => a.s.calls.includes("POST /v1/sessions/s-p/hello"));
-  // The agent knows the session, but no mod of it brings answers as prompts.
-  expect(agent?.seen("s-p", 45_000)).toBe(false);
+  // The agent records it as a run that ends with its turn: its route promises no prompt.
+  expect(agent?.headless("s-p")).toBe(true);
   const before = cli.errors.length;
   const first = await ask("Merge #12 now?", "s-p");
   expect(cli.errors.slice(before).join("\n")).toContain(`starbridge wait ${first}`);
@@ -344,9 +344,9 @@ test("a `claude -p` run takes an answer at its next tool call, submits no prompt
   expect(taken).toEqual([`Answer to ${second} (Deploy tonight?): Yes`]);
   expect(a.s.submitted).toEqual([]);
 
-  // `claude --resume` of that session, interactive: its hello counts again.
+  // `claude --resume` of that session, interactive: its hello says otherwise.
   await fetchOn("/v1/sessions/s-p/hello", "POST", { cwd: "/w" });
-  expect(agent?.seen("s-p", 45_000)).toBe(true);
+  expect(agent?.headless("s-p")).toBe(false);
 });
 
 test("mid-turn, a waiting answer that `waiting` printed meanwhile goes in no tool result (#1484)", async () => {

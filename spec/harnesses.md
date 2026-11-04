@@ -131,8 +131,8 @@ still takes any answer to its session, the `wait` line's safe side.
   printing the `wait` line. While a `claude -p` run works, its mod hands an answer in with the
   next tool result, as in any running turn: it polls only the local agent, with 1 s holds since
   the run exits only once the mod's open call returns, and submits no prompt, so a line that
-  misses the turn stays unconfirmed for `wait`. Its hello says `headless`, and the agent counts no
-  such session as one whose mod brings prompts. It takes no CLI path, whose lease would tell
+  misses the turn stays unconfirmed for `wait`. Its hello says `headless`, so `routeFor` gives
+  the question the `turn` route, whose promise is the `wait` line (#2284). It takes no CLI path, whose lease would tell
   `ask` that some session submits prompts. Checked with `mod/e2e` case `print` (Claude Code
   2.1.317): the answer came with the next tool result, and the run exited 0.6 s after its turn.
   The Pi extension and opencode plugin submit and confirm a line at once, which in a run that

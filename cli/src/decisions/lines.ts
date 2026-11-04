@@ -12,9 +12,12 @@ import type { AskInput } from "./source";
  */
 export type Delivery = "prompt" | "wait";
 
-/** What `ask` promises: a prompt exactly when its answer has a route (`routeFor`, #2284). */
+/**
+ * What `ask` promises: a prompt exactly when its answer has a route (`routeFor`, #2284), except
+ * a `claude -p` run's, whose route ends with the run (#2258).
+ */
 export function promise(route: Route | undefined | null): Delivery {
-  return route ? "prompt" : "wait";
+  return route && route.kind !== "turn" ? "prompt" : "wait";
 }
 
 /**
