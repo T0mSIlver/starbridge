@@ -534,7 +534,9 @@ it has no title. A session's title is words, in the reading face (#563).
   line, then ends in "…"; wider, it is cut in the middle (#2242). With no
   session the line is the button alone.
 - A question answered on its page shows "Answer in …" in amber with Done as a
-  secondary button beside it, on the card and in the detail alike (#2242).
+  secondary button beside it, on the card and in the detail alike (#2242). At large text
+  sizes the link wraps to a second line (Android) or Done goes under it (iPhone, from the
+  xxxLarge size), rather than the link ending in "…".
 - Links the agent attaches are chips after the context: the label and an
   open-outside icon, never the word "Open". A GitHub link leads with the
   Octicon for its kind and reads as its reference ("#123", "v0.1.2"); a

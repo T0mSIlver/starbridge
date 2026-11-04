@@ -105,7 +105,7 @@ private struct Answering: View {
 
     var body: some View {
         let body = decision.body
-        // From the third-largest text size up, Done goes under the link: side by side it left the link
+        // From the xxxLarge text size up, Done goes under the link: side by side it left the link
         // "Answ…" at 320 pt (#2242).
         let stacked = typeSize >= .xxxLarge
         let row = stacked ? AnyLayout(VStackLayout(spacing: Tokens.Spacing.s2)) : AnyLayout(HStackLayout(spacing: Tokens.Spacing.s2))
