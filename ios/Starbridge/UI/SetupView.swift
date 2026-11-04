@@ -54,6 +54,9 @@ private struct Step<Top: View, Bottom: View>: View {
 }
 
 enum SetupCopy {
+    /** Where the code to scan comes from: the web's "Add this browser" sentence, word for word (#2281). */
+    static let joinHint = "On a device you already use, open Add a device, then scan or type this code."
+
     /** How a tester joins a demo server, which approves the iPhone by itself (#2089, Tom's pick). */
     static let demoJoin = "This demo approves your iPhone by itself: tap Compare digits, then They match."
 }
@@ -387,7 +390,7 @@ private struct JoinStep: View {
         Step {
             Title(text: "Add this iPhone")
             // A demo server approves every join itself: a tester has no other device to scan (#2089).
-            if store.demo { Lede(text: SetupCopy.demoJoin).padding(.bottom, Tokens.Spacing.s4) }
+            Lede(text: store.demo ? SetupCopy.demoJoin : SetupCopy.joinHint).padding(.bottom, Tokens.Spacing.s4)
             Tile(symbol: "qrcode")
         } bottom: {
             Button {

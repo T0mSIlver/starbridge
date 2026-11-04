@@ -327,7 +327,7 @@ private fun Join(busy: Boolean, actions: SetupActions, modifier: Modifier, joinL
             Column(Modifier.padding(start = Spacing.s4, end = Spacing.s4, top = 48.dp, bottom = Spacing.s6), verticalArrangement = Arrangement.spacedBy(Spacing.s3)) {
                 Title("Add this phone")
                 // A demo server approves every join itself: a tester has no other device to scan (#2089).
-                if (demo) Text(DEMO_JOIN, style = StarbridgeTheme.type.body, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(if (demo) DEMO_JOIN else JOIN_HINT, style = StarbridgeTheme.type.body, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             Tile(Sym.Qr)
             scanError?.let { Text(it, style = StarbridgeTheme.type.small, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(Spacing.s4)) }
@@ -364,6 +364,9 @@ private fun Join(busy: Boolean, actions: SetupActions, modifier: Modifier, joinL
         )
     }
 }
+
+/** Where the code to scan comes from: the web's "Add this browser" sentence, word for word (#2281). */
+internal const val JOIN_HINT = "On a device you already use, open Add a device, then scan or type this code."
 
 /** How a tester joins a demo server, which approves the phone by itself (#2089, Tom's pick). */
 internal const val DEMO_JOIN = "This demo approves your phone by itself: tap Compare digits, then They match."
