@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.Density
 import com.github.takahirom.roborazzi.captureRoboImage
 import dev.starbridge.app.data.Approval
 import dev.starbridge.app.data.Kind
+import dev.starbridge.app.data.SessionLink
 import dev.starbridge.app.data.Phase
 import dev.starbridge.app.data.Comparison
 import dev.starbridge.app.data.JoinAsk
@@ -221,6 +222,11 @@ class ScreenshotTest(private val dark: Boolean) {
     @Test fun imageViewer() = capture("image-viewer", before = { compose.onNodeWithContentDescription("Inbox, dark").performClick() }) { QuestionSheet(fake.screenshot) }
 
     @Test fun sheetAnswerIn() = capture("sheet-answer-in") { QuestionSheet(fake.answerIn) }
+
+    // A session named by its first sentence wraps to a second line beside Done (#2242).
+    @Test fun sheetAnswerInLongName() = capture("sheet-answer-in-long-name") {
+        QuestionSheet(fake.answerIn.copy(source = fake.answerIn.source.copy(title = "Rename every provider id to CodexBar's names and keep the old ones as aliases (15)", links = listOf(SessionLink("web", "https://claude.ai/code/session_01")))))
+    }
 
     // A question answered on its own page: the link and Done on its card (#539).
     @Test fun inboxAnswerIn() = capture("inbox-answer-in") {
