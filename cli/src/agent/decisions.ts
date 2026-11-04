@@ -4,7 +4,7 @@
  * Everything lives in the CLI's state file, under its lock, so an agent restart loses nothing a
  * session has not confirmed, and the CLI's own path (no agent) reads the same state.
  */
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { activeMembers, type Directory, ProtocolError } from "@starbridge/protocol";
 import { type AgyRoute, agyReachable, agySend } from "../antigravity";
@@ -507,7 +507,12 @@ export function forgetSaved(dir: string, session: string, acks: string[]): strin
     const left = lines.filter(
       (l) => !acks.includes((l as { ack?: unknown } | null)?.ack as string),
     );
-    if (left.length < lines.length) writeFileSync(path, JSON.stringify(left));
+    if (left.length < lines.length) {
+      // Renamed into place: a failed write must not take the other saved lines with it.
+      const tmp = `${path}.${process.pid}.tmp`;
+      writeFileSync(tmp, JSON.stringify(left));
+      renameSync(tmp, path);
+    }
     return undefined;
   } catch (e) {
     return `the mod's saved answers: ${(e as Error).message}`;
