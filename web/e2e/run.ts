@@ -436,13 +436,18 @@ async function pushBack(page: Page) {
   await banner.waitFor({ state: "detached", timeout: 15_000 }).catch(() => {});
 }
 
-async function shoot(page: Page, name: string) {
+/**
+ * `again` runs at each size and scheme before the shot, for a state the layout change drops: the
+ * phone and desktop layouts are separate trees, so a banner's error is gone after one.
+ */
+async function shoot(page: Page, name: string, again?: () => Promise<void>) {
   for (const [size, viewport, text] of SIZES)
     for (const scheme of ["light", "dark"] as const) {
       await page.setViewportSize(viewport);
       // Without motion, so no row is caught sliding over another.
       await page.emulateMedia({ colorScheme: scheme, reducedMotion: "reduce" });
       await page.waitForTimeout(150);
+      await again?.();
       await pushBack(page);
       const unzoom = text > 1 ? await zoomText(page, text) : undefined;
       await fitsLayout(page, `${name} ${scheme}${unzoom ? " text 200%" : ""}`);
@@ -2296,6 +2301,28 @@ async function main() {
   await pageB.getByRole("heading", { name: "Inbox" }).waitFor({ timeout: 30_000 });
   await pageB.getByRole("button", { name: "Turn on notifications" }).waitFor();
   await shoot(pageB, "inbox-banner");
+  step("a server with no Web Push key and no relay says so in words (#2282)");
+  const noKey = "**/v1/push/vapid";
+  await pageB.route(noKey, (route) =>
+    route.fulfill({
+      status: 404,
+      contentType: "application/json",
+      body: JSON.stringify({ error: "not-configured", detail: "no Web Push key and no relay" }),
+    }),
+  );
+  const noKeySaid = pageB.getByText(
+    "This server sends no browser notifications. Whoever runs it can turn them on.",
+  );
+  const askAgain = async () => {
+    if (!(await noKeySaid.isVisible()))
+      await pageB.getByRole("button", { name: "Turn on notifications" }).click();
+    await noKeySaid.waitFor();
+    if (await pageB.getByText(/not-configured/).count())
+      throw new Error("the banner shows the API's error code");
+  };
+  await askAgain();
+  await shoot(pageB, "inbox-banner-no-push-key", askAgain);
+  await pageB.unroute(noKey);
   // The new device sees decisions sealed after it joined; the open one predates it.
 
   if (runs("devices")) {
