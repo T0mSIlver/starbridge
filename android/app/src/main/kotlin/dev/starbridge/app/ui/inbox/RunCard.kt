@@ -83,7 +83,8 @@ fun RunCard(run: Run, now: Instant, shape: Shape, modifier: Modifier = Modifier,
 }
 
 /**
- * How an ended run ended: "Passed in 8 s", "Failed, exit 1, after 2 min 05 s", or "Lost, no news
+ * How an ended run ended: "Passed in 8 s", "Failed, exit 1, after 2 min 05 s", "Killed (SIGKILL),
+ * after 2 min 05 s", or "Lost, no news
  * for 3 min 37 s", with no length since its last news may predate most of it (#190). The same
  * words on every client, in vectors/rules.json (`runEnd`). Null while it runs.
  */
@@ -91,10 +92,31 @@ fun runEnd(run: Run, now: Instant): String? {
     val took = elapsed(run.startedAt, run.endedAt ?: run.at)
     return when (run.state(now)) {
         Run.State.Passed -> "Passed in $took"
-        Run.State.Failed -> "Failed, exit ${run.exitCode}, after $took"
+        Run.State.Failed -> "${failure(run.exitCode ?: 1)}, after $took"
         Run.State.Lost -> "Lost, no news for ${elapsed(run.at, now)}"
         Run.State.Running -> null
     }
+}
+
+/** Signals that mean the same on Linux and macOS, by number: what a run they ended reads. */
+private val SIGNALS = mapOf(
+    1 to "Stopped (SIGHUP)",
+    2 to "Interrupted (Ctrl-C)",
+    6 to "Crashed (SIGABRT)",
+    9 to "Killed (SIGKILL)",
+    11 to "Crashed (SIGSEGV)",
+    15 to "Stopped (SIGTERM)",
+)
+
+/**
+ * Why a run failed, from its exit code alone (#2259): 126 and 127 are the shell's, and 128 + n
+ * means signal n ended it. Any other code says only its number.
+ */
+private fun failure(code: Int): String = when (code) {
+    126 -> "Failed, exit 126, not executable"
+    127 -> "Failed, exit 127, command not found"
+    in 129..159 -> SIGNALS[code - 128] ?: "Ended by signal ${code - 128}"
+    else -> "Failed, exit $code"
 }
 
 /** No progress reported: Material's indeterminate bar, in the same colours as [Progress]. */

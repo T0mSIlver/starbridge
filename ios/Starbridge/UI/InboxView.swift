@@ -519,6 +519,48 @@ private struct PromptCard: View {
     }
 }
 
+/** How a run ended, in the app only: the notification service has no `Times`. */
+extension SavedRun {
+    /** How it ended; nil while it runs. */
+    func end(_ now: Date) -> String? {
+        Self.end(startedAt: started, at: lastNews, exit: body.exit.map { (code: $0.code, at: Dates.instant($0.at)) }, now: now)
+    }
+
+    /**
+     * "Passed in 8 s", "Failed, exit 1, after 2 min 05 s", "Killed (SIGKILL), after 2 min 05 s",
+     * or "Lost, no news for 3 min 37 s",
+     * with no length since its last news may predate most of it (#190). The same words on every
+     * client, in vectors/rules.json (`runEnd`). Nil while it runs.
+     */
+    static func end(startedAt: Date, at: Date, exit: (code: Int, at: Date)?, now: Date) -> String? {
+        if let exit {
+            let took = Times.elapsed(startedAt, exit.at)
+            return exit.code == 0 ? "Passed in \(took)" : "\(failure(exit.code)), after \(took)"
+        }
+        if now.timeIntervalSince(at) * 1000 > Double(RUN_STALE_MS) { return "Lost, no news for \(Times.elapsed(at, now))" }
+        return nil
+    }
+
+    /** Signals that mean the same on Linux and macOS, by number: what a run they ended reads. */
+    private static let signals = [
+        1: "Stopped (SIGHUP)", 2: "Interrupted (Ctrl-C)", 6: "Crashed (SIGABRT)",
+        9: "Killed (SIGKILL)", 11: "Crashed (SIGSEGV)", 15: "Stopped (SIGTERM)",
+    ]
+
+    /**
+     * Why a run failed, from its exit code alone (#2259): 126 and 127 are the shell's, and
+     * 128 + n means signal n ended it. Any other code says only its number.
+     */
+    static func failure(_ code: Int) -> String {
+        switch code {
+        case 126: "Failed, exit 126, not executable"
+        case 127: "Failed, exit 127, command not found"
+        case 129...159: signals[code - 128] ?? "Ended by signal \(code - 128)"
+        default: "Failed, exit \(code)"
+        }
+    }
+}
+
 /** A `starbridge run`: running with its progress, passed, failed, or lost; ended ones can go. */
 private struct RunCard: View {
     let run: SavedRun

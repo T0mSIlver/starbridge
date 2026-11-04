@@ -80,7 +80,8 @@ export function runsToNotify(items: RunItem[], shown: string[], now: number): Ru
 export const runKey = (i: RunItem) => `${i.run.id}/${i.run.exit?.at ?? ""}`;
 
 /**
- * How an ended run ended: "Passed in 8 s", "Failed, exit 1, after 2 min 05 s", or "Lost, no news
+ * How an ended run ended: "Passed in 8 s", "Failed, exit 1, after 2 min 05 s", "Killed (SIGKILL),
+ * after 2 min 05 s", or "Lost, no news
  * for 3 min 37 s", with no length since its last news may predate most of it (#190). The same
  * words on every client, in vectors/rules.json (`runEnd`). None while it runs.
  */
@@ -90,12 +91,33 @@ export function runEnd(r: RunItem["run"], now: number): string | null {
     case "passed":
       return `Passed in ${took}`;
     case "failed":
-      return `Failed, exit ${r.exit?.code}, after ${took}`;
+      return `${failure(r.exit?.code ?? 1)}, after ${took}`;
     case "lost":
       return `Lost, no news for ${duration(now - Date.parse(r.at))}`;
     default:
       return null;
   }
+}
+
+/** Signals that mean the same on Linux and macOS, by number: what a run they ended reads. */
+const SIGNALS: Record<number, string> = {
+  1: "Stopped (SIGHUP)",
+  2: "Interrupted (Ctrl-C)",
+  6: "Crashed (SIGABRT)",
+  9: "Killed (SIGKILL)",
+  11: "Crashed (SIGSEGV)",
+  15: "Stopped (SIGTERM)",
+};
+
+/**
+ * Why a run failed, from its exit code alone (#2259): 126 and 127 are the shell's, and 128 + n
+ * means signal n ended it. Any other code says only its number.
+ */
+function failure(code: number): string {
+  if (code === 126) return "Failed, exit 126, not executable";
+  if (code === 127) return "Failed, exit 127, command not found";
+  if (code > 128 && code < 160) return SIGNALS[code - 128] ?? `Ended by signal ${code - 128}`;
+  return `Failed, exit ${code}`;
 }
 
 /** How the run ended, then the machine and project, then why. */
