@@ -51,6 +51,7 @@ export {
   bindSession,
   pickFields,
   resolveSource,
+  t3Of,
 } from "./decisions/source";
 export {
   ackLines,

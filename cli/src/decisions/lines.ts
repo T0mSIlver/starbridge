@@ -14,12 +14,16 @@ export type Delivery = "prompt" | "wait";
 /**
  * A prompt only when something will submit it (#537): for Claude Code, a mod seen polling for
  * this session (`modSeen`), which an installed plugin alone does not mean; for Pi and opencode,
- * their extension, which says so itself; for Codex, its reachable app-server; for Antigravity,
+ * their extension, which says so itself; for Codex, its reachable app-server, or T3 Code for a
+ * thread it runs (`t3`, which the agent keeps only when it can send, #2244); for Antigravity,
  * its reachable language server (#961). With no agent running, Codex and Antigravity get
  * nothing back.
  */
 export function delivery(
-  input: Pick<AskInput, "agent" | "extensionAnswers" | "headless" | "antigravity" | "subagent">,
+  input: Pick<
+    AskInput,
+    "agent" | "extensionAnswers" | "headless" | "antigravity" | "subagent" | "t3"
+  >,
   reachable: boolean,
   modSeen: boolean,
 ): Delivery {
@@ -31,7 +35,7 @@ export function delivery(
     return modSeen || (!input.headless && !!input.subagent) ? "prompt" : "wait";
   if (input.agent === "pi" || input.agent === "opencode")
     return input.extensionAnswers ? "prompt" : "wait";
-  return input.agent === "codex" && reachable ? "prompt" : "wait";
+  return input.agent === "codex" && (reachable || !!input.t3) ? "prompt" : "wait";
 }
 
 /**

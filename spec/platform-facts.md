@@ -64,6 +64,14 @@ What the code relies on, with the versions checked.
   unless the host sets one, and with the same arguments, and their commands get
   `CLAUDE_CODE_SESSION_ATTENDED=0`. The mod's `turn.complete` fires at each turn's end, and a
   turn its `$.prompt.submit` starts runs in the open session (#2100).
+- **T3 Code** (0.1.7-nightly.20261104): runs Claude Code through the Agent SDK with
+  `CLAUDE_CODE_ENTRYPOINT=t3-code` and `CLAUDE_CODE_SESSION_ATTENDED=0`, and gives every thread's
+  commands `T3CODE_THREAD_ID`: a UUID, or `mcp:launch:<hex>` for a thread an agent launched.
+  `t3 thread send <thread> -` reads the message from stdin; a busy thread runs it as its next
+  turn, interrupting nothing, and a stopped one is resumed. The thread shows the message as the
+  owner's. A prompt the mod submits shows only as "Background activity updated". A server
+  restart, as each update does, stops every session's process, and the server resumes only those
+  of threads that were mid-turn (#2244).
 - **Codex** (CLI 0.160): the TUI runs sessions in a shared app-server daemon; `codex queue --thread
   <id> --message <text>` starts a turn in an idle session or runs next in a busy one, and starts
   the daemon itself. It takes the message only as an argument and refuses sub-agent threads. An

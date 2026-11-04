@@ -21,6 +21,7 @@ import {
   printSnooze,
   resolveSource,
   snoozeLine,
+  t3Of,
   waitSeconds,
 } from "../decisions";
 import { MAX_HOLD_SECONDS, type SessionEvent } from "./api";
@@ -50,11 +51,14 @@ export async function askVia(
   opts: { wait?: boolean; timeout?: string; json?: boolean },
 ): Promise<number> {
   const { input: bound, warning } = bindSession(input, ctx.env);
-  const resolved = resolveSource(
+  const source = resolveSource(
     { ...bound, waiting: bound.waiting || opts.wait },
     ctx.env,
     process.cwd(),
   );
+  // Only through the agent, which sends it (#2244); the CLI's own path has nothing that would.
+  const t3 = t3Of(source, ctx.env);
+  const resolved = t3 ? { ...source, t3 } : source;
   const { id, delivery: d } = await agent.call<{ id: string; delivery: Delivery }>(
     "POST",
     "/v1/decisions",

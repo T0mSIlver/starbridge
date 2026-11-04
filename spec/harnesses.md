@@ -18,11 +18,12 @@ line, the safe side: at worst a prompt repeats an answer the agent already read.
 | Harness | Delivery |
 |---|---|
 | Claude Code: terminal, desktop app's Code tab, IDEs | The mod (`mod/`) long-polls the local agent's socket in 25 s cycles and submits each answer with `$.prompt.submit`; during a turn, it goes with the next tool result instead (#1484, #1584) |
-| Claude Code in an app that runs it through the Agent SDK and keeps the session open (such as T3 Code) | The mod, from the session's second turn; in the first, `wait` (#2100) |
+| Claude Code in an app that runs it through the Agent SDK and keeps the session open (such as T3 Code) | The mod: from the start when the app names itself in `CLAUDE_CODE_ENTRYPOINT`, as T3 Code does; else from the session's second turn, and in the first, `wait` (#2100) |
 | `claude -p`, Agent SDK scripts | `wait`: the run ends with its last turn, so the mod starts no loop there (#321) |
 | Codex TUI | The local agent runs `codex queue --thread <id>`; the message only says to run `starbridge wait <id>`, since other local users can read process arguments (#274). Retried each minute, 30 times. During a turn, the answer goes in with the daemon's `turn/steer` instead, answer and all (#1486, #1584). A daemon down at the ask means `wait`, and nothing is queued later (#2182) |
 | `codex exec` | `wait`: nothing runs a queued message once exec returns. The thread's rollout tells exec apart (#245) |
-| Codex in an app that runs its own `codex app-server` | `wait`: the daemon would load the thread and run the answer's turn where that app never shows it. The rollout's `originator`, `codex-tui` for the TUI, tells them apart (#2101) |
+| Codex in an app that runs its own `codex app-server` | `wait`: the daemon would load the thread and run the answer's turn where that app never shows it. The rollout's `originator`, `codex-tui` for the TUI, tells them apart (#2101). In T3 Code, the row below |
+| A session T3 Code runs: Claude Code, Codex on T3's app-server, opencode or Pi with Starbridge's extension | The local agent runs `t3 thread send <thread> -`, the answer on stdin, so the thread shows it as a message and runs it: next if busy, at once if idle, after resuming a stopped thread. For Claude Code only once the mod has not called for 45 s; for the others in place of the extension or `wait` (#2244) |
 | Pi TUI and RPC | The Pi extension (`mod/pi`) calls `pi.sendUserMessage(text, { deliverAs: "steer" })`: a busy session takes it after its current tool calls (#232, #1584) |
 | opencode TUI and `serve` | The opencode plugin (`mod/opencode`) calls `client.session.promptAsync`, one loop per session (#300); a busy session takes it at its next step (#1484) |
 | Claude Code subagents | The mod sends the answer to the subagent that asked with `$.session.send` (#1702) |
@@ -128,6 +129,19 @@ line, the safe side: at worst a prompt repeats an answer the agent already read.
   It is not installed on the computer Claude desktop runs on, whose own copy would shadow it the
   same way. Without it, `ask`'s `wait` line and `status` name the hookless copies, read from the
   arguments of the process Claude Code's session record names.
+- **T3 Code** (#2244). T3 runs each thread's harness itself and shows only the turns it starts
+  or sees: the Codex daemon would run an answer in a hidden copy of the thread (#2101), the
+  opencode plugin's `promptAsync` in a turn T3 never shows (#2237), and when T3 stops a thread's
+  Claude Code, as its nightly update does, no mod is left to submit one. T3 gives each thread's
+  commands `T3CODE_THREAD_ID`, so `ask` records the thread, and the agent posts the answer there
+  with the `t3` on its own PATH, never one the asker names. It counts only for the session T3
+  runs, which Starbridge reaches otherwise: a Claude Code session whose mod was seen at the ask,
+  a Codex thread on an app's own app-server, an opencode or Pi session whose extension runs. So
+  a `claude -p` or `codex exec` started inside the thread keeps its `wait`, and a hook's question
+  comes back through the hook. Claude Code's mod goes first since it puts an answer into a
+  running turn, where T3 would hold it for the next one; the agent claims an answer before it
+  sends, so the mod of the session T3 resumes does not submit it too. A send that fails is tried
+  each minute, 30 times, and the answer stays for a `wait`.
 - **Which harness asked** (#319, #320). Harnesses pass their variables to processes they start, so
   `ask` takes Codex, Pi or opencode over Claude Code when both are set, unless Claude Code runs as `claude
   -p`, the only way Codex and Pi start it. A Codex sub-agent asks under its root thread, since

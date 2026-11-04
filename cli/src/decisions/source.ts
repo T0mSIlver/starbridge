@@ -7,12 +7,13 @@ import {
   antigravityTitle,
 } from "../antigravity";
 import { claudeSession, knownClaudeSession } from "../claude";
-import { type CodexSession, codexAsker, codexSession, codexTitle } from "../codex";
+import { type CodexSession, codexApp, codexAsker, codexSession, codexTitle } from "../codex";
 import { type Ctx, machineKind } from "../context";
 import { CURSOR_CONVERSATION } from "../cursor";
 import { OPENCODE_ANSWERS, OPENCODE_SESSION, OPENCODE_TITLE } from "../opencode";
 import { PI_ANSWERS, piSessionTitle } from "../pi";
 import { projectName } from "../project";
+import { t3Thread } from "../t3";
 
 /** What a question says and where it goes: the part of an ask a file or a flag may give. */
 export interface AskContent {
@@ -55,6 +56,11 @@ export interface AskRoute {
    * subagent's `starbridge ask` (#1702): the mod sends the answer to that subagent.
    */
   subagent?: string;
+  /**
+   * The T3 Code thread the session runs in, which the agent posts the answer to with `t3 thread
+   * send` (#2244). Only `ask` sets it (`t3Of`): a hook's question comes back through the hook.
+   */
+  t3?: string;
 }
 
 /** What only a hook of this process sets, posting without the agent. */
@@ -100,6 +106,7 @@ export const ASK_ROUTE_FIELDS = [
   "extensionAnswers",
   "headless",
   "subagent",
+  "t3",
 ] as const satisfies readonly (keyof AskRoute)[];
 
 type Complete<T, L extends readonly PropertyKey[]> = [Exclude<keyof T, L[number]>] extends [never]
@@ -188,6 +195,26 @@ export function resolveSource(
         }
       : {}),
   };
+}
+
+/**
+ * The T3 Code thread an answer to this ask goes to as a message (#2244): a session T3 runs that
+ * Starbridge reaches otherwise, so a command another agent started inside the thread, such as a
+ * `codex exec` review, keeps its own `wait`. Claude Code's counts only while its mod runs, which
+ * the agent checks; Codex's when it runs on an app's own app-server, as T3's do; Pi's and
+ * opencode's when their extension runs.
+ */
+export function t3Of(
+  input: Pick<AskInput, "agent" | "extensionAnswers">,
+  env: Ctx["env"],
+): string | undefined {
+  const thread = t3Thread(env);
+  if (!thread) return undefined;
+  if (input.agent === "claude-code") return thread;
+  if (input.agent === "codex") return codexApp(env) ? thread : undefined;
+  if (input.agent === "pi" || input.agent === "opencode")
+    return input.extensionAnswers ? thread : undefined;
+  return undefined;
 }
 
 export function sourceFor(input: AskInput, ctx: Ctx, machine: string): Decision["source"] {
