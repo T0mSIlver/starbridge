@@ -20,7 +20,9 @@
   session the line is the button alone. Done left this line for a button beside "Answer in", as
   on the card, and at phone width the name wraps to two lines instead of losing its middle: the
   name is often the session's first sentence, and in the Mac app at 380 px Done squeezed it to
-  "The cards with the … n the normal" (#2242, the owner's pick from mockups). The
+  "The cards with the … n the normal" (#2242, the owner's pick from mockups). The web wraps by the
+  line's width, not the window's: a detail pane under 480 px wide, as beside the rail at 600 to
+  750 px or beside the list at 1100 to 1200 px, wraps too (#2285). The
   "Attached by the agent" caption went: the chips sit inside the agent's words. The owner chose
   this from mockups of every element.
 - **Snoozed** (#571, #692, #699). Snooze sits under the reply field in a question's detail (web)

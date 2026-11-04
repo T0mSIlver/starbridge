@@ -158,7 +158,7 @@ export function SessionLine({
   const link = app ? (links.find((l) => l.kind !== "desktop") ?? links[0]) : undefined;
   if (!name && !link && !children) return null;
   // Cut in the middle only when the line runs out of room: the head shrinks, the tail stays (#172).
-  // Under 600 px it wraps to two lines instead (#2242).
+  // Under 600 px, or on a line under 480 px wide, it wraps to two lines instead (#2242, #2285).
   const named = name && (
     <span className={s.sessionName} title={name}>
       <span className={s.sessionHead}>{name.slice(0, -TAIL)}</span>

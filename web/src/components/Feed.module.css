@@ -87,6 +87,9 @@
   align-items: center;
   gap: var(--s3);
   padding-top: var(--s2);
+  /* The name wraps by this line's width, not the window's: a detail pane beside the rail and the
+     list is as narrow as a phone (#2285). */
+  container: session / inline-size;
 }
 
 .sessionName {
@@ -140,6 +143,25 @@
   }
 
   /* No room to cut a sentence in the middle: the name wraps to two lines, then ends in "…". */
+  .sessionName {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    overflow: hidden;
+    white-space: normal;
+  }
+
+  .sessionHead,
+  .sessionTail {
+    display: inline;
+    overflow: visible;
+    white-space: normal;
+  }
+}
+
+/* The same wrap where the line is under 480 px wide, whatever the window: the pane beside the rail
+   (600 to 750 px) or beside the list too (1100 to 1200 px). Keep it equal to the phone's above. */
+@container session (max-width: 480px) {
   .sessionName {
     display: -webkit-box;
     -webkit-box-orient: vertical;
