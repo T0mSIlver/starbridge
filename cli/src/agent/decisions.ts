@@ -4,6 +4,8 @@
  * Everything lives in the CLI's state file, under its lock, so an agent restart loses nothing a
  * session has not confirmed, and the CLI's own path (no agent) reads the same state.
  */
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { activeMembers, type Directory, ProtocolError } from "@starbridge/protocol";
 import { type AgyRoute, agyReachable, agySend } from "../antigravity";
 import {
@@ -358,21 +360,30 @@ export class Decisions implements Feature {
   private async sendT3(all: string[], now: number) {
     const lines: string[] = [];
     const claimed: string[] = [];
-    let thread: string | undefined;
+    let route: { thread: string; session: string; mod: boolean } | undefined;
     this.ctx.store.updateState((st) => {
       for (const id of all) {
         const a = st.answers[id];
         const asked = st.asked[id];
-        if (!a || a.seen || steering(a) || !asked?.t3 || !deliverable(st, id)) continue;
+        if (!a || a.seen || steering(a) || !asked?.t3 || !asked.session) continue;
+        if (!deliverable(st, id)) continue;
+        // A mod that came back since the answers were picked, as during another thread's send,
+        // may hold this one already.
+        if (asked.t3.mod && this.hub.seen(asked.session, MOD_SEEN_MS)) continue;
         a.steering = Date.now();
         lines.push(answerLine(a.answer, asked.question));
         claimed.push(id);
-        thread ??= asked.t3.thread;
+        route ??= { thread: asked.t3.thread, session: asked.session, mod: !!asked.t3.mod };
       }
     });
-    if (!thread || claimed.length === 0) return;
+    if (!route || claimed.length === 0) return;
     const bin = t3Bin(this.ctx.env);
-    const error = bin ? await t3Send(bin, thread, lines.join("\n")) : "no t3 on the agent's PATH";
+    // The session T3 resumes would submit again what its last process saved and never confirmed.
+    const error = !bin
+      ? "no t3 on the agent's PATH"
+      : ((route.mod ? forgetSaved(this.ctx.store.dir, route.session, claimed) : undefined) ??
+        (await t3Send(bin, route.thread, lines.join("\n"))));
+    const thread = route.thread;
     this.ctx.store.updateState((st) => {
       for (const id of claimed) {
         const a = st.answers[id];
@@ -472,5 +483,33 @@ export class Decisions implements Feature {
         await pause(delay, signal);
       }
     }
+  }
+}
+
+/**
+ * Takes the answers `acks` out of the lines the Claude Code mod saved for `session` before
+ * submitting them (`mod/hooks/sent.ts`, #1517): a process that stopped before confirming one left
+ * it there, and the next process on the session would submit it again. Undefined once done, else
+ * why not: a file that cannot be read or written holds lines this must not miss.
+ */
+export function forgetSaved(dir: string, session: string, acks: string[]): string | undefined {
+  const path = join(dir, "mod-sent", `${encodeURIComponent(session)}.json`);
+  try {
+    if (!existsSync(path)) return undefined;
+    let lines: unknown;
+    try {
+      lines = JSON.parse(readFileSync(path, "utf8"));
+    } catch (e) {
+      if (e instanceof SyntaxError) return undefined;
+      throw e;
+    }
+    if (!Array.isArray(lines)) return undefined;
+    const left = lines.filter(
+      (l) => !acks.includes((l as { ack?: unknown } | null)?.ack as string),
+    );
+    if (left.length < lines.length) writeFileSync(path, JSON.stringify(left));
+    return undefined;
+  } catch (e) {
+    return `the mod's saved answers: ${(e as Error).message}`;
   }
 }

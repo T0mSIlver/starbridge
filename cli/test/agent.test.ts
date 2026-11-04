@@ -1584,13 +1584,25 @@ test.skipIf(WINDOWS)(
     await until(async () => (await s.events()).length === 1);
     await s.ack([first]);
 
-    // T3 stopped the session's process, as its nightly update does: the mod went quiet.
+    // T3 stopped the session's process, as its nightly update does: the mod went quiet. It had
+    // saved a line it never confirmed, which the session T3 resumes would submit again.
     const second = await ask(c, "--project", "p");
+    const saved = join(ctx.store.dir, "mod-sent", "c-t3.json");
+    mkdirSync(dirname(saved), { recursive: true });
+    const line = (ack: string) => ({
+      ack,
+      line: `Answer to ${ack}`,
+      process: "p1",
+      at: 1,
+      refused: 0,
+    });
+    writeFileSync(saved, JSON.stringify([line(second), line("d_other")]));
     const start = Date.now();
     ctx.now = () => new Date(start + 46_000);
     await server.answer(second, { choice: "Wait" });
     await until(() => !!ctx.store.state().answers[second]?.seen, 15_000).catch(() => {});
     expect(sent().trim()).toBe(sentToT3("th-claude", second, "Wait"));
+    expect(JSON.parse(readFileSync(saved, "utf8"))).toEqual([line("d_other")]);
   },
 );
 
