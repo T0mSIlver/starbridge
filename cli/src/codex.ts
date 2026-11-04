@@ -37,6 +37,16 @@ export function codexSession(env: Ctx["env"]): CodexSession | undefined {
 }
 
 /**
+ * Whether the asking Codex thread runs on an app's own app-server, such as T3 Code's (#2101):
+ * neither the TUI's daemon nor `codex exec`.
+ */
+export function codexApp(env: Ctx["env"]): boolean {
+  const home = codexHome(env);
+  const id = env.CODEX_THREAD_ID;
+  return !!home && !!id && codexThread(home, id)?.origin === "app";
+}
+
+/**
  * The thread an answer to the asking Codex session goes to: its `CODEX_THREAD_ID`, or for a
  * sub-agent the root thread that spawned it, since `codex queue` refuses sub-agent threads
  * (0.160: "direct app-server input is not allowed for multi-agent v2 sub-agents").

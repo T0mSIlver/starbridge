@@ -50,10 +50,16 @@ export function takeAnswer(
   return taken;
 }
 
-/** Past this, a steer's claim is from an agent that died mid-steer (#1486); a steer takes 5 s at most. */
+/**
+ * Past this, a claim is from an agent that died mid-steer (#1486) or mid-send; a steer takes 5 s
+ * at most, a T3 send 20 s.
+ */
 const STEER_CLAIM_MS = 30_000;
 
-/** The local agent is steering this answer into a Codex turn (#1486): nothing else hands it over. */
+/**
+ * The local agent is steering this answer into a Codex turn (#1486) or sending it to a T3 Code
+ * thread (#2244): nothing else hands it over.
+ */
 export function steering(a: { steering?: number }, now = Date.now()): boolean {
   return a.steering !== undefined && now - a.steering < STEER_CLAIM_MS;
 }
@@ -108,6 +114,9 @@ export function sessionLines(st: State, session: string): SessionLine[] {
   for (const [id, a] of Object.entries(st.answers)) {
     const asked = st.asked[id];
     if (!asked || a.seen || asked.session !== session || !deliverable(st, id)) continue;
+    // T3 brings it in place of the extension, which would run it where T3 never shows it (#2244);
+    // and one the agent is handing over goes that way only.
+    if ((asked.t3 && !asked.t3.mod) || steering(a)) continue;
     lines.push({
       type: "answer",
       decisionId: id,

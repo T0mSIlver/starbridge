@@ -89,6 +89,9 @@ export async function postDecision(
         ...(input.codex && decision.source.session ? { codex: input.codex } : {}),
         ...(input.antigravity && decision.source.session ? { antigravity: input.antigravity } : {}),
         ...(input.extensionAnswers && decision.source.session ? { extensionAnswers: true } : {}),
+        ...(input.t3 && decision.source.session && !input.held
+          ? { t3: { thread: input.t3, ...(input.agent === "claude-code" ? { mod: true } : {}) } }
+          : {}),
         ...(input.held ? { held: true } : {}),
         ...(input.picker ? { picker: input.picker } : {}),
         ...(input.nextStep ? { nextStep: input.nextStep } : {}),

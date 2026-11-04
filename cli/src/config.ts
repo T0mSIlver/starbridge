@@ -29,6 +29,7 @@ import {
 import type { AgyRoute } from "./antigravity";
 import type { CodexSession } from "./codex";
 import type { PiAdded } from "./pi";
+import type { T3Route } from "./t3";
 /** `$STARBRIDGE_CONFIG_DIR`, else `$XDG_CONFIG_HOME/starbridge`, else `~/.config/starbridge`. */
 export function configDir(env: Record<string, string | undefined>): string {
   if (env.STARBRIDGE_CONFIG_DIR) return env.STARBRIDGE_CONFIG_DIR;
@@ -178,6 +179,12 @@ export interface State {
       /** Told its answer comes back as a prompt from the Pi extension or the opencode plugin. */
       extensionAnswers?: boolean;
       /**
+       * The T3 Code thread the agent posts the answer to with `t3 thread send` (#2244): for a
+       * Claude Code session (`mod`) only once its mod is gone, else always, in place of the
+       * extension.
+       */
+      t3?: T3Route;
+      /**
        * Asked for a hook that waits for its answer itself: recorded without `session`, so no
        * session gets it as a prompt, and `wait` without an id skips it.
        */
@@ -203,7 +210,8 @@ export interface State {
    * Verified answers by decision id; `seen` once a `wait` has printed it or the mod confirmed it
    * submitted it (`answers --ack`). `announce` until the settled notice that names the answer
    * reached the server, so every device learns which answer won (#330). `steering` while the
-   * agent steers it into a Codex turn (#1486), when that began, in ms.
+   * agent steers it into a Codex turn (#1486) or sends it to a T3 Code thread (#2244), when that
+   * began, in ms.
    */
   answers: Record<
     string,

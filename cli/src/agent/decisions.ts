@@ -4,6 +4,8 @@
  * Everything lives in the CLI's state file, under its lock, so an agent restart loses nothing a
  * session has not confirmed, and the CLI's own path (no agent) reads the same state.
  */
+import { existsSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { activeMembers, type Directory, ProtocolError } from "@starbridge/protocol";
 import { type AgyRoute, agyReachable, agySend } from "../antigravity";
 import {
@@ -36,6 +38,7 @@ import {
   takeSnooze,
   takeUnseen,
 } from "../decisions";
+import { t3Bin, t3Send, t3ThreadId } from "../t3";
 import type { SessionEvent, Status } from "./api";
 import { type Feature, HttpError, type Hub, holdSeconds, pause } from "./server";
 
@@ -87,6 +90,20 @@ export class Decisions implements Feature {
         // The asking process knows its directory; the agent's would name the wrong project.
         if (typeof ask.project !== "string")
           throw new HttpError(400, "bad-request", "input.project is required");
+        const mod =
+          !!ask.session &&
+          this.hub.seen(
+            ask.session,
+            ask.agent === "cursor" ? Number.POSITIVE_INFINITY : MOD_SEEN_MS,
+          );
+        // T3 brings the answer only where this agent runs a `t3`, and to a Claude Code session
+        // only behind its mod: one with none, such as a `claude -p` started in the thread, keeps
+        // its `wait` (#2244).
+        if (
+          ask.t3 !== undefined &&
+          !(t3ThreadId(ask.t3) && t3Bin(this.ctx.env) && (ask.agent !== "claude-code" || mod))
+        )
+          delete ask.t3;
         const decision = await postDecision(this.ctx, session(this.ctx), ask);
         const codex = ask.codex && trustedCodex(this.ctx, ask.codex);
         const reachable = codex
@@ -94,12 +111,6 @@ export class Decisions implements Feature {
           : ask.antigravity
             ? await agyReachable(ask.antigravity)
             : false;
-        const mod =
-          !!ask.session &&
-          this.hub.seen(
-            ask.session,
-            ask.agent === "cursor" ? Number.POSITIVE_INFINITY : MOD_SEEN_MS,
-          );
         const d = delivery(ask, reachable, mod);
         // A Codex session told to wait gets nothing queued into it, as promised (#2182): its
         // daemon was down at the ask, and `codex queue` would reach it once it came back.
@@ -247,11 +258,11 @@ export class Decisions implements Feature {
 
   /**
    * Steers the new answers to a Codex session into its running turn (#1486, #1584), or queues
-   * them with `codex queue` when none runs, and sends those to an Antigravity conversation
-   * through its language server (#961): the answers one session has waiting go as one message
-   * (#1597). Marks them seen only once that succeeded: an agent that dies meanwhile delivers them
-   * again, rather than never. A session that is gone gets CODEX_TRIES tries, a minute apart; the
-   * answers stay for a `wait`.
+   * them with `codex queue` when none runs, sends those to an Antigravity conversation through
+   * its language server (#961), and those to a T3 Code thread with `t3 thread send` (#2244): the
+   * answers one session has waiting go as one message (#1597). Marks them seen only once that
+   * succeeded: an agent that dies meanwhile delivers them again, rather than never. A session
+   * that is gone gets CODEX_TRIES tries, a minute apart; the answers stay for a `wait`.
    */
   private async deliverQueued() {
     const now = Date.now();
@@ -261,11 +272,14 @@ export class Decisions implements Feature {
     const due = new Map<string, string[]>();
     for (const [id, a] of Object.entries(st.answers)) {
       const asked = st.asked[id];
-      const route = asked?.codex ?? asked?.antigravity;
+      const route = asked?.codex ?? asked?.antigravity ?? asked?.t3;
       if (a.seen || !route || !asked?.session || !deliverable(st, id)) continue;
+      // A Claude Code session's mod takes it while it runs: into the running turn, if one is.
+      if (route === asked.t3 && asked.t3.mod && this.hub.seen(asked.session, MOD_SEEN_MS)) continue;
       const retry = this.retries.get(id) ?? { tries: 0, at: 0 };
       if (retry.tries >= CODEX_TRIES || retry.at > now) continue;
-      const key = JSON.stringify([asked.codex ? "codex" : "agy", route, asked.session]);
+      const kind = asked.codex ? "codex" : asked.antigravity ? "agy" : "t3";
+      const key = JSON.stringify([kind, route, asked.session]);
       due.set(key, [...(due.get(key) ?? []), id]);
     }
     for (const ids of due.values()) await this.deliverTo(ids, now);
@@ -277,6 +291,7 @@ export class Decisions implements Feature {
     if (this.ctx.store.state().behind) return;
     const first = this.ctx.store.state().asked[all[0] as string];
     if (!first?.session) return;
+    if (!first.codex && !first.antigravity) return this.sendT3(all, now);
     const session = first.session;
     const [how, where] = first.codex
       ? ["codex queue", `Codex session ${session}`]
@@ -321,6 +336,11 @@ export class Decisions implements Feature {
             .join("\n"),
         );
     if (error === undefined) return done(ids, "queued");
+    this.failed(ids, how, error, now);
+  }
+
+  /** Counts a failed delivery of `ids`: tried again in a minute, CODEX_TRIES times in all. */
+  private failed(ids: string[], how: string, error: string, now: number) {
     for (const id of ids) {
       const tries = (this.retries.get(id)?.tries ?? 0) + 1;
       this.retries.set(id, { tries, at: now + CODEX_RETRY_MS });
@@ -330,6 +350,53 @@ export class Decisions implements Feature {
           : `answer to ${id}: ${how} failed ${tries} times (${error}); giving up`,
       );
     }
+  }
+
+  /**
+   * Sends the answers to `all`, one T3 Code thread's, as one message with `t3 thread send`
+   * (#2244). Claimed under the lock first, as a steer is: the mod of the session T3 resumes, or a
+   * `waiting`, hands none over meanwhile. Marked seen once T3 took them.
+   */
+  private async sendT3(all: string[], now: number) {
+    const lines: string[] = [];
+    const claimed: string[] = [];
+    let route: { thread: string; session: string; mod: boolean } | undefined;
+    this.ctx.store.updateState((st) => {
+      for (const id of all) {
+        const a = st.answers[id];
+        const asked = st.asked[id];
+        if (!a || a.seen || steering(a) || !asked?.t3 || !asked.session) continue;
+        if (!deliverable(st, id)) continue;
+        // A mod that came back since the answers were picked, as during another thread's send,
+        // may hold this one already.
+        if (asked.t3.mod && this.hub.seen(asked.session, MOD_SEEN_MS)) continue;
+        a.steering = Date.now();
+        lines.push(answerLine(a.answer, asked.question));
+        claimed.push(id);
+        route ??= { thread: asked.t3.thread, session: asked.session, mod: !!asked.t3.mod };
+      }
+    });
+    if (!route || claimed.length === 0) return;
+    const bin = t3Bin(this.ctx.env);
+    // The session T3 resumes would submit again what its last process saved and never confirmed.
+    const error = !bin
+      ? "no t3 on the agent's PATH"
+      : ((route.mod ? forgetSaved(this.ctx.store.dir, route.session, claimed) : undefined) ??
+        (await t3Send(bin, route.thread, lines.join("\n"))));
+    const thread = route.thread;
+    this.ctx.store.updateState((st) => {
+      for (const id of claimed) {
+        const a = st.answers[id];
+        if (!a) continue;
+        delete a.steering;
+        if (error === undefined) a.seen = true;
+      }
+    });
+    if (error !== undefined) return this.failed(claimed, "t3 thread send", error, now);
+    for (const id of claimed) this.retries.delete(id);
+    this.hub.log(
+      `${claimed.length > 1 ? "answers" : "answer"} to ${claimed.join(", ")} sent to T3 thread ${thread}`,
+    );
   }
 
   /**
@@ -416,5 +483,38 @@ export class Decisions implements Feature {
         await pause(delay, signal);
       }
     }
+  }
+}
+
+/**
+ * Takes the answers `acks` out of the lines the Claude Code mod saved for `session` before
+ * submitting them (`mod/hooks/sent.ts`, #1517): a process that stopped before confirming one left
+ * it there, and the next process on the session would submit it again. Undefined once done, else
+ * why not: a file that cannot be read or written holds lines this must not miss.
+ */
+export function forgetSaved(dir: string, session: string, acks: string[]): string | undefined {
+  const path = join(dir, "mod-sent", `${encodeURIComponent(session)}.json`);
+  try {
+    if (!existsSync(path)) return undefined;
+    let lines: unknown;
+    try {
+      lines = JSON.parse(readFileSync(path, "utf8"));
+    } catch (e) {
+      if (e instanceof SyntaxError) return undefined;
+      throw e;
+    }
+    if (!Array.isArray(lines)) return undefined;
+    const left = lines.filter(
+      (l) => !acks.includes((l as { ack?: unknown } | null)?.ack as string),
+    );
+    if (left.length < lines.length) {
+      // Renamed into place: a failed write must not take the other saved lines with it.
+      const tmp = `${path}.${process.pid}.tmp`;
+      writeFileSync(tmp, JSON.stringify(left));
+      renameSync(tmp, path);
+    }
+    return undefined;
+  } catch (e) {
+    return `the mod's saved answers: ${(e as Error).message}`;
   }
 }

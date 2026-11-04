@@ -13,7 +13,7 @@ import {
 import { createServer, Server as HttpServer, type IncomingMessage, request } from "node:http";
 import { createServer as createNetServer } from "node:net";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { delimiter, dirname, join } from "node:path";
 import { LiveServer } from "@starbridge/server/test-support";
 import { PNG } from "pngjs";
 import { configKey, proof, type SessionEvent, type Status } from "../src/agent/api";
@@ -618,6 +618,26 @@ test.skipIf(WINDOWS)(
   },
 );
 
+/** A thread in Codex home `home` that T3 Code runs on its own app-server, as its rollout says. */
+function appThread(home: string): string {
+  const thread = "01a15583-6a63-74b2-873d-d800b7671593";
+  const day = new Date(Number.parseInt(thread.replace(/-/g, "").slice(0, 12), 16));
+  const dir = join(
+    home,
+    "sessions",
+    String(day.getFullYear()),
+    String(day.getMonth() + 1).padStart(2, "0"),
+    String(day.getDate()).padStart(2, "0"),
+  );
+  mkdirSync(dir, { recursive: true });
+  const meta = { id: thread, session_id: thread, originator: "T3 Code", source: "vscode" };
+  writeFileSync(
+    join(dir, `rollout-x-${thread}.jsonl`),
+    `${JSON.stringify({ type: "session_meta", payload: meta })}\n`,
+  );
+  return thread;
+}
+
 test.skipIf(WINDOWS)(
   "a Codex thread T3 Code runs is told to wait, and nothing is queued into the daemon (#2101)",
   async () => {
@@ -625,21 +645,7 @@ test.skipIf(WINDOWS)(
     const codex = await codexHome();
     trustCodex(ctx, codex.env.CODEX_HOME);
     // T3 Code runs its own app-server, whose rollout names it; the TUI's daemon listens too.
-    const thread = "01a15583-6a63-74b2-873d-d800b7671593";
-    const day = new Date(Number.parseInt(thread.replace(/-/g, "").slice(0, 12), 16));
-    const dir = join(
-      codex.env.CODEX_HOME,
-      "sessions",
-      String(day.getFullYear()),
-      String(day.getMonth() + 1).padStart(2, "0"),
-      String(day.getDate()).padStart(2, "0"),
-    );
-    mkdirSync(dir, { recursive: true });
-    const meta = { id: thread, session_id: thread, originator: "T3 Code", source: "vscode" };
-    writeFileSync(
-      join(dir, `rollout-x-${thread}.jsonl`),
-      `${JSON.stringify({ type: "session_meta", payload: meta })}\n`,
-    );
+    const thread = appThread(codex.env.CODEX_HOME);
     const c = testCtx({ STARBRIDGE_AGENT_SOCKET: socket, ...codex.env, CODEX_THREAD_ID: thread });
     try {
       const id = await ask(c, "--project", "p");
@@ -1473,6 +1479,152 @@ test("an Agent SDK session, unattended to Claude Code, gets a prompt once its mo
   await session(socket, "s-t3").events();
   await ask(c, "--session", "s-t3");
   expect(c.errors.at(-1)).toBe("The answer will come back into this session as a new prompt.");
+});
+
+/** A `t3` on the agent's PATH that logs its arguments and the message it reads, or fails. */
+function fakeT3(ctx: TestCtx, fail = false) {
+  const dir = mkdtempSync(join(tmpdir(), "starbridge-t3-"));
+  const log = join(dir, "send.log");
+  fakeCommand(
+    join(dir, "t3"),
+    fail
+      ? "#!/bin/sh\necho 'T3 Code is not running' >&2\nexit 1\n"
+      : `#!/bin/sh\nprintf '%s\\n' "$*" >> "${log}"\ncat >> "${log}"\n`,
+  );
+  ctx.env.PATH = `${dir}${delimiter}${process.env.PATH ?? ""}`;
+  return () => (existsSync(log) ? readFileSync(log, "utf8") : "");
+}
+
+/** What `t3 thread send` got for one answer to an `ASK` question. */
+const sentToT3 = (thread: string, id: string, choice: string) =>
+  `thread send ${thread} -\nAnswer to ${id} (Merge #12 now?): ${choice}`;
+
+test.skipIf(WINDOWS)(
+  "a Codex thread T3 Code runs gets its answer as a message in the thread (#2244)",
+  async () => {
+    const { ctx, socket } = await machine();
+    const sent = fakeT3(ctx);
+    const codex = await codexHome();
+    trustCodex(ctx, codex.env.CODEX_HOME);
+    const c = testCtx({
+      STARBRIDGE_AGENT_SOCKET: socket,
+      ...codex.env,
+      CODEX_THREAD_ID: appThread(codex.env.CODEX_HOME),
+      T3CODE_THREAD_ID: "th-codex",
+    });
+    try {
+      const id = await ask(c, "--project", "p");
+      expect(c.errors.at(-1)).toBe(PROMPT);
+      await server.answer(id, { choice: "Merge" });
+      // Seen once `t3` exited 0, after it logged the message.
+      await until(() => !!ctx.store.state().answers[id]?.seen, 15_000).catch(() => {});
+      expect(sent().trim()).toBe(sentToT3("th-codex", id, "Merge"));
+      // Not through the daemon, which would run it out of T3's sight (#2101).
+      expect(existsSync(codex.log)).toBe(false);
+    } finally {
+      await codex.close();
+    }
+  },
+);
+
+test.skipIf(WINDOWS)(
+  "an opencode session T3 Code runs gets its answer through T3, never the plugin (#2237)",
+  async () => {
+    const { ctx, socket } = await machine();
+    const oc = {
+      STARBRIDGE_AGENT_SOCKET: socket,
+      STARBRIDGE_OPENCODE_SESSION: "ses_1",
+      STARBRIDGE_OPENCODE_ANSWERS: "ses_1",
+      T3CODE_THREAD_ID: "th-oc",
+    };
+    const s = session(socket, "ses_1");
+    await s.hello();
+    // Without a `t3` the agent can run, the plugin delivers it, as outside T3.
+    const plugin = await ask(testCtx(oc), "--project", "p");
+    expect(ctx.store.state().asked[plugin]?.t3).toBeUndefined();
+    await server.answer(plugin, { choice: "Merge" });
+    await until(async () => (await s.events()).length === 1);
+    await s.ack([plugin]);
+
+    const sent = fakeT3(ctx);
+    const c = testCtx(oc);
+    const id = await ask(c, "--project", "p");
+    expect(c.errors.at(-1)).toBe(PROMPT);
+    await server.answer(id, { choice: "Wait" });
+    await until(() => sent().includes(id), 15_000).catch(() => {});
+    expect(sent().trim()).toBe(sentToT3("th-oc", id, "Wait"));
+    // The plugin's `promptAsync` would run it in a turn T3 never shows.
+    expect(await s.events()).toEqual([]);
+
+    // `ask --wait` prints its answer itself: T3 does not bring it again.
+    const waits = testCtx(oc);
+    expect(await run([...ASK, "--project", "p", "--wait", "--timeout", "1s"], waits)).toBe(2);
+    const [, asked] = Object.entries(ctx.store.state().asked).at(-1) ?? [];
+    expect(asked?.t3).toBeUndefined();
+  },
+);
+
+test.skipIf(WINDOWS)(
+  "a Claude Code thread T3 Code runs: its mod takes the answer, and T3 once the mod is gone (#2244)",
+  async () => {
+    const { ctx, socket } = await machine();
+    const sent = fakeT3(ctx);
+    const env = {
+      STARBRIDGE_AGENT_SOCKET: socket,
+      CLAUDECODE: "1",
+      CLAUDE_CODE_SESSION_ATTENDED: "0",
+      T3CODE_THREAD_ID: "th-claude",
+    };
+    // A `claude -p` started in the thread runs no mod: it waits itself, and T3 brings nothing.
+    const print = testCtx({ ...env, CLAUDE_CODE_SESSION_ID: "c-print" });
+    const waits = await ask(print, "--project", "p");
+    expect(print.errors.at(-1)).toContain("run `starbridge wait");
+    expect(ctx.store.state().asked[waits]?.t3).toBeUndefined();
+
+    const s = session(socket, "c-t3");
+    await s.events();
+    const c = testCtx({ ...env, CLAUDE_CODE_SESSION_ID: "c-t3" });
+    const first = await ask(c, "--project", "p");
+    expect(c.errors.at(-1)).toBe(PROMPT);
+    await server.answer(first, { choice: "Merge" });
+    await until(async () => (await s.events()).length === 1);
+    await s.ack([first]);
+
+    // T3 stopped the session's process, as its nightly update does: the mod went quiet. It had
+    // saved a line it never confirmed, which the session T3 resumes would submit again.
+    const second = await ask(c, "--project", "p");
+    const saved = join(ctx.store.dir, "mod-sent", "c-t3.json");
+    mkdirSync(dirname(saved), { recursive: true });
+    const line = (ack: string) => ({
+      ack,
+      line: `Answer to ${ack}`,
+      process: "p1",
+      at: 1,
+      refused: 0,
+    });
+    writeFileSync(saved, JSON.stringify([line(second), line("d_other")]));
+    const start = Date.now();
+    ctx.now = () => new Date(start + 46_000);
+    await server.answer(second, { choice: "Wait" });
+    await until(() => !!ctx.store.state().answers[second]?.seen, 15_000).catch(() => {});
+    expect(sent().trim()).toBe(sentToT3("th-claude", second, "Wait"));
+    expect(JSON.parse(readFileSync(saved, "utf8"))).toEqual([line("d_other")]);
+  },
+);
+
+test.skipIf(WINDOWS)("an answer T3 did not take stays for a wait (#2244)", async () => {
+  const { ctx, socket } = await machine();
+  fakeT3(ctx, true);
+  const c = testCtx({
+    STARBRIDGE_AGENT_SOCKET: socket,
+    STARBRIDGE_OPENCODE_SESSION: "ses_1",
+    STARBRIDGE_OPENCODE_ANSWERS: "ses_1",
+    T3CODE_THREAD_ID: "th-down",
+  });
+  const id = await ask(c, "--project", "p");
+  await server.answer(id, { choice: "Merge" });
+  expect(await run(["wait", id, "--timeout", "10s"], c)).toBe(0);
+  expect(c.lines.at(-1)).toBe(`Answer to ${id} (Merge #12 now?): Merge`);
 });
 
 test("through the agent, wait --no-mark leaves the decision as it was (#603)", async () => {
