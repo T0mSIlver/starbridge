@@ -56,7 +56,10 @@ final class PresenceTests: XCTestCase {
         let window = try XCTUnwrap(UIApplication.shared.connectedScenes.compactMap { ($0 as? UIWindowScene)?.windows.first }.first)
         window.rootViewController = UIHostingController(rootView: MainTabs(store: store).environment(\.scenePhase, .active))
         addTeardownBlock { @MainActor in window.rootViewController = UIViewController() }
-        try await Task.sleep(for: .seconds(1))
+        // The controller attaches, and the tabs report the scene active, when the simulator gets to
+        // it: wait for that (#2254), not a second.
+        func attached() -> Bool { store.inFront && window.gestureRecognizers?.contains(where: { $0 is TouchWatcher }) == true }
+        for _ in 0..<100 where !attached() { try await Task.sleep(for: .milliseconds(100)) }
         let watcher = try XCTUnwrap(window.gestureRecognizers?.first { $0 is TouchWatcher } as? TouchWatcher)
         XCTAssertFalse(watcher.cancelsTouchesInView)
         XCTAssertTrue(store.inFront)
