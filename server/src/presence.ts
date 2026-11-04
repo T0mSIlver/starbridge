@@ -81,6 +81,12 @@ export class Presence {
   }
 }
 
+/**
+ * How long past its `hold_due` a held push waits at most (#2189), whoever stays present: a source
+ * that keeps saying so (stuck, or misused by a stolen token) must not silence the phones for good.
+ */
+export const HOLD_CAP_MS = 30 * 60_000;
+
 /** Kinds whose push waits while the owner is present: those that block an agent. */
 export const HELD_KINDS: readonly SealedItem["kind"][] = ["decision", "permission", "waiting"];
 
@@ -125,8 +131,8 @@ export function holdFor(
 /**
  * Pushes the held items whose hold has run out to the devices they were held from (#1003): the
  * account's hold time after the owner left every screen, and not before the item's `hold_due`.
- * The hold never runs out while the owner is at a screen; one turned off runs out at `hold_due`. They
- * go only when still open: a permission unanswered, a decision, or a `waiting` item's,
+ * The hold does not run out while the owner is at a screen, but at most `HOLD_CAP_MS` after
+ * `hold_due`; one turned off runs out at `hold_due`. They go only when still open: a permission unanswered, a decision, or a `waiting` item's,
  * unanswered and not snoozed. One answered, settled or snoozed meanwhile never pushes.
  */
 export function releaseHolds(
@@ -138,7 +144,7 @@ export function releaseHolds(
 ): void {
   const due = db
     .query(
-      `SELECT account_id, id, kind, from_id, re, answered_at, hold_to FROM items
+      `SELECT account_id, id, kind, from_id, re, answered_at, hold_due, hold_to FROM items
        WHERE hold_due IS NOT NULL AND hold_due <= ?`,
     )
     .all(new Date(now).toISOString()) as {
@@ -148,6 +154,7 @@ export function releaseHolds(
     from_id: string;
     re: string | null;
     answered_at: string | null;
+    hold_due: string;
     hold_to: string;
   }[];
   const ends = new Map<string, number>();
@@ -162,7 +169,7 @@ export function releaseHolds(
     return end;
   };
   for (const h of due) {
-    if (endOf(h.account_id) > now) continue;
+    if (endOf(h.account_id) > now && Date.parse(h.hold_due) + HOLD_CAP_MS > now) continue;
     // Cleared first: a push that fails is not retried, as no other push is. A closed item keeps
     // `hold_to`, so the notices that close it skip the devices that never heard of it.
     const open = stillOpen(db, h);

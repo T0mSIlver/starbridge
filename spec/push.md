@@ -149,13 +149,15 @@
   needed no buzz on the phone too: a quick back and forth at the desk did that. So while any of
   the owner's machines or devices says they sit at its screen, the push of a question, a
   permission prompt or a waiting flip waits for every device not itself in use, and goes only if
-  nothing answered it meanwhile. It waits as long as the owner stays, then the account's hold time
+  nothing answered it meanwhile. It waits while the owner stays, then the account's hold time
   (30 s by default; 0 s to 1 minute, or off, in Settings) from when the last screen stopped saying so
   (#1003): a fixed time from the question rang the phone at a desk the owner never left, and
   timed a walk away from the wrong moment. Coming back within the hold time holds again. What
   bounds a hold is each source's own reading, input in the last minute, so a Mac left unlocked
-  stops holding a minute after its last key; a source that says present wrongly (#990) holds
-  until it stops. Only the push waits, never the item: every device lists it at once, and a held card
+  stops holding a minute after its last key. A source that says present wrongly (#990), stuck or
+  misused by something holding its token, holds no longer than 30 minutes past the hold's due
+  time (#2189): then the push goes whoever stays present, since a phone kept silent until its
+  questions expire costs more than a buzz at the desk. Only the push waits, never the item: every device lists it at once, and a held card
   looks like any other, since the owner chose no state that flips while they look. With no presence
   signal, which is every older client, pushes go at once as before. The server reads presence as
   one bit per source, in memory, since the hold is all it is for: no idle time, lock state or
