@@ -7,12 +7,12 @@
 set -euo pipefail
 slots=${1:?usage: setup.sh <number of runner slots>}
 here=$(dirname "$(readlink -f "$0")")
-RUNNER_VERSION=2.338.0
-RUNNER_SHA256=af4b794c1bc41d73d40535e3fe092a39f9679cd8d965954c2aca25a05ca41d32
-NODE_VERSION=24.22.0
+RUNNER_VERSION=2.338.2
+RUNNER_SHA256=baebf204307bac6193480852732f0aba2ae97b6c5597c244f4d5558390147c40
+NODE_VERSION=24.22.2
 # From https://nodejs.org/dist/v$NODE_VERSION/SHASUMS256.txt, whose detached signature (SHASUMS256.txt.sig)
 # checks against a key in https://github.com/nodejs/release-keys/blob/main/keys.list. Change both together.
-NODE_SHA256=cc2f601cee82d9a5a233302fe307abc600727035fd7d2c3a3571755989e95008
+NODE_SHA256=48cc0e21e048790e54c0cf5749c2725005313d652651c40b7a21feb9697aaf75
 # Docker's apt signing key, from https://docs.docker.com/engine/install/debian/.
 DOCKER_KEY_FPR=9DC858229FC7DD38854AE2D88D81803C0EBFCD88
 export DEBIAN_FRONTEND=noninteractive
