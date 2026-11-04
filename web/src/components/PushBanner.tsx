@@ -6,6 +6,7 @@ import { usePref } from "@/lib/prefs";
 import { PushNotConfigured, type PushState } from "@/lib/push";
 import { useApp } from "./AppProvider";
 import b from "./PushBanner.module.css";
+import { PushError } from "./PushError";
 import ui from "./ui.module.css";
 
 /** Offers Web Push until it is on; says so when the browser blocks it or needs the app installed. */
@@ -73,16 +74,7 @@ export function PushBanner() {
       </button>
       {error !== undefined && (
         <span className={b.error}>
-          {error instanceof PushNotConfigured ? (
-            <>
-              This server sends no browser notifications. Whoever runs it can{" "}
-              <a href={`${SELF_HOST}#notifications`}>turn them on</a>.
-            </>
-          ) : error instanceof Error ? (
-            error.message
-          ) : (
-            String(error)
-          )}
+          <PushError error={error} />
         </span>
       )}
     </div>

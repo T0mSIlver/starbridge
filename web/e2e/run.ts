@@ -2322,6 +2322,24 @@ async function main() {
   };
   await askAgain();
   await shoot(pageB, "inbox-banner-no-push-key", askAgain);
+  // Settings has the same switch, with the same words and the link.
+  const main = pageB.getByRole("navigation", { name: "Main" });
+  await main.getByRole("link", { name: "Settings" }).click();
+  await pageB.getByRole("heading", { name: "Settings" }).waitFor();
+  const askInSettings = async () => {
+    if (!(await noKeySaid.isVisible()))
+      await pageB.getByRole("switch", { name: "Notifications on this device" }).click();
+    await noKeySaid.waitFor();
+    if (await pageB.getByText(/not-configured/).count())
+      throw new Error("Settings shows the API's error code");
+    const link = noKeySaid.getByRole("link", { name: "turn them on" });
+    if ((await link.getAttribute("href")) !== "/docs/self-host#notifications")
+      throw new Error("Settings' words do not link to the server's Notifications");
+  };
+  await askInSettings();
+  await shoot(pageB, "settings-no-push-key", askInSettings);
+  await main.getByRole("link", { name: "Inbox", exact: true }).click();
+  await pageB.getByRole("button", { name: "Turn on notifications" }).waitFor();
   await pageB.unroute(noKey);
   // The new device sees decisions sealed after it joined; the open one predates it.
 

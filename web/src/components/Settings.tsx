@@ -31,6 +31,7 @@ import { useApp } from "./AppProvider";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { Icon, type IconName } from "./icons";
 import { PhoneBar } from "./PhoneBar";
+import { PushError } from "./PushError";
 import { useReorder } from "./Reorder";
 import s from "./Settings.module.css";
 import { useDesktopUpdates } from "./UpdateButton";
@@ -258,7 +259,7 @@ type BrowserPush = ReturnType<typeof useBrowserPush>;
  */
 function useBrowserPush(initial: PushState) {
   const [state, setState] = useState(initial);
-  const [error, setError] = useState<string>();
+  const [error, setError] = useState<unknown>();
   // A refresh underneath never undoes what the owner just turned on or off.
   const touched = useRef(false);
   useEffect(() => {
@@ -278,16 +279,13 @@ function useBrowserPush(initial: PushState) {
       setState(next);
       then?.(next);
       if (on && next === "off")
-        waiting.current = push.finishOnAnswer(
-          (s) => {
-            setState(s);
-            then?.(s);
-            notify.report();
-          },
-          (e) => setError(message(e)),
-        );
+        waiting.current = push.finishOnAnswer((s) => {
+          setState(s);
+          then?.(s);
+          notify.report();
+        }, setError);
     } catch (e) {
-      setError(message(e));
+      setError(e);
     }
     notify.report();
   };
@@ -299,10 +297,11 @@ function BrowserRow({ push: { state, error, turn } }: { push: BrowserPush }) {
   if (state === "install")
     return <Row label={LABEL} sub="Add Starbridge to the Home Screen and open it from there" />;
   const sub =
-    error ??
-    (state === "denied"
-      ? "Blocked: allow Notifications from the icon left of the address, then reload"
-      : undefined);
+    error !== undefined ? (
+      <PushError error={error} />
+    ) : state === "denied" ? (
+      "Blocked: allow Notifications from the icon left of the address, then reload"
+    ) : undefined;
   return (
     <Row label={LABEL} sub={sub && <span className={s.bad}>{sub}</span>}>
       <Switch
