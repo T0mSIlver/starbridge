@@ -1555,6 +1555,12 @@ test.skipIf(WINDOWS)(
     expect(sent().trim()).toBe(sentToT3("th-oc", id, "Wait"));
     // The plugin's `promptAsync` would run it in a turn T3 never shows.
     expect(await s.events()).toEqual([]);
+
+    // `ask --wait` prints its answer itself: T3 does not bring it again.
+    const waits = testCtx(oc);
+    expect(await run([...ASK, "--project", "p", "--wait", "--timeout", "1s"], waits)).toBe(2);
+    const [, asked] = Object.entries(ctx.store.state().asked).at(-1) ?? [];
+    expect(asked?.t3).toBeUndefined();
   },
 );
 

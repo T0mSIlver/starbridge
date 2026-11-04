@@ -137,8 +137,8 @@ line, the safe side: at worst a prompt repeats an answer the agent already read.
   with the `t3` on its own PATH, never one the asker names. It counts only for the session T3
   runs, which Starbridge reaches otherwise: a Claude Code session whose mod was seen at the ask,
   a Codex thread on an app's own app-server, an opencode or Pi session whose extension runs. So
-  a `claude -p` or `codex exec` started inside the thread keeps its `wait`, and a hook's question
-  comes back through the hook. Claude Code's mod goes first since it puts an answer into a
+  a `claude -p` or `codex exec` started inside the thread keeps its `wait`, a hook's question
+  comes back through the hook, and `ask --wait` prints its answer itself. Claude Code's mod goes first since it puts an answer into a
   running turn, where T3 would hold it for the next one; the agent claims an answer before it
   sends, so the mod of the session T3 resumes does not submit it too. A send that fails is tried
   each minute, 30 times, and the answer stays for a `wait`.
