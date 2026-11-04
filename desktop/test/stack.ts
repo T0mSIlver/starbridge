@@ -131,7 +131,7 @@ async function shoot(app: ElectronApplication, page: Page, stop: string) {
       // within 8 s (a 30 s timeout failed the run, #2256) is nudged and taken again the same way.
       for (let tries = 1; ; tries++) {
         const png = await page.screenshot({ path: `${file}.png`, timeout: SHOT_MS }).catch((e) => {
-          if (tries === SHOT_TRIES) throw e;
+          if (tries === SHOT_TRIES || (e as Error).name !== "TimeoutError") throw e;
           console.log(
             `shot ${stop}-${scheme} try ${tries}: ${(e as Error).message.split("\n")[0]}`,
           );
