@@ -101,17 +101,22 @@ private struct Answering: View {
     let amber: Bool
     var options = true
     let answered: () -> Void
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
         let body = decision.body
+        // At accessibility text sizes Done goes under the link: side by side it left the link
+        // "Answ…" at 320 pt (#2242).
+        let stacked = typeSize.isAccessibilitySize
+        let row = stacked ? AnyLayout(VStackLayout(spacing: Tokens.Spacing.s2)) : AnyLayout(HStackLayout(spacing: Tokens.Spacing.s2))
         VStack(alignment: .leading, spacing: Tokens.Spacing.s3) {
             if let page = body.answerIn, let url = URL(string: page.url) {
                 // Answered on its page, never here; Done beside it says the owner did (#539, #2242).
-                HStack(spacing: Tokens.Spacing.s2) {
+                row {
                     Link(destination: url) {
                         HStack(spacing: Tokens.Spacing.s2) {
                             Image(systemName: "arrow.up.right").accessibilityHidden(true)
-                            Text("Answer in \(Notify.place(page))").lineLimit(1)
+                            Text("Answer in \(Notify.place(page))").lineLimit(stacked ? 3 : 1).multilineTextAlignment(.center)
                         }
                         .type(Tokens.Typography.action)
                         .frame(maxWidth: .infinity, minHeight: 48)
@@ -120,7 +125,7 @@ private struct Answering: View {
                     }
                     if body.done == true {
                         OptionButton(label: "Done", strong: false, amber: amber, height: 48) { send(nil, nil) }
-                            .fixedSize(horizontal: true, vertical: false)
+                            .fixedSize(horizontal: !stacked, vertical: false)
                     }
                 }
             } else {
