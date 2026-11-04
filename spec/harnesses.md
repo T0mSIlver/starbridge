@@ -378,6 +378,30 @@ still takes any answer to its session, the `wait` line's safe side.
   its language server; a reply that names no option becomes the write-in. The first answer wins,
   as with its approvals below.
 
+## The harness's own notifications
+
+A question can reach the owner twice: from Starbridge and from the harness (Discussion #846).
+Setup turns none of them off (#2257, card d_scorpion-toy-lecture), since no harness has a
+question-only notification that setup can switch without losing something Starbridge does not
+carry:
+
+- Claude Code's Push when actions required (`inputNeededNotifEnabled`) sends the Claude app
+  permission prompts and questions. It is an account preference on Anthropic's server that only
+  `/config` changes; the user settings only mirror it. So once permission prompts are on, setup
+  and `config permissions on` print where to turn it off, when the settings show it on. With
+  prompts off, that push is the phone's only word of a prompt.
+- Claude Code's local notifications, opencode's `attention` and Antigravity's bell each come from
+  one switch that also carries the end of a turn, which nothing else reports.
+- Codex's `plan-mode-prompt` notification carries both `request_user_input`, which Starbridge
+  races, and the plan's "Implement it?" prompt, which it does not; its approval notification opens
+  only once the permission hook lets go, when the owner sits down or the devices did not answer.
+- Cursor's single `notifications` switch covers its approvals and `askQuestion`, neither of which
+  reaches Starbridge (#957). Pi has none built in, and Claude desktop's switches live in the app on
+  the computer it runs on.
+
+`docs/notifications.md` lists how to turn each off by hand. Nothing is changed, so uninstall has
+nothing to restore.
+
 ## Permission prompts
 
 Off by default (#124): the Claude app already shows prompts for Remote Control sessions, and the

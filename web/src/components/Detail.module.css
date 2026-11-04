@@ -249,7 +249,7 @@
   text-decoration: none;
 }
 
-/* Done, Back now and the Snooze button at the end of the session's line, under the answer. */
+/* Back now and the Snooze button at the end of the session's line, under the answer. */
 .quiet {
   display: flex;
   flex: none;

@@ -22,7 +22,7 @@ Android's and iOS's tests read, so a change to one fails the others until they f
 | History | yes | yes | yes | yes (#1122: answered questions, with how; prompts not listed) |
 | Find | yes (rail box) | yes (Material 3 search view) | yes | yes (#1131: the system search field) |
 | Permission prompts, answer from the device (Allow / Deny) | yes | yes | yes | yes (#1122: Allow, Deny with a note, offered scopes) |
-| Runs (section, progress, dismiss) | yes | yes | yes | yes (#1122; the section #1170) |
+| Runs (section, progress with time left #2259, dismiss) | yes | yes | yes (as web) | yes (#1122; the section #1170) |
 | Link chips (icon and text from `linkChip`, packages/protocol) | yes (#971, #1577) | yes (#971, #1590) | yes (as web) | yes (#1591) |
 | Quotas tab | yes | yes | yes | yes (#1234: read with the inbox every 10 s while the app is open, since APNs carries no snapshots; Order is a page under Settings → Quotas) |
 | Quota alerts per window (settings) | yes | yes | yes | yes (#1235: Settings → Quotas → Alerts, a page like Android's; a section per window with a Toggle per alert, not a checkbox grid, #1859) |
@@ -56,6 +56,7 @@ Android's and iOS's tests read, so a change to one fails the others until they f
 | Recover with the recovery key (revokes every other member) | yes | yes | yes (as web) | yes (#1116) |
 | Sign in with Apple (no name or email asked) | yes (#1411: under Other ways to sign in; #1858: Apple's logo on a black or white pill) | yes (#1411: under Other ways to sign in; #1858: Apple's logo on a black or white pill) | yes (as web, in the browser) | yes (#1411: under GitHub's, the same size) |
 | One wording for sign-in and the inbox's group-by control (#1860, owner's pick, card d_sauce-gain-payment): sign-in buttons say "Sign in with GitHub" and "Sign in with Apple"; the control is an icon button named "Group by" (its accessible label, and its tooltip or long press where there is one), never a text label | yes (was "Continue with" and "View") | yes (the sign-in already; the filter icon is named "Group by", was "View") | yes (as web) | yes (the sign-in already; the ellipsis icon and its picker are named "Group by", were "Options" and "View") |
+| The join screen says where the code comes from: "On a device you already use, open Add a device, then scan or type this code.", the same sentence on each (#2281) | yes (Add this browser; the desktop app shows the same page) | yes (Add this phone) | yes (as web) | yes (Add this iPhone) |
 | On a demo server, Add this phone says how to join (#2089) | n/a (the demo serves no web page) | yes | n/a (as web) | yes |
 | Owner-token sign-in: the keyboard's key signs in, a failure stays under the fields (#2084) | yes (a form; its error stays under it) | yes | n/a (sets its server in its own window) | yes (#2085: return on the token field signs in, the alert waits while signed out) |
 | Delete account (Settings and the join screen, its recovery-key view included, typed confirmation) | yes (#1104, #1117) | yes (#1104, #1117, #1166) | yes (as web) | yes (#1141, #1195, #1233: Settings and the join screen, its recovery-key view included) |

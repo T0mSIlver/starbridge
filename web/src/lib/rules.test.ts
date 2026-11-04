@@ -8,8 +8,9 @@ import { backoff } from "./api";
 import { questionNote } from "./notes";
 import { ROW_INPUT_MAX } from "./permissionInput";
 import { PRESENCE_CHECK_MS } from "./presence";
+import { runCaption, runEnd } from "./runs";
 import { SNOOZE_MAX_MS, SNOOZE_MIN_MS, snoozePresets, snoozeTakes } from "./snooze";
-import type { Decision, InboxItem } from "./types";
+import type { Decision, InboxItem, RunItem } from "./types";
 
 test("presence, retry and row limits", () => {
   expect({
@@ -45,5 +46,19 @@ test("options, the recommended one first, in the detail and the notification", (
       decision: { ...d, question: "", context: "", source: {} },
     } as unknown as InboxItem;
     expect(questionNote(item).options, c.name).toEqual(c.ordered);
+  }
+});
+
+test("a running run's caption: its progress, then the time left at its pace (#2259)", () => {
+  for (const c of rules.runCaption) {
+    const run = { startedAt: c.startedAt, at: c.at, progress: c.progress ?? undefined };
+    expect(runCaption(run as RunItem["run"], Date.parse(c.now)), c.name).toBe(c.caption);
+  }
+});
+
+test("how a run ended, in the same words on every client", () => {
+  for (const c of rules.runEnd) {
+    const run = { startedAt: c.startedAt, at: c.at, exit: c.exit ?? undefined };
+    expect(runEnd(run as RunItem["run"], Date.parse(c.now)), c.name).toBe(c.text);
   }
 });

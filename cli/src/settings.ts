@@ -4,7 +4,9 @@
  * machine it is.
  */
 import { spawnSync } from "node:child_process";
-import { existsSync, readdirSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
 import { MachineKind } from "@starbridge/protocol";
 import { type Ctx, UsageError } from "./context";
 import { permissionsEnabled } from "./permissions";
@@ -98,6 +100,29 @@ export async function permissionsOn(ctx: Ctx, prompt: Prompt | undefined) {
   // installed after setup, which then had no rules to add.
   piAllowStep(ctx, write, true);
   piChainStep(ctx, write);
+  const push = claudePushLine(ctx.env);
+  if (push) ctx.out(push);
+}
+
+/**
+ * What to turn off so a question or permission prompt does not reach the phone twice (#2257):
+ * Claude Code's "Push when actions required", which sends the Claude app both, once Starbridge
+ * sends them too. Only then, since with prompts off that push is the phone's only word of a
+ * prompt. It is an account preference on Anthropic's server that only `/config` changes;
+ * `inputNeededNotifEnabled` in the user settings mirrors it, and editing the file changes nothing
+ * there, so setup says where rather than writing it.
+ */
+export function claudePushLine(env: Ctx["env"]): string | undefined {
+  const dir = env.CLAUDE_CONFIG_DIR || join(env.HOME || homedir(), ".claude");
+  let settings: unknown;
+  try {
+    settings = JSON.parse(readFileSync(join(dir, "settings.json"), "utf8"));
+  } catch {
+    return undefined;
+  }
+  if ((settings as { inputNeededNotifEnabled?: unknown } | null)?.inputNeededNotifEnabled !== true)
+    return undefined;
+  return "Claude Code: it also pushes permission prompts and questions to the Claude app. For one notification each, turn off Push when actions required in Claude Code's /config.";
 }
 
 /**

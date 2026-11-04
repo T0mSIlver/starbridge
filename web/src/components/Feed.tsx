@@ -7,7 +7,7 @@ import { useFind } from "@/lib/find";
 import { clockTime } from "@/lib/format";
 import { fitsRow, fullInput } from "@/lib/permissionInput";
 import type { Prefs } from "@/lib/prefs";
-import { duration, progressText, runState } from "@/lib/runs";
+import { runCaption, runEnd, runState } from "@/lib/runs";
 import { snoozeTime } from "@/lib/snooze";
 import type { Decision, PromptItem, RunItem, Source } from "@/lib/types";
 import s from "./Feed.module.css";
@@ -148,7 +148,7 @@ export function SessionLine({
 }: {
   source: Source;
   agent?: string;
-  /** Done, Back now and Snooze, at the end of the line. */
+  /** Back now and Snooze, at the end of the line. */
   children?: React.ReactNode;
 }) {
   // One space per run of white space, as the line would show it: the halves keep theirs (#630).
@@ -158,6 +158,7 @@ export function SessionLine({
   const link = app ? (links.find((l) => l.kind !== "desktop") ?? links[0]) : undefined;
   if (!name && !link && !children) return null;
   // Cut in the middle only when the line runs out of room: the head shrinks, the tail stays (#172).
+  // Under 600 px it wraps to two lines instead (#2242).
   const named = name && (
     <span className={s.sessionName} title={name}>
       <span className={s.sessionHead}>{name.slice(0, -TAIL)}</span>
@@ -331,14 +332,7 @@ export const label = (e: Entry) =>
       ? e.item.decision.question
       : e.item.run.title;
 
-function runOutcome(r: RunItem["run"], now: number): { text: string; tone: string } {
-  const state = runState(r, now);
-  const took = duration(Date.parse(r.exit?.at ?? r.at) - Date.parse(r.startedAt));
-  if (state === "passed") return { text: `Passed in ${took}`, tone: s.ok };
-  if (state === "failed")
-    return { text: `Failed, exit ${r.exit?.code}, after ${took}`, tone: s.bad };
-  return { text: `Lost, no news for ${duration(now - Date.parse(r.at))}`, tone: s.dim };
-}
+const runTone = { passed: s.ok, failed: s.bad, lost: s.dim, running: s.dim };
 
 /** A command an agent runs under `starbridge run`: what, why, and how far along. */
 export function RunRow({
@@ -388,17 +382,11 @@ export function RunRow({
               <span className={s.indeterminate} />
             )}
           </div>
-          {p && (
-            <span className={`t-caption ${s.dim}`}>
-              {p.unit === "percent" ? progressText(p) : `${p.done} of ${p.total}`}
-            </span>
-          )}
+          {p && <span className={`t-caption ${s.dim}`}>{runCaption(r, now)}</span>}
         </div>
       ) : (
         <div className={s.runEnd}>
-          <div className={`t-meta ${s.outcome} ${runOutcome(r, now).tone}`}>
-            {runOutcome(r, now).text}
-          </div>
+          <div className={`t-meta ${s.outcome} ${runTone[state]}`}>{runEnd(r, now)}</div>
           {onDismiss && (
             <button
               type="button"
