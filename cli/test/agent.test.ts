@@ -1785,17 +1785,22 @@ for (const [name, row] of [
       expect(promised).toBe(!!row.prompt);
       await server.answer(id, { choice: "Merge" });
       await until(() => ctx.store.state().answers[id] !== undefined, 10_000);
-      // A delivery starts as the answer comes in; give the slowest route its time.
-      await Bun.sleep(promised ? 3_000 : 1_500);
-      const log = existsSync(codex.log) ? readFileSync(codex.log, "utf8") : "";
-      const routes: Record<string, number> = {
-        "codex queue": log.split("\n").filter((l) => l.includes(id)).length,
-        steer: codex.steered.length,
-        t3: sent().includes(id) ? 1 : 0,
-        // A mod nobody saw polls nothing: its answer waits for `starbridge wait`.
-        mod: row.mod ? (await mod.events()).filter((e) => e.decisionId === id).length : 0,
+      const routes = async (): Promise<Record<string, number>> => {
+        const log = existsSync(codex.log) ? readFileSync(codex.log, "utf8") : "";
+        return {
+          "codex queue": log.split("\n").filter((l) => l.includes(id)).length,
+          steer: codex.steered.length,
+          t3: sent().includes(id) ? 1 : 0,
+          // A mod nobody saw polls nothing: its answer waits for `starbridge wait`.
+          mod: row.mod ? (await mod.events()).filter((e) => e.decisionId === id).length : 0,
+        };
       };
-      const took = Object.entries(routes).filter(([, n]) => n > 0);
+      const total = async () => Object.values(await routes()).reduce((a, n) => a + n, 0);
+      // A promised prompt: wait for its route, then give a second route the time to show. A
+      // promised wait has nothing to wait for, so it gives any route that time.
+      if (promised) await until(async () => (await total()) > 0, 15_000);
+      await Bun.sleep(promised ? 1_000 : 2_000);
+      const took = Object.entries(await routes()).filter(([, n]) => n > 0);
       expect(took).toEqual(row.prompt ? [[row.prompt, 1]] : []);
     } finally {
       await codex.close().catch(() => {});
