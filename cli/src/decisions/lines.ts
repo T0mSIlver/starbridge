@@ -2,6 +2,7 @@ import type { Answer } from "@starbridge/protocol";
 import { type HooklessCopy, hooklessCopies } from "../claude";
 import type { State } from "../config";
 import { type Ctx, UsageError } from "../context";
+import type { Route } from "./route";
 import type { AskInput } from "./source";
 
 /**
@@ -11,31 +12,9 @@ import type { AskInput } from "./source";
  */
 export type Delivery = "prompt" | "wait";
 
-/**
- * A prompt only when something will submit it (#537): for Claude Code, a mod seen polling for
- * this session (`modSeen`), which an installed plugin alone does not mean; for Pi and opencode,
- * their extension, which says so itself; for Codex, its reachable app-server, or T3 Code for a
- * thread it runs (`t3`, which the agent keeps only when it can send, #2244); for Antigravity,
- * its reachable language server (#961). With no agent running, Codex and Antigravity get
- * nothing back.
- */
-export function delivery(
-  input: Pick<
-    AskInput,
-    "agent" | "extensionAnswers" | "headless" | "antigravity" | "subagent" | "t3"
-  >,
-  reachable: boolean,
-  modSeen: boolean,
-): Delivery {
-  if (input.agent === "antigravity") return input.antigravity && reachable ? "prompt" : "wait";
-  // The mod runs its loop only in a session that stays open (#863, #2100), so a seen mod
-  // outweighs `headless`, which Agent SDK sessions carry as `claude -p` does. Only the mod
-  // names a subagent, so one runs in this session (#1702).
-  if (input.agent === "claude-code" || input.agent === "cursor")
-    return modSeen || (!input.headless && !!input.subagent) ? "prompt" : "wait";
-  if (input.agent === "pi" || input.agent === "opencode")
-    return input.extensionAnswers ? "prompt" : "wait";
-  return input.agent === "codex" && (reachable || !!input.t3) ? "prompt" : "wait";
+/** What `ask` promises: a prompt exactly when its answer has a route (`routeFor`, #2284). */
+export function promise(route: Route | undefined | null): Delivery {
+  return route ? "prompt" : "wait";
 }
 
 /**

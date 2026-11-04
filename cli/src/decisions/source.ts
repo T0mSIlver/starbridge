@@ -14,6 +14,7 @@ import { OPENCODE_ANSWERS, OPENCODE_SESSION, OPENCODE_TITLE } from "../opencode"
 import { PI_ANSWERS, piSessionTitle } from "../pi";
 import { projectName } from "../project";
 import { t3Thread } from "../t3";
+import type { Route } from "./route";
 
 /** What a question says and where it goes: the part of an ask a file or a flag may give. */
 export interface AskContent {
@@ -76,6 +77,8 @@ export interface AskHost {
    * milliseconds, so every inbox lists them together in the call's order (#1079).
    */
   askedAt?: Date;
+  /** The answer's route, which the agent picks when the question is asked (`routeFor`). */
+  route?: Route | null;
 }
 
 export type AskInput = AskContent & AskRoute & AskHost;

@@ -20,7 +20,7 @@ import { type SessionEvent, socketPath } from "./agent/api";
 import { AgentClient, withAgent } from "./agent/client";
 import type { State } from "./config";
 import { type Ctx, session, UsageError } from "./context";
-import { ackLines, deliverable, poll, sessionLines } from "./decisions";
+import { ackLines, deliverable, poll, routeOf, sessionLines } from "./decisions";
 import { permissionsEnabled } from "./permissions";
 
 /** The conversation's id, in every command the agent runs. */
@@ -422,7 +422,7 @@ function waitsOn(st: State, id: string, now: Date): boolean {
   return Object.entries(st.asked).some(
     ([d, a]) =>
       a.session === id &&
-      !a.antigravity &&
+      routeOf(a)?.kind !== "agy" &&
       a.waiting?.state === "waiting" &&
       !st.answers[d] &&
       deliverable(st, d) &&

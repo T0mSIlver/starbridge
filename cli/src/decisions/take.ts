@@ -3,6 +3,7 @@ import type { State } from "../config";
 import { type Ctx, session, UsageError } from "../context";
 import { answerLine } from "./lines";
 import { poll } from "./poll";
+import { routeOf } from "./route";
 import { dropRevokedNow } from "./trust";
 
 /**
@@ -116,7 +117,8 @@ export function sessionLines(st: State, session: string): SessionLine[] {
     if (!asked || a.seen || asked.session !== session || !deliverable(st, id)) continue;
     // T3 brings it in place of the extension, which would run it where T3 never shows it (#2244);
     // and one the agent is handing over goes that way only.
-    if ((asked.t3 && !asked.t3.mod) || steering(a)) continue;
+    const route = routeOf(asked);
+    if ((route?.kind === "t3" && !route.t3.mod) || steering(a)) continue;
     lines.push({
       type: "answer",
       decisionId: id,

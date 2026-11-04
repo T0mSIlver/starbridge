@@ -691,7 +691,10 @@ test.skipIf(WINDOWS)(
         undefined,
         undefined,
       ]);
-      expect(asked?.codex?.bin).toBe(join(codex.env.CODEX_HOME, "bin", "codex"));
+      const route = asked?.route;
+      expect(route?.kind === "codex" && route.codex.bin).toBe(
+        join(codex.env.CODEX_HOME, "bin", "codex"),
+      );
       await server.answer(id, { choice: "Merge" });
       const log = () => (existsSync(codex.log) ? readFileSync(codex.log, "utf8") : "");
       await until(() => log().includes(id), 15_000);
