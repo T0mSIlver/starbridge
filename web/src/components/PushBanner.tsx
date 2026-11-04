@@ -1,17 +1,19 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { SELF_HOST } from "@/lib/links";
 import { usePref } from "@/lib/prefs";
-import type { PushState } from "@/lib/push";
+import { PushNotConfigured, type PushState } from "@/lib/push";
 import { useApp } from "./AppProvider";
 import b from "./PushBanner.module.css";
+import { PushError } from "./PushError";
 import ui from "./ui.module.css";
 
 /** Offers Web Push until it is on; says so when the browser blocks it or needs the app installed. */
 export function PushBanner() {
   const ready = useApp().boot.state === "ready";
   const [state, setState] = useState<PushState>();
-  const [error, setError] = useState<string>();
+  const [error, setError] = useState<unknown>();
   // The owner turned them off in Settings (#943): no banner asks again.
   const [off] = usePref("pushOff");
   // Stops waiting for an answer the browser's prompt has yet to give (#1030).
@@ -51,7 +53,7 @@ export function PushBanner() {
         onClick={async () => {
           waiting.current?.();
           setError(undefined);
-          const fail = (e: unknown) => setError(e instanceof Error ? e.message : String(e));
+          const fail = (e: unknown) => setError(e);
           try {
             const push = await import("@/lib/push");
             const next = await push.enablePush();
@@ -70,7 +72,11 @@ export function PushBanner() {
       >
         Turn on notifications
       </button>
-      {error && <span className={b.error}>{error}</span>}
+      {error !== undefined && (
+        <span className={b.error}>
+          <PushError error={error} />
+        </span>
+      )}
     </div>
   );
 }

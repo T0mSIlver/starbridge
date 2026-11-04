@@ -108,4 +108,24 @@ final class ClientRulesTests: XCTestCase {
             XCTAssertEqual(ordered.map { Array($0.unicodeScalars) }, c["ordered"]!.array!.map { Array($0.string!.unicodeScalars) }, c["name"]!.string!)
         }
     }
+
+    func testRunCaption() {
+        for c in rules["runCaption"]!.array! {
+            let name = c["name"]!.string!
+            let caption: String? = c["progress"]?.object.map { p in
+                SavedRun.caption(
+                    done: Int(p["done"]!.number!), total: Int(p["total"]!.number!), percent: p["unit"]!.string == "percent",
+                    startedAt: Dates.instant(c["startedAt"]!.string!), at: Dates.instant(c["at"]!.string!), now: Dates.instant(c["now"]!.string!))
+            }
+            XCTAssertEqual(caption, c["caption"]?.string, name)
+        }
+    }
+
+    func testRunEnd() {
+        for c in rules["runEnd"]!.array! {
+            let exit = c["exit"]?.object.map { (code: Int($0["code"]!.number!), at: Dates.instant($0["at"]!.string!)) }
+            let end = SavedRun.end(startedAt: Dates.instant(c["startedAt"]!.string!), at: Dates.instant(c["at"]!.string!), exit: exit, now: Dates.instant(c["now"]!.string!))
+            XCTAssertEqual(end, c["text"]!.string, c["name"]!.string!)
+        }
+    }
 }

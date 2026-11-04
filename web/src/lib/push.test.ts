@@ -1,5 +1,15 @@
 import { expect, test } from "bun:test";
-import { blocked, current, pushState, sameKey, subscribeFailure, subscription } from "./push";
+import { ApiError } from "./api";
+import {
+  blocked,
+  current,
+  keyFailure,
+  PushNotConfigured,
+  pushState,
+  sameKey,
+  subscribeFailure,
+  subscription,
+} from "./push";
 
 const error = new DOMException("Registration failed - push service error", "AbortError");
 
@@ -11,6 +21,21 @@ test("other push failures show the browser's message with a hint", () => {
   const text = subscribeFailure(error, false);
   expect(text).toContain("Registration failed - push service error");
   expect(text).toContain("allowed for this site");
+});
+
+test("a server with no Web Push key and no relay says so in words, not its error code (#2282)", () => {
+  const said = keyFailure(new ApiError(404, "not-configured", "no Web Push key and no relay"));
+  expect(said).toBeInstanceOf(PushNotConfigured);
+  expect((said as Error).message).toBe(
+    "This server sends no browser notifications. Whoever runs it can turn them on.",
+  );
+});
+
+test("any other failure to read the key shows as it came", () => {
+  const down = new ApiError(503, "unavailable");
+  expect(keyFailure(down)).toBe(down);
+  const other = new ApiError(404, "not-found");
+  expect(keyFailure(other)).toBe(other);
 });
 
 const relayKey = "BA".padEnd(87, "A");

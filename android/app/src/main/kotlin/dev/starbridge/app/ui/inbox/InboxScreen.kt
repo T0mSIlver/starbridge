@@ -24,6 +24,8 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -743,10 +745,8 @@ fun DecisionSheet(decision: Decision, now: Instant, onAnswer: (String, String?, 
         timeSlot(since, decision.createdAt, now),
         decision.agent,
         blocked = if (waiting) since?.let { waitingLabel(it, now) } ?: "Waiting for you" else null,
-        // Quiet, on the session's line, so the answer stays above (#970): Done for a page's answer
-        // (#539), and putting it off (#571).
+        // Quiet, on the session's line, so the answer stays above (#970): putting it off (#571).
         footer = {
-            if (done) Done { send(null, null) }
             if (snooze != null && until != null) Quiet("Back now") { snooze(Instant.now()) }
             if (snooze != null) SnoozeButton(if (until != null) "Snooze again" else "Snooze") { snoozing = !snoozing; tapped = snoozing }
         },
@@ -787,6 +787,8 @@ fun DecisionSheet(decision: Decision, now: Instant, onAnswer: (String, String?, 
                     Images(decision.images, maxHeight = 360.dp)
                     val page = decision.answerIn
                     when {
+                        // Done beside the page's link, as on the card (#539, #2242).
+                        page != null && done -> PageAndDone(page, other = scheme.surfaceContainerHighest, height = 56.dp) { send(null, null) }
                         page != null -> AnswerElsewhere(page)
                         decision.options.isEmpty() -> FreeText(replies.drafts[decision.id].orEmpty(), { replies.drafts[decision.id] = it }) { send(null, it) }
                         else -> {
@@ -907,37 +909,33 @@ private fun AnswerElsewhere(page: Link) {
     }
 }
 
-/**
- * Done under the page's link in the sheet (#539): quiet, as Reply, since the page holds the
- * answer and Done only says it was given there.
- */
+/** The page's link, amber, joined to a tonal Done (#539), on a card and in the sheet (#2242). */
 @Composable
-private fun Done(onDone: () -> Unit) = Quiet("Done", onDone)
-
-/** On a card: the page's link, amber, joined to a tonal Done (#539). */
-@Composable
-private fun PageAndDone(page: Link, other: Color, onDone: () -> Unit) {
+private fun PageAndDone(page: Link, other: Color, height: Dp = 40.dp, onDone: () -> Unit) {
     val context = LocalContext.current
     val colors = StarbridgeTheme.colors
     val end = 20.dp
-    Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+    // The link wraps to a second line at large text sizes instead of ending in "…", and then Done
+    // takes the pair's height (#2242).
+    var wraps by remember { mutableStateOf(false) }
+    Row(Modifier.height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
         Button(
             onClick = { openLink(context, page.url) },
             shape = RoundedCornerShape(topStart = end, bottomStart = end, topEnd = 8.dp, bottomEnd = 8.dp),
             colors = ButtonDefaults.buttonColors(containerColor = colors.accent, contentColor = colors.onAccent),
             contentPadding = PaddingValues(horizontal = Spacing.s4),
-            modifier = Modifier.weight(1f).heightIn(min = 40.dp),
+            modifier = Modifier.weight(1f).heightIn(min = height),
         ) {
             Symbol(Sym.Open, size = 18.dp)
             Spacer(Modifier.width(Spacing.s2))
-            Text("Answer in ${page.place()}", style = StarbridgeTheme.type.label, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text("Answer in ${page.place()}", style = StarbridgeTheme.type.label, maxLines = 2, overflow = TextOverflow.Ellipsis, onTextLayout = { wraps = it.lineCount > 1 })
         }
         Button(
             onClick = onDone,
             shape = RoundedCornerShape(topStart = 8.dp, bottomStart = 8.dp, topEnd = end, bottomEnd = end),
             colors = ButtonDefaults.buttonColors(containerColor = other, contentColor = MaterialTheme.colorScheme.onSurface),
             contentPadding = PaddingValues(horizontal = Spacing.s4),
-            modifier = Modifier.heightIn(min = 40.dp),
+            modifier = (if (wraps) Modifier.fillMaxHeight() else Modifier).heightIn(min = height),
         ) { Text("Done", style = StarbridgeTheme.type.label, maxLines = 1) }
     }
 }

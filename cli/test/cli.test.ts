@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import {
   type Answer,
   checkKeyFromLink,
@@ -1077,6 +1077,22 @@ test("config turns permission prompts on and off", async () => {
   expect(await run(["config", "permissions", "on"], ctx)).toBe(0);
   expect(ctx.lines.at(-5)).toBe("permissions   on");
   expect(await run(["config", "permissions", "maybe"], ctx)).toBe(1);
+});
+
+test("permissions on says where to turn off Claude Code's own push, only while it is on (#2257)", async () => {
+  const ctx = await paired(server);
+  ctx.env.HOME = mkdtempSync(join(tmpdir(), "starbridge-claude-home-"));
+  const settings = join(ctx.env.HOME, ".claude", "settings.json");
+  mkdirSync(dirname(settings), { recursive: true });
+  const line = (l: string) => l.startsWith("Claude Code: it also pushes");
+  writeFileSync(settings, JSON.stringify({ inputNeededNotifEnabled: false }));
+  expect(await run(["config", "permissions", "on"], ctx)).toBe(0);
+  expect(ctx.lines.some(line)).toBe(false);
+  writeFileSync(settings, JSON.stringify({ inputNeededNotifEnabled: true }));
+  expect(await run(["config", "permissions", "on"], ctx)).toBe(0);
+  expect(ctx.lines.filter(line)).toHaveLength(1);
+  // Only `/config` changes the account's preference: the file stays as it was.
+  expect(JSON.parse(readFileSync(settings, "utf8"))).toEqual({ inputNeededNotifEnabled: true });
 });
 
 test("permissions on names the Starbridge link in pi-permission-system's chain", async () => {

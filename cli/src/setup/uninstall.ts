@@ -110,6 +110,7 @@ export async function uninstall(sys: Sys, opts: UninstallOpts): Promise<number> 
       opts.purge ||
       (await prompt.confirm(`Delete ${dir} (this machine's keys and state)?`, false))
     ) {
+      // remove-ok: the machine's own config folder, after --purge or the owner's yes
       rmSync(dir, { recursive: true, force: true });
       ctx.out(`Deleted ${dir}.`);
     } else ctx.out(`Kept ${dir}: \`starbridge setup\` reuses it.`);

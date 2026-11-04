@@ -247,6 +247,17 @@ export function QuestionDetail({
       ) : d.answerIn ? (
         <div className={s.actions}>
           <AnswerElsewhere page={d.answerIn} />
+          {/* Beside the page's link, as on the card (#539, #2242). */}
+          {d.done && (
+            <button
+              type="button"
+              className={`t-label ${ui.btn}`}
+              disabled={sending}
+              onClick={() => send({ done: true })}
+            >
+              Done
+            </button>
+          )}
         </div>
       ) : paired ? (
         <Picks
@@ -309,21 +320,11 @@ export function QuestionDetail({
           Not sent: {item.notSent}
         </p>
       )}
-      {/* Quiet, so the answer stays above: Done for a page's answer (#539), and putting it off
-          (#571), on the session's line (#970), where Snooze is a round icon button at the end (#1848). */}
+      {/* Quiet, so the answer stays above: putting it off (#571), on the session's line (#970), where
+          Snooze is a round icon button at the end (#1848). Done sits beside Answer in (#2242). */}
       <SessionLine source={d.source} agent={agentOf(d)}>
         {!closed && (
           <div className={s.quiet}>
-            {d.answerIn && d.done && (
-              <button
-                type="button"
-                className={`t-small ${s.link} ${s.reply}`}
-                disabled={sending}
-                onClick={() => send({ done: true })}
-              >
-                Done
-              </button>
-            )}
             {snoozed && (
               <button
                 type="button"

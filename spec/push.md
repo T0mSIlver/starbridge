@@ -99,6 +99,13 @@
   at most 32 pushes in flight to one host, its own and relayed ones together (#1738). Otherwise a
   subscription could make the server probe any port of any host, or hold many requests open on
   one. A self-hoster's distributor on another port goes in `ALLOW_PRIVATE_PUSH_ENDPOINTS`.
+- A server with no VAPID keys and no relay answers `GET /push/vapid` with 404 `not-configured`. The web's
+  Turn on notifications, in the banner and in Settings, then says "This server sends no browser notifications. Whoever runs it can
+  turn them on.", the last words linking to the server README's Notifications (#2282), never the
+  API's code. The user cannot fix it, whoever runs the server can. Android and iPhone never read the
+  key: they register an FCM or APNs token or a UnifiedPush endpoint, and a server that sends none
+  shows no error there, only Android's 10-second check while the app is open. The desktop app
+  notifies through its own bridge, so it never asks.
 - A server's VAPID key can change, as when a self-hoster leaves the relay for their own keys
   (#567). Each page boot compares the browser's subscription key with the server's and subscribes
   again when they differ. The server drops a Web Push subscription its push service refuses as signed

@@ -1,7 +1,6 @@
 import { expect, test } from "bun:test";
 import {
   duration,
-  progressText,
   runKey,
   runNote,
   runState,
@@ -50,12 +49,10 @@ test("running runs come first, newest first; finished ones stay half an hour", (
   expect(shownRuns(runs, now).map((r) => r.run.id)).toEqual(["late", "early", "fail", "old-pass"]);
 });
 
-test("durations and progress read at a glance", () => {
+test("durations read at a glance", () => {
   expect(duration(8_400)).toBe("8 s");
   expect(duration(125_000)).toBe("2 min 05 s");
   expect(duration(3_780_000)).toBe("1 h 03 min");
-  expect(progressText({ done: 3, total: 7, unit: "step" })).toBe("3/7");
-  expect(progressText({ done: 42, total: 100, unit: "percent" })).toBe("42%");
 });
 
 test("a run notifies once when it passes or fails, again when it ends again, and not when old", () => {
