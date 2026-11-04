@@ -1335,6 +1335,80 @@
       "valid": false
     },
     {
+      "name": "multiple",
+      "body": {
+        "v": 1,
+        "id": "dec_1",
+        "to": [
+          "phone",
+          "phone2"
+        ],
+        "createdAt": "2026-10-04T10:00:00Z",
+        "question": "Run inference on the Mac while you are away?",
+        "context": "The bench needs the GPU for about 40 minutes. No: it waits for tonight.",
+        "options": [
+          "Yes",
+          "No"
+        ],
+        "recommended": "Yes",
+        "source": {
+          "machine": "dev box",
+          "project": "localvoxtral",
+          "session": "s_42"
+        },
+        "multiple": true
+      },
+      "valid": true
+    },
+    {
+      "name": "multiple false",
+      "body": {
+        "v": 1,
+        "id": "dec_1",
+        "to": [
+          "phone",
+          "phone2"
+        ],
+        "createdAt": "2026-10-04T10:00:00Z",
+        "question": "Run inference on the Mac while you are away?",
+        "context": "The bench needs the GPU for about 40 minutes. No: it waits for tonight.",
+        "options": [
+          "Yes",
+          "No"
+        ],
+        "recommended": "Yes",
+        "source": {
+          "machine": "dev box",
+          "project": "localvoxtral",
+          "session": "s_42"
+        },
+        "multiple": false
+      },
+      "valid": false
+    },
+    {
+      "name": "multiple without options",
+      "body": {
+        "v": 1,
+        "id": "dec_1",
+        "to": [
+          "phone",
+          "phone2"
+        ],
+        "createdAt": "2026-10-04T10:00:00Z",
+        "question": "Run inference on the Mac while you are away?",
+        "context": "The bench needs the GPU for about 40 minutes. No: it waits for tonight.",
+        "options": [],
+        "source": {
+          "machine": "dev box",
+          "project": "localvoxtral",
+          "session": "s_42"
+        },
+        "multiple": true
+      },
+      "valid": false
+    },
+    {
       "name": "answered in an artifact and with options",
       "body": {
         "v": 1,
@@ -1471,6 +1545,111 @@
         "to": "devbox",
         "answeredAt": "2026-10-04T10:03:00Z",
         "done": false
+      },
+      "valid": false
+    },
+    {
+      "name": "choices",
+      "body": {
+        "v": 1,
+        "id": "ans_1",
+        "decisionId": "dec_1",
+        "to": "devbox",
+        "answeredAt": "2026-10-04T10:03:00Z",
+        "choices": [
+          "Yes",
+          "No"
+        ]
+      },
+      "valid": true
+    },
+    {
+      "name": "choice and choices",
+      "body": {
+        "v": 1,
+        "id": "ans_1",
+        "decisionId": "dec_1",
+        "to": "devbox",
+        "answeredAt": "2026-10-04T10:03:00Z",
+        "choice": "Yes",
+        "choices": [
+          "Yes"
+        ]
+      },
+      "valid": false
+    },
+    {
+      "name": "choices and text",
+      "body": {
+        "v": 1,
+        "id": "ans_1",
+        "decisionId": "dec_1",
+        "to": "devbox",
+        "answeredAt": "2026-10-04T10:03:00Z",
+        "choices": [
+          "Yes"
+        ],
+        "text": "and text"
+      },
+      "valid": false
+    },
+    {
+      "name": "no choices",
+      "body": {
+        "v": 1,
+        "id": "ans_1",
+        "decisionId": "dec_1",
+        "to": "devbox",
+        "answeredAt": "2026-10-04T10:03:00Z",
+        "choices": []
+      },
+      "valid": false
+    },
+    {
+      "name": "five choices",
+      "body": {
+        "v": 1,
+        "id": "ans_1",
+        "decisionId": "dec_1",
+        "to": "devbox",
+        "answeredAt": "2026-10-04T10:03:00Z",
+        "choices": [
+          "A",
+          "B",
+          "C",
+          "D",
+          "E"
+        ]
+      },
+      "valid": false
+    },
+    {
+      "name": "a choice twice",
+      "body": {
+        "v": 1,
+        "id": "ans_1",
+        "decisionId": "dec_1",
+        "to": "devbox",
+        "answeredAt": "2026-10-04T10:03:00Z",
+        "choices": [
+          "Yes",
+          "Yes"
+        ]
+      },
+      "valid": false
+    },
+    {
+      "name": "an empty choice among choices",
+      "body": {
+        "v": 1,
+        "id": "ans_1",
+        "decisionId": "dec_1",
+        "to": "devbox",
+        "answeredAt": "2026-10-04T10:03:00Z",
+        "choices": [
+          "Yes",
+          ""
+        ]
       },
       "valid": false
     },
@@ -2362,6 +2541,64 @@
         "at": "2026-10-04T10:01:00Z"
       },
       "valid": true
+    },
+    {
+      "name": "a device's choices",
+      "body": {
+        "v": 1,
+        "id": "set_1",
+        "itemId": "dec_1",
+        "to": [
+          "phone",
+          "phone2"
+        ],
+        "outcome": "device",
+        "device": "phone",
+        "at": "2026-10-04T10:01:00Z",
+        "choices": [
+          "Yes",
+          "No"
+        ]
+      },
+      "valid": true
+    },
+    {
+      "name": "a device's choices and text",
+      "body": {
+        "v": 1,
+        "id": "set_1",
+        "itemId": "dec_1",
+        "to": [
+          "phone",
+          "phone2"
+        ],
+        "outcome": "device",
+        "device": "phone",
+        "at": "2026-10-04T10:01:00Z",
+        "choices": [
+          "Yes"
+        ],
+        "text": "and text"
+      },
+      "valid": false
+    },
+    {
+      "name": "choices at the keyboard",
+      "body": {
+        "v": 1,
+        "id": "set_1",
+        "itemId": "perm_1",
+        "to": [
+          "phone",
+          "phone2"
+        ],
+        "outcome": "keyboard",
+        "at": "2026-10-04T10:01:00Z",
+        "choices": [
+          "Yes"
+        ]
+      },
+      "valid": false
     },
     {
       "name": "with a directory head",
