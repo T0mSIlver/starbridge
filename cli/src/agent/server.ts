@@ -493,8 +493,10 @@ export class Agent implements Hub {
   }
 
   seen(id: string, ms: number): boolean {
-    const at = this.sessions.get(id)?.lastSeenAt;
-    return at !== undefined && this.ctx.now().getTime() - Date.parse(at) <= ms;
+    const s = this.sessions.get(id);
+    // A run that ends with its turn hands answers only into that turn: it submits no prompt (#2258).
+    if (!s || s.headless) return false;
+    return this.ctx.now().getTime() - Date.parse(s.lastSeenAt) <= ms;
   }
 
   private async hello(req: Request) {
@@ -504,6 +506,7 @@ export class Agent implements Hub {
     const pid = pick<number>(b.pid, "number");
     const cwd = pick<string>(b.cwd, "string");
     const title = pick<string>(b.title, "string");
+    const headless = pick<boolean>(b.headless, "boolean");
     // After a `/clear` the mod greets under the new id and names the old one, which has no mod
     // any more (#537). Its events stay held for a `/resume`.
     const replaces = pick<string>(b.replaces, "string");
@@ -513,6 +516,8 @@ export class Agent implements Hub {
       ...(pid !== undefined ? { pid } : {}),
       ...(cwd !== undefined ? { cwd: cwd.slice(0, 1000) } : {}),
       ...(title !== undefined ? { title: title.slice(0, 200) } : {}),
+      // Each hello says it afresh: an interactive `--resume` of a `claude -p` session counts again.
+      headless: headless === true ? true : undefined,
     });
     return { version: VERSION };
   }

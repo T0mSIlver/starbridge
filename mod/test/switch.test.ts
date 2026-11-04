@@ -153,3 +153,35 @@ test("a host that throws once its session is gone does not reject the loop (#136
     process.off("unhandledRejection", onUnhandled);
   }
 });
+
+test("with no CLI path, as in a `claude -p` run, no agent means no loop until one answers (#2258)", async () => {
+  let up = false;
+  let probes = 0;
+  let started = 0;
+  const s = new Switch(
+    {
+      agentUp: async () => {
+        probes++;
+        return up;
+      },
+      agent: () => {
+        started++;
+        const run = async () => {
+          await Bun.sleep(5);
+          return "stopped";
+        };
+        return { run, stop: () => {}, bye: async () => {} } as never;
+      },
+      sleep: (ms) => Bun.sleep(Math.min(ms, 5)),
+      clearStatus: () => {},
+      log: () => {},
+    },
+    10,
+  );
+  while (probes < 3) await Bun.sleep(5);
+  expect(s.mode).toBeUndefined();
+  expect(started).toBe(0);
+  up = true;
+  while (started === 0) await Bun.sleep(5);
+  await s.stop();
+});

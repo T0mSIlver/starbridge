@@ -25,7 +25,8 @@ and the first answer wins.
 ¹ Your answer to a `starbridge ask` question comes back as the session's next prompt, so the
 agent doesn't wait for it with `starbridge wait`. A headless run (`claude -p`, `codex exec`,
 `pi -p`, `opencode run`, `cursor-agent -p`, `agy -p`) has no next prompt, so there the agent
-waits with `starbridge wait` before it ends its turn.
+waits with `starbridge wait` before it ends its turn. In `claude -p`, with the background service
+running, an answer that comes while the run still works reaches the agent at its next tool call.
 
 ² While the agent works, your answer reaches it at its next tool call. In Antigravity and Cursor,
 it comes once the turn ends.

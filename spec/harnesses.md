@@ -19,15 +19,16 @@ line, the safe side: at worst a prompt repeats an answer the agent already read.
 |---|---|
 | Claude Code: terminal, desktop app's Code tab, IDEs | The mod (`mod/`) long-polls the local agent's socket in 25 s cycles and submits each answer with `$.prompt.submit`; during a turn, it goes with the next tool result instead (#1484, #1584) |
 | Claude Code in an app that runs it through the Agent SDK and keeps the session open (such as T3 Code) | The mod: from the start when the app names itself in `CLAUDE_CODE_ENTRYPOINT`, as T3 Code does; else from the session's second turn, and in the first, `wait` (#2100) |
-| `claude -p`, Agent SDK scripts | `wait`: the run ends with its last turn, so the mod starts no loop there (#321) |
+| `claude -p` | While the run works, the next tool result, as in a running turn; after it, `wait`: the run ends with its last turn, so nothing would run a prompt (#321, #2258) |
+| Agent SDK scripts | `wait` in the first turn; then the mod, as for an app that keeps the session open (#2100) |
 | Codex TUI | The local agent runs `codex queue --thread <id>`; the message only says to run `starbridge wait <id>`, since other local users can read process arguments (#274). Retried each minute, 30 times. During a turn, the answer goes in with the daemon's `turn/steer` instead, answer and all (#1486, #1584). A daemon down at the ask means `wait`, and nothing is queued later (#2182) |
-| `codex exec` | `wait`: nothing runs a queued message once exec returns. The thread's rollout tells exec apart (#245) |
+| `codex exec` | `wait`: nothing runs a queued message once exec returns, and exec runs the thread in its own process, which no control socket reaches mid-turn. The thread's rollout tells exec apart (#245, #2258) |
 | Codex in an app that runs its own `codex app-server` | `wait`: the daemon would load the thread and run the answer's turn where that app never shows it. The rollout's `originator`, `codex-tui` for the TUI, tells them apart (#2101). In T3 Code, the row below |
 | A session T3 Code runs: Claude Code, Codex on T3's app-server, opencode or Pi with Starbridge's extension | The local agent runs `t3 thread send <thread> -`, the answer on stdin, so the thread shows it as a message and runs it: next if busy, at once if idle, after resuming a stopped thread. For Claude Code only once the mod has not called for 45 s; for the others in place of the extension or `wait` (#2244) |
 | Pi TUI and RPC | The Pi extension (`mod/pi`) calls `pi.sendUserMessage(text, { deliverAs: "steer" })`: a busy session takes it after its current tool calls (#232, #1584) |
 | opencode TUI and `serve` | The opencode plugin (`mod/opencode`) calls `client.session.promptAsync`, one loop per session (#300); a busy session takes it at its next step (#1484) |
 | Claude Code subagents | The mod sends the answer to the subagent that asked with `$.session.send` (#1702) |
-| `pi -p`, `opencode run`, other harnesses' subagents | `wait` |
+| `pi -p`, `opencode run`, other harnesses' subagents | `wait` (#2258: below) |
 | Antigravity, interactive | The local agent sends the answer to the conversation's language server, at the address and token `ask` saw, with `SendUserCascadeMessage` run when idle. Retried each minute, 30 times (#961) |
 | `agy -p` | `wait`: its language server ends with the run |
 | `cursor-agent` | Setup's `stop` hook holds up to 10 minutes while the conversation has a question open and returns the answer as `followup_message`, Cursor's next user message (#956) |
@@ -116,6 +117,20 @@ line, the safe side: at worst a prompt repeats an answer the agent already read.
   asked in the first turn still gets the `wait` line. A script that streams several prompts and
   then stops may still miss an answer promised in its later turns.
   `starbridge status` run from a session whose mod never called says so.
+- **Headless runs** (#2258, card d_evil-sight-long). `claude -p`, `codex exec`, `pi -p` and
+  `opencode run` end with their turn, so an answer that comes later reaches the session only by
+  starting a new run with it (`claude -p --resume`, `codex exec resume`), which would spend quota
+  unwatched, with permission flags Starbridge can only guess: none starts one, and `ask` keeps
+  printing the `wait` line. While a `claude -p` run works, its mod hands an answer in with the
+  next tool result, as in any running turn: it polls only the local agent, with 1 s holds since
+  the run exits only once the mod's open call returns, and submits no prompt, so a line that
+  misses the turn stays unconfirmed for `wait`. Its hello says `headless`, and the agent counts no
+  such session as one whose mod brings prompts. It takes no CLI path, whose lease would tell
+  `ask` that some session submits prompts. Checked with `mod/e2e` case `print` (Claude Code
+  2.1.317): the answer came with the next tool result, and the run exited 0.6 s after its turn.
+  The Pi extension and opencode plugin submit and confirm a line at once, which in a run that
+  then exits loses it, so `pi -p` and `opencode run` keep `wait` alone until they hold a line
+  unconfirmed until the agent read it (#2280). `codex exec` has no route in.
 - **Claude desktop on another machine** (#1428, #2107). Claude desktop starts a session over SSH
   with `--plugin-dir` copies of the plugins installed on the computer it runs on, synced without
   `hooks/`, and a `--plugin-dir` plugin replaces the installed one of its name. So where both

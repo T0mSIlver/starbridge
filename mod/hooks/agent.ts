@@ -63,6 +63,11 @@ export interface AgentHost {
   starting(): boolean;
   status(text: string | undefined): void;
   log(text: string): void;
+  /**
+   * A run that ends with its turn, such as `claude -p` (#2258): the hello says so, and the agent
+   * then promises the session no prompt.
+   */
+  headless?: boolean;
 }
 
 export interface AgentTiming {
@@ -78,12 +83,18 @@ export interface AgentTiming {
   maxBackoffMs: number;
 }
 
-const AGENT_TIMING: AgentTiming = {
+export const AGENT_TIMING: AgentTiming = {
   waitSeconds: 25,
   minCycleMs: 2_000,
   backoffMs: 2_000,
   maxBackoffMs: 60_000,
 };
+
+/**
+ * A `claude -p` run exits only once the mod's open call returns (#2258): short holds, so the run
+ * ends within a second or so of its turn.
+ */
+export const HEADLESS_TIMING: AgentTiming = { ...AGENT_TIMING, waitSeconds: 1 };
 
 const hex = (bytes: Uint8Array) => [...bytes].map((b) => b.toString(16).padStart(2, "0")).join("");
 
@@ -260,6 +271,7 @@ export class AgentLoop {
       const r = await this.host.fetch("POST", `${path(me)}/hello`, {
         cwd: await this.host.cwd(),
         ...replaces,
+        ...(this.host.headless ? { headless: true } : {}),
       });
       if (!(await this.ok(r))) return;
       this.greeted = me;

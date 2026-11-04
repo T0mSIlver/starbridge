@@ -390,7 +390,62 @@ async function subagentCase(running: boolean): Promise<Row> {
   };
 }
 
+/**
+ * A `claude -p` run (#2258): `ask` still gives the `wait` line, an answer that comes during the
+ * run's turn enters with the next tool result, and the run exits once the turn ends, its mod
+ * holding nothing open. Needs `--agent`, the only path such a run's mod takes.
+ */
+async function print(): Promise<Row> {
+  if (!opt.agent) return { name: "claude -p", result: "FAIL", timing: "", note: "needs --agent" };
+  const c = new Claude("print", proj, env, sessionArgs("print"));
+  const busy = `python3 -c "import time; time.sleep(10); print('done')"`;
+  const prompt = `Run exactly this with the Bash tool in the foreground three times, one call after another: ${busy}. Then reply with the word finished.`;
+  const p = Bun.spawn(
+    ["claude", "-p", prompt, "--session-id", c.sessionId, ...sessionArgs("print")],
+    {
+      cwd: proj,
+      env: { ...process.env, ...env },
+      stdout: "pipe",
+      stderr: "pipe",
+    },
+  );
+  await until(
+    "the busy command",
+    () => bashCommands(c.transcript()).some((cmd) => cmd.includes("time.sleep(10)")),
+    90_000,
+  );
+  const r =
+    await $`starbridge ask --session ${c.sessionId} --agent claude-code --question ${"Headless check?"} --option Alpha --option Beta`
+      .env({ ...process.env, ...env, CLAUDE_CODE_SESSION_ATTENDED: "0" })
+      .quiet();
+  const id = r.stdout.toString().trim();
+  const promised = r.stderr.toString().includes("as a new prompt");
+  await Bun.sleep(2_000);
+  const posted = Date.now();
+  await owner.answer(id, "Beta");
+  const got = await until(
+    `answer to ${id} in a tool result`,
+    () => c.context(`Answer to ${id}`),
+    60_000,
+  );
+  const finished = Date.now();
+  const code = await p.exited;
+  // From the turn's last entry to the process's exit: the mod's open poll must not hold it.
+  const last = Math.max(...c.transcript().map((e) => Date.parse(e.timestamp ?? "") || 0));
+  const exitLag = Math.max(0, Date.now() - Math.max(last, finished));
+  const ok = !promised && code === 0 && exitLag < 10_000 && !c.prompt(`Answer to ${id}`);
+  return {
+    name: "claude -p",
+    result: ok ? "pass" : "FAIL",
+    timing: `post → tool result ${secs(got.at - posted)}; exit ${secs(exitLag)} after the turn`,
+    note: `${promised ? "ask promised a prompt" : "ask printed the wait line"}; exit ${code}`,
+  };
+}
+
 const cases: Record<string, () => Promise<Row>> = {
+  /** A `claude -p` run takes an answer mid-turn and still exits (#2258). */
+  print,
+
   /** A background subagent asks; the answer reaches it while it runs (#1702). */
   subrunning() {
     return subagentCase(true);
