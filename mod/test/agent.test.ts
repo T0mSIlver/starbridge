@@ -318,6 +318,8 @@ test("a `claude -p` run takes an answer at its next tool call, submits no prompt
     submit: (lines) => handover.submit(lines, () => []),
   });
   await until(() => a.s.calls.includes("POST /v1/sessions/s-p/hello"));
+  // It says so each poll, so an agent that restarts between two still knows (#2258).
+  await until(() => a.s.calls.filter((c) => c === "POST /v1/sessions/s-p/hello").length >= 2);
   // The agent records it as a run that ends with its turn: its route promises no prompt.
   expect(agent?.headless("s-p")).toBe(true);
   const before = cli.errors.length;

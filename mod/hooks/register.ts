@@ -197,6 +197,14 @@ export const register: Register = (on) => {
       // A subagent's answers go to it, whatever the main agent does (#1702).
       const submit = async (lines: Line[]) => {
         const me = await sessionId();
+        // A `claude -p` run ends with the parent's turn: a subagent that finished could not take
+        // its answer, and a resumed one would outlive the run. So the parent's next tool result
+        // carries it, saying which subagent asked, or it stays for `wait` (#2258).
+        if (headless)
+          return handover.submit(
+            lines.map((l) => (l.subagent ? forParent(l, l.subagent) : l)),
+            () => [],
+          );
         const { taken, rest } = await toSubagents(
           lines,
           async (agentId, group, text) => {
@@ -312,7 +320,7 @@ export const register: Register = (on) => {
         const list = () => $.agent.list();
         if (!sent || !(await finished(list, (ms) => $.clock.sleep(ms), agent))) return;
         roundEnded.delete(agent);
-        if (await sent.finished(agent, ended)) await sent.recover();
+        if ((await sent.finished(agent, ended)) && !oneShot) await sent.recover();
       })().catch(() => undefined);
     } else {
       handover.ended();

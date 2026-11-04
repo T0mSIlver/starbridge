@@ -265,9 +265,11 @@ export class AgentLoop {
       await this.host.sleep(this.t.minCycleMs);
       return;
     }
-    if (this.greeted !== me) {
+    // A run that ends with its turn says so each poll: an agent that restarted between two polls
+    // would otherwise know the session only from its events, and promise it a prompt (#2258).
+    if (this.greeted !== me || this.host.headless) {
       // After a /clear: the old id has no mod any more (#537).
-      const replaces = this.greeted ? { replaces: this.greeted } : {};
+      const replaces = this.greeted && this.greeted !== me ? { replaces: this.greeted } : {};
       const r = await this.host.fetch("POST", `${path(me)}/hello`, {
         cwd: await this.host.cwd(),
         ...replaces,
