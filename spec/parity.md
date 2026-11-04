@@ -22,7 +22,7 @@ Android's and iOS's tests read, so a change to one fails the others until they f
 | History | yes | yes | yes | yes (#1122: answered questions, with how; prompts not listed) |
 | Find | yes (rail box) | yes (Material 3 search view) | yes | yes (#1131: the system search field) |
 | Permission prompts, answer from the device (Allow / Deny) | yes | yes | yes | yes (#1122: Allow, Deny with a note, offered scopes) |
-| Runs (section, progress, dismiss) | yes | yes | yes | yes (#1122; the section #1170) |
+| Runs (section, progress with time left #2259, dismiss) | yes | yes | yes (as web) | yes (#1122; the section #1170) |
 | Link chips (icon and text from `linkChip`, packages/protocol) | yes (#971, #1577) | yes (#971, #1590) | yes (as web) | yes (#1591) |
 | Quotas tab | yes | yes | yes | yes (#1234: read with the inbox every 10 s while the app is open, since APNs carries no snapshots; Order is a page under Settings → Quotas) |
 | Quota alerts per window (settings) | yes | yes | yes | yes (#1235: Settings → Quotas → Alerts, a page like Android's; a section per window with a Toggle per alert, not a checkbox grid, #1859) |

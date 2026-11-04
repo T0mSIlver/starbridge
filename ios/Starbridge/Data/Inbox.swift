@@ -244,6 +244,51 @@ struct SavedRun: Codable, Equatable {
     /** Neither ended nor lost. */
     var running: Bool { body.exit == nil && !lost }
 
+    /** "34 of 120 · about 12 min left" under a running run's bar; none without progress. */
+    func caption(_ now: Date) -> String? {
+        body.progress.map { Self.caption(done: $0.done, total: $0.total, percent: $0.unit == "percent", startedAt: started, at: lastNews, now: now) }
+    }
+
+    /** How it ended; nil while it runs. */
+    func end(_ now: Date) -> String? {
+        Self.end(startedAt: started, at: lastNews, exit: body.exit.map { (code: $0.code, at: Dates.instant($0.at)) }, now: now)
+    }
+
+    /**
+     * "Passed in 8 s", "Failed, exit 1, after 2 min 05 s", or "Lost, no news for 3 min 37 s",
+     * with no length since its last news may predate most of it (#190). The same words on every
+     * client, in vectors/rules.json (`runEnd`). Nil while it runs.
+     */
+    static func end(startedAt: Date, at: Date, exit: (code: Int, at: Date)?, now: Date) -> String? {
+        if let exit {
+            let took = Times.elapsed(startedAt, exit.at)
+            return exit.code == 0 ? "Passed in \(took)" : "Failed, exit \(exit.code), after \(took)"
+        }
+        if now.timeIntervalSince(at) * 1000 > Double(RUN_STALE_MS) { return "Lost, no news for \(Times.elapsed(at, now))" }
+        return nil
+    }
+
+    /** A run's pace says nothing before this much of it has passed. */
+    static let leftAfter: TimeInterval = 30
+
+    /**
+     * Its progress, then the time left: when the run ends at the pace it kept from its start to
+     * its last update, counted down to `now`. None before 30 s or the first step, since an early
+     * pace misleads, and none once every step is done (#2259). The same rule as the web's and
+     * Android's, in vectors/rules.json.
+     */
+    static func caption(done: Int, total: Int, percent: Bool, startedAt: Date, at: Date, now: Date) -> String {
+        let count = percent ? "\(done)%" : "\(done) of \(total)"
+        let ran = at.timeIntervalSince(startedAt)
+        if done == 0 || done >= total || ran < leftAfter { return count }
+        let end = at.addingTimeInterval(ran * Double(total - done) / Double(done))
+        let min = Int((end.timeIntervalSince(now) / 60).rounded(.up))
+        let left = if min <= 1 { "under a minute left" }
+            else if min < 60 { "about \(min) min left" }
+            else { "about \(min / 60) h \(String(format: "%02d", min % 60)) min left" }
+        return "\(count) · \(left)"
+    }
+
     /** A finished or lost run stays on the screen this long, so its result is seen (#827). */
     static let shownAfter: TimeInterval = 30 * 60
 

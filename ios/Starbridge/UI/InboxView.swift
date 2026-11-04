@@ -528,12 +528,11 @@ private struct RunCard: View {
         TimelineView(.periodic(from: .now, by: 1)) { context in
             let now = context.date
             let started = Dates.parse(run.body.startedAt) ?? now
-            let state: (String, Color) = if let exit = run.body.exit {
-                exit.code == 0 ? ("Passed", Tokens.Colors.ok.color) : ("Failed, exit \(exit.code)", Tokens.Colors.bad.color)
-            } else if run.lost {
-                ("Lost, no news for \(Times.elapsed(run.lastNews, now))", Tokens.Colors.fg3.color)
+            // How it ended, else its progress and time left, as on the web and Android; the meta row has its time.
+            let state: (String, Color) = if let end = run.end(now) {
+                (end, run.body.exit.map { $0.code == 0 ? Tokens.Colors.ok.color : Tokens.Colors.bad.color } ?? Tokens.Colors.fg3.color)
             } else {
-                ("Running, \(Times.elapsed(started, now))", Tokens.Colors.fg2.color)
+                (run.caption(now) ?? "", Tokens.Colors.fg2.color)
             }
             Card(amber: false) {
                 // A lost run's last news may predate most of its life, so it shows no time (#249).
@@ -551,14 +550,16 @@ private struct RunCard: View {
                     // No progress yet: an indeterminate bar, as on the web and Android.
                     ProgressView().progressViewStyle(.linear).tint(Tokens.Colors.fg.color)
                 }
-                HStack {
-                    Text(state.0).type(Tokens.Typography.small).foregroundStyle(state.1)
-                    Spacer()
-                    if run.body.exit != nil || run.lost {
-                        Button("Dismiss") { store.dismissRun(run.id) }
-                            .type(Tokens.Typography.action)
-                            .foregroundStyle(Tokens.Colors.fg.color)
-                            .frame(minHeight: Tokens.Sizes.tap)
+                if !state.0.isEmpty {
+                    HStack {
+                        Text(state.0).type(Tokens.Typography.small).foregroundStyle(state.1)
+                        Spacer()
+                        if run.body.exit != nil || run.lost {
+                            Button("Dismiss") { store.dismissRun(run.id) }
+                                .type(Tokens.Typography.action)
+                                .foregroundStyle(Tokens.Colors.fg.color)
+                                .frame(minHeight: Tokens.Sizes.tap)
+                        }
                     }
                 }
             }

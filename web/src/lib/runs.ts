@@ -35,9 +35,34 @@ export function duration(ms: number): string {
   return `${Math.floor(s / 3600)} h ${pad(Math.floor((s % 3600) / 60))} min`;
 }
 
-/** "3/7" for steps, "42%" for a percent. */
-export function progressText(p: NonNullable<RunItem["run"]["progress"]>): string {
-  return p.unit === "percent" ? `${p.done}%` : `${p.done}/${p.total}`;
+/**
+ * "about 12 min left": when the run ends at the pace it kept from its start to its last update,
+ * counted down to `now`. None before 30 s or the first step, since an early pace misleads, and none
+ * once every step is done. Overdue reads "under a minute left" (#2259).
+ */
+export function timeLeft(r: RunItem["run"], now: number): string | null {
+  const p = r.progress;
+  if (!p || p.done === 0 || p.done >= p.total) return null;
+  const start = Date.parse(r.startedAt);
+  const last = Date.parse(r.at);
+  if (last - start < LEFT_AFTER_MS) return null;
+  const end = last + ((last - start) * (p.total - p.done)) / p.done;
+  const min = Math.ceil((end - now) / 60_000);
+  if (min <= 1) return "under a minute left";
+  if (min < 60) return `about ${min} min left`;
+  return `about ${Math.floor(min / 60)} h ${String(min % 60).padStart(2, "0")} min left`;
+}
+
+/** A run's pace says nothing before this much of it has passed. */
+export const LEFT_AFTER_MS = 30_000;
+
+/** "34 of 120 · about 12 min left", "40%": what a running run's bar has under it. */
+export function runCaption(r: RunItem["run"], now: number): string | null {
+  const p = r.progress;
+  if (!p) return null;
+  const count = p.unit === "percent" ? `${p.done}%` : `${p.done} of ${p.total}`;
+  const left = timeLeft(r, now);
+  return left ? `${count} · ${left}` : count;
 }
 
 /**
@@ -54,12 +79,29 @@ export function runsToNotify(items: RunItem[], shown: string[], now: number): Ru
 /** One key per run's end, so a run its machine runs again under the same id notifies again. */
 export const runKey = (i: RunItem) => `${i.run.id}/${i.run.exit?.at ?? ""}`;
 
-/** "Passed in 8 s" or "Failed, exit 1, after 2 min 05 s", then the machine and project, then why. */
+/**
+ * How an ended run ended: "Passed in 8 s", "Failed, exit 1, after 2 min 05 s", or "Lost, no news
+ * for 3 min 37 s", with no length since its last news may predate most of it (#190). The same
+ * words on every client, in vectors/rules.json (`runEnd`). None while it runs.
+ */
+export function runEnd(r: RunItem["run"], now: number): string | null {
+  const took = duration(Date.parse(r.exit?.at ?? r.at) - Date.parse(r.startedAt));
+  switch (runState(r, now)) {
+    case "passed":
+      return `Passed in ${took}`;
+    case "failed":
+      return `Failed, exit ${r.exit?.code}, after ${took}`;
+    case "lost":
+      return `Lost, no news for ${duration(now - Date.parse(r.at))}`;
+    default:
+      return null;
+  }
+}
+
+/** How the run ended, then the machine and project, then why. */
 export function runNote(i: RunItem): { title: string; body: string } {
   const r = i.run;
-  const took = duration(Date.parse(r.exit?.at ?? r.at) - Date.parse(r.startedAt));
-  const outcome =
-    r.exit?.code === 0 ? `Passed in ${took}` : `Failed, exit ${r.exit?.code}, after ${took}`;
+  const outcome = runEnd(r, Date.parse(r.exit?.at ?? r.at));
   const where = [r.source.machine, r.source.project].filter(Boolean).join(" · ");
   return { title: r.title, body: `${outcome}\n${where}\n${r.reason}` };
 }

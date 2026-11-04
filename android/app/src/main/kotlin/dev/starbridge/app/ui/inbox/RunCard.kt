@@ -63,14 +63,14 @@ fun RunCard(run: Run, now: Instant, shape: Shape, modifier: Modifier = Modifier,
                 Text(run.title, style = type.action.copy(lineHeight = 22.sp), color = scheme.onSurface)
             }
             Text(run.reason.replaceFirstChar { it.uppercase() }, style = type.small, color = scheme.onSurfaceVariant)
-            if (state == Run.State.Running) run.progress?.let { Progress(it) } ?: Working()
+            if (state == Run.State.Running) run.progress?.let { Progress(it, run.caption(now).orEmpty()) } ?: Working()
             else Row(verticalAlignment = Alignment.CenterVertically) {
-                val (text, color) = when (state) {
-                    Run.State.Passed -> "Passed" to colors.ok
-                    Run.State.Failed -> "Failed, exit ${run.exitCode}" to colors.bad
-                    else -> "Lost, no news for ${elapsed(run.at, now)}" to colors.fg3
+                val color = when (state) {
+                    Run.State.Passed -> colors.ok
+                    Run.State.Failed -> colors.bad
+                    else -> colors.fg3
                 }
-                Text(text, style = type.metaStrong, color = color, modifier = Modifier.weight(1f))
+                Text(runEnd(run, now).orEmpty(), style = type.metaStrong, color = color, modifier = Modifier.weight(1f))
                 // Tonal, as a card's secondary buttons are (DESIGN.md); it drops the run on every device (#827).
                 if (onDismiss != null) FilledTonalButton(
                     onClick = onDismiss,
@@ -79,6 +79,21 @@ fun RunCard(run: Run, now: Instant, shape: Shape, modifier: Modifier = Modifier,
                 ) { Text("Dismiss", style = type.action) }
             }
         }
+    }
+}
+
+/**
+ * How an ended run ended: "Passed in 8 s", "Failed, exit 1, after 2 min 05 s", or "Lost, no news
+ * for 3 min 37 s", with no length since its last news may predate most of it (#190). The same
+ * words on every client, in vectors/rules.json (`runEnd`). Null while it runs.
+ */
+fun runEnd(run: Run, now: Instant): String? {
+    val took = elapsed(run.startedAt, run.endedAt ?: run.at)
+    return when (run.state(now)) {
+        Run.State.Passed -> "Passed in $took"
+        Run.State.Failed -> "Failed, exit ${run.exitCode}, after $took"
+        Run.State.Lost -> "Lost, no news for ${elapsed(run.at, now)}"
+        Run.State.Running -> null
     }
 }
 
@@ -93,9 +108,9 @@ private fun Working() {
     )
 }
 
-/** The fill in `fg`, a gap, then the track, as Material's indicator; "3 of 7" under it. */
+/** The fill in `fg`, a gap, then the track, as Material's indicator; "3 of 7 · about 4 min left" under it. */
 @Composable
-private fun Progress(p: Run.Progress) {
+private fun Progress(p: Run.Progress, caption: String) {
     val scheme = MaterialTheme.colorScheme
     val fraction by animateFloatAsState(p.fraction.coerceIn(0f, 1f), MaterialTheme.motionScheme.slowSpatialSpec(), label = "progress")
     Column(Modifier.padding(top = Spacing.s1), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -103,7 +118,7 @@ private fun Progress(p: Run.Progress) {
             if (fraction > 0f) Box(Modifier.weight(fraction).height(6.dp).background(scheme.onSurface, RoundedCornerShape(3.dp)))
             if (fraction < 1f) Box(Modifier.weight(1f - fraction).height(6.dp).background(scheme.surfaceContainerHighest, RoundedCornerShape(3.dp)))
         }
-        Text(if (p.percent) "${p.done}%" else "${p.done} of ${p.total}", style = StarbridgeTheme.type.caption, color = scheme.onSurfaceVariant)
+        Text(caption, style = StarbridgeTheme.type.caption, color = scheme.onSurfaceVariant)
     }
 }
 

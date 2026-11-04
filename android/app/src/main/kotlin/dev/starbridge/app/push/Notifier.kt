@@ -41,7 +41,7 @@ import dev.starbridge.app.protocol.Block
 import dev.starbridge.app.protocol.RUN_STALE_MS
 import dev.starbridge.app.protocol.Span
 import dev.starbridge.app.protocol.parseContext
-import dev.starbridge.app.ui.elapsed
+import dev.starbridge.app.ui.inbox.runEnd
 import java.time.Duration
 import java.time.Instant
 
@@ -574,8 +574,7 @@ class Notifier(private val context: Context, private val prefs: Prefs) : Alerts 
                 .setTimeoutAfter((RUN_STALE_MS - Duration.between(run.at, now).toMillis()).coerceAtLeast(1_000))
             // No short text: the status bar chip then shows the run's time, counting up.
         } else {
-            val took = elapsed(run.startedAt, run.endedAt ?: run.at)
-            val outcome = if (state == Run.State.Passed) "Passed in $took" else "Failed, exit ${run.exitCode}, after $took"
+            val outcome = runEnd(run, now).orEmpty()
             b.setContentText(outcome)
                 .setStyle(NotificationCompat.BigTextStyle().bigText("$outcome\n${run.reason}"))
                 .setShowWhen(true)

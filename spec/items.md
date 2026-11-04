@@ -156,6 +156,11 @@
   sealed run, so this is client-side. A lost run shows "Lost, no news for 3 min 37 s" and no
   elapsed time, since its last news may predate most of its life. A run with no progress shows an
   indeterminate bar.
+- **Time left** (#2259). A running run's bar reads "34 of 120 · about 12 min left" under it on
+  every client: devices compute it from the pace the run kept from its start to its last update,
+  counted down between updates, so the wire format carries no estimate. It shows after 30 s and
+  the first step, since an early pace misleads, and reads "under a minute left" once overdue.
+  `vectors/rules.json` (`runCaption`) holds the cases the web, Android and iOS test against.
 - Runs sit above the questions in their own section, open by default, which each device
   remembers open or closed like Snoozed and History (#835): many runs at once pushed the
   questions off the first screen. Closed, its head still counts the runs and names failed and

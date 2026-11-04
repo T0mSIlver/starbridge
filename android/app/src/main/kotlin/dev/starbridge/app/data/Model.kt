@@ -189,9 +189,34 @@ data class Run(
     /** When the last news came: the exit, else the last update. */
     val lastNews get() = endedAt ?: at
 
+    /**
+     * "34 of 120 · about 12 min left" under a running run's bar: the time left is when the run
+     * ends at the pace it kept from its start to its last update, counted down to [now]. None
+     * before 30 s or the first step, since an early pace misleads, and none once every step is
+     * done (#2259). The same rule as the web's and iOS's, in vectors/rules.json.
+     */
+    fun caption(now: Instant): String? {
+        val p = progress ?: return null
+        val count = if (p.percent) "${p.done}%" else "${p.done} of ${p.total}"
+        val start = startedAt.toEpochMilli()
+        val last = at.toEpochMilli()
+        if (p.done == 0 || p.done >= p.total || last - start < LEFT_AFTER_MS) return count
+        val end = last + (last - start).toDouble() * (p.total - p.done) / p.done
+        val min = kotlin.math.ceil((end - now.toEpochMilli()) / 60_000.0).toLong()
+        val left = when {
+            min <= 1 -> "under a minute left"
+            min < 60 -> "about $min min left"
+            else -> "about ${min / 60} h ${"%02d".format(min % 60)} min left"
+        }
+        return "$count · $left"
+    }
+
     companion object {
         /** A finished or lost run stays on the screen this long, so its result is seen. */
         val SHOWN_AFTER: Duration = Duration.ofMinutes(30)
+
+        /** A run's pace says nothing before this much of it has passed. */
+        const val LEFT_AFTER_MS = 30_000L
 
         /** Running runs, newest first, then the others still shown, latest news first. */
         fun shown(runs: List<Run>, now: Instant): List<Run> {
