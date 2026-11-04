@@ -3,6 +3,7 @@ package dev.starbridge.app
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import dev.starbridge.app.data.Phase
 import dev.starbridge.app.ui.setup.SetupActions
 import dev.starbridge.app.ui.setup.SetupScreen
@@ -22,8 +23,9 @@ class RecoverDeleteTest {
     @Test fun deleteAccountFromTheRecoveryKeyView() {
         val actions = SetupActions({ "" }, { "" }, { _, _ -> }, {}, {}, {}, {}, {}, {}, {}, {})
         compose.setContent { StarbridgeTheme { SetupScreen(Phase.NoDevice(accountExists = true), "https://starbridge.run", false, actions, {}) } }
-        compose.onNodeWithText("Use the recovery key").performClick()
-        compose.onNodeWithText("Delete account").performClick()
+        // The links sit below the fold of Robolectric's small default screen, as on a small phone.
+        compose.onNodeWithText("Use the recovery key").performScrollTo().performClick()
+        compose.onNodeWithText("Delete account").performScrollTo().performClick()
         compose.onNodeWithText("Delete your account?").assertExists()
     }
 }

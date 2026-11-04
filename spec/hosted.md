@@ -163,7 +163,8 @@
   `demo/` is its first device and machine. It approves every join by digits without comparing,
   so a reviewer walks the same screens as a real second phone. Those screens say so: when `GET
   /v1/demo` says the server is a demo, the Android and iPhone apps' "Add this phone" shows "This demo
-  approves your phone by itself: tap Compare digits, then They match.", since a Play tester stopped
+  approves your phone by itself: tap Compare digits, then They match." in place of the sentence every
+  server's join screen has, which sends a phone to another device's Add a device (#2281), since a Play tester stopped
   there with no other device to scan (#2089, Tom's pick over joining with no screen at all, which
   would take the server's unsigned word to skip comparing digits). The server refuses `DEMO=1` beside
   a starbridge.run `PUBLIC_URL`, GitHub sign-in or relay mode. Its database, its device's keys
