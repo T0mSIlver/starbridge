@@ -145,10 +145,14 @@ async function shoot(app: ElectronApplication, page: Page, stop: string) {
 
 /**
  * A warm switch between tabs, from the click to the frame that paints the new page: the median of
- * WARM_SWITCHES per tab, since one switch on a busy shared runner can stall (432 ms, #1581).
+ * WARM_SWITCHES per tab. A shared runner stalls the page for a second or so now and then (432 ms,
+ * #1581; 127 to 326 ms across three tabs, #2216), and a stall hit three of five back-to-back
+ * switches of one tab. A switch that waits on the server is slow every time, so the switches
+ * are spread over SWITCH_GAP_MS pauses and a stall reaches only a few of the nine.
  */
 const SWITCH_MS = 100;
-const WARM_SWITCHES = 5;
+const WARM_SWITCHES = 9;
+const SWITCH_GAP_MS = 250;
 
 /**
  * Clicks a tab of the rail, in the page, and resolves with the time to the frame painting the
@@ -174,6 +178,13 @@ function switchTab([tab, heading]: readonly [string, string]): Promise<number> {
     requestAnimationFrame(tick);
   });
 }
+
+/** A `long-animation-frame` entry; Chromium's, not yet in TypeScript's DOM types. */
+type LongFrame = {
+  startTime: number;
+  duration: number;
+  scripts: { invoker: string; sourceURL: string; duration: number }[];
+};
 
 /** What the main process records in place of the OS. */
 type Watched = {
@@ -337,6 +348,18 @@ try {
       ["Inbox", "Inbox"],
     ] as const;
     const times = new Map<string, number[]>(tabs.map(([tab]) => [tab, []]));
+    // What blocked the page, for a failure to name (#2216): each frame that took over 50 ms, with
+    // the scripts that ran in it.
+    await page.evaluate(() => {
+      const blocked: string[] = [];
+      Object.assign(window, { blocked });
+      new PerformanceObserver((list) => {
+        for (const e of list.getEntries() as unknown as LongFrame[])
+          blocked.push(
+            `at ${Math.round(e.startTime)} ms, ${Math.round(e.duration)} ms long: ${e.scripts.map((x) => `${x.invoker} ${x.sourceURL.split("/").pop()} ${Math.round(x.duration)} ms`).join(", ") || "no script"}`,
+          );
+      }).observe({ type: "long-animation-frame" });
+    });
     for (let round = 0; round <= WARM_SWITCHES; round++) {
       for (const [tab, heading] of tabs) {
         const fetched: string[] = [];
@@ -347,6 +370,7 @@ try {
         const ms = await page.evaluate(switchTab, [tab, heading] as const);
         page.off("request", onRequest);
         console.log(`${round ? "warm" : "cold"} ${tab}: ${Math.round(ms)} ms ${fetched.join(" ")}`);
+        await new Promise((r) => setTimeout(r, SWITCH_GAP_MS));
         if (!round) continue;
         assert.deepEqual(fetched, [], `switching to ${tab} fetched the page`);
         times.get(tab)?.push(ms);
@@ -354,10 +378,14 @@ try {
     }
     for (const [tab, ms] of times) {
       const median = [...ms].sort((a, b) => a - b)[Math.floor(ms.length / 2)] ?? Infinity;
-      assert.ok(
-        median < SWITCH_MS,
-        `switching to ${tab} took ${Math.round(median)} ms (median of ${ms.map(Math.round).join(", ")})`,
-      );
+      if (median >= SWITCH_MS) {
+        const blocked = await page.evaluate(
+          () => (window as unknown as { blocked: string[] }).blocked,
+        );
+        assert.fail(
+          `switching to ${tab} took ${Math.round(median)} ms (median of ${ms.map(Math.round).join(", ")}); frames over 50 ms: ${blocked.join("; ") || "none"}`,
+        );
+      }
     }
 
     await page.evaluate(switchTab, ["Quotas", "Quotas"] as const);
