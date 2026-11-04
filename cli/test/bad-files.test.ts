@@ -75,7 +75,7 @@ const baseline = new Set<string>();
  * the CLI never reads: Codex's plugin cache (`codex plugin` writes it) and Pi's git checkout.
  */
 const SKIPPED =
-  /\.fake-marketplace$|\.sock$|\.port$|\.lock$|\.tmp$|\.unreadable-|agent\.log$|\.codex\/plugins\/|\.pi\/agent\/git\//;
+  /\.fake-marketplace$|\.sock$|\.sock\.pid$|\.port$|\.lock$|\.tmp$|\.unreadable-|agent\.log$|\.codex\/plugins\/|\.pi\/agent\/git\//;
 
 /**
  * Cases that fail on main: a live bug each, `test.todo` below. Without `machine.json` setup pairs
