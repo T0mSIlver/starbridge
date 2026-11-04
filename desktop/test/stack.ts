@@ -98,6 +98,9 @@ async function fit(app: ElectronApplication, page: Page) {
   );
 }
 
+const SHOT_MS = 8_000;
+const SHOT_TRIES = 5;
+
 /**
  * The window as it is, in light then dark (the page's prefers-color-scheme, set through
  * Playwright: Electron's nativeTheme.themeSource did not reach the page under xvfb), as
@@ -124,15 +127,22 @@ async function shoot(app: ElectronApplication, page: Page, stop: string) {
       await new Promise((r) => setTimeout(r, 500));
       const file = join(dir, `${stop}-${scheme}`);
       // Some runs still paint a 773 px window although the page and the window say 800: a shot
-      // of another size is nudged to the size again and taken again.
+      // of another size is nudged to the size again and taken again. A capture that gets no frame
+      // within 8 s (a 30 s timeout failed the run, #2256) is nudged and taken again the same way.
       for (let tries = 1; ; tries++) {
-        const png = await page.screenshot({ path: `${file}.png` });
-        if (png.readUInt32BE(20) === 800 || tries === 5) break;
+        const png = await page.screenshot({ path: `${file}.png`, timeout: SHOT_MS }).catch((e) => {
+          if (tries === SHOT_TRIES || (e as Error).name !== "TimeoutError") throw e;
+          console.log(
+            `shot ${stop}-${scheme} try ${tries}: ${(e as Error).message.split("\n")[0]}`,
+          );
+        });
+        if (png && (png.readUInt32BE(20) === 800 || tries === SHOT_TRIES)) break;
         await app.evaluate(({ BrowserWindow }) => {
           const w = BrowserWindow.getAllWindows().find((x) => x.getTitle() === "Starbridge");
           w?.setMenuBarVisibility(false);
           w?.setContentSize(1200, 801);
           w?.setContentSize(1200, 800);
+          w?.webContents.invalidate();
         });
         await new Promise((r) => setTimeout(r, 500));
       }
