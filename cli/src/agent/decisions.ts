@@ -7,7 +7,7 @@
 import { existsSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { activeMembers, type Directory, ProtocolError } from "@starbridge/protocol";
-import { type AgyRoute, agyReachable, agySend } from "../antigravity";
+import { agyReachable, agySend } from "../antigravity";
 import {
   type CodexSession,
   codexNotice,
@@ -23,7 +23,6 @@ import {
   ackLines,
   answerLine,
   deliverable,
-  delivery,
   dropRevokedNow,
   MOD_SEEN_MS,
   observedAnswers,
@@ -31,6 +30,9 @@ import {
   poll,
   postDecision,
   postWaiting,
+  promise,
+  routeFor,
+  routeOf,
   sessionLines,
   snoozedUntil,
   steering,
@@ -96,28 +98,21 @@ export class Decisions implements Feature {
             ask.session,
             ask.agent === "cursor" ? Number.POSITIVE_INFINITY : MOD_SEEN_MS,
           );
-        // T3 brings the answer only where this agent runs a `t3`, and to a Claude Code session
-        // only behind its mod: one with none, such as a `claude -p` started in the thread, keeps
-        // its `wait` (#2244).
-        if (
-          ask.t3 !== undefined &&
-          !(t3ThreadId(ask.t3) && t3Bin(this.ctx.env) && (ask.agent !== "claude-code" || mod))
-        )
-          delete ask.t3;
-        const decision = await postDecision(this.ctx, session(this.ctx), ask);
         const codex = ask.codex && trustedCodex(this.ctx, ask.codex);
-        const reachable = codex
-          ? await codexReachable(codex)
-          : ask.antigravity
-            ? await agyReachable(ask.antigravity)
-            : false;
-        const d = delivery(ask, reachable, mod);
-        // A Codex session told to wait gets nothing queued into it, as promised (#2182): its
-        // daemon was down at the ask, and `codex queue` would reach it once it came back.
-        if (d === "wait" && ask.codex)
-          this.ctx.store.updateState((st) => {
-            delete st.asked[decision.id]?.codex;
-          });
+        // Seen before the post, so the route is recorded with the question: the server may hand
+        // out its answer before it replies.
+        const route = routeFor(ask, {
+          reachable: codex
+            ? await codexReachable(codex)
+            : ask.antigravity
+              ? await agyReachable(ask.antigravity)
+              : false,
+          modSeen: mod,
+          // T3 brings the answer only where this agent runs a `t3` (#2244).
+          t3: !!ask.t3 && !!t3ThreadId(ask.t3) && !!t3Bin(this.ctx.env),
+        });
+        const decision = await postDecision(this.ctx, session(this.ctx), { ...ask, route });
+        const d = promise(route);
         return { id: decision.id, delivery: d };
       },
     },
@@ -220,7 +215,7 @@ export class Decisions implements Feature {
     // it only once that gave up, or it would arrive twice (#1278).
     return sessionLines(st, id).filter(
       (l) =>
-        !st.asked[l.decisionId]?.antigravity ||
+        routeOf(st.asked[l.decisionId])?.kind !== "agy" ||
         (this.retries.get(l.decisionId)?.tries ?? 0) >= CODEX_TRIES,
     );
   }
@@ -272,14 +267,16 @@ export class Decisions implements Feature {
     const due = new Map<string, string[]>();
     for (const [id, a] of Object.entries(st.answers)) {
       const asked = st.asked[id];
-      const route = asked?.codex ?? asked?.antigravity ?? asked?.t3;
-      if (a.seen || !route || !asked?.session || !deliverable(st, id)) continue;
+      const route = routeOf(asked);
+      if (a.seen || !asked?.session || !deliverable(st, id)) continue;
+      // The mod and the extensions take theirs from the session's events.
+      if (route?.kind !== "codex" && route?.kind !== "agy" && route?.kind !== "t3") continue;
       // A Claude Code session's mod takes it while it runs: into the running turn, if one is.
-      if (route === asked.t3 && asked.t3.mod && this.hub.seen(asked.session, MOD_SEEN_MS)) continue;
+      if (route.kind === "t3" && route.t3.mod && this.hub.seen(asked.session, MOD_SEEN_MS))
+        continue;
       const retry = this.retries.get(id) ?? { tries: 0, at: 0 };
       if (retry.tries >= CODEX_TRIES || retry.at > now) continue;
-      const kind = asked.codex ? "codex" : asked.antigravity ? "agy" : "t3";
-      const key = JSON.stringify([kind, route, asked.session]);
+      const key = JSON.stringify([route, asked.session]);
       due.set(key, [...(due.get(key) ?? []), id]);
     }
     for (const ids of due.values()) await this.deliverTo(ids, now);
@@ -290,14 +287,17 @@ export class Decisions implements Feature {
     // Read again: another process may have found the directory behind meanwhile.
     if (this.ctx.store.state().behind) return;
     const first = this.ctx.store.state().asked[all[0] as string];
-    if (!first?.session) return;
-    if (!first.codex && !first.antigravity) return this.sendT3(all, now);
+    const route = routeOf(first);
+    if (!first?.session || !route) return;
+    if (route.kind === "t3") return this.sendT3(all, now);
+    if (route.kind !== "codex" && route.kind !== "agy") return;
     const session = first.session;
-    const [how, where] = first.codex
-      ? ["codex queue", `Codex session ${session}`]
-      : ["sending to Antigravity", `Antigravity conversation ${session}`];
+    const [how, where] =
+      route.kind === "codex"
+        ? ["codex queue", `Codex session ${session}`]
+        : ["sending to Antigravity", `Antigravity conversation ${session}`];
     // Into the running turn, waiting or not; with none running, queued (#1584).
-    const steered = first.codex ? await this.steer(all) : [];
+    const steered = route.kind === "codex" ? await this.steer(all) : [];
     // Read again: a `waiting` printed one meanwhile, or a `settle` closed it during the steer or
     // an earlier session's delivery.
     const fresh = this.ctx.store.state();
@@ -319,22 +319,23 @@ export class Decisions implements Feature {
     if (steered.length > 0) done(steered, "steered");
     if (ids.length === 0) return;
     const st = fresh;
-    const codex = first.codex && trustedCodex(this.ctx, first.codex);
-    const error = first.codex
-      ? codex
-        ? await codexQueue(codex, session, codexNotice(ids))
-        : "its CODEX_HOME is not the one setup recorded"
-      : await agySend(
-          first.antigravity as AgyRoute,
-          session,
-          ids
-            .map((id) => {
-              const a = st.answers[id];
-              return a ? answerLine(a.answer, st.asked[id]?.question) : "";
-            })
-            .filter(Boolean)
-            .join("\n"),
-        );
+    const codex = route.kind === "codex" && trustedCodex(this.ctx, route.codex);
+    const error =
+      route.kind === "codex"
+        ? codex
+          ? await codexQueue(codex, session, codexNotice(ids))
+          : "its CODEX_HOME is not the one setup recorded"
+        : await agySend(
+            route.antigravity,
+            session,
+            ids
+              .map((id) => {
+                const a = st.answers[id];
+                return a ? answerLine(a.answer, st.asked[id]?.question) : "";
+              })
+              .filter(Boolean)
+              .join("\n"),
+          );
     if (error === undefined) return done(ids, "queued");
     this.failed(ids, how, error, now);
   }
@@ -365,15 +366,16 @@ export class Decisions implements Feature {
       for (const id of all) {
         const a = st.answers[id];
         const asked = st.asked[id];
-        if (!a || a.seen || steering(a) || !asked?.t3 || !asked.session) continue;
+        const r = routeOf(asked);
+        if (!a || a.seen || steering(a) || r?.kind !== "t3" || !asked?.session) continue;
         if (!deliverable(st, id)) continue;
         // A mod that came back since the answers were picked, as during another thread's send,
         // may hold this one already.
-        if (asked.t3.mod && this.hub.seen(asked.session, MOD_SEEN_MS)) continue;
+        if (r.t3.mod && this.hub.seen(asked.session, MOD_SEEN_MS)) continue;
         a.steering = Date.now();
         lines.push(answerLine(a.answer, asked.question));
         claimed.push(id);
-        route ??= { thread: asked.t3.thread, session: asked.session, mod: !!asked.t3.mod };
+        route ??= { thread: r.t3.thread, session: asked.session, mod: !!r.t3.mod };
       }
     });
     if (!route || claimed.length === 0) return;
@@ -413,12 +415,13 @@ export class Decisions implements Feature {
       for (const id of ids) {
         const a = st.answers[id];
         const asked = st.asked[id];
-        if (!a || a.seen || steering(a) || !asked?.codex || !asked.session) continue;
+        const r = routeOf(asked);
+        if (!a || a.seen || steering(a) || r?.kind !== "codex" || !asked?.session) continue;
         if (!deliverable(st, id)) continue;
         a.steering = Date.now();
         lines.push(answerLine(a.answer, asked.question));
         claimed.push(id);
-        route ??= { codex: asked.codex, session: asked.session };
+        route ??= { codex: r.codex, session: asked.session };
       }
     });
     if (!route || claimed.length === 0) return [];

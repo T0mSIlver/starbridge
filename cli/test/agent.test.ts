@@ -691,7 +691,10 @@ test.skipIf(WINDOWS)(
         undefined,
         undefined,
       ]);
-      expect(asked?.codex?.bin).toBe(join(codex.env.CODEX_HOME, "bin", "codex"));
+      const route = asked?.route;
+      expect(route?.kind === "codex" && route.codex.bin).toBe(
+        join(codex.env.CODEX_HOME, "bin", "codex"),
+      );
       await server.answer(id, { choice: "Merge" });
       const log = () => (existsSync(codex.log) ? readFileSync(codex.log, "utf8") : "");
       await until(() => log().includes(id), 15_000);
@@ -1716,3 +1719,93 @@ test("Cursor: follow-ups that bring no answer stop after three per conversation 
   expect(countFollowup(ctx, "conv-1", false)).toBe(true);
   expect(countFollowup(ctx, "conv-1", true)).toBe(true);
 });
+
+type Route = "codex queue" | "t3" | "mod";
+interface RouteRow {
+  codex?: string; // the rollout's originator: a Codex session
+  claude?: Record<string, string>; // the host environment of a Claude Code session
+  mod?: boolean;
+  down?: boolean;
+  t3?: boolean;
+  prompt?: Route; // the one route a promised prompt takes
+}
+
+// What ask promises is the route the answer takes (#2264, #2182): a promised prompt reaches the
+// session by exactly one route, and a promised wait fires none. The routes the fakes show: the
+// mod's events, `codex queue`, the daemon's `turn/steer`, `t3 thread send`.
+for (const [name, row] of [
+  ["Codex TUI, daemon up", { codex: "codex-tui", prompt: "codex queue" }],
+  ["Codex TUI, daemon down", { codex: "codex-tui", down: true }],
+  ["Codex exec", { codex: "codex_exec" }],
+  ["Codex in an app with its own app-server", { codex: "Other App" }],
+  ["Codex in T3 Code", { codex: "T3 Code", t3: true, prompt: "t3" }],
+  ["Claude Code, mod seen", { claude: {}, mod: true, prompt: "mod" }],
+  ["Claude Code, no mod seen", { claude: {} }],
+  ["claude -p, no mod seen", { claude: { CLAUDE_CODE_SESSION_ATTENDED: "0" } }],
+  [
+    "Agent SDK app, mod seen (#2100)",
+    { claude: { CLAUDE_CODE_SESSION_ATTENDED: "0" }, mod: true, prompt: "mod" },
+  ],
+  [
+    "Claude Code in T3 Code, mod seen",
+    { claude: { CLAUDE_CODE_ENTRYPOINT: "t3code" }, mod: true, t3: true, prompt: "mod" },
+  ],
+] as [string, RouteRow][])
+  test.skipIf(WINDOWS)(`the answer takes the route ask promised: ${name}`, async () => {
+    const { ctx, socket } = await machine();
+    const sent = row.t3 ? fakeT3(ctx) : () => "";
+    const codex = await codexDaemon("completed");
+    if (row.down) await codex.close();
+    trustCodex(ctx, codex.env.CODEX_HOME);
+    const env: Record<string, string> = { STARBRIDGE_AGENT_SOCKET: socket };
+    if (row.t3) env.T3CODE_THREAD_ID = "th-1";
+    if (row.codex) {
+      const thread = "01a15583-6a63-74b2-873d-d800b7671593";
+      Object.assign(env, codex.env, { CODEX_THREAD_ID: thread });
+      const day = new Date(Number.parseInt(thread.replace(/-/g, "").slice(0, 12), 16));
+      const dir = join(
+        codex.env.CODEX_HOME,
+        "sessions",
+        String(day.getFullYear()),
+        String(day.getMonth() + 1).padStart(2, "0"),
+        String(day.getDate()).padStart(2, "0"),
+      );
+      mkdirSync(dir, { recursive: true });
+      const meta = { id: thread, session_id: thread, originator: row.codex };
+      writeFileSync(
+        join(dir, `rollout-x-${thread}.jsonl`),
+        `${JSON.stringify({ type: "session_meta", payload: meta })}\n`,
+      );
+    } else {
+      Object.assign(env, { CLAUDECODE: "1", CLAUDE_CODE_SESSION_ID: "c-row", ...row.claude });
+    }
+    const mod = session(socket, "c-row");
+    if (row.mod) await mod.events();
+    const c = testCtx(env);
+    try {
+      const id = await ask(c, "--project", "p");
+      const promised = c.errors.at(-1) === PROMPT;
+      expect(promised).toBe(!!row.prompt);
+      await server.answer(id, { choice: "Merge" });
+      await until(() => ctx.store.state().answers[id] !== undefined, 10_000);
+      const routes = async (): Promise<Record<string, number>> => {
+        const log = existsSync(codex.log) ? readFileSync(codex.log, "utf8") : "";
+        return {
+          "codex queue": log.split("\n").filter((l) => l.includes(id)).length,
+          steer: codex.steered.length,
+          t3: sent().includes(id) ? 1 : 0,
+          // A mod nobody saw polls nothing: its answer waits for `starbridge wait`.
+          mod: row.mod ? (await mod.events()).filter((e) => e.decisionId === id).length : 0,
+        };
+      };
+      const total = async () => Object.values(await routes()).reduce((a, n) => a + n, 0);
+      // A promised prompt: wait for its route, then give a second route the time to show. A
+      // promised wait has nothing to wait for, so it gives any route that time.
+      if (promised) await until(async () => (await total()) > 0, 15_000);
+      await Bun.sleep(promised ? 1_000 : 2_000);
+      const took = Object.entries(await routes()).filter(([, n]) => n > 0);
+      expect(took).toEqual(row.prompt ? [[row.prompt, 1]] : []);
+    } finally {
+      await codex.close().catch(() => {});
+    }
+  });

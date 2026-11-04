@@ -28,6 +28,7 @@ import {
 
 import type { AgyRoute } from "./antigravity";
 import type { CodexSession } from "./codex";
+import type { Route } from "./decisions/route";
 import type { PiAdded } from "./pi";
 import type { T3Route } from "./t3";
 /** `$STARBRIDGE_CONFIG_DIR`, else `$XDG_CONFIG_HOME/starbridge`, else `~/.config/starbridge`. */
@@ -172,6 +173,12 @@ export interface State {
       /** The asking session's title and project, for `answers --all` once `body` is gone. */
       sessionTitle?: string;
       project?: string;
+      /**
+       * The one route its answer takes into `session`, picked when it was asked (#2284); `null`
+       * when none does and only `wait` brings it. Read it with `routeOf`, which also reads the
+       * fields below, the route's parts as questions recorded before #2284 kept them.
+       */
+      route?: Route | null;
       /** The Codex session that asked, which the agent queues the answer into. */
       codex?: CodexSession;
       /** The Antigravity conversation's language server, which the agent sends the answer to. */
