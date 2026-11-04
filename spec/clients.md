@@ -27,7 +27,9 @@
   minutes on, confirmed by "Snooze until 15:00". Android sets the time on a dial; the web types
   it, to the minute, in the browser's time field, whose 12 or 24 hours follow the browser's
   language rather than the Clock setting. Phones open the times in place under Snooze; the
-  desktop web opens them in a popover. A
+  desktop web opens them in a popover, above Snooze when the pane has no room below. Either way
+  they scroll into view, since Snooze ends the card and opening them off screen looked broken
+  (#2247). A
   snoozed question leaves Needs you, the count and the badge, and its notification closes on
   every device (on Safari when the page next reads the inbox; spec/push.md, #1363); it waits in a collapsed "Snoozed · n" group after them, soonest back first, its
   time slot "Until 18:00", with no amber and no answer buttons even when its agent waits. Opened,

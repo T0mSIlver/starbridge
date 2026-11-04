@@ -33,7 +33,8 @@
   }
 }
 
-/* Opens upward-left of the button, which sits at the line's end. */
+/* Opens under the button, right-aligned with it at the line's end; above it (`.up`) when the pane
+   has no room below, since the button ends the card. */
 .menu {
   position: absolute;
   right: 0;
@@ -46,6 +47,11 @@
   border-radius: var(--radius-sm);
   background: var(--surface);
   box-shadow: 0 12px 32px var(--scrim);
+}
+
+.menu.up {
+  top: auto;
+  bottom: calc(100% + var(--s1));
 }
 
 .item {
@@ -138,6 +144,8 @@
     max-width: none;
     margin-top: var(--s2);
     box-shadow: none;
+    /* Scrolled into view, it clears the bottom bar. */
+    scroll-margin-bottom: calc(var(--size-bar-web) + env(safe-area-inset-bottom) + var(--s2));
   }
 
   .item {

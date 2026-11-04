@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { usePref } from "@/lib/prefs";
 import {
   dayLabel,
@@ -20,7 +20,9 @@ import ui from "./ui.module.css";
 /**
  * Snooze's round icon button and its times (#571, #699, #1848), up to 7 days ahead. Quiet, as
  * Done: putting a question off is never the default. `label` names it for screen readers and the
- * tooltip. Its icon is a clock, on the web and in the Mac app alike.
+ * tooltip. Its icon is a clock, on the web and in the Mac app alike. The button ends the card, so
+ * the times open above it when they would run past the pane's bottom, and always scroll into view
+ * (#2247).
  */
 export function SnoozeMenu({
   label,
@@ -33,8 +35,24 @@ export function SnoozeMenu({
 }) {
   const [clock] = usePref("clock");
   const [open, setOpen] = useState(false);
+  const [up, setUp] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
+  const menu = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const m = menu.current;
+    const t = trigger.current;
+    if (!open || !m || !t) return;
+    if (!up && getComputedStyle(m).position === "absolute") {
+      const view = visibleBox(m);
+      const below = m.getBoundingClientRect();
+      if (below.bottom > view.bottom && t.getBoundingClientRect().top - below.height >= view.top) {
+        setUp(true);
+        return;
+      }
+    }
+    m.scrollIntoView({ block: "nearest" });
+  }, [open, up]);
   useEffect(() => {
     if (!open) return;
     const close = (e: MouseEvent | KeyboardEvent) => {
@@ -70,13 +88,30 @@ export function SnoozeMenu({
         title={label}
         aria-haspopup="dialog"
         aria-expanded={open}
-        onClick={() => setOpen(!open)}
+        onClick={() => {
+          setUp(false);
+          setOpen(!open);
+        }}
       >
         <Icon name="clock" size={22} />
       </button>
-      {open && <SnoozeTimes now={now} clock={clock} onPick={pick} />}
+      {open && <SnoozeTimes now={now} clock={clock} up={up} menuRef={menu} onPick={pick} />}
     </div>
   );
+}
+
+/** The part of the window that shows `el`: its nearest scrolling ancestor's box, clipped to it. */
+function visibleBox(el: HTMLElement): { top: number; bottom: number } {
+  let top = 0;
+  let bottom = window.innerHeight;
+  for (let p = el.parentElement; p; p = p.parentElement) {
+    if (!/auto|scroll/.test(getComputedStyle(p).overflowY)) continue;
+    const r = p.getBoundingClientRect();
+    top = Math.max(top, r.top);
+    bottom = Math.min(bottom, r.bottom);
+    break;
+  }
+  return { top, bottom };
 }
 
 /**
@@ -88,10 +123,14 @@ export function SnoozeMenu({
 function SnoozeTimes({
   now,
   clock,
+  up,
+  menuRef,
   onPick,
 }: {
   now: Date;
   clock: ReturnType<typeof usePref<"clock">>[0];
+  up: boolean;
+  menuRef: React.Ref<HTMLDivElement>;
   onPick: (until: Date) => void;
 }) {
   const days = pickDays(now).filter((d) => pickTimes(d, now).length > 0);
@@ -102,7 +141,12 @@ function SnoozeTimes({
   const until = time ? onDay(day, time) : undefined;
   const chosen = until && snoozeTakes(until, now) ? until : undefined;
   return (
-    <div className={`t-small m-drop ${s.menu}`} role="dialog" aria-label="Snooze until">
+    <div
+      ref={menuRef}
+      className={`t-small m-drop ${s.menu} ${up ? s.up : ""}`}
+      role="dialog"
+      aria-label="Snooze until"
+    >
       {snoozePresets(now).map((p) => (
         <button key={p.label} type="button" className={s.item} onClick={() => onPick(p.until)}>
           {p.label}
