@@ -266,29 +266,27 @@ test("a wait held at the agent survives an agent restart (#548)", async () => {
 test("a wait whose agent stays away goes on at the server (#548)", async () => {
   const { ctx, agent } = await machine();
   const id = await ask(ctx, "--session", "s1", "--project", "p");
-  // A clock that runs fast while the agent is away, so its 30 s pass in a moment.
-  let speed = 1;
-  let last = Date.now();
-  let fake = last;
-  ctx.now = () => {
-    const t = Date.now();
-    fake += (t - last) * speed;
-    last = t;
-    return new Date(fake);
+  // A clock that each sleep moves on by the time it was asked for, in a millisecond, so the 30 s
+  // the wait gives the agent to come back pass in 30 sleeps. A clock that ran fast against the
+  // real one reached the wait's 10 minutes after 600 ms, and a stall that long on a busy runner
+  // (#2144) ended the wait at its deadline before it went on at the server.
+  let skew = 0;
+  ctx.now = () => new Date(Date.now() + skew);
+  ctx.sleep = async (ms) => {
+    skew += ms;
+    await Bun.sleep(1);
   };
   const done = run(["wait", id, "--timeout", "10m"], ctx);
   await Bun.sleep(300);
   await agent.stop();
-  speed = 1000;
-  const fast = Date.now();
+  const stopped = Date.now();
   // What the CLI said instead, and how far its clock ran, when it never says this (#2144).
   await until(() => ctx.errors.some((e) => e.includes("waiting at the server"))).catch((e) => {
-    const ran = Date.now() - fast;
+    const ran = Date.now() - stopped;
     throw new Error(
-      `${e.message} ${ran} ms after the clock sped up; the CLI said: ${ctx.errors.join(" | ")}`,
+      `${e.message} ${ran} ms after the agent stopped, its clock ${skew} ms ahead; the CLI said: ${ctx.errors.join(" | ")}`,
     );
   });
-  speed = 1;
   await server.answer(id, { choice: "Wait" });
   expect(await done).toBe(0);
   expect(ctx.lines.at(-1)).toBe(`Answer to ${id} (Merge #12 now?): Wait`);
