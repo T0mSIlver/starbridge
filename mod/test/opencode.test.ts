@@ -138,49 +138,61 @@ test("the devices see what opencode's dialog shows: an edit's diff, a command's 
   });
 });
 
-test("deleting a session stops its permission prompts on the devices (#1225)", async () => {
-  const home = mkdtempSync(join(tmpdir(), "sb-opencode-deleted-"));
-  const saved = { ...process.env };
-  let hooks: Awaited<ReturnType<typeof plugin.server>> | undefined;
-  try {
-    // A CLI that holds the prompt until stopped, and says it was.
-    const cli = join(home, "starbridge");
-    writeFileSync(
-      cli,
-      `#!/bin/sh\ntouch ${home}/started\ntrap 'touch ${home}/stopped; exit 0' TERM\nwhile :; do sleep 0.1; done\n`,
-    );
-    chmodSync(cli, 0o755);
-    writeFileSync(join(home, "cli-path"), cli, { mode: 0o600 });
-    Object.assign(process.env, {
-      HOME: home,
-      STARBRIDGE_CONFIG_DIR: home,
-      STARBRIDGE_NO_AGENT: "1",
-    });
-    const posted: string[] = [];
-    const client = {
-      session: { get: async () => ({ data: { title: "cache" } }) },
-      _client: {
-        post: async (r: { path: { requestID: string } }) => posted.push(r.path.requestID),
-      },
-    };
-    const h = await plugin.server({ client, directory: home } as never);
-    hooks = h;
-    const event = (e: unknown) => h.event({ event: e } as never);
-    await event({
-      type: "permission.asked",
-      properties: { id: "per_1", sessionID: "ses_1", permission: "bash", patterns: ["ls"] },
-    });
-    let by = Date.now() + 5000;
-    while (!existsSync(join(home, "started")) && Date.now() < by) await Bun.sleep(50);
-    expect(existsSync(join(home, "started"))).toBe(true);
-    await event({ type: "session.deleted", properties: { info: { id: "ses_1" } } });
-    by = Date.now() + 5000;
-    while (!existsSync(join(home, "stopped")) && Date.now() < by) await Bun.sleep(50);
-    expect(existsSync(join(home, "stopped"))).toBe(true);
-    expect(posted).toEqual([]);
-  } finally {
-    await hooks?.dispose();
-    process.env = saved;
-    rmSync(home, { recursive: true, force: true });
-  }
-}, 20_000);
+for (const kind of ["permission", "question"] as const)
+  test(`deleting a session stops its ${kind} hook, which closes its cards on the devices (#1225)`, async () => {
+    const home = mkdtempSync(join(tmpdir(), "sb-opencode-deleted-"));
+    const saved = { ...process.env };
+    let hooks: Awaited<ReturnType<typeof plugin.server>> | undefined;
+    try {
+      // A CLI that holds the prompt until stopped, and says it was.
+      const cli = join(home, "starbridge");
+      writeFileSync(
+        cli,
+        `#!/bin/sh\ntouch ${home}/started\ntrap 'touch ${home}/stopped; exit 0' TERM\nwhile :; do sleep 0.1; done\n`,
+      );
+      chmodSync(cli, 0o755);
+      writeFileSync(join(home, "cli-path"), cli, { mode: 0o600 });
+      Object.assign(process.env, {
+        HOME: home,
+        STARBRIDGE_CONFIG_DIR: home,
+        STARBRIDGE_NO_AGENT: "1",
+      });
+      const posted: string[] = [];
+      const client = {
+        session: { get: async () => ({ data: { title: "cache" } }) },
+        _client: {
+          post: async (r: { path: { requestID: string } }) => posted.push(r.path.requestID),
+        },
+      };
+      const h = await plugin.server({ client, directory: home } as never);
+      hooks = h;
+      const event = (e: unknown) => h.event({ event: e } as never);
+      await event(
+        kind === "permission"
+          ? {
+              type: "permission.asked",
+              properties: { id: "per_1", sessionID: "ses_1", permission: "bash", patterns: ["ls"] },
+            }
+          : {
+              type: "question.asked",
+              properties: {
+                id: "que_1",
+                sessionID: "ses_1",
+                questions: [{ question: "Which?", header: "Pick", options: [{ label: "a" }] }],
+              },
+            },
+      );
+      let by = Date.now() + 5000;
+      while (!existsSync(join(home, "started")) && Date.now() < by) await Bun.sleep(50);
+      expect(existsSync(join(home, "started"))).toBe(true);
+      await event({ type: "session.deleted", properties: { info: { id: "ses_1" } } });
+      by = Date.now() + 5000;
+      while (!existsSync(join(home, "stopped")) && Date.now() < by) await Bun.sleep(50);
+      expect(existsSync(join(home, "stopped"))).toBe(true);
+      expect(posted).toEqual([]);
+    } finally {
+      await hooks?.dispose();
+      process.env = saved;
+      rmSync(home, { recursive: true, force: true });
+    }
+  }, 20_000);
