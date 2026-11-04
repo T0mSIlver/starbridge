@@ -140,7 +140,7 @@ const QUESTIONS = [
 ];
 
 const NO_REPORT_DEADLINE = {
-  todo: "its settle of the open cards has no deadline: hookQuestion calls settle without one, so a server that stops answering holds the hook until the harness kills it (#1286's fix reached only the picker)",
+  todo: "its settle of the open cards has no deadline: hookQuestion calls settle without one, so a server that stops answering holds the hook until the harness kills it (#1286's fix reached only the picker; #2278)",
 };
 
 function questionRow(
