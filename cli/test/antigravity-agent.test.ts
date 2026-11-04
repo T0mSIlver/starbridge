@@ -1,5 +1,7 @@
 import { afterEach, expect, test } from "bun:test";
+import { writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { Antigravity, MAX_OPEN_PER_ROUTE, type RunHook } from "../src/agent/antigravity";
 import type { Hub } from "../src/agent/server";
@@ -311,4 +313,22 @@ test("a running conversation behind many idle ones is still read", async () => {
   agy.add({ address: `127.0.0.1:${server.port}`, token: "tok" });
   await agy.tick();
   expect(hooks).toEqual(["live"]);
+});
+
+test("an unreadable state file ends a round of the watch, not the watch (#2290)", async () => {
+  const w = watcher(async () => "");
+  const ctx = (w as unknown as { hub: Hub }).hub.ctx;
+  const logged: string[] = [];
+  (w as unknown as { hub: { log: (l: string) => void } }).hub.log = (l) => logged.push(l);
+  writeFileSync(join(ctx.store.dir, "state.json"), "not json\n");
+  const stop = new AbortController();
+  let ended = false;
+  const running = w.run(stop.signal).finally(() => {
+    ended = true;
+  });
+  await until(() => logged.length >= 2, 5_000);
+  expect(ended).toBe(false);
+  expect(logged[0]).toContain("state.json");
+  stop.abort();
+  await running;
 });
