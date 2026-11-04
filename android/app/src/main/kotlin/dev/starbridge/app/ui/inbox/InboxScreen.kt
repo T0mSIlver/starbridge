@@ -24,6 +24,8 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -913,7 +915,10 @@ private fun PageAndDone(page: Link, other: Color, height: Dp = 40.dp, onDone: ()
     val context = LocalContext.current
     val colors = StarbridgeTheme.colors
     val end = 20.dp
-    Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+    // The link wraps to a second line at large text sizes instead of ending in "…", and then Done
+    // takes the pair's height (#2242).
+    var wraps by remember { mutableStateOf(false) }
+    Row(Modifier.height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
         Button(
             onClick = { openLink(context, page.url) },
             shape = RoundedCornerShape(topStart = end, bottomStart = end, topEnd = 8.dp, bottomEnd = 8.dp),
@@ -923,14 +928,14 @@ private fun PageAndDone(page: Link, other: Color, height: Dp = 40.dp, onDone: ()
         ) {
             Symbol(Sym.Open, size = 18.dp)
             Spacer(Modifier.width(Spacing.s2))
-            Text("Answer in ${page.place()}", style = StarbridgeTheme.type.label, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text("Answer in ${page.place()}", style = StarbridgeTheme.type.label, maxLines = 2, overflow = TextOverflow.Ellipsis, onTextLayout = { wraps = it.lineCount > 1 })
         }
         Button(
             onClick = onDone,
             shape = RoundedCornerShape(topStart = 8.dp, bottomStart = 8.dp, topEnd = end, bottomEnd = end),
             colors = ButtonDefaults.buttonColors(containerColor = other, contentColor = MaterialTheme.colorScheme.onSurface),
             contentPadding = PaddingValues(horizontal = Spacing.s4),
-            modifier = Modifier.heightIn(min = height),
+            modifier = (if (wraps) Modifier.fillMaxHeight() else Modifier).heightIn(min = height),
         ) { Text("Done", style = StarbridgeTheme.type.label, maxLines = 1) }
     }
 }

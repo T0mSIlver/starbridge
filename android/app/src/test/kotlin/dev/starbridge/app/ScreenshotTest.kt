@@ -224,6 +224,13 @@ class ScreenshotTest(private val dark: Boolean) {
     @Test fun sheetAnswerIn() = capture("sheet-answer-in") { QuestionSheet(fake.answerIn) }
 
     // A session named by its first sentence wraps to a second line beside Done (#2242).
+    // At twice the text size Done must not leave the link a stub (#2242).
+    @Test fun sheetAnswerInLargeText() = capture("sheet-answer-in-large-text") {
+        CompositionLocalProvider(LocalDensity provides Density(LocalDensity.current.density, fontScale = 2f)) {
+            QuestionSheet(fake.answerIn.copy(source = fake.answerIn.source.copy(title = "Rename every provider id to CodexBar's names and keep the old ones as aliases (15)", links = listOf(SessionLink("web", "https://claude.ai/code/session_01")))))
+        }
+    }
+
     @Test fun sheetAnswerInLongName() = capture("sheet-answer-in-long-name") {
         QuestionSheet(fake.answerIn.copy(source = fake.answerIn.source.copy(title = "Rename every provider id to CodexBar's names and keep the old ones as aliases (15)", links = listOf(SessionLink("web", "https://claude.ai/code/session_01")))))
     }
