@@ -59,7 +59,7 @@ export async function askVia(
   // Only through the agent, which sends it (#2244); the CLI's own path has nothing that would.
   // An ask that waits for its answer prints it itself: T3 would bring it a second time.
   const t3 = opts.wait ? undefined : t3Of(source, ctx.env);
-  const resolved = t3 ? { ...source, t3 } : source;
+  const resolved = { ...source, ...(t3 ? { t3 } : {}), ...(opts.wait ? { wait: true } : {}) };
   const { id, delivery: d } = await agent.call<{ id: string; delivery: Delivery }>(
     "POST",
     "/v1/decisions",

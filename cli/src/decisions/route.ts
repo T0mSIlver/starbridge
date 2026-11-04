@@ -44,10 +44,21 @@ export interface Observed {
 export function routeFor(
   input: Pick<
     AskInput,
-    "agent" | "codex" | "antigravity" | "extensionAnswers" | "headless" | "subagent" | "t3"
+    | "agent"
+    | "session"
+    | "held"
+    | "wait"
+    | "codex"
+    | "antigravity"
+    | "extensionAnswers"
+    | "headless"
+    | "subagent"
+    | "t3"
   >,
   seen: Observed,
 ): Route | undefined {
+  // A route goes into a session; `ask --wait` and a held question print their answer themselves.
+  if (!input.session || input.held || input.wait) return undefined;
   const t3 = input.t3 && seen.t3 ? input.t3 : undefined;
   switch (input.agent) {
     case "antigravity":

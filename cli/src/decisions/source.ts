@@ -52,6 +52,8 @@ export interface AskRoute {
   extensionAnswers?: boolean;
   /** A `claude -p` session: the mod starts no loop there, so nothing submits answers. */
   headless?: boolean;
+  /** `ask --wait`: the asker prints the answer itself, so no route brings it again. */
+  wait?: boolean;
   /**
    * The Claude Code subagent that asks, from `STARBRIDGE_CLAUDE_AGENT`, which the mod sets for a
    * subagent's `starbridge ask` (#1702): the mod sends the answer to that subagent.
@@ -108,6 +110,7 @@ export const ASK_ROUTE_FIELDS = [
   "antigravity",
   "extensionAnswers",
   "headless",
+  "wait",
   "subagent",
   "t3",
 ] as const satisfies readonly (keyof AskRoute)[];
