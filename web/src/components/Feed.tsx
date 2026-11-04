@@ -7,7 +7,7 @@ import { useFind } from "@/lib/find";
 import { clockTime } from "@/lib/format";
 import { fitsRow, fullInput } from "@/lib/permissionInput";
 import type { Prefs } from "@/lib/prefs";
-import { duration, progressText, runState } from "@/lib/runs";
+import { runCaption, runEnd, runState } from "@/lib/runs";
 import { snoozeTime } from "@/lib/snooze";
 import type { Decision, PromptItem, RunItem, Source } from "@/lib/types";
 import s from "./Feed.module.css";
@@ -331,14 +331,7 @@ export const label = (e: Entry) =>
       ? e.item.decision.question
       : e.item.run.title;
 
-function runOutcome(r: RunItem["run"], now: number): { text: string; tone: string } {
-  const state = runState(r, now);
-  const took = duration(Date.parse(r.exit?.at ?? r.at) - Date.parse(r.startedAt));
-  if (state === "passed") return { text: `Passed in ${took}`, tone: s.ok };
-  if (state === "failed")
-    return { text: `Failed, exit ${r.exit?.code}, after ${took}`, tone: s.bad };
-  return { text: `Lost, no news for ${duration(now - Date.parse(r.at))}`, tone: s.dim };
-}
+const runTone = { passed: s.ok, failed: s.bad, lost: s.dim, running: s.dim };
 
 /** A command an agent runs under `starbridge run`: what, why, and how far along. */
 export function RunRow({
@@ -388,17 +381,11 @@ export function RunRow({
               <span className={s.indeterminate} />
             )}
           </div>
-          {p && (
-            <span className={`t-caption ${s.dim}`}>
-              {p.unit === "percent" ? progressText(p) : `${p.done} of ${p.total}`}
-            </span>
-          )}
+          {p && <span className={`t-caption ${s.dim}`}>{runCaption(r, now)}</span>}
         </div>
       ) : (
         <div className={s.runEnd}>
-          <div className={`t-meta ${s.outcome} ${runOutcome(r, now).tone}`}>
-            {runOutcome(r, now).text}
-          </div>
+          <div className={`t-meta ${s.outcome} ${runTone[state]}`}>{runEnd(r, now)}</div>
           {onDismiss && (
             <button
               type="button"

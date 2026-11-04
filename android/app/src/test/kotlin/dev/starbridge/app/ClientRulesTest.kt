@@ -4,6 +4,7 @@ import dev.starbridge.app.data.Beacon
 import dev.starbridge.app.data.Decision
 import dev.starbridge.app.data.ROW_INPUT_MAX
 import dev.starbridge.app.data.RETRY_FOR_MS
+import dev.starbridge.app.data.Run
 import dev.starbridge.app.data.Source
 import dev.starbridge.app.data.SwipeSnooze
 import dev.starbridge.app.data.laterSnooze
@@ -15,12 +16,14 @@ import dev.starbridge.app.ui.inbox.SNOOZE_MAX
 import dev.starbridge.app.ui.inbox.SNOOZE_MIN
 import dev.starbridge.app.ui.inbox.snoozeAllowed
 import dev.starbridge.app.ui.inbox.snoozeMenu
+import dev.starbridge.app.ui.inbox.runEnd
 import dev.starbridge.app.ui.inbox.until
 import java.io.File
 import java.time.Instant
 import java.time.LocalDateTime
 import java.time.ZoneId
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.boolean
 import kotlinx.serialization.json.int
@@ -98,6 +101,31 @@ class ClientRulesTest {
         for (c in rules.getValue("options").jsonArray.map { it.jsonObject }) {
             val d = Decision("d", "q", "", c.list("options"), c["recommended"]?.jsonPrimitive?.content, Source("m", "p", "s"), Instant.EPOCH)
             assertEquals(c.str("name"), c.list("ordered"), d.ordered)
+        }
+    }
+
+    @Test fun runCaption() {
+        for (c in rules.getValue("runCaption").jsonArray.map { it.jsonObject }) {
+            val p = c["progress"]?.takeUnless { it is JsonNull }?.jsonObject
+            val run = Run(
+                id = "r", title = "t", reason = "r", source = Source("m", "p", "s"),
+                startedAt = Instant.parse(c.str("startedAt")), at = Instant.parse(c.str("at")),
+                progress = p?.let { Run.Progress(it.getValue("done").jsonPrimitive.int, it.getValue("total").jsonPrimitive.int, it.str("unit") == "percent") },
+            )
+            val caption = c["caption"]?.takeUnless { it is JsonNull }?.jsonPrimitive?.content
+            assertEquals(c.str("name"), caption, run.caption(Instant.parse(c.str("now"))))
+        }
+    }
+
+    @Test fun runEnd() {
+        for (c in rules.getValue("runEnd").jsonArray.map { it.jsonObject }) {
+            val exit = c["exit"]?.takeUnless { it is JsonNull }?.jsonObject
+            val run = Run(
+                id = "r", title = "t", reason = "r", source = Source("m", "p", "s"),
+                startedAt = Instant.parse(c.str("startedAt")), at = Instant.parse(c.str("at")),
+                exitCode = exit?.getValue("code")?.jsonPrimitive?.int, endedAt = exit?.let { Instant.parse(it.str("at")) },
+            )
+            assertEquals(c.str("name"), c.str("text"), runEnd(run, Instant.parse(c.str("now"))))
         }
     }
 }
