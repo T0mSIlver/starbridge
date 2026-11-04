@@ -307,6 +307,50 @@ test("mid-turn, an answer goes out with the next tool result, once, waiting or n
   expect(a.s.submitted).toEqual([]);
 });
 
+test("a `claude -p` run takes an answer at its next tool call, submits no prompt and keeps its `wait` line (#2258)", async () => {
+  await startAgent();
+  const a = session("s-p");
+  const handover = new Handover();
+  // What register.ts does in such a run: nothing enters as a prompt.
+  const { loop: l } = loop({
+    ...a.host,
+    headless: true,
+    submit: (lines) => handover.submit(lines, () => []),
+  });
+  await until(() => a.s.calls.includes("POST /v1/sessions/s-p/hello"));
+  // It says so each poll, so an agent that restarts between two still knows (#2258).
+  await until(() => a.s.calls.filter((c) => c === "POST /v1/sessions/s-p/hello").length >= 2);
+  // The agent records it as a run that ends with its turn: its route promises no prompt.
+  expect(agent?.headless("s-p")).toBe(true);
+  const before = cli.errors.length;
+  const first = await ask("Merge #12 now?", "s-p");
+  expect(cli.errors.slice(before).join("\n")).toContain(`starbridge wait ${first}`);
+
+  // After the turn's last tool call: the answer stays for `wait`.
+  await server.answer(first, { choice: "No" });
+  await until(() => a.s.calls.filter((c) => c.includes("/events")).length >= 3);
+  expect(a.s.submitted).toEqual([]);
+  expect(cli.store.state().answers[first]?.seen).toBeFalsy();
+  expect(await run(["wait", first, "--timeout", "5s"], cli)).toBe(0);
+  expect(cli.lines.at(-1)).toBe(`Answer to ${first} (Merge #12 now?): No`);
+
+  // During the turn: the next tool result carries it.
+  handover.started();
+  const second = await ask("Deploy tonight?", "s-p");
+  await server.answer(second, { choice: "Yes" });
+  let taken: string[] = [];
+  await until(async () => {
+    taken = await handover.take((acks) => l.claim(acks));
+    return taken.length > 0;
+  });
+  expect(taken).toEqual([`Answer to ${second} (Deploy tonight?): Yes`]);
+  expect(a.s.submitted).toEqual([]);
+
+  // `claude --resume` of that session, interactive: its hello says otherwise.
+  await fetchOn("/v1/sessions/s-p/hello", "POST", { cwd: "/w" });
+  expect(agent?.headless("s-p")).toBe(false);
+});
+
 test("mid-turn, a waiting answer that `waiting` printed meanwhile goes in no tool result (#1484)", async () => {
   await startAgent();
   const a = session("s-a");

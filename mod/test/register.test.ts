@@ -45,7 +45,7 @@ test("on a port file, the mod reaches the agent at the port the file names (#128
   expect(fetched[0]).toBe("http://127.0.0.1:47213/v1/status");
 });
 
-test("an Agent SDK session calls the agent only once its first turn ends; `claude -p` never (#2100)", async () => {
+test("an Agent SDK session calls the agent only once its first turn ends; `claude -p` from its start, for tool results only (#2100, #2258)", async () => {
   const run = async (entrypoint: string) => {
     const { register } = (await import(REGISTER)) as {
       register: (on: (event: string, h: Handler) => void) => void;
@@ -90,7 +90,9 @@ test("an Agent SDK session calls the agent only once its first turn ends; `claud
   const sdk = await run("sdk-ts");
   expect([sdk.atStart, sdk.afterSubagent]).toEqual([0, 0]);
   expect(sdk.afterTurn).toBeGreaterThan(0);
-  expect(await run("sdk-cli")).toEqual({ atStart: 0, afterSubagent: 0, afterTurn: 0 });
+  // `claude -p` reaches only the agent, never the CLI path, from the start (#2258).
+  const print = await run("sdk-cli");
+  expect(print.atStart).toBeGreaterThan(0);
 });
 
 test("mid-turn, the main agent's next tool result carries an answer marked waiting, and the turn's end submits nothing (#1484)", async () => {

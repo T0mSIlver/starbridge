@@ -41,7 +41,12 @@ export interface Paths {
   /** True when an agent answers `GET /v1/status` with a 2xx. */
   agentUp(): Promise<boolean>;
   agent(unconfirmed: Set<string>): AgentLoop;
-  poller(unconfirmed: Set<string>): Poller;
+  /**
+   * The CLI path; none in a `claude -p` run (#2258), whose answers go only through the agent:
+   * the CLI path's lease tells `ask` that some session submits prompts, which such a run never
+   * does.
+   */
+  poller?(unconfirmed: Set<string>): Poller;
   sleep(ms: number): Promise<void>;
   /** Clears the status line: each loop clears only the errors it showed itself. */
   clearStatus(): void;
@@ -123,6 +128,10 @@ export class Switch {
         continue;
       }
       if (this.stopped) return;
+      if (!this.paths.poller) {
+        await this.paths.sleep(this.probeMs);
+        continue;
+      }
       this.paths.log("starbridge: no agent; answers through the CLI");
       this.paths.clearStatus();
       const poller = this.paths.poller(this.unconfirmed);

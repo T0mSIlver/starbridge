@@ -97,6 +97,8 @@ export interface Hub {
   log(line: string): void;
   /** Whether session `id`'s client called within `ms`: its mod is there to take a prompt. */
   seen(id: string, ms: number): boolean;
+  /** Whether session `id`'s mod said it runs in `claude -p`, which ends with its turn (#2258). */
+  headless?(id: string): boolean;
 }
 
 const SESSION_ID = /^[A-Za-z0-9_.:-]{1,200}$/;
@@ -497,6 +499,10 @@ export class Agent implements Hub {
     return at !== undefined && this.ctx.now().getTime() - Date.parse(at) <= ms;
   }
 
+  headless(id: string): boolean {
+    return this.sessions.get(id)?.headless === true;
+  }
+
   private async hello(req: Request) {
     const id = this.sessionId(req);
     const b = (req.body ?? {}) as Record<string, unknown>;
@@ -504,6 +510,7 @@ export class Agent implements Hub {
     const pid = pick<number>(b.pid, "number");
     const cwd = pick<string>(b.cwd, "string");
     const title = pick<string>(b.title, "string");
+    const headless = pick<boolean>(b.headless, "boolean");
     // After a `/clear` the mod greets under the new id and names the old one, which has no mod
     // any more (#537). Its events stay held for a `/resume`.
     const replaces = pick<string>(b.replaces, "string");
@@ -513,6 +520,8 @@ export class Agent implements Hub {
       ...(pid !== undefined ? { pid } : {}),
       ...(cwd !== undefined ? { cwd: cwd.slice(0, 1000) } : {}),
       ...(title !== undefined ? { title: title.slice(0, 200) } : {}),
+      // Each hello says it afresh: an interactive `--resume` of a `claude -p` session counts again.
+      headless: headless === true ? true : undefined,
     });
     return { version: VERSION };
   }

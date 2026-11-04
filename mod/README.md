@@ -184,7 +184,7 @@ pnpm --filter @starbridge/mod test
 ```
 
 `e2e/run.ts` drives real Claude Code sessions in tmux through each case:
-idle, mid-turn, `/clear` and `/resume`, a hot reload, a server outage, two
+idle, mid-turn, a `claude -p` run (with `--agent`), `/clear` and `/resume`, a hot reload, a server outage, two
 sessions at once, and a background subagent that asks, answered while it runs
 and after it finished. It runs against the server app on a
 random port (`--local`), or against a real server with a test device

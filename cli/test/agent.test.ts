@@ -1737,6 +1737,7 @@ interface RouteRow {
   t3?: boolean;
   wait?: boolean; // `ask --wait`, which prints the answer itself (#2289)
   prompt?: Route; // the one route a promised prompt takes
+  headless?: boolean; // the mod's hello says `claude -p`: its route carries it, ask promises a wait
 }
 
 // What ask promises is the route the answer takes (#2264, #2182): a promised prompt reaches the
@@ -1752,6 +1753,10 @@ for (const [name, row] of [
   ["Claude Code, mod seen", { claude: {}, mod: true, prompt: "mod" }],
   ["Claude Code, no mod seen", { claude: {} }],
   ["claude -p, no mod seen", { claude: { CLAUDE_CODE_SESSION_ATTENDED: "0" } }],
+  [
+    "claude -p, its mod seen (#2258)",
+    { claude: { CLAUDE_CODE_SESSION_ATTENDED: "0" }, mod: true, headless: true, prompt: "mod" },
+  ],
   [
     "Agent SDK app, mod seen (#2100)",
     { claude: { CLAUDE_CODE_SESSION_ATTENDED: "0" }, mod: true, prompt: "mod" },
@@ -1790,6 +1795,14 @@ for (const [name, row] of [
       Object.assign(env, { CLAUDECODE: "1", CLAUDE_CODE_SESSION_ID: "c-row", ...row.claude });
     }
     const mod = session(socket, "c-row");
+    if (row.headless)
+      await new AgentClient(socket, "starbridge-mod/test").call(
+        "POST",
+        "/v1/sessions/c-row/hello",
+        {
+          headless: true,
+        },
+      );
     if (row.mod) await mod.events();
     const c = testCtx(env);
     try {
@@ -1800,7 +1813,7 @@ for (const [name, row] of [
           )
         : await ask(c, "--project", "p");
       const promised = c.errors.at(-1) === PROMPT;
-      expect(promised).toBe(!!row.prompt);
+      expect(promised).toBe(!!row.prompt && !row.headless);
       await server.answer(id, { choice: "Merge" });
       await until(() => ctx.store.state().answers[id] !== undefined, 10_000);
       const routes = async (): Promise<Record<string, number>> => {
@@ -1816,8 +1829,8 @@ for (const [name, row] of [
       const total = async () => Object.values(await routes()).reduce((a, n) => a + n, 0);
       // A promised prompt: wait for its route, then give a second route the time to show. A
       // promised wait has nothing to wait for, so it gives any route that time.
-      if (promised) await until(async () => (await total()) > 0, 15_000);
-      await Bun.sleep(promised ? 1_000 : 2_000);
+      if (promised || row.headless) await until(async () => (await total()) > 0, 15_000);
+      await Bun.sleep(promised || row.headless ? 1_000 : 2_000);
       const took = Object.entries(await routes()).filter(([, n]) => n > 0);
       expect(took).toEqual(row.prompt ? [[row.prompt, 1]] : []);
     } finally {

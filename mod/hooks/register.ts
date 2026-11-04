@@ -4,6 +4,7 @@ import {
   agentAddress,
   CONFIG_HEADER,
   HEADERS,
+  HEADLESS_TIMING,
   isPortFile,
   type Line,
   PROOF_HEADER,
@@ -73,6 +74,11 @@ export const register: Register = (on) => {
 
   /** Starts the loop of an Agent SDK session once its first turn has ended (#2100). */
   let afterTurn: (() => Promise<void>) | undefined;
+  /**
+   * A `claude -p` run, which ends with its turn (#2258): its loop submits no prompt, since none
+   * would run, and hands each answer only into the turn's next tool result.
+   */
+  let oneShot = false;
 
   on("session.start", async ($, e, next) => {
     if (!(await acts($.plugin.name, $.plugin.root, (a, i) => $.process.run(a, i)))) return next(e);
@@ -80,12 +86,15 @@ export const register: Register = (on) => {
     const started = await next(e);
     const entrypoint = await $.env.get("CLAUDE_CODE_ENTRYPOINT");
     afterTurn = undefined;
-    if (wantsLoop(e.isInteractive, entrypoint)) await begin();
-    else if (!loop && wantsLoopAfterTurn(e.isInteractive, entrypoint)) afterTurn = begin;
+    if (wantsLoop(e.isInteractive, entrypoint)) await begin(false);
+    else if (wantsLoopAfterTurn(e.isInteractive, entrypoint)) {
+      if (!loop) afterTurn = () => begin(false);
+    } else await begin(true);
     return started;
 
     /** Starts the session's answer loop, replacing the one a hot reload left. */
-    async function begin() {
+    async function begin(headless: boolean) {
+      oneShot = headless;
       // The new loop takes over the lines the old one submitted and has not confirmed yet, so it
       // confirms them rather than submitting them again (#1337).
       const before = loop;
@@ -188,6 +197,14 @@ export const register: Register = (on) => {
       // A subagent's answers go to it, whatever the main agent does (#1702).
       const submit = async (lines: Line[]) => {
         const me = await sessionId();
+        // A `claude -p` run ends with the parent's turn: a subagent that finished could not take
+        // its answer, and a resumed one would outlive the run. So the parent's next tool result
+        // carries it, saying which subagent asked, or it stays for `wait` (#2258).
+        if (headless)
+          return handover.submit(
+            lines.map((l) => (l.subagent ? forParent(l, l.subagent) : l)),
+            () => [],
+          );
         const { taken, rest } = await toSubagents(
           lines,
           async (agentId, group, text) => {
@@ -208,7 +225,11 @@ export const register: Register = (on) => {
         // A /clear or /resume during the sends: the rest waits, unconfirmed, for session `me`.
         if (rest.length > 0 && (await sessionId()) !== me) return taken;
         const parent =
-          rest.length > 0 ? await handover.submit(rest, (left) => records.send(left)) : [];
+          rest.length > 0
+            ? // A run that ends with its turn would never run the prompt: the lines stay
+              // unconfirmed, for its next tool call or a `wait`.
+              await handover.submit(rest, (left) => (headless ? [] : records.send(left)))
+            : [];
         return [...taken, ...parent];
       };
       const starting = () => waiting > 0;
@@ -229,39 +250,43 @@ export const register: Register = (on) => {
                 starting,
                 status,
                 log,
+                headless,
               },
               unconfirmed,
+              headless ? HEADLESS_TIMING : undefined,
             ),
-          poller: (unconfirmed) =>
-            new Poller(
-              {
-                sessionId,
-                run: (argv, timeoutMs) => $.process.run(argv, { timeoutMs }),
-                read: (path) => $.fs.read(path),
-                write: (path, text) => $.fs.write(path, text),
-                mtime: async (path) => (await $.fs.stat(path).catch(() => undefined))?.mtimeMs,
-                // The mod's host reads no owner or mode: find does, as plugin/hooks/cli.sh. Windows
-                // has no `sh`, and keeps owners in ACLs: there, as `ownedFile`, a file.
-                owned: async (path) =>
-                  env.OS === "Windows_NT"
-                    ? (await $.fs.stat(path).catch(() => undefined))?.kind === "file"
-                    : (
-                        await $.process
-                          .run(["sh", "-c", OWNED, "sh", path], { timeoutMs: 10_000 })
-                          .catch(() => undefined)
-                      )?.exitCode === 0,
-                now,
-                sleep,
-                submit,
-                starting,
-                status,
-                log,
-              },
-              dir,
-              undefined,
-              undefined,
-              unconfirmed,
-            ),
+          poller: headless
+            ? undefined
+            : (unconfirmed) =>
+                new Poller(
+                  {
+                    sessionId,
+                    run: (argv, timeoutMs) => $.process.run(argv, { timeoutMs }),
+                    read: (path) => $.fs.read(path),
+                    write: (path, text) => $.fs.write(path, text),
+                    mtime: async (path) => (await $.fs.stat(path).catch(() => undefined))?.mtimeMs,
+                    // The mod's host reads no owner or mode: find does, as plugin/hooks/cli.sh. Windows
+                    // has no `sh`, and keeps owners in ACLs: there, as `ownedFile`, a file.
+                    owned: async (path) =>
+                      env.OS === "Windows_NT"
+                        ? (await $.fs.stat(path).catch(() => undefined))?.kind === "file"
+                        : (
+                            await $.process
+                              .run(["sh", "-c", OWNED, "sh", path], { timeoutMs: 10_000 })
+                              .catch(() => undefined)
+                          )?.exitCode === 0,
+                    now,
+                    sleep,
+                    submit,
+                    starting,
+                    status,
+                    log,
+                  },
+                  dir,
+                  undefined,
+                  undefined,
+                  unconfirmed,
+                ),
           sleep,
           clearStatus: () => status(undefined),
           log,
@@ -269,7 +294,8 @@ export const register: Register = (on) => {
         undefined,
         before?.unconfirmed,
       );
-      void records.recover().catch((e) => log(`starbridge: ${(e as Error).message}`));
+      if (!headless)
+        void records.recover().catch((e) => log(`starbridge: ${(e as Error).message}`));
     }
   });
 
@@ -294,7 +320,7 @@ export const register: Register = (on) => {
         const list = () => $.agent.list();
         if (!sent || !(await finished(list, (ms) => $.clock.sleep(ms), agent))) return;
         roundEnded.delete(agent);
-        if (await sent.finished(agent, ended)) await sent.recover();
+        if ((await sent.finished(agent, ended)) && !oneShot) await sent.recover();
       })().catch(() => undefined);
     } else {
       handover.ended();
@@ -303,7 +329,7 @@ export const register: Register = (on) => {
       afterTurn = undefined;
       if (start && !loop) await start();
       // After a `/resume`, or a submit that failed.
-      void sent?.recover().catch(() => undefined);
+      if (!oneShot) void sent?.recover().catch(() => undefined);
     }
     return r;
   });

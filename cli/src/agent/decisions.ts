@@ -108,6 +108,7 @@ export class Decisions implements Feature {
               ? await agyReachable(ask.antigravity)
               : false,
           modSeen: mod,
+          headless: mod && !!this.hub.headless?.(ask.session ?? ""),
           // T3 brings the answer only where this agent runs a `t3` (#2244).
           t3: !!ask.t3 && !!t3ThreadId(ask.t3) && !!t3Bin(this.ctx.env),
         });
