@@ -150,6 +150,8 @@
 
   .sessionHead,
   .sessionTail {
+    display: inline;
+    overflow: visible;
     white-space: normal;
   }
 }
