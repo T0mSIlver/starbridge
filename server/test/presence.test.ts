@@ -158,6 +158,22 @@ test("while a page is present, the other devices' push waits until the owner lea
   expect(sent).toEqual([]);
 });
 
+test("a source that stays present no longer silences the phone past 30 minutes after the hold was due (#2189)", async () => {
+  await present(web);
+  const d = decision();
+  await post(devbox, d);
+  sent = [];
+  // The page keeps beating for the whole half hour, and the hold was due 30 s after the post.
+  s.deps.presence.beat(acct.id, web.id, true, Date.now() + 30 * 60_000);
+  release(30 * 60_000 + 29_000);
+  expect(sent).toEqual([]);
+  release(30 * 60_000 + 31_000);
+  expect(pushed()).toEqual([[[phone.id], "decision", d.id]]);
+  sent = [];
+  release(31 * 60_000);
+  expect(sent).toEqual([]);
+});
+
 test("coming back before the hold runs out holds again, until the last screen is left", async () => {
   await present(web);
   await present(devbox);
