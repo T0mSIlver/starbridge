@@ -300,11 +300,14 @@ export class Antigravity implements Feature {
 
   async run(signal: AbortSignal): Promise<void> {
     while (!signal.aborted) {
-      if (
-        this.servers.size > 0 ||
-        Object.values(this.hub.ctx.store.state().asked).some((a) => a.antigravity)
-      )
-        await this.tick().catch((e) => this.hub.log(`Antigravity: ${(e as Error).message}`));
+      // A state file that can't be read ends this round, not the watch (#2290).
+      await (async () => {
+        if (
+          this.servers.size > 0 ||
+          Object.values(this.hub.ctx.store.state().asked).some((a) => a.antigravity)
+        )
+          await this.tick();
+      })().catch((e) => this.hub.log(`Antigravity: ${(e as Error).message}`));
       await pause(WATCH_MS, signal);
     }
     for (const stop of this.open.values()) stop.abort();

@@ -1,6 +1,6 @@
 // Web Push on the page side: registers the service worker and subscribes with the server's
 // VAPID key. The service worker (src/sw/sw.ts) opens what arrives.
-import { api } from "./api";
+import { ApiError, api } from "./api";
 import { desktop } from "./desktop";
 import { needsHomeScreen, thisBrowser } from "./install";
 import { getPref, setPref } from "./prefs";
@@ -119,6 +119,22 @@ export async function disablePush(): Promise<PushState> {
   return pushState();
 }
 
+/**
+ * The server has neither a Web Push key nor a relay (`not-configured`), so it sends no browser
+ * notifications; the person who runs it can turn them on (#2282). The banner words it, not the
+ * API's code.
+ */
+export class PushNotConfigured extends Error {
+  constructor() {
+    super("This server sends no browser notifications. Whoever runs it can turn them on.");
+  }
+}
+
+/** `PushNotConfigured` for the server's `not-configured` answer, anything else as it came. */
+export function keyFailure(e: unknown): unknown {
+  return e instanceof ApiError && e.code === "not-configured" ? new PushNotConfigured() : e;
+}
+
 /** Asks for permission (call it from a click) and subscribes this device. */
 export async function enablePush(): Promise<PushState> {
   setPref("pushOff", false);
@@ -132,7 +148,7 @@ export async function enablePush(): Promise<PushState> {
   // Without the server's key, an existing subscription is still worth sending.
   const key = await api.vapid().catch((e) => {
     if (existing) return undefined;
-    throw e;
+    throw keyFailure(e);
   });
   let sub: PushSubscription;
   try {

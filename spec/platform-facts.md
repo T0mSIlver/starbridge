@@ -24,6 +24,11 @@ What the code relies on, with the versions checked.
   Starbridge states 2.1.287, the oldest the mod works with, as its minimum, and setup says when
   `claude --version` is older, since an older one may lack mods or `claude plugin list --json`
   (#620).
+- **Claude Code's push settings** (2.1.317, #2257): `inputNeededNotifEnabled` (Push when actions
+  required) and `agentPushNotifEnabled` are kept on Anthropic's server
+  (`/api/claude_code/notification/preferences`). `/config` writes both the user settings and the
+  server; at start the server's value fills a setting the file lacks, and nothing sends the
+  file's value back, so editing the file leaves the push as it was.
 - **Claude Code sessions**: `~/.claude/sessions/<pid>.json` holds `sessionId`, `name` (the title)
   and, under Remote Control, `bridgeSessionId`; the Remote Control URL is
   `https://claude.ai/code/<bridgeSessionId>`. Records are rewritten in place without truncation,
