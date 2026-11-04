@@ -2338,7 +2338,7 @@ async function main() {
   };
   await askInSettings();
   await shoot(pageB, "settings-no-push-key", askInSettings);
-  await main.getByRole("link", { name: "Inbox" }).click();
+  await main.getByRole("link", { name: "Inbox", exact: true }).click();
   await pageB.getByRole("button", { name: "Turn on notifications" }).waitFor();
   await pageB.unroute(noKey);
   // The new device sees decisions sealed after it joined; the open one predates it.
