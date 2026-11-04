@@ -15,12 +15,24 @@ since a session started before it, or one whose mod failed to load, has none; wi
 the poller's lease says only that some session runs a mod. When unsure, `ask` prints the `wait`
 line, the safe side: at worst a prompt repeats an answer the agent already read.
 
+`ask` picks the answer's one route when it is asked, from what the agent sees then (`routeFor`,
+`cli/src/decisions/route.ts`), and records it with the question (#2284). The routes are `mod`
+(Claude Code's mod, or Cursor's hooks, take it from the agent's session events), `extension` (the
+Pi extension or the opencode plugin, the same way), `codex` (the agent steers or queues it into
+the Codex session), `agy` (the agent sends it to the Antigravity conversation's language server)
+and `t3` (the agent sends it with `t3 thread send`). `ask` promises a prompt exactly when there is
+a route, and the agent pushes an answer into Codex, Antigravity or T3 Code only by that route. The
+promise and the delivery had been worked out apart and disagreed (#321, #863, #2100, #2101). An
+ask with no session, a held one and `ask --wait`, which prints the answer itself, get no route:
+nothing pushes their answer (#2289). The session's own mod or extension still takes any answer
+to its session, the `wait` line's safe side.
+
 | Harness | Delivery |
 |---|---|
 | Claude Code: terminal, desktop app's Code tab, IDEs | The mod (`mod/`) long-polls the local agent's socket in 25 s cycles and submits each answer with `$.prompt.submit`; during a turn, it goes with the next tool result instead (#1484, #1584) |
 | Claude Code in an app that runs it through the Agent SDK and keeps the session open (such as T3 Code) | The mod: from the start when the app names itself in `CLAUDE_CODE_ENTRYPOINT`, as T3 Code does; else from the session's second turn, and in the first, `wait` (#2100) |
 | `claude -p`, Agent SDK scripts | `wait`: the run ends with its last turn, so the mod starts no loop there (#321) |
-| Codex TUI | The local agent runs `codex queue --thread <id>`; the message only says to run `starbridge wait <id>`, since other local users can read process arguments (#274). Retried each minute, 30 times. During a turn, the answer goes in with the daemon's `turn/steer` instead, answer and all (#1486, #1584). A daemon down at the ask means `wait`, and nothing is queued later (#2182) |
+| Codex TUI | The local agent runs `codex queue --thread <id>`; the message only says to run `starbridge wait <id>`, since other local users can read process arguments (#274). Retried each minute, 30 times. During a turn, the answer goes in with the daemon's `turn/steer` instead, answer and all (#1486, #1584). A daemon down at the ask means `wait`, and nothing is queued later (#2182, #2284) |
 | `codex exec` | `wait`: nothing runs a queued message once exec returns. The thread's rollout tells exec apart (#245) |
 | Codex in an app that runs its own `codex app-server` | `wait`: the daemon would load the thread and run the answer's turn where that app never shows it. The rollout's `originator`, `codex-tui` for the TUI, tells them apart (#2101). In T3 Code, the row below |
 | A session T3 Code runs: Claude Code, Codex on T3's app-server, opencode or Pi with Starbridge's extension | The local agent runs `t3 thread send <thread> -`, the answer on stdin, so the thread shows it as a message and runs it: next if busy, at once if idle, after resuming a stopped thread. For Claude Code only once the mod has not called for 45 s; for the others in place of the extension or `wait` (#2244) |

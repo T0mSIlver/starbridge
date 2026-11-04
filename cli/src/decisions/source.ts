@@ -14,6 +14,7 @@ import { OPENCODE_ANSWERS, OPENCODE_SESSION, OPENCODE_TITLE } from "../opencode"
 import { PI_ANSWERS, piSessionTitle } from "../pi";
 import { projectName } from "../project";
 import { t3Thread } from "../t3";
+import type { Route } from "./route";
 
 /** What a question says and where it goes: the part of an ask a file or a flag may give. */
 export interface AskContent {
@@ -51,6 +52,8 @@ export interface AskRoute {
   extensionAnswers?: boolean;
   /** A `claude -p` session: the mod starts no loop there, so nothing submits answers. */
   headless?: boolean;
+  /** `ask --wait`: the asker prints the answer itself, so no route brings it again. */
+  wait?: boolean;
   /**
    * The Claude Code subagent that asks, from `STARBRIDGE_CLAUDE_AGENT`, which the mod sets for a
    * subagent's `starbridge ask` (#1702): the mod sends the answer to that subagent.
@@ -76,6 +79,8 @@ export interface AskHost {
    * milliseconds, so every inbox lists them together in the call's order (#1079).
    */
   askedAt?: Date;
+  /** The answer's route, which the agent picks when the question is asked (`routeFor`). */
+  route?: Route | null;
 }
 
 export type AskInput = AskContent & AskRoute & AskHost;
@@ -105,6 +110,7 @@ export const ASK_ROUTE_FIELDS = [
   "antigravity",
   "extensionAnswers",
   "headless",
+  "wait",
   "subagent",
   "t3",
 ] as const satisfies readonly (keyof AskRoute)[];

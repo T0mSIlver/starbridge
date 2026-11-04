@@ -2,7 +2,7 @@
 // callers import from one place: source (who asks), build (the decision, its limits and its
 // seal), post (`ask`), waiting (`waiting` and `working`), poll (the long-poll, the shared cursor
 // and answers held while the directory is behind), trust (answer checks against the directory),
-// reseal (new devices), take (handing answers to sessions), wait, snooze, settle, observe
+// reseal (new devices), route (the one route an answer takes), take (handing answers to sessions), wait, snooze, settle, observe
 // (`answers --all`, `decisions --open`) and lines (what the CLI prints).
 export { ASK_LIMITS, buildDecision, typedBreaks } from "./decisions/build";
 export {
@@ -14,12 +14,12 @@ export {
   closedHow,
   type Delivery,
   DONE_LINE,
-  delivery,
   deliveryLine,
   hooklessLine,
   MOD_SEEN_MS,
   named,
   pastTime,
+  promise,
   staleLine,
 } from "./decisions/lines";
 export {
@@ -34,6 +34,7 @@ export {
 export { poll } from "./decisions/poll";
 export { ask, postDecision } from "./decisions/post";
 export { RESEAL_MS } from "./decisions/reseal";
+export { type Observed, type Route, routeFor, routeOf } from "./decisions/route";
 export { pickerReason, type SettleOpts, settle } from "./decisions/settle";
 export {
   acceptSnooze,

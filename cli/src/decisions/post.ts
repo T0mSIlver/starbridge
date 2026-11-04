@@ -4,7 +4,8 @@ import { ApiError, Unreachable } from "../api";
 import { type Ctx, devices, refreshDirectory, type Session, session, signedHead } from "../context";
 import { loadPicture } from "../images";
 import { buildDecision, sealWithPictures } from "./build";
-import { answerInLine, askLines, delivery, deliveryLine } from "./lines";
+import { answerInLine, askLines, deliveryLine, promise } from "./lines";
+import { routeFor } from "./route";
 import { settleOne } from "./settle";
 import { type AskInput, bindSession, resolveSource } from "./source";
 import { wait } from "./wait";
@@ -86,12 +87,14 @@ export async function postDecision(
         project: decision.source.project,
         ...(decision.answerIn ? { answerIn: true } : {}),
         ...(decision.done ? { done: true } : {}),
-        ...(input.codex && decision.source.session ? { codex: input.codex } : {}),
+        // The route the caller picked; a held question goes to no session.
+        ...(decision.source.session && !input.held ? { route: input.route ?? null } : {}),
+        // What the opencode plugin reads after a restart to resume the sessions it brings answers
+        // to (#398, `waitingSessions` in mod/opencode).
+        ...(input.route?.kind === "extension" ? { extensionAnswers: true } : {}),
+        // Where the conversation runs, which the agent watches for its waiting steps (#961),
+        // whatever the route.
         ...(input.antigravity && decision.source.session ? { antigravity: input.antigravity } : {}),
-        ...(input.extensionAnswers && decision.source.session ? { extensionAnswers: true } : {}),
-        ...(input.t3 && decision.source.session && !input.held
-          ? { t3: { thread: input.t3, ...(input.agent === "claude-code" ? { mod: true } : {}) } }
-          : {}),
         ...(input.held ? { held: true } : {}),
         ...(input.picker ? { picker: input.picker } : {}),
         ...(input.nextStep ? { nextStep: input.nextStep } : {}),
@@ -172,18 +175,22 @@ export async function ask(
   const s = session(ctx);
   const { input, warning } = bindSession(asked, ctx.env);
   const resolved = resolveSource(input, ctx.env, process.cwd());
+  // With no agent, nothing tells which sessions run a mod: the poller's lease says only that one
+  // does (#537).
+  const route = routeFor(
+    { ...resolved, wait: opts.wait },
+    { reachable: false, modSeen: false, t3: false },
+  );
   const decision = await postDecision(
     ctx,
     s,
-    { ...resolved, waiting: input.waiting || opts.wait },
+    { ...resolved, route, waiting: input.waiting || opts.wait },
     opts.answered,
   );
   ctx.out(decision.id);
   if (warning) ctx.err(warning);
-  // With no agent, nothing tells which sessions run a mod: the poller's lease says only that one
-  // does (#537).
   if (!opts.wait) {
-    const d = delivery(resolved, false, false);
+    const d = promise(route);
     ctx.err(deliveryLine(decision.id, d));
     for (const line of askLines(resolved, d, ctx.env)) ctx.err(line);
   }

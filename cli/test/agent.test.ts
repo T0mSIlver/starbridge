@@ -691,7 +691,10 @@ test.skipIf(WINDOWS)(
         undefined,
         undefined,
       ]);
-      expect(asked?.codex?.bin).toBe(join(codex.env.CODEX_HOME, "bin", "codex"));
+      const route = asked?.route;
+      expect(route?.kind === "codex" && route.codex.bin).toBe(
+        join(codex.env.CODEX_HOME, "bin", "codex"),
+      );
       await server.answer(id, { choice: "Merge" });
       const log = () => (existsSync(codex.log) ? readFileSync(codex.log, "utf8") : "");
       await until(() => log().includes(id), 15_000);
@@ -965,6 +968,14 @@ test("the agent sends an Antigravity conversation's answer through its language 
         cascadeConfig: { plannerConfig: { planModel: "MODEL_A" } },
       },
     });
+    // `ask --wait` prints its answer itself: the language server is not sent it too (#2289).
+    const waits = testCtx(env);
+    expect(await run([...ASK, "--project", "p", "--wait", "--timeout", "1s"], waits)).toBe(2);
+    const waited = waits.lines[0] as string;
+    await server.answer(waited, { choice: "Wait" });
+    // Long enough for the agent's poll to take the answer and a delivery to start.
+    await Bun.sleep(3_000);
+    expect(JSON.stringify(calls)).not.toContain(waited);
     // Its token goes to loopback only: a server elsewhere gets no route, and the line says wait.
     const away = testCtx({ ...env, ANTIGRAVITY_LS_ADDRESS: `example.com:${ls.port}` });
     await ask(away, "--project", "p");
@@ -1724,6 +1735,7 @@ interface RouteRow {
   mod?: boolean;
   down?: boolean;
   t3?: boolean;
+  wait?: boolean; // `ask --wait`, which prints the answer itself (#2289)
   prompt?: Route; // the one route a promised prompt takes
 }
 
@@ -1733,6 +1745,7 @@ interface RouteRow {
 for (const [name, row] of [
   ["Codex TUI, daemon up", { codex: "codex-tui", prompt: "codex queue" }],
   ["Codex TUI, daemon down", { codex: "codex-tui", down: true }],
+  ["Codex TUI, daemon up, ask --wait (#2289)", { codex: "codex-tui", wait: true }],
   ["Codex exec", { codex: "codex_exec" }],
   ["Codex in an app with its own app-server", { codex: "Other App" }],
   ["Codex in T3 Code", { codex: "T3 Code", t3: true, prompt: "t3" }],
@@ -1780,7 +1793,12 @@ for (const [name, row] of [
     if (row.mod) await mod.events();
     const c = testCtx(env);
     try {
-      const id = await ask(c, "--project", "p");
+      // `ask --wait` gives up at once here: the answer comes after it, for a route to take.
+      const id = row.wait
+        ? await run([...ASK, "--project", "p", "--wait", "--timeout", "1s"], c).then(
+            () => c.lines[0] as string,
+          )
+        : await ask(c, "--project", "p");
       const promised = c.errors.at(-1) === PROMPT;
       expect(promised).toBe(!!row.prompt);
       await server.answer(id, { choice: "Merge" });
