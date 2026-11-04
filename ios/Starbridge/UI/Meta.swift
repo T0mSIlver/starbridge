@@ -161,13 +161,13 @@ struct SessionLink: View {
                     Link(destination: link) {
                         HStack(spacing: Tokens.Spacing.s2) {
                             Image(systemName: "arrow.up.right").scaledFont(size: 13)
-                            Text(text).lineLimit(1).truncationMode(.middle)
+                            Text(text).lineLimit(2).multilineTextAlignment(.leading)
                         }
                     }
                     .foregroundStyle(Tokens.Colors.fg2.color)
                     .accessibilityHint("Opens the session in \(app!)")
                 } else {
-                    Text(text).lineLimit(1).truncationMode(.middle).foregroundStyle(Tokens.Colors.fg2.color)
+                    Text(text).lineLimit(2).multilineTextAlignment(.leading).foregroundStyle(Tokens.Colors.fg2.color)
                 }
             }
         }

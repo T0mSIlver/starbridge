@@ -138,6 +138,22 @@
     max-width: fit-content;
     margin-right: auto;
   }
+
+  /* No room to cut a sentence in the middle: the name wraps to two lines, then ends in "…". */
+  .sessionName {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    overflow: hidden;
+    white-space: normal;
+  }
+
+  .sessionHead,
+  .sessionTail {
+    display: inline;
+    overflow: visible;
+    white-space: normal;
+  }
 }
 
 a.open:hover {
