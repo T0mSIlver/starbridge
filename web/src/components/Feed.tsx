@@ -148,7 +148,7 @@ export function SessionLine({
 }: {
   source: Source;
   agent?: string;
-  /** Done, Back now and Snooze, at the end of the line. */
+  /** Back now and Snooze, at the end of the line. */
   children?: React.ReactNode;
 }) {
   // One space per run of white space, as the line would show it: the halves keep theirs (#630).
@@ -158,6 +158,7 @@ export function SessionLine({
   const link = app ? (links.find((l) => l.kind !== "desktop") ?? links[0]) : undefined;
   if (!name && !link && !children) return null;
   // Cut in the middle only when the line runs out of room: the head shrinks, the tail stays (#172).
+  // Under 600 px it wraps to two lines instead (#2242).
   const named = name && (
     <span className={s.sessionName} title={name}>
       <span className={s.sessionHead}>{name.slice(0, -TAIL)}</span>

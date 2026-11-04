@@ -743,10 +743,8 @@ fun DecisionSheet(decision: Decision, now: Instant, onAnswer: (String, String?, 
         timeSlot(since, decision.createdAt, now),
         decision.agent,
         blocked = if (waiting) since?.let { waitingLabel(it, now) } ?: "Waiting for you" else null,
-        // Quiet, on the session's line, so the answer stays above (#970): Done for a page's answer
-        // (#539), and putting it off (#571).
+        // Quiet, on the session's line, so the answer stays above (#970): putting it off (#571).
         footer = {
-            if (done) Done { send(null, null) }
             if (snooze != null && until != null) Quiet("Back now") { snooze(Instant.now()) }
             if (snooze != null) SnoozeButton(if (until != null) "Snooze again" else "Snooze") { snoozing = !snoozing; tapped = snoozing }
         },
@@ -787,6 +785,8 @@ fun DecisionSheet(decision: Decision, now: Instant, onAnswer: (String, String?, 
                     Images(decision.images, maxHeight = 360.dp)
                     val page = decision.answerIn
                     when {
+                        // Done beside the page's link, as on the card (#539, #2242).
+                        page != null && done -> PageAndDone(page, other = scheme.surfaceContainerHighest, height = 56.dp) { send(null, null) }
                         page != null -> AnswerElsewhere(page)
                         decision.options.isEmpty() -> FreeText(replies.drafts[decision.id].orEmpty(), { replies.drafts[decision.id] = it }) { send(null, it) }
                         else -> {
@@ -907,16 +907,9 @@ private fun AnswerElsewhere(page: Link) {
     }
 }
 
-/**
- * Done under the page's link in the sheet (#539): quiet, as Reply, since the page holds the
- * answer and Done only says it was given there.
- */
+/** The page's link, amber, joined to a tonal Done (#539), on a card and in the sheet (#2242). */
 @Composable
-private fun Done(onDone: () -> Unit) = Quiet("Done", onDone)
-
-/** On a card: the page's link, amber, joined to a tonal Done (#539). */
-@Composable
-private fun PageAndDone(page: Link, other: Color, onDone: () -> Unit) {
+private fun PageAndDone(page: Link, other: Color, height: Dp = 40.dp, onDone: () -> Unit) {
     val context = LocalContext.current
     val colors = StarbridgeTheme.colors
     val end = 20.dp
@@ -926,7 +919,7 @@ private fun PageAndDone(page: Link, other: Color, onDone: () -> Unit) {
             shape = RoundedCornerShape(topStart = end, bottomStart = end, topEnd = 8.dp, bottomEnd = 8.dp),
             colors = ButtonDefaults.buttonColors(containerColor = colors.accent, contentColor = colors.onAccent),
             contentPadding = PaddingValues(horizontal = Spacing.s4),
-            modifier = Modifier.weight(1f).heightIn(min = 40.dp),
+            modifier = Modifier.weight(1f).heightIn(min = height),
         ) {
             Symbol(Sym.Open, size = 18.dp)
             Spacer(Modifier.width(Spacing.s2))
@@ -937,7 +930,7 @@ private fun PageAndDone(page: Link, other: Color, onDone: () -> Unit) {
             shape = RoundedCornerShape(topStart = 8.dp, bottomStart = 8.dp, topEnd = end, bottomEnd = end),
             colors = ButtonDefaults.buttonColors(containerColor = other, contentColor = MaterialTheme.colorScheme.onSurface),
             contentPadding = PaddingValues(horizontal = Spacing.s4),
-            modifier = Modifier.heightIn(min = 40.dp),
+            modifier = Modifier.heightIn(min = height),
         ) { Text("Done", style = StarbridgeTheme.type.label, maxLines = 1) }
     }
 }

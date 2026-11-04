@@ -527,11 +527,14 @@ it has no title. A session's title is words, in the reading face (#563).
 - Every item opens with one meta row of facts Starbridge knows: the machine's
   kind icon and name, the repo, and the time right-aligned. The agent's own
   words come below it. Details end with one line: on the left the session's
-  name, truncated in the middle, as grey text with the open icon before it and
-  no underline, else "Open in Claude" or "Open in Codex" (no logos); on the
-  right the quiet actions, Back now and Done as text and Snooze last, as a
-  round tonal icon button named "Snooze" (#1848). With no session the line is
-  the button alone.
+  name as grey text with the open icon before it and no underline, else "Open
+  in Claude" or "Open in Codex" (no logos); on the right Back now as text and
+  Snooze last, as a round tonal icon button named "Snooze" (#1848). At phone
+  width (Android, iPhone, the web under 600 px) a long name wraps to a second
+  line, then ends in "…"; wider, it is cut in the middle (#2242). With no
+  session the line is the button alone.
+- A question answered on its page shows "Answer in …" in amber with Done as a
+  secondary button beside it, on the card and in the detail alike (#2242).
 - Links the agent attaches are chips after the context: the label and an
   open-outside icon, never the word "Open". A GitHub link leads with the
   Octicon for its kind and reads as its reference ("#123", "v0.1.2"); a

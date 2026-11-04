@@ -47,12 +47,8 @@ struct DecisionDetail: View {
                             }
                         }
                         Answering(store: store, decision: d, amber: waiting, options: !picks) { close() }
-                        // Done for a page's answer (#539) and putting it off (#571), on the session's line (#970).
-                        let page = d.body.answerIn != nil && d.body.done == true
-                        SnoozeControls(store: store, id: id, until: until, session: d.body.source, agent: d.body.agent, markDone: page ? {
-                            store.answer(id, choice: nil, text: nil)
-                            close()
-                        } : nil) { close() }
+                        // Putting it off (#571), on the session's line (#970).
+                        SnoozeControls(store: store, id: id, until: until, session: d.body.source, agent: d.body.agent) { close() }
                     } else {
                         Text(HistoryText.how(d, store)).type(Tokens.Typography.body).foregroundStyle(Tokens.Colors.fg2.color).textSelection(.enabled)
                         SessionLine(source: d.body.source, agent: d.body.agent)
@@ -110,16 +106,22 @@ private struct Answering: View {
         let body = decision.body
         VStack(alignment: .leading, spacing: Tokens.Spacing.s3) {
             if let page = body.answerIn, let url = URL(string: page.url) {
-                // Answered on its page, never here; Done says the owner did (#539).
-                Link(destination: url) {
-                    HStack(spacing: Tokens.Spacing.s2) {
-                        Image(systemName: "arrow.up.right").accessibilityHidden(true)
-                        Text("Answer in \(Notify.place(page))").lineLimit(1)
+                // Answered on its page, never here; Done beside it says the owner did (#539, #2242).
+                HStack(spacing: Tokens.Spacing.s2) {
+                    Link(destination: url) {
+                        HStack(spacing: Tokens.Spacing.s2) {
+                            Image(systemName: "arrow.up.right").accessibilityHidden(true)
+                            Text("Answer in \(Notify.place(page))").lineLimit(1)
+                        }
+                        .type(Tokens.Typography.action)
+                        .frame(maxWidth: .infinity, minHeight: 48)
+                        .foregroundStyle(Tokens.Colors.onAccent.color)
+                        .background(Capsule().fill(Tokens.Colors.accent.color))
                     }
-                    .type(Tokens.Typography.action)
-                    .frame(maxWidth: .infinity, minHeight: 48)
-                    .foregroundStyle(Tokens.Colors.onAccent.color)
-                    .background(Capsule().fill(Tokens.Colors.accent.color))
+                    if body.done == true {
+                        OptionButton(label: "Done", strong: false, amber: amber, height: 48) { send(nil, nil) }
+                            .fixedSize(horizontal: true, vertical: false)
+                    }
                 }
             } else {
                 if options, !body.options.isEmpty {
@@ -142,8 +144,8 @@ private struct Answering: View {
 /**
  * Snooze, under the reply field (#571): it opens the times in place: 1 hour and This evening, the
  * days as chips, a time, and "Snooze until 15:00". A snoozed question offers Snooze again and Back now.
- * In a question's detail the row is the session's line: the session at the start, then Done, Back
- * now and Snooze, which is a round icon button (#970, #1848).
+ * In a question's detail the row is the session's line: the session at the start, then Back now
+ * and Snooze, which is a round icon button (#970, #1848).
  */
 struct SnoozeControls: View {
     let store: Store
@@ -151,8 +153,6 @@ struct SnoozeControls: View {
     let until: Date?
     var session: Source?
     var agent: String?
-    /** Done for a question answered on its page (#539). */
-    var markDone: (() -> Void)?
     let done: () -> Void
     @State private var open: Bool
     @State private var day: Date
@@ -161,14 +161,13 @@ struct SnoozeControls: View {
     /** `open`: the times show at once, as over the inbox after a swipe (#692). */
     init(
         store: Store, id: String, until: Date?, open: Bool = false,
-        session: Source? = nil, agent: String? = nil, markDone: (() -> Void)? = nil, done: @escaping () -> Void
+        session: Source? = nil, agent: String? = nil, done: @escaping () -> Void
     ) {
         self.store = store
         self.id = id
         self.until = until
         self.session = session
         self.agent = agent
-        self.markDone = markDone
         self.done = done
         let now = Date()
         let today = Calendar.current.startOfDay(for: now)
@@ -185,7 +184,6 @@ struct SnoozeControls: View {
                     SessionLink(source: session, agent: agent).type(Tokens.Typography.small)
                 }
                 Spacer(minLength: Tokens.Spacing.s2)
-                if let markDone { quiet("Done", markDone) }
                 if until != nil { quiet("Back now") { snooze(Date()) } }
                 Button {
                     Motion.with { open.toggle() }

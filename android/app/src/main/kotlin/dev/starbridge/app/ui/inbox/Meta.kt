@@ -13,10 +13,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.rememberTextMeasurer
-import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Box
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -94,13 +92,6 @@ fun waitingLabel(since: Instant, now: Instant): String {
     }
 }
 
-/** "orchestrate-m…r-before-cli": the middle gives way, so both ends stay readable. */
-fun middle(text: String, max: Int): String {
-    if (text.length <= max) return text
-    val head = max / 2
-    return text.take(head) + "…" + text.takeLast(max - 1 - head)
-}
-
 /**
  * The agent's app, by the machine's word for it or, when it sends none, by the session's link. An agent this app does not know gets no "Open in".
  */
@@ -112,7 +103,7 @@ fun agentName(agent: String?, source: Source) = when {
 }
 
 /**
- * The end of every detail (#970, #1848): the session's name, middle-truncated, as grey text with
+ * The end of every detail (#970, #1848): the session's name, on up to two lines, as grey text with
  * the open icon before it, opening the session in Claude or Codex when the phone can; then the
  * quiet [actions] at the end. A session with no name the owner gave shows "Open in Claude" alone:
  * its id says nothing. With no session the line is the actions alone.
@@ -127,15 +118,11 @@ fun SessionLine(source: Source, agent: String?, modifier: Modifier = Modifier, a
     val opens = link != null && app != null
     Row(modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.s3)) {
         val style = StarbridgeTheme.type.small
-        val measurer = rememberTextMeasurer()
-        BoxWithConstraints(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
+        Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
+            // A name is often the session's first sentence: it wraps to a second line, then ends in
+            // "…", rather than losing its middle at a phone's width (#2242).
             val text = when {
-                name.isNotEmpty() -> {
-                    // Cut in the middle only when the line runs out of room, as on the web (#172).
-                    val room = constraints.maxWidth - with(LocalDensity.current) { (Spacing.s5 + Spacing.s2).roundToPx() }
-                    val max = (name.length downTo 8).firstOrNull { measurer.measure(middle(name, it), style, maxLines = 1).size.width <= room } ?: 8
-                    middle(name, max)
-                }
+                name.isNotEmpty() -> name
                 opens -> "Open in $app"
                 else -> ""
             }
@@ -146,7 +133,7 @@ fun SessionLine(source: Source, agent: String?, modifier: Modifier = Modifier, a
                     horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
                 ) {
                     if (opens) Symbol(Sym.Open, size = Spacing.s5, tint = scheme.onSurfaceVariant)
-                    Text(text, style = style, color = scheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(text, style = style, color = scheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 }
             }
         }
