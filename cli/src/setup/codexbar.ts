@@ -256,7 +256,9 @@ export async function installTarball(
     renameSync(fresh, dest);
   } finally {
     rmSync(file, { force: true });
+    // remove-ok: the download's unpack folder, Starbridge's own
     rmSync(fresh, { recursive: true, force: true });
+    // remove-ok: the CodexBar that setup installed, moved aside
     rmSync(old, { recursive: true, force: true });
   }
   return join(dest, "codexbar");

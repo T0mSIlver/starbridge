@@ -195,8 +195,10 @@ async function prefetchPiPackage(sys: Sys) {
     if (existsSync(parent))
       for (const f of readdirSync(parent)) {
         const pid = /^starbridge\.starbridge-(\d+)$/.exec(f)?.[1];
+        // remove-ok: a fetch folder an interrupted setup left; only setup writes these
         if (pid && !alive(Number(pid))) rmSync(join(parent, f), { recursive: true, force: true });
       }
+    // remove-ok: this setup's own fetch folder
     rmSync(part, { recursive: true, force: true });
     mkdirSync(part, { recursive: true });
     // What Pi writes on a first clone, so a Pi folder kept in git ignores its checkouts.
@@ -215,6 +217,7 @@ async function prefetchPiPackage(sys: Sys) {
   } catch {
     // Nothing here may stop `pi install`, which clones by itself.
     try {
+      // remove-ok: this setup's own fetch folder
       rmSync(part, { recursive: true, force: true });
     } catch {}
   }
