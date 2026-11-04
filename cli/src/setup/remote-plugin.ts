@@ -164,6 +164,7 @@ export function writeRemotePlugin(sys: Home, roots: { starbridge: string; mod: s
     readFileSync(join(parts[0] as string, "hooks.json"), "utf8"),
   ) as HooksFile;
   const next = `${dir}.new`;
+  // remove-ok: the plugin's staging copy, which only setup writes
   rmSync(next, { recursive: true, force: true });
   mkdirSync(join(next, ".claude-plugin"), { recursive: true });
   const seen = new Set<string>();
@@ -203,6 +204,7 @@ export function writeRemotePlugin(sys: Home, roots: { starbridge: string; mod: s
     filter: (from) => relative(next, from) !== manifest,
   });
   cpSync(join(next, manifest), join(dir, manifest), { force: true });
+  // remove-ok: the plugin's staging copy, which only setup writes
   rmSync(next, { recursive: true, force: true });
 }
 

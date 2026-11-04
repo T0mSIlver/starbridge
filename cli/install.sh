@@ -120,6 +120,7 @@ if [ -x "$DIR/starbridge" ] && [ -z "${STARBRIDGE_DOWNGRADE:-}" ]; then
 fi
 
 tmp=$(mktemp -d)
+# remove-ok: the installer's own mktemp folder
 trap 'rm -rf "$tmp"' EXIT
 trap 'exit 1' INT TERM
 
