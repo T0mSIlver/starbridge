@@ -102,6 +102,8 @@ private struct Answering: View {
     var options = true
     let answered: () -> Void
     @Environment(\.dynamicTypeSize) private var typeSize
+    /** The label's growth with Dynamic Type, which the link's curve follows, as OptionButton's (1 at the default size). */
+    @ScaledMetric private var scale: CGFloat = 1
 
     var body: some View {
         let body = decision.body
@@ -121,7 +123,7 @@ private struct Answering: View {
                         .type(Tokens.Typography.action)
                         .frame(maxWidth: .infinity, minHeight: 48)
                         .foregroundStyle(Tokens.Colors.onAccent.color)
-                        .background(Capsule().fill(Tokens.Colors.accent.color))
+                        .background(Pill(limit: 24 * scale).fill(Tokens.Colors.accent.color))
                     }
                     if body.done == true {
                         OptionButton(label: "Done", strong: false, amber: amber, height: 48) { send(nil, nil) }
