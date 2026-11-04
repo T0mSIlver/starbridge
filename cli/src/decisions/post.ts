@@ -177,7 +177,10 @@ export async function ask(
   const resolved = resolveSource(input, ctx.env, process.cwd());
   // With no agent, nothing tells which sessions run a mod: the poller's lease says only that one
   // does (#537).
-  const route = routeFor(resolved, { reachable: false, modSeen: false, t3: false });
+  const route = routeFor(
+    { ...resolved, wait: opts.wait },
+    { reachable: false, modSeen: false, t3: false },
+  );
   const decision = await postDecision(
     ctx,
     s,

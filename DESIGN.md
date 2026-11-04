@@ -531,7 +531,8 @@ it has no title. A session's title is words, in the reading face (#563).
   in Claude" or "Open in Codex" (no logos); on the right Back now as text and
   Snooze last, as a round tonal icon button named "Snooze" (#1848). At phone
   width (Android, iPhone, the web under 600 px) a long name wraps to a second
-  line, then ends in "…"; wider, it is cut in the middle (#2242). With no
+  line, then ends in "…"; so it does in a web detail whose line is under 480 px wide, as beside the
+  rail at 600 to 750 px (#2285); wider, it is cut in the middle (#2242). With no
   session the line is the button alone.
 - A question answered on its page shows "Answer in …" in amber with Done as a
   secondary button beside it, on the card and in the detail alike (#2242). At large text

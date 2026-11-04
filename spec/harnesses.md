@@ -16,11 +16,17 @@ the poller's lease says only that some session runs a mod. When unsure, `ask` pr
 line, the safe side: at worst a prompt repeats an answer the agent already read.
 
 `ask` picks the answer's one route when it is asked, from what the agent sees then (`routeFor`,
-`cli/src/decisions/route.ts`), and records it with the question: it promises a prompt exactly
-when there is a route, and the agent pushes an answer into Codex, Antigravity or T3 Code only by
-that route. The promise and the delivery had been worked out apart and disagreed (#321, #863,
-#2100, #2101), so they now come from one decision (#2284). The session's own mod or extension
-still takes any answer to its session, the `wait` line's safe side.
+`cli/src/decisions/route.ts`), and records it with the question (#2284). The routes are `mod`
+(Claude Code's mod, or Cursor's hooks, take it from the agent's session events), `extension` (the
+Pi extension or the opencode plugin, the same way), `codex` (the agent steers or queues it into
+the Codex session), `agy` (the agent sends it to the Antigravity conversation's language server)
+and `t3` (the agent sends it with `t3 thread send`), and `turn` (a `claude -p` run's mod hands it in with
+the next tool result, below). `ask` promises a prompt exactly when there is a route other than
+`turn`, and the agent pushes an answer into Codex, Antigravity or T3 Code only by that route. The
+promise and the delivery had been worked out apart and disagreed (#321, #863, #2100, #2101). An
+ask with no session, a held one and `ask --wait`, which prints the answer itself, get no route:
+nothing pushes their answer (#2289). The session's own mod or extension still takes any answer
+to its session, the `wait` line's safe side.
 
 | Harness | Delivery |
 |---|---|
