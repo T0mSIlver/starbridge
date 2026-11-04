@@ -1076,37 +1076,55 @@ for (const file of readdirSync(join(import.meta.dir, "fixtures/claude")).filter(
     test(`each field of ${file}'s ${shape} picker reaches a card or says why not (#2267)`, async () => {
       const ctx = await paired(server);
       const hook = JSON.parse(picker()) as Record<string, unknown>;
+      const stop = new AbortController();
       const done = hookPermission(
-        { ...ctx, env: { ...ctx.env, CLAUDE_CODE_QUESTION_PREVIEW_FORMAT: "html" } },
+        {
+          ...ctx,
+          signal: stop.signal,
+          env: { ...ctx.env, CLAUDE_CODE_QUESTION_PREVIEW_FORMAT: "html" },
+        },
         JSON.stringify({ ...hook, tool_input: input }),
         { agent: "claude-code", wait: "5s" },
       );
       await until(async () => (await server.opened("waiting")).length === input.questions.length);
-      // What a device shows of each card.
-      const shown = (await server.opened("decision"))
-        .flatMap((c) => [c.question, c.context ?? "", ...(c.options ?? [])])
-        .join("\n");
+      const cards = await server.opened("decision");
+      // What a device shows of a question's card besides the question itself, which would vouch
+      // for any field that shares a word with it ("How many slides?" and `unit: "slides"`).
+      const shownFor = (i: number | undefined) =>
+        cards
+          .filter((c) =>
+            i === undefined
+              ? true
+              : c.question === (input.questions[i] as { question: string }).question,
+          )
+          .flatMap((c) => [c.context ?? "", ...(c.options ?? [])])
+          .join("\n");
       // A preview's HTML reaches the card as its text; a number as a word of its own.
       const words = (v: string | number) =>
         String(v)
           .replace(/<[^>]*>/g, " ")
           .trim()
           .split(/\s+/);
-      const has = (word: string) =>
+      const has = (shown: string) => (word: string) =>
         new RegExp(`(^|[^\\w.])${word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}($|[^\\w])`).test(
           shown,
         );
       const missing = leaves(input)
-        .filter(
-          ([path]) => !((path.split(".").at(-1) ?? "").replace(/\[\d+\]$/, "") in PICKER_UNSHOWN),
-        )
-        .filter(([, v]) => !words(v).every(has))
+        .filter(([path]) => {
+          const key = (path.split(".").at(-1) ?? "").replace(/\[\d+\]$/, "");
+          // The question is the card's question, which `until` above already matched.
+          return !(key in PICKER_UNSHOWN) && !/^questions\[\d+\]\.question$/.test(path);
+        })
+        .filter(([path, v]) => {
+          const i = /^questions\[(\d+)\]/.exec(path)?.[1];
+          return !words(v).every(has(shownFor(i === undefined ? undefined : Number(i))));
+        })
         .map(([path, v]) => `${path} = ${JSON.stringify(v)}`);
       expect(
         missing,
         "Show the field on the card (cli/src/hook.ts, pickerQuestions and what reads it), or add it to PICKER_UNSHOWN with why no card shows it",
       ).toEqual([]);
-      ctx.signal = AbortSignal.abort();
+      stop.abort();
       await done.catch(() => {});
     });
 }
