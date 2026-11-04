@@ -177,6 +177,39 @@ async function runAll(file: string, failures: string[], afterCheck = () => {}): 
   return [...ctx.lines, ...ctx.errors].flatMap((l) => l.split("\n"));
 }
 
+/** Shell startup files: the owner's, with one line of setup's. */
+const OWNER_TEXT = /\/\.(profile|bashrc|bash_profile|zshrc|zprofile)$/;
+/** Files only the agent's own command changes. */
+const AGENT_OWNED = /\/\.codex\/config\.toml$|\/\.pi\/agent\/settings\.json$/;
+
+/**
+ * Whether `after` is a working file again, not just a changed one: a run may append to a broken
+ * file and leave it broken. As setup wrote it, or for JSON the same kind of value it wrote, or
+ * for any other file one that no longer holds the bad text.
+ */
+function valid(file: string, after: string, bad: string | undefined): boolean {
+  const was = good.get(file);
+  if (after === was) return true;
+  // The owner's own text, where setup keeps only its line: setup can't know what else is right.
+  if (OWNER_TEXT.test(file)) return after.includes("# Added by starbridge setup");
+  // The agent's own files, which setup changes only through the agent's command (`codex plugin
+  // add`, `pi install`). The fake agents append to a broken file where the real ones may refuse
+  // it, so what is right here is the real agent's call, not this sweep's.
+  if (AGENT_OWNED.test(file)) return true;
+  if (file.endsWith(".json")) {
+    const kind = (t: string | undefined) => {
+      try {
+        const v = JSON.parse(t ?? "");
+        return Array.isArray(v) ? "array" : v === null ? "null" : typeof v;
+      } catch {
+        return "unparsed";
+      }
+    };
+    return kind(after) !== "unparsed" && kind(after) === kind(was) && after.trim() !== bad?.trim();
+  }
+  return bad === undefined || !after.includes(bad.trim());
+}
+
 /** What a case found wrong, or undefined. */
 async function sweepOne(file: string, shape: Shape): Promise<string | undefined> {
   const before = new Map<string, string>();
@@ -203,7 +236,7 @@ async function sweepOne(file: string, shape: Shape): Promise<string | undefined>
     const named = [file, ...ancestors(file)].some((p) => said.includes(p));
     // A step that failed says so on a ✗ line, which is not success.
     const reported = said.includes("✗ ");
-    const repaired = after !== undefined && after !== text;
+    const repaired = after !== undefined && valid(file, after, text);
     if (!repaired && !named && !reported)
       failures.push(
         `${where(file)} (${shape}) was left ${after === undefined ? "missing" : `as ${JSON.stringify(after)}`} and no output names it`,
