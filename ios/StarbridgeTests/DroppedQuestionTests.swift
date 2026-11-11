@@ -43,6 +43,50 @@ final class OpenListServer: URLProtocol, @unchecked Sendable {
     override func stopLoading() {}
 }
 
+/**
+ * A server restored from a backup: its counter sits below the cursor this iPhone kept, so a list
+ * after that cursor is empty and hands it back, while the open list and a list from the start hold
+ * `asked`. Counts the decision lists read from the start.
+ */
+final class RestoredServer: URLProtocol, @unchecked Sendable {
+    nonisolated(unsafe) static var asked: [SealedItem] = []
+    nonisolated(unsafe) static var fromStart = 0
+
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+
+    override func startLoading() {
+        let url = request.url!
+        let path = url.path()
+        let query = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
+        func value(_ name: String) -> String { query.first { $0.name == name }?.value ?? "" }
+        var status = 500
+        var body = #"{"error":"internal"}"#
+        if path.hasSuffix("/v1/directory") {
+            status = 200
+            body = #"{"entries":[]}"#
+        } else if request.httpMethod == "GET" && path.hasSuffix("/v1/items") {
+            status = 200
+            let after = value("after")
+            let open = query.contains(URLQueryItem(name: "open", value: "1"))
+            var items: [JSON] = []
+            var cursor = after
+            if value("kind").hasPrefix("decision") && (open || after.isEmpty) {
+                if !open { RestoredServer.fromStart += 1 }
+                items = RestoredServer.asked.map { JSON.object(["item": $0.json, "cursor": "3", "receivedAt": "2026-09-01T12:00:00Z"]) }
+                cursor = "3"
+            }
+            body = JSON.object(["items": .array(items), "cursor": .string(cursor)]).text
+        }
+        let response = HTTPURLResponse(url: url, statusCode: status, httpVersion: "HTTP/1.1", headerFields: ["Content-Type": "application/json"])!
+        client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+        client?.urlProtocol(self, didLoad: Data(body.utf8))
+        client?.urlProtocolDidFinishLoading(self)
+    }
+
+    override func stopLoading() {}
+}
+
 /** An open question kept here that the server dropped, by its retention, leaves the inbox (#1980). */
 @MainActor
 final class DroppedQuestionTests: XCTestCase {
@@ -118,6 +162,32 @@ final class DroppedQuestionTests: XCTestCase {
         try await store.serial { try await store.syncDecisions() }
         XCTAssertEqual(store.saved.decisions.count, 501)
         XCTAssertEqual(store.saved.decisions.first?.id, "d_old")
+    }
+
+    /** A server restored from a backup holds open a question this iPhone never read: it reads from the start again, once. */
+    func testAServerRestoredFromABackupIsReadAgain() async throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        addTeardownBlock { try? FileManager.default.removeItem(at: dir) }
+        let f = try NotifyFixture()
+        RestoredServer.asked = [try f.decision("d_new")]
+        RestoredServer.fromStart = 0
+        var saved = f.saved
+        saved.cursor = "5000"
+        saved.promptCursor = "4000"
+        let disk = Disk(url: dir.appendingPathComponent("saved.json"))
+        try disk.save(saved)
+        let vault = MemoryVault()
+        vault.secrets = f.secrets
+        let config = URLSessionConfiguration.ephemeral
+        config.protocolClasses = [RestoredServer.self]
+        let store = Store(vault: vault, disk: disk, deviceName: "Test iPhone", http: URLSession(configuration: config))
+        try await store.serial { try await store.syncDirectory() }
+
+        try await store.serial { try await store.syncDecisions() }
+        XCTAssertEqual(store.saved.decisions.map(\.id), ["d_new"])
+        XCTAssertEqual(store.saved.cursor, "3")
+        XCTAssertEqual(store.saved.promptCursor, "")
+        XCTAssertEqual(RestoredServer.fromStart, 1)
     }
 }
 

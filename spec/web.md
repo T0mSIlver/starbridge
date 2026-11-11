@@ -65,7 +65,8 @@
   opened again on each load, and reads only what came after: its 500 latest answered questions
   and every open one, as the Android and iPhone apps do. Each load first lists the open
   questions, so a kept one the server dropped goes, and an open one neither kept nor listed after
-  the kept cursor means another or a reset server, which starts the read from scratch. Inbox
+  the kept cursor means another or a reset server, which starts the read from scratch; the
+  Android and iPhone apps check the same at a run's first sync, once a sync (#2326). Inbox
   reads run one at a time: a poll or a push during a read waits for it and starts from its
   cursor. A load shows the kept questions the server lists open before it opens the answered
   ones, which took a phone-speed CPU 7 s on a 500-question history (#1458). Signing out, revocation and deleting the account forget what was kept; signing out and deleting also remove the account's localStorage keys (quota settings, the account id that held quotas, shown quota and run alerts), listed once in `ACCOUNT_STORAGE_KEYS`, and keep the display prefs, which say nothing of the account (#2014). On a 500-question
