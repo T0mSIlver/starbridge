@@ -370,8 +370,12 @@ extension Store {
         }
         var s = saved
         s.cursor = cursor
-        // As instants: whole-second and millisecond stamps sort differently as text (#1079).
-        s.decisions = Array(Dates.byInstant(Array(byId.values)) { $0.body.createdAt }.suffix(500))
+        // As instants: whole-second and millisecond stamps sort differently as text (#1079). Every
+        // open question stays, with the 500 latest answered ones, as on the web: the cursor has
+        // passed a question cut here, so nothing would list it again.
+        let all = Dates.byInstant(Array(byId.values)) { $0.body.createdAt }
+        let cut = Set(all.filter { $0.answeredAt != nil }.dropLast(500).map(\.id))
+        s.decisions = all.filter { !cut.contains($0.id) }
         persist(s)
         SavedImage.prune(keeping: s.decisions)
         if listedOpen != nil { checkOpen = false }
