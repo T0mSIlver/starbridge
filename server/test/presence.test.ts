@@ -300,6 +300,20 @@ test("a waiting flip is held too, and a snooze during the hold keeps it quiet", 
   expect(sent).toEqual([]);
 });
 
+test("a waiting flip pushed after the owner left lets the settled notice reach the devices it rang", async () => {
+  await present(devbox);
+  const d = decision();
+  await post(devbox, d);
+  await present(devbox, false);
+  // Inside the question's hold, but nobody is present: the flip pushes at once.
+  await post(devbox, waiting(d));
+  expect(pushed()).toEqual([[[phone.id, web.id], "waiting", `w-${d.id}`]]);
+  sent = [];
+  await post(devbox, settled(d));
+  release(31_000);
+  expect(pushed()).toEqual([[[phone.id, web.id], "settled", expect.any(String)]]);
+});
+
 test("a snooze that wakes after the hold lets the answer and settled notice reach every device", async () => {
   await present(web);
   const d = decision();
