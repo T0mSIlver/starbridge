@@ -141,6 +141,11 @@ const retryAt = new Map<string, { at: number; wait: number }>();
 const RETRY_MIN_MS = 60_000;
 const RETRY_MAX_MS = 3_600_000;
 const RETRY_POST_MS = 5_000;
+/**
+ * Past `post.ts`'s deadline for the post and its withdrawal, with room to spare: a record still
+ * `posting` then belongs to a process killed mid-post.
+ */
+const POSTING_MS = 120_000;
 
 /**
  * Posts again the settled notice of each decision settled here whose post failed, such as the
@@ -149,6 +154,7 @@ const RETRY_POST_MS = 5_000;
  * hour.
  */
 async function resettle(ctx: Ctx, s: Session, dir: Directory): Promise<void> {
+  failKilledPosts(ctx);
   const st = ctx.store.state();
   if (st.behind) return;
   const now = Date.now();
@@ -176,6 +182,31 @@ async function resettle(ctx: Ctx, s: Session, dir: Directory): Promise<void> {
       if (!(e instanceof ApiError)) return;
     }
   }
+}
+
+/**
+ * Settles a question whose `ask` was killed mid-post (SIGKILL, out of memory), as a failed post:
+ * withdrawn and its notice owed, so `resettle` closes its card if the post did land. Otherwise it
+ * shows as open for a month, and is never pruned or re-sealed. One already answered did land: it
+ * is only marked posted.
+ */
+function failKilledPosts(ctx: Ctx): void {
+  const now = ctx.now().getTime();
+  const stale = (a: { posting?: boolean; askedAt: string }) =>
+    a.posting && now - Date.parse(a.askedAt) > POSTING_MS;
+  if (!Object.values(ctx.store.state().asked).some(stale)) return;
+  ctx.store.updateState((st) => {
+    for (const [id, a] of Object.entries(st.asked)) {
+      if (!stale(a)) continue;
+      delete a.posting;
+      if (st.answers[id] || a.settled) continue;
+      a.settled = true;
+      a.unposted = true;
+      a.settledAt = iso(ctx.now());
+      a.outcome = "withdrawn";
+      forget(a);
+    }
+  });
 }
 
 /**
