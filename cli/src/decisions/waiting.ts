@@ -96,6 +96,7 @@ export async function postWaiting(
     dir: signedHead(dir),
   } satisfies Waiting;
   const item = seal("waiting", body, { id: s.machine.id, signKey: s.keys.sign.privateKey }, to);
+  const started = Date.now();
   for (let attempt = 0; ; attempt++) {
     try {
       // Both flips push: a phone moves the question's notification between its channels (#191).
@@ -104,11 +105,15 @@ export async function postWaiting(
     } catch (e) {
       if (e instanceof ApiError && e.code === "already-answered")
         throw new UsageError(`${named(id, asked.question)} was already answered`);
-      const pause = WAITING_RETRY_MS[attempt];
       const passing =
         (e instanceof ApiError && (e.status === 429 || e.status >= 500)) ||
         e instanceof Unreachable;
-      if (pause === undefined || !passing || signal.aborted) throw cut(e);
+      const step = WAITING_RETRY_MS[attempt];
+      // A 429's Retry-After, when it still fits before the deadline.
+      const after = e instanceof ApiError && e.retryAfter ? e.retryAfter * 1000 : undefined;
+      const pause = step === undefined ? undefined : (after ?? step);
+      const left = WAITING_MS - (Date.now() - started);
+      if (pause === undefined || pause >= left || !passing || signal.aborted) throw cut(e);
       await ctx.sleep(pause);
       if (signal.aborted) throw cut(signal.reason);
     }
