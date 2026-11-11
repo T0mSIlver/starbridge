@@ -342,6 +342,36 @@ test("a withheld directory entry pauses the reporter; the exit still goes out (#
   expect(posts.at(-1)?.exit?.code).toBe(0);
 });
 
+test("the reporter ends the exit's post when it stops waiting, so the CLI exits", async () => {
+  const ctx = testCtx();
+  const signals: AbortSignal[] = [];
+  const reporter = new Reporter(
+    {
+      id: "r_1",
+      title: "t",
+      reason: "r",
+      startedAt: "2026-10-05T10:00:00Z",
+      project: "p",
+      session: "",
+    },
+    // A server that takes each post and never answers.
+    (_input, signal) => {
+      signals.push(signal);
+      return new Promise<void>((_, reject) =>
+        signal.addEventListener("abort", () => reject(signal.reason), { once: true }),
+      );
+    },
+    ctx,
+    { progressMs: 100, heartbeatMs: 5_000, finalMs: 50 },
+  );
+  reporter.start();
+  await reporter.finish(0);
+  expect(signals.length).toBeGreaterThan(0);
+  expect(signals.every((s) => s.aborted)).toBe(true);
+  await Bun.sleep(20);
+  expect(ctx.errors).toEqual([]);
+});
+
 test("the plugin's SessionStart hook adds the rule to reach the owner and the run rule, and ignores a rules.md", async () => {
   const hook = join(import.meta.dir, "..", "..", "plugin", "hooks", "session-start.sh");
   const ctx = testCtx();
