@@ -953,6 +953,26 @@ test("ask --waiting pushes once, through its waiting state, so the notification 
   expect(server.pushed).toEqual(["waiting"]);
 });
 
+test("ask --waiting still notifies when its first waiting post fails", async () => {
+  const { Api, ApiError } = await import("../src/api");
+  const ctx = await paired(server);
+  ctx.env.STARBRIDGE_NO_AGENT = "1";
+  const postItem = Api.prototype.postItem;
+  let failed = 0;
+  // One 503 on the waiting item, as a deploy or a blip between the two posts gives.
+  Api.prototype.postItem = async function (item, signal) {
+    if (item.kind === "waiting" && failed++ === 0) throw new ApiError(503, "unavailable");
+    return postItem.call(this, item, signal);
+  };
+  try {
+    expect(await run([...ASK, "--waiting", "--session", "s"], ctx)).toBe(0);
+  } finally {
+    Api.prototype.postItem = postItem;
+  }
+  expect(failed).toBe(2);
+  expect(server.pushed).toEqual(["waiting"]);
+});
+
 test("Ctrl-C during ask --waiting's waiting post exits 130", async () => {
   const { Api } = await import("../src/api");
   const ctx = await paired(server);

@@ -25,6 +25,12 @@ import { dropRevokedNow } from "./trust";
  * SIGTERM, as #1288 was for the decision's post.
  */
 const WAITING_MS = 15_000;
+/**
+ * Pauses before posting a waiting state again after a 429, a 5xx or a network error. A
+ * question asked `--waiting` is posted quiet and only its waiting state pushes, so one failure
+ * would leave the owner without a notification.
+ */
+const WAITING_RETRY_MS = [500, 2_000];
 
 /**
  * Posts decision `id`'s waiting state under the one id it keeps. Only a flip to `waiting`
@@ -90,13 +96,22 @@ export async function postWaiting(
     dir: signedHead(dir),
   } satisfies Waiting;
   const item = seal("waiting", body, { id: s.machine.id, signKey: s.keys.sign.privateKey }, to);
-  try {
-    // Both flips push: a phone moves the question's notification between its channels (#191).
-    await s.api.postItem(item, signal);
-  } catch (e) {
-    if (e instanceof ApiError && e.code === "already-answered")
-      throw new UsageError(`${named(id, asked.question)} was already answered`);
-    throw cut(e);
+  for (let attempt = 0; ; attempt++) {
+    try {
+      // Both flips push: a phone moves the question's notification between its channels (#191).
+      await s.api.postItem(item, signal);
+      break;
+    } catch (e) {
+      if (e instanceof ApiError && e.code === "already-answered")
+        throw new UsageError(`${named(id, asked.question)} was already answered`);
+      const pause = WAITING_RETRY_MS[attempt];
+      const passing =
+        (e instanceof ApiError && (e.status === 429 || e.status >= 500)) ||
+        e instanceof Unreachable;
+      if (pause === undefined || !passing || signal.aborted) throw cut(e);
+      await ctx.sleep(pause);
+      if (signal.aborted) throw cut(signal.reason);
+    }
   }
   ctx.store.updateState((st) => {
     const a = st.asked[id];
