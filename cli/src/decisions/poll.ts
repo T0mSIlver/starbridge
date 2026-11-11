@@ -154,9 +154,10 @@ const POSTING_MS = 120_000;
  * hour.
  */
 async function resettle(ctx: Ctx, s: Session, dir: Directory): Promise<void> {
+  // Behind, an answer to it may be held: it counts once the directory catches up.
+  if (ctx.store.state().behind) return;
   failKilledPosts(ctx);
   const st = ctx.store.state();
-  if (st.behind) return;
   const now = Date.now();
   const due = Object.entries(st.asked).filter(
     ([id, a]) =>
