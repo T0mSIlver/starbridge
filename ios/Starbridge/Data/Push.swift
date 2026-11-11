@@ -214,6 +214,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
             await store.denyFromNotification(id)
         case "page":
             // The app may have been closed when the question came: the list can lack it until fetched.
+            let store = store
             try? await store.serial { if store.decision(id) == nil { try await store.fetch(id) } }
             if let url = store.decision(id)?.body.answerIn.flatMap({ URL(string: $0.url) }) { await UIApplication.shared.open(url) }
             store.openRequest = .decision(id)
