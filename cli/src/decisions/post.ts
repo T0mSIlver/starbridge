@@ -189,6 +189,8 @@ export async function ask(
   );
   ctx.out(decision.id);
   if (warning) ctx.err(warning);
+  // Ctrl-C during the waiting state's post, which postDecision lets fail quietly.
+  if (ctx.signal?.aborted) return 130;
   if (!opts.wait) {
     const d = promise(route);
     ctx.err(deliveryLine(decision.id, d));

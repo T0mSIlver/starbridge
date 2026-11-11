@@ -953,6 +953,29 @@ test("ask --waiting pushes once, through its waiting state, so the notification 
   expect(server.pushed).toEqual(["waiting"]);
 });
 
+test("Ctrl-C during ask --waiting's waiting post exits 130", async () => {
+  const { Api } = await import("../src/api");
+  const ctx = await paired(server);
+  ctx.env.STARBRIDGE_NO_AGENT = "1";
+  const stop = new AbortController();
+  const postItem = Api.prototype.postItem;
+  // The waiting post reaches a server that never answers; Ctrl-C comes meanwhile.
+  Api.prototype.postItem = async function (item, signal) {
+    if (item.kind !== "waiting") return postItem.call(this, item, signal);
+    stop.abort();
+    await new Promise((_, reject) => {
+      if (signal?.aborted) reject(signal.reason);
+      signal?.addEventListener("abort", () => reject(signal.reason), { once: true });
+    });
+  };
+  try {
+    const asked = run([...ASK, "--waiting"], { ...ctx, signal: stop.signal });
+    expect(await Promise.race([asked, Bun.sleep(4000).then(() => "still running")])).toBe(130);
+  } finally {
+    Api.prototype.postItem = postItem;
+  }
+});
+
 test("a decision names its agent and the machine's kind, which config sets", async () => {
   const ctx = await paired(server);
   expect(ctx.store.agentConfig().machineKind).toBeDefined();
