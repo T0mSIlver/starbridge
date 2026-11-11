@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
-import type { Waiting } from "@starbridge/protocol";
-import { ApiError } from "../api";
+import type { Directory, Waiting } from "@starbridge/protocol";
+import { Interrupted } from "../agent/client";
+import { ApiError, Unreachable } from "../api";
 import {
   type Ctx,
   devices,
@@ -19,15 +20,24 @@ import { takeUnseen } from "./take";
 import { dropRevokedNow } from "./trust";
 
 /**
+ * How long a waiting state's post may take: a server that takes the connection and never
+ * answers would otherwise hold `wait`, `waiting` and `ask --waiting` past their timeout and
+ * SIGTERM, as #1288 was for the decision's post.
+ */
+const WAITING_MS = 15_000;
+
+/**
  * Posts decision `id`'s waiting state under the one id it keeps. Only a flip to `waiting`
  * pushes; posting the state it already has does nothing. Returns whether it
- * posted. A decision answered meanwhile throws a UsageError saying so.
+ * posted. A decision answered meanwhile throws a UsageError saying so. `stop` cuts it short too,
+ * as a `wait --timeout` does.
  */
 export async function postWaiting(
   ctx: Ctx,
   s: Session,
   id: string,
   state: Waiting["state"],
+  stop?: AbortSignal,
 ): Promise<boolean> {
   const asked = ctx.store.state().asked[id];
   if (!asked) throw new UsageError(`${id} is not a decision this machine asked`);
@@ -52,7 +62,23 @@ export async function postWaiting(
   const early = next - ctx.now().getTime();
   if (early > 0) await new Promise((r) => setTimeout(r, Math.min(early, 1000)));
   const at = iso(new Date(Math.max(ctx.now().getTime(), next)));
-  const dir = await refreshDirectory(ctx, s);
+  const deadline = AbortSignal.timeout(WAITING_MS);
+  const signal = AbortSignal.any(
+    [ctx.signal, stop, deadline].filter((x): x is AbortSignal => x !== undefined),
+  );
+  // Ctrl-C exits 130, as everywhere (CONTRACT.md); the deadline says what it cut.
+  const cut = (e: unknown) =>
+    ctx.signal?.aborted
+      ? new Interrupted()
+      : deadline.aborted
+        ? new Unreachable(`the server did not take the waiting state within ${WAITING_MS / 1000} s`)
+        : e;
+  let dir: Directory;
+  try {
+    dir = await refreshDirectory(ctx, s, signal);
+  } catch (e) {
+    throw cut(e);
+  }
   const to = devices(ctx, dir);
   const body = {
     v: 1 as const,
@@ -66,11 +92,11 @@ export async function postWaiting(
   const item = seal("waiting", body, { id: s.machine.id, signKey: s.keys.sign.privateKey }, to);
   try {
     // Both flips push: a phone moves the question's notification between its channels (#191).
-    await s.api.postItem(item);
+    await s.api.postItem(item, signal);
   } catch (e) {
     if (e instanceof ApiError && e.code === "already-answered")
       throw new UsageError(`${named(id, asked.question)} was already answered`);
-    throw e;
+    throw cut(e);
   }
   ctx.store.updateState((st) => {
     const a = st.asked[id];
@@ -115,6 +141,8 @@ export async function markWaiting(ctx: Ctx, post: () => Promise<unknown>): Promi
   try {
     await post();
   } catch (e) {
+    // Ctrl-C: the caller exits 130 and says nothing more.
+    if (ctx.signal?.aborted) return;
     ctx.err(`starbridge: could not mark it waiting: ${(e as Error).message}`);
   }
 }

@@ -1347,6 +1347,29 @@ test("SIGTERM ends an ask whose post the server never answers (#1288)", async ()
   expect(await Promise.race([asked, Bun.sleep(5000).then(() => "still running")])).toBe(130);
 });
 
+test("wait --timeout ends on time when the server never answers its waiting state", async () => {
+  const ctx = await paired(server);
+  ctx.env.STARBRIDGE_NO_AGENT = "1";
+  expect(await run([...ASK, "--session", "s"], ctx)).toBe(0);
+  const id = ctx.lines.at(-1) as string;
+  server.stalls.push("GET /directory");
+  const waiting = run(["wait", id, "--timeout", "1"], ctx);
+  expect(await Promise.race([waiting, Bun.sleep(4000).then(() => "still running")])).toBe(2);
+});
+
+test("SIGTERM ends waiting <id> when the server never answers", async () => {
+  const ctx = await paired(server);
+  ctx.env.STARBRIDGE_NO_AGENT = "1";
+  expect(await run([...ASK, "--session", "s"], ctx)).toBe(0);
+  const id = ctx.lines.at(-1) as string;
+  server.stalls.push("GET /directory");
+  const stop = new AbortController();
+  const waiting = run(["waiting", id], { ...ctx, signal: stop.signal });
+  await until(() => server.log.filter((l) => l === "GET /directory").length > 1);
+  stop.abort();
+  expect(await Promise.race([waiting, Bun.sleep(4000).then(() => "still running")])).toBe(130);
+});
+
 test("a decision whose post lost its reply is withdrawn, so its card does not stay on the devices (#1289)", async () => {
   const ctx = await paired(server);
   server.lostReplies.push("POST /items");
