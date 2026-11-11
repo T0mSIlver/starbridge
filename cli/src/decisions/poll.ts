@@ -140,6 +140,7 @@ export async function poll(
 const retryAt = new Map<string, { at: number; wait: number }>();
 const RETRY_MIN_MS = 60_000;
 const RETRY_MAX_MS = 3_600_000;
+const RETRY_POST_MS = 5_000;
 
 /**
  * Posts again the settled notice of each decision settled here whose post failed, such as the
@@ -163,7 +164,10 @@ async function resettle(ctx: Ctx, s: Session, dir: Directory): Promise<void> {
   for (const [id, a] of due) {
     try {
       // `bulk`: a server that dropped the decision, or never stored it, has nothing to close.
-      await settleOne(ctx, s, dir, id, a.outcome, true, a.reason, ctx.signal);
+      // Bounded, as `post.ts`'s first try: a server that never replies must not hold the poll.
+      const deadline = AbortSignal.timeout(RETRY_POST_MS);
+      const signal = ctx.signal ? AbortSignal.any([ctx.signal, deadline]) : deadline;
+      await settleOne(ctx, s, dir, id, a.outcome, true, a.reason, signal);
       retryAt.delete(id);
     } catch (e) {
       const wait = Math.min((retryAt.get(id)?.wait ?? RETRY_MIN_MS / 2) * 2, RETRY_MAX_MS);
