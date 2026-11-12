@@ -52,6 +52,7 @@ async function openDecision(
   const closing = closings.get(`${machine.id}/${body.id}`);
   const notice = closing?.notice;
   const answeredBy = notice && wonBy(ctx, notice, body as Decision);
+  const lost = !reply && notice ? lostReply(ctx, notice, body as Decision) : undefined;
   // Any other notice that closed it arrived in the same write, so it carries the same time; a
   // later one, after a device's answer, closed nothing.
   const settled =
@@ -78,7 +79,7 @@ async function openDecision(
     ...(settled ? { settled } : {}),
     ...(settled === "withdrawn" && notice?.reason ? { reason: notice.reason } : {}),
     ...(answeredBy ? { answeredBy } : {}),
-    ...(reply ? { reply: replyOf(reply) } : {}),
+    ...(reply ? { reply: replyOf(reply) } : lost ? { reply: lost } : {}),
   };
 }
 
@@ -89,17 +90,27 @@ async function openDecision(
 function wonBy(ctx: Ctx, notice: Settled, d: Omit<Decision, "images">): InboxItem["answeredBy"] {
   const by = notice.outcome === "device" ? notice.device : undefined;
   if (!by || by === ctx.device.id) return undefined;
-  // A device's notice with neither choice nor text applied a Done, on a decision that takes one
-  // (#539).
-  const reply: Reply | undefined =
-    notice.choice !== undefined
-      ? { choice: notice.choice }
-      : notice.text !== undefined
-        ? { text: notice.text }
-        : d.answerIn
-          ? { done: true }
-          : undefined;
+  const reply = noticeReply(notice, d);
   return reply && { device: ctx.dir.members.get(by)?.member.name ?? by, reply };
+}
+
+/**
+ * This browser's answer the machine took, from its settled notice, for an answer whose POST lost
+ * its reply before the sent answer was kept: undefined for any other notice.
+ */
+function lostReply(ctx: Ctx, notice: Settled, d: Omit<Decision, "images">): Reply | undefined {
+  if (notice.outcome !== "device" || notice.device !== ctx.device.id) return undefined;
+  return noticeReply(notice, d);
+}
+
+/**
+ * The reply a device's notice names. One with neither choice nor text applied a Done, on a
+ * decision that takes one (#539).
+ */
+function noticeReply(notice: Settled, d: Omit<Decision, "images">): Reply | undefined {
+  if (notice.choice !== undefined) return { choice: notice.choice };
+  if (notice.text !== undefined) return { text: notice.text };
+  return d.answerIn ? { done: true } : undefined;
 }
 
 /** The reply alone, without the time a sent answer is stored with. */
@@ -321,9 +332,11 @@ export async function loadInbox(
   // decision, which an earlier read already holds.
   for (const [key, { notice }] of closings) {
     const item = byId.get(notice.itemId);
-    const answeredBy = item && wonBy(ctx, notice, item.decision);
-    if (item && answeredBy && !item.reply && key === `${item.machine.id}/${notice.itemId}`)
-      byId.set(notice.itemId, { ...item, answeredBy });
+    if (!item || item.reply || key !== `${item.machine.id}/${notice.itemId}`) continue;
+    const answeredBy = wonBy(ctx, notice, item.decision);
+    const lost = lostReply(ctx, notice, item.decision);
+    if (answeredBy) byId.set(notice.itemId, { ...item, answeredBy });
+    else if (lost) byId.set(notice.itemId, { ...item, reply: lost });
   }
   const items = shown();
   await noteSnoozes(
