@@ -120,7 +120,11 @@ export class Decisions implements Feature {
     {
       method: "POST",
       path: "/v1/decisions/:id/waiting",
-      handle: async (req: { body: unknown; params: Record<string, string> }) => {
+      handle: async (req: {
+        body: unknown;
+        params: Record<string, string>;
+        signal: AbortSignal;
+      }) => {
         const state = (req.body as { state?: unknown } | undefined)?.state;
         if (state !== "working" && state !== "waiting")
           throw new HttpError(400, "bad-request", 'post {state: "working" | "waiting"}');
@@ -133,6 +137,8 @@ export class Decisions implements Feature {
           );
         // A revoked device's answer is dropped first, as every hand-out does (#491).
         if (state === "waiting") await this.beforeEvents();
+        // Taking marks the answer seen: a client that hung up meanwhile would never print it.
+        if (req.signal.aborted) return {};
         const taken = state === "waiting" ? takeUnseen(this.ctx.store, id) : undefined;
         if (taken) return { posted: false, ...taken };
         const posted = await postWaiting(this.ctx, session(this.ctx), id, state);
@@ -158,6 +164,7 @@ export class Decisions implements Feature {
         const wait = holdSeconds(b.wait === undefined ? undefined : String(b.wait));
         const end = Date.now() + wait * 1000;
         await this.beforeEvents();
+        if (req.signal.aborted) return {};
         // Without an answer, a decision's snooze, once per snooze (#571).
         const snoozed = () => {
           const until = id ? takeSnooze(this.ctx.store, id, this.ctx.now()) : undefined;
