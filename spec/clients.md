@@ -69,7 +69,7 @@
   before it reached the outbox. The notice blames the connection only when there is none:
   otherwise "Hold isn't sent yet. Retrying."
 - **History** lists answered questions and the last 7 days of prompts, with how and where each was
-  answered. A question settled `elsewhere` without a page to answer in was answered in the
+  answered, the latest answer first, so a question asked long ago and answered now leads (#2307). A question settled `elsewhere` without a page to answer in was answered in the
   agent's own picker or terminal, so it reads "at the keyboard", never "by the agent", which
   stays for a withdrawn question or one answered on its page (#865). A withdrawn question with a
   reason shows the reason in its place: "Withdrawn · Fixed it myself after rereading the logs"
