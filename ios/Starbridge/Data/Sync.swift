@@ -65,11 +65,21 @@ extension Store {
             .sorted { $0.snoozed! < $1.snoozed! }
     }
 
-    /** Answered questions, newest first, with this iPhone's unsent ones (#895). */
+    /**
+     * Answered questions, the latest answer first as on the web and Android (#2307), after this
+     * iPhone's unsent ones (#895). Ties keep the newest question first.
+     */
     var history: [SavedDecision] {
         if withheldWhy != nil { return [] }
         let sending = unsent
-        return saved.decisions.filter { !$0.isOpen || sending[$0.id] != nil }.reversed()
+        let shown: [SavedDecision] = saved.decisions.filter { !$0.isOpen || sending[$0.id] != nil }.reversed()
+        // One still sending has no answer time yet: it goes first.
+        func at(_ d: SavedDecision) -> Date {
+            if let answeredAt = d.answeredAt { return Dates.instant(answeredAt) }
+            return sending[d.id] != nil ? .distantFuture : Dates.instant(d.body.createdAt)
+        }
+        let keyed: [(at: Date, index: Int, decision: SavedDecision)] = shown.enumerated().map { (at($0.element), $0.offset, $0.element) }
+        return keyed.sorted { $0.at != $1.at ? $0.at > $1.at : $0.index < $1.index }.map { $0.decision }
     }
 
     var openPrompts: [SavedPrompt] {
