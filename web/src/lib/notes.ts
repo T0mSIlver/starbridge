@@ -44,3 +44,12 @@ export function promptNote(item: PromptItem): { title: string; body: string } {
 export function itemPage(id: string | undefined): string {
   return id ? `/?item=${encodeURIComponent(id)}` : "/";
 }
+
+/**
+ * Whether a window shows the app, whose pages open the item a notification names. The docs, the
+ * legal pages and the samples have no such listener.
+ */
+export function isAppPage(url: string): boolean {
+  const path = new URL(url).pathname;
+  return path === "/" || /^\/(devices|pair|quotas|settings)(\/|$)/.test(path);
+}

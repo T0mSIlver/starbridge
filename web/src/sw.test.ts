@@ -29,6 +29,21 @@ let rings = 0;
 /** Set to make the browser refuse the next notification. */
 let refuseNext = false;
 const errors: string[] = [];
+/** What a notification's click did to the windows: focus, post or open. */
+const clicked: string[] = [];
+function tab(url: string) {
+  return {
+    url,
+    focus: async () => {
+      clicked.push(`focus ${url}`);
+    },
+    postMessage: (m: { type: string; error?: string; id?: string }) => {
+      if (m.error !== undefined) errors.push(m.error);
+      if (m.type === "starbridge:open") clicked.push(`open ${m.id} in ${url}`);
+    },
+  };
+}
+let windows = [tab("https://starbridge.test/")];
 /** This browser's push service: Chrome's unless a test sets Safari's. */
 let endpoint = "https://fcm.googleapis.com/fcm/send/x";
 function note(title: string, tag: string, data?: unknown): Note {
@@ -64,12 +79,10 @@ Object.assign(globalThis, {
     },
     // The open page, which the worker tells why a push showed nothing.
     clients: {
-      matchAll: async () => [
-        {
-          postMessage: (m: { type: string; error?: string }) =>
-            m.error !== undefined && errors.push(m.error),
-        },
-      ],
+      matchAll: async () => windows,
+      openWindow: async (url: string) => {
+        clicked.push(`open ${url}`);
+      },
     },
   },
 });
@@ -435,4 +448,30 @@ test("records an earlier release kept stay as they were; the pushes' own goes be
     rang: true,
     closed: true,
   });
+});
+
+test("a notification's click opens its item in a window of the app, never in a docs or legal page", async () => {
+  const click = async () => {
+    const onClick = listeners.get("notificationclick") as unknown as (e: object) => void;
+    let done: Promise<unknown> = Promise.resolve();
+    onClick({
+      notification: { data: { account: ctx.account, id: "d_click" }, close: () => {} },
+      action: "",
+      waitUntil: (p: Promise<unknown>) => {
+        done = p;
+      },
+    });
+    await done;
+  };
+  const docs = tab("https://starbridge.test/docs/cli");
+  windows = [docs, tab("https://starbridge.test/terms"), tab("https://starbridge.test/quotas")];
+  await click();
+  expect(clicked.splice(0)).toEqual([
+    "focus https://starbridge.test/quotas",
+    "open d_click in https://starbridge.test/quotas",
+  ]);
+  windows = [docs];
+  await click();
+  expect(clicked.splice(0)).toEqual(["open /?item=d_click"]);
+  windows = [tab("https://starbridge.test/")];
 });
