@@ -139,6 +139,22 @@ class OwnerTokenSignInTest {
         assertEquals(null, store.notice.value)
     }
 
+    @Test fun anotherServerThatServesThisReleaseEndsTheUpdateScreen() {
+        // A server that refuses this release, then another that serves it: the first's refusal must not outlive the sign-in.
+        http.enqueue(json(426, """{"error":"client-too-old","detail":"update","client":"android","minimum":"1.2.0"}"""))
+        http.enqueue(json(200, """{"session":"s"}"""))
+        http.enqueue(json(200, """{"account":"acct","member":null,"role":"device"}"""))
+        http.enqueue(json(200, """{"entries":[]}"""))
+        http.start()
+        val store = store()
+        store.signInWithOwnerToken(http.url("/").toString(), "token")
+        until { !store.busy.value && store.notice.value != null }
+        assertEquals("1.2.0", store.tooOld.value)
+        store.signInWithOwnerToken(http.url("/").toString(), "token")
+        until { store.phase.value is dev.starbridge.app.data.Phase.NoDevice }
+        assertEquals(null, store.tooOld.value)
+    }
+
     @Test fun gitHubOnAServerWithoutASchemeGoesToHttps() {
         // Self-hosted GitHub sign-in reads the address the same way.
         val url = store().gitHubSignInUrl("demo.example.com/")
