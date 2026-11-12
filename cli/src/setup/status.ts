@@ -1,7 +1,7 @@
 /** `starbridge status`: setup's checks, at any time. */
 import { join } from "node:path";
 import type { Status } from "../agent/api";
-import { AgentClient } from "../agent/client";
+import { AgentClient, NoAgent } from "../agent/client";
 import { REMOVED, REMOVED_CLOUD } from "../api";
 import { autoOn, RETRY_MS } from "../autoupdate";
 import { hooklessCopies } from "../claude";
@@ -25,6 +25,11 @@ async function agentStatus(sys: Sys): Promise<Status | string> {
   try {
     return await agent.call<Status>("GET", "/v1/status", undefined, 5_000);
   } catch (e) {
+    // A socket that refuses connections is there: an agent whose queue is full, as when it cannot
+    // take the config lock, or one a crashed agent left (#2303).
+    const code = e instanceof NoAgent ? e.code : (e as NodeJS.ErrnoException).code;
+    if (code === "ECONNREFUSED" || code === "EAGAIN")
+      return `not answering (${agent.socket} refuses connections)`;
     return `not running (${(e as Error).message})`;
   }
 }

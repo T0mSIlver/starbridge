@@ -92,7 +92,7 @@ const HELP = `starbridge: post decisions to your devices, report runs, upload qu
   starbridge pair --confirm | --reject
       Answer that for a waiting \`pair\` or \`setup\` that has no terminal.
       --server <url>          a self-hosted server (default: $STARBRIDGE_SERVER, else
-                              https://starbridge.run)
+                              this machine's, else https://starbridge.run)
 
   starbridge machine export
       Print this machine's identity, its keys included, as one line. Where the config
@@ -139,7 +139,8 @@ const HELP = `starbridge: post decisions to your devices, report runs, upload qu
       notifies them once more), or back to working on other things. An answer that came in
       and has not reached you yet, \`waiting\` prints instead.
 
-  starbridge settle <decision id> [--outcome elsewhere|withdrawn] [--reason <text>]
+  starbridge settle <decision id> [--outcome withdrawn] --reason <text>
+  starbridge settle <decision id> [--outcome elsewhere]
   starbridge settle --session <id> | --all [--yes] [--outcome elsewhere|withdrawn]
       Close a decision without a Starbridge answer: answered on its --answer-in page
       (elsewhere, the default for those) or no longer needed (withdrawn). Devices move it

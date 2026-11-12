@@ -63,7 +63,7 @@
   with a long history, read twice since a poll started its own read before the first one ended.
   Now the browser keeps what the server listed in IndexedDB, still sealed to its device key and
   opened again on each load, and reads only what came after: its 500 latest answered questions
-  and every open one, as the Android and iPhone apps keep 500. Each load first lists the open
+  and every open one, as the Android and iPhone apps do. Each load first lists the open
   questions, so a kept one the server dropped goes, and an open one neither kept nor listed after
   the kept cursor means another or a reset server, which starts the read from scratch. Inbox
   reads run one at a time: a poll or a push during a read waits for it and starts from its
@@ -78,8 +78,9 @@
   the desktop app, which notifies from its inbox and prompts and so reads them while hidden (#886).
 - **Notifications.** The service worker shows one per question and closes it once answered (on Safari the page closes it; spec/push.md, #1363). Its
   actions answer only for the account it was shown for (#274). Signing out, revocation or adopting
-  new keys closes them all (#311). A click opens the question or prompt it is about, in the open
-  tab or a new one, as the apps' do; the placeholder opens the inbox (#2218).
+  new keys closes them all (#311). A click opens the question or prompt it is about, in the
+  app's open tab or a new one, as the apps' do, never a docs or legal tab, which cannot open it;
+  the placeholder opens the inbox (#2218).
 - **Sound**: off by default. The page plays it when a push reaches it, since a service worker
   cannot play audio, so it needs an open page and this browser's notifications: while they are
   off the switch shows off, and turning it on asks for them first (#1061). A closed web app

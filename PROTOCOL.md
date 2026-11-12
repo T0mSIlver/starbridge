@@ -800,7 +800,8 @@ waits a little, and goes only if nothing answered it meanwhile.
   devices that are themselves present, and waits for the others while the account stays present,
   then `pushHold` seconds from when it stopped (#1003); never less than `pushHold` seconds from
   the post. Present again before then, it waits again. It waits at most 30 minutes past that
-  time, whoever stays present (#2189). A re-seal's new devices join the same hold.
+  time, whoever stays present (#2189). A re-seal's new devices join the same hold, and an item
+  posted again `quiet` under its id, as a machine re-sends a `waiting` state, keeps it.
 - **When the hold ends**, within a few seconds, the server pushes the item to the
   devices it held it from, if it is still open, each item once, all those waiting together: a permission unanswered, a decision, or a
   `waiting` item's decision, unanswered and not snoozed. The hold is stored with the item, so a
@@ -810,6 +811,10 @@ waits a little, and goes only if nothing answered it meanwhile.
   during the hold skips them too, and a snoozed item's hold ends without a push. When the snooze
   wakes, it pushes them as well, so the answer and settled notice reach them from then on (#908).
 - **Devices** list a held item at once, as any other: only its push waits.
+- **Snoozed during the hold**, the devices the snooze skipped get, when snoozes wake, only the
+  snooze that came last, never an earlier one it replaced. A snooze that brings the question back
+  now, once its hold ended snoozed, starts the hold again, and its end pushes them the question
+  or its `waiting` item (#2312).
 
 ## Runs
 

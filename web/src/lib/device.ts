@@ -495,12 +495,16 @@ export async function startJoin(account: string, name: string): Promise<Join> {
   const claim = newClaimSecret();
   const request = pairingRequest({ v: 1, rendezvous: code.rendezvous, ...member, at: now() }, code);
   await store.put("pending", record, account);
-  await api.requestPairing(request, hashClaim(claim));
+  const { expiresInSeconds } = await api.requestPairing(request, hashClaim(claim));
+  const expiresAt = new Date(Date.now() + expiresInSeconds * 1000).toISOString();
   const abort = new AbortController();
   const done = (async () => {
     for (;;) {
       if (abort.signal.aborted) throw new Error("cancelled");
-      const res = await api.pairingResult(code.rendezvous, claim, 25, abort.signal);
+      // A failed poll waits on while the code is valid: the other device may approve it still.
+      const res = await retrying(expiresAt, abort.signal, () =>
+        api.pairingResult(code.rendezvous, claim, 25, abort.signal),
+      );
       if (res) return finishJoin(account, code, res.approval, record, member);
     }
   })();

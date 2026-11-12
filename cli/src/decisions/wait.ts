@@ -52,12 +52,16 @@ export async function wait(
   if (shut) throw shut;
   const already = takeAnswer(ctx.store, target, opts.session);
   if (already) return report(already);
-  if (target && !opts["no-mark"])
-    await markWaiting(ctx, () => postWaiting(ctx, s, target, "waiting"));
-  // A snooze is told only after a poll: the one cached may be over, or answered since.
-
   let deadline = Number.POSITIVE_INFINITY;
   if (opts.timeout) deadline = ctx.now().getTime() + parseDuration(opts.timeout);
+  if (target && !opts["no-mark"]) {
+    // Within --timeout: the loop below then says no answer came.
+    const stop = Number.isFinite(deadline)
+      ? AbortSignal.timeout(Math.max(0, deadline - ctx.now().getTime()))
+      : undefined;
+    await markWaiting(ctx, () => postWaiting(ctx, s, target, "waiting", stop));
+  }
+  // A snooze is told only after a poll: the one cached may be over, or answered since.
 
   // A wait for one decision reads from where that decision was asked; a wait for any answer
   // reads from, and moves, the shared cursor.

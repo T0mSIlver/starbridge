@@ -88,9 +88,18 @@ beforeAll(async () => {
     Promise.reject(new Error("no WebCrypto keys"))) as typeof crypto.subtle.generateKey;
   await api.ownerSignIn("owner-secret");
   const { account } = await api.me();
+  // The first result poll fails: the join waits on while its code is valid.
+  let failed = false;
+  forge = (path) => {
+    if (failed || !path.endsWith("/result?wait=25")) return undefined;
+    failed = true;
+    return Response.json({ error: "internal" }, { status: 500 });
+  };
   const join = await device.startJoin(account, "This browser");
   await live.approve(join.code);
   await join.done;
+  forge = undefined;
+  expect(failed).toBe(true);
   ctx = (await device.deviceContext(account)) as device.Ctx;
 });
 afterAll(() => {
@@ -343,17 +352,17 @@ test("a machine's settled notice closes only that machine's decisions (#362)", a
     });
     // Answered on the phone: the asking machine's later notice says with what, and only its own
     // counts (#330).
-    const told = (by: (typeof machines)[0], choice: string) => ({
+    const told = (by: (typeof machines)[0], choice: string, device = "phone") => ({
       item: seal(
         "settled",
         {
           v: 1,
-          id: `s_${choice}`,
+          id: `s_${device}_${choice}`,
           itemId: "d_asked",
           to,
           at,
           outcome: "device",
-          device: "phone",
+          device,
           choice,
         },
         { id: by.member.id, signKey: by.keys.sign.privateKey },
@@ -379,6 +388,13 @@ test("a machine's settled notice closes only that machine's decisions (#362)", a
     expect(won?.settled).toBeUndefined();
     expect(outcomeText(won as InboxItem)).toBe("No");
     expect(closedByPhrase(won as InboxItem)).toBe(`on ${phone}`);
+    // This browser's answer, its reply lost before the sent answer was kept: the notice names it.
+    items.length = 0;
+    items.push(told(asks, "Yes", fresh.device.id));
+    const mine = (await device.loadInbox(fresh, before)).items.find(
+      (i) => i.decision.id === "d_asked",
+    ) as InboxItem;
+    expect([outcomeText(mine), closedByPhrase(mine)]).toEqual(["Yes", "on this browser"]);
   } finally {
     globalThis.fetch = served;
   }
