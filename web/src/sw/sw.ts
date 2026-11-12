@@ -22,7 +22,7 @@ import {
   openWaiting,
   Withheld,
 } from "../lib/device";
-import { itemPage, promptNote, questionNote } from "../lib/notes";
+import { isAppPage, itemPage, promptNote, questionNote } from "../lib/notes";
 import { answerPlace } from "../lib/outcome";
 import { applePush, fallback, openPush, type Shown, type Unshown } from "../lib/pushFallback";
 import * as store from "../lib/store";
@@ -454,7 +454,8 @@ async function onClick(n: Notification, action: string): Promise<void> {
   // The click opens the item it is about, as the apps' do, not just the inbox (#2218).
   const id = data?.item?.decision.id ?? data?.id;
   const windows = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
-  const open = windows[0];
+  // A docs or legal tab would only come to the front: the item opens in the app.
+  const open = windows.find((w) => isAppPage(w.url));
   if (open) {
     await open.focus();
     if (id) open.postMessage({ type: "starbridge:open", id });
