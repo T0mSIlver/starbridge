@@ -22,7 +22,7 @@ import {
 } from "electron";
 import { Answers } from "./answers";
 import { appMenu, contextMenu } from "./appmenu";
-import { badgeText } from "./badge";
+import { badgeText, trayCount } from "./badge";
 import { type Answer, type Entry, parseAnswered, parseState } from "./bridge";
 import { macHours } from "./clock";
 import { MenuBar, trayImageName } from "./menubar";
@@ -186,7 +186,7 @@ async function ready(): Promise<void> {
   ipcMain.on("state", (e, x) => {
     const state = fromPage(e) && parseState(x);
     if (!state) return;
-    needs = state.count;
+    needs = trayCount(state, needs);
     badge = badgeText(state) ?? badge;
     paintBadge();
     paintTray();
