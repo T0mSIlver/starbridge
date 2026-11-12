@@ -1435,6 +1435,48 @@ test("a decision whose post lost its reply is withdrawn, so its card does not st
   ]);
 });
 
+test("a withdrawal that failed with the post it follows goes again at the next poll (#1289)", async () => {
+  const ctx = await paired(server);
+  // The server stores the question and its reply is lost; the same outage takes the withdrawal.
+  server.lostReplies.push("POST /items");
+  const stop = new AbortController();
+  const asked = run([...ASK, "--session", "s"], { ...ctx, signal: stop.signal });
+  await until(async () => (await server.opened("decision")).length === 1);
+  server.failures.push("POST /items");
+  stop.abort();
+  expect(await asked).toBe(130);
+  const [decision] = await server.opened("decision");
+  const id = decision?.id as string;
+  expect(ctx.store.state().asked[id]).toMatchObject({ settled: true, unposted: true });
+  expect(await server.opened("settled")).toEqual([]);
+  // The server is back: the agent's next poll withdraws the card from the devices.
+  await poll(ctx, session(ctx), { cursor: ctx.store.state().cursor, seconds: 0, shared: true });
+  expect(await server.opened("settled")).toMatchObject([{ itemId: id, outcome: "withdrawn" }]);
+  expect(ctx.store.state().asked[id]?.unposted).toBeUndefined();
+});
+
+test("a question whose ask was killed mid-post is withdrawn at a poll, not left open", async () => {
+  const ctx = await paired(server);
+  expect(await run([...ASK, "--session", "s"], ctx)).toBe(0);
+  const id = ctx.lines.at(-1) as string;
+  // Killed after the server stored it and before its reply: the record stays `posting`.
+  ctx.store.updateState((st) => {
+    (st.asked[id] as { posting?: boolean }).posting = true;
+  });
+  // Within the post's deadline, it may still be posting in another process.
+  await poll(ctx, session(ctx), { cursor: ctx.store.state().cursor, seconds: 0, shared: true });
+  expect(ctx.store.state().asked[id]?.posting).toBe(true);
+  const later = Date.now() + 3 * 60_000;
+  ctx.now = () => new Date(later);
+  await poll(ctx, session(ctx), { cursor: ctx.store.state().cursor, seconds: 0, shared: true });
+  expect(ctx.store.state().asked[id]).toMatchObject({ settled: true, outcome: "withdrawn" });
+  expect(ctx.store.state().asked[id]?.posting).toBeUndefined();
+  expect(await server.opened("settled")).toMatchObject([{ itemId: id, outcome: "withdrawn" }]);
+  ctx.lines.length = 0;
+  expect(await run(["decisions", "--open"], ctx)).toBe(0);
+  expect(ctx.lines).toEqual([]);
+});
+
 test("a waiting flip within the same second as the last one carries a later time (#1982)", async () => {
   const ctx = await paired(server);
   expect(await run([...ASK, "--session", "s"], ctx)).toBe(0);

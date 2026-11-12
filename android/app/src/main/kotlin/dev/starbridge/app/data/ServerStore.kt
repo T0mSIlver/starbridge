@@ -404,6 +404,7 @@ class ServerStore(
         // The next account's hold shows once its own read succeeds, as on the web (#1192).
         pushHold.value = null
         removalHold = null
+        tooOld.value = null
         wipes++
         joinJob?.cancel()
         showJob?.cancel()
@@ -500,6 +501,8 @@ class ServerStore(
         } catch (e: ApiException) {
             throw IllegalStateException(if (e.status == 401) "Sign-in failed: the server did not accept the session." else describe(e))
         }
+        // This server serves this release, whatever another one said.
+        tooOld.value = null
         val mine = saved.me
         if (mine != null && saved.pin != null && saved.joining == null && saved.digitJoin == null && secrets.signSk != null && me.account == saved.account) {
             // This phone is still a device: bind the new session with its signing key (PROTOCOL.md, "Auth").
@@ -923,7 +926,8 @@ class ServerStore(
     suspend fun syncQuotasQuietly(): Boolean {
         // Signed out: nothing to read, and nothing to retry.
         var done = phase.value != Phase.Ready
-        locked(showBusy = false) {
+        // A sync: a short outage leaves no notice for the next time the app opens (#920).
+        locked(showBusy = false, sync = true) {
             if (phase.value != Phase.Ready) return@locked
             // The directory first, as a full sync: a machine added since could not sign its snapshots otherwise.
             syncDirectory()

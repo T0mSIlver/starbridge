@@ -65,11 +65,21 @@ extension Store {
             .sorted { $0.snoozed! < $1.snoozed! }
     }
 
-    /** Answered questions, newest first, with this iPhone's unsent ones (#895). */
+    /**
+     * Answered questions, the latest answer first as on the web and Android (#2307), after this
+     * iPhone's unsent ones (#895). Ties keep the newest question first.
+     */
     var history: [SavedDecision] {
         if withheldWhy != nil { return [] }
         let sending = unsent
-        return saved.decisions.filter { !$0.isOpen || sending[$0.id] != nil }.reversed()
+        let shown: [SavedDecision] = saved.decisions.filter { !$0.isOpen || sending[$0.id] != nil }.reversed()
+        // One still sending has no answer time yet: it goes first.
+        func at(_ d: SavedDecision) -> Date {
+            if let answeredAt = d.answeredAt { return Dates.instant(answeredAt) }
+            return sending[d.id] != nil ? .distantFuture : Dates.instant(d.body.createdAt)
+        }
+        let keyed: [(at: Date, index: Int, decision: SavedDecision)] = shown.enumerated().map { (at($0.element), $0.offset, $0.element) }
+        return keyed.sorted { $0.at != $1.at ? $0.at > $1.at : $0.index < $1.index }.map { $0.decision }
     }
 
     var openPrompts: [SavedPrompt] {
@@ -311,6 +321,8 @@ extension Store {
         var wins: [(String, Settled)] = []
         var waits: [(String, Waiting)] = []
         var snoozes: [Snooze] = []
+        var read: Set<String> = []
+        var fromScratch = false
         while true {
             // An answered question's images download when its detail shows them (#1382).
             let page = try await api().items("decision,settled,waiting,snooze", after: cursor, openBlobs: true)
@@ -318,6 +330,7 @@ extension Store {
             if try await scan(page.items.map(\.item)) { return }
             let entries = entryJSON
             for listed in page.items {
+                if listed.item.kind == .decision { read.insert(listed.item.id) }
                 switch listed.item.kind {
                 case .waiting:
                     if let o = open(listed.item, entries: entries), let w = o.body as? Waiting { waits.append((o.from, w)) }
@@ -353,7 +366,13 @@ extension Store {
                 byId[d.id] = settledBy(o.from).map { closed(d, by: $0) } ?? d
             }
             cursor = page.cursor
-            if page.last { break }
+            if !page.last { continue }
+            // An open question neither kept nor listed after the cursor: the server is not the one
+            // these were kept from (restored from a backup, or reset). Read it all again, once a
+            // sync, as the web does (#1383).
+            guard !fromScratch, let listedOpen, listedOpen.contains(where: { !kept.contains($0) && !read.contains($0) }) else { break }
+            fromScratch = true
+            cursor = ""
         }
         // An update may list before the decision it is about, so they apply once all are read.
         for (from, w) in waits { if let d = byId[w.decisionId], let u = waited(d, from: from, w) { byId[w.decisionId] = u } }
@@ -370,8 +389,13 @@ extension Store {
         }
         var s = saved
         s.cursor = cursor
-        // As instants: whole-second and millisecond stamps sort differently as text (#1079).
-        s.decisions = Array(Dates.byInstant(Array(byId.values)) { $0.body.createdAt }.suffix(500))
+        if fromScratch { s.promptCursor = "" }
+        // As instants: whole-second and millisecond stamps sort differently as text (#1079). Every
+        // open question stays, with the 500 latest answered ones, as on the web: the cursor has
+        // passed a question cut here, so nothing would list it again.
+        let all = Dates.byInstant(Array(byId.values)) { $0.body.createdAt }
+        let cut = Set(all.filter { $0.answeredAt != nil }.dropLast(500).map(\.id))
+        s.decisions = all.filter { !cut.contains($0.id) }
         persist(s)
         SavedImage.prune(keeping: s.decisions)
         if listedOpen != nil { checkOpen = false }

@@ -231,6 +231,8 @@ export function AppProvider({
   // Images fetched on this page by question id: a read that started before keeps them (#1382).
   const shownImages = useRef(new Map<string, ShownImage[]>());
   const fetchingImages = useRef(new Set<string>());
+  // Prompt reads overlap too: one in flight at an answer must not show the prompt open again.
+  const promptRead = useRef(newestWins());
   // Inbox reads overlap (a load, pushes, polls): only the newest to start may land (#547).
   const inboxRead = useRef(newestWins());
   // And they run one at a time, so a poll during the first load reads after it, not the same
@@ -475,11 +477,12 @@ export function AppProvider({
   const refreshPrompts = useCallback(async () => {
     const fresh = await current();
     if (!fresh) return;
+    const landed = promptRead.current();
     const d = await load();
     const read = await holding(() =>
       Promise.all([d.loadPrompts(fresh), d.loadSettled(fresh, settledRef.current.cursor)]),
     );
-    if (!read) return;
+    if (!read || !landed()) return;
     const [open, notices] = read;
     const byKey = settledRef.current.byKey;
     for (const [k, v] of notices.settled) byKey.set(k, v);
@@ -688,6 +691,8 @@ export function AppProvider({
       const d = await load();
       try {
         const answeredAt = await whileSending(() => d.answerPermission(ctx, item, reply));
+        // A read already in flight may list the prompt open still: it must not land.
+        promptRead.current()();
         const at = Date.now();
         setPrompts((all) =>
           all.map((p) =>

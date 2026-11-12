@@ -134,12 +134,15 @@ internal class DecisionKind(
         val wins = mutableListOf<Pair<String, Settled>>()
         val waits = mutableListOf<Pair<String, Waiting>>()
         val snoozes = mutableListOf<Snooze>()
+        val read = mutableSetOf<String>()
+        var fromScratch = false
         while (true) {
             // An answered question's images download when its sheet shows them (#1382).
             val page = api().items("decision,settled,waiting,snooze", cursor, openBlobs = true)
             // Held: the cursor stays, so these items are read again once the hold ends.
             if (scan(page.items.map { it.item })) return
             for (listed in page.items) {
+                if (listed.item.kind == "decision") read += listed.item.id
                 if (listed.item.kind == "waiting") {
                     val (from, body) = open(listed.item) ?: continue
                     waits += from to body as Waiting
@@ -177,7 +180,13 @@ internal class DecisionKind(
                 byId[listed.item.id] = saved(listed.item, settledBy(from)?.let { closedBy(decision, it) } ?: decision)
             }
             cursor = page.cursor
-            if (page.last) break
+            if (!page.last) continue
+            // An open question neither kept nor listed after the cursor: the server is not the one
+            // these were kept from (restored from a backup, or reset). Read it all again, once a
+            // sync, as the web does (#1383).
+            if (fromScratch || listedOpen == null || listedOpen.all { it in kept || it in read }) break
+            fromScratch = true
+            cursor = ""
         }
         // An update may list before the decision it is about, so they apply once all are read.
         for ((from, w) in waits) byId[w.decisionId]?.let { d -> wait(d, from, w)?.let { byId[w.decisionId] = it } }
@@ -200,7 +209,12 @@ internal class DecisionKind(
                 alerts.cancel(id)
             }
         }
-        persist(saved.copy(cursor = cursor, decisions = byId.values.sortedBy { it.body.createdAt }.takeLast(500)))
+        // Every open question stays, with the 500 latest answered ones, as on the web: the cursor has
+        // passed a question cut here, so nothing would list it again.
+        val all = byId.values.sortedBy { it.body.createdAt }
+        val cut = all.filter { it.answeredAt != null }.dropLast(500).map { it.body.id }.toSet()
+        val prompts = if (fromScratch) "" else saved.promptCursor
+        persist(saved.copy(cursor = cursor, promptCursor = prompts, decisions = all.filter { it.body.id !in cut }))
         if (listedOpen != null) checkOpen = false
     }
 

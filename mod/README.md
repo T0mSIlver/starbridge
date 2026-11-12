@@ -24,8 +24,9 @@ To try a checkout in one session: `claude --plugin-dir mod`.
 
 ## How it works
 
-The mod skips `claude -p`, whose run ends with its last turn, told apart by
-`CLAUDE_CODE_ENTRYPOINT` (`sdk-cli`). An Agent SDK session (`sdk-ts`,
+In `claude -p`, whose run ends with its last turn, told apart by
+`CLAUDE_CODE_ENTRYPOINT` (`sdk-cli`), the mod submits no prompt: it hands each
+answer into the turn's next tool result (#2258). An Agent SDK session (`sdk-ts`,
 `sdk-py`) gets its loop once its first turn ends, since only an app that keeps
 the session open runs a second one.
 

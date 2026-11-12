@@ -140,8 +140,15 @@ internal class JoinKind(private val core: Core, private val joins: Joins) : Item
         val name = asks.value.find { it.id == id }?.name ?: "the device"
         val differed = compared?.first?.id == id
         compared = null
+        try {
+            core.api().cancelJoin(id)
+        } catch (e: Exception) {
+            // Still open on the server: the request stays, to refuse again, and the run's notice
+            // says why, as the web's card does (#2306).
+            comparison.value = Comparison.Idle
+            throw e
+        }
         core.alerts.cancel("join:$id")
-        runCatching { core.api().cancelJoin(id) }
         asks.value = asks.value.filter { it.id != id }
         comparison.value = Comparison.Done(if (differed) "Refused $name: the digits differed." else "Refused $name.")
     }

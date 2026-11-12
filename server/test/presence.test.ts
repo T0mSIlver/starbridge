@@ -97,13 +97,13 @@ function settled(d: SealedItem): SealedItem {
   return seal("settled", body, key(devbox), [phone.member, web.member]);
 }
 
-function snooze(d: SealedItem): SealedItem {
+function snooze(d: SealedItem, forMs = 3_600_000): SealedItem {
   const body: Snooze = {
     v: 1,
     id: `z${++n}`,
     decisionId: d.id,
     to: [devbox.id, phone.id, web.id],
-    until: new Date(Date.now() + 3_600_000).toISOString(),
+    until: new Date(Date.now() + forMs).toISOString(),
     at: new Date().toISOString(),
   };
   return seal("snooze", body, key(web), [devbox.member, phone.member, web.member]);
@@ -300,6 +300,18 @@ test("a waiting flip is held too, and a snooze during the hold keeps it quiet", 
   expect(sent).toEqual([]);
 });
 
+test("a held waiting state posted again quiet, as a re-seal for a new device does, keeps its hold", async () => {
+  await present(devbox);
+  const d = decision();
+  await post(devbox, { ...d, quiet: true });
+  await post(devbox, waiting(d));
+  await post(devbox, { ...waiting(d), quiet: true });
+  expect(sent).toEqual([]);
+  await present(devbox, false);
+  release(31_000);
+  expect(pushed()).toEqual([[[phone.id, web.id], "waiting", `w-${d.id}`]]);
+});
+
 test("a snooze that wakes after the hold lets the answer and settled notice reach every device", async () => {
   await present(web);
   const d = decision();
@@ -318,6 +330,49 @@ test("a snooze that wakes after the hold lets the answer and settled notice reac
   await post(devbox, settled(d));
   expect(pushed()).toEqual([[[phone.id, web.id], "settled", expect.any(String)]]);
 });
+
+test("a held question snoozed again elsewhere comes back to the phone at the later snooze's time only (#2312)", async () => {
+  await present(web);
+  const d = decision();
+  await post(devbox, d);
+  await post(web, snooze(d));
+  await present(web, false);
+  release(31_000);
+  const later = snooze(d, 24 * 3_600_000);
+  await post(web, later);
+  sent = [];
+  // The phone was sent neither snooze, so the first one's time must not ring it.
+  wakeSnoozes(s.deps.db, s.deps.push, 3072, Date.now() + 3_600_000 + 20_000);
+  expect(sent.filter((p) => p.to.includes(phone.id))).toEqual([]);
+  wakeSnoozes(s.deps.db, s.deps.push, 3072, Date.now() + 24 * 3_600_000 + 20_000);
+  expect(pushed()).toEqual([
+    [[web.id], "snooze", expect.any(String)],
+    [[phone.id, web.id], "snooze", later.id],
+  ]);
+});
+
+for (const shape of ["asked", "asked already waiting"] as const)
+  test(`a held question ${shape}, snoozed, then brought back now elsewhere pushes the phone once the owner leaves (#2312)`, async () => {
+    await present(web);
+    const d = decision();
+    const w = waiting(d);
+    if (shape === "asked") await post(devbox, d);
+    else {
+      await post(devbox, { ...d, quiet: true });
+      await post(devbox, w);
+    }
+    await post(web, snooze(d));
+    await present(web, false);
+    release(31_000);
+    await present(web);
+    await post(web, snooze(d, 0));
+    await present(web, false);
+    sent = [];
+    release(31_000);
+    expect(pushed()).toEqual([
+      shape === "asked" ? [[phone.id], "decision", d.id] : [[phone.id], "waiting", w.id],
+    ]);
+  });
 
 test("presence ends when its source says so or stops beating, and the hold time is the account's", async () => {
   await present(web);

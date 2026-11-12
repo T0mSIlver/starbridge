@@ -733,6 +733,30 @@ test("a unit's values keep %, $ and line breaks as systemd reads them back (#174
   expect(withInstalledPlaces({}, line).STARBRIDGE_CONFIG_DIR).toBe("/srv/a\nb %h");
 });
 
+test.skipIf(process.platform === "win32")(
+  "status tells a socket that refuses connections from no agent (#2303)",
+  async () => {
+    const m = await machine();
+    // Short enough for a unix socket on macOS, whose temporary folder is long.
+    const socket = join(mkdtempSync("/tmp/sb-"), "agent.sock");
+    m.ctx.env.STARBRIDGE_AGENT_SOCKET = socket;
+    expect(await status(m.sys)).toBe(0);
+    expect(m.ctx.lines).toContain(`Agent: not running (no agent on ${socket})`);
+    // A socket nothing accepts on, as one whose queue is full or one a killed agent left.
+    const child = Bun.spawn([
+      process.execPath,
+      "-e",
+      `require("node:net").createServer().listen(${JSON.stringify(socket)})`,
+    ]);
+    await until(() => existsSync(socket));
+    child.kill("SIGKILL");
+    await child.exited;
+    m.ctx.lines.length = 0;
+    expect(await status(m.sys)).toBe(0);
+    expect(m.ctx.lines).toContain(`Agent: not answering (${socket} refuses connections)`);
+  },
+);
+
 test("status reports the agent, the service and the plugins", async () => {
   const m = await machine();
   await startAgent(m.ctx);

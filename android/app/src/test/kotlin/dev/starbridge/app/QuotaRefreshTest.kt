@@ -30,6 +30,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.add
 import kotlinx.serialization.json.buildJsonArray
@@ -164,6 +165,14 @@ class QuotaRefreshTest {
         }
         refreshAndWait(store)
         assertEquals("1.2.0", store.tooOld.value)
+    }
+
+    @Test
+    fun theWidgetsReadLeavesNoNoticeWhenTheServerIsUnreachable() {
+        // The Quotas widget reads with the app closed: a short outage must not greet the owner at the next launch (#920).
+        val store = readyStore { path -> if (path == "/v1/directory") MockResponse(503, okhttp3.Headers.headersOf(), "") else null }
+        assertEquals(false, runBlocking { store.syncQuotasQuietly() })
+        assertNull(store.notice.value)
     }
 
     private fun refreshAndWait(store: ServerStore) {
