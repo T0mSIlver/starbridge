@@ -135,4 +135,65 @@ class DroppedQuestionTest {
         Thread.sleep(500)
         assertEquals(1, openReads.get())
     }
+
+    /** Every open question stays however many newer ones the phone keeps: the cursor has passed it. */
+    @Test
+    fun anOpenQuestionOutlivesFiveHundredAnsweredOnes() {
+        val account = "acct"
+        val start = java.time.Instant.parse("2026-09-01T12:00:00Z")
+        val signKeys = sodium.signKeyPair()
+        val boxKeys = sodium.boxKeyPair()
+        val phone = Member("phone", "device", "Phone", toB64(boxKeys.public), toB64(signKeys.public))
+        val machineSign = sodium.signKeyPair()
+        val machine = Member("m_box", "machine", "box", toB64(sodium.boxKeyPair().public), toB64(machineSign.public))
+        val entries = mutableListOf<JsonElement>(envelopeJson(directories.genesisEntry(account, phone, signKeys.secret, sodium.signKeyPair(), start.toString())))
+        entries += envelopeJson(directories.addEntry(directories.verify(entries, account, null), "phone", signKeys.secret, machine, start.toString()))
+        val dir = directories.verify(entries, account, null)
+        fun body(id: String, at: String) = buildJsonObject {
+            put("v", 1); put("id", id); putJsonArray("to") { add("phone") }; put("createdAt", at)
+            put("question", "Deploy?"); put("context", ""); putJsonArray("options") { add("Yes"); add("No") }; put("recommended", "Yes")
+            putJsonObject("source") { put("machine", "box"); put("project", "p"); put("session", "s") }
+        }
+        val old = envelopes.seal("decision", body("d_old", start.toString()), machine.id, machineSign.secret, listOf(phone))
+        http.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse = when (request.url.encodedPath) {
+                "/v1/directory" -> json(buildJsonObject { put("entries", buildJsonArray {}) })
+                "/v1/items" -> if (request.url.queryParameter("open") == "1") {
+                    json(buildJsonObject {
+                        put("items", buildJsonArray { add(buildJsonObject { put("item", ProtocolJson.encodeToJsonElement(old)); put("cursor", "1"); put("receivedAt", start.toString()) }) })
+                        put("cursor", "1")
+                    })
+                } else json(buildJsonObject { put("items", buildJsonArray {}); put("cursor", "10") })
+                else -> MockResponse(404, okhttp3.Headers.headersOf(), "")
+            }
+        }
+        http.start()
+        val disk = Disk(tmp.newFolder(), object : Vault {
+            override fun wrap(plain: ByteArray) = plain
+            override fun unwrap(wrapped: ByteArray) = wrapped
+        })
+        val server = http.url("/").toString().trimEnd('/')
+        // The oldest is open; the 500 asked after it are answered.
+        val kept = listOf(SavedDecision(machine.id, body("d_old", start.toString()).toString())) + (1..500).map {
+            val at = start.plusSeconds(it.toLong()).toString()
+            SavedDecision(machine.id, body("d_$it", at).toString(), answeredAt = at, answer = "Yes")
+        }
+        disk.save(Saved(server, account = account, accountExists = true, me = phone, pin = Pin(dir.length, dir.head), entries = entries.toList(), cursor = "9", decisions = kept))
+        disk.save(Secrets(session = "s", boxPk = toB64(boxKeys.public), boxSk = toB64(boxKeys.secret), signPk = toB64(signKeys.public), signSk = toB64(signKeys.secret)))
+        val alerts = object : Alerts {
+            override fun decision(decision: Decision, silent: Boolean) {}
+            override fun cancel(id: String) {}
+            override fun join(id: String, name: String) {}
+            override fun prompt(prompt: Prompt) {}
+            override fun cancelPrompt(prompt: Prompt) {}
+            override fun run(run: Run) {}
+        }
+        val store = ServerStore(disk, OkHttpClient(), sodium, envelopes, directories, Pairings(sodium), Joins(sodium), alerts, "Phone", server, false, scope)
+
+        store.refresh()
+        until { disk.saved()?.cursor == "10" }
+        val after = disk.saved()!!.decisions.map { it.body.id }
+        assertEquals(501, after.size)
+        assertEquals("d_old", after.first())
+    }
 }

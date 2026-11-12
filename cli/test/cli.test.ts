@@ -953,6 +953,29 @@ test("ask --waiting pushes once, through its waiting state, so the notification 
   expect(server.pushed).toEqual(["waiting"]);
 });
 
+test("Ctrl-C during ask --waiting's waiting post exits 130", async () => {
+  const { Api } = await import("../src/api");
+  const ctx = await paired(server);
+  ctx.env.STARBRIDGE_NO_AGENT = "1";
+  const stop = new AbortController();
+  const postItem = Api.prototype.postItem;
+  // The waiting post reaches a server that never answers; Ctrl-C comes meanwhile.
+  Api.prototype.postItem = async function (item, signal) {
+    if (item.kind !== "waiting") return postItem.call(this, item, signal);
+    stop.abort();
+    await new Promise((_, reject) => {
+      if (signal?.aborted) reject(signal.reason);
+      signal?.addEventListener("abort", () => reject(signal.reason), { once: true });
+    });
+  };
+  try {
+    const asked = run([...ASK, "--waiting"], { ...ctx, signal: stop.signal });
+    expect(await Promise.race([asked, Bun.sleep(4000).then(() => "still running")])).toBe(130);
+  } finally {
+    Api.prototype.postItem = postItem;
+  }
+});
+
 test("a decision names its agent and the machine's kind, which config sets", async () => {
   const ctx = await paired(server);
   expect(ctx.store.agentConfig().machineKind).toBeDefined();
@@ -1347,6 +1370,29 @@ test("SIGTERM ends an ask whose post the server never answers (#1288)", async ()
   expect(await Promise.race([asked, Bun.sleep(5000).then(() => "still running")])).toBe(130);
 });
 
+test("wait --timeout ends on time when the server never answers its waiting state", async () => {
+  const ctx = await paired(server);
+  ctx.env.STARBRIDGE_NO_AGENT = "1";
+  expect(await run([...ASK, "--session", "s"], ctx)).toBe(0);
+  const id = ctx.lines.at(-1) as string;
+  server.stalls.push("GET /directory");
+  const waiting = run(["wait", id, "--timeout", "1"], ctx);
+  expect(await Promise.race([waiting, Bun.sleep(4000).then(() => "still running")])).toBe(2);
+});
+
+test("SIGTERM ends waiting <id> when the server never answers", async () => {
+  const ctx = await paired(server);
+  ctx.env.STARBRIDGE_NO_AGENT = "1";
+  expect(await run([...ASK, "--session", "s"], ctx)).toBe(0);
+  const id = ctx.lines.at(-1) as string;
+  server.stalls.push("GET /directory");
+  const stop = new AbortController();
+  const waiting = run(["waiting", id], { ...ctx, signal: stop.signal });
+  await until(() => server.log.filter((l) => l === "GET /directory").length > 1);
+  stop.abort();
+  expect(await Promise.race([waiting, Bun.sleep(4000).then(() => "still running")])).toBe(130);
+});
+
 test("a decision whose post lost its reply is withdrawn, so its card does not stay on the devices (#1289)", async () => {
   const ctx = await paired(server);
   server.lostReplies.push("POST /items");
@@ -1367,6 +1413,26 @@ test("a decision whose post lost its reply is withdrawn, so its card does not st
   expect(await server.opened("settled")).toMatchObject([
     { itemId: decision?.id, outcome: "withdrawn" },
   ]);
+});
+
+test("a withdrawal that failed with the post it follows goes again at the next poll (#1289)", async () => {
+  const ctx = await paired(server);
+  // The server stores the question and its reply is lost; the same outage takes the withdrawal.
+  server.lostReplies.push("POST /items");
+  const stop = new AbortController();
+  const asked = run([...ASK, "--session", "s"], { ...ctx, signal: stop.signal });
+  await until(async () => (await server.opened("decision")).length === 1);
+  server.failures.push("POST /items");
+  stop.abort();
+  expect(await asked).toBe(130);
+  const [decision] = await server.opened("decision");
+  const id = decision?.id as string;
+  expect(ctx.store.state().asked[id]).toMatchObject({ settled: true, unposted: true });
+  expect(await server.opened("settled")).toEqual([]);
+  // The server is back: the agent's next poll withdraws the card from the devices.
+  await poll(ctx, session(ctx), { cursor: ctx.store.state().cursor, seconds: 0, shared: true });
+  expect(await server.opened("settled")).toMatchObject([{ itemId: id, outcome: "withdrawn" }]);
+  expect(ctx.store.state().asked[id]?.unposted).toBeUndefined();
 });
 
 test("a waiting flip within the same second as the last one carries a later time (#1982)", async () => {

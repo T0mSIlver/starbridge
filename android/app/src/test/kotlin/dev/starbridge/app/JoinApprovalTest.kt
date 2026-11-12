@@ -176,4 +176,61 @@ class JoinApprovalTest {
         assertEquals(2, approvals)
         assertNotNull(directories.verify(entries, account, null).members[browser.id])
     }
+
+    @Test
+    fun aRefusalTheServerDidNotTakeKeepsTheRequest() {
+        val account = "acct"
+        val signKeys = sodium.signKeyPair()
+        val boxKeys = sodium.boxKeyPair()
+        val phone = Member("phone", "device", "Phone", toB64(boxKeys.public), toB64(signKeys.public))
+        val genesis = directories.genesisEntry(account, phone, signKeys.secret, sodium.signKeyPair(), "2026-10-05T12:00:00Z")
+        val entries = listOf<JsonElement>(envelopeJson(genesis))
+        val first = directories.verify(entries, account, null)
+        val browser = Member("w_new", "device", "New browser", toB64(sodium.boxKeyPair().public), toB64(sodium.signKeyPair().public))
+        val id = joins.newId()
+        val request = joins.request(JoinRequestBody(1, id, account, browser.id, browser.name, browser.boxPk, browser.signPk, "2026-10-05T12:00:00Z"))
+        val view = buildJsonObject {
+            put("id", id)
+            put("request", request)
+            put("commitment", joins.commitment(sodium.boxKeyPair().public, request))
+            put("state", "open")
+            put("createdAt", "2026-10-05T12:00:00Z")
+            put("expiresAt", "2099-01-01T00:00:00Z")
+            put("version", 1)
+        }
+        http.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse = when {
+                request.url.encodedPath == "/v1/joins" -> json(buildJsonObject { put("joins", buildJsonArray { add(view) }); put("cursor", "1") })
+                request.url.encodedPath == "/v1/joins/$id" && request.method == "DELETE" -> json(buildJsonObject { put("error", "internal") }, 500)
+                else -> MockResponse(404, okhttp3.Headers.headersOf(), "")
+            }
+        }
+        http.start()
+        val disk = Disk(tmp.newFolder(), object : Vault {
+            override fun wrap(plain: ByteArray) = plain
+            override fun unwrap(wrapped: ByteArray) = wrapped
+        })
+        val server = http.url("/").toString().trimEnd('/')
+        disk.save(Saved(server, account = account, accountExists = true, me = phone, pin = Pin(first.length, first.head), entries = entries))
+        disk.save(Secrets(session = "s", boxPk = toB64(boxKeys.public), boxSk = toB64(boxKeys.secret), signPk = toB64(signKeys.public), signSk = toB64(signKeys.secret)))
+        val alerts = object : Alerts {
+            override fun decision(decision: Decision, silent: Boolean) {}
+            override fun cancel(id: String) {}
+            override fun join(id: String, name: String) {}
+            override fun prompt(prompt: Prompt) {}
+            override fun cancelPrompt(prompt: Prompt) {}
+            override fun run(run: Run) {}
+        }
+        val store = ServerStore(disk, OkHttpClient(), sodium, envelopes, directories, Pairings(sodium), joins, alerts, "Phone", server, false, scope)
+
+        store.watchJoins(true)
+        until { store.joinAsks.value.isNotEmpty() }
+        // Only the refusal touches the list from here.
+        store.watchJoins(false)
+        store.refuseJoin(id)
+        until { store.notice.value != null || store.comparison.value is Comparison.Done }
+        assertNotNull(store.notice.value)
+        assertEquals(listOf(id), store.joinAsks.value.map { it.id })
+        assertEquals(Comparison.Idle, store.comparison.value)
+    }
 }

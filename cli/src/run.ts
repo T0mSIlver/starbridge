@@ -97,8 +97,13 @@ function buildRun(
 }
 
 /** Seals a run update to every active device and posts it; the agent and the CLI share this. */
-export async function postRun(ctx: Ctx, s: Session, input: RunInput): Promise<Run> {
-  const dir = await refreshDirectory(ctx, s);
+export async function postRun(
+  ctx: Ctx,
+  s: Session,
+  input: RunInput,
+  signal?: AbortSignal,
+): Promise<Run> {
+  const dir = await refreshDirectory(ctx, s, signal);
   const to = devices(ctx, dir);
   const run = {
     ...buildRun(
@@ -110,7 +115,7 @@ export async function postRun(ctx: Ctx, s: Session, input: RunInput): Promise<Ru
     dir: signedHead(dir),
   };
   const signer = { id: s.machine.id, signKey: s.keys.sign.privateKey };
-  await s.api.postItem(seal("run", run, signer, to));
+  await s.api.postItem(seal("run", run, signer, to), signal);
   return run;
 }
 
@@ -171,8 +176,11 @@ function progressOf(m: RegExpMatchArray): RunProgress | null | undefined {
 
 // --- Reporting -------------------------------------------------------------------
 
-/** Posts one update: through the agent when one runs, else to the server directly. */
-export type Poster = (input: RunInput) => Promise<void>;
+/**
+ * Posts one update: through the agent when one runs, else to the server directly. `signal` aborts
+ * when the CLI stops waiting, so no open request keeps the process alive after that.
+ */
+export type Poster = (input: RunInput, signal: AbortSignal) => Promise<void>;
 
 /**
  * Each update replaces the last under the run's id, so whichever path posted the previous one,
@@ -180,11 +188,11 @@ export type Poster = (input: RunInput) => Promise<void>;
  */
 function makePoster(ctx: Ctx): Poster {
   let direct: Session | undefined;
-  return async (input) => {
+  return async (input, signal) => {
     const agent = AgentClient.for(ctx);
     if (agent) {
       try {
-        await agent.call("POST", "/v1/runs", { run: input });
+        await agent.call("POST", "/v1/runs", { run: input }, undefined, signal);
         return;
       } catch (e) {
         // No agent, or another API revision: it did nothing, so the server directly.
@@ -193,7 +201,7 @@ function makePoster(ctx: Ctx): Poster {
       }
     }
     direct ??= session(ctx);
-    await postRun(ctx, direct, input);
+    await postRun(ctx, direct, input, signal);
   };
 }
 
@@ -216,12 +224,17 @@ export class Reporter {
   private timer: ReturnType<typeof setTimeout> | undefined;
   private warned = false;
   private off = false;
+  /** Aborted once `finish` stops waiting: it ends any post still open. */
+  private readonly stop = new AbortController();
 
   constructor(
     private readonly base: Omit<RunInput, "at" | "progress" | "exit">,
     private readonly post: Poster,
     private readonly ctx: Ctx,
-    private readonly timing = { progressMs: PROGRESS_MS, heartbeatMs: RUN_HEARTBEAT_MS },
+    private readonly timing: { progressMs: number; heartbeatMs: number; finalMs?: number } = {
+      progressMs: PROGRESS_MS,
+      heartbeatMs: RUN_HEARTBEAT_MS,
+    },
   ) {}
 
   start() {
@@ -237,7 +250,7 @@ export class Reporter {
     this.schedule(this.progressGap());
   }
 
-  /** Posts the exit and resolves once it is sent, or after FINAL_MS. */
+  /** Posts the exit and resolves once it is sent, or after FINAL_MS, ending the post still open. */
   async finish(code: number): Promise<void> {
     this.exit = { code, at: iso(this.ctx.now()) };
     clearTimeout(this.timer);
@@ -246,8 +259,11 @@ export class Reporter {
       while (this.inflight) await this.inflight;
     })();
     let t: ReturnType<typeof setTimeout> | undefined;
-    await Promise.race([settled, new Promise<void>((r) => (t = setTimeout(r, FINAL_MS)))]);
+    const finalMs = this.timing.finalMs ?? FINAL_MS;
+    await Promise.race([settled, new Promise<void>((r) => (t = setTimeout(r, finalMs)))]);
     clearTimeout(t);
+    this.off = true;
+    this.stop.abort();
   }
 
   private progressGap() {
@@ -281,8 +297,10 @@ export class Reporter {
     this.lastPost = this.ctx.now().getTime();
     if (this.progress) this.progressSent = true;
     this.dirty = false;
-    this.inflight = this.post(input)
+    this.inflight = this.post(input, this.stop.signal)
       .catch((e: Error) => {
+        // `finish` gave up on it: the CLI exits now and says nothing more.
+        if (this.stop.signal.aborted) return;
         // Not paired, or a bad title: no later update can fare better. A withheld directory
         // entry may come any time.
         if (e instanceof UsageError && !(e instanceof WithheldError)) this.off = true;

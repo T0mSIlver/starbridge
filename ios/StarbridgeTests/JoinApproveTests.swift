@@ -75,4 +75,19 @@ final class JoinApproveTests: XCTestCase {
         await phone.refreshDirectory()
         XCTAssertEqual(phone.devices.count, 2)
     }
+
+    /** A refusal the server did not take keeps the request and says so (#2306). */
+    func testARefusalTheServerDidNotTakeKeepsTheRequest() async throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        addTeardownBlock { try? FileManager.default.removeItem(at: dir) }
+        // Every call but the directory and item lists fails with a 500, the refusal's DELETE included.
+        let config = URLSessionConfiguration.ephemeral
+        config.protocolClasses = [OpenListServer.self]
+        let store = Store(vault: MemoryVault(), disk: Disk(url: dir.appendingPathComponent("saved.json")), deviceName: "Test iPhone", http: URLSession(configuration: config))
+        store.joinAsks = [JoinAsk(id: "j_1", name: "Pixel", elsewhere: false)]
+        await store.refuseJoin("j_1")
+        XCTAssertEqual(store.joinAsks.map(\.id), ["j_1"])
+        XCTAssertEqual(store.comparison, .idle)
+        XCTAssertNotNil(store.notice)
+    }
 }

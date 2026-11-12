@@ -18,11 +18,14 @@ import { LiveServer } from "@starbridge/server/test-support";
 import { PNG } from "pngjs";
 import { configKey, proof, type SessionEvent, type Status } from "../src/agent/api";
 import { AgentClient, AgentError, Interrupted, NoAgent } from "../src/agent/client";
+import { Decisions } from "../src/agent/decisions";
 import { makeAgent } from "../src/agent/main";
-import type { Agent } from "../src/agent/server";
+import type { Agent, Hub } from "../src/agent/server";
 import { hookStop } from "../src/antigravity";
 import { run } from "../src/cli";
 import { Store } from "../src/config";
+import { session as machineSession } from "../src/context";
+import { poll, sessionLines } from "../src/decisions";
 import { countFollowup, hookCursorSession, MAX_EMPTY_FOLLOWUPS } from "../src/hook";
 import {
   agentAddress,
@@ -303,6 +306,33 @@ test("a wait whose agent stopped still ends at its timeout (#548)", async () => 
   expect(Date.now() - started).toBeLessThan(5_000);
 });
 
+test("a wait that hung up while the agent read the directory takes no answer (#548)", async () => {
+  const ctx = await paired(server);
+  ctx.env.STARBRIDGE_NO_AGENT = "1";
+  expect(await run([...ASK, "--session", "s"], ctx)).toBe(0);
+  const id = ctx.lines.at(-1) as string;
+  await server.answer(id, { choice: "Merge" });
+  await poll(ctx, machineSession(ctx), {
+    cursor: ctx.store.state().cursor,
+    seconds: 0,
+    shared: true,
+  });
+  const hub: Hub = { ctx, notify() {}, changed: async () => {}, log() {}, seen: () => false };
+  const decisions = new Decisions(hub);
+  // The client gives up (its call timeout, Ctrl-C) while the agent reads the directory.
+  const gone = new AbortController();
+  decisions.beforeEvents = async () => gone.abort();
+  for (const [path, body] of [
+    ["/v1/answers/next", { session: "s", wait: 0 }],
+    ["/v1/decisions/:id/waiting", { state: "waiting" }],
+  ] as const) {
+    const route = decisions.routes.find((r) => r.path === path);
+    await route?.handle({ body, params: { id }, signal: gone.signal } as never);
+    expect(ctx.store.state().answers[id]?.seen).toBe(false);
+    expect(sessionLines(ctx.store.state(), "s").length).toBe(1);
+  }
+});
+
 test("the socket is the user's only, and a second agent refuses to start", async () => {
   const { ctx, socket } = await machine();
   // Windows keeps no POSIX modes: the agent narrows the port file's ACL with icacls instead.
@@ -406,6 +436,20 @@ test("a client of another API revision gets 426 with what to update", async () =
   expect(newer.body.detail).toContain("restart the agent");
   expect((await raw(undefined)).body.error).toBe("client-too-old");
   expect((await raw("1")).status).toBe(200);
+});
+
+test("a config lock nobody lets go holds the requests that wait for it, not the agent (#2303)", async () => {
+  const { ctx, socket } = await machine();
+  const lock = join(ctx.store.dir, ".lock");
+  // A live process holds it: this one, as a holder that hangs would.
+  writeFileSync(lock, `${process.pid} hung`);
+  const asking = run(ASK, client(socket));
+  await Bun.sleep(100);
+  const started = Date.now();
+  await new AgentClient(socket, "starbridge-test").call("GET", "/v1/status");
+  expect(Date.now() - started).toBeLessThan(1_000);
+  rmSync(lock);
+  expect(await asking).toBe(0);
 });
 
 test("the CLI goes to the server itself when no agent runs, or when the agent cannot serve it", async () => {

@@ -5,8 +5,8 @@ import { pushPayload } from "./routes/items";
 
 /**
  * Brings snoozed decisions back (#571): pushes each snooze whose time has come once more to the
- * active devices it was sealed to, which notify for its decision again, once. An answer, a
- * settled notice or a newer snooze cleared its `wake_due` already. The devices it wakes have now
+ * active devices it was sealed to, which notify for its decision again, once. An answer or a
+ * settled notice cleared its `wake_due` already. The devices it wakes have now
  * heard of the decision, so they leave its `hold_to` (#908): its answer and settled notice reach
  * them.
  */
@@ -39,8 +39,12 @@ export function wakeSnoozes(db: Database, push: Push, inlineLimit: number, now =
       s.account_id,
       s.id,
     );
-    if (boxes.length === 0) continue;
-    const devices = boxes.map((b) => b.to);
+    // The devices still held from the question were sent no snooze of it, so only the one that
+    // came last brings it back to them, not an earlier one it replaced (#2312).
+    const unheard =
+      s.re && !lastSnooze(db, s.account_id, s.re, s.id) ? holdTo(db, s.account_id, s.re) : [];
+    const devices = boxes.map((b) => b.to).filter((d) => !unheard.includes(d));
+    if (devices.length === 0) continue;
     if (s.re) heard(db, s.account_id, s.re, devices);
     const item: SealedItem = {
       v: 1,
@@ -59,6 +63,24 @@ export function wakeSnoozes(db: Database, push: Push, inlineLimit: number, now =
       { thread: s.asker ?? undefined },
     );
   }
+}
+
+/** Whether `snooze` is the last one posted for decision `re`. */
+function lastSnooze(db: Database, account: string, re: string, snooze: string): boolean {
+  const last = db
+    .query(
+      "SELECT id FROM items WHERE account_id = ? AND kind = 'snooze' AND re = ? ORDER BY seq DESC LIMIT 1",
+    )
+    .get(account, re) as { id: string } | null;
+  return last?.id === snooze;
+}
+
+/** The devices item `id`'s push is still held from, or that never heard of it once it closed. */
+function holdTo(db: Database, account: string, id: string): string[] {
+  const row = db
+    .query("SELECT hold_to FROM items WHERE account_id = ? AND id = ?")
+    .get(account, id) as { hold_to: string | null } | null;
+  return row?.hold_to ? (JSON.parse(row.hold_to) as string[]) : [];
 }
 
 /** Takes `devices` off the held devices of item `id`, which no longer holds any once they all left. */

@@ -1309,6 +1309,53 @@ test("an answer in the picker settles its cards as answered elsewhere, and Esc d
   ]);
 });
 
+test("a picker answered at the keyboard does not withdraw the session's next picker card (#2314)", async () => {
+  const ctx = await paired(server);
+  // Picker 1, with the plugin's own `--wait`. The owner answers it in the terminal: Claude Code
+  // sends the waiting hook nothing, and PostToolUse settles its card.
+  const first = hookPermission(ctx, picker(PICKED.slice(0, 1)), {
+    agent: "claude-code",
+    wait: "85800s",
+  });
+  await until(async () => (await server.opened("waiting")).length === 1);
+  expect(await hookSettle(ctx, pickerDone(PICKED.slice(0, 1)), { agent: "claude-code" })).toBe(0);
+  expect((await server.opened("settled")).map((s) => s.outcome)).toEqual(["elsewhere"]);
+
+  // Picker 2, later in the same session. The owner has left the desk: the card is all they have.
+  const esc = new AbortController();
+  const second = hookPermission({ ...ctx, signal: esc.signal }, picker(PICKED.slice(1)), {
+    agent: "claude-code",
+    wait: "85800s",
+  });
+  await until(async () => (await server.opened("waiting")).length === 2);
+  const card = (await server.opened("decision")).find((d) => d.question === "Which sizes?");
+  expect(card).toBeDefined();
+
+  // The first hook is still running, in its long-poll, and picker 2's card is still open.
+  let firstDone = false;
+  void first.then(() => {
+    firstDone = true;
+  });
+  await Bun.sleep(1500);
+  expect(firstDone).toBe(false);
+  expect((await server.opened("settled")).filter((s) => s.itemId === card?.id)).toEqual([]);
+
+  // The first hook's long-poll returns: after its 300 s, or sooner when any other answer reaches
+  // this machine, as here.
+  expect(
+    await run(["ask", "--question", "Unrelated?", "--option", "A", "--option", "B"], ctx),
+  ).toBe(0);
+  const other = (await server.opened("decision")).find((d) => d.question === "Unrelated?");
+  await server.answer(other?.id as string, { choice: "A" });
+  expect(await first).toBe(0);
+
+  // Picker 2 is still open in the terminal, so its card must still be open on the devices.
+  const settled = (await server.opened("settled")).filter((s) => s.itemId === card?.id);
+  esc.abort();
+  await second;
+  expect(settled).toEqual([]);
+});
+
 test("Esc while a card's post is in flight settles it elsewhere, as Esc does later (#1913)", async () => {
   const ctx = await paired(server);
   // The server stores the card but its reply does not come back before Esc.
