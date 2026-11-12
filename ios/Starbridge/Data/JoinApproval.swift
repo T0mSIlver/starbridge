@@ -132,7 +132,15 @@ extension Store {
         let name = joinAsks.first { $0.id == id }?.name ?? "the device"
         let differed = compared?.join.id == id
         compared = nil
-        try? await api().cancelJoin(id: id)
+        do {
+            try await api().cancelJoin(id: id)
+        } catch {
+            // Still open on the server: the request stays, to refuse again, and the notice says
+            // why, as the web's card does (#2306).
+            comparison = .idle
+            notice = describe(error)
+            return
+        }
         joinAsks.removeAll { $0.id == id }
         // The join's push is collapsed under its id: "A device wants to join" goes with it.
         await Notify.removeDelivered(about: id)
