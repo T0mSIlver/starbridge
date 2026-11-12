@@ -200,7 +200,11 @@ internal class DecisionKind(
                 alerts.cancel(id)
             }
         }
-        persist(saved.copy(cursor = cursor, decisions = byId.values.sortedBy { it.body.createdAt }.takeLast(500)))
+        // Every open question stays, with the 500 latest answered ones, as on the web: the cursor has
+        // passed a question cut here, so nothing would list it again.
+        val all = byId.values.sortedBy { it.body.createdAt }
+        val cut = all.filter { it.answeredAt != null }.dropLast(500).map { it.body.id }.toSet()
+        persist(saved.copy(cursor = cursor, decisions = all.filter { it.body.id !in cut }))
         if (listedOpen != null) checkOpen = false
     }
 

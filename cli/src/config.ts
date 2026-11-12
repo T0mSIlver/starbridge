@@ -1,9 +1,12 @@
 import { randomBytes } from "node:crypto";
 import {
   chmodSync,
+  closeSync,
   existsSync,
+  fstatSync,
   linkSync,
   mkdirSync,
+  openSync,
   readFileSync,
   renameSync,
   unlinkSync,
@@ -361,6 +364,13 @@ export class StateFileError extends Error {
 
 /** Every holder lets go within milliseconds; this long means a lock nobody can break. */
 const LOCK_TIMEOUT_MS = 15_000;
+/**
+ * How long a lock may name no process (#2298). An older starbridge creates the lock, then writes
+ * its holder into it, so it is empty for an instant; one still empty after this long was left by a
+ * write that failed or a process killed in that instant. Longer than the coarsest file time (2 s
+ * on FAT), shorter than `LOCK_TIMEOUT_MS`.
+ */
+const LOCK_UNNAMED_MS = 5_000;
 const tick = new Int32Array(new SharedArrayBuffer(4));
 
 function readLock(path: string): string | undefined {
@@ -371,15 +381,54 @@ function readLock(path: string): string | undefined {
   }
 }
 
-/** Whether the process that wrote lock text `held` ("<pid> <nonce>") still runs. */
-function alive(held: string): boolean {
-  const pid = Number(held.split(" ")[0]);
-  if (!Number.isInteger(pid) || pid <= 0) return true;
+/** A lock's text and how far its last write is from now, from one open file: never two locks'. */
+function readHeld(path: string): { text: string; age: number } | undefined {
+  let fd: number | undefined;
   try {
-    process.kill(pid, 0);
+    fd = openSync(path, "r");
+    const text = readFileSync(fd, "utf8");
+    return { text, age: Math.abs(Date.now() - fstatSync(fd).mtimeMs) };
+  } catch {
+    return undefined;
+  } finally {
+    if (fd !== undefined) closeSync(fd);
+  }
+}
+
+/**
+ * Whether nothing holds a lock with this text ("<pid> <nonce>") and age: its process is gone, or
+ * it names none (empty, or cut before the space that ends the pid) and has for too long.
+ */
+function dead(held: { text: string; age: number }): boolean {
+  const pid = /^([1-9]\d*) /.exec(held.text)?.[1];
+  if (pid === undefined) return held.age > LOCK_UNNAMED_MS;
+  try {
+    process.kill(Number(pid), 0);
+    return false;
+  } catch (e) {
+    return (e as NodeJS.ErrnoException).code !== "EPERM";
+  }
+}
+
+/**
+ * Makes `lock` out of `whole`, the file that already names this process, if no lock exists. A
+ * hard link does it in one step, so no process ever reads a lock that names nobody.
+ */
+function take(whole: string, lock: string, mine: string): boolean {
+  try {
+    linkSync(whole, lock);
     return true;
   } catch (e) {
-    return (e as NodeJS.ErrnoException).code === "EPERM";
+    if ((e as NodeJS.ErrnoException).code === "EEXIST") return false;
+  }
+  // A filesystem with no hard links (FAT, some network folders): created then written, as before
+  // #2298. A write that fails here leaves it empty, and it is broken `LOCK_UNNAMED_MS` later.
+  try {
+    writeFileSync(lock, mine, { flag: "wx", mode: 0o600 });
+    return true;
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code === "EEXIST") return false;
+    throw e;
   }
 }
 
@@ -394,19 +443,24 @@ export class Store {
   locked<T>(fn: () => T): T {
     mkdirSync(this.dir, { recursive: true, mode: 0o700 });
     const lock = this.path(".lock");
-    const mine = `${process.pid} ${randomBytes(8).toString("hex")}`;
+    const nonce = randomBytes(8).toString("hex");
+    const mine = `${process.pid} ${nonce}`;
+    // Written under a name of its own first: a write that fails never touches the lock (#2298).
+    const whole = `${lock}.${process.pid}.${nonce}`;
     const end = Date.now() + LOCK_TIMEOUT_MS;
-    while (true) {
-      try {
-        writeFileSync(lock, mine, { flag: "wx", mode: 0o600 });
-        break;
-      } catch (e) {
-        if ((e as NodeJS.ErrnoException).code !== "EEXIST") throw e;
+    try {
+      writeFileSync(whole, mine, { flag: "wx", mode: 0o600 });
+      while (!take(whole, lock, mine)) {
+        this.breakDeadLock(lock);
+        if (Date.now() > end)
+          throw new Error(`${lock} stays locked: remove it if no starbridge runs`);
+        Atomics.wait(tick, 0, 0, 5);
       }
-      this.breakDeadLock(lock);
-      if (Date.now() > end)
-        throw new Error(`${lock} stays locked: remove it if no starbridge runs`);
-      Atomics.wait(tick, 0, 0, 5);
+    } finally {
+      // Best effort: left behind it is a stray file, and a throw here would keep the lock taken.
+      try {
+        unlinkSync(whole);
+      } catch {}
     }
     try {
       return fn();
@@ -417,20 +471,21 @@ export class Store {
   }
 
   /**
-   * Removes a lock whose process is gone. It moves the lock aside first and removes it only if
-   * it is still the dead one, so two processes breaking it at once do not remove a lock a third
-   * just took; a live one moved aside by mistake goes back.
+   * Removes a lock whose process is gone, or that names none for too long. It moves the lock aside
+   * first and removes it only if it is still the dead one, so two processes breaking it at once do
+   * not remove a lock a third just took; a live one moved aside by mistake goes back.
    */
   private breakDeadLock(lock: string) {
-    const held = readLock(lock);
-    if (held === undefined || alive(held)) return;
+    const held = readHeld(lock);
+    if (held === undefined || !dead(held)) return;
     const aside = `${lock}.${process.pid}`;
     try {
       renameSync(lock, aside);
     } catch {
       return;
     }
-    if (readLock(aside) === held) {
+    const moved = readHeld(aside);
+    if (moved?.text === held.text && dead(moved)) {
       unlinkSync(aside);
       return;
     }

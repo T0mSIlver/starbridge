@@ -151,7 +151,8 @@ const VERDICT_MS = 5_000;
 
 /** Races each questionnaire on the devices; `close` when its tool returns or the session ends. */
 export function questionnaires(deps: Deps) {
-  const open = new Set<AbortController>();
+  /** Each running CLI's stop, with the tool call id its prompt named, if any. */
+  const open = new Map<AbortController, string | undefined>();
   /** The questionnaire announced last, while its CLI runs. */
   let latest: { done?: Done } | undefined;
   /** That questionnaire, between its blocked event and its dialog's `custom` call. */
@@ -202,7 +203,7 @@ export function questionnaires(deps: Deps) {
       // A release that takes answers by event needs no dialog of its own to close.
       latest = toolCallId ? undefined : q;
       const stop = new AbortController();
-      open.add(stop);
+      open.set(stop, toolCallId);
       const out = await deps.hook(
         JSON.stringify({ session_id: session.id, cwd: session.cwd, questions: hookQuestions(qs) }),
         stop.signal,
@@ -235,9 +236,16 @@ export function questionnaires(deps: Deps) {
     blocked(data: unknown) {
       armed = (data as { active?: unknown } | undefined)?.active === true ? latest : undefined;
     },
-    close() {
-      for (const stop of open) stop.abort();
-      open.clear();
+    /**
+     * Stops the CLI of the questionnaire whose tool returned. A prompt that named no tool call
+     * (before 2.13.9) cannot be told apart, so any return stops it; `undefined` stops them all.
+     */
+    close(toolCallId: string | undefined) {
+      for (const [stop, id] of open) {
+        if (toolCallId !== undefined && id !== undefined && id !== toolCallId) continue;
+        stop.abort();
+        open.delete(stop);
+      }
     },
   };
 }

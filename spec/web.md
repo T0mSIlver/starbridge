@@ -63,7 +63,7 @@
   with a long history, read twice since a poll started its own read before the first one ended.
   Now the browser keeps what the server listed in IndexedDB, still sealed to its device key and
   opened again on each load, and reads only what came after: its 500 latest answered questions
-  and every open one, as the Android and iPhone apps keep 500. Each load first lists the open
+  and every open one, as the Android and iPhone apps do. Each load first lists the open
   questions, so a kept one the server dropped goes, and an open one neither kept nor listed after
   the kept cursor means another or a reset server, which starts the read from scratch. Inbox
   reads run one at a time: a poll or a push during a read waits for it and starts from its

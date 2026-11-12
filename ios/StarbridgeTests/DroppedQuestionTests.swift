@@ -82,4 +82,42 @@ final class DroppedQuestionTests: XCTestCase {
         try await store.serial { try await store.syncDecisions() }
         XCTAssertEqual(OpenListServer.openReads, 1)
     }
+
+    /** Every open question stays however many newer ones the iPhone keeps: the cursor has passed it. */
+    func testAnOpenQuestionOutlivesFiveHundredAnsweredOnes() async throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        addTeardownBlock { try? FileManager.default.removeItem(at: dir) }
+        let f = try NotifyFixture()
+        let start = Date(timeIntervalSince1970: 1_788_264_000)
+        func body(_ id: String, _ at: String) -> JSON {
+            [
+                "v": 1, "id": .string(id), "to": [.string(f.phone.id)], "createdAt": .string(at), "question": "Merge the inbox PR?",
+                "context": "", "options": ["Merge", "Wait"], "recommended": "Wait", "source": NotifyFixture.source,
+            ]
+        }
+        OpenListServer.open = [try f.decision("d_old")]
+        OpenListServer.openReads = 0
+        var saved = f.saved
+        // The oldest is open; the 500 asked after it are answered.
+        saved.decisions = [try SavedDecision(from: f.machine.id, text: body("d_old", Dates.format(start)).text, answeredAt: nil)]
+        for i in 1...500 {
+            let at = Dates.format(start.addingTimeInterval(Double(i)))
+            var d = try SavedDecision(from: f.machine.id, text: body("d_\(i)", at).text, answeredAt: at)
+            d.answer = "Merge"
+            saved.decisions.append(d)
+        }
+        let disk = Disk(url: dir.appendingPathComponent("saved.json"))
+        try disk.save(saved)
+        let vault = MemoryVault()
+        vault.secrets = f.secrets
+        let config = URLSessionConfiguration.ephemeral
+        config.protocolClasses = [OpenListServer.self]
+        let store = Store(vault: vault, disk: disk, deviceName: "Test iPhone", http: URLSession(configuration: config))
+        try await store.serial { try await store.syncDirectory() }
+
+        try await store.serial { try await store.syncDecisions() }
+        XCTAssertEqual(store.saved.decisions.count, 501)
+        XCTAssertEqual(store.saved.decisions.first?.id, "d_old")
+    }
 }
+
