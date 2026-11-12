@@ -16,6 +16,7 @@ import jsQR from "jsqr";
 import { PNG } from "pngjs";
 import { makeAgent } from "../src/agent/main";
 import { hookStop } from "../src/antigravity";
+import { REMOVED } from "../src/api";
 import { run } from "../src/cli";
 import { session } from "../src/context";
 import { DONE_LINE, poll, postDecision, typedBreaks } from "../src/decisions";
@@ -236,6 +237,22 @@ test("a machine the owner removed says so and how to pair it again", async () =>
   expect(ctx.errors.at(-1)).toBe(
     "starbridge: this machine was removed from your Starbridge account: run `starbridge pair --force` to add it again",
   );
+});
+
+test("wait and answers --all --follow stop on a machine the owner removed, as every command does (#2309)", async () => {
+  const ctx = await paired(server);
+  await run(ASK, ctx);
+  const id = ctx.lines.at(-1) as string;
+  await server.revoke(ctx.store.machine()?.id as string);
+  for (const args of [
+    ["wait", id, "--timeout", "8s"],
+    ["answers", "--all", "--follow"],
+  ]) {
+    ctx.errors.length = 0;
+    expect(await run(args, ctx)).toBe(1);
+    expect(ctx.errors.at(-1)).toBe(`starbridge: ${REMOVED}`);
+    expect(ctx.errors.filter((e) => e.includes("retrying"))).toEqual([]);
+  }
 });
 
 test("a cloud session asks and waits as the machine STARBRIDGE_MACHINE carries, until it is revoked (#1818)", async () => {

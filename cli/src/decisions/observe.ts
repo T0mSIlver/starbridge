@@ -1,4 +1,5 @@
 import { type Directory, ProtocolError } from "@starbridge/protocol";
+import { refusedForGood } from "../api";
 import type { State } from "../config";
 import { type Ctx, parseDuration, session, UsageError } from "../context";
 import { poll } from "./poll";
@@ -101,7 +102,7 @@ export async function answersAll(
         directory,
       }));
     } catch (e) {
-      if (e instanceof UsageError || e instanceof ProtocolError) throw e;
+      if (e instanceof UsageError || e instanceof ProtocolError || refusedForGood(e)) throw e;
       if (ctx.signal?.aborted) break;
       ctx.err(`starbridge: ${(e as Error).message}; retrying`);
       directory = undefined;
