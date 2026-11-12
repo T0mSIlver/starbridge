@@ -462,6 +462,7 @@ export class Decisions implements Feature {
       const seconds = first ? 0 : POLL_SECONDS;
       try {
         if (directory && Date.now() - directory.at > DIRECTORY_MS) directory = undefined;
+        await this.ctx.store.unlocked();
         const s = session(this.ctx);
         const r = await poll({ ...this.ctx, signal }, s, {
           cursor: st.cursor,

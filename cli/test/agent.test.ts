@@ -438,6 +438,20 @@ test("a client of another API revision gets 426 with what to update", async () =
   expect((await raw("1")).status).toBe(200);
 });
 
+test("a config lock nobody lets go holds the requests that wait for it, not the agent (#2303)", async () => {
+  const { ctx, socket } = await machine();
+  const lock = join(ctx.store.dir, ".lock");
+  // A live process holds it: this one, as a holder that hangs would.
+  writeFileSync(lock, `${process.pid} hung`);
+  const asking = run(ASK, client(socket));
+  await Bun.sleep(100);
+  const started = Date.now();
+  await new AgentClient(socket, "starbridge-test").call("GET", "/v1/status");
+  expect(Date.now() - started).toBeLessThan(1_000);
+  rmSync(lock);
+  expect(await asking).toBe(0);
+});
+
 test("the CLI goes to the server itself when no agent runs, or when the agent cannot serve it", async () => {
   const ctx = await paired(server);
   // A socket or port file left by a crashed agent: nobody listens.

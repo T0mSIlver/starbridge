@@ -14,7 +14,10 @@
   0700 directory. A `.lock` guards every read-modify-write (#33). It is written whole under
   another name, then hard-linked in, so a write that fails leaves no lock; a lock that names no
   process for 5 s is broken like one whose process is gone, since one left empty by a full disk
-  failed every command for good (#2298). A directory refresh keeps the
+  failed every command for good (#2298). The agent waits for it without blocking its event loop,
+  holding only the request that needs it, so one lock nobody lets go no longer fills its socket's
+  queue until it refuses every connection; `status` names a socket that refuses connections apart
+  from a missing one (#2303). A directory refresh keeps the
   longer of the fetched and saved chains, each required to extend the other's pin.
 - **The socket** is bound under a 077 umask (#95). There is no peer uid check, since neither Bun
   nor Node exposes `SO_PEERCRED`. The local agent runs only the CodexBar binary its own config names,
