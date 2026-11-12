@@ -196,4 +196,71 @@ class DroppedQuestionTest {
         assertEquals(501, after.size)
         assertEquals("d_old", after.first())
     }
+
+    /**
+     * A server restored from a backup lists nothing after the cursor this phone kept, while its
+     * open list holds a question asked since: the phone reads from the start again, once.
+     */
+    @Test
+    fun aServerRestoredFromABackupIsReadAgain() {
+        val account = "acct"
+        val at = "2026-09-01T12:00:00Z"
+        val signKeys = sodium.signKeyPair()
+        val boxKeys = sodium.boxKeyPair()
+        val phone = Member("phone", "device", "Phone", toB64(boxKeys.public), toB64(signKeys.public))
+        val machineSign = sodium.signKeyPair()
+        val machine = Member("m_box", "machine", "box", toB64(sodium.boxKeyPair().public), toB64(machineSign.public))
+        val entries = mutableListOf<JsonElement>(envelopeJson(directories.genesisEntry(account, phone, signKeys.secret, sodium.signKeyPair(), at)))
+        entries += envelopeJson(directories.addEntry(directories.verify(entries, account, null), "phone", signKeys.secret, machine, at))
+        val dir = directories.verify(entries, account, null)
+        val body = buildJsonObject {
+            put("v", 1); put("id", "d_new"); putJsonArray("to") { add("phone") }; put("createdAt", at)
+            put("question", "Deploy?"); put("context", ""); putJsonArray("options") { add("Yes"); add("No") }; put("recommended", "Yes")
+            putJsonObject("source") { put("machine", "box"); put("project", "p"); put("session", "s") }
+        }
+        val asked = ProtocolJson.encodeToJsonElement(envelopes.seal("decision", body, machine.id, machineSign.secret, listOf(phone)))
+        fun page(cursor: String, vararg items: JsonElement) = json(buildJsonObject {
+            put("items", buildJsonArray { items.forEach { add(buildJsonObject { put("item", it); put("cursor", "3"); put("receivedAt", at) }) } })
+            put("cursor", cursor)
+        })
+        val fromStart = AtomicInteger()
+        http.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse {
+                val after = request.url.queryParameter("after").orEmpty()
+                val decisions = request.url.queryParameter("kind").orEmpty().startsWith("decision")
+                return when {
+                    request.url.encodedPath == "/v1/directory" -> json(buildJsonObject { put("entries", buildJsonArray {}) })
+                    request.url.encodedPath != "/v1/items" -> MockResponse(404, okhttp3.Headers.headersOf(), "")
+                    !decisions -> page(after)
+                    request.url.queryParameter("open") == "1" -> page("3", asked)
+                    after == "" -> page("3", asked).also { fromStart.incrementAndGet() }
+                    // Its counter sits below the phone's cursor: an empty page hands that cursor back.
+                    else -> page(after)
+                }
+            }
+        }
+        http.start()
+        val disk = Disk(tmp.newFolder(), object : Vault {
+            override fun wrap(plain: ByteArray) = plain
+            override fun unwrap(wrapped: ByteArray) = wrapped
+        })
+        val server = http.url("/").toString().trimEnd('/')
+        disk.save(Saved(server, account = account, accountExists = true, me = phone, pin = Pin(dir.length, dir.head), entries = entries.toList(), cursor = "5000", promptCursor = "4000"))
+        disk.save(Secrets(session = "s", boxPk = toB64(boxKeys.public), boxSk = toB64(boxKeys.secret), signPk = toB64(signKeys.public), signSk = toB64(signKeys.secret)))
+        val alerts = object : Alerts {
+            override fun decision(decision: Decision, silent: Boolean) {}
+            override fun cancel(id: String) {}
+            override fun join(id: String, name: String) {}
+            override fun prompt(prompt: Prompt) {}
+            override fun cancelPrompt(prompt: Prompt) {}
+            override fun run(run: Run) {}
+        }
+        val store = ServerStore(disk, OkHttpClient(), sodium, envelopes, directories, Pairings(sodium), Joins(sodium), alerts, "Phone", server, false, scope)
+
+        store.refresh()
+        until { store.decisions.value.map { it.id } == listOf("d_new") }
+        until { disk.saved()?.let { it.cursor == "3" && it.promptCursor == "" } == true }
+        assertEquals(1, fromStart.get())
+    }
 }
+
