@@ -737,7 +737,9 @@ test.skipIf(process.platform === "win32")(
   "status tells a socket that refuses connections from no agent (#2303)",
   async () => {
     const m = await machine();
-    const socket = socketPath(m.ctx.env, m.ctx.store.dir);
+    // Short enough for a unix socket on macOS, whose temporary folder is long.
+    const socket = join(mkdtempSync("/tmp/sb-"), "agent.sock");
+    m.ctx.env.STARBRIDGE_AGENT_SOCKET = socket;
     expect(await status(m.sys)).toBe(0);
     expect(m.ctx.lines).toContain(`Agent: not running (no agent on ${socket})`);
     // A socket nothing accepts on, as one whose queue is full or one a killed agent left.
