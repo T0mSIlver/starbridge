@@ -473,6 +473,10 @@ itemRoutes.post("/items", requireCaller("paired"), async (c) => {
           written += kept;
           rateLimit(c, budget, limits.postedBytes, written, true);
         }
+      } else if (item.quiet) {
+        // Posted again quiet, as a machine re-sends a waiting state to a device that joined: its
+        // held push still goes when the hold ends.
+        kept = { due: earlier.hold_due, to: earlier.hold_to };
       }
       db.query("DELETE FROM items WHERE account_id = ? AND id = ?").run(caller.account, item.id);
     }

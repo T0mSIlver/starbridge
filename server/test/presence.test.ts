@@ -300,6 +300,18 @@ test("a waiting flip is held too, and a snooze during the hold keeps it quiet", 
   expect(sent).toEqual([]);
 });
 
+test("a held waiting state posted again quiet, as a re-seal for a new device does, keeps its hold", async () => {
+  await present(devbox);
+  const d = decision();
+  await post(devbox, { ...d, quiet: true });
+  await post(devbox, waiting(d));
+  await post(devbox, { ...waiting(d), quiet: true });
+  expect(sent).toEqual([]);
+  await present(devbox, false);
+  release(31_000);
+  expect(pushed()).toEqual([[[phone.id, web.id], "waiting", `w-${d.id}`]]);
+});
+
 test("a snooze that wakes after the hold lets the answer and settled notice reach every device", async () => {
   await present(web);
   const d = decision();
