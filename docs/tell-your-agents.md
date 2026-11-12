@@ -147,7 +147,7 @@ Starbridge from one, until `starbridge setup --agent <name>`. A later setup, or
 Setup also adds allow rules so that `starbridge ask`, `waiting`, `working` and `wait`
 run without a permission prompt; in Claude Code and Pi, `settle <id>` too, and in Pi and `agy`, `hello`. They go in:
 
-- Claude Code: the plugin.
+- Claude Code: `permissions.allow` in its `settings.json`.
 - Codex: `~/.codex/rules/starbridge.rules`, which also runs them outside the sandbox.
 - Pi: pi-permission-system's rules and its `authorizerChain`, only when it is installed.
 - `cursor-agent`: its `cli-config.json`, in `$CURSOR_CONFIG_DIR`, else `$XDG_CONFIG_HOME/cursor`,
