@@ -61,6 +61,9 @@ export interface Route {
   handle(req: Request): Promise<unknown>;
 }
 
+/** How long the agent blocks on the config lock once `unlocked` saw it free (#2303). */
+const LOCK_HOLDER_MS = 1_000;
+
 /** A 4xx the handler chose; anything else thrown becomes a 400, 502 or 500. */
 export class HttpError extends Error {
   constructor(
@@ -151,6 +154,8 @@ export class Agent implements Hub {
     features: (hub: Hub) => Feature[],
   ) {
     this.startedAt = ctx.now();
+    // Requests and loops wait for the lock in `unlocked` first; this covers one taken since.
+    ctx.store.lockWaitMs = LOCK_HOLDER_MS;
     this.features = features(this);
     const core: Route[] = [
       { method: "GET", path: "/v1/status", handle: async () => this.status() },
@@ -415,6 +420,11 @@ export class Agent implements Hub {
       this.stopping.signal.removeEventListener("abort", onStop);
     });
     try {
+      // Waited for here, so a lock that cannot be taken holds this request, not every other one.
+      if (route.path !== "/v1/status")
+        await this.ctx.store.unlocked().catch((e: Error) => {
+          throw new HttpError(503, "locked", e.message);
+        });
       const body = await readBody(req);
       const ua = req.headers["user-agent"];
       const out = await route.handle({

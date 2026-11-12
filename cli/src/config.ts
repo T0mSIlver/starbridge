@@ -433,7 +433,30 @@ function take(whole: string, lock: string, mine: string): boolean {
 }
 
 export class Store {
+  /**
+   * How long `locked` waits for the lock, blocking its thread. The agent, whose thread serves
+   * every request, waits in `unlocked` first and blocks here only for a holder that just took it
+   * (#2303).
+   */
+  lockWaitMs = LOCK_TIMEOUT_MS;
+
   constructor(readonly dir: string) {}
+
+  /**
+   * Resolves once nothing holds `.lock`, breaking a dead one, without blocking the event loop; past
+   * `LOCK_TIMEOUT_MS` it throws as `locked` does.
+   */
+  async unlocked(): Promise<void> {
+    const lock = this.path(".lock");
+    const end = Date.now() + LOCK_TIMEOUT_MS;
+    while (existsSync(lock)) {
+      this.breakDeadLock(lock);
+      if (!existsSync(lock)) return;
+      if (Date.now() > end)
+        throw new Error(`${lock} stays locked: remove it if no starbridge runs`);
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    }
+  }
 
   /**
    * Runs `fn` while holding `.lock`, which one process at a time can create, so read-modify-write
@@ -447,7 +470,7 @@ export class Store {
     const mine = `${process.pid} ${nonce}`;
     // Written under a name of its own first: a write that fails never touches the lock (#2298).
     const whole = `${lock}.${process.pid}.${nonce}`;
-    const end = Date.now() + LOCK_TIMEOUT_MS;
+    const end = Date.now() + this.lockWaitMs;
     try {
       writeFileSync(whole, mine, { flag: "wx", mode: 0o600 });
       while (!take(whole, lock, mine)) {

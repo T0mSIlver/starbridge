@@ -303,6 +303,20 @@ test("a wait whose agent stopped still ends at its timeout (#548)", async () => 
   expect(Date.now() - started).toBeLessThan(5_000);
 });
 
+test("a config lock nobody lets go holds the requests that wait for it, not the agent (#2303)", async () => {
+  const { ctx, socket } = await machine();
+  const lock = join(ctx.store.dir, ".lock");
+  // A live process holds it: this one, as a holder that hangs would.
+  writeFileSync(lock, `${process.pid} hung`);
+  const asking = run(ASK, client(socket));
+  await Bun.sleep(100);
+  const started = Date.now();
+  await new AgentClient(socket, "starbridge-test").call("GET", "/v1/status");
+  expect(Date.now() - started).toBeLessThan(1_000);
+  rmSync(lock);
+  expect(await asking).toBe(0);
+});
+
 test("the socket is the user's only, and a second agent refuses to start", async () => {
   const { ctx, socket } = await machine();
   // Windows keeps no POSIX modes: the agent narrows the port file's ACL with icacls instead.
