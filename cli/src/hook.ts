@@ -377,21 +377,37 @@ function pickerQuestions(input: unknown): PickerQuestion[] | undefined {
 }
 
 /** The picker's open questions on this machine's devices, by the session that asked them. */
-function pickerOpen(st: ReturnType<Ctx["store"]["state"]>, session: string): string[] {
+function pickerOpen(
+  st: ReturnType<Ctx["store"]["state"]>,
+  session: string,
+  only?: ReadonlySet<string>,
+): string[] {
   return Object.entries(st.asked)
-    .filter(([id, a]) => a.picker === session && !a.settled && !st.answers[id])
+    .filter(
+      ([id, a]) => a.picker === session && (!only || only.has(id)) && !a.settled && !st.answers[id],
+    )
     .map(([id]) => id);
 }
 
-async function settlePicker(ctx: Ctx, session: string, outcome: "elsewhere" | "withdrawn") {
+/**
+ * Settles the session's open picker cards, or only those in `only`: a picker's hook holds just the
+ * cards it posted, and the session's next picker may already be open.
+ */
+async function settlePicker(
+  ctx: Ctx,
+  session: string,
+  outcome: "elsewhere" | "withdrawn",
+  only?: ReadonlySet<string>,
+) {
   ctx.store.updateState((st) => {
-    for (const a of Object.values(st.asked)) if (a.picker === session) a.pickerClosed = true;
+    for (const [id, a] of Object.entries(st.asked))
+      if (a.picker === session && (!only || only.has(id))) a.pickerClosed = true;
   });
   // Its own deadline, not SIGTERM's: a stalled server would hold the hook until the harness
   // kills it (#1286).
   const deadline = AbortSignal.timeout(REPORT_MS);
   await Promise.all(
-    pickerOpen(ctx.store.state(), session).map((id) =>
+    pickerOpen(ctx.store.state(), session, only).map((id) =>
       settle(
         { ...ctx, signal: undefined },
         { id, outcome, ...pickerReason(outcome), deadline },
@@ -431,6 +447,9 @@ async function racePicker(
     failed.signal,
   ]);
   const at = ctx.now().getTime();
+  // The cards this hook posted: a hook still polling after the owner answered its picker at the
+  // keyboard must not settle the next picker's.
+  const posted = new Set<string>();
   const html = ctx.env.CLAUDE_CODE_QUESTION_PREVIEW_FORMAT === "html";
   const results = await Promise.allSettled(
     questions.map(async (q, i) => {
@@ -457,10 +476,11 @@ async function racePicker(
           failed.abort();
           throw e;
         }
+        posted.add(id);
         first ??= id;
         // The picker closed while this card was being posted: it is moot (#2061).
         if (id !== first && ctx.store.state().asked[first]?.pickerClosed) {
-          await settlePicker(ctx, sessionId, "elsewhere");
+          await settlePicker(ctx, sessionId, "elsewhere", posted);
           return undefined;
         }
         const answer = await pickerAnswer(sub, s, id);
@@ -495,7 +515,7 @@ async function racePicker(
   }
   // SIGTERM: Esc at the picker (or Claude Code's timeout, which `wait` comes before). Otherwise
   // the hook's own time ran out or a question could not be asked: no answer reaches the picker.
-  await settlePicker(ctx, sessionId, outer.signal?.aborted ? "elsewhere" : "withdrawn");
+  await settlePicker(ctx, sessionId, outer.signal?.aborted ? "elsewhere" : "withdrawn", posted);
   return 0;
 }
 

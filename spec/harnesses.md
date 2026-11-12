@@ -337,7 +337,9 @@ to its session, the `wait` line's safe side.
   labels only when it names nothing else, each label matched whole before the reply is split on
   commas, so a label with a comma in it stays one. A number card asked again after `hook
   settle` closed the picker is settled as answered elsewhere at once, since no answer can reach
-  the picker. A multi-select question still shows one card with a typed reply.
+  the picker. A picker's hook settles only the cards it posted: one still polling after the keyboard
+  answered its picker (Claude Code tells it nothing) leaves the session's next picker's cards open
+  (#2314). A multi-select question still shows one card with a typed reply.
 - Claude desktop's next-step box (#2118): a session the desktop app runs may end its turn with
   `mcp__ccd_turn__wrap_up` (`recap`, and optionally `ask` with `actions` of `label` and
   `message`), which the app shows as a box with one button per action; a click sends that
