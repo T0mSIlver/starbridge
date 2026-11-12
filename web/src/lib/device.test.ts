@@ -88,9 +88,18 @@ beforeAll(async () => {
     Promise.reject(new Error("no WebCrypto keys"))) as typeof crypto.subtle.generateKey;
   await api.ownerSignIn("owner-secret");
   const { account } = await api.me();
+  // The first result poll fails: the join waits on while its code is valid.
+  let failed = false;
+  forge = (path) => {
+    if (failed || !path.endsWith("/result?wait=25")) return undefined;
+    failed = true;
+    return Response.json({ error: "internal" }, { status: 500 });
+  };
   const join = await device.startJoin(account, "This browser");
   await live.approve(join.code);
   await join.done;
+  forge = undefined;
+  expect(failed).toBe(true);
   ctx = (await device.deviceContext(account)) as device.Ctx;
 });
 afterAll(() => {
