@@ -72,7 +72,10 @@ interface PiApi {
     event: "before_agent_start",
     handler: (e: { systemPrompt: string }, ctx: Ctx) => { systemPrompt?: string } | undefined,
   ): void;
-  on(event: "tool_execution_end", handler: (e: { toolName: string }, ctx: Ctx) => unknown): void;
+  on(
+    event: "tool_execution_end",
+    handler: (e: { toolName: string; toolCallId?: string }, ctx: Ctx) => unknown,
+  ): void;
   sendUserMessage(text: string, options?: { deliverAs?: "steer" | "followUp" }): void;
   events: {
     on(channel: string, handler: (data: unknown) => void): () => void;
@@ -161,7 +164,7 @@ export default function starbridge(pi: PiApi) {
 
   // Whoever answered, or on any error, the questionnaire is over once its tool returns.
   pi.on("tool_execution_end", (e) => {
-    if (e.toolName === TOOL) asked.close();
+    if (e.toolName === TOOL) asked.close(e.toolCallId);
   });
 
   pi.events.on("permissions:decision", (data) => {
@@ -333,7 +336,7 @@ export default function starbridge(pi: PiApi) {
     loop = undefined;
     current = undefined;
     ended.abort();
-    asked.close();
+    asked.close(undefined);
     for (const dispose of links.values()) dispose();
     links.clear();
     delete process.env[ANSWERS_ENV];

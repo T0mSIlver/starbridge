@@ -155,7 +155,7 @@ test("the questionnaire answered at the keyboard stops the CLI, which settles th
   const h = harness(JSON.stringify({ answers: [["Postgres"]] }));
   const done = h.ask([DB]);
   await tick();
-  h.q.close();
+  h.q.close(undefined);
   await done;
   expect(h.sent[0]?.signal.aborted).toBe(true);
   expect(h.closed).toEqual([]);
@@ -244,6 +244,19 @@ test("two questionnaires open at once each get their own answer (#1516)", async 
     "call-2",
   ]);
   expect(h.submitted).toEqual([]);
+});
+
+test("one questionnaire's tool returning stops only its own CLI (#1516)", async () => {
+  const h = harness("");
+  void h.askById([DB], "call-1");
+  void h.askById([DB], "call-2");
+  // A release before 2.13.9 names no tool call: any return may be its own.
+  void h.ask([DB]);
+  await tick();
+  h.q.close("call-1");
+  expect(h.sent.map((s) => s.signal.aborted)).toEqual([true, false, true]);
+  h.q.close(undefined);
+  expect(h.sent.map((s) => s.signal.aborted)).toEqual([true, true, true]);
 });
 
 test("an answer the package refuses: a closed questionnaire is left, RPC gets a follow-up, a misfit says so", async () => {
