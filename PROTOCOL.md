@@ -810,6 +810,8 @@ waits a little, and goes only if nothing answered it meanwhile.
   `answered` push or the settled notice that closes it: they never heard of it. A snooze posted
   during the hold skips them too, and a snoozed item's hold ends without a push. When the snooze
   wakes, it pushes them as well, so the answer and settled notice reach them from then on (#908).
+  A `waiting` item pushed to them during its decision's hold, once nobody is present, does the
+  same.
 - **Devices** list a held item at once, as any other: only its push waits.
 - **Snoozed during the hold**, the devices the snooze skipped get, when snoozes wake, only the
   snooze that came last, never an earlier one it replaced. A snooze that brings the question back

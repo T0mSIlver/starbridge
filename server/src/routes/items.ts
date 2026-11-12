@@ -13,6 +13,7 @@ import type { Env } from "../env";
 import { holdOpen, json, waitSeconds } from "../http";
 import { rateLimit } from "../limits";
 import { HELD_KINDS, holdFor } from "../presence";
+import { heard } from "../snooze";
 import { activeMember, wakeMachines } from "./directory";
 
 const PAGE = 100;
@@ -623,6 +624,8 @@ itemRoutes.post("/items", requireCaller("paired"), async (c) => {
       );
       pushTo = pushTo.filter((id) => !hold.held.includes(id));
     }
+    // A device pushed the waiting state heard of the question, so what closes it reaches it too.
+    if (item.kind === "waiting" && item.re) heard(db, caller.account, item.re, pushTo);
     // Browsers expect each Web Push to show a notification and drop subscriptions that keep
     // showing none, so quota snapshots and runs, which show none there, skip Web Push; pages
     // fetch them instead. A settled notice only closes one, so it skips Safari's (#1363).

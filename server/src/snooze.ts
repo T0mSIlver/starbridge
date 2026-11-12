@@ -84,7 +84,7 @@ function holdTo(db: Database, account: string, id: string): string[] {
 }
 
 /** Takes `devices` off the held devices of item `id`, which no longer holds any once they all left. */
-function heard(db: Database, account: string, id: string, devices: string[]): void {
+export function heard(db: Database, account: string, id: string, devices: string[]): void {
   const row = db
     .query("SELECT hold_to FROM items WHERE account_id = ? AND id = ?")
     .get(account, id) as { hold_to: string | null } | null;
