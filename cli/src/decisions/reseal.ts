@@ -59,7 +59,7 @@ export async function reseal(ctx: Ctx, s: Session, known: Directory): Promise<vo
     let sealed: SealedItem | undefined;
     try {
       sealed = item();
-      await s.api.postItem(sealed);
+      await s.api.postItem(sealed, ctx.signal);
       return "posted";
     } catch (e) {
       if (e instanceof ApiError && ["already-answered", "not-found"].includes(e.code))
