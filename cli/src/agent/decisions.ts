@@ -8,6 +8,7 @@ import { existsSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { activeMembers, type Directory, ProtocolError } from "@starbridge/protocol";
 import { agyReachable, agySend } from "../antigravity";
+import { type ApiError, refusedForGood } from "../api";
 import {
   type CodexSession,
   codexNotice,
@@ -63,6 +64,8 @@ export type QuotaWanted = "a device joined" | "a device asked";
 export class Decisions implements Feature {
   private lastOkAt: Date | undefined;
   private lastError: string | undefined;
+  /** The server's last refusal of this machine until the owner acts, which ends a `wait` (#2309). */
+  private refused: ApiError | undefined;
   /** Answers whose delivery failed, by decision id: tries so far, and when next. */
   private retries = new Map<string, { tries: number; at: number }>();
   /** The active devices and the last quota ask, as of the previous poll. */
@@ -166,6 +169,7 @@ export class Decisions implements Feature {
         let found = takeAnswer(this.ctx.store, id, from);
         let off = found ? undefined : snoozed();
         while (!found && !off && Date.now() < end) {
+          if (this.refused) throw this.refused;
           await this.hub.changed(end - Date.now(), req.signal);
           // Taking marks the answer seen: a client that hung up, as on a restart (#548), would
           // never print it, and its next wait would skip it.
@@ -173,6 +177,7 @@ export class Decisions implements Feature {
           found = takeAnswer(this.ctx.store, id, from);
           if (!found) off = snoozed();
         }
+        if (!found && !off && this.refused) throw this.refused;
         return found ?? off ?? {};
       },
     },
@@ -194,9 +199,12 @@ export class Decisions implements Feature {
         // An observer: it reads the answers and marks none seen, so each still reaches its session.
         let found = observedAnswers(this.ctx.store.state(), { since, known });
         while (found.length === 0 && !req.signal.aborted && Date.now() < end) {
+          if (this.refused) throw this.refused;
           await this.hub.changed(end - Date.now(), req.signal);
           found = observedAnswers(this.ctx.store.state(), { since, known });
         }
+        // A follow that held for nothing stops on the refusal; the first read prints what is here.
+        if (found.length === 0 && wait > 0 && this.refused) throw this.refused;
         return { answers: found };
       },
     },
@@ -468,6 +476,7 @@ export class Decisions implements Feature {
         this.lastOkAt = this.ctx.now();
         if (this.lastError !== undefined) this.hub.log("server reachable again");
         this.lastError = undefined;
+        this.refused = undefined;
         failures = 0;
         first = false;
         this.hub.notify();
@@ -484,6 +493,11 @@ export class Decisions implements Feature {
         if (message !== this.lastError)
           this.hub.log(`answers: ${message}; retrying in ${Math.round(delay / 1000)} s`);
         this.lastError = message;
+        if (refusedForGood(e)) {
+          this.refused = e;
+          // Held waits end now, as the CLI's own `wait` would.
+          this.hub.notify();
+        }
         await pause(delay, signal);
       }
     }

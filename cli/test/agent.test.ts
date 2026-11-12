@@ -21,6 +21,7 @@ import { AgentClient, AgentError, Interrupted, NoAgent } from "../src/agent/clie
 import { makeAgent } from "../src/agent/main";
 import type { Agent } from "../src/agent/server";
 import { hookStop } from "../src/antigravity";
+import { REMOVED } from "../src/api";
 import { run } from "../src/cli";
 import { Store } from "../src/config";
 import { countFollowup, hookCursorSession, MAX_EMPTY_FOLLOWUPS } from "../src/hook";
@@ -301,6 +302,16 @@ test("a wait whose agent stopped still ends at its timeout (#548)", async () => 
   await agent.stop();
   expect(await done).toBe(2);
   expect(Date.now() - started).toBeLessThan(5_000);
+});
+
+test("a wait held at the agent ends with the removal when the owner removes the machine (#2309)", async () => {
+  const { ctx } = await machine();
+  const id = await ask(ctx, "--session", "s1", "--project", "p");
+  const done = run(["wait", id, "--timeout", "20s"], ctx);
+  await until(async () => (await server.opened("waiting")).length > 0, 10_000);
+  await server.revoke(ctx.store.machine()?.id as string);
+  expect(await done).toBe(1);
+  expect(ctx.errors.at(-1)).toBe(`starbridge: ${REMOVED}`);
 });
 
 test("the socket is the user's only, and a second agent refuses to start", async () => {

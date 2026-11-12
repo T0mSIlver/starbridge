@@ -165,7 +165,9 @@
   unsigned, so the page keeps its keys. Once the chain shows it revoked, the browser deletes its
   keys, answers and push subscription, keeps the pin, and says which device removed it (#343).
   Android wipes only on a verified chain that revokes the phone (#44). A revoked machine gets 401
-  on its next long-poll (#353). A machine drops the answers of a device the chain revokes that its
+  on its next long-poll (#353): `wait` and `answers --all --follow`, through the agent too, then
+  exit 1 with the line every command prints instead of retrying, as on a 426 to a CLI too old for
+  the server, since only the owner can end either (#2309). A machine drops the answers of a device the chain revokes that its
   sessions have not taken yet, on every poll and before `answers` or `wait` hands one out, against
   a fresh directory or, out of reach of the server, the saved one (#491). The server holds that
   decision answered, so the machine closes it: `wait` says its answer came from a device removed

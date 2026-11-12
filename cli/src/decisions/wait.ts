@@ -1,4 +1,5 @@
 import { type Answer, type Directory, ProtocolError } from "@starbridge/protocol";
+import { refusedForGood } from "../api";
 import { type Ctx, parseDuration, type Session, session, UsageError } from "../context";
 import { closedError, named, printAnswer } from "./lines";
 import { poll } from "./poll";
@@ -80,7 +81,7 @@ export async function wait(
         directory,
       }));
     } catch (e) {
-      if (e instanceof UsageError || e instanceof ProtocolError) throw e;
+      if (e instanceof UsageError || e instanceof ProtocolError || refusedForGood(e)) throw e;
       if (ctx.signal?.aborted) continue;
       ctx.err(`starbridge: ${(e as Error).message}; retrying`);
       await ctx.sleep(Math.min(RETRY_MS, Math.max(0, left)));

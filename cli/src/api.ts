@@ -31,6 +31,13 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * The server refuses this machine until the owner acts: it was removed from the account (401),
+ * or this CLI is too old for the server (426). Retrying cannot help, so a loop stops (#2309).
+ */
+export const refusedForGood = (e: unknown): e is ApiError =>
+  e instanceof ApiError && (e.status === 401 || e.status === 426);
+
 /** What a refused post says when the account or the server has no room left (#586). */
 const FULL: Record<string, string> = {
   "account-full": "your Starbridge account is full; answer or settle open questions to free room",
