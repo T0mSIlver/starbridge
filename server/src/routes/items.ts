@@ -541,6 +541,13 @@ itemRoutes.post("/items", requireCaller("paired"), async (c) => {
     );
     const box = db.query("INSERT INTO boxes (account_id, item_id, to_id, box) VALUES (?, ?, ?, ?)");
     for (const b of item.boxes) box.run(caller.account, item.id, b.to, b.box);
+    // "Back now" on a question whose hold ended while it was snoozed: the devices it held it from
+    // still never heard of it, so its hold starts again, and its end pushes them it (#2312).
+    if (rule.wake && wakeDue === null && item.re)
+      db.query(
+        `UPDATE items SET hold_due = ? WHERE account_id = ? AND (id = ? OR (kind = 'waiting' AND re = ?))
+         AND hold_due IS NULL AND hold_to IS NOT NULL`,
+      ).run(iso, caller.account, item.re, item.re);
     // Marks the referred item answered and moves it past every cursor, so devices listing after
     // their cursor see it again, answered. A settled notice after a device's answer changes
     // nothing: the prompt was already answered. An open kind's note closes nothing.

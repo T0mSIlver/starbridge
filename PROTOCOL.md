@@ -811,6 +811,10 @@ waits a little, and goes only if nothing answered it meanwhile.
   during the hold skips them too, and a snoozed item's hold ends without a push. When the snooze
   wakes, it pushes them as well, so the answer and settled notice reach them from then on (#908).
 - **Devices** list a held item at once, as any other: only its push waits.
+- **Snoozed during the hold**, the devices the snooze skipped get, when snoozes wake, only the
+  snooze that came last, never an earlier one it replaced. A snooze that brings the question back
+  now, once its hold ended snoozed, starts the hold again, and its end pushes them the question
+  or its `waiting` item (#2312).
 
 ## Runs
 
