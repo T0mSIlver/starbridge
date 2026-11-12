@@ -5,6 +5,7 @@ import { type Ctx, iso, refreshDirectory, type Session, signedHead } from "../co
 import { acceptPermissionAnswer } from "../permissions";
 import { seal } from "../seal";
 import { reseal } from "./reseal";
+import { settleOne } from "./settle";
 import { acceptSnooze } from "./snooze";
 import { behindBy, checkAnswer, dropRevoked, forget, noteHead, refuse } from "./trust";
 
@@ -127,11 +128,54 @@ export async function poll(
     if (dropRevoked(before, dir)) ctx.store.updateState((st) => dropRevoked(st, dir));
   }
   await announce(ctx, s, directory);
+  await resettle(ctx, s, directory);
   // A device that joined since reads nothing this machine sealed before: re-seal it.
   await reseal(ctx, s, directory).catch((e) =>
     ctx.err(`starbridge: could not re-send open questions: ${(e as Error).message}`),
   );
   return { cursor: page.cursor ?? opts.cursor, directory, ...quotaAsked };
+}
+
+/** When each settled notice whose post failed may go again, in this process. */
+const retryAt = new Map<string, { at: number; wait: number }>();
+const RETRY_MIN_MS = 60_000;
+const RETRY_MAX_MS = 3_600_000;
+const RETRY_POST_MS = 5_000;
+
+/**
+ * Posts again the settled notice of each decision settled here whose post failed, such as the
+ * withdrawal after a post that lost its reply (#1289): otherwise its card stays open on the
+ * devices and their answer is refused here. Each retry waits twice as long as the last, up to an
+ * hour.
+ */
+async function resettle(ctx: Ctx, s: Session, dir: Directory): Promise<void> {
+  const st = ctx.store.state();
+  if (st.behind) return;
+  const now = Date.now();
+  const due = Object.entries(st.asked).filter(
+    ([id, a]) =>
+      a.settled &&
+      a.unposted &&
+      !a.posting &&
+      !a.revoked &&
+      !st.answers[id] &&
+      (retryAt.get(id)?.at ?? 0) <= now,
+  );
+  for (const [id, a] of due) {
+    try {
+      // `bulk`: a server that dropped the decision, or never stored it, has nothing to close.
+      // Bounded, as `post.ts`'s first try: a server that never replies must not hold the poll.
+      const deadline = AbortSignal.timeout(RETRY_POST_MS);
+      const signal = ctx.signal ? AbortSignal.any([ctx.signal, deadline]) : deadline;
+      await settleOne(ctx, s, dir, id, a.outcome, true, a.reason, signal);
+      retryAt.delete(id);
+    } catch (e) {
+      const wait = Math.min((retryAt.get(id)?.wait ?? RETRY_MIN_MS / 2) * 2, RETRY_MAX_MS);
+      retryAt.set(id, { at: now + wait, wait });
+      // Offline or cut off: the rest would fail the same way.
+      if (!(e instanceof ApiError)) return;
+    }
+  }
 }
 
 /**
