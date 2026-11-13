@@ -392,6 +392,8 @@ data class Decision(
     val replies: Boolean? = null,
     /** With answerIn: the machine takes a Done answer (#539). */
     val done: Boolean? = null,
+    /** The owner may pick more than one option and answer with choices (#2064). */
+    val multiple: Boolean? = null,
     override val dir: DirectoryHead? = null,
 ) : ItemBody {
     override val recipients get() = to
@@ -421,10 +423,21 @@ data class Decision(
             schema(answerIn != null, "done needs answerIn")
         }
         schema(options.size != 1, "options: 0 or 2 to 4")
+        multiple?.let {
+            schema(it, "multiple is true or absent")
+            schema(options.isNotEmpty(), "multiple needs options")
+        }
         schema(options.toSet().size == options.size, "options must be distinct")
         if (options.isNotEmpty()) schema(recommended != null && recommended in options, "recommended must be one of the options")
         else schema(recommended == null, "recommended needs options")
     }
+}
+
+/** A multi-select answer's picks (Choices in schemas.ts): 1 to 4 options, each once. */
+internal fun checkChoices(choices: List<String>) {
+    schema(choices.size in 1..4, "choices")
+    choices.forEach { len(it, 1, 100, "choice") }
+    schema(choices.toSet().size == choices.size, "choices must be distinct")
 }
 
 @Serializable
@@ -435,6 +448,8 @@ data class Answer(
     val to: String,
     val answeredAt: String,
     val choice: String? = null,
+    /** The options picked on a multiple decision, each once (#2064). */
+    val choices: List<String>? = null,
     val text: String? = null,
     /** The owner answered on the decision's answerIn page (#539). */
     val done: Boolean? = null,
@@ -453,7 +468,8 @@ data class Answer(
         choice?.let { len(it, 0, 100, "choice") }
         text?.let { len(it, 0, ANSWER_TEXT_MAX, "text") }
         done?.let { schema(it, "done is true or absent") }
-        schema(listOfNotNull(choice, text, done).size == 1, "exactly one of choice, text and done")
+        choices?.let(::checkChoices)
+        schema(listOfNotNull(choice, choices, text, done).size == 1, "exactly one of choice, choices, text and done")
     }
 }
 
@@ -556,6 +572,7 @@ data class Settled(
     val device: String? = null,
     /** With outcome "device" on a decision: the answer the machine took (#330). */
     val choice: String? = null,
+    val choices: List<String>? = null,
     val text: String? = null,
     override val dir: DirectoryHead? = null,
     /** With outcome "device" on a permission: what that device answered (#349). */
@@ -586,8 +603,9 @@ data class Settled(
             len(it, 1, SETTLED_REASON_MAX, "reason")
             schema('\n' !in it && '\r' !in it, "reason")
         }
-        schema(device != null || (choice == null && text == null), "choice and text come only with a device's outcome")
-        schema(choice == null || text == null, "at most one of choice and text")
+        choices?.let(::checkChoices)
+        schema(device != null || (choice == null && choices == null && text == null), "choice, choices and text come only with a device's outcome")
+        schema(listOfNotNull(choice, choices, text).size <= 1, "at most one of choice, choices and text")
     }
 }
 

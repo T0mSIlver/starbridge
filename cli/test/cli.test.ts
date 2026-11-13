@@ -1226,6 +1226,23 @@ test("wait ignores forged or foreign answers and keeps the good one", async () =
   expect(ctx.errors.filter((e) => e.includes("retrying"))).toHaveLength(2);
 });
 
+// Several picks count only on a decision that offered them (#2064); this machine posts none yet.
+test("an answer with choices to a decision that takes one choice is ignored", async () => {
+  const ctx = await paired(server);
+  await run(ASK, ctx);
+  const id = ctx.lines[0] as string;
+  const done = run(["wait", id, "--json"], ctx);
+  await until(() => server.log.includes("GET /answers"));
+  await server.forge(
+    { decisionId: id, reply: {}, tamper: { choices: ["Merge"] } },
+    { decisionId: id, reply: {}, tamper: { choices: ["Merge", "Wait"] } },
+  );
+  await server.answer(id, { choice: "Wait" });
+  expect(await done).toBe(0);
+  expect(JSON.parse(ctx.lines[1] as string)).toMatchObject({ decisionId: id, choice: "Wait" });
+  expect(ctx.errors.filter((e) => e.includes("ignored an answer"))).toHaveLength(2);
+});
+
 test("an answer to a withdrawn or answerIn decision, or a Done to another, is neither accepted nor delivered", async () => {
   const ctx = await paired(server);
   await run([...ASK, "--session", "s"], ctx);
