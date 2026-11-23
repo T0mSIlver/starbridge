@@ -324,7 +324,7 @@
   with the ETag of its last answer, since a 304 costs nothing from the 60 requests an hour an
   address gets, and a 10 s timeout; a failure changes nothing and is tried an hour later. It
   keeps the answer in `latest.json`, so commands read it without the network; an unreadable
-  one moves to `latest.json.unreadable-<time>` and is read again, since it is only a cache and a
+  one, including one that lacks `version` or `checkedAt`, moves to `latest.json.unreadable-<time>` and is read again, since it is only a cache and a
   kept one would stop the check for good (#1174). `setup`, `pair`,
   `config`, `--version` and help, run in a terminal, end with one line on stderr when it is
   newer, naming `starbridge update` or brew's or npm's command; hooks, `ask`, `wait` and every

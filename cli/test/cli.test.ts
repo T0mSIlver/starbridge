@@ -230,6 +230,28 @@ test("pair --force names the old pairing as Devices shows it, not by its id (#28
   );
 });
 
+test("pair --force stops before it replaces the identity when state.json is unreadable (#2274)", async () => {
+  const ctx = await paired(server);
+  const id = ctx.store.machine()?.id;
+  writeFileSync(join(ctx.store.dir, "state.json"), "{}\n");
+  expect(await run(["pair", "--force"], ctx)).toBe(1);
+  expect(ctx.errors.at(-1)).toContain("state.json is not in this starbridge's format");
+  expect(ctx.lines.some((l) => l.startsWith("Pairing code: "))).toBe(false);
+  expect(ctx.store.machine()?.id).toBe(id);
+});
+
+test("pair --force names the new machine to revoke when state.json breaks while the pairing waits (#2274)", async () => {
+  const ctx = await paired(server);
+  const old = ctx.store.machine()?.id;
+  const done = run(["pair", "--force"], ctx);
+  await until(() => ctx.lines.some((l) => l.startsWith("Pairing code: ")));
+  writeFileSync(join(ctx.store.dir, "state.json"), "{}\n");
+  await approveAndConfirm(server, ctx);
+  expect(await done).toBe(1);
+  expect(ctx.errors.at(-1)).toContain('revoke "devbox" under Devices');
+  expect(ctx.store.machine()?.id).toBe(old);
+});
+
 test("a machine the owner removed says so and how to pair it again", async () => {
   const ctx = await paired(server);
   await server.revoke(ctx.store.machine()?.id as string);

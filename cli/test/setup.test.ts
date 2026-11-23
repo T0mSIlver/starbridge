@@ -1076,6 +1076,16 @@ test("uninstall removes the service and plugins, asks the devices to revoke, kee
   expect(existsSync(m.ctx.store.dir)).toBe(false);
 });
 
+test("uninstall --purge goes on past a machine.json that lacks its fields (#2274)", async () => {
+  const m = await machine();
+  await setup(m.sys, { yes: true, noAgents: true, noService: true });
+  writeFileSync(join(m.ctx.store.dir, "machine.json"), "{}\n");
+  m.ctx.lines.length = 0;
+  expect(await uninstall(m.sys, { purge: true })).toBe(0);
+  expect(m.ctx.lines.join("\n")).toContain("machine.json is not in this starbridge's format");
+  expect(existsSync(m.ctx.store.dir)).toBe(false);
+});
+
 test("setup without a user systemd keeps going and says how to run the agent", async () => {
   const m = await machine();
   m.ctx.env.PATH = [join(m.home, "bin"), m.ctx.env.PATH].join(delimiter);
