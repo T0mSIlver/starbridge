@@ -69,6 +69,10 @@ targets:
         BGTaskSchedulerPermittedIdentifiers:
           - dev.starbridge.ios.answers
         NSCameraUsageDescription: Starbridge scans the QR code that your other device shows, to add this iPhone to your account.
+        # The app encrypts with standard algorithms, declared to France's ANSSI (dossier 34629389);
+        # the code is Apple's for that document, so a build skips the compliance question.
+        ITSAppUsesNonExemptEncryption: true
+        ITSEncryptionExportComplianceCode: 5731ca0c-5568-4809-82ec-82374a45c718
         # GitHub sign-in comes back on starbridge://auth (PROTOCOL.md, "Auth").
         CFBundleURLTypes:
           - CFBundleURLName: dev.starbridge.ios
