@@ -7,7 +7,9 @@
  * #1584).
  *
  * While the loop runs, the session's commands get its id in STARBRIDGE_PI_ANSWERS, so `starbridge ask`
- * says the answer comes back as a prompt. In `pi -p` it says to `starbridge wait` instead.
+ * says the answer comes back as a prompt. In `pi -p` it says to wait for it instead, and the loop
+ * only steers an answer into the running turn, holding it unconfirmed until the message is in what Pi
+ * sends to the model (unread.ts, #2280).
  *
  * With rpiv-ask-user-question installed, it races each of its questionnaires on the devices
  * (questions.ts).
@@ -22,7 +24,7 @@ import { readFileSync } from "node:fs";
 import { readFile, stat, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { AgentLoop, agentAddress, joinLines, type Line } from "../hooks/agent.ts";
+import { AgentLoop, agentAddress, HEADLESS_TIMING, joinLines, type Line } from "../hooks/agent.ts";
 import {
   hookCommand,
   ownedFile,
@@ -33,6 +35,7 @@ import {
 } from "../hooks/node.ts";
 import { configDir, Poller } from "../hooks/poller.ts";
 import { Switch } from "../hooks/switch.ts";
+import { Unread } from "../hooks/unread.ts";
 import {
   type AskDetails,
   authorize,
@@ -72,11 +75,20 @@ interface PiApi {
     event: "before_agent_start",
     handler: (e: { systemPrompt: string }, ctx: Ctx) => { systemPrompt?: string } | undefined,
   ): void;
+  on(event: "agent_start" | "agent_end", handler: (e: unknown, ctx: Ctx) => unknown): void;
+  on(
+    event: "context",
+    handler: (e: { messages: { role?: string; content?: unknown }[] }, ctx: Ctx) => unknown,
+  ): void;
   on(
     event: "tool_execution_end",
     handler: (e: { toolName: string; toolCallId?: string }, ctx: Ctx) => unknown,
   ): void;
   sendUserMessage(text: string, options?: { deliverAs?: "steer" | "followUp" }): void;
+  sendMessage(
+    message: { customType: string; content: string; display: boolean },
+    options?: { deliverAs?: "steer" | "followUp" | "nextTurn"; triggerTurn?: boolean },
+  ): void;
   events: {
     on(channel: string, handler: (data: unknown) => void): () => void;
     emit(channel: string, data: unknown): void;
@@ -101,6 +113,8 @@ function rule(): string | undefined {
 export default function starbridge(pi: PiApi) {
   const text = rule();
   let loop: Switch | undefined;
+  /** In `pi -p`: the steered answers the agent has not read yet. */
+  let unread: Unread | undefined;
   /** The session's context, for the permission link, which runs outside any handler. */
   let current: Ctx | undefined;
   /** Disposers of the link, by the session it was registered for. */
@@ -255,8 +269,12 @@ export default function starbridge(pi: PiApi) {
     dialogs = Promise.resolve();
     loop?.stop().catch(() => {});
     loop = undefined;
-    // `pi -p` and `--mode json` end after one prompt: nothing would be there to submit into.
-    if (!ctx.hasUI) return;
+    unread?.ended();
+    // `pi -p` and `--mode json` end after one prompt: an answer goes only into the turn that runs,
+    // and stays unconfirmed until the agent read it (#2280).
+    const headless = !ctx.hasUI;
+    const held = headless ? new Unread() : undefined;
+    unread = held;
     // Pi makes `ctx` and `pi` throw once it replaces or reloads the session (#1365), while the
     // loop may still run a step: it gets values read now, and no-ops once the session ended.
     const id = ctx.sessionManager.getSessionId();
@@ -275,14 +293,32 @@ export default function starbridge(pi: PiApi) {
     // The answers one poll brought go as one message (#1597), which enters the run after its
     // current tool calls; an idle session starts a turn with it (#1484, #1584). Taking none keeps
     // them unconfirmed, for this session's next start.
-    const submit = (lines: Line[]) => {
-      if (over.aborted) return [];
+    const steer = (lines: Line[]) => {
       try {
         pi.sendUserMessage(joinLines(lines), { deliverAs: "steer" });
-        return lines.map((l) => l.ack);
+        return lines;
       } catch {
         return [];
       }
+    };
+    // `pi -p`: a custom message queues into the running turn, or sits in the session when none
+    // runs, but never starts one: `sendUserMessage` runs Pi's input hooks first, and a run that
+    // ends meanwhile would start a turn with the answer (#2280).
+    const queue = (lines: Line[]) => {
+      try {
+        pi.sendMessage(
+          { customType: "starbridge-answer", content: joinLines(lines), display: true },
+          { deliverAs: "steer" },
+        );
+        return lines;
+      } catch {
+        return [];
+      }
+    };
+    const submit = (lines: Line[]): string[] | Promise<string[]> => {
+      if (over.aborted) return [];
+      if (held) return held.submit(lines, queue);
+      return steer(lines).map((l) => l.ack);
     };
     const status = (s: string | undefined) => {
       if (over.aborted) return;
@@ -291,7 +327,8 @@ export default function starbridge(pi: PiApi) {
       } catch {}
     };
     const log = (_s: string) => {};
-    env[ANSWERS_ENV] = id;
+    // `ask` promises a prompt only where one would run.
+    if (!headless) env[ANSWERS_ENV] = id;
     // Only Claude Code holds a queued prompt back behind an open call (#1446).
     const starting = () => false;
     loop = new Switch({
@@ -299,34 +336,72 @@ export default function starbridge(pi: PiApi) {
         !env.STARBRIDGE_NO_AGENT && (await fetch("GET", "/v1/status")).status < 300,
       agent: (unconfirmed) =>
         new AgentLoop(
-          { sessionId, cwd: async () => cwd, fetch, now, sleep, submit, starting, status, log },
-          unconfirmed,
-        ),
-      poller: (unconfirmed) =>
-        new Poller(
           {
             sessionId,
-            run: runCommand,
-            read: (path) => readFile(path, "utf8"),
-            write: (path, t) => writeFile(path, t),
-            mtime: async (path) => (await stat(path).catch(() => undefined))?.mtimeMs,
-            owned: async (path) => ownedFile(path),
+            cwd: async () => cwd,
+            fetch,
             now,
             sleep,
             submit,
             starting,
             status,
             log,
+            headless,
           },
-          dir,
-          undefined,
-          undefined,
           unconfirmed,
+          // `pi -p` exits only once the loop's open call returns.
+          headless ? HEADLESS_TIMING : undefined,
         ),
+      // The CLI's lease would tell `ask` that some session submits prompts, which `pi -p` never does.
+      poller: headless
+        ? undefined
+        : (unconfirmed) =>
+            new Poller(
+              {
+                sessionId,
+                run: runCommand,
+                read: (path) => readFile(path, "utf8"),
+                write: (path, t) => writeFile(path, t),
+                mtime: async (path) => (await stat(path).catch(() => undefined))?.mtimeMs,
+                owned: async (path) => ownedFile(path),
+                now,
+                sleep,
+                submit,
+                starting,
+                status,
+                log,
+              },
+              dir,
+              undefined,
+              undefined,
+              unconfirmed,
+            ),
       sleep,
       clearStatus: () => status(undefined),
       log,
     });
+  });
+
+  pi.on("agent_start", () => unread?.turn(true));
+  pi.on("agent_end", () => unread?.turn(false));
+  // The answer in the messages Pi is about to send to the model, after every extension had its
+  // say, is the agent having read it (#2280). The round trip to confirm it runs apart, so Pi's
+  // request is not held.
+  pi.on("context", (e) => {
+    const held = unread;
+    if (!held?.pending) return undefined;
+    const text = e.messages
+      .filter((m) => m?.role === "user" || m?.role === "custom")
+      .map((m) =>
+        typeof m.content === "string"
+          ? m.content
+          : Array.isArray(m.content)
+            ? m.content.map((p) => (typeof p?.text === "string" ? p.text : "")).join("\n")
+            : "",
+      )
+      .join("\n");
+    void held.entered(text, async (acks) => (await loop?.claim(acks)) ?? []).catch(() => {});
+    return undefined;
   });
 
   // A new, resumed or forked session gets its own `session_start` and loop; only quitting tells
@@ -334,6 +409,8 @@ export default function starbridge(pi: PiApi) {
   pi.on("session_shutdown", async (e) => {
     const ending = loop;
     loop = undefined;
+    unread?.ended();
+    unread = undefined;
     current = undefined;
     ended.abort();
     asked.close(undefined);

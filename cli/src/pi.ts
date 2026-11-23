@@ -2,7 +2,8 @@
  * Pi sessions. Pi's bash tool gives every command the session's id in `PI_SESSION_ID` and its
  * JSONL file in `PI_SESSION_FILE`. The Starbridge Pi extension (`mod/pi/starbridge.ts`) sets
  * `STARBRIDGE_PI_ANSWERS` to the session's id while it submits answers into it, so `ask` can tell
- * an interactive session that gets its answers as prompts from `pi -p` or a Pi without it, even
+ * an interactive session that gets its answers as prompts from `pi -p` (whose extension only steers
+ * an answer into the turn that runs, #2280) or a Pi without it, even
  * a `pi -p` started from that session's shell, which inherits the variable.
  */
 import { existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";

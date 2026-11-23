@@ -131,8 +131,9 @@ export interface SessionInfo {
   title?: string;
   helloAt?: string;
   /**
-   * A `claude -p` run, which ends with its turn: its mod hands an answer only into that turn's
-   * next tool result, so it does not count as one that brings answers as prompts (#2258).
+   * A `claude -p`, `pi -p` or `opencode run` run, which ends with its turn: its mod hands an
+   * answer only into that turn, so it does not count as one that brings answers as prompts
+   * (#2258, #2280).
    */
   headless?: boolean;
   lastSeenAt: string;

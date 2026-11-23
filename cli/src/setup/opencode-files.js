@@ -10,4 +10,5 @@ export default {
   "mod/hooks/node.ts": source("mod/hooks/node.ts"),
   "mod/hooks/poller.ts": source("mod/hooks/poller.ts"),
   "mod/hooks/switch.ts": source("mod/hooks/switch.ts"),
+  "mod/hooks/unread.ts": source("mod/hooks/unread.ts"),
 };

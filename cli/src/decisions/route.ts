@@ -12,9 +12,10 @@ import type { AskInput } from "./source";
 
 /**
  * - `mod`: Claude Code's mod, or Cursor's hooks, take it from the agent's session events.
- * - `turn`: Claude Code's mod in a `claude -p` run, which ends with its turn (#2258): it hands
- *   the answer in with the next tool result while the run works, and submits no prompt, since
- *   none would run. So `ask` promises none: after the run, only `wait` brings the answer.
+ * - `turn`: the mod of a `claude -p` run, which ends with its turn (#2258), or the Pi extension
+ *   or opencode plugin of a `pi -p` or `opencode run` (#2280): it hands the answer into the turn
+ *   that runs, with the next tool result or step, and starts no prompt, since none would run. So
+ *   `ask` promises none: after the run, only `wait` brings the answer.
  * - `extension`: the Pi extension or the opencode plugin take it the same way.
  * - `codex`: the agent steers it into the Codex session, or queues it there.
  * - `agy`: the agent sends it to the Antigravity conversation's language server; the Stop hook
@@ -37,7 +38,7 @@ export interface Observed {
   reachable: boolean;
   /** A mod polled for this session lately (for Cursor: its conversation is open). */
   modSeen: boolean;
-  /** That mod's hello said `headless`: a `claude -p` run (#2258). */
+  /** That mod's hello said `headless`: a `claude -p`, `pi -p` or `opencode run` run (#2258, #2280). */
   headless?: boolean;
   /** This agent can send to the T3 Code thread the ask names (`t3 thread send`). */
   t3: boolean;
@@ -85,6 +86,9 @@ export function routeFor(
     }
     case "pi":
     case "opencode":
+      // The extension of a run that ends with its turn sets no variable, so only its hello says
+      // it brings the answer into the running turn (#2280).
+      if (seen.modSeen && seen.headless) return { kind: "turn" };
       if (!input.extensionAnswers) return undefined;
       // T3 brings it in place of the extension, which would run it where T3 never shows it.
       return t3 ? { kind: "t3", t3: { thread: t3 } } : { kind: "extension" };
