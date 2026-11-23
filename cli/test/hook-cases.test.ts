@@ -139,10 +139,6 @@ const QUESTIONS = [
   { question: "Name the branch?", header: "Branch", options: [] },
 ];
 
-const NO_REPORT_DEADLINE = {
-  todo: "its settle of the open cards has no deadline: hookQuestion calls settle without one, so a server that stops answering holds the hook until the harness kills it (#1286's fix reached only the picker; #2278)",
-};
-
 function questionRow(
   agent: "opencode" | "pi" | "antigravity",
   cases: Partial<Record<CaseName, How>> = {},
@@ -402,7 +398,7 @@ const codexQuestion: Row = {
   delivered: (r) => daemons.get(r)?.got.some((m) => m.id === 0 && m.result !== undefined) ?? false,
   cases: {
     stalledPost: "run",
-    stalledReport: NO_REPORT_DEADLINE,
+    stalledReport: "run",
     lostReply: "run",
     snooze: "run",
     sessionEnd: "run",
@@ -536,9 +532,9 @@ const IMPL: Record<CaseName, (row: Row) => Promise<void>> = {
 const ROWS: Row[] = [
   claudeQuestion,
   codexQuestion,
-  questionRow("opencode", { stalledReport: NO_REPORT_DEADLINE }),
-  questionRow("pi", { stalledReport: NO_REPORT_DEADLINE }),
-  questionRow("antigravity", { stalledReport: NO_REPORT_DEADLINE }),
+  questionRow("opencode", {}),
+  questionRow("pi", {}),
+  questionRow("antigravity", {}),
   cursorRow("question", CURSOR_QUESTIONS),
   ...(["agent", "server"] as const).flatMap((via) => [
     permissionRow("claude-code", via),
