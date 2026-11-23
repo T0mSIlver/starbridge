@@ -11,11 +11,10 @@
  * or PI_CODING_AGENT_DIR) holding only the login, the real server app on a random port
  * with the CLI paired to it, a git project with a bare remote, and a `gh` that prints canned
  * output. Nothing is written to the owner's own config. Claude Code loads the plugin with
- * `--plugin-dir`; Codex gets the skill in `$CODEX_HOME/skills` and the SessionStart rule in
- * `$CODEX_HOME/AGENTS.md`, opencode the same in its XDG config folder; Pi loads the Starbridge Pi
- * extension and skill with `-e` and `--skill`. Cursor and Antigravity get what `starbridge setup`
- * writes for them, built from the version under test: Cursor the skill in `~/.cursor/skills` and
- * the hooks in `~/.cursor/hooks.json`, Antigravity the plugin in `~/.gemini/config/plugins`.
+ * `--plugin-dir`; Pi loads the Starbridge Pi extension and skill with `-e` and `--skill`. Codex,
+ * opencode, Cursor and Antigravity get what `starbridge setup --agent <name>` of that arm's
+ * version writes in the throwaway home (install.ts, #2268), so the eval keeps no copy of setup's
+ * files: the `before` arm's CLI is bundled from the `--before` ref, `after`'s from this checkout.
  *
  * Models: Claude Code defaults to claude-haiku-5-5, Codex to its own default and Pi to
  * zai/glm-5.3-flash (`provider/id`, with the providers of `~/.pi/agent`), Cursor to `auto` (all
@@ -41,6 +40,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { parseArgs } from "node:util";
 import { LiveServer } from "../../server/test-support/index.ts";
+import { buildCliAt, installHarness, SETUP_AGENTS, type SetupAgent, setupEnv } from "./install.ts";
 import {
   antigravityLogin,
   claudeToken,
@@ -134,6 +134,18 @@ const bundled = spawnSync(bun, ["build", join(repo, "cli/src/main.ts"), "--targe
   encoding: "utf8",
 });
 if (bundled.status !== 0) throw new Error(`bun build of the CLI: ${bundled.stderr}`);
+
+// The CLI of each arm, whose `setup` installs the harness's skill and rule: this checkout's for
+// `after`, bundled from the `--before` ref for `before`.
+const armCli: Record<string, string> = {};
+if ((SETUP_AGENTS as readonly string[]).includes(agent))
+  for (const arm of Object.keys(arms)) {
+    if (arm === "after") armCli[arm] = cliBundle;
+    else {
+      armCli[arm] = join(work, `starbridge-${arm}.js`);
+      buildCliAt(bun, repo, opt.before as string, join(work, "src", arm), armCli[arm]);
+    }
+  }
 
 const sh = (cmd: string, args: string[], cwd: string, env?: Record<string, string>) => {
   const r = spawnSync(cmd, args, { cwd, env: { ...process.env, ...env }, encoding: "utf8" });
@@ -305,6 +317,8 @@ async function turn(
     args = resume
       ? ["exec", "resume", ...common, bypass, resume, prompt]
       : ["exec", ...common, bypass, "-C", dir, prompt];
+    // Setup leaves a plugin's hooks for the owner to trust in the TUI, which `codex exec` skips silently.
+    args.splice(args.indexOf(bypass) + 1, 0, "--dangerously-bypass-hook-trust");
   }
   const p = Bun.spawn([agentBin, ...args], {
     cwd: dir,
@@ -699,20 +713,8 @@ async function liveRun(
         return { busy: /esc to interrupt/i.test(pane), ran };
       };
     } else if (agent === "opencode") {
-      // The plugin and skill as `starbridge setup` lays them out; the plugin adds the rule.
+      // The skill and plugin are in the config folder already: `starbridge setup --agent opencode` wrote them.
       const conf = join(cfg, "opencode");
-      rmSync(join(conf, "AGENTS.md"), { force: true });
-      mkdirSync(join(conf, "plugins"), { recursive: true });
-      writeFileSync(
-        join(conf, "plugins/starbridge.ts"),
-        'export { default } from "../starbridge/mod/opencode/starbridge.ts";\n',
-      );
-      for (const d of ["opencode", "hooks"])
-        cpSync(join(armDir, "mod", d), join(conf, "starbridge/mod", d), { recursive: true });
-      // Where the arm's plugin reads its rule: plugin/rules since #1063, plugin/hooks before.
-      for (const d of ["hooks", "rules"])
-        if (existsSync(join(armDir, "plugin", d)))
-          cpSync(join(armDir, "plugin", d), join(conf, "starbridge/plugin", d), { recursive: true });
       const allow = { bash: "allow", webfetch: "allow", external_directory: "allow" };
       writeFileSync(
         join(conf, "opencode.json"),
@@ -839,62 +841,24 @@ async function one(s: Scenario, arm: string, rep: number): Promise<RunRecord> {
   );
   chmodSync(join(bin, "starbridge"), 0o755);
 
-  // The agent's login (Claude's long-lived token, else a copy in its throwaway config); the
-  // plugin or skill under test.
+  // The agent's login (Claude's long-lived token, else a copy in its throwaway config).
   const armDir = arms[arm] as string;
-  const plugin = join(armDir, "plugin");
-  // The harness's own rule (#1063), else the one rule every harness had before.
-  const own = join(plugin, "rules", `${agent}.md`);
-  const rule = readFileSync(existsSync(own) ? own : join(plugin, "hooks/rule.md"), "utf8");
   const login: Record<string, string> = {};
   if (agent === "claude") login.CLAUDE_CODE_OAUTH_TOKEN = claudeToken();
   else if (agent === "cursor") {
     Object.assign(login, cursorLogin());
-    // What setup writes (cli/src/setup/cursor.ts): the skill, and the hooks running the plugin's
-    // scripts, which add the rule beside them and register the conversation (#1220).
-    cpSync(join(plugin, "skills/starbridge"), join(home, ".cursor/skills/starbridge"), { recursive: true });
-    const hooks = join(home, ".cursor/starbridge");
-    mkdirSync(hooks, { recursive: true });
-    for (const f of ["session-start.sh", "cli.sh"]) copyFileSync(join(plugin, "hooks", f), join(hooks, f));
-    writeFileSync(join(hooks, "rule.md"), rule);
-    const session = `sh "${hooks}/cli.sh" hook session --agent cursor`;
-    writeFileSync(
-      join(home, ".cursor/hooks.json"),
-      JSON.stringify({
-        version: 1,
-        hooks: {
-          sessionStart: [
-            { command: `sh "${hooks}/session-start.sh" cursor`, timeout: 5 },
-            { command: session, timeout: 10 },
-          ],
-          stop: [{ command: session, timeout: 660, loop_limit: null }],
-          sessionEnd: [{ command: session, timeout: 10 }],
-        },
-      }),
-    );
   } else if (agent === "antigravity") {
     const agy = antigravityLogin();
     if ("token" in agy) {
       mkdirSync(join(home, ".gemini/antigravity-cli"), { recursive: true });
       symlinkSync(agy.token, join(home, ".gemini/antigravity-cli/antigravity-oauth-token"));
     } else login.GEMINI_API_KEY = agy.GEMINI_API_KEY;
-    // What setup writes (cli/src/setup/harnesses.ts): the plugin, its always_on rule and the skill.
-    const dir = join(home, ".gemini/config/plugins/starbridge");
-    cpSync(join(armDir, "mod/antigravity"), dir, { recursive: true });
-    copyFileSync(join(plugin, "hooks/cli.sh"), join(dir, "cli.sh"));
-    mkdirSync(join(dir, "rules"));
-    writeFileSync(
-      join(dir, "rules/starbridge.md"),
-      `---\ntrigger: always_on\n---\n\n${rule}`,
-    );
-    cpSync(join(plugin, "skills/starbridge"), join(dir, "skills/starbridge"), { recursive: true });
   } else if (agent === "pi") {
     // Only the providers and their API keys: Pi's auth.json may hold OAuth logins that refresh.
     copyFileSync(join(homedir(), ".pi/agent/models.json"), join(cfg, "models.json"));
   } else {
     // opencode reads its config from `$XDG_CONFIG_HOME/opencode` and its login from
     // `$XDG_DATA_HOME/opencode/auth.json`: the API keys alone (the Z.ai key).
-    const conf = agent === "opencode" ? join(cfg, "opencode") : cfg;
     if (agent === "opencode") {
       mkdirSync(join(root, "data/opencode"), { recursive: true });
       writeFileSync(
@@ -910,9 +874,16 @@ async function one(s: Scenario, arm: string, rep: number): Promise<RunRecord> {
       });
       if (r.status !== 0) throw new Error(`codex login --with-api-key: ${r.stderr}`);
     }
-    cpSync(join(plugin, "skills/starbridge"), join(conf, "skills/starbridge"), { recursive: true });
-    writeFileSync(join(conf, "AGENTS.md"), `${rule.trimEnd()}\n`);
   }
+
+  // What the harness gets is what `starbridge setup` of this arm's version writes (#2268).
+  if ((SETUP_AGENTS as readonly string[]).includes(agent))
+    installHarness(
+      bun,
+      armCli[arm] as string,
+      agent as SetupAgent,
+      setupEnv(agent as SetupAgent, { home, sb, cfg }),
+    );
 
   const env: Record<string, string> = {
     HOME: home,
