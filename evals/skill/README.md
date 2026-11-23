@@ -28,7 +28,7 @@ and uses the providers in `~/.pi/agent`. Codex, opencode, Cursor and Antigravity
 the `before` arm's CLI is bundled from `--before`), so the eval keeps no copy of setup's files and
 cannot drift from them (#2268). That is Codex's plugin and its SessionStart rule (`codex exec`
 runs with `--dangerously-bypass-hook-trust`, since setup leaves the trust to the owner), opencode's
-skill and plugin in `$XDG_CONFIG_HOME/opencode` (`opencode run --pure --auto`, which waits for
+skill and plugin in `$XDG_CONFIG_HOME/opencode` (`opencode run --auto`, which waits for
 answers as `codex exec` does), Cursor's skill and hooks (`cursor-agent -p --force`) and
 Antigravity's plugin (`agy -p --dangerously-skip-permissions`). Cursor and Antigravity have no live session, so
 they skip the `live` situations. Anthropic bills a Claude subscription used from Pi as

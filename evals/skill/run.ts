@@ -297,10 +297,10 @@ async function turn(
       ...(resume ? ["--conversation", resume] : []),
     ];
   } else if (agent === "opencode") {
-    // `opencode run` rejects every permission prompt; `--auto` allows them, as Codex's bypass.
+    // `opencode run` rejects every permission prompt; `--auto` allows them, as Codex's bypass. No
+    // `--pure`: it turns external plugins off, and the rule comes with Starbridge's plugin.
     args = [
       "run",
-      "--pure",
       "--auto",
       "--format",
       "json",
@@ -837,7 +837,7 @@ async function one(s: Scenario, arm: string, rep: number): Promise<RunRecord> {
   ghShim(bin, gh, ghLog);
   writeFileSync(
     join(bin, "starbridge"),
-    `#!/bin/sh\nexec '${bun}' '${cliBundle}' "$@"\n`,
+    `#!/bin/sh\nexec '${bun}' '${armCli[arm] ?? cliBundle}' "$@"\n`,
   );
   chmodSync(join(bin, "starbridge"), 0o755);
 

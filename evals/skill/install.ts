@@ -5,8 +5,15 @@
  * Antigravity are installed this way; Claude Code and Pi load the arm's plugin and extension by flag.
  */
 import { spawnSync } from "node:child_process";
-import { mkdirSync, symlinkSync } from "node:fs";
-import { dirname, join } from "node:path";
+import {
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  realpathSync,
+  symlinkSync,
+} from "node:fs";
+import { join, relative, sep } from "node:path";
 
 export const SETUP_AGENTS = ["codex", "opencode", "cursor", "antigravity"] as const;
 export type SetupAgent = (typeof SETUP_AGENTS)[number];
@@ -31,15 +38,32 @@ export function setupEnv(
   };
 }
 
-/** `cli` is a bundle or `cli/src/main.ts`; throws with setup's own output when it fails. */
+/**
+ * `cli` is a bundle or `cli/src/main.ts`; throws with setup's own output when it fails. It runs in
+ * the throwaway home with no `.env` loaded, so neither the caller's folder nor a `.env` there can
+ * point setup at the owner's own config.
+ */
 export function installHarness(
   bun: string,
   cli: string,
   agent: SetupAgent,
   env: Record<string, string>,
 ): string {
-  const r = spawnSync(bun, [cli, "setup", "--agent", agent], { env, encoding: "utf8" });
+  mkdirSync(env.HOME as string, { recursive: true });
+  const r = spawnSync(bun, ["--no-env-file", cli, "setup", "--agent", agent], {
+    env,
+    cwd: env.HOME,
+    encoding: "utf8",
+  });
   if (r.status !== 0) throw new Error(`starbridge setup --agent ${agent}: ${r.stdout}${r.stderr}`);
+  // Setup notes a failed `codex plugin add` and exits 0, which would leave a run with no rule. A
+  // version that has no Codex plugin says nothing of one.
+  if (agent === "codex" && /plugin/i.test(r.stdout)) {
+    const config = join(env.CODEX_HOME as string, "config.toml");
+    const text = existsSync(config) ? readFileSync(config, "utf8") : "";
+    if (!text.includes('[plugins."starbridge@starbridge-cli"]'))
+      throw new Error(`starbridge setup --agent codex left the plugin uninstalled: ${r.stdout}`);
+  }
   return r.stdout;
 }
 
@@ -47,8 +71,38 @@ export function installHarness(
 const SKIPPED = ["android", "ios", "web", "desktop", "docs", "deploy", "demo", "evals", "landing"];
 
 /**
+ * Links the packages of `repo`'s `<rel>/node_modules` into `dir`'s, one by one. A workspace
+ * package (a link into the checkout, outside any `node_modules`) goes to the archive's own copy,
+ * so the archived CLI never loads the checkout's `packages/protocol`.
+ */
+function linkModules(repo: string, dir: string, rel: string) {
+  const from = join(repo, rel, "node_modules");
+  if (!existsSync(from)) return;
+  const to = join(dir, rel, "node_modules");
+  const link = (name: string) => {
+    const target = realpathSync(join(from, name));
+    const workspace =
+      !relative(repo, target).startsWith("..") && !target.includes(`${sep}node_modules${sep}`);
+    try {
+      symlinkSync(workspace ? join(dir, relative(repo, target)) : target, join(to, name));
+    } catch {
+      // Already linked.
+    }
+  };
+  mkdirSync(to, { recursive: true });
+  for (const name of readdirSync(from)) {
+    if (!name.startsWith("@")) link(name);
+    else {
+      mkdirSync(join(to, name), { recursive: true });
+      for (const sub of readdirSync(join(from, name))) link(join(name, sub));
+    }
+  }
+}
+
+/**
  * The CLI of an older ref, bundled, so the `before` arm installs what that version's setup wrote.
- * `repo`'s dependencies are linked in, since the archive holds no `node_modules`.
+ * The archive holds no `node_modules`: `repo`'s third-party packages are linked in, and its
+ * workspace packages are the archive's own.
  */
 export function buildCliAt(bun: string, repo: string, ref: string, dir: string, out: string) {
   const tar = spawnSync("git", ["-C", repo, "archive", ref], { maxBuffer: 1 << 29 });
@@ -57,14 +111,7 @@ export function buildCliAt(bun: string, repo: string, ref: string, dir: string, 
   const skip = SKIPPED.map((d) => `--exclude=./${d}`);
   if (spawnSync("tar", ["-x", "-C", dir, ...skip], { input: tar.stdout }).status !== 0)
     throw new Error(`tar -x of ${ref}`);
-  for (const nm of ["node_modules", "cli/node_modules", "packages/protocol/node_modules"]) {
-    mkdirSync(dirname(join(dir, nm)), { recursive: true });
-    try {
-      symlinkSync(join(repo, nm), join(dir, nm));
-    } catch {
-      // Already there, or the repo has none: the build says what it misses.
-    }
-  }
+  for (const rel of [".", "cli", "packages/protocol"]) linkModules(repo, dir, rel);
   const r = spawnSync(
     bun,
     ["build", join(dir, "cli/src/main.ts"), "--target", "bun", "--outfile", out],
