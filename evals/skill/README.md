@@ -22,13 +22,15 @@ bun evals/skill/render.ts --out evals/skill/cards evals/skill/results/claude/aft
 CLI paired to it, a git project with a bare remote, and a `gh` that prints canned output. Nothing
 touches your own `~/.claude`, `~/.codex`, `~/.pi` or opencode config. Claude Code loads the plugin with
 `--plugin-dir` and runs with `--permission-mode bypassPermissions`, so its auto-mode classifier
-cannot block the stub (#1021); Codex gets the skill in `$CODEX_HOME/skills` and the rule in
-`$CODEX_HOME/AGENTS.md`, opencode the same in `$XDG_CONFIG_HOME/opencode` (`opencode run
---pure --auto`, which waits for answers as `codex exec` does); Pi loads the Starbridge extension and skill with `-e` and `--skill`,
-and uses the providers in `~/.pi/agent`. Cursor and Antigravity get what `starbridge setup` writes
-for them, in the run's home: Cursor the skill in `~/.cursor/skills` and its hooks in
-`~/.cursor/hooks.json` (`cursor-agent -p --force`), Antigravity the plugin in
-`~/.gemini/config/plugins` (`agy -p --dangerously-skip-permissions`). Neither has a live session, so
+cannot block the stub (#1021); Pi loads the Starbridge extension and skill with `-e` and `--skill`,
+and uses the providers in `~/.pi/agent`. Codex, opencode, Cursor and Antigravity get what
+`starbridge setup --agent <name>` of each arm's version writes in the run's home (`install.ts`;
+the `before` arm's CLI is bundled from `--before`), so the eval keeps no copy of setup's files and
+cannot drift from them (#2268). That is Codex's plugin and its SessionStart rule (`codex exec`
+runs with `--dangerously-bypass-hook-trust`, since setup leaves the trust to the owner), opencode's
+skill and plugin in `$XDG_CONFIG_HOME/opencode` (`opencode run --auto`, which waits for
+answers as `codex exec` does), Cursor's skill and hooks (`cursor-agent -p --force`) and
+Antigravity's plugin (`agy -p --dangerously-skip-permissions`). Cursor and Antigravity have no live session, so
 they skip the `live` situations. Anthropic bills a Claude subscription used from Pi as
 extra usage, so Pi runs on another model. While a non-interactive agent waits, the owner answers its first card with the
 recommended option; situations with a follow-up check that it acts on the answer. An interactive
