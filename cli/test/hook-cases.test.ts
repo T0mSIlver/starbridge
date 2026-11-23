@@ -463,6 +463,20 @@ const IMPL: Record<CaseName, (row: Row) => Promise<void>> = {
     expect(await took(ended, 9_000)).toBeLessThan(6_500);
     h.cut();
     expect(await took(h.done, 9_000)).toBeLessThan(6_500);
+    if (row.card !== "decision") return;
+    // A slow directory read cut by the deadline leaves the card closed here, its notice owed, so
+    // the agent posts it again and no answer is taken for a picker that is gone (#2278).
+    const slow = await rig(row.rig);
+    const hs = await row.start(slow, 1);
+    await open(row, slow, 1);
+    slow.server.stalls.push("GET /directory", "GET /directory", "GET /directory");
+    const endedSlow = row.end ? row.end(slow, hs) : Promise.resolve(hs.cut());
+    expect(await took(endedSlow, 9_000)).toBeLessThan(6_500);
+    hs.cut();
+    await took(hs.done, 9_000);
+    const [card] = await stored(row, slow);
+    const kept = slow.ctx.store.state().asked[card?.id as string];
+    expect([kept?.settled, kept?.unposted]).toEqual([true, true]);
   },
 
   async lostReply(row) {

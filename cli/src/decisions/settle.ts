@@ -63,6 +63,10 @@ export async function settle(ctx: Ctx, opts: SettleOpts): Promise<number> {
       ctx.err(`starbridge: ${staleLine(ctx.store.state(), id, ctx.now())}`);
       return 0;
     }
+    // Closed here before the directory is read: a deadline that cuts the read leaves the notice
+    // owed, which the agent posts again, not a card that still takes answers (#2278).
+    if (opts.deadline)
+      closeHere(ctx, id, outcome ?? (asked.answerIn ? "elsewhere" : "withdrawn"), reason);
     const s = session(ctx);
     const dir = await refreshDirectory(ctx, s, opts.deadline);
     // An answer that came before the settle closed the decision: its session may not have it
@@ -149,6 +153,38 @@ async function settleMany(
 }
 
 /**
+ * Closes decision `id` here first: from now on no answer to it is accepted or delivered, even if
+ * the post of its notice fails or is cut off. An answer this machine accepted closed it, whether
+ * or not its session took it yet (#1575), and a withdrawal would contradict it; checked in the
+ * same update, so an answer accepted in another process cannot slip in between. True when an
+ * answer closed it. Marking a decision already marked keeps the first word.
+ */
+export function closeHere(
+  ctx: Ctx,
+  id: string,
+  outcome: "elsewhere" | "withdrawn",
+  reason?: string,
+): boolean {
+  let answered = false;
+  ctx.store.updateState((st) => {
+    answered = !!st.answers[id];
+    const a = st.asked[id];
+    if (a && !answered) {
+      a.settled = true;
+      a.unposted = true;
+      // The first settle's word stands while its notice is in flight: a second one is refused.
+      if (!a.settledAt) {
+        a.settledAt = iso(ctx.now());
+        a.outcome = outcome;
+        if (reason !== undefined && outcome === "withdrawn") a.reason = reason;
+      }
+      forget(a);
+    }
+  });
+  return answered;
+}
+
+/**
  * Closes decision `id` here, then tells the devices of `dir`; `bulk` for `settleMany`. False
  * when an answer closed it instead.
  */
@@ -167,27 +203,7 @@ export async function settleOne(
   // decision `settle` closed earlier is posted again, in case that post failed.
   if (!asked || asked.revoked) return false;
   const outcome = outcomeOpt ?? (asked.answerIn ? "elsewhere" : "withdrawn");
-  // Closed here first: from now on no answer to it is accepted or delivered, even if the post fails.
-  // An answer this machine accepted closed it, whether or not its session took it yet (#1575), and
-  // a withdrawal would contradict it; checked in the same update, so an answer accepted in
-  // another process cannot slip in between.
-  let answered = false;
-  ctx.store.updateState((st) => {
-    answered = !!st.answers[id];
-    const a = st.asked[id];
-    if (a && !answered) {
-      a.settled = true;
-      a.unposted = true;
-      // The first settle's word stands while its notice is in flight: a second one is refused.
-      if (!a.settledAt) {
-        a.settledAt = iso(ctx.now());
-        a.outcome = outcome;
-        if (reason !== undefined && outcome === "withdrawn") a.reason = reason;
-      }
-      forget(a);
-    }
-  });
-  if (answered) return false;
+  if (closeHere(ctx, id, outcome, reason)) return false;
   const to = devices(ctx, dir);
   const body = {
     v: 1 as const,
