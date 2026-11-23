@@ -119,7 +119,7 @@ In an interactive or RPC Pi session it submits each answer as a user message,
 which starts a turn when Pi is idle. When Pi is busy, the answer enters the
 running turn at its next tool call (`deliverAs: "steer"`). It also adds its rule (`plugin/rules/pi.md`) to Pi's system
 prompt. In `pi -p`, whose run ends with its turn, the loop only steers an answer into the running
-turn and confirms it once the steered message enters the context, so `starbridge ask` still tells
+turn and confirms it once the message is in what Pi sends to the model, so `starbridge ask` still tells
 the agent to `starbridge wait` (#2280).
 
 With [pi-permission-system](https://github.com/gotgenes/pi-packages/tree/main/packages/pi-permission-system)
@@ -157,7 +157,7 @@ opencode gives commands no session id, so the plugin's `shell.env` hook sets
 session's loop. Each answer goes in with `promptAsync`: an idle session starts
 a turn, a busy one takes it at its next step. In `opencode run`, which exits once the session is
 idle, the loop only submits an answer into the running turn and confirms it once its message is in
-the session, so `starbridge ask` still tells the agent to `starbridge wait` (#2280). The rule goes into
+what opencode sends to the model, so `starbridge ask` still tells the agent to `starbridge wait` (#2280). The rule goes into
 the system prompt through `experimental.chat.system.transform`.
 
 Each `permission.asked` event runs `starbridge hook permission --agent

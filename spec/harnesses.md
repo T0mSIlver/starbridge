@@ -147,22 +147,32 @@ to its session, the `wait` line's safe side.
   2.1.317): the answer came with the next tool result, and the run exited 0.6 s after its turn.
   `pi -p` and `opencode run` do the same through the Pi extension and the opencode plugin (#2280).
   Both confirm a line the moment they submit it, which in a run that then exits loses it, so
-  they hold it unconfirmed (`mod/hooks/unread.ts`) until the agent has read it: Pi's steered
-  message enters the context (`message_start`, a user message holding the line), opencode's
-  message is in the session (`message.part.updated`, a text part of a user message holding the
-  line). Only then do they confirm it, through the loop's `claim`, which drops a line a `wait`
-  printed first. A line goes in only while the turn runs (Pi's `agent_start` to `agent_end`,
-  opencode's `session.status` busy to `session.idle`), since an idle session would start a turn
-  of its own with it. One that misses the turn stays unconfirmed for `wait`. Like `claude -p`,
-  each sets no `STARBRIDGE_PI_ANSWERS` or `STARBRIDGE_OPENCODE_ANSWERS`, runs no CLI path and
-  polls with 1 s holds, and its hello says `headless`, so its question gets the `turn` route and
-  `ask` prints the `wait` line. opencode's loop starts at the run's first command and takes no
-  claim file, since no other process shows a run's session. A subagent's session of an
-  `opencode run` gets no loop, as before. An answer that reaches the agent by steer or message
-  while a `wait` is printing it is read twice; the loop confirms it once. Checked with real Pi
-  1.5.2 and opencode 1.19.6 against a stub model and agent: the answer reached the model's next
-  request, was confirmed after it, and each run exited within 0.5 s of its turn; an answer after
-  the turn was never submitted nor confirmed.
+  they hold it unconfirmed (`mod/hooks/unread.ts`) until the agent has read it: the line is in
+  the messages about to go to the model, which Pi's `context` event and opencode's
+  `experimental.chat.messages.transform` hook show after every other extension or plugin had its
+  say. A message saved to the session (opencode's `message.part.updated`) is not enough: a run
+  can end before the request. Only then do they confirm it, through the loop's `claim`, which
+  drops a line a `wait` printed first; that round trip runs apart from the request. A confirmed
+  line is kept for the run, so a poll that was in flight cannot submit it again. A line goes in
+  only while the turn runs (Pi's `agent_start` to `agent_end`, opencode's `session.status` busy
+  to `session.idle`), since an idle session would start a turn of its own with it. One that
+  misses the turn stays unconfirmed for `wait`. Pi gets the line as a custom message
+  (`pi.sendMessage`, `deliverAs: "steer"`), which queues into the running turn and only sits in
+  the session when none runs; `sendUserMessage` runs Pi's input hooks first, and a run that ends
+  meanwhile would start a turn with it. opencode gets it from `promptAsync` with the run's own
+  agent and model (its latest user message's), so `--agent plan` stays in `plan`. Like
+  `claude -p`, each sets no `STARBRIDGE_PI_ANSWERS` or `STARBRIDGE_OPENCODE_ANSWERS`, runs no CLI
+  path and polls with 1 s holds, and its hello says `headless`, so its question gets the `turn`
+  route and `ask` prints the `wait` line. opencode's loop starts at the run's first command, once
+  the session's lookup succeeded and showed no parent, and takes the claim file interactive
+  sessions take, so `opencode run --session <id>` and an interactive process showing that session
+  do not both submit one answer. An opencode subagent's session gets no loop, as before.
+  Limits: `promptAsync` has no way to bind a submit to the turn, so an answer sent in the
+  milliseconds the turn ends may start a new one, which then runs to its end and stays unconfirmed
+  until the agent has read it; and an answer that comes while a `wait` is printing it is read
+  twice, though confirmed once. Checked with real Pi 1.5.2 and opencode 1.19.6 against a stub
+  model and agent: the answer reached the model's next request, was confirmed after it, and each
+  run exited within 0.5 s of its turn; an answer after the turn was never submitted nor confirmed.
   `codex exec` has no route in.
 - **Claude desktop on another machine** (#1428, #2107). Claude desktop starts a session over SSH
   with `--plugin-dir` copies of the plugins installed on the computer it runs on, synced without

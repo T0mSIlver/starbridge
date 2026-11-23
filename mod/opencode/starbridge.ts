@@ -13,7 +13,7 @@
  * STARBRIDGE_OPENCODE_TITLE for them (cli/src/opencode.ts), and STARBRIDGE_OPENCODE_ANSWERS while
  * answers come back as prompts, which they cannot in `opencode run`: it exits once the session is
  * idle. There the loop only submits an answer while the turn runs, and holds it unconfirmed until
- * its message shows up in the session (unread.ts, #2280); `ask` says to wait for the answer.
+ * its message is in what opencode sends to the model (unread.ts, #2280); `ask` says to wait for the answer.
  *
  * Each permission prompt goes to `starbridge hook permission --agent opencode`, which does
  * nothing while `starbridge config permissions` is off. opencode's dialog stays up meanwhile, and
@@ -67,7 +67,11 @@ interface Client {
     }): Promise<{ data?: { title?: string; parentID?: string; directory?: string } }>;
     promptAsync(o: {
       path: { id: string };
-      body: { parts: { type: "text"; text: string }[] };
+      body: {
+        parts: { type: "text"; text: string }[];
+        agent?: string;
+        model?: { providerID: string; modelID: string };
+      };
     }): Promise<{ error?: unknown }>;
   };
   /** The generated client underneath, for the reply route the v1 classes lack. */
@@ -355,14 +359,18 @@ async function server({ client, directory }: Input) {
 
   /** In `opencode run`: the submitted answers its agent has not read yet, by session. */
   const unreads = new Map<string, Unread>();
-  /** The ids of those sessions' user messages. */
-  const users = new Set<string>();
+  /** The agent and model of each session's latest user message, which an answer carries. */
+  const turns = new Map<
+    string,
+    { agent?: string; model?: { providerID: string; modelID: string } }
+  >();
 
   const loop = (id: string) => {
     if (loops.has(id)) return;
     const sessionId = async () => id;
     // A run's answers go only into the turn that runs, and stay unconfirmed until the agent read
-    // them: it has no other process showing its session, so no claim is needed (#2280).
+    // them (#2280). A claim still keeps two processes that show one session (`opencode run
+    // --session`) from submitting one answer twice.
     const held = headless ? new Unread() : undefined;
     if (held) {
       // The first command of a run comes during its turn.
@@ -371,7 +379,9 @@ async function server({ client, directory }: Input) {
     }
     const prompt = async (text: string) => {
       const r = await client.session
-        .promptAsync({ path: { id }, body: { parts: [{ type: "text", text }] } })
+        // The answer continues the turn's own agent and model: opencode would take its default,
+        // which `--agent plan` must not fall back to.
+        .promptAsync({ path: { id }, body: { parts: [{ type: "text", text }], ...turns.get(id) } })
         .catch((e: unknown) => ({ error: e }));
       if (r.error) log(`starbridge: opencode refused an answer, trying again: ${String(r.error)}`);
       return !r.error;
@@ -381,7 +391,18 @@ async function server({ client, directory }: Input) {
     // stays unconfirmed here until that process marks it sent. The lines this process claims go
     // as one prompt (#1597).
     const submit = async (lines: Line[]) => {
-      if (held) return held.submit(lines, (fresh) => prompt(joinLines(fresh)));
+      if (held)
+        return held.submit(lines, async (fresh) => {
+          const claims = await Promise.all(fresh.map((l) => claim(dir, id, l.text)));
+          const mine = fresh.flatMap((l, i) => {
+            const c = claims[i];
+            return c?.state === "mine" ? [{ ...l, token: c.token }] : [];
+          });
+          if (mine.length === 0) return [];
+          if (await prompt(joinLines(mine))) return mine;
+          await Promise.all(mine.map((l) => unclaim(dir, id, l.text, l.token)));
+          return [];
+        });
       const claims = await Promise.all(lines.map((l) => claim(dir, id, l.text)));
       const sent = lines.filter((_, i) => claims[i]?.state === "sent").map((l) => l.ack);
       const mine = lines.flatMap((l, i) => {
@@ -544,13 +565,39 @@ async function server({ client, directory }: Input) {
       // would take for the agent asking.
       for (const name of INHERITED) output.env[name] = "";
       const session = await info(id);
-      if (session?.title) output.env[TITLE_ENV] = session.title;
+      // A failed lookup is no proof the session is top-level: its loop starts with the next command.
+      if (!session) return;
+      if (session.title) output.env[TITLE_ENV] = session.title;
       // A subagent's session ends with its task, so an answer submitted there reaches nobody:
       // its agent waits for the answer instead.
       if (session?.parentID) return;
       // `ask` promises a prompt only where one would run.
       if (answers) output.env[ANSWERS_ENV] = id;
       loop(id);
+    },
+    // The messages opencode is about to send to the model: an answer in them is read (#2280).
+    "experimental.chat.messages.transform": async (
+      _input: unknown,
+      output: {
+        messages: {
+          info: { sessionID: string; role: string };
+          parts: { type: string; text?: string }[];
+        }[];
+      },
+    ) => {
+      const texts = new Map<string, string[]>();
+      for (const m of output.messages) {
+        if (m.info.role !== "user" || !unreads.get(m.info.sessionID)?.pending) continue;
+        const list = texts.get(m.info.sessionID) ?? [];
+        for (const p of m.parts) if (p.type === "text" && p.text) list.push(p.text);
+        texts.set(m.info.sessionID, list);
+      }
+      // The round trip to confirm runs apart, so the request is not held.
+      for (const [session, list] of texts)
+        void unreads
+          .get(session)
+          ?.entered(list.join("\n"), async (acks) => (await loops.get(session)?.claim(acks)) ?? [])
+          .catch(() => {});
     },
     "experimental.chat.system.transform": async (_input: unknown, output: { system: string[] }) => {
       if (text) output.system.push(text);
@@ -578,21 +625,19 @@ async function server({ client, directory }: Input) {
         };
         if (status?.type === "busy") unreads.get(sessionID)?.turn(true);
       } else if (event.type === "message.updated") {
-        // The messages the user role wrote: a line is read once one of them holds it.
         const { info } = event.properties as {
-          info: { id: string; sessionID: string; role: string };
+          info: {
+            sessionID: string;
+            role: string;
+            agent?: string;
+            model?: { providerID: string; modelID: string };
+          };
         };
-        if (info.role === "user" && unreads.has(info.sessionID)) users.add(info.id);
-      } else if (event.type === "message.part.updated") {
-        const { part } = event.properties as {
-          part: { type: string; text?: string; messageID: string; sessionID: string };
-        };
-        if (part.type !== "text" || !users.has(part.messageID)) return;
-        // The answer is in the session, which `promptAsync` returns before it is (#2280).
-        const session = part.sessionID;
-        void unreads
-          .get(session)
-          ?.entered(part.text ?? "", async (acks) => (await loops.get(session)?.claim(acks)) ?? []);
+        if (info.role === "user")
+          turns.set(info.sessionID, {
+            ...(info.agent ? { agent: info.agent } : {}),
+            ...(info.model ? { model: info.model } : {}),
+          });
       } else if (event.type === "session.idle") {
         // The turn ended (Esc, an error) with prompts still out: they are moot.
         const session = (event.properties as { sessionID: string }).sessionID;
@@ -607,6 +652,7 @@ async function server({ client, directory }: Input) {
         loops.delete(id);
         unreads.get(id)?.ended();
         unreads.delete(id);
+        turns.delete(id);
       }
     },
     dispose: async () => {

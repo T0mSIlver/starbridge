@@ -8,8 +8,8 @@
  *
  * While the loop runs, the session's commands get its id in STARBRIDGE_PI_ANSWERS, so `starbridge ask`
  * says the answer comes back as a prompt. In `pi -p` it says to wait for it instead, and the loop
- * only steers an answer into the running turn, holding it unconfirmed until the steered message
- * enters the context (unread.ts, #2280).
+ * only steers an answer into the running turn, holding it unconfirmed until the message is in what Pi
+ * sends to the model (unread.ts, #2280).
  *
  * With rpiv-ask-user-question installed, it races each of its questionnaires on the devices
  * (questions.ts).
@@ -77,14 +77,18 @@ interface PiApi {
   ): void;
   on(event: "agent_start" | "agent_end", handler: (e: unknown, ctx: Ctx) => unknown): void;
   on(
-    event: "message_start",
-    handler: (e: { message: { role?: string; content?: unknown } }, ctx: Ctx) => unknown,
+    event: "context",
+    handler: (e: { messages: { role?: string; content?: unknown }[] }, ctx: Ctx) => unknown,
   ): void;
   on(
     event: "tool_execution_end",
     handler: (e: { toolName: string; toolCallId?: string }, ctx: Ctx) => unknown,
   ): void;
   sendUserMessage(text: string, options?: { deliverAs?: "steer" | "followUp" }): void;
+  sendMessage(
+    message: { customType: string; content: string; display: boolean },
+    options?: { deliverAs?: "steer" | "followUp" | "nextTurn"; triggerTurn?: boolean },
+  ): void;
   events: {
     on(channel: string, handler: (data: unknown) => void): () => void;
     emit(channel: string, data: unknown): void;
@@ -292,15 +296,29 @@ export default function starbridge(pi: PiApi) {
     const steer = (lines: Line[]) => {
       try {
         pi.sendUserMessage(joinLines(lines), { deliverAs: "steer" });
-        return true;
+        return lines;
       } catch {
-        return false;
+        return [];
+      }
+    };
+    // `pi -p`: a custom message queues into the running turn, or sits in the session when none
+    // runs, but never starts one: `sendUserMessage` runs Pi's input hooks first, and a run that
+    // ends meanwhile would start a turn with the answer (#2280).
+    const queue = (lines: Line[]) => {
+      try {
+        pi.sendMessage(
+          { customType: "starbridge-answer", content: joinLines(lines), display: true },
+          { deliverAs: "steer" },
+        );
+        return lines;
+      } catch {
+        return [];
       }
     };
     const submit = (lines: Line[]): string[] | Promise<string[]> => {
       if (over.aborted) return [];
-      if (held) return held.submit(lines, steer);
-      return steer(lines) ? lines.map((l) => l.ack) : [];
+      if (held) return held.submit(lines, queue);
+      return steer(lines).map((l) => l.ack);
     };
     const status = (s: string | undefined) => {
       if (over.aborted) return;
@@ -366,18 +384,24 @@ export default function starbridge(pi: PiApi) {
 
   pi.on("agent_start", () => unread?.turn(true));
   pi.on("agent_end", () => unread?.turn(false));
-  // The steered message entering the context is the agent having read it (#2280).
-  pi.on("message_start", (e) => {
-    const m = e.message;
-    if (m?.role !== "user" || !unread) return;
-    const c = m.content;
-    const text =
-      typeof c === "string"
-        ? c
-        : Array.isArray(c)
-          ? c.map((p) => (typeof p?.text === "string" ? p.text : "")).join("\n")
-          : "";
-    return unread.entered(text, async (acks) => (await loop?.claim(acks)) ?? []);
+  // The answer in the messages Pi is about to send to the model, after every extension had its
+  // say, is the agent having read it (#2280). The round trip to confirm it runs apart, so Pi's
+  // request is not held.
+  pi.on("context", (e) => {
+    const held = unread;
+    if (!held?.pending) return undefined;
+    const text = e.messages
+      .filter((m) => m?.role === "user" || m?.role === "custom")
+      .map((m) =>
+        typeof m.content === "string"
+          ? m.content
+          : Array.isArray(m.content)
+            ? m.content.map((p) => (typeof p?.text === "string" ? p.text : "")).join("\n")
+            : "",
+      )
+      .join("\n");
+    void held.entered(text, async (acks) => (await loop?.claim(acks)) ?? []).catch(() => {});
+    return undefined;
   });
 
   // A new, resumed or forked session gets its own `session_start` and loop; only quitting tells
