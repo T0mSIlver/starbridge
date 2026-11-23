@@ -93,7 +93,22 @@ export async function upload(opts: {
             "application/octet-stream",
           )
         ).versionCode;
-    if (have) console.log(`Play already has versionCode ${versionCode}; not uploading it again.`);
+    if (have) {
+      // Play's duplicate-version refusal no longer guards an older rerun, so the track is checked:
+      // rolling an older code out as the only release would replace, and can cancel, a newer one.
+      type Track = { releases?: { versionCodes?: string[] }[] };
+      const track = await call<Track>("GET", `${at}/tracks/${opts.track}`).catch((e): Track => {
+        // A track that has no release yet is a 404.
+        if (e instanceof PlayError && e.message.includes(": 404")) return {};
+        throw e;
+      });
+      const newer = (track.releases ?? []).flatMap((r) => r.versionCodes ?? []).map(Number);
+      if (newer.some((c) => c > versionCode))
+        throw new PlayError(
+          `Play's ${opts.track} track already has versionCode ${Math.max(...newer)}, above ${versionCode} of ${opts.version}; not putting the older one on it.`,
+        );
+      console.log(`Play already has versionCode ${versionCode}; not uploading it again.`);
+    }
     // Notes in the listing's default language, the one every tester falls back to.
     const { defaultLanguage } = await call<{ defaultLanguage: string }>("GET", `${at}/details`);
     await call(
