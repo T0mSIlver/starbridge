@@ -461,14 +461,15 @@ export class Decisions implements Feature {
     let first = true;
     let directory: { dir: Directory; at: number } | undefined;
     while (!signal.aborted) {
-      if (!this.ctx.store.machine()) {
-        this.lastError = "not paired: run `starbridge pair`";
-        await pause(UNPAIRED_MS, signal);
-        continue;
-      }
-      const st = this.ctx.store.state();
       const seconds = first ? 0 : POLL_SECONDS;
       try {
+        // Inside the retry: an unreadable file is reported and read again once it is repaired.
+        if (!this.ctx.store.machine()) {
+          this.lastError = "not paired: run `starbridge pair`";
+          await pause(UNPAIRED_MS, signal);
+          continue;
+        }
+        const st = this.ctx.store.state();
         if (directory && Date.now() - directory.at > DIRECTORY_MS) directory = undefined;
         await this.ctx.store.unlocked();
         const s = session(this.ctx);

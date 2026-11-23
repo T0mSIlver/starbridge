@@ -180,6 +180,25 @@ test("two sessions each get only their own answers, held until they arrive, unti
   expect(after.sessions.map((s) => s.id)).toEqual(["s2"]);
 });
 
+test("an agent whose state.json lacks its fields survives and recovers once it is repaired (#2274)", async () => {
+  const ctx = await paired(server);
+  const file = join(ctx.store.dir, "state.json");
+  const good = readFileSync(file, "utf8");
+  writeFileSync(file, "{}\n");
+  const socket = agentAddress(ctx.store.dir);
+  const agent = makeAgent(ctx, { socket });
+  await agent.start();
+  agents.push(agent);
+  const status = () => new AgentClient(socket).call<Status>("GET", "/v1/status");
+  // The retry waits out its backoff before it reads the file again.
+  await new Promise((r) => setTimeout(r, 300));
+  writeFileSync(file, good);
+  await until(
+    async () => (await status().catch(() => undefined))?.server.reachable === true,
+    40_000,
+  );
+}, 60_000);
+
 test("several CLI clients at once: ask, wait, answers and quota push all go through the agent", async () => {
   const { socket } = await machine();
   const clients = Array.from({ length: 5 }, () => client(socket));

@@ -546,7 +546,9 @@ export class Store {
         p,
         name === "directory.json"
           ? "is not in this starbridge's format: remove it, the server's copy is read again"
-          : "is not in this starbridge's format: move it away, then run `starbridge pair`",
+          : name === "latest.json"
+            ? "is not in this starbridge's format: the agent's next release check moves it aside and reads GitHub again"
+            : "is not in this starbridge's format: move it away, then run `starbridge pair`",
       );
     if (!isRecord(value)) throw bad();
     // Before the shape: a newer file may hold fields this one does not know.

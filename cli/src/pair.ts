@@ -47,6 +47,8 @@ export async function pair(
     throw new UsageError(
       `this machine is already paired as "${previous.name}" on ${previous.server}; \`starbridge pair --force\` pairs it again with new keys`,
     );
+  // An unreadable state stops here, not after the new identity is written (#2274).
+  ctx.store.state();
   // Pairing again stays on the same server, under the same name, unless told otherwise.
   const server = opts.server ?? ctx.env.STARBRIDGE_SERVER ?? previous?.server ?? DEFAULT_SERVER;
 
@@ -153,6 +155,9 @@ export async function pair(
 
   const token = result.token;
   ctx.store.locked(() => {
+    // Read again under the lock: a state file that broke meanwhile must not leave a new identity
+    // behind the failed reset below.
+    ctx.store.state();
     ctx.store.saveDirectory(entries);
     ctx.store.saveMachine({
       server,

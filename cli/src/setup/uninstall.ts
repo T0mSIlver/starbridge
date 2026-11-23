@@ -68,7 +68,15 @@ export async function withdrawRevokeCards(ctx: Ctx): Promise<void> {
 
 export async function uninstall(sys: Sys, opts: UninstallOpts): Promise<number> {
   const { ctx, prompt } = sys;
-  const machine = ctx.store.machine();
+  let machine: ReturnType<typeof ctx.store.machine>;
+  try {
+    machine = ctx.store.machine();
+  } catch (e) {
+    // The uninstall goes on: it removes what it can, and there is no name to remind about.
+    ctx.out(
+      `Could not read this machine's identity, so no revoke reminder is posted: ${(e as Error).message}`,
+    );
+  }
 
   // First, while the keys and the agent still work: a machine signs no directory entries, so
   // only a device can revoke it.

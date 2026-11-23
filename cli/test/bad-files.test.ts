@@ -278,6 +278,7 @@ test.skipIf(process.platform === "win32").each(["machine.json", "state.json", "l
       const said = [...ctx.lines, ...ctx.errors].join("\n");
       expect(said).toContain(`${file} is not in this starbridge's format`);
       expect(said).not.toContain("undefined");
+      if (name === "latest.json") expect(said).not.toContain("starbridge pair");
     } finally {
       writeFileSync(file, before);
     }
