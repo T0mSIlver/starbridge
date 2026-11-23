@@ -371,7 +371,17 @@ async function server({ client, directory }: Input) {
     // A run's answers go only into the turn that runs, and stay unconfirmed until the agent read
     // them (#2280). A claim still keeps two processes that show one session (`opencode run
     // --session`) from submitting one answer twice.
-    const held = headless ? new Unread() : undefined;
+    // The claim token of each answer submitted and not yet read, released if the run ends first.
+    const tokens = new Map<string, string>();
+    const held = headless
+      ? new Unread((texts) => {
+          for (const text of texts) {
+            const token = tokens.get(text);
+            tokens.delete(text);
+            if (token) void unclaim(dir, id, text, token);
+          }
+        })
+      : undefined;
     if (held) {
       // The first command of a run comes during its turn.
       held.turn(true);
@@ -392,16 +402,21 @@ async function server({ client, directory }: Input) {
     // as one prompt (#1597).
     const submit = async (lines: Line[]) => {
       if (held)
-        return held.submit(lines, async (fresh) => {
+        return held.submit(lines, async (fresh, live) => {
           const claims = await Promise.all(fresh.map((l) => claim(dir, id, l.text)));
           const mine = fresh.flatMap((l, i) => {
             const c = claims[i];
             return c?.state === "mine" ? [{ ...l, token: c.token }] : [];
           });
           if (mine.length === 0) return [];
+          const release = () =>
+            Promise.all(mine.map((l) => unclaim(dir, id, l.text, l.token))).then(() => []);
+          // The turn may have ended while the claims were taken: promptAsync would start another.
+          if (!live()) return release();
+          for (const l of mine) tokens.set(l.text, l.token);
           if (await prompt(joinLines(mine))) return mine;
-          await Promise.all(mine.map((l) => unclaim(dir, id, l.text, l.token)));
-          return [];
+          for (const l of mine) tokens.delete(l.text);
+          return release();
         });
       const claims = await Promise.all(lines.map((l) => claim(dir, id, l.text)));
       const sent = lines.filter((_, i) => claims[i]?.state === "sent").map((l) => l.ack);
@@ -581,7 +596,7 @@ async function server({ client, directory }: Input) {
       output: {
         messages: {
           info: { sessionID: string; role: string };
-          parts: { type: string; text?: string }[];
+          parts: { type: string; text?: string; ignored?: boolean }[];
         }[];
       },
     ) => {
@@ -589,7 +604,8 @@ async function server({ client, directory }: Input) {
       for (const m of output.messages) {
         if (m.info.role !== "user" || !unreads.get(m.info.sessionID)?.pending) continue;
         const list = texts.get(m.info.sessionID) ?? [];
-        for (const p of m.parts) if (p.type === "text" && p.text) list.push(p.text);
+        // opencode leaves an ignored part out of what it sends the model.
+        for (const p of m.parts) if (p.type === "text" && p.text && !p.ignored) list.push(p.text);
         texts.set(m.info.sessionID, list);
       }
       // The round trip to confirm runs apart, so the request is not held.

@@ -169,7 +169,10 @@ to its session, the `wait` line's safe side.
   do not both submit one answer. An opencode subagent's session gets no loop, as before.
   Limits: `promptAsync` has no way to bind a submit to the turn, so an answer sent in the
   milliseconds the turn ends may start a new one, which then runs to its end and stays unconfirmed
-  until the agent has read it; and an answer that comes while a `wait` is printing it is read
+  until the agent has read it; another plugin that removes the answer's part after ours ran (the
+  hook order is the config's) leaves it confirmed but unread, which no hook of opencode 1.19.6
+  shows (a part marked `ignored` is skipped, and the claim an unread answer holds is freed when
+  the run's turn ends); and an answer that comes while a `wait` is printing it is read
   twice, though confirmed once. Checked with real Pi 1.5.2 and opencode 1.19.6 against a stub
   model and agent: the answer reached the model's next request, was confirmed after it, and each
   run exited within 0.5 s of its turn; an answer after the turn was never submitted nor confirmed.

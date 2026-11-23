@@ -13,6 +13,8 @@ import type { Line } from "./agent.ts";
  */
 export class Unread {
   private running = false;
+  /** Counts the turn's starts and ends, so a submit can tell its turn ended meanwhile. */
+  private generation = 0;
   /** Lines submitted and not yet read, by their text, with the ack that confirms each. */
   private readonly sent = new Map<string, string>();
   /** Lines the agent read whose confirmation failed: the loop's next poll confirms them. */
@@ -23,6 +25,9 @@ export class Unread {
    */
   private readonly done = new Set<string>();
 
+  /** `dropped` hears the lines still unread when the turn or the session ends. */
+  constructor(private readonly dropped: (texts: string[]) => void = () => {}) {}
+
   /** Whether a submitted line waits to be read. */
   get pending() {
     return this.sent.size > 0;
@@ -30,8 +35,15 @@ export class Unread {
 
   /** The turn started or ended. A line still unread when it ends stays unconfirmed. */
   turn(running: boolean) {
+    if (running !== this.running) this.generation++;
     this.running = running;
-    if (!running) this.sent.clear();
+    if (!running) this.drop();
+  }
+
+  private drop() {
+    const texts = [...this.sent.keys()];
+    this.sent.clear();
+    if (texts.length > 0) this.dropped(texts);
   }
 
   /**
@@ -39,7 +51,11 @@ export class Unread {
    * message, and returns those the harness took; none is confirmed here. Returns the acks of
    * lines already read whose confirmation failed.
    */
-  async submit(lines: Line[], send: (lines: Line[]) => Line[] | Promise<Line[]>) {
+  async submit(
+    lines: Line[],
+    /** `live` says whether the turn this submit began in still runs: check it right before sending. */
+    send: (lines: Line[], live: () => boolean) => Line[] | Promise<Line[]>,
+  ) {
     const carried = lines.filter((l) => this.read.has(l.text));
     for (const l of carried) this.read.delete(l.text);
     if (this.running) {
@@ -49,7 +65,9 @@ export class Unread {
       // Recorded first: the harness may show the message before its submit returns.
       for (const l of fresh) this.sent.set(l.text, l.ack);
       if (fresh.length > 0) {
-        const took = new Set((await send(fresh)).map((l) => l.text));
+        const generation = this.generation;
+        const live = () => this.running && this.generation === generation;
+        const took = new Set((await send(fresh, live)).map((l) => l.text));
         for (const l of fresh) if (!took.has(l.text)) this.sent.delete(l.text);
       }
     }
@@ -76,7 +94,8 @@ export class Unread {
   /** The session ended. */
   ended() {
     this.running = false;
-    this.sent.clear();
+    this.generation++;
+    this.drop();
     this.read.clear();
     this.done.clear();
   }

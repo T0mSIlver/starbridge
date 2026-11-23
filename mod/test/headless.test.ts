@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, setDefaultTimeout, test } from "bun:test";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Line } from "../hooks/agent.ts";
@@ -332,6 +332,73 @@ test("opencode starts no loop for a session whose lookup failed, which may be a 
     await h["shell.env"]({ sessionID: "ses_1" }, out);
     await Bun.sleep(300);
     expect(agent.hellos()).toEqual([]);
+  } finally {
+    await h.dispose();
+  }
+});
+
+test("a submit whose turn ended meanwhile sees it, and lines unread at the turn's end are handed back (#2280)", async () => {
+  const dropped: string[][] = [];
+  const unread = new Unread((texts) => dropped.push(texts));
+  unread.turn(true);
+  const seen: boolean[] = [];
+  await unread.submit([line()], async (_lines, live) => {
+    seen.push(live());
+    unread.turn(false);
+    seen.push(live());
+    return [];
+  });
+  expect(seen).toEqual([true, false]);
+  unread.turn(true);
+  await unread.submit([line()], (lines) => lines);
+  unread.turn(false);
+  expect(dropped.at(-1)).toEqual([LINE]);
+  // A line the agent read is not handed back.
+  const before = dropped.length;
+  unread.turn(true);
+  await unread.submit([line()], (lines) => lines);
+  await unread.entered(LINE, async (acks) => acks);
+  unread.turn(false);
+  expect(dropped).toHaveLength(before);
+});
+
+test("`opencode run` confirms no answer from an ignored part, and frees its claim when the run ends unread (#2280)", async () => {
+  const agent = fakeAgent();
+  process.argv = [...argv.slice(0, 2), "run", "hi"];
+  const claims = join(process.env.STARBRIDGE_CONFIG_DIR as string, "opencode-claims");
+  const prompts: string[] = [];
+  const client = {
+    session: {
+      get: async () => ({ data: {} }),
+      promptAsync: async (o: { body: { parts: { text: string }[] } }) => {
+        prompts.push(o.body.parts.map((p) => p.text).join(""));
+        return {};
+      },
+    },
+    _client: { post: async () => ({}) },
+  };
+  const h = await plugin.server({ client, directory: "/work" } as never);
+  try {
+    await h["shell.env"]({ sessionID: "ses_1" }, { env: {} });
+    await until(() => prompts.length > 0, 5_000);
+    expect(readdirSync(claims)).toHaveLength(1);
+    // opencode leaves an ignored part out of the model's messages.
+    await h["experimental.chat.messages.transform"](
+      {},
+      {
+        messages: [
+          {
+            info: { sessionID: "ses_1", role: "user" },
+            parts: [{ type: "text", text: LINE, ignored: true }],
+          },
+        ],
+      },
+    );
+    await Bun.sleep(150);
+    expect(agent.acks()).toEqual([]);
+    // The run ends before the agent read it: an interactive loop on the session is not held back.
+    await h.event({ event: { type: "session.idle", properties: { sessionID: "ses_1" } } } as never);
+    await until(() => readdirSync(claims).length === 0, 3_000);
   } finally {
     await h.dispose();
   }
