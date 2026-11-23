@@ -1400,21 +1400,26 @@ test.skipIf(WINDOWS)(
         "  1 kB of 1 kB",
       ]);
       // A download cut short leaves nothing behind, and says which file.
-      const cut = Bun.serve({
+      // A raw socket that promises 4 kB and hangs up after 1 kB. An errored response stream in
+      // Bun.serve instead escapes as an unhandled error now and then, which fails the file.
+      const cut = Bun.listen({
+        hostname: "127.0.0.1",
         port: 0,
-        fetch: (req) =>
-          req.url.endsWith(".sha256")
-            ? new Response(`${"0".repeat(64)}\n`)
-            : new Response(
-                new ReadableStream({
-                  pull(c) {
-                    c.enqueue(new Uint8Array(1024));
-                    c.error(new Error("connection reset"));
-                  },
-                }),
-              ),
+        socket: {
+          data(socket, data) {
+            const head = (length: number) =>
+              `HTTP/1.1 200 OK\r\nContent-Length: ${length}\r\nConnection: close\r\n\r\n`;
+            if (data.toString().split(" ")[1]?.endsWith(".sha256")) {
+              const body = `${"0".repeat(64)}\n`;
+              socket.end(head(body.length) + body);
+            } else {
+              socket.write(head(4096));
+              socket.end(new Uint8Array(1024));
+            }
+          },
+        },
       });
-      const cutCtx = testCtx({ STARBRIDGE_CODEXBAR_RELEASES: cut.url.href.replace(/\/$/, "") });
+      const cutCtx = testCtx({ STARBRIDGE_CODEXBAR_RELEASES: `http://127.0.0.1:${cut.port}` });
       await expect(installTarball(linuxSys(cutCtx, home), "linux-x86_64", "9.9.8")).rejects.toThrow(
         "downloading CodexBarCLI-v9.9.8-linux-x86_64.tar.gz:",
       );
