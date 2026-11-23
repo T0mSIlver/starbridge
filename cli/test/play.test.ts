@@ -1,4 +1,5 @@
 import { afterEach, expect, test } from "bun:test";
+import { createHash } from "node:crypto";
 import {
   internalTrack,
   mainCode,
@@ -41,6 +42,7 @@ type Seen = { method: string; path: string; body: string };
 function fakePlay(
   commit: (seen: Seen[]) => Response | undefined = () => undefined,
   validate?: Response,
+  bundles: { versionCode: number; sha256: string }[] = [],
 ) {
   const seen: Seen[] = [];
   const server = Bun.serve({
@@ -53,6 +55,8 @@ function fakePlay(
       seen.push(s);
       const app = `/androidpublisher/v3/applications/${PACKAGE}`;
       if (s.path === `${app}/edits`) return Response.json({ id: "e1" });
+      if (s.method === "GET" && s.path === `${app}/edits/e1/bundles`)
+        return Response.json({ bundles });
       if (s.path.startsWith(`/upload${app}/edits/e1/bundles`))
         return Response.json({ versionCode: 3020399 });
       if (s.path === `${app}/edits/e1/details`) return Response.json({ defaultLanguage: "fr-FR" });
@@ -101,6 +105,26 @@ test.each([...TRACKS])(
     expect(play.seen.some((s) => s.path.includes(":commit"))).toBe(false);
   },
 );
+
+test("a rerun finds its bundle already in Play, skips the upload and assigns it to the track (#2296)", async () => {
+  const sha256 = createHash("sha256")
+    .update(new Uint8Array([1, 2]))
+    .digest("hex");
+  const play = fakePlay(undefined, undefined, [{ versionCode: 2010899, sha256 }]);
+  stop = () => play.server.stop(true);
+  expect(await play.run(false)).toBe(2010899);
+  expect(play.seen.some((s) => s.path.startsWith("/upload"))).toBe(false);
+  const track = play.seen.find((s) => s.path.endsWith("/tracks/alpha"));
+  expect(JSON.parse(track?.body ?? "").releases[0].versionCodes).toEqual(["2010899"]);
+  expect(play.seen.some((s) => s.path.includes(":commit"))).toBe(true);
+});
+
+test("a bundle with other bytes is still uploaded", async () => {
+  const play = fakePlay(undefined, undefined, [{ versionCode: 2010899, sha256: "ab" }]);
+  stop = () => play.server.stop(true);
+  expect(await play.run(false)).toBe(3020399);
+  expect(play.seen.some((s) => s.path.startsWith("/upload"))).toBe(true);
+});
 
 test("a commit Play will not send for review is committed for the owner to send", async () => {
   const play = fakePlay((seen) =>
