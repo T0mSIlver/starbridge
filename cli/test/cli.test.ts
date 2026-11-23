@@ -688,6 +688,22 @@ test("the machine tells every device which answer it took, once (#330)", async (
   expect(await server.opened("settled")).toHaveLength(1);
 });
 
+test("the settled notice repeats the choices of a multiple decision's answer (#2064)", async () => {
+  const ctx = await paired(server);
+  expect(await run(ASK, ctx)).toBe(0);
+  const id = ctx.lines.at(-1) as string;
+  // This machine posts no `multiple` decision yet: mark the one it asked.
+  ctx.store.updateState((st) => {
+    const asked = st.asked[id] as NonNullable<(typeof st.asked)[string]>;
+    asked.body = { ...(asked.body as NonNullable<typeof asked.body>), multiple: true };
+  });
+  await server.answer(id, { choices: ["Merge", "Wait"] });
+  await run(["wait", id, "--timeout", "5s"], ctx);
+  expect(await server.opened("settled")).toMatchObject([
+    { itemId: id, outcome: "device", choices: ["Merge", "Wait"] },
+  ]);
+});
+
 test("a withdrawal says why in one short line, which the settled notice carries (#1008)", async () => {
   const ctx = await paired(server);
   expect(await run(ASK, ctx)).toBe(0);
@@ -1537,6 +1553,7 @@ async function laptopAnswer(
   laptop: Awaited<ReturnType<LiveServer["addDevice"]>>,
   id: string,
   re?: string,
+  reply: Partial<Answer> = { choice: "Merge" },
 ) {
   const machine = ctx.store.machine()?.id as string;
   const answer: Answer = {
@@ -1545,7 +1562,7 @@ async function laptopAnswer(
     decisionId: id,
     to: machine,
     answeredAt: `${new Date().toISOString().slice(0, 19)}Z`,
-    choice: "Merge",
+    ...reply,
   };
   const member = (await server.directory()).members.get(machine)?.member;
   const sealed = seal("answer", answer, { id: laptop.id, signKey: laptop.keys.sign.privateKey }, [
@@ -1572,6 +1589,17 @@ test("an answer from a device revoked before the machine fetched it closes the d
   ctx.lines.length = 0;
   expect(await run(["decisions", "--open"], ctx)).toBe(0);
   expect(ctx.lines.join("")).not.toContain(id);
+});
+
+test("a revoked device's choices for a decision that takes one choice settle nothing (#2064)", async () => {
+  const ctx = await paired(server);
+  const laptop = await server.addDevice("laptop");
+  await run([...ASK, "--session", "s"], ctx);
+  const id = ctx.lines.at(-1) as string;
+  await laptopAnswer(ctx, laptop, id, undefined, { choice: undefined, choices: ["Merge", "Wait"] });
+  await server.revoke("laptop");
+  expect(await run(["wait", id, "--timeout", "1s"], ctx)).toBe(2);
+  expect(ctx.store.state().asked[id]?.settled).toBeUndefined();
 });
 
 test("a revoked device's answer whose routing hint names another decision closes neither (#1301)", async () => {

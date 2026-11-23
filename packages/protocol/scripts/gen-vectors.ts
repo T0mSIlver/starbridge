@@ -2632,6 +2632,11 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
       { name: "multiple", body: { ...decisionBody, multiple: true }, valid: true },
       { name: "multiple false", body: { ...decisionBody, multiple: false }, valid: false },
       {
+        name: "multiple as a string",
+        body: { ...decisionBody, multiple: "true" as unknown as true },
+        valid: false,
+      },
+      {
         name: "multiple without options",
         body: { ...decisionBody, options: [], recommended: undefined, multiple: true },
         valid: false,
@@ -2690,6 +2695,22 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
         name: "a choice twice",
         body: { ...answerBody, choice: undefined, choices: ["Yes", "Yes"] },
         valid: false,
+      },
+      {
+        name: "choices and done",
+        body: { ...answerBody, choice: undefined, choices: ["Yes"], done: true },
+        valid: false,
+      },
+      // Picks are compared as exact code points: neither case nor normalization folds them.
+      {
+        name: "choices that differ only by case",
+        body: { ...answerBody, choice: undefined, choices: ["Yes", "yes"] },
+        valid: true,
+      },
+      {
+        name: "choices that differ only by normalization",
+        body: { ...answerBody, choice: undefined, choices: ["\u00e9", "e\u0301"] },
+        valid: true,
       },
       {
         name: "an empty choice among choices",
