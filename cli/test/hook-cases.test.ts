@@ -26,6 +26,7 @@ import type { Agent } from "../src/agent/server";
 import { run } from "../src/cli";
 import { codexControlSocket } from "../src/codex-app";
 import { hookCodexQuestion } from "../src/codex-question";
+import { closeHere } from "../src/decisions/settle";
 import { hookPermission, hookQuestion, hookSettle } from "../src/hook";
 import { agentAddress, paired, type TestCtx, until } from "./helpers";
 
@@ -569,6 +570,21 @@ test("a directory read cut by the settle deadline leaves the card closed with it
   const [card] = await stored(row, slow);
   const kept = slow.ctx.store.state().asked[card?.id as string];
   expect([kept?.settled, kept?.unposted]).toEqual([true, true]);
+});
+
+test("a card a device's revocation closed is never marked owed by a settle (#2278)", async () => {
+  const r = await rig("question");
+  r.ctx.store.updateState((st) => {
+    st.asked.d_1 = {
+      question: "Q?",
+      options: [],
+      askedAt: r.ctx.now().toISOString(),
+      to: [],
+      revoked: true,
+    };
+  });
+  expect(closeHere(r.ctx, "d_1", "withdrawn", "why")).toBe(false);
+  expect(r.ctx.store.state().asked.d_1?.unposted).toBeUndefined();
 });
 
 test("a case a harness lacks says why", () => {

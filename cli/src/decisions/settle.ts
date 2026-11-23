@@ -63,12 +63,18 @@ export async function settle(ctx: Ctx, opts: SettleOpts): Promise<number> {
       ctx.err(`starbridge: ${staleLine(ctx.store.state(), id, ctx.now())}`);
       return 0;
     }
-    // Closed here before the directory is read: a deadline that cuts the read leaves the notice
-    // owed, which the agent posts again, not a card that still takes answers (#2278).
-    if (opts.deadline)
-      closeHere(ctx, id, outcome ?? (asked.answerIn ? "elsewhere" : "withdrawn"), reason);
     const s = session(ctx);
-    const dir = await refreshDirectory(ctx, s, opts.deadline);
+    let dir: Directory;
+    try {
+      dir = await refreshDirectory(ctx, s, opts.deadline);
+    } catch (e) {
+      // Cut by the deadline: the card is closed here and its notice owed, which the agent posts
+      // again, rather than a card that still takes answers for a picker that is gone (#2278).
+      // Only now: a read that succeeds lets an answer in flight be saved first.
+      if (opts.deadline)
+        closeHere(ctx, id, outcome ?? (asked.answerIn ? "elsewhere" : "withdrawn"), reason);
+      throw e;
+    }
     // An answer that came before the settle closed the decision: its session may not have it
     // yet, such as one held for the end of the turn that settles (#1575), so it prints here.
     ctx.store.updateState((st) => void dropRevoked(st, dir));
@@ -169,7 +175,8 @@ export function closeHere(
   ctx.store.updateState((st) => {
     answered = !!st.answers[id];
     const a = st.asked[id];
-    if (a && !answered) {
+    // A revoked card is closed by the server already: it is never owed a notice.
+    if (a && !answered && !a.revoked) {
       a.settled = true;
       a.unposted = true;
       // The first settle's word stands while its notice is in flight: a second one is refused.
