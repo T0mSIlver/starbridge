@@ -3,6 +3,7 @@ package dev.starbridge.app.protocol
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
@@ -134,7 +135,12 @@ fun parseBody(kind: String, text: String): Any {
     val json = readable(kind, parseJsonText(text))
     return when (kind) {
         "directory" -> decodeBody(DirectoryEntry.serializer(), json).also { it.check() }
-        "decision" -> decodeBody(Decision.serializer(), json).also { it.check() }
+        "decision" -> {
+            // kotlinx reads the string "true" as a Boolean; zod and Swift refuse it.
+            val multiple = (json as? JsonObject)?.get("multiple")
+            schema(multiple == null || (multiple is JsonPrimitive && !multiple.isString), "multiple")
+            decodeBody(Decision.serializer(), json).also { it.check() }
+        }
         "answer" -> decodeBody(Answer.serializer(), json).also { it.check() }
         "quota" -> decodeBody(QuotaSnapshot.serializer(), json).also { it.check() }
         "permission" -> decodeBody(Permission.serializer(), json).also { it.check() }

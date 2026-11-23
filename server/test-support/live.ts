@@ -37,6 +37,9 @@ import {
   signIn,
 } from "./app";
 
+/** What a device answers: one of a choice, several choices, a typed reply and a Done. */
+type Reply = { choice?: string; choices?: string[]; text?: string; done?: true };
+
 export class LiveServer {
   /** HTTP requests received, as "METHOD /path" without the `/v1` prefix. */
   readonly log: string[] = [];
@@ -184,7 +187,7 @@ export class LiveServer {
 
   private async sealAnswer(
     decisionId: string,
-    reply: { choice?: string; text?: string; done?: true },
+    reply: Reply,
     tamper?: Partial<Answer>,
   ): Promise<SealedItem> {
     const { item } = (await this.phone("GET", `/items/${decisionId}`)) as Stored;
@@ -205,7 +208,7 @@ export class LiveServer {
   }
 
   /** The phone answers a decision through `POST /items`. */
-  async answer(decisionId: string, reply: { choice?: string; text?: string; done?: true }) {
+  async answer(decisionId: string, reply: Reply) {
     await this.phone("POST", "/items", await this.sealAnswer(decisionId, reply));
   }
 
@@ -236,7 +239,7 @@ export class LiveServer {
    * answered. `tamper` changes the signed body.
    */
   async forge(
-    ...answers: { decisionId: string; reply: { choice?: string; text?: string; done?: true }; tamper?: Partial<Answer> }[]
+    ...answers: { decisionId: string; reply: Reply; tamper?: Partial<Answer> }[]
   ) {
     const items = await Promise.all(
       answers.map((a) => this.sealAnswer(a.decisionId, a.reply, a.tamper)),

@@ -4,7 +4,7 @@
 
 - Fields: `question`, `context`, `options` (2 to 4, or none for a typed answer), `recommended`,
   `source` (machine, project, session, its title and links, `machineKind`), `agent`, `images`,
-  `links`, `answerIn`, `done`, `replies`.
+  `links`, `answerIn`, `done`, `replies`, `multiple`.
 - **The first option is the agent's default** (#191), its proposal with no timer: listed first,
   the one amber button. `recommended` names it when it isn't first.
 - **Typed replies** (#201). Every question with options also takes a typed reply, as a steer to act
@@ -15,6 +15,13 @@
   and short. The owner chose this from mockups over a full-width Reply button and a mic in the
   field; the field reads "Your answer" on both clients. Every client's field stops at the
   server's 4000 characters, so a pasted log never comes back refused (#1921).
+- **Several picks** (#2064). When the agent's question lets more than one option apply (Claude
+  Code's `multiSelect`, opencode's `multiple`, Pi's `multiSelect`, Antigravity's
+  `isMultiSelect`), the decision sets `multiple: true` and an answer may carry `choices`, 1 to 4
+  distinct options. Clients that predate it ignore the field
+  and the owner types the picks, as before. The 4-option cap stays: raising it needs a minimum
+  client version. A machine refuses `choices` for a decision without `multiple`, since an old
+  client never sends them and a forged answer could.
 - **One call's questions keep its order** (#1079). Claude Code's `AskUserQuestion`, opencode's
   `question` and Codex's `request_user_input` ask several questions at once, and the CLI posts one
   card for each. Their `createdAt` is the call's time plus each question's index in milliseconds,

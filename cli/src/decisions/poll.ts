@@ -235,9 +235,11 @@ async function announce(ctx: Ctx, s: Session, dir: Directory): Promise<void> {
       // A Done repeats nothing: devices read a device's notice without either as one.
       ...(answer.choice !== undefined
         ? { choice: answer.choice }
-        : answer.text !== undefined
-          ? { text: answer.text }
-          : {}),
+        : answer.choices !== undefined
+          ? { choices: answer.choices }
+          : answer.text !== undefined
+            ? { text: answer.text }
+            : {}),
       dir: signedHead(dir),
     } satisfies Settled;
     try {

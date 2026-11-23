@@ -372,6 +372,13 @@ export const DirectoryHead = z.object({
 });
 export type DirectoryHead = z.infer<typeof DirectoryHead>;
 
+/** A multi-select answer's picks (#2064): 1 to 4 options, each once. */
+export const Choices = z
+  .array(z.string().min(1).max(100))
+  .min(1)
+  .max(4)
+  .refine((c) => new Set(c).size === c.length, { message: "choices must be distinct" });
+
 export const Decision = z
   .object({
     v: z.literal(1),
@@ -407,10 +414,18 @@ export const Decision = z
      * answer to such a decision.
      */
     done: z.literal(true).optional(),
+    /**
+     * The owner may pick more than one option, as Claude Code's multi-select questions take
+     * (#2064): clients then offer the options as checkboxes and send `choices`. A reader that
+     * does not know it offers one option to tap, which the machine still takes.
+     */
+    multiple: z.literal(true).optional(),
     dir: DirectoryHead.optional(),
   })
   .superRefine((d, ctx) => {
     if (d.options.length === 1) ctx.addIssue({ code: "custom", message: "options: 0 or 2 to 4" });
+    if (d.multiple && d.options.length === 0)
+      ctx.addIssue({ code: "custom", message: "multiple needs options" });
     if (new Set(d.options).size !== d.options.length)
       ctx.addIssue({ code: "custom", message: "options must be distinct" });
     if (d.options.length > 0 && (d.recommended === undefined || !d.options.includes(d.recommended)))
@@ -433,14 +448,17 @@ export const Answer = z
     to: Id,
     answeredAt: Time,
     choice: z.string().max(100).optional(),
+    /** The options picked on a `multiple` decision, each once, in the decision's order. */
+    choices: Choices.optional(),
     text: z.string().max(ANSWER_TEXT_MAX).optional(),
     /** The owner answered on the decision's `answerIn` page (#539). */
     done: z.literal(true).optional(),
     dir: DirectoryHead.optional(),
   })
-  .refine((a) => [a.choice, a.text, a.done].filter((x) => x !== undefined).length === 1, {
-    message: "exactly one of choice, text and done",
-  });
+  .refine(
+    (a) => [a.choice, a.choices, a.text, a.done].filter((x) => x !== undefined).length === 1,
+    { message: "exactly one of choice, choices, text and done" },
+  );
 export type Answer = z.infer<typeof Answer>;
 
 // --- Permission prompts -----------------------------------------------------
@@ -543,6 +561,7 @@ export const Settled = z
      * Neither for a Done answer.
      */
     choice: z.string().max(100).optional(),
+    choices: Choices.optional(),
     text: z.string().max(ANSWER_TEXT_MAX).optional(),
     dir: DirectoryHead.optional(),
     /** With outcome "device" on a permission: what that device answered (#349). */
@@ -555,11 +574,14 @@ export const Settled = z
       .regex(/^[^\r\n]*$/, "one line")
       .optional(),
   })
-  .refine((s) => s.device !== undefined || (s.choice === undefined && s.text === undefined), {
-    message: "choice and text come only with a device's outcome",
-  })
-  .refine((s) => s.choice === undefined || s.text === undefined, {
-    message: "at most one of choice and text",
+  .refine(
+    (s) =>
+      s.device !== undefined ||
+      (s.choice === undefined && s.choices === undefined && s.text === undefined),
+    { message: "choice, choices and text come only with a device's outcome" },
+  )
+  .refine((s) => [s.choice, s.choices, s.text].filter((x) => x !== undefined).length <= 1, {
+    message: "at most one of choice, choices and text",
   })
   .refine((s) => (s.outcome === "device") === (s.device !== undefined), {
     message: "device is set exactly when outcome is device",

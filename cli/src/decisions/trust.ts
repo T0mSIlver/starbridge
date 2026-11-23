@@ -15,7 +15,10 @@ import type { State } from "../config";
 import { type Ctx, refreshDirectory, type Session, session, withheld } from "../context";
 
 /** What `checkAnswer` reads of a decision this machine asked. */
-type Asked = Pick<State["asked"][string], "options" | "settled" | "answerIn" | "done" | "to">;
+type Asked = Pick<
+  State["asked"][string],
+  "options" | "settled" | "answerIn" | "done" | "to" | "body"
+>;
 
 /**
  * Checks an answer item: sealed to this machine, signed by an active device that the decision was
@@ -54,7 +57,17 @@ export function checkAnswer(
   // schema already holds an answer to exactly one of the two.
   if (body.choice !== undefined && !decision.options.includes(body.choice))
     throw new ProtocolError("bad-schema", "choice is not one of the options");
+  checkChoices(body, decision);
   return body;
+}
+
+/** Several picks only where the decision offered them (#2064), each one of its options. */
+function checkChoices(body: Answer, decision: Asked): void {
+  if (body.choices === undefined) return;
+  if (!decision.body?.multiple)
+    throw new ProtocolError("bad-schema", `${body.decisionId} takes one choice`);
+  if (!body.choices.every((c) => decision.options.includes(c)))
+    throw new ProtocolError("bad-schema", "a choice is not one of the options");
 }
 
 /**
@@ -111,6 +124,7 @@ export function refuse(raw: unknown, e: unknown, s: Session, dir: Directory, st:
   if (!(e instanceof ProtocolError) || e.code !== "revoked-signer") return;
   let decisionId: string;
   let signer: string;
+  let answer: Answer;
   try {
     const item = parseWith(SealedItem, raw);
     if (item.kind !== "answer") return;
@@ -118,7 +132,8 @@ export function refuse(raw: unknown, e: unknown, s: Session, dir: Directory, st:
     const member = dir.members.get(env.signer)?.member;
     if (env.signer !== item.from || member?.role !== "device") return;
     verify(env, member.signPk);
-    decisionId = parseBody("answer", env.body).decisionId;
+    answer = parseBody("answer", env.body);
+    decisionId = answer.decisionId;
     if (item.re !== decisionId) return;
     signer = env.signer;
   } catch {
@@ -126,6 +141,12 @@ export function refuse(raw: unknown, e: unknown, s: Session, dir: Directory, st:
   }
   const asked = st.asked[decisionId];
   if (!asked || asked.settled || st.answers[decisionId] || !asked.to.includes(signer)) return;
+  // An answer an active device could not have sent settles nothing either.
+  try {
+    checkChoices(answer, asked);
+  } catch {
+    return;
+  }
   asked.settled = true;
   asked.revoked = true;
   forget(asked);
