@@ -936,7 +936,8 @@ async function one(s: Scenario, arm: string, rep: number): Promise<RunRecord> {
       }
       await live.approve((/Pairing code: (\S+)/.exec(text) as RegExpExecArray)[1] as string);
       // The owner confirms the check code (#814); `pair` shows it once it sees the approval.
-      for (let i = 0; i < 50; i++) {
+      // A version that pairs with no confirmation step ends `pair` and rejects the flag: stop then.
+      for (let i = 0; i < 50 && pairing.exitCode === null; i++) {
         if (spawnSync(join(bin, "starbridge"), ["pair", "--confirm"], { env }).status === 0) break;
         await Bun.sleep(200);
       }

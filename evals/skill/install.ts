@@ -80,7 +80,14 @@ function linkModules(repo: string, dir: string, rel: string) {
   if (!existsSync(from)) return;
   const to = join(dir, rel, "node_modules");
   const link = (name: string) => {
-    const target = realpathSync(join(from, name));
+    let target: string;
+    try {
+      target = realpathSync(join(from, name));
+    } catch (e) {
+      // A dangling link, such as a removed local package: the build says what it needs.
+      if ((e as NodeJS.ErrnoException).code === "ENOENT") return;
+      throw e;
+    }
     const workspace =
       !relative(repo, target).startsWith("..") && !target.includes(`${sep}node_modules${sep}`);
     try {
