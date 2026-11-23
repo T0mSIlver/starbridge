@@ -355,6 +355,9 @@ export interface UpdateRecord {
  */
 const STATE_VERSION = 1;
 
+const isRecord = (v: unknown): v is Record<string, unknown> =>
+  typeof v === "object" && v !== null && !Array.isArray(v);
+
 /** A file this CLI cannot read. It stays as it is: nothing overwrites it with defaults. */
 export class StateFileError extends Error {
   constructor(path: string, why: string) {
@@ -525,7 +528,11 @@ export class Store {
     return join(this.dir, name);
   }
 
-  private read<T>(name: string): T | undefined {
+  /**
+   * `shape` says whether the parsed record holds what the reader needs: a file that is JSON but
+   * lacks it is as unreadable as one that is not JSON, never an empty value.
+   */
+  private read<T>(name: string, shape?: (o: Record<string, unknown>) => boolean): T | undefined {
     const p = this.path(name);
     if (!existsSync(p)) return undefined;
     let value: unknown;
@@ -534,16 +541,19 @@ export class Store {
     } catch (e) {
       throw new StateFileError(p, `is not valid JSON (${(e as Error).message}): fix or remove it`);
     }
-    if (typeof value !== "object" || value === null || Array.isArray(value))
-      throw new StateFileError(
+    const bad = () =>
+      new StateFileError(
         p,
         name === "directory.json"
           ? "is not in this starbridge's format: remove it, the server's copy is read again"
           : "is not in this starbridge's format: move it away, then run `starbridge pair`",
       );
-    const v = (value as { v?: unknown }).v ?? 1;
+    if (!isRecord(value)) throw bad();
+    // Before the shape: a newer file may hold fields this one does not know.
+    const v = value.v ?? 1;
     if (v !== STATE_VERSION)
       throw new StateFileError(p, `has format ${v}, from a newer starbridge: update starbridge`);
+    if (shape !== undefined && !shape(value)) throw bad();
     const { v: _, ...rest } = value as Record<string, unknown>;
     return rest as T;
   }
@@ -561,7 +571,13 @@ export class Store {
   }
 
   machine(): Machine | undefined {
-    return this.read<Machine>("machine.json");
+    return this.read<Machine>(
+      "machine.json",
+      (o) =>
+        ["server", "account", "id", "name", "token"].every((k) => typeof o[k] === "string") &&
+        isRecord(o.keys) &&
+        isRecord(o.pin),
+    );
   }
 
   /**
@@ -599,12 +615,20 @@ export class Store {
   }
 
   state(): State {
-    return this.read<State>("state.json") ?? { asked: {}, answers: {} };
+    return (
+      this.read<State>("state.json", (o) => isRecord(o.asked) && isRecord(o.answers)) ?? {
+        asked: {},
+        answers: {},
+      }
+    );
   }
 
   /** The agent's last read of the latest release (#1050). */
   latest(): LatestRelease | undefined {
-    return this.read<LatestRelease>("latest.json");
+    return this.read<LatestRelease>(
+      "latest.json",
+      (o) => typeof o.checkedAt === "string" && typeof o.version === "string",
+    );
   }
 
   /**

@@ -77,15 +77,7 @@ const baseline = new Set<string>();
 const SKIPPED =
   /\.fake-marketplace$|\.sock$|\.sock\.pid$|\.port$|\.lock$|\.tmp$|\.unreadable-|agent\.log$|\.codex\/plugins\/|\.pi\/agent\/git\//;
 
-/**
- * Cases that fail on main: a live bug each, `test.todo` below. Without `machine.json` setup pairs
- * again and waits for the phone, by design, so that case is not swept.
- */
-const BUGS: Record<string, string> = {
-  "config/state.json {}": "state.json holding {} crashes ask and setup with a TypeError (#2273)",
-  "config/machine.json {}":
-    "machine.json holding {} crashes setup and status says Paired: undefined (#2274)",
-};
+/** Without `machine.json` setup pairs again and waits for the phone, by design, so that case is not swept. */
 const NOT_SWEPT = ["config/machine.json missing"];
 
 beforeAll(async () => {
@@ -250,9 +242,6 @@ async function sweepOne(file: string, shape: Shape): Promise<string | undefined>
   return failures.length ? failures.join("; ") : undefined;
 }
 
-// A file that is JSON but lacks what the reader needs reaches code that assumes it (no issue yet).
-for (const [id, why] of Object.entries(BUGS)) test.todo(`${id}: ${why}`);
-
 // The fake agents are shell scripts, which Windows does not start as these tests do.
 test.skipIf(process.platform === "win32")("sweep", async () => {
   for (const l of await runAll(join(configDir, "none"), [])) baseline.add(l);
@@ -260,7 +249,7 @@ test.skipIf(process.platform === "win32")("sweep", async () => {
   for (const file of good.keys())
     for (const shape of Object.keys(SHAPES) as Shape[]) {
       const id = `${where(file)} ${shape === "object" ? "{}" : shape}`;
-      if (id in BUGS || NOT_SWEPT.includes(id)) continue;
+      if (NOT_SWEPT.includes(id)) continue;
       const r = await sweepOne(file, shape);
       if (r) found.push(r);
     }
@@ -269,3 +258,28 @@ test.skipIf(process.platform === "win32")("sweep", async () => {
     "Read the file through a reader that refuses what it can't use and says which file (AGENTS.md: treat a read that fails as an error), or rewrite it as setup would",
   ).toEqual([]);
 });
+
+// A file that is JSON but lacks what its reader needs is unreadable, never an empty value (#2274).
+test.skipIf(process.platform === "win32").each(["machine.json", "state.json", "latest.json"])(
+  "%s holding {} is named as unreadable by status",
+  async (name) => {
+    const file = join(configDir, name);
+    const before = readFileSync(file, "utf8");
+    try {
+      writeFileSync(file, "{}\n");
+      ctx.lines.length = 0;
+      ctx.errors.length = 0;
+      await bounded(
+        "status",
+        status(sys).catch((e) => {
+          ctx.errors.push(`starbridge: ${(e as Error).message}`);
+        }),
+      );
+      const said = [...ctx.lines, ...ctx.errors].join("\n");
+      expect(said).toContain(`${file} is not in this starbridge's format`);
+      expect(said).not.toContain("undefined");
+    } finally {
+      writeFileSync(file, before);
+    }
+  },
+);
