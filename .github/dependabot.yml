@@ -20,6 +20,10 @@ updates:
     directory: /android
     schedule:
       interval: monthly
+    # android-all-instrumented holds the SDK jar Robolectric runs, and Robolectric 4.17 runs SDK 36
+    # only; another jar comes with a Robolectric update that names it, so it moves by hand (#2255).
+    ignore:
+      - dependency-name: org.robolectric:android-all-instrumented
     groups:
       gradle:
         patterns: ["*"]
