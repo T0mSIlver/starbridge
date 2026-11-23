@@ -10,7 +10,7 @@ let package = Package(
     dependencies: [
         // The last tag, 0.9.1, is from 2020; this commit ships
         // libsodium 1.0.22 for Apple platforms and links the system libsodium elsewhere.
-        .package(url: "https://github.com/jedisct1/swift-sodium", revision: "fbe072d70df9dbe43adbc4f6ae5787ee59fd376e"),
+        .package(url: "https://github.com/jedisct1/swift-sodium", revision: "19d6edbb70bce36891993518cd399a043153007a"),
     ],
     targets: [
         .target(
