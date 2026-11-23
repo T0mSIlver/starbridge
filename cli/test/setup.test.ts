@@ -116,7 +116,14 @@ const PI_REPO = (() => {
     GIT_COMMITTER_NAME: "t",
     GIT_COMMITTER_EMAIL: "t@example.com",
   };
-  const git = (...args: string[]) => spawnSync("git", ["-C", repo, ...args], { env });
+  const git = (...args: string[]) =>
+    spawnSync(
+      "git",
+      ["-c", "tag.gpgsign=false", "-c", "commit.gpgsign=false", "-C", repo, ...args],
+      {
+        env,
+      },
+    );
   git("init", "-q");
   writeFileSync(join(repo, "package.json"), "{}");
   git("add", "-A");
