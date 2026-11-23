@@ -9,6 +9,7 @@
  * it for review; with managed publishing on, it then waits in Play Console for Publish.
  */
 import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { parseArgs } from "node:util";
 import { parseVersion } from "../src/release";
@@ -74,12 +75,40 @@ export async function upload(opts: {
   const edit = (await call<{ id: string }>("POST", `${app}/edits`)).id;
   const at = `${app}/edits/${edit}`;
   try {
-    const { versionCode } = await call<{ versionCode: number }>(
-      "POST",
-      `/upload${at}/bundles?uploadType=media`,
-      opts.aab,
-      "application/octet-stream",
+    // A rerun of a release finds its bundle already in Play, which refuses the same versionCode
+    // twice (#2296): the same bytes are recognised by their SHA-256 and only assigned to the track.
+    const sha256 = createHash("sha256").update(opts.aab).digest("hex");
+    const { bundles = [] } = await call<{ bundles?: { versionCode: number; sha256?: string }[] }>(
+      "GET",
+      `${at}/bundles`,
     );
+    const have = bundles.find((b) => b.sha256?.toLowerCase() === sha256);
+    const versionCode = have
+      ? have.versionCode
+      : (
+          await call<{ versionCode: number }>(
+            "POST",
+            `/upload${at}/bundles?uploadType=media`,
+            opts.aab,
+            "application/octet-stream",
+          )
+        ).versionCode;
+    if (have) {
+      // Play's duplicate-version refusal no longer guards an older rerun, so the track is checked:
+      // rolling an older code out as the only release would replace, and can cancel, a newer one.
+      type Track = { releases?: { versionCodes?: string[] }[] };
+      const track = await call<Track>("GET", `${at}/tracks/${opts.track}`).catch((e): Track => {
+        // A track that has no release yet is a 404.
+        if (e instanceof PlayError && e.message.includes(": 404")) return {};
+        throw e;
+      });
+      const newer = (track.releases ?? []).flatMap((r) => r.versionCodes ?? []).map(Number);
+      if (newer.some((c) => c > versionCode))
+        throw new PlayError(
+          `Play's ${opts.track} track already has versionCode ${Math.max(...newer)}, above ${versionCode} of ${opts.version}; not putting the older one on it.`,
+        );
+      console.log(`Play already has versionCode ${versionCode}; not uploading it again.`);
+    }
     // Notes in the listing's default language, the one every tester falls back to.
     const { defaultLanguage } = await call<{ defaultLanguage: string }>("GET", `${at}/details`);
     await call(
