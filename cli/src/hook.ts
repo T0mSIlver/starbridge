@@ -65,7 +65,7 @@ const SLACK_MS = 15_000;
 /** How long the hook's own path holds each answer poll, so it sees a settle soon. */
 const DIRECT_POLL_SECONDS = 5;
 /** How long reporting a prompt settled may hold up the hook's own path. */
-const REPORT_MS = 5_000;
+export const REPORT_MS = 5_000;
 
 function parseHook(text: string): PermissionHookInput & Record<string, unknown> {
   const v = JSON.parse(text) as unknown;
@@ -875,12 +875,16 @@ export async function hookQuestion(
     // Answered or dismissed at the terminal, or a question could not be asked: the ones still
     // open are moot. A settle of one answered meanwhile does nothing.
     const outcome = outer.signal?.aborted ? "elsewhere" : "withdrawn";
+    // Its own deadline, not SIGTERM's: a stalled server would hold the hook until the harness
+    // kills it (#2278).
+    const deadline = AbortSignal.timeout(REPORT_MS);
     await Promise.all(
       ids.map((id) =>
         id
-          ? settle({ ...ctx, signal: undefined }, { id, outcome, ...pickerReason(outcome) }).catch(
-              (e) => ctx.err(`starbridge: could not settle ${id}: ${(e as Error).message}`),
-            )
+          ? settle(
+              { ...ctx, signal: undefined },
+              { id, outcome, ...pickerReason(outcome), deadline },
+            ).catch((e) => ctx.err(`starbridge: could not settle ${id}: ${(e as Error).message}`))
           : undefined,
       ),
     );

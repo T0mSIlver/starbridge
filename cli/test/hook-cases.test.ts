@@ -26,6 +26,7 @@ import type { Agent } from "../src/agent/server";
 import { run } from "../src/cli";
 import { codexControlSocket } from "../src/codex-app";
 import { hookCodexQuestion } from "../src/codex-question";
+import { closeHere } from "../src/decisions/settle";
 import { hookPermission, hookQuestion, hookSettle } from "../src/hook";
 import { agentAddress, paired, type TestCtx, until } from "./helpers";
 
@@ -138,10 +139,6 @@ const QUESTIONS = [
   },
   { question: "Name the branch?", header: "Branch", options: [] },
 ];
-
-const NO_REPORT_DEADLINE = {
-  todo: "its settle of the open cards has no deadline: hookQuestion calls settle without one, so a server that stops answering holds the hook until the harness kills it (#1286's fix reached only the picker; #2278)",
-};
 
 function questionRow(
   agent: "opencode" | "pi" | "antigravity",
@@ -402,7 +399,7 @@ const codexQuestion: Row = {
   delivered: (r) => daemons.get(r)?.got.some((m) => m.id === 0 && m.result !== undefined) ?? false,
   cases: {
     stalledPost: "run",
-    stalledReport: NO_REPORT_DEADLINE,
+    stalledReport: "run",
     lostReply: "run",
     snooze: "run",
     sessionEnd: "run",
@@ -536,9 +533,9 @@ const IMPL: Record<CaseName, (row: Row) => Promise<void>> = {
 const ROWS: Row[] = [
   claudeQuestion,
   codexQuestion,
-  questionRow("opencode", { stalledReport: NO_REPORT_DEADLINE }),
-  questionRow("pi", { stalledReport: NO_REPORT_DEADLINE }),
-  questionRow("antigravity", { stalledReport: NO_REPORT_DEADLINE }),
+  questionRow("opencode", {}),
+  questionRow("pi", {}),
+  questionRow("antigravity", {}),
   cursorRow("question", CURSOR_QUESTIONS),
   ...(["agent", "server"] as const).flatMap((via) => [
     permissionRow("claude-code", via),
@@ -559,6 +556,36 @@ for (const row of ROWS)
     else if ("na" in how) test.skip(`${title} (n/a: ${how.na})`, () => {});
     else test.todo(`${title} (bug on main: ${how.todo})`, () => IMPL[name](row));
   }
+
+// One row, not every one: each waits out the deadline, and the table is near the Windows job's bound.
+test("a directory read cut by the settle deadline leaves the card closed with its notice owed (#2278)", async () => {
+  const row = questionRow("opencode");
+  // The agent posts the owed notice again, and no answer is taken for a picker that is gone.
+  const slow = await rig(row.rig);
+  const hs = await row.start(slow, 1);
+  await open(row, slow, 1);
+  slow.server.stalls.push("GET /directory", "GET /directory", "GET /directory");
+  hs.cut();
+  expect(await took(hs.done, 9_000)).toBeLessThan(6_500);
+  const [card] = await stored(row, slow);
+  const kept = slow.ctx.store.state().asked[card?.id as string];
+  expect([kept?.settled, kept?.unposted]).toEqual([true, true]);
+});
+
+test("a card a device's revocation closed is never marked owed by a settle (#2278)", async () => {
+  const r = await rig("question");
+  r.ctx.store.updateState((st) => {
+    st.asked.d_1 = {
+      question: "Q?",
+      options: [],
+      askedAt: r.ctx.now().toISOString(),
+      to: [],
+      revoked: true,
+    };
+  });
+  expect(closeHere(r.ctx, "d_1", "withdrawn", "why")).toBe(false);
+  expect(r.ctx.store.state().asked.d_1?.unposted).toBeUndefined();
+});
 
 test("a case a harness lacks says why", () => {
   for (const row of ROWS)

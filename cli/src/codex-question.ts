@@ -23,7 +23,7 @@ import {
   settle,
   wait,
 } from "./decisions";
-import { questionInput } from "./hook";
+import { questionInput, REPORT_MS } from "./hook";
 import { selfCommand } from "./setup/sys";
 
 /** What Codex 0.160 gives a `PreToolUse` hook (fields Starbridge reads). */
@@ -229,12 +229,16 @@ async function ask(
   // Answered at the keyboard or the turn ended: moot on the devices. Otherwise none of the
   // answers can reach the picker any more.
   const outcome = signal.aborted ? "elsewhere" : "withdrawn";
+  // Its own deadline, not the turn's: a stalled server would hold the hook until Codex kills it
+  // (#2278).
+  const deadline = AbortSignal.timeout(REPORT_MS);
   await Promise.all(
     ids.map((id) =>
       id
-        ? settle({ ...ctx, signal: undefined }, { id, outcome, ...pickerReason(outcome) }).catch(
-            (e) => ctx.err(`starbridge: could not settle ${id}: ${(e as Error).message}`),
-          )
+        ? settle(
+            { ...ctx, signal: undefined },
+            { id, outcome, ...pickerReason(outcome), deadline },
+          ).catch((e) => ctx.err(`starbridge: could not settle ${id}: ${(e as Error).message}`))
         : undefined,
     ),
   );
