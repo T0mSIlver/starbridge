@@ -22,7 +22,7 @@ import {
   verifyDirectory,
 } from "@starbridge/protocol";
 import { Api, ApiError } from "./api";
-import { encodeKeys } from "./config";
+import { encodeKeys, StateFileError } from "./config";
 import { type Ctx, iso, UsageError } from "./context";
 import { terminalQr } from "./qr";
 import { rememberMachineKind } from "./settings";
@@ -157,7 +157,15 @@ export async function pair(
   ctx.store.locked(() => {
     // Read again under the lock: a state file that broke meanwhile must not leave a new identity
     // behind the failed reset below.
-    ctx.store.state();
+    try {
+      ctx.store.state();
+    } catch (e) {
+      if (!(e instanceof StateFileError)) throw e;
+      // The server has activated this machine already, and its token goes unsaved.
+      throw new UsageError(
+        `${e.message}. The pairing was approved, but nothing is saved: revoke "${name}" under Devices, repair or remove the file, then run \`${again}\` again`,
+      );
+    }
     ctx.store.saveDirectory(entries);
     ctx.store.saveMachine({
       server,

@@ -240,6 +240,18 @@ test("pair --force stops before it replaces the identity when state.json is unre
   expect(ctx.store.machine()?.id).toBe(id);
 });
 
+test("pair --force names the new machine to revoke when state.json breaks while the pairing waits (#2274)", async () => {
+  const ctx = await paired(server);
+  const old = ctx.store.machine()?.id;
+  const done = run(["pair", "--force"], ctx);
+  await until(() => ctx.lines.some((l) => l.startsWith("Pairing code: ")));
+  writeFileSync(join(ctx.store.dir, "state.json"), "{}\n");
+  await approveAndConfirm(server, ctx);
+  expect(await done).toBe(1);
+  expect(ctx.errors.at(-1)).toContain('revoke "devbox" under Devices');
+  expect(ctx.store.machine()?.id).toBe(old);
+});
+
 test("a machine the owner removed says so and how to pair it again", async () => {
   const ctx = await paired(server);
   await server.revoke(ctx.store.machine()?.id as string);
