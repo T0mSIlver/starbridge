@@ -9,10 +9,10 @@ slots=${1:?usage: setup.sh <number of runner slots>}
 here=$(dirname "$(readlink -f "$0")")
 RUNNER_VERSION=2.338.2
 RUNNER_SHA256=baebf204307bac6193480852732f0aba2ae97b6c5597c244f4d5558390147c40
-NODE_VERSION=24.22.2
+NODE_VERSION=24.22.3
 # From https://nodejs.org/dist/v$NODE_VERSION/SHASUMS256.txt, whose detached signature (SHASUMS256.txt.sig)
 # checks against a key in https://github.com/nodejs/release-keys/blob/main/keys.list. Change both together.
-NODE_SHA256=48cc0e21e048790e54c0cf5749c2725005313d652651c40b7a21feb9697aaf75
+NODE_SHA256=4f2b175a6d53a5c617a80dba2676238a0688cef28c6da4eba35c7d844e66fcfb
 # Docker's apt signing key, from https://docs.docker.com/engine/install/debian/.
 DOCKER_KEY_FPR=9DC858229FC7DD38854AE2D88D81803C0EBFCD88
 export DEBIAN_FRONTEND=noninteractive
