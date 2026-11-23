@@ -18,6 +18,7 @@
     "hooks/agent.ts",
     "hooks/switch.ts",
     "hooks/handover.ts",
+    "hooks/unread.ts",
     "hooks/sent.ts",
     "hooks/node.ts",
     "opencode",

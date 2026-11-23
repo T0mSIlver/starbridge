@@ -1227,6 +1227,38 @@ test("an opencode session with the plugin gets its answer as an event, titled by
 
 const PROMPT = "The answer will come back into this session as a new prompt.";
 
+test("`pi -p` and `opencode run`, whose extension said headless, get the turn route: events still go to it, ask promises a wait (#2280)", async () => {
+  const { ctx, socket } = await machine();
+  const http = new AgentClient(socket, "starbridge-mod/test");
+  for (const [agent, id, env] of [
+    ["pi", "p-run", { PI_SESSION_ID: "p-run" }],
+    ["opencode", "ses_run", { STARBRIDGE_OPENCODE_SESSION: "ses_run" }],
+  ] as const) {
+    const s = session(socket, id);
+    await http.call("POST", `/v1/sessions/${id}/hello`, { headless: true });
+    await s.events();
+    const c = testCtx({ STARBRIDGE_AGENT_SOCKET: socket, CLAUDE_CODE_SESSION_ID: "c1", ...env });
+    const asked = await ask(c, "--project", "p");
+    expect(c.errors.at(-1)).toContain(`starbridge wait ${asked}`);
+    expect(ctx.store.state().asked[asked]?.route).toEqual({ kind: "turn" });
+    // The answer is still the session's event: the extension hands it into the turn that runs.
+    await server.answer(asked, { choice: "Merge" });
+    await until(async () => (await s.events()).length === 1);
+    expect((await s.events())[0]?.line).toBe(`Answer to ${asked} (Merge #12 now?): Merge`);
+    expect([agent, ctx.store.state().asked[asked]?.extensionAnswers]).toEqual([agent, undefined]);
+    // The next run of that session, whose extension greets as an interactive one, is promised a prompt.
+    await http.call("POST", `/v1/sessions/${id}/hello`, { cwd: "/w" });
+    const again = testCtx({
+      STARBRIDGE_AGENT_SOCKET: socket,
+      CLAUDE_CODE_SESSION_ID: "c1",
+      ...env,
+      ...(agent === "pi" ? { STARBRIDGE_PI_ANSWERS: id } : { STARBRIDGE_OPENCODE_ANSWERS: id }),
+    });
+    await ask(again, "--project", "p");
+    expect(again.errors.at(-1)).toBe(PROMPT);
+  }
+});
+
 /** A Cursor hook's input for conversation `conv`, each a turn of its own. */
 let turns = 0;
 const cursorHook = (event: string, conv: string, extra: Record<string, unknown> = {}) =>

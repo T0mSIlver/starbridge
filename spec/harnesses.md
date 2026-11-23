@@ -20,8 +20,8 @@ line, the safe side: at worst a prompt repeats an answer the agent already read.
 (Claude Code's mod, or Cursor's hooks, take it from the agent's session events), `extension` (the
 Pi extension or the opencode plugin, the same way), `codex` (the agent steers or queues it into
 the Codex session), `agy` (the agent sends it to the Antigravity conversation's language server)
-and `t3` (the agent sends it with `t3 thread send`), and `turn` (a `claude -p` run's mod hands it in with
-the next tool result, below). `ask` promises a prompt exactly when there is a route other than
+and `t3` (the agent sends it with `t3 thread send`), and `turn` (the mod, Pi extension or opencode plugin of a
+`claude -p`, `pi -p` or `opencode run` run hands it into the turn that runs, below). `ask` promises a prompt exactly when there is a route other than
 `turn`, and the agent pushes an answer into Codex, Antigravity or T3 Code only by that route. The
 promise and the delivery had been worked out apart and disagreed (#321, #863, #2100, #2101). An
 ask with no session, a held one and `ask --wait`, which prints the answer itself, get no route:
@@ -41,7 +41,9 @@ to its session, the `wait` line's safe side.
 | Pi TUI and RPC | The Pi extension (`mod/pi`) calls `pi.sendUserMessage(text, { deliverAs: "steer" })`: a busy session takes it after its current tool calls (#232, #1584) |
 | opencode TUI and `serve` | The opencode plugin (`mod/opencode`) calls `client.session.promptAsync`, one loop per session (#300); a busy session takes it at its next step (#1484) |
 | Claude Code subagents | The mod sends the answer to the subagent that asked with `$.session.send` (#1702) |
-| `pi -p`, `opencode run`, other harnesses' subagents | `wait` (#2258: below) |
+| `pi -p` | While the run works, a steer, as in a running turn; after it, `wait` (#2280: below) |
+| `opencode run` | While the run works, `promptAsync`, taken at the next step; after it, `wait` (#2280: below) |
+| Other harnesses' subagents | `wait` (#2258: below) |
 | Antigravity, interactive | The local agent sends the answer to the conversation's language server, at the address and token `ask` saw, with `SendUserCascadeMessage` run when idle. Retried each minute, 30 times (#961) |
 | `agy -p` | `wait`: its language server ends with the run |
 | `cursor-agent` | Setup's `stop` hook holds up to 10 minutes while the conversation has a question open and returns the answer as `followup_message`, Cursor's next user message (#956) |
@@ -143,9 +145,25 @@ to its session, the `wait` line's safe side.
   naming the subagent: a resumed subagent would outlive the run. It takes no CLI path, whose lease would tell
   `ask` that some session submits prompts. Checked with `mod/e2e` case `print` (Claude Code
   2.1.317): the answer came with the next tool result, and the run exited 0.6 s after its turn.
-  The Pi extension and opencode plugin submit and confirm a line at once, which in a run that
-  then exits loses it, so `pi -p` and `opencode run` keep `wait` alone until they hold a line
-  unconfirmed until the agent read it (#2280). `codex exec` has no route in.
+  `pi -p` and `opencode run` do the same through the Pi extension and the opencode plugin (#2280).
+  Both confirm a line the moment they submit it, which in a run that then exits loses it, so
+  they hold it unconfirmed (`mod/hooks/unread.ts`) until the agent has read it: Pi's steered
+  message enters the context (`message_start`, a user message holding the line), opencode's
+  message is in the session (`message.part.updated`, a text part of a user message holding the
+  line). Only then do they confirm it, through the loop's `claim`, which drops a line a `wait`
+  printed first. A line goes in only while the turn runs (Pi's `agent_start` to `agent_end`,
+  opencode's `session.status` busy to `session.idle`), since an idle session would start a turn
+  of its own with it. One that misses the turn stays unconfirmed for `wait`. Like `claude -p`,
+  each sets no `STARBRIDGE_PI_ANSWERS` or `STARBRIDGE_OPENCODE_ANSWERS`, runs no CLI path and
+  polls with 1 s holds, and its hello says `headless`, so its question gets the `turn` route and
+  `ask` prints the `wait` line. opencode's loop starts at the run's first command and takes no
+  claim file, since no other process shows a run's session. A subagent's session of an
+  `opencode run` gets no loop, as before. An answer that reaches the agent by steer or message
+  while a `wait` is printing it is read twice; the loop confirms it once. Checked with real Pi
+  1.5.2 and opencode 1.19.6 against a stub model and agent: the answer reached the model's next
+  request, was confirmed after it, and each run exited within 0.5 s of its turn; an answer after
+  the turn was never submitted nor confirmed.
+  `codex exec` has no route in.
 - **Claude desktop on another machine** (#1428, #2107). Claude desktop starts a session over SSH
   with `--plugin-dir` copies of the plugins installed on the computer it runs on, synced without
   `hooks/`, and a `--plugin-dir` plugin replaces the installed one of its name. So where both

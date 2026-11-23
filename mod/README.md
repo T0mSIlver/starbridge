@@ -118,8 +118,9 @@ pi install git:github.com/T0mSIlver/starbridge@v<version>
 In an interactive or RPC Pi session it submits each answer as a user message,
 which starts a turn when Pi is idle. When Pi is busy, the answer enters the
 running turn at its next tool call (`deliverAs: "steer"`). It also adds its rule (`plugin/rules/pi.md`) to Pi's system
-prompt. `pi -p` gets no loop, so `starbridge ask` tells the agent there to
-`starbridge wait`.
+prompt. In `pi -p`, whose run ends with its turn, the loop only steers an answer into the running
+turn and confirms it once the steered message enters the context, so `starbridge ask` still tells
+the agent to `starbridge wait` (#2280).
 
 With [pi-permission-system](https://github.com/gotgenes/pi-packages/tree/main/packages/pi-permission-system)
 installed, `pi/permissions.ts` registers a `starbridge` link in its authorizer
@@ -154,8 +155,9 @@ rule, into `~/.config/opencode/starbridge/`, and points
 opencode gives commands no session id, so the plugin's `shell.env` hook sets
 `STARBRIDGE_OPENCODE_SESSION` and the session's title for them, and starts that
 session's loop. Each answer goes in with `promptAsync`: an idle session starts
-a turn, a busy one takes it at its next step. `opencode run` gets no loop, so
-`starbridge ask` tells the agent there to `starbridge wait`. The rule goes into
+a turn, a busy one takes it at its next step. In `opencode run`, which exits once the session is
+idle, the loop only submits an answer into the running turn and confirms it once its message is in
+the session, so `starbridge ask` still tells the agent to `starbridge wait` (#2280). The rule goes into
 the system prompt through `experimental.chat.system.transform`.
 
 Each `permission.asked` event runs `starbridge hook permission --agent
@@ -199,7 +201,7 @@ from `claude setup-token`, so the login stays out of every command line.
 The tests run both paths against the CLI, a real agent and the real server,
 which `@starbridge/server/test-support` starts on a random port.
 `hooks/agent.ts` is the agent path, `hooks/poller.ts` the CLI path,
-`hooks/switch.ts` picks one, and `hooks/register.ts` connects them to the
+`hooks/switch.ts` picks one, `hooks/unread.ts` holds the answers of `pi -p` and `opencode run` until read, and `hooks/register.ts` connects them to the
 engine. CI type-checks all but `register.ts`. To type-check `register.ts`,
 load the mod once so the engine writes its types to `.claude-plugin/types/`,
 then run `tsc -p tsconfig.engine.json`.

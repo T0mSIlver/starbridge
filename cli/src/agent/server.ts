@@ -100,7 +100,7 @@ export interface Hub {
   log(line: string): void;
   /** Whether session `id`'s client called within `ms`: its mod is there to take a prompt. */
   seen(id: string, ms: number): boolean;
-  /** Whether session `id`'s mod said it runs in `claude -p`, which ends with its turn (#2258). */
+  /** Whether session `id`'s mod said it runs in a run that ends with its turn (#2258, #2280). */
   headless?(id: string): boolean;
 }
 
