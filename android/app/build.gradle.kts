@@ -127,10 +127,10 @@ dependencies {
     // Build-time only: none of these ships in the APK.
     constraints {
         for (pin in listOf(
-            "org.apache.commons:commons-lang3:3.21.0",
+            "org.apache.commons:commons-lang3:3.22.0",
             "org.apache.httpcomponents:httpclient:4.5.14",
-            "org.bouncycastle:bcpkix-jdk18on:1.86",
-            "org.bouncycastle:bcprov-jdk18on:1.86",
+            "org.bouncycastle:bcpkix-jdk18on:1.87",
+            "org.bouncycastle:bcprov-jdk18on:1.87",
         )) add("androidLintTool", pin)
     }
 
