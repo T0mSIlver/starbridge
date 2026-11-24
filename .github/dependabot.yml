@@ -13,6 +13,10 @@ updates:
     directory: /
     schedule:
       interval: monthly
+    # Playwright 1.65's WebKit never finishes making a first device's keys (#2375): held until that's understood.
+    ignore:
+      - dependency-name: playwright
+        versions: [">= 1.65.0"]
     groups:
       npm:
         patterns: ["*"]
@@ -20,10 +24,15 @@ updates:
     directory: /android
     schedule:
       interval: monthly
-    # android-all-instrumented holds the SDK jar Robolectric runs, and Robolectric 4.17 runs SDK 36
-    # only; another jar comes with a Robolectric update that names it, so it moves by hand (#2255).
+    # android-all-instrumented holds the SDK jar Robolectric runs, and each Robolectric release names the
+    # jar it runs; it moves by hand with Robolectric (#2255).
     ignore:
       - dependency-name: org.robolectric:android-all-instrumented
+      # Compose BOM 2026.11 and Material 3 1.6 alphas need compileSdk 37.2; the app builds with 37.0 (#2368).
+      - dependency-name: androidx.compose:compose-bom
+        versions: [">= 2026.11.0"]
+      - dependency-name: androidx.compose.material3:*
+        versions: [">= 1.6.0-alpha01"]
     groups:
       gradle:
         patterns: ["*"]
